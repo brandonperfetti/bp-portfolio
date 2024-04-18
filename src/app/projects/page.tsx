@@ -3,48 +3,132 @@ import Image from 'next/image'
 
 import { Card } from '@/components/Card'
 import { SimpleLayout } from '@/components/SimpleLayout'
-import logoAnimaginary from '@/images/logos/animaginary.svg'
-import logoCosmos from '@/images/logos/cosmos.svg'
-import logoHelioStream from '@/images/logos/helio-stream.svg'
-import logoOpenShuttle from '@/images/logos/open-shuttle.svg'
-import logoPlanetaria from '@/images/logos/planetaria.svg'
+
+// const projects = [
+//   {
+//     name: 'Planetaria',
+//     description:
+//       'Creating technology to empower civilians to explore space on their own terms.',
+//     link: { href: 'http://planetaria.tech', label: 'planetaria.tech' },
+//     logo: logoPlanetaria,
+//   },
+//   {
+//     name: 'Animaginary',
+//     description:
+//       'High performance web animation library, hand-written in optimized WASM.',
+//     link: { href: '#', label: 'github.com' },
+//     logo: logoAnimaginary,
+//   },
+//   {
+//     name: 'HelioStream',
+//     description:
+//       'Real-time video streaming library, optimized for interstellar transmission.',
+//     link: { href: '#', label: 'github.com' },
+//     logo: logoHelioStream,
+//   },
+//   {
+//     name: 'cosmOS',
+//     description:
+//       'The operating system that powers our Planetaria space shuttles.',
+//     link: { href: '#', label: 'github.com' },
+//     logo: logoCosmos,
+//   },
+//   {
+//     name: 'OpenShuttle',
+//     description:
+//       'The schematics for the first rocket I designed that successfully made it to orbit.',
+//     link: { href: '#', label: 'github.com' },
+//     logo: logoOpenShuttle,
+//   },
+// ]
 
 const projects = [
   {
-    name: 'Planetaria',
-    description:
-      'Creating technology to empower civilians to explore space on their own terms.',
-    link: { href: 'http://planetaria.tech', label: 'planetaria.tech' },
-    logo: logoPlanetaria,
+    name: 'EMP Consultants',
+    description: 'A design and forensic engineering firm landing page',
+    link: {
+      href: 'https://empconsultants.com/',
+      label: 'empconsultants.com',
+    },
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142675/bp-spotlight/images/logos/emp_vxkldh.svg',
   },
   {
-    name: 'Animaginary',
-    description:
-      'High performance web animation library, hand-written in optimized WASM.',
-    link: { href: '#', label: 'github.com' },
-    logo: logoAnimaginary,
+    name: 'Top Timeleines',
+    description: 'Event timelines made simple for anyone',
+    link: {
+      href: 'https://toptimelines.com/',
+      label: 'toptimelines.com',
+    },
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1710096798/top-timelines/top_timelines_logo_nzgxaq.svg',
   },
   {
-    name: 'HelioStream',
-    description:
-      'Real-time video streaming library, optimized for interstellar transmission.',
-    link: { href: '#', label: 'github.com' },
-    logo: logoHelioStream,
+    name: 'BEAUTY By Casey Lauren',
+    description: 'Event stylist landing page built with Gatsby.js and Netlify',
+    link: {
+      href: 'https://beautybycaseylauren.com/',
+      label: 'beautybycaseylauren.com',
+    },
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142669/bp-spotlight/images/logos/bbcl_pacmya.svg',
   },
   {
-    name: 'cosmOS',
-    description:
-      'The operating system that powers our Planetaria space shuttles.',
-    link: { href: '#', label: 'github.com' },
-    logo: logoCosmos,
+    name: 'Taoist Programmer',
+    description: 'Digital thought garden built with Gatsby.js and Netlify',
+    link: {
+      href: 'https://taoistprogrammer.com/',
+      label: 'taoistprogrammer.com',
+    },
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142703/bp-spotlight/images/logos/taoist-programmer_qhjxlo.svg',
   },
   {
-    name: 'OpenShuttle',
+    name: 'Taoist Shop',
     description:
-      'The schematics for the first rocket I designed that successfully made it to orbit.',
-    link: { href: '#', label: 'github.com' },
-    logo: logoOpenShuttle,
+      'eCommerce Webstore built with Gatsby.js, Shopify Storefront API, and Netlify',
+    link: {
+      href: 'https://shop.taoistprogrammer.com/',
+      label: 'shop.taoistprogrammer.com',
+    },
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142703/bp-spotlight/images/logos/taoist-programmer_qhjxlo.svg',
   },
+  {
+    name: 'Slicks Slices',
+    description:
+      'Local Eatery Webstore built with Gatsby.js, Sanity.io, and Netlify',
+    link: {
+      href: 'https://slicks-slices-brandon.netlify.app/',
+      label: 'slicks.slices',
+    },
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142712/bp-spotlight/images/logos/slicks-slices_c3v31k.svg',
+  },
+  {
+    name: 'Slick Fits',
+    description:
+      'eCommerce web store built with React, GraphQL, Next.js, Apollo, Keystone.js, Netlify, and Digital Ocean',
+    link: {
+      href: 'https://slickfits.shop/',
+      label: 'slickfits.shop',
+    },
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142696/bp-spotlight/images/logos/slick-fits_cbsksm.svg',
+  },
+  {
+    name: `Dang That's Delicious`,
+    description:
+      'Restaurant Review App built with Express.js MongoDB, and Digital Ocean',
+    link: {
+      href: 'https://octopus-app-jtjlf.ondigitalocean.app/',
+      label: 'dang-delicious.app',
+    },
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684608748/doughnut_uwkna5.png',
+  },
+  // {
+  //   name: `Resume Builder`,
+  //   description:
+  //     "Resume Builder App with built Next.js, Tailwind CSS, Open AI, Vercel, and Digital Ocean",
+  //   link: {
+  //     href: "https://resume-builder-ai.vercel.app/",
+  //     label: "resume-builder-ai.app",
+  //   },
+  //   logo: "https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684609674/cv2_euvxyv.svg",
+  // },
 ]
 
 function LinkIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
@@ -79,6 +163,8 @@ export default function Projects() {
               <Image
                 src={project.logo}
                 alt=""
+                width={48}
+                height={48}
                 className="h-8 w-8"
                 unoptimized
               />
