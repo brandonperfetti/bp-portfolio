@@ -1,10 +1,20 @@
 import glob from 'fast-glob'
 
 interface Article {
-  title: string
-  description: string
-  author: string
-  date: string
+  title: string;
+  description: string;
+  author: {
+    href: string;
+    name: string;
+    role: string;
+    image: string; // this already exists for the author's image
+  };
+  category: {
+    href: string;
+    title: string;
+  };
+  date: string;
+  image: string; // add this for the article's main image
 }
 
 export interface ArticleWithSlug extends Article {
