@@ -1,7 +1,7 @@
+import clsx from 'clsx'
 import { type Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
-import clsx from 'clsx'
 
 import { Container } from '@/components/Container'
 import {
@@ -10,7 +10,6 @@ import {
   LinkedInIcon,
   XIcon,
 } from '@/components/SocialIcons'
-import portraitImage from '@/images/portrait.jpg'
 
 function SocialLink({
   className,
@@ -50,7 +49,7 @@ function MailIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
 export const metadata: Metadata = {
   title: 'About',
   description:
-    'I’m Spencer Sharp. I live in New York City, where I design the future.',
+    'I’m Brandon Perfetti, a Project Manager + Software Engineer from Orange County CA, crafting efficient and user-friendly digital solutions.',
 }
 
 export default function About() {
@@ -60,7 +59,9 @@ export default function About() {
         <div className="lg:pl-20">
           <div className="max-w-xs px-2.5 lg:max-w-none">
             <Image
-              src={portraitImage}
+              height={800}
+              width={800}
+              src="https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142618/bp-spotlight/images/portrait_zdvgpf.jpg"
               alt=""
               sizes="(min-width: 1024px) 32rem, 20rem"
               className="aspect-square rotate-3 rounded-2xl bg-zinc-100 object-cover dark:bg-zinc-800"
@@ -69,58 +70,132 @@ export default function About() {
         </div>
         <div className="lg:order-first lg:row-span-2">
           <h1 className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100">
-            I’m Spencer Sharp. I live in New York City, where I design the
-            future.
+            Hey there! 👋<br></br>
+            <p>I&apos;m Brandon Perfetti.</p>
           </h1>
           <div className="mt-6 space-y-7 text-base text-zinc-600 dark:text-zinc-400">
             <p>
-              I’ve loved making things for as long as I can remember, and wrote
-              my first program when I was 6 years old, just two weeks after my
-              mom brought home the brand new Macintosh LC 550 that I taught
-              myself to type on.
+              With over a decade of experience, I specialize in navigating the
+              intricate landscape of real estate technology, crafting digital
+              solutions that are both efficient and user-centric. My journey has
+              been marked by a progressive transition from specialized roles in
+              data integration to leading edge front-end engineering projects,
+              particularly with Lone Wolf Technologies. This path has been
+              fueled by a relentless pursuit of technological excellence,
+              driving significant advancements within the teams and projects
+              under my stewardship.
             </p>
-            <p>
-              The only thing I loved more than computers as a kid was space.
-              When I was 8, I climbed the 40-foot oak tree at the back of our
-              yard while wearing my older sister’s motorcycle helmet, counted
-              down from three, and jumped — hoping the tree was tall enough that
-              with just a bit of momentum I’d be able to get to orbit.
-            </p>
-            <p>
-              I spent the next few summers indoors working on a rocket design,
-              while I recovered from the multiple surgeries it took to fix my
-              badly broken legs. It took nine iterations, but when I was 15 I
-              sent my dad’s Blackberry into orbit and was able to transmit a
-              photo back down to our family computer from space.
-            </p>
-            <p>
-              Today, I’m the founder of Planetaria, where we’re working on
-              civilian space suits and manned shuttle kits you can assemble at
-              home so that the next generation of kids really <em>can</em> make
-              it to orbit — from the comfort of their own backyards.
-            </p>
+          </div>
+          <div>
+            <div className="py-4">
+              <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
+                My Journey 🚀
+              </h3>
+              <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
+                My professional odyssey commenced in the realm of data services,
+                focusing on the seamless management and integration of complex
+                data systems. This foundational role at W+R Studios honed my
+                skills in ensuring robust data ingestion and optimized output
+                via GraphQL APIs, serving a broad spectrum of SaaS products
+                tailored for the real estate sector.
+              </p>
+              <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
+                As I elevated to the role of Senior Data Services Engineer, the
+                scope of my responsibilities expanded dramatically. I was
+                entrusted with the orchestration of over 250 distinct data
+                feeds, overseeing their daily management and leading the quality
+                assurance for new integrations. The primary aim was always
+                clear: deliver timely, precise data with minimal latency,
+                thereby enhancing the end-user experience.
+              </p>
+              <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
+                My journey took a pivotal turn as I embraced the challenges of
+                Front End Software Engineering. Here, my focus was on driving
+                innovation through detailed planning and execution of UI/UX
+                strategies. The landmark project of refactoring an internal data
+                ingestion tool, which I led, not only quintupled data feed
+                integration speeds but also achieved widespread adoption across
+                the organization, marking a significant milestone in my career
+                trajectory.
+              </p>
+            </div>
+            <div className="py-4">
+              <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
+                Present Focus 🎯
+              </h3>
+              <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
+                Currently, my professional endeavor is to pioneer intuitive,
+                robust, and scalable front-end architectures. My portfolio,
+                including the comprehensive overhaul of a data pipeline
+                ingestion tool and the development of my personal website,
+                stands as a testament to my dedication towards continuous
+                improvement and making a tangible impact.
+              </p>
+            </div>
+            <div className="py-4">
+              <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
+                Solutions & Problem-Solving 🛠
+              </h3>
+              <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
+                My career is built on identifying and solving intricate problems
+                with no apparent solutions. Through a refined skill set in
+                troubleshooting software and hardware issues, I excel in
+                identifying negative feedback loops and transforming them into
+                positive outcomes. My approach isolates the root cause of
+                challenges, paving the way for multiple resolution scenarios.
+              </p>
+            </div>
+            <div className="py-4">
+              <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
+                Enterprise Client & Project Management 🤝
+              </h3>
+              <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
+                I thrive on effective communication and meticulous time
+                management, which are crucial for achieving successful projects
+                and client satisfaction. By setting realistic expectations and
+                consistently delivering beyond them, I guide clients through
+                tailored project pathways, ensuring a service experience
+                uniquely catered to their specific needs and objectives.
+              </p>
+            </div>
+
+            <div className="py-4">
+              <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
+                Development & Technological Excellence 💻
+              </h3>
+              <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
+                With a solid foundation in technology and over ten years of
+                cross-disciplinary experience, my role extends beyond mere
+                participation to actively facilitating product inception,
+                pragmatic execution, and seamless rollout. My dedication to
+                crafting scalable solutions, optimizing internal processes, and
+                fostering result-oriented teams underscores my unwavering
+                commitment to delivering exceptional value in every project I
+                undertake.
+              </p>
+            </div>
           </div>
         </div>
         <div className="lg:pl-20">
           <ul role="list">
-            <SocialLink href="#" icon={XIcon}>
+            <SocialLink href="https://twitter.com/brandonperfetti" icon={XIcon}>
               Follow on X
             </SocialLink>
-            <SocialLink href="#" icon={InstagramIcon} className="mt-4">
+            {/* <SocialLink href="#" icon={InstagramIcon} className="mt-4">
               Follow on Instagram
-            </SocialLink>
-            <SocialLink href="#" icon={GitHubIcon} className="mt-4">
+            </SocialLink> */}
+            <SocialLink href="https://github.com/brandonperfetti" icon={GitHubIcon} className="mt-4">
               Follow on GitHub
             </SocialLink>
             <SocialLink href="#" icon={LinkedInIcon} className="mt-4">
               Follow on LinkedIn
             </SocialLink>
             <SocialLink
-              href="mailto:spencer@planetaria.tech"
+              href="https://www.linkedin.com/in/brandonperfetti/"
               icon={MailIcon}
               className="mt-8 border-t border-zinc-100 pt-8 dark:border-zinc-700/40"
             >
-              spencer@planetaria.tech
+              brandon@brandonperfetti.com
             </SocialLink>
           </ul>
         </div>

@@ -1,4 +1,4 @@
-import { Button } from '@/components/Button'
+import Button from '@/components/Button'
 import { Container } from '@/components/Container'
 
 export default function NotFound() {
@@ -14,9 +14,17 @@ export default function NotFound() {
         <p className="mt-4 text-base text-zinc-600 dark:text-zinc-400">
           Sorry, we couldn’t find the page you’re looking for.
         </p>
-        <Button href="/" variant="secondary" className="mt-4">
-          Go back home
-        </Button>
+        <div className="mt-4">
+          <Button
+            as={'a'}
+            // @ts-ignore
+            href="/"
+            variant="secondary"
+            className="mt-4"
+          >
+            Go back home
+          </Button>
+        </div>
       </div>
     </Container>
   )
