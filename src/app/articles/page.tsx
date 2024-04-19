@@ -86,7 +86,7 @@ export default async function ArticlesIndex({
   // console.log('Search Params:', searchParams) // Add this to check what you get in production
 
   // const articles = await getAllArticles()
-  let articles = (await getAllArticles()).slice(0, 6)
+  let articles = await getAllArticles()
   console.log('Articles Fetched:', articles.length) // Check how many articles are fetched
 
   // const filteredArticles = filterArticles(
