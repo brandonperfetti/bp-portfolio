@@ -225,7 +225,7 @@ export default function HermesChat() {
 
   return (
     <div>
-      <div className="flex h-[75vh] flex-col overflow-hidden md:h-[85vh]">
+      <div className="flex h-[75vh] flex-col overflow-hidden md:h-[75vh]">
         <div
           ref={chatContainerRef}
           id="messages"
