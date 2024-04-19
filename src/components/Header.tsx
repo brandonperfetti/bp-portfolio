@@ -12,6 +12,7 @@ import { ChevronDownIcon } from '@/icons/ChevronDownIcon'
 import { CloseIcon } from '@/icons/CloseIcon'
 import { MoonIcon } from '@/icons/MoonIcon'
 import { SunIcon } from '@/icons/SunIcon'
+import { HeaderJumper } from './HeaderJumper'
 
 function MobileNavItem({
   href,
@@ -419,10 +420,13 @@ export function Header() {
                 <MobileNavigation className="pointer-events-auto md:hidden" />
                 <DesktopNavigation className="pointer-events-auto hidden md:block" />
               </div>
-              <div className="flex justify-end md:flex-1">
+              <div className="flex justify-end space-x-2 md:flex-1">
                 <div className="pointer-events-auto">
                   {/* <ThemeToggle /> */}
                   <ModeToggle />
+                </div>
+                <div className="pointer-events-auto">
+                  <HeaderJumper />
                 </div>
               </div>
             </div>
