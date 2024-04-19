@@ -1,6 +1,5 @@
 import { SimpleLayout } from '@/components/SimpleLayout'
 import { getAllArticles, type ArticleWithSlug } from '@/lib/articles'
-import { filterArticles } from '@/lib/filterArticles'
 import { formatDate } from '@/lib/formatDate'
 import { Metadata } from 'next'
 import Image from 'next/image'
@@ -84,19 +83,20 @@ export default async function ArticlesIndex({
 }: {
   searchParams?: { [key: string]: string | string[] | undefined }
 }) {
-  console.log('Search Params:', searchParams) // Add this to check what you get in production
+  // console.log('Search Params:', searchParams) // Add this to check what you get in production
 
-  const articles = await getAllArticles()
+  // const articles = await getAllArticles()
+  let articles = (await getAllArticles()).slice(0, 6)
   console.log('Articles Fetched:', articles.length) // Check how many articles are fetched
 
-  const filteredArticles = filterArticles(
-    articles,
-    searchParams?.category || '',
-  )
-  console.log('Filtered Articles Fetched:', filteredArticles.length) // Check how many articles are fetched
+  // const filteredArticles = filterArticles(
+  //   articles,
+  //   searchParams?.category || '',
+  // )
+  // console.log('Filtered Articles Fetched:', filteredArticles.length) // Check how many articles are fetched
 
-  const displayArticles =
-    filteredArticles.length < 1 ? articles : filteredArticles
+  // const displayArticles =
+  //   filteredArticles.length < 1 ? articles : filteredArticles
 
   return (
     <SimpleLayout
