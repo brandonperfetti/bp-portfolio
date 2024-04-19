@@ -2,6 +2,7 @@ import { SimpleLayout } from '@/components/SimpleLayout'
 import { getAllArticles, type ArticleWithSlug } from '@/lib/articles'
 import { filterArticles } from '@/lib/filterArticles'
 import { formatDate } from '@/lib/formatDate'
+import { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
 
@@ -72,12 +73,11 @@ function Article({ article }: { article: ArticleWithSlug }) {
   )
 }
 
-// TODO: Figure out why this is breaking things
-// export const metadata: Metadata = {
-//   title: 'Articles',
-//   description:
-//     'All of my long-form thoughts on programming, leadership, product design, and more, collected in chronological order.',
-// }
+export const metadata: Metadata = {
+  title: 'Articles',
+  description:
+    'All of my long-form thoughts on programming, leadership, product design, and more, collected in chronological order.',
+}
 
 export default async function ArticlesIndex({
   searchParams,
@@ -95,7 +95,7 @@ export default async function ArticlesIndex({
       title="Writing on mindset, software design, company building, and the tech industry."
       intro="All of my long-form thoughts on mindset, programming, leadership, product design, and more, collected in chronological order."
     >
-      <div className="md:border-l md:border-zinc-100 md:pl-6 md:dark:border-zinc-700/40">
+      <div >
         <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-x-8 gap-y-20 lg:mx-0 lg:max-w-none lg:grid-cols-3">
           {filteredArticles.map((article) => (
             <Article key={article.slug} article={article} />

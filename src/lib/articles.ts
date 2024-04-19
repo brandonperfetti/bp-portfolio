@@ -7,14 +7,14 @@ interface Article {
     href: string;
     name: string;
     role: string;
-    image: string; // this already exists for the author's image
+    image: string;
   };
   category: {
     href: string;
     title: string;
   };
   date: string;
-  image: string; // add this for the article's main image
+  image: string;
 }
 
 export interface ArticleWithSlug extends Article {
