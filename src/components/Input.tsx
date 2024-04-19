@@ -56,7 +56,7 @@ export const Input = forwardRef<
       readOnly,
       disabled,
       className: clsx(
-        "block w-full appearance-none border shadow-sm focus:outline-none dark:bg-zinc-700/[0.15] dark:text-white focus:ring-0",
+        "block w-full appearance-none border shadow-sm focus:outline-none bg-white text-black dark:bg-zinc-700/[0.15] dark:text-white focus:ring-0",
         {
           "border-gray-300": variant === "primary",
           "focus:border-teal-400":
