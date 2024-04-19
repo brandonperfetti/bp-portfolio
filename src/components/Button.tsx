@@ -14,6 +14,7 @@ interface OwnButtonProps {
   children?: ReactNode
   onClick?: () => void
   as?: ElementType // specify the element type
+  href?: string
 }
 
 // Define the additional props allowed when the element is a 'button'

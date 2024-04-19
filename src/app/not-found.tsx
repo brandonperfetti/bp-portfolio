@@ -15,13 +15,7 @@ export default function NotFound() {
           Sorry, we couldn’t find the page you’re looking for.
         </p>
         <div className="mt-4">
-          <Button
-            as={'a'}
-            // @ts-ignore
-            href="/"
-            variant="secondary"
-            className="mt-4"
-          >
+          <Button as={'a'} href="/" variant="secondary">
             Go back home
           </Button>
         </div>
