@@ -105,14 +105,17 @@ export default async function ArticlesIndex({
 
   // const articles = await getAllArticles()
   let articles = await getAllArticles()
-  console.log('Articles Fetched:', articles.length) // Check how many articles are fetched
+  // console.log('Articles Fetched:', articles.length) // Check how many articles are fetched
 
   // TODO: Figure out why filtering articles returns 0 articles on production - could be related to calling searchParams
-  const filteredArticles = filterArticles(
-    articles,
-    searchParams?.category || '',
-  )
-  console.log('Filtered Articles Fetched:', filteredArticles.length) // Check how many articles are fetched
+  // const filteredArticles = filterArticles(
+  //   articles,
+  //   searchParams?.category || '',
+  // )
+  // console.log('Filtered Articles Fetched:', filteredArticles.length) // Check how many articles are fetched
+
+  // const displayArticles =
+  //   filteredArticles.length < 1 ? articles : filteredArticles
 
   return (
     <SimpleLayout
@@ -121,7 +124,7 @@ export default async function ArticlesIndex({
     >
       <div>
         <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-x-8 gap-y-20 lg:mx-0 lg:max-w-none lg:grid-cols-3">
-          {filteredArticles.map((article) => (
+          {articles.map((article) => (
             <Article key={article.slug} article={article} />
           ))}
         </div>
