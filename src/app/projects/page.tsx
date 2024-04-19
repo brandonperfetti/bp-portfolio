@@ -50,7 +50,7 @@ const projects = [
       href: 'https://empconsultants.com/',
       label: 'empconsultants.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142675/bp-spotlight/images/logos/emp_vxkldh.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562770/bp-portfolio/images/logos/emp_vxkldh_kiq2wl.png',
   },
   {
     name: 'Top Timeleines',
@@ -77,7 +77,7 @@ const projects = [
       href: 'https://taoistprogrammer.com/',
       label: 'taoistprogrammer.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142703/bp-spotlight/images/logos/taoist-programmer_qhjxlo.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562731/bp-portfolio/images/logos/taoist-programmer_qhjxlo_q4g7gx.png',
   },
   {
     name: 'Taoist Shop',
@@ -87,7 +87,7 @@ const projects = [
       href: 'https://shop.taoistprogrammer.com/',
       label: 'shop.taoistprogrammer.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142703/bp-spotlight/images/logos/taoist-programmer_qhjxlo.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562731/bp-portfolio/images/logos/taoist-programmer_qhjxlo_q4g7gx.png',
   },
   {
     name: 'Slicks Slices',
@@ -107,7 +107,7 @@ const projects = [
       href: 'https://slickfits.shop/',
       label: 'slickfits.shop',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142696/bp-spotlight/images/logos/slick-fits_cbsksm.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562756/bp-portfolio/images/logos/slick-fits_cbsksm_mbtv0i.png',
   },
   {
     name: `Dang That's Delicious`,

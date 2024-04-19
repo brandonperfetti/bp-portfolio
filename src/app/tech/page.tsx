@@ -13,7 +13,7 @@ const techStack = [
       href: 'https://developer.mozilla.org/en-US/docs/Web/javascript',
       label: 'JavaScript Docs',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142672/bp-spotlight/images/logos/javascript_z0s7rb.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562757/bp-portfolio/images/logos/javascript_z0s7rb_ym7vtr.svg',
   },
   {
     name: 'TypeScript',
@@ -23,7 +23,7 @@ const techStack = [
       href: 'https://www.typescriptlang.org/',
       label: 'typescriptlang.org',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142704/bp-spotlight/images/logos/typescript_yxn0ph.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562753/bp-portfolio/images/logos/typescript_yxn0ph_yru0kc.png',
   },
   {
     name: 'Node.js',
@@ -33,7 +33,7 @@ const techStack = [
       href: 'https://nodejs.org/en/',
       label: 'nodejs.org/en',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142688/bp-spotlight/images/logos/node_cc9ada.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562757/bp-portfolio/images/logos/node_cc9ada_rercig.png',
   },
   {
     name: 'Express.js',
@@ -53,7 +53,7 @@ const techStack = [
       href: 'https://reactjs.org/',
       label: 'reactjs.org',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142699/bp-spotlight/images/logos/react_vyeal3.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562805/bp-portfolio/images/logos/react_vyeal3_evwomt.png',
   },
   {
     name: 'Next.js',
@@ -71,7 +71,7 @@ const techStack = [
       href: 'https://vitejs.dev/',
       label: 'vitejs.dev',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683144618/bp-spotlight/images/logos/vite_pigseb.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562768/bp-portfolio/images/logos/vite_pigseb_uhrcdb.png',
   },
   {
     name: 'Remix',
@@ -81,7 +81,7 @@ const techStack = [
       href: 'https://remix.run/',
       label: 'remix.run',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142699/bp-spotlight/images/logos/remix_ftux3w.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562781/bp-portfolio/images/logos/remix_ftux3w_ckwsni.png',
   },
   {
     name: 'Gatsby',
@@ -100,7 +100,7 @@ const techStack = [
       href: 'https://www.npmjs.com/',
       label: 'npmjs.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142687/bp-spotlight/images/logos/npm_yuikai.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562727/bp-portfolio/images/logos/npm_yuikai_nng3dh.png',
   },
   {
     name: 'Yarn',
@@ -109,7 +109,7 @@ const techStack = [
       href: 'https://yarnpkg.com/',
       label: 'yarnpkg.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683144622/bp-spotlight/images/logos/yarn_x547mr.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562790/bp-portfolio/images/logos/yarn_x547mr_r6lxfk.png',
   },
   {
     name: 'GraphQL',
@@ -138,7 +138,7 @@ const techStack = [
       href: 'https://reactrouter.com/en/main',
       label: 'reactrouter.com/en/main/',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142697/bp-spotlight/images/logos/react-router_uyt6d7.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562763/bp-portfolio/images/logos/react-router_uyt6d7_iwvgkd.png',
   },
   {
     name: 'Tailwind CSS',
@@ -148,7 +148,7 @@ const techStack = [
       href: 'https://tailwindcss.com/',
       label: 'tailwindcss.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142707/bp-spotlight/images/logos/tailwind_pho1an.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562758/bp-portfolio/images/logos/tailwind_pho1an_j8ex5y.png',
   },
   {
     name: 'Tailwind UI',
@@ -158,7 +158,7 @@ const techStack = [
       href: 'https://tailwindui.com/',
       label: 'tailwindui.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142707/bp-spotlight/images/logos/tailwind_pho1an.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562758/bp-portfolio/images/logos/tailwind_pho1an_j8ex5y.png',
   },
   {
     name: 'Headless UI',
@@ -168,7 +168,7 @@ const techStack = [
       href: 'https://headlessui.com/',
       label: 'headlessui.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142680/bp-spotlight/images/logos/headless-ui_uidjre.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562806/bp-portfolio/images/logos/headless-ui_uidjre_i0qtak.png',
   },
   {
     name: 'Keystone.js',
@@ -177,17 +177,16 @@ const techStack = [
       href: 'https://keystonejs.com/',
       label: 'keystonejs.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142676/bp-spotlight/images/logos/keystone_bxxo3i.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562766/bp-portfolio/images/logos/keystone_bxxo3i_kqzgqt.png',
   },
   {
     name: 'MongoDB Atlas',
-    description: `The multi-cloud developer data platform.
-An integrated suite of cloud database and data services to accelerate and simplify how you build with data.`,
+    description: `The multi-cloud developer data platform. An integrated suite of cloud database and data services to accelerate and simplify how you build with data.`,
     link: {
       href: 'https://www.mongodb.com/atlas',
       label: 'mongodb.com/atlas',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142685/bp-spotlight/images/logos/mongo-db_qafkxh.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562806/bp-portfolio/images/logos/mongo-db_qafkxh_zrwhsd.svg',
   },
   {
     name: 'Supabase',
@@ -196,7 +195,7 @@ An integrated suite of cloud database and data services to accelerate and simpli
       href: 'https://supabase.com/',
       label: 'supabase.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142706/bp-spotlight/images/logos/supabase_wptfvp.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562759/bp-portfolio/images/logos/supabase_wptfvp_lwhtvr.png',
   },
   {
     name: 'Netlify',
@@ -206,7 +205,7 @@ An integrated suite of cloud database and data services to accelerate and simpli
       href: 'https://www.netlify.com/',
       label: 'netlify.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142683/bp-spotlight/images/logos/netlify_o47xmq.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562760/bp-portfolio/images/logos/netlify_o47xmq_gb6pmb.png',
   },
   {
     name: 'Digital Ocean',
@@ -226,7 +225,7 @@ An integrated suite of cloud database and data services to accelerate and simpli
       href: 'https://vercel.com/',
       label: 'vercel.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683144617/bp-spotlight/images/logos/vercel_yonasw.svg',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562737/bp-portfolio/images/logos/vercel_yonasw_renij3.png',
   },
 ]
 
