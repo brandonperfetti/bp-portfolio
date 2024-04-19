@@ -7,6 +7,7 @@ import { Container } from '@/components/Container'
 import Messenger from '@/components/Messenger'
 import { GitHubIcon, LinkedInIcon, XIcon } from '@/components/SocialIcons'
 
+import Newsletter from '@/components/Newsletter'
 import Resume from '@/components/Resume'
 import { getAllArticles, type ArticleWithSlug } from '@/lib/articles'
 import { formatDate } from '@/lib/formatDate'
@@ -84,7 +85,7 @@ function Photos() {
 }
 
 export default async function Home() {
-  let articles = (await getAllArticles()).slice(0, 6)
+  let articles = (await getAllArticles()).slice(0, 7)
 
   return (
     <>
@@ -135,7 +136,7 @@ export default async function Home() {
             ))}
           </div>
           <div className="space-y-10 lg:pl-16 xl:pl-24">
-            {/* <Newsletter /> */}
+            <Newsletter />
             <Messenger />
             <Resume />
           </div>
