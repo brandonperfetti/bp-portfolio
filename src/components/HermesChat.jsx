@@ -9,8 +9,8 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useCopyToClipboard } from 'usehooks-ts'
 import { Input } from './Input'
-import { ShortcutIcon } from './SearchFilterInput'
 import { Tooltip } from './ToolTip'
+import { ShortcutIcon } from '@/icons/ShortcutIcon'
 
 export default function HermesChat() {
   const [isLoading, setIsLoading] = useState(false)
