@@ -84,20 +84,28 @@ export default async function ArticlesIndex({
 }: {
   searchParams?: { [key: string]: string | string[] | undefined }
 }) {
+  // console.log('Search Params:', searchParams) // Add this to check what you get in production
+
   const articles = await getAllArticles()
+  // console.log('Articles Fetched:', articles.length) // Check how many articles are fetched
+
   const filteredArticles = filterArticles(
     articles,
     searchParams?.category || '',
   )
+  // console.log('Filtered Articles Fetched:', filteredArticles.length) // Check how many articles are fetched
+
+  const displayArticles =
+    filteredArticles.length < 1 ? articles : filteredArticles
 
   return (
     <SimpleLayout
       title="Writing on mindset, software design, company building, and the tech industry."
       intro="All of my long-form thoughts on mindset, programming, leadership, product design, and more, collected in chronological order."
     >
-      <div >
+      <div>
         <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-x-8 gap-y-20 lg:mx-0 lg:max-w-none lg:grid-cols-3">
-          {filteredArticles.map((article) => (
+          {displayArticles.map((article) => (
             <Article key={article.slug} article={article} />
           ))}
         </div>
