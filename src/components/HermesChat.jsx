@@ -31,7 +31,6 @@ export default function HermesChat() {
       role: 'assistant',
     },
   ])
-  const hasImage = /<img src=/.test(message.content)
 
   const submitMessage = (event) => {
     event.preventDefault()
@@ -226,7 +225,7 @@ export default function HermesChat() {
 
   return (
     <div>
-      <div className="flex h-[70vh] flex-col overflow-hidden md:h-[85vh]">
+      <div className="flex h-[75vh] flex-col overflow-hidden md:h-[85vh]">
         <div
           ref={chatContainerRef}
           id="messages"
@@ -249,9 +248,8 @@ export default function HermesChat() {
                             }}
                           />{' '}
                           <div className="flex">
-                            {(message.content !==
-                              "Hey there 👋, I'm Hermes ⚡, your virtual assistant! What can I help with?" ||
-                              hasImage) && (
+                            {message.content !==
+                              "Hey there 👋, I'm Hermes ⚡, your virtual assistant! What can I help with?" && (
                               <div className="w-full pt-2">
                                 <Tooltip
                                   delay={700}
