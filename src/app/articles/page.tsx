@@ -84,16 +84,16 @@ export default async function ArticlesIndex({
 }: {
   searchParams?: { [key: string]: string | string[] | undefined }
 }) {
-  // console.log('Search Params:', searchParams) // Add this to check what you get in production
+  console.log('Search Params:', searchParams) // Add this to check what you get in production
 
   const articles = await getAllArticles()
-  // console.log('Articles Fetched:', articles.length) // Check how many articles are fetched
+  console.log('Articles Fetched:', articles.length) // Check how many articles are fetched
 
   const filteredArticles = filterArticles(
     articles,
     searchParams?.category || '',
   )
-  // console.log('Filtered Articles Fetched:', filteredArticles.length) // Check how many articles are fetched
+  console.log('Filtered Articles Fetched:', filteredArticles.length) // Check how many articles are fetched
 
   const displayArticles =
     filteredArticles.length < 1 ? articles : filteredArticles
