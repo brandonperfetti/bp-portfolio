@@ -52,7 +52,7 @@ const HitsInIndex: FC<{ index: any }> = ({ index }) => {
   return (
     <>
       <HitCount />
-      <div className="max-h-[calc(100vh-20rem)] w-full overflow-scroll">
+      <div className="max-h-[calc(100vh-15rem)] w-full overflow-scroll">
         <Index indexName={index.name}>
           {/* @ts-ignore */}
           <Hits className="Hits" hitComponent={PageHit} />

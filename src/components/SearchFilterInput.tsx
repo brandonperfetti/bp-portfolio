@@ -1,14 +1,13 @@
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { ChangeEvent, useEffect, useRef } from "react";
-import { Input } from "./Input";
-import { ShortcutIcon } from "@/icons/ShortcutIcon";
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { ChangeEvent, useEffect, useRef } from 'react'
+import { Input } from './Input'
 
 interface SearchFilterInputProps {
-  id?: string;
-  type?: string;
-  value?: string;
-  placeholder: string;
-  onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+  id?: string
+  type?: string
+  value?: string
+  placeholder: string
+  onChange: (e: ChangeEvent<HTMLInputElement>) => void
 }
 
 export const SearchFilterInput = ({
@@ -16,33 +15,32 @@ export const SearchFilterInput = ({
   placeholder,
   onChange,
 }: SearchFilterInputProps) => {
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     function onKeyPress(event: KeyboardEvent) {
       if (
-        event.key === "/" &&
+        event.key === '/' &&
         document.activeElement !== searchInputRef.current
       ) {
-        event.preventDefault();
-        searchInputRef.current?.focus();
+        event.preventDefault()
+        searchInputRef.current?.focus()
       }
     }
-    document.body.addEventListener("keydown", onKeyPress);
+    document.body.addEventListener('keydown', onKeyPress)
     return () => {
-      document.body.removeEventListener("keydown", onKeyPress);
-    };
-  }, []);
+      document.body.removeEventListener('keydown', onKeyPress)
+    }
+  }, [])
 
   return (
     <Input
       ref={searchInputRef}
       aria-label="search"
       leftIcon={<MagnifyingGlassIcon />}
-      rightIcon={<ShortcutIcon className="text-gray-700" />}
       placeholder={placeholder}
       value={value}
       onChange={onChange}
     />
-  );
-};
+  )
+}

@@ -70,25 +70,25 @@ const projects = [
     },
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142669/bp-spotlight/images/logos/bbcl_pacmya.svg',
   },
-  {
-    name: 'Taoist Programmer',
-    description: 'Digital thought garden built with Gatsby.js and Netlify',
-    link: {
-      href: 'https://taoistprogrammer.com/',
-      label: 'taoistprogrammer.com',
-    },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562731/bp-portfolio/images/logos/taoist-programmer_qhjxlo_q4g7gx.png',
-  },
-  {
-    name: 'Taoist Shop',
-    description:
-      'eCommerce Webstore built with Gatsby.js, Shopify Storefront API, and Netlify',
-    link: {
-      href: 'https://shop.taoistprogrammer.com/',
-      label: 'shop.taoistprogrammer.com',
-    },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562731/bp-portfolio/images/logos/taoist-programmer_qhjxlo_q4g7gx.png',
-  },
+  // {
+  //   name: 'Taoist Programmer',
+  //   description: 'Digital thought garden built with Gatsby.js and Netlify',
+  //   link: {
+  //     href: 'https://taoistprogrammer.com/',
+  //     label: 'taoistprogrammer.com',
+  //   },
+  //   logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562731/bp-portfolio/images/logos/taoist-programmer_qhjxlo_q4g7gx.png',
+  // },
+  // {
+  //   name: 'Taoist Shop',
+  //   description:
+  //     'eCommerce Webstore built with Gatsby.js, Shopify Storefront API, and Netlify',
+  //   link: {
+  //     href: 'https://shop.taoistprogrammer.com/',
+  //     label: 'shop.taoistprogrammer.com',
+  //   },
+  //   logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562731/bp-portfolio/images/logos/taoist-programmer_qhjxlo_q4g7gx.png',
+  // },
   {
     name: 'Slicks Slices',
     description:
