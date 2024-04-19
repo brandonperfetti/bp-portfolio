@@ -4,12 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 import { Container } from '@/components/Container'
-import {
-  GitHubIcon,
-  InstagramIcon,
-  LinkedInIcon,
-  XIcon,
-} from '@/components/SocialIcons'
+import { GitHubIcon, LinkedInIcon, XIcon } from '@/components/SocialIcons'
 
 function SocialLink({
   className,
@@ -57,14 +52,14 @@ export default function About() {
     <Container className="mt-16 sm:mt-32">
       <div className="grid grid-cols-1 gap-y-16 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:gap-y-12">
         <div className="lg:pl-20">
-          <div className="max-w-xs px-2.5 lg:max-w-none">
+          <div className="mx-auto max-w-xs px-2.5 lg:max-w-none">
             <Image
               height={800}
               width={800}
               src="https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142618/bp-spotlight/images/portrait_zdvgpf.jpg"
               alt=""
               sizes="(min-width: 1024px) 32rem, 20rem"
-              className="aspect-square rotate-3 rounded-2xl bg-zinc-100 object-cover dark:bg-zinc-800"
+              className="aspect-square rounded-2xl bg-zinc-100 object-cover md:rotate-3 dark:bg-zinc-800"
             />
           </div>
         </div>
@@ -176,7 +171,7 @@ export default function About() {
             </div>
           </div>
         </div>
-        <div className="lg:pl-20">
+        <div className="mb-4 lg:pl-20">
           <ul role="list">
             <SocialLink href="https://twitter.com/brandonperfetti" icon={XIcon}>
               Follow on X
@@ -184,7 +179,11 @@ export default function About() {
             {/* <SocialLink href="#" icon={InstagramIcon} className="mt-4">
               Follow on Instagram
             </SocialLink> */}
-            <SocialLink href="https://github.com/brandonperfetti" icon={GitHubIcon} className="mt-4">
+            <SocialLink
+              href="https://github.com/brandonperfetti"
+              icon={GitHubIcon}
+              className="mt-4"
+            >
               Follow on GitHub
             </SocialLink>
             <SocialLink href="#" icon={LinkedInIcon} className="mt-4">
