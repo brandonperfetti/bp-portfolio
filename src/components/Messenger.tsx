@@ -85,7 +85,6 @@ export default function Messenger() {
 
       const { error } = await res.json()
       if (error) {
-        // console.log(error)
         setShowSuccessMessage(false)
         setShowFailureMessage(true)
         setButtonText('Send')
@@ -106,7 +105,6 @@ export default function Messenger() {
       setMessage('')
       setSubject('')
     }
-    // console.log(fullname, email, subject, message)
   }
   return (
     <form

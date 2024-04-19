@@ -15,7 +15,6 @@ export const runtime = "edge";
 export async function POST(req: Request): Promise<Response> {
   try {
     const forwardedProps = await req.json();
-    // console.log("Received props:", JSON.stringify(forwardedProps, null, 2));
 
     // Check if messages is an array
     if (!Array.isArray(forwardedProps.messages)) {

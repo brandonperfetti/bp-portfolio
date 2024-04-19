@@ -6,11 +6,10 @@ import { useContext, useEffect, useRef, useState } from 'react'
 import { AppContext } from '@/app/providers'
 import { Container } from '@/components/Container'
 import { Prose } from '@/components/Prose'
+import { ArrowLeftIcon } from '@/icons/ArrowLeftIcon'
 import { type ArticleWithSlug } from '@/lib/articles'
 import { formatDate } from '@/lib/formatDate'
 import { readingTime } from 'reading-time-estimator'
-import { ArrowLeftIcon } from '@/icons/ArrowLeftIcon'
-
 
 export function ArticleLayout({
   article,
@@ -26,7 +25,7 @@ export function ArticleLayout({
 
   useEffect(() => {
     setText(ref.current?.innerText)
-  }, [ref, text])
+  }, [ref])
 
   const readingTimeResult = readingTime(text || '', 230)
 
@@ -44,7 +43,7 @@ export function ArticleLayout({
               <ArrowLeftIcon className="h-4 w-4 stroke-zinc-500 transition group-hover:stroke-zinc-700 dark:stroke-zinc-500 dark:group-hover:stroke-zinc-400" />
             </button>
           )}
-          <article>
+          <article ref={ref}>
             <header className="flex flex-col">
               <h1 className="mt-6 text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100">
                 {article.title}

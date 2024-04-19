@@ -15,7 +15,6 @@ export async function POST(req: NextRequest, res: NextResponse) {
     })
   }
   const body = await req.json()
-  // console.log('Request body: ', body)
 
   const emailContent = `
     <!DOCTYPE html>

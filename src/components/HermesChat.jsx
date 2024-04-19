@@ -1,5 +1,6 @@
 'use client'
 import { SendIcon } from '@/icons/SendIcon'
+import { ShortcutIcon } from '@/icons/ShortcutIcon'
 import {
   ArrowDownIcon,
   ClipboardIcon,
@@ -10,7 +11,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useCopyToClipboard } from 'usehooks-ts'
 import { Input } from './Input'
 import { Tooltip } from './ToolTip'
-import { ShortcutIcon } from '@/icons/ShortcutIcon'
 
 export default function HermesChat() {
   const [isLoading, setIsLoading] = useState(false)
@@ -31,6 +31,7 @@ export default function HermesChat() {
       role: 'assistant',
     },
   ])
+  const hasImage = /<img src=/.test(message.content)
 
   const submitMessage = (event) => {
     event.preventDefault()
@@ -70,9 +71,9 @@ export default function HermesChat() {
           method: 'POST',
           body: JSON.stringify({ message: strippedMessage }),
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
-        }).then((r) => r.json());
+        }).then((r) => r.json())
 
         setIsLoadingDali(false)
         setMessages((messages) => [
@@ -248,8 +249,9 @@ export default function HermesChat() {
                             }}
                           />{' '}
                           <div className="flex">
-                            {message.content !==
-                              "Hey there 👋, I'm Hermes ⚡, your virtual assistant! What can I help with?" && (
+                            {(message.content !==
+                              "Hey there 👋, I'm Hermes ⚡, your virtual assistant! What can I help with?" ||
+                              hasImage) && (
                               <div className="w-full pt-2">
                                 <Tooltip
                                   delay={700}

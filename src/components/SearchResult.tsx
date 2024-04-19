@@ -1,19 +1,17 @@
-import Link from "next/link";
-import { FC } from "react";
-import { connectStateResults, Hits, Index } from "react-instantsearch-dom";
+import Link from 'next/link'
+import { FC } from 'react'
+import { connectStateResults, Hits, Index } from 'react-instantsearch-dom'
 
 interface SearchResultProps {
-  indices: any[];
-  className?: string;
-  show: string | boolean | undefined;
+  indices: any[]
+  className?: string
+  show: string | boolean | undefined
 }
 
 const HitCount = connectStateResults(({ searchState, searchResults }) => {
-  const validQuery = searchState?.query?.length || 0 >= 3;
+  const validQuery = searchState?.query?.length || 0 >= 3
   const hitCount =
-    searchResults?.hits.length && validQuery && searchResults.nbHits;
-
-  // console.log('searchResults', searchResults)
+    searchResults?.hits.length && validQuery && searchResults.nbHits
 
   return validQuery ? (
     <div className="float-right flex">
@@ -21,16 +19,14 @@ const HitCount = connectStateResults(({ searchState, searchResults }) => {
         {hitCount} result{hitCount !== 1 ? `s` : ``}
       </div>
     </div>
-  ) : null;
-});
+  ) : null
+})
 
 // @ts-ignore
 const PageHit = connectStateResults(({ searchState, searchResults, hit }) => {
-  const validQuery = searchState?.query?.length || 0 >= 3;
+  const validQuery = searchState?.query?.length || 0 >= 3
   const hitCount =
-    searchResults?.hits.length && validQuery && searchResults.nbHits;
-
-  // console.log(hit);
+    searchResults?.hits.length && validQuery && searchResults.nbHits
 
   return Number(hitCount) > 0 ? (
     <div className="py-1">
@@ -49,8 +45,8 @@ const PageHit = connectStateResults(({ searchState, searchResults, hit }) => {
         </Link>
       </div>
     </div>
-  ) : null;
-});
+  ) : null
+})
 
 const HitsInIndex: FC<{ index: any }> = ({ index }) => {
   return (
@@ -63,8 +59,8 @@ const HitsInIndex: FC<{ index: any }> = ({ index }) => {
         </Index>
       </div>
     </>
-  );
-};
+  )
+}
 
 const SearchResult: FC<SearchResultProps> = ({ indices, className }) => (
   <div className={className}>
@@ -72,6 +68,6 @@ const SearchResult: FC<SearchResultProps> = ({ indices, className }) => (
       <HitsInIndex index={index} key={index.name} />
     ))}
   </div>
-);
+)
 
-export default SearchResult;
+export default SearchResult

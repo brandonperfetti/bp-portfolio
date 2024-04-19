@@ -1,9 +1,7 @@
 'use client'
-import { AppContext } from '@/app/providers'
 import { ArticleWithSlug } from '@/lib/articles'
 import { filterArticles } from '@/lib/filterArticles'
 import { useSearchParams } from 'next/navigation'
-import { useContext } from 'react'
 import { ArticleCard } from './ArticleCard'
 
 interface FilterableArticlesProps {
@@ -13,12 +11,7 @@ interface FilterableArticlesProps {
 export function FilterableArticles({ articles }: FilterableArticlesProps) {
   const searchParams = useSearchParams()
   const category = searchParams.get('category') || ''
-  // console.log('Category:', category)
-  let { previousPathname } = useContext(AppContext)
-
   const filteredArticles = filterArticles(articles, category)
-  // console.log('Filtered Articles:', filteredArticles.length)
-
   return (
     <div>
       <h2 className="text-3xl font-semibold text-slate-900 dark:text-white">
