@@ -105,7 +105,7 @@ export default async function ArticlesIndex({
     >
       <div>
         <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-x-8 gap-y-20 lg:mx-0 lg:max-w-none lg:grid-cols-3">
-          {displayArticles.map((article) => (
+          {articles.map((article) => (
             <Article key={article.slug} article={article} />
           ))}
         </div>
