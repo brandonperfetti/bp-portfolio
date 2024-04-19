@@ -78,6 +78,24 @@ export const metadata: Metadata = {
     'All of my long-form thoughts on programming, leadership, product design, and more, collected in chronological order.',
 }
 
+function filterArticles(
+  articles: ArticleWithSlug[],
+  category: string | string[] | undefined,
+): ArticleWithSlug[] {
+  if (!category) return articles // Return all articles if no category is specified
+
+  // Normalize and filter articles based on category
+  const normalizedCategory =
+    typeof category === 'string'
+      ? category.toLowerCase().replace(/\s+/g, '')
+      : ''
+  return articles.filter(
+    (article) =>
+      article.category?.title.toLowerCase().replace(/\s+/g, '') ===
+      normalizedCategory,
+  )
+}
+
 export default async function ArticlesIndex({
   searchParams,
 }: {
@@ -89,14 +107,12 @@ export default async function ArticlesIndex({
   let articles = await getAllArticles()
   console.log('Articles Fetched:', articles.length) // Check how many articles are fetched
 
-  // const filteredArticles = filterArticles(
-  //   articles,
-  //   searchParams?.category || '',
-  // )
-  // console.log('Filtered Articles Fetched:', filteredArticles.length) // Check how many articles are fetched
-
-  // const displayArticles =
-  //   filteredArticles.length < 1 ? articles : filteredArticles
+  // TODO: Figure out why filtering articles returns 0 articles on production - could be related to calling searchParams
+  const filteredArticles = filterArticles(
+    articles,
+    searchParams?.category || '',
+  )
+  console.log('Filtered Articles Fetched:', filteredArticles.length) // Check how many articles are fetched
 
   return (
     <SimpleLayout
@@ -105,7 +121,7 @@ export default async function ArticlesIndex({
     >
       <div>
         <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-x-8 gap-y-20 lg:mx-0 lg:max-w-none lg:grid-cols-3">
-          {articles.map((article) => (
+          {filteredArticles.map((article) => (
             <Article key={article.slug} article={article} />
           ))}
         </div>
