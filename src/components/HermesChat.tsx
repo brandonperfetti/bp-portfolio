@@ -12,14 +12,24 @@ import { useCopyToClipboard } from 'usehooks-ts'
 import { Input } from './Input'
 import { Tooltip } from './ToolTip'
 
-export default function HermesChat() {
-  const [isLoading, setIsLoading] = useState(false)
-  const [isLoadingDali, setIsLoadingDali] = useState(false)
-  const [message, setMessage] = useState('')
-  const [typingMessage, setTypingMessage] = useState('')
-  const [isChatStart, setIsChatStart] = useState(true)
-  const [isDali, setIsDali] = useState(false)
-  const [isBlogPost, setIsBlogPost] = useState(false)
+interface Message {
+  content: string
+  role: 'user' | 'assistant'
+}
+
+interface ReadableStreamChunk {
+  done: boolean
+  value: Uint8Array
+}
+
+const HermesChat: React.FC = () => {
+  // const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [isLoadingDali, setIsLoadingDali] = useState<boolean>(false)
+  const [message, setMessage] = useState<string>('')
+  const [typingMessage, setTypingMessage] = useState<string>('')
+  const [isChatStart, setIsChatStart] = useState<boolean>(true)
+  const [isDali, setIsDali] = useState<boolean>(false)
+  // const [isBlogPost, setIsBlogPost] = useState<boolean>(false)
 
   const [value, copy] = useCopyToClipboard()
   const [isTyping, setIsTyping] = useState(false)
@@ -32,24 +42,26 @@ export default function HermesChat() {
     },
   ])
 
-  const submitMessage = (event) => {
+  const chatContainerRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  const submitMessage = (event: React.FormEvent) => {
     event.preventDefault()
     setIsChatStart(false)
-    setIsLoading(true)
+    // setIsLoading(true)
 
     // Add user message in the correct format
-    const newUserMessage = {
+    const newUserMessage: Message = {
       role: 'user',
       content: message,
     }
 
     setMessages((prevMessages) => [...prevMessages, newUserMessage])
-
     processMessage(newUserMessage) // Send the newly formatted message to the API
     setMessage('')
   }
 
-  const processMessage = async (newMessage) => {
+  const processMessage = async (newMessage: Message) => {
     const apiMessages = messages.map((msg) => ({
       role: msg.role === 'user' ? 'user' : 'assistant',
       content: msg.content,
@@ -64,7 +76,7 @@ export default function HermesChat() {
       try {
         setIsDali(true)
         setIsLoadingDali(true)
-        setIsBlogPost(false)
+        // setIsBlogPost(false)
         const strippedMessage = newMessage.content.replace('Dali: ', '')
         const { image } = await fetch('/api/openai/image', {
           method: 'POST',
@@ -103,13 +115,17 @@ export default function HermesChat() {
           throw new Error('Stream failed to start')
         }
 
-        const reader = response.body.getReader()
+        const reader: ReadableStreamDefaultReader<Uint8Array> =
+          response.body!.getReader()
         let buffer = ''
         let currentMessage = ''
 
-        const processStream = async ({ done, value }) => {
+        const processStream = async ({
+          done,
+          value,
+        }: ReadableStreamReadResult<Uint8Array>): Promise<void> => {
           if (done) {
-            setIsLoading(false)
+            // setIsLoading(false)
             setIsTyping(false)
             finalizeMessage(currentMessage)
             setTypingMessage('') // Clear the typing simulation
@@ -129,13 +145,13 @@ export default function HermesChat() {
               setIsTyping(true)
             }
           }
-          reader.read().then(processStream)
+          reader?.read().then(processStream)
         }
 
-        reader.read().then(processStream)
+        reader?.read().then(processStream)
       } catch (err) {
         console.error('Error fetching data:', err)
-        setIsLoading(false)
+        // setIsLoading(false)
         setMessages((prevMessages) => [
           ...prevMessages,
           {
@@ -147,7 +163,7 @@ export default function HermesChat() {
     }
   }
 
-  const finalizeMessage = (finalMessage) => {
+  const finalizeMessage = (finalMessage: string) => {
     setIsTyping(false)
     setMessages((prevMessages) => [
       ...prevMessages,
@@ -155,17 +171,14 @@ export default function HermesChat() {
     ])
   }
 
-  const chatContainerRef = useRef(null)
-
   useEffect(() => {
-    // Scroll chat container to the bottom on mount and update.
-    chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+    }
   })
 
-  const searchInputRef = useRef(null)
-
   useEffect(() => {
-    function onKeyPress(event) {
+    const onKeyPress = (event: KeyboardEvent) => {
       if (
         event.key === '/' &&
         document.activeElement !== searchInputRef.current
@@ -188,41 +201,6 @@ export default function HermesChat() {
     }
   }, [isCopied])
 
-  const displayMessageCharByChar = (fullMessage, interval = 50) => {
-    setIsTyping(true)
-    let currentIndex = 0
-
-    const intervalId = setInterval(() => {
-      if (currentIndex <= fullMessage.length) {
-        const currentMessage = fullMessage.slice(0, currentIndex++)
-        setMessages((prevMessages) => {
-          const newMessages = [...prevMessages]
-          const lastMessage = newMessages[newMessages.length - 1]
-          if (lastMessage && lastMessage.role === 'assistant' && isTyping) {
-            // Update the last message if it's from the assistant and is being "typed"
-            lastMessage.content = currentMessage
-          } else {
-            // This case should not happen if function is used correctly, but it's a safeguard
-            newMessages.push({ role: 'assistant', content: currentMessage })
-          }
-          return newMessages
-        })
-      } else {
-        clearInterval(intervalId)
-        setIsTyping(false)
-        // Ensure the final message is set completely only once at the end
-        setMessages((prevMessages) => {
-          const newMessages = [...prevMessages]
-          newMessages[newMessages.length - 1] = {
-            role: 'assistant',
-            content: fullMessage,
-          }
-          return newMessages
-        })
-      }
-    }, interval)
-  }
-
   return (
     <div>
       <div className="flex h-[75vh] flex-col overflow-hidden md:h-[75vh]">
@@ -233,7 +211,7 @@ export default function HermesChat() {
         >
           {messages.map((message, index) => {
             return message.role === 'assistant' ? (
-              <div key={index} id={index} className="chat-message">
+              <div key={index} id={`${index}_id`} className="chat-message">
                 <div className="flex items-end">
                   <div className="order-2 mx-2 flex max-w-xs flex-col items-start space-y-2 text-xs lg:max-w-md">
                     <div>
@@ -411,3 +389,5 @@ export default function HermesChat() {
     </div>
   )
 }
+
+export default HermesChat
