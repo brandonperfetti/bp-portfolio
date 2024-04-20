@@ -1,7 +1,7 @@
 /** @type {import('next-sitemap').IConfig} */
 module.exports = {
-  siteUrl: process.env.SITE_URL || "https://brandonperfetti.com",
+  siteUrl: process.env.SITE_URL || 'https://brandonperfetti.com',
   generateRobotsTxt: true, // (optional)
-  // generateIndexSitemap: false,
+  generateIndexSitemap: false,
   // ...other options
-};
+}
