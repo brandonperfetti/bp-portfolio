@@ -1,14 +1,16 @@
 'use client'
+import { filterArticles } from '@/lib'
 import { ArticleWithSlug } from '@/lib/articles'
-import { filterArticles } from '@/lib/filterArticles'
 import { useSearchParams } from 'next/navigation'
-import { ArticleCard } from './ArticleCard'
+import ArticleCard from './ArticleCard'
 
 interface FilterableArticlesProps {
   articles: ArticleWithSlug[]
 }
 
-export function FilterableArticles({ articles }: FilterableArticlesProps) {
+export default function FilterableArticles({
+  articles,
+}: FilterableArticlesProps) {
   const searchParams = useSearchParams()
   const category = searchParams.get('category') || ''
   const filteredArticles = filterArticles(articles, category)

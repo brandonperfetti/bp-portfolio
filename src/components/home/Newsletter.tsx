@@ -1,9 +1,9 @@
 'use client'
-import { MailIcon } from '@/icons/MailIcon'
+import Button from '@/components/common/Button'
+import { MailIcon } from '@/icons'
 import { ArrowRightIcon } from '@heroicons/react/24/outline'
 import { useState } from 'react'
-import Button from './Button'
-import { Spinner } from './Spinner'
+import { Spinner } from '../common'
 
 export default function Newsletter() {
   const [mail, setMail] = useState<any | null>(null)

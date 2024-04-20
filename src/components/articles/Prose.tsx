@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 
-export function Prose({
+export default function Prose({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<'div'>) {

@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { ElementType, forwardRef, ReactNode } from 'react'
-import { Spinner } from './Spinner'
+import Spinner from './Spinner'
 
 interface OwnButtonProps {
   variant?: 'primary' | 'secondary' | 'tertiary' | 'tertiary-danger' | 'danger'

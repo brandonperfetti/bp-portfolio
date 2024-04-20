@@ -1,6 +1,6 @@
-import { Card } from '@/components/Card'
-import { SimpleLayout } from '@/components/SimpleLayout'
-import { LinkIcon } from '@/icons/LinkIcon'
+import { SimpleLayout } from '@/components/common'
+import { Card } from '@/components/common/Card'
+import { LinkIcon } from '@/icons'
 import { Metadata } from 'next'
 import Image from 'next/image'
 
@@ -150,16 +150,16 @@ const techStack = [
     },
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562758/bp-portfolio/images/logos/tailwind_pho1an_j8ex5y.png',
   },
-  {
-    name: 'Tailwind UI',
-    description:
-      'Beautifully designed, expertly crafted components and templates, built by the makers of Tailwind CSS. The perfect starting point for your next project.',
-    link: {
-      href: 'https://tailwindui.com/',
-      label: 'tailwindui.com',
-    },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562758/bp-portfolio/images/logos/tailwind_pho1an_j8ex5y.png',
-  },
+  // {
+  //   name: 'Tailwind UI',
+  //   description:
+  //     'Beautifully designed, expertly crafted components and templates, built by the makers of Tailwind CSS. The perfect starting point for your next project.',
+  //   link: {
+  //     href: 'https://tailwindui.com/',
+  //     label: 'tailwindui.com',
+  //   },
+  //   logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562758/bp-portfolio/images/logos/tailwind_pho1an_j8ex5y.png',
+  // },
   {
     name: 'Headless UI',
     description:

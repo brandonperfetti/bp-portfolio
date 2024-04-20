@@ -1,10 +1,9 @@
+import { Container } from '@/components/common/Container'
+import { GitHubIcon, LinkedInIcon, XIcon } from '@/icons'
 import clsx from 'clsx'
 import { type Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
-
-import { Container } from '@/components/Container'
-import { GitHubIcon, LinkedInIcon, XIcon } from '@/components/SocialIcons'
 
 function SocialLink({
   className,

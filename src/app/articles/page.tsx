@@ -1,6 +1,5 @@
-import { ArticleCard } from '@/components/ArticleCard'
-import { FilterableArticles } from '@/components/FilterableArticles'
-import { SimpleLayout } from '@/components/SimpleLayout'
+import { ArticleCard, FilterableArticles } from '@/components/articles'
+import { SimpleLayout } from '@/components/common'
 import { getAllArticles } from '@/lib/articles'
 import { Metadata } from 'next'
 import { Suspense } from 'react'

@@ -1,6 +1,5 @@
-import { Card } from '@/components/Card'
-import { Section } from '@/components/Section'
-import { SimpleLayout } from '@/components/SimpleLayout'
+import { Section, SimpleLayout } from '@/components/common'
+import { Card } from '@/components/common/Card'
 
 function ToolsSection({
   children,
@@ -48,8 +47,8 @@ export default function Uses() {
       <div className="space-y-20">
         <ToolsSection title="Workstation">
           <Tool title="14” MacBook Pro, Apple M2 Pro, 16GB RAM (2023)">
-            You don&apos;t think you need to upgrade your laptop until you do. I am
-            thrilled with the performance of the M2 Pro chip. Never looking
+            You don&apos;t think you need to upgrade your laptop until you do. I
+            am thrilled with the performance of the M2 Pro chip. Never looking
             back. 🚀
           </Tool>
           <Tool title="Dual 27'' LG UltraFine UHD 4k HDR Monitors">
@@ -57,9 +56,9 @@ export default function Uses() {
             always be preferred.
           </Tool>
           <Tool title="Apple Magic Keyboard">
-            I have always been using some iteration of Apple&apos;s Magic Keyboard.
-            It&apos;s a pleasent experince if you have yet to drink the mechanical
-            keyboard kool aid.
+            I have always been using some iteration of Apple&apos;s Magic
+            Keyboard. It&apos;s a pleasent experince if you have yet to drink
+            the mechanical keyboard kool aid.
           </Tool>
           <Tool title="Apple Magic Trackpad">
             Something about all the gestures makes me feel like a wizard with
@@ -67,8 +66,8 @@ export default function Uses() {
             powers.
           </Tool>
           <Tool title="FAMISKY Electric Standup Desk">
-            I&apos;ve been coding standing up for almost a decade. I&apos;ll sit when I&apos;m
-            dead.
+            I&apos;ve been coding standing up for almost a decade. I&apos;ll sit
+            when I&apos;m dead.
           </Tool>
           <Tool title="Audio Pro USBC Microphone">
             When you shift from office life to remote work and zoom meetings,
@@ -104,9 +103,9 @@ export default function Uses() {
             onto a visual board for the team to analize, discuss and iterate on.
           </Tool>
           <Tool title="Pixelmator Pro">
-            I&apos;ve spent years trying to learn the ins and outs of Adobe Creative
-            Cloud, but at then end of the day i keep coming back to Pixelmator
-            for literally all of my graphic design needs.
+            I&apos;ve spent years trying to learn the ins and outs of Adobe
+            Creative Cloud, but at then end of the day i keep coming back to
+            Pixelmator for literally all of my graphic design needs.
           </Tool>
         </ToolsSection>
         <ToolsSection title="Podcasts">
@@ -129,11 +128,12 @@ export default function Uses() {
           <Tool title="The Tim Ferris Show">
             Tim Ferriss is a self-experimenter and bestselling author, best
             known for The 4-Hour Workweek, which has been translated into 40+
-            languages. Newsweek calls him &quot;the world&apos;s best human guinea pig,&quot;
-            and The New York Times calls him &quot;a cross between Jack Welch and a
-            Buddhist monk.&quot; In this show, he deconstructs world-class performers
-            from eclectic areas (investing, chess, pro sports, etc.), digging
-            deep to find the tools, tactics, and tricks that listeners can use.
+            languages. Newsweek calls him &quot;the world&apos;s best human
+            guinea pig,&quot; and The New York Times calls him &quot;a cross
+            between Jack Welch and a Buddhist monk.&quot; In this show, he
+            deconstructs world-class performers from eclectic areas (investing,
+            chess, pro sports, etc.), digging deep to find the tools, tactics,
+            and tricks that listeners can use.
           </Tool>
         </ToolsSection>
       </div>

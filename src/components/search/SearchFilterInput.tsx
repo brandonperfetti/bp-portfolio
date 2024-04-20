@@ -1,6 +1,6 @@
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { ChangeEvent, useEffect, useRef } from 'react'
-import { Input } from './Input'
+import { Input } from '../common'
 
 interface SearchFilterInputProps {
   id?: string
@@ -10,7 +10,7 @@ interface SearchFilterInputProps {
   onChange: (e: ChangeEvent<HTMLInputElement>) => void
 }
 
-export const SearchFilterInput = ({
+const SearchFilterInput = ({
   value,
   placeholder,
   onChange,
@@ -44,3 +44,4 @@ export const SearchFilterInput = ({
     />
   )
 }
+export default SearchFilterInput

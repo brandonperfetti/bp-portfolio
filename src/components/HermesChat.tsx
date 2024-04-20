@@ -1,6 +1,6 @@
 'use client'
-import { SendIcon } from '@/icons/SendIcon'
-import { ShortcutIcon } from '@/icons/ShortcutIcon'
+import { Tooltip } from '@/components/common/ToolTip'
+import { SendIcon, ShortcutIcon } from '@/icons'
 import {
   ArrowDownIcon,
   ClipboardIcon,
@@ -9,8 +9,7 @@ import {
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useCopyToClipboard } from 'usehooks-ts'
-import { Input } from './Input'
-import { Tooltip } from './ToolTip'
+import { Input } from './common'
 
 interface Message {
   content: string
@@ -273,7 +272,7 @@ const HermesChat: React.FC = () => {
             <>
               <div className="flex w-full justify-center pt-4">
                 <div className="flex align-middle dark:text-white">
-                  <PencilIcon className="mr-2 mt-1 h-6 w-6" />
+                  <PencilIcon className="mr-2 mt-2 h-4 w-4" />
                   <h2 className="text-xl">Examples</h2>
                 </div>
               </div>

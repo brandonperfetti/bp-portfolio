@@ -1,16 +1,12 @@
+import { Card } from '@/components/common'
+import { Container } from '@/components/common/Container'
+import { Messenger, Newsletter, Resume } from '@/components/home'
+import { GitHubIcon, LinkedInIcon, XIcon } from '@/icons'
+import { formatDate } from '@/lib'
+import { getAllArticles, type ArticleWithSlug } from '@/lib/articles'
 import clsx from 'clsx'
 import Image from 'next/image'
 import Link from 'next/link'
-
-import { Card } from '@/components/Card'
-import { Container } from '@/components/Container'
-import Messenger from '@/components/Messenger'
-import { GitHubIcon, LinkedInIcon, XIcon } from '@/components/SocialIcons'
-
-import Newsletter from '@/components/Newsletter'
-import Resume from '@/components/Resume'
-import { getAllArticles, type ArticleWithSlug } from '@/lib/articles'
-import { formatDate } from '@/lib/formatDate'
 
 function Article({ article }: { article: ArticleWithSlug }) {
   return (

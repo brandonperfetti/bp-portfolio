@@ -1,7 +1,6 @@
-import { ArrowDownIcon } from '@/icons/ArrowDownIcon'
-import { BriefcaseIcon } from '@/icons/BriefcaseIcon'
+import Button from '@/components/common/Button'
+import { ArrowDownIcon, BriefcaseIcon } from '@/icons'
 import Image, { ImageProps } from 'next/image'
-import Button from './Button'
 
 interface Role {
   company: string

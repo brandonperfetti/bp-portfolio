@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-export function useKeyShortcut(cb: () => void): void {
+export default function useKeyShortcut(cb: () => void): void {
   const currentKeys = useRef<{ [key: string]: boolean }>({});
 
   useEffect(() => {

@@ -1,46 +1,47 @@
-import { Dialog, Transition } from "@headlessui/react";
-import { XMarkIcon } from "@heroicons/react/24/outline";
-import clsx from "clsx";
+'use client'
+import { Dialog, Transition } from '@headlessui/react'
+import { XMarkIcon } from '@heroicons/react/24/outline'
+import clsx from 'clsx'
 import {
   Children,
   Fragment,
   PropsWithChildren,
   createContext,
   useContext,
-} from "react";
+} from 'react'
 
 const ModalContext = createContext({
   disableTrap: false,
   isFullScreen: false,
   onClose: () => {},
-});
+})
 
 export interface ModalProps {
   size?:
-    | "xs"
-    | "sm"
-    | "md"
-    | "lg"
-    | "xl"
-    | "2xl"
-    | "3xl"
-    | "4xl"
-    | "5xl"
-    | "6xl"
-    | "7xl"
-    | "max"
-    | "full-screen";
-  fullHeight?: boolean;
-  isOpen: boolean;
-  isTop?: boolean;
-  hideClose?: boolean;
-  disableTrap?: boolean;
-  onClose: () => void;
-  onAfterClose?: () => void;
+    | 'xs'
+    | 'sm'
+    | 'md'
+    | 'lg'
+    | 'xl'
+    | '2xl'
+    | '3xl'
+    | '4xl'
+    | '5xl'
+    | '6xl'
+    | '7xl'
+    | 'max'
+    | 'full-screen'
+  fullHeight?: boolean
+  isOpen: boolean
+  isTop?: boolean
+  hideClose?: boolean
+  disableTrap?: boolean
+  onClose: () => void
+  onAfterClose?: () => void
 }
 
 export function Modal({
-  size = "lg",
+  size = 'lg',
   fullHeight = false,
   children,
   isOpen,
@@ -50,31 +51,31 @@ export function Modal({
   onClose,
   onAfterClose,
 }: PropsWithChildren<ModalProps>) {
-  const isFullScreen = size === "full-screen";
-  const childrenArray = Children.toArray(children);
+  const isFullScreen = size === 'full-screen'
+  const childrenArray = Children.toArray(children)
   const title = childrenArray.find(
-    (child) => (child as any).type.name === ModalTitle.name
-  );
+    (child) => (child as any).type.name === ModalTitle.name,
+  )
   const content = childrenArray.filter(
-    (child) => (child as any).type.name !== ModalTitle.name
-  );
+    (child) => (child as any).type.name !== ModalTitle.name,
+  )
   const body = (
     <div
-      className={clsx("flex  justify-center", {
-        "min-h-screen": !isTop,
-        "mt-14 items-start": isTop,
-        "items-center": !fullHeight,
-        "p-4": size !== "full-screen",
+      className={clsx('flex  justify-center', {
+        'min-h-screen': !isTop,
+        'mt-14 items-start': isTop,
+        'items-center': !fullHeight,
+        'p-4': size !== 'full-screen',
       })}
     >
       <Transition.Child
         as={Fragment}
-        enter={clsx({ "ease-out duration-300": !isFullScreen })}
-        enterFrom={clsx({ "opacity-0": !isFullScreen })}
-        enterTo={clsx({ "opacity-100": !isFullScreen })}
-        leave={clsx({ "ease-in duration-200": !isFullScreen })}
-        leaveFrom={clsx({ "opacity-100": !isFullScreen })}
-        leaveTo={clsx({ "opacity-0": !isFullScreen })}
+        enter={clsx({ 'ease-out duration-300': !isFullScreen })}
+        enterFrom={clsx({ 'opacity-0': !isFullScreen })}
+        enterTo={clsx({ 'opacity-100': !isFullScreen })}
+        leave={clsx({ 'ease-in duration-200': !isFullScreen })}
+        leaveFrom={clsx({ 'opacity-100': !isFullScreen })}
+        leaveTo={clsx({ 'opacity-0': !isFullScreen })}
       >
         <div>
           {disableTrap && (
@@ -84,8 +85,8 @@ export function Modal({
               className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
               onClick={onClose}
               onKeyUp={(e) => {
-                if (e.key === "Escape") {
-                  onClose();
+                if (e.key === 'Escape') {
+                  onClose()
                 }
               }}
             />
@@ -97,41 +98,41 @@ export function Modal({
       </Transition.Child>
       <Transition.Child
         as={Fragment}
-        enter={clsx({ "ease-out duration-300": !isFullScreen })}
+        enter={clsx({ 'ease-out duration-300': !isFullScreen })}
         enterFrom={clsx({
-          "opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95": !isFullScreen,
+          'opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95': !isFullScreen,
         })}
         enterTo={clsx({
-          "opacity-100 translate-y-0 sm:scale-100": !isFullScreen,
+          'opacity-100 translate-y-0 sm:scale-100': !isFullScreen,
         })}
-        leave={clsx({ "ease-in duration-200": !isFullScreen })}
+        leave={clsx({ 'ease-in duration-200': !isFullScreen })}
         leaveFrom={clsx({
-          "opacity-100 translate-y-0 sm:scale-100": !isFullScreen,
+          'opacity-100 translate-y-0 sm:scale-100': !isFullScreen,
         })}
         leaveTo={clsx({
-          "opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95": !isFullScreen,
+          'opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95': !isFullScreen,
         })}
         afterLeave={onAfterClose}
       >
         <div
-          className={clsx("transform shadow-xl transition-all", {
-            "max-w-xs": size === "xs",
-            "max-w-sm": size === "sm",
-            "max-w-md": size === "md",
-            "max-w-lg": size === "lg",
-            "max-w-xl": size === "xl",
-            "max-w-2xl": size === "2xl",
-            "max-w-3xl": size === "3xl",
-            "max-w-4xl": size === "4xl",
-            "max-w-5xl": size === "5xl",
-            "max-w-6xl": size === "6xl",
-            "max-w-7xl": size === "7xl",
-            "max-w-max": size === "max",
+          className={clsx('transform shadow-xl transition-all', {
+            'max-w-xs': size === 'xs',
+            'max-w-sm': size === 'sm',
+            'max-w-md': size === 'md',
+            'max-w-lg': size === 'lg',
+            'max-w-xl': size === 'xl',
+            'max-w-2xl': size === '2xl',
+            'max-w-3xl': size === '3xl',
+            'max-w-4xl': size === '4xl',
+            'max-w-5xl': size === '5xl',
+            'max-w-6xl': size === '6xl',
+            'max-w-7xl': size === '7xl',
+            'max-w-max': size === 'max',
 
-            "w-full rounded-lg bg-white px-4 pb-4 pt-4 dark:bg-zinc-800 sm:my-8 sm:p-6":
+            'w-full rounded-lg bg-white px-4 pb-4 pt-4 sm:my-8 sm:p-6 dark:bg-zinc-800':
               !isFullScreen,
 
-            "flex h-screen w-screen flex-col overflow-auto bg-gray-100":
+            'flex h-screen w-screen flex-col overflow-auto bg-gray-100':
               isFullScreen,
           })}
         >
@@ -157,7 +158,7 @@ export function Modal({
         </div>
       </Transition.Child>
     </div>
-  );
+  )
 
   return (
     <ModalContext.Provider value={{ disableTrap, isFullScreen, onClose }}>
@@ -172,7 +173,7 @@ export function Modal({
                 // We don't want the user to close the modal when
                 // they hit the escape key when in fullscreen.
                 if (!isFullScreen) {
-                  onClose();
+                  onClose()
                 }
               }}
             >
@@ -182,13 +183,13 @@ export function Modal({
         </div>
       </Transition.Root>
     </ModalContext.Provider>
-  );
+  )
 }
 
-Modal.Title = ModalTitle;
+Modal.Title = ModalTitle
 
 function ModalTitle({ children }: PropsWithChildren<unknown>) {
-  const { disableTrap, isFullScreen, onClose } = useContext(ModalContext);
+  const { disableTrap, isFullScreen, onClose } = useContext(ModalContext)
 
   return (
     <>
@@ -228,5 +229,7 @@ function ModalTitle({ children }: PropsWithChildren<unknown>) {
         </>
       )}
     </>
-  );
+  )
 }
+
+export default Modal

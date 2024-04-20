@@ -1,6 +1,6 @@
-import { Container } from '@/components/Container'
+import { Container } from '@/components/common/Container'
 
-export function SimpleLayout({
+export default function SimpleLayout({
   title,
   intro,
   children,

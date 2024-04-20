@@ -1,6 +1,6 @@
 import { type Metadata } from 'next'
 
-import { Container } from '@/components/Container'
+import { Container } from '@/components/common/Container'
 import HermesChat from '@/components/HermesChat'
 
 export const metadata: Metadata = {

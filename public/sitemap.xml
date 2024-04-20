@@ -27,15 +27,15 @@
             </url>
           
             <url>
+                <loc>https://brandonperfetti.com/tech</loc>
+            </url>
+          
+            <url>
                 <loc>https://brandonperfetti.com/thank-you</loc>
             </url>
           
             <url>
                 <loc>https://brandonperfetti.com/uses</loc>
-            </url>
-          
-            <url>
-                <loc>https://brandonperfetti.com/tech</loc>
             </url>
           
             <url>
@@ -111,15 +111,19 @@
             </url>
           
             <url>
-                <loc>https://brandonperfetti.com/articles/in-demand-skills</loc>
-            </url>
-          
-            <url>
                 <loc>https://brandonperfetti.com/articles/leadership-skills</loc>
             </url>
           
             <url>
+                <loc>https://brandonperfetti.com/articles/in-demand-skills</loc>
+            </url>
+          
+            <url>
                 <loc>https://brandonperfetti.com/articles/maximizing-efficiency</loc>
+            </url>
+          
+            <url>
+                <loc>https://brandonperfetti.com/articles/mentorship</loc>
             </url>
           
             <url>
@@ -131,7 +135,7 @@
             </url>
           
             <url>
-                <loc>https://brandonperfetti.com/articles/mentorship</loc>
+                <loc>https://brandonperfetti.com/articles/risk-management</loc>
             </url>
           
             <url>
@@ -144,10 +148,6 @@
           
             <url>
                 <loc>https://brandonperfetti.com/articles/time-management-secrets</loc>
-            </url>
-          
-            <url>
-                <loc>https://brandonperfetti.com/articles/risk-management</loc>
             </url>
           
   </urlset>

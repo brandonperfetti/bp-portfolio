@@ -1,8 +1,6 @@
+import { Section, SimpleLayout } from '@/components/common'
+import { Card } from '@/components/common/Card'
 import { type Metadata } from 'next'
-
-import { Card } from '@/components/Card'
-import { Section } from '@/components/Section'
-import { SimpleLayout } from '@/components/SimpleLayout'
 
 function SpeakingSection({
   children,

@@ -1,17 +1,15 @@
 'use client'
-
+import { AppContext } from '@/app/providers'
+import { Container } from '@/components/common/Container'
+import { ArrowLeftIcon } from '@/icons'
+import { formatDate } from '@/lib'
+import { type ArticleWithSlug } from '@/lib/articles'
 import { useRouter } from 'next/navigation'
 import { useContext, useEffect, useRef, useState } from 'react'
-
-import { AppContext } from '@/app/providers'
-import { Container } from '@/components/Container'
-import { Prose } from '@/components/Prose'
-import { ArrowLeftIcon } from '@/icons/ArrowLeftIcon'
-import { type ArticleWithSlug } from '@/lib/articles'
-import { formatDate } from '@/lib/formatDate'
 import { readingTime } from 'reading-time-estimator'
+import Prose from './Prose'
 
-export function ArticleLayout({
+export default function ArticleLayout({
   article,
   children,
 }: {

@@ -1,9 +1,9 @@
-import { ArticleWithSlug } from "@/lib/articles";
-import { formatDate } from "@/lib/formatDate";
-import Image from "next/image";
-import Link from "next/link";
+import { formatDate } from '@/lib'
+import { ArticleWithSlug } from '@/lib/articles'
+import Image from 'next/image'
+import Link from 'next/link'
 
-export function ArticleCard({ article }: { article: ArticleWithSlug }) {
+export default function ArticleCard({ article }: { article: ArticleWithSlug }) {
   return (
     <article
       key={article.slug}

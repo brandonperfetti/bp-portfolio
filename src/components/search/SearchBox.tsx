@@ -1,14 +1,14 @@
-import { connectSearchBox } from "react-instantsearch-dom";
-import { SearchFilterInput } from "./SearchFilterInput";
+import { connectSearchBox } from 'react-instantsearch-dom'
+import SearchFilterInput from './SearchFilterInput'
 
 interface SearchBoxProps {
-  refine: any;
+  refine: any
 }
 
 function SearchBox({ refine }: SearchBoxProps): JSX.Element {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    refine(e.currentTarget.value);
-  };
+    refine(e.currentTarget.value)
+  }
 
   return (
     <>
@@ -19,7 +19,7 @@ function SearchBox({ refine }: SearchBoxProps): JSX.Element {
         onChange={handleChange}
       />
     </>
-  );
+  )
 }
 
-export default connectSearchBox(SearchBox);
+export default connectSearchBox(SearchBox)

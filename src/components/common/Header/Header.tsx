@@ -1,18 +1,13 @@
 'use client'
-
+import { Container } from '@/components/common/Container'
+import { ChevronDownIcon, CloseIcon, MoonIcon, SunIcon } from '@/icons'
 import { Popover, Transition } from '@headlessui/react'
 import clsx from 'clsx'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Fragment, useEffect, useRef } from 'react'
-
-import { Container } from '@/components/Container'
-import { ChevronDownIcon } from '@/icons/ChevronDownIcon'
-import { CloseIcon } from '@/icons/CloseIcon'
-import { MoonIcon } from '@/icons/MoonIcon'
-import { SunIcon } from '@/icons/SunIcon'
-import { HeaderJumper } from './HeaderJumper'
+import HeaderJumper from './HeaderJumper'
 
 function MobileNavItem({
   href,
@@ -239,7 +234,7 @@ function Avatar({
   )
 }
 
-export function Header() {
+export default function Header() {
   let isHomePage = usePathname() === '/'
 
   let headerRef = useRef<React.ElementRef<'div'>>(null)

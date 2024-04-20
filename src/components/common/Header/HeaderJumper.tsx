@@ -1,19 +1,20 @@
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { useState } from "react";
-import { Modal } from "./Modal";
-import Search from "./Search";
-import { useKeyShortcut } from "./useKeyShortcut";
+'use client'
+import { Search } from '@/components/search'
+import { useKeyShortcut } from '@/hooks'
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { useState } from 'react'
+import Modal from '../Modal'
 
-export function HeaderJumper() {
-  const [showModal, setShowModal] = useState(false);
+export default function HeaderJumper() {
+  const [showModal, setShowModal] = useState(false)
 
-  useKeyShortcut(() => setShowModal(true));
+  useKeyShortcut(() => setShowModal(true))
   const searchIndices = [
     {
       name: `${process.env.NEXT_PUBLIC_ALGOLIA_INDEX_NAME}`,
       title: process.env.NEXT_PUBLIC_ALGOLIA_INDEX_NAME,
     },
-  ];
+  ]
 
   return (
     <button
@@ -40,5 +41,5 @@ export function HeaderJumper() {
         </div>
       </Modal>
     </button>
-  );
+  )
 }

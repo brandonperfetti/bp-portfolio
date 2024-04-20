@@ -1,6 +1,5 @@
+import { ContainerInner, ContainerOuter } from '@/components/common/Container'
 import Link from 'next/link'
-
-import { ContainerInner, ContainerOuter } from '@/components/Container'
 
 function NavLink({
   href,
@@ -19,7 +18,7 @@ function NavLink({
   )
 }
 
-export function Footer() {
+export default function Footer() {
   return (
     <footer className="flex-none">
       <ContainerOuter>

@@ -1,4 +1,4 @@
-export function ArrowDownIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
+export default function ArrowDownIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
       <path

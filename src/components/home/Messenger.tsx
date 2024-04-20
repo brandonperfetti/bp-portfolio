@@ -1,7 +1,7 @@
 'use client'
-import { MailIcon } from '@/icons/MailIcon'
+import Button from '@/components/common/Button'
+import { MailIcon } from '@/icons'
 import { useEffect, useState } from 'react'
-import Button from './Button'
 
 interface Errors {
   fullname?: string

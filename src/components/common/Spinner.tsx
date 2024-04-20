@@ -1,11 +1,12 @@
-export function Spinner() {
+export default function Spinner() {
   return (
     <svg
       viewBox="0 0 20 20"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       data-testid="spinner"
-      className="animate-spin">
+      className="animate-spin"
+    >
       <path
         fillRule="evenodd"
         clipRule="evenodd"
