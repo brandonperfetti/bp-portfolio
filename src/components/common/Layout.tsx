@@ -1,7 +1,7 @@
-import { Footer } from './common'
-import { Header } from './common/Header'
+import Footer from './Footer'
+import { Header } from './Header'
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <div className="fixed inset-0 flex justify-center sm:px-8">

@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { Spinner } from '../common'
 
 export default function Newsletter() {
-  const [mail, setMail] = useState<any | null>(null)
+  const [mail, setMail] = useState('') // Initialize as an empty string
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState<boolean>()
   const [messageState, setMessageState] = useState('')
@@ -26,6 +26,7 @@ export default function Newsletter() {
       if (response.ok) {
         setSuccess(true)
         setMessageState(data.message)
+        setMail('') // Clear email input
         setTimeout(() => setMessageState(''), 5000) // Clear message after 5 seconds
       } else {
         setSuccess(false)
@@ -63,6 +64,7 @@ export default function Newsletter() {
           type="email"
           placeholder="Email address"
           aria-label="Email address"
+          value={mail} // Bind input value to the state
           onChange={(e) => setMail(e.target.value)}
           required
           className="min-w-0 flex-auto appearance-none rounded-md border border-zinc-900/10 bg-white px-3 py-[calc(theme(spacing.2)-1px)] text-black shadow-md shadow-zinc-800/5 placeholder:text-zinc-400 focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10 sm:text-sm dark:border-zinc-700 dark:bg-zinc-700/[0.15] dark:text-zinc-200 dark:placeholder:text-zinc-500 dark:focus:border-teal-400 dark:focus:ring-teal-400/10"
