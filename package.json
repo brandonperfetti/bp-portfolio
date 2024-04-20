@@ -25,6 +25,7 @@
     "@types/react-dom": "^18.2.18",
     "@types/webpack-env": "^1.18.1",
     "@vercel/analytics": "^1.2.2",
+    "@vercel/speed-insights": "^1.0.10",
     "algoliasearch": "^4.14.3",
     "autoprefixer": "^10.4.12",
     "cheerio": "^1.0.0-rc.12",
