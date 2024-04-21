@@ -53,15 +53,15 @@ const projects = [
     },
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562770/bp-portfolio/images/logos/emp_vxkldh_kiq2wl.png',
   },
-  {
-    name: 'Top Timeleines - In Progress',
-    description: 'Event timelines made simple for anyone',
-    link: {
-      href: 'https://toptimelines.com/',
-      label: 'toptimelines.com',
-    },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1710096798/top-timelines/top_timelines_logo_nzgxaq.svg',
-  },
+  // {
+  //   name: 'Top Timeleines - In Progress',
+  //   description: 'Event timelines made simple for anyone',
+  //   link: {
+  //     href: 'https://toptimelines.com/',
+  //     label: 'toptimelines.com',
+  //   },
+  //   logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1710096798/top-timelines/top_timelines_logo_nzgxaq.svg',
+  // },
   {
     name: 'BEAUTY By Casey Lauren',
     description: 'Event stylist landing page built with Gatsby.js and Netlify',
