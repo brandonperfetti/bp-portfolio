@@ -64,6 +64,7 @@ export default function Newsletter() {
           type="email"
           placeholder="Email address"
           aria-label="Email address"
+          autoComplete="email"
           value={mail} // Bind input value to the state
           onChange={(e) => setMail(e.target.value)}
           required
