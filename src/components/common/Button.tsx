@@ -13,7 +13,7 @@ interface OwnButtonProps {
   disabled?: boolean
   children?: ReactNode
   onClick?: () => void
-  as?: ElementType // specify the element type
+  as?: ElementType
   href?: string
 }
 

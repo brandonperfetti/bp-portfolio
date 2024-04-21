@@ -15,13 +15,8 @@ export default function Messenger() {
   const [email, setEmail] = useState('')
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
-
-  //   Form validation
   const [errors, setErrors] = useState<Errors>({})
-
-  //   Setting button text
   const [buttonText, setButtonText] = useState('Send')
-
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
 
   useEffect(() => {
@@ -88,8 +83,6 @@ export default function Messenger() {
         setShowSuccessMessage(false)
         setShowFailureMessage(true)
         setButtonText('Send')
-
-        // Reset form fields
         setFullname('')
         setEmail('')
         setMessage('')
@@ -99,7 +92,6 @@ export default function Messenger() {
       setShowSuccessMessage(true)
       setShowFailureMessage(false)
       setButtonText('Send')
-      // Reset form fields
       setFullname('')
       setEmail('')
       setMessage('')

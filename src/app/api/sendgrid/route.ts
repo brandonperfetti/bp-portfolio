@@ -39,8 +39,8 @@ export async function POST(req: NextRequest, res: NextResponse) {
 
   try {
     await sgMail.send({
-      to: 'brandon@brandonperfetti.com', // Your email where you'll receive emails
-      from: 'info@brandonperfetti.com', // your website email address here
+      to: 'brandon@brandonperfetti.com',
+      from: 'info@brandonperfetti.com',
       replyTo: `${body.email}`,
       subject: `${body.subject || 'BP Portfolio Form Submission'}`,
       html: emailContent,

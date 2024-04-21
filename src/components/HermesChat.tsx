@@ -16,20 +16,12 @@ interface Message {
   role: 'user' | 'assistant'
 }
 
-interface ReadableStreamChunk {
-  done: boolean
-  value: Uint8Array
-}
-
 const HermesChat: React.FC = () => {
-  // const [isLoading, setIsLoading] = useState<boolean>(false)
   const [isLoadingDali, setIsLoadingDali] = useState<boolean>(false)
   const [message, setMessage] = useState<string>('')
   const [typingMessage, setTypingMessage] = useState<string>('')
   const [isChatStart, setIsChatStart] = useState<boolean>(true)
   const [isDali, setIsDali] = useState<boolean>(false)
-  // const [isBlogPost, setIsBlogPost] = useState<boolean>(false)
-
   const [value, copy] = useCopyToClipboard()
   const [isTyping, setIsTyping] = useState(false)
   const [isCopied, setIsCopied] = useState(false)
@@ -47,16 +39,14 @@ const HermesChat: React.FC = () => {
   const submitMessage = (event: React.FormEvent) => {
     event.preventDefault()
     setIsChatStart(false)
-    // setIsLoading(true)
 
-    // Add user message in the correct format
     const newUserMessage: Message = {
       role: 'user',
       content: message,
     }
 
     setMessages((prevMessages) => [...prevMessages, newUserMessage])
-    processMessage(newUserMessage) // Send the newly formatted message to the API
+    processMessage(newUserMessage)
     setMessage('')
   }
 
@@ -75,7 +65,6 @@ const HermesChat: React.FC = () => {
       try {
         setIsDali(true)
         setIsLoadingDali(true)
-        // setIsBlogPost(false)
         const strippedMessage = newMessage.content.replace('Dali: ', '')
         const { image } = await fetch('/api/openai/image', {
           method: 'POST',
@@ -124,10 +113,9 @@ const HermesChat: React.FC = () => {
           value,
         }: ReadableStreamReadResult<Uint8Array>): Promise<void> => {
           if (done) {
-            // setIsLoading(false)
             setIsTyping(false)
             finalizeMessage(currentMessage)
-            setTypingMessage('') // Clear the typing simulation
+            setTypingMessage('')
             return
           }
 
@@ -140,7 +128,7 @@ const HermesChat: React.FC = () => {
 
             if (dataObject.choices[0].delta.content) {
               currentMessage += dataObject.choices[0].delta.content
-              setTypingMessage(currentMessage) // Update the typing simulation message
+              setTypingMessage(currentMessage)
               setIsTyping(true)
             }
           }
@@ -150,7 +138,6 @@ const HermesChat: React.FC = () => {
         reader?.read().then(processStream)
       } catch (err) {
         console.error('Error fetching data:', err)
-        // setIsLoading(false)
         setMessages((prevMessages) => [
           ...prevMessages,
           {

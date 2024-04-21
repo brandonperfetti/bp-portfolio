@@ -27,21 +27,21 @@ export default function Newsletter() {
         setSuccess(true)
         setMessageState(data.message)
         setMail('') // Clear email input
-        setTimeout(() => setMessageState(''), 5000) // Clear message after 5 seconds
+        setTimeout(() => setMessageState(''), 5000)
       } else {
         setSuccess(false)
         setMessageState(
           data.message ||
             'An error occurred while subscribing to the newsletter.',
         )
-        setTimeout(() => setMessageState(''), 5000) // Clear message after 5 seconds
+        setTimeout(() => setMessageState(''), 5000)
       }
     } catch (error) {
       setSuccess(false)
       setMessageState(
         error instanceof Error ? error.message : 'An unknown error occurred',
       )
-      setTimeout(() => setMessageState(''), 5000) // Clear message after 5 seconds
+      setTimeout(() => setMessageState(''), 5000)
     }
     setLoading(false)
   }
