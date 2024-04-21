@@ -7,8 +7,17 @@ import { LinkIcon } from '@/icons'
 
 const projects = [
   {
+    name: 'Sans Faux Studios',
+    description: 'A premier web development studio specializing in modern web technologies and design.',
+    link: {
+      href: 'https://sansfaux.com/',
+      label: 'sansfaux.com',
+    },
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713742159/bp-portfolio/images/logos/favicon_m2unhm.png',
+  },
+  {
     name: 'EMP Consultants',
-    description: 'A design and forensic engineering firm landing page',
+    description: 'A design and forensic engineering firm',
     link: {
       href: 'https://empconsultants.com/',
       label: 'empconsultants.com',
