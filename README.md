@@ -1,6 +1,4 @@
-# Spotlight
-
-Spotlight is a [Tailwind UI](https://tailwindui.com) site template built using [Tailwind CSS](https://tailwindcss.com) and [Next.js](https://nextjs.org).
+# bp-portfolio
 
 ## Getting started
 
@@ -28,10 +26,6 @@ Finally, open [http://localhost:3000](http://localhost:3000) in your browser to 
 
 You can start editing this template by modifying the files in the `/src` folder. The site will auto-update as you edit these files.
 
-## License
-
-This site template is a commercial product and is licensed under the [Tailwind UI license](https://tailwindui.com/license).
-
 ## Learn more
 
 To learn more about the technologies used in this site template, see the following resources:
@@ -40,4 +34,3 @@ To learn more about the technologies used in this site template, see the followi
 - [Next.js](https://nextjs.org/docs) - the official Next.js documentation
 - [Headless UI](https://headlessui.dev) - the official Headless UI documentation
 - [MDX](https://mdxjs.com) - the MDX documentation
-# bp-portfolio

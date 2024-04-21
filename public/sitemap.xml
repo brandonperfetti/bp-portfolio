@@ -15,10 +15,6 @@
             </url>
           
             <url>
-                <loc>https://brandonperfetti.com/hermes</loc>
-            </url>
-          
-            <url>
                 <loc>https://brandonperfetti.com/projects</loc>
             </url>
           
@@ -27,15 +23,19 @@
             </url>
           
             <url>
-                <loc>https://brandonperfetti.com/tech</loc>
-            </url>
-          
-            <url>
                 <loc>https://brandonperfetti.com/thank-you</loc>
             </url>
           
             <url>
+                <loc>https://brandonperfetti.com/hermes</loc>
+            </url>
+          
+            <url>
                 <loc>https://brandonperfetti.com/uses</loc>
+            </url>
+          
+            <url>
+                <loc>https://brandonperfetti.com/tech</loc>
             </url>
           
             <url>
@@ -59,15 +59,15 @@
             </url>
           
             <url>
-                <loc>https://brandonperfetti.com/articles/breaking-into-tech</loc>
-            </url>
-          
-            <url>
                 <loc>https://brandonperfetti.com/articles/budget-management</loc>
             </url>
           
             <url>
                 <loc>https://brandonperfetti.com/articles/building-high-performing-teams</loc>
+            </url>
+          
+            <url>
+                <loc>https://brandonperfetti.com/articles/breaking-into-tech</loc>
             </url>
           
             <url>
@@ -83,15 +83,15 @@
             </url>
           
             <url>
-                <loc>https://brandonperfetti.com/articles/continuous-improvement</loc>
-            </url>
-          
-            <url>
                 <loc>https://brandonperfetti.com/articles/continuous-learning</loc>
             </url>
           
             <url>
                 <loc>https://brandonperfetti.com/articles/data-analytics</loc>
+            </url>
+          
+            <url>
+                <loc>https://brandonperfetti.com/articles/continuous-improvement</loc>
             </url>
           
             <url>
@@ -103,7 +103,7 @@
             </url>
           
             <url>
-                <loc>https://brandonperfetti.com/articles/focus-and-productivity</loc>
+                <loc>https://brandonperfetti.com/articles/in-demand-skills</loc>
             </url>
           
             <url>
@@ -111,23 +111,11 @@
             </url>
           
             <url>
+                <loc>https://brandonperfetti.com/articles/focus-and-productivity</loc>
+            </url>
+          
+            <url>
                 <loc>https://brandonperfetti.com/articles/leadership-skills</loc>
-            </url>
-          
-            <url>
-                <loc>https://brandonperfetti.com/articles/in-demand-skills</loc>
-            </url>
-          
-            <url>
-                <loc>https://brandonperfetti.com/articles/maximizing-efficiency</loc>
-            </url>
-          
-            <url>
-                <loc>https://brandonperfetti.com/articles/mentorship</loc>
-            </url>
-          
-            <url>
-                <loc>https://brandonperfetti.com/articles/quality-assurance</loc>
             </url>
           
             <url>
@@ -135,11 +123,19 @@
             </url>
           
             <url>
-                <loc>https://brandonperfetti.com/articles/risk-management</loc>
+                <loc>https://brandonperfetti.com/articles/quality-assurance</loc>
             </url>
           
             <url>
-                <loc>https://brandonperfetti.com/articles/science-of-habits</loc>
+                <loc>https://brandonperfetti.com/articles/mentorship</loc>
+            </url>
+          
+            <url>
+                <loc>https://brandonperfetti.com/articles/maximizing-efficiency</loc>
+            </url>
+          
+            <url>
+                <loc>https://brandonperfetti.com/articles/risk-management</loc>
             </url>
           
             <url>
@@ -148,6 +144,10 @@
           
             <url>
                 <loc>https://brandonperfetti.com/articles/time-management-secrets</loc>
+            </url>
+          
+            <url>
+                <loc>https://brandonperfetti.com/articles/science-of-habits</loc>
             </url>
           
   </urlset>
