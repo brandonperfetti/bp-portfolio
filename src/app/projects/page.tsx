@@ -13,7 +13,7 @@ const projects = [
       href: 'https://empconsultants.com/',
       label: 'empconsultants.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562770/bp-portfolio/images/logos/emp_vxkldh_kiq2wl.png',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713727772/emp/favicon_jqaems.png',
   },
   // {
   //   name: 'Top Timeleines - In Progress',
