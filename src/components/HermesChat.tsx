@@ -189,7 +189,7 @@ const HermesChat: React.FC = () => {
 
   return (
     <div>
-      <div className="flex h-[70vh] flex-col overflow-hidden md:h-[75vh]">
+      <div className="flex h-[70vh] flex-col overflow-hidden md:h-[65vh]">
         <div
           ref={chatContainerRef}
           id="messages"
