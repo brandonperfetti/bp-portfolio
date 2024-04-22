@@ -1,11 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 
-type Data = {
-  message: string
-  error?: string
-}
-
 interface SendGridError {
   message: string
   field?: string
