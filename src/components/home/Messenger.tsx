@@ -18,6 +18,7 @@ export default function Messenger() {
   const [errors, setErrors] = useState<Errors>({})
   const [buttonText, setButtonText] = useState('Send')
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
+  const [botField, setBotField] = useState('') // Honeypot field
 
   useEffect(() => {
     if (!showSuccessMessage) return
@@ -60,6 +61,12 @@ export default function Messenger() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+
+    // Check if the honeypot field is filled
+    if (botField) {
+      // console.log('Bot detected')
+      return // Early return if botField is filled
+    }
 
     let isValidForm = handleValidation()
 
@@ -104,6 +111,19 @@ export default function Messenger() {
       action="/thank-you"
       className="rounded-2xl border border-zinc-100 p-6 dark:border-zinc-700/40"
     >
+      {/* Honeypot field */}
+      <div style={{ display: 'none' }}>
+        <label htmlFor="botField">
+          Don&apos;t fill this out if you&apos;re human:
+        </label>
+        <input
+          id="botField"
+          name="botField"
+          type="text"
+          value={botField}
+          onChange={(e) => setBotField(e.target.value)}
+        />
+      </div>
       <h2 className="flex text-sm font-semibold text-zinc-900 dark:text-zinc-100">
         <MailIcon className="h-6 w-6 flex-none" />
         <span className="ml-3">Send a message</span>

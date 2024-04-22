@@ -10,9 +10,15 @@ export default function Newsletter() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState<boolean>()
   const [messageState, setMessageState] = useState('')
+  const [botField, setBotField] = useState('') // Honeypot field
 
   const Subscribe = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    // Check if the honeypot field is filled
+    if (botField) {
+      // console.log('Bot detected')
+      return // Early return if botField is filled
+    }
     setLoading(true)
     try {
       const response = await fetch('/api/mailinglist', {
@@ -52,6 +58,19 @@ export default function Newsletter() {
       action="/thank-you"
       className="rounded-2xl border border-zinc-100 p-6 dark:border-zinc-700/40"
     >
+      {/* Honeypot field */}
+      <div style={{ display: 'none' }}>
+        <label htmlFor="botField">
+          Don&apos;t fill this out if you&apos;re human:
+        </label>
+        <input
+          id="botField"
+          name="botField"
+          type="text"
+          value={botField}
+          onChange={(e) => setBotField(e.target.value)}
+        />
+      </div>
       <h2 className="flex text-sm font-semibold text-zinc-900 dark:text-zinc-100">
         <MailIcon className="h-6 w-6 flex-none" />
         <span className="ml-3">Stay up to date</span>
