@@ -77,7 +77,10 @@ const HermesChat: React.FC = () => {
         setIsLoadingDali(false)
         setMessages((messages) => [
           ...messages,
-          { role: 'assistant', content: `<img src=${image} />` },
+          {
+            role: 'assistant',
+            content: `<img src=${image} alt="Generated image" />`,
+          },
         ])
       } catch (err) {
         console.error('Error processing Dali image request:', err)
@@ -311,7 +314,11 @@ const HermesChat: React.FC = () => {
             </>
           )}
           {isLoadingDali && (
-            <div id="assistant" className="chat-message">
+            <div
+              id="assistant"
+              className="chat-message"
+              data-testid="loading-dali"
+            >
               <div className="flex animate-pulse items-end">
                 <div className="order-2 mx-2 flex max-w-xs flex-col items-start space-y-2 text-xs lg:max-w-md">
                   <div>
