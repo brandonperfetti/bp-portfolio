@@ -37,3 +37,6 @@ next-env.d.ts
 
 # generated files
 public/sitemap.xml
+
+# ESLint cache
+.eslintcache
