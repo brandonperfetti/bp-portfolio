@@ -328,6 +328,7 @@ export default function Header() {
   return (
     <>
       <header
+        data-testid="header"
         className="pointer-events-none relative z-50 flex flex-none flex-col"
         style={{
           height: 'var(--header-height)',
