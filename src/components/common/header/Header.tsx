@@ -330,7 +330,7 @@ export default function Header() {
     <>
       <header
         data-testid="header"
-        className="pointer-events-none relative z-50 flex flex-none flex-col"
+        className="pointer-events-none relative z-40 flex flex-none flex-col"
         style={{
           height: 'var(--header-height)',
           marginBottom: 'var(--header-mb)',

@@ -1,3 +1,4 @@
+import { ShortcutIcon } from '@/icons'
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { ChangeEvent, useEffect, useRef } from 'react'
 import { Input } from '../common'
@@ -38,6 +39,7 @@ const SearchFilterInput = ({
       ref={searchInputRef}
       aria-label="search"
       leftIcon={<MagnifyingGlassIcon />}
+      rightIcon={<ShortcutIcon className="text-gray-700" />}
       placeholder={placeholder}
       value={value}
       onChange={onChange}
