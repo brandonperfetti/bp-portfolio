@@ -39,15 +39,18 @@ describe('Newsletter Component', () => {
     ) as HTMLInputElement
     const submitButton = screen.getByRole('button')
 
-    // Simulate typing into the input field
-    userEvent.type(input, 'user@example.com')
-    // Wait for state update if necessary
-    await screen.findByDisplayValue('user@example.com')
+    // Fire events and await their effects within act
+    await act(async () => {
+      // Simulate typing into the input field
+      userEvent.type(input, 'user@example.com')
+      // Wait for state update if necessary
+      await screen.findByDisplayValue('user@example.com')
 
-    // Click the submit button
-    userEvent.click(submitButton)
+      // Click the submit button
+      userEvent.click(submitButton)
+    })
 
-    // Use waitFor to allow any asynchronous actions to complete
+    // Use waitFor to allow any asynchronous actions from the component to complete
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('/api/mailinglist', {
         method: 'PUT',
@@ -56,13 +59,11 @@ describe('Newsletter Component', () => {
         },
         body: JSON.stringify({ mail: 'user@example.com' }),
       })
+      expect(
+        screen.getByText("You've subscribed successfully!"),
+      ).toBeInTheDocument()
+      expect(input.value).toBe('') // Input should be cleared
     })
-
-    // Check for the success message
-    expect(
-      await screen.findByText("You've subscribed successfully!"),
-    ).toBeInTheDocument()
-    expect(input.value).toBe('') // Input should be cleared, assert that input is HTMLInputElement to access value.
   })
 
   it('handles server errors and displays an error message', async () => {

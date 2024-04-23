@@ -1,4 +1,4 @@
-import { Footer } from '@/components/common' // Adjust the import path as necessary
+import { Footer } from '@/components/common'
 import { render, screen } from '@testing-library/react'
 
 describe('Footer Component', () => {

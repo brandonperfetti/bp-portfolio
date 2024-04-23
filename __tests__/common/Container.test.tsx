@@ -1,4 +1,4 @@
-import { Container } from '@/components/common/Container' // Adjust the import path as necessary
+import { Container } from '@/components/common/Container'
 import { render, screen } from '@testing-library/react'
 
 describe('Container Components', () => {

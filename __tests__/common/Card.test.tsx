@@ -1,4 +1,4 @@
-import { Card } from '@/components/common' // Adjust the import path as necessary
+import { Card } from '@/components/common'
 import { render, screen } from '@testing-library/react'
 
 describe('Card Component', () => {
@@ -60,7 +60,7 @@ describe('Card Component', () => {
       </Card>,
     )
 
-    console.log(container.innerHTML) // Outputs the rendered HTML to help debugging
+    // console.log(container.innerHTML) // Outputs the rendered HTML to help debugging
 
     const eyebrowText = screen.getByText('Eyebrow Text')
     expect(eyebrowText).toBeInTheDocument() // Check if the eyebrow text is in the document

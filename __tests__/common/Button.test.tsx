@@ -1,5 +1,5 @@
-import { Button } from '@/components/common' // Adjust the import path as necessary
-import { ShortcutIcon } from '@/icons' // Adjust according to your actual icon imports
+import { Button } from '@/components/common'
+import { ShortcutIcon } from '@/icons'
 import { fireEvent, render, screen } from '@testing-library/react'
 
 describe('Button Component', () => {

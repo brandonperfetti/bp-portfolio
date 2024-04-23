@@ -1,4 +1,4 @@
-import { Resume } from '@/components/home' // Adjust the import path as necessary
+import { Resume } from '@/components/home'
 import { render, screen, within } from '@testing-library/react'
 
 describe('Resume Component', () => {
