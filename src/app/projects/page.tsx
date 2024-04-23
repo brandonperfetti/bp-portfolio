@@ -7,8 +7,19 @@ import { LinkIcon } from '@/icons'
 
 const projects = [
   {
+    name: `Brandon Perfetti's Portfolio`,
+    description:
+      'A premier web development studio specializing in modern web technologies and design.',
+    link: {
+      href: 'https://github.com/brandonperfetti/bp-portfolio',
+      label: 'github.com/brandonperfetti/bp-portfolio',
+    },
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713915478/bp-portfolio/images/Head_Shot_vvk5yr.png',
+  },
+  {
     name: 'Sans Faux Studios',
-    description: 'A premier web development studio specializing in modern web technologies and design.',
+    description:
+      'A premier web development studio specializing in modern web technologies and design.',
     link: {
       href: 'https://sansfaux.com/',
       label: 'sansfaux.com',

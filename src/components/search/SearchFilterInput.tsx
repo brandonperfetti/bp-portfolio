@@ -1,3 +1,4 @@
+import { ShortcutIcon } from '@/icons'
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { ChangeEvent, useEffect, useRef } from 'react'
 import { Input } from '../common'
@@ -13,6 +14,7 @@ interface SearchFilterInputProps {
 const SearchFilterInput = ({
   value,
   placeholder,
+
   onChange,
 }: SearchFilterInputProps) => {
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -38,6 +40,7 @@ const SearchFilterInput = ({
       ref={searchInputRef}
       aria-label="search"
       leftIcon={<MagnifyingGlassIcon />}
+      rightIcon={<ShortcutIcon className="text-gray-700" />}
       placeholder={placeholder}
       value={value}
       onChange={onChange}

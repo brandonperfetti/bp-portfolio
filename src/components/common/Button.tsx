@@ -138,6 +138,7 @@ const Button = forwardRef<ElementType, ButtonProps<ElementType>>(
       >
         {!leftIcon && !rightIcon && loading && (
           <span
+            role="img"
             className={clsx('-ml-1 mr-2 flex-shrink-0', {
               'h-4 w-4': ['xs', 'sm'].includes(size),
               'h-5 w-5': ['md', 'lg', 'xl'].includes(size),
@@ -148,6 +149,7 @@ const Button = forwardRef<ElementType, ButtonProps<ElementType>>(
         )}
         {leftIcon && (
           <span
+            role="img"
             className={clsx('-ml-1 mr-2 flex-shrink-0', {
               'h-4 w-4': ['xs', 'sm'].includes(size),
               'h-5 w-5': ['md', 'lg', 'xl'].includes(size),
@@ -159,6 +161,7 @@ const Button = forwardRef<ElementType, ButtonProps<ElementType>>(
         {children}
         {rightIcon && (
           <span
+            role="img"
             className={clsx('-mr-1 ml-2 flex-shrink-0', {
               'h-4 w-4': ['xs', 'sm'].includes(size),
               'h-5 w-5': ['md', 'lg', 'xl'].includes(size),
