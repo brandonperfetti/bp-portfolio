@@ -14,6 +14,7 @@ interface SearchFilterInputProps {
 const SearchFilterInput = ({
   value,
   placeholder,
+
   onChange,
 }: SearchFilterInputProps) => {
   const searchInputRef = useRef<HTMLInputElement>(null)
