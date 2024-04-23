@@ -197,6 +197,7 @@ function Avatar({
 }) {
   return (
     <Link
+      data-testid="avatar"
       href="/"
       aria-label="Home"
       className={clsx(className, 'pointer-events-auto')}
@@ -405,7 +406,10 @@ export default function Header() {
                   {/* <ThemeToggle /> */}
                   <ModeToggle />
                 </div>
-                <div className="pointer-events-auto">
+                <div
+                  data-testid="header-jumper"
+                  className="pointer-events-auto"
+                >
                   <HeaderJumper />
                 </div>
               </div>
