@@ -8,8 +8,7 @@ import { LinkIcon } from '@/icons'
 const projects = [
   {
     name: `Brandon Perfetti's Portfolio`,
-    description:
-      'A premier web development studio specializing in modern web technologies and design.',
+    description: 'Sorce code for my digital playground.',
     link: {
       href: 'https://github.com/brandonperfetti/bp-portfolio',
       label: 'github.com/brandonperfetti/bp-portfolio',
