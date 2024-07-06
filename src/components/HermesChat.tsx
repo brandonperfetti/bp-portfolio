@@ -192,7 +192,7 @@ const HermesChat: React.FC = () => {
 
   return (
     <div>
-      <div className="flex h-[70vh] flex-col overflow-hidden md:h-[65vh] xl:h-[75vh]">
+      <div className="flex h-[75vh] flex-col overflow-hidden xl:h-[80vh]">
         <div
           ref={chatContainerRef}
           id="messages"
@@ -349,11 +349,11 @@ const HermesChat: React.FC = () => {
           className="w-full border-t-2 border-gray-200 py-4 sm:mb-0"
         >
           <form onSubmit={submitMessage} className="relative flex gap-2">
-            <div className="absolute z-30 flex w-full pr-1">
+            {/* <div className="absolute z-30 flex w-full pr-1">
               <Link className="bottom-0 w-full justify-end" href="/hermes">
                 <ArrowDownIcon className="float-right -mt-14 h-6 w-6 rounded-full bg-white/70 p-0.5 text-zinc-600 shadow-lg shadow-zinc-800/5 ring-1 ring-zinc-900/5 backdrop-blur dark:bg-zinc-800/70 dark:text-white dark:ring-white/10" />
               </Link>
-            </div>
+            </div> */}
             <div className="flex w-full py-2">
               <Input
                 fullWidth

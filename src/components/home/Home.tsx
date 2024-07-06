@@ -88,7 +88,7 @@ interface ArticlesProps {
 function Home({ articles }: ArticlesProps) {
   // Check if articles are undefined or empty and handle the case
   if (!articles || articles.length === 0) {
-    return <div>No articles to display.</div>;
+    return <div>No articles to display.</div>
   }
   return (
     <>
@@ -132,7 +132,7 @@ function Home({ articles }: ArticlesProps) {
       </Container>
       <Photos />
       <Container className="mt-24 md:mt-28">
-        <div className="mx-auto grid max-w-xl grid-cols-1 gap-y-20 lg:max-w-none lg:grid-cols-2">
+        <div className="mx-auto mb-4 grid max-w-xl grid-cols-1 gap-y-20 lg:max-w-none lg:grid-cols-2">
           <div className="flex flex-col gap-16">
             {articles.map((article) => (
               <Article key={article.slug} article={article} />

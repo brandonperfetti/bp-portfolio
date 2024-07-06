@@ -34,12 +34,11 @@ export default function HeaderJumper() {
       <Modal
         size="md"
         isTop
+        hideClose
         isOpen={showModal}
         onClose={() => setShowModal(false)}
       >
-        <div className="mt-8 md:m-4">
-          <Search indices={searchIndices} />
-        </div>
+        <Search indices={searchIndices} />
       </Modal>
     </>
   )
