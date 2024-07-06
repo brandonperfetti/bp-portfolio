@@ -42,7 +42,7 @@ describe('Resume Component', () => {
     expect(downloadButton).toBeInTheDocument()
     expect(downloadButton).toHaveAttribute(
       'href',
-      'assets/Brandon_Perfetti_Technical_PM.pdf',
+      'assets/Brandon_Perfetti_Resume.pdf',
     )
   })
 })
