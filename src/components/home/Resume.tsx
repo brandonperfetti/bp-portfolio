@@ -119,7 +119,7 @@ export default function Resume() {
         <Button
           as="a"
           fullWidth
-          href="assets/Brandon_Perfetti_CV.pdf"
+          href="assets/Brandon_Perfetti_Resume.pdf"
           variant="secondary"
         >
           Download CV
