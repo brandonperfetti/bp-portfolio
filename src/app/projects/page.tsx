@@ -16,6 +16,15 @@ const projects = [
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713915478/bp-portfolio/images/Head_Shot_vvk5yr.png',
   },
   {
+    name: `Dev Flow`,
+    description: 'A Stack Overflow Clone',
+    link: {
+      href: 'https://devflow-coral.vercel.app/',
+      label: 'devflow.com',
+    },
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1722822416/DevFlow/site-logo_wicnp6.svg',
+  },
+  {
     name: 'Sans Faux Studios',
     description:
       'A premier web development studio specializing in modern web technologies and design.',
