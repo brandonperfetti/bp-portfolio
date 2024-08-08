@@ -14,14 +14,12 @@ describe('Resume Component', () => {
     expect(roles.length).toBe(6) // Should have 6 roles
 
     // Check for multiple occurrences of the same job title
-    const titles = screen.getAllByText(
-      'Technical Product Manager + Software Engineer',
-    )
+    const titles = screen.getAllByText('Technical PM + Software Engineer')
     expect(titles.length).toBeGreaterThanOrEqual(2) // Check there are at least two roles with the same title
 
     // For a specific role check, access roles by index and then perform checks
     const firstRoleTitle = within(roles[0]).getByText(
-      'Technical Product Manager + Software Engineer',
+      'Technical PM + Software Engineer',
     )
     expect(firstRoleTitle).toBeInTheDocument()
 
@@ -42,7 +40,7 @@ describe('Resume Component', () => {
     expect(downloadButton).toBeInTheDocument()
     expect(downloadButton).toHaveAttribute(
       'href',
-      'assets/Brandon_Perfetti_Resume.pdf',
+      'assets/Brandon_Perfetti_CV.pdf',
     )
   })
 })

@@ -69,79 +69,56 @@ export default function About() {
           </h1>
           <div className="mt-6 space-y-7 text-base text-zinc-600 dark:text-zinc-400">
             <p>
-              With over a decade of experience, I specialize in navigating the
-              intricate landscape of real estate technology, crafting digital
-              solutions that are both efficient and user-centric. My journey has
-              been marked by a progressive transition from specialized roles in
-              data integration to leading edge front-end engineering projects,
-              particularly with Lone Wolf Technologies. This path has been
-              fueled by a relentless pursuit of technological excellence,
-              driving significant advancements within the teams and projects
-              under my stewardship.
+              With over a decade of immersion in the agile tech startup
+              ecosystem, I&rsquo;ve developed a dual expertise that intertwines
+              the strategic oversight of a Project Manager with the technical
+              acumen of a Software Engineer. This unique fusion not only defines
+              my professional persona but also amplifies my contribution to
+              every project I touch.
             </p>
           </div>
           <div>
             <div className="py-4">
               <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
-                My Journey 🚀
+                Navigating Complexities with Agile Leadership 🚀
               </h3>
               <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-                My professional odyssey commenced in the realm of data services,
-                focusing on the seamless management and integration of complex
-                data systems. This foundational role at W+R Studios honed my
-                skills in ensuring robust data ingestion and optimized output
-                via GraphQL APIs, serving a broad spectrum of SaaS products
-                tailored for the real estate sector.
-              </p>
-              <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-                As I elevated to the role of Senior Data Services Engineer, the
-                scope of my responsibilities expanded dramatically. I was
-                entrusted with the orchestration of over 250 distinct data
-                feeds, overseeing their daily management and leading the quality
-                assurance for new integrations. The primary aim was always
-                clear: deliver timely, precise data with minimal latency,
-                thereby enhancing the end-user experience.
-              </p>
-              <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-                My journey took a pivotal turn as I embraced the challenges of
-                Front End Software Engineering. Here, my focus was on driving
-                innovation through detailed planning and execution of UI/UX
-                strategies. The landmark project of refactoring an internal data
-                ingestion tool, which I led, not only quintupled data feed
-                integration speeds but also achieved widespread adoption across
-                the organization, marking a significant milestone in my career
-                trajectory.
+                My career is a mosaic of leading and contributing to diverse
+                teams, where my role oscillated between a versatile
+                jack-of-all-trades and a specialized expert. This flexibility
+                has been my cornerstone, enabling me to adapt, thrive, and drive
+                success in the fast-paced, ever-evolving tech landscape.
               </p>
             </div>
             <div className="py-4">
               <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
-                Present Focus 🎯
+                Driving Innovation Through Continuous Learning 📚
               </h3>
               <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-                Currently, my professional endeavor is to pioneer intuitive,
-                robust, and scalable front-end architectures. My portfolio,
-                including the comprehensive overhaul of a data pipeline
-                ingestion tool and the development of my personal website,
-                stands as a testament to my dedication towards continuous
-                improvement and making a tangible impact.
+                At the heart of my approach is a relentless pursuit of knowledge
+                and excellence. I am driven by the possibilities that new
+                technologies bring to the table, not just to meet ambitious
+                project deadlines but to redefine what&rsquo;s possible. My
+                passion for learning is matched by my commitment to sharing
+                knowledge, fostering an environment where innovation is not just
+                encouraged but expected.
               </p>
             </div>
             <div className="py-4">
               <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
-                Solutions & Problem-Solving 🛠
+                A Commitment to Excellence 💪
               </h3>
               <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-                My career is built on identifying and solving intricate problems
-                with no apparent solutions. Through a refined skill set in
-                troubleshooting software and hardware issues, I excel in
-                identifying negative feedback loops and transforming them into
-                positive outcomes. My approach isolates the root cause of
-                challenges, paving the way for multiple resolution scenarios.
+                My professional journey is underpinned by a belief in the power
+                of continuous improvement and the value of sharing knowledge. I
+                am dedicated to not only advancing my own skills but also
+                elevating those around me, ensuring that together, we can
+                overcome challenges and exceed expectations.
               </p>
             </div>
             <div className="py-4">
               <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
-                Enterprise Client & Project Management 🤝
+                Enterprise Client + Project Management 🤝
               </h3>
               <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
                 I thrive on effective communication and meticulous time
@@ -155,7 +132,7 @@ export default function About() {
 
             <div className="py-4">
               <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
-                Development & Technological Excellence 💻
+                Development + Technological Excellence 💻
               </h3>
               <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
                 With a solid foundation in technology and over ten years of
@@ -166,6 +143,17 @@ export default function About() {
                 fostering result-oriented teams underscores my unwavering
                 commitment to delivering exceptional value in every project I
                 undertake.
+              </p>
+            </div>
+            <div className="py-4">
+              <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
+                Looking forward 🔭
+              </h3>
+              <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
+                As I look to the future, I am excited about the opportunity to
+                leverage my experience and insights to tackle new challenges,
+                drive unparalleled innovation, and contribute to a culture of
+                excellence and continuous growth.
               </p>
             </div>
           </div>
