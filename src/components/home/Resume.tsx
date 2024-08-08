@@ -59,7 +59,7 @@ export default function Resume() {
   let resume: Array<Role> = [
     {
       company: 'Freelance',
-      title: 'Technical Product Manager + Software Engineer',
+      title: 'Technical PM + Software Engineer',
       logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562733/bp-portfolio/images/logos/rocket-7757105_640_lcepwk_vd862c.png',
       start: '2023',
       end: {
@@ -69,28 +69,28 @@ export default function Resume() {
     },
     {
       company: 'Lone Wolf Technologies',
-      title: 'Technical Product Manager + Software Engineer',
+      title: 'Technical PM + Software Engineer',
       logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562788/bp-portfolio/images/logos/lone-wolf_hpftff_fsqe3o.png',
       start: '2021',
       end: '2023',
     },
     {
       company: 'W+R Studios',
-      title: 'Technical Project Manager + Senior Data Integrations Engineer',
+      title: 'Technical PM + Senior Data Integrations Engineer',
       logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
       start: '2017',
       end: '2020',
     },
     {
       company: 'W+R Studios',
-      title: 'Technical Project Manager + Custom Theme Developer',
+      title: 'Technical PM + Custom Theme Developer',
       logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
       start: '2015',
       end: '2017',
     },
     {
       company: 'W+R Studios',
-      title: 'Technical Project Manager + Data Integrations Engineer',
+      title: 'Technical PM + Data Integrations Engineer',
       logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
       start: '2013',
       end: '2015',
