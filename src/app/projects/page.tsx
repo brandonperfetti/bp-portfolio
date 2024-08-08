@@ -25,6 +25,15 @@ const projects = [
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1722822416/DevFlow/site-logo_wicnp6.svg',
   },
   {
+    name: 'Top Timeleines - In Progress',
+    description: 'Event timelines made simple for anyone',
+    link: {
+      href: 'https://toptimelines.com/',
+      label: 'toptimelines.com',
+    },
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1710096798/top-timelines/top_timelines_logo_nzgxaq.svg',
+  },
+  {
     name: 'Sans Faux Studios',
     description:
       'A premier web development studio specializing in modern web technologies and design.',
@@ -43,15 +52,6 @@ const projects = [
     },
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713727772/emp/favicon_jqaems.png',
   },
-  // {
-  //   name: 'Top Timeleines - In Progress',
-  //   description: 'Event timelines made simple for anyone',
-  //   link: {
-  //     href: 'https://toptimelines.com/',
-  //     label: 'toptimelines.com',
-  //   },
-  //   logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1710096798/top-timelines/top_timelines_logo_nzgxaq.svg',
-  // },
   {
     name: 'BEAUTY By Casey Lauren',
     description: 'Event stylist landing page built with Gatsby.js and Netlify',

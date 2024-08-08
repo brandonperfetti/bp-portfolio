@@ -33,7 +33,7 @@ const techStack = [
       href: 'https://nodejs.org/en/',
       label: 'nodejs.org/en',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562757/bp-portfolio/images/logos/node_cc9ada_rercig.png',
+    logo: 'https://avatars.githubusercontent.com/u/9950313?s=200&v=4',
   },
   {
     name: 'Express.js',
@@ -43,7 +43,7 @@ const techStack = [
       href: 'https://expressjs.com/',
       label: 'expressjs.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684611833/expressjs-transparent-final_bf5dwz.svg',
+    logo: 'https://avatars.githubusercontent.com/u/5658226?s=48&v=4',
   },
   {
     name: 'React',
@@ -71,7 +71,7 @@ const techStack = [
       href: 'https://vitejs.dev/',
       label: 'vitejs.dev',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562768/bp-portfolio/images/logos/vite_pigseb_uhrcdb.png',
+    logo: 'https://avatars.githubusercontent.com/u/65625612?s=48&v=4',
   },
   {
     name: 'Remix',
@@ -81,7 +81,7 @@ const techStack = [
       href: 'https://remix.run/',
       label: 'remix.run',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562781/bp-portfolio/images/logos/remix_ftux3w_ckwsni.png',
+    logo: 'https://avatars.githubusercontent.com/u/64235328?s=48&v=4',
   },
   {
     name: 'Gatsby',
@@ -91,7 +91,37 @@ const techStack = [
       href: 'https://www.gatsbyjs.com/',
       label: 'gatsbyjs.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684610457/gatsbyjs-icon_kfk1v5.png',
+    logo: 'https://avatars.githubusercontent.com/u/12551863?s=48&v=4',
+  },
+  {
+    name: 'Vue.js',
+    description:
+      'The Progressive JavaScript Framework.An approachable, performant and versatile framework for building web user interfaces.',
+    link: {
+      href: 'https://vuejs.org/',
+      label: 'vuejs.org',
+    },
+    logo: 'https://avatars.githubusercontent.com/u/6128107?s=48&v=4',
+  },
+  {
+    name: 'Pinia',
+    description:
+      'The intuitive store for Vue.js.Type Safe, Extensible, and Modular by design. Forget you are even using a store.',
+    link: {
+      href: 'https://pinia.vuejs.org/',
+      label: 'pinia.vuejs.org',
+    },
+    logo: 'https://pinia.vuejs.org/logo.svg',
+  },
+  {
+    name: 'Nuxt',
+    description:
+      'The Intuitive Vue Framework. Nuxt is an open source framework that makes web development intuitive and powerful. Create performant and production-grade full-stack web apps and websites with confidence.',
+    link: {
+      href: 'https://nuxt.com/',
+      label: 'nuxt.com',
+    },
+    logo: 'https://avatars.githubusercontent.com/u/23360933?s=48&v=4',
   },
   {
     name: 'NPM',
@@ -100,7 +130,7 @@ const techStack = [
       href: 'https://www.npmjs.com/',
       label: 'npmjs.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562727/bp-portfolio/images/logos/npm_yuikai_nng3dh.png',
+    logo: 'https://avatars.githubusercontent.com/u/6078720?s=48&v=4',
   },
   {
     name: 'Yarn',
@@ -109,7 +139,7 @@ const techStack = [
       href: 'https://yarnpkg.com/',
       label: 'yarnpkg.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562790/bp-portfolio/images/logos/yarn_x547mr_r6lxfk.png',
+    logo: 'https://avatars.githubusercontent.com/u/22247014?s=48&v=4',
   },
   {
     name: 'GraphQL',
@@ -122,14 +152,14 @@ const techStack = [
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142685/bp-spotlight/images/logos/graphql_caswqs.svg',
   },
   {
-    name: 'React Query',
+    name: 'TanStack Query',
     description:
-      'Fetch, cache and update data in your React and React Native applications all without touching any "global state".',
+      'Powerful asynchronous state management for TS/JS, React, Solid, Vue, Svelte and Angular.',
     link: {
-      href: 'https://react-query-v3.tanstack.com/',
-      label: 'react-query-v3.tanstack.com',
+      href: 'https://tanstack.com/query/latest',
+      label: 'tanstack.com/query',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142701/bp-spotlight/images/logos/react-query_kyroff.svg',
+    logo: 'https://tanstack.com/_build/assets/logo-color-100w-lPbOTx1K.png',
   },
   {
     name: 'React Router',
@@ -148,18 +178,18 @@ const techStack = [
       href: 'https://tailwindcss.com/',
       label: 'tailwindcss.com',
     },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562758/bp-portfolio/images/logos/tailwind_pho1an_j8ex5y.png',
+    logo: 'https://avatars.githubusercontent.com/u/67109815?s=48&v=4',
   },
-  // {
-  //   name: 'Tailwind UI',
-  //   description:
-  //     'Beautifully designed, expertly crafted components and templates, built by the makers of Tailwind CSS. The perfect starting point for your next project.',
-  //   link: {
-  //     href: 'https://tailwindui.com/',
-  //     label: 'tailwindui.com',
-  //   },
-  //   logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562758/bp-portfolio/images/logos/tailwind_pho1an_j8ex5y.png',
-  // },
+  {
+    name: 'Tailwind UI',
+    description:
+      'Beautifully designed, expertly crafted components and templates, built by the makers of Tailwind CSS. The perfect starting point for your next project.',
+    link: {
+      href: 'https://tailwindui.com/',
+      label: 'tailwindui.com',
+    },
+    logo: 'https://avatars.githubusercontent.com/u/67109815?s=48&v=4',
+  },
   {
     name: 'Headless UI',
     description:
@@ -169,6 +199,26 @@ const techStack = [
       label: 'headlessui.com',
     },
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562806/bp-portfolio/images/logos/headless-ui_uidjre_i0qtak.png',
+  },
+  {
+    name: 'Radix UI',
+    description:
+      'Components, icons, colors, and templates for building high-quality, accessible UI. Free and open-source.',
+    link: {
+      href: 'https://www.radix-ui.com/',
+      label: 'www.radix-ui',
+    },
+    logo: 'https://avatars.githubusercontent.com/u/75042455?s=48&v=4',
+  },
+  {
+    name: 'shadcn/ui',
+    description:
+      'Build your component library. Beautifully designed components that you can copy and paste into your apps.',
+    link: {
+      href: 'https://ui.shadcn.com/',
+      label: 'ui.shadcn.com',
+    },
+    logo: 'https://avatars.githubusercontent.com/u/139895814?s=48&v=4',
   },
   {
     name: 'Keystone.js',
@@ -253,7 +303,7 @@ export default function TechStack() {
                   width={48}
                   src={tech.logo}
                   alt=""
-                  className="h-8 w-8"
+                  className="roudned h-8 w-8"
                   unoptimized
                 />
               </div>
