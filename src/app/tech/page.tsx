@@ -84,14 +84,14 @@ const techStack = [
     logo: 'https://avatars.githubusercontent.com/u/64235328?s=48&v=4',
   },
   {
-    name: 'Gatsby',
+    name: 'The Epic Stack',
     description:
-      'Gatsby enables developers to build fast, secure, and powerful websites using a React-based framework and innovative data layer that makes integrating different content, APIs, and services into one web experience incredibly simple.',
+      'An opinionated project starter and reference that allows teams to ship their ideas to production faster and on a more stable foundation.',
     link: {
-      href: 'https://www.gatsbyjs.com/',
-      label: 'gatsbyjs.com',
+      href: 'https://www.epicweb.dev/epic-stack',
+      label: 'epicweb.dev/epic-stack',
     },
-    logo: 'https://avatars.githubusercontent.com/u/12551863?s=48&v=4',
+    logo: 'https://avatars.githubusercontent.com/u/112979997?s=48&v=4',
   },
   {
     name: 'Vue.js',
@@ -124,6 +124,16 @@ const techStack = [
     logo: 'https://avatars.githubusercontent.com/u/23360933?s=48&v=4',
   },
   {
+    name: 'Gatsby',
+    description:
+      'Gatsby enables developers to build fast, secure, and powerful websites using a React-based framework and innovative data layer that makes integrating different content, APIs, and services into one web experience incredibly simple.',
+    link: {
+      href: 'https://www.gatsbyjs.com/',
+      label: 'gatsbyjs.com',
+    },
+    logo: 'https://avatars.githubusercontent.com/u/12551863?s=48&v=4',
+  },
+  {
     name: 'NPM',
     description: `npm is the world's largest software registry. Open source developers from every continent use npm to share and borrow packages, and many organizations use npm to manage private development as well.`,
     link: {
@@ -152,12 +162,12 @@ const techStack = [
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142685/bp-spotlight/images/logos/graphql_caswqs.svg',
   },
   {
-    name: 'TanStack Query',
+    name: 'TanStack',
     description:
-      'Powerful asynchronous state management for TS/JS, React, Solid, Vue, Svelte and Angular.',
+      'High-quality open-source software for web developers. Headless, type-safe, & powerful utilities for Web Applications, Routing, State Management, Data Visualization, Datagrids/Tables, and more.',
     link: {
-      href: 'https://tanstack.com/query/latest',
-      label: 'tanstack.com/query',
+      href: 'https://tanstack.com/',
+      label: 'tanstack.com',
     },
     logo: 'https://tanstack.com/_build/assets/logo-color-100w-lPbOTx1K.png',
   },
@@ -221,6 +231,15 @@ const techStack = [
     logo: 'https://avatars.githubusercontent.com/u/139895814?s=48&v=4',
   },
   {
+    name: 'Clerk',
+    description: `The most comprehensive User Management Platform. Need more than just a sign-in box? Clerk is a complete suite of embeddable UIs, flexible APIs, and admin dashboards to authenticate and manage your users.`,
+    link: {
+      href: 'https://clerk.com/',
+      label: 'clerk.com',
+    },
+    logo: 'https://avatars.githubusercontent.com/u/49538330?s=48&v=4',
+  },
+  {
     name: 'Keystone.js',
     description: `Keystone helps you build faster and scale further than any other CMS or App Framework. Just describe your schema, and get a powerful GraphQL API & beautiful Management UI for content and data.`,
     link: {
@@ -246,6 +265,15 @@ const techStack = [
       label: 'supabase.com',
     },
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562759/bp-portfolio/images/logos/supabase_wptfvp_lwhtvr.png',
+  },
+  {
+    name: 'Resend',
+    description: `Email for developers. The best way to reach humans instead of spam folders. Deliver transactional and marketing emails at scale.`,
+    link: {
+      href: 'https://resend.com/',
+      label: 'resend.com',
+    },
+    logo: 'https://avatars.githubusercontent.com/u/109384852?s=200&v=4',
   },
   {
     name: 'Netlify',
