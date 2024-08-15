@@ -25,7 +25,7 @@ const projects = [
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1722822416/DevFlow/site-logo_wicnp6.svg',
   },
   {
-    name: 'Top Timeleines - In Progress',
+    name: 'Top Timelines - In Progress',
     description: 'Event timelines made simple for anyone',
     link: {
       href: 'https://toptimelines.com/',
