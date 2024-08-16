@@ -48,12 +48,22 @@ const techStack = [
   {
     name: 'React',
     description:
-      'React is a free and open-source front-end JavaScript library for building user interfaces based on components. ',
+      'React is a free and open-source front-end JavaScript library for building user interfaces based on components.',
     link: {
       href: 'https://reactjs.org/',
       label: 'reactjs.org',
     },
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562805/bp-portfolio/images/logos/react_vyeal3_evwomt.png',
+  },
+  {
+    name: 'Redux',
+    description:
+      'Redux is a JS library for predictable and maintainable global state management.',
+    link: {
+      href: 'https://redux.js.org/',
+      label: 'redux.js.org',
+    },
+    logo: 'https://avatars.githubusercontent.com/u/13142323?s=48&v=4',
   },
   {
     name: 'Next.js',
@@ -276,6 +286,15 @@ const techStack = [
     logo: 'https://avatars.githubusercontent.com/u/109384852?s=200&v=4',
   },
   {
+    name: 'Zod',
+    description: `Zod is a TypeScript-first schema declaration and validation library. I'm using the term "schema" to broadly refer to any data type, from a simple string to a complex nested object.`,
+    link: {
+      href: 'https://zod.dev/',
+      label: 'zod.dev',
+    },
+    logo: 'https://zod.dev/logo.svg',
+  },
+  {
     name: 'Netlify',
     description:
       'Netlify is a global, production-ready environment from the start. Skip all the server setup and get straight to building.',
@@ -294,6 +313,16 @@ const techStack = [
       label: 'digitalocean.com',
     },
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684609938/digitalocean-icon_dnkqfc.png',
+  },
+  {
+    name: 'Fly.io',
+    description:
+      'Scalable Full Stack Without the Cortisol. Over 3 million apps have launched on Fly.io, boosted by global Anycast load-balancing, zero-configuration private networking, hardware isolation, and instant WireGuard VPN connections. Push-button deployments that scale to thousands of instances.',
+    link: {
+      href: 'https://fly.io/',
+      label: 'fly.io',
+    },
+    logo: 'https://avatars.githubusercontent.com/u/22525303?s=48&v=4',
   },
   {
     name: 'Vercel',
