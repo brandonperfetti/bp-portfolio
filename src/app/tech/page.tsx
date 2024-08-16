@@ -241,6 +241,42 @@ const techStack = [
     logo: 'https://avatars.githubusercontent.com/u/139895814?s=48&v=4',
   },
   {
+    name: 'Jest',
+    description: `Jest is a delightful JavaScript Testing Framework with a focus on simplicity. It works with projects using: Babel, TypeScript, Node, React, Angular, Vue and more!`,
+    link: {
+      href: 'https://jestjs.io/',
+      label: 'jestjs.io',
+    },
+    logo: 'https://avatars.githubusercontent.com/u/103283236?s=48&v=4',
+  },
+  {
+    name: 'Playwright',
+    description: `Playwright Test was created specifically to accommodate the needs of end-to-end testing. Playwright supports all modern rendering engines including Chromium, WebKit, and Firefox. Test on Windows, Linux, and macOS, locally or on CI, headless or headed with native mobile emulation of Google Chrome for Android and Mobile Safari.`,
+    link: {
+      href: 'https://playwright.dev/',
+      label: 'playwright.dev',
+    },
+    logo: 'https://playwright.dev/img/playwright-logo.svg',
+  },
+  {
+    name: 'Testing Library',
+    description: `Simple and complete testing utilities that encourage good testing practices`,
+    link: {
+      href: 'https://testing-library.com/',
+      label: 'testing-library.com',
+    },
+    logo: 'https://testing-library.com/img/octopus-64x64.png',
+  },
+  {
+    name: 'Vitest',
+    description: `Next Generation Testing Framework. A Vite-native testing framework. It's fast!`,
+    link: {
+      href: 'https://vitest.dev/',
+      label: 'vitest.dev',
+    },
+    logo: 'https://avatars.githubusercontent.com/u/95747107?s=48&v=4',
+  },
+  {
     name: 'Clerk',
     description: `The most comprehensive User Management Platform. Need more than just a sign-in box? Clerk is a complete suite of embeddable UIs, flexible APIs, and admin dashboards to authenticate and manage your users.`,
     link: {
@@ -295,16 +331,6 @@ const techStack = [
     logo: 'https://zod.dev/logo.svg',
   },
   {
-    name: 'Netlify',
-    description:
-      'Netlify is a global, production-ready environment from the start. Skip all the server setup and get straight to building.',
-    link: {
-      href: 'https://www.netlify.com/',
-      label: 'netlify.com',
-    },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562760/bp-portfolio/images/logos/netlify_o47xmq_gb6pmb.png',
-  },
-  {
     name: 'Digital Ocean',
     description:
       'DigitalOcean is the easiest ☁️ platform to deploy, manage & scale applications of any size.',
@@ -323,6 +349,16 @@ const techStack = [
       label: 'fly.io',
     },
     logo: 'https://avatars.githubusercontent.com/u/22525303?s=48&v=4',
+  },
+  {
+    name: 'Netlify',
+    description:
+      'Netlify is a global, production-ready environment from the start. Skip all the server setup and get straight to building.',
+    link: {
+      href: 'https://www.netlify.com/',
+      label: 'netlify.com',
+    },
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562760/bp-portfolio/images/logos/netlify_o47xmq_gb6pmb.png',
   },
   {
     name: 'Vercel',
