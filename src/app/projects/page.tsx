@@ -16,6 +16,15 @@ const projects = [
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713915478/bp-portfolio/images/Head_Shot_vvk5yr.png',
   },
   {
+    name: `Filmpire`,
+    description: 'Your Gateway to the Movies You Love',
+    link: {
+      href: 'https://filmpire-beta.vercel.app/',
+      label: 'filmpire.com',
+    },
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1724377796/Filmpire/site-logo_io51hi.svg',
+  },
+  {
     name: `Dev Flow`,
     description: 'A Stack Overflow Clone',
     link: {
