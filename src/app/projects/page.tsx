@@ -61,15 +61,15 @@ const projects = [
     },
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713727772/emp/favicon_jqaems.png',
   },
-  {
-    name: 'BEAUTY By Casey Lauren',
-    description: 'Event stylist landing page built with Gatsby.js and Netlify',
-    link: {
-      href: 'https://beautybycaseylauren.com/',
-      label: 'beautybycaseylauren.com',
-    },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142669/bp-spotlight/images/logos/bbcl_pacmya.svg',
-  },
+  // {
+  //   name: 'BEAUTY By Casey Lauren',
+  //   description: 'Event stylist landing page built with Gatsby.js and Netlify',
+  //   link: {
+  //     href: 'https://beautybycaseylauren.com/',
+  //     label: 'beautybycaseylauren.com',
+  //   },
+  //   logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142669/bp-spotlight/images/logos/bbcl_pacmya.svg',
+  // },
   // {
   //   name: 'Taoist Programmer',
   //   description: 'Digital thought garden built with Gatsby.js and Netlify',
@@ -99,26 +99,26 @@ const projects = [
     },
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142712/bp-spotlight/images/logos/slicks-slices_c3v31k.svg',
   },
-  {
-    name: 'Slick Fits',
-    description:
-      'eCommerce web store built with React, GraphQL, Next.js, Apollo, Keystone.js, Netlify, and Digital Ocean',
-    link: {
-      href: 'https://slickfits.shop/',
-      label: 'slickfits.shop',
-    },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562756/bp-portfolio/images/logos/slick-fits_cbsksm_mbtv0i.png',
-  },
-  {
-    name: `Dang That's Delicious`,
-    description:
-      'Restaurant Review App built with Express.js MongoDB, and Digital Ocean',
-    link: {
-      href: 'https://octopus-app-jtjlf.ondigitalocean.app/',
-      label: 'dang-delicious.app',
-    },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684608748/doughnut_uwkna5.png',
-  },
+  // {
+  //   name: 'Slick Fits',
+  //   description:
+  //     'eCommerce web store built with React, GraphQL, Next.js, Apollo, Keystone.js, Netlify, and Digital Ocean',
+  //   link: {
+  //     href: 'https://slickfits.shop/',
+  //     label: 'slickfits.shop',
+  //   },
+  //   logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562756/bp-portfolio/images/logos/slick-fits_cbsksm_mbtv0i.png',
+  // },
+  // {
+  //   name: `Dang That's Delicious`,
+  //   description:
+  //     'Restaurant Review App built with Express.js MongoDB, and Digital Ocean',
+  //   link: {
+  //     href: 'https://octopus-app-jtjlf.ondigitalocean.app/',
+  //     label: 'dang-delicious.app',
+  //   },
+  //   logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684608748/doughnut_uwkna5.png',
+  // },
   // {
   //   name: `Resume Builder`,
   //   description:
