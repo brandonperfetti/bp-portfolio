@@ -12,6 +12,12 @@
 - Reuse existing component primitives (`Button`, `Card`, `Container`) before introducing new wrappers.
 - Prefer existing color semantics (`zinc`, `teal`) to keep visual consistency.
 
+## Mobile Input Font Size
+
+- To prevent iOS Safari auto-zoom on focus, form controls must render at `16px` on mobile.
+- Use `text-base sm:text-sm` for `input`, `textarea`, and `select` controls unless a specific control requires a larger size.
+- Keep this rule consistent across Hermes, search, and all form surfaces.
+
 ## Cursor UX Rules
 
 Global base layer in `tailwind.css` sets:

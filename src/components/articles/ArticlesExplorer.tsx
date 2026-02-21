@@ -149,7 +149,7 @@ export function ArticlesExplorer({
               setQuery(nextQuery)
             }}
             placeholder="Search articles"
-            className={`w-full rounded-md bg-white px-3 py-2 text-sm outline outline-zinc-300 focus:outline-teal-500 dark:bg-zinc-800 dark:outline-zinc-600 ${
+            className={`w-full rounded-md bg-white px-3 py-2 text-base outline outline-zinc-300 focus:outline-teal-500 sm:text-sm dark:bg-zinc-800 dark:outline-zinc-600 ${
               query.trim() ? 'pr-3' : 'pr-10'
             }`}
           />
@@ -222,7 +222,10 @@ export function ArticlesExplorer({
 
               <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-700/40">
                 <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                  <Link href={author.href} {...getExternalLinkProps(author.href)}>
+                  <Link
+                    href={author.href}
+                    {...getExternalLinkProps(author.href)}
+                  >
                     {author.name}
                   </Link>
                 </p>

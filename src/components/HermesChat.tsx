@@ -20,6 +20,22 @@ const EXAMPLES = [
   `Dali: A digital illustration of a man meditating while sitting on a donut, 4k, detailed, pixar animation.`,
 ]
 
+function createMessageId() {
+  const cryptoApi = globalThis.crypto
+  if (cryptoApi?.randomUUID) {
+    return cryptoApi.randomUUID()
+  }
+  if (cryptoApi?.getRandomValues) {
+    const bytes = new Uint8Array(16)
+    cryptoApi.getRandomValues(bytes)
+    bytes[6] = (bytes[6] & 0x0f) | 0x40
+    bytes[8] = (bytes[8] & 0x3f) | 0x80
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'))
+    return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`
+  }
+  return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
 const markdownComponents: Components = {
   p: ({ children }) => <p className="my-1 leading-7">{children}</p>,
   h1: ({ children }) => (
@@ -97,19 +113,20 @@ export function HermesChat() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
-      id: crypto.randomUUID(),
+      id: createMessageId(),
       role: 'assistant',
       content: STARTER_MESSAGE,
     },
   ])
   const chatContainerRef = useRef<HTMLDivElement>(null)
+  const chatControlsRef = useRef<HTMLFormElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const appendAssistantMessage = (content: string, image?: string) => {
     setMessages((prev) => [
       ...prev,
       {
-        id: crypto.randomUUID(),
+        id: createMessageId(),
         role: 'assistant',
         content,
         image,
@@ -175,7 +192,7 @@ export function HermesChat() {
 
     setIsChatStart(false)
     const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: createMessageId(),
       role: 'user',
       content: value,
     }
@@ -277,6 +294,32 @@ export function HermesChat() {
     } catch {
       // No-op. Clipboard APIs can fail in restricted contexts.
     }
+  }
+
+  function handleInputBlur(event: React.FocusEvent<HTMLInputElement>) {
+    const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
+    if (!isCoarsePointer) {
+      return
+    }
+
+    const relatedTarget =
+      event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null
+    const activeElement =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null
+    const nextFocusedElement = relatedTarget ?? activeElement
+
+    if (
+      nextFocusedElement &&
+      chatControlsRef.current?.contains(nextFocusedElement)
+    ) {
+      return
+    }
+
+    window.setTimeout(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    }, 0)
   }
 
   return (
@@ -394,16 +437,21 @@ export function HermesChat() {
         )}
       </div>
 
-      <form onSubmit={onSubmit} className="mt-4 flex gap-2">
+      <form
+        ref={chatControlsRef}
+        onSubmit={onSubmit}
+        className="mt-4 flex gap-2"
+      >
         <div className="relative w-full">
           <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            onBlur={handleInputBlur}
             disabled={loading}
             placeholder="Ask Hermes..."
-            className="w-full rounded-md px-3 py-2 pr-10 text-sm outline outline-zinc-300 focus:outline-teal-500 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-zinc-800 dark:outline-zinc-600"
+            className="w-full rounded-md px-3 py-2 pr-10 text-base outline outline-zinc-300 focus:outline-teal-500 disabled:cursor-not-allowed disabled:opacity-70 sm:text-sm dark:bg-zinc-800 dark:outline-zinc-600"
           />
           <span className="pointer-events-none absolute inset-y-0 right-3 hidden items-center text-xs font-medium text-zinc-400 sm:inline-flex dark:text-zinc-500">
             /
