@@ -18,7 +18,7 @@
 - Maintain contrast parity in both themes for:
   - nav controls
   - category chips
-  - chat bubbles and markdown text
+  - chat bubbles and Markdown text
   - form validation/error text
 
 ## Regression Checklist
