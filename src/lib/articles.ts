@@ -45,10 +45,10 @@ async function importArticle(
   const fileContent = await readFile(filePath, 'utf8')
 
   return {
+    ...article,
     slug: articleFilename.replace(/(\/page)?\.mdx$/, ''),
     readingTimeMinutes: estimateReadingTimeMinutes(fileContent),
     searchText: buildSearchText(fileContent),
-    ...article,
   }
 }
 

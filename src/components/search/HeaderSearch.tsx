@@ -66,7 +66,7 @@ export function HeaderSearch() {
         (item) =>
           item.title.toLowerCase().includes(lowered) ||
           item.description.toLowerCase().includes(lowered) ||
-          item.searchText.includes(lowered),
+          (item.searchText ?? '').toLowerCase().includes(lowered),
       )
       .slice(0, 10)
   }, [items, debouncedQuery])

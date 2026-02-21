@@ -94,7 +94,7 @@ export function ArticlesExplorer({
         normalizedQuery.length === 0 ||
         article.title.toLowerCase().includes(normalizedQuery) ||
         article.description.toLowerCase().includes(normalizedQuery) ||
-        article.searchText.includes(normalizedQuery)
+        (article.searchText ?? '').toLowerCase().includes(normalizedQuery)
 
       return matchesCategory && matchesQuery
     })
