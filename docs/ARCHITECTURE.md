@@ -35,7 +35,7 @@
    - `searchText` (normalized article body text)
 4. Search API (`/api/search`) emits a compact index consumed by header modal.
 
-Key files:
+### Key files
 
 - `src/lib/articles.ts`
 - `src/app/api/search/route.ts`
