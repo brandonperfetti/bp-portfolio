@@ -1,22 +1,19 @@
 import assert from 'assert'
 import * as cheerio from 'cheerio'
 import { Feed } from 'feed'
+import { getSiteUrl, SITE_DESCRIPTION } from '@/lib/site'
 
 export async function GET(req: Request) {
-  let siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+  const siteUrl = getSiteUrl()
 
-  if (!siteUrl) {
-    throw Error('Missing NEXT_PUBLIC_SITE_URL environment variable')
-  }
-
-  let author = {
+  const author = {
     name: 'Brandon Perfetti',
     email: 'brandon@brandonperfetti.com',
   }
 
-  let feed = new Feed({
+  const feed = new Feed({
     title: author.name,
-    description: 'Writing on mindset, software design, company building, and the tech industry.',
+    description: SITE_DESCRIPTION,
     author,
     id: siteUrl,
     link: siteUrl,
@@ -28,22 +25,46 @@ export async function GET(req: Request) {
     },
   })
 
-  let articleIds = require
+  const articleIds = require
     .context('../articles', true, /\/page\.mdx$/)
     .keys()
     .filter((key) => key.startsWith('./'))
     .map((key) => key.slice(2).replace(/\/page\.mdx$/, ''))
 
-  for (let id of articleIds) {
-    let url = String(new URL(`/articles/${id}`, req.url))
-    let html = await (await fetch(url)).text()
-    let $ = cheerio.load(html)
+  for (const id of articleIds) {
+    const url = String(new URL(`/articles/${id}`, req.url))
+    let html = ''
+    try {
+      const response = await fetch(url)
 
-    let publicUrl = `${siteUrl}/articles/${id}`
-    let article = $('article').first()
-    let title = article.find('h1').first().text()
-    let date = article.find('time').first().attr('datetime')
-    let content = article.find('[data-mdx-content]').first().html()
+      if (!response.ok) {
+        console.error('[feed.xml] Failed to fetch article', {
+          url,
+          status: response.status,
+        })
+        continue
+      }
+
+      html = await response.text()
+      if (!html || !html.trim()) {
+        console.error('[feed.xml] Empty article HTML response', { url })
+        continue
+      }
+    } catch (error) {
+      console.error('[feed.xml] Error fetching article', {
+        url,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      continue
+    }
+
+    const $ = cheerio.load(html)
+
+    const publicUrl = `${siteUrl}/articles/${id}`
+    const article = $('article').first()
+    const title = article.find('h1').first().text()
+    const date = article.find('time').first().attr('datetime')
+    const content = article.find('[data-mdx-content]').first().html()
 
     assert(typeof title === 'string')
     assert(typeof date === 'string')

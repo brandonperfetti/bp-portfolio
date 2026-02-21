@@ -6,5 +6,5 @@ export default function LinkIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
         fill="currentColor"
       />
     </svg>
-  );
+  )
 }

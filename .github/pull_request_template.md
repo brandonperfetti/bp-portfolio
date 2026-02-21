@@ -1,24 +1,67 @@
-# Pull Request
+# PR Title
 
-## Type
+## TL;DR
 
-Please check the type of change your PR introduces:
+<!-- High-level bullet points summarizing the changes in this PR -->
 
-- [ ] Bug-fix
-- [ ] Feature
-- [ ] Code style update (formatting, renaming)
-- [ ] Refactoring (no functional changes, no api changes)
-- [ ] Build related changes
-- [ ] Documentation content changes
-- [ ] Other (please describe):
+-
 
-## Description
+---
 
-Please explain the changes you made here.
+## Scope
 
-## Checklist
+<!-- Describe the scope of the PR: What parts of the codebase are affected, what is being added/removed/refactored -->
 
-- [ ] Code compiles correctly
-- [ ] Created tests which fail without the change (if possible)
-- [ ] All tests passing
-- [ ] Extended the README / documentation, if necessary
+-
+
+### Key changes
+
+<!-- Bullet list of the most important changes -->
+
+-
+
+---
+
+## Why
+
+<!-- Explain why these changes were necessary -->
+
+-
+
+---
+
+## Risk / Mitigation
+
+-   **Risk:**  
+    **Mitigation:**
+
+---
+
+## How to Test (Reviewer Checklist)
+
+1.
+2.
+3.
+
+---
+
+## Breaking Changes?
+
+- [ ] Yes
+- [ ] No
+
+---
+
+## Release Notes
+
+<!-- Brief, user-facing summary of changes -->
+
+-
+
+---
+
+## Rollback Plan
+
+<!-- Steps to revert the changes if needed -->
+
+-

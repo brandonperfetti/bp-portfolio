@@ -1,386 +1,429 @@
 'use client'
-import { Tooltip } from '@/components/common/ToolTip'
-import { SendIcon, ShortcutIcon } from '@/icons'
-import {
-  ArrowDownIcon,
-  ClipboardIcon,
-  PencilIcon,
-} from '@heroicons/react/24/outline'
-import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
-import { useCopyToClipboard } from 'usehooks-ts'
-import { Input } from './common'
 
-interface Message {
-  content: string
+import Image from 'next/image'
+import ReactMarkdown, { type Components } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { useEffect, useRef, useState } from 'react'
+
+type ChatMessage = {
+  id: string
   role: 'user' | 'assistant'
+  content: string
+  image?: string
 }
 
-const HermesChat: React.FC = () => {
-  const [isLoadingDali, setIsLoadingDali] = useState<boolean>(false)
-  const [message, setMessage] = useState<string>('')
-  const [typingMessage, setTypingMessage] = useState<string>('')
-  const [isChatStart, setIsChatStart] = useState<boolean>(true)
-  const [isDali, setIsDali] = useState<boolean>(false)
-  const [value, copy] = useCopyToClipboard()
+const STARTER_MESSAGE =
+  "Hey there 👋, I'm Hermes ⚡, your virtual assistant! What can I help with?"
+
+const EXAMPLES = [
+  `Explain "The Observer Effect".`,
+  `Dali: A digital illustration of a man meditating while sitting on a donut, 4k, detailed, pixar animation.`,
+]
+
+const markdownComponents: Components = {
+  p: ({ children }) => <p className="my-1 leading-7">{children}</p>,
+  h1: ({ children }) => (
+    <h1 className="my-2 text-base leading-7 font-semibold">{children}</h1>
+  ),
+  h2: ({ children }) => (
+    <h2 className="my-2 text-base leading-7 font-semibold">{children}</h2>
+  ),
+  h3: ({ children }) => (
+    <h3 className="my-2 text-base leading-7 font-semibold">{children}</h3>
+  ),
+  h4: ({ children }) => (
+    <h4 className="my-2 text-base leading-7 font-semibold">{children}</h4>
+  ),
+  ul: ({ children }) => (
+    <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>
+  ),
+  li: ({ children }) => <li className="my-0 leading-7">{children}</li>,
+  hr: () => <hr className="my-3 border-white/20" />,
+  pre: ({ children }) => (
+    <pre className="my-2 overflow-x-auto rounded-md bg-zinc-900/35 p-3 text-sm leading-6">
+      {children}
+    </pre>
+  ),
+  code: ({ children }) => (
+    <code className="rounded bg-zinc-900/25 px-1.5 py-0.5 text-[0.92em]">
+      {children}
+    </code>
+  ),
+  a: ({ children, href }) => (
+    <a
+      href={href}
+      className="underline decoration-white/50 underline-offset-2 hover:decoration-white"
+      target="_blank"
+      rel="noreferrer"
+    >
+      {children}
+    </a>
+  ),
+}
+
+function CopyIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
+      <rect x="5" y="5" width="9" height="9" rx="2" stroke="currentColor" />
+      <rect x="2" y="2" width="9" height="9" rx="2" stroke="currentColor" />
+    </svg>
+  )
+}
+
+function SendIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M2 8h9m0 0L7.5 4.5M11 8l-3.5 3.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+export function HermesChat() {
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [typingMessage, setTypingMessage] = useState('')
   const [isTyping, setIsTyping] = useState(false)
-  const [isCopied, setIsCopied] = useState(false)
-  const [messages, setMessages] = useState([
+  const [isImageLoading, setIsImageLoading] = useState(false)
+  const [isChatStart, setIsChatStart] = useState(true)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<ChatMessage[]>([
     {
-      content:
-        "Hey there 👋, I'm Hermes ⚡, your virtual assistant! What can I help with?",
+      id: crypto.randomUUID(),
       role: 'assistant',
+      content: STARTER_MESSAGE,
     },
   ])
-
   const chatContainerRef = useRef<HTMLDivElement>(null)
-  const searchInputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const submitMessage = (event: React.FormEvent) => {
-    event.preventDefault()
-    setIsChatStart(false)
-
-    const newUserMessage: Message = {
-      role: 'user',
-      content: message,
-    }
-
-    setMessages((prevMessages) => [...prevMessages, newUserMessage])
-    processMessage(newUserMessage)
-    setMessage('')
-  }
-
-  const processMessage = async (newMessage: Message) => {
-    const apiMessages = messages.map((msg) => ({
-      role: msg.role === 'user' ? 'user' : 'assistant',
-      content: msg.content,
-    }))
-
-    apiMessages.push({
-      role: newMessage.role,
-      content: newMessage.content,
-    })
-
-    if (newMessage.content.includes('Dali:')) {
-      try {
-        setIsDali(true)
-        setIsLoadingDali(true)
-        const strippedMessage = newMessage.content.replace('Dali: ', '')
-        const { image } = await fetch('/api/openai/image', {
-          method: 'POST',
-          body: JSON.stringify({ message: strippedMessage }),
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }).then((r) => r.json())
-
-        setIsLoadingDali(false)
-        setMessages((messages) => [
-          ...messages,
-          {
-            role: 'assistant',
-            content: `<img src=${image} alt="Generated image" />`,
-          },
-        ])
-      } catch (err) {
-        console.error('Error processing Dali image request:', err)
-        setMessages((messages) => [
-          ...messages,
-          {
-            role: 'assistant',
-            content: `<p>Oops! Something went wrong 😬, please try again.</p>`,
-          },
-        ])
-      } finally {
-        setIsLoadingDali(false)
-      }
-    } else {
-      try {
-        const response = await fetch('/api/openai/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: apiMessages }),
-        })
-
-        if (!response.ok) {
-          throw new Error('Stream failed to start')
-        }
-
-        const reader: ReadableStreamDefaultReader<Uint8Array> =
-          response.body!.getReader()
-        let buffer = ''
-        let currentMessage = ''
-
-        const processStream = async ({
-          done,
-          value,
-        }: ReadableStreamReadResult<Uint8Array>): Promise<void> => {
-          if (done) {
-            setIsTyping(false)
-            finalizeMessage(currentMessage)
-            setTypingMessage('')
-            return
-          }
-
-          buffer += new TextDecoder().decode(value, { stream: true })
-          let newLineIndex
-          while ((newLineIndex = buffer.indexOf('\n')) !== -1) {
-            const completeData = buffer.slice(0, newLineIndex)
-            buffer = buffer.slice(newLineIndex + 1)
-            const dataObject = JSON.parse(completeData)
-
-            if (dataObject.choices[0].delta.content) {
-              currentMessage += dataObject.choices[0].delta.content
-              setTypingMessage(currentMessage)
-              setIsTyping(true)
-            }
-          }
-          reader?.read().then(processStream)
-        }
-
-        reader?.read().then(processStream)
-      } catch (err) {
-        console.error('Error fetching data:', err)
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          {
-            role: 'assistant',
-            content: `<p>Oops! Something went wrong 😬, please try again.</p>`,
-          },
-        ])
-      }
-    }
-  }
-
-  const finalizeMessage = (finalMessage: string) => {
-    setIsTyping(false)
-    setMessages((prevMessages) => [
-      ...prevMessages,
-      { role: 'assistant', content: finalMessage },
+  const appendAssistantMessage = (content: string, image?: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content,
+        image,
+      },
     ])
   }
 
   useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+    if (!chatContainerRef.current) {
+      return
     }
-  })
+    chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+  }, [messages, typingMessage, isTyping, isImageLoading])
 
   useEffect(() => {
-    const onKeyPress = (event: KeyboardEvent) => {
-      if (
-        event.key === '/' &&
-        document.activeElement !== searchInputRef.current
-      ) {
-        event.preventDefault()
-        searchInputRef.current?.focus()
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) {
+        return false
       }
+      const tag = target.tagName
+      return (
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        target.isContentEditable ||
+        target.closest('[contenteditable="true"]') !== null
+      )
     }
-    document.body.addEventListener('keydown', onKeyPress)
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isSlashShortcut =
+        event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey
+      if (!isSlashShortcut || isTypingTarget(event.target)) {
+        return
+      }
+      event.preventDefault()
+      inputRef.current?.focus()
+    }
+    document.body.addEventListener('keydown', onKeyDown)
     return () => {
-      document.body.removeEventListener('keydown', onKeyPress)
+      document.body.removeEventListener('keydown', onKeyDown)
     }
   }, [])
 
   useEffect(() => {
-    if (isCopied) {
-      setTimeout(() => {
-        setIsCopied(false)
-      }, 1200)
+    if (!copiedId) {
+      return
     }
-  }, [isCopied])
+    const timeout = window.setTimeout(() => {
+      setCopiedId(null)
+    }, 1200)
+    return () => {
+      window.clearTimeout(timeout)
+    }
+  }, [copiedId])
+
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    const value = input.trim()
+    if (!value || loading) {
+      return
+    }
+
+    setIsChatStart(false)
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: value,
+    }
+    setMessages((prev) => [...prev, userMessage])
+    setInput('')
+    setLoading(true)
+    setTypingMessage('')
+    setIsTyping(false)
+
+    try {
+      if (/^(image|dali):\s*/i.test(value)) {
+        const prompt = value.replace(/^(image|dali):\s*/i, '')
+        setIsImageLoading(true)
+
+        const response = await fetch('/api/openai/image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: prompt }),
+        })
+
+        const data = await response.json()
+        if (!response.ok) {
+          throw new Error(data.error ?? 'Failed to generate image.')
+        }
+
+        appendAssistantMessage('Here is your generated image:', data.image)
+      } else {
+        const response = await fetch('/api/openai/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: [...messages, userMessage] }),
+        })
+
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error ?? 'Failed to get a response.')
+        }
+
+        if (!response.body) {
+          throw new Error('No response stream returned.')
+        }
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let currentMessage = ''
+
+        while (true) {
+          const { done, value: chunkValue } = await reader.read()
+          if (done) {
+            break
+          }
+
+          buffer += decoder.decode(chunkValue, { stream: true })
+          let newLineIndex = buffer.indexOf('\n')
+          while (newLineIndex !== -1) {
+            const line = buffer.slice(0, newLineIndex).trim()
+            buffer = buffer.slice(newLineIndex + 1)
+
+            if (line) {
+              try {
+                const data = JSON.parse(line)
+                const content = data?.choices?.[0]?.delta?.content
+                if (typeof content === 'string' && content.length > 0) {
+                  currentMessage += content
+                  setTypingMessage(currentMessage)
+                  setIsTyping(true)
+                }
+              } catch {
+                // Ignore malformed stream line and continue.
+              }
+            }
+            newLineIndex = buffer.indexOf('\n')
+          }
+        }
+
+        setIsTyping(false)
+        setTypingMessage('')
+        appendAssistantMessage(currentMessage || 'No response returned.')
+      }
+    } catch (error) {
+      appendAssistantMessage(
+        error instanceof Error
+          ? error.message
+          : 'Something went wrong while processing your request.',
+      )
+    } finally {
+      setIsTyping(false)
+      setTypingMessage('')
+      setIsImageLoading(false)
+      setLoading(false)
+    }
+  }
+
+  async function copyMessage(id: string, content: string) {
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopiedId(id)
+    } catch {
+      // No-op. Clipboard APIs can fail in restricted contexts.
+    }
+  }
 
   return (
-    <div>
-      <div className="flex h-[75vh] flex-col overflow-hidden xl:h-[80vh]">
-        <div
-          ref={chatContainerRef}
-          id="messages"
-          className="scrollbar-thumb-teal scrollbar-thumb-rounded scrollbar-track-teal-lighter scrollbar-w-2 scrolling-touch flex h-full flex-col space-y-4 overflow-y-scroll p-3"
-        >
-          {messages.map((message, index) => {
-            return message.role === 'assistant' ? (
-              <div key={index} id={`${index}_id`} className="chat-message">
-                <div className="flex items-end">
-                  <div className="order-2 mx-2 flex max-w-xs flex-col items-start space-y-2 text-xs lg:max-w-md">
-                    <div>
-                      <span className="inline-block rounded-lg rounded-bl-none bg-teal-600 px-4 py-2 text-lg text-gray-100">
-                        <div>
-                          <div
-                            dangerouslySetInnerHTML={{
-                              __html: message.content.replace(
-                                /(\r\n|\n|\r)/gm,
-                                '<br>',
-                              ),
-                            }}
-                          />{' '}
-                          <div className="flex">
-                            {message.content !==
-                              "Hey there 👋, I'm Hermes ⚡, your virtual assistant! What can I help with?" && (
-                              <div className="w-full pt-2">
-                                <Tooltip
-                                  delay={700}
-                                  placement="right"
-                                  maxWidth={150}
-                                  content="Click to copy"
-                                >
-                                  <button
-                                    className="float-right"
-                                    onClick={() => {
-                                      copy(`${message.content}`)
-                                      setIsCopied(true)
-                                    }}
-                                  >
-                                    <ClipboardIcon className="h-3 w-3 text-white hover:text-yellow-400" />
-                                  </button>
-                                </Tooltip>
-                                {/* {isCopied && <p className="text-sm float-right pr-2 -mt-1">Copied!</p>} */}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div key={index} id="user" className="chat-message">
-                <div className="flex items-end justify-end">
-                  <div className="order-1 mx-2 flex max-w-xs flex-col items-end space-y-2 text-xs lg:max-w-md">
-                    <div>
-                      <span className="inline-block rounded-lg rounded-br-none bg-zinc-500 px-4 py-2 text-lg text-white dark:bg-zinc-600">
+    <div className="flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100 p-4 dark:border-zinc-700/40">
+      <div
+        ref={chatContainerRef}
+        className="min-h-0 flex-1 space-y-4 overflow-auto p-2"
+      >
+        {messages.map((message, index) => (
+          <div key={message.id} className="chat-message">
+            <div
+              className={`flex items-end ${
+                message.role === 'assistant' ? '' : 'justify-end'
+              }`}
+            >
+              <div
+                className={`mx-1 max-w-[92%] space-y-2 text-sm lg:max-w-[80%] ${
+                  message.role === 'assistant' ? 'items-start' : 'items-end'
+                }`}
+              >
+                <span
+                  className={`inline-block rounded-xl px-4 py-2.5 ${
+                    message.role === 'assistant'
+                      ? 'rounded-bl-none bg-teal-600 text-white'
+                      : 'rounded-br-none bg-zinc-500 text-white dark:bg-zinc-600'
+                  }`}
+                >
+                  {message.role === 'assistant' ? (
+                    <div className="max-w-none text-white">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={markdownComponents}
+                      >
                         {message.content}
-                      </span>
+                      </ReactMarkdown>
                     </div>
-                  </div>
-                </div>
+                  ) : (
+                    <span className="whitespace-pre-wrap">
+                      {message.content}
+                    </span>
+                  )}
+                  {message.image && (
+                    <Image
+                      src={message.image}
+                      alt="Generated image"
+                      width={512}
+                      height={512}
+                      className="mt-3 rounded-lg"
+                      unoptimized
+                    />
+                  )}
+                </span>
+                {message.role === 'assistant' &&
+                  index > 0 &&
+                  !message.image && (
+                    <button
+                      type="button"
+                      onClick={() => copyMessage(message.id, message.content)}
+                      className="inline-flex items-center gap-1 rounded px-1 text-xs text-zinc-500 hover:text-teal-600 dark:text-zinc-400 dark:hover:text-teal-400"
+                    >
+                      <CopyIcon className="h-3.5 w-3.5" />
+                      <span>{copiedId === message.id ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  )}
               </div>
-            )
-          })}
-          {!!isChatStart && (
+            </div>
+          </div>
+        ))}
+
+        {isImageLoading && (
+          <div className="chat-message">
+            <div className="flex items-end">
+              <div className="mx-1 max-w-[92%] text-sm lg:max-w-[80%]">
+                <span className="inline-block animate-pulse rounded-xl rounded-bl-none bg-teal-500 px-4 py-2.5 text-white">
+                  Let&apos;s consult Salvador... 🧑‍🎨
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isTyping && (
+          <div className="chat-message">
+            <div className="flex items-end">
+              <div className="mx-1 max-w-[92%] text-sm lg:max-w-[80%]">
+                <span className="inline-block animate-pulse rounded-xl rounded-bl-none bg-teal-500 px-4 py-2.5 text-white">
+                  {typingMessage || 'Thinking'}...
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isChatStart && (
+          <div className="space-y-3 pt-1">
+            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Examples
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {EXAMPLES.map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  onClick={() => {
+                    setInput(example)
+                    inputRef.current?.focus()
+                  }}
+                  className="rounded-lg bg-zinc-100 px-3 py-2 text-left text-sm text-zinc-700 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <form onSubmit={onSubmit} className="mt-4 flex gap-2">
+        <div className="relative w-full">
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            disabled={loading}
+            placeholder="Ask Hermes..."
+            className="w-full rounded-md px-3 py-2 pr-10 text-sm outline outline-zinc-300 focus:outline-teal-500 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-zinc-800 dark:outline-zinc-600"
+          />
+          <span className="pointer-events-none absolute inset-y-0 right-3 hidden items-center text-xs font-medium text-zinc-400 sm:inline-flex dark:text-zinc-500">
+            /
+          </span>
+        </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="inline-flex items-center gap-1 rounded-md bg-teal-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-teal-400 active:bg-teal-600 disabled:opacity-50 dark:bg-teal-500 dark:hover:bg-teal-400 dark:active:bg-teal-600"
+        >
+          {loading ? (
+            <span className="tracking-widest">...</span>
+          ) : (
             <>
-              <div className="flex w-full justify-center pt-4">
-                <div className="flex align-middle dark:text-white">
-                  <PencilIcon className="mr-2 mt-2 h-4 w-4" />
-                  <h2 className="text-xl">Examples</h2>
-                </div>
-              </div>
-              <form className="w-full" onSubmit={submitMessage}>
-                <div className=" mx-auto grid max-w-sm grid-cols-1 space-y-3 md:max-w-lg">
-                  <button
-                    className="mx-auto inline-block rounded-lg bg-zinc-500 px-4 py-2 text-lg text-gray-100 transition duration-500 ease-in-out hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-600"
-                    onClick={(event) => {
-                      setMessage(`Explain "The Observer Effect".`)
-                    }}
-                  >
-                    Explain &quot;The Observer Effect&quot;.
-                  </button>
-                  <button
-                    className="mx-auto inline-block rounded-lg bg-zinc-500 px-4 py-2 text-lg text-gray-100 transition duration-500 ease-in-out hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-600"
-                    onClick={(event) => {
-                      setMessage(`Dali: A digital
-                    illustration of Homer Simpson meditating while sitting on a donut, 4k, detailed, pixar animation.`)
-                    }}
-                  >
-                    <span className="font-extrabold">Dali:</span> A digital
-                    illustration of Homer Simpson meditating while sitting on a
-                    donut, 4k, detailed, pixar animation.
-                  </button>
-                  {/* <button
-                    className="mx-auto inline-block rounded-lg bg-zinc-500 px-4 py-2 text-lg text-gray-100 transition duration-500 ease-in-out hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-600"
-                    onClick={(event) => {
-                      setMessage(
-                        `Generate Blog Topics: Software Engineering Management`
-                      );
-                    }}
-                  >
-                    <span className="font-extrabold">
-                      Generate Blog Topics:
-                    </span>{" "}
-                    Software Engineering Management
-                  </button> */}
-                  {/* <button
-                    className="mx-auto inline-block rounded-lg bg-zinc-500 px-4 py-2 text-lg text-gray-100 transition duration-500 ease-in-out hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-600"
-                    onClick={(event) => {
-                      setMessage(`Blog Post: Buckminster Fuller`);
-                    }}
-                  >
-                    <span className="font-extrabold">Blog Post:</span>{" "}
-                    Buckminster Fuller
-                  </button> */}
-                </div>
-              </form>
+              <span>Send</span>
+              <SendIcon className="h-4 w-4" />
             </>
           )}
-          {isLoadingDali && (
-            <div
-              id="assistant"
-              className="chat-message"
-              data-testid="loading-dali"
-            >
-              <div className="flex animate-pulse items-end">
-                <div className="order-2 mx-2 flex max-w-xs flex-col items-start space-y-2 text-xs lg:max-w-md">
-                  <div>
-                    <span className="inline-block rounded-lg rounded-bl-none bg-teal-500 px-4 py-2 text-lg text-white">
-                      {!!isDali && <>Let&apos;s consult Salvador... 🧑‍🎨</>}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          {isTyping && (
-            <div className="chat-message">
-              <div className="flex animate-pulse items-end">
-                <div className="order-2 mx-2 flex max-w-xs flex-col items-start space-y-2 text-xs lg:max-w-md">
-                  <div>
-                    <span className="inline-block rounded-lg rounded-bl-none bg-teal-500 px-4 py-2 text-lg text-white">
-                      {typingMessage}...
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-        <div
-          id="type-field"
-          className="w-full border-t-2 border-gray-200 py-4 sm:mb-0"
-        >
-          <form onSubmit={submitMessage} className="relative flex gap-2">
-            {/* <div className="absolute z-30 flex w-full pr-1">
-              <Link className="bottom-0 w-full justify-end" href="/hermes">
-                <ArrowDownIcon className="float-right -mt-14 h-6 w-6 rounded-full bg-white/70 p-0.5 text-zinc-600 shadow-lg shadow-zinc-800/5 ring-1 ring-zinc-900/5 backdrop-blur dark:bg-zinc-800/70 dark:text-white dark:ring-white/10" />
-              </Link>
-            </div> */}
-            <div className="flex w-full py-2">
-              <Input
-                fullWidth
-                autoFocus
-                ref={searchInputRef}
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                type="text"
-                name="message"
-                placeholder="Write your message!"
-                rightIcon={<ShortcutIcon className="text-gray-700" />}
-              />
-            </div>
-            <div className="inset-y-0 hidden items-center sm:flex">
-              <button
-                type="submit"
-                className="inline-flex w-full items-center justify-center rounded-xl  bg-zinc-500 px-4 py-1.5 text-white transition duration-500 ease-in-out hover:bg-zinc-600 focus:outline-none dark:bg-zinc-700 dark:hover:bg-zinc-600"
-              >
-                <span className="font-semibold">Send</span>
-                <SendIcon />
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
+        </button>
+      </form>
     </div>
   )
 }
-
-export default HermesChat

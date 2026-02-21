@@ -1,6 +1,8 @@
-import { Section, SimpleLayout } from '@/components/common'
-import { Card } from '@/components/common/Card'
 import { type Metadata } from 'next'
+
+import { Card } from '@/components/Card'
+import { Section } from '@/components/Section'
+import { SimpleLayout } from '@/components/SimpleLayout'
 
 function SpeakingSection({
   children,
@@ -42,6 +44,10 @@ export const metadata: Metadata = {
   title: 'Speaking',
   description:
     'I’ve spoken at events all around the world and been interviewed for many podcasts.',
+  robots: {
+    index: false,
+    follow: false,
+  },
 }
 
 export default function Speaking() {

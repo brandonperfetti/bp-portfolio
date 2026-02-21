@@ -1,4 +1,5 @@
 import  ArticleLayout  from "@/components/articles/ArticleLayout";
+import { createArticleMetadata } from '@/lib/articleMetadata'
 
 export const article = {
   author: {
@@ -18,10 +19,7 @@ export const article = {
     "https://res.cloudinary.com/dgwdyrmsn/image/upload/v1710352555/bp-spotlight/images/articles/banners/continuous-learning_jdmroe.webp",
 };
 
-export const metadata = {
-  title: article.title,
-  description: article.description,
-}
+export const metadata = createArticleMetadata(article)
 
 export default (props) => <ArticleLayout article={article} {...props} />
 

@@ -1,9 +1,14 @@
-import { SimpleLayout } from '@/components/common'
 import { type Metadata } from 'next'
+
+import { SimpleLayout } from '@/components/SimpleLayout'
 
 export const metadata: Metadata = {
   title: 'You’re subscribed',
   description: 'Thanks for subscribing to my newsletter.',
+  robots: {
+    index: false,
+    follow: false,
+  },
 }
 
 export default function ThankYou() {

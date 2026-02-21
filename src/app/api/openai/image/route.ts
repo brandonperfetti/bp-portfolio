@@ -1,40 +1,55 @@
-import OpenAI from "openai";
+import OpenAI from 'openai'
+import { NextResponse } from 'next/server'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
-
-export const runtime = "edge";
-
-export async function POST(req: Request): Promise<Response> {
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: "Method Not Allowed" }), { status: 405 });
+export async function POST(req: Request) {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: 'OPENAI_API_KEY is not configured.' },
+      { status: 500 },
+    )
   }
-  let data;
+  const openai = new OpenAI({ apiKey })
 
+  let body: unknown
   try {
-    data = await req.json();
-  } catch (err) {
-    return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400 });
+    body = await req.json()
+  } catch (error) {
+    console.error('[api/openai/image] Invalid JSON body', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  if (!data.message) {
-    return new Response(JSON.stringify({ error: "No message provided" }), { status: 400 });
+  const message = (body as { message?: string })?.message
+
+  if (!message) {
+    return NextResponse.json({ error: 'No message provided.' }, { status: 400 })
   }
 
   try {
     const response = await openai.images.generate({
-      model: "dall-e-3",
-      prompt: data.message,
-      n: 1,
-      size: "1024x1024",
-      quality: "hd",
-    });
+      model: 'gpt-image-1',
+      prompt: message,
+      size: '1024x1024',
+    })
 
-    const imageUrl = response.data[0].url;
-    return new Response(JSON.stringify({ image: imageUrl }), { status: 200 });
+    const image = response.data?.[0]?.b64_json
+    if (!image) {
+      return NextResponse.json(
+        { error: 'No image returned by the model.' },
+        { status: 500 },
+      )
+    }
+
+    return NextResponse.json({ image: `data:image/png;base64,${image}` })
   } catch (error) {
-    console.error("Failed to generate image:", error);
-    return new Response(JSON.stringify({ error: "Failed to generate image" }), { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : 'Failed to generate image.',
+      },
+      { status: 500 },
+    )
   }
 }
