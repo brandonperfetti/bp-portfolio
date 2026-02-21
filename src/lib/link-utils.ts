@@ -1,6 +1,8 @@
+import type { LinkProps } from 'next/link'
+
 import { getSiteUrl } from '@/lib/site'
 
-type HrefLike = string | URL | { pathname?: string }
+type HrefLike = LinkProps['href'] | null | undefined
 
 const INTERNAL_HOSTS = (() => {
   const hosts = new Set(['localhost:3000', 'localhost', '127.0.0.1'])
@@ -15,6 +17,10 @@ const INTERNAL_HOSTS = (() => {
 })()
 
 function toHrefString(href: HrefLike) {
+  if (!href) {
+    return undefined
+  }
+
   if (typeof href === 'string') {
     return href
   }
@@ -23,7 +29,7 @@ function toHrefString(href: HrefLike) {
     return href.toString()
   }
 
-  return href.pathname
+  return typeof href.pathname === 'string' ? href.pathname : undefined
 }
 
 export function isExternalHref(href: HrefLike) {
