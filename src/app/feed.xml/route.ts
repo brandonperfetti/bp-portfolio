@@ -1,7 +1,7 @@
 import assert from 'assert'
 import * as cheerio from 'cheerio'
 import { Feed } from 'feed'
-import { getSiteUrl } from '@/lib/site'
+import { getSiteUrl, SITE_DESCRIPTION } from '@/lib/site'
 
 export async function GET(req: Request) {
   const siteUrl = getSiteUrl()
@@ -13,7 +13,7 @@ export async function GET(req: Request) {
 
   const feed = new Feed({
     title: author.name,
-    description: 'Your blog description',
+    description: SITE_DESCRIPTION,
     author,
     id: siteUrl,
     link: siteUrl,
@@ -33,7 +33,31 @@ export async function GET(req: Request) {
 
   for (const id of articleIds) {
     const url = String(new URL(`/articles/${id}`, req.url))
-    const html = await (await fetch(url)).text()
+    let html = ''
+    try {
+      const response = await fetch(url)
+
+      if (!response.ok) {
+        console.error('[feed.xml] Failed to fetch article', {
+          url,
+          status: response.status,
+        })
+        continue
+      }
+
+      html = await response.text()
+      if (!html || !html.trim()) {
+        console.error('[feed.xml] Empty article HTML response', { url })
+        continue
+      }
+    } catch (error) {
+      console.error('[feed.xml] Error fetching article', {
+        url,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      continue
+    }
+
     const $ = cheerio.load(html)
 
     const publicUrl = `${siteUrl}/articles/${id}`
