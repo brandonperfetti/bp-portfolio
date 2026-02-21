@@ -119,6 +119,7 @@ export function HermesChat() {
     },
   ])
   const chatContainerRef = useRef<HTMLDivElement>(null)
+  const chatControlsRef = useRef<HTMLFormElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const appendAssistantMessage = (content: string, image?: string) => {
@@ -295,11 +296,27 @@ export function HermesChat() {
     }
   }
 
-  function handleInputBlur() {
+  function handleInputBlur(event: React.FocusEvent<HTMLInputElement>) {
     const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
     if (!isCoarsePointer) {
       return
     }
+
+    const relatedTarget =
+      event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null
+    const activeElement =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null
+    const nextFocusedElement = relatedTarget ?? activeElement
+
+    if (
+      nextFocusedElement &&
+      chatControlsRef.current?.contains(nextFocusedElement)
+    ) {
+      return
+    }
+
     window.setTimeout(() => {
       window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
     }, 0)
@@ -420,7 +437,11 @@ export function HermesChat() {
         )}
       </div>
 
-      <form onSubmit={onSubmit} className="mt-4 flex gap-2">
+      <form
+        ref={chatControlsRef}
+        onSubmit={onSubmit}
+        className="mt-4 flex gap-2"
+      >
         <div className="relative w-full">
           <input
             ref={inputRef}
