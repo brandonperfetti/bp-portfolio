@@ -9,6 +9,7 @@ import { Messenger } from '@/components/home/Messenger'
 import { GitHubIcon, LinkedInIcon, XIcon } from '@/icons'
 import { type ArticleWithSlug, getAllArticles } from '@/lib/articles'
 import { formatDate } from '@/lib/formatDate'
+import { getExternalLinkProps } from '@/lib/link-utils'
 
 const image1 =
   'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684298666/image-1_ebktnx.jpg'
@@ -79,7 +80,7 @@ function SocialLink({
   icon: React.ComponentType<{ className?: string }>
 }) {
   return (
-    <Link className="group -m-1 p-1" {...props}>
+    <Link className="group -m-1 p-1" {...getExternalLinkProps(props.href)} {...props}>
       <Icon className="h-6 w-6 fill-zinc-500 transition group-hover:fill-zinc-600 dark:fill-zinc-400 dark:group-hover:fill-zinc-300" />
     </Link>
   )

@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import { type ArticleWithSlug } from '@/lib/articles'
 import { formatDate } from '@/lib/formatDate'
+import { getExternalLinkProps } from '@/lib/link-utils'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 
 function getAuthor(article: ArticleWithSlug) {
@@ -221,7 +222,9 @@ export function ArticlesExplorer({
 
               <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-700/40">
                 <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                  <Link href={author.href}>{author.name}</Link>
+                  <Link href={author.href} {...getExternalLinkProps(author.href)}>
+                    {author.name}
+                  </Link>
                 </p>
                 {author.role && (
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">

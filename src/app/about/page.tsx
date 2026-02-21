@@ -5,6 +5,7 @@ import clsx from 'clsx'
 
 import { Container } from '@/components/Container'
 import { GitHubIcon, LinkedInIcon, MailIcon, XIcon } from '@/icons'
+import { getExternalLinkProps } from '@/lib/link-utils'
 
 function SocialLink({
   className,
@@ -21,6 +22,7 @@ function SocialLink({
     <li className={clsx(className, 'flex')}>
       <Link
         href={href}
+        {...getExternalLinkProps(href)}
         className="group flex text-sm font-medium text-zinc-800 transition hover:text-teal-500 dark:text-zinc-200 dark:hover:text-teal-500"
       >
         <Icon className="h-6 w-6 flex-none fill-zinc-500 transition group-hover:fill-teal-500" />

@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import clsx from 'clsx'
 
+import { getExternalLinkProps } from '@/lib/link-utils'
+
 const variantStyles = {
   primary:
     'bg-teal-500 font-semibold text-white hover:bg-teal-400 active:bg-teal-600 active:text-white/80 dark:bg-teal-500 dark:hover:bg-teal-400 dark:active:bg-teal-600 dark:active:text-white/80',
@@ -29,6 +31,10 @@ export function Button({
   return typeof props.href === 'undefined' ? (
     <button className={className} {...props} />
   ) : (
-    <Link className={className} {...props} />
+    <Link
+      className={className}
+      {...getExternalLinkProps(props.href)}
+      {...props}
+    />
   )
 }

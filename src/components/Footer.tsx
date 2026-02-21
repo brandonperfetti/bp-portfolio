@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 import { ContainerInner, ContainerOuter } from '@/components/Container'
+import { getExternalLinkProps } from '@/lib/link-utils'
 
 function NavLink({
   href,
@@ -15,6 +16,7 @@ function NavLink({
   return (
     <Link
       href={href}
+      {...getExternalLinkProps(href)}
       className="transition hover:text-teal-500 dark:hover:text-teal-400"
     >
       {children}

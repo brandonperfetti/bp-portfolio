@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
+import { getExternalLinkProps } from '@/lib/link-utils'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 
 type SearchItem = {
@@ -131,6 +132,7 @@ export function HeaderSearch() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  {...getExternalLinkProps(item.href)}
                   onClick={() => setIsOpen(false)}
                   className="block rounded-lg p-3 transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
                 >
