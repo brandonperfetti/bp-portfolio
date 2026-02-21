@@ -169,7 +169,7 @@ export function ArticlesExplorer({
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
                 category === item
                   ? 'bg-teal-500 text-white'
-                  : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-100 dark:hover:text-zinc-900'
+                  : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
               }`}
             >
               {item}

@@ -70,7 +70,7 @@ export function Newsletter() {
         />
         <div className="ml-2">
           <Button type="submit" disabled={loading}>
-            {!loading ? <ArrowRightIcon className="h-5 w-4" /> : '...'}
+            {!loading ? <ArrowRightIcon className="h-5 w-5" /> : '...'}
           </Button>
         </div>
       </div>
