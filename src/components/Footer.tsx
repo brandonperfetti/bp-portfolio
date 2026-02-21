@@ -32,7 +32,7 @@ export function Footer() {
   }
 
   return (
-    <footer className="flex-none">
+    <footer className="mt-10 flex-none sm:mt-12">
       <ContainerOuter>
         <div className="border-t border-zinc-100 py-6 dark:border-zinc-700/40">
           <ContainerInner>
