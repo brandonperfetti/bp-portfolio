@@ -111,7 +111,7 @@ export function HeaderSearch() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search articles"
-                className="w-full rounded-md px-3 py-2 text-sm outline outline-zinc-300 focus:outline-teal-500 dark:bg-zinc-800 dark:outline-zinc-600"
+                className="w-full rounded-md px-3 py-2 text-base outline outline-zinc-300 focus:outline-teal-500 sm:text-sm dark:bg-zinc-800 dark:outline-zinc-600"
               />
               <button
                 type="button"
