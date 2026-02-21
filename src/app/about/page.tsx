@@ -1,9 +1,10 @@
-import { Container } from '@/components/common/Container'
-import { GitHubIcon, LinkedInIcon, XIcon } from '@/icons'
-import clsx from 'clsx'
 import { type Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
+import clsx from 'clsx'
+
+import { Container } from '@/components/Container'
+import { GitHubIcon, LinkedInIcon, MailIcon, XIcon } from '@/icons'
 
 function SocialLink({
   className,
@@ -29,143 +30,113 @@ function SocialLink({
   )
 }
 
-function MailIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-      <path
-        fillRule="evenodd"
-        d="M6 5a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V8a3 3 0 0 0-3-3H6Zm.245 2.187a.75.75 0 0 0-.99 1.126l6.25 5.5a.75.75 0 0 0 .99 0l6.25-5.5a.75.75 0 0 0-.99-1.126L12 12.251 6.245 7.187Z"
-      />
-    </svg>
-  )
-}
-
 export const metadata: Metadata = {
   title: 'About',
   description:
-    'I’m Brandon Perfetti, a Project Manager + Software Engineer from Orange County CA, crafting efficient and user-friendly digital solutions.',
+    'Brandon Perfetti is a product and project leader plus software engineer based in Orange County, California.',
 }
 
 export default function About() {
   return (
     <Container className="my-16 sm:mt-32">
-      <div className="grid grid-cols-1 gap-y-16 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:gap-y-12">
-        <div className="lg:pl-20">
+      <div className="grid grid-cols-1 gap-y-14 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:gap-y-12">
+        <div className="order-2 lg:order-none lg:pl-20">
           <div className="mx-auto max-w-xs px-2.5 lg:max-w-none">
             <Image
               height={800}
               width={800}
               src="https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142618/bp-spotlight/images/portrait_zdvgpf.jpg"
-              alt=""
+              alt="Brandon Perfetti"
               sizes="(min-width: 1024px) 32rem, 20rem"
               className="aspect-square rounded-2xl bg-zinc-100 object-cover md:rotate-3 dark:bg-zinc-800"
+              unoptimized
             />
           </div>
         </div>
-        <div className="lg:order-first lg:row-span-2">
+        <div className="order-first lg:order-first lg:row-span-2">
           <h1 className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100">
-            Hey there! 👋<br></br>
-            <p>I&apos;m Brandon Perfetti.</p>
+            I build software with a product mindset and an execution-first
+            approach.
           </h1>
           <div className="mt-6 space-y-7 text-base text-zinc-600 dark:text-zinc-400">
             <p>
-              With over a decade of immersion in the agile tech startup
-              ecosystem, I&rsquo;ve developed a dual expertise that intertwines
-              the strategic oversight of a Project Manager with the technical
-              acumen of a Software Engineer. This unique fusion not only defines
-              my professional persona but also amplifies my contribution to
-              every project I touch.
+              I&apos;m Brandon Perfetti, a product and project manager plus
+              software engineer based in Orange County, California. Over the
+              last decade, I&apos;ve worked across startup and client teams
+              where clear priorities, fast iteration, and reliable delivery are
+              non-negotiable.
             </p>
           </div>
           <div>
             <div className="py-4">
               <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
-                Navigating Complexities with Agile Leadership 🚀
+                Navigating Complexities with Agile Leadership
               </h3>
               <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-                My career is a mosaic of leading and contributing to diverse
-                teams, where my role oscillated between a versatile
-                jack-of-all-trades and a specialized expert. This flexibility
-                has been my cornerstone, enabling me to adapt, thrive, and drive
-                success in the fast-paced, ever-evolving tech landscape.
+                I&apos;ve led and contributed across diverse teams, shifting
+                between strategic planning and hands-on implementation as
+                needed. That adaptability helps me keep teams aligned in
+                fast-moving, ambiguous environments.
               </p>
             </div>
             <div className="py-4">
               <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
-                Driving Innovation Through Continuous Learning 📚
+                Driving Innovation Through Continuous Learning
               </h3>
               <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-                At the heart of my approach is a relentless pursuit of knowledge
-                and excellence. I am driven by the possibilities that new
-                technologies bring to the table, not just to meet ambitious
-                project deadlines but to redefine what&rsquo;s possible. My
-                passion for learning is matched by my commitment to sharing
-                knowledge, fostering an environment where innovation is not just
-                encouraged but expected.
+                I continuously refine the systems, tooling, and workflows behind
+                delivery. I adopt new methods when they improve quality, reduce
+                risk, and help teams make better product decisions.
               </p>
             </div>
             <div className="py-4">
               <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
-                A Commitment to Excellence 💪
+                A Commitment to Excellence
               </h3>
               <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-                My professional journey is underpinned by a belief in the power
-                of continuous improvement and the value of sharing knowledge. I
-                am dedicated to not only advancing my own skills but also
-                elevating those around me, ensuring that together, we can
-                overcome challenges and exceed expectations.
+                My work is grounded in continuous improvement and collaborative
+                knowledge sharing. I focus on raising both delivery standards
+                and team capability so outcomes improve over time.
               </p>
             </div>
             <div className="py-4">
               <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
-                Enterprise Client + Project Management 🤝
+                Enterprise Client and Project Management
               </h3>
               <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-                I thrive on effective communication and meticulous time
-                management, which are crucial for achieving successful projects
-                and client satisfaction. By setting realistic expectations and
-                consistently delivering beyond them, I guide clients through
-                tailored project pathways, ensuring a service experience
-                uniquely catered to their specific needs and objectives.
+                I prioritize clear communication, realistic commitments, and
+                disciplined execution. That combination helps clients and
+                stakeholders move forward with confidence.
               </p>
             </div>
 
             <div className="py-4">
               <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
-                Development + Technological Excellence 💻
+                Development and Technological Excellence
               </h3>
               <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-                With a solid foundation in technology and over ten years of
-                cross-disciplinary experience, my role extends beyond mere
-                participation to actively facilitating product inception,
-                pragmatic execution, and seamless rollout. My dedication to
-                crafting scalable solutions, optimizing internal processes, and
-                fostering result-oriented teams underscores my unwavering
-                commitment to delivering exceptional value in every project I
-                undertake.
+                With a strong technical foundation and cross-disciplinary
+                experience, I help teams move from product inception to
+                pragmatic rollout. I prioritize scalable solutions, operational
+                efficiency, and measurable outcomes.
               </p>
             </div>
             <div className="py-4">
               <h3 className="text-xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
-                Looking forward 🔭
+                Looking Forward
               </h3>
               <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-                As I look to the future, I am excited about the opportunity to
-                leverage my experience and insights to tackle new challenges,
-                drive unparalleled innovation, and contribute to a culture of
-                excellence and continuous growth.
+                I&apos;m most energized by hard product problems, strong teams,
+                and builds that create durable value for users and businesses.
               </p>
             </div>
           </div>
         </div>
-        <div className="mb-4 lg:pl-20">
+        <div className="mb-4 lg:mt-2 lg:pl-20">
           <ul role="list">
-            <SocialLink href="https://twitter.com/brandonperfetti" icon={XIcon}>
+            <SocialLink href="https://x.com/brandonperfetti" icon={XIcon}>
               Follow on X
             </SocialLink>
-            {/* <SocialLink href="#" icon={InstagramIcon} className="mt-4">
-              Follow on Instagram
-            </SocialLink> */}
             <SocialLink
               href="https://github.com/brandonperfetti"
               icon={GitHubIcon}
@@ -173,11 +144,15 @@ export default function About() {
             >
               Follow on GitHub
             </SocialLink>
-            <SocialLink href="#" icon={LinkedInIcon} className="mt-4">
+            <SocialLink
+              href="https://www.linkedin.com/in/brandonperfetti/"
+              icon={LinkedInIcon}
+              className="mt-4"
+            >
               Follow on LinkedIn
             </SocialLink>
             <SocialLink
-              href="https://www.linkedin.com/in/brandonperfetti/"
+              href="mailto:brandon@brandonperfetti.com"
               icon={MailIcon}
               className="mt-8 border-t border-zinc-100 pt-8 dark:border-zinc-700/40"
             >

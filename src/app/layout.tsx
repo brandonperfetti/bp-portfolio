@@ -1,22 +1,41 @@
-import { Providers } from '@/app/providers'
-import { Layout } from '@/components/common'
-import '@/styles/tailwind.css'
-import { Analytics } from '@vercel/analytics/react'
-import { SpeedInsights } from '@vercel/speed-insights/next'
 import { type Metadata } from 'next'
 
+import { Providers } from '@/app/providers'
+import { Layout } from '@/components/Layout'
+import { getSiteUrl } from '@/lib/site'
+
+import '@/styles/tailwind.css'
+
+const siteUrl = getSiteUrl()
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
     template: '%s - Brandon Perfetti',
     default:
-      'Brandon Perfetti - Product & Project Manager, Software Engineer, and Continuous Learner',
+      'Brandon Perfetti - Product & Project Manager and Software Engineer',
   },
   description:
-    'I’m Brandon, based in the beautiful Orange County, CA. My passion lies in crafting solutions that not only solve complex problems but also significantly improve user interactions and business processes. A continual learner, I thrive on exploring new technologies and methodologies to stay ahead in the ever-evolving tech landscape.',
+    'I’m Brandon, a product and project manager plus software engineer based in Orange County, California.',
   alternates: {
+    canonical: './',
     types: {
-      'application/rss+xml': `${process.env.NEXT_PUBLIC_SITE_URL}/feed.xml`,
+      'application/rss+xml': `${siteUrl}/feed.xml`,
     },
+  },
+  openGraph: {
+    type: 'website',
+    url: siteUrl,
+    siteName: 'Brandon Perfetti',
+    title: 'Brandon Perfetti - Product & Project Manager and Software Engineer',
+    description:
+      'I’m Brandon, a product and project manager plus software engineer based in Orange County, California.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Brandon Perfetti - Product & Project Manager and Software Engineer',
+    description:
+      'I’m Brandon, a product and project manager plus software engineer based in Orange County, California.',
   },
 }
 
@@ -30,11 +49,7 @@ export default function RootLayout({
       <body className="flex h-full bg-zinc-50 dark:bg-black">
         <Providers>
           <div className="flex w-full">
-            <Layout>
-              {children}
-              <Analytics />
-              <SpeedInsights />
-            </Layout>
+            <Layout>{children}</Layout>
           </div>
         </Providers>
       </body>

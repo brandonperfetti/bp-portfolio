@@ -11,6 +11,7 @@
 # next.js
 /.next/
 /out/
+/.swc
 
 # production
 /build
@@ -40,3 +41,7 @@ public/sitemap.xml
 
 # ESLint cache
 .eslintcache
+
+# local tooling artifacts
+/.playwright-cli
+/output

@@ -1,4 +1,3 @@
-import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 
 interface SendGridError {
@@ -7,84 +6,77 @@ interface SendGridError {
   help?: string
 }
 
-// Export a named function corresponding to the HTTP method
-export async function PUT(req: NextRequest) {
-  if (req.method !== 'PUT') {
-    return new NextResponse(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: {
-        'Content-Type': 'application/json',
+export async function PUT(req: Request) {
+  const apiKey = process.env.SENDGRID_API_KEY
+  const listId = process.env.SENDGRID_MAILING_ID ?? process.env.SENDGRID_LIST_ID
+  const isEuResidency = process.env.SENDGRID_DATA_RESIDENCY === 'eu'
+  const apiBase = isEuResidency
+    ? 'https://api.eu.sendgrid.com'
+    : 'https://api.sendgrid.com'
+
+  if (!apiKey || !listId) {
+    return NextResponse.json(
+      {
+        message:
+          'SendGrid mailing list environment variables are not configured.',
+        error:
+          'Expected SENDGRID_API_KEY and SENDGRID_MAILING_ID (or SENDGRID_LIST_ID).',
       },
-    })
+      { status: 500 },
+    )
+  }
+
+  const body = await req.json()
+  const email = String(body?.mail ?? body?.email ?? '')
+    .trim()
+    .toLowerCase()
+
+  if (!email) {
+    return NextResponse.json({ message: 'Email is required.' }, { status: 400 })
   }
 
   try {
-    const body = await req.json()
-    const email = body.mail
-    const url = `https://api.sendgrid.com/v3/marketing/contacts`
-
-    const data = {
-      contacts: [{ email: email }],
-      list_ids: [process.env.SENDGRID_MAILING_ID],
-    }
-
-    const headers = {
-      Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
-      'Content-Type': 'application/json',
-    }
-
-    const options = {
+    const response = await fetch(`${apiBase}/v3/marketing/contacts`, {
       method: 'PUT',
-      headers: headers,
-      body: JSON.stringify(data),
-    }
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ contacts: [{ email }], list_ids: [listId] }),
+    })
 
-    const response = await fetch(url, options)
-    const json = await response.json()
+    const payload = await response.json()
 
-    if (json.errors) {
-      return new NextResponse(
-        JSON.stringify({
-          message:
-            'Oops, there was a problem with your subscription. Please try again or contact us',
-          error: json.errors
-            .map((err: SendGridError) => err.message)
-            .join(', '),
-        }),
+    if (!response.ok || payload.errors) {
+      return NextResponse.json(
         {
-          status: 500,
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          message: 'Unable to subscribe right now. Please try again.',
+          error: payload.errors
+            ?.map((entry: SendGridError) =>
+              [
+                entry.message,
+                entry.field ? `field: ${entry.field}` : '',
+                entry.help,
+              ]
+                .filter(Boolean)
+                .join(' | '),
+            )
+            .join(', '),
         },
+        { status: 500 },
       )
     }
 
-    return new NextResponse(
-      JSON.stringify({
-        message:
-          'Your email has been successfully added to the mailing list. Welcome 👋',
-      }),
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      },
-    )
+    return NextResponse.json({
+      message: 'Your email has been added to the mailing list. Welcome.',
+    })
   } catch (error) {
-    console.error('SendGrid error:', error)
-    return new NextResponse(
-      JSON.stringify({
-        message: 'Failed to process your request',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      }),
+    return NextResponse.json(
       {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        message: 'Unable to subscribe right now. Please try again.',
+        error: error instanceof Error ? error.message : 'Unknown error',
       },
+      { status: 500 },
     )
   }
 }

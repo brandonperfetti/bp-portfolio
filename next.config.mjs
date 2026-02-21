@@ -11,7 +11,34 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'res.cloudinary.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'avatars.githubusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'tanstack.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'playwright.dev',
+      },
+      {
+        protocol: 'https',
+        hostname: 'pinia.vuejs.org',
+      },
+      {
+        protocol: 'https',
+        hostname: 'testing-library.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'zod.dev',
+      },
     ],
+  },
+  outputFileTracingIncludes: {
+    '/articles/*': ['./src/app/articles/**/*.mdx'],
   },
 }
 

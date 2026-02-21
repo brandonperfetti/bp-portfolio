@@ -1,61 +1,76 @@
-import OpenAI from "openai";
+import OpenAI from 'openai'
+import { NextResponse } from 'next/server'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
-
-// Define a TypeScript interface for the message structure
-interface IMessage {
-  role: string;
-  content: string;
+type Message = {
+  role: 'system' | 'assistant' | 'user'
+  content: string
 }
 
-export const runtime = "edge";
+export async function POST(req: Request) {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: 'OPENAI_API_KEY is not configured.' },
+      { status: 500 },
+    )
+  }
+  const openai = new OpenAI({ apiKey })
 
-export async function POST(req: Request): Promise<Response> {
+  const body = await req.json()
+  const messages = body?.messages as Message[]
+
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return NextResponse.json(
+      { error: 'messages must be a non-empty array.' },
+      { status: 400 },
+    )
+  }
+
   try {
-    const forwardedProps = await req.json();
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4.1-mini',
+      messages,
+      temperature: 0.5,
+      stream: true,
+    })
 
-    // Check if messages is an array
-    if (!Array.isArray(forwardedProps.messages)) {
-      return new Response(
-        JSON.stringify({ error: "messages must be an array" }),
-        {
-          headers: { "Content-Type": "application/json" },
-          status: 400,
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of response) {
+            const content = chunk.choices?.[0]?.delta?.content
+            if (!content) {
+              continue
+            }
+
+            const payload = JSON.stringify({
+              choices: [{ delta: { content } }],
+            })
+            controller.enqueue(encoder.encode(`${payload}\n`))
+          }
+          controller.close()
+        } catch (error) {
+          controller.error(error)
         }
-      );
-    }
+      },
+    })
 
-    // Validate each message structure using the IMessage interface
-    if (
-      !forwardedProps.messages.every(
-        (msg: IMessage) => msg.role && typeof msg.content === "string"
-      )
-    ) {
-      return new Response(
-        JSON.stringify({ error: "Each message must have a role and content" }),
-        { headers: { "Content-Type": "application/json" }, status: 400 }
-      );
-    }
-
-    const stream = openai.beta.chat.completions
-      .stream({
-        model: "gpt-4",
-        ...forwardedProps,
-        stream: true,
-      })
-      .toReadableStream();
-
-    return new Response(stream);
-  } catch (error: any) {
-    console.error("Error processing the request:", error);
-    // More detailed error response based on the type of error
-    const status = error.response?.status || 500;
-    const message = error.response?.data?.message || error.message;
-    return new Response(JSON.stringify({ error: message }), {
-      headers: { "Content-Type": "application/json" },
-      status: status,
-    });
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+      },
+    })
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to generate response.',
+      },
+      { status: 500 },
+    )
   }
 }

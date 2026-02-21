@@ -1,4 +1,6 @@
-export default function ShortcutIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
+export default function ShortcutIcon(
+  props: React.ComponentPropsWithoutRef<'svg'>,
+) {
   return (
     <svg
       viewBox="0 0 20 20"
@@ -15,5 +17,5 @@ export default function ShortcutIcon(props: React.ComponentPropsWithoutRef<'svg'
         fill="currentColor"
       />
     </svg>
-  );
+  )
 }

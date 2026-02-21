@@ -1,76 +1,55 @@
 'use client'
-import Button from '@/components/common/Button'
-import { MailIcon } from '@/icons'
-import { ArrowRightIcon } from '@heroicons/react/24/outline'
+
 import { useState } from 'react'
-import { Spinner } from '../common'
+import { ArrowRightIcon } from '@heroicons/react/24/outline'
 
-export default function Newsletter() {
-  const [mail, setMail] = useState('')
+import { Button } from '@/components/Button'
+import { MailIcon } from '@/icons'
+
+export function Newsletter() {
+  const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState<boolean>()
-  const [messageState, setMessageState] = useState('')
-  const [botField, setBotField] = useState('') // Honeypot field
+  const [message, setMessage] = useState('')
+  const [success, setSuccess] = useState<boolean | null>(null)
 
-  const Subscribe = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    // Check if the honeypot field is filled
-    if (botField) {
-      // console.log('Bot detected')
-      return // Early return if botField is filled
-    }
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
     setLoading(true)
+    setMessage('')
+
     try {
       const response = await fetch('/api/mailinglist', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ mail }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mail: email }),
       })
+
       const data = await response.json()
-      if (response.ok) {
-        setSuccess(true)
-        setMessageState(data.message)
-        setMail('')
-        setTimeout(() => setMessageState(''), 5000)
-      } else {
+      if (!response.ok) {
         setSuccess(false)
-        setMessageState(
-          data.message ||
-            'An error occurred while subscribing to the newsletter.',
+        setMessage(
+          data.error
+            ? `${data.message ?? 'Unable to subscribe right now.'} (${data.error})`
+            : (data.message ?? 'Unable to subscribe right now.'),
         )
-        setTimeout(() => setMessageState(''), 5000)
+      } else {
+        setSuccess(true)
+        setMessage(data.message ?? 'Subscribed successfully.')
+        setEmail('')
       }
-    } catch (error) {
+    } catch {
       setSuccess(false)
-      setMessageState(
-        error instanceof Error ? error.message : 'An unknown error occurred',
-      )
-      setTimeout(() => setMessageState(''), 5000)
+      setMessage('Unable to subscribe right now.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
     <form
-      onSubmit={Subscribe}
-      action="/thank-you"
+      onSubmit={onSubmit}
       className="rounded-2xl border border-zinc-100 p-6 dark:border-zinc-700/40"
     >
-      {/* Honeypot field */}
-      <div style={{ display: 'none' }}>
-        <label htmlFor="botField">
-          Don&apos;t fill this out if you&apos;re human:
-        </label>
-        <input
-          id="botField"
-          name="botField"
-          type="text"
-          value={botField}
-          onChange={(e) => setBotField(e.target.value)}
-        />
-      </div>
       <h2 className="flex text-sm font-semibold text-zinc-900 dark:text-zinc-100">
         <MailIcon className="h-6 w-6 flex-none" />
         <span className="ml-3">Stay up to date</span>
@@ -84,28 +63,22 @@ export default function Newsletter() {
           placeholder="Email address"
           aria-label="Email address"
           autoComplete="email"
-          value={mail}
-          onChange={(e) => setMail(e.target.value)}
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
           required
-          className="min-w-0 flex-auto appearance-none rounded-md border border-zinc-900/10 bg-white px-3 py-[calc(theme(spacing.2)-1px)] text-black shadow-md shadow-zinc-800/5 placeholder:text-zinc-400 focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10 sm:text-sm dark:border-zinc-700 dark:bg-zinc-700/[0.15] dark:text-zinc-200 dark:placeholder:text-zinc-500 dark:focus:border-teal-400 dark:focus:ring-teal-400/10"
+          className="min-w-0 flex-auto appearance-none rounded-md border border-zinc-900/10 bg-white px-3 py-[calc(theme(spacing.2)-1px)] text-black shadow-md shadow-zinc-800/5 placeholder:text-zinc-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 focus:outline-none sm:text-sm dark:border-zinc-700 dark:bg-zinc-700/[0.15] dark:text-zinc-200 dark:placeholder:text-zinc-500 dark:focus:border-teal-400 dark:focus:ring-teal-400/10"
         />
         <div className="ml-2">
           <Button type="submit" disabled={loading}>
-            {!loading ? (
-              <ArrowRightIcon className="h-5 w-4" />
-            ) : (
-              <div className="w-4">
-                <Spinner />
-              </div>
-            )}
+            {!loading ? <ArrowRightIcon className="h-5 w-4" /> : '...'}
           </Button>
         </div>
       </div>
-      {messageState && (
+      {message && (
         <p
-          className={`mt-2 text-sm ${success ? 'text-green-400' : 'text-red-500'}`}
+          className={`mt-3 text-sm ${success ? 'text-emerald-500' : 'text-red-500'}`}
         >
-          {messageState}
+          {message}
         </p>
       )}
     </form>

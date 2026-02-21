@@ -1,4 +1,6 @@
-export default function ChevronDownIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
+export default function ChevronDownIcon(
+  props: React.ComponentPropsWithoutRef<'svg'>,
+) {
   return (
     <svg viewBox="0 0 8 6" aria-hidden="true" {...props}>
       <path
