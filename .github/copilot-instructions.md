@@ -6,11 +6,10 @@ Next.js App Router portfolio + MDX content platform (Tailwind Plus Spotlight-bas
 - Package manager: `npm` (lockfile is `package-lock.json`)
 - Primary commands:
   - `npm run dev`
-  - `npm run dev:turbo`
   - `npm run build`
   - `npm run lint`
 - Runtime baseline:
-  - Next.js 15
+  - Next.js 16
   - React 19
   - TypeScript 5
 
