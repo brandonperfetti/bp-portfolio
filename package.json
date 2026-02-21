@@ -22,7 +22,7 @@
     "@tailwindcss/postcss": "^4.1.15",
     "@tailwindcss/typography": "^0.5.16",
     "@types/webpack-env": "^1.18.8",
-    "cheerio": "^1.1.2",
+    "cheerio": "^1.2.0",
     "clsx": "^2.1.1",
     "fast-glob": "^3.3.3",
     "feed": "^5.1.0",
