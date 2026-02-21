@@ -132,12 +132,6 @@ If you need implementation internals first, start with:
 - `docs/NAVIGATION.md`
 
 ## Troubleshooting
-### GitHub MCP / custom MCP auth
-If GUI-launched Codex cannot see shell env vars, set them at launchd level and restart Codex:
-```bash
-launchctl setenv GITHUB_PAT_TOKEN "<token>"
-```
-
 ### SendGrid marketing API errors
 If newsletter subscribe fails with access/scope errors, verify your SendGrid key has marketing contacts permissions and that `SENDGRID_MAILING_ID` / `SENDGRID_LIST_ID` is set.
 
