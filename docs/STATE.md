@@ -42,6 +42,7 @@ State:
 - `loading`
 - typing/image loading indicators
 - copy feedback state
+- `isChatStart` (initial welcome screen vs. active chat view)
 
 Behavior:
 
@@ -51,5 +52,5 @@ Behavior:
 
 ## Server-Side Data Flow
 
-- Articles are assembled server-side from MDX files (`lib/articles.ts`).
+- Articles are assembled server-side from MDX files (`src/lib/articles.ts`).
 - API endpoints return JSON/stream payloads for client features.
