@@ -1,19 +1,14 @@
-import { ArticleLayout as BaseArticleLayout } from '@/components/ArticleLayout'
-
-interface Article {
-  title: string
-  description: string
-  date: string
-}
+import {
+  ArticleLayout as BaseArticleLayout,
+  type ArticleLayoutArticle,
+} from '@/components/ArticleLayout'
 
 export default function ArticleLayout({
   article,
   children,
 }: {
-  article: Article
+  article: ArticleLayoutArticle
   children: React.ReactNode
 }) {
-  return (
-    <BaseArticleLayout article={article as any}>{children}</BaseArticleLayout>
-  )
+  return <BaseArticleLayout article={article}>{children}</BaseArticleLayout>
 }
