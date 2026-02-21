@@ -11,8 +11,17 @@ export async function POST(req: Request) {
   }
   const openai = new OpenAI({ apiKey })
 
-  const body = await req.json()
-  const message = body?.message
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch (error) {
+    console.error('[api/openai/image] Invalid JSON body', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const message = (body as { message?: string })?.message
 
   if (!message) {
     return NextResponse.json({ error: 'No message provided.' }, { status: 400 })

@@ -18,9 +18,37 @@ export async function POST(req: Request) {
     ).setDataResidency?.('eu')
   }
 
-  const body = await req.json()
+  let parsedBody: unknown
+  try {
+    parsedBody = await req.json()
+  } catch (error) {
+    console.error('[api/sendgrid] Invalid JSON body', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return NextResponse.json(
+      { message: 'Invalid JSON in request body.' },
+      { status: 400 },
+    )
+  }
 
-  if (!body?.fullname || !body?.email || !body?.subject || !body?.message) {
+  const body =
+    parsedBody &&
+    typeof parsedBody === 'object' &&
+    !Array.isArray(parsedBody)
+      ? (parsedBody as {
+          fullname?: unknown
+          email?: unknown
+          subject?: unknown
+          message?: unknown
+        })
+      : {}
+
+  const fullname = String(body.fullname ?? '').trim()
+  const email = String(body.email ?? '').trim()
+  const subject = String(body.subject ?? '').trim()
+  const message = String(body.message ?? '').trim()
+
+  if (!fullname || !email || !subject || !message) {
     return NextResponse.json(
       { message: 'fullname, email, subject, and message are required.' },
       { status: 400 },
@@ -34,12 +62,12 @@ export async function POST(req: Request) {
     await sgMail.send({
       to,
       from,
-      replyTo: body.email,
-      subject: body.subject,
+      replyTo: email,
+      subject,
       html: `
-        <h3>New contact from ${body.fullname}</h3>
-        <p><strong>Email:</strong> ${body.email}</p>
-        <p><strong>Message:</strong> ${body.message}</p>
+        <h3>New contact from ${fullname}</h3>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Message:</strong> ${message}</p>
       `,
     })
 

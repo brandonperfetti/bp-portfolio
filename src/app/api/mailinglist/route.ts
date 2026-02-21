@@ -26,8 +26,25 @@ export async function PUT(req: Request) {
     )
   }
 
-  const body = await req.json()
-  const email = String(body?.mail ?? body?.email ?? '')
+  let parsedBody: unknown
+  try {
+    parsedBody = await req.json()
+  } catch (error) {
+    console.error('[api/mailinglist] Invalid JSON body', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return NextResponse.json(
+      { message: 'Invalid JSON body.' },
+      { status: 400 },
+    )
+  }
+
+  const body =
+    parsedBody && typeof parsedBody === 'object'
+      ? (parsedBody as { mail?: unknown; email?: unknown })
+      : {}
+
+  const email = String(body.mail ?? body.email ?? '')
     .trim()
     .toLowerCase()
 
