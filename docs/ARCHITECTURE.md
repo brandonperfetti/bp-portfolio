@@ -31,10 +31,8 @@
 1. `getAllArticles()` globs MDX files.
 2. Each file is imported for frontmatter metadata and read from disk for content.
 3. Utility builds:
-
-- `readingTimeMinutes`
-- `searchText` (normalized article body text)
-
+   - `readingTimeMinutes`
+   - `searchText` (normalized article body text)
 4. Search API (`/api/search`) emits a compact index consumed by header modal.
 
 Key files:
