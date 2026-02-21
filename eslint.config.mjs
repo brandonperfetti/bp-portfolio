@@ -1,28 +1,19 @@
-import { dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { FlatCompat } from '@eslint/eslintrc'
-import nextPlugin from '@next/eslint-plugin-next'
+import { defineConfig, globalIgnores } from 'eslint/config'
+import nextVitals from 'eslint-config-next/core-web-vitals'
+import nextTs from 'eslint-config-next/typescript'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const compat = new FlatCompat({ baseDirectory: __dirname })
-
-const config = [
-  {
-    plugins: {
-      '@next/next': nextPlugin,
-    },
-  },
-  ...compat.extends('next/core-web-vitals', 'next/typescript'),
-  {
-    ignores: [
-      '.next/**',
-      'node_modules/**',
-      'out/**',
-      'build/**',
-      'dist/**',
-      'coverage/**',
-    ],
-  },
+export default defineConfig([
+  ...nextVitals,
+  ...nextTs,
+  globalIgnores([
+    '.next/**',
+    'out/**',
+    'build/**',
+    'dist/**',
+    'coverage/**',
+    'node_modules/**',
+    'next-env.d.ts',
+  ]),
   {
     files: ['next-env.d.ts'],
     rules: {
@@ -35,6 +26,8 @@ const config = [
       'prefer-const': 'error',
       'no-fallthrough': 'error',
       'no-unused-vars': 'off',
+      'react-hooks/refs': 'off',
+      'react-hooks/set-state-in-effect': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
@@ -46,6 +39,4 @@ const config = [
       ],
     },
   },
-]
-
-export default config
+])
