@@ -33,6 +33,12 @@ Optional env vars:
 - Hermes chat must keep streaming behavior and markdown rendering compatibility.
 - Prefer project-local icons in `src/icons` when matching existing visual language; use Heroicons selectively where already adopted.
 
+## Dependency Security Rules
+- For dependency additions, upgrades, or removals, prioritize Sonatype MCP tools first.
+- Before changing dependencies, check current package risk and recommended versions with Sonatype MCP.
+- When proposing upgrades, include security impact and compatibility risk (major vs minor/patch).
+- Keep vulnerability blocking strict; warning-only signals (e.g., scorecard/license metadata noise) should be documented and triaged separately.
+
 ## Progressive Disclosure
 - Architecture and app map: `docs/ARCHITECTURE.md`
 - Feature inventory and behavior: `docs/FEATURES.md`
