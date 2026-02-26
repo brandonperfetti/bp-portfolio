@@ -7,6 +7,16 @@ export async function POST(request: Request) {
   const secret = process.env.CMS_REVALIDATE_SECRET
   const body = await request.json().catch(() => ({}))
 
+  if (!secret) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: 'Server misconfiguration: CMS_REVALIDATE_SECRET missing',
+      },
+      { status: 500 },
+    )
+  }
+
   if (!isValidSecret(body?.secret, secret)) {
     return NextResponse.json(
       { ok: false, error: 'Unauthorized' },
