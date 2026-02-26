@@ -195,6 +195,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, verified: true })
   }
 
+  if (payload.events !== undefined && !Array.isArray(payload.events)) {
+    return NextResponse.json(
+      { ok: false, error: 'Invalid events payload' },
+      { status: 400 },
+    )
+  }
+
   cleanupEventCache()
 
   for (const event of payload.events ?? []) {
@@ -218,8 +225,6 @@ export async function POST(request: Request) {
       timestamp: event.timestamp,
     })
 
-    applyEventRevalidation(eventType)
-
     let ledgerPageId = ''
     if (eventId) {
       try {
@@ -237,6 +242,9 @@ export async function POST(request: Request) {
         if (claim.action === 'claimed') {
           ledgerPageId = claim.ledgerPageId
         }
+        if (claim.action === 'ignored') {
+          continue
+        }
       } catch (error) {
         console.error('[cms:notion:webhook] event ledger claim failed', {
           eventId,
@@ -247,9 +255,28 @@ export async function POST(request: Request) {
       }
     }
 
+    applyEventRevalidation(eventType)
+
     if (!shouldRunProjectionSync(eventType)) {
       if (ledgerPageId) {
         await completeWebhookEventClaim(ledgerPageId).catch(() => {})
+      }
+      continue
+    }
+
+    if (eventType.startsWith('page.') && !entityId) {
+      console.warn(
+        '[cms:notion:webhook] page event missing entity id; skipping sync',
+        {
+          eventId,
+          eventType,
+        },
+      )
+      if (ledgerPageId) {
+        await failWebhookEventClaim(
+          ledgerPageId,
+          'Page event missing entity id',
+        ).catch(() => {})
       }
       continue
     }
