@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
-import { DEFAULT_SOCIAL_IMAGE, getSiteUrl } from '@/lib/site'
 import type { CmsPageContent, CmsSiteSettings } from '@/lib/cms/types'
+import { DEFAULT_SOCIAL_IMAGE, getSiteUrl } from '@/lib/site'
 
 function toAbsoluteUrl(url: string | undefined, siteUrl: string) {
   if (!url) {
@@ -15,7 +15,10 @@ function toAbsoluteUrl(url: string | undefined, siteUrl: string) {
   return `${siteUrl}${url.startsWith('/') ? '' : '/'}${url}`
 }
 
-export function resolvePageSocialImage(page: CmsPageContent | null, settings: CmsSiteSettings) {
+export function resolvePageSocialImage(
+  page: CmsPageContent | null,
+  settings: CmsSiteSettings,
+) {
   const siteUrl = settings.canonicalUrl || getSiteUrl()
   return (
     toAbsoluteUrl(page?.ogImage, siteUrl) ??
@@ -45,6 +48,11 @@ export function buildPageMetadata({
   const title = page?.seoTitle || fallbackTitle
   const description = page?.seoDescription || fallbackDescription
   const socialImage = resolvePageSocialImage(page, settings)
+  const hasExplicitSocialImage = Boolean(
+    page?.ogImage?.trim() ||
+      page?.heroImage?.trim() ||
+      settings.openGraphImage?.trim(),
+  )
 
   return {
     title,
@@ -61,7 +69,9 @@ export function buildPageMetadata({
       images: socialImage ? [{ url: socialImage }] : undefined,
     },
     twitter: {
-      card: socialImage ? 'summary_large_image' : settings.twitterCard ?? 'summary_large_image',
+      card: hasExplicitSocialImage
+        ? 'summary_large_image'
+        : (settings.twitterCard ?? 'summary_large_image'),
       title,
       description,
       images: socialImage ? [socialImage] : undefined,
