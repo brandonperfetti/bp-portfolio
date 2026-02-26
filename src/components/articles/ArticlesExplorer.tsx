@@ -2,8 +2,8 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { type ArticleWithSlug } from '@/lib/articles'
 import { formatDate } from '@/lib/formatDate'
@@ -41,7 +41,8 @@ export function ArticlesExplorer({
 
   useEffect(() => {
     const nextQuery = searchParams.get('q') ?? ''
-    const nextTopic = searchParams.get('topic') ?? searchParams.get('category') ?? 'All'
+    const nextTopic =
+      searchParams.get('topic') ?? searchParams.get('category') ?? 'All'
     const isInputFocused = searchInputRef.current === document.activeElement
 
     // Keep typing stable: don't overwrite local input value while user is actively editing.
@@ -105,8 +106,7 @@ export function ArticlesExplorer({
       const taxonomyValues = Array.from(
         new Set([...(article.topics ?? []), ...(article.tech ?? [])]),
       )
-      const matchesTopic =
-        topic === 'All' || taxonomyValues.includes(topic)
+      const matchesTopic = topic === 'All' || taxonomyValues.includes(topic)
 
       const normalizedQuery = debouncedQuery.trim().toLowerCase()
       const matchesQuery =
@@ -148,11 +148,14 @@ export function ArticlesExplorer({
       const queryString = params.toString()
       if (queryString === currentQueryString) {
         if (isDev) {
-          console.debug('[articles:explorer] skip router.replace (no URL change)', {
-            currentQueryString,
-            query: nextQuery.trim(),
-            topic: nextTopic,
-          })
+          console.debug(
+            '[articles:explorer] skip router.replace (no URL change)',
+            {
+              currentQueryString,
+              query: nextQuery.trim(),
+              topic: nextTopic,
+            },
+          )
         }
         return
       }
@@ -223,21 +226,32 @@ export function ArticlesExplorer({
       <div className="mx-auto mt-10 grid max-w-2xl grid-cols-1 gap-8 lg:mx-0 lg:max-w-none lg:grid-cols-3">
         {filtered.map((article) => {
           const author = getAuthor(article)
-          const topicValues = (article.topics ?? []).map((item) => item.trim()).filter(Boolean)
-          const techValues = (article.tech ?? []).map((item) => item.trim()).filter(Boolean)
-          const normalizedActiveTopic = topic === 'All' ? '' : topic.toLowerCase()
+          const topicValues = (article.topics ?? [])
+            .map((item) => item.trim())
+            .filter(Boolean)
+          const techValues = (article.tech ?? [])
+            .map((item) => item.trim())
+            .filter(Boolean)
+          const normalizedActiveTopic =
+            topic === 'All' ? '' : topic.toLowerCase()
 
           const matchedTopicChip = topicValues.find(
-            (item) => normalizedActiveTopic && item.toLowerCase() === normalizedActiveTopic,
+            (item) =>
+              normalizedActiveTopic &&
+              item.toLowerCase() === normalizedActiveTopic,
           )
           const matchedTechChip = techValues.find(
-            (item) => normalizedActiveTopic && item.toLowerCase() === normalizedActiveTopic,
+            (item) =>
+              normalizedActiveTopic &&
+              item.toLowerCase() === normalizedActiveTopic,
           )
 
           const topicChip = matchedTopicChip ?? topicValues[0]
-          const techChip = (matchedTechChip ?? techValues[0])?.toLowerCase() === topicChip?.toLowerCase()
-            ? undefined
-            : matchedTechChip ?? techValues[0]
+          const techChip =
+            (matchedTechChip ?? techValues[0])?.toLowerCase() ===
+            topicChip?.toLowerCase()
+              ? undefined
+              : (matchedTechChip ?? techValues[0])
 
           return (
             <article
@@ -262,8 +276,8 @@ export function ArticlesExplorer({
                       crop: 'fill',
                     })}
                     alt={article.title}
-                    width={1200}
-                    height={630}
+                    width={960}
+                    height={540}
                     sizes="(min-width: 1280px) 24rem, (min-width: 1024px) 30vw, 100vw"
                     className="aspect-[16/9] w-full object-cover"
                   />
@@ -272,7 +286,9 @@ export function ArticlesExplorer({
 
               <div className="relative z-10 text-xs text-zinc-500 dark:text-zinc-400">
                 <div className="flex items-center gap-2">
-                  <time dateTime={article.date}>{formatDate(article.date)}</time>
+                  <time dateTime={article.date}>
+                    {formatDate(article.date)}
+                  </time>
                   {article.readingTimeMinutes && (
                     <span>{article.readingTimeMinutes} min read</span>
                   )}
