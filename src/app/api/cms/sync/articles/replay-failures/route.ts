@@ -15,6 +15,26 @@ function truncateErrorMessage(message: string) {
     : message
 }
 
+function buildBoundedErrorMessage(messages: string[]) {
+  let combined = ''
+
+  for (const message of messages) {
+    if (!message) {
+      continue
+    }
+
+    const next = combined ? `${combined}; ${message}` : message
+    if (next.length > MAX_ERROR_MESSAGE_LENGTH) {
+      combined = next
+      break
+    }
+
+    combined = next
+  }
+
+  return truncateErrorMessage(combined)
+}
+
 export async function POST(request: Request) {
   const secret = process.env.CMS_REVALIDATE_SECRET
   const body = await request.json().catch(() => ({}))
@@ -43,8 +63,8 @@ export async function POST(request: Request) {
         if (!syncResult.ok) {
           return {
             ok: false,
-            error: truncateErrorMessage(
-              syncResult.errors.map((entry) => entry.message).join('; '),
+            error: buildBoundedErrorMessage(
+              syncResult.errors.map((entry) => entry.message),
             ),
           }
         }
