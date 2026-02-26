@@ -1,8 +1,17 @@
 'use client'
 
-import { Fragment, useRef, useState } from 'react'
-import { Menu, MenuButton, MenuItem, MenuItems, Transition } from '@headlessui/react'
-import { ChevronDownIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline'
+import {
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuItems,
+  Transition,
+} from '@headlessui/react'
+import {
+  ChevronDownIcon,
+  ClipboardDocumentIcon,
+} from '@heroicons/react/24/outline'
+import { Fragment, useEffect, useRef, useState } from 'react'
 
 async function copyText(value: string) {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
@@ -26,6 +35,15 @@ async function copyText(value: string) {
 export function UseWithAiMenu({ markdown }: { markdown: string }) {
   const [copied, setCopied] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+    }
+  }, [])
 
   return (
     <Menu as="div" className="relative">
