@@ -2,10 +2,18 @@ import { NextResponse } from 'next/server'
 
 import { syncPortfolioArticleProjection } from '@/lib/cms/notion/projectionSync'
 import {
-	listProjectionSyncFailures,
-	replayProjectionSyncFailures,
+  listProjectionSyncFailures,
+  replayProjectionSyncFailures,
 } from '@/lib/cms/notion/syncFailureQueue'
 import { isValidSecret } from '@/lib/security/timingSafeSecret'
+
+const MAX_ERROR_MESSAGE_LENGTH = 2000
+
+function truncateErrorMessage(message: string) {
+  return message.length > MAX_ERROR_MESSAGE_LENGTH
+    ? `${message.slice(0, MAX_ERROR_MESSAGE_LENGTH - 1)}…`
+    : message
+}
 
 export async function POST(request: Request) {
   const secret = process.env.CMS_REVALIDATE_SECRET
@@ -18,7 +26,12 @@ export async function POST(request: Request) {
     )
   }
 
-  const limit = typeof body?.limit === 'number' ? body.limit : undefined
+  const limit =
+    typeof body?.limit === 'number' &&
+    Number.isFinite(body.limit) &&
+    body.limit > 0
+      ? Math.floor(body.limit)
+      : undefined
 
   const result = await replayProjectionSyncFailures({
     limit,
@@ -33,15 +46,16 @@ export async function POST(request: Request) {
             error: syncResult.errors
               .map((entry) => entry.message)
               .join('; ')
-              .slice(0, 2000),
+              .slice(0, MAX_ERROR_MESSAGE_LENGTH),
           }
         }
         return { ok: true }
       } catch (error) {
         return {
           ok: false,
-          error:
+          error: truncateErrorMessage(
             error instanceof Error ? error.message : 'Unknown replay error',
+          ),
         }
       }
     },
