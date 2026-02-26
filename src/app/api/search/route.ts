@@ -34,7 +34,7 @@ const getPersistedSearchPayload = unstable_cache(
 
 export async function GET() {
   try {
-    const payload = await buildSearchPayload()
+    const payload = await getPersistedSearchPayload()
     return NextResponse.json(payload)
   } catch (error) {
     const stalePayload = await getPersistedSearchPayload().catch(
