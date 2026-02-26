@@ -51,7 +51,13 @@ function resolveMaxRetryAfterSeconds() {
 }
 
 function shouldRetry(status: number) {
-  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504
+  return (
+    status === 429 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  )
 }
 
 function computeBackoffMs(attempt: number, retryAfterSeconds: number | null) {
@@ -97,10 +103,14 @@ function ensureNotionConfig(): NotionConfig {
 
 export function parseDataSourceId(value: string | undefined, envName: string) {
   if (!value) {
-    throw new NotionConfigError(`${envName} is required when CMS_PROVIDER=notion`)
+    throw new NotionConfigError(
+      `${envName} is required when CMS_PROVIDER=notion`,
+    )
   }
 
-  return value.startsWith('collection://') ? value.slice('collection://'.length) : value
+  return value.startsWith('collection://')
+    ? value.slice('collection://'.length)
+    : value
 }
 
 export async function notionRequest<T>(
@@ -200,7 +210,10 @@ export async function notionCreatePage(body: Record<string, unknown>) {
   return notionRequest('/pages', { method: 'POST', body })
 }
 
-export async function notionUpdatePage(pageId: string, body: Record<string, unknown>) {
+export async function notionUpdatePage(
+  pageId: string,
+  body: Record<string, unknown>,
+) {
   return notionRequest(`/pages/${pageId}`, { method: 'PATCH', body })
 }
 
