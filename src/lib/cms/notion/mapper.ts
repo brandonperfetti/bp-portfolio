@@ -53,14 +53,18 @@ function toYearLabel(dateValue: string) {
   return dateValue.slice(0, 4)
 }
 
-export function mapNotionArticleSummary(page: NotionPage): CmsArticleSummary | null {
+export function mapNotionArticleSummary(
+  page: NotionPage,
+): CmsArticleSummary | null {
   const title = propertyToText(getProperty(page.properties, ['Title', 'Name']))
   const slugRaw = propertyToText(getProperty(page.properties, ['Slug']))
   const slug = toSlug(slugRaw || title)
   const description = propertyToText(
     getProperty(page.properties, ['Meta Description', 'Description']),
   )
-  const date = propertyToDate(getProperty(page.properties, ['Publish Date', 'Published Date']))
+  const date = propertyToDate(
+    getProperty(page.properties, ['Publish Date', 'Published Date']),
+  )
   const status = propertyToText(getProperty(page.properties, ['Status']))
   const syncState = propertyToText(getProperty(page.properties, ['Sync State']))
   const topics = propertyToMultiSelect(
@@ -72,9 +76,9 @@ export function mapNotionArticleSummary(page: NotionPage): CmsArticleSummary | n
 
   const pageCoverUrl =
     page.cover?.type === 'external'
-      ? page.cover.external?.url ?? ''
+      ? (page.cover.external?.url ?? '')
       : page.cover?.type === 'file'
-        ? page.cover.file?.url ?? ''
+        ? (page.cover.file?.url ?? '')
         : ''
 
   const imageUrl =
@@ -87,7 +91,12 @@ export function mapNotionArticleSummary(page: NotionPage): CmsArticleSummary | n
       ]),
     ) ||
     propertyToFileUrl(
-      getProperty(page.properties, ['Cover Image', 'Hero Image', 'Image', 'OG Image']),
+      getProperty(page.properties, [
+        'Cover Image',
+        'Hero Image',
+        'Image',
+        'OG Image',
+      ]),
     ) ||
     pageCoverUrl
 
@@ -120,7 +129,9 @@ export function mapNotionArticleSummary(page: NotionPage): CmsArticleSummary | n
   }
 
   const publishSafeStatus = new Set(['ready to publish', 'published'])
-  const publishSafeSyncState = syncState ? syncState.toLowerCase() === 'synced' : true
+  const publishSafeSyncState = syncState
+    ? syncState.toLowerCase() === 'synced'
+    : true
   if (!publishSafeStatus.has(status.toLowerCase()) || !publishSafeSyncState) {
     return null
   }
@@ -140,21 +151,26 @@ export function mapNotionArticleSummary(page: NotionPage): CmsArticleSummary | n
     category: {
       title:
         topics[0] ||
-        propertyToText(getProperty(page.properties, ['Category', 'Content Type'])) ||
+        propertyToText(
+          getProperty(page.properties, ['Category', 'Content Type']),
+        ) ||
         'Article',
     },
     canonicalUrl: canonicalFromCms || `${getSiteUrl()}/articles/${slug}`,
     keywords: propertyToMultiSelect(getProperty(page.properties, ['Keywords'])),
     topics,
     tech,
-    noindex: propertyToBoolean(getProperty(page.properties, ['Noindex'])) ?? false,
+    noindex:
+      propertyToBoolean(getProperty(page.properties, ['Noindex'])) ?? false,
     searchIndexText: searchIndexText || undefined,
     sourceArticlePageId: sourceArticleIds[0],
     sourceType: 'notion',
   }
 }
 
-export function mapNotionAuthorProfile(page: NotionPage): CmsAuthorProfile | null {
+export function mapNotionAuthorProfile(
+  page: NotionPage,
+): CmsAuthorProfile | null {
   const status = propertyToText(getProperty(page.properties, ['Status']))
   const isPublished = status.toLowerCase() === 'published' || status === ''
   if (!isPublished) {
