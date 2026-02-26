@@ -7,11 +7,10 @@ import {
   MenuItems,
   Transition,
 } from '@headlessui/react'
-import {
-  ChevronDownIcon,
-  ClipboardDocumentIcon,
-} from '@heroicons/react/24/outline'
+import { ClipboardDocumentIcon } from '@heroicons/react/24/outline'
 import { Fragment, useEffect, useRef, useState } from 'react'
+
+import { ChevronDownIcon } from '@/icons'
 
 async function copyText(value: string) {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
