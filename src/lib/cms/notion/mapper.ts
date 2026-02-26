@@ -426,14 +426,20 @@ export function mapNavigationItem(page: NotionPage): CmsNavigationItem | null {
   }
 
   const showInNav =
-    propertyToBoolean(getProperty(page.properties, ['Show In Nav', 'Visible'])) ?? true
+    propertyToBoolean(
+      getProperty(page.properties, ['Show In Nav', 'Visible']),
+    ) ?? true
 
   if (!showInNav) {
     return null
   }
 
-  const href = propertyToText(getProperty(page.properties, ['Path', 'Href', 'Route']))
-  const label = propertyToText(getProperty(page.properties, ['Label', 'Name', 'Title']))
+  const href = propertyToText(
+    getProperty(page.properties, ['Path', 'Href', 'Route']),
+  )
+  const label = propertyToText(
+    getProperty(page.properties, ['Label', 'Name', 'Title']),
+  )
 
   if (!href || !label) {
     return null
@@ -442,7 +448,10 @@ export function mapNavigationItem(page: NotionPage): CmsNavigationItem | null {
   return {
     href,
     label,
-    order: propertyToNumber(getProperty(page.properties, ['Nav Order', 'Sort Order'])) ?? 1000,
+    order:
+      propertyToNumber(
+        getProperty(page.properties, ['Nav Order', 'Sort Order']),
+      ) ?? 1000,
     showInNav,
   }
 }
