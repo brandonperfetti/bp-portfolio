@@ -30,7 +30,22 @@ export async function POST(request: Request) {
       ? body.sourcePageId.trim()
       : undefined
 
-  const result = await syncPortfolioArticleProjection({ pageId: sourcePageId })
+  let result
+  try {
+    result = await syncPortfolioArticleProjection({ pageId: sourcePageId })
+  } catch (error) {
+    console.error('[cms:sync:articles] projection sync failed', {
+      sourcePageId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+    return NextResponse.json(
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 },
+    )
+  }
 
   return NextResponse.json(result, { status: result.ok ? 200 : 207 })
 }
