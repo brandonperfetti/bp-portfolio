@@ -2,41 +2,46 @@ import { type Metadata } from 'next'
 
 import { Providers } from '@/app/providers'
 import { Layout } from '@/components/Layout'
+import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getSiteUrl } from '@/lib/site'
 
 import '@/styles/tailwind.css'
 
-const siteUrl = getSiteUrl()
+export async function generateMetadata(): Promise<Metadata> {
+  const defaults = await getCmsSiteSettings()
+  const siteUrl = defaults.canonicalUrl || getSiteUrl()
 
-export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
-  title: {
-    template: '%s - Brandon Perfetti',
-    default:
-      'Brandon Perfetti - Product & Project Manager and Software Engineer',
-  },
-  description:
-    'I’m Brandon, a product and project manager plus software engineer based in Orange County, California.',
-  alternates: {
-    canonical: './',
-    types: {
-      'application/rss+xml': `${siteUrl}/feed.xml`,
+  return {
+    metadataBase: new URL(siteUrl),
+    title: {
+      template: `%s - ${defaults.siteName}`,
+      default: defaults.siteTitle,
     },
-  },
-  openGraph: {
-    type: 'website',
-    url: siteUrl,
-    siteName: 'Brandon Perfetti',
-    title: 'Brandon Perfetti - Product & Project Manager and Software Engineer',
-    description:
-      'I’m Brandon, a product and project manager plus software engineer based in Orange County, California.',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Brandon Perfetti - Product & Project Manager and Software Engineer',
-    description:
-      'I’m Brandon, a product and project manager plus software engineer based in Orange County, California.',
-  },
+    description: defaults.siteDescription,
+    keywords: defaults.keywords,
+    alternates: {
+      canonical: siteUrl,
+      types: {
+        'application/rss+xml': `${siteUrl}/feed.xml`,
+      },
+    },
+    openGraph: {
+      type: 'website',
+      url: siteUrl,
+      siteName: defaults.siteName,
+      title: defaults.siteTitle,
+      description: defaults.siteDescription,
+      images: defaults.openGraphImage
+        ? [{ url: defaults.openGraphImage }]
+        : undefined,
+    },
+    twitter: {
+      card: defaults.twitterCard ?? 'summary_large_image',
+      title: defaults.siteTitle,
+      description: defaults.siteDescription,
+      images: defaults.openGraphImage ? [defaults.openGraphImage] : undefined,
+    },
+  }
 }
 
 export default function RootLayout({

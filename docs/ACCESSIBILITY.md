@@ -17,7 +17,7 @@
 
 - Maintain contrast parity in both themes for:
   - nav controls
-  - category chips
+  - topic and tech chips
   - chat bubbles and Markdown text
   - form validation/error text
 

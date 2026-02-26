@@ -7,7 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import { type ArticleWithSlug } from '@/lib/articles'
 import { formatDate } from '@/lib/formatDate'
-import { getExternalLinkProps } from '@/lib/link-utils'
+import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 
 function getAuthor(article: ArticleWithSlug) {
@@ -28,19 +28,28 @@ export function ArticlesExplorer({
 }: {
   articles: ArticleWithSlug[]
 }) {
+  const isDev = process.env.NODE_ENV !== 'production'
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState(searchParams.get('q') ?? '')
-  const [category, setCategory] = useState(
-    searchParams.get('category') ?? 'All',
+  const [topic, setTopic] = useState(
+    searchParams.get('topic') ?? searchParams.get('category') ?? 'All',
   )
-  const debouncedQuery = useDebouncedValue(query, query.trim() ? 180 : 0)
+  const debouncedQuery = useDebouncedValue(query, query.trim() ? 500 : 0)
 
   useEffect(() => {
-    setQuery(searchParams.get('q') ?? '')
-    setCategory(searchParams.get('category') ?? 'All')
+    const nextQuery = searchParams.get('q') ?? ''
+    const nextTopic = searchParams.get('topic') ?? searchParams.get('category') ?? 'All'
+    const isInputFocused = searchInputRef.current === document.activeElement
+
+    // Keep typing stable: don't overwrite local input value while user is actively editing.
+    if (!isInputFocused) {
+      setQuery((current) => (current === nextQuery ? current : nextQuery))
+    }
+
+    setTopic((current) => (current === nextTopic ? current : nextTopic))
   }, [searchParams])
 
   useEffect(() => {
@@ -73,12 +82,18 @@ export function ArticlesExplorer({
     }
   }, [])
 
-  const categories = useMemo(() => {
+  const topics = useMemo(() => {
     const values = new Set<string>()
     for (const article of articles) {
-      const title = article.category?.title
-      if (title) {
-        values.add(title)
+      for (const item of article.topics ?? []) {
+        if (item) {
+          values.add(item)
+        }
+      }
+      for (const item of article.tech ?? []) {
+        if (item) {
+          values.add(item)
+        }
       }
     }
 
@@ -87,24 +102,33 @@ export function ArticlesExplorer({
 
   const filtered = useMemo(() => {
     return articles.filter((article) => {
-      const matchesCategory =
-        category === 'All' || article.category?.title === category
+      const taxonomyValues = Array.from(
+        new Set([...(article.topics ?? []), ...(article.tech ?? [])]),
+      )
+      const matchesTopic =
+        topic === 'All' || taxonomyValues.includes(topic)
 
       const normalizedQuery = debouncedQuery.trim().toLowerCase()
       const matchesQuery =
         normalizedQuery.length === 0 ||
         article.title.toLowerCase().includes(normalizedQuery) ||
         article.description.toLowerCase().includes(normalizedQuery) ||
+        (article.topics ?? []).some((value) =>
+          value.toLowerCase().includes(normalizedQuery),
+        ) ||
+        (article.tech ?? []).some((value) =>
+          value.toLowerCase().includes(normalizedQuery),
+        ) ||
         (article.searchText ?? '').toLowerCase().includes(normalizedQuery)
 
-      return matchesCategory && matchesQuery
+      return matchesTopic && matchesQuery
     })
-  }, [articles, category, debouncedQuery])
+  }, [articles, topic, debouncedQuery])
 
   const queryText = debouncedQuery.trim()
 
   const updateUrl = useCallback(
-    (nextQuery: string, nextCategory: string) => {
+    (nextQuery: string, nextTopic: string) => {
       const currentQueryString = searchParams.toString()
       const params = new URLSearchParams(searchParams.toString())
 
@@ -114,27 +138,44 @@ export function ArticlesExplorer({
         params.delete('q')
       }
 
-      if (nextCategory !== 'All') {
-        params.set('category', nextCategory)
+      if (nextTopic !== 'All') {
+        params.set('topic', nextTopic)
       } else {
+        params.delete('topic')
         params.delete('category')
       }
 
       const queryString = params.toString()
       if (queryString === currentQueryString) {
+        if (isDev) {
+          console.debug('[articles:explorer] skip router.replace (no URL change)', {
+            currentQueryString,
+            query: nextQuery.trim(),
+            topic: nextTopic,
+          })
+        }
         return
+      }
+
+      if (isDev) {
+        console.debug('[articles:explorer] apply router.replace', {
+          from: currentQueryString,
+          to: queryString,
+          query: nextQuery.trim(),
+          topic: nextTopic,
+        })
       }
 
       router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
         scroll: false,
       })
     },
-    [pathname, router, searchParams],
+    [isDev, pathname, router, searchParams],
   )
 
   useEffect(() => {
-    updateUrl(debouncedQuery, category)
-  }, [category, debouncedQuery, updateUrl])
+    updateUrl(debouncedQuery, topic)
+  }, [topic, debouncedQuery, updateUrl])
 
   return (
     <div>
@@ -160,15 +201,15 @@ export function ArticlesExplorer({
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {categories.map((item) => (
+          {topics.map((item) => (
             <button
               key={item}
               type="button"
               onClick={() => {
-                setCategory((current) => (current === item ? 'All' : item))
+                setTopic((current) => (current === item ? 'All' : item))
               }}
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                category === item
+                topic === item
                   ? 'bg-teal-500 text-white'
                   : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
               }`}
@@ -182,52 +223,86 @@ export function ArticlesExplorer({
       <div className="mx-auto mt-10 grid max-w-2xl grid-cols-1 gap-8 lg:mx-0 lg:max-w-none lg:grid-cols-3">
         {filtered.map((article) => {
           const author = getAuthor(article)
+          const topicValues = (article.topics ?? []).map((item) => item.trim()).filter(Boolean)
+          const techValues = (article.tech ?? []).map((item) => item.trim()).filter(Boolean)
+          const normalizedActiveTopic = topic === 'All' ? '' : topic.toLowerCase()
+
+          const matchedTopicChip = topicValues.find(
+            (item) => normalizedActiveTopic && item.toLowerCase() === normalizedActiveTopic,
+          )
+          const matchedTechChip = techValues.find(
+            (item) => normalizedActiveTopic && item.toLowerCase() === normalizedActiveTopic,
+          )
+
+          const topicChip = matchedTopicChip ?? topicValues[0]
+          const techChip = (matchedTechChip ?? techValues[0])?.toLowerCase() === topicChip?.toLowerCase()
+            ? undefined
+            : matchedTechChip ?? techValues[0]
 
           return (
             <article
               key={article.slug}
-              className="flex flex-col rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-700/40 dark:bg-zinc-900"
+              className="group relative flex flex-col rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-700/40 dark:bg-zinc-900"
             >
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 z-0 rounded-2xl bg-zinc-50 opacity-0 transition group-hover:opacity-100 dark:bg-zinc-800/40"
+              />
+              <Link
+                href={`/articles/${article.slug}`}
+                aria-label={`Read article: ${article.title}`}
+                className="absolute inset-0 z-20 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70"
+              />
               {article.image && (
-                <div className="relative mb-4 overflow-hidden rounded-xl">
+                <div className="relative z-10 mb-4 overflow-hidden rounded-xl">
                   <Image
-                    src={article.image}
+                    src={getOptimizedImageUrl(article.image, {
+                      width: 960,
+                      height: 540,
+                      crop: 'fill',
+                    })}
                     alt={article.title}
                     width={1200}
                     height={630}
-                    unoptimized
+                    sizes="(min-width: 1280px) 24rem, (min-width: 1024px) 30vw, 100vw"
                     className="aspect-[16/9] w-full object-cover"
                   />
                 </div>
               )}
 
-              <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-                <time dateTime={article.date}>{formatDate(article.date)}</time>
-                {article.readingTimeMinutes && (
-                  <span>{article.readingTimeMinutes} min read</span>
-                )}
-                {article.category?.title && (
-                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">
-                    {article.category.title}
-                  </span>
+              <div className="relative z-10 text-xs text-zinc-500 dark:text-zinc-400">
+                <div className="flex items-center gap-2">
+                  <time dateTime={article.date}>{formatDate(article.date)}</time>
+                  {article.readingTimeMinutes && (
+                    <span>{article.readingTimeMinutes} min read</span>
+                  )}
+                </div>
+                {(topicChip || techChip) && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {topicChip && (
+                      <span className="max-w-[11rem] truncate rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">
+                        {topicChip}
+                      </span>
+                    )}
+                    {techChip && (
+                      <span className="max-w-[11rem] truncate rounded-full bg-teal-50 px-2 py-0.5 text-teal-700 dark:bg-teal-900/40 dark:text-teal-200">
+                        {techChip}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
 
-              <h2 className="mt-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                <Link href={`/articles/${article.slug}`}>{article.title}</Link>
+              <h2 className="relative z-10 mt-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                <span>{article.title}</span>
               </h2>
-              <p className="mt-2 line-clamp-3 text-sm text-zinc-600 dark:text-zinc-400">
+              <p className="relative z-10 mt-2 line-clamp-3 text-sm text-zinc-600 dark:text-zinc-400">
                 {article.description}
               </p>
 
-              <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-700/40">
+              <div className="relative z-10 mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-700/40">
                 <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                  <Link
-                    href={author.href}
-                    {...getExternalLinkProps(author.href)}
-                  >
-                    {author.name}
-                  </Link>
+                  {author.name}
                 </p>
                 {author.role && (
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -242,12 +317,12 @@ export function ArticlesExplorer({
 
       {filtered.length === 0 && (
         <p className="mt-8 mb-12 text-sm text-zinc-500">
-          {queryText && category !== 'All'
-            ? `No articles found for the search term "${queryText}" in the "${category}" category.`
+          {queryText && topic !== 'All'
+            ? `No articles found for the search term "${queryText}" in the "${topic}" topic.`
             : queryText
               ? `No articles found for the search term "${queryText}".`
-              : category !== 'All'
-                ? `No articles found in the "${category}" category.`
+              : topic !== 'All'
+                ? `No articles found in the "${topic}" topic.`
                 : 'No articles found.'}
         </p>
       )}

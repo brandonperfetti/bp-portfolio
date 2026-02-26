@@ -1,7 +1,12 @@
-import { Footer } from '@/components/Footer'
+import { FooterWithNavigation } from '@/components/Footer'
 import { Header } from '@/components/Header'
+import { getCmsNavigation } from '@/lib/cms/navigationRepo'
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export async function Layout({ children }: { children: React.ReactNode }) {
+  const navigationItems = (await getCmsNavigation()).filter(
+    (item) => item.showInNav,
+  )
+
   return (
     <>
       <div className="fixed inset-0 flex justify-center sm:px-8">
@@ -10,9 +15,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
       <div className="relative flex w-full flex-col">
-        <Header />
+        <Header navigationItems={navigationItems} />
         <main className="flex-auto">{children}</main>
-        <Footer />
+        <FooterWithNavigation navigationItems={navigationItems} />
       </div>
     </>
   )

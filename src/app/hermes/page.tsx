@@ -2,11 +2,27 @@ import { type Metadata } from 'next'
 
 import { Container } from '@/components/Container'
 import { HermesChat } from '@/components/HermesChat'
+import { buildPageMetadata } from '@/lib/cms/pageMetadata'
+import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
+import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 
-export const metadata: Metadata = {
+const defaultHermesMeta: Metadata = {
   title: 'Hermes',
   description:
     'Chat with Hermes using streaming responses and image generation prompts.',
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getCmsSiteSettings()
+  const page = await getCmsPageByPath('/hermes')
+
+  return buildPageMetadata({
+    page,
+    settings,
+    fallbackTitle: String(defaultHermesMeta.title),
+    fallbackDescription: String(defaultHermesMeta.description),
+    path: '/hermes',
+  })
 }
 
 export default function HermesPage() {

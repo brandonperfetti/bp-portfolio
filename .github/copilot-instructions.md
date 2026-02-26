@@ -1,6 +1,6 @@
 # BP Portfolio - AI Agent Instructions
 
-Next.js App Router portfolio + MDX content platform (Tailwind Plus Spotlight-based) with custom feature layers for search, Hermes chat, contact forms, and SEO routes.
+Next.js App Router portfolio + provider-switched CMS platform (fallback local mode + Notion) with custom feature layers for search, Hermes chat, contact forms, and SEO routes.
 
 ## Essentials
 - Package manager: `npm` (lockfile is `package-lock.json`)
@@ -26,8 +26,11 @@ Optional env vars:
 - `CONTACT_FROM_EMAIL`
 
 ## Project-Specific Rules
-- Keep article content and metadata co-located in `src/app/articles/**/page.mdx`.
-- Preserve query-string behavior in article explorer (`q`, `category`) and keyboard shortcuts (`/` for focus).
+- Articles are CMS-first; local mode should gracefully render empty article states when Notion is disabled.
+- Dynamic article route is `src/app/articles/[slug]/page.tsx`; preserve this shape.
+- In Notion mode, `Source Article` page blocks are canonical article body source.
+- Keep Notion API pinned to `NOTION_API_VERSION=2025-09-03`.
+- Preserve query-string behavior in article explorer (`q`, `topic`) and keyboard shortcuts (`/` for focus).
 - Preserve header search UX (`Cmd/Ctrl + K`) and debounced matching over article body text.
 - Hermes chat must keep streaming behavior and markdown rendering compatibility.
 - Prefer project-local icons in `src/icons` when matching existing visual language; use Heroicons selectively where already adopted.
@@ -51,3 +54,4 @@ Optional env vars:
 - Testing strategy / current gaps: `docs/TESTING.md`
 - Ongoing upkeep tasks: `docs/MAINTENANCE.md`
 - Documentation standards: `docs/DOCUMENTATION.md`
+- Notion CMS setup and runbook: `docs/NOTION_CMS.md`

@@ -5,6 +5,7 @@
 - `README.md` = onboarding and runtime usage.
 - `.github/copilot-instructions.md` = concise AI-agent operating guide.
 - `docs/*.md` = deep references by concern (architecture, styling, SEO, etc.).
+- `docs/NOTION_CMS.md` = Notion-specific configuration and operations runbook.
 
 ## Progressive Disclosure Rule
 

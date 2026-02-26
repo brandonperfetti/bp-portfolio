@@ -1,9 +1,8 @@
-import nextMDX from '@next/mdx'
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'mdx'],
   images: {
+    formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 60 * 60 * 24 * 7,
     remotePatterns: [
       {
         protocol: 'https',
@@ -35,18 +34,6 @@ const nextConfig = {
       },
     ],
   },
-  outputFileTracingIncludes: {
-    '/articles/*': ['./src/app/articles/**/*.mdx'],
-  },
 }
 
-const withMDX = nextMDX({
-  extension: /\.mdx?$/,
-  options: {
-    // Turbopack requires serializable MDX plugin configuration.
-    remarkPlugins: ['remark-gfm'],
-    rehypePlugins: ['@mapbox/rehype-prism'],
-  },
-})
-
-export default withMDX(nextConfig)
+export default nextConfig

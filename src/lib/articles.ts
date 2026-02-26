@@ -1,7 +1,9 @@
-import { readFile } from 'node:fs/promises'
-import path from 'node:path'
-
-import glob from 'fast-glob'
+import {
+  getAllCmsArticleSummaries,
+  getCmsArticleBySlug,
+  getCmsSearchArticles,
+  type CmsArticleDetailResult,
+} from '@/lib/cms/articlesRepo'
 
 interface Article {
   title: string
@@ -21,6 +23,11 @@ interface Article {
   date: string
   image?: string
   readingTimeMinutes?: number
+  canonicalUrl?: string
+  keywords?: string[]
+  topics?: string[]
+  tech?: string[]
+  noindex?: boolean
 }
 
 export interface ArticleWithSlug extends Article {
@@ -28,61 +35,48 @@ export interface ArticleWithSlug extends Article {
   searchText: string
 }
 
-async function importArticle(
-  articleFilename: string,
-): Promise<ArticleWithSlug> {
-  const { article } = (await import(`../app/articles/${articleFilename}`)) as {
-    default: React.ComponentType
-    article: Article
-  }
-  const filePath = path.join(
-    process.cwd(),
-    'src',
-    'app',
-    'articles',
-    articleFilename,
-  )
-  const fileContent = await readFile(filePath, 'utf8')
+export interface ArticleDetailWithSlug extends ArticleWithSlug {
+  bodyBlocks: CmsArticleDetailResult['bodyBlocks']
+  sourceType: CmsArticleDetailResult['sourceType']
+}
 
-  return {
+export async function getAllArticles(): Promise<ArticleWithSlug[]> {
+  const articles = await getAllCmsArticleSummaries()
+  return articles.map((article) => ({
     ...article,
-    slug: articleFilename.replace(/(\/page)?\.mdx$/, ''),
-    readingTimeMinutes: estimateReadingTimeMinutes(fileContent),
-    searchText: buildSearchText(fileContent),
+    searchText: '',
+  }))
+}
+
+export async function getArticleBySlug(
+  slug: string,
+): Promise<ArticleDetailWithSlug | null> {
+  const article = await getCmsArticleBySlug(slug)
+
+  if (!article) {
+    return null
   }
+
+  return article
 }
 
-function estimateReadingTimeMinutes(content: string) {
-  const cleaned = cleanArticleContent(content)
+export async function getSearchArticles(): Promise<ArticleWithSlug[]> {
+  const articles = await getCmsSearchArticles()
 
-  const words = cleaned.match(/[A-Za-z0-9']+/g)?.length ?? 0
-  return Math.max(1, Math.round(words / 230))
-}
-
-function cleanArticleContent(content: string) {
-  return content
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`[^`]*`/g, ' ')
-    .replace(/^import .*$/gm, ' ')
-    .replace(/^export .*$/gm, ' ')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\{[^}]*\}/g, ' ')
-}
-
-function buildSearchText(content: string) {
-  return cleanArticleContent(content)
-    .replace(/[#>*_\-\[\]\(\)!]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase()
-}
-
-export async function getAllArticles() {
-  const articleFilenames = await glob('*/page.mdx', {
-    cwd: './src/app/articles',
-  })
-
-  const articles = await Promise.all(articleFilenames.map(importArticle))
-
-  return articles.sort((a, z) => +new Date(z.date) - +new Date(a.date))
+  return articles.map((article) => ({
+    slug: article.slug,
+    title: article.title,
+    description: article.description,
+    author: article.author,
+    category: article.category,
+    date: article.date,
+    image: article.image,
+    readingTimeMinutes: article.readingTimeMinutes,
+    canonicalUrl: article.canonicalUrl,
+    keywords: article.keywords,
+    topics: article.topics,
+    tech: article.tech,
+    noindex: article.noindex,
+    searchText: article.searchText,
+  }))
 }

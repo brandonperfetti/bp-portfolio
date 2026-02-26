@@ -4,23 +4,28 @@
 
 - Framework: Next.js App Router (`src/app`).
 - Rendering:
-  - Static content for most pages/articles.
+  - Static and dynamic App Router rendering.
   - Dynamic API routes for chat, image generation, contact, newsletter, and search index.
 - Content source:
-  - MDX files under `src/app/articles/**/page.mdx`.
+  - Local provider: fallback mode with empty article-safe behavior.
+  - Notion provider: metadata from `Portfolio CMS - Articles` data source and canonical body from `Source Article` page blocks.
 
 ## Primary Layers
 
 - `src/app/`
   - Route handlers and page entries.
+  - Dynamic article route (`src/app/articles/[slug]/page.tsx`).
   - SEO routes (`sitemap.ts`, `robots.ts`, feed route).
   - Metadata defaults in `layout.tsx`.
 - `src/components/`
   - Reusable UI shell (`Layout`, `Header`, `Footer`, `Container`).
   - Feature components (`HermesChat`, `ArticlesExplorer`, `HeaderSearch`, `Messenger`).
 - `src/lib/`
+  - Provider facade and CMS repositories (`src/lib/cms/*`).
   - Article aggregation/parsing + metadata helpers.
   - Shared debouncing utility.
+  - Work history provider (`src/lib/cms/workHistoryRepo.ts`) powers home-page resume data in Notion mode.
+  - Page content provider (`src/lib/cms/pagesRepo.ts`) powers home/about hero + content slots in Notion mode.
 - `src/icons/`
   - Project-local icon set.
 - `src/styles/`
@@ -28,12 +33,14 @@
 
 ## Content + Search Pipeline
 
-1. `getAllArticles()` globs MDX files.
-2. Each file is imported for frontmatter metadata and read from disk for content.
-3. Utility builds:
+1. Provider facade resolves `local` or `notion` mode (`CMS_PROVIDER`).
+2. Local mode returns empty article-safe data (non-Notion fallback behavior).
+3. Notion mode reads article projection records + canonical Source Article blocks via `src/lib/cms/notion/*`.
+4. Utility builds:
    - `readingTimeMinutes`
-   - `searchText` (normalized article body text)
-4. Search API (`/api/search`) emits a compact index consumed by header modal.
+   - `searchText` (metadata + projected `Search Index` text)
+   - `Search Index` is written during projection sync from canonical Source Article blocks
+5. Search API (`/api/search`) emits a compact index consumed by header modal.
 
 ### Key files
 
@@ -54,7 +61,8 @@
 Search/filter URL contract:
 
 - `q` = text query
-- `category` = selected category title
+- `topic` = selected topic title
+- `category` = legacy compatibility alias still read from URL
 - Updates are applied with `router.replace(..., { scroll: false })` to keep context stable.
 
 Keyboard shortcuts:

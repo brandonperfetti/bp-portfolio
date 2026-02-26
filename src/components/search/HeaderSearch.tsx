@@ -14,11 +14,14 @@ type SearchItem = {
   searchText: string
 }
 
+const SEARCH_CACHE_KEY = 'bp:header-search:index:v1'
+const SEARCH_FETCH_TIMEOUT_MS = 8000
+
 export function HeaderSearch() {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<SearchItem[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const debouncedQuery = useDebouncedValue(query, query.trim() ? 500 : 0)
 
   useEffect(() => {
@@ -44,17 +47,47 @@ export function HeaderSearch() {
   }, [isOpen, query])
 
   useEffect(() => {
-    if (!isOpen || items.length > 0) {
+    if (!isOpen || loadState !== 'idle') {
       return
     }
 
-    setIsLoading(true)
-    fetch('/api/search')
+    try {
+      const raw = sessionStorage.getItem(SEARCH_CACHE_KEY)
+      if (raw) {
+        const cached = JSON.parse(raw) as SearchItem[]
+        if (Array.isArray(cached) && cached.length > 0) {
+          setItems(cached)
+          setLoadState('ready')
+          return
+        }
+      }
+    } catch {
+      // noop: cache parse/storage failures should not break search
+    }
+
+    setLoadState('loading')
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), SEARCH_FETCH_TIMEOUT_MS)
+
+    fetch('/api/search', { signal: controller.signal })
       .then((response) => response.json())
-      .then((data: SearchItem[]) => setItems(data))
-      .catch(() => setItems([]))
-      .finally(() => setIsLoading(false))
-  }, [isOpen, items.length])
+      .then((data: SearchItem[]) => {
+        setItems(data)
+        setLoadState('ready')
+        try {
+          sessionStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(data))
+        } catch {
+          // noop
+        }
+      })
+      .catch(() => {
+        setItems([])
+        setLoadState('error')
+      })
+      .finally(() => {
+        clearTimeout(timeoutId)
+      })
+  }, [isOpen, loadState])
 
   const filteredItems = useMemo(() => {
     if (!debouncedQuery.trim()) {
@@ -125,7 +158,7 @@ export function HeaderSearch() {
             </div>
 
             <div className="mt-4 max-h-96 space-y-2 overflow-auto">
-              {isLoading && (
+              {loadState === 'loading' && (
                 <p className="p-3 text-sm text-zinc-500">Loading articles...</p>
               )}
               {filteredItems.map((item) => (
@@ -144,7 +177,21 @@ export function HeaderSearch() {
                   </p>
                 </Link>
               ))}
-              {!isLoading && filteredItems.length === 0 && (
+              {loadState === 'error' && (
+                <div className="flex items-center justify-between gap-3 p-3">
+                  <p className="text-sm text-red-500">
+                    Unable to load search index right now.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setLoadState('idle')}
+                    className="rounded-md px-2 py-1 text-xs font-medium text-zinc-600 ring-1 ring-zinc-300 transition hover:bg-zinc-100 dark:text-zinc-300 dark:ring-zinc-600 dark:hover:bg-zinc-800"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+              {loadState !== 'loading' && loadState !== 'error' && filteredItems.length === 0 && (
                 <p className="p-3 text-sm text-zinc-500">
                   {queryText
                     ? `No articles found for the search term "${queryText}".`

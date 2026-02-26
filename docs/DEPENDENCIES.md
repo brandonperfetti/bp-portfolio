@@ -11,12 +11,10 @@
 - `clsx`
 - `@heroicons/react`
 
-## Content and MDX
+## Content and Rendering
 
-- `@next/mdx`, `@mdx-js/loader`, `@mdx-js/react`
 - `remark-gfm`
 - `@mapbox/rehype-prism`
-- `fast-glob`
 - `cheerio` (content parsing helpers)
 
 ## APIs and Integrations
@@ -39,5 +37,4 @@ When removing dependencies, check:
 
 1. `src/app/api/*`
 2. `next.config.mjs`
-3. `mdx-components.tsx`
-4. `typography.ts`
+3. `typography.ts`

@@ -1,5 +1,13 @@
 import { Card } from '@/components/Card'
+import { EntityGrid } from '@/components/cms/EntityGrid'
+import { NotFoundState } from '@/components/cms/NotFoundState'
 import { SimpleLayout } from '@/components/SimpleLayout'
+import { buildPageMetadata } from '@/lib/cms/pageMetadata'
+import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
+import { isNotionProvider } from '@/lib/cms/provider'
+import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
+import { getCmsTech } from '@/lib/cms/techRepo'
+import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { type Metadata } from 'next'
 import Image from 'next/image'
 
@@ -382,13 +390,46 @@ const techStack = [
   },
 ]
 
-export const metadata: Metadata = {
+const defaultTechMeta: Metadata = {
   title: 'Tech',
   description:
     'Core technologies and tools I reach for when building products.',
 }
 
-export default function TechStack() {
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getCmsSiteSettings()
+  const page = await getCmsPageByPath('/tech')
+
+  return buildPageMetadata({
+    page,
+    settings,
+    fallbackTitle: String(defaultTechMeta.title),
+    fallbackDescription: String(defaultTechMeta.description),
+    path: '/tech',
+  })
+}
+
+export default async function TechStack() {
+  const cmsTech = isNotionProvider() ? await getCmsTech() : null
+
+  if (cmsTech) {
+    return (
+      <SimpleLayout
+        title="Core technologies I reach for first."
+        intro="A practical stack for product delivery, engineering execution, and long-term maintainability."
+      >
+        {cmsTech.length ? (
+          <EntityGrid items={cmsTech} />
+        ) : (
+          <NotFoundState
+            title="No published tech entries"
+            description="No CMS tech records are currently publish-safe."
+          />
+        )}
+      </SimpleLayout>
+    )
+  }
+
   return (
     <SimpleLayout
       title="Core technologies I reach for first."
@@ -408,10 +449,14 @@ export default function TechStack() {
               <Image
                 height={48}
                 width={48}
-                src={tech.logo}
+                src={getOptimizedImageUrl(tech.logo, {
+                  width: 96,
+                  height: 96,
+                  crop: 'fit',
+                })}
                 alt={tech.name}
                 className="h-8 w-8 rounded"
-                unoptimized
+                sizes="2.25rem"
               />
             </div>
             <h2 className="mt-6 text-base font-semibold text-zinc-800 dark:text-zinc-100">
