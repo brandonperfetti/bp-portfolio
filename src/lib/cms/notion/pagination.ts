@@ -24,13 +24,14 @@ export async function queryAllDataSourcePages(
       requestBody.start_cursor = nextCursor
     }
 
-    const response: NotionQueryResponse = await notionRequest<NotionQueryResponse>(
-      `/data_sources/${dataSourceId}/query`,
-      {
-        method: 'POST',
-        body: requestBody,
-      },
-    )
+    const response: NotionQueryResponse =
+      await notionRequest<NotionQueryResponse>(
+        `/data_sources/${dataSourceId}/query`,
+        {
+          method: 'POST',
+          body: requestBody,
+        },
+      )
 
     pages.push(...response.results)
     nextCursor = response.has_more ? response.next_cursor : null
@@ -39,17 +40,20 @@ export async function queryAllDataSourcePages(
   return pages
 }
 
-export async function listAllBlockChildren(blockId: string): Promise<NotionBlock[]> {
+export async function listAllBlockChildren(
+  blockId: string,
+): Promise<NotionBlock[]> {
   const blocks: NotionBlock[] = []
   let nextCursor: string | null = null
 
   do {
+    const encodedCursor = nextCursor ? encodeURIComponent(nextCursor) : null
     const response: NotionBlockChildrenResponse =
       await notionRequest<NotionBlockChildrenResponse>(
-      `/blocks/${blockId}/children?page_size=100${nextCursor ? `&start_cursor=${nextCursor}` : ''}`,
-      {
-        method: 'GET',
-      },
+        `/blocks/${blockId}/children?page_size=100${encodedCursor ? `&start_cursor=${encodedCursor}` : ''}`,
+        {
+          method: 'GET',
+        },
       )
 
     blocks.push(...response.results)
