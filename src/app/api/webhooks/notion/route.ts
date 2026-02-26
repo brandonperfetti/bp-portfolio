@@ -209,18 +209,19 @@ export async function POST(request: Request) {
       continue
     }
 
-    const eventId = event.id
+    const eventId = typeof event.id === 'string' ? event.id : undefined
 
     if (eventId && eventDedupe.has(eventId)) {
       continue
     }
 
-    if (eventId) {
-      eventDedupe.set(eventId, Date.now())
-    }
-
-    const eventType = event.type ?? 'unknown'
-    const entityId = event.data?.id
+    const eventType = typeof event.type === 'string' ? event.type : 'unknown'
+    const eventData =
+      typeof event.data === 'object' && event.data !== null
+        ? event.data
+        : undefined
+    const entityId =
+      typeof eventData?.id === 'string' ? eventData.id : undefined
 
     console.info('[cms:notion:webhook] received', {
       eventId,
@@ -245,6 +246,7 @@ export async function POST(request: Request) {
         }
         if (claim.action === 'claimed') {
           ledgerPageId = claim.ledgerPageId
+          eventDedupe.set(eventId, Date.now())
         }
         if (claim.action === 'ignored') {
           continue
