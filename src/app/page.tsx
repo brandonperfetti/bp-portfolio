@@ -1,3 +1,4 @@
+import { type Metadata } from 'next'
 import Image, { type ImageProps } from 'next/image'
 import Link from 'next/link'
 import clsx from 'clsx'
@@ -5,10 +6,16 @@ import clsx from 'clsx'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Container } from '@/components/Container'
+import { NotFoundState } from '@/components/cms/NotFoundState'
 import { Messenger } from '@/components/home/Messenger'
 import { GitHubIcon, LinkedInIcon, XIcon } from '@/icons'
+import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { type ArticleWithSlug, getAllArticles } from '@/lib/articles'
+import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
+import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
+import { getCmsWorkHistory } from '@/lib/cms/workHistoryRepo'
 import { formatDate } from '@/lib/formatDate'
+import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
 
 const image1 =
@@ -21,6 +28,12 @@ const image4 =
   'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684298665/image-4_iten8l.jpg'
 const image5 =
   'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684298668/image-5_cpx20p.jpg'
+const defaultHomeGalleryImages = [image1, image2, image3, image4, image5]
+const defaultHomeMeta = {
+  title: 'Home',
+  description:
+    'I’m Brandon, a product and project manager plus software engineer based in Orange County, California.',
+}
 
 function BriefcaseIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
   return (
@@ -89,7 +102,7 @@ function SocialLink({
 interface Role {
   company: string
   title: string
-  logo: ImageProps['src']
+  logo?: ImageProps['src']
   start: string | { label: string; dateTime: string }
   end: string | { label: string; dateTime: string }
 }
@@ -106,14 +119,28 @@ function Role({ role }: { role: Role }) {
   return (
     <li className="flex gap-4">
       <div className="relative mt-1 flex h-10 w-10 flex-none items-center justify-center rounded-full shadow-md ring-1 shadow-zinc-800/5 ring-zinc-900/5 dark:border dark:border-zinc-700/50 dark:bg-zinc-800 dark:ring-0">
-        <Image
-          src={role.logo}
-          alt=""
-          width={100}
-          height={100}
-          className="h-7 w-7"
-          unoptimized
-        />
+        {role.logo ? (
+          <Image
+            src={
+              typeof role.logo === 'string'
+                ? getOptimizedImageUrl(role.logo, {
+                    width: 96,
+                    height: 96,
+                    crop: 'fit',
+                  })
+                : role.logo
+            }
+            alt=""
+            width={100}
+            height={100}
+            sizes="(min-width: 640px) 2.25rem, 2rem"
+            className="h-7 w-7"
+          />
+        ) : (
+          <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+            {role.company.charAt(0).toUpperCase()}
+          </span>
+        )}
       </div>
       <dl className="flex flex-auto flex-wrap gap-x-2">
         <dt className="sr-only">Company</dt>
@@ -138,40 +165,51 @@ function Role({ role }: { role: Role }) {
   )
 }
 
-function Resume() {
-  const resume: Array<Role> = [
-    {
-      company: 'Freelance',
-      title: 'Technical PM + Software Engineer',
-      logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562733/bp-portfolio/images/logos/rocket-7757105_640_lcepwk_vd862c.png',
-      start: '2023',
-      end: {
-        label: 'Present',
-        dateTime: new Date().getFullYear().toString(),
-      },
+const defaultResume: Array<Role> = [
+  {
+    company: 'Freelance',
+    title: 'Technical PM + Software Engineer',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562733/bp-portfolio/images/logos/rocket-7757105_640_lcepwk_vd862c.png',
+    start: '2023',
+    end: {
+      label: 'Present',
+      dateTime: new Date().getFullYear().toString(),
     },
-    {
-      company: 'Lone Wolf Technologies',
-      title: 'Technical PM + Software Engineer',
-      logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562788/bp-portfolio/images/logos/lone-wolf_hpftff_fsqe3o.png',
-      start: '2021',
-      end: '2023',
-    },
-    {
-      company: 'W+R Studios',
-      title: 'Technical PM + Senior Data Integrations Engineer',
-      logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
-      start: '2017',
-      end: '2020',
-    },
-    {
-      company: 'W+R Studios',
-      title: 'Technical PM + Data Integrations Engineer',
-      logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
-      start: '2013',
-      end: '2017',
-    },
-  ]
+  },
+  {
+    company: 'Lone Wolf Technologies',
+    title: 'Technical PM + Software Engineer',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562788/bp-portfolio/images/logos/lone-wolf_hpftff_fsqe3o.png',
+    start: '2021',
+    end: '2023',
+  },
+  {
+    company: 'W+R Studios',
+    title: 'Technical PM + Senior Data Integrations Engineer',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
+    start: '2017',
+    end: '2020',
+  },
+  {
+    company: 'W+R Studios',
+    title: 'Technical PM + Data Integrations Engineer',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
+    start: '2013',
+    end: '2017',
+  },
+]
+
+async function Resume() {
+  const cmsResume = await getCmsWorkHistory()
+  const resume: Array<Role> = cmsResume?.length
+    ? cmsResume.map((entry) => ({
+        company: entry.company,
+        title: entry.title,
+        logo: entry.logo,
+        start: entry.start,
+        end: entry.end,
+      }))
+    : defaultResume
 
   return (
     <div className="rounded-2xl border border-zinc-100 p-6 dark:border-zinc-700/40">
@@ -196,7 +234,7 @@ function Resume() {
   )
 }
 
-function Photos() {
+function Photos({ images }: { images: string[] }) {
   const rotations = [
     'rotate-2',
     '-rotate-2',
@@ -208,7 +246,7 @@ function Photos() {
   return (
     <div className="mt-16 sm:mt-20">
       <div className="-my-4 flex justify-center gap-5 overflow-hidden py-4 sm:gap-8">
-        {[image1, image2, image3, image4, image5].map((image, imageIndex) => (
+        {images.map((image, imageIndex) => (
           <div
             key={image}
             className={clsx(
@@ -218,12 +256,16 @@ function Photos() {
           >
             <div className="aspect-9/10">
               <Image
-                src={image}
+                src={getOptimizedImageUrl(image, {
+                  width: 1000,
+                  height: 1125,
+                  crop: 'fill',
+                })}
                 alt=""
                 width={1200}
                 height={1400}
-                unoptimized
                 sizes="(min-width: 640px) 18rem, 11rem"
+                priority={imageIndex === 0}
                 className="absolute inset-0 h-full w-full object-cover"
               />
             </div>
@@ -236,17 +278,23 @@ function Photos() {
 
 export default async function Home() {
   const articles = (await getAllArticles()).slice(0, 7)
+  const homePage = await getCmsPageByPath('/')
+  const homeTitle = homePage?.title || 'Product and project leader focused on practical software delivery.'
+  const homeSubtitle =
+    homePage?.subtitle ||
+    "I'm Brandon, based in Orange County, CA. I help teams turn complex product goals into reliable, user-focused software."
+  const homeGalleryImages =
+    homePage?.homeImages?.filter(Boolean).slice(0, 5) ?? defaultHomeGalleryImages
 
   return (
     <>
       <Container className="mt-9">
         <div className="max-w-2xl">
           <h1 className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100">
-            Product and project leader focused on practical software delivery.
+            {homeTitle}
           </h1>
           <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-            I&apos;m Brandon, based in Orange County, CA. I help teams turn
-            complex product goals into reliable, user-focused software.
+            {homeSubtitle}
           </p>
           <div className="mt-6 flex gap-6">
             <SocialLink
@@ -267,13 +315,20 @@ export default async function Home() {
           </div>
         </div>
       </Container>
-      <Photos />
+      <Photos images={homeGalleryImages.length ? homeGalleryImages : defaultHomeGalleryImages} />
       <Container className="mt-24 mb-24 md:mt-28 md:mb-28">
         <div className="mx-auto grid max-w-xl grid-cols-1 gap-y-20 lg:max-w-none lg:grid-cols-2">
           <div className="flex flex-col gap-16">
-            {articles.map((article) => (
-              <Article key={article.slug} article={article} />
-            ))}
+            {articles.length > 0 ? (
+              articles.map((article) => (
+                <Article key={article.slug} article={article} />
+              ))
+            ) : (
+              <NotFoundState
+                title="No published articles"
+                description="No CMS article records are currently publish-safe."
+              />
+            )}
           </div>
           <div className="space-y-10 lg:pl-16 xl:pl-24">
             <Messenger />
@@ -283,4 +338,17 @@ export default async function Home() {
       </Container>
     </>
   )
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getCmsSiteSettings()
+  const page = await getCmsPageByPath('/')
+
+  return buildPageMetadata({
+    page,
+    settings,
+    fallbackTitle: defaultHomeMeta.title,
+    fallbackDescription: defaultHomeMeta.description,
+    path: '/',
+  })
 }

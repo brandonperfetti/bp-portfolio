@@ -5,6 +5,7 @@
 - Tailwind CSS 4 via `src/styles/tailwind.css`.
 - Typography plugin configured through `typography.ts`.
 - Prism code highlighting styles in `src/styles/prism.css`.
+- Image delivery uses Next Image + Cloudinary transform helper in `src/lib/image-utils.ts` for responsive `f_auto/q_auto` variants.
 
 ## Conventions
 

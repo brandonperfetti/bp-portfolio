@@ -2,7 +2,7 @@
 
 ## Client State Patterns
 
-The codebase primarily uses local React state and URL state, not a global store.
+The codebase primarily uses local React state + URL state, not a global client store.
 
 ### Header Search (`HeaderSearch`)
 
@@ -11,27 +11,28 @@ State:
 - `isOpen`
 - `query`
 - `items`
-- `isLoading`
+- `loadState` (`idle | loading | ready | error`)
 - derived `debouncedQuery`, `filteredItems`
 
 Behavior:
 
-- Loads index once per open session.
+- Loads index from `/api/search` on first open and caches in session storage for fast reopen.
 - Keyboard control via `Cmd/Ctrl + K` and `Escape`.
+- Dev fallback behavior is resilient to temporary index failures (`Retry` path + stale payload support server-side).
 
 ### Articles Explorer (`ArticlesExplorer`)
 
 State:
 
 - `query`
-- `category`
+- `topic`
 - debounced `query`
 
 Behavior:
 
-- Syncs state from `useSearchParams`.
-- Writes back via `router.replace` for shareable URLs.
-- Filters against server-provided article list.
+- Syncs from `useSearchParams` (`q`, `topic`; legacy `category` is read for compatibility).
+- Writes back with guarded `router.replace(..., { scroll: false })`.
+- Filters against server-provided article list + search text.
 
 ### Hermes (`HermesChat`)
 
@@ -42,7 +43,7 @@ State:
 - `loading`
 - typing/image loading indicators
 - copy feedback state
-- `isChatStart` (initial welcome screen vs. active chat view)
+- `isChatStart` (initial welcome screen vs active chat view)
 
 Behavior:
 
@@ -52,5 +53,9 @@ Behavior:
 
 ## Server-Side Data Flow
 
-- Articles are assembled server-side from MDX files (`src/lib/articles.ts`).
-- API endpoints return JSON/stream payloads for client features.
+- `src/lib/articles.ts` is the facade used by routes/components.
+- Local mode returns empty article-safe results.
+- Notion mode sources:
+  - summaries/projections from `Portfolio CMS - Articles`
+  - canonical article body from `Source Article` page blocks
+- Search API (`/api/search`) returns compact records (`title`, `description`, `date`, `href`, `searchText`) for header modal filtering.

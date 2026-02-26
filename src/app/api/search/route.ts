@@ -1,16 +1,60 @@
+import { unstable_cache } from 'next/cache'
 import { NextResponse } from 'next/server'
 
-import { getAllArticles } from '@/lib/articles'
+import { getSearchArticles } from '@/lib/articles'
+import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
+
+type SearchPayloadItem = {
+  title: string
+  description: string
+  date: string
+  href: string
+  searchText: string
+}
+
+// Process-local last-known-good payload used only as a best-effort emergency fallback.
+let lastSuccessfulPayload: SearchPayloadItem[] | null = null
+
+async function buildSearchPayload(): Promise<SearchPayloadItem[]> {
+  const articles = await getSearchArticles()
+  return articles.map((article) => ({
+    title: article.title,
+    description: article.description,
+    date: article.date,
+    href: `/articles/${article.slug}`,
+    searchText: article.searchText,
+  }))
+}
+
+const getPersistedSearchPayload = unstable_cache(
+  async () => buildSearchPayload(),
+  ['api', 'search', 'stale-fallback'],
+  {
+    revalidate: CMS_REVALIDATE.search,
+    tags: [CMS_TAGS.articles],
+  },
+)
 
 export async function GET() {
-  const articles = await getAllArticles()
-  return NextResponse.json(
-    articles.map((article) => ({
-      title: article.title,
-      description: article.description,
-      date: article.date,
-      href: `/articles/${article.slug}`,
-      searchText: article.searchText,
-    })),
-  )
+  try {
+    const payload = await getPersistedSearchPayload()
+    lastSuccessfulPayload = payload
+    return NextResponse.json(payload)
+  } catch (error) {
+    const stalePayload = lastSuccessfulPayload
+
+    if (stalePayload) {
+      return NextResponse.json(stalePayload, {
+        headers: {
+          'x-search-stale': '1',
+        },
+      })
+    }
+
+    console.error('[api/search] failed and no stale payload available', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+
+    return NextResponse.json([], { status: 503 })
+  }
 }

@@ -1,6 +1,14 @@
+import { type Metadata } from 'next'
+
 import { Card } from '@/components/Card'
+import { NotFoundState } from '@/components/cms/NotFoundState'
 import { Section } from '@/components/Section'
 import { SimpleLayout } from '@/components/SimpleLayout'
+import { buildPageMetadata } from '@/lib/cms/pageMetadata'
+import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
+import { isNotionProvider } from '@/lib/cms/provider'
+import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
+import { getCmsUses } from '@/lib/cms/usesRepo'
 
 function ToolsSection({
   children,
@@ -34,12 +42,55 @@ function Tool({
   )
 }
 
-export const metadata = {
+const defaultUsesMeta: Metadata = {
   title: 'Uses',
   description: 'Software, hardware, and tools I use to plan, build, and ship.',
 }
 
-export default function Uses() {
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getCmsSiteSettings()
+  const page = await getCmsPageByPath('/uses')
+
+  return buildPageMetadata({
+    page,
+    settings,
+    fallbackTitle: String(defaultUsesMeta.title),
+    fallbackDescription: String(defaultUsesMeta.description),
+    path: '/uses',
+  })
+}
+
+export default async function Uses() {
+  const cmsUses = isNotionProvider() ? await getCmsUses() : null
+
+  if (cmsUses) {
+    return (
+      <SimpleLayout
+        title="Software, hardware, and workflows I rely on every week."
+        intro="A practical list of tools I use for product work, engineering, communication, and learning."
+      >
+        <div className="space-y-20">
+          {cmsUses.length ? (
+            cmsUses.map((section) => (
+              <ToolsSection key={section.title} title={section.title}>
+                {section.items.map((item) => (
+                  <Tool key={item.slug} title={item.name} href={item.link?.href}>
+                    {item.description}
+                  </Tool>
+                ))}
+              </ToolsSection>
+            ))
+          ) : (
+            <NotFoundState
+              title="No published uses entries"
+              description="No CMS uses records are currently publish-safe."
+            />
+          )}
+        </div>
+      </SimpleLayout>
+    )
+  }
+
   return (
     <SimpleLayout
       title="Software, hardware, and workflows I rely on every week."

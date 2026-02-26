@@ -2,23 +2,28 @@
 
 ## Content Platform
 
-- 40+ MDX articles with metadata, category tags, images, and reading-time estimates.
-- Article cards include date, read time, category chips, and author metadata.
+- Provider-switched article system:
+  - `local`: fallback mode with empty article-safe states
+  - `notion`: projection records in `Portfolio CMS - Articles` + canonical body from related `Source Article` page blocks
+- Dynamic article route: `/articles/[slug]`
+- Article detail supports topic + tech chips, hero media, and Notion block rendering.
 
 ## Article Discovery
 
 - `/articles` explorer supports:
-  - text search over title + description + full article content
-  - category chip filtering
-  - query string persistence (`q`, `category`)
-  - chip re-click to clear selection
+  - text search over title + description + taxonomy + server-provided `searchText`
+  - topic filtering with chip controls
+  - URL persistence (`q`, `topic`)
+  - chip re-click to clear selection back to `All`
   - `/` keyboard shortcut to focus search input
+- Empty-state handling uses shared `NotFoundState` for publish-safe parity across CMS pages.
 
 ## Global Header Search
 
 - Modal search opens via button or `Cmd/Ctrl + K`.
-- Debounced query and ranked subset display.
-- Click outside / Escape closes modal with clear behavior.
+- Uses debounced client filtering over a compact `/api/search` index payload.
+- Session cache keeps modal reopen fast within a tab.
+- API route includes stale payload fallback to reduce transient Notion failures.
 
 ## Hermes AI Chat
 

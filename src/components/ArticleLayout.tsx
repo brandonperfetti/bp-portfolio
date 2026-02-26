@@ -2,15 +2,18 @@
 
 import { useContext } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 
 import { AppContext } from '@/app/providers'
 import { Container } from '@/components/Container'
 import { Prose } from '@/components/Prose'
 import { formatDate } from '@/lib/formatDate'
+import { getOptimizedImageUrl } from '@/lib/image-utils'
 
 export interface ArticleLayoutArticle {
   title: string
   date: string
+  image?: string
 }
 
 function ArrowLeftIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
@@ -62,6 +65,21 @@ export function ArticleLayout({
                 <span className="h-4 w-0.5 rounded-full bg-zinc-200 dark:bg-zinc-500" />
                 <span className="ml-3">{formatDate(article.date)}</span>
               </time>
+              {article.image ? (
+                <Image
+                  src={getOptimizedImageUrl(article.image, {
+                    width: 1600,
+                    height: 900,
+                    crop: 'fill',
+                  })}
+                  alt={article.title}
+                  width={1600}
+                  height={900}
+                  sizes="(min-width: 1280px) 42rem, (min-width: 1024px) 42rem, 100vw"
+                  priority
+                  className="mt-8 aspect-[16/9] w-full rounded-2xl object-cover"
+                />
+              ) : null}
             </header>
             <Prose className="mt-8" data-mdx-content>
               {children}

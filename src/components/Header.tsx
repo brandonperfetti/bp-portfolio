@@ -15,9 +15,22 @@ import clsx from 'clsx'
 
 import { Container } from '@/components/Container'
 import { HeaderSearch } from '@/components/search/HeaderSearch'
+import type { CmsNavigationItem } from '@/lib/cms/types'
+import { getOptimizedImageUrl } from '@/lib/image-utils'
 
 const avatarImage =
   'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142617/bp-spotlight/images/avatar_jeycju.jpg'
+
+type NavigationItem = Pick<CmsNavigationItem, 'href' | 'label'>
+
+const DEFAULT_NAV_ITEMS: NavigationItem[] = [
+  { href: '/about', label: 'About' },
+  { href: '/articles', label: 'Articles' },
+  { href: '/projects', label: 'Projects' },
+  { href: '/tech', label: 'Tech' },
+  { href: '/hermes', label: 'Hermes' },
+  { href: '/uses', label: 'Uses' },
+]
 
 function CloseIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
   return (
@@ -96,9 +109,12 @@ function MobileNavItem({
   )
 }
 
-function MobileNavigation(
-  props: React.ComponentPropsWithoutRef<typeof Popover>,
-) {
+function MobileNavigation({
+  items,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof Popover> & {
+  items: NavigationItem[]
+}) {
   return (
     <Popover {...props}>
       <PopoverButton className="group flex cursor-pointer items-center rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-zinc-800 shadow-lg ring-1 shadow-zinc-800/5 ring-zinc-900/5 backdrop-blur-sm dark:bg-zinc-800/90 dark:text-zinc-200 dark:ring-white/10 dark:hover:ring-white/20">
@@ -127,12 +143,11 @@ function MobileNavigation(
         </div>
         <nav className="mt-6">
           <ul className="-my-2 divide-y divide-zinc-100 text-base text-zinc-800 dark:divide-zinc-100/5 dark:text-zinc-300">
-            <MobileNavItem href="/about">About</MobileNavItem>
-            <MobileNavItem href="/articles">Articles</MobileNavItem>
-            <MobileNavItem href="/projects">Projects</MobileNavItem>
-            <MobileNavItem href="/tech">Tech</MobileNavItem>
-            <MobileNavItem href="/hermes">Hermes</MobileNavItem>
-            <MobileNavItem href="/uses">Uses</MobileNavItem>
+            {items.map((item) => (
+              <MobileNavItem key={item.href} href={item.href}>
+                {item.label}
+              </MobileNavItem>
+            ))}
           </ul>
         </nav>
       </PopoverPanel>
@@ -169,16 +184,20 @@ function NavItem({
   )
 }
 
-function DesktopNavigation(props: React.ComponentPropsWithoutRef<'nav'>) {
+function DesktopNavigation({
+  items,
+  ...props
+}: React.ComponentPropsWithoutRef<'nav'> & {
+  items: NavigationItem[]
+}) {
   return (
     <nav {...props}>
       <ul className="flex rounded-full bg-white/90 px-3 text-sm font-medium text-zinc-800 shadow-lg ring-1 shadow-zinc-800/5 ring-zinc-900/5 backdrop-blur-sm dark:bg-zinc-800/90 dark:text-zinc-200 dark:ring-white/10">
-        <NavItem href="/about">About</NavItem>
-        <NavItem href="/articles">Articles</NavItem>
-        <NavItem href="/projects">Projects</NavItem>
-        <NavItem href="/tech">Tech</NavItem>
-        <NavItem href="/hermes">Hermes</NavItem>
-        <NavItem href="/uses">Uses</NavItem>
+        {items.map((item) => (
+          <NavItem key={item.href} href={item.href}>
+            {item.label}
+          </NavItem>
+        ))}
       </ul>
     </nav>
   )
@@ -242,7 +261,11 @@ function Avatar({
       {...props}
     >
       <Image
-        src={avatarImage}
+        src={getOptimizedImageUrl(avatarImage, {
+          width: 128,
+          height: 128,
+          crop: 'fill',
+        })}
         alt=""
         width={100}
         height={100}
@@ -257,7 +280,11 @@ function Avatar({
   )
 }
 
-export function Header() {
+export function Header({
+  navigationItems = DEFAULT_NAV_ITEMS,
+}: {
+  navigationItems?: NavigationItem[]
+}) {
   const isHomePage = usePathname() === '/'
 
   const headerRef = useRef<React.ElementRef<'div'>>(null)
@@ -435,8 +462,14 @@ export function Header() {
                 )}
               </div>
               <div className="flex flex-1 justify-end md:justify-center">
-                <MobileNavigation className="pointer-events-auto md:hidden" />
-                <DesktopNavigation className="pointer-events-auto hidden md:block" />
+                <MobileNavigation
+                  items={navigationItems}
+                  className="pointer-events-auto md:hidden"
+                />
+                <DesktopNavigation
+                  items={navigationItems}
+                  className="pointer-events-auto hidden md:block"
+                />
               </div>
               <div className="flex justify-end md:flex-1">
                 <div className="pointer-events-auto flex items-center gap-2 md:gap-3">

@@ -24,7 +24,7 @@ Defined in `src/app/layout.tsx`:
 
 - `src/app/sitemap.ts`:
   - emits static routes
-  - appends article routes from MDX content
+  - appends article routes from provider facade (`local` fallback mode or `notion` CMS)
 - `src/app/robots.ts`:
   - robots directives
 - `src/app/feed.xml/route.ts`:
@@ -34,4 +34,4 @@ Defined in `src/app/layout.tsx`:
 
 - Keep article `description` concise and unique.
 - Ensure article `date` is valid ISO-compatible format.
-- Provide `image` in frontmatter when social card richness is important.
+- Ensure article/social image fields are populated in the active content provider when social card richness is important.

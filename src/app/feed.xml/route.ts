@@ -1,6 +1,7 @@
 import assert from 'assert'
 import * as cheerio from 'cheerio'
 import { Feed } from 'feed'
+import { getAllArticles } from '@/lib/articles'
 import { getSiteUrl, SITE_DESCRIPTION } from '@/lib/site'
 
 export async function GET(req: Request) {
@@ -25,11 +26,7 @@ export async function GET(req: Request) {
     },
   })
 
-  const articleIds = require
-    .context('../articles', true, /\/page\.mdx$/)
-    .keys()
-    .filter((key) => key.startsWith('./'))
-    .map((key) => key.slice(2).replace(/\/page\.mdx$/, ''))
+  const articleIds = (await getAllArticles()).map((article) => article.slug)
 
   for (const id of articleIds) {
     const url = String(new URL(`/articles/${id}`, req.url))

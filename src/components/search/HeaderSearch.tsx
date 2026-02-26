@@ -1,10 +1,10 @@
 'use client'
 
-import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
 import { getExternalLinkProps } from '@/lib/link-utils'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
+import { XMarkIcon } from '@heroicons/react/24/outline'
+import Link from 'next/link'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 type SearchItem = {
   title: string
@@ -14,11 +14,18 @@ type SearchItem = {
   searchText: string
 }
 
+const SEARCH_CACHE_KEY = 'bp:header-search:index:v1'
+const SEARCH_FETCH_TIMEOUT_MS = 8000
+
 export function HeaderSearch() {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<SearchItem[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+  const [loadState, setLoadState] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle')
+  const [fetchAttempt, setFetchAttempt] = useState(0)
+  const bypassCacheRef = useRef(false)
   const debouncedQuery = useDebouncedValue(query, query.trim() ? 500 : 0)
 
   useEffect(() => {
@@ -44,17 +51,74 @@ export function HeaderSearch() {
   }, [isOpen, query])
 
   useEffect(() => {
-    if (!isOpen || items.length > 0) {
+    if (!isOpen) {
       return
     }
 
-    setIsLoading(true)
-    fetch('/api/search')
-      .then((response) => response.json())
-      .then((data: SearchItem[]) => setItems(data))
-      .catch(() => setItems([]))
-      .finally(() => setIsLoading(false))
-  }, [isOpen, items.length])
+    const bypassCache = bypassCacheRef.current
+    bypassCacheRef.current = false
+
+    if (!bypassCache) {
+      try {
+        const raw = sessionStorage.getItem(SEARCH_CACHE_KEY)
+        if (raw) {
+          const cached = JSON.parse(raw) as SearchItem[]
+          if (Array.isArray(cached)) {
+            setItems(cached)
+            setLoadState('ready')
+            return
+          }
+        }
+      } catch {
+        // noop: cache parse/storage failures should not break search
+      }
+    }
+
+    setLoadState('loading')
+    const controller = new AbortController()
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      SEARCH_FETCH_TIMEOUT_MS,
+    )
+
+    fetch('/api/search', { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) {
+          const body = await response.text().catch(() => '')
+          throw new Error(
+            `Search index request failed (${response.status})${body ? `: ${body}` : ''}`,
+          )
+        }
+        return response.json() as Promise<SearchItem[]>
+      })
+      .then((data: SearchItem[]) => {
+        if (controller.signal.aborted) {
+          return
+        }
+        setItems(data)
+        setLoadState('ready')
+        try {
+          sessionStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(data))
+        } catch {
+          // noop
+        }
+      })
+      .catch(() => {
+        if (controller.signal.aborted) {
+          return
+        }
+        setItems([])
+        setLoadState('error')
+      })
+      .finally(() => {
+        clearTimeout(timeoutId)
+      })
+
+    return () => {
+      controller.abort()
+      clearTimeout(timeoutId)
+    }
+  }, [isOpen, fetchAttempt])
 
   const filteredItems = useMemo(() => {
     if (!debouncedQuery.trim()) {
@@ -125,7 +189,7 @@ export function HeaderSearch() {
             </div>
 
             <div className="mt-4 max-h-96 space-y-2 overflow-auto">
-              {isLoading && (
+              {loadState === 'loading' && (
                 <p className="p-3 text-sm text-zinc-500">Loading articles...</p>
               )}
               {filteredItems.map((item) => (
@@ -144,13 +208,38 @@ export function HeaderSearch() {
                   </p>
                 </Link>
               ))}
-              {!isLoading && filteredItems.length === 0 && (
-                <p className="p-3 text-sm text-zinc-500">
-                  {queryText
-                    ? `No articles found for the search term "${queryText}".`
-                    : 'No articles found.'}
-                </p>
+              {loadState === 'error' && (
+                <div className="flex items-center justify-between gap-3 p-3">
+                  <p className="text-sm text-red-500">
+                    Unable to load search index right now.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        sessionStorage.removeItem(SEARCH_CACHE_KEY)
+                      } catch {
+                        // noop
+                      }
+                      bypassCacheRef.current = true
+                      setLoadState('loading')
+                      setFetchAttempt((current) => current + 1)
+                    }}
+                    className="rounded-md px-2 py-1 text-xs font-medium text-zinc-600 ring-1 ring-zinc-300 transition hover:bg-zinc-100 dark:text-zinc-300 dark:ring-zinc-600 dark:hover:bg-zinc-800"
+                  >
+                    Retry
+                  </button>
+                </div>
               )}
+              {loadState !== 'loading' &&
+                loadState !== 'error' &&
+                filteredItems.length === 0 && (
+                  <p className="p-3 text-sm text-zinc-500">
+                    {queryText
+                      ? `No articles found for the search term "${queryText}".`
+                      : 'No articles found.'}
+                  </p>
+                )}
             </div>
           </div>
         </div>

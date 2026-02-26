@@ -1,47 +1,144 @@
 pre[class*='language-'] {
-  color: var(--color-zinc-100);
+  background: #011627;
+  color: #d6deeb;
+  border: 1px solid rgb(130 170 255 / 20%);
+  border-radius: 0.75rem;
+  padding: 1.1rem 1.25rem;
+  overflow-x: auto;
 }
 
-.token.tag,
-.token.class-name,
-.token.selector,
-.token.selector .class,
-.token.selector.class,
-.token.function {
-  color: var(--color-pink-400);
+pre[class*='language-'] code[class*='language-'] {
+  color: inherit;
+  background: transparent;
+  text-shadow: none;
 }
 
-.token.attr-name,
-.token.keyword,
-.token.rule,
-.token.pseudo-class,
-.token.important {
-  color: var(--color-zinc-300);
-}
-
-.token.module {
-  color: var(--color-pink-400);
-}
-
-.token.attr-value,
-.token.class,
-.token.string,
-.token.property {
-  color: var(--color-teal-300);
+.token.comment,
+.token.prolog,
+.token.cdata {
+  color: #637777;
+  font-style: italic;
 }
 
 .token.punctuation,
 .token.attr-equals {
-  color: var(--color-zinc-500);
+  color: #d6deeb;
 }
 
-.token.unit,
+.token.keyword,
+.token.atrule,
+.token.important,
+.token.rule,
+.token.pseudo-class {
+  color: #c792ea;
+  font-style: italic;
+}
+
+.token.operator {
+  color: #c792ea;
+}
+
+.token.string,
+.token.attr-value {
+  color: #ecc48d;
+}
+
+.token.function,
+.token.method,
 .language-css .token.function {
-  color: var(--color-sky-200);
+  color: #82aaff;
 }
 
-.token.comment,
-.token.operator,
-.token.combinator {
-  color: var(--color-zinc-400);
+.token.number,
+.token.unit {
+  color: #f78c6c;
+}
+
+.token.variable,
+.token.namespace {
+  color: #d6deeb;
+}
+
+.token.property,
+.token.symbol {
+  color: #d6deeb;
+}
+
+.token.parameter,
+.token.attr-name {
+  color: #d6deeb;
+}
+
+.token.class-name,
+.token.builtin,
+.token.class {
+  color: #82aaff;
+}
+
+.token.tag,
+.token.selector,
+.token.selector .class,
+.token.selector.class,
+.token.module {
+  color: #7fdbca;
+}
+
+.token.boolean,
+.token.constant {
+  color: #ff5874;
+}
+
+.token.regex {
+  color: #addb67;
+}
+
+.token.deleted {
+  color: #ef5350;
+}
+
+.token.inserted {
+  color: #22da6e;
+}
+
+/* Night Owl language tuning */
+.language-json .token.property,
+.language-json5 .token.property {
+  color: #addb67;
+}
+
+.language-typescript .token.property,
+.language-javascript .token.property {
+  color: #d6deeb;
+}
+
+.language-typescript .token.class-name,
+.language-javascript .token.class-name {
+  color: #82aaff;
+}
+
+.language-bash .token.function,
+.language-shell .token.function {
+  color: #82aaff;
+}
+
+.language-bash .token.variable,
+.language-shell .token.variable {
+  color: #ff5874;
+}
+
+.language-typescript .token.generic-function,
+.language-javascript .token.generic-function {
+  color: #82aaff;
+}
+
+.token.template-string > .token.string {
+  color: #ecc48d;
+}
+
+.prose :not(pre) > code {
+  background: rgb(130 170 255 / 14%);
+  color: #c792ea;
+  border: 1px solid rgb(130 170 255 / 25%);
+  border-radius: 0.35rem;
+  padding: 0.12rem 0.35rem;
 }
