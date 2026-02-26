@@ -24,6 +24,7 @@ export function HeaderSearch() {
   const [loadState, setLoadState] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle')
+  const [fetchAttempt, setFetchAttempt] = useState(0)
   const bypassCacheRef = useRef(false)
   const debouncedQuery = useDebouncedValue(query, query.trim() ? 500 : 0)
 
@@ -50,7 +51,7 @@ export function HeaderSearch() {
   }, [isOpen, query])
 
   useEffect(() => {
-    if (!isOpen || loadState !== 'idle') {
+    if (!isOpen) {
       return
     }
 
@@ -62,7 +63,7 @@ export function HeaderSearch() {
         const raw = sessionStorage.getItem(SEARCH_CACHE_KEY)
         if (raw) {
           const cached = JSON.parse(raw) as SearchItem[]
-          if (Array.isArray(cached) && cached.length > 0) {
+          if (Array.isArray(cached)) {
             setItems(cached)
             setLoadState('ready')
             return
@@ -117,7 +118,7 @@ export function HeaderSearch() {
       controller.abort()
       clearTimeout(timeoutId)
     }
-  }, [isOpen, loadState])
+  }, [isOpen, fetchAttempt])
 
   const filteredItems = useMemo(() => {
     if (!debouncedQuery.trim()) {
@@ -221,7 +222,8 @@ export function HeaderSearch() {
                         // noop
                       }
                       bypassCacheRef.current = true
-                      setLoadState('idle')
+                      setLoadState('loading')
+                      setFetchAttempt((current) => current + 1)
                     }}
                     className="rounded-md px-2 py-1 text-xs font-medium text-zinc-600 ring-1 ring-zinc-300 transition hover:bg-zinc-100 dark:text-zinc-300 dark:ring-zinc-600 dark:hover:bg-zinc-800"
                   >
