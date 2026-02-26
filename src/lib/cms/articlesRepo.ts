@@ -144,6 +144,41 @@ function getCachedNotionArticleDetail(slug: string) {
   )()
 }
 
+const getCachedNotionSearchArticles = unstable_cache(
+  async (): Promise<CmsArticleDetailResult[]> => {
+    const summaries = await getCachedNotionArticleSummaries()
+
+    return summaries.map((summary) => {
+      const metadataSearchText = [
+        summary.title,
+        summary.description,
+        ...(summary.keywords ?? []),
+        ...(summary.topics ?? []),
+        ...(summary.tech ?? []),
+      ]
+        .join(' ')
+        .toLowerCase()
+        .trim()
+
+      const projectedSearchText = (summary.searchIndexText ?? '')
+        .toLowerCase()
+        .trim()
+
+      return {
+        ...summary,
+        sourceType: 'notion' as const,
+        bodyBlocks: [],
+        searchText: `${metadataSearchText} ${projectedSearchText}`.trim(),
+      }
+    })
+  },
+  ['cms', 'notion', 'articles', 'search'],
+  {
+    revalidate: CMS_REVALIDATE.search,
+    tags: [CMS_TAGS.articles],
+  },
+)
+
 export async function getAllCmsArticleSummaries() {
   if (getCmsProvider() === 'notion') {
     return getCachedNotionArticleSummaries()
@@ -162,45 +197,12 @@ export async function getCmsArticleBySlug(
   return null
 }
 
-export async function getCmsSearchArticles(): Promise<CmsArticleDetailResult[]> {
+export async function getCmsSearchArticles(): Promise<
+  CmsArticleDetailResult[]
+> {
   if (getCmsProvider() !== 'notion') {
     return getCachedLocalArticles()
   }
-
-  const getCachedNotionSearchArticles = unstable_cache(
-    async (): Promise<CmsArticleDetailResult[]> => {
-      const summaries = await getCachedNotionArticleSummaries()
-
-      return summaries.map((summary) => {
-        const metadataSearchText = [
-          summary.title,
-          summary.description,
-          ...(summary.keywords ?? []),
-          ...(summary.topics ?? []),
-          ...(summary.tech ?? []),
-        ]
-          .join(' ')
-          .toLowerCase()
-          .trim()
-
-        const projectedSearchText = (summary.searchIndexText ?? '')
-          .toLowerCase()
-          .trim()
-
-        return {
-          ...summary,
-          sourceType: 'notion' as const,
-          bodyBlocks: [],
-          searchText: `${metadataSearchText} ${projectedSearchText}`.trim(),
-        }
-      })
-    },
-    ['cms', 'notion', 'articles', 'search'],
-    {
-      revalidate: CMS_REVALIDATE.search,
-      tags: [CMS_TAGS.articles],
-    },
-  )
 
   return getCachedNotionSearchArticles()
 }
