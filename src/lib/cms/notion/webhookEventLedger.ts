@@ -28,7 +28,49 @@ export type WebhookLedgerWatchdogResult = {
   errors: Array<{ ledgerPageId: string; message: string }>
 }
 
-const schemaCache = new Map<string, LedgerSchema>()
+type CachedLedgerSchema = {
+  schema: LedgerSchema
+  fetchedAt: number
+}
+
+const DEFAULT_SCHEMA_CACHE_TTL_MS = 5 * 60 * 1000
+const schemaCache = new Map<string, CachedLedgerSchema>()
+
+function resolveSchemaCacheTtlMs() {
+  const raw = process.env.NOTION_LEDGER_SCHEMA_CACHE_TTL_MS
+  const parsed = raw ? Number(raw) : Number.NaN
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed
+  }
+  return DEFAULT_SCHEMA_CACHE_TTL_MS
+}
+
+function getSchemaCacheEntry(dataSourceId: string): LedgerSchema | null {
+  const cached = schemaCache.get(dataSourceId)
+  if (!cached) {
+    return null
+  }
+
+  const ttlMs = resolveSchemaCacheTtlMs()
+  if (Date.now() - cached.fetchedAt > ttlMs) {
+    schemaCache.delete(dataSourceId)
+    return null
+  }
+
+  return cached.schema
+}
+
+function setSchemaCacheEntry(dataSourceId: string, schema: LedgerSchema) {
+  schemaCache.set(dataSourceId, { schema, fetchedAt: Date.now() })
+}
+
+export function invalidateSchemaCache(dataSourceId: string) {
+  schemaCache.delete(dataSourceId)
+}
+
+export function clearSchemaCache() {
+  schemaCache.clear()
+}
 
 function toTitle(content: string) {
   return {
