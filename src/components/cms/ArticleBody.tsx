@@ -138,6 +138,7 @@ function BlockNode({ block }: { block: CmsArticleBlock }) {
       return (
         <div className="rounded-xl border border-teal-200/60 bg-teal-50/50 px-4 py-3 text-zinc-800 dark:border-teal-900/50 dark:bg-teal-950/20 dark:text-zinc-100">
           <RichText values={block.richText} />
+          {block.children?.length ? renderBlockNodes(block.children) : null}
         </div>
       )
     case 'to_do':
@@ -150,6 +151,7 @@ function BlockNode({ block }: { block: CmsArticleBlock }) {
             className="mr-2"
           />
           <RichText values={block.richText} />
+          {block.children?.length ? renderBlockNodes(block.children) : null}
         </p>
       )
     case 'code': {
@@ -211,7 +213,10 @@ function BlockNode({ block }: { block: CmsArticleBlock }) {
       return block.richText?.length ? (
         <p>
           <RichText values={block.richText} />
+          {block.children?.length ? renderBlockNodes(block.children) : null}
         </p>
+      ) : block.children?.length ? (
+        <>{renderBlockNodes(block.children)}</>
       ) : null
   }
 }
