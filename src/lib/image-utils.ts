@@ -6,6 +6,27 @@ type CloudinaryOptions = {
   crop?: CloudinaryCropMode
 }
 
+function isVersionSegment(segment: string) {
+  return /^v\d+$/.test(segment)
+}
+
+function isTransformSegment(segment: string) {
+  if (!segment) {
+    return false
+  }
+
+  if (segment.startsWith('t_')) {
+    return true
+  }
+
+  if (segment.includes(':')) {
+    return true
+  }
+
+  const components = segment.split(',')
+  return components.some((component) => /^[a-z]{1,6}_[^/]+$/i.test(component))
+}
+
 function withCloudinaryTransform(url: string, transform: string) {
   try {
     const parsed = new URL(url)
@@ -18,15 +39,12 @@ function withCloudinaryTransform(url: string, transform: string) {
 
     const prefix = parsed.pathname.slice(0, markerIndex + marker.length)
     const suffix = parsed.pathname.slice(markerIndex + marker.length)
+    const segments = suffix.split('/').filter(Boolean)
+    const firstNonVersionSegment = segments.find(
+      (segment) => !isVersionSegment(segment),
+    )
 
-    if (
-      suffix.startsWith('f_') ||
-      suffix.startsWith('q_') ||
-      suffix.startsWith('w_') ||
-      suffix.startsWith('h_') ||
-      suffix.startsWith('c_') ||
-      suffix.startsWith('dpr_')
-    ) {
+    if (firstNonVersionSegment && isTransformSegment(firstNonVersionSegment)) {
       return url
     }
 
