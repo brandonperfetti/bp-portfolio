@@ -21,7 +21,9 @@ export function HeaderSearch() {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<SearchItem[]>([])
-  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+  const [loadState, setLoadState] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle')
   const bypassCacheRef = useRef(false)
   const debouncedQuery = useDebouncedValue(query, query.trim() ? 500 : 0)
 
@@ -73,11 +75,17 @@ export function HeaderSearch() {
 
     setLoadState('loading')
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), SEARCH_FETCH_TIMEOUT_MS)
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      SEARCH_FETCH_TIMEOUT_MS,
+    )
 
     fetch('/api/search', { signal: controller.signal })
       .then((response) => response.json())
       .then((data: SearchItem[]) => {
+        if (controller.signal.aborted) {
+          return
+        }
         setItems(data)
         setLoadState('ready')
         try {
@@ -87,12 +95,20 @@ export function HeaderSearch() {
         }
       })
       .catch(() => {
+        if (controller.signal.aborted) {
+          return
+        }
         setItems([])
         setLoadState('error')
       })
       .finally(() => {
         clearTimeout(timeoutId)
       })
+
+    return () => {
+      controller.abort()
+      clearTimeout(timeoutId)
+    }
   }, [isOpen, loadState])
 
   const filteredItems = useMemo(() => {
@@ -205,13 +221,15 @@ export function HeaderSearch() {
                   </button>
                 </div>
               )}
-              {loadState !== 'loading' && loadState !== 'error' && filteredItems.length === 0 && (
-                <p className="p-3 text-sm text-zinc-500">
-                  {queryText
-                    ? `No articles found for the search term "${queryText}".`
-                    : 'No articles found.'}
-                </p>
-              )}
+              {loadState !== 'loading' &&
+                loadState !== 'error' &&
+                filteredItems.length === 0 && (
+                  <p className="p-3 text-sm text-zinc-500">
+                    {queryText
+                      ? `No articles found for the search term "${queryText}".`
+                      : 'No articles found.'}
+                  </p>
+                )}
             </div>
           </div>
         </div>
