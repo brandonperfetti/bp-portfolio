@@ -1,13 +1,18 @@
 import type { NotionPage } from '@/lib/cms/notion/contracts'
 
 import { flattenBlockText, getNotionBlockTree } from '@/lib/cms/notion/blocks'
-import { notionCreatePage, notionGetPage, notionUpdatePage } from '@/lib/cms/notion/client'
+import {
+  notionCreatePage,
+  notionGetPage,
+  notionUpdatePage,
+} from '@/lib/cms/notion/client'
 import {
   getNotionArticlesDataSourceId,
   getNotionContentCalendarDataSourceId,
   getNotionContentDataSourceId,
   getOptionalNotionDefaultAuthorPageId,
 } from '@/lib/cms/notion/config'
+import { NotionHttpError } from '@/lib/cms/notion/errors'
 import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
 import {
   getProperty,
@@ -402,8 +407,29 @@ async function getSourcePages(pageId?: string): Promise<NotionPage[]> {
     try {
       const page = (await notionGetPage(pageId)) as NotionPage
       return [page]
-    } catch {
-      return []
+    } catch (error) {
+      const errorCode =
+        error instanceof NotionHttpError &&
+        error.body &&
+        typeof error.body === 'object' &&
+        'code' in error.body &&
+        typeof (error.body as { code?: unknown }).code === 'string'
+          ? (error.body as { code: string }).code
+          : null
+
+      if (
+        error instanceof NotionHttpError &&
+        (error.status === 404 || errorCode === 'object_not_found')
+      ) {
+        console.warn('[cms:notion] source page not found for projection sync', {
+          pageId,
+          status: error.status,
+          code: errorCode,
+        })
+        return []
+      }
+
+      throw error
     }
   }
 
