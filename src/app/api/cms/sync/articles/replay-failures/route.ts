@@ -48,9 +48,12 @@ export async function POST(request: Request) {
 
   const queued = await listProjectionSyncFailures()
 
-  return NextResponse.json({
-    ok: result.failed === 0,
-    ...result,
-    queuedCount: queued.length,
-  })
+  return NextResponse.json(
+    {
+      ok: result.failed === 0,
+      ...result,
+      queuedCount: queued.length,
+    },
+    { status: result.failed === 0 ? 200 : 207 },
+  )
 }
