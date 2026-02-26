@@ -15,6 +15,7 @@ type LedgerSchema = {
 
 export type WebhookEventClaim =
   | { action: 'disabled' }
+  | { action: 'ignored'; reason: string }
   | { action: 'skip_duplicate'; reason: string }
   | { action: 'skip_processed'; reason: string }
   | { action: 'claimed'; ledgerPageId: string }
@@ -409,7 +410,8 @@ export async function claimWebhookEvent(input: {
 }): Promise<WebhookEventClaim> {
   const eventId = input.eventId?.trim()
   if (!eventId) {
-    return { action: 'claimed', ledgerPageId: '' }
+    // No event ID means there is nothing stable to dedupe or ledger.
+    return { action: 'ignored', reason: 'Missing event id' }
   }
 
   const dataSourceId = getOptionalNotionWebhookEventsDataSourceId()
