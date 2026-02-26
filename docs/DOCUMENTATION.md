@@ -43,6 +43,20 @@ Style conventions:
 - Prefer explicit file paths and commands over abstract guidance.
 - Keep sections short and scannable; avoid deep nesting.
 
+## Code comments and JSDoc
+
+When changing code, treat inline documentation as part of the deliverable:
+
+- Add short comments where logic is not immediately obvious (edge cases, fallback semantics, cache behavior, dedupe logic, provider branching).
+- Keep comments intent-focused ("why this branch exists"), not implementation narration.
+- Add JSDoc for exported components/hooks/utilities when their contract is non-trivial:
+  - expected inputs and constraints
+  - return shape/value semantics
+  - side effects (network, cache, storage, mutation)
+  - important assumptions/fallback behavior
+- Avoid over-commenting trivial code; prefer fewer, high-signal comments.
+- If you refactor behavior, update/remove stale comments and JSDoc in the same commit.
+
 ## Agent Compatibility
 
 `AGENTS.md` and `CLAUDE.md` should point to the same instruction source to prevent drift.
