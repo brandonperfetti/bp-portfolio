@@ -24,11 +24,18 @@ export function getProperty(
     keyByNormalizedName.set(normalizeName(name), property)
   }
 
-  return firstDefined(names.map((name) => keyByNormalizedName.get(normalizeName(name))))
+  return firstDefined(
+    names.map((name) => keyByNormalizedName.get(normalizeName(name))),
+  )
 }
 
-export function richTextToPlainText(values: NotionRichText[] | undefined): string {
-  return (values ?? []).map((value) => value.plain_text ?? value.text?.content ?? '').join('').trim()
+export function richTextToPlainText(
+  values: NotionRichText[] | undefined,
+): string {
+  return (values ?? [])
+    .map((value) => value.plain_text ?? value.text?.content ?? '')
+    .join('')
+    .trim()
 }
 
 export function propertyToText(property: NotionProperty | undefined): string {
@@ -87,7 +94,9 @@ export function propertyToText(property: NotionProperty | undefined): string {
   return ''
 }
 
-export function propertyToNumber(property: NotionProperty | undefined): number | undefined {
+export function propertyToNumber(
+  property: NotionProperty | undefined,
+): number | undefined {
   if (!property) {
     return undefined
   }
@@ -105,7 +114,9 @@ export function propertyToNumber(property: NotionProperty | undefined): number |
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
-export function propertyToBoolean(property: NotionProperty | undefined): boolean | undefined {
+export function propertyToBoolean(
+  property: NotionProperty | undefined,
+): boolean | undefined {
   if (!property) {
     return undefined
   }
@@ -195,7 +206,9 @@ export function propertyToFileUrl(
   return ''
 }
 
-export function propertyToFileUrls(property: NotionProperty | undefined): string[] {
+export function propertyToFileUrls(
+  property: NotionProperty | undefined,
+): string[] {
   if (!property || property.type !== 'files') {
     return []
   }
