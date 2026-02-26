@@ -2,6 +2,7 @@ import { NotionConfigError, NotionHttpError } from '@/lib/cms/notion/errors'
 
 const NOTION_BASE_URL = 'https://api.notion.com/v1'
 const DEFAULT_NOTION_VERSION = '2025-09-03'
+const NOTION_REQUEST_TIMEOUT_MS = 15_000
 
 type NotionRequestOptions = {
   method: 'GET' | 'POST' | 'PATCH'
@@ -110,16 +111,48 @@ export async function notionRequest<T>(
   const maxRetries = options.maxRetries ?? 5
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    const response = await fetch(`${NOTION_BASE_URL}${path}`, {
-      method: options.method,
-      headers: {
-        Authorization: `Bearer ${config.apiToken}`,
-        'Notion-Version': config.notionVersion,
-        'Content-Type': 'application/json',
-      },
-      body: options.body ? JSON.stringify(options.body) : undefined,
-      cache: 'no-store',
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      NOTION_REQUEST_TIMEOUT_MS,
+    )
+    let response: Response
+
+    try {
+      response = await fetch(`${NOTION_BASE_URL}${path}`, {
+        method: options.method,
+        headers: {
+          Authorization: `Bearer ${config.apiToken}`,
+          'Notion-Version': config.notionVersion,
+          'Content-Type': 'application/json',
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined,
+        cache: 'no-store',
+        signal: controller.signal,
+      })
+    } catch (error) {
+      if (attempt < maxRetries) {
+        const waitMs = computeBackoffMs(attempt, null)
+        console.warn('[cms:notion] transport retry', {
+          path,
+          attempt,
+          error: error instanceof Error ? error.message : String(error),
+          waitMs,
+        })
+        await sleep(waitMs)
+        continue
+      }
+
+      throw new NotionHttpError(
+        `Notion request transport failure for ${path}`,
+        503,
+        {
+          body: error instanceof Error ? error.message : String(error),
+        },
+      )
+    } finally {
+      clearTimeout(timeoutId)
+    }
 
     if (response.ok) {
       return (await response.json()) as T
