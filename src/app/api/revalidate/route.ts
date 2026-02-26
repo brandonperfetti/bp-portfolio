@@ -1,22 +1,28 @@
-import { NextResponse } from 'next/server'
 import { revalidatePath, revalidateTag } from 'next/cache'
+import { NextResponse } from 'next/server'
 
 import { CMS_TAGS } from '@/lib/cms/cache'
+import { isValidSecret } from '@/lib/security/timingSafeSecret'
 
 function parseTags(tags: unknown): string[] {
   if (!Array.isArray(tags)) {
     return []
   }
 
-  return tags.filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0)
+  return tags.filter(
+    (tag): tag is string => typeof tag === 'string' && tag.trim().length > 0,
+  )
 }
 
 export async function POST(request: Request) {
   const secret = process.env.CMS_REVALIDATE_SECRET
   const body = await request.json().catch(() => ({}))
 
-  if (!secret || body?.secret !== secret) {
-    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+  if (!isValidSecret(body?.secret, secret)) {
+    return NextResponse.json(
+      { ok: false, error: 'Unauthorized' },
+      { status: 401 },
+    )
   }
 
   const tags = parseTags(body.tags)
