@@ -246,6 +246,8 @@ export function ArticlesExplorer({
               item.toLowerCase() === normalizedActiveTopic,
           )
 
+          // Prefer chips matching the active topic; otherwise use the first available.
+          // Hide tech chip when it would duplicate the topic chip.
           const topicChip = matchedTopicChip ?? topicValues[0]
           const techChip =
             (matchedTechChip ?? techValues[0])?.toLowerCase() ===
