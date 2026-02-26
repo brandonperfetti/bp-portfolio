@@ -37,9 +37,16 @@ function cleanupEventCache() {
   }
 }
 
-function verifySignature(payload: string, signatureHeader: string, secret: string): boolean {
+function verifySignature(
+  payload: string,
+  signatureHeader: string,
+  secret: string,
+): boolean {
   const expected = createHmac('sha256', secret).update(payload).digest('hex')
-  const provided = signatureHeader.trim().toLowerCase().replace(/^sha256=/, '')
+  const provided = signatureHeader
+    .trim()
+    .toLowerCase()
+    .replace(/^sha256=/, '')
 
   const expectedBuffer = Buffer.from(expected)
   const providedBuffer = Buffer.from(provided)
@@ -92,7 +99,9 @@ function applyEventRevalidation(eventType: string) {
   }
 
   if (eventType === 'data_source.schema_updated') {
-    console.warn('[cms:notion:webhook] Data source schema updated, verify mapper compatibility')
+    console.warn(
+      '[cms:notion:webhook] Data source schema updated, verify mapper compatibility',
+    )
     revalidateTag(CMS_TAGS.articles, 'max')
     revalidateTag(CMS_TAGS.pages, 'max')
     revalidateTag(CMS_TAGS.settings, 'max')
@@ -138,7 +147,10 @@ export async function POST(request: Request) {
 
   if (webhookSecret) {
     if (!signature || !verifySignature(rawBody, signature, webhookSecret)) {
-      return NextResponse.json({ ok: false, error: 'Invalid signature' }, { status: 401 })
+      return NextResponse.json(
+        { ok: false, error: 'Invalid signature' },
+        { status: 401 },
+      )
     }
   }
 
@@ -152,12 +164,21 @@ export async function POST(request: Request) {
       events?: NotionWebhookEvent[]
     }
   } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid JSON payload' }, { status: 400 })
+    return NextResponse.json(
+      { ok: false, error: 'Invalid JSON payload' },
+      { status: 400 },
+    )
   }
 
   if (payload.verification_token) {
-    if (!verificationToken || payload.verification_token !== verificationToken) {
-      return NextResponse.json({ ok: false, error: 'Invalid verification token' }, { status: 401 })
+    if (
+      !verificationToken ||
+      payload.verification_token !== verificationToken
+    ) {
+      return NextResponse.json(
+        { ok: false, error: 'Invalid verification token' },
+        { status: 401 },
+      )
     }
 
     return NextResponse.json({ ok: true, verified: true })
@@ -196,7 +217,10 @@ export async function POST(request: Request) {
           eventType,
           entityId,
         })
-        if (claim.action === 'skip_duplicate' || claim.action === 'skip_processed') {
+        if (
+          claim.action === 'skip_duplicate' ||
+          claim.action === 'skip_processed'
+        ) {
           continue
         }
         if (claim.action === 'claimed') {
@@ -221,7 +245,9 @@ export async function POST(request: Request) {
 
     try {
       const syncResult = await syncPortfolioArticleProjection(
-        eventType === 'data_source.content_updated' ? undefined : { pageId: entityId },
+        eventType === 'data_source.content_updated'
+          ? undefined
+          : { pageId: entityId },
       )
       console.info('[cms:notion:webhook] projection sync', {
         eventType,
@@ -233,9 +259,13 @@ export async function POST(request: Request) {
         await enqueueProjectionSyncFailure({
           eventType,
           entityId,
-          pageId: eventType === 'data_source.content_updated' ? undefined : entityId,
+          pageId:
+            eventType === 'data_source.content_updated' ? undefined : entityId,
           reason: 'Projection sync completed with errors',
-          lastError: syncResult.errors.map((entry) => entry.message).join('; ').slice(0, 2000),
+          lastError: syncResult.errors
+            .map((entry) => entry.message)
+            .join('; ')
+            .slice(0, 2000),
         })
         if (ledgerPageId) {
           await failWebhookEventClaim(
@@ -255,7 +285,8 @@ export async function POST(request: Request) {
       await enqueueProjectionSyncFailure({
         eventType,
         entityId,
-        pageId: eventType === 'data_source.content_updated' ? undefined : entityId,
+        pageId:
+          eventType === 'data_source.content_updated' ? undefined : entityId,
         reason: 'Projection sync threw exception',
         lastError: error instanceof Error ? error.message : 'Unknown error',
       })
