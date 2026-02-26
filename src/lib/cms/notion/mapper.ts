@@ -279,7 +279,9 @@ export function mapNotionEntity(page: NotionPage): CmsEntityItem | null {
   }
 }
 
-export function mapNotionWorkHistory(page: NotionPage): CmsWorkHistoryItem | null {
+export function mapNotionWorkHistory(
+  page: NotionPage,
+): CmsWorkHistoryItem | null {
   const status = propertyToText(getProperty(page.properties, ['Status']))
   const publishSafe = status.toLowerCase() === 'published' || status === ''
 
@@ -296,7 +298,9 @@ export function mapNotionWorkHistory(page: NotionPage): CmsWorkHistoryItem | nul
   const startDate = propertyToDate(
     getProperty(page.properties, ['Start Date', 'Start']),
   )
-  const endDate = propertyToDate(getProperty(page.properties, ['End Date', 'End']))
+  const endDate = propertyToDate(
+    getProperty(page.properties, ['End Date', 'End']),
+  )
   const current = propertyToBoolean(
     getProperty(page.properties, ['Current', 'Is Current']),
   )
