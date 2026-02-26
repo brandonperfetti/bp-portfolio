@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 
 export function isValidSecret(
   provided: unknown,
@@ -15,9 +15,8 @@ export function isValidSecret(
   const providedBuffer = Buffer.from(provided)
   const expectedBuffer = Buffer.from(expected)
 
-  if (providedBuffer.length !== expectedBuffer.length) {
-    return false
-  }
+  const providedDigest = createHash('sha256').update(providedBuffer).digest()
+  const expectedDigest = createHash('sha256').update(expectedBuffer).digest()
 
-  return timingSafeEqual(providedBuffer, expectedBuffer)
+  return timingSafeEqual(providedDigest, expectedDigest)
 }
