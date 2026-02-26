@@ -23,6 +23,9 @@ type NotionWebhookEvent = {
 }
 
 const EVENT_TTL_MS = 24 * 60 * 60 * 1000
+// Best-effort fast-path dedupe for duplicate events in the same process instance.
+// In serverless/multi-instance deployments this map is not shared, so canonical
+// distributed dedupe still relies on claimWebhookEvent + ledger state in Notion.
 const eventDedupe = new Map<string, number>()
 
 function cleanupEventCache() {
