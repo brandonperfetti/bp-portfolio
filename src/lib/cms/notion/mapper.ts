@@ -182,7 +182,9 @@ export function mapNotionAuthorProfile(
     return null
   }
 
-  const slug = toSlug(propertyToText(getProperty(page.properties, ['Slug'])) || name)
+  const slug = toSlug(
+    propertyToText(getProperty(page.properties, ['Slug'])) || name,
+  )
   const role = propertyToText(getProperty(page.properties, ['Role', 'Title']))
   const href = propertyToText(
     getProperty(page.properties, ['Profile URL', 'Website', 'URL', 'Href']),
@@ -190,9 +192,13 @@ export function mapNotionAuthorProfile(
   const image =
     propertyToText(getProperty(page.properties, ['Avatar URL', 'Image URL'])) ||
     propertyToFileUrl(getProperty(page.properties, ['Avatar', 'Image']))
-  const bio = propertyToText(getProperty(page.properties, ['Bio Short', 'Bio', 'Summary']))
+  const bio = propertyToText(
+    getProperty(page.properties, ['Bio Short', 'Bio', 'Summary']),
+  )
   const primary =
-    propertyToBoolean(getProperty(page.properties, ['Primary', 'Is Default', 'Default'])) ?? false
+    propertyToBoolean(
+      getProperty(page.properties, ['Primary', 'Is Default', 'Default']),
+    ) ?? false
   const order =
     propertyToNumber(getProperty(page.properties, ['Sort Order', 'Order'])) ??
     Number.MAX_SAFE_INTEGER
