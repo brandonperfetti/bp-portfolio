@@ -1,9 +1,19 @@
 import type { NotionPage } from '@/lib/cms/notion/contracts'
 
-import { notionCreatePage, notionGetDataSource, notionUpdatePage } from '@/lib/cms/notion/client'
+import {
+  notionCreatePage,
+  notionGetDataSource,
+  notionUpdatePage,
+} from '@/lib/cms/notion/client'
 import { getOptionalNotionWebhookEventsDataSourceId } from '@/lib/cms/notion/config'
 import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
-import { getProperty, propertyToBoolean, propertyToDate, propertyToNumber, propertyToText } from '@/lib/cms/notion/property'
+import {
+  getProperty,
+  propertyToBoolean,
+  propertyToDate,
+  propertyToNumber,
+  propertyToText,
+} from '@/lib/cms/notion/property'
 
 type LedgerState = 'processing' | 'completed' | 'failed'
 
@@ -102,7 +112,13 @@ function normalize(value: string) {
 function getEventIdFromPage(page: NotionPage) {
   const named =
     propertyToText(
-      getProperty(page.properties, ['Event ID', 'Event Id', 'Webhook Event ID', 'Name', 'Title']),
+      getProperty(page.properties, [
+        'Event ID',
+        'Event Id',
+        'Webhook Event ID',
+        'Name',
+        'Title',
+      ]),
     ) || ''
   if (named.trim()) {
     return named.trim()
@@ -121,8 +137,14 @@ function getEventIdFromPage(page: NotionPage) {
 }
 
 function getEventState(page: NotionPage): LedgerState | '' {
-  const status = normalize(propertyToText(getProperty(page.properties, ['State', 'Status'])))
-  if (status === 'processing' || status === 'completed' || status === 'failed') {
+  const status = normalize(
+    propertyToText(getProperty(page.properties, ['State', 'Status'])),
+  )
+  if (
+    status === 'processing' ||
+    status === 'completed' ||
+    status === 'failed'
+  ) {
     return status
   }
   return ''
@@ -313,7 +335,12 @@ function buildClaimProperties(
     [schema.titlePropertyName]: toTitle(input.eventId),
   }
 
-  setTextProperty(schema, properties, ['Event ID', 'Event Id', 'Webhook Event ID'], input.eventId)
+  setTextProperty(
+    schema,
+    properties,
+    ['Event ID', 'Event Id', 'Webhook Event ID'],
+    input.eventId,
+  )
   setTextProperty(schema, properties, ['Event Type'], input.eventType)
   setTextProperty(schema, properties, ['Entity ID'], input.entityId ?? '')
   setDateProperty(schema, properties, ['Received At'], nowIso)
@@ -324,7 +351,9 @@ function buildClaimProperties(
   return properties
 }
 
-function buildCompleteProperties(schema: LedgerSchema): Record<string, unknown> {
+function buildCompleteProperties(
+  schema: LedgerSchema,
+): Record<string, unknown> {
   const nowIso = new Date().toISOString()
   const properties: Record<string, unknown> = {}
   setStateProperty(schema, properties, 'completed')
@@ -334,7 +363,10 @@ function buildCompleteProperties(schema: LedgerSchema): Record<string, unknown> 
   return properties
 }
 
-function buildFailedProperties(schema: LedgerSchema, message: string): Record<string, unknown> {
+function buildFailedProperties(
+  schema: LedgerSchema,
+  message: string,
+): Record<string, unknown> {
   const properties: Record<string, unknown> = {}
   setStateProperty(schema, properties, 'failed')
   setCheckboxProperty(schema, properties, ['Processed'], false)
@@ -437,7 +469,8 @@ export async function claimWebhookEvent(input: {
       return { action: 'skip_duplicate', reason: 'Event currently processing' }
     }
 
-    const attempts = propertyToNumber(getProperty(canonical.properties, ['Attempts'])) ?? 0
+    const attempts =
+      propertyToNumber(getProperty(canonical.properties, ['Attempts'])) ?? 0
     await notionUpdatePage(canonical.id, {
       properties: buildClaimProperties(schema, {
         eventId,
@@ -475,7 +508,10 @@ export async function completeWebhookEventClaim(ledgerPageId: string) {
   })
 }
 
-export async function failWebhookEventClaim(ledgerPageId: string, error: string) {
+export async function failWebhookEventClaim(
+  ledgerPageId: string,
+  error: string,
+) {
   const dataSourceId = getOptionalNotionWebhookEventsDataSourceId()
   if (!dataSourceId || !ledgerPageId) {
     return
@@ -507,7 +543,10 @@ export async function runWebhookLedgerWatchdog(options?: {
     typeof options?.staleMinutes === 'number' && options.staleMinutes > 0
       ? options.staleMinutes
       : 15
-  const limit = typeof options?.limit === 'number' && options.limit > 0 ? options.limit : 100
+  const limit =
+    typeof options?.limit === 'number' && options.limit > 0
+      ? options.limit
+      : 100
   const staleMs = staleMinutes * 60 * 1000
   const now = Date.now()
   const errors: Array<{ ledgerPageId: string; message: string }> = []
@@ -519,7 +558,8 @@ export async function runWebhookLedgerWatchdog(options?: {
       if (state !== 'processing') {
         return false
       }
-      const processed = propertyToBoolean(getProperty(row.properties, ['Processed'])) ?? false
+      const processed =
+        propertyToBoolean(getProperty(row.properties, ['Processed'])) ?? false
       if (processed) {
         return false
       }
@@ -553,7 +593,8 @@ export async function runWebhookLedgerWatchdog(options?: {
     } catch (error) {
       errors.push({
         ledgerPageId: row.id,
-        message: error instanceof Error ? error.message : 'Unknown watchdog error',
+        message:
+          error instanceof Error ? error.message : 'Unknown watchdog error',
       })
     }
   }
