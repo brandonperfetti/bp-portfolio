@@ -43,10 +43,9 @@ export async function POST(request: Request) {
         if (!syncResult.ok) {
           return {
             ok: false,
-            error: syncResult.errors
-              .map((entry) => entry.message)
-              .join('; ')
-              .slice(0, MAX_ERROR_MESSAGE_LENGTH),
+            error: truncateErrorMessage(
+              syncResult.errors.map((entry) => entry.message).join('; '),
+            ),
           }
         }
         return { ok: true }
