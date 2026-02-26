@@ -1,5 +1,4 @@
 import { type Metadata } from 'next'
-import { Suspense } from 'react'
 
 import { ArticlesExplorer } from '@/components/articles/ArticlesExplorer'
 import { NotFoundState } from '@/components/cms/NotFoundState'
@@ -42,13 +41,7 @@ export default async function ArticlesIndex() {
           description="No CMS article records are currently publish-safe."
         />
       ) : (
-        <Suspense
-          fallback={
-            <div className="text-sm text-zinc-500">Loading articles...</div>
-          }
-        >
-          <ArticlesExplorer articles={articles} />
-        </Suspense>
+        <ArticlesExplorer articles={articles} />
       )}
     </SimpleLayout>
   )
