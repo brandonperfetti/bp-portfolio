@@ -356,24 +356,40 @@ export function mapNotionPageContent(page: NotionPage): CmsPageContent | null {
     return null
   }
 
-  const routeKeyRaw = propertyToText(getProperty(page.properties, ['Route Key', 'Route', 'Path']))
+  const routeKeyRaw = propertyToText(
+    getProperty(page.properties, ['Route Key', 'Route', 'Path']),
+  )
   const routeKey = normalizeRouteKey(routeKeyRaw)
 
   const slugRaw = propertyToText(getProperty(page.properties, ['Slug', 'Name']))
   const slug = toSlug(slugRaw || routeKey.replace(/^\//, '') || page.id)
 
-  const title = propertyToText(getProperty(page.properties, ['Title', 'Page Title', 'Name']))
+  const title = propertyToText(
+    getProperty(page.properties, ['Title', 'Page Title', 'Name']),
+  )
   if (!routeKey || !title) {
     return null
   }
 
   const homeImages = [
-    propertyToText(getProperty(page.properties, ['Featured Image 1', 'Home Image 1'])),
-    propertyToText(getProperty(page.properties, ['Featured Image 2', 'Home Image 2'])),
-    propertyToText(getProperty(page.properties, ['Featured Image 3', 'Home Image 3'])),
-    propertyToText(getProperty(page.properties, ['Featured Image 4', 'Home Image 4'])),
-    propertyToText(getProperty(page.properties, ['Featured Image 5', 'Home Image 5'])),
-    ...propertyToFileUrls(getProperty(page.properties, ['Gallery Images', 'Home Images'])),
+    propertyToText(
+      getProperty(page.properties, ['Featured Image 1', 'Home Image 1']),
+    ),
+    propertyToText(
+      getProperty(page.properties, ['Featured Image 2', 'Home Image 2']),
+    ),
+    propertyToText(
+      getProperty(page.properties, ['Featured Image 3', 'Home Image 3']),
+    ),
+    propertyToText(
+      getProperty(page.properties, ['Featured Image 4', 'Home Image 4']),
+    ),
+    propertyToText(
+      getProperty(page.properties, ['Featured Image 5', 'Home Image 5']),
+    ),
+    ...propertyToFileUrls(
+      getProperty(page.properties, ['Gallery Images', 'Home Images']),
+    ),
   ].filter(Boolean)
 
   return {
@@ -381,14 +397,23 @@ export function mapNotionPageContent(page: NotionPage): CmsPageContent | null {
     routeKey,
     slug,
     title,
-    subtitle: propertyToText(getProperty(page.properties, ['Subtitle', 'Summary'])) || undefined,
-    seoTitle: propertyToText(getProperty(page.properties, ['SEO Title'])) || undefined,
-    seoDescription:
-      propertyToText(getProperty(page.properties, ['SEO Description', 'Meta Description'])) ||
+    subtitle:
+      propertyToText(getProperty(page.properties, ['Subtitle', 'Summary'])) ||
       undefined,
+    seoTitle:
+      propertyToText(getProperty(page.properties, ['SEO Title'])) || undefined,
+    seoDescription:
+      propertyToText(
+        getProperty(page.properties, ['SEO Description', 'Meta Description']),
+      ) || undefined,
     heroImage:
-      propertyToText(getProperty(page.properties, ['Hero Image', 'Hero Image URL'])) || undefined,
-    ogImage: propertyToText(getProperty(page.properties, ['OG Image', 'Open Graph Image'])) || undefined,
+      propertyToText(
+        getProperty(page.properties, ['Hero Image', 'Hero Image URL']),
+      ) || undefined,
+    ogImage:
+      propertyToText(
+        getProperty(page.properties, ['OG Image', 'Open Graph Image']),
+      ) || undefined,
     homeImages: homeImages.length > 0 ? homeImages : undefined,
     updatedAt: page.last_edited_time,
   }
