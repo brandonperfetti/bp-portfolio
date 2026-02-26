@@ -71,14 +71,21 @@ export function UseWithAiMenu({ markdown }: { markdown: string }) {
                     : 'text-zinc-700 dark:text-zinc-200'
                 }`}
                 onClick={async () => {
-                  await copyText(markdown)
-                  setCopied(true)
-                  if (timeoutRef.current) {
-                    clearTimeout(timeoutRef.current)
+                  try {
+                    await copyText(markdown)
+                    setCopied(true)
+                    if (timeoutRef.current) {
+                      clearTimeout(timeoutRef.current)
+                    }
+                    timeoutRef.current = setTimeout(() => {
+                      setCopied(false)
+                    }, 1400)
+                  } catch (error) {
+                    console.error('[UseWithAiMenu] copy failed', {
+                      error:
+                        error instanceof Error ? error.message : String(error),
+                    })
                   }
-                  timeoutRef.current = setTimeout(() => {
-                    setCopied(false)
-                  }, 1400)
                 }}
               >
                 <ClipboardDocumentIcon className="h-4 w-4" />
