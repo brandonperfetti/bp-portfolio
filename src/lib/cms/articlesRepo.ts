@@ -2,15 +2,18 @@ import { unstable_cache } from 'next/cache'
 
 import { getCmsDefaultAuthor } from '@/lib/cms/authorsRepo'
 import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
-import { getCmsProvider } from '@/lib/cms/provider'
-import { getNotionBlockTree, flattenBlockText } from '@/lib/cms/notion/blocks'
+import { flattenBlockText, getNotionBlockTree } from '@/lib/cms/notion/blocks'
+import { notionRequest } from '@/lib/cms/notion/client'
 import { getNotionArticlesDataSourceId } from '@/lib/cms/notion/config'
 import type { NotionPage } from '@/lib/cms/notion/contracts'
-import { mapNotionArticleSummary, mapNotionAuthorProfile } from '@/lib/cms/notion/mapper'
-import { notionRequest } from '@/lib/cms/notion/client'
+import {
+	mapNotionArticleSummary,
+	mapNotionAuthorProfile,
+} from '@/lib/cms/notion/mapper'
 import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
 import { getProperty, propertyToRelationIds } from '@/lib/cms/notion/property'
 import { mapWithConcurrency } from '@/lib/cms/notion/utils'
+import { getCmsProvider } from '@/lib/cms/provider'
 import type { CmsArticleDetail, CmsArticleSummary } from '@/lib/cms/types'
 
 export type CmsArticleDetailResult = CmsArticleDetail & {
