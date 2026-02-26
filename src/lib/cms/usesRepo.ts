@@ -1,10 +1,11 @@
 import { unstable_cache } from 'next/cache'
 
 import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
-import { getCmsProvider } from '@/lib/cms/provider'
 import { getNotionUsesDataSourceId } from '@/lib/cms/notion/config'
+import { NotionConfigError, NotionHttpError } from '@/lib/cms/notion/errors'
 import { mapNotionEntity } from '@/lib/cms/notion/mapper'
 import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
+import { getCmsProvider } from '@/lib/cms/provider'
 import type { CmsEntityItem, CmsUseSection } from '@/lib/cms/types'
 
 const getCachedNotionUses = unstable_cache(
@@ -53,6 +54,23 @@ export async function getCmsUses() {
     return null
   }
 
-  const items = await getCachedNotionUses()
-  return groupUses(items)
+  try {
+    const items = await getCachedNotionUses()
+    return groupUses(items)
+  } catch (error) {
+    if (
+      error instanceof NotionConfigError ||
+      error instanceof NotionHttpError
+    ) {
+      console.warn(
+        '[cms:notion] uses unavailable, falling back to local content',
+        {
+          error: error.message,
+        },
+      )
+      return null
+    }
+
+    throw error
+  }
 }
