@@ -1,6 +1,8 @@
+import { unstable_cache } from 'next/cache'
 import { NextResponse } from 'next/server'
 
 import { getSearchArticles } from '@/lib/articles'
+import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
 
 type SearchPayloadItem = {
   title: string
@@ -10,24 +12,37 @@ type SearchPayloadItem = {
   searchText: string
 }
 
-let lastGoodSearchPayload: SearchPayloadItem[] | null = null
+async function buildSearchPayload(): Promise<SearchPayloadItem[]> {
+  const articles = await getSearchArticles()
+  return articles.map((article) => ({
+    title: article.title,
+    description: article.description,
+    date: article.date,
+    href: `/articles/${article.slug}`,
+    searchText: article.searchText,
+  }))
+}
+
+const getPersistedSearchPayload = unstable_cache(
+  async () => buildSearchPayload(),
+  ['api', 'search', 'stale-fallback'],
+  {
+    revalidate: CMS_REVALIDATE.search,
+    tags: [CMS_TAGS.articles],
+  },
+)
 
 export async function GET() {
   try {
-    const articles = await getSearchArticles()
-    const payload = articles.map((article) => ({
-      title: article.title,
-      description: article.description,
-      date: article.date,
-      href: `/articles/${article.slug}`,
-      searchText: article.searchText,
-    }))
-
-    lastGoodSearchPayload = payload
+    const payload = await buildSearchPayload()
     return NextResponse.json(payload)
   } catch (error) {
-    if (lastGoodSearchPayload) {
-      return NextResponse.json(lastGoodSearchPayload, {
+    const stalePayload = await getPersistedSearchPayload().catch(
+      () => null as SearchPayloadItem[] | null,
+    )
+
+    if (stalePayload) {
+      return NextResponse.json(stalePayload, {
         headers: {
           'x-search-stale': '1',
         },
