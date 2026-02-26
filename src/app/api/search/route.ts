@@ -12,6 +12,9 @@ type SearchPayloadItem = {
   searchText: string
 }
 
+// Process-local last-known-good payload used only as a best-effort emergency fallback.
+let lastSuccessfulPayload: SearchPayloadItem[] | null = null
+
 async function buildSearchPayload(): Promise<SearchPayloadItem[]> {
   const articles = await getSearchArticles()
   return articles.map((article) => ({
@@ -35,11 +38,10 @@ const getPersistedSearchPayload = unstable_cache(
 export async function GET() {
   try {
     const payload = await getPersistedSearchPayload()
+    lastSuccessfulPayload = payload
     return NextResponse.json(payload)
   } catch (error) {
-    const stalePayload = await getPersistedSearchPayload().catch(
-      () => null as SearchPayloadItem[] | null,
-    )
+    const stalePayload = lastSuccessfulPayload
 
     if (stalePayload) {
       return NextResponse.json(stalePayload, {
