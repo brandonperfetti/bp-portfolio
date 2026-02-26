@@ -336,11 +336,16 @@ export function mapNotionWorkHistory(
 }
 
 function normalizeRouteKey(value: string) {
-  if (!value || value === '/') {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  if (trimmed === '/') {
     return '/'
   }
 
-  const withLeadingSlash = value.startsWith('/') ? value : `/${value}`
+  const withLeadingSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
   return withLeadingSlash.replace(/\/+$/, '')
 }
 
