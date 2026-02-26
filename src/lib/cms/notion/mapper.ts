@@ -466,19 +466,27 @@ export function mapSiteSettings(page: NotionPage): CmsSiteSettings | null {
     propertyToText(getProperty(page.properties, ['Site Name', 'Name'])) ||
     'Brandon Perfetti'
   const siteTitle =
-    propertyToText(getProperty(page.properties, ['Site Title', 'Default Title'])) ||
-    'Brandon Perfetti - Product & Project Manager and Software Engineer'
+    propertyToText(
+      getProperty(page.properties, ['Site Title', 'Default Title']),
+    ) || 'Brandon Perfetti - Product & Project Manager and Software Engineer'
   const siteDescription =
-    propertyToText(getProperty(page.properties, ['Site Description', 'Description'])) ||
+    propertyToText(
+      getProperty(page.properties, ['Site Description', 'Description']),
+    ) ||
     'I’m Brandon, a product and project manager plus software engineer based in Orange County, California.'
 
   const canonicalUrl =
-    propertyToText(getProperty(page.properties, ['Canonical URL', 'Site URL'])) ||
-    getSiteUrl()
+    propertyToText(
+      getProperty(page.properties, ['Canonical URL', 'Site URL']),
+    ) || getSiteUrl()
 
   const openGraphImage =
-    propertyToText(getProperty(page.properties, ['Open Graph Image URL', 'OG Image URL'])) ||
-    propertyToFileUrl(getProperty(page.properties, ['Open Graph Image', 'OG Image'])) ||
+    propertyToText(
+      getProperty(page.properties, ['Open Graph Image URL', 'OG Image URL']),
+    ) ||
+    propertyToFileUrl(
+      getProperty(page.properties, ['Open Graph Image', 'OG Image']),
+    ) ||
     undefined
 
   const twitterCardRaw = propertyToText(
