@@ -55,7 +55,10 @@ function withCloudinaryTransform(url: string, transform: string) {
   }
 }
 
-export function getOptimizedImageUrl(url: string, options: CloudinaryOptions = {}) {
+export function getOptimizedImageUrl(
+  url: string,
+  options: CloudinaryOptions = {},
+) {
   if (!url.startsWith('https://res.cloudinary.com/')) {
     return url
   }
