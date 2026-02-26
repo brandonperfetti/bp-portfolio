@@ -146,25 +146,38 @@ export function propertyToDate(property: NotionProperty | undefined): string {
   return ''
 }
 
-export function propertyToMultiSelect(property: NotionProperty | undefined): string[] {
+export function propertyToMultiSelect(
+  property: NotionProperty | undefined,
+): string[] {
   if (!property || property.type !== 'multi_select') {
     return []
   }
 
-  return property.multi_select
-    ?.map((value) => value.name?.trim())
-    .filter((value): value is string => Boolean(value)) ?? []
+  return (
+    property.multi_select
+      ?.map((value) => value.name?.trim())
+      .filter((value): value is string => Boolean(value)) ?? []
+  )
 }
 
-export function propertyToRelationIds(property: NotionProperty | undefined): string[] {
+export function propertyToRelationIds(
+  property: NotionProperty | undefined,
+): string[] {
   if (!property || property.type !== 'relation') {
     return []
   }
 
-  return property.relation?.map((entry) => entry.id).filter(Boolean) ?? []
+  return (
+    property.relation
+      ?.map((entry) => entry.id?.trim())
+      .filter((id): id is string => typeof id === 'string' && id.length > 0) ??
+    []
+  )
 }
 
-export function propertyToFileUrl(property: NotionProperty | undefined): string {
+export function propertyToFileUrl(
+  property: NotionProperty | undefined,
+): string {
   if (!property || property.type !== 'files') {
     return ''
   }
