@@ -3,6 +3,10 @@ export async function mapWithConcurrency<T, R>(
   worker: (item: T) => Promise<R>,
   concurrency = 4,
 ): Promise<R[]> {
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    throw new RangeError('concurrency must be an integer >= 1')
+  }
+
   const results: R[] = []
   let index = 0
 
@@ -14,8 +18,9 @@ export async function mapWithConcurrency<T, R>(
     }
   }
 
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () =>
-    runWorker(),
+  const workers = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    () => runWorker(),
   )
 
   await Promise.all(workers)
