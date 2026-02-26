@@ -81,7 +81,15 @@ export function HeaderSearch() {
     )
 
     fetch('/api/search', { signal: controller.signal })
-      .then((response) => response.json())
+      .then(async (response) => {
+        if (!response.ok) {
+          const body = await response.text().catch(() => '')
+          throw new Error(
+            `Search index request failed (${response.status})${body ? `: ${body}` : ''}`,
+          )
+        }
+        return response.json() as Promise<SearchItem[]>
+      })
       .then((data: SearchItem[]) => {
         if (controller.signal.aborted) {
           return
