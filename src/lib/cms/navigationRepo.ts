@@ -1,10 +1,11 @@
 import { unstable_cache } from 'next/cache'
 
 import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
-import { getCmsProvider } from '@/lib/cms/provider'
 import { getNotionRouteRegistryDataSourceId } from '@/lib/cms/notion/config'
+import { NotionConfigError, NotionHttpError } from '@/lib/cms/notion/errors'
 import { mapNavigationItem } from '@/lib/cms/notion/mapper'
 import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
+import { getCmsProvider } from '@/lib/cms/provider'
 import type { CmsNavigationItem } from '@/lib/cms/types'
 
 const DEFAULT_NAVIGATION: CmsNavigationItem[] = [
@@ -45,5 +46,16 @@ export async function getCmsNavigation() {
     return DEFAULT_NAVIGATION
   }
 
-  return getCachedNotionNavigation()
+  try {
+    return await getCachedNotionNavigation()
+  } catch (error) {
+    if (error instanceof NotionConfigError || error instanceof NotionHttpError) {
+      console.warn('[cms:notion] navigation unavailable, using default navigation', {
+        error: error.message,
+      })
+      return DEFAULT_NAVIGATION
+    }
+
+    throw error
+  }
 }
