@@ -371,22 +371,43 @@ export function mapNotionPageContent(page: NotionPage): CmsPageContent | null {
     return null
   }
 
+  const featuredImage1 = getProperty(page.properties, [
+    'Featured Image 1',
+    'Home Image 1',
+  ])
+  const featuredImage2 = getProperty(page.properties, [
+    'Featured Image 2',
+    'Home Image 2',
+  ])
+  const featuredImage3 = getProperty(page.properties, [
+    'Featured Image 3',
+    'Home Image 3',
+  ])
+  const featuredImage4 = getProperty(page.properties, [
+    'Featured Image 4',
+    'Home Image 4',
+  ])
+  const featuredImage5 = getProperty(page.properties, [
+    'Featured Image 5',
+    'Home Image 5',
+  ])
+  const heroImageProperty = getProperty(page.properties, [
+    'Hero Image',
+    'Hero Image URL',
+  ])
+  const ogImageProperty = getProperty(page.properties, [
+    'OG Image',
+    'Open Graph Image',
+    'OG Image URL',
+    'Open Graph Image URL',
+  ])
+
   const homeImages = [
-    propertyToText(
-      getProperty(page.properties, ['Featured Image 1', 'Home Image 1']),
-    ),
-    propertyToText(
-      getProperty(page.properties, ['Featured Image 2', 'Home Image 2']),
-    ),
-    propertyToText(
-      getProperty(page.properties, ['Featured Image 3', 'Home Image 3']),
-    ),
-    propertyToText(
-      getProperty(page.properties, ['Featured Image 4', 'Home Image 4']),
-    ),
-    propertyToText(
-      getProperty(page.properties, ['Featured Image 5', 'Home Image 5']),
-    ),
+    propertyToText(featuredImage1) || propertyToFileUrl(featuredImage1),
+    propertyToText(featuredImage2) || propertyToFileUrl(featuredImage2),
+    propertyToText(featuredImage3) || propertyToFileUrl(featuredImage3),
+    propertyToText(featuredImage4) || propertyToFileUrl(featuredImage4),
+    propertyToText(featuredImage5) || propertyToFileUrl(featuredImage5),
     ...propertyToFileUrls(
       getProperty(page.properties, ['Gallery Images', 'Home Images']),
     ),
@@ -407,13 +428,13 @@ export function mapNotionPageContent(page: NotionPage): CmsPageContent | null {
         getProperty(page.properties, ['SEO Description', 'Meta Description']),
       ) || undefined,
     heroImage:
-      propertyToText(
-        getProperty(page.properties, ['Hero Image', 'Hero Image URL']),
-      ) || undefined,
+      propertyToText(heroImageProperty) ||
+      propertyToFileUrl(heroImageProperty) ||
+      undefined,
     ogImage:
-      propertyToText(
-        getProperty(page.properties, ['OG Image', 'Open Graph Image']),
-      ) || undefined,
+      propertyToText(ogImageProperty) ||
+      propertyToFileUrl(ogImageProperty) ||
+      undefined,
     homeImages: homeImages.length > 0 ? homeImages : undefined,
     updatedAt: page.last_edited_time,
   }
