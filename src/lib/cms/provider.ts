@@ -1,7 +1,7 @@
 import type { CmsProvider } from '@/lib/cms/types'
 
 function normalizeProvider(value: string | undefined): CmsProvider {
-  if (value === 'notion') {
+  if (value?.trim().toLowerCase() === 'notion') {
     return 'notion'
   }
 
