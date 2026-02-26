@@ -16,7 +16,25 @@ type QueueState = {
   failures: ProjectionSyncFailure[]
 }
 
-const QUEUE_FILE = path.join(process.cwd(), '.cache', 'notion-sync-failures.json')
+const QUEUE_FILE = path.join(
+  process.cwd(),
+  '.cache',
+  'notion-sync-failures.json',
+)
+let queueMutationLock: Promise<void> = Promise.resolve()
+
+/**
+ * Serializes queue mutations within a single Node.js process.
+ * Note: this is not a cross-process/distributed lock.
+ */
+function withQueueMutationLock<T>(operation: () => Promise<T>): Promise<T> {
+  const run = queueMutationLock.then(operation, operation)
+  queueMutationLock = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
 
 async function readQueue(): Promise<QueueState> {
   try {
