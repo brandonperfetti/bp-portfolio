@@ -1,12 +1,12 @@
-import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
 
 import { ArticleLayout } from '@/components/ArticleLayout'
 import { ArticleBody } from '@/components/cms/ArticleBody'
 import { ArticleMeta } from '@/components/cms/ArticleMeta'
 import { SyncErrorState } from '@/components/cms/SyncErrorState'
 import { UseWithAiMenu } from '@/components/cms/UseWithAiMenu'
-import { getArticleBySlug, getAllArticles } from '@/lib/articles'
+import { getAllArticles, getArticleBySlug } from '@/lib/articles'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
 import { getSiteUrl } from '@/lib/site'
 
@@ -25,7 +25,9 @@ export async function generateStaticParams() {
   return articles.map((article) => ({ slug: article.slug }))
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
   const { slug } = await params
   const article = await getArticleBySlug(slug)
 
@@ -40,10 +42,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const siteUrl = getSiteUrl()
-  const canonical =
-    article.canonicalUrl?.startsWith('http')
-      ? article.canonicalUrl
-      : `${siteUrl}/articles/${article.slug}`
+  const canonical = article.canonicalUrl?.startsWith('http')
+    ? article.canonicalUrl
+    : `${siteUrl}/articles/${article.slug}`
 
   const image = article.image
     ? article.image.startsWith('http')
@@ -55,7 +56,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: article.title,
     description: article.description,
     keywords: Array.from(
-      new Set([...(article.keywords ?? []), ...(article.topics ?? []), ...(article.tech ?? [])]),
+      new Set([
+        ...(article.keywords ?? []),
+        ...(article.topics ?? []),
+        ...(article.tech ?? []),
+      ]),
     ),
     alternates: {
       canonical,
@@ -91,21 +96,28 @@ export default async function ArticlePage({ params }: PageProps) {
     notFound()
   }
 
+  const bodyBlocks = Array.isArray(article.bodyBlocks) ? article.bodyBlocks : []
+  const hasBodyBlocks = bodyBlocks.length > 0
+
   return (
-    <ArticleLayout article={{ title: article.title, date: article.date, image: article.image }}>
+    <ArticleLayout
+      article={{
+        title: article.title,
+        date: article.date,
+        image: article.image,
+      }}
+    >
       <ArticleMeta
         author={article.author}
-        actions={<UseWithAiMenu markdown={articleBlocksToMarkdown(article.bodyBlocks)} />}
+        actions={
+          <UseWithAiMenu markdown={articleBlocksToMarkdown(bodyBlocks)} />
+        }
         readingTimeMinutes={article.readingTimeMinutes}
         category={article.category?.title}
         topics={article.topics}
         tech={article.tech}
       />
-      {article.bodyBlocks.length ? (
-        <ArticleBody blocks={article.bodyBlocks} />
-      ) : (
-        <SyncErrorState />
-      )}
+      {hasBodyBlocks ? <ArticleBody blocks={bodyBlocks} /> : <SyncErrorState />}
     </ArticleLayout>
   )
 }
