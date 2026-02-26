@@ -341,7 +341,63 @@ function buildFailedProperties(schema: LedgerSchema, message: string): Record<st
   return properties
 }
 
-async function listMatchingEventRows(dataSourceId: string, eventId: string) {
+function buildEventIdFilters(
+  schema: LedgerSchema,
+  eventId: string,
+): Array<Record<string, unknown>> {
+  const filters: Array<Record<string, unknown>> = []
+  const seen = new Set<string>()
+
+  const candidates = [
+    'Event ID',
+    'Event Id',
+    'Webhook Event ID',
+    schema.titlePropertyName,
+  ]
+
+  for (const name of candidates) {
+    if (!name || seen.has(name)) {
+      continue
+    }
+    seen.add(name)
+
+    const type = schema.propertyTypesByName.get(name)
+    if (type === 'rich_text') {
+      filters.push({ property: name, rich_text: { equals: eventId } })
+      continue
+    }
+    if (type === 'title') {
+      filters.push({ property: name, title: { equals: eventId } })
+    }
+  }
+
+  return filters
+}
+
+async function listMatchingEventRows(
+  dataSourceId: string,
+  eventId: string,
+  schema: LedgerSchema,
+) {
+  const filters = buildEventIdFilters(schema, eventId)
+  if (filters.length) {
+    try {
+      const rows = await queryAllDataSourcePages(dataSourceId, {
+        filter: filters.length === 1 ? filters[0] : { or: filters },
+      })
+      return rows.filter((row) => getEventIdFromPage(row) === eventId)
+    } catch (error) {
+      console.warn(
+        '[cms:notion:webhook] falling back to full event ledger scan',
+        {
+          dataSourceId,
+          eventId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      )
+    }
+  }
+
   const rows = await queryAllDataSourcePages(dataSourceId, {})
   return rows.filter((row) => getEventIdFromPage(row) === eventId)
 }
@@ -364,11 +420,13 @@ export async function claimWebhookEvent(input: {
   const schema = await ensureLedgerSchema(dataSourceId)
   const now = new Date()
 
-  const matches = await listMatchingEventRows(dataSourceId, eventId)
+  const matches = await listMatchingEventRows(dataSourceId, eventId, schema)
   if (matches.length > 0) {
     const canonical = pickCanonicalMatch(matches)
 
-    const processed = propertyToBoolean(getProperty(canonical.properties, ['Processed'])) ?? false
+    const processed =
+      propertyToBoolean(getProperty(canonical.properties, ['Processed'])) ??
+      false
     if (processed || getEventState(canonical) === 'completed') {
       return { action: 'skip_processed', reason: 'Event already completed' }
     }
