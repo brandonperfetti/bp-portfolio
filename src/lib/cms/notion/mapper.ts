@@ -220,7 +220,9 @@ export function mapNotionEntity(page: NotionPage): CmsEntityItem | null {
   const name = propertyToText(
     getProperty(page.properties, ['Name', 'Title', 'Item']),
   )
-  const slug = toSlug(propertyToText(getProperty(page.properties, ['Slug'])) || name)
+  const slug = toSlug(
+    propertyToText(getProperty(page.properties, ['Slug'])) || name,
+  )
   const description = propertyToText(
     getProperty(page.properties, ['Description', 'Summary']),
   )
@@ -245,7 +247,11 @@ export function mapNotionEntity(page: NotionPage): CmsEntityItem | null {
 
   const linkLabel =
     propertyToText(
-      getProperty(page.properties, ['Reference Label', 'Display Link', 'Link Label']),
+      getProperty(page.properties, [
+        'Reference Label',
+        'Display Link',
+        'Link Label',
+      ]),
     ) || linkHref.replace(/^https?:\/\//, '')
 
   const logo =
@@ -263,7 +269,9 @@ export function mapNotionEntity(page: NotionPage): CmsEntityItem | null {
           label: normalizeLinkLabel(linkLabel, linkHref),
         }
       : undefined,
-    category: propertyToText(getProperty(page.properties, ['Category', 'Section'])) || undefined,
+    category:
+      propertyToText(getProperty(page.properties, ['Category', 'Section'])) ||
+      undefined,
     order:
       propertyToNumber(getProperty(page.properties, ['Sort Order', 'Order'])) ??
       Number.MAX_SAFE_INTEGER,
