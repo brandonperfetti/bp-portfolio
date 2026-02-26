@@ -67,7 +67,10 @@ const getCachedNotionArticleSummaries = unstable_cache(
     const authorIds = Array.from(
       new Set(mappedByPage.map((item) => item.authorId).filter(Boolean)),
     ) as string[]
-    const authorsById = new Map<string, NonNullable<ReturnType<typeof mapNotionAuthorProfile>>>()
+    const authorsById = new Map<
+      string,
+      NonNullable<ReturnType<typeof mapNotionAuthorProfile>>
+    >()
 
     await mapWithConcurrency(
       authorIds,
@@ -110,7 +113,9 @@ const getCachedNotionArticleSummaries = unstable_cache(
   },
 )
 
-async function getNotionArticleDetailRaw(slug: string): Promise<CmsArticleDetailResult | null> {
+async function getNotionArticleDetailRaw(
+  slug: string,
+): Promise<CmsArticleDetailResult | null> {
   const summaries = await getCachedNotionArticleSummaries()
   const summary = summaries.find((article) => article.slug === slug)
 
@@ -147,7 +152,9 @@ export async function getAllCmsArticleSummaries() {
   return getCachedLocalArticles()
 }
 
-export async function getCmsArticleBySlug(slug: string): Promise<CmsArticleDetailResult | null> {
+export async function getCmsArticleBySlug(
+  slug: string,
+): Promise<CmsArticleDetailResult | null> {
   if (getCmsProvider() === 'notion') {
     return getCachedNotionArticleDetail(slug)
   }
