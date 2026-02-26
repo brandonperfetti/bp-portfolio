@@ -136,9 +136,9 @@ function BlockNode({ block }: { block: CmsArticleBlock }) {
       )
     case 'callout':
       return (
-        <blockquote>
+        <div className="rounded-xl border border-teal-200/60 bg-teal-50/50 px-4 py-3 text-zinc-800 dark:border-teal-900/50 dark:bg-teal-950/20 dark:text-zinc-100">
           <RichText values={block.richText} />
-        </blockquote>
+        </div>
       )
     case 'to_do':
       return (
