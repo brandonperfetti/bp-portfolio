@@ -63,6 +63,17 @@ const defaultProjectsMeta: Metadata = {
     'Selected products, platforms, and client builds I have shipped or led.',
 }
 
+function slugify(value: string) {
+  const normalized = value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return normalized || 'project'
+}
+
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getCmsSiteSettings()
   const page = await getCmsPageByPath('/projects')
@@ -81,7 +92,7 @@ export default async function Projects() {
   const items = cmsProjects
     ? cmsProjects
     : projects.map((project) => ({
-        slug: project.name.toLowerCase().replace(/\s+/g, '-'),
+        slug: slugify(project.name),
         name: project.name,
         description: project.description,
         logo: project.logo,
