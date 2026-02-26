@@ -48,7 +48,7 @@ function verifySignature(payload: string, signatureHeader: string, secret: strin
   return timingSafeEqual(expectedBuffer, providedBuffer)
 }
 
-function applyEventRevalidation(eventType: string, pageId?: string) {
+function applyEventRevalidation(eventType: string) {
   if (eventType === 'comment.created' || eventType.startsWith('comment.')) {
     return
   }
@@ -74,8 +74,6 @@ function applyEventRevalidation(eventType: string, pageId?: string) {
     revalidatePath('/projects')
     revalidatePath('/tech')
     revalidatePath('/uses')
-
-    void pageId
 
     return
   }
@@ -185,7 +183,7 @@ export async function POST(request: Request) {
       timestamp: event.timestamp,
     })
 
-    applyEventRevalidation(eventType, entityId)
+    applyEventRevalidation(eventType)
 
     let ledgerPageId = ''
     if (eventId) {
