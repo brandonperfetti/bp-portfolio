@@ -575,15 +575,17 @@ export async function syncPortfolioArticleProjection(options?: {
 
   if (options?.pageId) {
     const sourceMissing = !sourceIds.has(options.pageId)
-    if (sourceMissing) {
+    const sourceMappable = mappedById.has(options.pageId)
+
+    if (sourceMissing || !sourceMappable) {
       const existing = targetIndex.bySourceId.get(options.pageId)
       if (existing) {
         try {
+          const reason = sourceMissing
+            ? 'Source article no longer exists or is inaccessible; projection archived pending cleanup.'
+            : 'Source article exists but is no longer eligible/mappable for projection; projection archived pending cleanup.'
           const archivedProperties = pickKnownProperties(
-            buildArchivedProjectionProperties(
-              nowIso,
-              'Source article no longer exists or is inaccessible; projection archived pending cleanup.',
-            ),
+            buildArchivedProjectionProperties(nowIso, reason),
             knownTargetPropertyNames,
           )
           await notionUpdatePage(existing.id, {
