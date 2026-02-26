@@ -143,16 +143,18 @@ function BlockNode({ block }: { block: CmsArticleBlock }) {
       )
     case 'to_do':
       return (
-        <p>
-          <input
-            checked={Boolean(block.checked)}
-            readOnly
-            type="checkbox"
-            className="mr-2"
-          />
-          <RichText values={block.richText} />
+        <>
+          <p>
+            <input
+              checked={Boolean(block.checked)}
+              readOnly
+              type="checkbox"
+              className="mr-2"
+            />
+            <RichText values={block.richText} />
+          </p>
           {block.children?.length ? renderBlockNodes(block.children) : null}
-        </p>
+        </>
       )
     case 'code': {
       const language = (block.language || 'plaintext').trim().toLowerCase()
@@ -211,10 +213,12 @@ function BlockNode({ block }: { block: CmsArticleBlock }) {
       return <hr />
     default:
       return block.richText?.length ? (
-        <p>
-          <RichText values={block.richText} />
+        <>
+          <p>
+            <RichText values={block.richText} />
+          </p>
           {block.children?.length ? renderBlockNodes(block.children) : null}
-        </p>
+        </>
       ) : block.children?.length ? (
         <>{renderBlockNodes(block.children)}</>
       ) : null
