@@ -137,22 +137,38 @@ function sourceToProjectionStatus(sourceStatus: string): ProjectionStatus {
 
 function mapSourcePage(page: NotionPage): SourceArticle | null {
   const title = propertyToText(getProperty(page.properties, ['Name', 'Title']))
-  const slug = toSlug(propertyToText(getProperty(page.properties, ['Slug'])) || title)
-  const metaDescription = propertyToText(getProperty(page.properties, ['Meta Description']))
-  const coverImageUrl = propertyToText(getProperty(page.properties, ['Cover Image URL']))
-  const publishDate = propertyToDate(getProperty(page.properties, ['Published Date', 'Publish Date']))
+  const slug = toSlug(
+    propertyToText(getProperty(page.properties, ['Slug'])) || title,
+  )
+  const metaDescription = propertyToText(
+    getProperty(page.properties, ['Meta Description']),
+  )
+  const coverImageUrl = propertyToText(
+    getProperty(page.properties, ['Cover Image URL']),
+  )
+  const publishDate = propertyToDate(
+    getProperty(page.properties, ['Published Date', 'Publish Date']),
+  )
   const liveUrl = propertyToText(getProperty(page.properties, ['Live URL']))
-  const keywords = propertyToMultiSelect(getProperty(page.properties, ['Keywords']))
+  const keywords = propertyToMultiSelect(
+    getProperty(page.properties, ['Keywords']),
+  )
   const topics = propertyToMultiSelect(
     getProperty(page.properties, ['Topics/Tags', 'Topics', 'Tags']),
   )
   const tech = propertyToMultiSelect(
     getProperty(page.properties, ['Tech', 'Tech Stack', 'Technologies']),
   )
-  const contentType = propertyToText(getProperty(page.properties, ['Content Type']))
-  const sourceStatus = propertyToText(getProperty(page.properties, ['Content Status', 'Status']))
+  const contentType = propertyToText(
+    getProperty(page.properties, ['Content Type']),
+  )
+  const sourceStatus = propertyToText(
+    getProperty(page.properties, ['Content Status', 'Status']),
+  )
   const projectionStatus = sourceToProjectionStatus(sourceStatus)
-  const articleType = propertyToText(getProperty(page.properties, ['Article Type', 'Mode']))
+  const articleType = propertyToText(
+    getProperty(page.properties, ['Article Type', 'Mode']),
+  )
   const aiCopyeditStatus = propertyToText(
     getProperty(page.properties, ['AI Copyedit Status', 'AI Copyedit']),
   )
@@ -160,10 +176,15 @@ function mapSourcePage(page: NotionPage): SourceArticle | null {
     getProperty(page.properties, ['Logic Review Status', 'Logic Review']),
   )
   const tutorialValidationStatus = propertyToText(
-    getProperty(page.properties, ['Tutorial Validation Status', 'Tutorial Validation']),
+    getProperty(page.properties, [
+      'Tutorial Validation Status',
+      'Tutorial Validation',
+    ]),
   )
   const reRevisionRequested =
-    propertyToBoolean(getProperty(page.properties, ['Re-Revision Requested'])) ?? false
+    propertyToBoolean(
+      getProperty(page.properties, ['Re-Revision Requested']),
+    ) ?? false
   const hasWinningCover = propertyToBoolean(
     getProperty(page.properties, ['Has Winning Cover']),
   )
@@ -253,7 +274,9 @@ function validatePublishSafeRequirements(
     Number.isFinite(source.winningCoverCount) &&
     source.winningCoverCount !== 1
   ) {
-    errors.push(`Winning Cover Count must be 1 (found ${source.winningCoverCount})`)
+    errors.push(
+      `Winning Cover Count must be 1 (found ${source.winningCoverCount})`,
+    )
   }
 
   if (normalizeStatus(source.aiCopyeditStatus) !== 'pass') {
@@ -266,11 +289,17 @@ function validatePublishSafeRequirements(
 
   if (isTutorialLike(source.articleType)) {
     if (normalizeStatus(source.tutorialValidationStatus) !== 'pass') {
-      errors.push('Tutorial Validation Status must be Pass for tutorial/hybrid articles')
+      errors.push(
+        'Tutorial Validation Status must be Pass for tutorial/hybrid articles',
+      )
     }
   } else {
     const tutorialStatus = normalizeStatus(source.tutorialValidationStatus)
-    if (tutorialStatus && tutorialStatus !== 'not applicable' && tutorialStatus !== 'pass') {
+    if (
+      tutorialStatus &&
+      tutorialStatus !== 'not applicable' &&
+      tutorialStatus !== 'pass'
+    ) {
       errors.push(
         `Tutorial Validation Status must be Not Applicable (or Pass) for non-tutorial articles`,
       )
@@ -316,7 +345,9 @@ function buildProjectionProperties(
     },
     Summary: toRichText(source.summary),
     'Meta Description': toRichText(source.metaDescription || source.summary),
-    'Cover Image URL': source.coverImageUrl ? { url: source.coverImageUrl } : { url: null },
+    'Cover Image URL': source.coverImageUrl
+      ? { url: source.coverImageUrl }
+      : { url: null },
     Keywords: {
       multi_select: source.keywords.map((name) => ({ name })),
     },
@@ -326,7 +357,9 @@ function buildProjectionProperties(
     Tech: {
       multi_select: source.tech.map((name) => ({ name })),
     },
-    'Publish Date': source.publishDate ? { date: { start: source.publishDate } } : { date: null },
+    'Publish Date': source.publishDate
+      ? { date: { start: source.publishDate } }
+      : { date: null },
     'Canonical URL': source.liveUrl ? { url: source.liveUrl } : { url: null },
     'Live URL': source.liveUrl ? { url: source.liveUrl } : { url: null },
     Status: {
@@ -387,7 +420,9 @@ function indexTargets(pages: NotionPage[]) {
   const bySlug = new Map<string, NotionPage>()
 
   for (const page of pages) {
-    const relationIds = propertyToRelationIds(getProperty(page.properties, ['Source Article']))
+    const relationIds = propertyToRelationIds(
+      getProperty(page.properties, ['Source Article']),
+    )
     const slug = toSlug(propertyToText(getProperty(page.properties, ['Slug'])))
 
     if (relationIds[0] && !bySourceId.has(relationIds[0])) {
@@ -437,7 +472,9 @@ async function getSourcePages(pageId?: string): Promise<NotionPage[]> {
   return queryAllDataSourcePages(sourceDataSourceId, {})
 }
 
-export async function syncPortfolioArticleProjection(options?: { pageId?: string }): Promise<ProjectionSyncResult> {
+export async function syncPortfolioArticleProjection(options?: {
+  pageId?: string
+}): Promise<ProjectionSyncResult> {
   const nowIso = new Date().toISOString()
   const errors: Array<{ sourcePageId: string; message: string }> = []
   let created = 0
@@ -446,7 +483,9 @@ export async function syncPortfolioArticleProjection(options?: { pageId?: string
   let skipped = 0
 
   const sourcePages = await getSourcePages(options?.pageId)
-  const mapped = sourcePages.map(mapSourcePage).filter((entry): entry is SourceArticle => Boolean(entry))
+  const mapped = sourcePages
+    .map(mapSourcePage)
+    .filter((entry): entry is SourceArticle => Boolean(entry))
   const mappedById = new Map(mapped.map((source) => [source.id, source]))
   const sourceIds = new Set(sourcePages.map((page) => page.id))
 
@@ -460,7 +499,9 @@ export async function syncPortfolioArticleProjection(options?: { pageId?: string
 
   for (const source of mapped) {
     try {
-      const existing = targetIndex.bySourceId.get(source.id) ?? targetIndex.bySlug.get(source.slug)
+      const existing =
+        targetIndex.bySourceId.get(source.id) ??
+        targetIndex.bySlug.get(source.slug)
       let searchIndexText: string | undefined
 
       if (eligibleForProjection(source)) {
@@ -478,7 +519,12 @@ export async function syncPortfolioArticleProjection(options?: { pageId?: string
       }
 
       const properties = pickKnownProperties(
-        buildProjectionProperties(source, nowIso, defaultAuthorPageId, searchIndexText),
+        buildProjectionProperties(
+          source,
+          nowIso,
+          defaultAuthorPageId,
+          searchIndexText,
+        ),
         knownTargetPropertyNames,
       )
       const publishSafe =
@@ -486,7 +532,10 @@ export async function syncPortfolioArticleProjection(options?: { pageId?: string
         source.sourceStatus.trim().toLowerCase() === 'published'
 
       if (publishSafe) {
-        const gateErrors = validatePublishSafeRequirements(source, defaultAuthorPageId)
+        const gateErrors = validatePublishSafeRequirements(
+          source,
+          defaultAuthorPageId,
+        )
         if (gateErrors.length > 0) {
           errors.push({
             sourcePageId: source.id,
@@ -516,7 +565,10 @@ export async function syncPortfolioArticleProjection(options?: { pageId?: string
     } catch (error) {
       errors.push({
         sourcePageId: source.id,
-        message: error instanceof Error ? error.message : 'Unknown projection sync error',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Unknown projection sync error',
       })
     }
   }
@@ -534,7 +586,9 @@ export async function syncPortfolioArticleProjection(options?: { pageId?: string
             ),
             knownTargetPropertyNames,
           )
-          await notionUpdatePage(existing.id, { properties: archivedProperties })
+          await notionUpdatePage(existing.id, {
+            properties: archivedProperties,
+          })
           archived += 1
         } catch (error) {
           errors.push({
@@ -549,7 +603,9 @@ export async function syncPortfolioArticleProjection(options?: { pageId?: string
     }
   } else {
     for (const target of targetPages) {
-      const relationIds = propertyToRelationIds(getProperty(target.properties, ['Source Article']))
+      const relationIds = propertyToRelationIds(
+        getProperty(target.properties, ['Source Article']),
+      )
       const sourceId = relationIds[0]
 
       if (!sourceId) {
@@ -609,7 +665,9 @@ export async function reconcilePortfolioArticleProjection(): Promise<ProjectionR
     queryAllDataSourcePages(calendarDataSourceId, {}),
   ])
 
-  const mapped = sourcePages.map(mapSourcePage).filter((entry): entry is SourceArticle => Boolean(entry))
+  const mapped = sourcePages
+    .map(mapSourcePage)
+    .filter((entry): entry is SourceArticle => Boolean(entry))
   const mappedById = new Map(mapped.map((source) => [source.id, source]))
   const targetIndex = indexTargets(targetPages)
 
@@ -622,7 +680,9 @@ export async function reconcilePortfolioArticleProjection(): Promise<ProjectionR
       continue
     }
 
-    const target = targetIndex.bySourceId.get(source.id) ?? targetIndex.bySlug.get(source.slug)
+    const target =
+      targetIndex.bySourceId.get(source.id) ??
+      targetIndex.bySlug.get(source.slug)
     if (!target) {
       findings.push({
         code: 'SOURCE_PUBLISHSAFE_MISSING_TARGET',
@@ -634,8 +694,12 @@ export async function reconcilePortfolioArticleProjection(): Promise<ProjectionR
       continue
     }
 
-    const targetStatus = propertyToText(getProperty(target.properties, ['Status']))
-    if (normalizeStatus(targetStatus) !== normalizeStatus(source.projectionStatus)) {
+    const targetStatus = propertyToText(
+      getProperty(target.properties, ['Status']),
+    )
+    if (
+      normalizeStatus(targetStatus) !== normalizeStatus(source.projectionStatus)
+    ) {
       findings.push({
         code: 'STATUS_MISMATCH',
         severity: 'warning',
@@ -646,7 +710,9 @@ export async function reconcilePortfolioArticleProjection(): Promise<ProjectionR
       })
     }
 
-    const targetCover = propertyToText(getProperty(target.properties, ['Cover Image URL']))
+    const targetCover = propertyToText(
+      getProperty(target.properties, ['Cover Image URL']),
+    )
     if ((targetCover || '').trim() !== (source.coverImageUrl || '').trim()) {
       findings.push({
         code: 'COVER_URL_MISMATCH',
@@ -660,13 +726,18 @@ export async function reconcilePortfolioArticleProjection(): Promise<ProjectionR
   }
 
   for (const target of targetPages) {
-    const sourceId = propertyToRelationIds(getProperty(target.properties, ['Source Article']))[0]
+    const sourceId = propertyToRelationIds(
+      getProperty(target.properties, ['Source Article']),
+    )[0]
     if (!sourceId) {
       continue
     }
     const source = mappedById.get(sourceId)
-    const targetStatus = normalizeStatus(propertyToText(getProperty(target.properties, ['Status'])))
-    const targetIsPublishSafe = targetStatus === 'ready to publish' || targetStatus === 'published'
+    const targetStatus = normalizeStatus(
+      propertyToText(getProperty(target.properties, ['Status'])),
+    )
+    const targetIsPublishSafe =
+      targetStatus === 'ready to publish' || targetStatus === 'published'
     const sourceIsPublishSafe =
       source &&
       (normalizeStatus(source.sourceStatus) === 'ready to publish' ||
@@ -690,7 +761,8 @@ export async function reconcilePortfolioArticleProjection(): Promise<ProjectionR
     const rowStatus = normalizeStatus(
       propertyToText(getProperty(row.properties, ['Status', 'Content Status'])),
     )
-    const rowIsPublishSafe = rowStatus === 'ready to publish' || rowStatus === 'published'
+    const rowIsPublishSafe =
+      rowStatus === 'ready to publish' || rowStatus === 'published'
     const assigned = propertyToRelationIds(
       getProperty(row.properties, ['Assigned Article', 'Article']),
     )
@@ -700,7 +772,8 @@ export async function reconcilePortfolioArticleProjection(): Promise<ProjectionR
         code: 'CALENDAR_MISSING_ASSIGNED_ARTICLE',
         severity: 'warning',
         calendarPageId: row.id,
-        message: 'Publish-safe content calendar row is missing Assigned Article relation',
+        message:
+          'Publish-safe content calendar row is missing Assigned Article relation',
       })
     }
 
@@ -765,7 +838,9 @@ export async function evaluateSourceArticlePublishGate(
     return {
       ok: false,
       sourcePageId,
-      reasons: ['Source page is not an eligible Blog Post record for projection'],
+      reasons: [
+        'Source page is not an eligible Blog Post record for projection',
+      ],
     }
   }
 
