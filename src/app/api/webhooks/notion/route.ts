@@ -145,13 +145,24 @@ export async function POST(request: Request) {
   const rawBody = await request.text()
   const signature = request.headers.get('x-notion-signature')
 
-  if (webhookSecret) {
-    if (!signature || !verifySignature(rawBody, signature, webhookSecret)) {
-      return NextResponse.json(
-        { ok: false, error: 'Invalid signature' },
-        { status: 401 },
-      )
-    }
+  if (!webhookSecret && process.env.NODE_ENV === 'production') {
+    console.error(
+      '[cms:notion:webhook] NOTION_WEBHOOK_SECRET is required in production',
+    )
+    return NextResponse.json(
+      { ok: false, error: 'Webhook secret not configured' },
+      { status: 500 },
+    )
+  }
+
+  if (
+    webhookSecret &&
+    (!signature || !verifySignature(rawBody, signature, webhookSecret))
+  ) {
+    return NextResponse.json(
+      { ok: false, error: 'Invalid signature' },
+      { status: 401 },
+    )
   }
 
   let payload: {
