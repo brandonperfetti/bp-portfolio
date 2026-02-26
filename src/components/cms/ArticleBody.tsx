@@ -149,7 +149,7 @@ function BlockNode({ block }: { block: CmsArticleBlock }) {
           <RichText values={block.richText} />
         </p>
       )
-    case 'code':
+    case 'code': {
       const language = (block.language || 'plaintext').trim().toLowerCase()
       const code = richTextToPlain(block.richText)
       return (
@@ -162,23 +162,20 @@ function BlockNode({ block }: { block: CmsArticleBlock }) {
           ) : null}
         </figure>
       )
+    }
     case 'bulleted_list_item':
       return (
-        <ul>
-          <li>
-            <RichText values={block.richText} />
-            {block.children?.length ? renderBlockNodes(block.children) : null}
-          </li>
-        </ul>
+        <>
+          <RichText values={block.richText} />
+          {block.children?.length ? renderBlockNodes(block.children) : null}
+        </>
       )
     case 'numbered_list_item':
       return (
-        <ol>
-          <li>
-            <RichText values={block.richText} />
-            {block.children?.length ? renderBlockNodes(block.children) : null}
-          </li>
-        </ol>
+        <>
+          <RichText values={block.richText} />
+          {block.children?.length ? renderBlockNodes(block.children) : null}
+        </>
       )
     case 'image':
       if (!block.url) {
