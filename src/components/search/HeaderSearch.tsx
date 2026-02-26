@@ -1,10 +1,10 @@
 'use client'
 
-import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
 import { getExternalLinkProps } from '@/lib/link-utils'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
+import { XMarkIcon } from '@heroicons/react/24/outline'
+import Link from 'next/link'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 type SearchItem = {
   title: string
@@ -22,6 +22,7 @@ export function HeaderSearch() {
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<SearchItem[]>([])
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+  const bypassCacheRef = useRef(false)
   const debouncedQuery = useDebouncedValue(query, query.trim() ? 500 : 0)
 
   useEffect(() => {
@@ -51,18 +52,23 @@ export function HeaderSearch() {
       return
     }
 
-    try {
-      const raw = sessionStorage.getItem(SEARCH_CACHE_KEY)
-      if (raw) {
-        const cached = JSON.parse(raw) as SearchItem[]
-        if (Array.isArray(cached) && cached.length > 0) {
-          setItems(cached)
-          setLoadState('ready')
-          return
+    const bypassCache = bypassCacheRef.current
+    bypassCacheRef.current = false
+
+    if (!bypassCache) {
+      try {
+        const raw = sessionStorage.getItem(SEARCH_CACHE_KEY)
+        if (raw) {
+          const cached = JSON.parse(raw) as SearchItem[]
+          if (Array.isArray(cached) && cached.length > 0) {
+            setItems(cached)
+            setLoadState('ready')
+            return
+          }
         }
+      } catch {
+        // noop: cache parse/storage failures should not break search
       }
-    } catch {
-      // noop: cache parse/storage failures should not break search
     }
 
     setLoadState('loading')
@@ -184,7 +190,15 @@ export function HeaderSearch() {
                   </p>
                   <button
                     type="button"
-                    onClick={() => setLoadState('idle')}
+                    onClick={() => {
+                      try {
+                        sessionStorage.removeItem(SEARCH_CACHE_KEY)
+                      } catch {
+                        // noop
+                      }
+                      bypassCacheRef.current = true
+                      setLoadState('idle')
+                    }}
                     className="rounded-md px-2 py-1 text-xs font-medium text-zinc-600 ring-1 ring-zinc-300 transition hover:bg-zinc-100 dark:text-zinc-300 dark:ring-zinc-600 dark:hover:bg-zinc-800"
                   >
                     Retry
