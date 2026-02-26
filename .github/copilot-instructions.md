@@ -3,6 +3,7 @@
 Next.js App Router portfolio + provider-switched CMS platform (fallback local mode + Notion) with custom feature layers for search, Hermes chat, contact forms, and SEO routes.
 
 ## Essentials
+
 - Package manager: `npm` (lockfile is `package-lock.json`)
 - Primary commands:
   - `npm run dev`
@@ -14,18 +15,22 @@ Next.js App Router portfolio + provider-switched CMS platform (fallback local mo
   - TypeScript 5
 
 ## Environment Expectations
+
 Core env vars:
+
 - `NEXT_PUBLIC_SITE_URL`
 - `OPENAI_API_KEY`
 - `SENDGRID_API_KEY`
 
 Optional env vars:
+
 - `SENDGRID_MAILING_ID` or `SENDGRID_LIST_ID`
 - `SENDGRID_DATA_RESIDENCY`
 - `CONTACT_TO_EMAIL`
 - `CONTACT_FROM_EMAIL`
 
 ## Project-Specific Rules
+
 - Articles are CMS-first; local mode should gracefully render empty article states when Notion is disabled.
 - Dynamic article route is `src/app/articles/[slug]/page.tsx`; preserve this shape.
 - In Notion mode, `Source Article` page blocks are canonical article body source.
@@ -35,13 +40,23 @@ Optional env vars:
 - Hermes chat must keep streaming behavior and markdown rendering compatibility.
 - Prefer project-local icons in `src/icons` when matching existing visual language; use Heroicons selectively where already adopted.
 
+## Code Documentation Expectations
+
+- Add concise comments for non-obvious logic, edge-case handling, and tradeoffs.
+- Avoid narrating obvious code ("set x to y"); comments should explain intent/why.
+- Add JSDoc for exported components/hooks/utilities when contracts are non-trivial (inputs, return shape, side effects, assumptions).
+- Prefer keeping comments near complex branches and transformations so future edits are safe.
+- If behavior changes, update nearby comments/JSDoc in the same change.
+
 ## Dependency Security Rules
+
 - For dependency additions, upgrades, or removals, prioritize Sonatype MCP tools first.
 - Before changing dependencies, check current package risk and recommended versions with Sonatype MCP.
 - When proposing upgrades, include security impact and compatibility risk (major vs minor/patch).
 - Keep vulnerability blocking strict; warning-only signals (e.g., scorecard/license metadata noise) should be documented and triaged separately.
 
 ## Progressive Disclosure
+
 - Architecture and app map: `docs/ARCHITECTURE.md`
 - Feature inventory and behavior: `docs/FEATURES.md`
 - Navigation and route responsibilities: `docs/NAVIGATION.md`
