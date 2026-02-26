@@ -205,6 +205,10 @@ export async function POST(request: Request) {
   cleanupEventCache()
 
   for (const event of payload.events ?? []) {
+    if (typeof event !== 'object' || event === null) {
+      continue
+    }
+
     const eventId = event.id
 
     if (eventId && eventDedupe.has(eventId)) {
@@ -294,17 +298,33 @@ export async function POST(request: Request) {
       })
 
       if (!syncResult.ok) {
-        await enqueueProjectionSyncFailure({
-          eventType,
-          entityId,
-          pageId:
-            eventType === 'data_source.content_updated' ? undefined : entityId,
-          reason: 'Projection sync completed with errors',
-          lastError: syncResult.errors
-            .map((entry) => entry.message)
-            .join('; ')
-            .slice(0, 2000),
-        })
+        try {
+          await enqueueProjectionSyncFailure({
+            eventType,
+            entityId,
+            pageId:
+              eventType === 'data_source.content_updated'
+                ? undefined
+                : entityId,
+            reason: 'Projection sync completed with errors',
+            lastError: syncResult.errors
+              .map((entry) => entry.message)
+              .join('; ')
+              .slice(0, 2000),
+          })
+        } catch (queueError) {
+          console.error(
+            '[cms:notion:webhook] failed to enqueue projection sync failure',
+            {
+              eventType,
+              entityId,
+              error:
+                queueError instanceof Error
+                  ? queueError.message
+                  : 'Unknown enqueue error',
+            },
+          )
+        }
         if (ledgerPageId) {
           await failWebhookEventClaim(
             ledgerPageId,
@@ -320,14 +340,28 @@ export async function POST(request: Request) {
         entityId,
         error: error instanceof Error ? error.message : 'Unknown error',
       })
-      await enqueueProjectionSyncFailure({
-        eventType,
-        entityId,
-        pageId:
-          eventType === 'data_source.content_updated' ? undefined : entityId,
-        reason: 'Projection sync threw exception',
-        lastError: error instanceof Error ? error.message : 'Unknown error',
-      })
+      try {
+        await enqueueProjectionSyncFailure({
+          eventType,
+          entityId,
+          pageId:
+            eventType === 'data_source.content_updated' ? undefined : entityId,
+          reason: 'Projection sync threw exception',
+          lastError: error instanceof Error ? error.message : 'Unknown error',
+        })
+      } catch (queueError) {
+        console.error(
+          '[cms:notion:webhook] failed to enqueue projection sync failure',
+          {
+            eventType,
+            entityId,
+            error:
+              queueError instanceof Error
+                ? queueError.message
+                : 'Unknown enqueue error',
+          },
+        )
+      }
       if (ledgerPageId) {
         await failWebhookEventClaim(
           ledgerPageId,
