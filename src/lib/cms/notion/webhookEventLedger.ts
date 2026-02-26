@@ -170,7 +170,7 @@ function pickCanonicalMatch(matches: NotionPage[]) {
 }
 
 async function ensureLedgerSchema(dataSourceId: string): Promise<LedgerSchema> {
-  const cached = schemaCache.get(dataSourceId)
+  const cached = getSchemaCacheEntry(dataSourceId)
   if (cached) {
     return cached
   }
@@ -196,7 +196,7 @@ async function ensureLedgerSchema(dataSourceId: string): Promise<LedgerSchema> {
     titlePropertyName,
     propertyTypesByName,
   }
-  schemaCache.set(dataSourceId, schema)
+  setSchemaCacheEntry(dataSourceId, schema)
 
   return schema
 }
