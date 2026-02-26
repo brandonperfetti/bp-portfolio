@@ -2,9 +2,9 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 import { CodeSnippet } from '@/components/cms/CodeSnippet'
+import type { CmsArticleBlock, CmsRichText } from '@/lib/cms/types'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
-import type { CmsArticleBlock, CmsRichText } from '@/lib/cms/types'
 
 function RichText({ values }: { values?: CmsRichText[] }) {
   if (!values?.length) {
@@ -65,7 +65,10 @@ function renderBlockNodes(blocks: CmsArticleBlock[]) {
   for (let index = 0; index < blocks.length; ) {
     const block = blocks[index]
 
-    if (block.type === 'bulleted_list_item' || block.type === 'numbered_list_item') {
+    if (
+      block.type === 'bulleted_list_item' ||
+      block.type === 'numbered_list_item'
+    ) {
       const listType = block.type
       const items: React.ReactNode[] = []
       const firstId = block.id
@@ -163,20 +166,6 @@ function BlockNode({ block }: { block: CmsArticleBlock }) {
         </figure>
       )
     }
-    case 'bulleted_list_item':
-      return (
-        <>
-          <RichText values={block.richText} />
-          {block.children?.length ? renderBlockNodes(block.children) : null}
-        </>
-      )
-    case 'numbered_list_item':
-      return (
-        <>
-          <RichText values={block.richText} />
-          {block.children?.length ? renderBlockNodes(block.children) : null}
-        </>
-      )
     case 'image':
       if (!block.url) {
         return null
@@ -189,7 +178,7 @@ function BlockNode({ block }: { block: CmsArticleBlock }) {
               width: 1600,
               crop: 'fit',
             })}
-            alt={block.caption?.map((entry) => entry.plainText).join(' ') || ''}
+            alt={richTextToPlain(block.caption) || ''}
             width={1600}
             height={900}
             sizes="(min-width: 1280px) 42rem, (min-width: 1024px) 42rem, 100vw"
