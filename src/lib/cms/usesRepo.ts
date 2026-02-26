@@ -23,7 +23,10 @@ const getCachedNotionUses = unstable_cache(
           return categorySort
         }
 
-        return (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER)
+        return (
+          (a.order ?? Number.MAX_SAFE_INTEGER) -
+          (b.order ?? Number.MAX_SAFE_INTEGER)
+        )
       })
   },
   ['cms', 'notion', 'uses'],
