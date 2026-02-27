@@ -60,12 +60,26 @@ export async function POST(request: Request) {
   let fullSyncOutcome: { ok: boolean; error?: string } | null = null
 
   for (const failure of queuedFailures) {
-    try {
-      const claimed = await beginWebhookEventReplay(failure)
-      if (!claimed) {
-        continue
-      }
+    let claimed = false
 
+    try {
+      claimed = await beginWebhookEventReplay(failure)
+    } catch (error) {
+      console.error(
+        '[cms:sync:articles:replay-failures] failed to claim ledger row',
+        {
+          ledgerPageId: failure.ledgerPageId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      )
+      continue
+    }
+
+    if (!claimed) {
+      continue
+    }
+
+    try {
       let replayOk = true
       let replayError: string | undefined
 
