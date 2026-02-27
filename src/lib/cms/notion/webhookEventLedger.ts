@@ -429,6 +429,39 @@ function buildEventIdFilters(
   return filters
 }
 
+function buildFailedStateFilters(
+  schema: LedgerSchema,
+): Array<Record<string, unknown>> {
+  const filters: Array<Record<string, unknown>> = []
+  const seen = new Set<string>()
+
+  for (const name of ['State', 'Status']) {
+    if (!name || seen.has(name)) {
+      continue
+    }
+    seen.add(name)
+
+    const type = schema.propertyTypesByName.get(name)
+    if (type === 'rich_text') {
+      filters.push({ property: name, rich_text: { equals: 'failed' } })
+      continue
+    }
+    if (type === 'status') {
+      filters.push({ property: name, status: { equals: 'failed' } })
+      continue
+    }
+    if (type === 'select') {
+      filters.push({ property: name, select: { equals: 'failed' } })
+      continue
+    }
+    if (type === 'title') {
+      filters.push({ property: name, title: { equals: 'failed' } })
+    }
+  }
+
+  return filters
+}
+
 async function listMatchingEventRows(
   dataSourceId: string,
   eventId: string,
@@ -639,12 +672,36 @@ export async function listFailedWebhookEvents(options?: {
     return []
   }
 
+  const schema = await ensureLedgerSchema(dataSourceId)
   const limit =
     typeof options?.limit === 'number' && options.limit > 0
       ? options.limit
       : 100
 
-  const rows = await queryAllDataSourcePages(dataSourceId, {})
+  const stateFilters = buildFailedStateFilters(schema)
+  let rows: NotionPage[] = []
+
+  if (stateFilters.length) {
+    try {
+      rows = await queryAllDataSourcePages(dataSourceId, {
+        filter:
+          stateFilters.length === 1 ? stateFilters[0] : { or: stateFilters },
+      })
+    } catch (error) {
+      console.warn(
+        '[cms:notion:webhook] falling back to full event ledger scan for failed rows',
+        {
+          dataSourceId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      )
+    }
+  }
+
+  if (!rows.length) {
+    rows = await queryAllDataSourcePages(dataSourceId, {})
+  }
+
   const failedRows = rows
     .filter((row) => getEventState(row) === 'failed')
     .sort((a, b) => {
@@ -664,6 +721,8 @@ export async function listFailedWebhookEvents(options?: {
       eventId: getEventIdFromPage(row) || row.id,
       eventType,
       entityId,
+      // data_source.content_updated events are data-source scoped (not page-scoped),
+      // so getEventType/getEntityId may produce an entityId that should not be used as pageId.
       pageId:
         eventType === 'data_source.content_updated' ? undefined : entityId,
       attempts: getAttempts(row),
