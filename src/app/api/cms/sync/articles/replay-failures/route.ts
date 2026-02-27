@@ -57,17 +57,49 @@ export async function POST(request: Request) {
 
   const queuedFailures = await listFailedWebhookEvents({ limit })
   const replayed: Array<{ id: string; ok: boolean; error?: string }> = []
+  let fullSyncOutcome: { ok: boolean; error?: string } | null = null
 
   for (const failure of queuedFailures) {
     try {
-      await beginWebhookEventReplay(failure)
-      const syncResult = await syncPortfolioArticleProjection(
-        failure.pageId ? { pageId: failure.pageId } : undefined,
-      )
-      if (!syncResult.ok) {
-        const error = buildBoundedErrorMessage(
-          syncResult.errors.map((entry) => entry.message),
-        )
+      const claimed = await beginWebhookEventReplay(failure)
+      if (!claimed) {
+        continue
+      }
+
+      let replayOk = true
+      let replayError: string | undefined
+
+      if (failure.pageId) {
+        const syncResult = await syncPortfolioArticleProjection({
+          pageId: failure.pageId,
+        })
+        if (!syncResult.ok) {
+          replayOk = false
+          replayError = buildBoundedErrorMessage(
+            syncResult.errors.map((entry) => entry.message),
+          )
+        }
+      } else {
+        if (!fullSyncOutcome) {
+          const firstFullSyncResult = await syncPortfolioArticleProjection()
+          if (!firstFullSyncResult.ok) {
+            fullSyncOutcome = {
+              ok: false,
+              error: buildBoundedErrorMessage(
+                firstFullSyncResult.errors.map((entry) => entry.message),
+              ),
+            }
+          } else {
+            fullSyncOutcome = { ok: true }
+          }
+        }
+
+        replayOk = fullSyncOutcome.ok
+        replayError = fullSyncOutcome.error
+      }
+
+      if (!replayOk) {
+        const error = replayError ?? 'Unknown replay error'
         await failWebhookEventClaim(failure.ledgerPageId, error)
         replayed.push({ id: failure.ledgerPageId, ok: false, error })
         continue
@@ -98,7 +130,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const remainingFailed = await listFailedWebhookEvents()
+  const remainingFailed = await listFailedWebhookEvents({ noLimit: true })
   const result = {
     totalQueued: queuedFailures.length,
     attempted: replayed.length,
