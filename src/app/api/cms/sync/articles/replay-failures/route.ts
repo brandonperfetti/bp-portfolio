@@ -79,7 +79,21 @@ export async function POST(request: Request) {
       const message = truncateErrorMessage(
         error instanceof Error ? error.message : 'Unknown replay error',
       )
-      await failWebhookEventClaim(failure.ledgerPageId, message).catch(() => {})
+      await failWebhookEventClaim(failure.ledgerPageId, message).catch(
+        (claimError) => {
+          console.error(
+            '[cms:sync:articles:replay-failures] failed to mark ledger row as failed',
+            {
+              ledgerPageId: failure.ledgerPageId,
+              message,
+              error:
+                claimError instanceof Error
+                  ? claimError.message
+                  : 'Unknown error',
+            },
+          )
+        },
+      )
       replayed.push({ id: failure.ledgerPageId, ok: false, error: message })
     }
   }
