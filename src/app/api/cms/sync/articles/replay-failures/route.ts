@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server'
 
 import { syncPortfolioArticleProjection } from '@/lib/cms/notion/projectionSync'
 import {
-  listProjectionSyncFailures,
-  replayProjectionSyncFailures,
-} from '@/lib/cms/notion/syncFailureQueue'
+  beginWebhookEventReplay,
+  completeWebhookEventClaim,
+  failWebhookEventClaim,
+  listFailedWebhookEvents,
+} from '@/lib/cms/notion/webhookEventLedger'
 import { isValidSecret } from '@/lib/security/timingSafeSecret'
 
 const MAX_ERROR_MESSAGE_LENGTH = 2000
@@ -53,40 +55,110 @@ export async function POST(request: Request) {
       ? Math.floor(body.limit)
       : undefined
 
-  const result = await replayProjectionSyncFailures({
-    limit,
-    runSync: async (failure) => {
-      try {
-        const syncResult = await syncPortfolioArticleProjection(
-          failure.pageId ? { pageId: failure.pageId } : undefined,
-        )
+  const queuedFailures = await listFailedWebhookEvents({ limit })
+  const replayed: Array<{ id: string; ok: boolean; error?: string }> = []
+  let fullSyncOutcome: { ok: boolean; error?: string } | null = null
+
+  for (const failure of queuedFailures) {
+    let claimed = false
+
+    try {
+      claimed = await beginWebhookEventReplay(failure)
+    } catch (error) {
+      console.error(
+        '[cms:sync:articles:replay-failures] failed to claim ledger row',
+        {
+          ledgerPageId: failure.ledgerPageId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      )
+      continue
+    }
+
+    if (!claimed) {
+      continue
+    }
+
+    try {
+      let replayOk = true
+      let replayError: string | undefined
+
+      if (failure.pageId) {
+        const syncResult = await syncPortfolioArticleProjection({
+          pageId: failure.pageId,
+        })
         if (!syncResult.ok) {
-          return {
-            ok: false,
-            error: buildBoundedErrorMessage(
-              syncResult.errors.map((entry) => entry.message),
-            ),
+          replayOk = false
+          replayError = buildBoundedErrorMessage(
+            syncResult.errors.map((entry) => entry.message),
+          )
+        }
+      } else {
+        if (!fullSyncOutcome) {
+          const firstFullSyncResult = await syncPortfolioArticleProjection()
+          if (!firstFullSyncResult.ok) {
+            fullSyncOutcome = {
+              ok: false,
+              error: buildBoundedErrorMessage(
+                firstFullSyncResult.errors.map((entry) => entry.message),
+              ),
+            }
+          } else {
+            fullSyncOutcome = { ok: true }
           }
         }
-        return { ok: true }
-      } catch (error) {
-        return {
-          ok: false,
-          error: truncateErrorMessage(
-            error instanceof Error ? error.message : 'Unknown replay error',
-          ),
-        }
-      }
-    },
-  })
 
-  const queued = await listProjectionSyncFailures()
+        replayOk = fullSyncOutcome.ok
+        replayError = fullSyncOutcome.error
+      }
+
+      if (!replayOk) {
+        const error = replayError ?? 'Unknown replay error'
+        await failWebhookEventClaim(failure.ledgerPageId, error)
+        replayed.push({ id: failure.ledgerPageId, ok: false, error })
+        continue
+      }
+
+      await completeWebhookEventClaim(failure.ledgerPageId)
+      replayed.push({ id: failure.ledgerPageId, ok: true })
+    } catch (error) {
+      const message = truncateErrorMessage(
+        error instanceof Error ? error.message : 'Unknown replay error',
+      )
+      await failWebhookEventClaim(failure.ledgerPageId, message).catch(
+        (claimError) => {
+          console.error(
+            '[cms:sync:articles:replay-failures] failed to mark ledger row as failed',
+            {
+              ledgerPageId: failure.ledgerPageId,
+              message,
+              error:
+                claimError instanceof Error
+                  ? claimError.message
+                  : 'Unknown error',
+            },
+          )
+        },
+      )
+      replayed.push({ id: failure.ledgerPageId, ok: false, error: message })
+    }
+  }
+
+  const remainingFailed = await listFailedWebhookEvents({ noLimit: true })
+  const result = {
+    totalQueued: queuedFailures.length,
+    attempted: replayed.length,
+    succeeded: replayed.filter((entry) => entry.ok).length,
+    failed: replayed.filter((entry) => !entry.ok).length,
+    remaining: remainingFailed.length,
+    replayed,
+  }
 
   return NextResponse.json(
     {
       ok: result.failed === 0,
       ...result,
-      queuedCount: queued.length,
+      queuedCount: remainingFailed.length,
     },
     { status: result.failed === 0 ? 200 : 207 },
   )

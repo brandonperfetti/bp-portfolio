@@ -1,8 +1,13 @@
-import type { NotionPage } from '@/lib/cms/notion/contracts'
+import type {
+  NotionPage,
+  NotionQueryResponse,
+} from '@/lib/cms/notion/contracts'
 
 import {
   notionCreatePage,
   notionGetDataSource,
+  notionGetPage,
+  notionRequest,
   notionUpdatePage,
 } from '@/lib/cms/notion/client'
 import { getOptionalNotionWebhookEventsDataSourceId } from '@/lib/cms/notion/config'
@@ -37,6 +42,22 @@ export type WebhookLedgerWatchdogResult = {
   staleFound: number
   markedFailed: number
   errors: Array<{ ledgerPageId: string; message: string }>
+}
+
+/**
+ * Ledger row projection used by replay workflows.
+ * `ledgerPageId` is always the Notion ledger page id to mutate during claim/complete/fail.
+ * `pageId` is the target article page id when the event is page-scoped; it is intentionally
+ * omitted for data-source scoped events (for example `data_source.content_updated`).
+ */
+export type WebhookReplayCandidate = {
+  ledgerPageId: string
+  eventId: string
+  eventType: string
+  entityId?: string
+  pageId?: string
+  attempts: number
+  receivedAt?: string
 }
 
 type CachedLedgerSchema = {
@@ -152,6 +173,18 @@ function getEventState(page: NotionPage): LedgerState | '' {
 
 function getReceivedAt(page: NotionPage): string {
   return propertyToDate(getProperty(page.properties, ['Received At'])) || ''
+}
+
+function getAttempts(page: NotionPage): number {
+  return propertyToNumber(getProperty(page.properties, ['Attempts'])) ?? 0
+}
+
+function getEventType(page: NotionPage): string {
+  return propertyToText(getProperty(page.properties, ['Event Type'])).trim()
+}
+
+function getEntityId(page: NotionPage): string {
+  return propertyToText(getProperty(page.properties, ['Entity ID'])).trim()
 }
 
 function isRecentlyProcessing(page: NotionPage, now: Date): boolean {
@@ -407,6 +440,39 @@ function buildEventIdFilters(
   return filters
 }
 
+function buildFailedStateFilters(
+  schema: LedgerSchema,
+): Array<Record<string, unknown>> {
+  const filters: Array<Record<string, unknown>> = []
+  const seen = new Set<string>()
+
+  for (const name of ['State', 'Status']) {
+    if (!name || seen.has(name)) {
+      continue
+    }
+    seen.add(name)
+
+    const type = schema.propertyTypesByName.get(name)
+    if (type === 'rich_text') {
+      filters.push({ property: name, rich_text: { equals: 'failed' } })
+      continue
+    }
+    if (type === 'status') {
+      filters.push({ property: name, status: { equals: 'failed' } })
+      continue
+    }
+    if (type === 'select') {
+      filters.push({ property: name, select: { equals: 'failed' } })
+      continue
+    }
+    if (type === 'title') {
+      filters.push({ property: name, title: { equals: 'failed' } })
+    }
+  }
+
+  return filters
+}
+
 async function listMatchingEventRows(
   dataSourceId: string,
   eventId: string,
@@ -607,4 +673,172 @@ export async function runWebhookLedgerWatchdog(options?: {
     markedFailed,
     errors,
   }
+}
+
+async function queryFailedRowsPaginated(input: {
+  dataSourceId: string
+  filter?: Record<string, unknown>
+  limit?: number
+}): Promise<NotionPage[]> {
+  const failedRows: NotionPage[] = []
+  let nextCursor: string | null = null
+
+  do {
+    const pageSize =
+      typeof input.limit === 'number'
+        ? Math.max(1, Math.min(100, input.limit - failedRows.length))
+        : 100
+
+    const body: Record<string, unknown> = {
+      page_size: pageSize,
+      sorts: [{ timestamp: 'created_time', direction: 'ascending' }],
+    }
+
+    if (input.filter) {
+      body.filter = input.filter
+    }
+    if (nextCursor) {
+      body.start_cursor = nextCursor
+    }
+
+    const response = await notionRequest<NotionQueryResponse>(
+      `/data_sources/${input.dataSourceId}/query`,
+      {
+        method: 'POST',
+        body,
+      },
+    )
+
+    for (const row of response.results) {
+      if (getEventState(row) !== 'failed') {
+        continue
+      }
+      failedRows.push(row)
+      if (typeof input.limit === 'number' && failedRows.length >= input.limit) {
+        return failedRows
+      }
+    }
+
+    nextCursor = response.has_more ? response.next_cursor : null
+  } while (nextCursor)
+
+  return failedRows
+}
+
+/**
+ * Lists failed webhook ledger rows ordered oldest-first by `receivedAt`.
+ * When `options.limit` is provided, fetching and return size are both bounded to that limit.
+ * When `options.noLimit` is true, all failed rows are returned.
+ */
+export async function listFailedWebhookEvents(options?: {
+  limit?: number
+  noLimit?: boolean
+}): Promise<WebhookReplayCandidate[]> {
+  const dataSourceId = getOptionalNotionWebhookEventsDataSourceId()
+  if (!dataSourceId) {
+    return []
+  }
+
+  const schema = await ensureLedgerSchema(dataSourceId)
+  const noLimit = options?.noLimit === true
+  const limit =
+    !noLimit && typeof options?.limit === 'number' && options.limit > 0
+      ? options.limit
+      : noLimit
+        ? undefined
+        : 100
+
+  const stateFilters = buildFailedStateFilters(schema)
+  let failedRows: NotionPage[] = []
+  let filteredQuerySucceeded = false
+
+  if (stateFilters.length) {
+    try {
+      failedRows = await queryFailedRowsPaginated({
+        dataSourceId,
+        filter:
+          stateFilters.length === 1 ? stateFilters[0] : { or: stateFilters },
+        limit,
+      })
+      filteredQuerySucceeded = true
+    } catch (error) {
+      console.warn(
+        '[cms:notion:webhook] falling back to full event ledger scan for failed rows',
+        {
+          dataSourceId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      )
+    }
+  }
+
+  if (!filteredQuerySucceeded) {
+    if (typeof limit === 'number') {
+      failedRows = await queryFailedRowsPaginated({ dataSourceId, limit })
+    } else {
+      const rows = await queryAllDataSourcePages(dataSourceId, {})
+      failedRows = rows.filter((row) => getEventState(row) === 'failed')
+    }
+  }
+
+  const sortedFailedRows = failedRows
+    .sort((a, b) => {
+      const aMs = Date.parse(getReceivedAt(a) || '')
+      const bMs = Date.parse(getReceivedAt(b) || '')
+      const aSafe = Number.isNaN(aMs) ? Number.MAX_SAFE_INTEGER : aMs
+      const bSafe = Number.isNaN(bMs) ? Number.MAX_SAFE_INTEGER : bMs
+      return aSafe - bSafe
+    })
+    .slice(0, limit)
+
+  return sortedFailedRows.map((row) => {
+    const eventType = getEventType(row) || 'unknown'
+    const entityId = getEntityId(row) || undefined
+    return {
+      ledgerPageId: row.id,
+      eventId: getEventIdFromPage(row) || row.id,
+      eventType,
+      entityId,
+      // data_source.content_updated events are data-source scoped (not page-scoped),
+      // so getEventType/getEntityId may produce an entityId that should not be used as pageId.
+      pageId:
+        eventType === 'data_source.content_updated' ? undefined : entityId,
+      attempts: getAttempts(row),
+      receivedAt: getReceivedAt(row) || undefined,
+    }
+  })
+}
+
+/**
+ * Attempts to claim a failed replay candidate for processing.
+ * Side effects on success: increments attempts, transitions state to processing,
+ * clears previous error details, and updates timestamps via buildClaimProperties.
+ * Returns false when the row is missing, no data source is configured, or when state/attempts
+ * no longer match the provided candidate (concurrent worker already mutated it).
+ */
+export async function beginWebhookEventReplay(
+  input: WebhookReplayCandidate,
+): Promise<boolean> {
+  const dataSourceId = getOptionalNotionWebhookEventsDataSourceId()
+  if (!dataSourceId) {
+    return false
+  }
+
+  const schema = await ensureLedgerSchema(dataSourceId)
+  const current = (await notionGetPage(input.ledgerPageId)) as NotionPage
+  const currentState = getEventState(current)
+  const currentAttempts = getAttempts(current)
+  if (currentState !== 'failed' || currentAttempts !== input.attempts) {
+    return false
+  }
+
+  await notionUpdatePage(input.ledgerPageId, {
+    properties: buildClaimProperties(schema, {
+      eventId: input.eventId,
+      eventType: input.eventType,
+      entityId: input.entityId,
+      attempts: input.attempts + 1,
+    }),
+  })
+  return true
 }
