@@ -813,13 +813,29 @@ export async function listFailedWebhookEvents(options?: {
   })
 }
 
-export async function beginWebhookEventReplay(input: WebhookReplayCandidate) {
+/**
+ * Attempts to claim a failed replay candidate for processing.
+ * Side effects on success: increments attempts, transitions state to processing,
+ * clears previous error details, and updates timestamps via buildClaimProperties.
+ * Returns false when the row is missing, no data source is configured, or when state/attempts
+ * no longer match the provided candidate (concurrent worker already mutated it).
+ */
+export async function beginWebhookEventReplay(
+  input: WebhookReplayCandidate,
+): Promise<boolean> {
   const dataSourceId = getOptionalNotionWebhookEventsDataSourceId()
   if (!dataSourceId) {
-    return
+    return false
   }
 
   const schema = await ensureLedgerSchema(dataSourceId)
+  const current = (await notionGetPage(input.ledgerPageId)) as NotionPage
+  const currentState = getEventState(current)
+  const currentAttempts = getAttempts(current)
+  if (currentState !== 'failed' || currentAttempts !== input.attempts) {
+    return false
+  }
+
   await notionUpdatePage(input.ledgerPageId, {
     properties: buildClaimProperties(schema, {
       eventId: input.eventId,
@@ -828,4 +844,5 @@ export async function beginWebhookEventReplay(input: WebhookReplayCandidate) {
       attempts: input.attempts + 1,
     }),
   })
+  return true
 }
