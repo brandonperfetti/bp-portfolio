@@ -85,6 +85,20 @@ export function propertyToText(property: NotionProperty | undefined): string {
     }
   }
 
+  if (property.type === 'rollup') {
+    if (property.rollup?.type === 'string') {
+      return property.rollup.string?.trim() ?? ''
+    }
+
+    if (property.rollup?.type === 'number') {
+      return String(property.rollup.number ?? '')
+    }
+
+    if (property.rollup?.type === 'date') {
+      return property.rollup.date?.start?.trim() ?? ''
+    }
+  }
+
   if (property.type === 'number') {
     return property.number === null || property.number === undefined
       ? ''
@@ -92,6 +106,18 @@ export function propertyToText(property: NotionProperty | undefined): string {
   }
 
   return ''
+}
+
+function textToNumber(value: string): number | undefined {
+  const trimmed = value.trim()
+
+  // Avoid coercing empty strings to 0 via Number('').
+  if (!trimmed) {
+    return undefined
+  }
+
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 export function propertyToNumber(
@@ -109,9 +135,17 @@ export function propertyToNumber(
     return property.formula.number ?? undefined
   }
 
-  const asText = propertyToText(property)
-  const parsed = Number(asText)
-  return Number.isFinite(parsed) ? parsed : undefined
+  if (property.type === 'rollup') {
+    if (property.rollup?.type === 'number') {
+      return property.rollup.number ?? undefined
+    }
+
+    if (property.rollup?.type === 'string') {
+      return textToNumber(property.rollup.string ?? '')
+    }
+  }
+
+  return textToNumber(propertyToText(property))
 }
 
 export function propertyToBoolean(

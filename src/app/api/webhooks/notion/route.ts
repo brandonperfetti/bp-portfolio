@@ -139,8 +139,25 @@ function shouldRunProjectionSync(eventType: string) {
 }
 
 export async function POST(request: Request) {
-  const verificationToken = process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN
-  const webhookSecret = process.env.NOTION_WEBHOOK_SECRET
+  const verificationToken =
+    process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN?.trim() || undefined
+  const webhookSecret = process.env.NOTION_WEBHOOK_SECRET?.trim() || undefined
+  // Fallback order is intentionally different:
+  // configuredVerificationToken is for setup-token/admin checks,
+  // signingSecret is for request signature verification.
+  // This allows either verificationToken or webhookSecret to be configured.
+  const configuredVerificationToken = verificationToken ?? webhookSecret
+  const signingSecret = webhookSecret ?? verificationToken
+
+  if (
+    verificationToken &&
+    webhookSecret &&
+    verificationToken !== webhookSecret
+  ) {
+    console.warn(
+      '[cms:notion:webhook] NOTION_WEBHOOK_VERIFICATION_TOKEN and NOTION_WEBHOOK_SECRET differ; this can cause 401 signature failures',
+    )
+  }
 
   const rawBody = await request.text()
   const signature = request.headers.get('x-notion-signature')
@@ -163,22 +180,19 @@ export async function POST(request: Request) {
 
   if (payload.verification_token) {
     console.info('[cms:notion:webhook] setup debug', {
-      verificationToken: payload.verification_token,
-      signature,
+      hasSignatureHeader: Boolean(signature),
+      hasConfiguredVerificationToken: Boolean(configuredVerificationToken),
     })
 
-    if (!verificationToken) {
+    if (!configuredVerificationToken) {
       console.info(
-        '[cms:notion:webhook] received verification token; set NOTION_WEBHOOK_VERIFICATION_TOKEN',
-        {
-          verificationToken: payload.verification_token,
-        },
+        '[cms:notion:webhook] received verification token; configure NOTION_WEBHOOK_VERIFICATION_TOKEN (or NOTION_WEBHOOK_SECRET)',
       )
     }
 
     if (
-      !verificationToken ||
-      payload.verification_token !== verificationToken
+      !configuredVerificationToken ||
+      payload.verification_token !== configuredVerificationToken
     ) {
       return NextResponse.json(
         { ok: false, error: 'Invalid verification token' },
@@ -189,9 +203,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, verified: true })
   }
 
-  if (!webhookSecret && process.env.NODE_ENV === 'production') {
+  if (!signingSecret && process.env.NODE_ENV === 'production') {
     console.error(
-      '[cms:notion:webhook] NOTION_WEBHOOK_SECRET is required in production',
+      '[cms:notion:webhook] NOTION_WEBHOOK_SECRET (or NOTION_WEBHOOK_VERIFICATION_TOKEN) is required in production',
     )
     return NextResponse.json(
       { ok: false, error: 'Webhook secret not configured' },
@@ -200,8 +214,8 @@ export async function POST(request: Request) {
   }
 
   if (
-    webhookSecret &&
-    (!signature || !verifySignature(rawBody, signature, webhookSecret))
+    signingSecret &&
+    (!signature || !verifySignature(rawBody, signature, signingSecret))
   ) {
     return NextResponse.json(
       { ok: false, error: 'Invalid signature' },

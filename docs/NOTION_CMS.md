@@ -45,6 +45,8 @@ NOTION_ENABLE_ARTICLE_PROJECTION_SYNC=true
 
 - `/api/revalidate` is used for tag-based revalidation.
 - `/api/webhooks/notion` validates signature (`X-Notion-Signature`) and processes events.
+- Notion webhook signatures are generated using the subscription `verification_token`.
+  Configure `NOTION_WEBHOOK_VERIFICATION_TOKEN`, or set `NOTION_WEBHOOK_SECRET` to the same value.
 
 ## Canonical article model
 

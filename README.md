@@ -10,8 +10,9 @@ Personal portfolio and content platform built on Next.js App Router with a provi
 4. Environment Variables
 5. Local Development
 6. Build and Run
-7. Documentation Map
-8. Troubleshooting
+7. Testing
+8. Documentation Map
+9. Troubleshooting
 
 ## Overview
 
@@ -131,6 +132,32 @@ npm run lint
 ```
 
 Uses ESLint flat config in `eslint.config.mjs` (not legacy `.eslintrc*`).
+
+## Testing
+
+Unit/integration tests (Vitest):
+
+```bash
+npm run test
+```
+
+Watch mode:
+
+```bash
+npm run test:watch
+```
+
+Coverage:
+
+```bash
+npm run test:coverage
+```
+
+E2E smoke (Playwright):
+
+```bash
+npm run test:e2e
+```
 
 ## Documentation Map
 

@@ -9,6 +9,8 @@ Next.js App Router portfolio + provider-switched CMS platform (fallback local mo
   - `npm run dev`
   - `npm run build`
   - `npm run lint`
+  - `npm run test`
+  - `npm run test:e2e`
 - Runtime baseline:
   - Next.js 16
   - React 19

@@ -7,7 +7,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {
@@ -31,15 +36,21 @@
     "typescript": "^5.8.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/mapbox__rehype-prism": "^0.8.3",
     "@types/node": "^24.1.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@vitest/coverage-v8": "^4.0.17",
     "eslint": "^9.32.0",
     "eslint-config-next": "16.1.6",
+    "jsdom": "^27.4.0",
     "prettier": "^3.6.2",
     "prettier-plugin-tailwindcss": "^0.7.1",
-    "sharp": "0.34.3"
+    "sharp": "0.34.3",
+    "vitest": "^4.0.17"
   },
   "overrides": {
     "@types/react": "19.2.14",
