@@ -689,10 +689,6 @@ async function queryFailedRowsPaginated(input: {
         ? Math.max(1, Math.min(100, input.limit - failedRows.length))
         : 100
 
-    if (pageSize <= 0) {
-      break
-    }
-
     const body: Record<string, unknown> = {
       page_size: pageSize,
       sorts: [{ timestamp: 'created_time', direction: 'ascending' }],
