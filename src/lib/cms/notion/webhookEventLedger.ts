@@ -1,8 +1,13 @@
-import type { NotionPage } from '@/lib/cms/notion/contracts'
+import type {
+  NotionPage,
+  NotionQueryResponse,
+} from '@/lib/cms/notion/contracts'
 
 import {
   notionCreatePage,
   notionGetDataSource,
+  notionGetPage,
+  notionRequest,
   notionUpdatePage,
 } from '@/lib/cms/notion/client'
 import { getOptionalNotionWebhookEventsDataSourceId } from '@/lib/cms/notion/config'
@@ -39,6 +44,12 @@ export type WebhookLedgerWatchdogResult = {
   errors: Array<{ ledgerPageId: string; message: string }>
 }
 
+/**
+ * Ledger row projection used by replay workflows.
+ * `ledgerPageId` is always the Notion ledger page id to mutate during claim/complete/fail.
+ * `pageId` is the target article page id when the event is page-scoped; it is intentionally
+ * omitted for data-source scoped events (for example `data_source.content_updated`).
+ */
 export type WebhookReplayCandidate = {
   ledgerPageId: string
   eventId: string
