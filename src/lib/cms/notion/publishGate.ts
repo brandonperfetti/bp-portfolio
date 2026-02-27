@@ -22,6 +22,17 @@ function isTutorialLike(articleType: string) {
   return mode.includes('tutorial') || mode.includes('hybrid')
 }
 
+/**
+ * Validates publish-safe requirements for a source article.
+ *
+ * @param source Source article fields used by publish-gate policy checks.
+ * @param defaultAuthorPageId Optional configured default author page id fallback.
+ * @returns Array of validation error messages. Empty means all checks passed.
+ *
+ * Enforces required source fields/statuses, winning cover constraints,
+ * tutorial-mode specific validation rules, and author fallback behavior.
+ * This function has no side effects.
+ */
 export function validatePublishSafeRequirements(
   source: PublishGateSourceArticle,
   defaultAuthorPageId: string | null,
@@ -48,10 +59,8 @@ export function validatePublishSafeRequirements(
     errors.push('Has Winning Cover must be checked')
   }
 
-  // Unknown rollup/number states should remain unknown and not be treated as zero.
   if (
     source.winningCoverCount !== undefined &&
-    Number.isFinite(source.winningCoverCount) &&
     source.winningCoverCount !== 1
   ) {
     errors.push(
@@ -90,7 +99,10 @@ export function validatePublishSafeRequirements(
     errors.push('Re-Revision Requested must be unchecked')
   }
 
-  if (source.authorRelationIds.length === 0 && !defaultAuthorPageId) {
+  if (
+    source.authorRelationIds.length === 0 &&
+    (!defaultAuthorPageId || defaultAuthorPageId.trim().length === 0)
+  ) {
     errors.push(
       'Missing required Author and NOTION_CMS_DEFAULT_AUTHOR_PAGE_ID is not configured',
     )
