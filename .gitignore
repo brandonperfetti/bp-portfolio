@@ -45,3 +45,5 @@ public/sitemap.xml
 # local tooling artifacts
 /.playwright-cli
 /output
+/playwright-report
+/test-results

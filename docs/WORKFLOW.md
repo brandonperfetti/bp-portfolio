@@ -13,7 +13,12 @@ Before merging significant changes:
 
 - `npm run lint`
 - `npm run build`
+- `npm run test`
 - Linting is configured via flat config in `eslint.config.mjs`.
+
+For UI-, route-, or middleware-affecting changes, also run:
+
+- `npm run test:e2e`
 
 ## Content Workflow (Articles)
 

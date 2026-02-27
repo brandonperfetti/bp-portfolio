@@ -36,6 +36,13 @@ export type NotionProperty = {
     boolean?: boolean | null
     date?: { start?: string | null; end?: string | null } | null
   }
+  rollup?: {
+    type?: 'number' | 'string' | 'date' | 'array'
+    number?: number | null
+    string?: string | null
+    date?: { start?: string | null; end?: string | null } | null
+    array?: NotionProperty[]
+  }
   files?: Array<
     | { type?: 'file'; file?: { url?: string | null } }
     | { type?: 'external'; external?: { url?: string | null } }
@@ -78,7 +85,11 @@ export type NotionBlock = {
   to_do?: { rich_text?: NotionRichText[]; checked?: boolean; color?: string }
   quote?: { rich_text?: NotionRichText[]; color?: string }
   callout?: { rich_text?: NotionRichText[]; color?: string }
-  code?: { rich_text?: NotionRichText[]; language?: string; caption?: NotionRichText[] }
+  code?: {
+    rich_text?: NotionRichText[]
+    language?: string
+    caption?: NotionRichText[]
+  }
   divider?: Record<string, never>
   image?: {
     type?: 'external' | 'file'

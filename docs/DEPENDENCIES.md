@@ -29,6 +29,15 @@
 - `prettier`, `prettier-plugin-tailwindcss`
 - `eslint`, `eslint-config-next`
 
+## Testing Toolchain
+
+- `vitest`
+- `@vitest/coverage-v8`
+- `jsdom`
+- `@testing-library/react`
+- `@testing-library/jest-dom`
+- `@playwright/test`
+
 ## Image Processing
 
 - `sharp` (required by Next image optimization pipeline)
