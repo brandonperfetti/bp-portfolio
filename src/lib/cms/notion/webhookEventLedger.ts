@@ -680,6 +680,7 @@ export async function listFailedWebhookEvents(options?: {
 
   const stateFilters = buildFailedStateFilters(schema)
   let rows: NotionPage[] = []
+  let filteredQuerySucceeded = false
 
   if (stateFilters.length) {
     try {
@@ -687,6 +688,7 @@ export async function listFailedWebhookEvents(options?: {
         filter:
           stateFilters.length === 1 ? stateFilters[0] : { or: stateFilters },
       })
+      filteredQuerySucceeded = true
     } catch (error) {
       console.warn(
         '[cms:notion:webhook] falling back to full event ledger scan for failed rows',
@@ -698,7 +700,7 @@ export async function listFailedWebhookEvents(options?: {
     }
   }
 
-  if (!rows.length) {
+  if (!filteredQuerySucceeded) {
     rows = await queryAllDataSourcePages(dataSourceId, {})
   }
 
