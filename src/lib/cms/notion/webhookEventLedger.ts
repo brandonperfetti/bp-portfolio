@@ -675,8 +675,68 @@ export async function runWebhookLedgerWatchdog(options?: {
   }
 }
 
+async function queryFailedRowsPaginated(input: {
+  dataSourceId: string
+  filter?: Record<string, unknown>
+  limit?: number
+}): Promise<NotionPage[]> {
+  const failedRows: NotionPage[] = []
+  let nextCursor: string | null = null
+
+  do {
+    const pageSize =
+      typeof input.limit === 'number'
+        ? Math.max(1, Math.min(100, input.limit - failedRows.length))
+        : 100
+
+    if (pageSize <= 0) {
+      break
+    }
+
+    const body: Record<string, unknown> = {
+      page_size: pageSize,
+      sorts: [{ timestamp: 'created_time', direction: 'ascending' }],
+    }
+
+    if (input.filter) {
+      body.filter = input.filter
+    }
+    if (nextCursor) {
+      body.start_cursor = nextCursor
+    }
+
+    const response = await notionRequest<NotionQueryResponse>(
+      `/data_sources/${input.dataSourceId}/query`,
+      {
+        method: 'POST',
+        body,
+      },
+    )
+
+    for (const row of response.results) {
+      if (getEventState(row) !== 'failed') {
+        continue
+      }
+      failedRows.push(row)
+      if (typeof input.limit === 'number' && failedRows.length >= input.limit) {
+        return failedRows
+      }
+    }
+
+    nextCursor = response.has_more ? response.next_cursor : null
+  } while (nextCursor)
+
+  return failedRows
+}
+
+/**
+ * Lists failed webhook ledger rows ordered oldest-first by `receivedAt`.
+ * When `options.limit` is provided, fetching and return size are both bounded to that limit.
+ * When `options.noLimit` is true, all failed rows are returned.
+ */
 export async function listFailedWebhookEvents(options?: {
   limit?: number
+  noLimit?: boolean
 }): Promise<WebhookReplayCandidate[]> {
   const dataSourceId = getOptionalNotionWebhookEventsDataSourceId()
   if (!dataSourceId) {
@@ -684,20 +744,25 @@ export async function listFailedWebhookEvents(options?: {
   }
 
   const schema = await ensureLedgerSchema(dataSourceId)
+  const noLimit = options?.noLimit === true
   const limit =
-    typeof options?.limit === 'number' && options.limit > 0
+    !noLimit && typeof options?.limit === 'number' && options.limit > 0
       ? options.limit
-      : 100
+      : noLimit
+        ? undefined
+        : 100
 
   const stateFilters = buildFailedStateFilters(schema)
-  let rows: NotionPage[] = []
+  let failedRows: NotionPage[] = []
   let filteredQuerySucceeded = false
 
   if (stateFilters.length) {
     try {
-      rows = await queryAllDataSourcePages(dataSourceId, {
+      failedRows = await queryFailedRowsPaginated({
+        dataSourceId,
         filter:
           stateFilters.length === 1 ? stateFilters[0] : { or: stateFilters },
+        limit,
       })
       filteredQuerySucceeded = true
     } catch (error) {
@@ -712,11 +777,15 @@ export async function listFailedWebhookEvents(options?: {
   }
 
   if (!filteredQuerySucceeded) {
-    rows = await queryAllDataSourcePages(dataSourceId, {})
+    if (typeof limit === 'number') {
+      failedRows = await queryFailedRowsPaginated({ dataSourceId, limit })
+    } else {
+      const rows = await queryAllDataSourcePages(dataSourceId, {})
+      failedRows = rows.filter((row) => getEventState(row) === 'failed')
+    }
   }
 
-  const failedRows = rows
-    .filter((row) => getEventState(row) === 'failed')
+  const sortedFailedRows = failedRows
     .sort((a, b) => {
       const aMs = Date.parse(getReceivedAt(a) || '')
       const bMs = Date.parse(getReceivedAt(b) || '')
@@ -726,7 +795,7 @@ export async function listFailedWebhookEvents(options?: {
     })
     .slice(0, limit)
 
-  return failedRows.map((row) => {
+  return sortedFailedRows.map((row) => {
     const eventType = getEventType(row) || 'unknown'
     const entityId = getEntityId(row) || undefined
     return {
