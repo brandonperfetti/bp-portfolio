@@ -60,6 +60,18 @@ describe('propertyToNumber', () => {
     expect(value).toBeUndefined()
   })
 
+  it('returns undefined for whitespace-only rollup.string values', () => {
+    const value = propertyToNumber({
+      type: 'rollup',
+      rollup: {
+        type: 'string',
+        string: '   ',
+      },
+    })
+
+    expect(value).toBeUndefined()
+  })
+
   it('returns undefined for non-numeric text values', () => {
     const value = propertyToNumber({
       type: 'rollup',

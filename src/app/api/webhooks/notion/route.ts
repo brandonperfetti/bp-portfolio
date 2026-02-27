@@ -180,7 +180,7 @@ export async function POST(request: Request) {
 
   if (payload.verification_token) {
     console.info('[cms:notion:webhook] setup debug', {
-      signature,
+      hasSignatureHeader: Boolean(signature),
       hasConfiguredVerificationToken: Boolean(configuredVerificationToken),
     })
 
