@@ -162,18 +162,8 @@ export async function POST(request: Request) {
   }
 
   if (payload.verification_token) {
-    console.info('[cms:notion:webhook] setup debug', {
-      verificationToken: payload.verification_token,
-      signature,
-    })
-
     if (!verificationToken) {
-      console.info(
-        '[cms:notion:webhook] received verification token; set NOTION_WEBHOOK_VERIFICATION_TOKEN',
-        {
-          verificationToken: payload.verification_token,
-        },
-      )
+      console.info('[cms:notion:webhook] verification token received but env var is not set')
     }
 
     if (
