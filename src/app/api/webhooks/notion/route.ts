@@ -5,7 +5,6 @@ import { NextResponse } from 'next/server'
 
 import { CMS_TAGS } from '@/lib/cms/cache'
 import { syncPortfolioArticleProjection } from '@/lib/cms/notion/projectionSync'
-import { enqueueProjectionSyncFailure } from '@/lib/cms/notion/syncFailureQueue'
 import {
   claimWebhookEvent,
   completeWebhookEventClaim,
@@ -328,33 +327,6 @@ export async function POST(request: Request) {
       })
 
       if (!syncResult.ok) {
-        try {
-          await enqueueProjectionSyncFailure({
-            eventType,
-            entityId,
-            pageId:
-              eventType === 'data_source.content_updated'
-                ? undefined
-                : entityId,
-            reason: 'Projection sync completed with errors',
-            lastError: syncResult.errors
-              .map((entry) => entry.message)
-              .join('; ')
-              .slice(0, 2000),
-          })
-        } catch (queueError) {
-          console.error(
-            '[cms:notion:webhook] failed to enqueue projection sync failure',
-            {
-              eventType,
-              entityId,
-              error:
-                queueError instanceof Error
-                  ? queueError.message
-                  : 'Unknown enqueue error',
-            },
-          )
-        }
         if (ledgerPageId) {
           await failWebhookEventClaim(
             ledgerPageId,
@@ -370,28 +342,6 @@ export async function POST(request: Request) {
         entityId,
         error: error instanceof Error ? error.message : 'Unknown error',
       })
-      try {
-        await enqueueProjectionSyncFailure({
-          eventType,
-          entityId,
-          pageId:
-            eventType === 'data_source.content_updated' ? undefined : entityId,
-          reason: 'Projection sync threw exception',
-          lastError: error instanceof Error ? error.message : 'Unknown error',
-        })
-      } catch (queueError) {
-        console.error(
-          '[cms:notion:webhook] failed to enqueue projection sync failure',
-          {
-            eventType,
-            entityId,
-            error:
-              queueError instanceof Error
-                ? queueError.message
-                : 'Unknown enqueue error',
-          },
-        )
-      }
       if (ledgerPageId) {
         await failWebhookEventClaim(
           ledgerPageId,
