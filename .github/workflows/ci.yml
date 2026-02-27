@@ -4,9 +4,7 @@ on:
   pull_request:
     branches: ['master']
   push:
-    branches:
-      - 'master'
-      - 'hotfix/**'
+    branches: ['master']
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
