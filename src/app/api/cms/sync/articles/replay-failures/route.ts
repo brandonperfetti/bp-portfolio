@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server'
 
 import { syncPortfolioArticleProjection } from '@/lib/cms/notion/projectionSync'
 import {
-  listProjectionSyncFailures,
-  replayProjectionSyncFailures,
-} from '@/lib/cms/notion/syncFailureQueue'
+  beginWebhookEventReplay,
+  completeWebhookEventClaim,
+  failWebhookEventClaim,
+  listFailedWebhookEvents,
+} from '@/lib/cms/notion/webhookEventLedger'
 import { isValidSecret } from '@/lib/security/timingSafeSecret'
 
 const MAX_ERROR_MESSAGE_LENGTH = 2000
@@ -53,40 +55,50 @@ export async function POST(request: Request) {
       ? Math.floor(body.limit)
       : undefined
 
-  const result = await replayProjectionSyncFailures({
-    limit,
-    runSync: async (failure) => {
-      try {
-        const syncResult = await syncPortfolioArticleProjection(
-          failure.pageId ? { pageId: failure.pageId } : undefined,
-        )
-        if (!syncResult.ok) {
-          return {
-            ok: false,
-            error: buildBoundedErrorMessage(
-              syncResult.errors.map((entry) => entry.message),
-            ),
-          }
-        }
-        return { ok: true }
-      } catch (error) {
-        return {
-          ok: false,
-          error: truncateErrorMessage(
-            error instanceof Error ? error.message : 'Unknown replay error',
-          ),
-        }
-      }
-    },
-  })
+  const queuedFailures = await listFailedWebhookEvents({ limit })
+  const replayed: Array<{ id: string; ok: boolean; error?: string }> = []
 
-  const queued = await listProjectionSyncFailures()
+  for (const failure of queuedFailures) {
+    try {
+      await beginWebhookEventReplay(failure)
+      const syncResult = await syncPortfolioArticleProjection(
+        failure.pageId ? { pageId: failure.pageId } : undefined,
+      )
+      if (!syncResult.ok) {
+        const error = buildBoundedErrorMessage(
+          syncResult.errors.map((entry) => entry.message),
+        )
+        await failWebhookEventClaim(failure.ledgerPageId, error)
+        replayed.push({ id: failure.ledgerPageId, ok: false, error })
+        continue
+      }
+
+      await completeWebhookEventClaim(failure.ledgerPageId)
+      replayed.push({ id: failure.ledgerPageId, ok: true })
+    } catch (error) {
+      const message = truncateErrorMessage(
+        error instanceof Error ? error.message : 'Unknown replay error',
+      )
+      await failWebhookEventClaim(failure.ledgerPageId, message).catch(() => {})
+      replayed.push({ id: failure.ledgerPageId, ok: false, error: message })
+    }
+  }
+
+  const remainingFailed = await listFailedWebhookEvents()
+  const result = {
+    totalQueued: queuedFailures.length,
+    attempted: replayed.length,
+    succeeded: replayed.filter((entry) => entry.ok).length,
+    failed: replayed.filter((entry) => !entry.ok).length,
+    remaining: remainingFailed.length,
+    replayed,
+  }
 
   return NextResponse.json(
     {
       ok: result.failed === 0,
       ...result,
-      queuedCount: queued.length,
+      queuedCount: remainingFailed.length,
     },
     { status: result.failed === 0 ? 200 : 207 },
   )
