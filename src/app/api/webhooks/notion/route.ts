@@ -143,6 +143,46 @@ export async function POST(request: Request) {
   const webhookSecret = process.env.NOTION_WEBHOOK_SECRET
 
   const rawBody = await request.text()
+
+  let payload: {
+    verification_token?: string
+    events?: NotionWebhookEvent[]
+  }
+  try {
+    payload = JSON.parse(rawBody || '{}') as {
+      verification_token?: string
+      events?: NotionWebhookEvent[]
+    }
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: 'Invalid JSON payload' },
+      { status: 400 },
+    )
+  }
+
+  if (payload.verification_token) {
+    if (!verificationToken) {
+      console.info(
+        '[cms:notion:webhook] received verification token; set NOTION_WEBHOOK_VERIFICATION_TOKEN',
+        {
+          verificationToken: payload.verification_token,
+        },
+      )
+    }
+
+    if (
+      !verificationToken ||
+      payload.verification_token !== verificationToken
+    ) {
+      return NextResponse.json(
+        { ok: false, error: 'Invalid verification token' },
+        { status: 401 },
+      )
+    }
+
+    return NextResponse.json({ ok: true, verified: true })
+  }
+
   const signature = request.headers.get('x-notion-signature')
 
   if (!webhookSecret && process.env.NODE_ENV === 'production') {
@@ -163,36 +203,6 @@ export async function POST(request: Request) {
       { ok: false, error: 'Invalid signature' },
       { status: 401 },
     )
-  }
-
-  let payload: {
-    verification_token?: string
-    events?: NotionWebhookEvent[]
-  }
-  try {
-    payload = JSON.parse(rawBody || '{}') as {
-      verification_token?: string
-      events?: NotionWebhookEvent[]
-    }
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: 'Invalid JSON payload' },
-      { status: 400 },
-    )
-  }
-
-  if (payload.verification_token) {
-    if (
-      !verificationToken ||
-      payload.verification_token !== verificationToken
-    ) {
-      return NextResponse.json(
-        { ok: false, error: 'Invalid verification token' },
-        { status: 401 },
-      )
-    }
-
-    return NextResponse.json({ ok: true, verified: true })
   }
 
   if (payload.events !== undefined && !Array.isArray(payload.events)) {
