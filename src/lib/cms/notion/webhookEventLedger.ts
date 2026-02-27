@@ -39,6 +39,16 @@ export type WebhookLedgerWatchdogResult = {
   errors: Array<{ ledgerPageId: string; message: string }>
 }
 
+export type WebhookReplayCandidate = {
+  ledgerPageId: string
+  eventId: string
+  eventType: string
+  entityId?: string
+  pageId?: string
+  attempts: number
+  receivedAt?: string
+}
+
 type CachedLedgerSchema = {
   schema: LedgerSchema
   fetchedAt: number
@@ -152,6 +162,18 @@ function getEventState(page: NotionPage): LedgerState | '' {
 
 function getReceivedAt(page: NotionPage): string {
   return propertyToDate(getProperty(page.properties, ['Received At'])) || ''
+}
+
+function getAttempts(page: NotionPage): number {
+  return propertyToNumber(getProperty(page.properties, ['Attempts'])) ?? 0
+}
+
+function getEventType(page: NotionPage): string {
+  return propertyToText(getProperty(page.properties, ['Event Type'])).trim()
+}
+
+function getEntityId(page: NotionPage): string {
+  return propertyToText(getProperty(page.properties, ['Entity ID'])).trim()
 }
 
 function isRecentlyProcessing(page: NotionPage, now: Date): boolean {
@@ -607,4 +629,62 @@ export async function runWebhookLedgerWatchdog(options?: {
     markedFailed,
     errors,
   }
+}
+
+export async function listFailedWebhookEvents(options?: {
+  limit?: number
+}): Promise<WebhookReplayCandidate[]> {
+  const dataSourceId = getOptionalNotionWebhookEventsDataSourceId()
+  if (!dataSourceId) {
+    return []
+  }
+
+  const limit =
+    typeof options?.limit === 'number' && options.limit > 0
+      ? options.limit
+      : 100
+
+  const rows = await queryAllDataSourcePages(dataSourceId, {})
+  const failedRows = rows
+    .filter((row) => getEventState(row) === 'failed')
+    .sort((a, b) => {
+      const aMs = Date.parse(getReceivedAt(a) || '')
+      const bMs = Date.parse(getReceivedAt(b) || '')
+      const aSafe = Number.isNaN(aMs) ? Number.MAX_SAFE_INTEGER : aMs
+      const bSafe = Number.isNaN(bMs) ? Number.MAX_SAFE_INTEGER : bMs
+      return aSafe - bSafe
+    })
+    .slice(0, limit)
+
+  return failedRows.map((row) => {
+    const eventType = getEventType(row) || 'unknown'
+    const entityId = getEntityId(row) || undefined
+    return {
+      ledgerPageId: row.id,
+      eventId: getEventIdFromPage(row) || row.id,
+      eventType,
+      entityId,
+      pageId:
+        eventType === 'data_source.content_updated' ? undefined : entityId,
+      attempts: getAttempts(row),
+      receivedAt: getReceivedAt(row) || undefined,
+    }
+  })
+}
+
+export async function beginWebhookEventReplay(input: WebhookReplayCandidate) {
+  const dataSourceId = getOptionalNotionWebhookEventsDataSourceId()
+  if (!dataSourceId) {
+    return
+  }
+
+  const schema = await ensureLedgerSchema(dataSourceId)
+  await notionUpdatePage(input.ledgerPageId, {
+    properties: buildClaimProperties(schema, {
+      eventId: input.eventId,
+      eventType: input.eventType,
+      entityId: input.entityId,
+      attempts: input.attempts + 1,
+    }),
+  })
 }
