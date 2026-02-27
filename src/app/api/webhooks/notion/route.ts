@@ -142,10 +142,18 @@ export async function POST(request: Request) {
   const verificationToken =
     process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN?.trim() || undefined
   const webhookSecret = process.env.NOTION_WEBHOOK_SECRET?.trim() || undefined
+  // Fallback order is intentionally different:
+  // configuredVerificationToken is for setup-token/admin checks,
+  // signingSecret is for request signature verification.
+  // This allows either verificationToken or webhookSecret to be configured.
   const configuredVerificationToken = verificationToken ?? webhookSecret
   const signingSecret = webhookSecret ?? verificationToken
 
-  if (verificationToken && webhookSecret && verificationToken !== webhookSecret) {
+  if (
+    verificationToken &&
+    webhookSecret &&
+    verificationToken !== webhookSecret
+  ) {
     console.warn(
       '[cms:notion:webhook] NOTION_WEBHOOK_VERIFICATION_TOKEN and NOTION_WEBHOOK_SECRET differ; this can cause 401 signature failures',
     )
