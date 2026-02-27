@@ -143,6 +143,7 @@ export async function POST(request: Request) {
   const webhookSecret = process.env.NOTION_WEBHOOK_SECRET
 
   const rawBody = await request.text()
+  const signature = request.headers.get('x-notion-signature')
 
   let payload: {
     verification_token?: string
@@ -161,6 +162,11 @@ export async function POST(request: Request) {
   }
 
   if (payload.verification_token) {
+    console.info('[cms:notion:webhook] setup debug', {
+      verificationToken: payload.verification_token,
+      signature,
+    })
+
     if (!verificationToken) {
       console.info(
         '[cms:notion:webhook] received verification token; set NOTION_WEBHOOK_VERIFICATION_TOKEN',
@@ -182,8 +188,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, verified: true })
   }
-
-  const signature = request.headers.get('x-notion-signature')
 
   if (!webhookSecret && process.env.NODE_ENV === 'production') {
     console.error(
