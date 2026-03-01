@@ -57,6 +57,7 @@ async function writeErrorLog(
 export async function runProjectionCronAutomation(options?: {
   logErrors?: boolean
 }): Promise<AutomationSummary> {
+  const startedAt = new Date().toISOString()
   const summary: Record<string, unknown> = {}
   const errors: AutomationIssue[] = []
 
@@ -138,7 +139,7 @@ export async function runProjectionCronAutomation(options?: {
 
   return {
     ok: errors.length === 0,
-    startedAt: new Date().toISOString(),
+    startedAt,
     errors,
     ...summary,
   }
@@ -147,6 +148,7 @@ export async function runProjectionCronAutomation(options?: {
 export async function runCoverRegenerationCronAutomation(options?: {
   logErrors?: boolean
 }): Promise<AutomationSummary> {
+  const startedAt = new Date().toISOString()
   const summary: Record<string, unknown> = {}
   const errors: AutomationIssue[] = []
 
@@ -173,13 +175,14 @@ export async function runCoverRegenerationCronAutomation(options?: {
 
   return {
     ok: errors.length === 0,
-    startedAt: new Date().toISOString(),
+    startedAt,
     errors,
     ...summary,
   }
 }
 
 export async function runFullCmsCronAutomation(): Promise<AutomationSummary> {
+  const startedAt = new Date().toISOString()
   const projection = await runProjectionCronAutomation({ logErrors: false })
   const cover = await runCoverRegenerationCronAutomation({ logErrors: false })
 
@@ -201,7 +204,7 @@ export async function runFullCmsCronAutomation(): Promise<AutomationSummary> {
 
   return {
     ok: combinedErrors.length === 0,
-    startedAt: new Date().toISOString(),
+    startedAt,
     errors: combinedErrors,
     ...summary,
   }
