@@ -1,4 +1,4 @@
-import type { NotionPage, NotionProperty } from '@/lib/cms/notion/contracts'
+import type { NotionPage } from '@/lib/cms/notion/contracts'
 
 import { notionUpdatePage } from '@/lib/cms/notion/client'
 import { getOptionalNotionImageJobsDataSourceId } from '@/lib/cms/notion/config'
@@ -43,24 +43,6 @@ function parsePositiveInt(raw: string | undefined, fallback: number) {
   return fallback
 }
 
-function findPropertyName(
-  properties: Record<string, NotionProperty>,
-  aliases: string[],
-) {
-  const normalizeName = (value: string) =>
-    value.toLowerCase().replace(/[^a-z0-9]/g, '')
-  const lookup = new Map(
-    Object.keys(properties).map((name) => [normalizeName(name), name]),
-  )
-  for (const alias of aliases) {
-    const key = lookup.get(normalizeName(alias))
-    if (key) {
-      return key
-    }
-  }
-  return null
-}
-
 function isWinner(page: NotionPage) {
   return (
     propertyToBoolean(
@@ -97,37 +79,6 @@ function resolveRetentionTimestamp(page: NotionPage) {
   }
 
   return Number.NaN
-}
-
-function buildArchivedMetadataProperties(page: NotionPage) {
-  const properties: Record<string, unknown> = {}
-  const cleanupStateName = findPropertyName(page.properties, ['Cleanup State'])
-  if (cleanupStateName) {
-    const type = page.properties[cleanupStateName]?.type
-    if (type === 'status') {
-      properties[cleanupStateName] = { status: { name: 'Archived' } }
-    } else if (type === 'select') {
-      properties[cleanupStateName] = { select: { name: 'Archived' } }
-    }
-  }
-
-  const cleanupNotesName = findPropertyName(page.properties, ['Cleanup Notes'])
-  if (cleanupNotesName) {
-    const type = page.properties[cleanupNotesName]?.type
-    const content =
-      'Archived by cron cleanup after retention policy window elapsed.'
-    if (type === 'rich_text') {
-      properties[cleanupNotesName] = {
-        rich_text: [{ type: 'text', text: { content } }],
-      }
-    } else if (type === 'title') {
-      properties[cleanupNotesName] = {
-        title: [{ type: 'text', text: { content } }],
-      }
-    }
-  }
-
-  return properties
 }
 
 export async function pruneImageJobs(options?: {
@@ -210,12 +161,7 @@ export async function pruneImageJobs(options?: {
     }
 
     try {
-      const metadataProperties = buildArchivedMetadataProperties(page)
-      const updateBody: Record<string, unknown> = { in_trash: true }
-      if (Object.keys(metadataProperties).length > 0) {
-        updateBody.properties = metadataProperties
-      }
-      await notionUpdatePage(page.id, updateBody)
+      await notionUpdatePage(page.id, { in_trash: true })
       archived += 1
     } catch (error) {
       errors.push({
