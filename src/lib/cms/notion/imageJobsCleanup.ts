@@ -211,10 +211,11 @@ export async function pruneImageJobs(options?: {
 
     try {
       const metadataProperties = buildArchivedMetadataProperties(page)
+      const updateBody: Record<string, unknown> = { in_trash: true }
       if (Object.keys(metadataProperties).length > 0) {
-        await notionUpdatePage(page.id, { properties: metadataProperties })
+        updateBody.properties = metadataProperties
       }
-      await notionUpdatePage(page.id, { in_trash: true })
+      await notionUpdatePage(page.id, updateBody)
       archived += 1
     } catch (error) {
       errors.push({
