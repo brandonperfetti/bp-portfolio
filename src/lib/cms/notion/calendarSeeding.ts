@@ -297,11 +297,18 @@ async function generateIdeas(args: {
   })
 
   const raw = response.output_text?.trim() ?? ''
-  const match = raw.match(/\{[\s\S]*\}/)
-  const json = match ? match[0] : raw
-  const parsed = JSON.parse(json) as { ideas?: CalendarSeedIdea[] }
-  const ideas = Array.isArray(parsed.ideas) ? parsed.ideas : []
-  return ideas
+  try {
+    const match = raw.match(/\{[\s\S]*\}/)
+    const json = match ? match[0] : raw
+    const parsed = JSON.parse(json) as { ideas?: CalendarSeedIdea[] }
+    const ideas = Array.isArray(parsed.ideas) ? parsed.ideas : []
+    return ideas
+  } catch (error) {
+    console.warn('[cms:calendar-seeding] failed to parse model output', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return []
+  }
 }
 
 function nextDateIso(date: Date) {
