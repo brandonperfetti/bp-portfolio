@@ -14,18 +14,26 @@ type SearchItem = {
   searchText: string
 }
 
-const SEARCH_CACHE_KEY = 'bp:header-search:index:v1'
+const SEARCH_CACHE_KEY = 'bp:header-search:index:v2'
 const SEARCH_FETCH_TIMEOUT_MS = 8000
+const SEARCH_CACHE_TTL_MS = 60 * 1000
+
+type SearchCacheEntry = {
+  savedAt: number
+  items: SearchItem[]
+}
 
 export function HeaderSearch() {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<SearchItem[]>([])
+  const [activeIndex, setActiveIndex] = useState(-1)
   const [loadState, setLoadState] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle')
   const [fetchAttempt, setFetchAttempt] = useState(0)
   const bypassCacheRef = useRef(false)
+  const resultRefs = useRef<Array<HTMLAnchorElement | null>>([])
   const debouncedQuery = useDebouncedValue(query, query.trim() ? 500 : 0)
 
   useEffect(() => {
@@ -62,12 +70,22 @@ export function HeaderSearch() {
       try {
         const raw = sessionStorage.getItem(SEARCH_CACHE_KEY)
         if (raw) {
-          const cached = JSON.parse(raw) as SearchItem[]
-          if (Array.isArray(cached)) {
-            setItems(cached)
+          const parsed = JSON.parse(raw) as SearchItem[] | SearchCacheEntry
+          const cached = Array.isArray(parsed)
+            ? ({
+                savedAt: Date.now(),
+                items: parsed,
+              } satisfies SearchCacheEntry)
+            : parsed
+          if (
+            Array.isArray(cached.items) &&
+            Date.now() - (cached.savedAt || 0) <= SEARCH_CACHE_TTL_MS
+          ) {
+            setItems(cached.items)
             setLoadState('ready')
             return
           }
+          sessionStorage.removeItem(SEARCH_CACHE_KEY)
         }
       } catch {
         // noop: cache parse/storage failures should not break search
@@ -98,7 +116,11 @@ export function HeaderSearch() {
         setItems(data)
         setLoadState('ready')
         try {
-          sessionStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(data))
+          const cacheEntry: SearchCacheEntry = {
+            savedAt: Date.now(),
+            items: data,
+          }
+          sessionStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(cacheEntry))
         } catch {
           // noop
         }
@@ -137,6 +159,27 @@ export function HeaderSearch() {
   }, [items, debouncedQuery])
   const queryText = debouncedQuery.trim()
 
+  useEffect(() => {
+    resultRefs.current = resultRefs.current.slice(0, filteredItems.length)
+    setActiveIndex(-1)
+  }, [filteredItems])
+
+  function focusResult(index: number) {
+    const count = filteredItems.length
+    if (count === 0) {
+      return
+    }
+
+    const normalized = ((index % count) + count) % count
+    const target = resultRefs.current[normalized]
+    if (!target) {
+      return
+    }
+
+    target.focus()
+    setActiveIndex(normalized)
+  }
+
   return (
     <>
       <button
@@ -174,6 +217,26 @@ export function HeaderSearch() {
                 type="text"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (!filteredItems.length) {
+                    return
+                  }
+
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault()
+                    focusResult(activeIndex < 0 ? 0 : activeIndex + 1)
+                  } else if (event.key === 'ArrowUp') {
+                    event.preventDefault()
+                    focusResult(
+                      activeIndex < 0
+                        ? filteredItems.length - 1
+                        : activeIndex - 1,
+                    )
+                  } else if (event.key === 'Enter' && activeIndex >= 0) {
+                    event.preventDefault()
+                    resultRefs.current[activeIndex]?.click()
+                  }
+                }}
                 placeholder="Search articles"
                 className="w-full rounded-md px-3 py-2 text-base outline outline-zinc-300 focus:outline-teal-500 sm:text-sm dark:bg-zinc-800 dark:outline-zinc-600"
               />
@@ -192,13 +255,34 @@ export function HeaderSearch() {
               {loadState === 'loading' && (
                 <p className="p-3 text-sm text-zinc-500">Loading articles...</p>
               )}
-              {filteredItems.map((item) => (
+              {filteredItems.map((item, index) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   {...getExternalLinkProps(item.href)}
+                  ref={(element) => {
+                    resultRefs.current[index] = element
+                  }}
+                  onFocus={() => {
+                    setActiveIndex(index)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault()
+                      focusResult(index + 1)
+                    } else if (event.key === 'ArrowUp') {
+                      event.preventDefault()
+                      focusResult(index - 1)
+                    } else if (event.key === 'Home') {
+                      event.preventDefault()
+                      focusResult(0)
+                    } else if (event.key === 'End') {
+                      event.preventDefault()
+                      focusResult(filteredItems.length - 1)
+                    }
+                  }}
                   onClick={() => setIsOpen(false)}
-                  className="block rounded-lg p-3 transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  className="block rounded-lg p-3 transition hover:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 focus-visible:ring-inset dark:hover:bg-zinc-800 dark:focus-visible:ring-teal-400/70"
                 >
                   <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     {item.title}

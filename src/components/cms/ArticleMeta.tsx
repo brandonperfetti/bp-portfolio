@@ -1,3 +1,11 @@
+import Link from 'next/link'
+
+import { getExternalLinkProps } from '@/lib/link-utils'
+
+function isSiteOwnerAuthor(name: string) {
+  return name.trim().toLowerCase() === 'brandon perfetti'
+}
+
 export function ArticleMeta({
   author,
   actions,
@@ -33,6 +41,11 @@ export function ArticleMeta({
             href: author.href,
           }
         : null
+  const authorHref = authorMeta
+    ? isSiteOwnerAuthor(authorMeta.name)
+      ? '/about'
+      : authorMeta.href
+    : undefined
 
   const topicChips = Array.from(
     new Set((topics ?? []).map((item) => item.trim()).filter(Boolean)),
@@ -62,14 +75,15 @@ export function ArticleMeta({
       {authorMeta || actions ? (
         <div className="flex items-start justify-between gap-3">
           {authorMeta ? (
-            <div className="border-l border-zinc-200 pl-3 dark:border-zinc-700/60">
-              {authorMeta.href ? (
-                <a
-                  href={authorMeta.href}
-                  className="text-sm font-semibold text-zinc-800 transition hover:text-teal-500 dark:text-zinc-100 dark:hover:text-teal-400"
+            <div>
+              {authorHref ? (
+                <Link
+                  href={authorHref}
+                  {...getExternalLinkProps(authorHref)}
+                  className="text-sm font-semibold text-zinc-800 no-underline transition hover:text-teal-500 hover:underline hover:underline-offset-2 dark:text-zinc-100 dark:hover:text-teal-400"
                 >
                   {authorMeta.name}
-                </a>
+                </Link>
               ) : (
                 <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                   {authorMeta.name}

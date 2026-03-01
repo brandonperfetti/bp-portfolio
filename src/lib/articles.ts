@@ -40,6 +40,14 @@ export interface ArticleDetailWithSlug extends ArticleWithSlug {
   sourceType: CmsArticleDetailResult['sourceType']
 }
 
+function isFuturePublicationDate(dateValue: string) {
+  const timestamp = Date.parse(dateValue)
+  if (Number.isNaN(timestamp)) {
+    return false
+  }
+  return timestamp > Date.now()
+}
+
 export async function getAllArticles(): Promise<ArticleWithSlug[]> {
   const articles = await getAllCmsArticleSummaries()
   return articles.map((article) => ({
@@ -63,20 +71,22 @@ export async function getArticleBySlug(
 export async function getSearchArticles(): Promise<ArticleWithSlug[]> {
   const articles = await getCmsSearchArticles()
 
-  return articles.map((article) => ({
-    slug: article.slug,
-    title: article.title,
-    description: article.description,
-    author: article.author,
-    category: article.category,
-    date: article.date,
-    image: article.image,
-    readingTimeMinutes: article.readingTimeMinutes,
-    canonicalUrl: article.canonicalUrl,
-    keywords: article.keywords,
-    topics: article.topics,
-    tech: article.tech,
-    noindex: article.noindex,
-    searchText: article.searchText,
-  }))
+  return articles
+    .filter((article) => !isFuturePublicationDate(article.date))
+    .map((article) => ({
+      slug: article.slug,
+      title: article.title,
+      description: article.description,
+      author: article.author,
+      category: article.category,
+      date: article.date,
+      image: article.image,
+      readingTimeMinutes: article.readingTimeMinutes,
+      canonicalUrl: article.canonicalUrl,
+      keywords: article.keywords,
+      topics: article.topics,
+      tech: article.tech,
+      noindex: article.noindex,
+      searchText: article.searchText,
+    }))
 }

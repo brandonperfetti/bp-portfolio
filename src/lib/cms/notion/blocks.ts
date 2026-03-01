@@ -20,7 +20,10 @@ function mapRichText(richText: NotionRichText[] | undefined): CmsRichText[] {
   }))
 }
 
-function mapBlock(block: NotionBlock, children?: CmsArticleBlock[]): CmsArticleBlock {
+function mapBlock(
+  block: NotionBlock,
+  children?: CmsArticleBlock[],
+): CmsArticleBlock {
   const base: CmsArticleBlock = {
     id: block.id,
     type: block.type,
@@ -113,7 +116,9 @@ async function mapTree(blocks: NotionBlock[]): Promise<CmsArticleBlock[]> {
   )
 }
 
-export async function getNotionBlockTree(blockId: string): Promise<CmsArticleBlock[]> {
+export async function getNotionBlockTree(
+  blockId: string,
+): Promise<CmsArticleBlock[]> {
   const rootBlocks = await listAllBlockChildren(blockId)
   return mapTree(rootBlocks)
 }

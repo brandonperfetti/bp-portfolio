@@ -4,9 +4,7 @@
 
 <!-- High-level bullet points summarizing the changes in this PR -->
 
--
-
----
+- ***
 
 ## Scope
 
@@ -18,22 +16,18 @@
 
 <!-- Bullet list of the most important changes -->
 
--
-
----
+- ***
 
 ## Why
 
 <!-- Explain why these changes were necessary -->
 
--
-
----
+- ***
 
 ## Risk / Mitigation
 
--   **Risk:**  
-    **Mitigation:**
+- **Risk:**  
+  **Mitigation:**
 
 ---
 
@@ -56,9 +50,7 @@
 
 <!-- Brief, user-facing summary of changes -->
 
--
-
----
+- ***
 
 ## Rollback Plan
 

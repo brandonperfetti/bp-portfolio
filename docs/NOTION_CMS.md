@@ -24,12 +24,16 @@ NOTION_CMS_AUTHORS_DATA_SOURCE=collection://...
 NOTION_CMS_SITE_SETTINGS_DATA_SOURCE=collection://...
 NOTION_CMS_ROUTE_REGISTRY_DATA_SOURCE=collection://...
 NOTION_CONTENT_DB_DATA_SOURCE=collection://...
+# Required for content-calendar seeding cron.
+NOTION_CONTENT_CALENDAR_DATA_SOURCE=collection://...
 ```
 
 Optional:
 
 ```bash
 NOTION_CMS_WEBHOOK_EVENTS_DATA_SOURCE=collection://...
+NOTION_CMS_AUTOMATION_ERRORS_DATA_SOURCE=collection://...
+NOTION_IMAGE_JOBS_DATA_SOURCE=collection://...
 NOTION_CMS_DEFAULT_AUTHOR_PAGE_ID=...
 NOTION_MAX_RETRY_AFTER_SECONDS=...
 ```
@@ -38,6 +42,7 @@ NOTION_MAX_RETRY_AFTER_SECONDS=...
 
 ```bash
 CMS_REVALIDATE_SECRET=...
+CRON_SECRET=...
 NOTION_WEBHOOK_VERIFICATION_TOKEN=...
 NOTION_WEBHOOK_SECRET=...
 NOTION_ENABLE_ARTICLE_PROJECTION_SYNC=true
@@ -54,6 +59,25 @@ NOTION_ENABLE_ARTICLE_PROJECTION_SYNC=true
 - Projection target is `Portfolio CMS - Articles`.
 - `Search Index` (rich text) must exist in `Portfolio CMS - Articles`.
 - Projection sync writes normalized body text into `Search Index` for fast header search.
+- Future-dated articles are intentionally excluded from both `/articles` and header search modal payloads until their publish date is reached.
+
+## Content Calendar schema (for seeding automation)
+
+The `Content Calendar` data source should include:
+
+- `Topic/Title` (title)
+- `Status` (select)
+- `Content Type` (select)
+- `Publish Date` (date)
+- `Hook Strategy` (select)
+- `Content Pillar` (select)
+- `Target Audience` (multi-select)
+- `Technology Dependencies` (multi-select)
+
+Seeder defaults:
+
+- Missing `Target Audience` is treated as `Tech Workers`.
+- Missing `Technology Dependencies` is treated as `None - Timeless`.
 
 ## Projection sync endpoints
 
@@ -62,6 +86,16 @@ NOTION_ENABLE_ARTICLE_PROJECTION_SYNC=true
 - `POST /api/cms/sync/articles/replay-failures`
 - `POST /api/cms/sync/articles/watchdog`
 - `POST /api/cms/sync/articles/prepublish-gate`
+- `POST /api/cms/sync/articles/quality-gate`
+- `POST /api/cms/sync/articles/auto-heal`
+- `POST /api/cms/sync/articles/cover-regeneration`
+- `GET /api/cron/cms-integrity` (or `POST`)
+- `GET /api/cron/cms-projection` (or `POST`)
+- `GET /api/cron/cms-cover-regeneration` (or `POST`)
+- `GET /api/cron/cms-cleanup` (or `POST`)
+- `GET /api/cron/cms-automation-errors-retention` (or `POST`)
+- `GET /api/cron/cms-automation` (or `POST`)
+- `GET /api/cron/content-calendar-seeding` (or `POST`)
 
 Primary usage:
 
@@ -69,14 +103,172 @@ Primary usage:
 curl -X POST http://localhost:3000/api/cms/sync/articles \
   -H "Content-Type: application/json" \
   --data '{"secret":"<CMS_REVALIDATE_SECRET>"}'
+
+# Audit publish-safe source rows for SOP consistency gaps.
+curl -X POST http://localhost:3000/api/cms/sync/articles/quality-gate \
+  -H "Content-Type: application/json" \
+  --data '{"secret":"<CMS_REVALIDATE_SECRET>"}'
+
+# Auto-fill missing SOP quality defaults on publish-safe source rows.
+curl -X POST http://localhost:3000/api/cms/sync/articles/auto-heal \
+  -H "Content-Type: application/json" \
+  --data '{"secret":"<CMS_REVALIDATE_SECRET>"}'
+
+# Process cover regeneration requests (supports optional limit/sourcePageId).
+curl -X POST http://localhost:3000/api/cms/sync/articles/cover-regeneration \
+  -H "Content-Type: application/json" \
+  --data '{"secret":"<CMS_REVALIDATE_SECRET>","limit":2}'
+
+# Run full cron automation flow manually (projection, quality-heal, cover regen, reconcile, watchdog).
+curl -X GET http://localhost:3000/api/cron/cms-automation \
+  -H "Authorization: Bearer <CRON_SECRET>"
+
+# Run integrity maintenance (projection + quality gate + auto-heal + reconcile + watchdog).
+curl -X GET http://localhost:3000/api/cron/cms-integrity \
+  -H "Authorization: Bearer <CRON_SECRET>"
+
+# Backward-compatible alias for the same integrity workflow.
+curl -X GET http://localhost:3000/api/cron/cms-projection \
+  -H "Authorization: Bearer <CRON_SECRET>"
+
+# Run cover-regeneration maintenance only.
+curl -X GET http://localhost:3000/api/cron/cms-cover-regeneration \
+  -H "Authorization: Bearer <CRON_SECRET>"
+
+# Run automation-error retention cleanup only.
+curl -X GET http://localhost:3000/api/cron/cms-automation-errors-retention \
+  -H "Authorization: Bearer <CRON_SECRET>"
+
+# Run cleanup maintenance (archive stale failed webhook ledger rows, prune automation errors,
+# and optionally archive non-winner completed image jobs past retention).
+curl -X GET http://localhost:3000/api/cron/cms-cleanup \
+  -H "Authorization: Bearer <CRON_SECRET>"
+
+# Run content-calendar idea seeding (LLM + Notion write path, supports dry-run env mode).
+curl -X GET http://localhost:3000/api/cron/content-calendar-seeding \
+  -H "Authorization: Bearer <CRON_SECRET>"
+
+# Force dry-run for ad-hoc validation (no Notion row creation).
+curl -X GET "http://localhost:3000/api/cron/content-calendar-seeding?dryRun=1" \
+  -H "Authorization: Bearer <CRON_SECRET>"
 ```
+
+Optional cover regeneration hosting config:
+
+```bash
+CLOUDINARY_CLOUD_NAME=...
+CLOUDINARY_API_KEY=...
+CLOUDINARY_API_SECRET=...
+# Optional override; default is bp-portfolio/articles.
+CLOUDINARY_CMS_COVERS_FOLDER=bp-portfolio/articles
+# Optional cap for cron cover-regeneration throughput.
+CMS_COVER_REGEN_CRON_LIMIT=2
+# Error-log retention settings (archive old rows).
+CMS_AUTOMATION_ERRORS_RETENTION_DAYS=30
+CMS_AUTOMATION_ERRORS_RETENTION_LIMIT=100
+# Failed webhook-event ledger cleanup retention.
+CMS_WEBHOOK_EVENTS_RETENTION_DAYS=30
+CMS_WEBHOOK_EVENTS_RETENTION_LIMIT=100
+# Optional Image Jobs cleanup retention.
+CMS_IMAGE_JOBS_RETENTION_DAYS=30
+CMS_IMAGE_JOBS_CLEANUP_LIMIT=100
+# Optional fallback mode for rows missing explicit retention date.
+CMS_IMAGE_JOBS_CLEANUP_ALLOW_FALLBACK_AGE=false
+# Content calendar seeding controls.
+CALENDAR_SEEDING_ENABLED=true
+CALENDAR_SEEDING_DRY_RUN=false
+CALENDAR_SEEDING_MODEL=gpt-5-mini
+CALENDAR_SEEDING_COUNT=5
+CALENDAR_SEEDING_CADENCE_DAYS=7
+CALENDAR_SEEDING_MAX_CONTEXT_ROWS=80
+CALENDAR_SEEDING_PILLAR_LOOKBACK_ROWS=10
+CALENDAR_SEEDING_MAX_PILLAR_SHARE_PERCENT=40
+```
+
+Content pillar policy:
+
+- Canonical pillars: `Mindset`, `Software`, `Design`, `Leadership`, `Product Execution`.
+- Calendar seeding now requires and writes `Content Pillar` for every generated row.
+- Seeder uses recent lookback distribution and a max-per-run share cap to avoid one pillar dominating each seeded batch.
+- Publish-safe source articles now require `Content Pillar`; quality auto-heal defaults it when missing.
+- Auto-default heuristic (when `Content Pillar` is empty):
+  - topic/tag signal wins first (`mindset`, `design`, `leadership`, `product`, `execution`).
+  - `Hybrid` falls back to `Product Execution`.
+  - everything else falls back to `Software`.
+
+Cover regeneration retry behavior:
+
+- If generation/upload fails, request remains queued until `Recovery Attempts` reaches 3.
+- At 3 failed attempts, request is cleared and `Recovery Status` is set to `Needs Human Review`.
+- Regeneration uses model `gpt-image-1.5` with a shared house-style prompt and A/B/C variant framing to match initial Image Jobs visual language.
+- Optional article property: `Cover Style Profile` (aliases supported: `Image Style Profile`, `Cover Style`).
+  - Recommended values:
+    - `Editorial Realistic` (default)
+    - `Technical Minimal`
+    - `Studio Photoreal`
+  - Unknown/custom values are treated as style-overrides in prompt text.
+  - Auto-default mapping used by quality auto-heal when style is missing:
+    - `Implementation Tutorial` -> `Technical Minimal`
+    - `Tool Showcase` -> `Studio Photoreal`
+    - `Concept Explainer` / `Hybrid` / unknown -> `Editorial Realistic`
+
+Error-only Notion run logging:
+
+- When configured, failures are written to `NOTION_CMS_AUTOMATION_ERRORS_DATA_SOURCE`.
+- Success runs are intentionally not logged to avoid workspace noise.
+
+Vercel cron cadence (current):
+
+- `/api/cron/cms-integrity` every 10 minutes.
+- `/api/cron/cms-cover-regeneration` every 4 hours (minute 20).
+- `/api/cron/cms-cleanup` weekly Friday at 23:00 UTC.
+- `/api/cron/cms-automation-errors-retention` daily at 03:45.
+- `/api/cron/content-calendar-seeding` weekly Monday at 18:00 UTC.
+- `/api/cron/cms-projection` retained as a compatibility alias.
+- `/api/cron/cms-automation` retained for manual full-run execution.
+
+Cache invalidation behavior:
+
+- Webhook and article-mutation cron routes trigger `revalidateTag(cms:articles)` and path revalidation for `/` and `/articles`.
+- Header search modal also uses session cache with a short TTL, so cron-updated content appears without hard refresh after the cache window expires.
+
+## Runtime boundary (Cron vs Codex)
+
+- Vercel cron routes run inside your deployed Next.js runtime.
+  - They can use direct APIs/SDKs only (Notion API, OpenAI API, Cloudinary API, internal app code).
+  - They cannot use Codex MCP servers or local Codex skills.
+- Codex automations run in your Codex environment.
+  - They can use MCP tools/skills and interactive agent workflows.
+  - They are best for research-heavy or multi-tool authoring flows.
+
+Recommended split:
+
+- Production maintenance (deterministic): use cron routes `/api/cron/cms-integrity` and `/api/cron/cms-cover-regeneration`.
+- Editorial/agentic generation workflows: keep in Codex automations.
+- Handoff contract between both systems: Notion properties (for example `Content Status`, `Regenerate Cover Requested`, `Recovery Status`, `Cover Image URL`, `Has Required Metadata`).
+
+Automation proposal checklist:
+
+1. Classify runtime owner: `Cron-safe` or `Codex-only`.
+2. List external dependencies:
+   - Cron-safe must be direct API/SDK only.
+   - Codex-only may require MCP tools/skills.
+3. Define Notion handoff fields (inputs + outputs) and failure states.
+4. Define auth model:
+   - Cron route uses `Authorization: Bearer <CRON_SECRET>`.
+   - Manual API routes use `CMS_REVALIDATE_SECRET`.
+5. Define observability:
+   - Error-only logs to `NOTION_CMS_AUTOMATION_ERRORS_DATA_SOURCE`.
+   - No success-log noise by default.
+6. Define retry and terminal behavior (max attempts, when to require human review).
+7. Define throughput limits and schedule (for cron jobs, include run frequency + per-run caps).
 
 ## Content guardrails
 
 - Articles:
   - `Topics/Tags` required for publish-safe rendering and faceting.
   - `Tech` should be tool/framework specific.
-  - `Author` relation should be present on every article.
+  - `Author` relation should be present on every article (recommended). Missing author no longer blocks projection; fallback author is used at runtime.
 - Pages (`Portfolio CMS - Pages`):
   - `Status` should be `Published` (or `Approved`, mapper dependent).
 

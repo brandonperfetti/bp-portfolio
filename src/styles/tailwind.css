@@ -46,4 +46,32 @@
   [aria-disabled='true'] {
     cursor: not-allowed;
   }
+
+  :where(
+    a,
+    button,
+    input,
+    textarea,
+    select,
+    summary,
+    [role='button'],
+    [tabindex]:not([tabindex='-1'])
+  ):focus-visible {
+    outline: 2px solid var(--color-teal-500);
+    outline-offset: 2px;
+  }
+
+  .dark
+    :where(
+      a,
+      button,
+      input,
+      textarea,
+      select,
+      summary,
+      [role='button'],
+      [tabindex]:not([tabindex='-1'])
+    ):focus-visible {
+    outline-color: var(--color-teal-400);
+  }
 }

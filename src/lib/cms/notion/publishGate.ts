@@ -1,7 +1,10 @@
 export type PublishGateSourceArticle = {
   slug: string
+  sourceStatus: string
+  publishDate: string
   metaDescription: string
   coverImageUrl: string
+  contentPillar: string
   topics: string[]
   hasWinningCover: boolean
   winningCoverCount?: number
@@ -15,6 +18,14 @@ export type PublishGateSourceArticle = {
 
 function normalizeStatus(value: string) {
   return value.trim().toLowerCase()
+}
+
+function isFutureDate(value: string) {
+  const timestamp = Date.parse(value)
+  if (Number.isNaN(timestamp)) {
+    return false
+  }
+  return timestamp > Date.now()
 }
 
 function isTutorialLike(articleType: string) {
@@ -38,6 +49,7 @@ export function validatePublishSafeRequirements(
   defaultAuthorPageId: string | null,
 ): string[] {
   const errors: string[] = []
+  const sourceStatus = normalizeStatus(source.sourceStatus)
 
   if (!source.slug.trim()) {
     errors.push('Missing required Slug')
@@ -49,6 +61,18 @@ export function validatePublishSafeRequirements(
 
   if (!source.coverImageUrl.trim()) {
     errors.push('Missing required Cover Image URL')
+  }
+
+  if (!source.contentPillar.trim()) {
+    errors.push('Missing required Content Pillar')
+  }
+
+  if (!source.publishDate.trim()) {
+    errors.push('Missing required Published Date')
+  } else if (sourceStatus === 'published' && isFutureDate(source.publishDate)) {
+    errors.push(
+      'Published Date cannot be in the future when Content Status is Published',
+    )
   }
 
   if (source.topics.length === 0) {
@@ -99,13 +123,14 @@ export function validatePublishSafeRequirements(
     errors.push('Re-Revision Requested must be unchecked')
   }
 
+  // Author is a quality signal, but not a hard publish blocker.
+  // Runtime rendering has a stable default-author fallback, so missing relation
+  // should not prevent projection creation for otherwise publish-safe content.
   if (
     source.authorRelationIds.length === 0 &&
     (!defaultAuthorPageId || defaultAuthorPageId.trim().length === 0)
   ) {
-    errors.push(
-      'Missing required Author and NOTION_CMS_DEFAULT_AUTHOR_PAGE_ID is not configured',
-    )
+    // Intentionally non-blocking.
   }
 
   return errors

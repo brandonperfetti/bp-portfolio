@@ -10,14 +10,21 @@ import type { CmsWorkHistoryItem } from '@/lib/cms/types'
 
 const getCachedNotionWorkHistory = unstable_cache(
   async (): Promise<CmsWorkHistoryItem[]> => {
-    const pages = await queryAllDataSourcePages(getNotionWorkHistoryDataSourceId(), {
-      sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
-    })
+    const pages = await queryAllDataSourcePages(
+      getNotionWorkHistoryDataSourceId(),
+      {
+        sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
+      },
+    )
 
     return pages
       .map(mapNotionWorkHistory)
       .filter((item): item is CmsWorkHistoryItem => item !== null)
-      .sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER))
+      .sort(
+        (a, b) =>
+          (a.order ?? Number.MAX_SAFE_INTEGER) -
+          (b.order ?? Number.MAX_SAFE_INTEGER),
+      )
   },
   ['cms', 'notion', 'work-history'],
   {
@@ -34,10 +41,16 @@ export async function getCmsWorkHistory() {
   try {
     return await getCachedNotionWorkHistory()
   } catch (error) {
-    if (error instanceof NotionConfigError || error instanceof NotionHttpError) {
-      console.warn('[cms:notion] work history unavailable, falling back to local content', {
-        error: error.message,
-      })
+    if (
+      error instanceof NotionConfigError ||
+      error instanceof NotionHttpError
+    ) {
+      console.warn(
+        '[cms:notion] work history unavailable, falling back to local content',
+        {
+          error: error.message,
+        },
+      )
       return null
     }
 

@@ -7,8 +7,8 @@ import { notionRequest } from '@/lib/cms/notion/client'
 import { getNotionArticlesDataSourceId } from '@/lib/cms/notion/config'
 import type { NotionPage } from '@/lib/cms/notion/contracts'
 import {
-	mapNotionArticleSummary,
-	mapNotionAuthorProfile,
+  mapNotionArticleSummary,
+  mapNotionAuthorProfile,
 } from '@/lib/cms/notion/mapper'
 import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
 import { getProperty, propertyToRelationIds } from '@/lib/cms/notion/property'

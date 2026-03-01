@@ -18,7 +18,7 @@ function NavLink({
     <Link
       href={href}
       {...getExternalLinkProps(href)}
-      className="transition hover:text-teal-500 dark:hover:text-teal-400"
+      className="rounded-md px-1.5 py-0.5 transition hover:text-teal-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:hover:text-teal-400 dark:focus-visible:ring-teal-400/80"
     >
       {children}
     </Link>
@@ -26,14 +26,15 @@ function NavLink({
 }
 
 export function Footer() {
-  const defaultNavigationItems: Array<Pick<CmsNavigationItem, 'href' | 'label'>> =
-    [
-      { href: '/about', label: 'About' },
-      { href: '/articles', label: 'Articles' },
-      { href: '/projects', label: 'Projects' },
-      { href: '/tech', label: 'Tech' },
-      { href: '/uses', label: 'Uses' },
-    ]
+  const defaultNavigationItems: Array<
+    Pick<CmsNavigationItem, 'href' | 'label'>
+  > = [
+    { href: '/about', label: 'About' },
+    { href: '/articles', label: 'Articles' },
+    { href: '/projects', label: 'Projects' },
+    { href: '/tech', label: 'Tech' },
+    { href: '/uses', label: 'Uses' },
+  ]
   return <FooterWithNavigation navigationItems={defaultNavigationItems} />
 }
 

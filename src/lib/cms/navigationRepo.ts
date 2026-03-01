@@ -19,9 +19,12 @@ const DEFAULT_NAVIGATION: CmsNavigationItem[] = [
 
 const getCachedNotionNavigation = unstable_cache(
   async (): Promise<CmsNavigationItem[]> => {
-    const pages = await queryAllDataSourcePages(getNotionRouteRegistryDataSourceId(), {
-      sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
-    })
+    const pages = await queryAllDataSourcePages(
+      getNotionRouteRegistryDataSourceId(),
+      {
+        sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
+      },
+    )
 
     const items = pages
       .map(mapNavigationItem)
@@ -49,10 +52,16 @@ export async function getCmsNavigation() {
   try {
     return await getCachedNotionNavigation()
   } catch (error) {
-    if (error instanceof NotionConfigError || error instanceof NotionHttpError) {
-      console.warn('[cms:notion] navigation unavailable, using default navigation', {
-        error: error.message,
-      })
+    if (
+      error instanceof NotionConfigError ||
+      error instanceof NotionHttpError
+    ) {
+      console.warn(
+        '[cms:notion] navigation unavailable, using default navigation',
+        {
+          error: error.message,
+        },
+      )
       return DEFAULT_NAVIGATION
     }
 

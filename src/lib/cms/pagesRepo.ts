@@ -34,7 +34,10 @@ const getCachedNotionPages = unstable_cache(
 )
 
 const getCachedPageByPath = unstable_cache(
-  async (path: string, includeBody: boolean): Promise<CmsPageContent | null> => {
+  async (
+    path: string,
+    includeBody: boolean,
+  ): Promise<CmsPageContent | null> => {
     const targetPath = normalizePath(path)
     const pages = await getCachedNotionPages()
     const page = pages.find((candidate) => candidate.routeKey === targetPath)
@@ -65,7 +68,10 @@ const getCachedPageByPath = unstable_cache(
   },
 )
 
-export async function getCmsPageByPath(path: string, options?: { includeBody?: boolean }) {
+export async function getCmsPageByPath(
+  path: string,
+  options?: { includeBody?: boolean },
+) {
   if (getCmsProvider() !== 'notion') {
     return null
   }
@@ -74,11 +80,17 @@ export async function getCmsPageByPath(path: string, options?: { includeBody?: b
   try {
     return await getCachedPageByPath(path, includeBody)
   } catch (error) {
-    if (error instanceof NotionConfigError || error instanceof NotionHttpError) {
-      console.warn('[cms:notion] page content unavailable, falling back to local content', {
-        path,
-        error: error.message,
-      })
+    if (
+      error instanceof NotionConfigError ||
+      error instanceof NotionHttpError
+    ) {
+      console.warn(
+        '[cms:notion] page content unavailable, falling back to local content',
+        {
+          path,
+          error: error.message,
+        },
+      )
       return null
     }
 

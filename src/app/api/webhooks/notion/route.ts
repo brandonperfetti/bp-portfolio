@@ -4,6 +4,10 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { NextResponse } from 'next/server'
 
 import { CMS_TAGS } from '@/lib/cms/cache'
+import {
+  getNotionContentDataSourceId,
+  getOptionalNotionWebhookEventsDataSourceId,
+} from '@/lib/cms/notion/config'
 import { syncPortfolioArticleProjection } from '@/lib/cms/notion/projectionSync'
 import {
   claimWebhookEvent,
@@ -14,11 +18,34 @@ import {
 type NotionWebhookEvent = {
   id?: string
   type?: string
+  entity?: {
+    id?: string
+    [key: string]: unknown
+  }
   data?: {
     id?: string
     [key: string]: unknown
   }
   timestamp?: string
+}
+
+type NotionWebhookPayload = {
+  verification_token?: string
+  events?: NotionWebhookEvent[]
+} & NotionWebhookEvent
+
+function normalizeEvents(payload: NotionWebhookPayload): NotionWebhookEvent[] {
+  if (Array.isArray(payload.events)) {
+    return payload.events
+  }
+
+  // Some Notion webhook deliveries are a single event object rather than an
+  // envelope with `events[]`. Support both shapes.
+  if (typeof payload.type === 'string') {
+    return [payload]
+  }
+
+  return []
 }
 
 const EVENT_TTL_MS = 24 * 60 * 60 * 1000
@@ -137,6 +164,78 @@ function shouldRunProjectionSync(eventType: string) {
   )
 }
 
+function getContentDataSourceIdSafe() {
+  try {
+    return getNotionContentDataSourceId()
+  } catch {
+    return null
+  }
+}
+
+function getWebhookEventsDataSourceIdSafe() {
+  try {
+    return getOptionalNotionWebhookEventsDataSourceId()
+  } catch {
+    return null
+  }
+}
+
+function getEventDataSourceId(event: NotionWebhookEvent): string | null {
+  const data =
+    event.data && typeof event.data === 'object'
+      ? (event.data as Record<string, unknown>)
+      : null
+  const parent =
+    data &&
+    data.parent &&
+    typeof data.parent === 'object' &&
+    data.parent !== null
+      ? (data.parent as Record<string, unknown>)
+      : null
+
+  const parentDataSourceId =
+    parent && typeof parent.data_source_id === 'string'
+      ? parent.data_source_id
+      : null
+  if (parentDataSourceId) {
+    return parentDataSourceId
+  }
+
+  if (event.type === 'data_source.content_updated') {
+    const entityId =
+      event.entity && typeof event.entity.id === 'string'
+        ? event.entity.id
+        : null
+    if (entityId) {
+      return entityId
+    }
+  }
+
+  return null
+}
+
+function shouldRunProjectionForEvent(
+  eventType: string,
+  eventDataSourceId: string | null,
+  contentDataSourceId: string | null,
+) {
+  if (!shouldRunProjectionSync(eventType)) {
+    return false
+  }
+
+  // Fail open if content data source is unavailable at runtime.
+  if (!contentDataSourceId) {
+    return true
+  }
+
+  // Some payloads omit parent data source metadata; keep behavior permissive.
+  if (!eventDataSourceId) {
+    return true
+  }
+
+  return eventDataSourceId === contentDataSourceId
+}
+
 export async function POST(request: Request) {
   const verificationToken =
     process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN?.trim() || undefined
@@ -161,15 +260,9 @@ export async function POST(request: Request) {
   const rawBody = await request.text()
   const signature = request.headers.get('x-notion-signature')
 
-  let payload: {
-    verification_token?: string
-    events?: NotionWebhookEvent[]
-  }
+  let payload: NotionWebhookPayload
   try {
-    payload = JSON.parse(rawBody || '{}') as {
-      verification_token?: string
-      events?: NotionWebhookEvent[]
-    }
+    payload = JSON.parse(rawBody || '{}') as NotionWebhookPayload
   } catch {
     return NextResponse.json(
       { ok: false, error: 'Invalid JSON payload' },
@@ -199,7 +292,11 @@ export async function POST(request: Request) {
       )
     }
 
-    return NextResponse.json({ ok: true, verified: true })
+    return NextResponse.json({
+      ok: true,
+      verified: true,
+      reason: 'verification_token_handshake',
+    })
   }
 
   if (!signingSecret && process.env.NODE_ENV === 'production') {
@@ -231,14 +328,34 @@ export async function POST(request: Request) {
 
   cleanupEventCache()
 
-  for (const event of payload.events ?? []) {
+  const events = normalizeEvents(payload)
+  const contentDataSourceId = getContentDataSourceIdSafe()
+  const webhookEventsDataSourceId = getWebhookEventsDataSourceIdSafe()
+
+  const diagnostics = {
+    receivedEvents: events.length,
+    processedEvents: 0,
+    skippedDuplicate: 0,
+    skippedIgnored: 0,
+    skippedNoEntityId: 0,
+    skippedNoProjectionSync: 0,
+    skippedLedgerEvent: 0,
+    skippedUnrelatedDataSource: 0,
+    syncAttempts: 0,
+    syncSuccesses: 0,
+    syncFailures: 0,
+  }
+
+  for (const event of events) {
     if (typeof event !== 'object' || event === null) {
       continue
     }
+    diagnostics.processedEvents += 1
 
     const eventId = typeof event.id === 'string' ? event.id : undefined
 
     if (eventId && eventDedupe.has(eventId)) {
+      diagnostics.skippedDuplicate += 1
       continue
     }
 
@@ -249,13 +366,26 @@ export async function POST(request: Request) {
         : undefined
     const entityId =
       typeof eventData?.id === 'string' ? eventData.id : undefined
+    const entityFallbackId =
+      typeof event.entity?.id === 'string' ? event.entity.id : undefined
+    const resolvedEntityId = entityId ?? entityFallbackId
+    const eventDataSourceId = getEventDataSourceId(event)
 
     console.info('[cms:notion:webhook] received', {
       eventId,
       eventType,
-      entityId,
+      entityId: resolvedEntityId,
+      eventDataSourceId,
       timestamp: event.timestamp,
     })
+
+    if (
+      webhookEventsDataSourceId &&
+      eventDataSourceId === webhookEventsDataSourceId
+    ) {
+      diagnostics.skippedLedgerEvent += 1
+      continue
+    }
 
     let ledgerPageId = ''
     if (eventId) {
@@ -263,12 +393,13 @@ export async function POST(request: Request) {
         const claim = await claimWebhookEvent({
           eventId,
           eventType,
-          entityId,
+          entityId: resolvedEntityId,
         })
         if (
           claim.action === 'skip_duplicate' ||
           claim.action === 'skip_processed'
         ) {
+          diagnostics.skippedDuplicate += 1
           continue
         }
         if (claim.action === 'claimed') {
@@ -276,6 +407,7 @@ export async function POST(request: Request) {
           eventDedupe.set(eventId, Date.now())
         }
         if (claim.action === 'ignored') {
+          diagnostics.skippedIgnored += 1
           continue
         }
       } catch (error) {
@@ -290,14 +422,23 @@ export async function POST(request: Request) {
 
     applyEventRevalidation(eventType)
 
-    if (!shouldRunProjectionSync(eventType)) {
+    const shouldSyncThisEvent = shouldRunProjectionForEvent(
+      eventType,
+      eventDataSourceId,
+      contentDataSourceId,
+    )
+    if (!shouldSyncThisEvent) {
+      diagnostics.skippedNoProjectionSync += 1
+      if (shouldRunProjectionSync(eventType)) {
+        diagnostics.skippedUnrelatedDataSource += 1
+      }
       if (ledgerPageId) {
         await completeWebhookEventClaim(ledgerPageId).catch(() => {})
       }
       continue
     }
 
-    if (eventType.startsWith('page.') && !entityId) {
+    if (eventType.startsWith('page.') && !resolvedEntityId) {
       console.warn(
         '[cms:notion:webhook] page event missing entity id; skipping sync',
         {
@@ -305,6 +446,7 @@ export async function POST(request: Request) {
           eventType,
         },
       )
+      diagnostics.skippedNoEntityId += 1
       if (ledgerPageId) {
         await failWebhookEventClaim(
           ledgerPageId,
@@ -315,18 +457,20 @@ export async function POST(request: Request) {
     }
 
     try {
+      diagnostics.syncAttempts += 1
       const syncResult = await syncPortfolioArticleProjection(
         eventType === 'data_source.content_updated'
           ? undefined
-          : { pageId: entityId },
+          : { pageId: resolvedEntityId },
       )
       console.info('[cms:notion:webhook] projection sync', {
         eventType,
-        entityId,
+        entityId: resolvedEntityId,
         ...syncResult,
       })
 
       if (!syncResult.ok) {
+        diagnostics.syncFailures += 1
         if (ledgerPageId) {
           await failWebhookEventClaim(
             ledgerPageId,
@@ -334,12 +478,14 @@ export async function POST(request: Request) {
           ).catch(() => {})
         }
       } else if (ledgerPageId) {
+        diagnostics.syncSuccesses += 1
         await completeWebhookEventClaim(ledgerPageId).catch(() => {})
       }
     } catch (error) {
+      diagnostics.syncFailures += 1
       console.error('[cms:notion:webhook] projection sync failed', {
         eventType,
-        entityId,
+        entityId: resolvedEntityId,
         error: error instanceof Error ? error.message : 'Unknown error',
       })
       if (ledgerPageId) {
@@ -351,5 +497,13 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true })
+  if (events.length === 0) {
+    console.info('[cms:notion:webhook] no events in payload', {
+      hasVerificationToken: Boolean(payload.verification_token),
+      projectionSyncEnabled:
+        process.env.NOTION_ENABLE_ARTICLE_PROJECTION_SYNC !== 'false',
+    })
+  }
+
+  return NextResponse.json({ ok: true, diagnostics })
 }

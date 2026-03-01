@@ -23,10 +23,7 @@ export async function POST(req: Request) {
     console.error('[api/openai/chat] Invalid JSON body', {
       error: error instanceof Error ? error.message : String(error),
     })
-    return NextResponse.json(
-      { error: 'Invalid JSON body.' },
-      { status: 400 },
-    )
+    return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
   const messages = (body as { messages?: Message[] })?.messages

@@ -1,9 +1,11 @@
 import Image from 'next/image'
+import Link from 'next/link'
 
 import { Card } from '@/components/Card'
 import { LinkIcon } from '@/icons'
 import type { CmsEntityItem } from '@/lib/cms/types'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
+import { getExternalLinkProps } from '@/lib/link-utils'
 
 export function EntityGrid({ items }: { items: CmsEntityItem[] }) {
   return (
@@ -16,6 +18,17 @@ export function EntityGrid({ items }: { items: CmsEntityItem[] }) {
           as="li"
           key={`${item.slug || item.name}-${item.link?.href ?? 'no-link'}-${index}`}
         >
+          {item.link?.href ? (
+            <>
+              <div className="absolute -inset-x-4 -inset-y-6 z-0 scale-95 bg-zinc-50 opacity-0 transition group-hover:scale-100 group-hover:opacity-100 sm:-inset-x-6 sm:rounded-2xl dark:bg-zinc-800/50" />
+              <Link
+                href={item.link.href}
+                {...getExternalLinkProps(item.link.href)}
+                aria-label={`Open project: ${item.name}`}
+                className="absolute -inset-x-4 -inset-y-6 z-20 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 sm:-inset-x-6 sm:rounded-2xl dark:focus-visible:ring-teal-400/70"
+              />
+            </>
+          ) : null}
           {item.logo ? (
             <div className="relative z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-md ring-1 shadow-zinc-800/5 ring-zinc-900/5 sm:h-12 sm:w-12 dark:border dark:border-zinc-700/50 dark:bg-zinc-800 dark:ring-0">
               <Image
@@ -33,11 +46,7 @@ export function EntityGrid({ items }: { items: CmsEntityItem[] }) {
             </div>
           ) : null}
           <h2 className="mt-6 text-base font-semibold text-zinc-800 dark:text-zinc-100">
-            {item.link?.href ? (
-              <Card.Link href={item.link.href}>{item.name}</Card.Link>
-            ) : (
-              item.name
-            )}
+            <span className="relative z-10">{item.name}</span>
           </h2>
           <Card.Description>{item.description}</Card.Description>
           {item.link?.label ? (

@@ -33,10 +33,7 @@ export async function PUT(req: Request) {
     console.error('[api/mailinglist] Invalid JSON body', {
       error: error instanceof Error ? error.message : String(error),
     })
-    return NextResponse.json(
-      { message: 'Invalid JSON body.' },
-      { status: 400 },
-    )
+    return NextResponse.json({ message: 'Invalid JSON body.' }, { status: 400 })
   }
 
   const body =
