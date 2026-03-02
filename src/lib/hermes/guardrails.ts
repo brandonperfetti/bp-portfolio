@@ -23,7 +23,9 @@ export function setGuardrailStores(store: GuardrailStores | null) {
   injectedGuardrailStores = store
   if (store) {
     globalForGuardrails.__bpHermesGuardrails = store
+    return
   }
+  delete globalForGuardrails.__bpHermesGuardrails
 }
 
 export function getStores(): GuardrailStores {
