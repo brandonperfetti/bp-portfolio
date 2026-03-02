@@ -570,7 +570,7 @@ function buildCatalog() {
       referenceLabel: 'ai-sdk.dev',
       summary:
         'Type-safe TypeScript SDK for building AI-powered apps with model/provider abstractions.',
-      logoSourceUrl: 'https://avatars.githubusercontent.com/u/14985020?v=4',
+      logoSourceUrl: 'https://avatars.githubusercontent.com/u/14985020?s=200&v=4',
     },
     {
       canonicalName: 'Cloudinary',
