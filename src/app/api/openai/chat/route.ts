@@ -99,24 +99,42 @@ export async function POST(req: Request) {
   }
 
   const safeMessages = messages.slice(-limits.maxMessages)
-  const isValidMessages = safeMessages.every(
-    (message) =>
-      message &&
-      (message.role === 'system' ||
-        message.role === 'assistant' ||
-        message.role === 'user') &&
-      typeof message.content === 'string' &&
-      message.content.trim().length > 0 &&
-      message.content.length <= limits.maxMessageChars,
-  )
-
-  if (!isValidMessages) {
-    return NextResponse.json(
-      {
-        error: `Each message must be non-empty and at most ${limits.maxMessageChars} characters.`,
-      },
-      { status: 400 },
-    )
+  const allowedRoles = new Set<Message['role']>(['system', 'assistant', 'user'])
+  for (const [index, message] of safeMessages.entries()) {
+    if (!message || typeof message !== 'object') {
+      return NextResponse.json(
+        { error: `Message ${index} is invalid.` },
+        { status: 400 },
+      )
+    }
+    if (!allowedRoles.has(message.role)) {
+      return NextResponse.json(
+        {
+          error: `Message ${index} has invalid role. Allowed roles: system, assistant, user.`,
+        },
+        { status: 400 },
+      )
+    }
+    if (typeof message.content !== 'string') {
+      return NextResponse.json(
+        { error: `Message ${index} content must be a string.` },
+        { status: 400 },
+      )
+    }
+    if (message.content.trim().length === 0) {
+      return NextResponse.json(
+        { error: `Message ${index} content cannot be empty.` },
+        { status: 400 },
+      )
+    }
+    if (message.content.length > limits.maxMessageChars) {
+      return NextResponse.json(
+        {
+          error: `Message ${index} content exceeds ${limits.maxMessageChars} characters.`,
+        },
+        { status: 400 },
+      )
+    }
   }
 
   try {
