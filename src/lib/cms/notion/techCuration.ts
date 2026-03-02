@@ -1090,7 +1090,7 @@ export async function runTechCurationCron(args?: {
   const candidateSignals = buildCandidateSignals(
     github.signals,
     config,
-    new Set(Array.from(catalog.keys())),
+    new Set(catalog.keys()),
   )
 
   let updated = 0
