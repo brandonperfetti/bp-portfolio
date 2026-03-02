@@ -570,7 +570,10 @@ function buildCatalog() {
       referenceLabel: 'ai-sdk.dev',
       summary:
         'Type-safe TypeScript SDK for building AI-powered apps with model/provider abstractions.',
-      logoSourceUrl: 'https://avatars.githubusercontent.com/u/14985020?s=200&v=4',
+      // Intentional: AI SDK is maintained under Vercel, so we use the Vercel org avatar
+      // as the canonical logo source until a distinct official AI SDK brand asset is available.
+      logoSourceUrl:
+        'https://avatars.githubusercontent.com/u/14985020?s=200&v=4',
     },
     {
       canonicalName: 'Cloudinary',
@@ -620,7 +623,8 @@ function buildCatalog() {
       referenceLabel: 'zustand.docs.pmnd.rs',
       summary:
         'Minimal state management library for React with simple store-based patterns.',
-      logoSourceUrl: 'https://avatars.githubusercontent.com/u/45790596?s=200&v=4',
+      logoSourceUrl:
+        'https://avatars.githubusercontent.com/u/45790596?s=200&v=4',
     },
     {
       canonicalName: 'React Markdown',
