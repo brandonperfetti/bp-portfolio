@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/content-calendar-seeding",
       "schedule": "0 18 * * 1"
+    },
+    {
+      "path": "/api/cron/cms-tech-curation",
+      "schedule": "30 18 * * 1"
     }
   ]
 }

@@ -304,10 +304,7 @@ async function generateIdeas(args: {
     const ideas = Array.isArray(parsed.ideas) ? parsed.ideas : []
     return ideas
   } catch (error) {
-    const outputSample = raw
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 500)
+    const outputSample = raw.replace(/\s+/g, ' ').trim().slice(0, 500)
     console.warn('[cms:calendar-seeding] failed to parse model output', {
       error: error instanceof Error ? error.message : String(error),
       outputSample,

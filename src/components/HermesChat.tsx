@@ -19,6 +19,8 @@ const EXAMPLES = [
   `Explain "The Observer Effect".`,
   `Dali: A digital illustration of a man meditating while sitting on a donut, 4k, detailed, pixar animation.`,
 ]
+const MAX_INPUT_CHARS = 1500
+const MAX_TEXTAREA_HEIGHT_PX = 160
 
 function createMessageId() {
   const cryptoApi = globalThis.crypto
@@ -120,7 +122,7 @@ export function HermesChat() {
   ])
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const chatControlsRef = useRef<HTMLFormElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const appendAssistantMessage = (content: string, image?: string) => {
     setMessages((prev) => [
@@ -181,6 +183,18 @@ export function HermesChat() {
       window.clearTimeout(timeout)
     }
   }, [copiedId])
+
+  useEffect(() => {
+    const textarea = inputRef.current
+    if (!textarea) {
+      return
+    }
+    textarea.style.height = 'auto'
+    const nextHeight = Math.min(textarea.scrollHeight, MAX_TEXTAREA_HEIGHT_PX)
+    textarea.style.height = `${nextHeight}px`
+    textarea.style.overflowY =
+      textarea.scrollHeight > MAX_TEXTAREA_HEIGHT_PX ? 'auto' : 'hidden'
+  }, [input])
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -296,7 +310,7 @@ export function HermesChat() {
     }
   }
 
-  function handleInputBlur(event: React.FocusEvent<HTMLInputElement>) {
+  function handleInputBlur(event: React.FocusEvent<HTMLTextAreaElement>) {
     const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
     if (!isCoarsePointer) {
       return
@@ -440,27 +454,31 @@ export function HermesChat() {
       <form
         ref={chatControlsRef}
         onSubmit={onSubmit}
-        className="mt-4 flex gap-2"
+        className="mt-4 flex items-center gap-2"
       >
         <div className="relative w-full">
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault()
+                event.currentTarget.form?.requestSubmit()
+              }
+            }}
             onBlur={handleInputBlur}
             disabled={loading}
+            rows={1}
+            maxLength={MAX_INPUT_CHARS}
             placeholder="Ask Hermes..."
-            className="w-full rounded-md px-3 py-2 pr-10 text-base outline outline-zinc-300 focus:outline-teal-500 disabled:cursor-not-allowed disabled:opacity-70 sm:text-sm dark:bg-zinc-800 dark:outline-zinc-600"
+            className="max-h-40 min-h-10 w-full resize-none overflow-hidden rounded-md px-3 py-2 text-base outline outline-zinc-300 focus:outline-teal-500 disabled:cursor-not-allowed disabled:opacity-70 sm:text-sm dark:bg-zinc-800 dark:outline-zinc-600"
           />
-          <span className="pointer-events-none absolute inset-y-0 right-3 hidden items-center text-xs font-medium text-zinc-400 sm:inline-flex dark:text-zinc-500">
-            /
-          </span>
         </div>
         <button
           type="submit"
           disabled={loading}
-          className="inline-flex items-center gap-1 rounded-md bg-teal-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-teal-400 active:bg-teal-600 disabled:opacity-50 dark:bg-teal-500 dark:hover:bg-teal-400 dark:active:bg-teal-600"
+          className="relative -top-px inline-flex h-10 items-center gap-1 rounded-md bg-teal-500 px-3 text-sm leading-none font-semibold text-white transition hover:bg-teal-400 active:bg-teal-600 disabled:opacity-50 dark:bg-teal-500 dark:hover:bg-teal-400 dark:active:bg-teal-600"
         >
           {loading ? (
             <span className="tracking-widest">...</span>

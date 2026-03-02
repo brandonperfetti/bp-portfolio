@@ -30,7 +30,16 @@
 - Streaming assistant responses (`gpt-4.1-mini`).
 - Markdown rendering with GFM support inside assistant bubble.
 - Copy-to-clipboard for assistant text responses.
-- Image mode via `image:` or `dali:` prompt prefix (`gpt-image-1`).
+- Image mode via `image:` or `dali:` prompt prefix (`gpt-image-1.5`).
+- Multiline prompt input:
+  - `Enter` sends.
+  - `Shift+Enter` inserts a newline.
+- Public-route guardrails:
+  - per-IP rate limits on chat/image APIs
+  - message length + history caps
+  - max completion token cap for chat
+  - optional daily image cap and endpoint kill switches
+  - optional Turnstile verification when configured
 
 ## Contact + Newsletter APIs
 

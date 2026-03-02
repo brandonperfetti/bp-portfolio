@@ -46,6 +46,7 @@ This project is the active codebase for [brandonperfetti.com](https://brandonper
 - Articles route with full-text + topic filtering.
 - Global header modal search (`Cmd/Ctrl + K`).
 - Hermes AI chat with streaming text and image generation modes.
+- Hermes input supports multiline prompts (`Enter` to send, `Shift+Enter` for newline).
 - SendGrid-backed contact workflow (newsletter API is present; home-page newsletter UI is currently hidden).
 - SEO routes: sitemap, robots, and feed endpoint metadata.
 
@@ -107,6 +108,16 @@ NOTION_WEBHOOK_SECRET=...
 For full Notion configuration (all `NOTION_*` env vars, webhook/revalidate secrets, projection sync, runbooks), see:
 
 - `docs/NOTION_CMS.md`
+
+### Tech Curation (Notion)
+
+The `Portfolio CMS - Tech` database is maintained by the tech curation cron using GitHub signals.
+
+- Recency is gated with `GITHUB_TECH_MAX_REPO_AGE_MONTHS` (default: `24`) so old repos do not dominate current stack telemetry.
+- Auto-create remains catalog-driven (high-confidence technologies only), then rows are enriched with summary/reference/logo and Cloudinary-hosted `Logo URL`.
+- Site visibility is controlled in Notion:
+  - `Status = Published` to show on the site.
+  - `Featured = true` only for highlighted tech sections.
 
 ## Local Development
 
@@ -247,3 +258,4 @@ If newsletter subscribe fails with access/scope errors, verify your SendGrid key
 ### Hermes API failures
 
 Confirm `OPENAI_API_KEY` is present and valid. Chat and image endpoints are server-side and return explicit JSON errors for missing keys.
+If public Hermes routes start returning `429`/`403`, verify Hermes guardrail env settings (`HERMES_*`) and `TURNSTILE_SECRET_KEY` behavior.

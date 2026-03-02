@@ -96,6 +96,7 @@ Seeder defaults:
 - `GET /api/cron/cms-automation-errors-retention` (or `POST`)
 - `GET /api/cron/cms-automation` (or `POST`)
 - `GET /api/cron/content-calendar-seeding` (or `POST`)
+- `GET /api/cron/cms-tech-curation` (or `POST`)
 
 Primary usage:
 
@@ -151,6 +152,14 @@ curl -X GET http://localhost:3000/api/cron/content-calendar-seeding \
 # Force dry-run for ad-hoc validation (no Notion row creation).
 curl -X GET "http://localhost:3000/api/cron/content-calendar-seeding?dryRun=1" \
   -H "Authorization: Bearer <CRON_SECRET>"
+
+# Run tech curation from GitHub signals (updates/creates Notion tech rows).
+curl -X GET http://localhost:3000/api/cron/cms-tech-curation \
+  -H "Authorization: Bearer <CRON_SECRET>"
+
+# Force dry-run for tech curation (preview only, no writes).
+curl -X GET "http://localhost:3000/api/cron/cms-tech-curation?dryRun=1" \
+  -H "Authorization: Bearer <CRON_SECRET>"
 ```
 
 Optional cover regeneration hosting config:
@@ -183,6 +192,28 @@ CALENDAR_SEEDING_CADENCE_DAYS=7
 CALENDAR_SEEDING_MAX_CONTEXT_ROWS=80
 CALENDAR_SEEDING_PILLAR_LOOKBACK_ROWS=10
 CALENDAR_SEEDING_MAX_PILLAR_SHARE_PERCENT=40
+# GitHub tech curation controls.
+GITHUB_TOKEN=...
+GITHUB_OWNER=...
+GITHUB_TECH_OWNER=...
+GITHUB_TECH_REPOS_ALLOWLIST=...
+GITHUB_TECH_REPOS_DENYLIST=...
+GITHUB_TECH_REPO_LIMIT=60
+GITHUB_TECH_MAX_REPO_AGE_MONTHS=24
+GITHUB_TECH_MAX_PACKAGE_JSON_FILES_PER_REPO=20
+GITHUB_TECH_INCLUDE_PRIVATE=false
+TECH_CURATION_ENABLED=true
+TECH_CURATION_DRY_RUN=false
+TECH_CURATION_MIN_SCORE=4
+TECH_CURATION_MAX_CANDIDATES=60
+TECH_CURATION_AUTO_CREATE=true
+TECH_CURATION_UPDATE_EXISTING=true
+TECH_CURATION_DEFAULT_CREATE_STATUS=Review
+TECH_CURATION_INCLUDE_UNMAPPED=false
+TECH_CURATION_REQUIRE_AUTOMATION_MANAGED_FOR_UPDATES=true
+TECH_CURATION_ENFORCE_INTEGRITY=true
+# Optional dedicated folder for curated tech logos.
+CLOUDINARY_CMS_TECH_LOGOS_FOLDER=bp-portfolio/tech
 ```
 
 Content pillar policy:
@@ -217,6 +248,24 @@ Error-only Notion run logging:
 - When configured, failures are written to `NOTION_CMS_AUTOMATION_ERRORS_DATA_SOURCE`.
 - Success runs are intentionally not logged to avoid workspace noise.
 
+Tech curation behavior:
+
+- GitHub is discovery-only for this workflow.
+- Missing GitHub-observed tech can be added as `Review`, but existing tech is not demoted based on GitHub absence.
+- By default, updates only apply to rows marked as automation-managed
+  when an `Automation Managed` (or alias) checkbox exists.
+- Controls:
+  - `GITHUB_TECH_MAX_REPO_AGE_MONTHS`
+  - `GITHUB_TECH_MAX_PACKAGE_JSON_FILES_PER_REPO`
+  - `TECH_CURATION_REQUIRE_AUTOMATION_MANAGED_FOR_UPDATES`
+  - `TECH_CURATION_ENFORCE_INTEGRITY`
+- Recommended telemetry fields on `Portfolio CMS - Tech`:
+  - `Usage Score`, `Repo Count`, `Source Repos`
+  - `GitHub Observed`, `GitHub Repo Mentions`, `GitHub Last Scanned At`
+  - `Signal Sources` (multi-select)
+  - `First Seen In GitHub`, `Last Seen In GitHub`
+  - `Review Reason`
+
 Vercel cron cadence (current):
 
 - `/api/cron/cms-integrity` every 10 minutes.
@@ -224,6 +273,7 @@ Vercel cron cadence (current):
 - `/api/cron/cms-cleanup` weekly Friday at 23:00 UTC.
 - `/api/cron/cms-automation-errors-retention` daily at 03:45.
 - `/api/cron/content-calendar-seeding` weekly Monday at 18:00 UTC.
+- `/api/cron/cms-tech-curation` weekly Monday at 18:30 UTC.
 - `/api/cron/cms-projection` retained as a compatibility alias.
 - `/api/cron/cms-automation` retained for manual full-run execution.
 

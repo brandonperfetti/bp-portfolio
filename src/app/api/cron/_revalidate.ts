@@ -11,3 +11,11 @@ export function revalidateArticleSurfaces() {
   revalidatePath('/')
   revalidatePath('/articles')
 }
+
+/**
+ * Revalidate tech surfaces when tech records are curated by cron automation.
+ */
+export function revalidateTechSurfaces() {
+  revalidateTag(CMS_TAGS.tech, 'max')
+  revalidatePath('/tech')
+}

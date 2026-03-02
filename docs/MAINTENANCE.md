@@ -37,3 +37,24 @@
 
 - Home-page newsletter card is intentionally hidden temporarily, but mailing list API route remains available.
 - Hermes route intentionally suppresses footer to minimize outer scroll and keep chat UX focused.
+
+## Hermes Security Controls
+
+- Public endpoint kill switches:
+  - Set `HERMES_DISABLE_CHAT=true` to disable `/api/openai/chat`.
+  - Set `HERMES_DISABLE_IMAGE=true` to disable `/api/openai/image`.
+- Tune abuse/cost limits per environment:
+  - `HERMES_CHAT_RATE_LIMIT_PER_MINUTE`
+  - `HERMES_IMAGE_RATE_LIMIT_PER_MINUTE`
+  - `HERMES_MAX_MESSAGE_CHARS`
+  - `HERMES_MAX_MESSAGES`
+  - `HERMES_MAX_COMPLETION_TOKENS`
+  - `HERMES_IMAGE_DAILY_LIMIT`
+- Optional bot challenge:
+  - Configure `TURNSTILE_SECRET_KEY` to enforce server-side Turnstile verification for Hermes chat/image requests.
+- Incident response playbook (public abuse or cost spike):
+  1. Immediately set `HERMES_DISABLE_IMAGE=true` (highest-cost path) and redeploy.
+  2. If abuse continues, set `HERMES_DISABLE_CHAT=true` and redeploy.
+  3. Lower rate limits and caps (`HERMES_*`) before re-enabling.
+  4. Confirm routes return expected guardrail responses (`429`/`403`) in production logs.
+  5. Re-enable chat first, image second, while monitoring request volume and spend.

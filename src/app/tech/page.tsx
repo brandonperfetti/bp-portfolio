@@ -1,26 +1,14 @@
-import { Card } from '@/components/Card'
-import { EntityGrid } from '@/components/cms/EntityGrid'
 import { NotFoundState } from '@/components/cms/NotFoundState'
 import { SimpleLayout } from '@/components/SimpleLayout'
+import { TechExplorer } from '@/components/tech/TechExplorer'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { isNotionProvider } from '@/lib/cms/provider'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getCmsTech } from '@/lib/cms/techRepo'
-import { getOptimizedImageUrl } from '@/lib/image-utils'
+import type { CmsEntityItem } from '@/lib/cms/types'
 import { type Metadata } from 'next'
-import Image from 'next/image'
-
-function LinkIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-      <path
-        d="M15.712 11.823a.75.75 0 1 0 1.06 1.06l-1.06-1.06Zm-4.95 1.768a.75.75 0 0 0 1.06-1.06l-1.06 1.06Zm-2.475-1.414a.75.75 0 1 0-1.06-1.06l1.06 1.06Zm4.95-1.768a.75.75 0 1 0-1.06 1.06l1.06-1.06Zm3.359.53-.884.884 1.06 1.06.885-.883-1.061-1.06Zm-4.95-2.12 1.414-1.415L12 6.344l-1.415 1.413 1.061 1.061Zm0 3.535a2.5 2.5 0 0 1 0-3.536l-1.06-1.06a4 4 0 0 0 0 5.656l1.06-1.06Zm4.95-4.95a2.5 2.5 0 0 1 0 3.535L17.656 12a4 4 0 0 0 0-5.657l-1.06 1.06Zm1.06-1.06a4 4 0 0 0-5.656 0l1.06 1.06a2.5 2.5 0 0 1 3.536 0l1.06-1.06Zm-7.07 7.07.176.177 1.06-1.06-.176-.177-1.06 1.06Zm-3.183-.353.884-.884-1.06-1.06-.884.883 1.06 1.06Zm4.95 2.121-1.414 1.414 1.06 1.06 1.415-1.413-1.06-1.061Zm0-3.536a2.5 2.5 0 0 1 0 3.536l1.06 1.06a4 4 0 0 0 0-5.656l-1.06 1.06Zm-4.95 4.95a2.5 2.5 0 0 1 0-3.535L6.344 12a4 4 0 0 0 0 5.656l1.06-1.06Zm-1.06 1.06a4 4 0 0 0 5.657 0l-1.061-1.06a2.5 2.5 0 0 1-3.535 0l-1.061 1.06Zm7.07-7.07-.176-.177-1.06 1.06.176.178 1.06-1.061Z"
-        fill="currentColor"
-      />
-    </svg>
-  )
-}
+import { Suspense } from 'react'
 
 const techStack = [
   {
@@ -411,67 +399,35 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function TechStack() {
   const cmsTech = isNotionProvider() ? await getCmsTech() : null
-
-  if (cmsTech) {
-    return (
-      <SimpleLayout
-        title="Core technologies I reach for first."
-        intro="A practical stack for product delivery, engineering execution, and long-term maintainability."
-      >
-        {cmsTech.length ? (
-          <EntityGrid items={cmsTech} />
-        ) : (
-          <NotFoundState
-            title="No published tech entries"
-            description="No CMS tech records are currently publish-safe."
-          />
-        )}
-      </SimpleLayout>
-    )
-  }
+  const localTech: CmsEntityItem[] = techStack.map((tech) => ({
+    slug: tech.name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-'),
+    name: tech.name,
+    description: tech.description,
+    logo: tech.logo,
+    link: tech.link,
+  }))
+  const items = cmsTech ?? localTech
 
   return (
     <SimpleLayout
       title="Core technologies I reach for first."
       intro="A practical stack for product delivery, engineering execution, and long-term maintainability."
     >
-      <ul
-        role="list"
-        className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2 lg:grid-cols-3"
-      >
-        {techStack.map((tech) => (
-          <Card
-            className="h-full rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-700/40 dark:bg-zinc-900"
-            as="li"
-            key={tech.name}
-          >
-            <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-md ring-1 shadow-zinc-800/5 ring-zinc-900/5 dark:border dark:border-zinc-700/50 dark:bg-zinc-800 dark:ring-0">
-              <Image
-                height={48}
-                width={48}
-                src={getOptimizedImageUrl(tech.logo, {
-                  width: 96,
-                  height: 96,
-                  crop: 'fit',
-                })}
-                alt={tech.name}
-                className="h-8 w-8 rounded"
-                sizes="2.25rem"
-              />
-            </div>
-            <h2 className="mt-6 text-base font-semibold text-zinc-800 dark:text-zinc-100">
-              <Card.Link href={tech.link.href}>{tech.name}</Card.Link>
-            </h2>
-            <p className="relative z-10 mt-2 line-clamp-4 text-sm text-zinc-600 dark:text-zinc-400">
-              {tech.description}
-            </p>
-            <p className="relative z-10 mt-6 flex text-sm font-medium text-zinc-400 transition group-hover:text-teal-500 dark:text-zinc-200">
-              <LinkIcon className="h-6 w-6 flex-none" />
-              <span className="ml-2">{tech.link.label}</span>
-            </p>
-          </Card>
-        ))}
-      </ul>
+      {items.length ? (
+        <Suspense fallback={null}>
+          <TechExplorer items={items} />
+        </Suspense>
+      ) : (
+        <NotFoundState
+          title="No published tech entries"
+          description="No CMS tech records are currently publish-safe."
+        />
+      )}
     </SimpleLayout>
   )
 }
