@@ -191,6 +191,8 @@ function coerceTechKey(raw: string) {
     heroicons: 'heroicons',
     sendgrid: 'sendgrid',
     gsap: 'gsap',
+    ai: 'ai-sdk',
+    'ai-sdk': 'ai-sdk',
   }
 
   return aliases[key] || key
@@ -237,6 +239,9 @@ function expandDependencySignalKeys(depName: string): string[] {
   }
   if (raw.startsWith('@sendgrid/')) {
     keys.add('sendgrid')
+  }
+  if (raw.startsWith('@ai-sdk/')) {
+    keys.add('ai-sdk')
   }
   if (raw.startsWith('@headlessui/')) {
     keys.add('headless-ui')
@@ -297,6 +302,9 @@ async function fetchGithubJson<T>(url: string, token: string): Promise<T> {
     }
   }
 
+  // Unreachable in normal flow: the retry loop either returns a parsed response
+  // or throws after MAX_RETRIES with REQUEST_TIMEOUT_MS + backoff handling.
+  // This is kept as a defensive terminal path for TypeScript control-flow.
   throw new Error(`GitHub request failed for ${url}`)
 }
 
@@ -497,12 +505,24 @@ async function readPackageJsonDependenciesFromManifests(
       )
       .sort((a, b) => (a.path || '').localeCompare(b.path || ''))
       .slice(0, maxFiles)
-    for (const manifest of candidateManifests) {
-      if (!manifest.sha) {
-        continue
-      }
-      const content = await readBlobContent(repo.full_name, manifest.sha, token)
-      for (const dep of parseDependencyNamesFromPackageJson(content)) {
+
+    const manifestDeps = await Promise.all(
+      candidateManifests
+        .filter((manifest): manifest is GithubTreeEntry & { sha: string } =>
+          Boolean(manifest.sha),
+        )
+        .map(async (manifest) => {
+          const content = await readBlobContent(
+            repo.full_name,
+            manifest.sha,
+            token,
+          )
+          return parseDependencyNamesFromPackageJson(content)
+        }),
+    )
+
+    for (const depsFromManifest of manifestDeps) {
+      for (const dep of depsFromManifest) {
         deps.add(dep)
       }
     }
