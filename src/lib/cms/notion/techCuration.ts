@@ -927,12 +927,51 @@ function buildCandidateSignals(
     reasons: string[]
   }>,
   config: TechConfig,
+  catalogKeys: Set<string>,
 ) {
-  return rawSignals
-    .map(toSignal)
+  const normalizedCatalogKeys = new Set(
+    Array.from(catalogKeys).map((key) => normalized(key)),
+  )
+
+  const mapped = rawSignals.map(toSignal)
+  const catalogKnown = mapped
+    .filter(
+      (signal) =>
+        signal.score > 0 && normalizedCatalogKeys.has(normalized(signal.key)),
+    )
+    .sort((a, b) => b.score - a.score)
+
+  const candidates: Array<ReturnType<typeof toSignal>> = []
+  const seen = new Set<string>()
+  for (const signal of catalogKnown) {
+    const key = normalized(signal.key)
+    if (!key || seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    candidates.push(signal)
+    if (candidates.length >= config.maxCandidates) {
+      return candidates
+    }
+  }
+
+  const aboveThreshold = mapped
     .filter((signal) => signal.score >= config.minScore)
     .sort((a, b) => b.score - a.score)
-    .slice(0, config.maxCandidates)
+
+  for (const signal of aboveThreshold) {
+    const key = normalized(signal.key)
+    if (!key || seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    candidates.push(signal)
+    if (candidates.length >= config.maxCandidates) {
+      break
+    }
+  }
+
+  return candidates
 }
 
 function buildSignalMaps(
@@ -1044,7 +1083,11 @@ export async function runTechCurationCron(args?: {
   }
 
   const catalog = buildCatalog()
-  const candidateSignals = buildCandidateSignals(github.signals, config)
+  const candidateSignals = buildCandidateSignals(
+    github.signals,
+    config,
+    new Set(Array.from(catalog.keys())),
+  )
 
   let updated = 0
   let created = 0
