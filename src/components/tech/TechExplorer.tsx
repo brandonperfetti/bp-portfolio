@@ -68,7 +68,7 @@ function resolveCategory(item: CmsEntityItem) {
   if (explicit) {
     return explicit
   }
-  return CATEGORY_BY_NAME[item.name] ?? 'Tools'
+  return CATEGORY_BY_NAME[item.name] ?? 'Tooling'
 }
 
 export function TechExplorer({ items }: { items: CmsEntityItem[] }) {
@@ -146,7 +146,7 @@ export function TechExplorer({ items }: { items: CmsEntityItem[] }) {
   const updateUrl = useCallback(
     (nextQuery: string, nextCategory: string) => {
       const currentQueryString = searchParams.toString()
-      const params = new URLSearchParams(searchParams.toString())
+      const params = new URLSearchParams(currentQueryString)
 
       if (nextQuery.trim()) {
         params.set('q', nextQuery.trim())
@@ -275,7 +275,7 @@ export function TechExplorer({ items }: { items: CmsEntityItem[] }) {
                   })}
                   alt={tech.name}
                   className="h-8 w-8 rounded object-contain"
-                  sizes="2.25rem"
+                  sizes="2rem"
                 />
               ) : null}
             </div>
