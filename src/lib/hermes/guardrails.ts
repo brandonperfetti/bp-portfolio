@@ -8,7 +8,7 @@ type DailyBucket = {
   dayKey: string
 }
 
-type GuardrailStores = {
+export type GuardrailStores = {
   rateBuckets: Map<string, RateBucket>
   dailyBuckets: Map<string, DailyBucket>
 }
@@ -17,8 +17,23 @@ const globalForGuardrails = globalThis as typeof globalThis & {
   __bpHermesGuardrails?: GuardrailStores
 }
 
-function getStores(): GuardrailStores {
+let injectedGuardrailStores: GuardrailStores | null = null
+
+export function setGuardrailStores(store: GuardrailStores | null) {
+  injectedGuardrailStores = store
+  if (store) {
+    globalForGuardrails.__bpHermesGuardrails = store
+  }
+}
+
+export function getStores(): GuardrailStores {
+  if (injectedGuardrailStores) {
+    return injectedGuardrailStores
+  }
+
   if (!globalForGuardrails.__bpHermesGuardrails) {
+    // TODO(hermes-guardrails): Replace in-memory buckets with a distributed
+    // store (e.g., Redis/Upstash) for stable limits across serverless restarts.
     globalForGuardrails.__bpHermesGuardrails = {
       rateBuckets: new Map<string, RateBucket>(),
       dailyBuckets: new Map<string, DailyBucket>(),
@@ -79,28 +94,31 @@ export function isAllowedRequestSource(request: Request) {
   const hosts = getSiteHosts()
 
   const origin = request.headers.get('origin')
+  let originValid = false
   if (origin) {
     try {
-      if (!hosts.has(new URL(origin).host)) {
-        return false
-      }
+      originValid = hosts.has(new URL(origin).host)
     } catch {
-      return false
+      originValid = false
     }
   }
 
   const referer = request.headers.get('referer')
+  let refererValid = false
   if (referer) {
     try {
-      if (!hosts.has(new URL(referer).host)) {
-        return false
-      }
+      refererValid = hosts.has(new URL(referer).host)
     } catch {
-      return false
+      refererValid = false
     }
   }
 
-  return true
+  // Require at least one source header to be present and valid.
+  if (!origin && !referer) {
+    return false
+  }
+
+  return originValid || refererValid
 }
 
 export function applyHermesRateLimit(options: {
