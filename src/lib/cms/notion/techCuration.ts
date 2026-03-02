@@ -428,6 +428,8 @@ function setDateProperty(
   }
 }
 
+// TODO(tech-curation): Extract catalog entries to a dedicated module
+// (e.g. techCatalogEntries.ts) to reduce file size/churn in this workflow file.
 function buildCatalog() {
   const entries: TechCatalogEntry[] = [
     {
@@ -559,6 +561,16 @@ function buildCatalog() {
         'Model APIs for reasoning, generation, and multimodal workflows.',
       logoSourceUrl:
         'https://avatars.githubusercontent.com/u/14957082?s=200&v=4',
+    },
+    {
+      canonicalName: 'AI SDK',
+      slug: 'ai-sdk',
+      category: 'AI',
+      referenceUrl: 'https://ai-sdk.dev/',
+      referenceLabel: 'ai-sdk.dev',
+      summary:
+        'Type-safe TypeScript SDK for building AI-powered apps with model/provider abstractions.',
+      logoSourceUrl: 'https://avatars.githubusercontent.com/u/14985020?v=4',
     },
     {
       canonicalName: 'Cloudinary',
