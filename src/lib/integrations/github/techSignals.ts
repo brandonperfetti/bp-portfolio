@@ -191,6 +191,7 @@ function coerceTechKey(raw: string) {
     heroicons: 'heroicons',
     sendgrid: 'sendgrid',
     gsap: 'gsap',
+    zustand: 'zustand',
     ai: 'ai-sdk',
     'ai-sdk': 'ai-sdk',
   }

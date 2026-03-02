@@ -613,6 +613,16 @@ function buildCatalog() {
       logoSourceUrl: 'https://avatars.githubusercontent.com/u/2386673?v=4',
     },
     {
+      canonicalName: 'Zustand',
+      slug: 'zustand',
+      category: 'Frontend',
+      referenceUrl: 'https://zustand.docs.pmnd.rs/',
+      referenceLabel: 'zustand.docs.pmnd.rs',
+      summary:
+        'Minimal state management library for React with simple store-based patterns.',
+      logoSourceUrl: 'https://avatars.githubusercontent.com/u/45790596?s=200&v=4',
+    },
+    {
       canonicalName: 'React Markdown',
       slug: 'react-markdown',
       category: 'Frontend',
