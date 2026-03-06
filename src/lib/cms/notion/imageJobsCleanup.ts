@@ -12,6 +12,15 @@ import {
   propertyToText,
 } from '@/lib/cms/notion/property'
 
+/**
+ * Summary telemetry for a single Image Jobs cleanup run.
+ *
+ * - `retentionDays` is the effective retention window (days).
+ * - `scanned` is total rows examined during pagination.
+ * - `eligible` counts non-winner completed rows considered for expiration checks.
+ * - `archived` counts rows moved to trash (`in_trash: true`).
+ * - `errors` contains per-row failures (`{ pageId, message }`).
+ */
 export type ImageJobsCleanupResult = {
   ok: boolean
   enabled: boolean
@@ -83,6 +92,24 @@ function resolveRetentionTimestamp(page: NotionPage) {
   return Number.NaN
 }
 
+/**
+ * Prunes old non-winner completed rows from the Notion Image Jobs data source.
+ *
+ * @param options Optional retention controls.
+ * @param options.retentionDays Override retention window in days.
+ * @param options.limit Max rows to archive in a single run.
+ * @returns Cleanup run summary (`ImageJobsCleanupResult`).
+ *
+ * Side effects:
+ * - Queries Notion Image Jobs pages (paginated).
+ * - Moves expired rows to trash via Notion page updates.
+ *
+ * Behavior notes:
+ * - No-ops with `enabled: false` when Image Jobs data source env is unset.
+ * - Preserves winner rows and non-completed rows.
+ * - Uses explicit retention date fields, or optional fallback age mode when
+ *   `CMS_IMAGE_JOBS_CLEANUP_ALLOW_FALLBACK_AGE=true`.
+ */
 export async function pruneImageJobs(options?: {
   retentionDays?: number
   limit?: number
