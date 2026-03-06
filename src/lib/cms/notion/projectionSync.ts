@@ -101,6 +101,13 @@ export type SourcePublishGateResult = {
   reasons: string[]
 }
 
+/**
+ * Quality-gate metadata snapshot extracted from a source article row.
+ *
+ * Nullable fields represent incomplete source data:
+ * - `reviewRound` is null when unset/non-numeric.
+ * - `hasRequiredMetadata` is null when checkbox/property is missing.
+ */
 export type SourceArticleQualitySnapshot = {
   sourcePageId: string
   title: string
@@ -114,10 +121,25 @@ export type SourceArticleQualitySnapshot = {
   hasRequiredMetadata: boolean | null
 }
 
+/**
+ * A quality-gate failure for one source row plus blocking reasons.
+ *
+ * `reasons` contains human-readable validation failures for this specific
+ * source row (`sourcePageId`).
+ */
 export type SourceArticleQualityFailure = SourceArticleQualitySnapshot & {
   reasons: string[]
 }
 
+/**
+ * Aggregate result for source quality-gate evaluation.
+ *
+ * Counter semantics:
+ * - `scanned`: quality snapshots parsed from source pages.
+ * - `checkedPublishSafe`: publish-safe rows evaluated against requirements.
+ * - `passed`/`failed`: evaluated publish-safe rows.
+ * - `ok`: true when no publish-safe rows failed.
+ */
 export type SourceArticleQualityGateResult = {
   ok: boolean
   scanned: number
@@ -127,6 +149,16 @@ export type SourceArticleQualityGateResult = {
   failures: SourceArticleQualityFailure[]
 }
 
+/**
+ * Aggregate result for source quality auto-healing.
+ *
+ * Counter semantics:
+ * - `scanned`: quality snapshots parsed from source pages.
+ * - `checkedPublishSafe`: publish-safe rows considered for healing.
+ * - `healed`: rows updated in Notion.
+ * - `skipped`: rows not publish-safe or already compliant.
+ * - `ok`: true when no row-level errors were recorded.
+ */
 export type SourceArticleAutoHealResult = {
   ok: boolean
   scanned: number
@@ -136,6 +168,19 @@ export type SourceArticleAutoHealResult = {
   errors: Array<{ sourcePageId: string; message: string }>
 }
 
+/**
+ * Aggregate result for cover regeneration request processing.
+ *
+ * Counter semantics:
+ * - `scanned`: source rows inspected.
+ * - `queued`: publish-safe rows with regenerate request checked.
+ * - `regenerated`: successful cover regenerations written.
+ * - `skipped`: queued rows deferred due to run limit.
+ * - `ok`: true when no row-level errors were recorded.
+ *
+ * `errors` entries contain failing source row IDs and stage-specific messages
+ * (generation, upload, Notion update, or follow-up projection sync).
+ */
 export type CoverRegenerationResult = {
   ok: boolean
   scanned: number
