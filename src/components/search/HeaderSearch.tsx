@@ -23,6 +23,23 @@ type SearchCacheEntry = {
   items: SearchItem[]
 }
 
+function isSearchItem(value: unknown): value is SearchItem {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Partial<SearchItem>
+  return (
+    typeof item.title === 'string' &&
+    typeof item.description === 'string' &&
+    typeof item.date === 'string' &&
+    typeof item.href === 'string' &&
+    typeof item.searchText === 'string'
+  )
+}
+
+function sanitizeSearchItems(value: unknown): SearchItem[] {
+  if (!Array.isArray(value)) return []
+  return value.filter(isSearchItem)
+}
+
 export function HeaderSearch() {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -74,14 +91,17 @@ export function HeaderSearch() {
           const cached = Array.isArray(parsed)
             ? ({
                 savedAt: Date.now(),
-                items: parsed,
+                items: sanitizeSearchItems(parsed),
               } satisfies SearchCacheEntry)
             : parsed
+          const savedAt =
+            typeof cached.savedAt === 'number' ? cached.savedAt : 0
+          const cachedItems = sanitizeSearchItems(cached.items)
           if (
-            Array.isArray(cached.items) &&
-            Date.now() - (cached.savedAt || 0) <= SEARCH_CACHE_TTL_MS
+            cachedItems.length > 0 &&
+            Date.now() - savedAt <= SEARCH_CACHE_TTL_MS
           ) {
-            setItems(cached.items)
+            setItems(cachedItems)
             setLoadState('ready')
             return
           }
@@ -113,12 +133,13 @@ export function HeaderSearch() {
         if (controller.signal.aborted) {
           return
         }
-        setItems(data)
+        const safeItems = sanitizeSearchItems(data)
+        setItems(safeItems)
         setLoadState('ready')
         try {
           const cacheEntry: SearchCacheEntry = {
             savedAt: Date.now(),
-            items: data,
+            items: safeItems,
           }
           sessionStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(cacheEntry))
         } catch {
