@@ -50,20 +50,6 @@ export async function POST(req: Request) {
     )
   }
 
-  const dailyQuota = applyHermesDailyQuota({
-    key: 'hermes:image:global',
-    limit: limits.imageDailyLimit,
-  })
-  if (!dailyQuota.allowed) {
-    return NextResponse.json(
-      {
-        error:
-          'Image generation is at the daily limit. Please try again tomorrow.',
-      },
-      { status: 429 },
-    )
-  }
-
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     return NextResponse.json(
@@ -110,6 +96,20 @@ export async function POST(req: Request) {
           : 'Unable to verify request.',
       },
       { status: 403 },
+    )
+  }
+
+  const dailyQuota = applyHermesDailyQuota({
+    key: 'hermes:image:global',
+    limit: limits.imageDailyLimit,
+  })
+  if (!dailyQuota.allowed) {
+    return NextResponse.json(
+      {
+        error:
+          'Image generation is at the daily limit. Please try again tomorrow.',
+      },
+      { status: 429 },
     )
   }
 
