@@ -896,6 +896,7 @@ function deriveReferenceLabel(referenceUrl: string) {
 async function resolveLogoUrl(
   entry: TechCatalogEntry,
   currentLogoUrl: string,
+  options: { allowUpload: boolean },
 ): Promise<string> {
   if (isCloudinaryUrl(currentLogoUrl)) {
     return currentLogoUrl
@@ -903,6 +904,10 @@ async function resolveLogoUrl(
 
   if (!entry.logoSourceUrl) {
     return currentLogoUrl
+  }
+
+  if (!options.allowUpload) {
+    return isValidHttpUrl(currentLogoUrl) ? currentLogoUrl : entry.logoSourceUrl
   }
 
   try {
