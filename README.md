@@ -259,3 +259,4 @@ If newsletter subscribe fails with access/scope errors, verify your SendGrid key
 
 Confirm `OPENAI_API_KEY` is present and valid. Chat and image endpoints are server-side and return explicit JSON errors for missing keys.
 If public Hermes routes start returning `429`/`403`, verify Hermes guardrail env settings (`HERMES_*`) and `TURNSTILE_SECRET_KEY` behavior.
+If memory pressure is observed under high-cardinality traffic, tune optional in-memory guardrail controls: `HERMES_GUARDRAILS_MAX_BUCKETS` and `HERMES_GUARDRAILS_BUCKET_TTL_MS`.

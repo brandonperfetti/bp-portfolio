@@ -50,6 +50,8 @@
   - `HERMES_MAX_MESSAGES`
   - `HERMES_MAX_COMPLETION_TOKENS`
   - `HERMES_IMAGE_DAILY_LIMIT`
+  - `HERMES_GUARDRAILS_MAX_BUCKETS` (optional in-memory bucket cap)
+  - `HERMES_GUARDRAILS_BUCKET_TTL_MS` (optional stale-bucket TTL)
 - Optional bot challenge:
   - Configure `TURNSTILE_SECRET_KEY` to enforce server-side Turnstile verification for Hermes chat/image requests.
 - Incident response playbook (public abuse or cost spike):
