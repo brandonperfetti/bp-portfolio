@@ -42,17 +42,18 @@ export function ArticleMeta({
   topics?: string[]
   tech?: string[]
 }): ReactElement | null {
-  const rawAuthorName = typeof author === 'string' ? author : author?.name
+  const rawAuthorName =
+    typeof author === 'string' ? author.trim() : (author?.name ?? '').trim()
   const authorMeta =
     typeof author === 'string'
       ? {
-          name: author,
+          name: rawAuthorName,
           role: '',
           href: undefined,
         }
       : author
         ? {
-            name: author.name ?? '',
+            name: rawAuthorName || (author.href || author.role ? 'Author' : ''),
             role: author.role ?? '',
             href: author.href,
           }
