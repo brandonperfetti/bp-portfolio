@@ -933,6 +933,9 @@ function buildCoverRegenerationUpdate(
   },
 ) {
   const properties: Record<string, unknown> = {}
+  const existingHasWinningCover =
+    propertyToBoolean(getProperty(page.properties, ['Has Winning Cover'])) ??
+    Boolean(values.coverUrl)
   const trySet = (aliases: string[], value: unknown) => {
     const name = findPropertyName(page.properties, aliases)
     if (!name) {
@@ -946,7 +949,9 @@ function buildCoverRegenerationUpdate(
   trySet(['Recovery Needed'], { checkbox: !values.success })
   trySet(['Cover Image URL'], { url: values.coverUrl || null })
   trySet(['Has Cover URL'], { checkbox: Boolean(values.coverUrl) })
-  trySet(['Has Winning Cover'], { checkbox: values.success })
+  trySet(['Has Winning Cover'], {
+    checkbox: values.success ? true : existingHasWinningCover,
+  })
   trySet(['Has Required Metadata'], { checkbox: Boolean(values.coverUrl) })
   if (values.nextSceneArchetype) {
     const archetypeName = findPropertyName(page.properties, [
