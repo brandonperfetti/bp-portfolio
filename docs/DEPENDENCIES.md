@@ -38,6 +38,14 @@
 - `@testing-library/jest-dom`
 - `@playwright/test`
 
+## Workflow Tooling
+
+- `husky` (`^9.1.7`)
+  - Purpose: local Git hooks to enforce pre-commit/pre-push quality checks (`format:check`, `lint`, `typecheck`, `test`) before code leaves a workstation.
+  - Security: hooks execute local repo scripts only; keep hook commands minimal, pin through lockfile, and avoid untrusted shell/install scripts.
+  - Compatibility: validated in this repo with Node 24 + npm workflows; CI remains the source of truth for server-side checks and does not depend on Husky.
+  - Sonatype check: completed on 2026-03-05 for `pkg:npm/husky@9.1.7` (license `MIT`, `malicious=false`, `endOfLife=false`).
+
 ## Image Processing
 
 - `sharp` (required by Next image optimization pipeline)
