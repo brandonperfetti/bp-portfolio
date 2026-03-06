@@ -1018,6 +1018,23 @@ function buildSignalMaps(
   return { signalScoreByKey, signalReposByKey, signalSourcesByKey }
 }
 
+/**
+ * Runs GitHub-signal-driven curation against the Portfolio CMS Tech data source.
+ *
+ * @param args Optional runtime overrides.
+ * @param args.dryRun When true, computes candidates/preview without mutating
+ * Notion rows; Cloudinary logo uploads and Notion create/update writes are skipped.
+ * @returns Aggregated cron result telemetry (`TechCurationResult`) including
+ * counts, preview rows, and structured errors.
+ *
+ * Behavior notes:
+ * - Honors feature/config gates from `resolveConfig()` (for example `enabled`,
+ *   owner/repo limits, and include-unmapped behavior).
+ * - Loads existing Tech rows and schema, then reconciles mapped catalog signals.
+ * - In non-dry runs, applies Notion row updates/creates and backfill repairs.
+ * - Returns structured failures for GitHub/Notion stages; thrown transport errors
+ *   from underlying helpers may still propagate to the caller.
+ */
 export async function runTechCurationCron(args?: {
   dryRun?: boolean
 }): Promise<TechCurationResult> {
