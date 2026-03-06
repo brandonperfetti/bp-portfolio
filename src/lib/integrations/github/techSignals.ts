@@ -59,6 +59,16 @@ const REQUEST_TIMEOUT_MS = 30_000
 const MAX_RETRIES = 3
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504])
 
+class GithubHttpError extends Error {
+  status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'GithubHttpError'
+    this.status = status
+  }
+}
+
 function parseBoolean(value: string | undefined, fallback: boolean) {
   if (!value) {
     return fallback
@@ -286,14 +296,29 @@ async function fetchGithubJson<T>(url: string, token: string): Promise<T> {
           continue
         }
         const body = await response.text().catch(() => '')
-        throw new Error(
+        throw new GithubHttpError(
           `GitHub request failed (${response.status}) for ${url}: ${body.slice(0, 400)}`,
+          response.status,
         )
       }
 
       return (await response.json()) as T
     } catch (error) {
-      if (attempt < MAX_RETRIES) {
+      const status = error instanceof GithubHttpError ? error.status : undefined
+      if (status !== undefined && !RETRYABLE_STATUSES.has(status)) {
+        throw error
+      }
+
+      const retryableNetworkError =
+        error instanceof Error &&
+        (error.name === 'AbortError' || error.name === 'TypeError')
+      const retryableStatusError =
+        status !== undefined && RETRYABLE_STATUSES.has(status)
+
+      if (
+        attempt < MAX_RETRIES &&
+        (retryableStatusError || retryableNetworkError)
+      ) {
         await sleep((attempt + 1) * 500)
         continue
       }
