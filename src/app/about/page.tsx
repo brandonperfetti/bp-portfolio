@@ -153,7 +153,6 @@ export default async function About() {
               })}
               alt="Brandon Perfetti"
               sizes="(min-width: 1024px) 32rem, 20rem"
-              priority
               className="aspect-square rounded-2xl bg-zinc-100 object-cover md:rotate-3 dark:bg-zinc-800"
             />
           </div>
@@ -177,7 +176,6 @@ export default async function About() {
                 })}
                 alt="Brandon Perfetti"
                 sizes="20rem"
-                priority
                 className="aspect-square rounded-2xl bg-zinc-100 object-cover dark:bg-zinc-800"
               />
             </div>
