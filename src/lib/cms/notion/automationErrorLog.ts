@@ -175,6 +175,18 @@ function setSeverityProperty(
   }
 }
 
+/**
+ * Writes an automation error event into the configured Notion error-log data source.
+ *
+ * @param payload Error context (`workflow`, `error`, optional endpoint/source/details).
+ * @returns Resolves when write is complete, or no-ops when data source env is unset.
+ *
+ * Side effects:
+ * - Reads Notion schema (cached) and creates a new Notion page row.
+ * - Performs network I/O via Notion API.
+ *
+ * Throws on Notion transport/schema/write failures when logging is enabled.
+ */
 export async function logAutomationErrorToNotion(
   payload: ErrorLogPayload,
 ): Promise<void> {
@@ -263,6 +275,21 @@ function toOccurredAt(page: {
   )
 }
 
+/**
+ * Archives old automation-error rows in Notion according to retention policy.
+ *
+ * @param options Optional retention controls.
+ * @param options.retentionDays Age threshold in days (defaults to 30).
+ * @param options.limit Max rows to archive in one run (defaults to 100).
+ * @returns Retention run telemetry including scanned/eligible/archived counts.
+ *
+ * Side effects:
+ * - Queries Notion pages (paginated) and archives eligible rows.
+ * - Performs network I/O via Notion API.
+ *
+ * Throws when query-stage Notion calls fail; per-row archive failures are
+ * captured in `errors` and returned in the result.
+ */
 export async function pruneAutomationErrorLogs(options?: {
   retentionDays?: number
   limit?: number
