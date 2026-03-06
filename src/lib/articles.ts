@@ -43,6 +43,7 @@ export interface ArticleDetailWithSlug extends ArticleWithSlug {
 function isFuturePublicationDate(dateValue: string) {
   const timestamp = Date.parse(dateValue)
   if (Number.isNaN(timestamp)) {
+    // Treat invalid dates as non-future so bad metadata does not hide content.
     return false
   }
   return timestamp > Date.now()
