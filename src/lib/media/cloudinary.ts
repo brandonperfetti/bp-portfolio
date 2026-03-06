@@ -8,6 +8,8 @@ type CloudinaryConfig = {
   techLogosFolder: string
 }
 
+const CLOUDINARY_UPLOAD_TIMEOUT_MS = 15_000
+
 function getCloudinaryConfig(): CloudinaryConfig | null {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim()
   const apiKey = process.env.CLOUDINARY_API_KEY?.trim()
@@ -64,13 +66,31 @@ export async function uploadBase64PngToCloudinary(options: {
   formData.append('signature', signature)
   formData.append('folder', config.folder)
 
-  const response = await fetch(
-    `https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`,
-    {
-      method: 'POST',
-      body: formData,
-    },
+  const controller = new AbortController()
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    CLOUDINARY_UPLOAD_TIMEOUT_MS,
   )
+  let response: Response
+  try {
+    response = await fetch(
+      `https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`,
+      {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      },
+    )
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(
+        `Cloudinary upload timed out after ${CLOUDINARY_UPLOAD_TIMEOUT_MS}ms`,
+      )
+    }
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   const body = (await response.json().catch(() => null)) as {
     secure_url?: string
@@ -115,13 +135,31 @@ export async function uploadRemoteImageToCloudinary(options: {
   formData.append('folder', config.techLogosFolder)
   formData.append('overwrite', 'true')
 
-  const response = await fetch(
-    `https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`,
-    {
-      method: 'POST',
-      body: formData,
-    },
+  const controller = new AbortController()
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    CLOUDINARY_UPLOAD_TIMEOUT_MS,
   )
+  let response: Response
+  try {
+    response = await fetch(
+      `https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`,
+      {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      },
+    )
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(
+        `Cloudinary upload timed out after ${CLOUDINARY_UPLOAD_TIMEOUT_MS}ms`,
+      )
+    }
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   const body = (await response.json().catch(() => null)) as {
     secure_url?: string
