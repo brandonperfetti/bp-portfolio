@@ -1,12 +1,12 @@
 import { isValidSecret } from '@/lib/security/timingSafeSecret'
 
 function resolveBearerToken(request: Request) {
-  const value = request.headers.get('authorization') || ''
-  const [scheme, token] = value.split(' ')
-  if (scheme?.toLowerCase() !== 'bearer' || !token) {
+  const value = request.headers.get('authorization')?.trim() ?? ''
+  const match = value.match(/^Bearer\s+(\S+)$/i)
+  if (!match) {
     return null
   }
-  return token.trim()
+  return match[1]
 }
 
 export function isAuthorizedCronRequest(request: Request) {
