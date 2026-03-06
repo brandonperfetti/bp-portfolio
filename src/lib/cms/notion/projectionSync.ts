@@ -1651,6 +1651,15 @@ export async function evaluateSourceArticlePublishGate(
   }
 }
 
+/**
+ * Evaluates publish-safe source rows against required SOP quality fields.
+ *
+ * @param options Optional scope. When `sourcePageId` is provided, limits
+ * evaluation to one source row.
+ * @returns Quality-gate summary with per-row failure details.
+ *
+ * Side effects: read-only Notion fetches (no writes).
+ */
 export async function evaluateSourceArticleQualityGate(options?: {
   sourcePageId?: string
 }): Promise<SourceArticleQualityGateResult> {
@@ -1684,6 +1693,17 @@ export async function evaluateSourceArticleQualityGate(options?: {
   }
 }
 
+/**
+ * Applies best-effort metadata auto-healing for source quality-gate fields.
+ *
+ * @param options Optional scope. When `sourcePageId` is provided, limits
+ * healing to one source row.
+ * @returns Auto-heal summary with healed/skipped/error counters.
+ *
+ * Side effects:
+ * - Updates source rows in Notion for publish-safe candidates.
+ * - Intended to be idempotent for already-healed rows.
+ */
 export async function autoHealSourceArticleQualityGate(options?: {
   sourcePageId?: string
 }): Promise<SourceArticleAutoHealResult> {
@@ -1745,6 +1765,19 @@ export async function autoHealSourceArticleQualityGate(options?: {
   }
 }
 
+/**
+ * Processes queued cover regeneration requests for publish-safe source rows.
+ *
+ * @param options Optional scope and processing cap.
+ * @param options.sourcePageId Limit processing to one source row.
+ * @param options.limit Max candidates to process this run (default: 10).
+ * @returns Cover regeneration summary with success/skipped/error telemetry.
+ *
+ * Side effects:
+ * - Generates images via OpenAI and uploads outputs to Cloudinary.
+ * - Updates source rows with success/failure/retry metadata.
+ * - Attempts projection sync for regenerated rows.
+ */
 export async function processCoverRegenerationRequests(options?: {
   sourcePageId?: string
   limit?: number
