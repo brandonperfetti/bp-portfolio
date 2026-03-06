@@ -1,16 +1,16 @@
 import OpenAI from 'openai'
 import { NextResponse } from 'next/server'
 import {
-  applyHermesDailyQuota,
-  applyHermesRateLimit,
-  getHermesClientIp,
-  getHermesLimits,
+  applyDailyQuota,
+  applyRateLimit,
+  getRequestClientIp,
+  getSecurityLimits,
   isAllowedRequestSource,
-  verifyTurnstileToken,
-} from '@/lib/hermes/guardrails'
+  verifyRequestTurnstileToken,
+} from '@/lib/security/guardrails'
 
 export async function POST(req: Request) {
-  const limits = getHermesLimits()
+  const limits = getSecurityLimits()
   if (!limits.publicImageEnabled) {
     return NextResponse.json(
       { error: 'Hermes image generation is temporarily unavailable.' },
@@ -25,8 +25,8 @@ export async function POST(req: Request) {
     )
   }
 
-  const clientIp = getHermesClientIp(req)
-  const rate = applyHermesRateLimit({
+  const clientIp = getRequestClientIp(req)
+  const rate = applyRateLimit({
     key: `hermes:image:${clientIp}`,
     limit: limits.imageRatePerMinute,
     windowMs: 60_000,
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const turnstile = await verifyTurnstileToken({
+  const turnstile = await verifyRequestTurnstileToken({
     token: turnstileToken ?? '',
     ip: clientIp,
   })
@@ -99,7 +99,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const dailyQuota = applyHermesDailyQuota({
+  const dailyQuota = applyDailyQuota({
     key: 'hermes:image:global',
     limit: limits.imageDailyLimit,
   })

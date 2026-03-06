@@ -1,12 +1,12 @@
 import OpenAI from 'openai'
 import { NextResponse } from 'next/server'
 import {
-  applyHermesRateLimit,
-  getHermesClientIp,
-  getHermesLimits,
+  applyRateLimit,
+  getRequestClientIp,
+  getSecurityLimits,
   isAllowedRequestSource,
-  verifyTurnstileToken,
-} from '@/lib/hermes/guardrails'
+  verifyRequestTurnstileToken,
+} from '@/lib/security/guardrails'
 
 type Message = {
   role: 'system' | 'assistant' | 'user'
@@ -14,7 +14,7 @@ type Message = {
 }
 
 export async function POST(req: Request) {
-  const limits = getHermesLimits()
+  const limits = getSecurityLimits()
   if (!limits.publicChatEnabled) {
     return NextResponse.json(
       { error: 'Hermes chat is temporarily unavailable.' },
@@ -29,8 +29,8 @@ export async function POST(req: Request) {
     )
   }
 
-  const clientIp = getHermesClientIp(req)
-  const rate = applyHermesRateLimit({
+  const clientIp = getRequestClientIp(req)
+  const rate = applyRateLimit({
     key: `hermes:chat:${clientIp}`,
     limit: limits.chatRatePerMinute,
     windowMs: 60_000,
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const turnstile = await verifyTurnstileToken({
+  const turnstile = await verifyRequestTurnstileToken({
     token: turnstileToken ?? '',
     ip: clientIp,
   })
