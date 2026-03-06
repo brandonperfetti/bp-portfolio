@@ -443,8 +443,18 @@ export async function runCalendarIdeaSeedingCron(options?: {
   try {
     const dataSourceId = getNotionContentCalendarDataSourceId()
     const schema = await loadCalendarSchema(dataSourceId)
+    const publishDateProperty = findPropertyName(schema, ['Publish Date'])
     const existingRows = await queryAllDataSourcePages(dataSourceId, {
-      sorts: [{ property: 'Publish Date', direction: 'descending' }],
+      ...(publishDateProperty
+        ? {
+            sorts: [
+              {
+                property: publishDateProperty,
+                direction: 'descending',
+              },
+            ],
+          }
+        : {}),
     })
     const scopedRows = existingRows.slice(0, config.maxContextRows)
     const pillarLookbackRows = scopedRows.slice(0, config.pillarLookbackRows)
@@ -455,9 +465,14 @@ export async function runCalendarIdeaSeedingCron(options?: {
       )
       .filter((title): title is string => Boolean(title))
     const existingDates = scopedRows
-      .map((row) =>
-        propertyToDate(getProperty(row.properties, ['Publish Date'])),
-      )
+      .map((row) => {
+        if (publishDateProperty) {
+          return propertyToDate(
+            getProperty(row.properties, [publishDateProperty]),
+          )
+        }
+        return propertyToDate(getProperty(row.properties, ['Publish Date']))
+      })
       .filter((date): date is string => Boolean(date))
 
     const existingPillars = pillarLookbackRows
