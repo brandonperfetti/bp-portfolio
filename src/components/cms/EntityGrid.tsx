@@ -20,6 +20,8 @@ export function EntityGrid({ items }: { items: CmsEntityItem[] }) {
         >
           {item.link?.href ? (
             <>
+              {/* Keep overlay/background and absolute link separate so the full
+                  card is clickable while content remains visibly layered above. */}
               <div className="absolute -inset-x-4 -inset-y-6 z-0 scale-95 bg-zinc-50 opacity-0 transition group-hover:scale-100 group-hover:opacity-100 sm:-inset-x-6 sm:rounded-2xl dark:bg-zinc-800/50" />
               <Link
                 href={item.link.href}
