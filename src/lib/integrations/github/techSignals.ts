@@ -615,6 +615,19 @@ async function readRepoToolingSignals(
   return signals
 }
 
+/**
+ * Collects weighted technology signals from the configured GitHub owner/org.
+ *
+ * Reads runtime config/env via `resolveConfig()` (owner/token/limits/filters),
+ * then performs GitHub API scans across repos, languages, topics, manifests,
+ * and selected tooling files to build scored `GithubTechSignal` entries.
+ *
+ * @returns Aggregated `GithubTechSignalsResult` including owner, scanned repo
+ * count, sorted signal scores, and recoverable per-step error strings.
+ * @throws Does not intentionally throw for expected config/network failures;
+ * returns `{ ok: false, errors }` when config or repo listing fails. Some
+ * unexpected low-level errors may still propagate from helpers.
+ */
 export async function collectGithubTechSignals(): Promise<GithubTechSignalsResult> {
   const config = resolveConfig()
   if (!config.ok) {
