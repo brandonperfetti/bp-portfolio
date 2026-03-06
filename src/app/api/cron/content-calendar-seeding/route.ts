@@ -4,6 +4,7 @@ import { logAutomationErrorToNotion } from '@/lib/cms/notion/automationErrorLog'
 import { runCalendarIdeaSeedingCron } from '@/lib/cms/notion/calendarSeeding'
 
 import { isAuthorizedCronRequest } from '../_auth'
+import { parseDryRunParam } from '../_params'
 
 async function run(request: Request) {
   if (!isAuthorizedCronRequest(request)) {
@@ -16,19 +17,10 @@ async function run(request: Request) {
   try {
     const url = new URL(request.url)
     const body =
-      request.method === 'POST' ? await request.json().catch(() => ({})) : {}
-    const dryRunFromQuery = url.searchParams.get('dryRun')
-    const dryRunFromBody =
-      typeof (body as { dryRun?: unknown })?.dryRun === 'boolean'
-        ? (body as { dryRun: boolean }).dryRun
-        : undefined
-    const dryRun =
-      dryRunFromBody ??
-      (dryRunFromQuery === '1' || dryRunFromQuery?.toLowerCase() === 'true'
-        ? true
-        : dryRunFromQuery === '0' || dryRunFromQuery?.toLowerCase() === 'false'
-          ? false
-          : undefined)
+      request.method === 'POST'
+        ? ((await request.json().catch(() => ({}))) as Record<string, unknown>)
+        : {}
+    const dryRun = parseDryRunParam(body, url.searchParams)
 
     const result = await runCalendarIdeaSeedingCron({ dryRun })
     if (!result.ok) {
