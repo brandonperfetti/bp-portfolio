@@ -83,6 +83,18 @@ async function runStep<T>(
   }
 }
 
+/**
+ * Runs the projection maintenance workflow for article CMS surfaces.
+ *
+ * @param options Optional runtime controls.
+ * @param options.logErrors When false, suppresses Notion error-log writes.
+ * @returns Automation summary (`ok`, `startedAt`, `errors`, step payloads).
+ *
+ * Side effects:
+ * - Executes projection sync, quality-gate checks/healing, reconcile, and webhook watchdog.
+ * - May mutate Notion content/projection rows through downstream operations.
+ * - Optionally writes unresolved issues to Notion Automation Errors.
+ */
 export async function runProjectionCronAutomation(options?: {
   logErrors?: boolean
 }): Promise<AutomationSummary> {
@@ -158,6 +170,8 @@ export async function runProjectionCronAutomation(options?: {
       errors,
     )
     if (reconcile && !reconcile.ok) {
+      // Only escalate blocking reconcile issues here; non-critical findings are
+      // preserved in summary.reconcile for observability without failing the run.
       const critical = reconcile.findings.filter(
         (finding) => finding.severity === 'critical',
       )
