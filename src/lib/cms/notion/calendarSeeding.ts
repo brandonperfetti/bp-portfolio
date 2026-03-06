@@ -625,11 +625,22 @@ export async function runCalendarIdeaSeedingCron(options?: {
 
       if (config.dryRun) continue
 
-      await notionCreatePage({
-        parent: { data_source_id: schema.dataSourceId },
-        properties: buildCalendarPageProperties(schema, idea, publishDateIso),
-      })
-      created += 1
+      try {
+        await notionCreatePage({
+          parent: { data_source_id: schema.dataSourceId },
+          properties: buildCalendarPageProperties(schema, idea, publishDateIso),
+        })
+        created += 1
+      } catch (error) {
+        errors.push({
+          step: 'create-calendar-row',
+          message: error instanceof Error ? error.message : 'Unknown error',
+          details: {
+            title: idea.title,
+            publishDate: publishDateIso,
+          },
+        })
+      }
     }
 
     return {
