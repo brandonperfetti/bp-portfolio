@@ -68,10 +68,20 @@ const getCachedPageByPath = unstable_cache(
   },
 )
 
+/**
+ * Retrieves CMS page content by route path when Notion is the active provider.
+ *
+ * @param path Route path to resolve (for example: `/` or `/about`).
+ * @param options Optional lookup settings.
+ * @param options.includeBody When true, fetches and attaches Notion body blocks.
+ * @returns The mapped CMS page content, or `null` when provider is not Notion,
+ * page is not found, or a recoverable Notion availability/config error occurs.
+ * @throws Re-throws unexpected errors outside NotionConfigError/NotionHttpError.
+ */
 export async function getCmsPageByPath(
   path: string,
   options?: { includeBody?: boolean },
-) {
+): Promise<CmsPageContent | null> {
   if (getCmsProvider() !== 'notion') {
     return null
   }
