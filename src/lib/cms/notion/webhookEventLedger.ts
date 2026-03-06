@@ -862,18 +862,18 @@ export async function pruneFailedWebhookEvents(options?: {
   limit?: number
 }): Promise<WebhookLedgerRetentionResult> {
   const dataSourceId = getOptionalNotionWebhookEventsDataSourceId()
-  const retentionDays =
+  const parsedRetentionDays =
     typeof options?.retentionDays === 'number' &&
-    Number.isFinite(options.retentionDays) &&
-    options.retentionDays > 0
+    Number.isFinite(options.retentionDays)
       ? Math.floor(options.retentionDays)
       : 30
-  const limit =
-    typeof options?.limit === 'number' &&
-    Number.isFinite(options.limit) &&
-    options.limit > 0
+  const retentionDays = parsedRetentionDays > 0 ? parsedRetentionDays : 30
+
+  const parsedLimit =
+    typeof options?.limit === 'number' && Number.isFinite(options.limit)
       ? Math.floor(options.limit)
       : 100
+  const limit = parsedLimit > 0 ? parsedLimit : 100
 
   if (!dataSourceId) {
     return {
