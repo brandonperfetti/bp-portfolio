@@ -184,6 +184,7 @@ export function HermesChat() {
     }
   }, [copiedId])
 
+  // Auto-resize input with content while capping growth and enabling scroll overflow at max height.
   useEffect(() => {
     const textarea = inputRef.current
     if (!textarea) {
