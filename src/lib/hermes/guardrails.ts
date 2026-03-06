@@ -302,14 +302,19 @@ export async function verifyTurnstileToken(options: {
   }
 
   try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
     const response = await fetch(
       'https://challenges.cloudflare.com/turnstile/v0/siteverify',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: payload.toString(),
+        signal: controller.signal,
       },
-    )
+    ).finally(() => {
+      clearTimeout(timeoutId)
+    })
 
     if (!response.ok) {
       return { required: true, ok: false as const }
