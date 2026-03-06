@@ -360,7 +360,7 @@ export async function pruneAutomationErrorLogs(options?: {
       }
 
       const ms = Date.parse(occurredAt)
-      if (!Number.isFinite(ms) || ms >= cutoff.getTime()) {
+      if (!Number.isFinite(ms) || ms > cutoff.getTime()) {
         continue
       }
 
