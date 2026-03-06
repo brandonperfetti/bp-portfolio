@@ -1,4 +1,10 @@
 import { NextResponse } from 'next/server'
+import {
+  applyRateLimit,
+  getRequestClientIp,
+  getSecurityLimits,
+  verifyRequestTurnstileToken,
+} from '@/lib/security/guardrails'
 
 interface SendGridError {
   message: string
@@ -7,6 +13,32 @@ interface SendGridError {
 }
 
 export async function PUT(req: Request) {
+  const limits = getSecurityLimits()
+  const clientIp = getRequestClientIp(req)
+  const rate = applyRateLimit({
+    key: `hermes:mailinglist:${clientIp}`,
+    limit: limits.chatRatePerMinute,
+    windowMs: 60_000,
+  })
+  if (!rate.allowed) {
+    const retryAfter = Math.max(
+      1,
+      Math.ceil((rate.resetAt - Date.now()) / 1000),
+    )
+    return NextResponse.json(
+      { message: 'Too many subscribe attempts. Please slow down.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(retryAfter),
+          'X-RateLimit-Limit': String(limits.chatRatePerMinute),
+          'X-RateLimit-Remaining': String(rate.remaining),
+          'X-RateLimit-Reset': String(Math.floor(rate.resetAt / 1000)),
+        },
+      },
+    )
+  }
+
   const apiKey = process.env.SENDGRID_API_KEY
   const listId = process.env.SENDGRID_MAILING_ID ?? process.env.SENDGRID_LIST_ID
   const isEuResidency = process.env.SENDGRID_DATA_RESIDENCY === 'eu'
@@ -38,8 +70,27 @@ export async function PUT(req: Request) {
 
   const body =
     parsedBody && typeof parsedBody === 'object'
-      ? (parsedBody as { mail?: unknown; email?: unknown })
+      ? (parsedBody as {
+          mail?: unknown
+          email?: unknown
+          turnstileToken?: unknown
+        })
       : {}
+
+  const turnstile = await verifyRequestTurnstileToken({
+    token: String(body.turnstileToken ?? ''),
+    ip: clientIp,
+  })
+  if (!turnstile.ok) {
+    return NextResponse.json(
+      {
+        message: turnstile.required
+          ? 'Security challenge failed. Please refresh and try again.'
+          : 'Unable to verify request.',
+      },
+      { status: 403 },
+    )
+  }
 
   const email = String(body.mail ?? body.email ?? '')
     .trim()
