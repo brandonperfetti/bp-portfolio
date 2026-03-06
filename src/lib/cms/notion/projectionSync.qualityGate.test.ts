@@ -71,4 +71,12 @@ describe('evaluateSourceArticleQualityRequirements', () => {
       ),
     ).toContain('Content Pillar is missing')
   })
+
+  it('fails when cover style profile is missing', () => {
+    expect(
+      evaluateSourceArticleQualityRequirements(
+        makeSnapshot({ coverStyleProfile: '   ' }),
+      ),
+    ).toContain('Cover Style Profile is missing')
+  })
 })
