@@ -477,9 +477,11 @@ export async function POST(request: Request) {
             syncResult.errors.map((entry) => entry.message).join('; '),
           ).catch(() => {})
         }
-      } else if (ledgerPageId) {
+      } else {
         diagnostics.syncSuccesses += 1
-        await completeWebhookEventClaim(ledgerPageId).catch(() => {})
+        if (ledgerPageId) {
+          await completeWebhookEventClaim(ledgerPageId).catch(() => {})
+        }
       }
     } catch (error) {
       diagnostics.syncFailures += 1
