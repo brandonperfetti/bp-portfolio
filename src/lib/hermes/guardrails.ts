@@ -1,11 +1,13 @@
 type RateBucket = {
   count: number
   resetAt: number
+  touchedAt: number
 }
 
 type DailyBucket = {
   count: number
   dayKey: string
+  touchedAt: number
 }
 
 export type GuardrailStores = {
@@ -81,6 +83,52 @@ function getDayKey(now = new Date()) {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`
 }
 
+function getGuardrailMaxEntries() {
+  return toPositiveInt(process.env.HERMES_GUARDRAILS_MAX_BUCKETS, 5000, 50000)
+}
+
+function getGuardrailBucketTtlMs() {
+  return toPositiveInt(
+    process.env.HERMES_GUARDRAILS_BUCKET_TTL_MS,
+    24 * 60 * 60 * 1000,
+    7 * 24 * 60 * 60 * 1000,
+  )
+}
+
+function pruneMapByTtlAndCap<T extends { touchedAt: number }>(
+  map: Map<string, T>,
+  nowMs: number,
+  ttlMs: number,
+  maxEntries: number,
+) {
+  for (const [key, bucket] of map) {
+    if (nowMs - bucket.touchedAt > ttlMs) {
+      map.delete(key)
+    }
+  }
+
+  if (map.size <= maxEntries) {
+    return
+  }
+
+  const overflow = map.size - maxEntries
+  const oldest = Array.from(map.entries())
+    .sort((a, b) => a[1].touchedAt - b[1].touchedAt)
+    .slice(0, overflow)
+
+  for (const [key] of oldest) {
+    map.delete(key)
+  }
+}
+
+function pruneGuardrailBuckets(nowMs = Date.now()) {
+  const { rateBuckets, dailyBuckets } = getStores()
+  const ttlMs = getGuardrailBucketTtlMs()
+  const maxEntries = getGuardrailMaxEntries()
+  pruneMapByTtlAndCap(rateBuckets, nowMs, ttlMs, maxEntries)
+  pruneMapByTtlAndCap(dailyBuckets, nowMs, ttlMs, maxEntries)
+}
+
 export function getHermesClientIp(request: Request) {
   const xff = request.headers.get('x-forwarded-for')
   if (xff) {
@@ -131,11 +179,16 @@ export function applyHermesRateLimit(options: {
 }) {
   const { key, limit, windowMs } = options
   const now = options.now ?? Date.now()
+  pruneGuardrailBuckets(now)
   const { rateBuckets } = getStores()
   const current = rateBuckets.get(key)
 
   if (!current || now >= current.resetAt) {
-    const next: RateBucket = { count: 1, resetAt: now + windowMs }
+    const next: RateBucket = {
+      count: 1,
+      resetAt: now + windowMs,
+      touchedAt: now,
+    }
     rateBuckets.set(key, next)
     return {
       allowed: true,
@@ -153,6 +206,7 @@ export function applyHermesRateLimit(options: {
   }
 
   current.count += 1
+  current.touchedAt = now
   rateBuckets.set(key, current)
   return {
     allowed: true,
@@ -172,12 +226,14 @@ export function applyHermesDailyQuota(options: {
   }
 
   const now = options.now ?? new Date()
+  const nowMs = now.getTime()
+  pruneGuardrailBuckets(nowMs)
   const dayKey = getDayKey(now)
   const { dailyBuckets } = getStores()
   const current = dailyBuckets.get(key)
 
   if (!current || current.dayKey !== dayKey) {
-    dailyBuckets.set(key, { count: 1, dayKey })
+    dailyBuckets.set(key, { count: 1, dayKey, touchedAt: nowMs })
     return { allowed: true, remaining: Math.max(0, limit - 1) }
   }
 
@@ -186,6 +242,7 @@ export function applyHermesDailyQuota(options: {
   }
 
   current.count += 1
+  current.touchedAt = nowMs
   dailyBuckets.set(key, current)
   return { allowed: true, remaining: Math.max(0, limit - current.count) }
 }
