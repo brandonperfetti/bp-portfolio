@@ -56,7 +56,9 @@ export async function POST(request: Request) {
       workflow: 'cms-quality-gate',
       endpoint: '/api/cms/sync/articles/quality-gate',
       error: error instanceof Error ? error.message : 'Unknown error',
-      sourcePageId,
+      details: {
+        sourcePageId,
+      },
     }).catch((logError) => {
       console.error('[cms-quality-gate] failed to write Notion error log', {
         error: logError instanceof Error ? logError.message : String(logError),
