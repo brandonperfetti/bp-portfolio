@@ -81,5 +81,5 @@ Keyboard shortcuts:
 Hermes layout note:
 
 - `src/app/hermes/page.tsx` computes viewport-fit height and keeps scrolling inside the message panel instead of page-level overflow.
-- `src/components/HermesChat.tsx` uses multiline textarea input (`Enter` send, `Shift+Enter` newline).
+- `src/components/HermesChat.tsx` uses multiline textarea input (`Enter` sends message, `Shift+Enter` creates a newline).
 - `src/lib/security/guardrails.ts` centralizes request guardrails for public endpoints (origin/referrer validation, rate limits, quotas, and optional Turnstile verification).
