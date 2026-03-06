@@ -219,26 +219,39 @@ export async function runCoverRegenerationCronAutomation(options?: {
   const startedAt = new Date().toISOString()
   const summary: Record<string, unknown> = {}
   const errors: AutomationIssue[] = []
-
-  const coverRegeneration = await processCoverRegenerationRequests({
-    limit: resolveCoverLimit(),
-  })
-  summary.coverRegeneration = coverRegeneration
-  if (!coverRegeneration.ok) {
-    errors.push({
-      step: 'cover-regeneration',
-      message: 'Cover regeneration completed with errors',
-      details: coverRegeneration.errors,
-    })
-  }
-
-  if (options?.logErrors !== false) {
-    await writeErrorLog(
-      'cms-cron-cover-regeneration',
-      '/api/cron/cms-cover-regeneration',
-      errors,
+  try {
+    const coverRegeneration = await runStep(
+      'cover-regeneration',
+      () =>
+        processCoverRegenerationRequests({
+          limit: resolveCoverLimit(),
+        }),
       summary,
+      'coverRegeneration',
+      errors,
     )
+    if (coverRegeneration && !coverRegeneration.ok) {
+      errors.push({
+        step: 'cover-regeneration',
+        message: 'Cover regeneration completed with errors',
+        details: coverRegeneration.errors,
+      })
+    }
+  } catch (error) {
+    errors.push({
+      step: 'cover-regeneration-cron',
+      message: 'Unhandled cover regeneration cron error',
+      details: toErrorMessage(error),
+    })
+  } finally {
+    if (options?.logErrors !== false) {
+      await writeErrorLog(
+        'cms-cron-cover-regeneration',
+        '/api/cron/cms-cover-regeneration',
+        errors,
+        summary,
+      )
+    }
   }
 
   return {
@@ -251,24 +264,45 @@ export async function runCoverRegenerationCronAutomation(options?: {
 
 export async function runFullCmsCronAutomation(): Promise<AutomationSummary> {
   const startedAt = new Date().toISOString()
-  const projection = await runProjectionCronAutomation({ logErrors: false })
-  const cover = await runCoverRegenerationCronAutomation({ logErrors: false })
+  const summary: Record<string, unknown> = {}
+  const combinedErrors: AutomationIssue[] = []
 
-  const combinedErrors: AutomationIssue[] = [
-    ...projection.errors,
-    ...cover.errors,
-  ]
-  const summary = {
-    projection,
-    cover,
+  try {
+    const projection = await runStep(
+      'projection-cron',
+      () => runProjectionCronAutomation({ logErrors: false }),
+      summary,
+      'projection',
+      combinedErrors,
+    )
+    if (projection) {
+      combinedErrors.push(...projection.errors)
+    }
+
+    const cover = await runStep(
+      'cover-regeneration-cron',
+      () => runCoverRegenerationCronAutomation({ logErrors: false }),
+      summary,
+      'cover',
+      combinedErrors,
+    )
+    if (cover) {
+      combinedErrors.push(...cover.errors)
+    }
+  } catch (error) {
+    combinedErrors.push({
+      step: 'full-cms-cron',
+      message: 'Unhandled full CMS cron error',
+      details: toErrorMessage(error),
+    })
+  } finally {
+    await writeErrorLog(
+      'cms-cron-automation',
+      '/api/cron/cms-automation',
+      combinedErrors,
+      summary,
+    )
   }
-
-  await writeErrorLog(
-    'cms-cron-automation',
-    '/api/cron/cms-automation',
-    combinedErrors,
-    summary,
-  )
 
   return {
     ok: combinedErrors.length === 0,
