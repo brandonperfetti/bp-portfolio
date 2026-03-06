@@ -40,6 +40,14 @@ function sanitizeSearchItems(value: unknown): SearchItem[] {
   return value.filter(isSearchItem)
 }
 
+/**
+ * Global header search modal with keyboard and cached-index behavior.
+ *
+ * Side effects:
+ * - Registers/removes global `keydown` listeners for `Cmd/Ctrl+K` and `Escape`.
+ * - Reads/writes sessionStorage search index cache (`SEARCH_CACHE_KEY`).
+ * - Fetches `/api/search` on demand when cache is stale/bypassed.
+ */
 export function HeaderSearch() {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -88,6 +96,8 @@ export function HeaderSearch() {
         const raw = sessionStorage.getItem(SEARCH_CACHE_KEY)
         if (raw) {
           const parsed = JSON.parse(raw) as SearchItem[] | SearchCacheEntry
+          // Backward-compat: older cache payloads stored a raw SearchItem[].
+          // Wrap arrays into SearchCacheEntry so TTL logic stays consistent.
           const cached = Array.isArray(parsed)
             ? ({
                 savedAt: Date.now(),
@@ -191,6 +201,7 @@ export function HeaderSearch() {
       return
     }
 
+    // Wrap index in both directions so ArrowUp/ArrowDown cycles results.
     const normalized = ((index % count) + count) % count
     const target = resultRefs.current[normalized]
     if (!target) {
