@@ -227,6 +227,17 @@ export async function runProjectionCronAutomation(options?: {
   }
 }
 
+/**
+ * Runs scheduled cover-regeneration processing for queued source articles.
+ *
+ * @param options Optional runtime controls.
+ * @param options.logErrors When false, suppresses Notion error-log writes.
+ * @returns Automation summary (`ok`, `startedAt`, `errors`, step payloads).
+ *
+ * Side effects:
+ * - Processes cover regeneration queue and updates source/projection rows downstream.
+ * - Optionally writes unresolved issues to Notion Automation Errors.
+ */
 export async function runCoverRegenerationCronAutomation(options?: {
   logErrors?: boolean
 }): Promise<AutomationSummary> {
@@ -276,6 +287,15 @@ export async function runCoverRegenerationCronAutomation(options?: {
   }
 }
 
+/**
+ * Runs the full CMS cron orchestration (projection + cover regeneration).
+ *
+ * @returns Combined automation summary (`ok`, `startedAt`, `errors`, nested step payloads).
+ *
+ * Side effects:
+ * - Invokes projection and cover cron workflows in sequence.
+ * - Writes aggregated unresolved issues to Notion Automation Errors.
+ */
 export async function runFullCmsCronAutomation(): Promise<AutomationSummary> {
   const startedAt = new Date().toISOString()
   const summary: Record<string, unknown> = {}
