@@ -54,87 +54,155 @@ async function writeErrorLog(
   })
 }
 
+function toErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+async function runStep<T>(
+  step: string,
+  run: () => Promise<T>,
+  summary: Record<string, unknown>,
+  summaryKey: string,
+  errors: AutomationIssue[],
+): Promise<T | null> {
+  try {
+    const result = await run()
+    summary[summaryKey] = result
+    return result
+  } catch (error) {
+    errors.push({
+      step,
+      message: `${step} failed`,
+      details: toErrorMessage(error),
+    })
+    summary[summaryKey] = {
+      ok: false,
+      errors: [toErrorMessage(error)],
+    }
+    return null
+  }
+}
+
 export async function runProjectionCronAutomation(options?: {
   logErrors?: boolean
 }): Promise<AutomationSummary> {
   const startedAt = new Date().toISOString()
   const summary: Record<string, unknown> = {}
   const errors: AutomationIssue[] = []
-
-  const projectionSync = await syncPortfolioArticleProjection()
-  summary.projectionSync = projectionSync
-  if (!projectionSync.ok) {
-    errors.push({
-      step: 'projection-sync',
-      message: 'Projection sync completed with errors',
-      details: projectionSync.errors,
-    })
-  }
-
-  const qualityBefore = await evaluateSourceArticleQualityGate()
-  summary.qualityGateBefore = qualityBefore
-
-  let autoHeal = null
-  let qualityAfter = qualityBefore
-  if (!qualityBefore.ok) {
-    autoHeal = await autoHealSourceArticleQualityGate()
-    summary.autoHeal = autoHeal
-
-    qualityAfter = await evaluateSourceArticleQualityGate()
-    summary.qualityGateAfter = qualityAfter
-  }
-
-  if (!qualityAfter.ok) {
-    errors.push({
-      step: 'quality-gate',
-      message: `Quality gate still failing for ${qualityAfter.failed} source rows after remediation`,
-      details: qualityAfter.failures,
-    })
-  }
-
-  if (autoHeal && !autoHeal.ok) {
-    errors.push({
-      step: 'auto-heal',
-      message: 'Auto-heal completed with errors',
-      details: autoHeal.errors,
-    })
-  }
-
-  const reconcile = await reconcilePortfolioArticleProjection()
-  summary.reconcile = reconcile
-  if (!reconcile.ok) {
-    const critical = reconcile.findings.filter(
-      (finding) => finding.severity === 'critical',
+  try {
+    const projectionSync = await runStep(
+      'projection-sync',
+      () => syncPortfolioArticleProjection(),
+      summary,
+      'projectionSync',
+      errors,
     )
-    if (critical.length > 0) {
+    if (projectionSync && !projectionSync.ok) {
       errors.push({
-        step: 'reconcile',
-        message: `Reconcile found ${critical.length} critical findings`,
-        details: critical,
+        step: 'projection-sync',
+        message: 'Projection sync completed with errors',
+        details: projectionSync.errors,
       })
     }
-  }
 
-  const watchdog = await runWebhookLedgerWatchdog({
-    staleMinutes: 90,
-    limit: 100,
-  })
-  summary.watchdog = watchdog
-  if (!watchdog.ok) {
-    errors.push({
-      step: 'webhook-watchdog',
-      message: 'Webhook watchdog completed with errors',
-      details: watchdog.errors,
-    })
-  }
-
-  if (options?.logErrors !== false) {
-    await writeErrorLog(
-      'cms-cron-projection',
-      '/api/cron/cms-projection',
-      errors,
+    const qualityBefore = await runStep(
+      'quality-gate-before',
+      () => evaluateSourceArticleQualityGate(),
       summary,
+      'qualityGateBefore',
+      errors,
     )
+
+    let autoHeal: Awaited<
+      ReturnType<typeof autoHealSourceArticleQualityGate>
+    > | null = null
+    let qualityAfter = qualityBefore
+    if (qualityBefore && !qualityBefore.ok) {
+      autoHeal = await runStep(
+        'auto-heal',
+        () => autoHealSourceArticleQualityGate(),
+        summary,
+        'autoHeal',
+        errors,
+      )
+      if (autoHeal && !autoHeal.ok) {
+        errors.push({
+          step: 'auto-heal',
+          message: 'Auto-heal completed with errors',
+          details: autoHeal.errors,
+        })
+      }
+
+      qualityAfter = await runStep(
+        'quality-gate-after',
+        () => evaluateSourceArticleQualityGate(),
+        summary,
+        'qualityGateAfter',
+        errors,
+      )
+    }
+
+    if (qualityAfter && !qualityAfter.ok) {
+      errors.push({
+        step: 'quality-gate',
+        message: `Quality gate still failing for ${qualityAfter.failed} source rows after remediation`,
+        details: qualityAfter.failures,
+      })
+    }
+
+    const reconcile = await runStep(
+      'reconcile',
+      () => reconcilePortfolioArticleProjection(),
+      summary,
+      'reconcile',
+      errors,
+    )
+    if (reconcile && !reconcile.ok) {
+      const critical = reconcile.findings.filter(
+        (finding) => finding.severity === 'critical',
+      )
+      if (critical.length > 0) {
+        errors.push({
+          step: 'reconcile',
+          message: `Reconcile found ${critical.length} critical findings`,
+          details: critical,
+        })
+      }
+    }
+
+    const watchdog = await runStep(
+      'webhook-watchdog',
+      () =>
+        runWebhookLedgerWatchdog({
+          staleMinutes: 90,
+          limit: 100,
+        }),
+      summary,
+      'watchdog',
+      errors,
+    )
+    if (watchdog && !watchdog.ok) {
+      errors.push({
+        step: 'webhook-watchdog',
+        message: 'Webhook watchdog completed with errors',
+        details: watchdog.errors,
+      })
+    }
+  } catch (error) {
+    errors.push({
+      step: 'projection-cron',
+      message: 'Unhandled projection cron error',
+      details: toErrorMessage(error),
+    })
+  } finally {
+    if (options?.logErrors !== false) {
+      await writeErrorLog(
+        'cms-cron-projection',
+        '/api/cron/cms-projection',
+        errors,
+        summary,
+      )
+    }
   }
 
   return {
