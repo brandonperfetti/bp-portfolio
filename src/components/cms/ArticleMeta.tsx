@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import type { ReactElement } from 'react'
 
 import { getExternalLinkProps } from '@/lib/link-utils'
 
@@ -6,6 +7,20 @@ function isSiteOwnerAuthor(name: string) {
   return name.trim().toLowerCase() === 'brandon perfetti'
 }
 
+/**
+ * Renders article metadata chips and author/actions row when metadata exists.
+ *
+ * @param author Author identity, either a string label or object with optional
+ * `name`, `role`, and `href`.
+ * @param actions Optional right-aligned action slot.
+ * @param readingTimeMinutes Optional reading-time value.
+ * @param category Optional fallback category when topic chips are absent.
+ * @param topics Optional topics list (deduped + trimmed, max 3).
+ * @param tech Optional tech list (deduped + trimmed, max 3, excluding topic duplicates).
+ * @returns Rendered metadata block, or `null` when no metadata is present.
+ * @remarks If `author.href` is present it is preferred. Otherwise, site-owner
+ * author names route to `/about`; external links use `getExternalLinkProps`.
+ */
 export function ArticleMeta({
   author,
   actions,
@@ -26,7 +41,7 @@ export function ArticleMeta({
   category?: string
   topics?: string[]
   tech?: string[]
-}) {
+}): ReactElement | null {
   const rawAuthorName = typeof author === 'string' ? author : author?.name
   const authorMeta =
     typeof author === 'string'
