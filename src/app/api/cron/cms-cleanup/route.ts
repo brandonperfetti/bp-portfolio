@@ -60,21 +60,76 @@ async function run(request: Request) {
   const imageJobsLimit = resolveImageJobsLimit()
 
   try {
-    const [webhookRetention, errorRetention, imageJobsRetention] =
-      await Promise.all([
-        pruneFailedWebhookEvents({
-          retentionDays: webhookRetentionDays,
-          limit: webhookLimit,
-        }),
-        pruneAutomationErrorLogs({
-          retentionDays: errorRetentionDays,
-          limit: errorLimit,
-        }),
-        pruneImageJobs({
-          retentionDays: imageJobsRetentionDays,
-          limit: imageJobsLimit,
-        }),
-      ])
+    const [webhookStep, errorStep, imageJobsStep] = await Promise.allSettled([
+      pruneFailedWebhookEvents({
+        retentionDays: webhookRetentionDays,
+        limit: webhookLimit,
+      }),
+      pruneAutomationErrorLogs({
+        retentionDays: errorRetentionDays,
+        limit: errorLimit,
+      }),
+      pruneImageJobs({
+        retentionDays: imageJobsRetentionDays,
+        limit: imageJobsLimit,
+      }),
+    ])
+
+    const toMessage = (reason: unknown) =>
+      reason instanceof Error ? reason.message : String(reason)
+
+    const webhookRetention: Awaited<
+      ReturnType<typeof pruneFailedWebhookEvents>
+    > =
+      webhookStep.status === 'fulfilled'
+        ? webhookStep.value
+        : {
+            ok: false,
+            enabled: true,
+            retentionDays: webhookRetentionDays,
+            scanned: 0,
+            archived: 0,
+            skippedRecent: 0,
+            errors: [
+              {
+                ledgerPageId: 'runtime',
+                message: toMessage(webhookStep.reason),
+              },
+            ],
+          }
+
+    const errorRetention: Awaited<ReturnType<typeof pruneAutomationErrorLogs>> =
+      errorStep.status === 'fulfilled'
+        ? errorStep.value
+        : {
+            ok: false,
+            enabled: true,
+            scanned: 0,
+            eligible: 0,
+            archived: 0,
+            cutoffIso: new Date().toISOString(),
+            errors: [
+              { pageId: 'runtime', message: toMessage(errorStep.reason) },
+            ],
+          }
+
+    const imageJobsRetention: Awaited<ReturnType<typeof pruneImageJobs>> =
+      imageJobsStep.status === 'fulfilled'
+        ? imageJobsStep.value
+        : {
+            ok: false,
+            enabled: true,
+            retentionDays: imageJobsRetentionDays,
+            scanned: 0,
+            eligible: 0,
+            archived: 0,
+            preservedWinner: 0,
+            skippedRecent: 0,
+            skippedMissingRetention: 0,
+            errors: [
+              { pageId: 'runtime', message: toMessage(imageJobsStep.reason) },
+            ],
+          }
 
     const errors = [
       ...webhookRetention.errors.map((error) => ({
