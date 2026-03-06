@@ -129,7 +129,7 @@ function pruneGuardrailBuckets(nowMs = Date.now()) {
   pruneMapByTtlAndCap(dailyBuckets, nowMs, ttlMs, maxEntries)
 }
 
-export function getHermesClientIp(request: Request) {
+export function getRequestClientIp(request: Request) {
   const xff = request.headers.get('x-forwarded-for')
   if (xff) {
     const candidate = xff.split(',')[0]?.trim()
@@ -171,7 +171,7 @@ export function isAllowedRequestSource(request: Request) {
   return originValid || refererValid
 }
 
-export function applyHermesRateLimit(options: {
+export function applyRateLimit(options: {
   key: string
   limit: number
   windowMs: number
@@ -215,7 +215,7 @@ export function applyHermesRateLimit(options: {
   }
 }
 
-export function applyHermesDailyQuota(options: {
+export function applyDailyQuota(options: {
   key: string
   limit: number
   now?: Date
@@ -247,7 +247,7 @@ export function applyHermesDailyQuota(options: {
   return { allowed: true, remaining: Math.max(0, limit - current.count) }
 }
 
-export function getHermesLimits() {
+export function getSecurityLimits() {
   return {
     chatRatePerMinute: toPositiveInt(
       process.env.HERMES_CHAT_RATE_LIMIT_PER_MINUTE,
@@ -280,7 +280,7 @@ export function getHermesLimits() {
   }
 }
 
-export async function verifyTurnstileToken(options: {
+export async function verifyRequestTurnstileToken(options: {
   token: string
   ip?: string
 }) {
@@ -326,3 +326,5 @@ export async function verifyTurnstileToken(options: {
     return { required: true, ok: false as const }
   }
 }
+
+// Backward-compatible aliases during migration from Hermes-specific names.
