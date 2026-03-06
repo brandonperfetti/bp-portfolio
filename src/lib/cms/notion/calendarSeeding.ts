@@ -178,9 +178,13 @@ function coerceMultiSelect(
   allowedOptions: string[],
   fallback: string,
 ) {
-  const allowed = new Set(allowedOptions.map((option) => normalized(option)))
-  const filtered = values.filter((value) => allowed.has(normalized(value)))
-  if (filtered.length > 0) return filtered
+  const allowedByKey = new Map(
+    allowedOptions.map((option) => [normalized(option), option]),
+  )
+  const filtered = values
+    .map((value) => allowedByKey.get(normalized(value)))
+    .filter((value): value is string => Boolean(value))
+  if (filtered.length > 0) return Array.from(new Set(filtered))
   return allowedOptions.includes(fallback) ? [fallback] : []
 }
 
