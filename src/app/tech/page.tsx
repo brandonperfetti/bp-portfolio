@@ -399,6 +399,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function TechStack() {
   const cmsTech = isNotionProvider() ? await getCmsTech() : null
+  // Normalize legacy tech names into URL-safe slugs: trim/lowercase, strip
+  // non-alphanumeric chars (except spaces/hyphens), then collapse to hyphens.
   const localTech: CmsEntityItem[] = techStack.map((tech) => ({
     slug: tech.name
       .trim()
