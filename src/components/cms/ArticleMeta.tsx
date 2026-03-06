@@ -27,6 +27,7 @@ export function ArticleMeta({
   topics?: string[]
   tech?: string[]
 }) {
+  const rawAuthorName = typeof author === 'string' ? author : author?.name
   const authorMeta =
     typeof author === 'string'
       ? {
@@ -36,15 +37,14 @@ export function ArticleMeta({
         }
       : author
         ? {
-            name: author.name ?? 'Brandon Perfetti',
+            name: author.name ?? '',
             role: author.role ?? '',
             href: author.href,
           }
         : null
   const authorHref = authorMeta
-    ? isSiteOwnerAuthor(authorMeta.name)
-      ? '/about'
-      : authorMeta.href
+    ? authorMeta.href ||
+      (rawAuthorName && isSiteOwnerAuthor(rawAuthorName) ? '/about' : undefined)
     : undefined
 
   const topicChips = Array.from(
