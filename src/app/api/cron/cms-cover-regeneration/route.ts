@@ -6,6 +6,15 @@ import { runCoverRegenerationCronAutomation } from '@/lib/cms/notion/cronAutomat
 import { isAuthorizedCronRequest } from '../_auth'
 import { revalidateArticleSurfaces } from '../_revalidate'
 
+function getRegeneratedCount(result: Record<string, unknown>) {
+  const coverRegeneration =
+    result.coverRegeneration && typeof result.coverRegeneration === 'object'
+      ? (result.coverRegeneration as Record<string, unknown>)
+      : null
+  const regenerated = coverRegeneration?.regenerated
+  return typeof regenerated === 'number' ? regenerated : 0
+}
+
 async function run(request: Request) {
   if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json(
@@ -16,7 +25,9 @@ async function run(request: Request) {
 
   try {
     const result = await runCoverRegenerationCronAutomation()
-    revalidateArticleSurfaces()
+    if (getRegeneratedCount(result) > 0) {
+      revalidateArticleSurfaces()
+    }
     return NextResponse.json(result, { status: result.ok ? 200 : 207 })
   } catch (error) {
     await logAutomationErrorToNotion({
