@@ -337,6 +337,7 @@ async function fetchGithubJson<T>(url: string, token: string): Promise<T> {
 async function listRepos(config: Extract<ResolveConfigResult, { ok: true }>) {
   const repos: GithubRepo[] = []
   const pageSize = 100
+  const ownerPrefix = `${config.owner.toLowerCase()}/`
 
   for (let page = 1; repos.length < config.repoLimit; page += 1) {
     const endpoint = config.includePrivate
@@ -348,7 +349,13 @@ async function listRepos(config: Extract<ResolveConfigResult, { ok: true }>) {
       break
     }
 
-    repos.push(...chunk)
+    const ownedChunk = config.includePrivate
+      ? chunk.filter((repo) =>
+          repo.full_name.toLowerCase().startsWith(ownerPrefix),
+        )
+      : chunk
+
+    repos.push(...ownedChunk)
     if (chunk.length < pageSize) {
       break
     }
