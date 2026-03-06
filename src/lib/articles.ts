@@ -72,22 +72,25 @@ export async function getArticleBySlug(
 export async function getSearchArticles(): Promise<ArticleWithSlug[]> {
   const articles = await getCmsSearchArticles()
 
-  return articles
-    .filter((article) => !isFuturePublicationDate(article.date))
-    .map((article) => ({
-      slug: article.slug,
-      title: article.title,
-      description: article.description,
-      author: article.author,
-      category: article.category,
-      date: article.date,
-      image: article.image,
-      readingTimeMinutes: article.readingTimeMinutes,
-      canonicalUrl: article.canonicalUrl,
-      keywords: article.keywords,
-      topics: article.topics,
-      tech: article.tech,
-      noindex: article.noindex,
-      searchText: article.searchText,
-    }))
+  return (
+    articles
+      // Publish gate: scheduled articles stay hidden until their publish date.
+      .filter((article) => !isFuturePublicationDate(article.date))
+      .map((article) => ({
+        slug: article.slug,
+        title: article.title,
+        description: article.description,
+        author: article.author,
+        category: article.category,
+        date: article.date,
+        image: article.image,
+        readingTimeMinutes: article.readingTimeMinutes,
+        canonicalUrl: article.canonicalUrl,
+        keywords: article.keywords,
+        topics: article.topics,
+        tech: article.tech,
+        noindex: article.noindex,
+        searchText: article.searchText,
+      }))
+  )
 }
