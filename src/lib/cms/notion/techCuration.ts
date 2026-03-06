@@ -1168,7 +1168,13 @@ export async function runTechCurationCron(args?: {
       continue
     }
 
-    const logoUrl = await resolveLogoUrl(catalogEntry, existing?.logoUrl || '')
+    const logoUrl = await resolveLogoUrl(
+      catalogEntry,
+      existing?.logoUrl || '',
+      {
+        allowUpload: !dryRun,
+      },
+    )
 
     if (existing && config.updateExisting) {
       const properties: Record<string, unknown> = {}
@@ -1179,7 +1185,7 @@ export async function runTechCurationCron(args?: {
       const needsLogoMigration =
         !existing.logoUrl ||
         !isTechLogoPathCompliant(existing.logoUrl, targetLogoSlug)
-      if (needsLogoMigration) {
+      if (needsLogoMigration && !dryRun) {
         try {
           const uploadSource =
             existing.logoUrl && isValidHttpUrl(existing.logoUrl)
@@ -1605,7 +1611,7 @@ export async function runTechCurationCron(args?: {
         currentOrCatalogLogoUrl &&
         (!isCloudinaryUrl(row.logoUrl) ||
           !isTechLogoPathCompliant(row.logoUrl, rowLogoSlug))
-      if (needsLogoMigration) {
+      if (needsLogoMigration && !dryRun) {
         try {
           const uploaded = await uploadRemoteImageToCloudinary({
             imageUrl: currentOrCatalogLogoUrl,
