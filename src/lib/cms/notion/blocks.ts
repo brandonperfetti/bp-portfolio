@@ -116,6 +116,16 @@ async function mapTree(blocks: NotionBlock[]): Promise<CmsArticleBlock[]> {
   )
 }
 
+/**
+ * Fetches and maps a Notion block subtree into CMS article blocks.
+ *
+ * Recursively paginates child blocks from the provided root `blockId`,
+ * preserving Notion ordering while mapping each node into `CmsArticleBlock`.
+ *
+ * @param blockId Notion page/block identifier to expand.
+ * @returns Hierarchical CMS blocks for article rendering/search pipelines.
+ * @throws Propagates Notion transport/pagination errors from child fetches.
+ */
 export async function getNotionBlockTree(
   blockId: string,
 ): Promise<CmsArticleBlock[]> {
