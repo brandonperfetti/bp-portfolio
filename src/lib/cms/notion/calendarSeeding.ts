@@ -408,6 +408,25 @@ function buildCalendarPageProperties(
   return properties
 }
 
+/**
+ * Seeds content-calendar ideas using OpenAI + Notion schema/context.
+ *
+ * @param options Optional runtime overrides.
+ * @param options.dryRun When true, generates/evaluates ideas but skips Notion writes.
+ * @returns Calendar seeding summary telemetry (`CalendarSeedingSummary`).
+ *
+ * Behavior/assumptions:
+ * - Reads env-driven config from `CALENDAR_SEEDING_*` variables.
+ * - When enabled and not dry-run, creates Planned Blog Post rows in the
+ *   configured content calendar data source.
+ * - Uses OpenAI generation and Notion reads for context/duplicates/pillar balancing.
+ * - Returns structured `errors` for recoverable failures; unexpected transport
+ *   failures from upstream clients may still propagate.
+ *
+ * @example
+ * await runCalendarIdeaSeedingCron({ dryRun: true }) // preview only
+ * await runCalendarIdeaSeedingCron({ dryRun: false }) // write rows to Notion
+ */
 export async function runCalendarIdeaSeedingCron(options?: {
   dryRun?: boolean
 }): Promise<CalendarSeedingSummary> {
