@@ -12,6 +12,23 @@ interface SendGridError {
   help?: string
 }
 
+/**
+ * Subscribes a user email to the configured SendGrid marketing list.
+ *
+ * Expected request body:
+ * - `{ email: string, turnstileToken?: string }`, or
+ * - `{ mail: string, turnstileToken?: string }`
+ *
+ * Email is normalized via `trim().toLowerCase()` before submission.
+ *
+ * @param req Incoming request with JSON payload containing email/mail.
+ * @returns JSON response with:
+ * - `200` on successful subscription (`{ message }`)
+ * - `400` for invalid JSON or missing email
+ * - `403` when Turnstile verification fails
+ * - `429` when request rate limit is exceeded
+ * - `500` for SendGrid/configuration failures (`{ message, error? }`)
+ */
 export async function PUT(req: Request) {
   const limits = getSecurityLimits()
   const clientIp = getRequestClientIp(req)
