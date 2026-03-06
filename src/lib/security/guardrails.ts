@@ -21,6 +21,16 @@ const globalForGuardrails = globalThis as typeof globalThis & {
 
 let injectedGuardrailStores: GuardrailStores | null = null
 
+/**
+ * Injects or clears custom guardrail stores for rate/daily counters.
+ *
+ * @param store Custom stores to use globally, or `null` to clear and fall back
+ * to lazily created in-memory stores.
+ *
+ * Side effects:
+ * - Mutates module singleton (`injectedGuardrailStores`).
+ * - Mutates global fallback holder (`globalForGuardrails.__bpHermesGuardrails`).
+ */
 export function setGuardrailStores(store: GuardrailStores | null) {
   injectedGuardrailStores = store
   if (store) {
@@ -30,6 +40,14 @@ export function setGuardrailStores(store: GuardrailStores | null) {
   delete globalForGuardrails.__bpHermesGuardrails
 }
 
+/**
+ * Returns active guardrail stores for rate/daily counters.
+ *
+ * Prefers injected stores (for tests/custom backends), otherwise returns a
+ * lazily initialized in-memory fallback.
+ *
+ * @returns Guardrail stores with rate and daily bucket maps.
+ */
 export function getStores(): GuardrailStores {
   if (injectedGuardrailStores) {
     return injectedGuardrailStores
@@ -129,6 +147,12 @@ function pruneGuardrailBuckets(nowMs = Date.now()) {
   pruneMapByTtlAndCap(dailyBuckets, nowMs, ttlMs, maxEntries)
 }
 
+/**
+ * Resolves a best-effort client IP from proxy headers.
+ *
+ * @param request Incoming HTTP request.
+ * @returns First forwarded/real IP, or `'unknown'` when unavailable.
+ */
 export function getRequestClientIp(request: Request) {
   const xff = request.headers.get('x-forwarded-for')
   if (xff) {
@@ -140,6 +164,15 @@ export function getRequestClientIp(request: Request) {
   return 'unknown'
 }
 
+/**
+ * Validates request source host against trusted site hosts.
+ *
+ * Requires at least one of `Origin` or `Referer` headers to be present and
+ * parseable to an allowed host (localhost + `NEXT_PUBLIC_SITE_URL` host).
+ *
+ * @param request Incoming HTTP request.
+ * @returns `true` when source is allowed; otherwise `false`.
+ */
 export function isAllowedRequestSource(request: Request) {
   const hosts = getSiteHosts()
 
@@ -171,6 +204,16 @@ export function isAllowedRequestSource(request: Request) {
   return originValid || refererValid
 }
 
+/**
+ * Applies fixed-window per-key rate limiting.
+ *
+ * @param options Rate-limit inputs (`key`, `limit`, `windowMs`, optional `now` override).
+ * @returns Allow/remaining/reset metadata for caller response handling.
+ *
+ * Side effects:
+ * - Updates guardrail bucket maps in active store.
+ * - Prunes stale/overflow entries before applying counters.
+ */
 export function applyRateLimit(options: {
   key: string
   limit: number
@@ -215,6 +258,16 @@ export function applyRateLimit(options: {
   }
 }
 
+/**
+ * Applies per-day quota counting for a given key.
+ *
+ * @param options Daily quota inputs (`key`, `limit`, optional `now` override).
+ * @returns Allow/remaining metadata; `limit <= 0` is treated as unlimited.
+ *
+ * Side effects:
+ * - Updates daily bucket counters in active store.
+ * - Prunes stale/overflow entries before applying counters.
+ */
 export function applyDailyQuota(options: {
   key: string
   limit: number
@@ -247,6 +300,11 @@ export function applyDailyQuota(options: {
   return { allowed: true, remaining: Math.max(0, limit - current.count) }
 }
 
+/**
+ * Resolves normalized public-endpoint security limits from environment.
+ *
+ * @returns Effective rate/quota and payload limits plus endpoint enabled flags.
+ */
 export function getSecurityLimits() {
   return {
     chatRatePerMinute: toPositiveInt(
@@ -280,6 +338,17 @@ export function getSecurityLimits() {
   }
 }
 
+/**
+ * Verifies a Cloudflare Turnstile token when configured.
+ *
+ * @param options Verification inputs (`token`, optional `ip`).
+ * @returns `{ required: false, ok: true }` when Turnstile is disabled,
+ * otherwise `{ required: true, ok }` based on verification result.
+ *
+ * Side effects:
+ * - Performs network I/O to Cloudflare Turnstile verification API.
+ * - Treats transport/timeouts/non-200 responses as verification failure.
+ */
 export async function verifyRequestTurnstileToken(options: {
   token: string
   ip?: string
@@ -326,5 +395,3 @@ export async function verifyRequestTurnstileToken(options: {
     return { required: true, ok: false as const }
   }
 }
-
-// Backward-compatible aliases during migration from Hermes-specific names.
