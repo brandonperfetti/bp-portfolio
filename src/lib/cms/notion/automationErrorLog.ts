@@ -1,11 +1,15 @@
 import {
   notionCreatePage,
   notionGetDataSource,
+  notionRequest,
   notionUpdatePage,
   parseDataSourceId,
 } from '@/lib/cms/notion/client'
-import type { NotionProperty } from '@/lib/cms/notion/contracts'
-import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
+import type {
+  NotionPage,
+  NotionProperty,
+  NotionQueryResponse,
+} from '@/lib/cms/notion/contracts'
 import { getProperty, propertyToDate } from '@/lib/cms/notion/property'
 
 type ErrorLogPayload = {
@@ -290,11 +294,34 @@ export async function pruneAutomationErrorLogs(options?: {
       : 100
 
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000)
-  const pages = await queryAllDataSourcePages(dataSourceId, {})
+  const eligible: NotionPage[] = []
+  let scanned = 0
+  let nextCursor: string | null = null
 
-  const eligible = pages
-    .filter((page) => !page.archived && !page.in_trash)
-    .filter((page) => {
+  // Query incrementally and stop when we have enough archive candidates.
+  do {
+    const body: Record<string, unknown> = {
+      page_size: 100,
+      sorts: [{ timestamp: 'created_time', direction: 'ascending' }],
+    }
+    if (nextCursor) {
+      body.start_cursor = nextCursor
+    }
+
+    const response = await notionRequest<NotionQueryResponse>(
+      `/data_sources/${dataSourceId}/query`,
+      {
+        method: 'POST',
+        body,
+      },
+    )
+
+    for (const page of response.results) {
+      scanned += 1
+      if (page.archived || page.in_trash) {
+        continue
+      }
+
       const occurredAt = toOccurredAt(
         page as {
           properties: Record<string, NotionProperty>
@@ -302,15 +329,29 @@ export async function pruneAutomationErrorLogs(options?: {
         },
       )
       if (!occurredAt) {
-        return false
+        continue
       }
+
       const ms = Date.parse(occurredAt)
-      return Number.isFinite(ms) && ms < cutoff.getTime()
-    })
+      if (!Number.isFinite(ms) || ms >= cutoff.getTime()) {
+        continue
+      }
+
+      eligible.push(page)
+      if (eligible.length >= limit) {
+        break
+      }
+    }
+
+    if (eligible.length >= limit) {
+      break
+    }
+    nextCursor = response.has_more ? response.next_cursor : null
+  } while (nextCursor)
 
   let archived = 0
   const errors: Array<{ pageId: string; message: string }> = []
-  for (const page of eligible.slice(0, limit)) {
+  for (const page of eligible) {
     try {
       await notionUpdatePage(page.id, { archived: true })
       archived += 1
@@ -325,7 +366,7 @@ export async function pruneAutomationErrorLogs(options?: {
   return {
     ok: errors.length === 0,
     enabled: true,
-    scanned: pages.length,
+    scanned,
     eligible: eligible.length,
     archived,
     cutoffIso: cutoff.toISOString(),
