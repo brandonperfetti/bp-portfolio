@@ -41,6 +41,20 @@ function buildSignature(
   return createHash('sha1').update(raw).digest('hex')
 }
 
+/**
+ * Uploads a base64 PNG payload to the configured Cloudinary covers folder.
+ *
+ * @param options.base64Png Raw PNG base64 payload (without data URI prefix).
+ * @param options.publicId Cloudinary public ID path segment to assign.
+ * @returns Uploaded asset URL (`secure_url`).
+ *
+ * Side effects:
+ * - Performs network I/O to Cloudinary upload API.
+ * - Creates/overwrites remote Cloudinary assets in `CLOUDINARY_CMS_COVERS_FOLDER`.
+ *
+ * Throws when Cloudinary env vars are missing, request times out, transport
+ * fails, or Cloudinary returns a non-success response payload.
+ */
 export async function uploadBase64PngToCloudinary(options: {
   base64Png: string
   publicId: string
@@ -107,6 +121,20 @@ export async function uploadBase64PngToCloudinary(options: {
   return { url: body.secure_url }
 }
 
+/**
+ * Uploads a remote image URL to Cloudinary tech logos folder.
+ *
+ * @param options.imageUrl Public HTTP(S) image URL to ingest into Cloudinary.
+ * @param options.publicId Cloudinary public ID path segment to assign.
+ * @returns Uploaded asset URL (`secure_url`).
+ *
+ * Side effects:
+ * - Performs network I/O to Cloudinary upload API.
+ * - Creates/overwrites remote Cloudinary assets in `CLOUDINARY_CMS_TECH_LOGOS_FOLDER`.
+ *
+ * Throws when Cloudinary env vars are missing, request times out, transport
+ * fails, or Cloudinary returns a non-success response payload.
+ */
 export async function uploadRemoteImageToCloudinary(options: {
   imageUrl: string
   publicId: string
