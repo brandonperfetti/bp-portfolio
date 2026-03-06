@@ -1651,14 +1651,24 @@ export async function autoHealSourceArticleQualityGate(options?: {
       .filter((snapshot) => isPublishSafeStatus(snapshot.sourceStatus))
       .map((snapshot) => snapshot.sourcePageId),
   )
+  const sourcePagesById = new Map(sourcePages.map((page) => [page.id, page]))
 
   let healed = 0
   let skipped = 0
   const errors: Array<{ sourcePageId: string; message: string }> = []
 
-  for (const sourcePage of sourcePages) {
-    if (!publishSafePageIds.has(sourcePage.id)) {
+  for (const snapshot of snapshots) {
+    if (!publishSafePageIds.has(snapshot.sourcePageId)) {
       skipped += 1
+      continue
+    }
+
+    const sourcePage = sourcePagesById.get(snapshot.sourcePageId)
+    if (!sourcePage) {
+      errors.push({
+        sourcePageId: snapshot.sourcePageId,
+        message: 'Unable to load source page',
+      })
       continue
     }
 
