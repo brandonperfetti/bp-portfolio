@@ -706,16 +706,30 @@ export async function collectGithubTechSignals(): Promise<GithubTechSignalsResul
       trackSignal(signals, topic, 2, repoRef, 'topic')
     }
 
-    const languages = await readRepoLanguages(repo, config.token)
+    let languages: Record<string, number> = {}
+    try {
+      languages = await readRepoLanguages(repo, config.token)
+    } catch (error) {
+      errors.push(
+        `${repoRef}: readRepoLanguages failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
     for (const language of Object.keys(languages)) {
       trackSignal(signals, language, 1, repoRef, 'language-breakdown')
     }
 
-    const packageDependencies = await readPackageJsonDependenciesFromManifests(
-      repo,
-      config.token,
-      config.maxPackageJsonFilesPerRepo,
-    )
+    let packageDependencies: string[] = []
+    try {
+      packageDependencies = await readPackageJsonDependenciesFromManifests(
+        repo,
+        config.token,
+        config.maxPackageJsonFilesPerRepo,
+      )
+    } catch (error) {
+      errors.push(
+        `${repoRef}: readPackageJsonDependenciesFromManifests failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
     if (config.debugPackageScan && debugPrinted < 12) {
       console.log('[cms:tech-signals] package-scan', {
         repo: repo.full_name,
@@ -730,7 +744,14 @@ export async function collectGithubTechSignals(): Promise<GithubTechSignalsResul
       }
     }
 
-    const repoToolingSignals = await readRepoToolingSignals(repo, config.token)
+    let repoToolingSignals: RepoToolingSignal[] = []
+    try {
+      repoToolingSignals = await readRepoToolingSignals(repo, config.token)
+    } catch (error) {
+      errors.push(
+        `${repoRef}: readRepoToolingSignals failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
     for (const toolingSignal of repoToolingSignals) {
       trackSignal(
         signals,
