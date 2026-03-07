@@ -72,7 +72,7 @@ function renderBlock(block: CmsArticleBlock, depth = 0): string {
     case 'code': {
       const language = (block.language || '').trim().toLowerCase()
       const code = (block.richText ?? [])
-        .map((entry) => entry.plainText)
+        .map((entry) => entry.plainText ?? '')
         .join('')
       return `\`\`\`${language}\n${code}\n\`\`\``
     }
