@@ -75,7 +75,6 @@ export type TechCurationResult = {
   created: number
   telemetryBackfilled: number
   integrityBackfilled: number
-  staleFlaggedToReview: number
   skippedManualOverride: number
   skippedUnknown: number
   errors: TechCurationIssue[]
@@ -1056,7 +1055,6 @@ export async function runTechCurationCron(args?: {
       created: 0,
       telemetryBackfilled: 0,
       integrityBackfilled: 0,
-      staleFlaggedToReview: 0,
       skippedManualOverride: 0,
       skippedUnknown: 0,
       errors: [],
@@ -1082,7 +1080,6 @@ export async function runTechCurationCron(args?: {
       created: 0,
       telemetryBackfilled: 0,
       integrityBackfilled: 0,
-      staleFlaggedToReview: 0,
       skippedManualOverride: 0,
       skippedUnknown: 0,
       errors: github.errors.map((message) => ({
@@ -1119,7 +1116,6 @@ export async function runTechCurationCron(args?: {
   let created = 0
   let telemetryBackfilled = 0
   let integrityBackfilled = 0
-  const staleFlaggedToReview = 0
   let skippedManualOverride = 0
   let skippedUnknown = 0
 
@@ -1729,7 +1725,6 @@ export async function runTechCurationCron(args?: {
     created,
     telemetryBackfilled,
     integrityBackfilled,
-    staleFlaggedToReview,
     skippedManualOverride,
     skippedUnknown,
     errors,
