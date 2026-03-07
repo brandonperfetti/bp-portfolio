@@ -4,6 +4,17 @@ import { logAutomationErrorToNotion } from '@/lib/cms/notion/automationErrorLog'
 import { processCoverRegenerationRequests } from '@/lib/cms/notion/projectionSync'
 import { isValidSecret } from '@/lib/security/timingSafeSecret'
 
+/**
+ * Triggers cover-regeneration processing for source articles.
+ *
+ * Expects JSON body:
+ * - `secret` (required): must match `CMS_REVALIDATE_SECRET`
+ * - `sourcePageId` (optional): restrict processing to one source page
+ * - `limit` (optional): max queued items to process this run
+ *
+ * Returns 401 for invalid secret, 500 for server misconfiguration, and 207 when
+ * the batch partially succeeds (some item-level failures).
+ */
 export async function POST(request: Request) {
   const secret = process.env.CMS_REVALIDATE_SECRET
 
@@ -61,6 +72,7 @@ export async function POST(request: Request) {
         )
       })
     }
+    // 207 Multi-Status indicates partial success when batch item errors exist.
     return NextResponse.json(result, { status: result.ok ? 200 : 207 })
   } catch (error) {
     await logAutomationErrorToNotion({
