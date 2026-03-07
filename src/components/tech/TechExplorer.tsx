@@ -88,7 +88,9 @@ export function TechExplorer({
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const [query, setQuery] = useState(searchParams.get('q') ?? '')
-  const [category, setCategory] = useState('All')
+  const [category, setCategory] = useState(
+    searchParams.get('category') ?? 'All',
+  )
   const debouncedQuery = useDebouncedValue(query, query.trim() ? 350 : 0)
 
   const normalizedItems = useMemo(
@@ -141,6 +143,7 @@ export function TechExplorer({
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
+      // Guard slash-focus shortcut while typing/editing or using modifier keys.
       const isSlashShortcut =
         event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey
       if (!isSlashShortcut || isTypingTarget(event.target)) {
@@ -248,7 +251,12 @@ export function TechExplorer({
             </button>
           ))}
         </div>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <p
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="text-xs text-zinc-500 dark:text-zinc-400"
+        >
           {normalizedQueryText && category !== 'All'
             ? `Showing ${filteredItems.length} results for "${normalizedQueryText}" in ${category}.`
             : normalizedQueryText
