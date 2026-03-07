@@ -1,3 +1,5 @@
+import { isFuturePublicationDate } from '@/lib/date'
+
 export type PublishGateSourceArticle = {
   slug: string
   sourceStatus: string
@@ -18,14 +20,6 @@ export type PublishGateSourceArticle = {
 
 function normalizeStatus(value: string) {
   return value.trim().toLowerCase()
-}
-
-function isFutureDate(value: string) {
-  const timestamp = Date.parse(value)
-  if (Number.isNaN(timestamp)) {
-    return false
-  }
-  return timestamp > Date.now()
 }
 
 function isTutorialLike(articleType: string) {
@@ -70,7 +64,10 @@ export function validatePublishSafeRequirements(
 
   if (!source.publishDate.trim()) {
     errors.push('Missing required Published Date')
-  } else if (sourceStatus === 'published' && isFutureDate(source.publishDate)) {
+  } else if (
+    sourceStatus === 'published' &&
+    isFuturePublicationDate(source.publishDate)
+  ) {
     errors.push(
       'Published Date cannot be in the future when Content Status is Published',
     )
