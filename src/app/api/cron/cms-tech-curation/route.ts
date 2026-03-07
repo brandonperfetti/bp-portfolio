@@ -26,7 +26,25 @@ async function run(request: Request) {
     const result = await runTechCurationCron({ dryRun })
 
     if (!result.dryRun && result.ok && result.enabled) {
-      revalidateTechSurfaces()
+      try {
+        revalidateTechSurfaces()
+      } catch (error) {
+        const revalidateError =
+          error instanceof Error ? error.message : String(error)
+        await logAutomationErrorToNotion({
+          workflow: 'cms-tech-curation',
+          endpoint: '/api/cron/cms-tech-curation',
+          error: `Tech revalidation failed: ${revalidateError}`,
+        }).catch((logError) => {
+          console.error(
+            '[cms-tech-curation] failed to write revalidation error log',
+            {
+              error:
+                logError instanceof Error ? logError.message : String(logError),
+            },
+          )
+        })
+      }
     }
 
     if (!result.ok) {
