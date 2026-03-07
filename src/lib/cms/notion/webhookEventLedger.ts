@@ -898,19 +898,34 @@ export async function pruneFailedWebhookEvents(options?: {
   const errors: Array<{ ledgerPageId: string; message: string }> = []
   let archived = 0
   const skippedRecent = candidates.length - expiredCandidates.length
+  const batchSize = 10
 
-  for (const candidate of expiredCandidates.slice(0, limit)) {
-    try {
-      await notionUpdatePage(candidate.ledgerPageId, {
-        in_trash: true,
-      })
-      archived += 1
-    } catch (error) {
-      errors.push({
-        ledgerPageId: candidate.ledgerPageId,
-        message:
-          error instanceof Error ? error.message : 'Unknown retention error',
-      })
+  const toArchive = expiredCandidates.slice(0, limit)
+  for (let index = 0; index < toArchive.length; index += batchSize) {
+    const batch = toArchive.slice(index, index + batchSize)
+    const settled = await Promise.allSettled(
+      batch.map(async (candidate) => {
+        await notionUpdatePage(candidate.ledgerPageId, {
+          in_trash: true,
+        })
+        return candidate
+      }),
+    )
+
+    for (const [resultIndex, result] of settled.entries()) {
+      if (result.status === 'fulfilled') {
+        archived += 1
+      } else {
+        const reason =
+          result.reason instanceof Error
+            ? result.reason.message
+            : 'Unknown retention error'
+        const failedCandidate = batch[resultIndex]
+        errors.push({
+          ledgerPageId: failedCandidate?.ledgerPageId ?? 'unknown',
+          message: reason,
+        })
+      }
     }
   }
 
