@@ -225,11 +225,27 @@ function shouldRunProjectionForEvent(
 
   // Fail open if content data source is unavailable at runtime.
   if (!contentDataSourceId) {
+    console.warn(
+      '[cms:notion:webhook] projection fail-open: missing content data source id',
+      {
+        eventType,
+        eventDataSourceId,
+        contentDataSourceId,
+      },
+    )
     return true
   }
 
   // Some payloads omit parent data source metadata; keep behavior permissive.
   if (!eventDataSourceId) {
+    console.warn(
+      '[cms:notion:webhook] projection fail-open: missing event data source id',
+      {
+        eventType,
+        eventDataSourceId,
+        contentDataSourceId,
+      },
+    )
     return true
   }
 
