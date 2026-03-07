@@ -6,7 +6,6 @@ import { isValidSecret } from '@/lib/security/timingSafeSecret'
 
 export async function POST(request: Request) {
   const secret = process.env.CMS_REVALIDATE_SECRET
-  const body = await request.json().catch(() => ({}))
 
   if (!secret) {
     return NextResponse.json(
@@ -17,6 +16,8 @@ export async function POST(request: Request) {
       { status: 500 },
     )
   }
+
+  const body = await request.json().catch(() => ({}))
 
   if (!isValidSecret(body?.secret, secret)) {
     return NextResponse.json(
