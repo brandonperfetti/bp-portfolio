@@ -196,9 +196,11 @@ export async function pruneImageJobs(options?: {
         isExpired = retentionMs <= nowMs
       } else if (allowFallbackAge) {
         const ageMs = Date.parse(page.last_edited_time ?? '')
-        if (!Number.isNaN(ageMs)) {
-          isExpired = ageMs <= fallbackCutoffMs
+        if (Number.isNaN(ageMs)) {
+          skippedMissingRetention += 1
+          continue
         }
+        isExpired = ageMs <= fallbackCutoffMs
       } else {
         skippedMissingRetention += 1
         continue
