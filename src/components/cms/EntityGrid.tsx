@@ -24,10 +24,7 @@ export function EntityGrid({ items }: { items: CmsEntityItem[] }) {
         }-${index}`
 
         return (
-          <Card
-            as="li"
-            key={`${item.slug || item.name}-${item.link?.href ?? 'no-link'}-${index}`}
-          >
+          <Card as="li" key={`${item.slug || item.name}-${index}`}>
             {item.link?.href ? (
               <>
                 {/* Keep overlay/background and absolute link separate so the full
