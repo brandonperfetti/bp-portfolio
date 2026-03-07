@@ -118,3 +118,12 @@ export function getOptionalNotionImageJobsDataSourceId() {
 
   return parseDataSourceId(raw, 'NOTION_IMAGE_JOBS_DATA_SOURCE')
 }
+
+export function getOptionalNotionPortfolioBacklogDataSourceId() {
+  const raw = process.env.NOTION_PORTFOLIO_BACKLOG_DATA_SOURCE
+  if (!raw) {
+    return null
+  }
+
+  return parseDataSourceId(raw, 'NOTION_PORTFOLIO_BACKLOG_DATA_SOURCE')
+}
