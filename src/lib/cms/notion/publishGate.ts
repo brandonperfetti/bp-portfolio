@@ -125,13 +125,7 @@ export function validatePublishSafeRequirements(
 
   // Author is a quality signal, but not a hard publish blocker.
   // Runtime rendering has a stable default-author fallback, so missing relation
-  // should not prevent projection creation for otherwise publish-safe content.
-  if (
-    source.authorRelationIds.length === 0 &&
-    (!defaultAuthorPageId || defaultAuthorPageId.trim().length === 0)
-  ) {
-    // Intentionally non-blocking.
-  }
+  // is intentionally non-blocking for otherwise publish-safe content.
 
   return errors
 }
