@@ -113,6 +113,14 @@ function getGuardrailBucketTtlMs() {
   )
 }
 
+function getGuardrailPruneIntervalMs() {
+  return toPositiveInt(
+    process.env.HERMES_GUARDRAILS_PRUNE_INTERVAL_MS,
+    60_000,
+    60 * 60 * 1000,
+  )
+}
+
 function pruneMapByTtlAndCap<T extends { touchedAt: number }>(
   map: Map<string, T>,
   nowMs: number,
@@ -139,12 +147,24 @@ function pruneMapByTtlAndCap<T extends { touchedAt: number }>(
   }
 }
 
+let lastGuardrailPruneAt = 0
+
 function pruneGuardrailBuckets(nowMs = Date.now()) {
   const { rateBuckets, dailyBuckets } = getStores()
   const ttlMs = getGuardrailBucketTtlMs()
   const maxEntries = getGuardrailMaxEntries()
+  const intervalMs = getGuardrailPruneIntervalMs()
+  const shouldPruneByTime = nowMs - lastGuardrailPruneAt >= intervalMs
+  const shouldPruneBySize =
+    rateBuckets.size > maxEntries || dailyBuckets.size > maxEntries
+
+  if (!shouldPruneByTime && !shouldPruneBySize) {
+    return
+  }
+
   pruneMapByTtlAndCap(rateBuckets, nowMs, ttlMs, maxEntries)
   pruneMapByTtlAndCap(dailyBuckets, nowMs, ttlMs, maxEntries)
+  lastGuardrailPruneAt = nowMs
 }
 
 /**
