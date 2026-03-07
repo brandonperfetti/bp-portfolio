@@ -271,11 +271,15 @@ export function TechExplorer({
         role="list"
         className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2 lg:grid-cols-3"
       >
-        {filteredItems.map((tech) => (
+        {filteredItems.map((tech, index) => (
           <Card
             className="h-full rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-700/40 dark:bg-zinc-900"
             as="li"
-            key={tech.slug || tech.name}
+            key={
+              tech.slug ||
+              tech.link?.href ||
+              `${tech.name}-${tech.category || 'uncategorized'}-${index}`
+            }
           >
             {tech.link?.href ? (
               <>
