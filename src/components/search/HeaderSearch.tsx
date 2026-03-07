@@ -107,13 +107,20 @@ export function HeaderSearch() {
             : parsed
           const savedAt =
             typeof cached.savedAt === 'number' ? cached.savedAt : 0
-          const cachedItems = sanitizeSearchItems(cached.items)
-          if (Date.now() - savedAt <= SEARCH_CACHE_TTL_MS) {
+          const rawCachedItems = (cached as Partial<SearchCacheEntry>).items
+          const cachedItems = sanitizeSearchItems(rawCachedItems)
+          const hasInvalidCachedItems =
+            Array.isArray(rawCachedItems) &&
+            rawCachedItems.length !== cachedItems.length
+          if (!Array.isArray(rawCachedItems) || hasInvalidCachedItems) {
+            sessionStorage.removeItem(SEARCH_CACHE_KEY)
+          } else if (Date.now() - savedAt <= SEARCH_CACHE_TTL_MS) {
             setItems(cachedItems)
             setLoadState('ready')
             return
+          } else {
+            sessionStorage.removeItem(SEARCH_CACHE_KEY)
           }
-          sessionStorage.removeItem(SEARCH_CACHE_KEY)
         }
       } catch {
         // noop: cache parse/storage failures should not break search
@@ -137,9 +144,12 @@ export function HeaderSearch() {
         }
         return response.json() as Promise<SearchItem[]>
       })
-      .then((data: SearchItem[]) => {
+      .then((data: unknown) => {
         if (controller.signal.aborted) {
           return
+        }
+        if (!Array.isArray(data)) {
+          throw new Error('Search index response was not an array')
         }
         const safeItems = sanitizeSearchItems(data)
         setItems(safeItems)
