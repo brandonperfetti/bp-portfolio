@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { type ArticleWithSlug } from '@/lib/articles'
+import { dedupeArticlesBySlug } from '@/lib/articleUtils'
 import { formatDate } from '@/lib/formatDate'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
@@ -39,20 +40,10 @@ export function ArticlesExplorer({
     searchParams.get('topic') ?? searchParams.get('category') ?? 'All',
   )
   const debouncedQuery = useDebouncedValue(query, query.trim() ? 500 : 0)
-  const uniqueArticles = useMemo(() => {
-    const seen = new Set<string>()
-    const deduped: ArticleWithSlug[] = []
-
-    for (const article of articles) {
-      if (!article.slug || seen.has(article.slug)) {
-        continue
-      }
-      seen.add(article.slug)
-      deduped.push(article)
-    }
-
-    return deduped
-  }, [articles])
+  const uniqueArticles = useMemo(
+    () => dedupeArticlesBySlug(articles),
+    [articles],
+  )
 
   useEffect(() => {
     const nextQuery = searchParams.get('q') ?? ''

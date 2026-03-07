@@ -19,6 +19,7 @@ import { getCmsWorkHistory } from '@/lib/cms/workHistoryRepo'
 import { formatDate } from '@/lib/formatDate'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
+import { dedupeArticlesBySlug } from '@/lib/articleUtils'
 
 const image1 =
   'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684298666/image-1_ebktnx.jpg'
@@ -396,19 +397,4 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 function isNonEmptyString(value: string | undefined): value is string {
   return typeof value === 'string' && value.length > 0
-}
-
-function dedupeArticlesBySlug(articles: ArticleWithSlug[]) {
-  const seen = new Set<string>()
-  const deduped: ArticleWithSlug[] = []
-
-  for (const article of articles) {
-    if (!article.slug || seen.has(article.slug)) {
-      continue
-    }
-    seen.add(article.slug)
-    deduped.push(article)
-  }
-
-  return deduped
 }

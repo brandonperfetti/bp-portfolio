@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import {
   LINE_WORD_DURATION,
   LINE_WORD_STAGGER,
+  TYPEWRITER_CARET_START_BUFFER,
   TYPEWRITER_CHAR_DURATION,
   TYPEWRITER_CHAR_STAGGER,
 } from '@/lib/motion/headlineTiming'
@@ -68,7 +69,9 @@ export function AnimatedHeadline({
             duration: 0.75,
             ease: 'none',
             delay:
-              delay + characterNodes.length * TYPEWRITER_CHAR_STAGGER + 0.1,
+              delay +
+              characterNodes.length * TYPEWRITER_CHAR_STAGGER +
+              TYPEWRITER_CARET_START_BUFFER,
             startAt: { autoAlpha: 1 },
           })
         }
