@@ -108,10 +108,7 @@ export function HeaderSearch() {
           const savedAt =
             typeof cached.savedAt === 'number' ? cached.savedAt : 0
           const cachedItems = sanitizeSearchItems(cached.items)
-          if (
-            cachedItems.length > 0 &&
-            Date.now() - savedAt <= SEARCH_CACHE_TTL_MS
-          ) {
+          if (Date.now() - savedAt <= SEARCH_CACHE_TTL_MS) {
             setItems(cachedItems)
             setLoadState('ready')
             return
@@ -252,6 +249,7 @@ export function HeaderSearch() {
                 type="text"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
+                onFocus={() => setActiveIndex(-1)}
                 onKeyDown={(event) => {
                   if (!filteredItems.length) {
                     return
