@@ -97,10 +97,11 @@ export function HeaderSearch() {
         if (raw) {
           const parsed = JSON.parse(raw) as SearchItem[] | SearchCacheEntry
           // Backward-compat: older cache payloads stored a raw SearchItem[].
-          // Wrap arrays into SearchCacheEntry so TTL logic stays consistent.
+          // Wrap arrays into SearchCacheEntry, but force stale timestamp so we
+          // refresh from /api/search instead of treating legacy payloads as fresh.
           const cached = Array.isArray(parsed)
             ? ({
-                savedAt: Date.now(),
+                savedAt: 0,
                 items: sanitizeSearchItems(parsed),
               } satisfies SearchCacheEntry)
             : parsed
@@ -192,8 +193,10 @@ export function HeaderSearch() {
 
   useEffect(() => {
     resultRefs.current = resultRefs.current.slice(0, filteredItems.length)
-    setActiveIndex(-1)
-  }, [filteredItems])
+    if (isOpen) {
+      setActiveIndex(-1)
+    }
+  }, [filteredItems, isOpen])
 
   function focusResult(index: number) {
     const count = filteredItems.length
