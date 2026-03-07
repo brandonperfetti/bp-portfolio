@@ -88,9 +88,7 @@ export function TechExplorer({
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const [query, setQuery] = useState(searchParams.get('q') ?? '')
-  const [category, setCategory] = useState(
-    searchParams.get('category') ?? 'All',
-  )
+  const [category, setCategory] = useState('All')
   const debouncedQuery = useDebouncedValue(query, query.trim() ? 350 : 0)
 
   const normalizedItems = useMemo(
@@ -114,7 +112,10 @@ export function TechExplorer({
 
   useEffect(() => {
     const nextQuery = searchParams.get('q') ?? ''
-    const nextCategory = searchParams.get('category') ?? 'All'
+    const requestedCategory = searchParams.get('category') ?? 'All'
+    const nextCategory = categories.includes(requestedCategory)
+      ? requestedCategory
+      : 'All'
     const isInputFocused = searchInputRef.current === document.activeElement
 
     if (!isInputFocused) {
@@ -123,7 +124,7 @@ export function TechExplorer({
     setCategory((current) =>
       current === nextCategory ? current : nextCategory,
     )
-  }, [searchParams])
+  }, [searchParams, categories])
 
   useEffect(() => {
     const isTypingTarget = (target: EventTarget | null) => {
@@ -213,6 +214,7 @@ export function TechExplorer({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search tech"
+            aria-label="Search technologies"
             className={`w-full rounded-md bg-white px-3 py-2 text-base outline outline-zinc-300 focus:outline-teal-500 sm:text-sm dark:bg-zinc-800 dark:outline-zinc-600 ${
               query.trim() ? 'pr-3' : 'pr-10'
             }`}
@@ -223,7 +225,11 @@ export function TechExplorer({
             </span>
           )}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div
+          className="flex flex-wrap gap-2"
+          role="group"
+          aria-label="Filter technologies by category"
+        >
           {categories.map((item) => (
             <button
               key={item}
@@ -231,6 +237,7 @@ export function TechExplorer({
               onClick={() => {
                 setCategory((current) => (current === item ? 'All' : item))
               }}
+              aria-pressed={category === item}
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80 ${
                 category === item
                   ? 'bg-teal-500 text-white'
