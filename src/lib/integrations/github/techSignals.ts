@@ -312,13 +312,8 @@ async function fetchGithubJson<T>(url: string, token: string): Promise<T> {
       const retryableNetworkError =
         error instanceof Error &&
         (error.name === 'AbortError' || error.name === 'TypeError')
-      const retryableStatusError =
-        status !== undefined && RETRYABLE_STATUSES.has(status)
 
-      if (
-        attempt < MAX_RETRIES &&
-        (retryableStatusError || retryableNetworkError)
-      ) {
+      if (attempt < MAX_RETRIES && retryableNetworkError) {
         await sleep((attempt + 1) * 500)
         continue
       }
@@ -587,6 +582,11 @@ async function readRepoToolingSignals(
         .filter((entry) => entry.type === 'blob')
         .map((entry) => (entry.path || '').toLowerCase()),
     )
+    const rootDirs = new Set(
+      (rootTree.tree ?? [])
+        .filter((entry) => entry.type === 'tree')
+        .map((entry) => (entry.path || '').toLowerCase()),
+    )
 
     if (
       rootFiles.has('package-lock.json') ||
@@ -597,6 +597,12 @@ async function readRepoToolingSignals(
     if (rootFiles.has('yarn.lock')) {
       signals.push({ key: 'yarn', score: 2, reason: 'tooling-file' })
     }
+    if (rootFiles.has('pnpm-lock.yaml')) {
+      signals.push({ key: 'pnpm', score: 2, reason: 'tooling-file' })
+    }
+    if (rootFiles.has('bun.lockb') || rootFiles.has('bun.lock')) {
+      signals.push({ key: 'bun', score: 2, reason: 'tooling-file' })
+    }
     if (
       rootFiles.has('playwright.config.ts') ||
       rootFiles.has('playwright.config.js') ||
@@ -605,7 +611,30 @@ async function readRepoToolingSignals(
     ) {
       signals.push({ key: 'playwright', score: 3, reason: 'tooling-file' })
     }
-    if (rootFiles.has('components.json')) {
+    const hasComponentsConfig = rootFiles.has('components.json')
+    let hasShadcnDependency = false
+    const rootManifest = (rootTree.tree ?? []).find(
+      (entry) =>
+        entry.type === 'blob' &&
+        entry.path?.toLowerCase() === 'package.json' &&
+        entry.sha,
+    )
+    if (rootManifest?.sha) {
+      const rootManifestRaw = await readBlobContent(
+        repo.full_name,
+        rootManifest.sha,
+        token,
+      )
+      const deps = parseDependencyNamesFromPackageJson(rootManifestRaw).map(
+        (dep) => dep.toLowerCase(),
+      )
+      hasShadcnDependency = deps.some(
+        (dep) =>
+          dep.includes('shadcn') || dep === '@shadcn/ui' || dep === 'shadcn-ui',
+      )
+    }
+    const hasComponentsDir = rootDirs.has('components')
+    if (hasComponentsConfig && (hasShadcnDependency || hasComponentsDir)) {
       signals.push({ key: 'shadcn-ui', score: 2, reason: 'tooling-file' })
     }
   } catch {
@@ -677,15 +706,9 @@ export async function collectGithubTechSignals(): Promise<GithubTechSignalsResul
       trackSignal(signals, topic, 2, repoRef, 'topic')
     }
 
-    try {
-      const languages = await readRepoLanguages(repo, config.token)
-      for (const language of Object.keys(languages)) {
-        trackSignal(signals, language, 1, repoRef, 'language-breakdown')
-      }
-    } catch (error) {
-      errors.push(
-        `languages:${repo.full_name}:${error instanceof Error ? error.message : String(error)}`,
-      )
+    const languages = await readRepoLanguages(repo, config.token)
+    for (const language of Object.keys(languages)) {
+      trackSignal(signals, language, 1, repoRef, 'language-breakdown')
     }
 
     const packageDependencies = await readPackageJsonDependenciesFromManifests(
