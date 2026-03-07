@@ -16,8 +16,29 @@ async function run(request: Request) {
 
   try {
     const result = await runProjectionCronAutomation()
-    revalidateArticleSurfaces()
-    return NextResponse.json(result, { status: result.ok ? 200 : 207 })
+    let revalidateError: string | null = null
+    try {
+      revalidateArticleSurfaces()
+    } catch (error) {
+      revalidateError = error instanceof Error ? error.message : String(error)
+      await logAutomationErrorToNotion({
+        workflow: 'cms-cron-integrity',
+        endpoint: '/api/cron/cms-integrity',
+        error: `Revalidation failed: ${revalidateError}`,
+      }).catch((logError) => {
+        console.error(
+          '[cms-cron-integrity] failed to write revalidation error log',
+          {
+            error:
+              logError instanceof Error ? logError.message : String(logError),
+          },
+        )
+      })
+    }
+    return NextResponse.json(
+      revalidateError ? { ...result, revalidateError } : result,
+      { status: result.ok && !revalidateError ? 200 : 207 },
+    )
   } catch (error) {
     await logAutomationErrorToNotion({
       workflow: 'cms-cron-integrity',
