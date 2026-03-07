@@ -248,7 +248,12 @@ export function HeaderSearch() {
                 autoFocus
                 type="text"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  setQuery(event.target.value)
+                  // Clear any previously armed selection immediately while
+                  // debounced filtering catches up.
+                  setActiveIndex(-1)
+                }}
                 onFocus={() => setActiveIndex(-1)}
                 onKeyDown={(event) => {
                   if (!filteredItems.length) {
