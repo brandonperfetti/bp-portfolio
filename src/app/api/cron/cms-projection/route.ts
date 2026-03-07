@@ -37,7 +37,7 @@ async function run(request: Request) {
     }
     return NextResponse.json(
       revalidateError ? { ...result, revalidateError } : result,
-      { status: result.ok ? 200 : 207 },
+      { status: result.ok && !revalidateError ? 200 : 207 },
     )
   } catch (error) {
     await logAutomationErrorToNotion({
