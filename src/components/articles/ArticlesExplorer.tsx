@@ -9,6 +9,7 @@ import { type ArticleWithSlug } from '@/lib/articles'
 import { formatDate } from '@/lib/formatDate'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
+import { ScrollReveal } from '@/components/motion/ScrollReveal'
 
 function getAuthor(article: ArticleWithSlug) {
   if (typeof article.author === 'string') {
@@ -38,6 +39,20 @@ export function ArticlesExplorer({
     searchParams.get('topic') ?? searchParams.get('category') ?? 'All',
   )
   const debouncedQuery = useDebouncedValue(query, query.trim() ? 500 : 0)
+  const uniqueArticles = useMemo(() => {
+    const seen = new Set<string>()
+    const deduped: ArticleWithSlug[] = []
+
+    for (const article of articles) {
+      if (!article.slug || seen.has(article.slug)) {
+        continue
+      }
+      seen.add(article.slug)
+      deduped.push(article)
+    }
+
+    return deduped
+  }, [articles])
 
   useEffect(() => {
     const nextQuery = searchParams.get('q') ?? ''
@@ -85,7 +100,7 @@ export function ArticlesExplorer({
 
   const topics = useMemo(() => {
     const values = new Set<string>()
-    for (const article of articles) {
+    for (const article of uniqueArticles) {
       for (const item of article.topics ?? []) {
         if (item) {
           values.add(item)
@@ -99,10 +114,10 @@ export function ArticlesExplorer({
     }
 
     return ['All', ...Array.from(values).sort()]
-  }, [articles])
+  }, [uniqueArticles])
 
   const filtered = useMemo(() => {
-    return articles.filter((article) => {
+    return uniqueArticles.filter((article) => {
       const taxonomyValues = Array.from(
         new Set([...(article.topics ?? []), ...(article.tech ?? [])]),
       )
@@ -123,7 +138,7 @@ export function ArticlesExplorer({
 
       return matchesTopic && matchesQuery
     })
-  }, [articles, topic, debouncedQuery])
+  }, [uniqueArticles, topic, debouncedQuery])
 
   const queryText = debouncedQuery.trim()
 
@@ -223,115 +238,122 @@ export function ArticlesExplorer({
         </div>
       </div>
 
-      <div className="mx-auto mt-10 grid max-w-2xl grid-cols-1 gap-8 lg:mx-0 lg:max-w-none lg:grid-cols-3">
-        {filtered.map((article) => {
-          const author = getAuthor(article)
-          const topicValues = (article.topics ?? [])
-            .map((item) => item.trim())
-            .filter(Boolean)
-          const techValues = (article.tech ?? [])
-            .map((item) => item.trim())
-            .filter(Boolean)
-          const normalizedActiveTopic =
-            topic === 'All' ? '' : topic.toLowerCase()
+      <ScrollReveal
+        className="mx-auto mt-10 max-w-2xl lg:mx-0 lg:max-w-none"
+        targets="article"
+        stagger={0.07}
+        y={20}
+      >
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+          {filtered.map((article) => {
+            const author = getAuthor(article)
+            const topicValues = (article.topics ?? [])
+              .map((item) => item.trim())
+              .filter(Boolean)
+            const techValues = (article.tech ?? [])
+              .map((item) => item.trim())
+              .filter(Boolean)
+            const normalizedActiveTopic =
+              topic === 'All' ? '' : topic.toLowerCase()
 
-          const matchedTopicChip = topicValues.find(
-            (item) =>
-              normalizedActiveTopic &&
-              item.toLowerCase() === normalizedActiveTopic,
-          )
-          const matchedTechChip = techValues.find(
-            (item) =>
-              normalizedActiveTopic &&
-              item.toLowerCase() === normalizedActiveTopic,
-          )
+            const matchedTopicChip = topicValues.find(
+              (item) =>
+                normalizedActiveTopic &&
+                item.toLowerCase() === normalizedActiveTopic,
+            )
+            const matchedTechChip = techValues.find(
+              (item) =>
+                normalizedActiveTopic &&
+                item.toLowerCase() === normalizedActiveTopic,
+            )
 
-          // Prefer chips matching the active topic; otherwise use the first available.
-          // Hide tech chip when it would duplicate the topic chip.
-          const topicChip = matchedTopicChip ?? topicValues[0]
-          const techChip =
-            (matchedTechChip ?? techValues[0])?.toLowerCase() ===
-            topicChip?.toLowerCase()
-              ? undefined
-              : (matchedTechChip ?? techValues[0])
+            // Prefer chips matching the active topic; otherwise use the first available.
+            // Hide tech chip when it would duplicate the topic chip.
+            const topicChip = matchedTopicChip ?? topicValues[0]
+            const techChip =
+              (matchedTechChip ?? techValues[0])?.toLowerCase() ===
+              topicChip?.toLowerCase()
+                ? undefined
+                : (matchedTechChip ?? techValues[0])
 
-          return (
-            <article
-              key={article.slug}
-              className="group relative flex flex-col rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-700/40 dark:bg-zinc-900"
-            >
-              <div
-                aria-hidden="true"
-                className="absolute inset-0 z-0 rounded-2xl bg-zinc-50 opacity-0 transition group-hover:opacity-100 dark:bg-zinc-800/40"
-              />
-              <Link
-                href={`/articles/${article.slug}`}
-                aria-label={`Read article: ${article.title}`}
-                className="absolute inset-0 z-20 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70"
-              />
-              {article.image && (
-                <div className="relative z-10 mb-4 overflow-hidden rounded-xl">
-                  <Image
-                    src={getOptimizedImageUrl(article.image, {
-                      width: 960,
-                      height: 540,
-                      crop: 'fill',
-                    })}
-                    alt={article.title}
-                    width={960}
-                    height={540}
-                    sizes="(min-width: 1280px) 24rem, (min-width: 1024px) 30vw, 100vw"
-                    className="aspect-[16/9] w-full object-cover"
-                  />
-                </div>
-              )}
-
-              <div className="relative z-10 text-xs text-zinc-500 dark:text-zinc-400">
-                <div className="flex items-center gap-2">
-                  <time dateTime={article.date}>
-                    {formatDate(article.date)}
-                  </time>
-                  {article.readingTimeMinutes && (
-                    <span>{article.readingTimeMinutes} min read</span>
-                  )}
-                </div>
-                {(topicChip || techChip) && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {topicChip && (
-                      <span className="max-w-[11rem] truncate rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">
-                        {topicChip}
-                      </span>
-                    )}
-                    {techChip && (
-                      <span className="max-w-[11rem] truncate rounded-full bg-teal-50 px-2 py-0.5 text-teal-700 dark:bg-teal-900/40 dark:text-teal-200">
-                        {techChip}
-                      </span>
-                    )}
+            return (
+              <article
+                key={article.slug}
+                className="group relative flex flex-col rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-700/40 dark:bg-zinc-900"
+              >
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-0 z-0 rounded-2xl bg-zinc-50 opacity-0 transition group-hover:opacity-100 dark:bg-zinc-800/40"
+                />
+                <Link
+                  href={`/articles/${article.slug}`}
+                  aria-label={`Read article: ${article.title}`}
+                  className="absolute inset-0 z-20 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70"
+                />
+                {article.image && (
+                  <div className="relative z-10 mb-4 overflow-hidden rounded-xl">
+                    <Image
+                      src={getOptimizedImageUrl(article.image, {
+                        width: 960,
+                        height: 540,
+                        crop: 'fill',
+                      })}
+                      alt={article.title}
+                      width={960}
+                      height={540}
+                      sizes="(min-width: 1280px) 24rem, (min-width: 1024px) 30vw, 100vw"
+                      className="aspect-[16/9] w-full object-cover"
+                    />
                   </div>
                 )}
-              </div>
 
-              <h2 className="relative z-10 mt-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                <span>{article.title}</span>
-              </h2>
-              <p className="relative z-10 mt-2 line-clamp-3 text-sm text-zinc-600 dark:text-zinc-400">
-                {article.description}
-              </p>
+                <div className="relative z-10 text-xs text-zinc-500 dark:text-zinc-400">
+                  <div className="flex items-center gap-2">
+                    <time dateTime={article.date}>
+                      {formatDate(article.date)}
+                    </time>
+                    {article.readingTimeMinutes && (
+                      <span>{article.readingTimeMinutes} min read</span>
+                    )}
+                  </div>
+                  {(topicChip || techChip) && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {topicChip && (
+                        <span className="max-w-[11rem] truncate rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">
+                          {topicChip}
+                        </span>
+                      )}
+                      {techChip && (
+                        <span className="max-w-[11rem] truncate rounded-full bg-teal-50 px-2 py-0.5 text-teal-700 dark:bg-teal-900/40 dark:text-teal-200">
+                          {techChip}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
 
-              <div className="relative z-10 mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-700/40">
-                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                  {author.name}
+                <h2 className="relative z-10 mt-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                  <span>{article.title}</span>
+                </h2>
+                <p className="relative z-10 mt-2 line-clamp-3 text-sm text-zinc-600 dark:text-zinc-400">
+                  {article.description}
                 </p>
-                {author.role && (
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {author.role}
+
+                <div className="relative z-10 mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-700/40">
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                    {author.name}
                   </p>
-                )}
-              </div>
-            </article>
-          )
-        })}
-      </div>
+                  {author.role && (
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {author.role}
+                    </p>
+                  )}
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      </ScrollReveal>
 
       {filtered.length === 0 && (
         <p className="mt-8 mb-12 text-sm text-zinc-500">

@@ -8,6 +8,8 @@ import { Card } from '@/components/Card'
 import { Container } from '@/components/Container'
 import { NotFoundState } from '@/components/cms/NotFoundState'
 import { Messenger } from '@/components/home/Messenger'
+import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
+import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { GitHubIcon, LinkedInIcon, XIcon } from '@/icons'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { type ArticleWithSlug, getAllArticles } from '@/lib/articles'
@@ -285,7 +287,7 @@ function Photos({ images }: { images: string[] }) {
 }
 
 export default async function Home() {
-  const articles = (await getAllArticles()).slice(0, 7)
+  const articles = dedupeArticlesBySlug(await getAllArticles()).slice(0, 7)
   const homePage = await getCmsPageByPath('/')
   const homeTitle =
     homePage?.title ||
@@ -309,50 +311,71 @@ export default async function Home() {
     <>
       <Container className="mt-9">
         <div className="max-w-2xl">
-          <h1 className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100">
-            {homeTitle}
-          </h1>
-          <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-            {homeSubtitle}
-          </p>
-          <div className="mt-6 flex gap-6">
-            <SocialLink
-              href="https://x.com/brandonperfetti"
-              aria-label="Follow on X"
-              icon={XIcon}
-            />
-            <SocialLink
-              href="https://github.com/brandonperfetti"
-              aria-label="Follow on GitHub"
-              icon={GitHubIcon}
-            />
-            <SocialLink
-              href="https://www.linkedin.com/in/brandonperfetti/"
-              aria-label="Follow on LinkedIn"
-              icon={LinkedInIcon}
-            />
-          </div>
+          <AnimatedHeadline
+            text={homeTitle}
+            variant="typewriter"
+            className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100"
+          />
+          <ScrollReveal y={14} duration={0.72} delay={0.24}>
+            <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
+              {homeSubtitle}
+            </p>
+          </ScrollReveal>
+          <ScrollReveal y={10} duration={0.62} delay={0.34}>
+            <div className="mt-6 flex gap-6">
+              <SocialLink
+                href="https://x.com/brandonperfetti"
+                aria-label="Follow on X"
+                icon={XIcon}
+              />
+              <SocialLink
+                href="https://github.com/brandonperfetti"
+                aria-label="Follow on GitHub"
+                icon={GitHubIcon}
+              />
+              <SocialLink
+                href="https://www.linkedin.com/in/brandonperfetti/"
+                aria-label="Follow on LinkedIn"
+                icon={LinkedInIcon}
+              />
+            </div>
+          </ScrollReveal>
         </div>
       </Container>
-      <Photos images={homeGalleryImages} />
+      <ScrollReveal y={30} duration={0.9} start="top 92%">
+        <Photos images={homeGalleryImages} />
+      </ScrollReveal>
       <Container className="mt-24 mb-24 md:mt-28 md:mb-28">
         <div className="mx-auto grid max-w-xl grid-cols-1 gap-y-20 lg:max-w-none lg:grid-cols-2">
-          <div className="flex flex-col gap-16">
-            {articles.length > 0 ? (
-              articles.map((article) => (
-                <Article key={article.slug} article={article} />
-              ))
-            ) : (
-              <NotFoundState
-                title="No published articles"
-                description="No CMS article records are currently publish-safe."
-              />
-            )}
-          </div>
-          <div className="space-y-10 lg:pl-16 xl:pl-24">
-            <Messenger />
-            <Resume />
-          </div>
+          <ScrollReveal targets="article" y={20} stagger={0.08}>
+            <div className="flex flex-col gap-16">
+              {articles.length > 0 ? (
+                articles.map((article) => (
+                  <Article key={article.slug} article={article} />
+                ))
+              ) : (
+                <NotFoundState
+                  title="No published articles"
+                  description="No CMS article records are currently publish-safe."
+                />
+              )}
+            </div>
+          </ScrollReveal>
+          <ScrollReveal
+            className="lg:pl-16 xl:pl-24"
+            targets="[data-reveal-item]"
+            y={20}
+            stagger={0.16}
+          >
+            <div className="space-y-10">
+              <div data-reveal-item>
+                <Messenger />
+              </div>
+              <div data-reveal-item>
+                <Resume />
+              </div>
+            </div>
+          </ScrollReveal>
         </div>
       </Container>
     </>
@@ -373,4 +396,19 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 function isNonEmptyString(value: string | undefined): value is string {
   return typeof value === 'string' && value.length > 0
+}
+
+function dedupeArticlesBySlug(articles: ArticleWithSlug[]) {
+  const seen = new Set<string>()
+  const deduped: ArticleWithSlug[] = []
+
+  for (const article of articles) {
+    if (!article.slug || seen.has(article.slug)) {
+      continue
+    }
+    seen.add(article.slug)
+    deduped.push(article)
+  }
+
+  return deduped
 }

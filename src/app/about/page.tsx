@@ -4,6 +4,8 @@ import Link from 'next/link'
 import clsx from 'clsx'
 
 import { Container } from '@/components/Container'
+import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
+import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { Prose } from '@/components/Prose'
 import { ArticleBody } from '@/components/cms/ArticleBody'
 import { GitHubIcon, LinkedInIcon, MailIcon, XIcon } from '@/icons'
@@ -158,35 +160,41 @@ export default async function About() {
           </div>
         </div>
         <div className="order-first lg:order-first lg:row-span-2">
-          <h1 className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100">
-            {heroTitle}
-          </h1>
-          <div className="mt-6 space-y-7 text-base text-zinc-600 dark:text-zinc-400">
-            <p>{heroSubtitle}</p>
-          </div>
-          <div className="mt-8 lg:hidden">
-            <div className="mx-auto max-w-xs px-2.5">
-              <Image
-                height={800}
-                width={800}
-                src={getOptimizedImageUrl(portraitImage, {
-                  width: 1024,
-                  height: 1024,
-                  crop: 'fill',
-                })}
-                alt="Brandon Perfetti"
-                sizes="20rem"
-                className="aspect-square rounded-2xl bg-zinc-100 object-cover dark:bg-zinc-800"
-              />
+          <AnimatedHeadline
+            text={heroTitle}
+            variant="typewriter"
+            className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100"
+          />
+          <ScrollReveal y={14} duration={0.72} delay={0.24}>
+            <div className="mt-6 space-y-7 text-base text-zinc-600 dark:text-zinc-400">
+              <p>{heroSubtitle}</p>
             </div>
-          </div>
-          {page?.bodyBlocks?.length ? (
-            <Prose className="mt-8 max-w-none" data-mdx-content>
-              <ArticleBody blocks={page.bodyBlocks} />
-            </Prose>
-          ) : (
-            <AboutFallbackBody />
-          )}
+          </ScrollReveal>
+          <ScrollReveal y={16} duration={0.78} delay={0.36}>
+            <div className="mt-8 lg:hidden">
+              <div className="mx-auto max-w-xs px-2.5">
+                <Image
+                  height={800}
+                  width={800}
+                  src={getOptimizedImageUrl(portraitImage, {
+                    width: 1024,
+                    height: 1024,
+                    crop: 'fill',
+                  })}
+                  alt="Brandon Perfetti"
+                  sizes="20rem"
+                  className="aspect-square rounded-2xl bg-zinc-100 object-cover dark:bg-zinc-800"
+                />
+              </div>
+            </div>
+            {page?.bodyBlocks?.length ? (
+              <Prose className="mt-8 max-w-none" data-mdx-content>
+                <ArticleBody blocks={page.bodyBlocks} />
+              </Prose>
+            ) : (
+              <AboutFallbackBody />
+            )}
+          </ScrollReveal>
         </div>
         <div className="mb-4 lg:mt-2 lg:pl-20">
           <ul role="list">
