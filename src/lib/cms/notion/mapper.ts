@@ -20,6 +20,7 @@ import {
   propertyToRelationIds,
   propertyToText,
 } from '@/lib/cms/notion/property'
+import { isFuturePublicationDate } from '@/lib/date'
 import { getSiteUrl } from '@/lib/site'
 
 export const DEFAULT_CMS_AUTHOR = {
@@ -51,15 +52,6 @@ function normalizeLinkLabel(rawLabel: string, linkHref: string) {
 
 function toYearLabel(dateValue: string) {
   return dateValue.slice(0, 4)
-}
-
-function isFuturePublicationDate(dateValue: string) {
-  const timestamp = Date.parse(dateValue)
-  if (Number.isNaN(timestamp)) {
-    return false
-  }
-
-  return timestamp > Date.now()
 }
 
 export function mapNotionArticleSummary(

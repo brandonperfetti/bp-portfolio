@@ -4,6 +4,7 @@ import {
   getCmsSearchArticles,
   type CmsArticleDetailResult,
 } from '@/lib/cms/articlesRepo'
+import { isFuturePublicationDate } from '@/lib/date'
 
 interface Article {
   title: string
@@ -40,15 +41,6 @@ export interface ArticleDetailWithSlug extends ArticleWithSlug {
   sourceType: CmsArticleDetailResult['sourceType']
 }
 
-function isFuturePublicationDate(dateValue: string) {
-  const timestamp = Date.parse(dateValue)
-  if (Number.isNaN(timestamp)) {
-    // Treat invalid dates as non-future so bad metadata does not hide content.
-    return false
-  }
-  return timestamp > Date.now()
-}
-
 export async function getAllArticles(): Promise<ArticleWithSlug[]> {
   const articles = await getAllCmsArticleSummaries()
   return articles.map((article) => ({
@@ -76,6 +68,8 @@ export async function getSearchArticles(): Promise<ArticleWithSlug[]> {
     articles
       // Publish gate: scheduled articles stay hidden until their publish date.
       .filter((article) => !isFuturePublicationDate(article.date))
+      // Keep a stable public search payload shape instead of passing through
+      // all CMS fields (prevents accidental leakage when repo types evolve).
       .map((article) => ({
         slug: article.slug,
         title: article.title,
