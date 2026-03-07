@@ -856,6 +856,8 @@ export async function beginWebhookEventReplay(
 /**
  * Archives failed webhook ledger rows older than `retentionDays`.
  * Safety: rows are moved to Notion trash (`in_trash=true`) and never hard-deleted.
+ * Rows without a valid `receivedAt` timestamp are skipped (not archived) because
+ * retention age cannot be determined safely.
  */
 export async function pruneFailedWebhookEvents(options?: {
   retentionDays?: number
