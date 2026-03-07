@@ -384,6 +384,23 @@ const defaultTechMeta: Metadata = {
     'Core technologies and tools I reach for when building products.',
 }
 
+function normalizeTechSlug(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+}
+
+function TechExplorerFallback() {
+  return (
+    <div className="rounded-2xl border border-zinc-100 p-4 text-sm text-zinc-500 dark:border-zinc-700/40 dark:text-zinc-400">
+      Loading technology explorer...
+    </div>
+  )
+}
+
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getCmsSiteSettings()
   const page = await getCmsPageByPath('/tech')
@@ -402,12 +419,7 @@ export default async function TechStack() {
   // Normalize legacy tech names into URL-safe slugs: trim/lowercase, strip
   // non-alphanumeric chars (except spaces/hyphens), then collapse to hyphens.
   const localTech: CmsEntityItem[] = techStack.map((tech) => ({
-    slug: tech.name
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-'),
+    slug: normalizeTechSlug(tech.name),
     name: tech.name,
     description: tech.description,
     logo: tech.logo,
@@ -421,7 +433,7 @@ export default async function TechStack() {
       intro="A practical stack for product delivery, engineering execution, and long-term maintainability."
     >
       {items.length ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<TechExplorerFallback />}>
           <TechExplorer items={items} />
         </Suspense>
       ) : (
