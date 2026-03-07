@@ -46,8 +46,8 @@ function normalize(value: string) {
   return value.trim().toLowerCase()
 }
 
-function parsePositiveInt(raw: string | undefined, fallback: number) {
-  const parsed = raw ? Number(raw) : Number.NaN
+function parsePositiveInt(raw: string | number | undefined, fallback: number) {
+  const parsed = raw === undefined ? Number.NaN : Number(raw)
   if (Number.isFinite(parsed) && parsed > 0) {
     return Math.floor(parsed)
   }
@@ -116,11 +116,11 @@ export async function pruneImageJobs(options?: {
 }): Promise<ImageJobsCleanupResult> {
   const dataSourceId = getOptionalNotionImageJobsDataSourceId()
   const retentionDays = parsePositiveInt(
-    String(options?.retentionDays ?? process.env.CMS_IMAGE_JOBS_RETENTION_DAYS),
+    options?.retentionDays ?? process.env.CMS_IMAGE_JOBS_RETENTION_DAYS,
     30,
   )
   const limit = parsePositiveInt(
-    String(options?.limit ?? process.env.CMS_IMAGE_JOBS_CLEANUP_LIMIT),
+    options?.limit ?? process.env.CMS_IMAGE_JOBS_CLEANUP_LIMIT,
     100,
   )
 
