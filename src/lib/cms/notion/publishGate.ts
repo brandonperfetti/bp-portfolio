@@ -37,16 +37,17 @@ function isTutorialLike(articleType: string) {
  * Validates publish-safe requirements for a source article.
  *
  * @param source Source article fields used by publish-gate policy checks.
- * @param defaultAuthorPageId Optional configured default author page id fallback.
+ * @param _defaultAuthorPageId Reserved for compatibility with existing call
+ * sites; author relation is intentionally non-blocking in publish validation.
  * @returns Array of validation error messages. Empty means all checks passed.
  *
  * Enforces required source fields/statuses, winning cover constraints,
- * tutorial-mode specific validation rules, and author fallback behavior.
+ * tutorial-mode specific validation rules, and non-blocking author handling.
  * This function has no side effects.
  */
 export function validatePublishSafeRequirements(
   source: PublishGateSourceArticle,
-  defaultAuthorPageId: string | null,
+  _defaultAuthorPageId: string | null,
 ): string[] {
   const errors: string[] = []
   const sourceStatus = normalizeStatus(source.sourceStatus)
