@@ -61,7 +61,7 @@ async function run(request: Request) {
       })
     }
 
-    return NextResponse.json(result, { status: result.ok ? 200 : 207 })
+    return NextResponse.json(result, { status: result.ok ? 200 : 500 })
   } catch (error) {
     await logAutomationErrorToNotion({
       workflow: 'portfolio-backlog-sync',

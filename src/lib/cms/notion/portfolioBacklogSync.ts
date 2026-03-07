@@ -171,6 +171,7 @@ export async function runPortfolioBacklogSync(options?: {
 }): Promise<PortfolioBacklogSyncResult> {
   // TODO(portfolio-backlog): automate this sync via CI/cron once manual flow is validated.
   const outputPath = options?.outputPath ?? DEFAULT_BACKLOG_DOC_PATH
+  const errors: string[] = []
   const dataSourceId = getOptionalNotionPortfolioBacklogDataSourceId()
   if (!dataSourceId) {
     return {
@@ -180,40 +181,53 @@ export async function runPortfolioBacklogSync(options?: {
       active: 0,
       outputPath,
       wroteFile: false,
-      errors: [],
+      errors,
     }
   }
 
-  const pages = await queryAllDataSourcePages(dataSourceId, {})
-  const activeItems = pages
-    .filter((page) => !page.archived && !page.in_trash)
-    .filter(isActiveBacklogPage)
-    .map(mapBacklogPage)
-    .filter((item): item is PortfolioBacklogItem => Boolean(item))
-    .sort((a, b) => {
-      const byPriority = toPriorityRank(a.priority) - toPriorityRank(b.priority)
-      if (byPriority !== 0) {
-        return byPriority
-      }
-      return a.title.localeCompare(b.title)
-    })
+  let pages: NotionPage[] = []
+  let activeItems: PortfolioBacklogItem[] = []
+  try {
+    pages = await queryAllDataSourcePages(dataSourceId, {})
+    activeItems = pages
+      .filter((page) => !page.archived && !page.in_trash)
+      .filter(isActiveBacklogPage)
+      .map(mapBacklogPage)
+      .filter((item): item is PortfolioBacklogItem => Boolean(item))
+      .sort((a, b) => {
+        const byPriority =
+          toPriorityRank(a.priority) - toPriorityRank(b.priority)
+        if (byPriority !== 0) {
+          return byPriority
+        }
+        return a.title.localeCompare(b.title)
+      })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    errors.push(`queryAllDataSourcePages failed: ${message}`)
+  }
 
   const markdown = renderBacklogMarkdown(activeItems)
   let wroteFile = false
   if (options?.writeFile) {
-    const absoluteOutputPath = path.resolve(process.cwd(), outputPath)
-    await mkdir(path.dirname(absoluteOutputPath), { recursive: true })
-    await writeFile(absoluteOutputPath, markdown, 'utf8')
-    wroteFile = true
+    try {
+      const absoluteOutputPath = path.resolve(process.cwd(), outputPath)
+      await mkdir(path.dirname(absoluteOutputPath), { recursive: true })
+      await writeFile(absoluteOutputPath, markdown, 'utf8')
+      wroteFile = true
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      errors.push(`writeFile failed: ${message}`)
+    }
   }
 
   return {
-    ok: true,
+    ok: errors.length === 0,
     enabled: true,
     scanned: pages.length,
     active: activeItems.length,
     outputPath,
     wroteFile,
-    errors: [],
+    errors,
   }
 }
