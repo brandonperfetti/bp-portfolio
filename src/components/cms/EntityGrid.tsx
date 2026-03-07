@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
+import { useId } from 'react'
 
 import { Card } from '@/components/Card'
 import { LinkIcon } from '@/icons'
@@ -8,6 +9,8 @@ import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
 
 export function EntityGrid({ items }: { items: CmsEntityItem[] }) {
+  const instanceId = useId().replace(/[:]/g, '')
+
   return (
     <ul
       role="list"
@@ -16,7 +19,7 @@ export function EntityGrid({ items }: { items: CmsEntityItem[] }) {
       {items.map((item, index) => {
         // Stable heading id wires the full-card overlay link to visible heading text.
         // This preserves full-card click UX while improving heading/link semantics.
-        const headingId = `entity-grid-heading-${
+        const headingId = `entity-grid-heading-${instanceId}-${
           item.slug || item.name.toLowerCase().replace(/\s+/g, '-')
         }-${index}`
 
