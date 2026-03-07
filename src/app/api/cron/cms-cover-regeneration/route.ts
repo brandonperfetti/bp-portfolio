@@ -25,10 +25,31 @@ async function run(request: Request) {
 
   try {
     const result = await runCoverRegenerationCronAutomation()
+    let revalidateError: string | null = null
     if (getRegeneratedCount(result) > 0) {
-      revalidateArticleSurfaces()
+      try {
+        revalidateArticleSurfaces()
+      } catch (error) {
+        revalidateError = error instanceof Error ? error.message : String(error)
+        await logAutomationErrorToNotion({
+          workflow: 'cms-cron-cover-regeneration',
+          endpoint: '/api/cron/cms-cover-regeneration',
+          error: `Revalidation failed: ${revalidateError}`,
+        }).catch((logError) => {
+          console.error(
+            '[cms-cron-cover-regeneration] failed to write revalidation error log',
+            {
+              error:
+                logError instanceof Error ? logError.message : String(logError),
+            },
+          )
+        })
+      }
     }
-    return NextResponse.json(result, { status: result.ok ? 200 : 207 })
+    return NextResponse.json(
+      revalidateError ? { ...result, revalidateError } : result,
+      { status: result.ok && !revalidateError ? 200 : 207 },
+    )
   } catch (error) {
     await logAutomationErrorToNotion({
       workflow: 'cms-cron-cover-regeneration',

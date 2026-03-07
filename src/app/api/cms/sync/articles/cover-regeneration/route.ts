@@ -67,8 +67,10 @@ export async function POST(request: Request) {
       workflow: 'cms-cover-regeneration',
       endpoint: '/api/cms/sync/articles/cover-regeneration',
       error: error instanceof Error ? error.message : 'Unknown error',
-      sourcePageId,
-      details: { limit },
+      details: {
+        sourcePageId,
+        limit,
+      },
     }).catch((logError) => {
       console.error(
         '[cms-cover-regeneration] failed to write Notion error log',
