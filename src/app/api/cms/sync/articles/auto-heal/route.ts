@@ -55,7 +55,9 @@ export async function POST(request: Request) {
       workflow: 'cms-auto-heal',
       endpoint: '/api/cms/sync/articles/auto-heal',
       error: error instanceof Error ? error.message : 'Unknown error',
-      sourcePageId,
+      details: {
+        sourcePageId,
+      },
     }).catch((logError) => {
       console.error('[cms-auto-heal] failed to write Notion error log', {
         error: logError instanceof Error ? logError.message : String(logError),
