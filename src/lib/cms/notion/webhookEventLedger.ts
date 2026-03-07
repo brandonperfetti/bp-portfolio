@@ -888,20 +888,18 @@ export async function pruneFailedWebhookEvents(options?: {
   }
 
   const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000
-  const candidates = await listFailedWebhookEvents({ limit })
-  const errors: Array<{ ledgerPageId: string; message: string }> = []
-  let archived = 0
-  let skippedRecent = 0
-
-  for (const candidate of candidates) {
+  const candidates = await listFailedWebhookEvents({ noLimit: true })
+  const expiredCandidates = candidates.filter((candidate) => {
     const receivedMs = candidate.receivedAt
       ? Date.parse(candidate.receivedAt)
       : Number.NaN
-    if (Number.isNaN(receivedMs) || receivedMs > cutoffMs) {
-      skippedRecent += 1
-      continue
-    }
+    return !Number.isNaN(receivedMs) && receivedMs <= cutoffMs
+  })
+  const errors: Array<{ ledgerPageId: string; message: string }> = []
+  let archived = 0
+  const skippedRecent = candidates.length - expiredCandidates.length
 
+  for (const candidate of expiredCandidates.slice(0, limit)) {
     try {
       await notionUpdatePage(candidate.ledgerPageId, {
         in_trash: true,
