@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed"
+    "test:e2e:headed": "playwright test --headed",
+    "sync:portfolio-backlog": "bash ./scripts/sync-portfolio-backlog.sh"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {
