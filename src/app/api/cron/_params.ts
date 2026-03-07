@@ -22,3 +22,11 @@ export function parseDryRunParam(
 
   return undefined
 }
+
+export function parsePositiveInt(raw: string | undefined, fallback: number) {
+  const parsed = raw ? Number(raw) : Number.NaN
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.floor(parsed)
+  }
+  return fallback
+}

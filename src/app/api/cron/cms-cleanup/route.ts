@@ -8,14 +8,7 @@ import { pruneImageJobs } from '@/lib/cms/notion/imageJobsCleanup'
 import { pruneFailedWebhookEvents } from '@/lib/cms/notion/webhookEventLedger'
 
 import { isAuthorizedCronRequest } from '../_auth'
-
-function parsePositiveInt(raw: string | undefined, fallback: number) {
-  const parsed = raw ? Number(raw) : Number.NaN
-  if (Number.isFinite(parsed) && parsed > 0) {
-    return Math.floor(parsed)
-  }
-  return fallback
-}
+import { parsePositiveInt } from '../_params'
 
 function resolveWebhookRetentionDays() {
   return parsePositiveInt(process.env.CMS_WEBHOOK_EVENTS_RETENTION_DAYS, 30)

@@ -6,23 +6,17 @@ import {
 } from '@/lib/cms/notion/automationErrorLog'
 
 import { isAuthorizedCronRequest } from '../_auth'
+import { parsePositiveInt } from '../_params'
 
 function resolveRetentionDays() {
-  const raw = process.env.CMS_AUTOMATION_ERRORS_RETENTION_DAYS
-  const parsed = raw ? Number(raw) : Number.NaN
-  if (Number.isFinite(parsed) && parsed > 0) {
-    return Math.floor(parsed)
-  }
-  return 30
+  return parsePositiveInt(process.env.CMS_AUTOMATION_ERRORS_RETENTION_DAYS, 30)
 }
 
 function resolveRetentionLimit() {
-  const raw = process.env.CMS_AUTOMATION_ERRORS_RETENTION_LIMIT
-  const parsed = raw ? Number(raw) : Number.NaN
-  if (Number.isFinite(parsed) && parsed > 0) {
-    return Math.floor(parsed)
-  }
-  return 100
+  return parsePositiveInt(
+    process.env.CMS_AUTOMATION_ERRORS_RETENTION_LIMIT,
+    100,
+  )
 }
 
 async function run(request: Request) {
