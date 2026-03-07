@@ -34,7 +34,7 @@ export async function PUT(req: Request) {
   const clientIp = getRequestClientIp(req)
   const rate = applyRateLimit({
     key: `hermes:mailinglist:${clientIp}`,
-    limit: limits.chatRatePerMinute,
+    limit: limits.mailingListRatePerMinute,
     windowMs: 60_000,
   })
   if (!rate.allowed) {
@@ -48,7 +48,7 @@ export async function PUT(req: Request) {
         status: 429,
         headers: {
           'Retry-After': String(retryAfter),
-          'X-RateLimit-Limit': String(limits.chatRatePerMinute),
+          'X-RateLimit-Limit': String(limits.mailingListRatePerMinute),
           'X-RateLimit-Remaining': String(rate.remaining),
           'X-RateLimit-Reset': String(Math.floor(rate.resetAt / 1000)),
         },

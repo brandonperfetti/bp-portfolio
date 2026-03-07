@@ -306,12 +306,20 @@ export function applyDailyQuota(options: {
  * @returns Effective rate/quota and payload limits plus endpoint enabled flags.
  */
 export function getSecurityLimits() {
+  const chatRatePerMinute = toPositiveInt(
+    process.env.HERMES_CHAT_RATE_LIMIT_PER_MINUTE,
+    10,
+    200,
+  )
+  const mailingListRatePerMinute = toPositiveInt(
+    process.env.HERMES_MAILINGLIST_RATE_LIMIT_PER_MINUTE,
+    chatRatePerMinute,
+    200,
+  )
+
   return {
-    chatRatePerMinute: toPositiveInt(
-      process.env.HERMES_CHAT_RATE_LIMIT_PER_MINUTE,
-      10,
-      200,
-    ),
+    chatRatePerMinute,
+    mailingListRatePerMinute,
     imageRatePerMinute: toPositiveInt(
       process.env.HERMES_IMAGE_RATE_LIMIT_PER_MINUTE,
       2,
