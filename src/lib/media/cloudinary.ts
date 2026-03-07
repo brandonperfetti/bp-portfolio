@@ -69,6 +69,7 @@ export async function uploadBase64PngToCloudinary(options: {
   const timestamp = Math.floor(Date.now() / 1000)
   const signature = buildSignature(config, {
     folder: config.folder,
+    overwrite: 'true',
     public_id: options.publicId,
     timestamp: String(timestamp),
   })
@@ -79,6 +80,7 @@ export async function uploadBase64PngToCloudinary(options: {
   formData.append('public_id', options.publicId)
   formData.append('signature', signature)
   formData.append('folder', config.folder)
+  formData.append('overwrite', 'true')
 
   const controller = new AbortController()
   const timeoutId = setTimeout(
