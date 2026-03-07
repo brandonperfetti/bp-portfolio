@@ -293,9 +293,11 @@ export default async function Home() {
   const homeSubtitle =
     homePage?.subtitle ||
     "I'm Brandon, based in Orange County, CA. I help teams turn complex product goals into reliable, user-focused software."
+  const homeGalleryImagesRaw = homePage?.homeImages?.filter(Boolean).slice(0, 5)
   const homeGalleryImages =
-    homePage?.homeImages?.filter(Boolean).slice(0, 5) ??
-    defaultHomeGalleryImages
+    homeGalleryImagesRaw && homeGalleryImagesRaw.length > 0
+      ? homeGalleryImagesRaw
+      : defaultHomeGalleryImages
 
   return (
     <>
@@ -326,13 +328,7 @@ export default async function Home() {
           </div>
         </div>
       </Container>
-      <Photos
-        images={
-          homeGalleryImages.length
-            ? homeGalleryImages
-            : defaultHomeGalleryImages
-        }
-      />
+      <Photos images={homeGalleryImages} />
       <Container className="mt-24 mb-24 md:mt-28 md:mb-28">
         <div className="mx-auto grid max-w-xl grid-cols-1 gap-y-20 lg:max-w-none lg:grid-cols-2">
           <div className="flex flex-col gap-16">
