@@ -194,7 +194,7 @@ export function TechExplorer({
       const matchesQuery =
         normalizedQuery.length === 0 ||
         item.name.toLowerCase().includes(normalizedQuery) ||
-        item.description.toLowerCase().includes(normalizedQuery) ||
+        (item.description ?? '').toLowerCase().includes(normalizedQuery) ||
         item.category.toLowerCase().includes(normalizedQuery) ||
         (item.link?.label ?? '').toLowerCase().includes(normalizedQuery) ||
         (item.link?.href ?? '').toLowerCase().includes(normalizedQuery)
