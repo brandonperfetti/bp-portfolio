@@ -4,6 +4,8 @@ import { isAuthorizedCronRequest } from '@/app/api/cron/_auth'
 import { logAutomationErrorToNotion } from '@/lib/cms/notion/automationErrorLog'
 import { runPortfolioBacklogSync } from '@/lib/cms/notion/portfolioBacklogSync'
 
+// Accepts body.writeFile, legacy body.write, or ?write= for compatibility with
+// existing scripts and ad-hoc curl usage.
 function parseWriteParam(
   body: Record<string, unknown>,
   searchParams: URLSearchParams,

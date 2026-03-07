@@ -9,7 +9,7 @@ if [[ -z "${SECRET}" ]]; then
   exit 1
 fi
 
-curl -sS -X POST "${BASE_URL}/api/cron/cms-portfolio-backlog-sync" \
+curl -sS --fail -X POST "${BASE_URL}/api/cron/cms-portfolio-backlog-sync" \
   -H "Authorization: Bearer ${SECRET}" \
   -H "Content-Type: application/json" \
   --data '{"write":true}'

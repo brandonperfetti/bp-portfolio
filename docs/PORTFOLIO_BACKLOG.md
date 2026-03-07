@@ -32,11 +32,12 @@ Manual sync is the current operating mode by design.
 
 The command calls:
 
-- `POST /api/cron/cms-portfolio-backlog-sync?write=1`
+- `POST /api/cron/cms-portfolio-backlog-sync` with JSON body `{"write": true}`
 
 Auth:
 
 - `Authorization: Bearer <CRON_SECRET>`
+- Fallback accepted by server auth helper: `CMS_REVALIDATE_SECRET`
 
 ## Route behavior
 
