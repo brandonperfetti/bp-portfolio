@@ -74,7 +74,11 @@ export default async function Uses() {
             cmsUses.map((section) => (
               <ToolsSection key={section.title} title={section.title}>
                 {section.items.map((item) => (
-                  <Tool key={item.slug} title={item.name} href={item.link?.href}>
+                  <Tool
+                    key={item.slug}
+                    title={item.name}
+                    href={item.link?.href}
+                  >
                     {item.description}
                   </Tool>
                 ))}

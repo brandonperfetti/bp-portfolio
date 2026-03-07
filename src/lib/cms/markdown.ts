@@ -71,7 +71,9 @@ function renderBlock(block: CmsArticleBlock, depth = 0): string {
       return `- [${block.checked ? 'x' : ' '}] ${formatRichText(block.richText)}`
     case 'code': {
       const language = (block.language || '').trim().toLowerCase()
-      const code = (block.richText ?? []).map((entry) => entry.plainText).join('')
+      const code = (block.richText ?? [])
+        .map((entry) => entry.plainText ?? '')
+        .join('')
       return `\`\`\`${language}\n${code}\n\`\`\``
     }
     case 'image':

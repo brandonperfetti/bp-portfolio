@@ -18,7 +18,8 @@ const getCachedNotionTech = unstable_cache(
       .filter((tech): tech is CmsEntityItem => tech !== null)
       .sort((a, b) => {
         const orderCompare =
-          (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER)
+          (a.order ?? Number.MAX_SAFE_INTEGER) -
+          (b.order ?? Number.MAX_SAFE_INTEGER)
         if (orderCompare !== 0) {
           return orderCompare
         }

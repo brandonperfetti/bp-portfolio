@@ -44,11 +44,15 @@ State:
 - typing/image loading indicators
 - copy feedback state
 - `isChatStart` (initial welcome screen vs active chat view)
+- `active textarea height` (derived from content; auto-resized client-side)
 
 Behavior:
 
 - Streams NDJSON chunks into transient typing buffer.
 - Commits final assistant message after stream completion.
+- Uses multiline textarea input:
+  - `Enter` sends
+  - `Shift+Enter` inserts newline
 - Keeps input static while message pane scrolls.
 
 ## Server-Side Data Flow

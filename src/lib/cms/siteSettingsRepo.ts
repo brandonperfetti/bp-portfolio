@@ -10,7 +10,8 @@ import type { CmsSiteSettings } from '@/lib/cms/types'
 
 const DEFAULT_SITE_SETTINGS: CmsSiteSettings = {
   siteName: 'Brandon Perfetti',
-  siteTitle: 'Brandon Perfetti - Product & Project Manager and Software Engineer',
+  siteTitle:
+    'Brandon Perfetti - Product & Project Manager and Software Engineer',
   siteDescription: SITE_DESCRIPTION,
   canonicalUrl: getSiteUrl(),
   twitterCard: 'summary_large_image',
@@ -18,9 +19,12 @@ const DEFAULT_SITE_SETTINGS: CmsSiteSettings = {
 
 const getCachedNotionSiteSettings = unstable_cache(
   async (): Promise<CmsSiteSettings> => {
-    const pages = await queryAllDataSourcePages(getNotionSiteSettingsDataSourceId(), {
-      sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
-    })
+    const pages = await queryAllDataSourcePages(
+      getNotionSiteSettingsDataSourceId(),
+      {
+        sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
+      },
+    )
 
     for (const page of pages) {
       const settings = mapSiteSettings(page)

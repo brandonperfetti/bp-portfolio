@@ -14,18 +14,51 @@ type SearchItem = {
   searchText: string
 }
 
-const SEARCH_CACHE_KEY = 'bp:header-search:index:v1'
+const SEARCH_CACHE_KEY = 'bp:header-search:index:v2'
 const SEARCH_FETCH_TIMEOUT_MS = 8000
+const SEARCH_CACHE_TTL_MS = 60 * 1000
 
+type SearchCacheEntry = {
+  savedAt: number
+  items: SearchItem[]
+}
+
+function isSearchItem(value: unknown): value is SearchItem {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Partial<SearchItem>
+  return (
+    typeof item.title === 'string' &&
+    typeof item.description === 'string' &&
+    typeof item.date === 'string' &&
+    typeof item.href === 'string' &&
+    typeof item.searchText === 'string'
+  )
+}
+
+function sanitizeSearchItems(value: unknown): SearchItem[] {
+  if (!Array.isArray(value)) return []
+  return value.filter(isSearchItem)
+}
+
+/**
+ * Global header search modal with keyboard and cached-index behavior.
+ *
+ * Side effects:
+ * - Registers/removes global `keydown` listeners for `Cmd/Ctrl+K` and `Escape`.
+ * - Reads/writes sessionStorage search index cache (`SEARCH_CACHE_KEY`).
+ * - Fetches `/api/search` on demand when cache is stale/bypassed.
+ */
 export function HeaderSearch() {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<SearchItem[]>([])
+  const [activeIndex, setActiveIndex] = useState(-1)
   const [loadState, setLoadState] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle')
   const [fetchAttempt, setFetchAttempt] = useState(0)
   const bypassCacheRef = useRef(false)
+  const resultRefs = useRef<Array<HTMLAnchorElement | null>>([])
   const debouncedQuery = useDebouncedValue(query, query.trim() ? 500 : 0)
 
   useEffect(() => {
@@ -62,11 +95,31 @@ export function HeaderSearch() {
       try {
         const raw = sessionStorage.getItem(SEARCH_CACHE_KEY)
         if (raw) {
-          const cached = JSON.parse(raw) as SearchItem[]
-          if (Array.isArray(cached)) {
-            setItems(cached)
+          const parsed = JSON.parse(raw) as SearchItem[] | SearchCacheEntry
+          // Backward-compat: older cache payloads stored a raw SearchItem[].
+          // Wrap arrays into SearchCacheEntry, but force stale timestamp so we
+          // refresh from /api/search instead of treating legacy payloads as fresh.
+          const cached = Array.isArray(parsed)
+            ? ({
+                savedAt: 0,
+                items: sanitizeSearchItems(parsed),
+              } satisfies SearchCacheEntry)
+            : parsed
+          const savedAt =
+            typeof cached.savedAt === 'number' ? cached.savedAt : 0
+          const rawCachedItems = (cached as Partial<SearchCacheEntry>).items
+          const cachedItems = sanitizeSearchItems(rawCachedItems)
+          const hasInvalidCachedItems =
+            Array.isArray(rawCachedItems) &&
+            rawCachedItems.length !== cachedItems.length
+          if (!Array.isArray(rawCachedItems) || hasInvalidCachedItems) {
+            sessionStorage.removeItem(SEARCH_CACHE_KEY)
+          } else if (Date.now() - savedAt <= SEARCH_CACHE_TTL_MS) {
+            setItems(cachedItems)
             setLoadState('ready')
             return
+          } else {
+            sessionStorage.removeItem(SEARCH_CACHE_KEY)
           }
         }
       } catch {
@@ -91,14 +144,22 @@ export function HeaderSearch() {
         }
         return response.json() as Promise<SearchItem[]>
       })
-      .then((data: SearchItem[]) => {
+      .then((data: unknown) => {
         if (controller.signal.aborted) {
           return
         }
-        setItems(data)
+        if (!Array.isArray(data)) {
+          throw new Error('Search index response was not an array')
+        }
+        const safeItems = sanitizeSearchItems(data)
+        setItems(safeItems)
         setLoadState('ready')
         try {
-          sessionStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(data))
+          const cacheEntry: SearchCacheEntry = {
+            savedAt: Date.now(),
+            items: safeItems,
+          }
+          sessionStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(cacheEntry))
         } catch {
           // noop
         }
@@ -137,6 +198,30 @@ export function HeaderSearch() {
   }, [items, debouncedQuery])
   const queryText = debouncedQuery.trim()
 
+  useEffect(() => {
+    resultRefs.current = resultRefs.current.slice(0, filteredItems.length)
+    if (isOpen) {
+      setActiveIndex(-1)
+    }
+  }, [filteredItems, isOpen])
+
+  function focusResult(index: number) {
+    const count = filteredItems.length
+    if (count === 0) {
+      return
+    }
+
+    // Wrap index in both directions so ArrowUp/ArrowDown cycles results.
+    const normalized = ((index % count) + count) % count
+    const target = resultRefs.current[normalized]
+    if (!target) {
+      return
+    }
+
+    target.focus()
+    setActiveIndex(normalized)
+  }
+
   return (
     <>
       <button
@@ -173,7 +258,33 @@ export function HeaderSearch() {
                 autoFocus
                 type="text"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  setQuery(event.target.value)
+                  // Clear any previously armed selection immediately while
+                  // debounced filtering catches up.
+                  setActiveIndex(-1)
+                }}
+                onFocus={() => setActiveIndex(-1)}
+                onKeyDown={(event) => {
+                  if (!filteredItems.length) {
+                    return
+                  }
+
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault()
+                    focusResult(activeIndex < 0 ? 0 : activeIndex + 1)
+                  } else if (event.key === 'ArrowUp') {
+                    event.preventDefault()
+                    focusResult(
+                      activeIndex < 0
+                        ? filteredItems.length - 1
+                        : activeIndex - 1,
+                    )
+                  } else if (event.key === 'Enter' && activeIndex >= 0) {
+                    event.preventDefault()
+                    resultRefs.current[activeIndex]?.click()
+                  }
+                }}
                 placeholder="Search articles"
                 className="w-full rounded-md px-3 py-2 text-base outline outline-zinc-300 focus:outline-teal-500 sm:text-sm dark:bg-zinc-800 dark:outline-zinc-600"
               />
@@ -192,13 +303,34 @@ export function HeaderSearch() {
               {loadState === 'loading' && (
                 <p className="p-3 text-sm text-zinc-500">Loading articles...</p>
               )}
-              {filteredItems.map((item) => (
+              {filteredItems.map((item, index) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   {...getExternalLinkProps(item.href)}
+                  ref={(element) => {
+                    resultRefs.current[index] = element
+                  }}
+                  onFocus={() => {
+                    setActiveIndex(index)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault()
+                      focusResult(index + 1)
+                    } else if (event.key === 'ArrowUp') {
+                      event.preventDefault()
+                      focusResult(index - 1)
+                    } else if (event.key === 'Home') {
+                      event.preventDefault()
+                      focusResult(0)
+                    } else if (event.key === 'End') {
+                      event.preventDefault()
+                      focusResult(filteredItems.length - 1)
+                    }
+                  }}
                   onClick={() => setIsOpen(false)}
-                  className="block rounded-lg p-3 transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  className="block rounded-lg p-3 transition hover:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 focus-visible:ring-inset dark:hover:bg-zinc-800 dark:focus-visible:ring-teal-400/70"
                 >
                   <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     {item.title}

@@ -65,9 +65,10 @@ function AboutFallbackBody() {
           Navigating Complexities with Agile Leadership
         </h3>
         <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-          I&apos;ve led and contributed across diverse teams, shifting between strategic
-          planning and hands-on implementation as needed. That adaptability helps me keep
-          teams aligned in fast-moving, ambiguous environments.
+          I&apos;ve led and contributed across diverse teams, shifting between
+          strategic planning and hands-on implementation as needed. That
+          adaptability helps me keep teams aligned in fast-moving, ambiguous
+          environments.
         </p>
       </div>
       <div className="py-4">
@@ -75,9 +76,9 @@ function AboutFallbackBody() {
           Driving Innovation Through Continuous Learning
         </h3>
         <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-          I continuously refine the systems, tooling, and workflows behind delivery. I adopt
-          new methods when they improve quality, reduce risk, and help teams make better
-          product decisions.
+          I continuously refine the systems, tooling, and workflows behind
+          delivery. I adopt new methods when they improve quality, reduce risk,
+          and help teams make better product decisions.
         </p>
       </div>
       <div className="py-4">
@@ -85,9 +86,9 @@ function AboutFallbackBody() {
           A Commitment to Excellence
         </h3>
         <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-          My work is grounded in continuous improvement and collaborative knowledge sharing. I
-          focus on raising both delivery standards and team capability so outcomes improve over
-          time.
+          My work is grounded in continuous improvement and collaborative
+          knowledge sharing. I focus on raising both delivery standards and team
+          capability so outcomes improve over time.
         </p>
       </div>
       <div className="py-4">
@@ -95,8 +96,9 @@ function AboutFallbackBody() {
           Enterprise Client and Project Management
         </h3>
         <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-          I prioritize clear communication, realistic commitments, and disciplined execution.
-          That combination helps clients and stakeholders move forward with confidence.
+          I prioritize clear communication, realistic commitments, and
+          disciplined execution. That combination helps clients and stakeholders
+          move forward with confidence.
         </p>
       </div>
       <div className="py-4">
@@ -104,9 +106,10 @@ function AboutFallbackBody() {
           Development and Technological Excellence
         </h3>
         <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-          With a strong technical foundation and cross-disciplinary experience, I help teams
-          move from product inception to pragmatic rollout. I prioritize scalable solutions,
-          operational efficiency, and measurable outcomes.
+          With a strong technical foundation and cross-disciplinary experience,
+          I help teams move from product inception to pragmatic rollout. I
+          prioritize scalable solutions, operational efficiency, and measurable
+          outcomes.
         </p>
       </div>
       <div className="py-4">
@@ -114,8 +117,8 @@ function AboutFallbackBody() {
           Looking Forward
         </h3>
         <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-          I&apos;m most energized by hard product problems, strong teams, and builds that
-          create durable value for users and businesses.
+          I&apos;m most energized by hard product problems, strong teams, and
+          builds that create durable value for users and businesses.
         </p>
       </div>
     </div>
@@ -125,7 +128,9 @@ function AboutFallbackBody() {
 export default async function About() {
   const page = await getCmsPageByPath('/about', { includeBody: true })
 
-  const heroTitle = page?.title || 'I build software with a product mindset and an execution-first approach.'
+  const heroTitle =
+    page?.title ||
+    'I build software with a product mindset and an execution-first approach.'
   const heroSubtitle =
     page?.subtitle ||
     "I'm Brandon Perfetti, a product and project manager plus software engineer based in Orange County, California. Over the last decade, I've worked across startup and client teams where clear priorities, fast iteration, and reliable delivery are non-negotiable."
@@ -136,7 +141,7 @@ export default async function About() {
   return (
     <Container className="my-16 sm:mt-32">
       <div className="grid grid-cols-1 gap-y-14 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:gap-y-12">
-        <div className="order-2 lg:order-none lg:pl-20">
+        <div className="order-2 hidden lg:order-none lg:block lg:pl-20">
           <div className="mx-auto max-w-xs px-2.5 lg:max-w-none">
             <Image
               height={800}
@@ -148,7 +153,6 @@ export default async function About() {
               })}
               alt="Brandon Perfetti"
               sizes="(min-width: 1024px) 32rem, 20rem"
-              priority
               className="aspect-square rounded-2xl bg-zinc-100 object-cover md:rotate-3 dark:bg-zinc-800"
             />
           </div>
@@ -159,6 +163,22 @@ export default async function About() {
           </h1>
           <div className="mt-6 space-y-7 text-base text-zinc-600 dark:text-zinc-400">
             <p>{heroSubtitle}</p>
+          </div>
+          <div className="mt-8 lg:hidden">
+            <div className="mx-auto max-w-xs px-2.5">
+              <Image
+                height={800}
+                width={800}
+                src={getOptimizedImageUrl(portraitImage, {
+                  width: 1024,
+                  height: 1024,
+                  crop: 'fill',
+                })}
+                alt="Brandon Perfetti"
+                sizes="20rem"
+                className="aspect-square rounded-2xl bg-zinc-100 object-cover dark:bg-zinc-800"
+              />
+            </div>
           </div>
           {page?.bodyBlocks?.length ? (
             <Prose className="mt-8 max-w-none" data-mdx-content>

@@ -6,6 +6,7 @@
 - `.github/copilot-instructions.md` = concise AI-agent operating guide.
 - `docs/*.md` = deep references by concern (architecture, styling, SEO, etc.).
 - `docs/NOTION_CMS.md` = Notion-specific configuration and operations runbook.
+- `docs/PORTFOLIO_BACKLOG.md` = portfolio engineering backlog operations and Notion backlog sync workflow.
 
 ## Progressive Disclosure Rule
 

@@ -53,8 +53,8 @@
 
 - `/articles` uses `ArticlesExplorer` for client-side filtering/search.
 - `/hermes` hosts AI chat UI and calls OpenAI endpoints.
-- `/api/openai/chat` streams NDJSON token chunks.
-- `/api/openai/image` returns base64 image payload.
+- `/api/openai/chat` streams NDJSON token chunks and applies request guardrails.
+- `/api/openai/image` returns base64 image payload and applies request guardrails.
 - `/api/sendgrid` handles contact form email send.
 - `/api/mailinglist` uses SendGrid marketing contacts API.
 
@@ -81,3 +81,5 @@ Keyboard shortcuts:
 Hermes layout note:
 
 - `src/app/hermes/page.tsx` computes viewport-fit height and keeps scrolling inside the message panel instead of page-level overflow.
+- `src/components/HermesChat.tsx` uses multiline textarea input (`Enter` sends message, `Shift+Enter` creates a newline).
+- `src/lib/security/guardrails.ts` centralizes request guardrails for public endpoints (origin/referrer validation, rate limits, quotas, and optional Turnstile verification).

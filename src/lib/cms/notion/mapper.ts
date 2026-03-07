@@ -20,11 +20,12 @@ import {
   propertyToRelationIds,
   propertyToText,
 } from '@/lib/cms/notion/property'
+import { isFuturePublicationDate } from '@/lib/date'
 import { getSiteUrl } from '@/lib/site'
 
 export const DEFAULT_CMS_AUTHOR = {
   name: 'Brandon Perfetti',
-  href: 'https://brandonperfetti.com/about',
+  href: '/about',
   role: 'Technical PM + Software Engineer',
   image:
     'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142617/bp-spotlight/images/avatar_jeycju.jpg',
@@ -125,6 +126,12 @@ export function mapNotionArticleSummary(
     !sourceArticleIds.length ||
     topics.length === 0
   ) {
+    return null
+  }
+
+  // Allow scheduling by keeping publish-safe records hidden until their
+  // publication date is reached.
+  if (isFuturePublicationDate(date)) {
     return null
   }
 

@@ -32,6 +32,10 @@
   - `/api/openai/image`
   - `/api/sendgrid`
   - `/api/mailinglist`
+  - Hermes guardrail responses:
+    - `429` on rate-limit breach
+    - `403` on failed/invalid source verification
+    - `403` when Turnstile verification is enabled and token is missing/invalid
 
 ## Coverage Priorities (Next)
 
@@ -42,3 +46,5 @@
 - Add component tests for high-change UI areas:
   - header search interactions
   - article explorer query/topic controls
+  - Hermes textarea behavior (`Enter` send, `Shift+Enter` newline)
+  - Hermes guardrail contract tests for chat/image API routes

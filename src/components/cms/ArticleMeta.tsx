@@ -1,3 +1,28 @@
+import Link from 'next/link'
+import type { ReactElement } from 'react'
+
+import { getExternalLinkProps } from '@/lib/link-utils'
+
+function isSiteOwnerAuthor(name: string) {
+  // TODO(backlog): centralize site-owner identity constant across CMS rendering.
+  // Notion: https://www.notion.so/Centralize-site-owner-identity-constant-across-CMS-rendering-31cbe01e1e06818ea6f4f1c037fc8ef3
+  return name.trim().toLowerCase() === 'brandon perfetti'
+}
+
+/**
+ * Renders article metadata chips and author/actions row when metadata exists.
+ *
+ * @param author Author identity, either a string label or object with optional
+ * `name`, `role`, and `href`.
+ * @param actions Optional right-aligned action slot.
+ * @param readingTimeMinutes Optional reading-time value.
+ * @param category Optional fallback category when topic chips are absent.
+ * @param topics Optional topics list (deduped + trimmed, max 3).
+ * @param tech Optional tech list (deduped + trimmed, max 3, excluding topic duplicates).
+ * @returns Rendered metadata block, or `null` when no metadata is present.
+ * @remarks If `author.href` is present it is preferred. Otherwise, site-owner
+ * author names route to `/about`; external links use `getExternalLinkProps`.
+ */
 export function ArticleMeta({
   author,
   actions,
@@ -18,21 +43,38 @@ export function ArticleMeta({
   category?: string
   topics?: string[]
   tech?: string[]
-}) {
-  const authorMeta =
+}): ReactElement | null {
+  const rawAuthorName =
+    typeof author === 'string' ? author.trim() : (author?.name ?? '').trim()
+  const provisionalAuthorMeta =
     typeof author === 'string'
       ? {
-          name: author,
+          name: rawAuthorName,
           role: '',
           href: undefined,
         }
       : author
         ? {
-            name: author.name ?? 'Brandon Perfetti',
+            name: rawAuthorName || (author.href || author.role ? 'Author' : ''),
             role: author.role ?? '',
             href: author.href,
           }
         : null
+
+  const hasMeaningfulAuthorMeta =
+    Boolean(provisionalAuthorMeta?.name?.trim()) ||
+    Boolean(provisionalAuthorMeta?.role?.trim()) ||
+    Boolean(provisionalAuthorMeta?.href)
+  const authorMeta = hasMeaningfulAuthorMeta ? provisionalAuthorMeta : null
+
+  const authorHref = authorMeta
+    ? authorMeta.href ||
+      (rawAuthorName
+        ? isSiteOwnerAuthor(rawAuthorName)
+          ? '/about'
+          : undefined
+        : undefined)
+    : undefined
 
   const topicChips = Array.from(
     new Set((topics ?? []).map((item) => item.trim()).filter(Boolean)),
@@ -62,14 +104,15 @@ export function ArticleMeta({
       {authorMeta || actions ? (
         <div className="flex items-start justify-between gap-3">
           {authorMeta ? (
-            <div className="border-l border-zinc-200 pl-3 dark:border-zinc-700/60">
-              {authorMeta.href ? (
-                <a
-                  href={authorMeta.href}
-                  className="text-sm font-semibold text-zinc-800 transition hover:text-teal-500 dark:text-zinc-100 dark:hover:text-teal-400"
+            <div>
+              {authorHref ? (
+                <Link
+                  href={authorHref}
+                  {...getExternalLinkProps(authorHref)}
+                  className="text-sm font-semibold text-zinc-800 no-underline transition hover:text-teal-500 hover:underline hover:underline-offset-2 dark:text-zinc-100 dark:hover:text-teal-400"
                 >
                   {authorMeta.name}
-                </a>
+                </Link>
               ) : (
                 <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                   {authorMeta.name}

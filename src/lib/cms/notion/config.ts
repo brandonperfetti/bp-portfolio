@@ -1,7 +1,8 @@
 import { parseDataSourceId } from '@/lib/cms/notion/client'
 
 const DEFAULT_CONTENT_DATA_SOURCE_ID = '221be01e-1e06-8089-99b0-000b6415ee9e'
-const DEFAULT_CONTENT_CALENDAR_DATA_SOURCE_ID = '30abe01e-1e06-8192-b1b6-000b38ccbd62'
+const DEFAULT_CONTENT_CALENDAR_DATA_SOURCE_ID =
+  '30abe01e-1e06-8192-b1b6-000b38ccbd62'
 
 export function getNotionArticlesDataSourceId() {
   return parseDataSourceId(
@@ -74,7 +75,9 @@ export function getOptionalNotionDefaultAuthorPageId() {
     return null
   }
 
-  const uuidMatch = raw.match(/[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}/)
+  const uuidMatch = raw.match(
+    /[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}/,
+  )
   if (!uuidMatch) {
     return raw
   }
@@ -105,4 +108,22 @@ export function getOptionalNotionWebhookEventsDataSourceId() {
   }
 
   return parseDataSourceId(raw, 'NOTION_CMS_WEBHOOK_EVENTS_DATA_SOURCE')
+}
+
+export function getOptionalNotionImageJobsDataSourceId() {
+  const raw = process.env.NOTION_IMAGE_JOBS_DATA_SOURCE
+  if (!raw) {
+    return null
+  }
+
+  return parseDataSourceId(raw, 'NOTION_IMAGE_JOBS_DATA_SOURCE')
+}
+
+export function getOptionalNotionPortfolioBacklogDataSourceId() {
+  const raw = process.env.NOTION_PORTFOLIO_BACKLOG_DATA_SOURCE
+  if (!raw) {
+    return null
+  }
+
+  return parseDataSourceId(raw, 'NOTION_PORTFOLIO_BACKLOG_DATA_SOURCE')
 }

@@ -1,5 +1,12 @@
 import OpenAI from 'openai'
 import { NextResponse } from 'next/server'
+import {
+  applyRateLimit,
+  getRequestClientIp,
+  getSecurityLimits,
+  isAllowedRequestSource,
+  verifyRequestTurnstileToken,
+} from '@/lib/security/guardrails'
 
 type Message = {
   role: 'system' | 'assistant' | 'user'
@@ -7,6 +14,46 @@ type Message = {
 }
 
 export async function POST(req: Request) {
+  const limits = getSecurityLimits()
+  if (!limits.publicChatEnabled) {
+    return NextResponse.json(
+      { error: 'Hermes chat is temporarily unavailable.' },
+      { status: 503 },
+    )
+  }
+
+  if (!isAllowedRequestSource(req)) {
+    return NextResponse.json(
+      { error: 'Forbidden request source.' },
+      { status: 403 },
+    )
+  }
+
+  const clientIp = getRequestClientIp(req)
+  const rate = applyRateLimit({
+    key: `hermes:chat:${clientIp}`,
+    limit: limits.chatRatePerMinute,
+    windowMs: 60_000,
+  })
+  if (!rate.allowed) {
+    const retryAfter = Math.max(
+      1,
+      Math.ceil((rate.resetAt - Date.now()) / 1000),
+    )
+    return NextResponse.json(
+      { error: 'Too many chat requests. Please slow down.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(retryAfter),
+          'X-RateLimit-Limit': String(limits.chatRatePerMinute),
+          'X-RateLimit-Remaining': String(rate.remaining),
+          'X-RateLimit-Reset': String(Math.floor(rate.resetAt / 1000)),
+        },
+      },
+    )
+  }
+
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     return NextResponse.json(
@@ -23,13 +70,11 @@ export async function POST(req: Request) {
     console.error('[api/openai/chat] Invalid JSON body', {
       error: error instanceof Error ? error.message : String(error),
     })
-    return NextResponse.json(
-      { error: 'Invalid JSON body.' },
-      { status: 400 },
-    )
+    return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
   const messages = (body as { messages?: Message[] })?.messages
+  const turnstileToken = (body as { turnstileToken?: string })?.turnstileToken
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json(
@@ -38,11 +83,66 @@ export async function POST(req: Request) {
     )
   }
 
+  const turnstile = await verifyRequestTurnstileToken({
+    token: turnstileToken ?? '',
+    ip: clientIp,
+  })
+  if (!turnstile.ok) {
+    return NextResponse.json(
+      {
+        error: turnstile.required
+          ? 'Security challenge failed. Please refresh and try again.'
+          : 'Unable to verify request.',
+      },
+      { status: 403 },
+    )
+  }
+
+  const safeMessages = messages.slice(-limits.maxMessages)
+  const allowedRoles = new Set<Message['role']>(['system', 'assistant', 'user'])
+  for (const [index, message] of safeMessages.entries()) {
+    if (!message || typeof message !== 'object') {
+      return NextResponse.json(
+        { error: `Message ${index} is invalid.` },
+        { status: 400 },
+      )
+    }
+    if (!allowedRoles.has(message.role)) {
+      return NextResponse.json(
+        {
+          error: `Message ${index} has invalid role. Allowed roles: system, assistant, user.`,
+        },
+        { status: 400 },
+      )
+    }
+    if (typeof message.content !== 'string') {
+      return NextResponse.json(
+        { error: `Message ${index} content must be a string.` },
+        { status: 400 },
+      )
+    }
+    if (message.content.trim().length === 0) {
+      return NextResponse.json(
+        { error: `Message ${index} content cannot be empty.` },
+        { status: 400 },
+      )
+    }
+    if (message.content.length > limits.maxMessageChars) {
+      return NextResponse.json(
+        {
+          error: `Message ${index} content exceeds ${limits.maxMessageChars} characters.`,
+        },
+        { status: 400 },
+      )
+    }
+  }
+
   try {
     const response = await openai.chat.completions.create({
       model: 'gpt-4.1-mini',
-      messages,
+      messages: safeMessages,
       temperature: 0.5,
+      max_completion_tokens: limits.maxCompletionTokens,
       stream: true,
     })
 

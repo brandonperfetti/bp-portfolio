@@ -1,0 +1,29 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/cms-integrity",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/cms-cover-regeneration",
+      "schedule": "20 */4 * * *"
+    },
+    {
+      "path": "/api/cron/cms-cleanup",
+      "schedule": "0 23 * * 5"
+    },
+    {
+      "path": "/api/cron/cms-automation-errors-retention",
+      "schedule": "45 3 * * *"
+    },
+    {
+      "path": "/api/cron/content-calendar-seeding",
+      "schedule": "0 18 * * 1"
+    },
+    {
+      "path": "/api/cron/cms-tech-curation",
+      "schedule": "30 18 * * 1"
+    }
+  ]
+}

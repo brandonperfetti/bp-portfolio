@@ -7,10 +7,12 @@ import {
   MenuItems,
   Transition,
 } from '@headlessui/react'
+import {
+  ChevronDownIcon as ChevronDownIconMini,
+  ChevronUpIcon as ChevronUpIconMini,
+} from '@heroicons/react/20/solid'
 import { ClipboardDocumentIcon } from '@heroicons/react/24/outline'
 import { Fragment, useEffect, useRef, useState } from 'react'
-
-import { ChevronDownIcon } from '@/icons'
 
 async function copyText(value: string) {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
@@ -46,54 +48,64 @@ export function UseWithAiMenu({ markdown }: { markdown: string }) {
 
   return (
     <Menu as="div" className="relative">
-      <MenuButton className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
-        {copied ? 'Copied' : 'Use with AI'}
-        <ChevronDownIcon className="h-4 w-4" />
-      </MenuButton>
-      <Transition
-        as={Fragment}
-        enter="transition ease-out duration-100"
-        enterFrom="transform opacity-0 scale-95"
-        enterTo="transform opacity-100 scale-100"
-        leave="transition ease-in duration-75"
-        leaveFrom="transform opacity-100 scale-100"
-        leaveTo="transform opacity-0 scale-95"
-      >
-        <MenuItems className="absolute right-0 z-30 mt-2 w-56 origin-top-right rounded-md border border-zinc-200 bg-white p-1 shadow-lg focus:outline-none dark:border-zinc-700 dark:bg-zinc-900">
-          <MenuItem>
-            {({ focus }) => (
-              <button
-                type="button"
-                className={`flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm ${
-                  focus
-                    ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                    : 'text-zinc-700 dark:text-zinc-200'
-                }`}
-                onClick={async () => {
-                  try {
-                    await copyText(markdown)
-                    setCopied(true)
-                    if (timeoutRef.current) {
-                      clearTimeout(timeoutRef.current)
-                    }
-                    timeoutRef.current = setTimeout(() => {
-                      setCopied(false)
-                    }, 1400)
-                  } catch (error) {
-                    console.error('[UseWithAiMenu] copy failed', {
-                      error:
-                        error instanceof Error ? error.message : String(error),
-                    })
-                  }
-                }}
-              >
-                <ClipboardDocumentIcon className="h-4 w-4" />
-                Copy as Markdown
-              </button>
+      {({ open }) => (
+        <>
+          <MenuButton className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
+            {copied ? 'Copied' : 'Use with AI'}
+            {open ? (
+              <ChevronUpIconMini className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronDownIconMini className="h-3.5 w-3.5" />
             )}
-          </MenuItem>
-        </MenuItems>
-      </Transition>
+          </MenuButton>
+          <Transition
+            as={Fragment}
+            enter="transition ease-out duration-100"
+            enterFrom="transform opacity-0 scale-95"
+            enterTo="transform opacity-100 scale-100"
+            leave="transition ease-in duration-75"
+            leaveFrom="transform opacity-100 scale-100"
+            leaveTo="transform opacity-0 scale-95"
+          >
+            <MenuItems className="absolute right-0 z-30 mt-2 w-56 origin-top-right rounded-md border border-zinc-200 bg-white p-1 shadow-lg focus:outline-none dark:border-zinc-700 dark:bg-zinc-900">
+              <MenuItem>
+                {({ focus }) => (
+                  <button
+                    type="button"
+                    className={`flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm ${
+                      focus
+                        ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
+                        : 'text-zinc-700 dark:text-zinc-200'
+                    }`}
+                    onClick={async () => {
+                      try {
+                        await copyText(markdown)
+                        setCopied(true)
+                        if (timeoutRef.current) {
+                          clearTimeout(timeoutRef.current)
+                        }
+                        timeoutRef.current = setTimeout(() => {
+                          setCopied(false)
+                        }, 1400)
+                      } catch (error) {
+                        console.error('[UseWithAiMenu] copy failed', {
+                          error:
+                            error instanceof Error
+                              ? error.message
+                              : String(error),
+                        })
+                      }
+                    }}
+                  >
+                    <ClipboardDocumentIcon className="h-4 w-4" />
+                    Copy as Markdown
+                  </button>
+                )}
+              </MenuItem>
+            </MenuItems>
+          </Transition>
+        </>
+      )}
     </Menu>
   )
 }

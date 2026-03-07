@@ -34,7 +34,10 @@ const getCachedNotionPages = unstable_cache(
 )
 
 const getCachedPageByPath = unstable_cache(
-  async (path: string, includeBody: boolean): Promise<CmsPageContent | null> => {
+  async (
+    path: string,
+    includeBody: boolean,
+  ): Promise<CmsPageContent | null> => {
     const targetPath = normalizePath(path)
     const pages = await getCachedNotionPages()
     const page = pages.find((candidate) => candidate.routeKey === targetPath)
@@ -65,7 +68,20 @@ const getCachedPageByPath = unstable_cache(
   },
 )
 
-export async function getCmsPageByPath(path: string, options?: { includeBody?: boolean }) {
+/**
+ * Retrieves CMS page content by route path when Notion is the active provider.
+ *
+ * @param path Route path to resolve (for example: `/` or `/about`).
+ * @param options Optional lookup settings.
+ * @param options.includeBody When true, fetches and attaches Notion body blocks.
+ * @returns The mapped CMS page content, or `null` when provider is not Notion,
+ * page is not found, or a recoverable Notion availability/config error occurs.
+ * @throws Re-throws unexpected errors outside NotionConfigError/NotionHttpError.
+ */
+export async function getCmsPageByPath(
+  path: string,
+  options?: { includeBody?: boolean },
+): Promise<CmsPageContent | null> {
   if (getCmsProvider() !== 'notion') {
     return null
   }
@@ -74,11 +90,17 @@ export async function getCmsPageByPath(path: string, options?: { includeBody?: b
   try {
     return await getCachedPageByPath(path, includeBody)
   } catch (error) {
-    if (error instanceof NotionConfigError || error instanceof NotionHttpError) {
-      console.warn('[cms:notion] page content unavailable, falling back to local content', {
-        path,
-        error: error.message,
-      })
+    if (
+      error instanceof NotionConfigError ||
+      error instanceof NotionHttpError
+    ) {
+      console.warn(
+        '[cms:notion] page content unavailable, falling back to local content',
+        {
+          path,
+          error: error.message,
+        },
+      )
       return null
     }
 

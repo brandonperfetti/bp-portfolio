@@ -1,7 +1,12 @@
+import { isFuturePublicationDate } from '@/lib/date'
+
 export type PublishGateSourceArticle = {
   slug: string
+  sourceStatus: string
+  publishDate: string
   metaDescription: string
   coverImageUrl: string
+  contentPillar: string
   topics: string[]
   hasWinningCover: boolean
   winningCoverCount?: number
@@ -26,18 +31,20 @@ function isTutorialLike(articleType: string) {
  * Validates publish-safe requirements for a source article.
  *
  * @param source Source article fields used by publish-gate policy checks.
- * @param defaultAuthorPageId Optional configured default author page id fallback.
+ * @param _defaultAuthorPageId Reserved for compatibility with existing call
+ * sites; author relation is intentionally non-blocking in publish validation.
  * @returns Array of validation error messages. Empty means all checks passed.
  *
  * Enforces required source fields/statuses, winning cover constraints,
- * tutorial-mode specific validation rules, and author fallback behavior.
+ * tutorial-mode specific validation rules, and non-blocking author handling.
  * This function has no side effects.
  */
 export function validatePublishSafeRequirements(
   source: PublishGateSourceArticle,
-  defaultAuthorPageId: string | null,
+  _defaultAuthorPageId: string | null,
 ): string[] {
   const errors: string[] = []
+  const sourceStatus = normalizeStatus(source.sourceStatus)
 
   if (!source.slug.trim()) {
     errors.push('Missing required Slug')
@@ -49,6 +56,21 @@ export function validatePublishSafeRequirements(
 
   if (!source.coverImageUrl.trim()) {
     errors.push('Missing required Cover Image URL')
+  }
+
+  if (!source.contentPillar.trim()) {
+    errors.push('Missing required Content Pillar')
+  }
+
+  if (!source.publishDate.trim()) {
+    errors.push('Missing required Published Date')
+  } else if (
+    sourceStatus === 'published' &&
+    isFuturePublicationDate(source.publishDate)
+  ) {
+    errors.push(
+      'Published Date cannot be in the future when Content Status is Published',
+    )
   }
 
   if (source.topics.length === 0) {
@@ -99,14 +121,9 @@ export function validatePublishSafeRequirements(
     errors.push('Re-Revision Requested must be unchecked')
   }
 
-  if (
-    source.authorRelationIds.length === 0 &&
-    (!defaultAuthorPageId || defaultAuthorPageId.trim().length === 0)
-  ) {
-    errors.push(
-      'Missing required Author and NOTION_CMS_DEFAULT_AUTHOR_PAGE_ID is not configured',
-    )
-  }
+  // Author is a quality signal, but not a hard publish blocker.
+  // Runtime rendering has a stable default-author fallback, so missing relation
+  // is intentionally non-blocking for otherwise publish-safe content.
 
   return errors
 }

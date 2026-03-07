@@ -32,9 +32,7 @@ export async function POST(req: Request) {
   }
 
   const body =
-    parsedBody &&
-    typeof parsedBody === 'object' &&
-    !Array.isArray(parsedBody)
+    parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody)
       ? (parsedBody as {
           fullname?: unknown
           email?: unknown

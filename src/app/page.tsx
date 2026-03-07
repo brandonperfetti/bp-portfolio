@@ -74,9 +74,13 @@ function ArrowDownIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
 function Article({ article }: { article: ArticleWithSlug }) {
   return (
     <Card as="article">
-      <Card.Title href={`/articles/${article.slug}`}>
-        {article.title}
-      </Card.Title>
+      <div className="absolute -inset-x-4 -inset-y-6 z-0 scale-95 bg-zinc-50 opacity-0 transition group-hover:scale-100 group-hover:opacity-100 sm:-inset-x-6 sm:rounded-2xl dark:bg-zinc-800/50" />
+      <Link
+        href={`/articles/${article.slug}`}
+        aria-label={`Read article: ${article.title}`}
+        className="absolute -inset-x-4 -inset-y-6 z-20 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 sm:-inset-x-6 sm:rounded-2xl dark:focus-visible:ring-teal-400/70"
+      />
+      <Card.Title>{article.title}</Card.Title>
       <Card.Eyebrow as="time" dateTime={article.date} decorate>
         {formatDate(article.date)}
       </Card.Eyebrow>
@@ -93,7 +97,11 @@ function SocialLink({
   icon: React.ComponentType<{ className?: string }>
 }) {
   return (
-    <Link className="group -m-1 p-1" {...getExternalLinkProps(props.href)} {...props}>
+    <Link
+      className="group -m-1 rounded-md p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80"
+      {...getExternalLinkProps(props.href)}
+      {...props}
+    >
       <Icon className="h-6 w-6 fill-zinc-500 transition group-hover:fill-zinc-600 dark:fill-zinc-400 dark:group-hover:fill-zinc-300" />
     </Link>
   )
@@ -134,7 +142,7 @@ function Role({ role }: { role: Role }) {
             width={100}
             height={100}
             sizes="(min-width: 640px) 2.25rem, 2rem"
-            className="h-7 w-7"
+            className="h-7 w-auto max-w-7 object-contain"
           />
         ) : (
           <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
@@ -279,12 +287,23 @@ function Photos({ images }: { images: string[] }) {
 export default async function Home() {
   const articles = (await getAllArticles()).slice(0, 7)
   const homePage = await getCmsPageByPath('/')
-  const homeTitle = homePage?.title || 'Product and project leader focused on practical software delivery.'
+  const homeTitle =
+    homePage?.title ||
+    'Product and project leader focused on practical software delivery.'
   const homeSubtitle =
     homePage?.subtitle ||
     "I'm Brandon, based in Orange County, CA. I help teams turn complex product goals into reliable, user-focused software."
+  const homeGalleryImagesRaw = Array.from(
+    new Set(
+      (homePage?.homeImages ?? [])
+        .map((image) => image?.trim())
+        .filter(isNonEmptyString),
+    ),
+  ).slice(0, 5)
   const homeGalleryImages =
-    homePage?.homeImages?.filter(Boolean).slice(0, 5) ?? defaultHomeGalleryImages
+    homeGalleryImagesRaw && homeGalleryImagesRaw.length > 0
+      ? homeGalleryImagesRaw
+      : defaultHomeGalleryImages
 
   return (
     <>
@@ -315,7 +334,7 @@ export default async function Home() {
           </div>
         </div>
       </Container>
-      <Photos images={homeGalleryImages.length ? homeGalleryImages : defaultHomeGalleryImages} />
+      <Photos images={homeGalleryImages} />
       <Container className="mt-24 mb-24 md:mt-28 md:mb-28">
         <div className="mx-auto grid max-w-xl grid-cols-1 gap-y-20 lg:max-w-none lg:grid-cols-2">
           <div className="flex flex-col gap-16">
@@ -351,4 +370,7 @@ export async function generateMetadata(): Promise<Metadata> {
     fallbackDescription: defaultHomeMeta.description,
     path: '/',
   })
+}
+function isNonEmptyString(value: string | undefined): value is string {
+  return typeof value === 'string' && value.length > 0
 }

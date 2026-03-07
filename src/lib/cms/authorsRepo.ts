@@ -2,7 +2,10 @@ import { unstable_cache } from 'next/cache'
 
 import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
 import { getOptionalNotionAuthorsDataSourceId } from '@/lib/cms/notion/config'
-import { mapNotionAuthorProfile, DEFAULT_CMS_AUTHOR } from '@/lib/cms/notion/mapper'
+import {
+  mapNotionAuthorProfile,
+  DEFAULT_CMS_AUTHOR,
+} from '@/lib/cms/notion/mapper'
 import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
 import { getCmsProvider } from '@/lib/cms/provider'
 import type { CmsAuthor, CmsAuthorProfile } from '@/lib/cms/types'
@@ -20,7 +23,11 @@ const getCachedNotionAuthors = unstable_cache(
     return pages
       .map(mapNotionAuthorProfile)
       .filter((author): author is CmsAuthorProfile => author !== null)
-      .sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER))
+      .sort(
+        (a, b) =>
+          (a.order ?? Number.MAX_SAFE_INTEGER) -
+          (b.order ?? Number.MAX_SAFE_INTEGER),
+      )
   },
   ['cms', 'notion', 'authors'],
   {
@@ -44,8 +51,6 @@ export async function getCmsDefaultAuthor(): Promise<CmsAuthor> {
 
   const authors = await getCachedNotionAuthors()
   return (
-    authors.find((author) => author.primary) ??
-    authors[0] ??
-    FALLBACK_AUTHOR
+    authors.find((author) => author.primary) ?? authors[0] ?? FALLBACK_AUTHOR
   )
 }

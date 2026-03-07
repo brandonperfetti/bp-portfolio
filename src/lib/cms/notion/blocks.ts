@@ -20,7 +20,10 @@ function mapRichText(richText: NotionRichText[] | undefined): CmsRichText[] {
   }))
 }
 
-function mapBlock(block: NotionBlock, children?: CmsArticleBlock[]): CmsArticleBlock {
+function mapBlock(
+  block: NotionBlock,
+  children?: CmsArticleBlock[],
+): CmsArticleBlock {
   const base: CmsArticleBlock = {
     id: block.id,
     type: block.type,
@@ -113,7 +116,19 @@ async function mapTree(blocks: NotionBlock[]): Promise<CmsArticleBlock[]> {
   )
 }
 
-export async function getNotionBlockTree(blockId: string): Promise<CmsArticleBlock[]> {
+/**
+ * Fetches and maps a Notion block subtree into CMS article blocks.
+ *
+ * Recursively paginates child blocks from the provided root `blockId`,
+ * preserving Notion ordering while mapping each node into `CmsArticleBlock`.
+ *
+ * @param blockId Notion page/block identifier to expand.
+ * @returns Hierarchical CMS blocks for article rendering/search pipelines.
+ * @throws Propagates Notion transport/pagination errors from child fetches.
+ */
+export async function getNotionBlockTree(
+  blockId: string,
+): Promise<CmsArticleBlock[]> {
   const rootBlocks = await listAllBlockChildren(blockId)
   return mapTree(rootBlocks)
 }

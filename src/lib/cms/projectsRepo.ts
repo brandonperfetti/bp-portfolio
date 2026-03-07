@@ -15,7 +15,11 @@ async function getNotionProjectsRaw(): Promise<CmsEntityItem[]> {
   return pages
     .map(mapNotionEntity)
     .filter((project): project is CmsEntityItem => project !== null)
-    .sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER))
+    .sort(
+      (a, b) =>
+        (a.order ?? Number.MAX_SAFE_INTEGER) -
+        (b.order ?? Number.MAX_SAFE_INTEGER),
+    )
 }
 
 const getCachedNotionProjects = unstable_cache(

@@ -44,6 +44,19 @@ export type WebhookLedgerWatchdogResult = {
   errors: Array<{ ledgerPageId: string; message: string }>
 }
 
+export type WebhookLedgerRetentionResult = {
+  ok: boolean
+  enabled: boolean
+  retentionDays: number
+  scanned: number
+  eligible: number
+  archived: number
+  skippedRecent: number
+  skippedMissingRetention: number
+  backlogExcluded: number
+  errors: Array<{ ledgerPageId: string; message: string }>
+}
+
 /**
  * Ledger row projection used by replay workflows.
  * `ledgerPageId` is always the Notion ledger page id to mutate during claim/complete/fail.
@@ -841,4 +854,110 @@ export async function beginWebhookEventReplay(
     }),
   })
   return true
+}
+
+/**
+ * Archives failed webhook ledger rows older than `retentionDays`.
+ * Safety: rows are moved to Notion trash (`in_trash=true`) and never hard-deleted.
+ * Rows without a valid `receivedAt` timestamp are skipped (not archived) because
+ * retention age cannot be determined safely.
+ */
+export async function pruneFailedWebhookEvents(options?: {
+  retentionDays?: number
+  limit?: number
+}): Promise<WebhookLedgerRetentionResult> {
+  const dataSourceId = getOptionalNotionWebhookEventsDataSourceId()
+  const parsedRetentionDays =
+    typeof options?.retentionDays === 'number' &&
+    Number.isFinite(options.retentionDays)
+      ? Math.floor(options.retentionDays)
+      : 30
+  const retentionDays = parsedRetentionDays > 0 ? parsedRetentionDays : 30
+
+  const parsedLimit =
+    typeof options?.limit === 'number' && Number.isFinite(options.limit)
+      ? Math.floor(options.limit)
+      : 100
+  const limit = parsedLimit > 0 ? parsedLimit : 100
+
+  if (!dataSourceId) {
+    return {
+      ok: true,
+      enabled: false,
+      retentionDays,
+      scanned: 0,
+      eligible: 0,
+      archived: 0,
+      skippedRecent: 0,
+      skippedMissingRetention: 0,
+      backlogExcluded: 0,
+      errors: [],
+    }
+  }
+
+  const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000
+  const candidates = await listFailedWebhookEvents({ noLimit: true })
+  let skippedMissingRetention = 0
+  let skippedRecent = 0
+  const expiredCandidates = candidates.filter((candidate) => {
+    const receivedMs = candidate.receivedAt
+      ? Date.parse(candidate.receivedAt)
+      : Number.NaN
+    if (Number.isNaN(receivedMs)) {
+      skippedMissingRetention += 1
+      return false
+    }
+    if (receivedMs > cutoffMs) {
+      skippedRecent += 1
+      return false
+    }
+    return true
+  })
+  const errors: Array<{ ledgerPageId: string; message: string }> = []
+  let archived = 0
+  const eligible = expiredCandidates.length + skippedRecent
+  const backlogExcluded = Math.max(0, expiredCandidates.length - limit)
+  const batchSize = 10
+
+  const toArchive = expiredCandidates.slice(0, limit)
+  for (let index = 0; index < toArchive.length; index += batchSize) {
+    const batch = toArchive.slice(index, index + batchSize)
+    const settled = await Promise.allSettled(
+      batch.map(async (candidate) => {
+        await notionUpdatePage(candidate.ledgerPageId, {
+          in_trash: true,
+        })
+        return candidate
+      }),
+    )
+
+    for (const [resultIndex, result] of settled.entries()) {
+      if (result.status === 'fulfilled') {
+        archived += 1
+      } else {
+        const reason =
+          result.reason instanceof Error
+            ? result.reason.message
+            : 'Unknown retention error'
+        const failedCandidate = batch[resultIndex]
+        errors.push({
+          ledgerPageId: failedCandidate?.ledgerPageId ?? 'unknown',
+          message: reason,
+        })
+      }
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    enabled: true,
+    retentionDays,
+    scanned: candidates.length,
+    eligible,
+    archived,
+    skippedRecent,
+    skippedMissingRetention,
+    backlogExcluded,
+    errors,
+  }
 }

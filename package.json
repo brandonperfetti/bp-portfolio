@@ -5,14 +5,19 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prepare": "husky",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "format": "prettier . --write --ignore-path .gitignore",
+    "format:check": "prettier . --check --ignore-path .gitignore",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed"
+    "test:e2e:headed": "playwright test --headed",
+    "sync:portfolio-backlog": "bash ./scripts/sync-portfolio-backlog.sh"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {
@@ -46,6 +51,7 @@
     "@vitest/coverage-v8": "^4.0.17",
     "eslint": "^9.32.0",
     "eslint-config-next": "16.1.6",
+    "husky": "^9.1.7",
     "jsdom": "^27.4.0",
     "prettier": "^3.6.2",
     "prettier-plugin-tailwindcss": "^0.7.1",
