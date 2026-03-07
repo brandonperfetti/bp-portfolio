@@ -6,6 +6,8 @@ import { runProjectionCronAutomation } from '@/lib/cms/notion/cronAutomation'
 import { isAuthorizedCronRequest } from '../_auth'
 import { revalidateArticleSurfaces } from '../_revalidate'
 
+// TODO(backlog): Refactor cms-projection/cms-integrity into shared cron handler.
+// Notion: https://www.notion.so/Refactor-cms-projection-cms-integrity-into-shared-cron-handler-31cbe01e1e06813f84ffeb50eedb7469
 async function run(request: Request) {
   if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json(
