@@ -297,7 +297,7 @@ export default async function Home() {
     new Set(
       (homePage?.homeImages ?? [])
         .map((image) => image?.trim())
-        .filter(Boolean),
+        .filter(isNonEmptyString),
     ),
   ).slice(0, 5)
   const homeGalleryImages =
@@ -370,4 +370,7 @@ export async function generateMetadata(): Promise<Metadata> {
     fallbackDescription: defaultHomeMeta.description,
     path: '/',
   })
+}
+function isNonEmptyString(value: string | undefined): value is string {
+  return typeof value === 'string' && value.length > 0
 }

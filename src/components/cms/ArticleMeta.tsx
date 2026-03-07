@@ -4,6 +4,8 @@ import type { ReactElement } from 'react'
 import { getExternalLinkProps } from '@/lib/link-utils'
 
 function isSiteOwnerAuthor(name: string) {
+  // TODO(backlog): centralize site-owner identity constant across CMS rendering.
+  // Notion: https://www.notion.so/Centralize-site-owner-identity-constant-across-CMS-rendering-31cbe01e1e06818ea6f4f1c037fc8ef3
   return name.trim().toLowerCase() === 'brandon perfetti'
 }
 

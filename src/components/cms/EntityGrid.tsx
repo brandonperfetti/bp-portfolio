@@ -46,7 +46,7 @@ export function EntityGrid({ items }: { items: CmsEntityItem[] }) {
                     height: 96,
                     crop: 'fit',
                   })}
-                  alt={item.name}
+                  alt=""
                   width={48}
                   height={48}
                   sizes="2.25rem"
