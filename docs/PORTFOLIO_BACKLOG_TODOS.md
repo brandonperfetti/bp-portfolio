@@ -26,13 +26,17 @@ Sync: `npm run sync:portfolio-backlog` (manual pull from Notion).
       Notion: [Add candidate explainability output to Tech Curation cron](https://www.notion.so/Add-candidate-explainability-output-to-Tech-Curation-cron-31bbe01e1e068111933bd3998d1ba0f8)
       Code touchpoints: `src/lib/cms/notion/techCuration.ts`, `src/app/api/cron/cms-tech-curation/route.ts`
 
-- [ ] **P2 · UI** Implement cover image style QA regression checks
-      Notion: [Implement cover image style QA regression checks](https://www.notion.so/Implement-cover-image-style-QA-regression-checks-31bbe01e1e0681e7ad3ac3d583619382)
-      Code touchpoints: `src/lib/cms/notion/projectionSync.ts`, `src/lib/cms/notion/publishGate.ts`, `src/app/api/cms/sync/articles/cover-regeneration/route.ts`
+- [ ] **P2 · UI** Implement cover image style QA regression checks  
+       Notion: [Implement cover image style QA regression checks](https://www.notion.so/Implement-cover-image-style-QA-regression-checks-31bbe01e1e0681e7ad3ac3d583619382)  
+       Code touchpoints: `src/lib/cms/notion/projectionSync.ts`, `src/lib/cms/notion/publishGate.ts`, `src/app/api/cms/sync/articles/cover-regeneration/route.ts`
 
-- [ ] **P3 · Infra** Add Notion backlog-to-PR traceability automation
-      Notion: [Add Notion backlog-to-PR traceability automation](https://www.notion.so/Add-Notion-backlog-to-PR-traceability-automation-31bbe01e1e068168b367fe2de9732054)
-      Code touchpoints: `src/lib/cms/notion/automationErrorLog.ts`, `src/app/api/cron/*`
+- [ ] **P2 · CMS** Optimize webhook retention to avoid full-table scans  
+       Notion: [Optimize webhook retention to avoid full-table scans](https://www.notion.so/Optimize-webhook-retention-to-avoid-full-table-scans-31cbe01e1e0681da8dcdd21298a8b3d8)  
+       Code touchpoints: `src/lib/cms/notion/webhookEventLedger.ts`, `src/app/api/cron/cms-cleanup/route.ts`
+
+- [ ] **P3 · Infra** Add Notion backlog-to-PR traceability automation  
+       Notion: [Add Notion backlog-to-PR traceability automation](https://www.notion.so/Add-Notion-backlog-to-PR-traceability-automation-31bbe01e1e068168b367fe2de9732054)  
+       Code touchpoints: `src/lib/cms/notion/automationErrorLog.ts`, `src/app/api/cron/*`
 
 - [ ] **P3 · Infra** Decide dotenv key ordering policy (.env.example)
       Notion: [Decide dotenv key ordering policy (.env.example)](https://www.notion.so/Decide-dotenv-key-ordering-policy-env-example-31bbe01e1e0681d1ad9ecd1159fb1a94)

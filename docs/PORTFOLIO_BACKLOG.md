@@ -48,8 +48,8 @@ Auth:
 Current semantics:
 
 - Pull active backlog rows from Notion.
-- Render deterministic markdown checklist entries.
-- Write markdown only when `write`/`writeFile` resolves true.
+- Render deterministic Markdown checklist entries.
+- Write Markdown only when `write`/`writeFile` resolves true.
 
 ## Automation policy
 
