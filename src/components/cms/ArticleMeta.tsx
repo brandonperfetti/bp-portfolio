@@ -44,7 +44,7 @@ export function ArticleMeta({
 }): ReactElement | null {
   const rawAuthorName =
     typeof author === 'string' ? author.trim() : (author?.name ?? '').trim()
-  const authorMeta =
+  const provisionalAuthorMeta =
     typeof author === 'string'
       ? {
           name: rawAuthorName,
@@ -58,9 +58,20 @@ export function ArticleMeta({
             href: author.href,
           }
         : null
+
+  const hasMeaningfulAuthorMeta =
+    Boolean(provisionalAuthorMeta?.name?.trim()) ||
+    Boolean(provisionalAuthorMeta?.role?.trim()) ||
+    Boolean(provisionalAuthorMeta?.href)
+  const authorMeta = hasMeaningfulAuthorMeta ? provisionalAuthorMeta : null
+
   const authorHref = authorMeta
     ? authorMeta.href ||
-      (rawAuthorName && isSiteOwnerAuthor(rawAuthorName) ? '/about' : undefined)
+      (rawAuthorName
+        ? isSiteOwnerAuthor(rawAuthorName)
+          ? '/about'
+          : undefined
+        : undefined)
     : undefined
 
   const topicChips = Array.from(
