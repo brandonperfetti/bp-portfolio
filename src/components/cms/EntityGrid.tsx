@@ -26,7 +26,7 @@ export function EntityGrid({ items }: { items: CmsEntityItem[] }) {
               <Link
                 href={item.link.href}
                 {...getExternalLinkProps(item.link.href)}
-                aria-label={`Open project: ${item.name}`}
+                aria-label={`View ${item.name}`}
                 className="absolute -inset-x-4 -inset-y-6 z-20 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 sm:-inset-x-6 sm:rounded-2xl dark:focus-visible:ring-teal-400/70"
               />
             </>
