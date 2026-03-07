@@ -293,7 +293,13 @@ export default async function Home() {
   const homeSubtitle =
     homePage?.subtitle ||
     "I'm Brandon, based in Orange County, CA. I help teams turn complex product goals into reliable, user-focused software."
-  const homeGalleryImagesRaw = homePage?.homeImages?.filter(Boolean).slice(0, 5)
+  const homeGalleryImagesRaw = Array.from(
+    new Set(
+      (homePage?.homeImages ?? [])
+        .map((image) => image?.trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, 5)
   const homeGalleryImages =
     homeGalleryImagesRaw && homeGalleryImagesRaw.length > 0
       ? homeGalleryImagesRaw
