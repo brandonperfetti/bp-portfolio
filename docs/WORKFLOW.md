@@ -49,6 +49,11 @@ For UI-, route-, or middleware-affecting changes, also run:
 For complete Notion setup and operations (env variables, webhook security, projection sync endpoints), see `docs/NOTION_CMS.md`.
 For automation ownership boundaries (cron-safe vs Codex-only), see `Runtime boundary (Cron vs Codex)` in `docs/NOTION_CMS.md`.
 
+## Portfolio Backlog Workflow
+
+- Portfolio engineering backlog operations are documented in `docs/PORTFOLIO_BACKLOG.md`.
+- Keep `docs/PORTFOLIO_BACKLOG_TODOS.md` synchronized from Notion before release notes or PR handoff work.
+
 ## Content Workflow (Pages CMS)
 
 - Source: `Portfolio CMS - Pages` (`NOTION_CMS_PAGES_DATA_SOURCE`).

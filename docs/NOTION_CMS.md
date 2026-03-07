@@ -160,7 +160,11 @@ curl -X GET http://localhost:3000/api/cron/cms-tech-curation \
 # Force dry-run for tech curation (preview only, no writes).
 curl -X GET "http://localhost:3000/api/cron/cms-tech-curation?dryRun=1" \
   -H "Authorization: Bearer <CRON_SECRET>"
+
 ```
+
+Portfolio backlog synchronization (Notion as engineering ticketing/backlog system)
+is documented separately in `docs/PORTFOLIO_BACKLOG.md`.
 
 Optional cover regeneration hosting config:
 
