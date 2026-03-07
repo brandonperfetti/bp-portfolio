@@ -49,8 +49,11 @@ export type WebhookLedgerRetentionResult = {
   enabled: boolean
   retentionDays: number
   scanned: number
+  eligible: number
   archived: number
   skippedRecent: number
+  skippedMissingRetention: number
+  backlogExcluded: number
   errors: Array<{ ledgerPageId: string; message: string }>
 }
 
@@ -883,23 +886,37 @@ export async function pruneFailedWebhookEvents(options?: {
       enabled: false,
       retentionDays,
       scanned: 0,
+      eligible: 0,
       archived: 0,
       skippedRecent: 0,
+      skippedMissingRetention: 0,
+      backlogExcluded: 0,
       errors: [],
     }
   }
 
   const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000
   const candidates = await listFailedWebhookEvents({ noLimit: true })
+  let skippedMissingRetention = 0
+  let skippedRecent = 0
   const expiredCandidates = candidates.filter((candidate) => {
     const receivedMs = candidate.receivedAt
       ? Date.parse(candidate.receivedAt)
       : Number.NaN
-    return !Number.isNaN(receivedMs) && receivedMs <= cutoffMs
+    if (Number.isNaN(receivedMs)) {
+      skippedMissingRetention += 1
+      return false
+    }
+    if (receivedMs > cutoffMs) {
+      skippedRecent += 1
+      return false
+    }
+    return true
   })
   const errors: Array<{ ledgerPageId: string; message: string }> = []
   let archived = 0
-  const skippedRecent = candidates.length - expiredCandidates.length
+  const eligible = expiredCandidates.length + skippedRecent
+  const backlogExcluded = Math.max(0, expiredCandidates.length - limit)
   const batchSize = 10
 
   const toArchive = expiredCandidates.slice(0, limit)
@@ -936,8 +953,11 @@ export async function pruneFailedWebhookEvents(options?: {
     enabled: true,
     retentionDays,
     scanned: candidates.length,
+    eligible,
     archived,
     skippedRecent,
+    skippedMissingRetention,
+    backlogExcluded,
     errors,
   }
 }

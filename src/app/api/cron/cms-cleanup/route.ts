@@ -81,8 +81,11 @@ async function run(request: Request) {
             enabled: true,
             retentionDays: webhookRetentionDays,
             scanned: 0,
+            eligible: 0,
             archived: 0,
             skippedRecent: 0,
+            skippedMissingRetention: 0,
+            backlogExcluded: 0,
             errors: [
               {
                 ledgerPageId: 'runtime',
