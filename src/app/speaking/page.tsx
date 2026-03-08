@@ -62,6 +62,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     ...metadata,
+    // Speaking is intentionally excluded from indexing until event content is
+    // fully curated in CMS for public discoverability.
     robots: {
       index: false,
       follow: false,
