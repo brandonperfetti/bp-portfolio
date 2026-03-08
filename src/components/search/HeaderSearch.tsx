@@ -1,10 +1,12 @@
 'use client'
 
 import { getExternalLinkProps } from '@/lib/link-utils'
+import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { XMarkIcon } from '@heroicons/react/24/outline'
+import { gsap } from 'gsap'
 import Link from 'next/link'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 type SearchItem = {
   title: string
@@ -40,6 +42,21 @@ function sanitizeSearchItems(value: unknown): SearchItem[] {
   return value.filter(isSearchItem)
 }
 
+function dedupeSearchItemsByHref(items: SearchItem[]): SearchItem[] {
+  const seen = new Set<string>()
+  const deduped: SearchItem[] = []
+
+  for (const item of items) {
+    if (!item.href || seen.has(item.href)) {
+      continue
+    }
+    seen.add(item.href)
+    deduped.push(item)
+  }
+
+  return deduped
+}
+
 /**
  * Global header search modal with keyboard and cached-index behavior.
  *
@@ -59,6 +76,10 @@ export function HeaderSearch() {
   const [fetchAttempt, setFetchAttempt] = useState(0)
   const bypassCacheRef = useRef(false)
   const resultRefs = useRef<Array<HTMLAnchorElement | null>>([])
+  const modalOverlayRef = useRef<HTMLDivElement | null>(null)
+  const modalPanelRef = useRef<HTMLDivElement | null>(null)
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const prefersReducedMotion = usePrefersReducedMotion()
   const debouncedQuery = useDebouncedValue(query, query.trim() ? 500 : 0)
 
   useEffect(() => {
@@ -183,18 +204,18 @@ export function HeaderSearch() {
 
   const filteredItems = useMemo(() => {
     if (!debouncedQuery.trim()) {
-      return items.slice(0, 8)
+      return dedupeSearchItemsByHref(items).slice(0, 8)
     }
 
     const lowered = debouncedQuery.toLowerCase()
-    return items
-      .filter(
+    return dedupeSearchItemsByHref(
+      items.filter(
         (item) =>
           item.title.toLowerCase().includes(lowered) ||
           item.description.toLowerCase().includes(lowered) ||
           (item.searchText ?? '').toLowerCase().includes(lowered),
-      )
-      .slice(0, 10)
+      ),
+    ).slice(0, 10)
   }, [items, debouncedQuery])
   const queryText = debouncedQuery.trim()
 
@@ -204,6 +225,64 @@ export function HeaderSearch() {
       setActiveIndex(-1)
     }
   }, [filteredItems, isOpen])
+
+  useEffect(() => {
+    if (!isOpen || prefersReducedMotion) {
+      return
+    }
+
+    const ctx = gsap.context(() => {
+      if (modalOverlayRef.current) {
+        gsap.fromTo(
+          modalOverlayRef.current,
+          { autoAlpha: 0 },
+          { autoAlpha: 1, duration: 0.3, ease: 'power2.out' },
+        )
+      }
+
+      if (modalPanelRef.current) {
+        gsap.fromTo(
+          modalPanelRef.current,
+          { autoAlpha: 0, y: 10, scale: 0.988 },
+          {
+            autoAlpha: 1,
+            y: 0,
+            scale: 1,
+            duration: 0.42,
+            ease: 'power2.out',
+          },
+        )
+      }
+    }, modalOverlayRef)
+
+    return () => ctx.revert()
+  }, [isOpen, prefersReducedMotion])
+
+  useLayoutEffect(() => {
+    if (!isOpen || prefersReducedMotion || !listRef.current) {
+      return
+    }
+    if (loadState !== 'ready') {
+      return
+    }
+
+    listRef.current.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+
+    const nodes = listRef.current.querySelectorAll('[data-search-result]')
+    if (!nodes.length) {
+      return
+    }
+
+    gsap.set(nodes, { autoAlpha: 0, y: 8 })
+    gsap.to(nodes, {
+      autoAlpha: 1,
+      y: 0,
+      duration: 0.44,
+      stagger: 0.075,
+      ease: 'power2.out',
+      clearProps: 'opacity,transform',
+    })
+  }, [filteredItems, isOpen, loadState, prefersReducedMotion])
 
   function focusResult(index: number) {
     const count = filteredItems.length
@@ -245,6 +324,7 @@ export function HeaderSearch() {
 
       {isOpen && (
         <div
+          ref={modalOverlayRef}
           className="fixed inset-0 z-50 flex items-start justify-center bg-zinc-900/50 p-4 pt-24"
           onClick={(event) => {
             if (event.target === event.currentTarget) {
@@ -252,7 +332,10 @@ export function HeaderSearch() {
             }
           }}
         >
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-4 shadow-xl ring-1 ring-zinc-900/10 dark:bg-zinc-900 dark:ring-zinc-700">
+          <div
+            ref={modalPanelRef}
+            className="w-full max-w-2xl rounded-2xl bg-white p-4 shadow-xl ring-1 ring-zinc-900/10 dark:bg-zinc-900 dark:ring-zinc-700"
+          >
             <div className="flex items-center gap-3">
               <input
                 autoFocus
@@ -299,9 +382,26 @@ export function HeaderSearch() {
               </button>
             </div>
 
-            <div className="mt-4 max-h-96 space-y-2 overflow-auto">
+            <div
+              ref={listRef}
+              className="mt-4 max-h-96 space-y-2 overflow-auto"
+            >
               {loadState === 'loading' && (
-                <p className="p-3 text-sm text-zinc-500">Loading articles...</p>
+                <div className="space-y-2 px-1 py-1" aria-live="polite">
+                  <p className="px-2 text-xs text-zinc-500">
+                    Loading articles...
+                  </p>
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                      key={`loading-row-${index}`}
+                      className="rounded-lg border border-zinc-200/70 p-3 dark:border-zinc-700/60"
+                    >
+                      <div className="h-3.5 w-[68%] animate-pulse rounded bg-zinc-200/85 dark:bg-zinc-700/80" />
+                      <div className="mt-2 h-2.5 w-[88%] animate-pulse rounded bg-zinc-200/65 dark:bg-zinc-700/55" />
+                      <div className="mt-1.5 h-2.5 w-[74%] animate-pulse rounded bg-zinc-200/55 dark:bg-zinc-700/45" />
+                    </div>
+                  ))}
+                </div>
               )}
               {filteredItems.map((item, index) => (
                 <Link
@@ -330,6 +430,7 @@ export function HeaderSearch() {
                     }
                   }}
                   onClick={() => setIsOpen(false)}
+                  data-search-result
                   className="block rounded-lg p-3 transition hover:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 focus-visible:ring-inset dark:hover:bg-zinc-800 dark:focus-visible:ring-teal-400/70"
                 >
                   <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
