@@ -145,13 +145,9 @@ export default async function About() {
   return (
     <Container className="my-16 sm:mt-32">
       <div className="grid grid-cols-1 gap-y-14 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:gap-y-12">
-        <div className="order-2 hidden lg:order-none lg:block lg:pl-20">
-          <ParallaxGroup amount={7}>
-            <div
-              className="mx-auto max-w-xs px-2.5 will-change-transform lg:max-w-none"
-              data-parallax-item
-              data-parallax-speed="0.75"
-            >
+        <div className="order-2 hidden lg:order-none lg:row-span-2 lg:block lg:pl-20">
+          <div className="space-y-6 lg:sticky lg:top-10 lg:self-start">
+            <div className="mx-auto max-w-xs px-2.5 lg:max-w-none">
               <HoverMotionCard y={0} scale={1} imageScale={1.03}>
                 <div className="overflow-hidden rounded-2xl md:rotate-3">
                   <Image
@@ -170,7 +166,35 @@ export default async function About() {
                 </div>
               </HoverMotionCard>
             </div>
-          </ParallaxGroup>
+            <div className="mb-4 lg:mt-2">
+              <ul role="list">
+                <SocialLink href="https://x.com/brandonperfetti" icon={XIcon}>
+                  Follow on X
+                </SocialLink>
+                <SocialLink
+                  href="https://github.com/brandonperfetti"
+                  icon={GitHubIcon}
+                  className="mt-4"
+                >
+                  Follow on GitHub
+                </SocialLink>
+                <SocialLink
+                  href="https://www.linkedin.com/in/brandonperfetti/"
+                  icon={LinkedInIcon}
+                  className="mt-4"
+                >
+                  Follow on LinkedIn
+                </SocialLink>
+                <SocialLink
+                  href="mailto:brandon@brandonperfetti.com"
+                  icon={MailIcon}
+                  className="mt-8 border-t border-zinc-100 pt-8 dark:border-zinc-700/40"
+                >
+                  brandon@brandonperfetti.com
+                </SocialLink>
+              </ul>
+            </div>
+          </div>
         </div>
         <div className="order-first lg:order-first lg:row-span-2">
           <AnimatedHeadline
@@ -222,7 +246,7 @@ export default async function About() {
             )}
           </ScrollReveal>
         </div>
-        <div className="mb-4 lg:mt-2 lg:pl-20">
+        <div className="mb-4 lg:hidden">
           <ul role="list">
             <SocialLink href="https://x.com/brandonperfetti" icon={XIcon}>
               Follow on X
