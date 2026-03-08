@@ -1,5 +1,7 @@
 'use client'
 
+import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
+import { gsap } from 'gsap'
 import Image from 'next/image'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -123,6 +125,14 @@ export function HermesChat() {
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const chatControlsRef = useRef<HTMLFormElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const messageNodeByIdRef = useRef<Record<string, HTMLDivElement | null>>({})
+  const animatedMessageIdsRef = useRef(new Set<string>())
+  const introPlayedRef = useRef(false)
+  const examplesRef = useRef<HTMLDivElement | null>(null)
+  const exampleButtonsRef = useRef<Array<HTMLButtonElement | null>>([])
+  const typingIndicatorRef = useRef<HTMLDivElement | null>(null)
+  const imageIndicatorRef = useRef<HTMLDivElement | null>(null)
+  const prefersReducedMotion = usePrefersReducedMotion()
 
   const appendAssistantMessage = (content: string, image?: string) => {
     setMessages((prev) => [
@@ -142,6 +152,146 @@ export function HermesChat() {
     }
     chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
   }, [messages, typingMessage, isTyping, isImageLoading])
+
+  useEffect(() => {
+    if (prefersReducedMotion || introPlayedRef.current || !isChatStart) {
+      return
+    }
+
+    const firstMessage = messages[0]
+    const firstMessageNode = firstMessage
+      ? messageNodeByIdRef.current[firstMessage.id]
+      : null
+    const exampleButtons = exampleButtonsRef.current.filter(Boolean)
+    if (!firstMessageNode || !examplesRef.current || !exampleButtons.length) {
+      return
+    }
+
+    const timeline = gsap.timeline({
+      onComplete: () => {
+        introPlayedRef.current = true
+        animatedMessageIdsRef.current.add(firstMessage.id)
+      },
+    })
+    timeline.fromTo(
+      firstMessageNode,
+      { autoAlpha: 0, x: -14, y: 8 },
+      {
+        autoAlpha: 1,
+        x: 0,
+        y: 0,
+        duration: 0.76,
+        ease: 'power2.out',
+      },
+    )
+    timeline.fromTo(
+      examplesRef.current,
+      { autoAlpha: 0, y: 8 },
+      { autoAlpha: 1, y: 0, duration: 0.42, ease: 'power2.out' },
+      '-=0.04',
+    )
+    timeline.fromTo(
+      exampleButtons,
+      { autoAlpha: 0, y: 10 },
+      {
+        autoAlpha: 1,
+        y: 0,
+        duration: 0.46,
+        stagger: 0.11,
+        ease: 'power2.out',
+      },
+      '-=0.02',
+    )
+    const pulseStart = timeline.duration() + 0.12
+    const pulseUpDuration = 0.62
+    const pulseDownDuration = 0.7
+    const pulseGap = 0.08
+    const pulseCycle = pulseUpDuration + pulseDownDuration + pulseGap
+
+    exampleButtons.forEach((button, index) => {
+      const start = pulseStart + index * pulseCycle
+      timeline.to(
+        button,
+        {
+          filter: 'brightness(1.06) saturate(1.04)',
+          duration: pulseUpDuration,
+          ease: 'power1.out',
+        },
+        start,
+      )
+      timeline.to(
+        button,
+        {
+          filter: 'brightness(1) saturate(1)',
+          duration: pulseDownDuration,
+          ease: 'power1.out',
+          clearProps: 'filter',
+        },
+        start + pulseUpDuration,
+      )
+    })
+
+    return () => {
+      timeline.kill()
+    }
+  }, [isChatStart, messages, prefersReducedMotion])
+
+  useEffect(() => {
+    if (prefersReducedMotion || messages.length === 0) {
+      return
+    }
+
+    const latestMessage = messages[messages.length - 1]
+    if (animatedMessageIdsRef.current.has(latestMessage.id)) {
+      return
+    }
+
+    const node = messageNodeByIdRef.current[latestMessage.id]
+    if (!node) {
+      return
+    }
+
+    animatedMessageIdsRef.current.add(latestMessage.id)
+    gsap.fromTo(
+      node,
+      {
+        autoAlpha: 0,
+        y: 8,
+        x: latestMessage.role === 'assistant' ? -10 : 12,
+      },
+      {
+        autoAlpha: 1,
+        y: 0,
+        x: 0,
+        duration: latestMessage.role === 'assistant' ? 0.44 : 0.56,
+        ease: 'power2.out',
+      },
+    )
+  }, [messages, prefersReducedMotion])
+
+  useEffect(() => {
+    if (!isTyping || prefersReducedMotion || !typingIndicatorRef.current) {
+      return
+    }
+
+    gsap.fromTo(
+      typingIndicatorRef.current,
+      { autoAlpha: 0, y: 6 },
+      { autoAlpha: 1, y: 0, duration: 0.24, ease: 'power2.out' },
+    )
+  }, [isTyping, prefersReducedMotion])
+
+  useEffect(() => {
+    if (!isImageLoading || prefersReducedMotion || !imageIndicatorRef.current) {
+      return
+    }
+
+    gsap.fromTo(
+      imageIndicatorRef.current,
+      { autoAlpha: 0, y: 6 },
+      { autoAlpha: 1, y: 0, duration: 0.24, ease: 'power2.out' },
+    )
+  }, [isImageLoading, prefersReducedMotion])
 
   useEffect(() => {
     const isTypingTarget = (target: EventTarget | null) => {
@@ -344,7 +494,13 @@ export function HermesChat() {
         className="min-h-0 flex-1 space-y-4 overflow-auto p-2"
       >
         {messages.map((message, index) => (
-          <div key={message.id} className="chat-message">
+          <div
+            key={message.id}
+            className="chat-message"
+            ref={(node) => {
+              messageNodeByIdRef.current[message.id] = node
+            }}
+          >
             <div
               className={`flex items-end ${
                 message.role === 'assistant' ? '' : 'justify-end'
@@ -405,7 +561,7 @@ export function HermesChat() {
         ))}
 
         {isImageLoading && (
-          <div className="chat-message">
+          <div className="chat-message" ref={imageIndicatorRef}>
             <div className="flex items-end">
               <div className="mx-1 max-w-[92%] text-sm lg:max-w-[80%]">
                 <span className="inline-block animate-pulse rounded-xl rounded-bl-none bg-teal-500 px-4 py-2.5 text-white">
@@ -417,7 +573,7 @@ export function HermesChat() {
         )}
 
         {isTyping && (
-          <div className="chat-message">
+          <div className="chat-message" ref={typingIndicatorRef}>
             <div className="flex items-end">
               <div className="mx-1 max-w-[92%] text-sm lg:max-w-[80%]">
                 <span className="inline-block animate-pulse rounded-xl rounded-bl-none bg-teal-500 px-4 py-2.5 text-white">
@@ -429,15 +585,18 @@ export function HermesChat() {
         )}
 
         {isChatStart && (
-          <div className="space-y-3 pt-1">
+          <div ref={examplesRef} className="space-y-3 pt-1">
             <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Examples
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
-              {EXAMPLES.map((example) => (
+              {EXAMPLES.map((example, index) => (
                 <button
                   key={example}
                   type="button"
+                  ref={(node) => {
+                    exampleButtonsRef.current[index] = node
+                  }}
                   onClick={() => {
                     setInput(example)
                     inputRef.current?.focus()
