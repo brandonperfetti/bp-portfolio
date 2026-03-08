@@ -204,7 +204,8 @@ export function ArticlesExplorer({
         base.unshift(activeTopicLabel)
       }
     }
-    return ['All', ...base]
+
+    return ['All', ...base.slice(0, PRIMARY_FILTER_CHIPS_LIMIT)]
   }, [activeTopicLabel, sortedDynamicFilters])
 
   const overflowFilters = useMemo(() => {
