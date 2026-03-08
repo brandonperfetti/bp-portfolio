@@ -292,27 +292,37 @@ export function HermesChat() {
   }, [messages, prefersReducedMotion])
 
   useEffect(() => {
-    if (!isTyping || prefersReducedMotion || !typingIndicatorRef.current) {
+    const node = typingIndicatorRef.current
+    if (!isTyping || prefersReducedMotion || !node) {
       return
     }
 
-    gsap.fromTo(
-      typingIndicatorRef.current,
+    const tween = gsap.fromTo(
+      node,
       { autoAlpha: 0, y: 6 },
       { autoAlpha: 1, y: 0, duration: 0.24, ease: 'power2.out' },
     )
+
+    return () => {
+      tween.kill()
+    }
   }, [isTyping, prefersReducedMotion])
 
   useEffect(() => {
-    if (!isImageLoading || prefersReducedMotion || !imageIndicatorRef.current) {
+    const node = imageIndicatorRef.current
+    if (!isImageLoading || prefersReducedMotion || !node) {
       return
     }
 
-    gsap.fromTo(
-      imageIndicatorRef.current,
+    const tween = gsap.fromTo(
+      node,
       { autoAlpha: 0, y: 6 },
       { autoAlpha: 1, y: 0, duration: 0.24, ease: 'power2.out' },
     )
+
+    return () => {
+      tween.kill()
+    }
   }, [isImageLoading, prefersReducedMotion])
 
   useEffect(() => {
