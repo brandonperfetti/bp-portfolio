@@ -268,20 +268,24 @@ export function HeaderSearch() {
 
     listRef.current.scrollTo({ top: 0, left: 0, behavior: 'auto' })
 
-    const nodes = listRef.current.querySelectorAll('[data-search-result]')
-    if (!nodes.length) {
-      return
-    }
+    const ctx = gsap.context(() => {
+      const nodes = listRef.current?.querySelectorAll('[data-search-result]')
+      if (!nodes?.length) {
+        return
+      }
 
-    gsap.set(nodes, { autoAlpha: 0, y: 8 })
-    gsap.to(nodes, {
-      autoAlpha: 1,
-      y: 0,
-      duration: 0.44,
-      stagger: 0.075,
-      ease: 'power2.out',
-      clearProps: 'opacity,transform',
-    })
+      gsap.set(nodes, { autoAlpha: 0, y: 8 })
+      gsap.to(nodes, {
+        autoAlpha: 1,
+        y: 0,
+        duration: 0.44,
+        stagger: 0.075,
+        ease: 'power2.out',
+        clearProps: 'opacity,transform',
+      })
+    }, listRef)
+
+    return () => ctx.revert()
   }, [filteredItems, isOpen, loadState, prefersReducedMotion])
 
   function focusResult(index: number) {
