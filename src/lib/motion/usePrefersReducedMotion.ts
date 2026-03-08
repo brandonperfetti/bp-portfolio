@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 
 /**
  * Tracks the user-level reduced motion preference so animation components
@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
 export function usePrefersReducedMotion() {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof window === 'undefined') {
       return
     }

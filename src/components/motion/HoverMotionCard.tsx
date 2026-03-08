@@ -71,7 +71,15 @@ export function HoverMotionCard({
 
   useEffect(() => {
     const root = rootRef.current
-    if (!root || prefersReducedMotion || !isHoverable) {
+    const prefersReducedMotionSync =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (
+      !root ||
+      prefersReducedMotionSync ||
+      prefersReducedMotion ||
+      !isHoverable
+    ) {
       return
     }
 

@@ -9,6 +9,20 @@ import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 
 gsap.registerPlugin(ScrollTrigger)
 
+/**
+ * Reveals child content on scroll with configurable GSAP motion presets.
+ *
+ * @param children Rendered content to reveal.
+ * @param className Optional wrapper classes.
+ * @param targets Target selector within the wrapper (or `'self'`). Defaults to `'self'`.
+ * @param once Whether animation should play only once. Defaults to `true`.
+ * @param y Initial vertical offset in pixels. Defaults to `18`.
+ * @param duration Animation duration in seconds. Defaults to `0.86`.
+ * @param stagger Stagger delay between multiple targets in seconds. Defaults to `0.09`.
+ * @param start ScrollTrigger start position expression. Defaults to `'top 88%'`.
+ * @param delay Additional delay before animation starts in seconds. Defaults to `0`.
+ * @remarks This component only changes visual presentation and does not alter focus order or keyboard interaction behavior.
+ */
 export function ScrollReveal({
   children,
   className,
