@@ -66,6 +66,14 @@ Optional env vars:
 - Bug-fix changes should include a regression test that fails before the fix and passes after.
 - If no new test is added, document the reason in PR testing notes.
 
+## Review Suggestion Triage
+
+- Not every automated review suggestion should be applied verbatim; verify against current code and product intent first.
+- If intentionally skipping a valid suggestion due to scope/timing, leave:
+  - a short PR note explaining why, and
+  - an inline comment only when the skipped choice is non-obvious to future editors.
+- For deferred-but-valid work, add a TODO/backlog reference with enough context for follow-up.
+
 ## Progressive Disclosure
 
 - Architecture and app map: `docs/ARCHITECTURE.md`

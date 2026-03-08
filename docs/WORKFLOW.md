@@ -87,3 +87,10 @@ For automation ownership boundaries (cron-safe vs Codex-only), see `Runtime boun
 
 - Keep PR scope narrow and documented.
 - Update `README.md` + affected `docs/*.md` when behavior or architecture changes.
+
+## Review Suggestion Triage
+
+- Treat automated review comments as inputs, not mandates; confirm correctness against current behavior and scope.
+- If a suggestion is intentionally skipped, record rationale in the PR.
+- Add an inline code comment only when the skip would be surprising to future maintainers.
+- For deferred valid improvements, add a TODO/backlog reference so follow-up is explicit.
