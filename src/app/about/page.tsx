@@ -42,12 +42,31 @@ function SocialLink({
   )
 }
 
-const socialLinks: Array<{
+type SocialLinkItem = {
   href: string
   icon: React.ComponentType<{ className?: string }>
   label: string
   className?: string
-}> = [
+}
+
+function SocialLinksList({ links }: { links: SocialLinkItem[] }) {
+  return (
+    <ul role="list">
+      {links.map((link) => (
+        <SocialLink
+          key={link.href}
+          href={link.href}
+          icon={link.icon}
+          className={link.className}
+        >
+          {link.label}
+        </SocialLink>
+      ))}
+    </ul>
+  )
+}
+
+const socialLinks: SocialLinkItem[] = [
   {
     href: 'https://x.com/brandonperfetti',
     icon: XIcon,
@@ -201,18 +220,7 @@ export default async function About() {
               data-testid="about-sticky-rail-anchor"
               className="mb-4 lg:mt-2"
             >
-              <ul role="list">
-                {socialLinks.map((link) => (
-                  <SocialLink
-                    key={link.href}
-                    href={link.href}
-                    icon={link.icon}
-                    className={link.className}
-                  >
-                    {link.label}
-                  </SocialLink>
-                ))}
-              </ul>
+              <SocialLinksList links={socialLinks} />
             </div>
           </div>
         </div>
@@ -267,18 +275,7 @@ export default async function About() {
           </ScrollReveal>
         </div>
         <div className="mb-4 lg:hidden">
-          <ul role="list">
-            {socialLinks.map((link) => (
-              <SocialLink
-                key={link.href}
-                href={link.href}
-                icon={link.icon}
-                className={link.className}
-              >
-                {link.label}
-              </SocialLink>
-            ))}
-          </ul>
+          <SocialLinksList links={socialLinks} />
         </div>
       </div>
     </Container>
