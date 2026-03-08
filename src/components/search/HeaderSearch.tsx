@@ -278,7 +278,7 @@ export function HeaderSearch() {
         duration: 0.44,
         stagger: 0.075,
         ease: 'power2.out',
-        clearProps: 'opacity,transform',
+        clearProps: 'opacity,transform,visibility',
       })
     }, listRef)
 
