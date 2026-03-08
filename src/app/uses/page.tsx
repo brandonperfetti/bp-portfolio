@@ -63,11 +63,8 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function Uses() {
   const page = await getCmsPageByPath('/uses')
   const cmsUses = isNotionProvider() ? await getCmsUses() : null
-  const title =
-    page?.title || 'Software, hardware, and workflows I rely on every week.'
-  const intro =
-    page?.subtitle ||
-    'A practical list of tools I use for product work, engineering, communication, and learning.'
+  const title = page?.title || String(defaultUsesMeta.title)
+  const intro = page?.subtitle || String(defaultUsesMeta.description)
 
   if (cmsUses) {
     return (

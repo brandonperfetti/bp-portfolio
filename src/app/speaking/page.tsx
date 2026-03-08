@@ -75,10 +75,7 @@ export default async function Speaking() {
   return (
     <SimpleLayout
       title={page?.title || String(defaultSpeakingMeta.title)}
-      intro={
-        page?.subtitle ||
-        'One of my favorite ways to share my ideas is live on stage, where there’s so much more communication bandwidth than there is in writing, and I love podcast interviews because they give me the opportunity to answer questions instead of just present my opinions.'
-      }
+      intro={page?.subtitle || String(defaultSpeakingMeta.description)}
     >
       <div className="space-y-20">
         <SpeakingSection title="Conferences">
