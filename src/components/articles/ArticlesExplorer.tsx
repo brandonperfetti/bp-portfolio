@@ -13,6 +13,8 @@ import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 
+const PRIMARY_FILTER_CHIPS_LIMIT = 12
+
 function getAuthor(article: ArticleWithSlug) {
   if (typeof article.author === 'string') {
     return { name: article.author, role: '', href: '#', image: '' }
@@ -24,6 +26,35 @@ function getAuthor(article: ArticleWithSlug) {
     href: article.author?.href ?? '#',
     image: article.author?.image ?? '',
   }
+}
+
+function getArticleTaxonomyValues(article: ArticleWithSlug) {
+  return Array.from(
+    new Set([...(article.topics ?? []), ...(article.tech ?? [])]),
+  )
+    .map((value) => value.trim())
+    .filter(Boolean)
+}
+
+function articleMatchesQuery(
+  article: ArticleWithSlug,
+  normalizedQuery: string,
+) {
+  if (!normalizedQuery) {
+    return true
+  }
+
+  return (
+    article.title.toLowerCase().includes(normalizedQuery) ||
+    article.description.toLowerCase().includes(normalizedQuery) ||
+    (article.topics ?? []).some((value) =>
+      value.toLowerCase().includes(normalizedQuery),
+    ) ||
+    (article.tech ?? []).some((value) =>
+      value.toLowerCase().includes(normalizedQuery),
+    ) ||
+    (article.searchText ?? '').toLowerCase().includes(normalizedQuery)
+  )
 }
 
 export function ArticlesExplorer({
@@ -40,7 +71,9 @@ export function ArticlesExplorer({
   const [topic, setTopic] = useState(
     searchParams.get('topic') ?? searchParams.get('category') ?? 'All',
   )
+  const [showAllFilters, setShowAllFilters] = useState(false)
   const debouncedQuery = useDebouncedValue(query, query.trim() ? 500 : 0)
+  const normalizedQuery = debouncedQuery.trim().toLowerCase()
   const uniqueArticles = useMemo(
     () => dedupeArticlesBySlug(articles),
     [articles],
@@ -90,47 +123,98 @@ export function ArticlesExplorer({
     }
   }, [])
 
-  const topics = useMemo(() => {
+  const allTaxonomyFilters = useMemo(() => {
     const values = new Set<string>()
     for (const article of uniqueArticles) {
-      for (const item of article.topics ?? []) {
-        if (item) {
-          values.add(item)
-        }
-      }
-      for (const item of article.tech ?? []) {
+      for (const item of getArticleTaxonomyValues(article)) {
         if (item) {
           values.add(item)
         }
       }
     }
 
-    return ['All', ...Array.from(values).sort()]
+    return Array.from(values).sort()
   }, [uniqueArticles])
+
+  const queryMatchedArticles = useMemo(
+    () =>
+      uniqueArticles.filter((article) =>
+        articleMatchesQuery(article, normalizedQuery),
+      ),
+    [uniqueArticles, normalizedQuery],
+  )
+
+  const sortedDynamicFilters = useMemo(() => {
+    const counts = new Map<string, { label: string; count: number }>()
+    for (const article of queryMatchedArticles) {
+      for (const value of getArticleTaxonomyValues(article)) {
+        const key = value.toLowerCase()
+        const current = counts.get(key)
+        if (current) {
+          current.count += 1
+        } else {
+          counts.set(key, { label: value, count: 1 })
+        }
+      }
+    }
+
+    return Array.from(counts.values())
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+      .map((entry) => entry.label)
+  }, [queryMatchedArticles])
+
+  const activeTopicLabel = useMemo(() => {
+    if (topic === 'All') {
+      return 'All'
+    }
+    const key = topic.toLowerCase()
+    const fromSorted = sortedDynamicFilters.find(
+      (item) => item.toLowerCase() === key,
+    )
+    if (fromSorted) {
+      return fromSorted
+    }
+    const fromAll = allTaxonomyFilters.find(
+      (item) => item.toLowerCase() === key,
+    )
+    return fromAll ?? topic
+  }, [allTaxonomyFilters, sortedDynamicFilters, topic])
+
+  const primaryFilters = useMemo(() => {
+    const base = sortedDynamicFilters.slice(0, PRIMARY_FILTER_CHIPS_LIMIT)
+    if (activeTopicLabel !== 'All') {
+      const hasActive = base.some(
+        (item) => item.toLowerCase() === activeTopicLabel.toLowerCase(),
+      )
+      if (!hasActive) {
+        base.unshift(activeTopicLabel)
+      }
+    }
+    return ['All', ...base]
+  }, [activeTopicLabel, sortedDynamicFilters])
+
+  const overflowFilters = useMemo(() => {
+    const primarySet = new Set(
+      primaryFilters.slice(1).map((item) => item.toLowerCase()),
+    )
+    return sortedDynamicFilters.filter(
+      (item) => !primarySet.has(item.toLowerCase()),
+    )
+  }, [primaryFilters, sortedDynamicFilters])
 
   const filtered = useMemo(() => {
     return uniqueArticles.filter((article) => {
-      const taxonomyValues = Array.from(
-        new Set([...(article.topics ?? []), ...(article.tech ?? [])]),
-      )
-      const matchesTopic = topic === 'All' || taxonomyValues.includes(topic)
-
-      const normalizedQuery = debouncedQuery.trim().toLowerCase()
-      const matchesQuery =
-        normalizedQuery.length === 0 ||
-        article.title.toLowerCase().includes(normalizedQuery) ||
-        article.description.toLowerCase().includes(normalizedQuery) ||
-        (article.topics ?? []).some((value) =>
-          value.toLowerCase().includes(normalizedQuery),
-        ) ||
-        (article.tech ?? []).some((value) =>
-          value.toLowerCase().includes(normalizedQuery),
-        ) ||
-        (article.searchText ?? '').toLowerCase().includes(normalizedQuery)
-
+      const taxonomyValues = getArticleTaxonomyValues(article)
+      const matchesTopic =
+        activeTopicLabel === 'All' || taxonomyValues.includes(activeTopicLabel)
+      const matchesQuery = articleMatchesQuery(article, normalizedQuery)
       return matchesTopic && matchesQuery
     })
-  }, [uniqueArticles, topic, debouncedQuery])
+  }, [uniqueArticles, activeTopicLabel, normalizedQuery])
+
+  useEffect(() => {
+    setShowAllFilters(false)
+  }, [debouncedQuery])
 
   const queryText = debouncedQuery.trim()
 
@@ -211,15 +295,15 @@ export function ArticlesExplorer({
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {topics.map((item) => (
+          {primaryFilters.map((item) => (
             <button
               key={item}
               type="button"
               onClick={() => {
                 setTopic((current) => (current === item ? 'All' : item))
               }}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80 ${
-                topic === item
+              className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80 ${
+                activeTopicLabel === item
                   ? 'bg-teal-500 text-white'
                   : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
               }`}
@@ -227,7 +311,40 @@ export function ArticlesExplorer({
               {item}
             </button>
           ))}
+          {overflowFilters.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAllFilters((current) => !current)}
+              className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:focus-visible:ring-teal-400/80"
+              aria-expanded={showAllFilters}
+              aria-controls="articles-more-filters"
+            >
+              {showAllFilters
+                ? 'Fewer filters'
+                : `More filters (${overflowFilters.length})`}
+            </button>
+          )}
         </div>
+        {showAllFilters && overflowFilters.length > 0 && (
+          <div id="articles-more-filters" className="flex flex-wrap gap-2">
+            {overflowFilters.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => {
+                  setTopic((current) => (current === item ? 'All' : item))
+                }}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80 ${
+                  activeTopicLabel === item
+                    ? 'bg-teal-500 text-white'
+                    : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
+                }`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <ScrollReveal
@@ -260,13 +377,15 @@ export function ArticlesExplorer({
             )
 
             // Prefer chips matching the active topic; otherwise use the first available.
-            // Hide tech chip when it would duplicate the topic chip.
+            // Keep topic/tech chips distinct when possible.
             const topicChip = matchedTopicChip ?? topicValues[0]
             const techChip =
-              (matchedTechChip ?? techValues[0])?.toLowerCase() ===
-              topicChip?.toLowerCase()
-                ? undefined
-                : (matchedTechChip ?? techValues[0])
+              (matchedTechChip &&
+              matchedTechChip.toLowerCase() !== topicChip?.toLowerCase()
+                ? matchedTechChip
+                : techValues.find(
+                    (item) => item.toLowerCase() !== topicChip?.toLowerCase(),
+                  )) ?? undefined
 
             return (
               <HoverMotionCard key={article.slug}>
@@ -311,12 +430,12 @@ export function ArticlesExplorer({
                     {(topicChip || techChip) && (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {topicChip && (
-                          <span className="max-w-[11rem] truncate rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">
+                          <span className="max-w-[11rem] truncate rounded-full bg-zinc-100 px-2 py-0.5 capitalize dark:bg-zinc-800">
                             {topicChip}
                           </span>
                         )}
                         {techChip && (
-                          <span className="max-w-[11rem] truncate rounded-full bg-teal-50 px-2 py-0.5 text-teal-700 dark:bg-teal-900/40 dark:text-teal-200">
+                          <span className="max-w-[11rem] truncate rounded-full bg-teal-50 px-2 py-0.5 text-teal-700 capitalize dark:bg-teal-900/40 dark:text-teal-200">
                             {techChip}
                           </span>
                         )}
