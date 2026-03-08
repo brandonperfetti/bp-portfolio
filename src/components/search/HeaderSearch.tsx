@@ -185,10 +185,7 @@ export function HeaderSearch() {
           // noop
         }
       })
-      .catch(() => {
-        if (controller.signal.aborted) {
-          return
-        }
+      .catch((_error: unknown) => {
         setItems([])
         setLoadState('error')
       })
@@ -400,9 +397,9 @@ export function HeaderSearch() {
                       key={`loading-row-${index}`}
                       className="rounded-lg border border-zinc-200/70 p-3 dark:border-zinc-700/60"
                     >
-                      <div className="h-3.5 w-[68%] animate-pulse rounded bg-zinc-200/85 dark:bg-zinc-700/80" />
-                      <div className="mt-2 h-2.5 w-[88%] animate-pulse rounded bg-zinc-200/65 dark:bg-zinc-700/55" />
-                      <div className="mt-1.5 h-2.5 w-[74%] animate-pulse rounded bg-zinc-200/55 dark:bg-zinc-700/45" />
+                      <div className="h-3.5 w-[68%] rounded bg-zinc-200/85 motion-safe:animate-pulse dark:bg-zinc-700/80" />
+                      <div className="mt-2 h-2.5 w-[88%] rounded bg-zinc-200/65 motion-safe:animate-pulse dark:bg-zinc-700/55" />
+                      <div className="mt-1.5 h-2.5 w-[74%] rounded bg-zinc-200/55 motion-safe:animate-pulse dark:bg-zinc-700/45" />
                     </div>
                   ))}
                 </div>
