@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ArticlesExplorer } from '@/components/articles/ArticlesExplorer'
@@ -56,7 +56,16 @@ describe('ArticlesExplorer', () => {
 
     render(<ArticlesExplorer articles={articles} />)
 
-    expect(screen.getAllByText('react').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('zod').length).toBeGreaterThan(0)
+    const articleTitle = screen.getByText(
+      "Building Form Validation You Don't Hate",
+    )
+    const articleCard = articleTitle.closest('article')
+    expect(articleCard).not.toBeNull()
+    if (!articleCard) {
+      throw new Error('Expected article card to be present')
+    }
+
+    expect(within(articleCard).getByText('react')).toBeInTheDocument()
+    expect(within(articleCard).getByText('zod')).toBeInTheDocument()
   })
 })

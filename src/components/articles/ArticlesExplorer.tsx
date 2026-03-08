@@ -28,6 +28,12 @@ function getAuthor(article: ArticleWithSlug) {
   }
 }
 
+/**
+ * Builds a deduplicated taxonomy list by combining `topics` and `tech`.
+ *
+ * @param article Article source record.
+ * @returns Trimmed taxonomy values with duplicates removed. Missing arrays are treated as empty.
+ */
 function getArticleTaxonomyValues(article: ArticleWithSlug) {
   return Array.from(
     new Set([...(article.topics ?? []), ...(article.tech ?? [])]),
@@ -36,6 +42,14 @@ function getArticleTaxonomyValues(article: ArticleWithSlug) {
     .filter(Boolean)
 }
 
+/**
+ * Evaluates whether an article matches the normalized search query.
+ *
+ * @param article Article source record.
+ * @param normalizedQuery Lowercased query string.
+ * @returns `true` when query is empty, otherwise case-insensitive substring
+ * checks across title, description, topics, tech, and `searchText`.
+ */
 function articleMatchesQuery(
   article: ArticleWithSlug,
   normalizedQuery: string,
@@ -206,7 +220,10 @@ export function ArticlesExplorer({
     return uniqueArticles.filter((article) => {
       const taxonomyValues = getArticleTaxonomyValues(article)
       const matchesTopic =
-        activeTopicLabel === 'All' || taxonomyValues.includes(activeTopicLabel)
+        activeTopicLabel === 'All' ||
+        taxonomyValues.some(
+          (value) => value.toLowerCase() === activeTopicLabel.toLowerCase(),
+        )
       const matchesQuery = articleMatchesQuery(article, normalizedQuery)
       return matchesTopic && matchesQuery
     })
