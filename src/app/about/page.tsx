@@ -42,6 +42,37 @@ function SocialLink({
   )
 }
 
+const socialLinks: Array<{
+  href: string
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  className?: string
+}> = [
+  {
+    href: 'https://x.com/brandonperfetti',
+    icon: XIcon,
+    label: 'Follow on X',
+  },
+  {
+    href: 'https://github.com/brandonperfetti',
+    icon: GitHubIcon,
+    label: 'Follow on GitHub',
+    className: 'mt-4',
+  },
+  {
+    href: 'https://www.linkedin.com/in/brandonperfetti/',
+    icon: LinkedInIcon,
+    label: 'Follow on LinkedIn',
+    className: 'mt-4',
+  },
+  {
+    href: 'mailto:brandon@brandonperfetti.com',
+    icon: MailIcon,
+    label: 'brandon@brandonperfetti.com',
+    className: 'mt-8 border-t border-zinc-100 pt-8 dark:border-zinc-700/40',
+  },
+]
+
 const defaultAboutMeta = {
   title: 'About',
   description:
@@ -168,30 +199,16 @@ export default async function About() {
             </div>
             <div className="mb-4 lg:mt-2">
               <ul role="list">
-                <SocialLink href="https://x.com/brandonperfetti" icon={XIcon}>
-                  Follow on X
-                </SocialLink>
-                <SocialLink
-                  href="https://github.com/brandonperfetti"
-                  icon={GitHubIcon}
-                  className="mt-4"
-                >
-                  Follow on GitHub
-                </SocialLink>
-                <SocialLink
-                  href="https://www.linkedin.com/in/brandonperfetti/"
-                  icon={LinkedInIcon}
-                  className="mt-4"
-                >
-                  Follow on LinkedIn
-                </SocialLink>
-                <SocialLink
-                  href="mailto:brandon@brandonperfetti.com"
-                  icon={MailIcon}
-                  className="mt-8 border-t border-zinc-100 pt-8 dark:border-zinc-700/40"
-                >
-                  brandon@brandonperfetti.com
-                </SocialLink>
+                {socialLinks.map((link) => (
+                  <SocialLink
+                    key={link.href}
+                    href={link.href}
+                    icon={link.icon}
+                    className={link.className}
+                  >
+                    {link.label}
+                  </SocialLink>
+                ))}
               </ul>
             </div>
           </div>
@@ -248,30 +265,16 @@ export default async function About() {
         </div>
         <div className="mb-4 lg:hidden">
           <ul role="list">
-            <SocialLink href="https://x.com/brandonperfetti" icon={XIcon}>
-              Follow on X
-            </SocialLink>
-            <SocialLink
-              href="https://github.com/brandonperfetti"
-              icon={GitHubIcon}
-              className="mt-4"
-            >
-              Follow on GitHub
-            </SocialLink>
-            <SocialLink
-              href="https://www.linkedin.com/in/brandonperfetti/"
-              icon={LinkedInIcon}
-              className="mt-4"
-            >
-              Follow on LinkedIn
-            </SocialLink>
-            <SocialLink
-              href="mailto:brandon@brandonperfetti.com"
-              icon={MailIcon}
-              className="mt-8 border-t border-zinc-100 pt-8 dark:border-zinc-700/40"
-            >
-              brandon@brandonperfetti.com
-            </SocialLink>
+            {socialLinks.map((link) => (
+              <SocialLink
+                key={link.href}
+                href={link.href}
+                icon={link.icon}
+                className={link.className}
+              >
+                {link.label}
+              </SocialLink>
+            ))}
           </ul>
         </div>
       </div>
