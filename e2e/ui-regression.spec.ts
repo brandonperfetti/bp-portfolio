@@ -1,23 +1,41 @@
 import { type Locator, type Page, expect, test } from '@playwright/test'
 
+// Home rail can legitimately shift more due to sticky offset transitions and
+// stacked cards entering/leaving around the rail during long-scroll sampling.
+const HOME_STICKY_RAIL_MAX_DRIFT_RATIO = 0.25
+// About rail should remain visually tighter because the right column is more
+// static while the left narrative content scrolls.
+const ABOUT_STICKY_RAIL_MAX_DRIFT_RATIO = 0.07
+
 async function getStableBoundingBoxY(page: Page, locator: Locator) {
+  const STABILITY_TOLERANCE_PX = 0.75
+  const REQUIRED_CONSECUTIVE_STABLE_READS = 2
   let previousY: number | null = null
+  let consecutiveStableCount = 0
+
   for (let index = 0; index < 16; index += 1) {
     const box = await locator.boundingBox()
     if (!box) {
       throw new Error('Expected sticky rail anchor to have a bounding box.')
     }
-    if (previousY !== null && Math.abs(box.y - previousY) < 0.75) {
-      return box.y
+
+    if (
+      previousY !== null &&
+      Math.abs(box.y - previousY) < STABILITY_TOLERANCE_PX
+    ) {
+      consecutiveStableCount += 1
+      if (consecutiveStableCount >= REQUIRED_CONSECUTIVE_STABLE_READS) {
+        return box.y
+      }
+    } else {
+      consecutiveStableCount = 0
     }
+
     previousY = box.y
     await page.waitForTimeout(40)
   }
 
-  if (previousY === null) {
-    throw new Error('Unable to read stable sticky rail position.')
-  }
-  return previousY
+  throw new Error('Sticky rail position did not stabilize in time.')
 }
 
 test('articles query syncs to URL', async ({ page }) => {
@@ -82,7 +100,7 @@ test('home desktop sticky right rail remains pinned while scrolling', async ({
     Math.round(viewportHeight * 2),
   )
   const secondY = await getStableBoundingBoxY(page, railAnchor)
-  const maxDrift = viewportHeight * 0.25
+  const maxDrift = viewportHeight * HOME_STICKY_RAIL_MAX_DRIFT_RATIO
   expect(Math.abs(secondY - firstY)).toBeLessThan(maxDrift)
 })
 
@@ -106,6 +124,6 @@ test('about desktop sticky right rail remains pinned while scrolling', async ({
     Math.round(viewportHeight * 1.7),
   )
   const secondY = await getStableBoundingBoxY(page, railAnchor)
-  const maxDrift = viewportHeight * 0.07
+  const maxDrift = viewportHeight * ABOUT_STICKY_RAIL_MAX_DRIFT_RATIO
   expect(Math.abs(secondY - firstY)).toBeLessThan(maxDrift)
 })
