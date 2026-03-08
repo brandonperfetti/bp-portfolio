@@ -216,6 +216,12 @@ export function ArticlesExplorer({
     )
   }, [primaryFilters, sortedDynamicFilters])
 
+  const isActiveFilter = useCallback(
+    (candidate: string) =>
+      activeTopicLabel.toLowerCase() === candidate.toLowerCase(),
+    [activeTopicLabel],
+  )
+
   const filtered = useMemo(() => {
     return uniqueArticles.filter((article) => {
       const taxonomyValues = getArticleTaxonomyValues(article)
@@ -320,7 +326,7 @@ export function ArticlesExplorer({
                 setTopic((current) => (current === item ? 'All' : item))
               }}
               className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80 ${
-                activeTopicLabel === item
+                isActiveFilter(item)
                   ? 'bg-teal-500 text-white'
                   : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
               }`}
@@ -352,7 +358,7 @@ export function ArticlesExplorer({
                   setTopic((current) => (current === item ? 'All' : item))
                 }}
                 className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80 ${
-                  activeTopicLabel === item
+                  isActiveFilter(item)
                     ? 'bg-teal-500 text-white'
                     : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
                 }`}

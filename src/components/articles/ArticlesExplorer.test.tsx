@@ -60,12 +60,10 @@ describe('ArticlesExplorer', () => {
       "Building Form Validation You Don't Hate",
     )
     const articleCard = articleTitle.closest('article')
-    expect(articleCard).not.toBeNull()
-    if (!articleCard) {
-      throw new Error('Expected article card to be present')
-    }
+    expect(articleCard).toBeInTheDocument()
+    const articleCardScope = within(articleCard as HTMLElement)
 
-    expect(within(articleCard).getByText('react')).toBeInTheDocument()
-    expect(within(articleCard).getByText('zod')).toBeInTheDocument()
+    expect(articleCardScope.getByText('react')).toBeInTheDocument()
+    expect(articleCardScope.getByText('zod')).toBeInTheDocument()
   })
 })
