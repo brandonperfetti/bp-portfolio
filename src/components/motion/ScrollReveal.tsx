@@ -3,7 +3,7 @@
 import clsx from 'clsx'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 
 import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 
@@ -33,8 +33,11 @@ export function ScrollReveal({
   const rootRef = useRef<HTMLDivElement | null>(null)
   const prefersReducedMotion = usePrefersReducedMotion()
 
-  useEffect(() => {
-    if (prefersReducedMotion || !rootRef.current) {
+  useLayoutEffect(() => {
+    const prefersReducedMotionSync =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotionSync || prefersReducedMotion || !rootRef.current) {
       return
     }
 
