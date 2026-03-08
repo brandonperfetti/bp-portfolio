@@ -263,6 +263,8 @@ export function HeaderSearch() {
       return
     }
 
+    // Intentional: rerun when filteredItems changes so debounced query updates
+    // reset scroll position and replay the entry animation for refreshed results.
     listRef.current.scrollTo({ top: 0, left: 0, behavior: 'auto' })
 
     const ctx = gsap.context(() => {
