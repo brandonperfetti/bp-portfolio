@@ -9,6 +9,8 @@ import { Container } from '@/components/Container'
 import { NotFoundState } from '@/components/cms/NotFoundState'
 import { Messenger } from '@/components/home/Messenger'
 import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
+import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
+import { ParallaxGroup } from '@/components/motion/ParallaxGroup'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { GitHubIcon, LinkedInIcon, XIcon } from '@/icons'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
@@ -76,20 +78,29 @@ function ArrowDownIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
 
 function Article({ article }: { article: ArticleWithSlug }) {
   return (
-    <Card as="article">
-      <div className="absolute -inset-x-4 -inset-y-6 z-0 scale-95 bg-zinc-50 opacity-0 transition group-hover:scale-100 group-hover:opacity-100 sm:-inset-x-6 sm:rounded-2xl dark:bg-zinc-800/50" />
-      <Link
-        href={`/articles/${article.slug}`}
-        aria-label={`Read article: ${article.title}`}
-        className="absolute -inset-x-4 -inset-y-6 z-20 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 sm:-inset-x-6 sm:rounded-2xl dark:focus-visible:ring-teal-400/70"
-      />
-      <Card.Title>{article.title}</Card.Title>
-      <Card.Eyebrow as="time" dateTime={article.date} decorate>
-        {formatDate(article.date)}
-      </Card.Eyebrow>
-      <Card.Description>{article.description}</Card.Description>
-      <Card.Cta>Read article</Card.Cta>
-    </Card>
+    <HoverMotionCard>
+      <Card as="article">
+        <div
+          data-hover-overlay
+          className="absolute -inset-x-4 -inset-y-6 z-0 scale-95 bg-zinc-50 opacity-0 transition sm:-inset-x-6 sm:rounded-2xl dark:bg-zinc-800/50"
+        />
+        <Link
+          href={`/articles/${article.slug}`}
+          aria-label={`Read article: ${article.title}`}
+          className="absolute -inset-x-4 -inset-y-6 z-20 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 sm:-inset-x-6 sm:rounded-2xl dark:focus-visible:ring-teal-400/70"
+        />
+        <Card.Title>{article.title}</Card.Title>
+        <Card.Eyebrow as="time" dateTime={article.date} decorate>
+          {formatDate(article.date)}
+        </Card.Eyebrow>
+        <Card.Description>{article.description}</Card.Description>
+        <Card.Cta>
+          <span data-hover-icon className="inline-flex items-center">
+            Read article
+          </span>
+        </Card.Cta>
+      </Card>
+    </HoverMotionCard>
   )
 }
 
@@ -253,37 +264,52 @@ function Photos({ images }: { images: string[] }) {
     'rotate-2',
     '-rotate-2',
   ]
+  const parallaxSpeeds = [0.8, -0.55, 0.95, -0.45, 0.7]
 
   return (
-    <div className="mt-16 sm:mt-20">
-      <div className="-my-4 flex justify-center gap-5 overflow-hidden py-4 sm:gap-8">
-        {images.map((image, imageIndex) => (
-          <div
-            key={image}
-            className={clsx(
-              'relative w-44 flex-none overflow-hidden rounded-xl bg-zinc-100 sm:w-72 sm:rounded-2xl dark:bg-zinc-800',
-              rotations[imageIndex % rotations.length],
-            )}
-          >
-            <div className="aspect-9/10">
-              <Image
-                src={getOptimizedImageUrl(image, {
-                  width: 1000,
-                  height: 1125,
-                  crop: 'fill',
-                })}
-                alt=""
-                width={1200}
-                height={1400}
-                sizes="(min-width: 640px) 18rem, 11rem"
-                priority={imageIndex === 0}
-                className="absolute inset-0 h-full w-full object-cover"
-              />
+    <ParallaxGroup amount={10} start="top 95%" end="bottom 10%">
+      <div className="mt-16 sm:mt-20">
+        <div className="-my-4 flex justify-center gap-5 overflow-hidden py-4 sm:gap-8">
+          {images.map((image, imageIndex) => (
+            <div
+              key={image}
+              className={clsx(
+                'relative w-44 flex-none overflow-hidden rounded-xl bg-zinc-100 will-change-transform sm:w-72 sm:rounded-2xl dark:bg-zinc-800',
+                rotations[imageIndex % rotations.length],
+              )}
+              data-parallax-item
+              data-parallax-speed={
+                parallaxSpeeds[imageIndex % parallaxSpeeds.length]
+              }
+            >
+              <HoverMotionCard
+                y={0}
+                scale={1}
+                imageScale={1.035}
+                className="h-full"
+              >
+                <div className="aspect-9/10">
+                  <Image
+                    src={getOptimizedImageUrl(image, {
+                      width: 1000,
+                      height: 1125,
+                      crop: 'fill',
+                    })}
+                    alt=""
+                    width={1200}
+                    height={1400}
+                    sizes="(min-width: 640px) 18rem, 11rem"
+                    priority={imageIndex === 0}
+                    data-hover-image
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                </div>
+              </HoverMotionCard>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-    </div>
+    </ParallaxGroup>
   )
 }
 

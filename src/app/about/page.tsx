@@ -5,6 +5,8 @@ import clsx from 'clsx'
 
 import { Container } from '@/components/Container'
 import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
+import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
+import { ParallaxGroup } from '@/components/motion/ParallaxGroup'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { Prose } from '@/components/Prose'
 import { ArticleBody } from '@/components/cms/ArticleBody'
@@ -144,20 +146,31 @@ export default async function About() {
     <Container className="my-16 sm:mt-32">
       <div className="grid grid-cols-1 gap-y-14 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:gap-y-12">
         <div className="order-2 hidden lg:order-none lg:block lg:pl-20">
-          <div className="mx-auto max-w-xs px-2.5 lg:max-w-none">
-            <Image
-              height={800}
-              width={800}
-              src={getOptimizedImageUrl(portraitImage, {
-                width: 1024,
-                height: 1024,
-                crop: 'fill',
-              })}
-              alt="Brandon Perfetti"
-              sizes="(min-width: 1024px) 32rem, 20rem"
-              className="aspect-square rounded-2xl bg-zinc-100 object-cover md:rotate-3 dark:bg-zinc-800"
-            />
-          </div>
+          <ParallaxGroup amount={7}>
+            <div
+              className="mx-auto max-w-xs px-2.5 will-change-transform lg:max-w-none"
+              data-parallax-item
+              data-parallax-speed="0.75"
+            >
+              <HoverMotionCard y={0} scale={1} imageScale={1.03}>
+                <div className="overflow-hidden rounded-2xl md:rotate-3">
+                  <Image
+                    height={800}
+                    width={800}
+                    src={getOptimizedImageUrl(portraitImage, {
+                      width: 1024,
+                      height: 1024,
+                      crop: 'fill',
+                    })}
+                    alt="Brandon Perfetti"
+                    sizes="(min-width: 1024px) 32rem, 20rem"
+                    data-hover-image
+                    className="aspect-square bg-zinc-100 object-cover dark:bg-zinc-800"
+                  />
+                </div>
+              </HoverMotionCard>
+            </div>
+          </ParallaxGroup>
         </div>
         <div className="order-first lg:order-first lg:row-span-2">
           <AnimatedHeadline
@@ -171,20 +184,33 @@ export default async function About() {
             </div>
           </ScrollReveal>
           <ScrollReveal y={16} duration={0.78} delay={0.36}>
-            <div className="mt-8 lg:hidden">
-              <div className="mx-auto max-w-xs px-2.5">
-                <Image
-                  height={800}
-                  width={800}
-                  src={getOptimizedImageUrl(portraitImage, {
-                    width: 1024,
-                    height: 1024,
-                    crop: 'fill',
-                  })}
-                  alt="Brandon Perfetti"
-                  sizes="20rem"
-                  className="aspect-square rounded-2xl bg-zinc-100 object-cover dark:bg-zinc-800"
-                />
+            <div className="mt-8">
+              <div className="lg:hidden">
+                <ParallaxGroup amount={6} start="top 94%" end="bottom 8%">
+                  <div
+                    className="mx-auto max-w-xs px-2.5 will-change-transform"
+                    data-parallax-item
+                    data-parallax-speed="0.6"
+                  >
+                    <HoverMotionCard y={0} scale={1} imageScale={1.03}>
+                      <div className="overflow-hidden rounded-2xl">
+                        <Image
+                          height={800}
+                          width={800}
+                          src={getOptimizedImageUrl(portraitImage, {
+                            width: 1024,
+                            height: 1024,
+                            crop: 'fill',
+                          })}
+                          alt="Brandon Perfetti"
+                          sizes="20rem"
+                          data-hover-image
+                          className="aspect-square bg-zinc-100 object-cover dark:bg-zinc-800"
+                        />
+                      </div>
+                    </HoverMotionCard>
+                  </div>
+                </ParallaxGroup>
               </div>
             </div>
             {page?.bodyBlocks?.length ? (
