@@ -2,7 +2,7 @@
 
 import clsx from 'clsx'
 import { gsap } from 'gsap'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 
@@ -42,17 +42,36 @@ export function HoverMotionCard({
   const Component = as
   const rootRef = useRef<HTMLElement | null>(null)
   const prefersReducedMotion = usePrefersReducedMotion()
+  const [isHoverable, setIsHoverable] = useState(false)
 
   useEffect(() => {
-    const root = rootRef.current
-    if (!root || prefersReducedMotion) {
+    if (typeof window === 'undefined') {
       return
     }
 
-    const canHover =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(hover: hover) and (pointer: fine)').matches
-    if (!canHover) {
+    const mediaQuery = window.matchMedia('(hover: hover) and (pointer: fine)')
+    const syncHoverCapability = (event?: MediaQueryListEvent) => {
+      setIsHoverable(event ? event.matches : mediaQuery.matches)
+    }
+
+    syncHoverCapability()
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', syncHoverCapability)
+      return () => {
+        mediaQuery.removeEventListener('change', syncHoverCapability)
+      }
+    }
+
+    mediaQuery.addListener(syncHoverCapability)
+    return () => {
+      mediaQuery.removeListener(syncHoverCapability)
+    }
+  }, [])
+
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root || prefersReducedMotion || !isHoverable) {
       return
     }
 
@@ -131,9 +150,9 @@ export function HoverMotionCard({
     }
 
     const onFocusIn = () => runEnter()
-    const onFocusOut = () => {
-      const active = document.activeElement
-      if (active instanceof Node && root.contains(active)) {
+    const onFocusOut = (event: FocusEvent) => {
+      const nextTarget = event.relatedTarget
+      if (nextTarget instanceof Node && root.contains(nextTarget)) {
         return
       }
       runLeave()
@@ -154,7 +173,7 @@ export function HoverMotionCard({
       gsap.set(iconNodes, { clearProps: 'transform' })
       gsap.set(overlayNodes, { clearProps: 'opacity,visibility' })
     }
-  }, [iconShiftX, imageScale, prefersReducedMotion, scale, y])
+  }, [iconShiftX, imageScale, isHoverable, prefersReducedMotion, scale, y])
 
   return (
     <Component
