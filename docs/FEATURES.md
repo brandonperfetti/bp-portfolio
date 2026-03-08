@@ -24,6 +24,7 @@
 - Uses debounced client filtering over a compact `/api/search` index payload.
 - Session cache keeps modal reopen fast within a tab.
 - API route includes stale payload fallback to reduce transient Notion failures.
+- Includes animated modal/results transitions with GSAP context cleanup on rerender/unmount.
 
 ## Hermes AI Chat
 
@@ -34,12 +35,23 @@
 - Multiline prompt input:
   - `Enter` sends.
   - `Shift+Enter` inserts a newline.
+- Empty submit behavior focuses the input to avoid silent no-op UX.
 - Public-route guardrails:
   - per-IP rate limits on chat/image APIs
   - message length + history caps
   - max completion token cap for chat
   - optional daily image cap and endpoint kill switches
   - optional Turnstile verification when configured
+
+## Motion System
+
+- Shared motion primitives:
+  - `AnimatedHeadline` (typewriter/line variants)
+  - `ScrollReveal`
+  - `ParallaxGroup`
+  - `HoverMotionCard`
+- Applied across Home/About/Articles/Projects/Tech/Uses/Speaking and selected shared layouts.
+- Desktop sticky right-rail behavior is used on Home and About for long-scroll readability.
 
 ## Contact + Newsletter APIs
 

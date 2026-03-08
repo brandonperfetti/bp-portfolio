@@ -74,7 +74,23 @@ For automation ownership boundaries (cron-safe vs Codex-only), see `Runtime boun
 - Preserve keyboard shortcuts (`Cmd/Ctrl+K`, `/`) unless intentionally redesigning UX.
 - Keep API route error responses user-safe and log-friendly.
 
+## Test Update Policy
+
+- User-visible behavior changes require at least one automated test update/addition.
+- UI interaction/state changes should be covered by Playwright and/or component tests.
+- Logic-only changes should be covered by Vitest unit tests.
+- Motion/accessibility changes should validate keyboard interaction and reduced-motion behavior.
+- Bug fixes should include a regression test when feasible.
+- If no new test is added, record rationale in PR testing notes.
+
 ## Branching / PR Hygiene
 
 - Keep PR scope narrow and documented.
 - Update `README.md` + affected `docs/*.md` when behavior or architecture changes.
+
+## Review Suggestion Triage
+
+- Treat automated review comments as inputs, not mandates; confirm correctness against current behavior and scope.
+- If a suggestion is intentionally skipped, record rationale in the PR.
+- Add an inline code comment only when the skip would be surprising to future maintainers.
+- For deferred valid improvements, add a TODO/backlog reference so follow-up is explicit.

@@ -6,6 +6,7 @@
 - Explicit `aria-label` on icon-only controls (theme toggle, search controls, menu close).
 - Keyboard shortcuts augment but do not replace pointer interactions.
 - Focus-visible outline behavior using Tailwind outline utilities.
+- `prefers-reduced-motion` behavior for all new motion work (headline, reveal, parallax, hover, modal/chat transitions).
 
 ## Search and Chat Considerations
 
@@ -26,3 +27,4 @@
 - Tab through header controls and modal controls.
 - Validate keyboard-only open/close for search and chat shortcuts.
 - Verify no hidden route links in mobile nav causing dead-end navigation.
+- Validate reduced-motion mode does not rely on animation timing for content visibility.

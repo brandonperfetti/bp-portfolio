@@ -29,12 +29,19 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function ArticlesIndex() {
+  const page = await getCmsPageByPath('/articles')
   const articles = await getSearchArticles()
 
   return (
     <SimpleLayout
-      title="Writing on mindset, software design, leadership, and product execution."
-      intro="Browse by category or search by topic. These are practical notes from real projects, engineering leadership, and continuous learning."
+      title={
+        page?.title ||
+        'Writing on mindset, software design, leadership, and product execution.'
+      }
+      intro={
+        page?.subtitle ||
+        'Browse by category or search by topic. These are practical notes from real projects, engineering leadership, and continuous learning.'
+      }
     >
       {articles.length === 0 ? (
         <NotFoundState

@@ -1,11 +1,13 @@
 'use client'
 
-import { useContext } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
 import { AppContext } from '@/app/providers'
 import { Container } from '@/components/Container'
+import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
+import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { Prose } from '@/components/Prose'
 import { formatDate } from '@/lib/formatDate'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
@@ -38,6 +40,12 @@ export function ArticleLayout({
 }) {
   const router = useRouter()
   const { previousPathname } = useContext(AppContext)
+  const [isHeroImageLoaded, setIsHeroImageLoaded] = useState(false)
+
+  // Reset image reveal choreography when navigating between article heroes.
+  useEffect(() => {
+    setIsHeroImageLoaded(false)
+  }, [article.image])
 
   return (
     <Container className="mt-16 lg:mt-32">
@@ -55,9 +63,6 @@ export function ArticleLayout({
           )}
           <article>
             <header className="flex flex-col">
-              <h1 className="mt-6 text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100">
-                {article.title}
-              </h1>
               <time
                 dateTime={article.date}
                 className="order-first flex items-center text-base text-zinc-400 dark:text-zinc-500"
@@ -65,20 +70,36 @@ export function ArticleLayout({
                 <span className="h-4 w-0.5 rounded-full bg-zinc-200 dark:bg-zinc-500" />
                 <span className="ml-3">{formatDate(article.date)}</span>
               </time>
+              <AnimatedHeadline
+                text={article.title}
+                variant="line"
+                className="mt-6 text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100"
+              />
               {article.image ? (
-                <Image
-                  src={getOptimizedImageUrl(article.image, {
-                    width: 1600,
-                    height: 900,
-                    crop: 'fill',
-                  })}
-                  alt={article.title}
-                  width={1600}
-                  height={900}
-                  sizes="(min-width: 1280px) 42rem, (min-width: 1024px) 42rem, 100vw"
-                  priority
-                  className="mt-8 aspect-[16/9] w-full rounded-2xl object-cover"
-                />
+                <ScrollReveal y={20} duration={0.86} delay={0.1}>
+                  <div className="mt-8 overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800">
+                    <Image
+                      src={getOptimizedImageUrl(article.image, {
+                        width: 1600,
+                        height: 900,
+                        crop: 'fill',
+                      })}
+                      alt={article.title}
+                      width={1600}
+                      height={900}
+                      sizes="(min-width: 1280px) 42rem, (min-width: 1024px) 42rem, 100vw"
+                      priority
+                      onLoad={() => setIsHeroImageLoaded(true)}
+                      // Fallback: if image load fails, avoid leaving the hero permanently hidden.
+                      onError={() => setIsHeroImageLoaded(true)}
+                      className={`aspect-[16/9] w-full object-cover transition-[opacity,transform] duration-700 ease-out motion-reduce:transform-none motion-reduce:transition-none ${
+                        isHeroImageLoaded
+                          ? 'scale-100 opacity-100'
+                          : 'scale-[1.02] opacity-0'
+                      }`}
+                    />
+                  </div>
+                </ScrollReveal>
               ) : null}
             </header>
             <Prose className="mt-8" data-mdx-content>

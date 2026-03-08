@@ -13,6 +13,8 @@ import {
 } from 'react'
 
 import { Card } from '@/components/Card'
+import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
+import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import LinkIcon from '@/icons/LinkIcon'
 import type { CmsEntityItem } from '@/lib/cms/types'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
@@ -267,67 +269,80 @@ export function TechExplorer({
         </p>
       </div>
 
-      <ul
-        role="list"
-        className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2 lg:grid-cols-3"
-      >
-        {filteredItems.map((tech, index) => (
-          <Card
-            className="h-full rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-700/40 dark:bg-zinc-900"
-            as="li"
-            key={
-              tech.slug ||
-              tech.link?.href ||
-              `${tech.name}-${tech.category || 'uncategorized'}-${index}`
-            }
-          >
-            {tech.link?.href ? (
-              <>
-                <div className="absolute inset-0 z-0 rounded-2xl bg-zinc-50 opacity-0 transition group-hover:opacity-100 dark:bg-zinc-800/40" />
-                <Link
-                  href={tech.link.href}
-                  {...getExternalLinkProps(tech.link.href)}
-                  aria-label={`Open technology: ${tech.name}`}
-                  className="absolute inset-0 z-20 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 dark:focus-visible:ring-teal-400/70"
-                />
-              </>
-            ) : null}
-            <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-md ring-1 shadow-zinc-800/5 ring-zinc-900/5 dark:border dark:border-zinc-700/50 dark:bg-zinc-800 dark:ring-0">
-              {tech.logo ? (
-                <Image
-                  height={48}
-                  width={48}
-                  src={getOptimizedImageUrl(tech.logo, {
-                    width: 96,
-                    height: 96,
-                    crop: 'fit',
-                  })}
-                  alt={tech.name}
-                  className="h-8 w-8 rounded object-contain"
-                  sizes="2rem"
-                />
-              ) : null}
-            </div>
-            <h2 className="relative z-10 mt-6 text-base font-semibold text-zinc-800 dark:text-zinc-100">
-              {tech.name}
-            </h2>
-            <p className="relative z-10 mt-2 line-clamp-4 text-sm text-zinc-600 dark:text-zinc-400">
-              {tech.description}
-            </p>
-            <div className="relative z-10 mt-4 flex flex-wrap items-center gap-2 text-xs">
-              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                {tech.category}
-              </span>
-            </div>
-            {tech.link?.label ? (
-              <p className="relative z-10 mt-4 flex text-sm font-medium text-zinc-400 transition group-hover:text-teal-500 dark:text-zinc-200">
-                <LinkIcon className="h-6 w-6 flex-none" />
-                <span className="ml-2">{tech.link.label}</span>
-              </p>
-            ) : null}
-          </Card>
-        ))}
-      </ul>
+      <ScrollReveal targets="li" y={20} stagger={0.07}>
+        <ul
+          role="list"
+          className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2 lg:grid-cols-3"
+        >
+          {filteredItems.map((tech, index) => (
+            <HoverMotionCard
+              as="li"
+              key={
+                tech.slug ||
+                tech.link?.href ||
+                `${tech.name}-${tech.category || 'uncategorized'}-${index}`
+              }
+            >
+              <Card className="h-full rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm dark:border-zinc-700/40 dark:bg-zinc-900">
+                {tech.link?.href ? (
+                  <>
+                    <div
+                      data-hover-overlay
+                      className="absolute inset-0 z-0 rounded-2xl bg-zinc-50 opacity-0 transition dark:bg-zinc-800/40"
+                    />
+                    <Link
+                      href={tech.link.href}
+                      {...getExternalLinkProps(tech.link.href)}
+                      aria-label={`Open technology: ${tech.name}`}
+                      className="absolute inset-0 z-20 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 dark:focus-visible:ring-teal-400/70"
+                    />
+                  </>
+                ) : null}
+                <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-md ring-1 shadow-zinc-800/5 ring-zinc-900/5 dark:border dark:border-zinc-700/50 dark:bg-zinc-800 dark:ring-0">
+                  {tech.logo ? (
+                    <Image
+                      height={48}
+                      width={48}
+                      src={getOptimizedImageUrl(tech.logo, {
+                        width: 96,
+                        height: 96,
+                        crop: 'fit',
+                      })}
+                      alt={tech.name}
+                      className="h-8 w-8 rounded object-contain"
+                      sizes="2rem"
+                    />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="flex h-8 w-8 items-center justify-center rounded bg-zinc-100 text-sm font-semibold text-zinc-600 uppercase dark:bg-zinc-700/70 dark:text-zinc-200"
+                    >
+                      {tech.name.charAt(0)}
+                    </span>
+                  )}
+                </div>
+                <h2 className="relative z-10 mt-6 text-base font-semibold text-zinc-800 dark:text-zinc-100">
+                  {tech.name}
+                </h2>
+                <p className="relative z-10 mt-2 line-clamp-4 text-sm text-zinc-600 dark:text-zinc-400">
+                  {tech.description}
+                </p>
+                <div className="relative z-10 mt-4 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                    {tech.category}
+                  </span>
+                </div>
+                {tech.link?.label ? (
+                  <p className="relative z-10 mt-4 flex text-sm font-medium text-zinc-400 dark:text-zinc-200">
+                    <LinkIcon data-hover-icon className="h-6 w-6 flex-none" />
+                    <span className="ml-2">{tech.link.label}</span>
+                  </p>
+                ) : null}
+              </Card>
+            </HoverMotionCard>
+          ))}
+        </ul>
+      </ScrollReveal>
 
       {filteredItems.length === 0 && (
         <p className="text-sm text-zinc-500">

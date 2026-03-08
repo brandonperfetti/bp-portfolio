@@ -35,6 +35,7 @@ This project is the active codebase for [brandonperfetti.com](https://brandonper
 - [React 19](https://react.dev/)
 - [TypeScript 5](https://www.typescriptlang.org/)
 - [Tailwind CSS 4](https://tailwindcss.com/)
+- [GSAP](https://gsap.com/) for motion primitives and choreography
 - [Headless UI](https://headlessui.com/) (menu/popover primitives)
 - [SendGrid](https://sendgrid.com/) for contact + marketing list APIs
 - [OpenAI API](https://platform.openai.com/docs/api-reference) for Hermes chat + image generation
@@ -43,6 +44,7 @@ This project is the active codebase for [brandonperfetti.com](https://brandonper
 ## Quick Features
 
 - Home page with article highlights, contact card, and work/resume summary.
+- Reusable motion system for headline, reveal, parallax, and hover animations.
 - Articles route with full-text + topic filtering.
 - Global header modal search (`Cmd/Ctrl + K`).
 - Hermes AI chat with streaming text and image generation modes.

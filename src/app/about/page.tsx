@@ -4,6 +4,10 @@ import Link from 'next/link'
 import clsx from 'clsx'
 
 import { Container } from '@/components/Container'
+import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
+import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
+import { ParallaxGroup } from '@/components/motion/ParallaxGroup'
+import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { Prose } from '@/components/Prose'
 import { ArticleBody } from '@/components/cms/ArticleBody'
 import { GitHubIcon, LinkedInIcon, MailIcon, XIcon } from '@/icons'
@@ -37,6 +41,56 @@ function SocialLink({
     </li>
   )
 }
+
+type SocialLinkItem = {
+  href: string
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  className?: string
+}
+
+function SocialLinksList({ links }: { links: SocialLinkItem[] }) {
+  return (
+    <ul role="list">
+      {links.map((link) => (
+        <SocialLink
+          key={link.href}
+          href={link.href}
+          icon={link.icon}
+          className={link.className}
+        >
+          {link.label}
+        </SocialLink>
+      ))}
+    </ul>
+  )
+}
+
+const socialLinks: SocialLinkItem[] = [
+  {
+    href: 'https://x.com/brandonperfetti',
+    icon: XIcon,
+    label: 'Follow on X',
+  },
+  {
+    href: 'https://github.com/brandonperfetti',
+    icon: GitHubIcon,
+    label: 'Follow on GitHub',
+    className: 'mt-4',
+  },
+  {
+    href: 'https://www.linkedin.com/in/brandonperfetti/',
+    icon: LinkedInIcon,
+    label: 'Follow on LinkedIn',
+    className: 'mt-4',
+  },
+  {
+    href: 'mailto:brandon@brandonperfetti.com',
+    icon: MailIcon,
+    label: 'brandon@brandonperfetti.com',
+    className: 'mt-8 border-t border-zinc-100 pt-8 dark:border-zinc-700/40',
+  },
+]
 
 const defaultAboutMeta = {
   title: 'About',
@@ -141,80 +195,87 @@ export default async function About() {
   return (
     <Container className="my-16 sm:mt-32">
       <div className="grid grid-cols-1 gap-y-14 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:gap-y-12">
-        <div className="order-2 hidden lg:order-none lg:block lg:pl-20">
-          <div className="mx-auto max-w-xs px-2.5 lg:max-w-none">
-            <Image
-              height={800}
-              width={800}
-              src={getOptimizedImageUrl(portraitImage, {
-                width: 1024,
-                height: 1024,
-                crop: 'fill',
-              })}
-              alt="Brandon Perfetti"
-              sizes="(min-width: 1024px) 32rem, 20rem"
-              className="aspect-square rounded-2xl bg-zinc-100 object-cover md:rotate-3 dark:bg-zinc-800"
-            />
+        <div className="order-2 hidden lg:order-none lg:row-span-2 lg:block lg:pl-20">
+          <div className="space-y-6 lg:sticky lg:top-10 lg:self-start">
+            <div className="mx-auto max-w-xs px-2.5 lg:max-w-none">
+              <HoverMotionCard y={0} scale={1} imageScale={1.03}>
+                <div className="overflow-hidden rounded-2xl md:rotate-3">
+                  <Image
+                    height={800}
+                    width={800}
+                    src={getOptimizedImageUrl(portraitImage, {
+                      width: 1024,
+                      height: 1024,
+                      crop: 'fill',
+                    })}
+                    alt="Brandon Perfetti"
+                    sizes="(min-width: 1024px) 32rem, 20rem"
+                    data-hover-image
+                    className="aspect-square bg-zinc-100 object-cover dark:bg-zinc-800"
+                  />
+                </div>
+              </HoverMotionCard>
+            </div>
+            <div
+              data-testid="about-sticky-rail-anchor"
+              className="mb-4 lg:mt-2"
+            >
+              <SocialLinksList links={socialLinks} />
+            </div>
           </div>
         </div>
         <div className="order-first lg:order-first lg:row-span-2">
-          <h1 className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100">
-            {heroTitle}
-          </h1>
-          <div className="mt-6 space-y-7 text-base text-zinc-600 dark:text-zinc-400">
-            <p>{heroSubtitle}</p>
-          </div>
-          <div className="mt-8 lg:hidden">
-            <div className="mx-auto max-w-xs px-2.5">
-              <Image
-                height={800}
-                width={800}
-                src={getOptimizedImageUrl(portraitImage, {
-                  width: 1024,
-                  height: 1024,
-                  crop: 'fill',
-                })}
-                alt="Brandon Perfetti"
-                sizes="20rem"
-                className="aspect-square rounded-2xl bg-zinc-100 object-cover dark:bg-zinc-800"
-              />
+          <AnimatedHeadline
+            text={heroTitle}
+            variant="typewriter"
+            className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100"
+          />
+          <ScrollReveal y={14} duration={0.72} delay={0.24}>
+            <div className="mt-6 space-y-7 text-base text-zinc-600 dark:text-zinc-400">
+              <p>{heroSubtitle}</p>
             </div>
-          </div>
-          {page?.bodyBlocks?.length ? (
-            <Prose className="mt-8 max-w-none" data-mdx-content>
-              <ArticleBody blocks={page.bodyBlocks} />
-            </Prose>
-          ) : (
-            <AboutFallbackBody />
-          )}
+          </ScrollReveal>
+          <ScrollReveal y={16} duration={0.78} delay={0.36}>
+            <div className="mt-8">
+              <div className="lg:hidden">
+                <ParallaxGroup amount={6} start="top 94%" end="bottom 8%">
+                  <div
+                    className="mx-auto max-w-xs px-2.5 will-change-transform"
+                    data-parallax-item
+                    data-parallax-speed="0.6"
+                  >
+                    <HoverMotionCard y={0} scale={1} imageScale={1.03}>
+                      <div className="overflow-hidden rounded-2xl">
+                        <Image
+                          height={800}
+                          width={800}
+                          src={getOptimizedImageUrl(portraitImage, {
+                            width: 1024,
+                            height: 1024,
+                            crop: 'fill',
+                          })}
+                          alt="Brandon Perfetti"
+                          sizes="20rem"
+                          data-hover-image
+                          className="aspect-square bg-zinc-100 object-cover dark:bg-zinc-800"
+                        />
+                      </div>
+                    </HoverMotionCard>
+                  </div>
+                </ParallaxGroup>
+              </div>
+            </div>
+            {page?.bodyBlocks?.length ? (
+              <Prose className="mt-8 max-w-none" data-mdx-content>
+                <ArticleBody blocks={page.bodyBlocks} />
+              </Prose>
+            ) : (
+              <AboutFallbackBody />
+            )}
+          </ScrollReveal>
         </div>
-        <div className="mb-4 lg:mt-2 lg:pl-20">
-          <ul role="list">
-            <SocialLink href="https://x.com/brandonperfetti" icon={XIcon}>
-              Follow on X
-            </SocialLink>
-            <SocialLink
-              href="https://github.com/brandonperfetti"
-              icon={GitHubIcon}
-              className="mt-4"
-            >
-              Follow on GitHub
-            </SocialLink>
-            <SocialLink
-              href="https://www.linkedin.com/in/brandonperfetti/"
-              icon={LinkedInIcon}
-              className="mt-4"
-            >
-              Follow on LinkedIn
-            </SocialLink>
-            <SocialLink
-              href="mailto:brandon@brandonperfetti.com"
-              icon={MailIcon}
-              className="mt-8 border-t border-zinc-100 pt-8 dark:border-zinc-700/40"
-            >
-              brandon@brandonperfetti.com
-            </SocialLink>
-          </ul>
+        <div className="mb-4 lg:hidden">
+          <SocialLinksList links={socialLinks} />
         </div>
       </div>
     </Container>

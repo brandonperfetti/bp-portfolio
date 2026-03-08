@@ -61,14 +61,14 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Uses() {
+  const page = await getCmsPageByPath('/uses')
   const cmsUses = isNotionProvider() ? await getCmsUses() : null
+  const title = page?.title || String(defaultUsesMeta.title)
+  const intro = page?.subtitle || String(defaultUsesMeta.description)
 
   if (cmsUses) {
     return (
-      <SimpleLayout
-        title="Software, hardware, and workflows I rely on every week."
-        intro="A practical list of tools I use for product work, engineering, communication, and learning."
-      >
+      <SimpleLayout title={title} intro={intro}>
         <div className="space-y-20">
           {cmsUses.length ? (
             cmsUses.map((section) => (
@@ -96,10 +96,7 @@ export default async function Uses() {
   }
 
   return (
-    <SimpleLayout
-      title="Software, hardware, and workflows I rely on every week."
-      intro="A practical list of tools I use for product work, engineering, communication, and learning."
-    >
+    <SimpleLayout title={title} intro={intro}>
       <div className="space-y-20">
         <ToolsSection title="Workstation">
           <Tool title="14-inch MacBook Pro, Apple M2 Pro, 16GB RAM (2023)">
