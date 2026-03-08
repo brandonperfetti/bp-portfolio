@@ -6,14 +6,16 @@ const HOME_STICKY_RAIL_MAX_DRIFT_RATIO = 0.25
 // About rail should remain visually tighter because the right column is more
 // static while the left narrative content scrolls.
 const ABOUT_STICKY_RAIL_MAX_DRIFT_RATIO = 0.07
+const STICKY_RAIL_STABILITY_TOLERANCE_PX = 0.75
+const STICKY_RAIL_REQUIRED_CONSECUTIVE_STABLE_READS = 2
+const STICKY_RAIL_SAMPLE_INTERVAL_MS = 40
+const STICKY_RAIL_MAX_SAMPLES = 16
 
 async function getStableBoundingBoxY(page: Page, locator: Locator) {
-  const STABILITY_TOLERANCE_PX = 0.75
-  const REQUIRED_CONSECUTIVE_STABLE_READS = 2
   let previousY: number | null = null
   let consecutiveStableCount = 0
 
-  for (let index = 0; index < 16; index += 1) {
+  for (let index = 0; index < STICKY_RAIL_MAX_SAMPLES; index += 1) {
     const box = await locator.boundingBox()
     if (!box) {
       throw new Error('Expected sticky rail anchor to have a bounding box.')
@@ -21,10 +23,12 @@ async function getStableBoundingBoxY(page: Page, locator: Locator) {
 
     if (
       previousY !== null &&
-      Math.abs(box.y - previousY) < STABILITY_TOLERANCE_PX
+      Math.abs(box.y - previousY) < STICKY_RAIL_STABILITY_TOLERANCE_PX
     ) {
       consecutiveStableCount += 1
-      if (consecutiveStableCount >= REQUIRED_CONSECUTIVE_STABLE_READS) {
+      if (
+        consecutiveStableCount >= STICKY_RAIL_REQUIRED_CONSECUTIVE_STABLE_READS
+      ) {
         return box.y
       }
     } else {
@@ -32,7 +36,7 @@ async function getStableBoundingBoxY(page: Page, locator: Locator) {
     }
 
     previousY = box.y
-    await page.waitForTimeout(40)
+    await page.waitForTimeout(STICKY_RAIL_SAMPLE_INTERVAL_MS)
   }
 
   throw new Error('Sticky rail position did not stabilize in time.')
