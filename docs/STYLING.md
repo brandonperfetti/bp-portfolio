@@ -13,6 +13,16 @@
 - Reuse existing component primitives (`Button`, `Card`, `Container`) before introducing new wrappers.
 - Prefer existing color semantics (`zinc`, `teal`) to keep visual consistency.
 
+## Motion Conventions
+
+- Prefer shared motion primitives over one-off animation logic:
+  - `AnimatedHeadline`
+  - `ScrollReveal`
+  - `ParallaxGroup`
+  - `HoverMotionCard`
+- Keep motion subtle and compositional (small y/opacity/scale offsets, restrained stagger).
+- When adding GSAP effects in hooks, always include cleanup (`context.revert()`, `timeline.kill()`, or `tween.kill()`).
+
 ## Mobile Input Font Size
 
 - To prevent iOS Safari auto-zoom on focus, form controls must render at `16px` on mobile.
