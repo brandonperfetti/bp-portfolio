@@ -44,7 +44,8 @@ export function ParallaxGroup({
       )
 
       for (const target of targets) {
-        const speed = Number(target.dataset.parallaxSpeed ?? '1')
+        const parsedSpeed = parseFloat(target.dataset.parallaxSpeed ?? '1')
+        const speed = Number.isFinite(parsedSpeed) ? parsedSpeed : 1
         const delta = amount * speed
 
         gsap.fromTo(
