@@ -394,7 +394,7 @@ export default async function Home() {
             y={20}
             stagger={0.16}
           >
-            <div className="space-y-10">
+            <div className="space-y-10 lg:sticky lg:top-10">
               <div data-reveal-item>
                 <Messenger />
               </div>
