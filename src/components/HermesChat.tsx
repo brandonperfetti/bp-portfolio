@@ -251,8 +251,10 @@ export function HermesChat() {
       return
     }
 
-    animatedMessageIdsRef.current.add(latestMessage.id)
-    gsap.fromTo(
+    const animatedMessageIds = animatedMessageIdsRef.current
+    animatedMessageIds.add(latestMessage.id)
+    let didComplete = false
+    const tween = gsap.fromTo(
       node,
       {
         autoAlpha: 0,
@@ -265,8 +267,18 @@ export function HermesChat() {
         x: 0,
         duration: latestMessage.role === 'assistant' ? 0.44 : 0.56,
         ease: 'power2.out',
+        onComplete: () => {
+          didComplete = true
+        },
       },
     )
+
+    return () => {
+      tween.kill()
+      if (!didComplete) {
+        animatedMessageIds.delete(latestMessage.id)
+      }
+    }
   }, [messages, prefersReducedMotion])
 
   useEffect(() => {
