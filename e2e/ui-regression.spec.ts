@@ -95,7 +95,7 @@ test('home desktop sticky right rail remains pinned while scrolling', async ({
     (topOffset) => window.scrollTo(0, topOffset),
     Math.round(viewportHeight * 1.2),
   )
-  const railAnchor = page.getByText('Send a message').first()
+  const railAnchor = page.getByTestId('home-sticky-rail-anchor')
   await expect(railAnchor).toBeVisible()
   const firstY = await getStableBoundingBoxY(page, railAnchor)
 
