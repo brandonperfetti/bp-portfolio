@@ -132,12 +132,7 @@ export function AnimatedHeadline({
                   <span
                     key={`${wordIndex}-${char}-${charIndex}`}
                     data-char
-                    className={clsx(
-                      'inline-block',
-                      variant === 'typewriter'
-                        ? 'will-change-[opacity]'
-                        : 'will-change-transform',
-                    )}
+                    className="inline-block will-change-[opacity]"
                   >
                     {char}
                   </span>
