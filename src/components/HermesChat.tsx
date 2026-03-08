@@ -167,10 +167,10 @@ export function HermesChat() {
       return
     }
 
+    animatedMessageIdsRef.current.add(firstMessage.id)
     const timeline = gsap.timeline({
       onComplete: () => {
         introPlayedRef.current = true
-        animatedMessageIdsRef.current.add(firstMessage.id)
       },
     })
     timeline.fromTo(
@@ -580,7 +580,7 @@ export function HermesChat() {
           <div className="chat-message" ref={imageIndicatorRef}>
             <div className="flex items-end">
               <div className="mx-1 max-w-[92%] text-sm lg:max-w-[80%]">
-                <span className="inline-block animate-pulse rounded-xl rounded-bl-none bg-teal-500 px-4 py-2.5 text-white">
+                <span className="inline-block rounded-xl rounded-bl-none bg-teal-500 px-4 py-2.5 text-white motion-safe:animate-pulse">
                   Let&apos;s consult Salvador... 🧑‍🎨
                 </span>
               </div>
@@ -592,7 +592,7 @@ export function HermesChat() {
           <div className="chat-message" ref={typingIndicatorRef}>
             <div className="flex items-end">
               <div className="mx-1 max-w-[92%] text-sm lg:max-w-[80%]">
-                <span className="inline-block animate-pulse rounded-xl rounded-bl-none bg-teal-500 px-4 py-2.5 text-white">
+                <span className="inline-block rounded-xl rounded-bl-none bg-teal-500 px-4 py-2.5 text-white motion-safe:animate-pulse">
                   {typingMessage || 'Thinking'}...
                 </span>
               </div>
