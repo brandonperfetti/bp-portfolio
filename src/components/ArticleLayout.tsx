@@ -70,7 +70,7 @@ export function ArticleLayout({
                 className="mt-6 text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100"
               />
               {article.image ? (
-                <ScrollReveal y={20} duration={0.8} delay={0.08}>
+                <ScrollReveal y={20} duration={0.86} delay={0.1}>
                   <Image
                     src={getOptimizedImageUrl(article.image, {
                       width: 1600,

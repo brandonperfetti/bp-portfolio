@@ -14,9 +14,9 @@ export function ScrollReveal({
   className,
   targets = 'self',
   once = true,
-  y = 22,
-  duration = 0.8,
-  stagger = 0.08,
+  y = 18,
+  duration = 0.86,
+  stagger = 0.09,
   start = 'top 88%',
   delay = 0,
 }: {

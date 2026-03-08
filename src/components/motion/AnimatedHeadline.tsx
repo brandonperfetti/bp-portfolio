@@ -66,7 +66,7 @@ export function AnimatedHeadline({
             autoAlpha: 0,
             repeat: -1,
             yoyo: true,
-            duration: 0.75,
+            duration: 0.82,
             ease: 'none',
             delay:
               delay +
@@ -84,7 +84,7 @@ export function AnimatedHeadline({
       )
       gsap.fromTo(
         wordNodes,
-        { autoAlpha: 0, y: 18 },
+        { autoAlpha: 0, y: 16 },
         {
           autoAlpha: 1,
           y: 0,
