@@ -1,4 +1,24 @@
-import { expect, test } from '@playwright/test'
+import { type Locator, type Page, expect, test } from '@playwright/test'
+
+async function getStableBoundingBoxY(page: Page, locator: Locator) {
+  let previousY: number | null = null
+  for (let index = 0; index < 16; index += 1) {
+    const box = await locator.boundingBox()
+    if (!box) {
+      throw new Error('Expected sticky rail anchor to have a bounding box.')
+    }
+    if (previousY !== null && Math.abs(box.y - previousY) < 0.75) {
+      return box.y
+    }
+    previousY = box.y
+    await page.waitForTimeout(40)
+  }
+
+  if (previousY === null) {
+    throw new Error('Unable to read stable sticky rail position.')
+  }
+  return previousY
+}
 
 test('articles query syncs to URL', async ({ page }) => {
   await page.goto('/articles')
