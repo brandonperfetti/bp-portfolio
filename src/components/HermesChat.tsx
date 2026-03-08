@@ -154,6 +154,16 @@ export function HermesChat() {
   }, [messages, typingMessage, isTyping, isImageLoading])
 
   useEffect(() => {
+    const activeMessageIds = new Set(messages.map((message) => message.id))
+
+    Object.keys(messageNodeByIdRef.current).forEach((id) => {
+      if (!activeMessageIds.has(id)) {
+        delete messageNodeByIdRef.current[id]
+      }
+    })
+  }, [messages])
+
+  useEffect(() => {
     if (prefersReducedMotion || introPlayedRef.current || !isChatStart) {
       return
     }
@@ -514,7 +524,12 @@ export function HermesChat() {
             key={message.id}
             className="chat-message"
             ref={(node) => {
-              messageNodeByIdRef.current[message.id] = node
+              if (node) {
+                messageNodeByIdRef.current[message.id] = node
+                return
+              }
+
+              delete messageNodeByIdRef.current[message.id]
             }}
           >
             <div
