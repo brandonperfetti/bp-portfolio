@@ -134,7 +134,7 @@ export function ArticleMeta({
       {!topicChips.length && category ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-zinc-400 dark:text-zinc-500">Topic:</span>
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 capitalize dark:bg-zinc-800">
             {category}
           </span>
         </div>
@@ -145,7 +145,7 @@ export function ArticleMeta({
           {topicChips.map((item, index) => (
             <span
               key={`topic-${item}-${index}`}
-              className="rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800"
+              className="rounded-full bg-zinc-100 px-2 py-0.5 capitalize dark:bg-zinc-800"
             >
               {item}
             </span>
@@ -158,7 +158,7 @@ export function ArticleMeta({
           {techChips.map((item, index) => (
             <span
               key={`tech-${item}-${index}`}
-              className="rounded-full bg-teal-50 px-2 py-0.5 text-teal-700 dark:bg-teal-900/40 dark:text-teal-200"
+              className="rounded-full bg-teal-50 px-2 py-0.5 text-teal-700 capitalize dark:bg-teal-900/40 dark:text-teal-200"
             >
               {item}
             </span>
