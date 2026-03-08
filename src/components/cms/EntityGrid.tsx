@@ -22,14 +22,17 @@ export function EntityGrid({ items }: { items: CmsEntityItem[] }) {
         className="grid grid-cols-1 gap-x-12 gap-y-12 sm:grid-cols-2 sm:gap-y-16 lg:grid-cols-3"
       >
         {items.map((item, index) => {
+          const computedSlug =
+            item.slug || item.name.toLowerCase().replace(/\s+/g, '-')
+          const stableItemKey = computedSlug || `${item.name}-${index}`
           // Stable heading id wires the full-card overlay link to visible heading text.
           // This preserves full-card click UX while improving heading/link semantics.
           const headingId = `entity-grid-heading-${instanceId}-${
-            item.slug || item.name.toLowerCase().replace(/\s+/g, '-')
+            computedSlug
           }-${index}`
 
           return (
-            <HoverMotionCard as="li" key={`${item.slug || item.name}-${index}`}>
+            <HoverMotionCard as="li" key={stableItemKey}>
               <Card>
                 {item.link?.href ? (
                   <>
