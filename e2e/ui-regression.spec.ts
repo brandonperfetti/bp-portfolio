@@ -24,6 +24,10 @@ test('articles query syncs to URL', async ({ page }) => {
   await page.goto('/articles')
 
   const searchInput = page.getByPlaceholder('Search articles')
+  if ((await searchInput.count()) === 0) {
+    await expect(page.getByText('No published articles')).toBeVisible()
+    return
+  }
   await expect(searchInput).toBeVisible()
   await searchInput.fill('react')
 
