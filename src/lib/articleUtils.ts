@@ -14,7 +14,7 @@ export function dedupeArticlesBySlug(
       if (!article.slug) {
         console.warn('[articles] skipping item with missing slug', {
           title: article.title,
-          article,
+          slug: article.slug,
         })
       }
       continue
