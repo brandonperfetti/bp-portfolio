@@ -46,16 +46,31 @@ test('articles query syncs to URL', async ({ page }) => {
   await page.goto('/articles')
 
   const searchInput = page.getByPlaceholder('Search articles')
-  if ((await searchInput.count()) === 0) {
-    await expect(page.getByText('No published articles')).toBeVisible()
-    return
-  }
+  test.skip(
+    (await searchInput.count()) === 0,
+    'No published articles available in this environment to exercise query sync.',
+  )
+
   await expect(searchInput).toBeVisible()
   await searchInput.fill('react')
 
   await expect
     .poll(() => new URL(page.url()).searchParams.get('q'))
     .toBe('react')
+})
+
+test('articles shows empty-state message when no published articles', async ({
+  page,
+}) => {
+  await page.goto('/articles')
+
+  const searchInput = page.getByPlaceholder('Search articles')
+  test.skip(
+    (await searchInput.count()) > 0,
+    'Published articles are available in this environment.',
+  )
+
+  await expect(page.getByText('No published articles')).toBeVisible()
 })
 
 test('header search modal opens and closes via escape', async ({ page }) => {
@@ -87,8 +102,8 @@ test('home desktop sticky right rail remains pinned while scrolling', async ({
   page,
 }) => {
   // Stabilize after each scroll, then compare drift against viewport-relative tolerance.
-  await page.goto('/')
   await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto('/')
   const viewportHeight = page.viewportSize()?.height ?? 1000
 
   await page.evaluate(
@@ -111,15 +126,15 @@ test('home desktop sticky right rail remains pinned while scrolling', async ({
 test('about desktop sticky right rail remains pinned while scrolling', async ({
   page,
 }) => {
-  await page.goto('/about')
   await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto('/about')
   const viewportHeight = page.viewportSize()?.height ?? 1000
 
   await page.evaluate(
     (topOffset) => window.scrollTo(0, topOffset),
     Math.round(viewportHeight * 0.9),
   )
-  const railAnchor = page.getByText('Follow on X').first()
+  const railAnchor = page.getByTestId('about-sticky-rail-anchor')
   await expect(railAnchor).toBeVisible()
   const firstY = await getStableBoundingBoxY(page, railAnchor)
 

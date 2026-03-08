@@ -197,7 +197,10 @@ export default async function About() {
                 </div>
               </HoverMotionCard>
             </div>
-            <div className="mb-4 lg:mt-2">
+            <div
+              data-testid="about-sticky-rail-anchor"
+              className="mb-4 lg:mt-2"
+            >
               <ul role="list">
                 {socialLinks.map((link) => (
                   <SocialLink
