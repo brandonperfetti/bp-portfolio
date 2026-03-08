@@ -10,6 +10,9 @@
 - `next-themes`
 - `clsx`
 - `@heroicons/react`
+- `gsap`
+  - Purpose: reusable motion primitives (headline, reveal, parallax, hover) and interaction choreography (search modal, Hermes message entrances).
+  - Accessibility: all motion must respect reduced-motion preferences through `usePrefersReducedMotion` and non-motion fallbacks.
 
 ## Content and Rendering
 
