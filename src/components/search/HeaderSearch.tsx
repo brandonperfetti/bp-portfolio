@@ -19,6 +19,7 @@ type SearchItem = {
 const SEARCH_CACHE_KEY = 'bp:header-search:index:v2'
 const SEARCH_FETCH_TIMEOUT_MS = 8000
 const SEARCH_CACHE_TTL_MS = 60 * 1000
+const SEARCH_DIALOG_TITLE_ID = 'header-search-dialog-title'
 
 type SearchCacheEntry = {
   savedAt: number
@@ -185,7 +186,17 @@ export function HeaderSearch() {
           // noop
         }
       })
-      .catch((_error: unknown) => {
+      .catch((error: unknown) => {
+        const isAbortError =
+          (error instanceof DOMException && error.name === 'AbortError') ||
+          (typeof error === 'object' &&
+            error !== null &&
+            'name' in error &&
+            error.name === 'AbortError')
+        if (isAbortError) {
+          return
+        }
+
         setItems([])
         setLoadState('error')
       })
@@ -337,8 +348,14 @@ export function HeaderSearch() {
         >
           <div
             ref={modalPanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={SEARCH_DIALOG_TITLE_ID}
             className="w-full max-w-2xl rounded-2xl bg-white p-4 shadow-xl ring-1 ring-zinc-900/10 dark:bg-zinc-900 dark:ring-zinc-700"
           >
+            <h2 id={SEARCH_DIALOG_TITLE_ID} className="sr-only">
+              Search articles
+            </h2>
             <div className="flex items-center gap-3">
               <input
                 autoFocus
