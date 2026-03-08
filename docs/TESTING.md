@@ -26,6 +26,11 @@
   - `/articles`
   - `/hermes`
   - `/about`, `/projects`, `/tech`, `/uses`
+- Motion/interaction smoke:
+  - headline/scroll/hover motion renders without console/runtime errors
+  - sticky desktop right rails on Home/About behave without internal rail scrollbars
+  - header search modal/result transitions remain smooth and key-stable
+  - Hermes empty submit re-focuses input
 - API smoke checks (as relevant):
   - `/api/search`
   - `/api/openai/chat`
@@ -42,6 +47,7 @@
 - Expand Playwright flows:
   - article filtering/search query sync
   - header search modal open/close behavior
+  - reduced-motion behavior parity for key routes/components
   - publish-gate happy/fail API scenarios (fixture-backed)
 - Add component tests for high-change UI areas:
   - header search interactions
