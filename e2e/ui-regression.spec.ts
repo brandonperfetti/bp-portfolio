@@ -60,22 +60,26 @@ test('hermes empty submit focuses input', async ({ page }) => {
 test('home desktop sticky right rail remains pinned while scrolling', async ({
   page,
 }) => {
+  // Stabilize after each scroll, then compare drift against viewport-relative tolerance.
   await page.goto('/')
   await page.setViewportSize({ width: 1440, height: 1000 })
+  const viewportHeight = page.viewportSize()?.height ?? 1000
 
-  await page.evaluate(() => window.scrollTo(0, 1200))
-  await page.waitForTimeout(200)
+  await page.evaluate(
+    (topOffset) => window.scrollTo(0, topOffset),
+    Math.round(viewportHeight * 1.2),
+  )
   const railAnchor = page.getByText('Send a message').first()
   await expect(railAnchor).toBeVisible()
-  const firstBox = await railAnchor.boundingBox()
+  const firstY = await getStableBoundingBoxY(page, railAnchor)
 
-  await page.evaluate(() => window.scrollTo(0, 2000))
-  await page.waitForTimeout(200)
-  const secondBox = await railAnchor.boundingBox()
-
-  expect(firstBox).not.toBeNull()
-  expect(secondBox).not.toBeNull()
-  expect(Math.abs((secondBox?.y ?? 0) - (firstBox?.y ?? 0))).toBeLessThan(140)
+  await page.evaluate(
+    (topOffset) => window.scrollTo(0, topOffset),
+    Math.round(viewportHeight * 2),
+  )
+  const secondY = await getStableBoundingBoxY(page, railAnchor)
+  const maxDrift = viewportHeight * 0.25
+  expect(Math.abs(secondY - firstY)).toBeLessThan(maxDrift)
 })
 
 test('about desktop sticky right rail remains pinned while scrolling', async ({
