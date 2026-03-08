@@ -363,7 +363,11 @@ export function HermesChat() {
     event.preventDefault()
 
     const value = input.trim()
-    if (!value || loading) {
+    if (!value) {
+      inputRef.current?.focus()
+      return
+    }
+    if (loading) {
       return
     }
 
