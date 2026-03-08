@@ -142,6 +142,8 @@ export function HoverMotionCard({
 
   return (
     <Component
+      // Keep callback ref for the polymorphic `as` union, whose intrinsic refs are
+      // more specific than HTMLElement and don't accept a shared object ref.
       ref={(node: HTMLElement | null) => {
         rootRef.current = node
       }}
