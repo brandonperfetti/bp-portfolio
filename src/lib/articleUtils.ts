@@ -10,15 +10,18 @@ export function dedupeArticlesBySlug(
   const deduped: ArticleWithSlug[] = []
 
   for (const article of articles) {
-    if (!article.slug || seen.has(article.slug)) {
-      if (!article.slug) {
-        console.warn('[articles] skipping item with missing slug', {
-          title: article.title,
-          slug: article.slug,
-        })
-      }
+    if (!article.slug) {
+      console.warn('[articles] skipping item with missing slug', {
+        title: article.title,
+        slug: article.slug,
+      })
       continue
     }
+
+    if (seen.has(article.slug)) {
+      continue
+    }
+
     seen.add(article.slug)
     deduped.push(article)
   }
