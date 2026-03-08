@@ -88,6 +88,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Projects() {
+  const page = await getCmsPageByPath('/projects')
   const cmsProjects = isNotionProvider() ? await getCmsProjects() : null
   const items = cmsProjects
     ? cmsProjects
@@ -101,8 +102,14 @@ export default async function Projects() {
 
   return (
     <SimpleLayout
-      title="Selected projects across product, engineering, and consulting work."
-      intro="A practical mix of platform builds, client delivery, and product experiments."
+      title={
+        page?.title ||
+        'Selected projects across product, engineering, and consulting work.'
+      }
+      intro={
+        page?.subtitle ||
+        'A practical mix of platform builds, client delivery, and product experiments.'
+      }
     >
       {items.length ? (
         <EntityGrid items={items} />

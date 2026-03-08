@@ -3,6 +3,9 @@ import { type Metadata } from 'next'
 import { Card } from '@/components/Card'
 import { Section } from '@/components/Section'
 import { SimpleLayout } from '@/components/SimpleLayout'
+import { buildPageMetadata } from '@/lib/cms/pageMetadata'
+import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
+import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 
 function SpeakingSection({
   children,
@@ -40,21 +43,45 @@ function Appearance({
   )
 }
 
-export const metadata: Metadata = {
+const defaultSpeakingMeta: Metadata = {
   title: 'Speaking',
   description:
     'I’ve spoken at events all around the world and been interviewed for many podcasts.',
-  robots: {
-    index: false,
-    follow: false,
-  },
 }
 
-export default function Speaking() {
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getCmsSiteSettings()
+  const page = await getCmsPageByPath('/speaking')
+  const metadata = buildPageMetadata({
+    page,
+    settings,
+    fallbackTitle: String(defaultSpeakingMeta.title),
+    fallbackDescription: String(defaultSpeakingMeta.description),
+    path: '/speaking',
+  })
+
+  return {
+    ...metadata,
+    robots: {
+      index: false,
+      follow: false,
+    },
+  }
+}
+
+export default async function Speaking() {
+  const page = await getCmsPageByPath('/speaking')
+
   return (
     <SimpleLayout
-      title="I’ve spoken at events all around the world and been interviewed for many podcasts."
-      intro="One of my favorite ways to share my ideas is live on stage, where there’s so much more communication bandwidth than there is in writing, and I love podcast interviews because they give me the opportunity to answer questions instead of just present my opinions."
+      title={
+        page?.title ||
+        'I’ve spoken at events all around the world and been interviewed for many podcasts.'
+      }
+      intro={
+        page?.subtitle ||
+        'One of my favorite ways to share my ideas is live on stage, where there’s so much more communication bandwidth than there is in writing, and I love podcast interviews because they give me the opportunity to answer questions instead of just present my opinions.'
+      }
     >
       <div className="space-y-20">
         <SpeakingSection title="Conferences">

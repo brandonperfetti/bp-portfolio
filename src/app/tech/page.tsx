@@ -415,6 +415,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function TechStack() {
+  const page = await getCmsPageByPath('/tech')
   const cmsTech = isNotionProvider() ? await getCmsTech() : null
   // Normalize legacy tech names into URL-safe slugs: trim/lowercase, strip
   // non-alphanumeric chars (except spaces/hyphens), then collapse to hyphens.
@@ -429,8 +430,11 @@ export default async function TechStack() {
 
   return (
     <SimpleLayout
-      title="Core technologies I reach for first."
-      intro="A practical stack for product delivery, engineering execution, and long-term maintainability."
+      title={page?.title || 'Core technologies I reach for first.'}
+      intro={
+        page?.subtitle ||
+        'A practical stack for product delivery, engineering execution, and long-term maintainability.'
+      }
     >
       {items.length ? (
         <Suspense fallback={<TechExplorerFallback />}>

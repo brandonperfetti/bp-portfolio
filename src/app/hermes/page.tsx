@@ -27,8 +27,12 @@ export async function generateMetadata(): Promise<Metadata> {
   })
 }
 
-export default function HermesPage() {
-  const headingText = 'Hermes'
+export default async function HermesPage() {
+  const page = await getCmsPageByPath('/hermes')
+  const headingText = page?.title || 'Hermes'
+  const subtitleText =
+    page?.subtitle ||
+    'Prefix your prompt with image: or Dali: to generate an image.'
 
   return (
     <Container className="py-0">
@@ -41,7 +45,7 @@ export default function HermesPage() {
           />
           <ScrollReveal y={10} duration={0.6} delay={0.26}>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              Prefix your prompt with image: or Dali: to generate an image.
+              {subtitleText}
             </p>
           </ScrollReveal>
         </div>
