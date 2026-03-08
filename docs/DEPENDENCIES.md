@@ -26,6 +26,13 @@
 - `@sendgrid/mail`
 - `feed`
 
+## Observability
+
+- `@vercel/analytics`
+  - Purpose: lightweight page and traffic analytics from Vercel with minimal integration overhead.
+- `@vercel/speed-insights`
+  - Purpose: real-user performance telemetry (web vitals + page responsiveness) to track frontend UX regressions.
+
 ## Styling Toolchain
 
 - `tailwindcss`, `@tailwindcss/postcss`, `@tailwindcss/typography`
@@ -39,6 +46,8 @@
 - `jsdom`
 - `@testing-library/react`
 - `@testing-library/jest-dom`
+- `@testing-library/user-event`
+  - Purpose: higher-fidelity user interaction simulation (typing, clicking, keyboard flow) beyond low-level event dispatch.
 - `@playwright/test`
 
 ## Workflow Tooling
