@@ -7,7 +7,11 @@ import { useEffect, useState } from 'react'
  * can gracefully fall back to static rendering.
  */
 export function usePrefersReducedMotion() {
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false,
+  )
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)')
