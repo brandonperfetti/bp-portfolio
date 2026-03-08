@@ -13,6 +13,10 @@
 - `gsap`
   - Purpose: reusable motion primitives (headline, reveal, parallax, hover) and interaction choreography (search modal, Hermes message entrances).
   - Accessibility: all motion must respect reduced-motion preferences through `usePrefersReducedMotion` and non-motion fallbacks.
+  - Audit date: 2026-03-08.
+  - Risk outcome: No findings.
+  - Security/compatibility notes: no known Sonatype security flags; tightly coupled to animation timing and reduced-motion fallbacks.
+  - Upgrade-risk classification: Medium (animation behavior/timing drift can affect UX polish).
 
 ## Content and Rendering
 
@@ -30,8 +34,16 @@
 
 - `@vercel/analytics`
   - Purpose: lightweight page and traffic analytics from Vercel with minimal integration overhead.
+  - Audit date: 2026-03-08.
+  - Risk outcome: No findings.
+  - Security/compatibility notes: Sonatype reports no vulnerability/malicious/EOL flags at `1.6.1`; runtime impact is limited to analytics instrumentation.
+  - Upgrade-risk classification: Low.
 - `@vercel/speed-insights`
   - Purpose: real-user performance telemetry (web vitals + page responsiveness) to track frontend UX regressions.
+  - Audit date: 2026-03-08.
+  - Risk outcome: No findings.
+  - Security/compatibility notes: no known Sonatype risk indicators; ensure version stays aligned with Next major upgrades.
+  - Upgrade-risk classification: Low.
 
 ## Styling Toolchain
 
@@ -48,6 +60,10 @@
 - `@testing-library/jest-dom`
 - `@testing-library/user-event`
   - Purpose: higher-fidelity user interaction simulation (typing, clicking, keyboard flow) beyond low-level event dispatch.
+  - Audit date: 2026-03-08.
+  - Risk outcome: No findings.
+  - Security/compatibility notes: Sonatype shows clean metadata at `14.6.1`; requires modern package exports support (compatible with current TS/Next setup).
+  - Upgrade-risk classification: Low.
 - `@playwright/test`
 
 ## Workflow Tooling
