@@ -42,6 +42,7 @@ export function ArticleLayout({
   const { previousPathname } = useContext(AppContext)
   const [isHeroImageLoaded, setIsHeroImageLoaded] = useState(false)
 
+  // Reset image reveal choreography when navigating between article heroes.
   useEffect(() => {
     setIsHeroImageLoaded(false)
   }, [article.image])
@@ -89,6 +90,8 @@ export function ArticleLayout({
                       sizes="(min-width: 1280px) 42rem, (min-width: 1024px) 42rem, 100vw"
                       priority
                       onLoad={() => setIsHeroImageLoaded(true)}
+                      // Fallback: if image load fails, avoid leaving the hero permanently hidden.
+                      onError={() => setIsHeroImageLoaded(true)}
                       className={`aspect-[16/9] w-full object-cover transition-[opacity,transform] duration-700 ease-out motion-reduce:transform-none motion-reduce:transition-none ${
                         isHeroImageLoaded
                           ? 'scale-100 opacity-100'
