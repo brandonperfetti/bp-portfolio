@@ -43,20 +43,30 @@ function Appearance({
   )
 }
 
-const defaultSpeakingMeta: Metadata = {
+const defaultSpeakingMeta: { title: string; description: string } = {
   title: 'Speaking',
   description:
     'I’ve spoken at events all around the world and been interviewed for many podcasts.',
 }
 
+/**
+ * Resolves metadata for the Speaking route from CMS settings/page content and
+ * fallback defaults, then enforces temporary noindex/nofollow behavior.
+ *
+ * @returns Next.js metadata object with CMS-derived fields, fallback
+ * title/description from `defaultSpeakingMeta`, and explicit robots exclusion.
+ * @remarks Performs CMS I/O through `getCmsSiteSettings()` and
+ * `getCmsPageByPath('/speaking')`. Keep the robots restriction unless route
+ * indexing policy is explicitly changed.
+ */
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getCmsSiteSettings()
   const page = await getCmsPageByPath('/speaking')
   const metadata = buildPageMetadata({
     page,
     settings,
-    fallbackTitle: String(defaultSpeakingMeta.title),
-    fallbackDescription: String(defaultSpeakingMeta.description),
+    fallbackTitle: defaultSpeakingMeta.title,
+    fallbackDescription: defaultSpeakingMeta.description,
     path: '/speaking',
   })
 
@@ -76,8 +86,8 @@ export default async function Speaking() {
 
   return (
     <SimpleLayout
-      title={page?.title || String(defaultSpeakingMeta.title)}
-      intro={page?.subtitle || String(defaultSpeakingMeta.description)}
+      title={page?.title || defaultSpeakingMeta.title}
+      intro={page?.subtitle || defaultSpeakingMeta.description}
     >
       <div className="space-y-20">
         <SpeakingSection title="Conferences">
