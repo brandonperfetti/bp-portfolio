@@ -57,6 +57,15 @@ Optional env vars:
 - When proposing upgrades, include security impact and compatibility risk (major vs minor/patch).
 - Keep vulnerability blocking strict; warning-only signals (e.g., scorecard/license metadata noise) should be documented and triaged separately.
 
+## Test Update Policy
+
+- If a change modifies user-visible behavior, add or update at least one automated test that covers the new behavior.
+- UI interaction/state updates should include Playwright coverage and/or a component test (`@testing-library/react` + Vitest).
+- Pure logic/data transformations should include or update Vitest unit tests.
+- Motion/accessibility changes must include keyboard-path and reduced-motion validation (automated when practical, otherwise explicit manual checklist notes).
+- Bug-fix changes should include a regression test that fails before the fix and passes after.
+- If no new test is added, document the reason in PR testing notes.
+
 ## Progressive Disclosure
 
 - Architecture and app map: `docs/ARCHITECTURE.md`

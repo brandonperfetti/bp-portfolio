@@ -42,6 +42,20 @@
     - `403` on failed/invalid source verification
     - `403` when Turnstile verification is enabled and token is missing/invalid
 
+## Test Update Policy
+
+- Add/update tests whenever behavior changes, not only when files are added.
+- UI interaction/state changes:
+  - Prefer Playwright coverage for route-level behavior.
+  - Add component tests for targeted UI logic where full E2E is unnecessary.
+- Logic/data transformations:
+  - Add or update Vitest unit tests close to the changed module.
+- Motion/accessibility changes:
+  - Validate keyboard behavior and reduced-motion parity.
+- Bug fixes:
+  - Add a regression test that proves the fixed behavior when practical.
+- If no test is added, include explicit justification in PR testing notes.
+
 ## Coverage Priorities (Next)
 
 - Expand Playwright flows:
