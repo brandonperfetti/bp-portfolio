@@ -312,7 +312,14 @@ export function TechExplorer({
                       className="h-8 w-8 rounded object-contain"
                       sizes="2rem"
                     />
-                  ) : null}
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="flex h-8 w-8 items-center justify-center rounded bg-zinc-100 text-sm font-semibold text-zinc-600 uppercase dark:bg-zinc-700/70 dark:text-zinc-200"
+                    >
+                      {tech.name.charAt(0)}
+                    </span>
+                  )}
                 </div>
                 <h2 className="relative z-10 mt-6 text-base font-semibold text-zinc-800 dark:text-zinc-100">
                   {tech.name}
