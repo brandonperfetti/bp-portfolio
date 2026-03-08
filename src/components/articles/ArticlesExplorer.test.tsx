@@ -4,10 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { ArticlesExplorer } from '@/components/articles/ArticlesExplorer'
 import type { ArticleWithSlug } from '@/lib/articles'
 
-const replaceMock = vi.fn()
-
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: replaceMock }),
+  useRouter: () => ({ replace: () => {} }),
   usePathname: () => '/articles',
   useSearchParams: () => new URLSearchParams(''),
 }))
