@@ -380,12 +380,12 @@ export function ArticlesExplorer({
             // Keep topic/tech chips distinct when possible.
             const topicChip = matchedTopicChip ?? topicValues[0]
             const techChip =
-              (matchedTechChip &&
+              matchedTechChip &&
               matchedTechChip.toLowerCase() !== topicChip?.toLowerCase()
                 ? matchedTechChip
                 : techValues.find(
                     (item) => item.toLowerCase() !== topicChip?.toLowerCase(),
-                  )) ?? undefined
+                  )
 
             return (
               <HoverMotionCard key={article.slug}>
