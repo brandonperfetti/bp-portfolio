@@ -1,6 +1,7 @@
 'use client'
 
 import { useContext } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
@@ -40,6 +41,11 @@ export function ArticleLayout({
 }) {
   const router = useRouter()
   const { previousPathname } = useContext(AppContext)
+  const [isHeroImageLoaded, setIsHeroImageLoaded] = useState(false)
+
+  useEffect(() => {
+    setIsHeroImageLoaded(false)
+  }, [article.image])
 
   return (
     <Container className="mt-16 lg:mt-32">
@@ -71,19 +77,26 @@ export function ArticleLayout({
               />
               {article.image ? (
                 <ScrollReveal y={20} duration={0.86} delay={0.1}>
-                  <Image
-                    src={getOptimizedImageUrl(article.image, {
-                      width: 1600,
-                      height: 900,
-                      crop: 'fill',
-                    })}
-                    alt={article.title}
-                    width={1600}
-                    height={900}
-                    sizes="(min-width: 1280px) 42rem, (min-width: 1024px) 42rem, 100vw"
-                    priority
-                    className="mt-8 aspect-[16/9] w-full rounded-2xl object-cover"
-                  />
+                  <div className="mt-8 overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800">
+                    <Image
+                      src={getOptimizedImageUrl(article.image, {
+                        width: 1600,
+                        height: 900,
+                        crop: 'fill',
+                      })}
+                      alt={article.title}
+                      width={1600}
+                      height={900}
+                      sizes="(min-width: 1280px) 42rem, (min-width: 1024px) 42rem, 100vw"
+                      priority
+                      onLoad={() => setIsHeroImageLoaded(true)}
+                      className={`aspect-[16/9] w-full object-cover transition-[opacity,transform] duration-700 ease-out motion-reduce:transform-none motion-reduce:transition-none ${
+                        isHeroImageLoaded
+                          ? 'scale-100 opacity-100'
+                          : 'scale-[1.02] opacity-0'
+                      }`}
+                    />
+                  </div>
                 </ScrollReveal>
               ) : null}
             </header>
