@@ -1,3 +1,4 @@
+// Timing constants are measured in seconds.
 export const TYPEWRITER_CHAR_DURATION = 0.02
 export const TYPEWRITER_CHAR_STAGGER = 0.043
 export const LINE_WORD_DURATION = 1.14
