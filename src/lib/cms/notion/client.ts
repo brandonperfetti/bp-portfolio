@@ -1,6 +1,7 @@
 import { NotionConfigError, NotionHttpError } from '@/lib/cms/notion/errors'
 
 const NOTION_BASE_URL = 'https://api.notion.com/v1'
+const NOTION_API_ORIGIN = new URL(NOTION_BASE_URL).origin
 const DEFAULT_NOTION_VERSION = '2025-09-03'
 const NOTION_REQUEST_TIMEOUT_MS = 15_000
 
@@ -113,11 +114,32 @@ export function parseDataSourceId(value: string | undefined, envName: string) {
     : value
 }
 
+function buildNotionRequestUrl(path: string): string {
+  if (!path.startsWith('/')) {
+    throw new NotionConfigError(
+      `Notion request path must start with "/": ${path}`,
+    )
+  }
+
+  if (path.startsWith('//') || path.includes('..')) {
+    throw new NotionConfigError(`Blocked unsafe Notion request path: ${path}`)
+  }
+
+  const url = new URL(NOTION_BASE_URL)
+  url.pathname = `${url.pathname.replace(/\/$/, '')}${path}`
+  if (url.origin !== NOTION_API_ORIGIN || !url.pathname.startsWith('/v1/')) {
+    throw new NotionConfigError(`Blocked unsafe Notion request path: ${path}`)
+  }
+
+  return url.toString()
+}
+
 export async function notionRequest<T>(
   path: string,
   options: NotionRequestOptions,
 ): Promise<T> {
   const config = ensureNotionConfig()
+  const requestUrl = buildNotionRequestUrl(path)
   const maxRetries = options.maxRetries ?? 5
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
@@ -129,7 +151,7 @@ export async function notionRequest<T>(
     let response: Response
 
     try {
-      response = await fetch(`${NOTION_BASE_URL}${path}`, {
+      response = await fetch(requestUrl, {
         method: options.method,
         headers: {
           Authorization: `Bearer ${config.apiToken}`,
