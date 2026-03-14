@@ -187,6 +187,26 @@ describe('GET /api/cron/cms-integrity', () => {
     })
   })
 
+  it('honors CMS_INTEGRITY_FORCE_MODE=full over query and user-agent', async () => {
+    process.env.CMS_INTEGRITY_FORCE_MODE = 'full'
+
+    const response = await GET(
+      buildRequest(
+        'http://localhost/api/cron/cms-integrity?mode=incremental&deep=0',
+        'Mozilla/5.0 local-manual-run',
+      ),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.mode).toBe('full')
+    expect(mocks.runProjectionCronAutomation).toHaveBeenCalledWith({
+      includeQualityGate: true,
+      includeReconcile: true,
+      includeWebhookWatchdog: true,
+    })
+  })
+
   it('returns 500 when projection automation throws', async () => {
     mocks.runProjectionCronAutomation.mockRejectedValueOnce(
       new Error('Projection exploded'),
@@ -200,6 +220,11 @@ describe('GET /api/cron/cms-integrity', () => {
     expect(response.status).toBe(500)
     expect(body).toMatchObject({
       ok: false,
+      error: 'Projection exploded',
+    })
+    expect(mocks.logAutomationErrorToNotion).toHaveBeenCalledWith({
+      workflow: 'cms-cron-integrity',
+      endpoint: '/api/cron/cms-integrity',
       error: 'Projection exploded',
     })
   })
