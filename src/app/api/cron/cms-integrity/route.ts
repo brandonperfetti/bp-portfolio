@@ -73,6 +73,9 @@ async function run(request: Request) {
       includeQualityGate: fullRun,
       includeReconcile: fullRun,
       includeWebhookWatchdog: fullRun,
+      errorLogWorkflow: 'cms-cron-integrity',
+      errorLogEndpoint: '/api/cron/cms-integrity',
+      skipReason: 'Disabled for incremental integrity run',
     })
     let revalidateError: string | null = null
     try {
