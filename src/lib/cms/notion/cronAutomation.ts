@@ -97,10 +97,16 @@ async function runStep<T>(
  */
 export async function runProjectionCronAutomation(options?: {
   logErrors?: boolean
+  includeQualityGate?: boolean
+  includeReconcile?: boolean
+  includeWebhookWatchdog?: boolean
 }): Promise<AutomationSummary> {
   const startedAt = new Date().toISOString()
   const summary: Record<string, unknown> = {}
   const errors: AutomationIssue[] = []
+  const includeQualityGate = options?.includeQualityGate !== false
+  const includeReconcile = options?.includeReconcile !== false
+  const includeWebhookWatchdog = options?.includeWebhookWatchdog !== false
   try {
     const projectionSync = await runStep(
       'projection-sync',
@@ -117,90 +123,111 @@ export async function runProjectionCronAutomation(options?: {
       })
     }
 
-    const qualityBefore = await runStep(
-      'quality-gate-before',
-      () => evaluateSourceArticleQualityGate(),
-      summary,
-      'qualityGateBefore',
-      errors,
-    )
-
-    let autoHeal: Awaited<
-      ReturnType<typeof autoHealSourceArticleQualityGate>
-    > | null = null
-    let qualityAfter = qualityBefore
-    if (qualityBefore && !qualityBefore.ok) {
-      autoHeal = await runStep(
-        'auto-heal',
-        () => autoHealSourceArticleQualityGate(),
-        summary,
-        'autoHeal',
-        errors,
-      )
-      if (autoHeal && !autoHeal.ok) {
-        errors.push({
-          step: 'auto-heal',
-          message: 'Auto-heal completed with errors',
-          details: autoHeal.errors,
-        })
-      }
-
-      qualityAfter = await runStep(
-        'quality-gate-after',
+    if (includeQualityGate) {
+      const qualityBefore = await runStep(
+        'quality-gate-before',
         () => evaluateSourceArticleQualityGate(),
         summary,
-        'qualityGateAfter',
+        'qualityGateBefore',
         errors,
       )
-    }
 
-    if (qualityAfter && !qualityAfter.ok) {
-      errors.push({
-        step: 'quality-gate',
-        message: `Quality gate still failing for ${qualityAfter.failed} source rows after remediation`,
-        details: qualityAfter.failures,
-      })
-    }
+      let autoHeal: Awaited<
+        ReturnType<typeof autoHealSourceArticleQualityGate>
+      > | null = null
+      let qualityAfter = qualityBefore
+      if (qualityBefore && !qualityBefore.ok) {
+        autoHeal = await runStep(
+          'auto-heal',
+          () => autoHealSourceArticleQualityGate(),
+          summary,
+          'autoHeal',
+          errors,
+        )
+        if (autoHeal && !autoHeal.ok) {
+          errors.push({
+            step: 'auto-heal',
+            message: 'Auto-heal completed with errors',
+            details: autoHeal.errors,
+          })
+        }
 
-    const reconcile = await runStep(
-      'reconcile',
-      () => reconcilePortfolioArticleProjection(),
-      summary,
-      'reconcile',
-      errors,
-    )
-    if (reconcile && !reconcile.ok) {
-      // Only escalate blocking reconcile issues here; non-critical findings are
-      // preserved in summary.reconcile for observability without failing the run.
-      const critical = reconcile.findings.filter(
-        (finding) => finding.severity === 'critical',
-      )
-      if (critical.length > 0) {
+        qualityAfter = await runStep(
+          'quality-gate-after',
+          () => evaluateSourceArticleQualityGate(),
+          summary,
+          'qualityGateAfter',
+          errors,
+        )
+      }
+
+      if (qualityAfter && !qualityAfter.ok) {
         errors.push({
-          step: 'reconcile',
-          message: `Reconcile found ${critical.length} critical findings`,
-          details: critical,
+          step: 'quality-gate',
+          message: `Quality gate still failing for ${qualityAfter.failed} source rows after remediation`,
+          details: qualityAfter.failures,
         })
+      }
+    } else {
+      summary.qualityGate = {
+        skipped: true,
+        reason: 'Disabled for incremental integrity run',
       }
     }
 
-    const watchdog = await runStep(
-      'webhook-watchdog',
-      () =>
-        runWebhookLedgerWatchdog({
-          staleMinutes: 90,
-          limit: 100,
-        }),
-      summary,
-      'watchdog',
-      errors,
-    )
-    if (watchdog && !watchdog.ok) {
-      errors.push({
-        step: 'webhook-watchdog',
-        message: 'Webhook watchdog completed with errors',
-        details: watchdog.errors,
-      })
+    if (includeReconcile) {
+      const reconcile = await runStep(
+        'reconcile',
+        () => reconcilePortfolioArticleProjection(),
+        summary,
+        'reconcile',
+        errors,
+      )
+      if (reconcile && !reconcile.ok) {
+        // Only escalate blocking reconcile issues here; non-critical findings are
+        // preserved in summary.reconcile for observability without failing the run.
+        const critical = reconcile.findings.filter(
+          (finding) => finding.severity === 'critical',
+        )
+        if (critical.length > 0) {
+          errors.push({
+            step: 'reconcile',
+            message: `Reconcile found ${critical.length} critical findings`,
+            details: critical,
+          })
+        }
+      }
+    } else {
+      summary.reconcile = {
+        skipped: true,
+        reason: 'Disabled for incremental integrity run',
+      }
+    }
+
+    if (includeWebhookWatchdog) {
+      const watchdog = await runStep(
+        'webhook-watchdog',
+        () =>
+          runWebhookLedgerWatchdog({
+            staleMinutes: 90,
+            limit: 100,
+          }),
+        summary,
+        'watchdog',
+        errors,
+      )
+      if (watchdog && !watchdog.ok) {
+        errors.push({
+          step: 'webhook-watchdog',
+          message: 'Webhook watchdog completed with errors',
+          details: watchdog.errors,
+        })
+      }
+    } else {
+      summary.watchdog = {
+        skipped: true,
+        reason: 'Disabled for incremental integrity run',
+      }
     }
   } catch (error) {
     errors.push({
