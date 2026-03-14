@@ -88,6 +88,12 @@ async function runStep<T>(
  *
  * @param options Optional runtime controls.
  * @param options.logErrors When false, suppresses Notion error-log writes.
+ * @param options.includeQualityGate When false, skips quality-gate,
+ * auto-heal, and quality-gate recheck steps. Defaults to true.
+ * @param options.includeReconcile When false, skips projection reconcile checks.
+ * Defaults to true.
+ * @param options.includeWebhookWatchdog When false, skips webhook ledger
+ * watchdog processing. Defaults to true.
  * @returns Automation summary (`ok`, `startedAt`, `errors`, step payloads).
  *
  * Side effects:
