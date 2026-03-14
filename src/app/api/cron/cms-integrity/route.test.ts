@@ -37,6 +37,7 @@ describe('GET /api/cron/cms-integrity', () => {
     delete process.env.CMS_REVALIDATE_SECRET
     delete process.env.CMS_INTEGRITY_FORCE_MODE
     delete process.env.CMS_INTEGRITY_DEEP_RUN_OFFSET
+    delete process.env.CMS_INTEGRITY_DEEP_RUN_INTERVAL
     mocks.logAutomationErrorToNotion.mockResolvedValue(undefined)
     mocks.runProjectionCronAutomation.mockResolvedValue({
       ok: true,
