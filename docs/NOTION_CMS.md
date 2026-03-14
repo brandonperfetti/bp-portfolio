@@ -176,6 +176,15 @@ CLOUDINARY_API_SECRET=...
 CLOUDINARY_CMS_COVERS_FOLDER=bp-portfolio/articles
 # Optional cap for cron cover-regeneration throughput.
 CMS_COVER_REGEN_CRON_LIMIT=2
+# Integrity cron runtime tuning:
+# - full: run projection + quality gate + auto-heal + reconcile + watchdog every run
+# - incremental: run projection-only on most cron invocations
+CMS_INTEGRITY_FORCE_MODE=
+# When running via Vercel cron and force mode is unset, run one full integrity pass
+# every N scheduled windows (default: 6 => hourly when cron is every 10 minutes).
+CMS_INTEGRITY_DEEP_RUN_INTERVAL=6
+# Optional phase offset for deep windows.
+CMS_INTEGRITY_DEEP_RUN_OFFSET=0
 # Error-log retention settings (archive old rows).
 CMS_AUTOMATION_ERRORS_RETENTION_DAYS=30
 CMS_AUTOMATION_ERRORS_RETENTION_LIMIT=100
@@ -280,6 +289,9 @@ Vercel cron cadence (current):
 - `/api/cron/cms-tech-curation` weekly Monday at 18:30 UTC.
 - `/api/cron/cms-projection` retained as a compatibility alias.
 - `/api/cron/cms-automation` retained for manual full-run execution.
+- `/api/cron/cms-integrity` supports explicit overrides:
+  - `?deep=1` or `?mode=full` forces full integrity workflow.
+  - `?deep=0` or `?mode=incremental` forces projection-only workflow.
 
 Cache invalidation behavior:
 

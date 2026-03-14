@@ -6,6 +6,9 @@ import { runProjectionCronAutomation } from '@/lib/cms/notion/cronAutomation'
 import { isAuthorizedCronRequest } from '../_auth'
 import { revalidateArticleSurfaces } from '../_revalidate'
 
+const WORKFLOW = 'cms-cron-projection'
+const ENDPOINT = '/api/cron/cms-projection'
+
 // TODO(backlog): Refactor cms-projection/cms-integrity into shared cron handler.
 // Notion: https://www.notion.so/Refactor-cms-projection-cms-integrity-into-shared-cron-handler-31cbe01e1e06813f84ffeb50eedb7469
 async function run(request: Request) {
@@ -17,24 +20,24 @@ async function run(request: Request) {
   }
 
   try {
-    const result = await runProjectionCronAutomation()
+    const result = await runProjectionCronAutomation({
+      errorLogWorkflow: WORKFLOW,
+      errorLogEndpoint: ENDPOINT,
+    })
     let revalidateError: string | null = null
     try {
       revalidateArticleSurfaces()
     } catch (error) {
       revalidateError = error instanceof Error ? error.message : String(error)
       await logAutomationErrorToNotion({
-        workflow: 'cms-cron-projection',
-        endpoint: '/api/cron/cms-projection',
+        workflow: WORKFLOW,
+        endpoint: ENDPOINT,
         error: `Revalidation failed: ${revalidateError}`,
       }).catch((logError) => {
-        console.error(
-          '[cms-cron-projection] failed to write revalidation error log',
-          {
-            error:
-              logError instanceof Error ? logError.message : String(logError),
-          },
-        )
+        console.error(`[${WORKFLOW}] failed to write revalidation error log`, {
+          error:
+            logError instanceof Error ? logError.message : String(logError),
+        })
       })
     }
     return NextResponse.json(
@@ -43,11 +46,11 @@ async function run(request: Request) {
     )
   } catch (error) {
     await logAutomationErrorToNotion({
-      workflow: 'cms-cron-projection',
-      endpoint: '/api/cron/cms-projection',
+      workflow: WORKFLOW,
+      endpoint: ENDPOINT,
       error: error instanceof Error ? error.message : 'Unknown error',
     }).catch((logError) => {
-      console.error('[cms-cron-projection] failed to write Notion error log', {
+      console.error(`[${WORKFLOW}] failed to write Notion error log`, {
         error: logError instanceof Error ? logError.message : String(logError),
       })
     })

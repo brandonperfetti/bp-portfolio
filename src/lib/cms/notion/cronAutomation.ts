@@ -88,6 +88,18 @@ async function runStep<T>(
  *
  * @param options Optional runtime controls.
  * @param options.logErrors When false, suppresses Notion error-log writes.
+ * @param options.includeQualityGate When false, skips quality-gate,
+ * auto-heal, and quality-gate recheck steps. Defaults to true.
+ * @param options.includeReconcile When false, skips projection reconcile checks.
+ * Defaults to true.
+ * @param options.includeWebhookWatchdog When false, skips webhook ledger
+ * watchdog processing. Defaults to true.
+ * @param options.errorLogWorkflow Optional workflow name used when writing
+ * unresolved errors to Notion. Defaults to `cms-cron-projection`.
+ * @param options.errorLogEndpoint Optional endpoint name used when writing
+ * unresolved errors to Notion. Defaults to `/api/cron/cms-projection`.
+ * @param options.skipReason Optional summary reason for disabled steps.
+ * Defaults to `Skipped by caller configuration`.
  * @returns Automation summary (`ok`, `startedAt`, `errors`, step payloads).
  *
  * Side effects:
@@ -97,10 +109,25 @@ async function runStep<T>(
  */
 export async function runProjectionCronAutomation(options?: {
   logErrors?: boolean
+  includeQualityGate?: boolean
+  includeReconcile?: boolean
+  includeWebhookWatchdog?: boolean
+  errorLogWorkflow?: string
+  errorLogEndpoint?: string
+  skipReason?: string
 }): Promise<AutomationSummary> {
   const startedAt = new Date().toISOString()
   const summary: Record<string, unknown> = {}
   const errors: AutomationIssue[] = []
+  const includeQualityGate = options?.includeQualityGate !== false
+  const includeReconcile = options?.includeReconcile !== false
+  const includeWebhookWatchdog = options?.includeWebhookWatchdog !== false
+  const errorLogWorkflow =
+    options?.errorLogWorkflow?.trim() || 'cms-cron-projection'
+  const errorLogEndpoint =
+    options?.errorLogEndpoint?.trim() || '/api/cron/cms-projection'
+  const skipReason =
+    options?.skipReason?.trim() || 'Skipped by caller configuration'
   try {
     const projectionSync = await runStep(
       'projection-sync',
@@ -117,90 +144,141 @@ export async function runProjectionCronAutomation(options?: {
       })
     }
 
-    const qualityBefore = await runStep(
-      'quality-gate-before',
-      () => evaluateSourceArticleQualityGate(),
-      summary,
-      'qualityGateBefore',
-      errors,
-    )
-
-    let autoHeal: Awaited<
-      ReturnType<typeof autoHealSourceArticleQualityGate>
-    > | null = null
-    let qualityAfter = qualityBefore
-    if (qualityBefore && !qualityBefore.ok) {
-      autoHeal = await runStep(
-        'auto-heal',
-        () => autoHealSourceArticleQualityGate(),
-        summary,
-        'autoHeal',
-        errors,
-      )
-      if (autoHeal && !autoHeal.ok) {
-        errors.push({
-          step: 'auto-heal',
-          message: 'Auto-heal completed with errors',
-          details: autoHeal.errors,
-        })
-      }
-
-      qualityAfter = await runStep(
-        'quality-gate-after',
+    if (includeQualityGate) {
+      const qualityBefore = await runStep(
+        'quality-gate-before',
         () => evaluateSourceArticleQualityGate(),
         summary,
-        'qualityGateAfter',
+        'qualityGateBefore',
         errors,
       )
-    }
 
-    if (qualityAfter && !qualityAfter.ok) {
-      errors.push({
-        step: 'quality-gate',
-        message: `Quality gate still failing for ${qualityAfter.failed} source rows after remediation`,
-        details: qualityAfter.failures,
-      })
-    }
+      let autoHeal: Awaited<
+        ReturnType<typeof autoHealSourceArticleQualityGate>
+      > | null = null
+      let qualityAfter = qualityBefore
+      if (qualityBefore && !qualityBefore.ok) {
+        autoHeal = await runStep(
+          'auto-heal',
+          () => autoHealSourceArticleQualityGate(),
+          summary,
+          'autoHeal',
+          errors,
+        )
+        if (autoHeal && !autoHeal.ok) {
+          errors.push({
+            step: 'auto-heal',
+            message: 'Auto-heal completed with errors',
+            details: autoHeal.errors,
+          })
+        }
 
-    const reconcile = await runStep(
-      'reconcile',
-      () => reconcilePortfolioArticleProjection(),
-      summary,
-      'reconcile',
-      errors,
-    )
-    if (reconcile && !reconcile.ok) {
-      // Only escalate blocking reconcile issues here; non-critical findings are
-      // preserved in summary.reconcile for observability without failing the run.
-      const critical = reconcile.findings.filter(
-        (finding) => finding.severity === 'critical',
-      )
-      if (critical.length > 0) {
+        qualityAfter = await runStep(
+          'quality-gate-after',
+          () => evaluateSourceArticleQualityGate(),
+          summary,
+          'qualityGateAfter',
+          errors,
+        )
+      }
+
+      if (qualityAfter && !qualityAfter.ok) {
         errors.push({
-          step: 'reconcile',
-          message: `Reconcile found ${critical.length} critical findings`,
-          details: critical,
+          step: 'quality-gate',
+          message: `Quality gate still failing for ${qualityAfter.failed} source rows after remediation`,
+          details: qualityAfter.failures,
         })
+      }
+    } else {
+      summary.qualityGateBefore = {
+        stepSkipped: true,
+        skipped: true,
+        reason: skipReason,
+      }
+      summary.autoHeal = {
+        stepSkipped: true,
+        ok: true,
+        scanned: 0,
+        checkedPublishSafe: 0,
+        healed: 0,
+        skipped: 0,
+        errors: [],
+        status: 'skipped',
+        reason: skipReason,
+      }
+      summary.qualityGateAfter = {
+        stepSkipped: true,
+        skipped: true,
+        reason: skipReason,
       }
     }
 
-    const watchdog = await runStep(
-      'webhook-watchdog',
-      () =>
-        runWebhookLedgerWatchdog({
-          staleMinutes: 90,
-          limit: 100,
-        }),
-      summary,
-      'watchdog',
-      errors,
-    )
-    if (watchdog && !watchdog.ok) {
-      errors.push({
-        step: 'webhook-watchdog',
-        message: 'Webhook watchdog completed with errors',
-        details: watchdog.errors,
-      })
+    if (includeReconcile) {
+      const reconcile = await runStep(
+        'reconcile',
+        () => reconcilePortfolioArticleProjection(),
+        summary,
+        'reconcile',
+        errors,
+      )
+      if (reconcile && !reconcile.ok) {
+        // Only escalate blocking reconcile issues here; non-critical findings are
+        // preserved in summary.reconcile for observability without failing the run.
+        const critical = reconcile.findings.filter(
+          (finding) => finding.severity === 'critical',
+        )
+        if (critical.length > 0) {
+          errors.push({
+            step: 'reconcile',
+            message: `Reconcile found ${critical.length} critical findings`,
+            details: critical,
+          })
+        }
+      }
+    } else {
+      summary.reconcile = {
+        stepSkipped: true,
+        ok: true,
+        checkedSource: 0,
+        checkedTargets: 0,
+        checkedCalendarRows: 0,
+        findings: [],
+        skipped: true,
+        reason: skipReason,
+      }
+    }
+
+    if (includeWebhookWatchdog) {
+      const watchdog = await runStep(
+        'webhook-watchdog',
+        () =>
+          runWebhookLedgerWatchdog({
+            staleMinutes: 90,
+            limit: 100,
+          }),
+        summary,
+        'watchdog',
+        errors,
+      )
+      if (watchdog && !watchdog.ok) {
+        errors.push({
+          step: 'webhook-watchdog',
+          message: 'Webhook watchdog completed with errors',
+          details: watchdog.errors,
+        })
+      }
+    } else {
+      summary.watchdog = {
+        stepSkipped: true,
+        ok: true,
+        enabled: false,
+        scanned: 0,
+        staleFound: 0,
+        markedFailed: 0,
+        errors: [],
+        skipped: true,
+        reason: skipReason,
+      }
     }
   } catch (error) {
     errors.push({
@@ -210,12 +288,7 @@ export async function runProjectionCronAutomation(options?: {
     })
   } finally {
     if (options?.logErrors !== false) {
-      await writeErrorLog(
-        'cms-cron-projection',
-        '/api/cron/cms-projection',
-        errors,
-        summary,
-      )
+      await writeErrorLog(errorLogWorkflow, errorLogEndpoint, errors, summary)
     }
   }
 

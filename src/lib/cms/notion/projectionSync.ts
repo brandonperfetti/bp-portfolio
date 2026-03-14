@@ -1294,6 +1294,22 @@ export async function syncPortfolioArticleProjection(options?: {
       const existing =
         targetIndex.bySourceId.get(source.id) ??
         targetIndex.bySlug.get(source.slug)
+      const existingFingerprint = existing
+        ? propertyToText(
+            getProperty(existing.properties, ['Hash / Revision Fingerprint']),
+          )
+        : ''
+      const normalizedExistingFingerprint = existingFingerprint.trim()
+      const normalizedSourceFingerprint = source.revisionFingerprint.trim()
+      const unchangedExisting =
+        Boolean(existing) &&
+        normalizedExistingFingerprint === normalizedSourceFingerprint
+
+      if (unchangedExisting) {
+        skipped += 1
+        continue
+      }
+
       let searchIndexText: string | undefined
 
       if (eligibleForProjection(source)) {
