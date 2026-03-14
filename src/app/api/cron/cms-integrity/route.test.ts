@@ -69,6 +69,9 @@ describe('GET /api/cron/cms-integrity', () => {
       includeQualityGate: false,
       includeReconcile: false,
       includeWebhookWatchdog: false,
+      errorLogWorkflow: 'cms-cron-integrity',
+      errorLogEndpoint: '/api/cron/cms-integrity',
+      skipReason: 'Disabled for incremental integrity run',
     })
   })
 
@@ -107,6 +110,9 @@ describe('GET /api/cron/cms-integrity', () => {
       includeQualityGate: true,
       includeReconcile: true,
       includeWebhookWatchdog: true,
+      errorLogWorkflow: 'cms-cron-integrity',
+      errorLogEndpoint: '/api/cron/cms-integrity',
+      skipReason: 'Disabled for incremental integrity run',
     })
   })
 
@@ -128,6 +134,9 @@ describe('GET /api/cron/cms-integrity', () => {
       includeQualityGate: true,
       includeReconcile: true,
       includeWebhookWatchdog: true,
+      errorLogWorkflow: 'cms-cron-integrity',
+      errorLogEndpoint: '/api/cron/cms-integrity',
+      skipReason: 'Disabled for incremental integrity run',
     })
   })
 
@@ -146,6 +155,9 @@ describe('GET /api/cron/cms-integrity', () => {
       includeQualityGate: true,
       includeReconcile: true,
       includeWebhookWatchdog: true,
+      errorLogWorkflow: 'cms-cron-integrity',
+      errorLogEndpoint: '/api/cron/cms-integrity',
+      skipReason: 'Disabled for incremental integrity run',
     })
   })
 
@@ -164,6 +176,9 @@ describe('GET /api/cron/cms-integrity', () => {
       includeQualityGate: false,
       includeReconcile: false,
       includeWebhookWatchdog: false,
+      errorLogWorkflow: 'cms-cron-integrity',
+      errorLogEndpoint: '/api/cron/cms-integrity',
+      skipReason: 'Disabled for incremental integrity run',
     })
   })
 
@@ -184,6 +199,9 @@ describe('GET /api/cron/cms-integrity', () => {
       includeQualityGate: false,
       includeReconcile: false,
       includeWebhookWatchdog: false,
+      errorLogWorkflow: 'cms-cron-integrity',
+      errorLogEndpoint: '/api/cron/cms-integrity',
+      skipReason: 'Disabled for incremental integrity run',
     })
   })
 
@@ -204,6 +222,9 @@ describe('GET /api/cron/cms-integrity', () => {
       includeQualityGate: true,
       includeReconcile: true,
       includeWebhookWatchdog: true,
+      errorLogWorkflow: 'cms-cron-integrity',
+      errorLogEndpoint: '/api/cron/cms-integrity',
+      skipReason: 'Disabled for incremental integrity run',
     })
   })
 
