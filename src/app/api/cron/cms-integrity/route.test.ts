@@ -183,6 +183,29 @@ describe('GET /api/cron/cms-integrity', () => {
     })
   })
 
+  it('mode overrides deep when both are provided', async () => {
+    process.env.CMS_INTEGRITY_DEEP_RUN_INTERVAL = '1'
+    vi.spyOn(Date, 'now').mockReturnValue(20 * 60 * 1000)
+
+    const response = await GET(
+      buildRequest(
+        'http://localhost/api/cron/cms-integrity?mode=incremental&deep=1',
+      ),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.mode).toBe('incremental')
+    expect(mocks.runProjectionCronAutomation).toHaveBeenCalledWith({
+      includeQualityGate: false,
+      includeReconcile: false,
+      includeWebhookWatchdog: false,
+      errorLogWorkflow: 'cms-cron-integrity',
+      errorLogEndpoint: '/api/cron/cms-integrity',
+      skipReason: 'Disabled for incremental integrity run',
+    })
+  })
+
   it('respects CMS_INTEGRITY_DEEP_RUN_OFFSET', async () => {
     process.env.CMS_INTEGRITY_DEEP_RUN_INTERVAL = '3'
     process.env.CMS_INTEGRITY_DEEP_RUN_OFFSET = '2'
