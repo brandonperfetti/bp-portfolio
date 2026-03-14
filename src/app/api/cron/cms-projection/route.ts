@@ -34,13 +34,10 @@ async function run(request: Request) {
         endpoint: ENDPOINT,
         error: `Revalidation failed: ${revalidateError}`,
       }).catch((logError) => {
-        console.error(
-          `[${WORKFLOW}] failed to write revalidation error log`,
-          {
-            error:
-              logError instanceof Error ? logError.message : String(logError),
-          },
-        )
+        console.error(`[${WORKFLOW}] failed to write revalidation error log`, {
+          error:
+            logError instanceof Error ? logError.message : String(logError),
+        })
       })
     }
     return NextResponse.json(
