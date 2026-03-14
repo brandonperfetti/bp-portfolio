@@ -37,6 +37,7 @@ describe('GET /api/cron/cms-integrity', () => {
     delete process.env.CMS_REVALIDATE_SECRET
     delete process.env.CMS_INTEGRITY_FORCE_MODE
     delete process.env.CMS_INTEGRITY_DEEP_RUN_OFFSET
+    mocks.logAutomationErrorToNotion.mockResolvedValue(undefined)
     mocks.runProjectionCronAutomation.mockResolvedValue({
       ok: true,
       startedAt: '2026-03-14T00:00:00.000Z',
@@ -148,6 +149,24 @@ describe('GET /api/cron/cms-integrity', () => {
     })
   })
 
+  it('respects explicit mode=incremental query override', async () => {
+    process.env.CMS_INTEGRITY_DEEP_RUN_INTERVAL = '1'
+    vi.spyOn(Date, 'now').mockReturnValue(20 * 60 * 1000)
+
+    const response = await GET(
+      buildRequest('http://localhost/api/cron/cms-integrity?mode=incremental'),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.mode).toBe('incremental')
+    expect(mocks.runProjectionCronAutomation).toHaveBeenCalledWith({
+      includeQualityGate: false,
+      includeReconcile: false,
+      includeWebhookWatchdog: false,
+    })
+  })
+
   it('honors CMS_INTEGRITY_FORCE_MODE over query and user-agent', async () => {
     process.env.CMS_INTEGRITY_FORCE_MODE = 'incremental'
 
@@ -165,6 +184,23 @@ describe('GET /api/cron/cms-integrity', () => {
       includeQualityGate: false,
       includeReconcile: false,
       includeWebhookWatchdog: false,
+    })
+  })
+
+  it('returns 500 when projection automation throws', async () => {
+    mocks.runProjectionCronAutomation.mockRejectedValueOnce(
+      new Error('Projection exploded'),
+    )
+
+    const response = await GET(
+      buildRequest('http://localhost/api/cron/cms-integrity'),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(body).toMatchObject({
+      ok: false,
+      error: 'Projection exploded',
     })
   })
 })
