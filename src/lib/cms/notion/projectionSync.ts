@@ -1299,9 +1299,11 @@ export async function syncPortfolioArticleProjection(options?: {
             getProperty(existing.properties, ['Hash / Revision Fingerprint']),
           )
         : ''
+      const normalizedExistingFingerprint = existingFingerprint.trim()
+      const normalizedSourceFingerprint = source.revisionFingerprint.trim()
       const unchangedExisting =
         Boolean(existing) &&
-        existingFingerprint.trim() === source.revisionFingerprint
+        normalizedExistingFingerprint === normalizedSourceFingerprint
 
       if (unchangedExisting) {
         skipped += 1
