@@ -190,7 +190,24 @@ export async function runProjectionCronAutomation(options?: {
         })
       }
     } else {
-      summary.qualityGate = {
+      summary.qualityGateBefore = {
+        stepSkipped: true,
+        skipped: true,
+        reason: skipReason,
+      }
+      summary.autoHeal = {
+        stepSkipped: true,
+        ok: true,
+        scanned: 0,
+        checkedPublishSafe: 0,
+        healed: 0,
+        skipped: 0,
+        errors: [],
+        status: 'skipped',
+        reason: skipReason,
+      }
+      summary.qualityGateAfter = {
+        stepSkipped: true,
         skipped: true,
         reason: skipReason,
       }
@@ -220,6 +237,12 @@ export async function runProjectionCronAutomation(options?: {
       }
     } else {
       summary.reconcile = {
+        stepSkipped: true,
+        ok: true,
+        checkedSource: 0,
+        checkedTargets: 0,
+        checkedCalendarRows: 0,
+        findings: [],
         skipped: true,
         reason: skipReason,
       }
@@ -246,6 +269,13 @@ export async function runProjectionCronAutomation(options?: {
       }
     } else {
       summary.watchdog = {
+        stepSkipped: true,
+        ok: true,
+        enabled: false,
+        scanned: 0,
+        staleFound: 0,
+        markedFailed: 0,
+        errors: [],
         skipped: true,
         reason: skipReason,
       }
