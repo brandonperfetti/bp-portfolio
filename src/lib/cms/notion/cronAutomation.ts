@@ -94,6 +94,12 @@ async function runStep<T>(
  * Defaults to true.
  * @param options.includeWebhookWatchdog When false, skips webhook ledger
  * watchdog processing. Defaults to true.
+ * @param options.errorLogWorkflow Optional workflow name used when writing
+ * unresolved errors to Notion. Defaults to `cms-cron-projection`.
+ * @param options.errorLogEndpoint Optional endpoint name used when writing
+ * unresolved errors to Notion. Defaults to `/api/cron/cms-projection`.
+ * @param options.skipReason Optional summary reason for disabled steps.
+ * Defaults to `Skipped by caller configuration`.
  * @returns Automation summary (`ok`, `startedAt`, `errors`, step payloads).
  *
  * Side effects:
@@ -106,6 +112,9 @@ export async function runProjectionCronAutomation(options?: {
   includeQualityGate?: boolean
   includeReconcile?: boolean
   includeWebhookWatchdog?: boolean
+  errorLogWorkflow?: string
+  errorLogEndpoint?: string
+  skipReason?: string
 }): Promise<AutomationSummary> {
   const startedAt = new Date().toISOString()
   const summary: Record<string, unknown> = {}
@@ -113,6 +122,12 @@ export async function runProjectionCronAutomation(options?: {
   const includeQualityGate = options?.includeQualityGate !== false
   const includeReconcile = options?.includeReconcile !== false
   const includeWebhookWatchdog = options?.includeWebhookWatchdog !== false
+  const errorLogWorkflow =
+    options?.errorLogWorkflow?.trim() || 'cms-cron-projection'
+  const errorLogEndpoint =
+    options?.errorLogEndpoint?.trim() || '/api/cron/cms-projection'
+  const skipReason =
+    options?.skipReason?.trim() || 'Skipped by caller configuration'
   try {
     const projectionSync = await runStep(
       'projection-sync',
@@ -177,7 +192,7 @@ export async function runProjectionCronAutomation(options?: {
     } else {
       summary.qualityGate = {
         skipped: true,
-        reason: 'Disabled for incremental integrity run',
+        reason: skipReason,
       }
     }
 
@@ -206,7 +221,7 @@ export async function runProjectionCronAutomation(options?: {
     } else {
       summary.reconcile = {
         skipped: true,
-        reason: 'Disabled for incremental integrity run',
+        reason: skipReason,
       }
     }
 
@@ -232,7 +247,7 @@ export async function runProjectionCronAutomation(options?: {
     } else {
       summary.watchdog = {
         skipped: true,
-        reason: 'Disabled for incremental integrity run',
+        reason: skipReason,
       }
     }
   } catch (error) {
@@ -243,12 +258,7 @@ export async function runProjectionCronAutomation(options?: {
     })
   } finally {
     if (options?.logErrors !== false) {
-      await writeErrorLog(
-        'cms-cron-projection',
-        '/api/cron/cms-projection',
-        errors,
-        summary,
-      )
+      await writeErrorLog(errorLogWorkflow, errorLogEndpoint, errors, summary)
     }
   }
 
