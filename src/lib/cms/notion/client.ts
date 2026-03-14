@@ -125,8 +125,13 @@ function buildNotionRequestUrl(path: string): string {
     throw new NotionConfigError(`Blocked unsafe Notion request path: ${path}`)
   }
 
+  const [pathWithoutQuery, ...queryParts] = path.split('?')
+  const query = queryParts.join('?')
+
   const url = new URL(NOTION_BASE_URL)
-  url.pathname = `${url.pathname.replace(/\/$/, '')}${path}`
+  url.pathname = `${url.pathname.replace(/\/$/, '')}${pathWithoutQuery}`
+  url.search = query ? `?${query}` : ''
+  url.hash = ''
   if (url.origin !== NOTION_API_ORIGIN || !url.pathname.startsWith('/v1/')) {
     throw new NotionConfigError(`Blocked unsafe Notion request path: ${path}`)
   }

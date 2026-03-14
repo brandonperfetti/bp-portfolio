@@ -28,6 +28,24 @@ describe('notionRequest', () => {
     )
   })
 
+  it('preserves query strings in allowed Notion API paths', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ results: [] }), { status: 200 }),
+      )
+
+    await notionRequest('/blocks/abc123/children?page_size=100', {
+      method: 'GET',
+      maxRetries: 0,
+    })
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://api.notion.com/v1/blocks/abc123/children?page_size=100',
+      expect.objectContaining({ method: 'GET' }),
+    )
+  })
+
   it('rejects absolute or cross-origin request paths', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
 
