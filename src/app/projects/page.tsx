@@ -35,8 +35,8 @@ const projects = [
     name: 'Dev Flow',
     description: 'A Stack Overflow style question-and-answer platform.',
     link: {
-      href: 'https://devflow-coral.vercel.app/',
-      label: 'devflow-coral.vercel.app',
+      href: 'https://devflow-coral2.vercel.app/',
+      label: 'devflow-coral2.vercel.app',
     },
     logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1722822416/DevFlow/site-logo_wicnp6.svg',
   },
