@@ -245,7 +245,7 @@ async function Resume() {
         ))}
       </ol>
       <Button
-        href="/assets/Brandon_Perfetti_CV.pdf"
+        href="/assets/Brandon_Perfetti_Resume.pdf"
         variant="secondary"
         className="group mt-6 w-full"
       >
