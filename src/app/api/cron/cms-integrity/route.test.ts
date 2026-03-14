@@ -182,6 +182,28 @@ describe('GET /api/cron/cms-integrity', () => {
     })
   })
 
+  it('respects CMS_INTEGRITY_DEEP_RUN_OFFSET', async () => {
+    process.env.CMS_INTEGRITY_DEEP_RUN_INTERVAL = '3'
+    process.env.CMS_INTEGRITY_DEEP_RUN_OFFSET = '2'
+    vi.spyOn(Date, 'now').mockReturnValue(10 * 60 * 1000)
+
+    const response = await GET(
+      buildRequest('http://localhost/api/cron/cms-integrity'),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.mode).toBe('full')
+    expect(mocks.runProjectionCronAutomation).toHaveBeenCalledWith({
+      includeQualityGate: true,
+      includeReconcile: true,
+      includeWebhookWatchdog: true,
+      errorLogWorkflow: 'cms-cron-integrity',
+      errorLogEndpoint: '/api/cron/cms-integrity',
+      skipReason: 'Disabled for incremental integrity run',
+    })
+  })
+
   it('honors CMS_INTEGRITY_FORCE_MODE over query and user-agent', async () => {
     process.env.CMS_INTEGRITY_FORCE_MODE = 'incremental'
 
