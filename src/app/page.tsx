@@ -319,7 +319,10 @@ function Photos({ images }: { images: string[] }) {
 export default async function Home() {
   const siteUrl = getSiteUrl()
   const settings = await getCmsSiteSettings()
-  const canonicalSiteUrl = settings.canonicalUrl || siteUrl
+  const canonicalSiteUrl = (settings.canonicalUrl || siteUrl).replace(
+    /\/+$/,
+    '',
+  )
   const articles = dedupeArticlesBySlug(await getAllArticles()).slice(0, 7)
   const homePage = await getCmsPageByPath('/')
   const homeTitle =

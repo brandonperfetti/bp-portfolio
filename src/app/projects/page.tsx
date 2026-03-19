@@ -90,13 +90,13 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Projects() {
-  const siteUrl = getSiteUrl()
-  const normalizedSiteUrl = siteUrl.replace(/\/+$/, '')
   const [settings, page, cmsProjects] = await Promise.all([
     getCmsSiteSettings(),
     getCmsPageByPath('/projects'),
     isNotionProvider() ? getCmsProjects() : Promise.resolve(null),
   ])
+  const siteUrl = settings.canonicalUrl || getSiteUrl()
+  const normalizedSiteUrl = siteUrl.replace(/\/+$/, '')
   const items = cmsProjects
     ? cmsProjects
     : projects.map((project) => ({

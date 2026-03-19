@@ -20,7 +20,10 @@ export async function GET() {
     getAllArticles(),
   ])
 
-  const canonicalSiteUrl = settings.canonicalUrl || siteUrl
+  const canonicalSiteUrl = (settings.canonicalUrl || siteUrl).replace(
+    /\/+$/,
+    '',
+  )
   const publicArticles = getPublicSortedArticles(allArticles, MAX_ARTICLES)
 
   const articleBlocks =
