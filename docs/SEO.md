@@ -78,7 +78,7 @@ Shared structured-data helpers:
 ## Best Practices
 
 - Keep article `description` concise and unique.
-- Keep `SEO Title` within ~45-65 characters.
-- Keep `SEO Description` within ~120-160 characters.
+- Keep `SEO Title` within 45-65 characters.
+- Keep `SEO Description` within 120-160 characters.
 - Ensure article `date` is valid ISO-compatible format.
 - Ensure article/social image fields are populated in the active content provider when social card richness is important.
