@@ -110,6 +110,8 @@ function applyEventRevalidation(eventType: string) {
     revalidatePath('/projects')
     revalidatePath('/tech')
     revalidatePath('/uses')
+    revalidatePath('/sitemap.xml')
+    revalidatePath('/feed.xml')
 
     return
   }
@@ -121,6 +123,8 @@ function applyEventRevalidation(eventType: string) {
     revalidateTag(CMS_TAGS.uses, 'max')
     revalidateTag(CMS_TAGS.workHistory, 'max')
     revalidateTag(CMS_TAGS.pages, 'max')
+    revalidatePath('/sitemap.xml')
+    revalidatePath('/feed.xml')
     return
   }
 

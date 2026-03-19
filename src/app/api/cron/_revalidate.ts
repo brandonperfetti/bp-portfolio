@@ -10,6 +10,8 @@ export function revalidateArticleSurfaces() {
   revalidateTag(CMS_TAGS.articles, 'max')
   revalidatePath('/')
   revalidatePath('/articles')
+  revalidatePath('/sitemap.xml')
+  revalidatePath('/feed.xml')
 }
 
 /**
