@@ -82,6 +82,7 @@ export function validatePublishSafeRequirements(
   if (!source.seoDescription.trim()) {
     errors.push('Missing required SEO Description')
   } else {
+    // SEO Description is used as the primary SERP snippet target window.
     const seoDescriptionLength = source.seoDescription.trim().length
     if (seoDescriptionLength < 120 || seoDescriptionLength > 160) {
       errors.push(
@@ -93,6 +94,7 @@ export function validatePublishSafeRequirements(
   if (!source.metaDescription.trim()) {
     errors.push('Missing required Meta Description')
   } else {
+    // Meta Description allows a slightly wider legacy window from prior content.
     const metaLength = source.metaDescription.trim().length
     if (metaLength < 110 || metaLength > 170) {
       errors.push(
