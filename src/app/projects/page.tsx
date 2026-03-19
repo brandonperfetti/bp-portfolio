@@ -91,8 +91,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function Projects() {
   const siteUrl = getSiteUrl()
-  const page = await getCmsPageByPath('/projects')
-  const cmsProjects = isNotionProvider() ? await getCmsProjects() : null
+  const [settings, page, cmsProjects] = await Promise.all([
+    getCmsSiteSettings(),
+    getCmsPageByPath('/projects'),
+    isNotionProvider() ? getCmsProjects() : Promise.resolve(null),
+  ])
   const items = cmsProjects
     ? cmsProjects
     : projects.map((project) => ({
@@ -111,7 +114,7 @@ export default async function Projects() {
     isPartOf: {
       '@type': 'WebSite',
       url: siteUrl,
-      name: 'Brandon Perfetti',
+      name: settings.siteName,
     },
   }
   const breadcrumbSchema = {
