@@ -185,7 +185,10 @@ function AboutFallbackBody() {
 export default async function About() {
   const siteUrl = getSiteUrl()
   const normalizedSiteUrl = siteUrl.replace(/\/+$/, '')
-  const page = await getCmsPageByPath('/about', { includeBody: true })
+  const [settings, page] = await Promise.all([
+    getCmsSiteSettings(),
+    getCmsPageByPath('/about', { includeBody: true }),
+  ])
 
   const heroTitle =
     page?.title ||
@@ -204,7 +207,7 @@ export default async function About() {
     url: `${normalizedSiteUrl}/about`,
     isPartOf: {
       '@type': 'WebSite',
-      name: 'Brandon Perfetti',
+      name: settings.siteName,
       url: normalizedSiteUrl,
     },
   }
