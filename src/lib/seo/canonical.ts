@@ -11,16 +11,15 @@ export function canonicalizeArticleUrl(
     return fallback
   }
 
+  const site = new URL(normalizedSiteUrl)
   const trimmed = candidate.trim()
 
-  if (trimmed.startsWith('/')) {
-    return `${normalizedSiteUrl}${trimmed}`
-  }
-
   try {
-    const site = new URL(normalizedSiteUrl)
-    const parsed = new URL(trimmed)
-    if (parsed.host !== site.host) {
+    const parsed = trimmed.startsWith('/')
+      ? new URL(trimmed, site)
+      : new URL(trimmed)
+
+    if (parsed.host !== site.host || parsed.protocol !== site.protocol) {
       return fallback
     }
 

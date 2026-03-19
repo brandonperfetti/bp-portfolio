@@ -29,12 +29,32 @@ describe('canonicalizeArticleUrl', () => {
     ).toBe('https://example.com/articles/my-post')
   })
 
+  it('strips hash fragments from relative canonical paths', () => {
+    expect(
+      canonicalizeArticleUrl(
+        'https://example.com',
+        'my-post',
+        '/articles/my-post#section',
+      ),
+    ).toBe('https://example.com/articles/my-post')
+  })
+
   it('falls back when canonical host is different', () => {
     expect(
       canonicalizeArticleUrl(
         'https://example.com',
         'my-post',
         'https://other-domain.com/articles/my-post',
+      ),
+    ).toBe('https://example.com/articles/my-post')
+  })
+
+  it('falls back when canonical protocol does not match the site protocol', () => {
+    expect(
+      canonicalizeArticleUrl(
+        'https://example.com',
+        'my-post',
+        'http://example.com/articles/my-post',
       ),
     ).toBe('https://example.com/articles/my-post')
   })
