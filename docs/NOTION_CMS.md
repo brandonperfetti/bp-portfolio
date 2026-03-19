@@ -58,8 +58,14 @@ NOTION_ENABLE_ARTICLE_PROJECTION_SYNC=true
 - Canonical body source is `Source Article` block tree (not a single DB body field).
 - Projection target is `Portfolio CMS - Articles`.
 - `Search Index` (rich text) must exist in `Portfolio CMS - Articles`.
+- `SEO Title` and `SEO Description` must exist in both source and projection
+  data sources.
 - Projection sync writes normalized body text into `Search Index` for fast header search.
+- Projection sync also writes `SEO Title` and `SEO Description` to projected
+  article rows so runtime metadata matches source editorial updates.
 - Future-dated articles are intentionally excluded from both `/articles` and header search modal payloads until their publish date is reached.
+- After source SEO edits, run projection sync (`/api/cms/sync/articles`) before
+  expecting runtime pages to reflect those metadata changes.
 
 ## Content Calendar schema (for seeding automation)
 
@@ -333,6 +339,7 @@ Automation proposal checklist:
 
 - Articles:
   - `Topics/Tags` required for publish-safe rendering and faceting.
+  - `SEO Title` and `SEO Description` are required for publish-safe SOP checks.
   - `Tech` should be tool/framework specific.
   - `Author` relation should be present on every article (recommended). Missing author no longer blocks projection; fallback author is used at runtime.
 - Pages (`Portfolio CMS - Pages`):
