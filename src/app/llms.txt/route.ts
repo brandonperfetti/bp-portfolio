@@ -8,6 +8,7 @@ import { PRIMARY_NAV_LINKS } from '@/lib/navigation'
 import { getSiteUrl } from '@/lib/site'
 
 const MAX_ARTICLES = 50
+export const revalidate = 3600
 
 export async function GET() {
   const siteUrl = getSiteUrl()
