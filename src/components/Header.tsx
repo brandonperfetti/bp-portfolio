@@ -16,21 +16,14 @@ import clsx from 'clsx'
 import { Container } from '@/components/Container'
 import { HeaderSearch } from '@/components/search/HeaderSearch'
 import type { CmsNavigationItem } from '@/lib/cms/types'
+import { PERSON_IMAGE_URL } from '@/lib/identity'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
+import { HEADER_NAV_LINKS } from '@/lib/navigation'
 
-const avatarImage =
-  'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142617/bp-spotlight/images/avatar_jeycju.jpg'
+const avatarImage = PERSON_IMAGE_URL
 
 type NavigationItem = Pick<CmsNavigationItem, 'href' | 'label'>
-
-const DEFAULT_NAV_ITEMS: NavigationItem[] = [
-  { href: '/about', label: 'About' },
-  { href: '/articles', label: 'Articles' },
-  { href: '/projects', label: 'Projects' },
-  { href: '/tech', label: 'Tech' },
-  { href: '/hermes', label: 'Hermes' },
-  { href: '/uses', label: 'Uses' },
-]
+const DEFAULT_NAV_ITEMS: NavigationItem[] = HEADER_NAV_LINKS
 
 function CloseIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
   return (

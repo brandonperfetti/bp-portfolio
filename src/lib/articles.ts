@@ -9,6 +9,8 @@ import { isFuturePublicationDate } from '@/lib/date'
 interface Article {
   title: string
   description: string
+  seoTitle?: string
+  seoDescription?: string
   author:
     | string
     | {
@@ -22,6 +24,7 @@ interface Article {
     title?: string
   }
   date: string
+  updatedAt?: string
   image?: string
   readingTimeMinutes?: number
   canonicalUrl?: string
@@ -44,7 +47,22 @@ export interface ArticleDetailWithSlug extends ArticleWithSlug {
 export async function getAllArticles(): Promise<ArticleWithSlug[]> {
   const articles = await getAllCmsArticleSummaries()
   return articles.map((article) => ({
-    ...article,
+    slug: article.slug,
+    title: article.title,
+    description: article.description,
+    seoTitle: article.seoTitle,
+    seoDescription: article.seoDescription,
+    author: article.author,
+    category: article.category,
+    date: article.date,
+    updatedAt: article.updatedAt,
+    image: article.image,
+    readingTimeMinutes: article.readingTimeMinutes,
+    canonicalUrl: article.canonicalUrl,
+    keywords: article.keywords,
+    topics: article.topics,
+    tech: article.tech,
+    noindex: article.noindex,
     searchText: '',
   }))
 }
@@ -74,9 +92,12 @@ export async function getSearchArticles(): Promise<ArticleWithSlug[]> {
         slug: article.slug,
         title: article.title,
         description: article.description,
+        seoTitle: article.seoTitle,
+        seoDescription: article.seoDescription,
         author: article.author,
         category: article.category,
         date: article.date,
+        updatedAt: article.updatedAt,
         image: article.image,
         readingTimeMinutes: article.readingTimeMinutes,
         canonicalUrl: article.canonicalUrl,

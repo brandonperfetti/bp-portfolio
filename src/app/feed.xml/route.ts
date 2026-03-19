@@ -1,11 +1,16 @@
-import assert from 'assert'
 import * as cheerio from 'cheerio'
 import { Feed } from 'feed'
 import { getAllArticles } from '@/lib/articles'
+import { isFuturePublicationDate, toValidDate } from '@/lib/date'
 import { getSiteUrl, SITE_DESCRIPTION } from '@/lib/site'
+
+export const revalidate = 3600
 
 export async function GET(req: Request) {
   const siteUrl = getSiteUrl()
+  const articles = (await getAllArticles()).filter(
+    (article) => !article.noindex && !isFuturePublicationDate(article.date),
+  )
 
   const author = {
     name: 'Brandon Perfetti',
@@ -26,10 +31,8 @@ export async function GET(req: Request) {
     },
   })
 
-  const articleIds = (await getAllArticles()).map((article) => article.slug)
-
-  for (const id of articleIds) {
-    const url = String(new URL(`/articles/${id}`, req.url))
+  for (const articleSummary of articles) {
+    const url = String(new URL(`/articles/${articleSummary.slug}`, req.url))
     let html = ''
     try {
       const response = await fetch(url)
@@ -57,15 +60,16 @@ export async function GET(req: Request) {
 
     const $ = cheerio.load(html)
 
-    const publicUrl = `${siteUrl}/articles/${id}`
+    const publicUrl = `${siteUrl}/articles/${articleSummary.slug}`
     const article = $('article').first()
-    const title = article.find('h1').first().text()
+    const title = article.find('h1').first().text() || articleSummary.title
     const date = article.find('time').first().attr('datetime')
-    const content = article.find('[data-mdx-content]').first().html()
+    const content = article.find('[data-mdx-content]').first().html() ?? ''
 
-    assert(typeof title === 'string')
-    assert(typeof date === 'string')
-    assert(typeof content === 'string')
+    const freshnessDate = toValidDate(
+      articleSummary.updatedAt || date || articleSummary.date,
+    )
+    const fallbackDate = toValidDate(articleSummary.date)
 
     feed.addItem({
       title,
@@ -74,7 +78,7 @@ export async function GET(req: Request) {
       content,
       author: [author],
       contributor: [author],
-      date: new Date(date),
+      date: freshnessDate || fallbackDate || new Date(),
     })
   }
 
@@ -82,7 +86,7 @@ export async function GET(req: Request) {
     status: 200,
     headers: {
       'content-type': 'application/xml',
-      'cache-control': 's-maxage=31556952',
+      'cache-control': 's-maxage=3600, stale-while-revalidate=86400',
     },
   })
 }

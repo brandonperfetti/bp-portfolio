@@ -24,7 +24,10 @@ export interface CmsArticleSummary {
   slug: string
   title: string
   description: string
+  seoTitle?: string
+  seoDescription?: string
   date: string
+  updatedAt?: string
   image?: string
   readingTimeMinutes?: number
   author: CmsAuthor | string

@@ -21,14 +21,18 @@ import {
   propertyToText,
 } from '@/lib/cms/notion/property'
 import { isFuturePublicationDate } from '@/lib/date'
+import {
+  PERSON_IMAGE_URL,
+  SITE_OWNER_JOB_TITLE,
+  SITE_OWNER_NAME,
+} from '@/lib/identity'
 import { getSiteUrl } from '@/lib/site'
 
 export const DEFAULT_CMS_AUTHOR = {
-  name: 'Brandon Perfetti',
+  name: SITE_OWNER_NAME,
   href: '/about',
-  role: 'Technical PM + Software Engineer',
-  image:
-    'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142617/bp-spotlight/images/avatar_jeycju.jpg',
+  role: SITE_OWNER_JOB_TITLE,
+  image: PERSON_IMAGE_URL,
 } as const
 
 function toSlug(value: string) {
@@ -62,6 +66,10 @@ export function mapNotionArticleSummary(
   const slug = toSlug(slugRaw || title)
   const description = propertyToText(
     getProperty(page.properties, ['Meta Description', 'Description']),
+  )
+  const seoTitle = propertyToText(getProperty(page.properties, ['SEO Title']))
+  const seoDescription = propertyToText(
+    getProperty(page.properties, ['SEO Description', 'SEO Meta Description']),
   )
   const date = propertyToDate(
     getProperty(page.properties, ['Publish Date', 'Published Date']),
@@ -151,7 +159,10 @@ export function mapNotionArticleSummary(
     slug,
     title,
     description,
+    seoTitle: seoTitle || undefined,
+    seoDescription: seoDescription || undefined,
     date,
+    updatedAt: page.last_edited_time || undefined,
     image: imageUrl,
     readingTimeMinutes,
     author: DEFAULT_CMS_AUTHOR,

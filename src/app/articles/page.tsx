@@ -8,6 +8,8 @@ import { getSearchArticles } from '@/lib/articles'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
+import { toSafeJsonLd } from '@/lib/seo/jsonLd'
+import { getSiteUrl } from '@/lib/site'
 
 const defaultArticlesMeta: Metadata = {
   title: 'Articles',
@@ -29,34 +31,102 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function ArticlesIndex() {
-  const page = await getCmsPageByPath('/articles')
-  const articles = await getSearchArticles()
+  const siteUrl = getSiteUrl()
+  const [settings, page, articles] = await Promise.all([
+    getCmsSiteSettings(),
+    getCmsPageByPath('/articles'),
+    getSearchArticles(),
+  ])
+  const canonicalSiteUrl = (settings.canonicalUrl || siteUrl).replace(
+    /\/+$/,
+    '',
+  )
+  const collectionSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: page?.title || 'Articles',
+    description: page?.subtitle || defaultArticlesMeta.description,
+    url: `${canonicalSiteUrl}/articles`,
+    isPartOf: {
+      '@type': 'WebSite',
+      url: canonicalSiteUrl,
+      name: settings.siteName,
+    },
+  }
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Home',
+        item: `${canonicalSiteUrl}`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Articles',
+        item: `${canonicalSiteUrl}/articles`,
+      },
+    ],
+  }
+  const hasArticles = articles.length > 0
+  const itemListSchema = hasArticles
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'ItemList',
+        itemListElement: articles.slice(0, 50).map((article, index) => ({
+          '@type': 'ListItem',
+          position: index + 1,
+          url: `${canonicalSiteUrl}/articles/${article.slug}`,
+          name: article.title,
+        })),
+      }
+    : null
+  const scriptPayload = itemListSchema ? toSafeJsonLd(itemListSchema) : null
 
   return (
-    <SimpleLayout
-      title={
-        page?.title ||
-        'Writing on mindset, software design, leadership, and product execution.'
-      }
-      intro={
-        page?.subtitle ||
-        'Browse by category or search by topic. These are practical notes from real projects, engineering leadership, and continuous learning.'
-      }
-    >
-      {articles.length === 0 ? (
-        <NotFoundState
-          title="No published articles"
-          description="No CMS article records are currently publish-safe."
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(collectionSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
+      />
+      {scriptPayload ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: scriptPayload }}
         />
-      ) : (
-        <Suspense
-          fallback={
-            <div className="text-sm text-zinc-500">Loading articles...</div>
-          }
-        >
-          <ArticlesExplorer articles={articles} />
-        </Suspense>
-      )}
-    </SimpleLayout>
+      ) : null}
+      <SimpleLayout
+        title={
+          page?.title ||
+          'Writing on mindset, software design, leadership, and product execution.'
+        }
+        intro={
+          page?.subtitle ||
+          'Browse by category or search by topic. These are practical notes from real projects, engineering leadership, and continuous learning.'
+        }
+      >
+        {!hasArticles ? (
+          <NotFoundState
+            title="No published articles"
+            description="No CMS article records are currently publish-safe."
+          />
+        ) : (
+          <Suspense
+            fallback={
+              <div className="text-sm text-zinc-500">Loading articles...</div>
+            }
+          >
+            <ArticlesExplorer articles={articles} />
+          </Suspense>
+        )}
+      </SimpleLayout>
+    </>
   )
 }

@@ -8,6 +8,10 @@ import { SyncErrorState } from '@/components/cms/SyncErrorState'
 import { UseWithAiMenu } from '@/components/cms/UseWithAiMenu'
 import { getAllArticles, getArticleBySlug } from '@/lib/articles'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
+import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
+import { isFuturePublicationDate } from '@/lib/date'
+import { canonicalizeArticleUrl } from '@/lib/seo/canonical'
+import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import { getSiteUrl } from '@/lib/site'
 
 export const dynamicParams = true
@@ -20,6 +24,25 @@ type PageProps = {
   params: Promise<Params>
 }
 
+function getArticleKeywords(article: {
+  keywords?: string[]
+  topics?: string[]
+  tech?: string[]
+}) {
+  return Array.from(
+    new Set([
+      ...(article.keywords ?? []),
+      ...(article.topics ?? []),
+      ...(article.tech ?? []),
+    ]),
+  )
+}
+
+function toAbsoluteImageUrl(siteUrl: string, image?: string) {
+  if (!image) return undefined
+  return image.startsWith('http') ? image : new URL(image, siteUrl).toString()
+}
+
 export async function generateStaticParams() {
   const articles = await getAllArticles()
   return articles.map((article) => ({ slug: article.slug }))
@@ -29,7 +52,10 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { slug } = await params
-  const article = await getArticleBySlug(slug)
+  const [article, settings] = await Promise.all([
+    getArticleBySlug(slug),
+    getCmsSiteSettings(),
+  ])
 
   if (!article) {
     return {
@@ -41,31 +67,34 @@ export async function generateMetadata({
     }
   }
 
-  const siteUrl = getSiteUrl()
-  const canonical = article.canonicalUrl?.startsWith('http')
-    ? article.canonicalUrl
-    : `${siteUrl}/articles/${article.slug}`
+  const canonicalBase = (settings.canonicalUrl || getSiteUrl()).replace(
+    /\/+$/,
+    '',
+  )
+  const canonical = canonicalizeArticleUrl(
+    canonicalBase,
+    article.slug,
+    article.canonicalUrl,
+  )
 
-  const image = article.image
-    ? article.image.startsWith('http')
-      ? article.image
-      : `${siteUrl}${article.image}`
-    : undefined
+  const image = toAbsoluteImageUrl(canonicalBase, article.image)
+  const shouldNoindex = article.noindex || isFuturePublicationDate(article.date)
+
+  const effectiveTitle = article.seoTitle || article.title
+  const effectiveDescription = article.seoDescription || article.description
 
   return {
-    title: article.title,
-    description: article.description,
-    keywords: Array.from(
-      new Set([
-        ...(article.keywords ?? []),
-        ...(article.topics ?? []),
-        ...(article.tech ?? []),
-      ]),
-    ),
+    title: {
+      // Keep article SEO title exact and avoid inheriting the global
+      // "%s - SiteName" layout template, which can push titles over limits.
+      absolute: effectiveTitle,
+    },
+    description: effectiveDescription,
+    keywords: getArticleKeywords(article),
     alternates: {
       canonical,
     },
-    robots: article.noindex
+    robots: shouldNoindex
       ? {
           index: false,
           follow: false,
@@ -73,16 +102,16 @@ export async function generateMetadata({
       : undefined,
     openGraph: {
       type: 'article',
-      title: article.title,
-      description: article.description,
+      title: effectiveTitle,
+      description: effectiveDescription,
       publishedTime: article.date,
       url: canonical,
       images: image ? [{ url: image }] : undefined,
     },
     twitter: {
       card: image ? 'summary_large_image' : 'summary',
-      title: article.title,
-      description: article.description,
+      title: effectiveTitle,
+      description: effectiveDescription,
       images: image ? [image] : undefined,
     },
   }
@@ -90,7 +119,10 @@ export async function generateMetadata({
 
 export default async function ArticlePage({ params }: PageProps) {
   const { slug } = await params
-  const article = await getArticleBySlug(slug)
+  const [article, settings] = await Promise.all([
+    getArticleBySlug(slug),
+    getCmsSiteSettings(),
+  ])
 
   if (!article) {
     notFound()
@@ -98,6 +130,82 @@ export default async function ArticlePage({ params }: PageProps) {
 
   const bodyBlocks = Array.isArray(article.bodyBlocks) ? article.bodyBlocks : []
   const hasBodyBlocks = bodyBlocks.length > 0
+  const siteUrl = getSiteUrl()
+  const canonicalSiteUrl = (settings.canonicalUrl || siteUrl).replace(
+    /\/+$/,
+    '',
+  )
+  const canonical = canonicalizeArticleUrl(
+    canonicalSiteUrl,
+    article.slug,
+    article.canonicalUrl,
+  )
+  const schemaImage = toAbsoluteImageUrl(canonicalSiteUrl, article.image)
+  const publisherLogo = toAbsoluteImageUrl(
+    canonicalSiteUrl,
+    settings.openGraphImage || '/favicon.ico',
+  )
+  const authorName =
+    typeof article.author === 'string'
+      ? article.author.trim() || undefined
+      : article.author?.name?.trim() || undefined
+  const articleKeywords = getArticleKeywords(article)
+  const articleSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: article.title,
+    description: article.seoDescription || article.description,
+    datePublished: article.date,
+    dateModified: article.updatedAt || article.date,
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': canonical,
+    },
+    author: authorName
+      ? [
+          {
+            '@type': 'Person',
+            name: authorName,
+          },
+        ]
+      : undefined,
+    publisher: {
+      '@type': 'Organization',
+      name: settings.siteName,
+      logo: publisherLogo
+        ? {
+            '@type': 'ImageObject',
+            url: publisherLogo,
+          }
+        : undefined,
+    },
+    image: schemaImage ? [schemaImage] : undefined,
+    keywords: articleKeywords,
+  }
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Home',
+        item: `${canonicalSiteUrl}`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Articles',
+        item: `${canonicalSiteUrl}/articles`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: article.title,
+        item: canonical,
+      },
+    ],
+  }
 
   return (
     <ArticleLayout
@@ -107,6 +215,14 @@ export default async function ArticlePage({ params }: PageProps) {
         image: article.image,
       }}
     >
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(articleSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
+      />
       <ArticleMeta
         author={article.author}
         actions={

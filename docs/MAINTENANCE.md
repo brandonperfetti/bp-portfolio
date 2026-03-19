@@ -11,9 +11,15 @@
 
 - Keep article slugs stable after publish.
 - Validate dates and `Topics/Tags` values for consistency.
+- Keep `SEO Title` and `SEO Description` populated and within SOP target ranges
+  before publish-safe statuses.
 - Keep `Content Pillar` populated (`Mindset`, `Software`, `Design`, `Leadership`, `Product Execution`) so brand coverage stays balanced.
 - Keep `Tech` values tool/framework specific (avoid concept tags like `Design` or `Observability` in `Tech`).
 - Confirm `Search Index` is being populated on `Portfolio CMS - Articles` after projection sync runs.
+- Confirm projection sync propagates source `SEO Title` and `SEO Description`
+  into `Portfolio CMS - Articles` after SEO edits.
+- Run `/api/cms/sync/articles/prepublish-gate` as part of release checks to
+  catch SEO metadata, date, and publish-safe status blockers early.
 - Run `/api/cms/sync/articles/quality-gate` to catch publish-safe source rows missing `Review Round`, `Recovery Status`, `Has Required Metadata`, `Cover Style Profile`, or `Content Pillar`.
 - Run `/api/cms/sync/articles/auto-heal` to fill missing SOP defaults on publish-safe source rows (including `Content Pillar`).
 - Keep `Cover Style Profile` populated for style consistency; auto-heal sets defaults from `Article Type` if missing.

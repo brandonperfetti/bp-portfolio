@@ -35,6 +35,8 @@ type SourceArticle = {
   slug: string
   summary: string
   metaDescription: string
+  seoTitle: string
+  seoDescription: string
   coverImageUrl: string
   contentPillar: string
   keywords: string[]
@@ -99,6 +101,8 @@ export type SourcePublishGateResult = {
   sourcePageId: string
   sourceStatus?: string
   reasons: string[]
+  seoGatePersisted?: boolean
+  seoGatePersistError?: string
 }
 
 /**
@@ -236,6 +240,10 @@ function mapSourcePage(page: NotionPage): SourceArticle | null {
   const metaDescription = propertyToText(
     getProperty(page.properties, ['Meta Description']),
   )
+  const seoTitle = propertyToText(getProperty(page.properties, ['SEO Title']))
+  const seoDescription = propertyToText(
+    getProperty(page.properties, ['SEO Description', 'SEO Meta Description']),
+  )
   const coverImageUrl = propertyToText(
     getProperty(page.properties, ['Cover Image URL']),
   )
@@ -301,6 +309,8 @@ function mapSourcePage(page: NotionPage): SourceArticle | null {
     slug,
     summary: metaDescription || title,
     metaDescription,
+    seoTitle,
+    seoDescription,
     coverImageUrl,
     contentPillar,
     keywords,
@@ -1137,6 +1147,10 @@ function buildProjectionProperties(
     },
     Summary: toRichText(source.summary),
     'Meta Description': toRichText(source.metaDescription || source.summary),
+    'SEO Title': toRichText(source.seoTitle || source.title),
+    'SEO Description': toRichText(
+      source.seoDescription || source.metaDescription || source.summary,
+    ),
     'Cover Image URL': source.coverImageUrl
       ? { url: source.coverImageUrl }
       : { url: null },
@@ -1624,6 +1638,36 @@ export async function reconcilePortfolioArticleProjection(): Promise<ProjectionR
   }
 }
 
+async function persistSeoGateAudit(
+  sourcePageId: string,
+  pass: boolean,
+  reasons: string[],
+): Promise<{ persisted: boolean; error?: string }> {
+  const checkedAtIso = new Date().toISOString()
+  try {
+    await notionUpdatePage(sourcePageId, {
+      properties: {
+        'SEO Gate Status': {
+          select: { name: pass ? 'Pass' : 'Fail' },
+        },
+        'SEO Gate Findings':
+          reasons.length > 0
+            ? toRichText(reasons.join('; '))
+            : { rich_text: [] },
+        'SEO Checked At': {
+          date: { start: checkedAtIso },
+        },
+      },
+    })
+    return { persisted: true }
+  } catch (error) {
+    return {
+      persisted: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
 export async function evaluateSourceArticlePublishGate(
   sourcePageId: string,
 ): Promise<SourcePublishGateResult> {
@@ -1645,12 +1689,16 @@ export async function evaluateSourceArticlePublishGate(
 
   const mapped = mapSourcePage(sourcePage)
   if (!mapped) {
+    const reasons = [
+      'Source page is not an eligible Blog Post record for projection',
+    ]
+    const persisted = await persistSeoGateAudit(sourcePageId, false, reasons)
     return {
       ok: false,
       sourcePageId,
-      reasons: [
-        'Source page is not an eligible Blog Post record for projection',
-      ],
+      reasons,
+      seoGatePersisted: persisted.persisted,
+      seoGatePersistError: persisted.error,
     }
   }
 
@@ -1658,12 +1706,19 @@ export async function evaluateSourceArticlePublishGate(
     mapped,
     getOptionalNotionDefaultAuthorPageId(),
   )
+  const persisted = await persistSeoGateAudit(
+    sourcePageId,
+    reasons.length === 0,
+    reasons,
+  )
 
   return {
     ok: reasons.length === 0,
     sourcePageId,
     sourceStatus: mapped.sourceStatus,
     reasons,
+    seoGatePersisted: persisted.persisted,
+    seoGatePersistError: persisted.error,
   }
 }
 

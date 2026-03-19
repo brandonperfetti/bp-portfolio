@@ -21,6 +21,9 @@ import { getCmsWorkHistory } from '@/lib/cms/workHistoryRepo'
 import { formatDate } from '@/lib/formatDate'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
+import { toSafeJsonLd } from '@/lib/seo/jsonLd'
+import { buildPersonSchema, buildWebsiteSchema } from '@/lib/seo/structuredData'
+import { getSiteUrl } from '@/lib/site'
 import { dedupeArticlesBySlug } from '@/lib/articleUtils'
 
 const image1 =
@@ -314,6 +317,12 @@ function Photos({ images }: { images: string[] }) {
 }
 
 export default async function Home() {
+  const siteUrl = getSiteUrl()
+  const settings = await getCmsSiteSettings()
+  const canonicalSiteUrl = (settings.canonicalUrl || siteUrl).replace(
+    /\/+$/,
+    '',
+  )
   const articles = dedupeArticlesBySlug(await getAllArticles()).slice(0, 7)
   const homePage = await getCmsPageByPath('/')
   const homeTitle =
@@ -333,9 +342,23 @@ export default async function Home() {
     homeGalleryImagesRaw && homeGalleryImagesRaw.length > 0
       ? homeGalleryImagesRaw
       : defaultHomeGalleryImages
+  const websiteSchema = buildWebsiteSchema(
+    settings.siteName,
+    settings.siteDescription,
+    canonicalSiteUrl,
+  )
+  const personSchema = buildPersonSchema(canonicalSiteUrl)
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(websiteSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(personSchema) }}
+      />
       <Container className="mt-9">
         <div className="max-w-2xl">
           <AnimatedHeadline

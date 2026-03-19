@@ -1,12 +1,17 @@
 import { isFuturePublicationDate } from '@/lib/date'
 
 export type PublishGateSourceArticle = {
+  title: string
   slug: string
   sourceStatus: string
   publishDate: string
   metaDescription: string
+  seoTitle: string
+  seoDescription: string
   coverImageUrl: string
+  liveUrl: string
   contentPillar: string
+  keywords: string[]
   topics: string[]
   hasWinningCover: boolean
   winningCoverCount?: number
@@ -25,6 +30,15 @@ function normalizeStatus(value: string) {
 function isTutorialLike(articleType: string) {
   const mode = normalizeStatus(articleType)
   return mode.includes('tutorial') || mode.includes('hybrid')
+}
+
+function isValidHttpUrl(value: string) {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -50,12 +64,49 @@ export function validatePublishSafeRequirements(
     errors.push('Missing required Slug')
   }
 
+  if (!source.title.trim()) {
+    errors.push('Missing required Title')
+  }
+
+  if (!source.seoTitle.trim()) {
+    errors.push('Missing required SEO Title')
+  } else {
+    const seoTitleLength = source.seoTitle.trim().length
+    if (seoTitleLength < 45 || seoTitleLength > 65) {
+      errors.push(
+        `SEO Title should be between 45 and 65 characters (found ${seoTitleLength})`,
+      )
+    }
+  }
+
+  if (!source.seoDescription.trim()) {
+    errors.push('Missing required SEO Description')
+  } else {
+    // SEO Description is used as the primary SERP snippet target window.
+    const seoDescriptionLength = source.seoDescription.trim().length
+    if (seoDescriptionLength < 120 || seoDescriptionLength > 160) {
+      errors.push(
+        `SEO Description should be between 120 and 160 characters (found ${seoDescriptionLength})`,
+      )
+    }
+  }
+
   if (!source.metaDescription.trim()) {
     errors.push('Missing required Meta Description')
+  } else {
+    // Meta Description allows a slightly wider legacy window from prior content.
+    const metaLength = source.metaDescription.trim().length
+    if (metaLength < 110 || metaLength > 170) {
+      errors.push(
+        `Meta Description should be between 110 and 170 characters (found ${metaLength})`,
+      )
+    }
   }
 
   if (!source.coverImageUrl.trim()) {
     errors.push('Missing required Cover Image URL')
+  } else if (!isValidHttpUrl(source.coverImageUrl.trim())) {
+    errors.push('Cover Image URL must be an absolute http(s) URL')
   }
 
   if (!source.contentPillar.trim()) {
@@ -75,6 +126,14 @@ export function validatePublishSafeRequirements(
 
   if (source.topics.length === 0) {
     errors.push('Missing required Topics/Tags')
+  }
+
+  if (source.keywords.length === 0) {
+    errors.push('Missing required Keywords')
+  }
+
+  if (source.liveUrl.trim() && !isValidHttpUrl(source.liveUrl.trim())) {
+    errors.push('Live URL must be an absolute http(s) URL when provided')
   }
 
   if (!source.hasWinningCover) {
