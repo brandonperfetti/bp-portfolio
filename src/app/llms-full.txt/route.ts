@@ -51,7 +51,7 @@ export async function GET() {
           const updated = sanitizeInlineMarkdown(
             article.updatedAt || article.date,
           )
-          const url = `${siteUrl}/articles/${article.slug}`
+          const url = `${canonicalSiteUrl}/articles/${article.slug}`
           const topics = formatOptionalList('Topics', article.topics)
           const keywords = formatOptionalList('Keywords', article.keywords)
           const tech = formatOptionalList('Tech', article.tech)
@@ -75,12 +75,12 @@ export async function GET() {
     `> ${sanitizeInlineMarkdown(settings.siteDescription)}`,
     '',
     `Base: ${canonicalSiteUrl}`,
-    `Primary index: ${siteUrl}/llms.txt`,
-    `Sitemap: ${siteUrl}/sitemap.xml`,
+    `Primary index: ${canonicalSiteUrl}/llms.txt`,
+    `Sitemap: ${canonicalSiteUrl}/sitemap.xml`,
     '',
     '## Content Corpus',
     ...articleBlocks,
-    `Generated from live CMS data at ${siteUrl}.`,
+    `Generated from live CMS data at ${canonicalSiteUrl}.`,
   ]
 
   return new Response(`${lines.join('\n')}\n`, {

@@ -93,4 +93,38 @@ describe('GET /llms-full.txt', () => {
     expect(body).not.toContain('Noindex Article')
     expect(body).not.toContain('Future Article')
   })
+
+  it('prefers canonicalUrl from settings when getSiteUrl differs', async () => {
+    mocks.getSiteUrl.mockReturnValue('https://app.example.com')
+    mocks.getCmsSiteSettings.mockResolvedValue({
+      siteName: 'Example Site',
+      siteTitle: 'Example Site',
+      siteDescription: 'A sample site for testing.',
+      canonicalUrl: 'https://canonical.example.com',
+      twitterCard: 'summary_large_image',
+    })
+    mocks.getAllArticles.mockResolvedValue([
+      {
+        slug: 'public-article',
+        title: 'Public Article',
+        description: 'Expanded listing entry.',
+        date: '2025-01-10',
+        noindex: false,
+      },
+    ])
+
+    const response = await GET()
+    const body = await response.text()
+
+    expect(body).toContain('Base: https://canonical.example.com')
+    expect(body).toContain(
+      'Primary index: https://canonical.example.com/llms.txt',
+    )
+    expect(body).toContain(
+      'URL: https://canonical.example.com/articles/public-article',
+    )
+    expect(body).not.toContain(
+      'https://app.example.com/articles/public-article',
+    )
+  })
 })
