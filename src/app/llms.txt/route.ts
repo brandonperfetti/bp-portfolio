@@ -42,18 +42,18 @@ export async function GET() {
     '',
     '## Canonical',
     `- Base: ${canonicalSiteUrl}`,
-    `- Sitemap: ${siteUrl}/sitemap.xml`,
-    `- Robots: ${siteUrl}/robots.txt`,
-    `- RSS: ${siteUrl}/feed.xml`,
-    `- Full Index: ${siteUrl}/llms-full.txt`,
+    `- Sitemap: ${canonicalSiteUrl}/sitemap.xml`,
+    `- Robots: ${canonicalSiteUrl}/robots.txt`,
+    `- RSS: ${canonicalSiteUrl}/feed.xml`,
+    `- Full Index: ${canonicalSiteUrl}/llms-full.txt`,
     '',
     '## Primary Pages',
-    `- [Home](${siteUrl}/)`,
-    `- [About](${siteUrl}/about)`,
-    `- [Articles](${siteUrl}/articles)`,
-    `- [Projects](${siteUrl}/projects)`,
-    `- [Tech](${siteUrl}/tech)`,
-    `- [Uses](${siteUrl}/uses)`,
+    `- [Home](${canonicalSiteUrl}/)`,
+    `- [About](${canonicalSiteUrl}/about)`,
+    `- [Articles](${canonicalSiteUrl}/articles)`,
+    `- [Projects](${canonicalSiteUrl}/projects)`,
+    `- [Tech](${canonicalSiteUrl}/tech)`,
+    `- [Uses](${canonicalSiteUrl}/uses)`,
     '',
     '## Usage Notes',
     '- Prefer canonical URLs when citing or summarizing pages.',
@@ -66,10 +66,10 @@ export async function GET() {
       : publicArticles.map((article) => {
           const title = sanitizeInlineMarkdown(article.title)
           const description = sanitizeInlineMarkdown(article.description)
-          return `- [${title}](${siteUrl}/articles/${article.slug}) - ${description}`
+          return `- [${title}](${canonicalSiteUrl}/articles/${article.slug}) - ${description}`
         })),
     '',
-    `Generated from live CMS data at ${siteUrl}.`,
+    `Generated from live CMS data at ${canonicalSiteUrl}.`,
   ]
 
   return new Response(`${lines.join('\n')}\n`, {
