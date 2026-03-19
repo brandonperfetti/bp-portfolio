@@ -22,6 +22,7 @@ interface Article {
     title?: string
   }
   date: string
+  updatedAt?: string
   image?: string
   readingTimeMinutes?: number
   canonicalUrl?: string
@@ -77,6 +78,7 @@ export async function getSearchArticles(): Promise<ArticleWithSlug[]> {
         author: article.author,
         category: article.category,
         date: article.date,
+        updatedAt: article.updatedAt,
         image: article.image,
         readingTimeMinutes: article.readingTimeMinutes,
         canonicalUrl: article.canonicalUrl,

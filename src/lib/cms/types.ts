@@ -25,6 +25,7 @@ export interface CmsArticleSummary {
   title: string
   description: string
   date: string
+  updatedAt?: string
   image?: string
   readingTimeMinutes?: number
   author: CmsAuthor | string

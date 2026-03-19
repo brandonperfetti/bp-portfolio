@@ -8,6 +8,7 @@ import { SyncErrorState } from '@/components/cms/SyncErrorState'
 import { UseWithAiMenu } from '@/components/cms/UseWithAiMenu'
 import { getAllArticles, getArticleBySlug } from '@/lib/articles'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
+import { canonicalizeArticleUrl } from '@/lib/seo/canonical'
 import { getSiteUrl } from '@/lib/site'
 
 export const dynamicParams = true
@@ -42,9 +43,11 @@ export async function generateMetadata({
   }
 
   const siteUrl = getSiteUrl()
-  const canonical = article.canonicalUrl?.startsWith('http')
-    ? article.canonicalUrl
-    : `${siteUrl}/articles/${article.slug}`
+  const canonical = canonicalizeArticleUrl(
+    siteUrl,
+    article.slug,
+    article.canonicalUrl,
+  )
 
   const image = article.image
     ? article.image.startsWith('http')
@@ -98,6 +101,66 @@ export default async function ArticlePage({ params }: PageProps) {
 
   const bodyBlocks = Array.isArray(article.bodyBlocks) ? article.bodyBlocks : []
   const hasBodyBlocks = bodyBlocks.length > 0
+  const siteUrl = getSiteUrl()
+  const canonical = canonicalizeArticleUrl(
+    siteUrl,
+    article.slug,
+    article.canonicalUrl,
+  )
+  const authorName =
+    typeof article.author === 'string' ? article.author : article.author.name
+  const articleSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: article.title,
+    description: article.description,
+    datePublished: article.date,
+    dateModified: article.updatedAt || article.date,
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': canonical,
+    },
+    author: authorName
+      ? [
+          {
+            '@type': 'Person',
+            name: authorName,
+          },
+        ]
+      : undefined,
+    image: article.image ? [article.image] : undefined,
+    keywords: Array.from(
+      new Set([
+        ...(article.keywords ?? []),
+        ...(article.topics ?? []),
+        ...(article.tech ?? []),
+      ]),
+    ),
+  }
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Home',
+        item: `${siteUrl}/`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Articles',
+        item: `${siteUrl}/articles`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: article.title,
+        item: canonical,
+      },
+    ],
+  }
 
   return (
     <ArticleLayout
@@ -107,6 +170,14 @@ export default async function ArticlePage({ params }: PageProps) {
         image: article.image,
       }}
     >
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
       <ArticleMeta
         author={article.author}
         actions={

@@ -152,6 +152,7 @@ export function mapNotionArticleSummary(
     title,
     description,
     date,
+    updatedAt: page.last_edited_time || undefined,
     image: imageUrl,
     readingTimeMinutes,
     author: DEFAULT_CMS_AUTHOR,
