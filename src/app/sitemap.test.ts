@@ -77,4 +77,17 @@ describe('sitemap', () => {
     )
     expect(home?.lastModified).toBeUndefined()
   })
+
+  it('sets /articles lastModified to undefined when no public articles exist', async () => {
+    mocks.getSiteUrl.mockReturnValue('https://example.com')
+    mocks.getAllArticles.mockResolvedValue([])
+
+    const entries = await sitemap()
+    const articlesIndex = entries.find(
+      (entry) => String(entry.url) === 'https://example.com/articles',
+    )
+
+    expect(articlesIndex).toBeDefined()
+    expect(articlesIndex?.lastModified).toBeUndefined()
+  })
 })
