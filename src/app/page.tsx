@@ -22,7 +22,7 @@ import { formatDate } from '@/lib/formatDate'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
-import { buildPersonSchema } from '@/lib/seo/structuredData'
+import { buildPersonSchema, buildWebsiteSchema } from '@/lib/seo/structuredData'
 import { getSiteUrl } from '@/lib/site'
 import { dedupeArticlesBySlug } from '@/lib/articleUtils'
 
@@ -339,18 +339,11 @@ export default async function Home() {
     homeGalleryImagesRaw && homeGalleryImagesRaw.length > 0
       ? homeGalleryImagesRaw
       : defaultHomeGalleryImages
-  const websiteSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    name: settings.siteName,
-    url: canonicalSiteUrl,
-    description: settings.siteDescription,
-    potentialAction: {
-      '@type': 'SearchAction',
-      target: `${canonicalSiteUrl}/articles?q={search_term_string}`,
-      'query-input': 'required name=search_term_string',
-    },
-  }
+  const websiteSchema = buildWebsiteSchema(
+    settings.siteName,
+    settings.siteDescription,
+    canonicalSiteUrl,
+  )
   const personSchema = buildPersonSchema(canonicalSiteUrl)
 
   return (
