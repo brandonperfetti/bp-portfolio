@@ -21,13 +21,17 @@ import {
   propertyToText,
 } from '@/lib/cms/notion/property'
 import { isFuturePublicationDate } from '@/lib/date'
-import { PERSON_IMAGE_URL } from '@/lib/identity'
+import {
+  PERSON_IMAGE_URL,
+  SITE_OWNER_JOB_TITLE,
+  SITE_OWNER_NAME,
+} from '@/lib/identity'
 import { getSiteUrl } from '@/lib/site'
 
 export const DEFAULT_CMS_AUTHOR = {
-  name: 'Brandon Perfetti',
+  name: SITE_OWNER_NAME,
   href: '/about',
-  role: 'Technical PM + Software Engineer',
+  role: SITE_OWNER_JOB_TITLE,
   image: PERSON_IMAGE_URL,
 } as const
 
