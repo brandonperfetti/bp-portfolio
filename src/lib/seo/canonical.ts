@@ -3,7 +3,10 @@ export function canonicalizeArticleUrl(
   slug: string,
   candidate?: string,
 ) {
-  const fallback = `${siteUrl}/articles/${slug}`
+  const normalizedSiteUrl = siteUrl.endsWith('/')
+    ? siteUrl.slice(0, -1)
+    : siteUrl
+  const fallback = `${normalizedSiteUrl}/articles/${slug}`
   if (!candidate?.trim()) {
     return fallback
   }
@@ -11,11 +14,11 @@ export function canonicalizeArticleUrl(
   const trimmed = candidate.trim()
 
   if (trimmed.startsWith('/')) {
-    return `${siteUrl}${trimmed}`
+    return `${normalizedSiteUrl}${trimmed}`
   }
 
   try {
-    const site = new URL(siteUrl)
+    const site = new URL(normalizedSiteUrl)
     const parsed = new URL(trimmed)
     if (parsed.host !== site.host) {
       return fallback

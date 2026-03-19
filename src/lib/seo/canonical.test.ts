@@ -38,4 +38,27 @@ describe('canonicalizeArticleUrl', () => {
       ),
     ).toBe('https://example.com/articles/my-post')
   })
+
+  it('falls back when candidate canonical is malformed', () => {
+    expect(
+      canonicalizeArticleUrl(
+        'https://example.com',
+        'my-post',
+        'not-a-valid-url',
+      ),
+    ).toBe('https://example.com/articles/my-post')
+  })
+
+  it('normalizes trailing slash in siteUrl to avoid double slashes', () => {
+    expect(canonicalizeArticleUrl('https://example.com/', 'my-post')).toBe(
+      'https://example.com/articles/my-post',
+    )
+    expect(
+      canonicalizeArticleUrl(
+        'https://example.com/',
+        'my-post',
+        '/articles/my-post',
+      ),
+    ).toBe('https://example.com/articles/my-post')
+  })
 })
