@@ -69,6 +69,19 @@ export default async function ArticlesIndex() {
     ],
   }
   const hasArticles = articles.length > 0
+  const itemListSchema = hasArticles
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'ItemList',
+        itemListElement: articles.slice(0, 50).map((article, index) => ({
+          '@type': 'ListItem',
+          position: index + 1,
+          url: `${canonicalSiteUrl}/articles/${article.slug}`,
+          name: article.title,
+        })),
+      }
+    : null
+  const scriptPayload = itemListSchema ? toSafeJsonLd(itemListSchema) : null
 
   return (
     <>
@@ -80,29 +93,12 @@ export default async function ArticlesIndex() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
       />
-      {hasArticles
-        ? (() => {
-            const itemListSchema = {
-              '@context': 'https://schema.org',
-              '@type': 'ItemList',
-              itemListElement: articles.slice(0, 50).map((article, index) => ({
-                '@type': 'ListItem',
-                position: index + 1,
-                url: `${canonicalSiteUrl}/articles/${article.slug}`,
-                name: article.title,
-              })),
-            }
-
-            return (
-              <script
-                type="application/ld+json"
-                dangerouslySetInnerHTML={{
-                  __html: toSafeJsonLd(itemListSchema),
-                }}
-              />
-            )
-          })()
-        : null}
+      {hasArticles && scriptPayload ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: scriptPayload }}
+        />
+      ) : null}
       <SimpleLayout
         title={
           page?.title ||
