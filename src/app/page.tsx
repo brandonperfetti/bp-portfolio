@@ -350,20 +350,7 @@ export default async function Home() {
       'query-input': 'required name=search_term_string',
     },
   }
-  const personSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'Person',
-    name: 'Brandon Perfetti',
-    url: `${siteUrl}/about`,
-    image:
-      'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142617/bp-spotlight/images/avatar_jeycju.jpg',
-    sameAs: [
-      'https://x.com/brandonperfetti',
-      'https://github.com/brandonperfetti',
-      'https://www.linkedin.com/in/brandonperfetti/',
-    ],
-    jobTitle: 'Technical PM + Software Engineer',
-  }
+  const personSchema = buildPersonSchema(siteUrl)
 
   return (
     <>

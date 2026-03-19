@@ -207,19 +207,7 @@ export default async function About() {
       url: siteUrl,
     },
   }
-  const personSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'Person',
-    name: 'Brandon Perfetti',
-    url: `${siteUrl}/about`,
-    image: portraitImage,
-    sameAs: [
-      'https://x.com/brandonperfetti',
-      'https://github.com/brandonperfetti',
-      'https://www.linkedin.com/in/brandonperfetti/',
-    ],
-    jobTitle: 'Technical PM + Software Engineer',
-  }
+  const personSchema = buildPersonSchema(siteUrl)
   const breadcrumbSchema = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
