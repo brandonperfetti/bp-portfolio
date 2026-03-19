@@ -4,6 +4,7 @@ import {
   getPublicSortedArticles,
   sanitizeInlineMarkdown,
 } from '@/lib/llms/helpers'
+import { PRIMARY_NAV_LINKS } from '@/lib/navigation'
 import { getSiteUrl } from '@/lib/site'
 
 const MAX_ARTICLES = 50
@@ -15,8 +16,17 @@ export async function GET() {
     getAllArticles(),
   ])
 
-  const canonicalSiteUrl = settings.canonicalUrl || siteUrl
+  const canonicalSiteUrl = (settings.canonicalUrl || siteUrl).replace(
+    /\/+$/,
+    '',
+  )
   const publicArticles = getPublicSortedArticles(allArticles, MAX_ARTICLES)
+  const primaryPageLinks = [
+    `- [Home](${canonicalSiteUrl}/)`,
+    ...PRIMARY_NAV_LINKS.map(
+      (item) => `- [${item.label}](${canonicalSiteUrl}${item.href})`,
+    ),
+  ]
 
   const lines = [
     `# ${sanitizeInlineMarkdown(settings.siteName)}`,
@@ -30,17 +40,7 @@ export async function GET() {
     `- Full Index: ${canonicalSiteUrl}/llms-full.txt`,
     '',
     '## Primary Pages',
-    // Keep this list aligned with user-facing primary navigation defaults.
-    // Source of truth references:
-    // - src/components/Header.tsx
-    // - src/components/Footer.tsx
-    // - docs/NAVIGATION.md
-    `- [Home](${canonicalSiteUrl}/)`,
-    `- [About](${canonicalSiteUrl}/about)`,
-    `- [Articles](${canonicalSiteUrl}/articles)`,
-    `- [Projects](${canonicalSiteUrl}/projects)`,
-    `- [Tech](${canonicalSiteUrl}/tech)`,
-    `- [Uses](${canonicalSiteUrl}/uses)`,
+    ...primaryPageLinks,
     '',
     '## Usage Notes',
     '- Prefer canonical URLs when citing or summarizing pages.',
