@@ -1638,38 +1638,39 @@ export async function reconcilePortfolioArticleProjection(): Promise<ProjectionR
   }
 }
 
+async function persistSeoGateAudit(
+  sourcePageId: string,
+  pass: boolean,
+  reasons: string[],
+): Promise<{ persisted: boolean; error?: string }> {
+  const checkedAtIso = new Date().toISOString()
+  try {
+    await notionUpdatePage(sourcePageId, {
+      properties: {
+        'SEO Gate Status': {
+          select: { name: pass ? 'Pass' : 'Fail' },
+        },
+        'SEO Gate Findings':
+          reasons.length > 0
+            ? toRichText(reasons.join('; '))
+            : { rich_text: [] },
+        'SEO Checked At': {
+          date: { start: checkedAtIso },
+        },
+      },
+    })
+    return { persisted: true }
+  } catch (error) {
+    return {
+      persisted: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
 export async function evaluateSourceArticlePublishGate(
   sourcePageId: string,
 ): Promise<SourcePublishGateResult> {
-  async function persistSeoGateAudit(
-    pass: boolean,
-    reasons: string[],
-  ): Promise<{ persisted: boolean; error?: string }> {
-    const checkedAtIso = new Date().toISOString()
-    try {
-      await notionUpdatePage(sourcePageId, {
-        properties: {
-          'SEO Gate Status': {
-            select: { name: pass ? 'Pass' : 'Fail' },
-          },
-          'SEO Gate Findings':
-            reasons.length > 0
-              ? toRichText(reasons.join('; '))
-              : { rich_text: [] },
-          'SEO Checked At': {
-            date: { start: checkedAtIso },
-          },
-        },
-      })
-      return { persisted: true }
-    } catch (error) {
-      return {
-        persisted: false,
-        error: error instanceof Error ? error.message : String(error),
-      }
-    }
-  }
-
   let sourcePage: NotionPage
 
   try {
@@ -1691,7 +1692,7 @@ export async function evaluateSourceArticlePublishGate(
     const reasons = [
       'Source page is not an eligible Blog Post record for projection',
     ]
-    const persisted = await persistSeoGateAudit(false, reasons)
+    const persisted = await persistSeoGateAudit(sourcePageId, false, reasons)
     return {
       ok: false,
       sourcePageId,
@@ -1705,7 +1706,11 @@ export async function evaluateSourceArticlePublishGate(
     mapped,
     getOptionalNotionDefaultAuthorPageId(),
   )
-  const persisted = await persistSeoGateAudit(reasons.length === 0, reasons)
+  const persisted = await persistSeoGateAudit(
+    sourcePageId,
+    reasons.length === 0,
+    reasons,
+  )
 
   return {
     ok: reasons.length === 0,
