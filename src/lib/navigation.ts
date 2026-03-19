@@ -14,12 +14,14 @@ export const PRIMARY_NAV_LINKS: NavigationLink[] = [
 
 // Header includes Hermes in addition to primary links.
 const HERMES_LINK: NavigationLink = { href: '/hermes', label: 'Hermes' }
-const INSERT_HERMES_AFTER_LABEL = 'Tech'
-const insertAfterIndex = PRIMARY_NAV_LINKS.findIndex(
-  (item) => item.label === INSERT_HERMES_AFTER_LABEL,
-)
+// Keep Hermes placement explicit and tied to PRIMARY_NAV_LINKS order:
+// index 3 currently corresponds to "Tech".
+const INSERT_HERMES_AFTER_INDEX = 3
 const hermesInsertIndex =
-  insertAfterIndex >= 0 ? insertAfterIndex + 1 : PRIMARY_NAV_LINKS.length
+  INSERT_HERMES_AFTER_INDEX >= 0 &&
+  INSERT_HERMES_AFTER_INDEX < PRIMARY_NAV_LINKS.length
+    ? INSERT_HERMES_AFTER_INDEX + 1
+    : PRIMARY_NAV_LINKS.length
 
 export const HEADER_NAV_LINKS: NavigationLink[] = [
   ...PRIMARY_NAV_LINKS.slice(0, hermesInsertIndex),
