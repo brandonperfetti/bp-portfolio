@@ -32,18 +32,22 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function ArticlesIndex() {
   const siteUrl = getSiteUrl()
-  const page = await getCmsPageByPath('/articles')
-  const articles = await getSearchArticles()
+  const [settings, page, articles] = await Promise.all([
+    getCmsSiteSettings(),
+    getCmsPageByPath('/articles'),
+    getSearchArticles(),
+  ])
+  const canonicalSiteUrl = settings.canonicalUrl || siteUrl
   const collectionSchema = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
     name: page?.title || 'Articles',
     description: page?.subtitle || defaultArticlesMeta.description,
-    url: `${siteUrl}/articles`,
+    url: `${canonicalSiteUrl}/articles`,
     isPartOf: {
       '@type': 'WebSite',
-      url: siteUrl,
-      name: 'Brandon Perfetti',
+      url: canonicalSiteUrl,
+      name: settings.siteName,
     },
   }
   const breadcrumbSchema = {
@@ -54,13 +58,13 @@ export default async function ArticlesIndex() {
         '@type': 'ListItem',
         position: 1,
         name: 'Home',
-        item: `${siteUrl}/`,
+        item: `${canonicalSiteUrl}/`,
       },
       {
         '@type': 'ListItem',
         position: 2,
         name: 'Articles',
-        item: `${siteUrl}/articles`,
+        item: `${canonicalSiteUrl}/articles`,
       },
     ],
   }
@@ -84,7 +88,7 @@ export default async function ArticlesIndex() {
               itemListElement: articles.slice(0, 50).map((article, index) => ({
                 '@type': 'ListItem',
                 position: index + 1,
-                url: `${siteUrl}/articles/${article.slug}`,
+                url: `${canonicalSiteUrl}/articles/${article.slug}`,
                 name: article.title,
               })),
             }
