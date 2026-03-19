@@ -17,6 +17,10 @@ Defined in `src/app/layout.tsx`:
 `src/app/articles/[slug]/page.tsx` (`generateMetadata`) sets:
 
 - per-article title/description
+  - title precedence: `SEO Title` -> article `title`
+  - description precedence: `SEO Description` -> article `description`
+  - article pages use an absolute page title to avoid inheriting the global
+    `%s - SiteName` title template
 - canonical URL
 - robots directives (`noindex` support)
 - published time
@@ -44,6 +48,11 @@ Defined in `src/app/layout.tsx`:
   - `BreadcrumbList`
   - `ItemList`
 
+Shared structured-data helpers:
+
+- `src/lib/seo/jsonLd.ts` (`toSafeJsonLd`)
+- `src/lib/seo/structuredData.ts` (`buildPersonSchema`)
+
 ## Indexing Routes
 
 - `src/app/sitemap.ts`:
@@ -69,5 +78,7 @@ Defined in `src/app/layout.tsx`:
 ## Best Practices
 
 - Keep article `description` concise and unique.
+- Keep `SEO Title` within ~45-65 characters.
+- Keep `SEO Description` within ~120-160 characters.
 - Ensure article `date` is valid ISO-compatible format.
 - Ensure article/social image fields are populated in the active content provider when social card richness is important.
