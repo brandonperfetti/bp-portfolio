@@ -10,7 +10,8 @@ Defined in `src/app/layout.tsx`:
 - Open Graph defaults
 - Twitter card defaults
 
-`NEXT_PUBLIC_SITE_URL` is used to derive canonical and metadata base URLs.
+Canonical base URLs should come from CMS site settings (`canonicalUrl`) when
+available, with `NEXT_PUBLIC_SITE_URL` as the fallback.
 
 ## Article Metadata
 

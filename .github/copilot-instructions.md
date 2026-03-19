@@ -36,6 +36,8 @@ Optional env vars:
 - Articles are CMS-first; local mode should gracefully render empty article states when Notion is disabled.
 - Dynamic article route is `src/app/articles/[slug]/page.tsx`; preserve this shape.
 - In Notion mode, `Source Article` page blocks are canonical article body source.
+- Canonical URL source of truth is CMS site settings (`canonicalUrl`) when
+  available; fall back to `NEXT_PUBLIC_SITE_URL`.
 - Keep Notion API pinned to `NOTION_API_VERSION=2025-09-03`.
 - Preserve query-string behavior in article explorer (`q`, `topic`) and keyboard shortcuts (`/` for focus).
 - Preserve header search UX (`Cmd/Ctrl + K`) and debounced matching over article body text.
