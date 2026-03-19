@@ -1,21 +1,13 @@
 import { getAllArticles } from '@/lib/articles'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { isFuturePublicationDate } from '@/lib/date'
+import {
+  sanitizeInlineMarkdown,
+  toFreshnessTimestamp,
+} from '@/lib/llms/helpers'
 import { getSiteUrl } from '@/lib/site'
 
 const MAX_ARTICLES = 50
-
-function sanitizeInlineMarkdown(value: string) {
-  return value
-    .replace(/[\r\n]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function toFreshnessTimestamp(updatedAt?: string, date?: string) {
-  const parsed = Date.parse(updatedAt || date || '')
-  return Number.isNaN(parsed) ? 0 : parsed
-}
 
 export async function GET() {
   const siteUrl = getSiteUrl()
@@ -48,6 +40,11 @@ export async function GET() {
     `- Full Index: ${canonicalSiteUrl}/llms-full.txt`,
     '',
     '## Primary Pages',
+    // Keep this list aligned with user-facing primary navigation defaults.
+    // Source of truth references:
+    // - src/components/Header.tsx
+    // - src/components/Footer.tsx
+    // - docs/NAVIGATION.md
     `- [Home](${canonicalSiteUrl}/)`,
     `- [About](${canonicalSiteUrl}/about)`,
     `- [Articles](${canonicalSiteUrl}/articles)`,

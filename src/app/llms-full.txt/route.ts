@@ -1,21 +1,13 @@
 import { getAllArticles } from '@/lib/articles'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { isFuturePublicationDate } from '@/lib/date'
+import {
+  sanitizeInlineMarkdown,
+  toFreshnessTimestamp,
+} from '@/lib/llms/helpers'
 import { getSiteUrl } from '@/lib/site'
 
 const MAX_ARTICLES = 200
-
-function sanitizeInlineMarkdown(value: string) {
-  return value
-    .replace(/[\r\n]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function toFreshnessTimestamp(updatedAt?: string, date?: string) {
-  const parsed = Date.parse(updatedAt || date || '')
-  return Number.isNaN(parsed) ? 0 : parsed
-}
 
 function formatOptionalList(label: string, values?: string[]) {
   if (!values || values.length === 0) return null
