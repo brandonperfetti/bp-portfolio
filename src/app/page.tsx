@@ -21,6 +21,7 @@ import { getCmsWorkHistory } from '@/lib/cms/workHistoryRepo'
 import { formatDate } from '@/lib/formatDate'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
+import { getSiteUrl } from '@/lib/site'
 import { dedupeArticlesBySlug } from '@/lib/articleUtils'
 
 const image1 =
@@ -38,6 +39,10 @@ const defaultHomeMeta = {
   title: 'Home',
   description:
     'I’m Brandon, a product and project manager plus software engineer based in Orange County, California.',
+}
+
+function toSafeJsonLd(value: unknown) {
+  return JSON.stringify(value).replace(/</g, '\\u003c')
 }
 
 function BriefcaseIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
@@ -314,6 +319,8 @@ function Photos({ images }: { images: string[] }) {
 }
 
 export default async function Home() {
+  const siteUrl = getSiteUrl()
+  const settings = await getCmsSiteSettings()
   const articles = dedupeArticlesBySlug(await getAllArticles()).slice(0, 7)
   const homePage = await getCmsPageByPath('/')
   const homeTitle =
@@ -333,9 +340,43 @@ export default async function Home() {
     homeGalleryImagesRaw && homeGalleryImagesRaw.length > 0
       ? homeGalleryImagesRaw
       : defaultHomeGalleryImages
+  const websiteSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: settings.siteName,
+    url: siteUrl,
+    description: settings.siteDescription,
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: `${siteUrl}/articles?q={search_term_string}`,
+      'query-input': 'required name=search_term_string',
+    },
+  }
+  const personSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    name: 'Brandon Perfetti',
+    url: `${siteUrl}/about`,
+    image:
+      'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142617/bp-spotlight/images/avatar_jeycju.jpg',
+    sameAs: [
+      'https://x.com/brandonperfetti',
+      'https://github.com/brandonperfetti',
+      'https://www.linkedin.com/in/brandonperfetti/',
+    ],
+    jobTitle: 'Technical PM + Software Engineer',
+  }
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(websiteSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(personSchema) }}
+      />
       <Container className="mt-9">
         <div className="max-w-2xl">
           <AnimatedHeadline
