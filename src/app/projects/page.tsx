@@ -91,6 +91,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function Projects() {
   const siteUrl = getSiteUrl()
+  const normalizedSiteUrl = siteUrl.replace(/\/+$/, '')
   const [settings, page, cmsProjects] = await Promise.all([
     getCmsSiteSettings(),
     getCmsPageByPath('/projects'),
@@ -110,10 +111,10 @@ export default async function Projects() {
     '@type': 'CollectionPage',
     name: page?.title || 'Projects',
     description: page?.subtitle || defaultProjectsMeta.description,
-    url: `${siteUrl}/projects`,
+    url: `${normalizedSiteUrl}/projects`,
     isPartOf: {
       '@type': 'WebSite',
-      url: siteUrl,
+      url: normalizedSiteUrl,
       name: settings.siteName,
     },
   }
@@ -125,13 +126,13 @@ export default async function Projects() {
         '@type': 'ListItem',
         position: 1,
         name: 'Home',
-        item: `${siteUrl}/`,
+        item: `${normalizedSiteUrl}/`,
       },
       {
         '@type': 'ListItem',
         position: 2,
         name: 'Projects',
-        item: `${siteUrl}/projects`,
+        item: `${normalizedSiteUrl}/projects`,
       },
     ],
   }
@@ -142,7 +143,7 @@ export default async function Projects() {
       '@type': 'ListItem',
       position: index + 1,
       name: item.name,
-      url: item.link?.href || `${siteUrl}/projects`,
+      url: item.link?.href || `${normalizedSiteUrl}/projects`,
     })),
   }
 

@@ -37,7 +37,10 @@ export default async function ArticlesIndex() {
     getCmsPageByPath('/articles'),
     getSearchArticles(),
   ])
-  const canonicalSiteUrl = settings.canonicalUrl || siteUrl
+  const canonicalSiteUrl = (settings.canonicalUrl || siteUrl).replace(
+    /\/+$/,
+    '',
+  )
   const collectionSchema = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
