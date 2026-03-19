@@ -1,16 +1,10 @@
 import { type MetadataRoute } from 'next'
 
 import { getAllArticles } from '@/lib/articles'
-import { isFuturePublicationDate } from '@/lib/date'
+import { isFuturePublicationDate, toValidDate } from '@/lib/date'
 import { getSiteUrl } from '@/lib/site'
 
 export const revalidate = 3600
-
-function toValidDate(value?: string): Date | undefined {
-  if (!value) return undefined
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed
-}
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = getSiteUrl()

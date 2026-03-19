@@ -26,3 +26,13 @@ export function isFuturePublicationDate(dateValue: string) {
   }
   return timestamp > Date.now()
 }
+
+/**
+ * Parses an optional date string and returns a valid Date instance when
+ * parseable, otherwise `undefined`.
+ */
+export function toValidDate(value?: string): Date | undefined {
+  if (!value) return undefined
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed
+}
