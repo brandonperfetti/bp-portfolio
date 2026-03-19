@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { ContainerInner, ContainerOuter } from '@/components/Container'
 import type { CmsNavigationItem } from '@/lib/cms/types'
 import { getExternalLinkProps } from '@/lib/link-utils'
+import { PRIMARY_NAV_LINKS } from '@/lib/navigation'
 
 function NavLink({
   href,
@@ -28,13 +29,7 @@ function NavLink({
 export function Footer() {
   const defaultNavigationItems: Array<
     Pick<CmsNavigationItem, 'href' | 'label'>
-  > = [
-    { href: '/about', label: 'About' },
-    { href: '/articles', label: 'Articles' },
-    { href: '/projects', label: 'Projects' },
-    { href: '/tech', label: 'Tech' },
-    { href: '/uses', label: 'Uses' },
-  ]
+  > = PRIMARY_NAV_LINKS
   return <FooterWithNavigation navigationItems={defaultNavigationItems} />
 }
 
