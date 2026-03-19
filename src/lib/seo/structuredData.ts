@@ -6,11 +6,13 @@ const PERSON_IMAGE_URL =
  * Keeps identity metadata consistent across pages that embed person schema.
  */
 export function buildPersonSchema(siteUrl: string) {
+  const normalizedSiteUrl = siteUrl.replace(/\/+$/, '')
+
   return {
     '@context': 'https://schema.org',
     '@type': 'Person',
     name: 'Brandon Perfetti',
-    url: `${siteUrl}/about`,
+    url: `${normalizedSiteUrl}/about`,
     image: PERSON_IMAGE_URL,
     sameAs: [
       'https://x.com/brandonperfetti',

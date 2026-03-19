@@ -184,6 +184,7 @@ function AboutFallbackBody() {
 
 export default async function About() {
   const siteUrl = getSiteUrl()
+  const normalizedSiteUrl = siteUrl.replace(/\/+$/, '')
   const page = await getCmsPageByPath('/about', { includeBody: true })
 
   const heroTitle =
@@ -200,14 +201,14 @@ export default async function About() {
     '@type': 'AboutPage',
     name: page?.title || defaultAboutMeta.title,
     description: page?.subtitle || defaultAboutMeta.description,
-    url: `${siteUrl}/about`,
+    url: `${normalizedSiteUrl}/about`,
     isPartOf: {
       '@type': 'WebSite',
       name: 'Brandon Perfetti',
-      url: siteUrl,
+      url: normalizedSiteUrl,
     },
   }
-  const personSchema = buildPersonSchema(siteUrl)
+  const personSchema = buildPersonSchema(normalizedSiteUrl)
   const breadcrumbSchema = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
@@ -216,13 +217,13 @@ export default async function About() {
         '@type': 'ListItem',
         position: 1,
         name: 'Home',
-        item: `${siteUrl}/`,
+        item: `${normalizedSiteUrl}/`,
       },
       {
         '@type': 'ListItem',
         position: 2,
         name: 'About',
-        item: `${siteUrl}/about`,
+        item: `${normalizedSiteUrl}/about`,
       },
     ],
   }
