@@ -16,6 +16,7 @@ import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
+import { getSiteUrl } from '@/lib/site'
 
 function SocialLink({
   className,
@@ -96,6 +97,10 @@ const defaultAboutMeta = {
   title: 'About',
   description:
     'Brandon Perfetti is a product and project leader plus software engineer based in Orange County, California.',
+}
+
+function toSafeJsonLd(value: unknown) {
+  return JSON.stringify(value).replace(/</g, '\\u003c')
 }
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -180,6 +185,7 @@ function AboutFallbackBody() {
 }
 
 export default async function About() {
+  const siteUrl = getSiteUrl()
   const page = await getCmsPageByPath('/about', { includeBody: true })
 
   const heroTitle =
@@ -191,93 +197,150 @@ export default async function About() {
   const portraitImage =
     page?.heroImage ||
     'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142618/bp-spotlight/images/portrait_zdvgpf.jpg'
+  const aboutPageSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'AboutPage',
+    name: page?.title || defaultAboutMeta.title,
+    description: page?.subtitle || defaultAboutMeta.description,
+    url: `${siteUrl}/about`,
+    isPartOf: {
+      '@type': 'WebSite',
+      name: 'Brandon Perfetti',
+      url: siteUrl,
+    },
+  }
+  const personSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    name: 'Brandon Perfetti',
+    url: `${siteUrl}/about`,
+    image: portraitImage,
+    sameAs: [
+      'https://x.com/brandonperfetti',
+      'https://github.com/brandonperfetti',
+      'https://www.linkedin.com/in/brandonperfetti/',
+    ],
+    jobTitle: 'Technical PM + Software Engineer',
+  }
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Home',
+        item: `${siteUrl}/`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'About',
+        item: `${siteUrl}/about`,
+      },
+    ],
+  }
 
   return (
-    <Container className="my-16 sm:mt-32">
-      <div className="grid grid-cols-1 gap-y-14 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:gap-y-12">
-        <div className="order-2 hidden lg:order-none lg:row-span-2 lg:block lg:pl-20">
-          <div className="space-y-6 lg:sticky lg:top-10 lg:self-start">
-            <div className="mx-auto max-w-xs px-2.5 lg:max-w-none">
-              <HoverMotionCard y={0} scale={1} imageScale={1.03}>
-                <div className="overflow-hidden rounded-2xl md:rotate-3">
-                  <Image
-                    height={800}
-                    width={800}
-                    src={getOptimizedImageUrl(portraitImage, {
-                      width: 1024,
-                      height: 1024,
-                      crop: 'fill',
-                    })}
-                    alt="Brandon Perfetti"
-                    sizes="(min-width: 1024px) 32rem, 20rem"
-                    data-hover-image
-                    className="aspect-square bg-zinc-100 object-cover dark:bg-zinc-800"
-                  />
-                </div>
-              </HoverMotionCard>
-            </div>
-            <div
-              data-testid="about-sticky-rail-anchor"
-              className="mb-4 lg:mt-2"
-            >
-              <SocialLinksList links={socialLinks} />
-            </div>
-          </div>
-        </div>
-        <div className="order-first lg:order-first lg:row-span-2">
-          <AnimatedHeadline
-            text={heroTitle}
-            variant="typewriter"
-            className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100"
-          />
-          <ScrollReveal y={14} duration={0.72} delay={0.24}>
-            <div className="mt-6 space-y-7 text-base text-zinc-600 dark:text-zinc-400">
-              <p>{heroSubtitle}</p>
-            </div>
-          </ScrollReveal>
-          <ScrollReveal y={16} duration={0.78} delay={0.36}>
-            <div className="mt-8">
-              <div className="lg:hidden">
-                <ParallaxGroup amount={6} start="top 94%" end="bottom 8%">
-                  <div
-                    className="mx-auto max-w-xs px-2.5 will-change-transform"
-                    data-parallax-item
-                    data-parallax-speed="0.6"
-                  >
-                    <HoverMotionCard y={0} scale={1} imageScale={1.03}>
-                      <div className="overflow-hidden rounded-2xl">
-                        <Image
-                          height={800}
-                          width={800}
-                          src={getOptimizedImageUrl(portraitImage, {
-                            width: 1024,
-                            height: 1024,
-                            crop: 'fill',
-                          })}
-                          alt="Brandon Perfetti"
-                          sizes="20rem"
-                          data-hover-image
-                          className="aspect-square bg-zinc-100 object-cover dark:bg-zinc-800"
-                        />
-                      </div>
-                    </HoverMotionCard>
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(aboutPageSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(personSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
+      />
+      <Container className="my-16 sm:mt-32">
+        <div className="grid grid-cols-1 gap-y-14 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:gap-y-12">
+          <div className="order-2 hidden lg:order-none lg:row-span-2 lg:block lg:pl-20">
+            <div className="space-y-6 lg:sticky lg:top-10 lg:self-start">
+              <div className="mx-auto max-w-xs px-2.5 lg:max-w-none">
+                <HoverMotionCard y={0} scale={1} imageScale={1.03}>
+                  <div className="overflow-hidden rounded-2xl md:rotate-3">
+                    <Image
+                      height={800}
+                      width={800}
+                      src={getOptimizedImageUrl(portraitImage, {
+                        width: 1024,
+                        height: 1024,
+                        crop: 'fill',
+                      })}
+                      alt="Brandon Perfetti"
+                      sizes="(min-width: 1024px) 32rem, 20rem"
+                      data-hover-image
+                      className="aspect-square bg-zinc-100 object-cover dark:bg-zinc-800"
+                    />
                   </div>
-                </ParallaxGroup>
+                </HoverMotionCard>
+              </div>
+              <div
+                data-testid="about-sticky-rail-anchor"
+                className="mb-4 lg:mt-2"
+              >
+                <SocialLinksList links={socialLinks} />
               </div>
             </div>
-            {page?.bodyBlocks?.length ? (
-              <Prose className="mt-8 max-w-none" data-mdx-content>
-                <ArticleBody blocks={page.bodyBlocks} />
-              </Prose>
-            ) : (
-              <AboutFallbackBody />
-            )}
-          </ScrollReveal>
+          </div>
+          <div className="order-first lg:order-first lg:row-span-2">
+            <AnimatedHeadline
+              text={heroTitle}
+              variant="typewriter"
+              className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100"
+            />
+            <ScrollReveal y={14} duration={0.72} delay={0.24}>
+              <div className="mt-6 space-y-7 text-base text-zinc-600 dark:text-zinc-400">
+                <p>{heroSubtitle}</p>
+              </div>
+            </ScrollReveal>
+            <ScrollReveal y={16} duration={0.78} delay={0.36}>
+              <div className="mt-8">
+                <div className="lg:hidden">
+                  <ParallaxGroup amount={6} start="top 94%" end="bottom 8%">
+                    <div
+                      className="mx-auto max-w-xs px-2.5 will-change-transform"
+                      data-parallax-item
+                      data-parallax-speed="0.6"
+                    >
+                      <HoverMotionCard y={0} scale={1} imageScale={1.03}>
+                        <div className="overflow-hidden rounded-2xl">
+                          <Image
+                            height={800}
+                            width={800}
+                            src={getOptimizedImageUrl(portraitImage, {
+                              width: 1024,
+                              height: 1024,
+                              crop: 'fill',
+                            })}
+                            alt="Brandon Perfetti"
+                            sizes="20rem"
+                            data-hover-image
+                            className="aspect-square bg-zinc-100 object-cover dark:bg-zinc-800"
+                          />
+                        </div>
+                      </HoverMotionCard>
+                    </div>
+                  </ParallaxGroup>
+                </div>
+              </div>
+              {page?.bodyBlocks?.length ? (
+                <Prose className="mt-8 max-w-none" data-mdx-content>
+                  <ArticleBody blocks={page.bodyBlocks} />
+                </Prose>
+              ) : (
+                <AboutFallbackBody />
+              )}
+            </ScrollReveal>
+          </div>
+          <div className="mb-4 lg:hidden">
+            <SocialLinksList links={socialLinks} />
+          </div>
         </div>
-        <div className="mb-4 lg:hidden">
-          <SocialLinksList links={socialLinks} />
-        </div>
-      </div>
-    </Container>
+      </Container>
+    </>
   )
 }

@@ -22,6 +22,27 @@ Defined in `src/app/layout.tsx`:
 - published time
 - optional OG/Twitter image
 - keyword set derived from CMS `keywords/topics/tech`
+- JSON-LD:
+  - `Article`
+  - `BreadcrumbList`
+
+## Non-Article Structured Data
+
+- `src/app/page.tsx`:
+  - `WebSite` (with `SearchAction`)
+  - `Person`
+- `src/app/about/page.tsx`:
+  - `AboutPage`
+  - `Person`
+  - `BreadcrumbList`
+- `src/app/articles/page.tsx`:
+  - `CollectionPage`
+  - `BreadcrumbList`
+  - `ItemList`
+- `src/app/projects/page.tsx`:
+  - `CollectionPage`
+  - `BreadcrumbList`
+  - `ItemList`
 
 ## Indexing Routes
 
