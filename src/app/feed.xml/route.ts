@@ -1,4 +1,3 @@
-import assert from 'assert'
 import * as cheerio from 'cheerio'
 import { Feed } from 'feed'
 import { getAllArticles } from '@/lib/articles'
@@ -71,10 +70,7 @@ export async function GET(req: Request) {
     const article = $('article').first()
     const title = article.find('h1').first().text() || articleSummary.title
     const date = article.find('time').first().attr('datetime')
-    const content = article.find('[data-mdx-content]').first().html()
-
-    assert(typeof title === 'string')
-    assert(typeof content === 'string')
+    const content = article.find('[data-mdx-content]').first().html() ?? ''
 
     const freshnessDate = toValidDate(
       articleSummary.updatedAt || date || articleSummary.date,
