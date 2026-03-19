@@ -6,7 +6,9 @@ export type PublishGateSourceArticle = {
   publishDate: string
   metaDescription: string
   coverImageUrl: string
+  liveUrl: string
   contentPillar: string
+  keywords: string[]
   topics: string[]
   hasWinningCover: boolean
   winningCoverCount?: number
@@ -25,6 +27,15 @@ function normalizeStatus(value: string) {
 function isTutorialLike(articleType: string) {
   const mode = normalizeStatus(articleType)
   return mode.includes('tutorial') || mode.includes('hybrid')
+}
+
+function isValidHttpUrl(value: string) {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -52,10 +63,19 @@ export function validatePublishSafeRequirements(
 
   if (!source.metaDescription.trim()) {
     errors.push('Missing required Meta Description')
+  } else {
+    const metaLength = source.metaDescription.trim().length
+    if (metaLength < 110 || metaLength > 170) {
+      errors.push(
+        `Meta Description should be between 110 and 170 characters (found ${metaLength})`,
+      )
+    }
   }
 
   if (!source.coverImageUrl.trim()) {
     errors.push('Missing required Cover Image URL')
+  } else if (!isValidHttpUrl(source.coverImageUrl.trim())) {
+    errors.push('Cover Image URL must be an absolute http(s) URL')
   }
 
   if (!source.contentPillar.trim()) {
@@ -75,6 +95,14 @@ export function validatePublishSafeRequirements(
 
   if (source.topics.length === 0) {
     errors.push('Missing required Topics/Tags')
+  }
+
+  if (source.keywords.length === 0) {
+    errors.push('Missing required Keywords')
+  }
+
+  if (source.liveUrl.trim() && !isValidHttpUrl(source.liveUrl.trim())) {
+    errors.push('Live URL must be an absolute http(s) URL when provided')
   }
 
   if (!source.hasWinningCover) {

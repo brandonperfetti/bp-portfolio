@@ -99,6 +99,8 @@ export type SourcePublishGateResult = {
   sourcePageId: string
   sourceStatus?: string
   reasons: string[]
+  seoGatePersisted?: boolean
+  seoGatePersistError?: string
 }
 
 /**
@@ -1627,6 +1629,35 @@ export async function reconcilePortfolioArticleProjection(): Promise<ProjectionR
 export async function evaluateSourceArticlePublishGate(
   sourcePageId: string,
 ): Promise<SourcePublishGateResult> {
+  async function persistSeoGateAudit(
+    pass: boolean,
+    reasons: string[],
+  ): Promise<{ persisted: boolean; error?: string }> {
+    const checkedAtIso = new Date().toISOString()
+    try {
+      await notionUpdatePage(sourcePageId, {
+        properties: {
+          'SEO Gate Status': {
+            select: { name: pass ? 'Pass' : 'Fail' },
+          },
+          'SEO Gate Findings':
+            reasons.length > 0
+              ? toRichText(reasons.join('; '))
+              : { rich_text: [] },
+          'SEO Checked At': {
+            date: { start: checkedAtIso },
+          },
+        },
+      })
+      return { persisted: true }
+    } catch (error) {
+      return {
+        persisted: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
   let sourcePage: NotionPage
 
   try {
@@ -1645,12 +1676,16 @@ export async function evaluateSourceArticlePublishGate(
 
   const mapped = mapSourcePage(sourcePage)
   if (!mapped) {
+    const reasons = [
+      'Source page is not an eligible Blog Post record for projection',
+    ]
+    const persisted = await persistSeoGateAudit(false, reasons)
     return {
       ok: false,
       sourcePageId,
-      reasons: [
-        'Source page is not an eligible Blog Post record for projection',
-      ],
+      reasons,
+      seoGatePersisted: persisted.persisted,
+      seoGatePersistError: persisted.error,
     }
   }
 
@@ -1658,12 +1693,15 @@ export async function evaluateSourceArticlePublishGate(
     mapped,
     getOptionalNotionDefaultAuthorPageId(),
   )
+  const persisted = await persistSeoGateAudit(reasons.length === 0, reasons)
 
   return {
     ok: reasons.length === 0,
     sourcePageId,
     sourceStatus: mapped.sourceStatus,
     reasons,
+    seoGatePersisted: persisted.persisted,
+    seoGatePersistError: persisted.error,
   }
 }
 

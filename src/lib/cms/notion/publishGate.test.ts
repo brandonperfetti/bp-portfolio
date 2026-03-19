@@ -7,9 +7,12 @@ function makeValidArticle() {
     slug: 'winning-cover-test',
     sourceStatus: 'Ready to Publish',
     publishDate: '2025-01-01',
-    metaDescription: 'Meta description',
+    metaDescription:
+      'This practical guide explains the core tradeoffs, implementation patterns, and rollout checks needed for reliable SEO metadata quality.',
     coverImageUrl: 'https://example.com/cover.png',
+    liveUrl: 'https://brandonperfetti.com/articles/winning-cover-test',
     contentPillar: 'Software',
+    keywords: ['SEO'],
     topics: ['Engineering'],
     hasWinningCover: true,
     winningCoverCount: 1,
@@ -48,7 +51,9 @@ describe('validatePublishSafeRequirements', () => {
         publishDate: ' ',
         metaDescription: '',
         coverImageUrl: ' ',
+        liveUrl: ' ',
         contentPillar: '',
+        keywords: [],
         topics: [],
       },
       null,
@@ -59,7 +64,38 @@ describe('validatePublishSafeRequirements', () => {
     expect(reasons).toContain('Missing required Meta Description')
     expect(reasons).toContain('Missing required Cover Image URL')
     expect(reasons).toContain('Missing required Content Pillar')
+    expect(reasons).toContain('Missing required Keywords')
     expect(reasons).toContain('Missing required Topics/Tags')
+  })
+
+  it('fails when meta description is out of range', () => {
+    const reasons = validatePublishSafeRequirements(
+      {
+        ...makeValidArticle(),
+        metaDescription: 'Too short',
+      },
+      null,
+    )
+
+    expect(reasons).toContain(
+      'Meta Description should be between 110 and 170 characters (found 9)',
+    )
+  })
+
+  it('fails when URLs are not absolute http(s)', () => {
+    const reasons = validatePublishSafeRequirements(
+      {
+        ...makeValidArticle(),
+        coverImageUrl: '/relative-cover.png',
+        liveUrl: 'ftp://example.com/post',
+      },
+      null,
+    )
+
+    expect(reasons).toContain('Cover Image URL must be an absolute http(s) URL')
+    expect(reasons).toContain(
+      'Live URL must be an absolute http(s) URL when provided',
+    )
   })
 
   it('fails when hasWinningCover is false', () => {
