@@ -220,7 +220,7 @@ export default async function About() {
         '@type': 'ListItem',
         position: 1,
         name: 'Home',
-        item: `${normalizedSiteUrl}/`,
+        item: `${normalizedSiteUrl}`,
       },
       {
         '@type': 'ListItem',
