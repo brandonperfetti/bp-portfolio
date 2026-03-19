@@ -4,11 +4,15 @@ import { validatePublishSafeRequirements } from './publishGate'
 
 function makeValidArticle() {
   return {
+    title: 'Winning Cover Test: A Production-Ready SEO Metadata Workflow',
     slug: 'winning-cover-test',
     sourceStatus: 'Ready to Publish',
     publishDate: '2025-01-01',
     metaDescription:
       'This practical guide explains the core tradeoffs, implementation patterns, and rollout checks needed for reliable SEO metadata quality.',
+    seoTitle: 'Production SEO Metadata Workflow for Engineering Content Teams',
+    seoDescription:
+      'Use a practical publishing gate to validate SEO titles, descriptions, canonical links, and readiness checks so every article ships indexable and consistent.',
     coverImageUrl: 'https://example.com/cover.png',
     liveUrl: 'https://brandonperfetti.com/articles/winning-cover-test',
     contentPillar: 'Software',
@@ -47,9 +51,12 @@ describe('validatePublishSafeRequirements', () => {
     const reasons = validatePublishSafeRequirements(
       {
         ...makeValidArticle(),
+        title: ' ',
         slug: '   ',
         publishDate: ' ',
         metaDescription: '',
+        seoTitle: '',
+        seoDescription: '',
         coverImageUrl: ' ',
         liveUrl: ' ',
         contentPillar: '',
@@ -60,8 +67,11 @@ describe('validatePublishSafeRequirements', () => {
     )
 
     expect(reasons).toContain('Missing required Slug')
+    expect(reasons).toContain('Missing required Title')
     expect(reasons).toContain('Missing required Published Date')
     expect(reasons).toContain('Missing required Meta Description')
+    expect(reasons).toContain('Missing required SEO Title')
+    expect(reasons).toContain('Missing required SEO Description')
     expect(reasons).toContain('Missing required Cover Image URL')
     expect(reasons).toContain('Missing required Content Pillar')
     expect(reasons).toContain('Missing required Keywords')
@@ -80,6 +90,29 @@ describe('validatePublishSafeRequirements', () => {
     expect(reasons).toContain(
       'Meta Description should be between 110 and 170 characters (found 9)',
     )
+  })
+
+  it('fails when SEO title and SEO description are out of range', () => {
+    const reasons = validatePublishSafeRequirements(
+      {
+        ...makeValidArticle(),
+        seoTitle: 'Too short',
+        seoDescription:
+          'Too short for practical SERP display testing and meaningful search snippet quality.',
+      },
+      null,
+    )
+
+    expect(reasons).toContain(
+      'SEO Title should be between 45 and 65 characters (found 9)',
+    )
+    expect(
+      reasons.some((reason) =>
+        reason.startsWith(
+          'SEO Description should be between 120 and 160 characters',
+        ),
+      ),
+    ).toBe(true)
   })
 
   it('fails when URLs are not absolute http(s)', () => {

@@ -35,6 +35,8 @@ type SourceArticle = {
   slug: string
   summary: string
   metaDescription: string
+  seoTitle: string
+  seoDescription: string
   coverImageUrl: string
   contentPillar: string
   keywords: string[]
@@ -238,6 +240,10 @@ function mapSourcePage(page: NotionPage): SourceArticle | null {
   const metaDescription = propertyToText(
     getProperty(page.properties, ['Meta Description']),
   )
+  const seoTitle = propertyToText(getProperty(page.properties, ['SEO Title']))
+  const seoDescription = propertyToText(
+    getProperty(page.properties, ['SEO Description', 'SEO Meta Description']),
+  )
   const coverImageUrl = propertyToText(
     getProperty(page.properties, ['Cover Image URL']),
   )
@@ -303,6 +309,8 @@ function mapSourcePage(page: NotionPage): SourceArticle | null {
     slug,
     summary: metaDescription || title,
     metaDescription,
+    seoTitle,
+    seoDescription,
     coverImageUrl,
     contentPillar,
     keywords,
@@ -1139,6 +1147,10 @@ function buildProjectionProperties(
     },
     Summary: toRichText(source.summary),
     'Meta Description': toRichText(source.metaDescription || source.summary),
+    'SEO Title': toRichText(source.seoTitle || source.title),
+    'SEO Description': toRichText(
+      source.seoDescription || source.metaDescription || source.summary,
+    ),
     'Cover Image URL': source.coverImageUrl
       ? { url: source.coverImageUrl }
       : { url: null },

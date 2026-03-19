@@ -63,6 +63,10 @@ export function mapNotionArticleSummary(
   const description = propertyToText(
     getProperty(page.properties, ['Meta Description', 'Description']),
   )
+  const seoTitle = propertyToText(getProperty(page.properties, ['SEO Title']))
+  const seoDescription = propertyToText(
+    getProperty(page.properties, ['SEO Description', 'SEO Meta Description']),
+  )
   const date = propertyToDate(
     getProperty(page.properties, ['Publish Date', 'Published Date']),
   )
@@ -151,6 +155,8 @@ export function mapNotionArticleSummary(
     slug,
     title,
     description,
+    seoTitle: seoTitle || undefined,
+    seoDescription: seoDescription || undefined,
     date,
     updatedAt: page.last_edited_time || undefined,
     image: imageUrl,

@@ -1,10 +1,13 @@
 import { isFuturePublicationDate } from '@/lib/date'
 
 export type PublishGateSourceArticle = {
+  title: string
   slug: string
   sourceStatus: string
   publishDate: string
   metaDescription: string
+  seoTitle: string
+  seoDescription: string
   coverImageUrl: string
   liveUrl: string
   contentPillar: string
@@ -59,6 +62,32 @@ export function validatePublishSafeRequirements(
 
   if (!source.slug.trim()) {
     errors.push('Missing required Slug')
+  }
+
+  if (!source.title.trim()) {
+    errors.push('Missing required Title')
+  }
+
+  if (!source.seoTitle.trim()) {
+    errors.push('Missing required SEO Title')
+  } else {
+    const seoTitleLength = source.seoTitle.trim().length
+    if (seoTitleLength < 45 || seoTitleLength > 65) {
+      errors.push(
+        `SEO Title should be between 45 and 65 characters (found ${seoTitleLength})`,
+      )
+    }
+  }
+
+  if (!source.seoDescription.trim()) {
+    errors.push('Missing required SEO Description')
+  } else {
+    const seoDescriptionLength = source.seoDescription.trim().length
+    if (seoDescriptionLength < 120 || seoDescriptionLength > 160) {
+      errors.push(
+        `SEO Description should be between 120 and 160 characters (found ${seoDescriptionLength})`,
+      )
+    }
   }
 
   if (!source.metaDescription.trim()) {

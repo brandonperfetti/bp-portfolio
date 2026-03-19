@@ -9,6 +9,8 @@ import { isFuturePublicationDate } from '@/lib/date'
 interface Article {
   title: string
   description: string
+  seoTitle?: string
+  seoDescription?: string
   author:
     | string
     | {
@@ -75,6 +77,8 @@ export async function getSearchArticles(): Promise<ArticleWithSlug[]> {
         slug: article.slug,
         title: article.title,
         description: article.description,
+        seoTitle: article.seoTitle,
+        seoDescription: article.seoDescription,
         author: article.author,
         category: article.category,
         date: article.date,
