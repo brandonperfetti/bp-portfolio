@@ -1,4 +1,4 @@
-import { isFuturePublicationDate } from '@/lib/date'
+import { isFuturePublicationDate, toValidDate } from '@/lib/date'
 
 /**
  * Flattens multiline markdown fragments into a safe single-line value for
@@ -16,8 +16,8 @@ export function sanitizeInlineMarkdown(value: string) {
  * Invalid or missing dates intentionally fall back to 0 for deterministic sort.
  */
 export function toFreshnessTimestamp(updatedAt?: string, date?: string) {
-  const parsed = Date.parse(updatedAt || date || '')
-  return Number.isNaN(parsed) ? 0 : parsed
+  const parsed = toValidDate(updatedAt || date)
+  return parsed ? parsed.getTime() : 0
 }
 
 type PublicArticleCandidate = {
