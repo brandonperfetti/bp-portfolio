@@ -90,4 +90,24 @@ describe('sitemap', () => {
     expect(articlesIndex).toBeDefined()
     expect(articlesIndex?.lastModified).toBeUndefined()
   })
+
+  it('uses article.date when article.updatedAt is missing', async () => {
+    mocks.getSiteUrl.mockReturnValue('https://example.com')
+    mocks.getAllArticles.mockResolvedValue([
+      {
+        slug: 'date-only-article',
+        date: '2025-03-01',
+        noindex: false,
+      },
+    ])
+
+    const entries = await sitemap()
+    const articleEntry = entries.find(
+      (entry) =>
+        String(entry.url) === 'https://example.com/articles/date-only-article',
+    )
+
+    expect(articleEntry).toBeDefined()
+    expect(articleEntry?.lastModified).toEqual(new Date('2025-03-01'))
+  })
 })
