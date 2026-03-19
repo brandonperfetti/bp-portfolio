@@ -8,6 +8,7 @@ import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsProjects } from '@/lib/cms/projectsRepo'
 import { isNotionProvider } from '@/lib/cms/provider'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
+import { getSiteUrl } from '@/lib/site'
 
 const projects = [
   {
@@ -63,6 +64,10 @@ const defaultProjectsMeta: Metadata = {
     'Selected products, platforms, and client builds I have shipped or led.',
 }
 
+function toSafeJsonLd(value: unknown) {
+  return JSON.stringify(value).replace(/</g, '\\u003c')
+}
+
 function slugify(value: string) {
   const normalized = value
     .normalize('NFKD')
@@ -88,6 +93,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Projects() {
+  const siteUrl = getSiteUrl()
   const page = await getCmsPageByPath('/projects')
   const cmsProjects = isNotionProvider() ? await getCmsProjects() : null
   const items = cmsProjects
@@ -99,26 +105,82 @@ export default async function Projects() {
         logo: project.logo,
         link: project.link,
       }))
+  const collectionSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: page?.title || 'Projects',
+    description: page?.subtitle || defaultProjectsMeta.description,
+    url: `${siteUrl}/projects`,
+    isPartOf: {
+      '@type': 'WebSite',
+      url: siteUrl,
+      name: 'Brandon Perfetti',
+    },
+  }
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Home',
+        item: `${siteUrl}/`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Projects',
+        item: `${siteUrl}/projects`,
+      },
+    ],
+  }
+  const itemListSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    itemListElement: items.slice(0, 50).map((item, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: item.name,
+      url: item.link?.href || `${siteUrl}/projects`,
+    })),
+  }
 
   return (
-    <SimpleLayout
-      title={
-        page?.title ||
-        'Selected projects across product, engineering, and consulting work.'
-      }
-      intro={
-        page?.subtitle ||
-        'A practical mix of platform builds, client delivery, and product experiments.'
-      }
-    >
-      {items.length ? (
-        <EntityGrid items={items} />
-      ) : (
-        <NotFoundState
-          title="No published projects"
-          description="No CMS project records are currently publish-safe."
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(collectionSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
+      />
+      {items.length > 0 ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: toSafeJsonLd(itemListSchema) }}
         />
-      )}
-    </SimpleLayout>
+      ) : null}
+      <SimpleLayout
+        title={
+          page?.title ||
+          'Selected projects across product, engineering, and consulting work.'
+        }
+        intro={
+          page?.subtitle ||
+          'A practical mix of platform builds, client delivery, and product experiments.'
+        }
+      >
+        {items.length ? (
+          <EntityGrid items={items} />
+        ) : (
+          <NotFoundState
+            title="No published projects"
+            description="No CMS project records are currently publish-safe."
+          />
+        )}
+      </SimpleLayout>
+    </>
   )
 }

@@ -8,11 +8,16 @@ import { getSearchArticles } from '@/lib/articles'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
+import { getSiteUrl } from '@/lib/site'
 
 const defaultArticlesMeta: Metadata = {
   title: 'Articles',
   description:
     'All of my long-form thoughts on programming, leadership, product design, and more, collected in chronological order.',
+}
+
+function toSafeJsonLd(value: unknown) {
+  return JSON.stringify(value).replace(/</g, '\\u003c')
 }
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -29,34 +34,91 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function ArticlesIndex() {
+  const siteUrl = getSiteUrl()
   const page = await getCmsPageByPath('/articles')
   const articles = await getSearchArticles()
+  const collectionSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: page?.title || 'Articles',
+    description: page?.subtitle || defaultArticlesMeta.description,
+    url: `${siteUrl}/articles`,
+    isPartOf: {
+      '@type': 'WebSite',
+      url: siteUrl,
+      name: 'Brandon Perfetti',
+    },
+  }
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Home',
+        item: `${siteUrl}/`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Articles',
+        item: `${siteUrl}/articles`,
+      },
+    ],
+  }
+  const itemListSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    itemListElement: articles.slice(0, 50).map((article, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      url: `${siteUrl}/articles/${article.slug}`,
+      name: article.title,
+    })),
+  }
 
   return (
-    <SimpleLayout
-      title={
-        page?.title ||
-        'Writing on mindset, software design, leadership, and product execution.'
-      }
-      intro={
-        page?.subtitle ||
-        'Browse by category or search by topic. These are practical notes from real projects, engineering leadership, and continuous learning.'
-      }
-    >
-      {articles.length === 0 ? (
-        <NotFoundState
-          title="No published articles"
-          description="No CMS article records are currently publish-safe."
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(collectionSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
+      />
+      {articles.length > 0 ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: toSafeJsonLd(itemListSchema) }}
         />
-      ) : (
-        <Suspense
-          fallback={
-            <div className="text-sm text-zinc-500">Loading articles...</div>
-          }
-        >
-          <ArticlesExplorer articles={articles} />
-        </Suspense>
-      )}
-    </SimpleLayout>
+      ) : null}
+      <SimpleLayout
+        title={
+          page?.title ||
+          'Writing on mindset, software design, leadership, and product execution.'
+        }
+        intro={
+          page?.subtitle ||
+          'Browse by category or search by topic. These are practical notes from real projects, engineering leadership, and continuous learning.'
+        }
+      >
+        {articles.length === 0 ? (
+          <NotFoundState
+            title="No published articles"
+            description="No CMS article records are currently publish-safe."
+          />
+        ) : (
+          <Suspense
+            fallback={
+              <div className="text-sm text-zinc-500">Loading articles...</div>
+            }
+          >
+            <ArticlesExplorer articles={articles} />
+          </Suspense>
+        )}
+      </SimpleLayout>
+    </>
   )
 }
