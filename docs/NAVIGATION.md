@@ -2,7 +2,16 @@
 
 ## Primary Top Navigation
 
-Defined in `src/components/Header.tsx`.
+Shared defaults are defined in `src/lib/navigation.ts`:
+
+- `HEADER_NAV_LINKS`
+- `PRIMARY_NAV_LINKS`
+
+Consumed by:
+
+- `src/components/Header.tsx`
+- `src/components/Footer.tsx`
+- `src/app/llms.txt/route.ts` (for Primary Pages output)
 
 Desktop + mobile nav include:
 
@@ -21,7 +30,7 @@ Desktop + mobile nav include:
 
 ## Footer Navigation
 
-Defined in `src/components/Footer.tsx`.
+Defaults sourced from `PRIMARY_NAV_LINKS` in `src/lib/navigation.ts`.
 
 Footer links:
 
