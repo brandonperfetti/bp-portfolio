@@ -1,5 +1,4 @@
-const PERSON_IMAGE_URL =
-  'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142617/bp-spotlight/images/avatar_jeycju.jpg'
+import { PERSON_IMAGE_URL } from '@/lib/identity'
 
 /**
  * Shared WebSite JSON-LD for site-level discoverability and sitelink search.

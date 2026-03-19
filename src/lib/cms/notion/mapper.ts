@@ -21,14 +21,14 @@ import {
   propertyToText,
 } from '@/lib/cms/notion/property'
 import { isFuturePublicationDate } from '@/lib/date'
+import { PERSON_IMAGE_URL } from '@/lib/identity'
 import { getSiteUrl } from '@/lib/site'
 
 export const DEFAULT_CMS_AUTHOR = {
   name: 'Brandon Perfetti',
   href: '/about',
   role: 'Technical PM + Software Engineer',
-  image:
-    'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142617/bp-spotlight/images/avatar_jeycju.jpg',
+  image: PERSON_IMAGE_URL,
 } as const
 
 function toSlug(value: string) {
