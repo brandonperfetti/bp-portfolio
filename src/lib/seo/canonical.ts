@@ -3,9 +3,7 @@ export function canonicalizeArticleUrl(
   slug: string,
   candidate?: string,
 ) {
-  const normalizedSiteUrl = siteUrl.endsWith('/')
-    ? siteUrl.slice(0, -1)
-    : siteUrl
+  const normalizedSiteUrl = siteUrl.replace(/\/+$/, '')
   const fallback = `${normalizedSiteUrl}/articles/${slug}`
   if (!candidate?.trim()) {
     return fallback
