@@ -8,6 +8,7 @@ import { SyncErrorState } from '@/components/cms/SyncErrorState'
 import { UseWithAiMenu } from '@/components/cms/UseWithAiMenu'
 import { getAllArticles, getArticleBySlug } from '@/lib/articles'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
+import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { canonicalizeArticleUrl } from '@/lib/seo/canonical'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import { getSiteUrl } from '@/lib/site'
@@ -110,7 +111,10 @@ export async function generateMetadata({
 
 export default async function ArticlePage({ params }: PageProps) {
   const { slug } = await params
-  const article = await getArticleBySlug(slug)
+  const [article, settings] = await Promise.all([
+    getArticleBySlug(slug),
+    getCmsSiteSettings(),
+  ])
 
   if (!article) {
     notFound()
@@ -125,6 +129,10 @@ export default async function ArticlePage({ params }: PageProps) {
     article.canonicalUrl,
   )
   const schemaImage = toAbsoluteImageUrl(siteUrl, article.image)
+  const publisherLogo = toAbsoluteImageUrl(
+    siteUrl,
+    settings.openGraphImage || '/favicon.ico',
+  )
   const authorName =
     typeof article.author === 'string'
       ? article.author.trim() || undefined
@@ -149,6 +157,16 @@ export default async function ArticlePage({ params }: PageProps) {
           },
         ]
       : undefined,
+    publisher: {
+      '@type': 'Organization',
+      name: settings.siteName,
+      logo: publisherLogo
+        ? {
+            '@type': 'ImageObject',
+            url: publisherLogo,
+          }
+        : undefined,
+    },
     image: schemaImage ? [schemaImage] : undefined,
     keywords: articleKeywords,
   }
