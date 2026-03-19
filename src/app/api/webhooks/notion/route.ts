@@ -112,6 +112,8 @@ function applyEventRevalidation(eventType: string) {
     revalidatePath('/uses')
     revalidatePath('/sitemap.xml')
     revalidatePath('/feed.xml')
+    revalidatePath('/llms.txt')
+    revalidatePath('/llms-full.txt')
 
     return
   }
@@ -125,6 +127,8 @@ function applyEventRevalidation(eventType: string) {
     revalidateTag(CMS_TAGS.pages, 'max')
     revalidatePath('/sitemap.xml')
     revalidatePath('/feed.xml')
+    revalidatePath('/llms.txt')
+    revalidatePath('/llms-full.txt')
     return
   }
 
