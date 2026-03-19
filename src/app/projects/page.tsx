@@ -126,7 +126,7 @@ export default async function Projects() {
         '@type': 'ListItem',
         position: 1,
         name: 'Home',
-        item: `${normalizedSiteUrl}/`,
+        item: `${normalizedSiteUrl}`,
       },
       {
         '@type': 'ListItem',
