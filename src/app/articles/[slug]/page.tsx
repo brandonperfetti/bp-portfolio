@@ -21,6 +21,24 @@ type PageProps = {
   params: Promise<Params>
 }
 
+function getArticleKeywords(article: {
+  keywords?: string[]
+  topics?: string[]
+  tech?: string[]
+}) {
+  return Array.from(
+    new Set([
+      ...(article.keywords ?? []),
+      ...(article.topics ?? []),
+      ...(article.tech ?? []),
+    ]),
+  )
+}
+
+function toSafeJsonLd(value: unknown) {
+  return JSON.stringify(value).replace(/</g, '\\u003c')
+}
+
 export async function generateStaticParams() {
   const articles = await getAllArticles()
   return articles.map((article) => ({ slug: article.slug }))
@@ -55,16 +73,17 @@ export async function generateMetadata({
       : `${siteUrl}${article.image}`
     : undefined
 
+  const effectiveTitle = article.seoTitle || article.title
+  const effectiveDescription = article.seoDescription || article.description
+
   return {
-    title: article.title,
-    description: article.description,
-    keywords: Array.from(
-      new Set([
-        ...(article.keywords ?? []),
-        ...(article.topics ?? []),
-        ...(article.tech ?? []),
-      ]),
-    ),
+    title: {
+      // Keep article SEO title exact and avoid inheriting the global
+      // "%s - SiteName" layout template, which can push titles over limits.
+      absolute: effectiveTitle,
+    },
+    description: effectiveDescription,
+    keywords: getArticleKeywords(article),
     alternates: {
       canonical,
     },
@@ -76,16 +95,16 @@ export async function generateMetadata({
       : undefined,
     openGraph: {
       type: 'article',
-      title: article.title,
-      description: article.description,
+      title: effectiveTitle,
+      description: effectiveDescription,
       publishedTime: article.date,
       url: canonical,
       images: image ? [{ url: image }] : undefined,
     },
     twitter: {
       card: image ? 'summary_large_image' : 'summary',
-      title: article.title,
-      description: article.description,
+      title: effectiveTitle,
+      description: effectiveDescription,
       images: image ? [image] : undefined,
     },
   }
@@ -109,11 +128,12 @@ export default async function ArticlePage({ params }: PageProps) {
   )
   const authorName =
     typeof article.author === 'string' ? article.author : article.author.name
+  const articleKeywords = getArticleKeywords(article)
   const articleSchema = {
     '@context': 'https://schema.org',
     '@type': 'Article',
     headline: article.title,
-    description: article.description,
+    description: article.seoDescription || article.description,
     datePublished: article.date,
     dateModified: article.updatedAt || article.date,
     mainEntityOfPage: {
@@ -129,13 +149,7 @@ export default async function ArticlePage({ params }: PageProps) {
         ]
       : undefined,
     image: article.image ? [article.image] : undefined,
-    keywords: Array.from(
-      new Set([
-        ...(article.keywords ?? []),
-        ...(article.topics ?? []),
-        ...(article.tech ?? []),
-      ]),
-    ),
+    keywords: articleKeywords,
   }
   const breadcrumbSchema = {
     '@context': 'https://schema.org',
@@ -172,11 +186,11 @@ export default async function ArticlePage({ params }: PageProps) {
     >
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(articleSchema) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
       />
       <ArticleMeta
         author={article.author}
