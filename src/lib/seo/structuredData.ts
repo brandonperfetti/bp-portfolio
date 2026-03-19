@@ -35,6 +35,7 @@ export function buildPersonSchema(siteUrl: string) {
   return {
     '@context': 'https://schema.org',
     '@type': 'Person',
+    '@id': `${normalizedSiteUrl}/about#person`,
     name: 'Brandon Perfetti',
     url: `${normalizedSiteUrl}/about`,
     image: PERSON_IMAGE_URL,
