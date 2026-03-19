@@ -11,7 +11,16 @@ export function canonicalizeArticleUrl(
     return fallback
   }
 
-  const site = new URL(normalizedSiteUrl)
+  let site: URL
+  try {
+    site = new URL(normalizedSiteUrl)
+  } catch {
+    try {
+      site = new URL(fallback)
+    } catch {
+      return fallback
+    }
+  }
   const trimmed = candidate.trim()
 
   try {

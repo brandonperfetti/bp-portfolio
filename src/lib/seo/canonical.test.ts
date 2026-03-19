@@ -81,4 +81,14 @@ describe('canonicalizeArticleUrl', () => {
       ),
     ).toBe('https://example.com/articles/my-post')
   })
+
+  it('returns fallback string when siteUrl is malformed', () => {
+    expect(
+      canonicalizeArticleUrl(
+        'not-a-valid-url',
+        'my-post',
+        'https://example.com/articles/my-post',
+      ),
+    ).toBe('not-a-valid-url/articles/my-post')
+  })
 })
