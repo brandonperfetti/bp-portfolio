@@ -36,6 +36,11 @@ function getArticleKeywords(article: {
   )
 }
 
+function toAbsoluteImageUrl(siteUrl: string, image?: string) {
+  if (!image) return undefined
+  return image.startsWith('http') ? image : new URL(image, siteUrl).toString()
+}
+
 export async function generateStaticParams() {
   const articles = await getAllArticles()
   return articles.map((article) => ({ slug: article.slug }))
@@ -64,11 +69,7 @@ export async function generateMetadata({
     article.canonicalUrl,
   )
 
-  const image = article.image
-    ? article.image.startsWith('http')
-      ? article.image
-      : `${siteUrl}${article.image}`
-    : undefined
+  const image = toAbsoluteImageUrl(siteUrl, article.image)
 
   const effectiveTitle = article.seoTitle || article.title
   const effectiveDescription = article.seoDescription || article.description
@@ -123,10 +124,11 @@ export default async function ArticlePage({ params }: PageProps) {
     article.slug,
     article.canonicalUrl,
   )
+  const schemaImage = toAbsoluteImageUrl(siteUrl, article.image)
   const authorName =
     typeof article.author === 'string'
-      ? article.author
-      : (article.author?.name ?? 'Unknown author')
+      ? article.author.trim() || undefined
+      : article.author?.name?.trim() || undefined
   const articleKeywords = getArticleKeywords(article)
   const articleSchema = {
     '@context': 'https://schema.org',
@@ -147,7 +149,7 @@ export default async function ArticlePage({ params }: PageProps) {
           },
         ]
       : undefined,
-    image: article.image ? [article.image] : undefined,
+    image: schemaImage ? [schemaImage] : undefined,
     keywords: articleKeywords,
   }
   const breadcrumbSchema = {
