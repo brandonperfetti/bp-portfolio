@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const ORIGINAL_CMS_REVALIDATE_SECRET = process.env.CMS_REVALIDATE_SECRET
 
 const mocks = vi.hoisted(() => ({
   evaluateSourceArticlePublishGate: vi.fn(),
@@ -14,6 +16,15 @@ describe('POST /api/cms/sync/articles/prepublish-gate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.CMS_REVALIDATE_SECRET = 'test-secret'
+  })
+
+  afterEach(() => {
+    if (ORIGINAL_CMS_REVALIDATE_SECRET === undefined) {
+      delete process.env.CMS_REVALIDATE_SECRET
+      return
+    }
+
+    process.env.CMS_REVALIDATE_SECRET = ORIGINAL_CMS_REVALIDATE_SECRET
   })
 
   it('returns 401 when secret is invalid', async () => {
