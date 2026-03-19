@@ -319,6 +319,7 @@ function Photos({ images }: { images: string[] }) {
 export default async function Home() {
   const siteUrl = getSiteUrl()
   const settings = await getCmsSiteSettings()
+  const canonicalSiteUrl = settings.canonicalUrl || siteUrl
   const articles = dedupeArticlesBySlug(await getAllArticles()).slice(0, 7)
   const homePage = await getCmsPageByPath('/')
   const homeTitle =
@@ -342,15 +343,15 @@ export default async function Home() {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     name: settings.siteName,
-    url: siteUrl,
+    url: canonicalSiteUrl,
     description: settings.siteDescription,
     potentialAction: {
       '@type': 'SearchAction',
-      target: `${siteUrl}/articles?q={search_term_string}`,
+      target: `${canonicalSiteUrl}/articles?q={search_term_string}`,
       'query-input': 'required name=search_term_string',
     },
   }
-  const personSchema = buildPersonSchema(siteUrl)
+  const personSchema = buildPersonSchema(canonicalSiteUrl)
 
   return (
     <>
