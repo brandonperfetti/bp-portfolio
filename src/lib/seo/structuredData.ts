@@ -1,4 +1,9 @@
-import { PERSON_IMAGE_URL } from '@/lib/identity'
+import {
+  PERSON_IMAGE_URL,
+  SITE_OWNER_JOB_TITLE,
+  SITE_OWNER_NAME,
+  SITE_OWNER_SOCIAL_LINKS,
+} from '@/lib/identity'
 
 /**
  * Shared WebSite JSON-LD for site-level discoverability and sitelink search.
@@ -35,14 +40,10 @@ export function buildPersonSchema(siteUrl: string) {
     '@context': 'https://schema.org',
     '@type': 'Person',
     '@id': `${normalizedSiteUrl}/about#person`,
-    name: 'Brandon Perfetti',
+    name: SITE_OWNER_NAME,
     url: `${normalizedSiteUrl}/about`,
     image: PERSON_IMAGE_URL,
-    sameAs: [
-      'https://x.com/brandonperfetti',
-      'https://github.com/brandonperfetti',
-      'https://www.linkedin.com/in/brandonperfetti/',
-    ],
-    jobTitle: 'Technical PM + Software Engineer',
+    sameAs: SITE_OWNER_SOCIAL_LINKS,
+    jobTitle: SITE_OWNER_JOB_TITLE,
   }
 }
