@@ -96,7 +96,7 @@ export default async function ArticlesIndex() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
       />
-      {hasArticles && scriptPayload ? (
+      {scriptPayload ? (
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: scriptPayload }}
