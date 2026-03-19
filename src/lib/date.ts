@@ -33,6 +33,18 @@ export function isFuturePublicationDate(dateValue: string) {
  */
 export function toValidDate(value?: string): Date | undefined {
   if (!value) return undefined
-  const parsed = new Date(value)
+  const trimmed = value.trim()
+  const dateOnly = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const parsed = dateOnly
+    ? new Date(
+        Number(dateOnly[1]),
+        Number(dateOnly[2]) - 1,
+        Number(dateOnly[3]),
+        0,
+        0,
+        0,
+        0,
+      )
+    : new Date(trimmed)
   return Number.isNaN(parsed.getTime()) ? undefined : parsed
 }

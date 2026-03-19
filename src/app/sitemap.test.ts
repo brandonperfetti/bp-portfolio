@@ -108,6 +108,6 @@ describe('sitemap', () => {
     )
 
     expect(articleEntry).toBeDefined()
-    expect(articleEntry?.lastModified).toEqual(new Date('2025-03-01'))
+    expect(articleEntry?.lastModified).toEqual(new Date(2025, 2, 1, 0, 0, 0, 0))
   })
 })
