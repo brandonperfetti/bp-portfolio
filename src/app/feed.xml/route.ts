@@ -5,6 +5,14 @@ import { getAllArticles } from '@/lib/articles'
 import { isFuturePublicationDate } from '@/lib/date'
 import { getSiteUrl, SITE_DESCRIPTION } from '@/lib/site'
 
+export const revalidate = 3600
+
+function toValidDate(value?: string): Date | undefined {
+  if (!value) return undefined
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed
+}
+
 export async function GET(req: Request) {
   const siteUrl = getSiteUrl()
   const articles = (await getAllArticles()).filter(
@@ -68,8 +76,10 @@ export async function GET(req: Request) {
     assert(typeof title === 'string')
     assert(typeof content === 'string')
 
-    const freshnessDate =
-      articleSummary.updatedAt || date || articleSummary.date
+    const freshnessDate = toValidDate(
+      articleSummary.updatedAt || date || articleSummary.date,
+    )
+    const fallbackDate = toValidDate(articleSummary.date)
 
     feed.addItem({
       title,
@@ -78,7 +88,7 @@ export async function GET(req: Request) {
       content,
       author: [author],
       contributor: [author],
-      date: new Date(freshnessDate),
+      date: freshnessDate || fallbackDate || new Date(),
     })
   }
 
