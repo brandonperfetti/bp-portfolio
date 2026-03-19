@@ -9,6 +9,7 @@ import { UseWithAiMenu } from '@/components/cms/UseWithAiMenu'
 import { getAllArticles, getArticleBySlug } from '@/lib/articles'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
+import { isFuturePublicationDate } from '@/lib/date'
 import { canonicalizeArticleUrl } from '@/lib/seo/canonical'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import { getSiteUrl } from '@/lib/site'
@@ -51,7 +52,10 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { slug } = await params
-  const article = await getArticleBySlug(slug)
+  const [article, settings] = await Promise.all([
+    getArticleBySlug(slug),
+    getCmsSiteSettings(),
+  ])
 
   if (!article) {
     return {
@@ -63,14 +67,18 @@ export async function generateMetadata({
     }
   }
 
-  const siteUrl = getSiteUrl()
+  const canonicalBase = (settings.canonicalUrl || getSiteUrl()).replace(
+    /\/+$/,
+    '',
+  )
   const canonical = canonicalizeArticleUrl(
-    siteUrl,
+    canonicalBase,
     article.slug,
     article.canonicalUrl,
   )
 
-  const image = toAbsoluteImageUrl(siteUrl, article.image)
+  const image = toAbsoluteImageUrl(canonicalBase, article.image)
+  const shouldNoindex = article.noindex || isFuturePublicationDate(article.date)
 
   const effectiveTitle = article.seoTitle || article.title
   const effectiveDescription = article.seoDescription || article.description
@@ -86,7 +94,7 @@ export async function generateMetadata({
     alternates: {
       canonical,
     },
-    robots: article.noindex
+    robots: shouldNoindex
       ? {
           index: false,
           follow: false,
@@ -182,7 +190,7 @@ export default async function ArticlePage({ params }: PageProps) {
         '@type': 'ListItem',
         position: 1,
         name: 'Home',
-        item: `${canonicalSiteUrl}/`,
+        item: `${canonicalSiteUrl}`,
       },
       {
         '@type': 'ListItem',
