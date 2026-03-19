@@ -8,6 +8,7 @@ import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsProjects } from '@/lib/cms/projectsRepo'
 import { isNotionProvider } from '@/lib/cms/provider'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
+import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import { getSiteUrl } from '@/lib/site'
 
 const projects = [
@@ -62,10 +63,6 @@ const defaultProjectsMeta: Metadata = {
   title: 'Projects',
   description:
     'Selected products, platforms, and client builds I have shipped or led.',
-}
-
-function toSafeJsonLd(value: unknown) {
-  return JSON.stringify(value).replace(/</g, '\\u003c')
 }
 
 function slugify(value: string) {

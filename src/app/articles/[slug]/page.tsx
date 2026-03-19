@@ -9,6 +9,7 @@ import { UseWithAiMenu } from '@/components/cms/UseWithAiMenu'
 import { getAllArticles, getArticleBySlug } from '@/lib/articles'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
 import { canonicalizeArticleUrl } from '@/lib/seo/canonical'
+import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import { getSiteUrl } from '@/lib/site'
 
 export const dynamicParams = true
@@ -33,10 +34,6 @@ function getArticleKeywords(article: {
       ...(article.tech ?? []),
     ]),
   )
-}
-
-function toSafeJsonLd(value: unknown) {
-  return JSON.stringify(value).replace(/</g, '\\u003c')
 }
 
 export async function generateStaticParams() {

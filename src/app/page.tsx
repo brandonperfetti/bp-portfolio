@@ -21,6 +21,8 @@ import { getCmsWorkHistory } from '@/lib/cms/workHistoryRepo'
 import { formatDate } from '@/lib/formatDate'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
+import { toSafeJsonLd } from '@/lib/seo/jsonLd'
+import { buildPersonSchema } from '@/lib/seo/structuredData'
 import { getSiteUrl } from '@/lib/site'
 import { dedupeArticlesBySlug } from '@/lib/articleUtils'
 
@@ -39,10 +41,6 @@ const defaultHomeMeta = {
   title: 'Home',
   description:
     'I’m Brandon, a product and project manager plus software engineer based in Orange County, California.',
-}
-
-function toSafeJsonLd(value: unknown) {
-  return JSON.stringify(value).replace(/</g, '\\u003c')
 }
 
 function BriefcaseIcon(props: React.ComponentPropsWithoutRef<'svg'>) {

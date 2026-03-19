@@ -16,6 +16,8 @@ import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
+import { toSafeJsonLd } from '@/lib/seo/jsonLd'
+import { buildPersonSchema } from '@/lib/seo/structuredData'
 import { getSiteUrl } from '@/lib/site'
 
 function SocialLink({
@@ -97,10 +99,6 @@ const defaultAboutMeta = {
   title: 'About',
   description:
     'Brandon Perfetti is a product and project leader plus software engineer based in Orange County, California.',
-}
-
-function toSafeJsonLd(value: unknown) {
-  return JSON.stringify(value).replace(/</g, '\\u003c')
 }
 
 export async function generateMetadata(): Promise<Metadata> {
