@@ -7,6 +7,7 @@ import {
 import { getSiteUrl } from '@/lib/site'
 
 const MAX_ARTICLES = 200
+export const revalidate = 3600
 
 function formatOptionalList(label: string, values?: string[]) {
   if (!values || values.length === 0) return null
