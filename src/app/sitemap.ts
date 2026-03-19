@@ -4,6 +4,8 @@ import { getAllArticles } from '@/lib/articles'
 import { isFuturePublicationDate } from '@/lib/date'
 import { getSiteUrl } from '@/lib/site'
 
+export const revalidate = 3600
+
 function toValidDate(value?: string): Date | undefined {
   if (!value) return undefined
   const parsed = new Date(value)
