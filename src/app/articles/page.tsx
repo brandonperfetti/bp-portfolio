@@ -64,16 +64,7 @@ export default async function ArticlesIndex() {
       },
     ],
   }
-  const itemListSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'ItemList',
-    itemListElement: articles.slice(0, 50).map((article, index) => ({
-      '@type': 'ListItem',
-      position: index + 1,
-      url: `${siteUrl}/articles/${article.slug}`,
-      name: article.title,
-    })),
-  }
+  const hasArticles = articles.length > 0
 
   return (
     <>
@@ -85,12 +76,29 @@ export default async function ArticlesIndex() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
       />
-      {articles.length > 0 ? (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: toSafeJsonLd(itemListSchema) }}
-        />
-      ) : null}
+      {hasArticles
+        ? (() => {
+            const itemListSchema = {
+              '@context': 'https://schema.org',
+              '@type': 'ItemList',
+              itemListElement: articles.slice(0, 50).map((article, index) => ({
+                '@type': 'ListItem',
+                position: index + 1,
+                url: `${siteUrl}/articles/${article.slug}`,
+                name: article.title,
+              })),
+            }
+
+            return (
+              <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                  __html: toSafeJsonLd(itemListSchema),
+                }}
+              />
+            )
+          })()
+        : null}
       <SimpleLayout
         title={
           page?.title ||
@@ -101,7 +109,7 @@ export default async function ArticlesIndex() {
           'Browse by category or search by topic. These are practical notes from real projects, engineering leadership, and continuous learning.'
         }
       >
-        {articles.length === 0 ? (
+        {!hasArticles ? (
           <NotFoundState
             title="No published articles"
             description="No CMS article records are currently publish-safe."
