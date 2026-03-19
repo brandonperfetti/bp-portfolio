@@ -16,7 +16,7 @@ export function sanitizeInlineMarkdown(value: string) {
  * Invalid or missing dates intentionally fall back to 0 for deterministic sort.
  */
 export function toFreshnessTimestamp(updatedAt?: string, date?: string) {
-  const parsed = toValidDate(updatedAt || date)
+  const parsed = toValidDate(updatedAt) || toValidDate(date)
   return parsed ? parsed.getTime() : 0
 }
 

@@ -15,7 +15,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const newestArticleTimestamp = publicArticles.reduce<number | null>(
     (latest, article) => {
-      const freshness = toValidDate(article.updatedAt || article.date)
+      const freshness =
+        toValidDate(article.updatedAt) || toValidDate(article.date)
       if (!freshness) return latest
       const time = freshness.getTime()
       return latest === null || time > latest ? time : latest
@@ -64,7 +65,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const articleRoutes: MetadataRoute.Sitemap = publicArticles.map(
     (article) => ({
       url: `${siteUrl}/articles/${article.slug}`,
-      lastModified: toValidDate(article.updatedAt || article.date),
+      lastModified: toValidDate(article.updatedAt) || toValidDate(article.date),
       changeFrequency: 'monthly',
       priority: 0.7,
     }),
