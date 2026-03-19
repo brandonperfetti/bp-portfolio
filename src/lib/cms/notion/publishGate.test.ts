@@ -93,12 +93,13 @@ describe('validatePublishSafeRequirements', () => {
   })
 
   it('fails when SEO title and SEO description are out of range', () => {
+    const invalidSeoDescription =
+      'Too short for practical SERP display testing and meaningful search snippet quality.'
     const reasons = validatePublishSafeRequirements(
       {
         ...makeValidArticle(),
         seoTitle: 'Too short',
-        seoDescription:
-          'Too short for practical SERP display testing and meaningful search snippet quality.',
+        seoDescription: invalidSeoDescription,
       },
       null,
     )
@@ -106,13 +107,9 @@ describe('validatePublishSafeRequirements', () => {
     expect(reasons).toContain(
       'SEO Title should be between 45 and 65 characters (found 9)',
     )
-    expect(
-      reasons.some((reason) =>
-        reason.startsWith(
-          'SEO Description should be between 120 and 160 characters',
-        ),
-      ),
-    ).toBe(true)
+    expect(reasons).toContain(
+      `SEO Description should be between 120 and 160 characters (found ${invalidSeoDescription.length})`,
+    )
   })
 
   it('fails when URLs are not absolute http(s)', () => {
