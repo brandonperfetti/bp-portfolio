@@ -124,7 +124,9 @@ export default async function ArticlePage({ params }: PageProps) {
     article.canonicalUrl,
   )
   const authorName =
-    typeof article.author === 'string' ? article.author : article.author.name
+    typeof article.author === 'string'
+      ? article.author
+      : (article.author?.name ?? 'Unknown author')
   const articleKeywords = getArticleKeywords(article)
   const articleSchema = {
     '@context': 'https://schema.org',
