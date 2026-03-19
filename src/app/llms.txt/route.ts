@@ -12,6 +12,11 @@ function sanitizeInlineMarkdown(value: string) {
     .trim()
 }
 
+function toFreshnessTimestamp(updatedAt?: string, date?: string) {
+  const parsed = Date.parse(updatedAt || date || '')
+  return Number.isNaN(parsed) ? 0 : parsed
+}
+
 export async function GET() {
   const siteUrl = getSiteUrl()
   const [settings, allArticles] = await Promise.all([
@@ -25,8 +30,8 @@ export async function GET() {
       (article) => !article.noindex && !isFuturePublicationDate(article.date),
     )
     .sort((a, b) => {
-      const aFresh = new Date(a.updatedAt || a.date).getTime()
-      const bFresh = new Date(b.updatedAt || b.date).getTime()
+      const aFresh = toFreshnessTimestamp(a.updatedAt, a.date)
+      const bFresh = toFreshnessTimestamp(b.updatedAt, b.date)
       return bFresh - aFresh
     })
     .slice(0, MAX_ARTICLES)
