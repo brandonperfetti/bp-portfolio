@@ -183,12 +183,12 @@ function AboutFallbackBody() {
 }
 
 export default async function About() {
-  const siteUrl = getSiteUrl()
-  const normalizedSiteUrl = siteUrl.replace(/\/+$/, '')
   const [settings, page] = await Promise.all([
     getCmsSiteSettings(),
     getCmsPageByPath('/about', { includeBody: true }),
   ])
+  const baseUrl = settings.canonicalUrl || getSiteUrl()
+  const normalizedSiteUrl = baseUrl.replace(/\/+$/, '')
 
   const heroTitle =
     page?.title ||
