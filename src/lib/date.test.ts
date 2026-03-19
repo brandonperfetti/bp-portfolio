@@ -10,6 +10,13 @@ describe('toValidDate', () => {
   })
 
   it('parses date-only strings at local midnight', () => {
-    expect(toValidDate('2026-03-19')).toEqual(new Date(2026, 2, 19, 0, 0, 0, 0))
+    const parsed = toValidDate('2026-03-19')
+    expect(parsed).toBeDefined()
+    expect(parsed?.getFullYear()).toBe(2026)
+    expect(parsed?.getMonth()).toBe(2)
+    expect(parsed?.getDate()).toBe(19)
+    expect(parsed?.getHours()).toBe(0)
+    expect(parsed?.getMinutes()).toBe(0)
+    expect(parsed?.getSeconds()).toBe(0)
   })
 })
