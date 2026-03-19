@@ -2,17 +2,21 @@ function parseEditorialDate(value: string): Date | undefined {
   const trimmed = value.trim()
   const dateOnly = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   const parsed = dateOnly
-    ? new Date(
-        Number(dateOnly[1]),
-        Number(dateOnly[2]) - 1,
-        Number(dateOnly[3]),
-        0,
-        0,
-        0,
-        0,
-      )
+    ? (() => {
+        const year = Number(dateOnly[1])
+        const month = Number(dateOnly[2])
+        const day = Number(dateOnly[3])
+        if (month < 1 || month > 12) return undefined
+
+        const monthIndex = month - 1
+        const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
+        if (day < 1 || day > daysInMonth) return undefined
+
+        return new Date(year, monthIndex, day, 0, 0, 0, 0)
+      })()
     : new Date(trimmed)
 
+  if (!parsed) return undefined
   return Number.isNaN(parsed.getTime()) ? undefined : parsed
 }
 
