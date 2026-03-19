@@ -1,3 +1,5 @@
+import { isFuturePublicationDate } from '@/lib/date'
+
 /**
  * Flattens multiline markdown fragments into a safe single-line value for
  * plain-text llms index output.
@@ -16,4 +18,30 @@ export function sanitizeInlineMarkdown(value: string) {
 export function toFreshnessTimestamp(updatedAt?: string, date?: string) {
   const parsed = Date.parse(updatedAt || date || '')
   return Number.isNaN(parsed) ? 0 : parsed
+}
+
+type PublicArticleCandidate = {
+  date: string
+  updatedAt?: string
+  noindex?: boolean
+}
+
+/**
+ * Shared public-article selection for llms endpoints.
+ * Excludes noindex/future-dated entries, sorts by freshness desc, and caps size.
+ */
+export function getPublicSortedArticles<T extends PublicArticleCandidate>(
+  articles: T[],
+  maxArticles: number,
+) {
+  return articles
+    .filter(
+      (article) => !article.noindex && !isFuturePublicationDate(article.date),
+    )
+    .sort((a, b) => {
+      const aFresh = toFreshnessTimestamp(a.updatedAt, a.date)
+      const bFresh = toFreshnessTimestamp(b.updatedAt, b.date)
+      return bFresh - aFresh
+    })
+    .slice(0, maxArticles)
 }

@@ -1,9 +1,8 @@
 import { getAllArticles } from '@/lib/articles'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
-import { isFuturePublicationDate } from '@/lib/date'
 import {
+  getPublicSortedArticles,
   sanitizeInlineMarkdown,
-  toFreshnessTimestamp,
 } from '@/lib/llms/helpers'
 import { getSiteUrl } from '@/lib/site'
 
@@ -17,16 +16,7 @@ export async function GET() {
   ])
 
   const canonicalSiteUrl = settings.canonicalUrl || siteUrl
-  const publicArticles = allArticles
-    .filter(
-      (article) => !article.noindex && !isFuturePublicationDate(article.date),
-    )
-    .sort((a, b) => {
-      const aFresh = toFreshnessTimestamp(a.updatedAt, a.date)
-      const bFresh = toFreshnessTimestamp(b.updatedAt, b.date)
-      return bFresh - aFresh
-    })
-    .slice(0, MAX_ARTICLES)
+  const publicArticles = getPublicSortedArticles(allArticles, MAX_ARTICLES)
 
   const lines = [
     `# ${sanitizeInlineMarkdown(settings.siteName)}`,
