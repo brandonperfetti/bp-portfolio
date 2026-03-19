@@ -140,9 +140,9 @@ export default async function ArticlePage({ params }: PageProps) {
     article.slug,
     article.canonicalUrl,
   )
-  const schemaImage = toAbsoluteImageUrl(siteUrl, article.image)
+  const schemaImage = toAbsoluteImageUrl(canonicalSiteUrl, article.image)
   const publisherLogo = toAbsoluteImageUrl(
-    siteUrl,
+    canonicalSiteUrl,
     settings.openGraphImage || '/favicon.ico',
   )
   const authorName =
