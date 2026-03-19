@@ -61,7 +61,7 @@ export default async function ArticlesIndex() {
         '@type': 'ListItem',
         position: 1,
         name: 'Home',
-        item: `${canonicalSiteUrl}/`,
+        item: `${canonicalSiteUrl}`,
       },
       {
         '@type': 'ListItem',

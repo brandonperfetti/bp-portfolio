@@ -123,8 +123,12 @@ export default async function ArticlePage({ params }: PageProps) {
   const bodyBlocks = Array.isArray(article.bodyBlocks) ? article.bodyBlocks : []
   const hasBodyBlocks = bodyBlocks.length > 0
   const siteUrl = getSiteUrl()
+  const canonicalSiteUrl = (settings.canonicalUrl || siteUrl).replace(
+    /\/+$/,
+    '',
+  )
   const canonical = canonicalizeArticleUrl(
-    siteUrl,
+    canonicalSiteUrl,
     article.slug,
     article.canonicalUrl,
   )
@@ -178,13 +182,13 @@ export default async function ArticlePage({ params }: PageProps) {
         '@type': 'ListItem',
         position: 1,
         name: 'Home',
-        item: `${siteUrl}/`,
+        item: `${canonicalSiteUrl}/`,
       },
       {
         '@type': 'ListItem',
         position: 2,
         name: 'Articles',
-        item: `${siteUrl}/articles`,
+        item: `${canonicalSiteUrl}/articles`,
       },
       {
         '@type': 'ListItem',
