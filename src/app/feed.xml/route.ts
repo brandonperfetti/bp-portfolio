@@ -14,7 +14,7 @@ export async function GET(req: Request) {
 
   const author = {
     name: 'Brandon Perfetti',
-    email: 'brandon@brandonperfetti.com',
+    email: 'info@brandonperfetti.com',
   }
 
   const feed = new Feed({
