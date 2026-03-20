@@ -123,7 +123,18 @@ async function getNotionArticleDetailRaw(
     return null
   }
 
-  const bodyBlocks = await getNotionBlockTree(summary.sourceArticlePageId)
+  let bodyBlocks: CmsArticleDetailResult['bodyBlocks'] = []
+  try {
+    bodyBlocks = await getNotionBlockTree(summary.sourceArticlePageId)
+  } catch (error) {
+    // Fail open for article body hydration so transient Notion read failures
+    // do not take down the entire static build for one slug.
+    console.warn('[cms:notion] article body blocks unavailable', {
+      slug,
+      sourceArticlePageId: summary.sourceArticlePageId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 
   return {
     ...summary,
