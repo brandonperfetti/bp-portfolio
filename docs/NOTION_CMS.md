@@ -4,6 +4,11 @@
 
 Operational setup and runbook for the Notion-backed CMS runtime.
 
+Related references:
+
+- `docs/notion-integration.md` for current runtime architecture and contracts.
+- `docs/agent-notion-operations.md` for agent execution workflow using Notion MCP, Cloudinary MCP, and image tooling.
+
 ## Provider mode
 
 - `CMS_PROVIDER=notion`: uses Notion CMS repositories for articles, pages, projects, tech, uses, and site settings.
