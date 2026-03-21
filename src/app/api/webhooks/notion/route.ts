@@ -49,6 +49,137 @@ function normalizeEvents(payload: NotionWebhookPayload): NotionWebhookEvent[] {
 }
 
 const EVENT_TTL_MS = 24 * 60 * 60 * 1000
+const PAGE_MUTATION_EVENTS = new Set([
+  'page.created',
+  'page.properties_updated',
+  'page.content_updated',
+  'page.deleted',
+  'page.undeleted',
+  'page.moved',
+])
+const CONTENT_UPDATED_EVENT = 'data_source.content_updated'
+const SCHEMA_UPDATED_EVENT = 'data_source.schema_updated'
+const DATA_SOURCE_NAV_EVENTS = new Set([
+  'data_source.created',
+  'data_source.deleted',
+  'data_source.moved',
+  'data_source.undeleted',
+])
+const FULL_SYNC_KEY = '__full_sync__'
+
+type RevalidationPlan = {
+  tags: Set<string>
+  paths: Set<string>
+}
+
+type PendingSyncRequest = {
+  eventType: string
+  resolvedEntityId?: string
+  ledgerPageId?: string
+}
+
+function isCommentEvent(eventType: string) {
+  return eventType === 'comment.created' || eventType.startsWith('comment.')
+}
+
+function isPageMutationEvent(eventType: string) {
+  return PAGE_MUTATION_EVENTS.has(eventType)
+}
+
+function isDataSourceNavigationEvent(eventType: string) {
+  return (
+    DATA_SOURCE_NAV_EVENTS.has(eventType) || eventType.startsWith('database.')
+  )
+}
+
+function isProjectionCandidateEvent(eventType: string) {
+  return isPageMutationEvent(eventType) || eventType === CONTENT_UPDATED_EVENT
+}
+
+function createRevalidationPlan(): RevalidationPlan {
+  return {
+    tags: new Set<string>(),
+    paths: new Set<string>(),
+  }
+}
+
+function addTag(plan: RevalidationPlan, tag: string) {
+  plan.tags.add(tag)
+}
+
+function addPath(plan: RevalidationPlan, path: string) {
+  plan.paths.add(path)
+}
+
+function queueCommonCmsTags(plan: RevalidationPlan) {
+  addTag(plan, CMS_TAGS.articles)
+  addTag(plan, CMS_TAGS.projects)
+  addTag(plan, CMS_TAGS.tech)
+  addTag(plan, CMS_TAGS.uses)
+  addTag(plan, CMS_TAGS.workHistory)
+  addTag(plan, CMS_TAGS.pages)
+}
+
+function queueContentDiscoveryPaths(plan: RevalidationPlan) {
+  addPath(plan, '/sitemap.xml')
+  addPath(plan, '/feed.xml')
+  addPath(plan, '/llms.txt')
+  addPath(plan, '/llms-full.txt')
+}
+
+function queuePrimaryContentPaths(plan: RevalidationPlan) {
+  addPath(plan, '/')
+  addPath(plan, '/about')
+  addPath(plan, '/articles')
+  addPath(plan, '/projects')
+  addPath(plan, '/tech')
+  addPath(plan, '/uses')
+}
+
+function collectEventRevalidation(eventType: string, plan: RevalidationPlan) {
+  if (isCommentEvent(eventType)) {
+    return
+  }
+
+  if (isPageMutationEvent(eventType)) {
+    queueCommonCmsTags(plan)
+    queuePrimaryContentPaths(plan)
+    queueContentDiscoveryPaths(plan)
+    return
+  }
+
+  if (eventType === CONTENT_UPDATED_EVENT) {
+    queueCommonCmsTags(plan)
+    queueContentDiscoveryPaths(plan)
+    return
+  }
+
+  if (eventType === SCHEMA_UPDATED_EVENT) {
+    console.warn(
+      '[cms:notion:webhook] Data source schema updated, verify mapper compatibility',
+    )
+    addTag(plan, CMS_TAGS.articles)
+    addTag(plan, CMS_TAGS.pages)
+    addTag(plan, CMS_TAGS.settings)
+    addTag(plan, CMS_TAGS.navigation)
+    return
+  }
+
+  if (isDataSourceNavigationEvent(eventType)) {
+    addTag(plan, CMS_TAGS.navigation)
+    addTag(plan, CMS_TAGS.settings)
+  }
+}
+
+function applyRevalidationPlan(plan: RevalidationPlan) {
+  for (const tag of plan.tags) {
+    revalidateTag(tag, 'max')
+  }
+  for (const path of plan.paths) {
+    revalidatePath(path)
+  }
+}
+
 // Best-effort fast-path dedupe for duplicate events in the same process instance.
 // In serverless/multi-instance deployments this map is not shared, so canonical
 // distributed dedupe still relies on claimWebhookEvent + ledger state in Notion.
@@ -84,92 +215,12 @@ function verifySignature(
   return timingSafeEqual(expectedBuffer, providedBuffer)
 }
 
-function applyEventRevalidation(eventType: string) {
-  if (eventType === 'comment.created' || eventType.startsWith('comment.')) {
-    return
-  }
-
-  if (
-    eventType === 'page.created' ||
-    eventType === 'page.properties_updated' ||
-    eventType === 'page.content_updated' ||
-    eventType === 'page.deleted' ||
-    eventType === 'page.undeleted' ||
-    eventType === 'page.moved'
-  ) {
-    revalidateTag(CMS_TAGS.articles, 'max')
-    revalidateTag(CMS_TAGS.projects, 'max')
-    revalidateTag(CMS_TAGS.tech, 'max')
-    revalidateTag(CMS_TAGS.uses, 'max')
-    revalidateTag(CMS_TAGS.workHistory, 'max')
-    revalidateTag(CMS_TAGS.pages, 'max')
-
-    revalidatePath('/')
-    revalidatePath('/about')
-    revalidatePath('/articles')
-    revalidatePath('/projects')
-    revalidatePath('/tech')
-    revalidatePath('/uses')
-    revalidatePath('/sitemap.xml')
-    revalidatePath('/feed.xml')
-    revalidatePath('/llms.txt')
-    revalidatePath('/llms-full.txt')
-
-    return
-  }
-
-  if (eventType === 'data_source.content_updated') {
-    revalidateTag(CMS_TAGS.articles, 'max')
-    revalidateTag(CMS_TAGS.projects, 'max')
-    revalidateTag(CMS_TAGS.tech, 'max')
-    revalidateTag(CMS_TAGS.uses, 'max')
-    revalidateTag(CMS_TAGS.workHistory, 'max')
-    revalidateTag(CMS_TAGS.pages, 'max')
-    revalidatePath('/sitemap.xml')
-    revalidatePath('/feed.xml')
-    revalidatePath('/llms.txt')
-    revalidatePath('/llms-full.txt')
-    return
-  }
-
-  if (eventType === 'data_source.schema_updated') {
-    console.warn(
-      '[cms:notion:webhook] Data source schema updated, verify mapper compatibility',
-    )
-    revalidateTag(CMS_TAGS.articles, 'max')
-    revalidateTag(CMS_TAGS.pages, 'max')
-    revalidateTag(CMS_TAGS.settings, 'max')
-    revalidateTag(CMS_TAGS.navigation, 'max')
-    return
-  }
-
-  if (
-    eventType === 'data_source.created' ||
-    eventType === 'data_source.deleted' ||
-    eventType === 'data_source.moved' ||
-    eventType === 'data_source.undeleted' ||
-    eventType.startsWith('database.')
-  ) {
-    revalidateTag(CMS_TAGS.navigation, 'max')
-    revalidateTag(CMS_TAGS.settings, 'max')
-    return
-  }
-}
-
 function shouldRunProjectionSync(eventType: string) {
   if (process.env.NOTION_ENABLE_ARTICLE_PROJECTION_SYNC === 'false') {
     return false
   }
 
-  return (
-    eventType === 'page.created' ||
-    eventType === 'page.properties_updated' ||
-    eventType === 'page.content_updated' ||
-    eventType === 'page.deleted' ||
-    eventType === 'page.undeleted' ||
-    eventType === 'page.moved' ||
-    eventType === 'data_source.content_updated'
-  )
+  return isProjectionCandidateEvent(eventType)
 }
 
 function getContentDataSourceIdSafe() {
@@ -209,7 +260,7 @@ function getEventDataSourceId(event: NotionWebhookEvent): string | null {
     return parentDataSourceId
   }
 
-  if (event.type === 'data_source.content_updated') {
+  if (event.type === CONTENT_UPDATED_EVENT) {
     const entityId =
       event.entity && typeof event.entity.id === 'string'
         ? event.entity.id
@@ -369,6 +420,8 @@ export async function POST(request: Request) {
     syncSuccesses: 0,
     syncFailures: 0,
   }
+  const revalidationPlan = createRevalidationPlan()
+  const pendingSyncByKey = new Map<string, PendingSyncRequest[]>()
 
   for (const event of events) {
     if (typeof event !== 'object' || event === null) {
@@ -444,7 +497,7 @@ export async function POST(request: Request) {
       }
     }
 
-    applyEventRevalidation(eventType)
+    collectEventRevalidation(eventType, revalidationPlan)
 
     const shouldSyncThisEvent = shouldRunProjectionForEvent(
       eventType,
