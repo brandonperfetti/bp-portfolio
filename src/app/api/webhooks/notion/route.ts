@@ -533,6 +533,9 @@ export async function POST(request: Request) {
       continue
     }
 
+    // syncKey groups events into pendingSyncByKey so we can coalesce processing:
+    // CONTENT_UPDATED_EVENT uses FULL_SYNC_KEY (global/full sync bucket), while
+    // other events use page:${resolvedEntityId} (per-page bucket).
     const syncKey =
       eventType === CONTENT_UPDATED_EVENT
         ? FULL_SYNC_KEY
