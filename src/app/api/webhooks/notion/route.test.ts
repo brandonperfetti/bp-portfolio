@@ -141,6 +141,108 @@ describe('POST /api/webhooks/notion payload normalization', () => {
     })
   })
 
+  it('coalesces duplicate page sync work within one webhook payload', async () => {
+    mocks.claimWebhookEvent
+      .mockResolvedValueOnce({
+        action: 'claimed',
+        ledgerPageId: 'ledger-a',
+      })
+      .mockResolvedValueOnce({
+        action: 'claimed',
+        ledgerPageId: 'ledger-b',
+      })
+
+    const request = new Request('http://localhost/api/webhooks/notion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        events: [
+          {
+            id: 'evt-batch-1',
+            type: 'page.content_updated',
+            data: {
+              id: 'page-shared-id',
+            },
+          },
+          {
+            id: 'evt-batch-2',
+            type: 'page.content_updated',
+            data: {
+              id: 'page-shared-id',
+            },
+          },
+        ],
+      }),
+    })
+
+    const response = await POST(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(mocks.syncPortfolioArticleProjection).toHaveBeenCalledTimes(1)
+    expect(mocks.syncPortfolioArticleProjection).toHaveBeenCalledWith({
+      pageId: 'page-shared-id',
+    })
+    expect(mocks.completeWebhookEventClaim).toHaveBeenCalledTimes(2)
+    expect(body.diagnostics).toMatchObject({
+      receivedEvents: 2,
+      processedEvents: 2,
+      syncAttempts: 1,
+      syncSuccesses: 1,
+      syncFailures: 0,
+    })
+  })
+
+  it('prefers a single full sync when payload includes data_source.content_updated', async () => {
+    mocks.claimWebhookEvent
+      .mockResolvedValueOnce({
+        action: 'claimed',
+        ledgerPageId: 'ledger-page-event',
+      })
+      .mockResolvedValueOnce({
+        action: 'claimed',
+        ledgerPageId: 'ledger-full-event',
+      })
+
+    const request = new Request('http://localhost/api/webhooks/notion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        events: [
+          {
+            id: 'evt-mixed-page',
+            type: 'page.content_updated',
+            data: {
+              id: 'page-mixed-id',
+            },
+          },
+          {
+            id: 'evt-mixed-full',
+            type: 'data_source.content_updated',
+            entity: {
+              id: '221be01e-1e06-8089-99b0-000b6415ee9e',
+            },
+          },
+        ],
+      }),
+    })
+
+    const response = await POST(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(mocks.syncPortfolioArticleProjection).toHaveBeenCalledTimes(1)
+    expect(mocks.syncPortfolioArticleProjection).toHaveBeenCalledWith(undefined)
+    expect(mocks.completeWebhookEventClaim).toHaveBeenCalledTimes(2)
+    expect(body.diagnostics).toMatchObject({
+      receivedEvents: 2,
+      processedEvents: 2,
+      syncAttempts: 1,
+      syncSuccesses: 1,
+      syncFailures: 0,
+    })
+  })
+
   it('returns verified response for verification token handshake payloads', async () => {
     process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN = 'verify-me'
 

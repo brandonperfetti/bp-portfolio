@@ -244,6 +244,8 @@ Detailed topic docs live in `docs/`:
 - `docs/MAINTENANCE.md`
 - `docs/DOCUMENTATION.md`
 - `docs/NOTION_CMS.md`
+- `docs/notion-integration.md`
+- `docs/agent-notion-operations.md`
 
 If you need implementation internals first, start with:
 

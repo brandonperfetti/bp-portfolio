@@ -43,6 +43,8 @@ Optional env vars:
 - Preserve header search UX (`Cmd/Ctrl + K`) and debounced matching over article body text.
 - Hermes chat must keep streaming behavior and markdown rendering compatibility.
 - Prefer project-local icons in `src/icons` when matching existing visual language; use Heroicons selectively where already adopted.
+- Treat Notion `Governance Hub` as the canonical index for governance/contracts/runbooks and related CMS source databases.
+- For reconciliation/drift/cleanup/integrity operations, log evidence in Notion `Operations Runs`.
 
 ## Code Documentation Expectations
 
@@ -91,3 +93,5 @@ Optional env vars:
 - Ongoing upkeep tasks: `docs/MAINTENANCE.md`
 - Documentation standards: `docs/DOCUMENTATION.md`
 - Notion CMS setup and runbook: `docs/NOTION_CMS.md`
+- Notion runtime integration (current state): `docs/notion-integration.md`
+- Agent Notion operations playbook: `docs/agent-notion-operations.md`

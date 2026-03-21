@@ -5,7 +5,9 @@
 - `README.md` = onboarding and runtime usage.
 - `.github/copilot-instructions.md` = concise AI-agent operating guide.
 - `docs/*.md` = deep references by concern (architecture, styling, SEO, etc.).
-- `docs/NOTION_CMS.md` = Notion-specific configuration and operations runbook.
+- `docs/NOTION_CMS.md` = Notion-specific setup and operational runbook.
+- `docs/notion-integration.md` = current Notion runtime architecture and integration contracts.
+- `docs/agent-notion-operations.md` = agent execution playbook for Notion MCP/Cloudinary MCP/image workflows.
 - `docs/PORTFOLIO_BACKLOG.md` = portfolio engineering backlog operations and Notion backlog sync workflow.
 
 ## Progressive Disclosure Rule
