@@ -533,43 +533,83 @@ export async function POST(request: Request) {
       continue
     }
 
+    const syncKey =
+      eventType === CONTENT_UPDATED_EVENT
+        ? FULL_SYNC_KEY
+        : `page:${resolvedEntityId}`
+    const pending = pendingSyncByKey.get(syncKey) ?? []
+    pending.push({
+      eventType,
+      resolvedEntityId,
+      ledgerPageId: ledgerPageId || undefined,
+    })
+    pendingSyncByKey.set(syncKey, pending)
+  }
+
+  applyRevalidationPlan(revalidationPlan)
+
+  if (pendingSyncByKey.has(FULL_SYNC_KEY)) {
+    const fullSyncRequests = pendingSyncByKey.get(FULL_SYNC_KEY) ?? []
+    for (const [syncKey, requests] of pendingSyncByKey) {
+      if (syncKey === FULL_SYNC_KEY) {
+        continue
+      }
+      fullSyncRequests.push(...requests)
+      pendingSyncByKey.delete(syncKey)
+    }
+    pendingSyncByKey.set(FULL_SYNC_KEY, fullSyncRequests)
+  }
+
+  for (const [syncKey, pendingRequests] of pendingSyncByKey) {
+    const syncInput =
+      syncKey === FULL_SYNC_KEY
+        ? undefined
+        : { pageId: pendingRequests[0]?.resolvedEntityId }
+
     try {
       diagnostics.syncAttempts += 1
-      const syncResult = await syncPortfolioArticleProjection(
-        eventType === 'data_source.content_updated'
-          ? undefined
-          : { pageId: resolvedEntityId },
-      )
+      const syncResult = await syncPortfolioArticleProjection(syncInput)
       console.info('[cms:notion:webhook] projection sync', {
-        eventType,
-        entityId: resolvedEntityId,
+        syncKey,
+        syncInput,
         ...syncResult,
       })
 
       if (!syncResult.ok) {
         diagnostics.syncFailures += 1
-        if (ledgerPageId) {
-          await failWebhookEventClaim(
-            ledgerPageId,
-            syncResult.errors.map((entry) => entry.message).join('; '),
-          ).catch(() => {})
+        const errorMessage = syncResult.errors
+          .map((entry) => entry.message)
+          .join('; ')
+        for (const request of pendingRequests) {
+          if (!request.ledgerPageId) {
+            continue
+          }
+          await failWebhookEventClaim(request.ledgerPageId, errorMessage).catch(
+            () => {},
+          )
         }
       } else {
         diagnostics.syncSuccesses += 1
-        if (ledgerPageId) {
-          await completeWebhookEventClaim(ledgerPageId).catch(() => {})
+        for (const request of pendingRequests) {
+          if (!request.ledgerPageId) {
+            continue
+          }
+          await completeWebhookEventClaim(request.ledgerPageId).catch(() => {})
         }
       }
     } catch (error) {
       diagnostics.syncFailures += 1
       console.error('[cms:notion:webhook] projection sync failed', {
-        eventType,
-        entityId: resolvedEntityId,
+        syncKey,
+        syncInput,
         error: error instanceof Error ? error.message : 'Unknown error',
       })
-      if (ledgerPageId) {
+      for (const request of pendingRequests) {
+        if (!request.ledgerPageId) {
+          continue
+        }
         await failWebhookEventClaim(
-          ledgerPageId,
+          request.ledgerPageId,
           error instanceof Error ? error.message : 'Unknown error',
         ).catch(() => {})
       }
