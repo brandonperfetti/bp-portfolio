@@ -1,6 +1,7 @@
 import { defineConfig, globalIgnores } from 'eslint/config'
 import nextVitals from 'eslint-config-next/core-web-vitals'
 import nextTs from 'eslint-config-next/typescript'
+import tsdoc from 'eslint-plugin-tsdoc'
 
 export default defineConfig([
   ...nextVitals,
@@ -25,7 +26,10 @@ export default defineConfig([
   },
   {
     files: ['**/*.{ts,tsx}'],
+    plugins: { tsdoc },
     rules: {
+      // TSDoc syntax validation on doc comments (project standard §15b).
+      'tsdoc/syntax': 'warn',
       'prefer-const': 'error',
       'no-fallthrough': 'error',
       'no-unused-vars': 'off',
