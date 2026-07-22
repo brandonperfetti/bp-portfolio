@@ -72,7 +72,11 @@ export default buildConfig({
   },
   db: vercelPostgresAdapter({
     pool: {
-      connectionString: process.env.DATABASE_URI || '',
+      // DATABASE_URI is our canonical name; POSTGRES_URL is what a Vercel
+      // Postgres (Neon) store auto-injects — accept it so connecting a store
+      // to an environment needs zero manual copying.
+      connectionString:
+        process.env.DATABASE_URI || process.env.POSTGRES_URL || '',
     },
     // Disable dev schema push unless explicitly enabled — migrations are the
     // source of truth so staging/prod schema stays reproducible.
