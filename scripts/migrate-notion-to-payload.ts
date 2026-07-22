@@ -673,7 +673,11 @@ const run = async () => {
   process.exit(0)
 }
 
-run().catch((err) => {
+// Top-level await: `payload run` waits for module evaluation, then exits the
+// process — a floating promise here gets killed mid-init.
+try {
+  await run()
+} catch (err) {
   console.error('[migrate] fatal:', err)
   process.exit(1)
-})
+}
