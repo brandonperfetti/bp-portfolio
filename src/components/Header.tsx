@@ -14,7 +14,7 @@ import {
 import clsx from 'clsx'
 
 import { Container } from '@/components/Container'
-import { HeaderSearch } from '@/components/search/HeaderSearch'
+import { CommandPalette } from '@/components/search/CommandPalette'
 import type { CmsNavigationItem } from '@/lib/cms/types'
 import { PERSON_IMAGE_URL } from '@/lib/identity'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
@@ -473,7 +473,7 @@ export function Header({
               </div>
               <div className="flex justify-end md:flex-1">
                 <div className="pointer-events-auto flex items-center gap-2 md:gap-3">
-                  <HeaderSearch />
+                  <CommandPalette />
                   <ThemeToggle />
                 </div>
               </div>

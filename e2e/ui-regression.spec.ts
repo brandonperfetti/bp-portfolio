@@ -73,19 +73,21 @@ test('articles shows empty-state message when no published articles', async ({
   await expect(page.getByText('No published articles')).toBeVisible()
 })
 
-test('header search modal opens and closes via escape', async ({ page }) => {
+test('command palette opens and closes via escape', async ({ page }) => {
   await page.goto('/')
 
-  const openSearchButton = page.getByRole('button', {
-    name: /open search/i,
+  const openPaletteButton = page.getByRole('button', {
+    name: /open command palette/i,
   })
-  await openSearchButton.click()
+  await openPaletteButton.click()
 
-  const modalInput = page.getByPlaceholder('Search articles')
-  await expect(modalInput).toBeVisible()
+  const paletteInput = page.getByPlaceholder(
+    /search articles or type a command/i,
+  )
+  await expect(paletteInput).toBeVisible()
 
   await page.keyboard.press('Escape')
-  await expect(modalInput).not.toBeVisible()
+  await expect(paletteInput).not.toBeVisible()
 })
 
 test('hermes empty submit focuses input', async ({ page }) => {
