@@ -1,6 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
+import { useTheme } from 'next-themes'
 import { useEffect, useRef, useState } from 'react'
 
 import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
@@ -31,9 +32,13 @@ export function ShaderHero({
   preset?: ShaderPresetKey
 }) {
   const reducedMotion = usePrefersReducedMotion()
+  const { resolvedTheme } = useTheme()
   const containerRef = useRef<HTMLDivElement>(null)
   const [gpuOk, setGpuOk] = useState(false)
   const [onscreen, setOnscreen] = useState(true)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => setMounted(true), [])
 
   useEffect(() => {
     const hasGpu =
@@ -54,7 +59,10 @@ export function ShaderHero({
     return () => observer.disconnect()
   }, [])
 
-  const enabled = !reducedMotion && gpuOk && onscreen
+  const enabled = !reducedMotion && gpuOk && onscreen && mounted
+  // Light mode gets the §23 light preset; dark mode uses the configured one.
+  const activePreset: ShaderPresetKey =
+    resolvedTheme === 'light' ? 'static-noise-4' : preset
 
   return (
     // Anchored to the page top (behind the header) and clipped to the same
@@ -70,8 +78,8 @@ export function ShaderHero({
           {/* Static fallback — paints instantly, intentional in both themes. */}
           <div className="absolute inset-0 bg-gradient-to-br from-zinc-100 via-white to-teal-50 dark:from-zinc-950 dark:via-[#0b1329] dark:to-black" />
           {enabled && (
-            <div className="absolute inset-0 opacity-0 transition-opacity duration-700 dark:opacity-100">
-              <ShaderBackground preset={preset} />
+            <div className="absolute inset-0 animate-[fadeIn_0.7s_ease-out]">
+              <ShaderBackground key={activePreset} preset={activePreset} />
             </div>
           )}
           {/* Legibility scrim over the text zone + fade into the page below. */}

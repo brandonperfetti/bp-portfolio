@@ -2,6 +2,7 @@
 
 import {
   Aurora,
+  Blob,
   Circle,
   FilmGrain,
   LinearGradient,
@@ -32,6 +33,36 @@ export default function ShaderBackground({
 }: {
   preset: ShaderPresetKey
 }) {
+  if (preset === 'static-noise-4') {
+    // "Static Noise 4" (light mode, §23) adapted: white→lavender gradient with
+    // a soft right-anchored blob. The preset's 16k-particle logo layer is a
+    // logo shader (needs a brand SVG/SDF) and is intentionally omitted for a
+    // background role.
+    return (
+      <Shader style={canvasStyle} toneMapping="neutral">
+        <LinearGradient
+          stops={[
+            { color: '#ffffff', position: 0 },
+            { color: '#ffffff', position: 1 },
+          ]}
+        />
+        <Blob
+          center={{ x: 0.89, y: 0.57 }}
+          highlightIntensity={0.3}
+          opacity={0.54}
+          size={0.5977}
+          softness={1}
+          stops={[
+            { color: '#6fa1ce', position: 0 },
+            { color: '#9659ef', position: 1 },
+          ]}
+          visible={true}
+        />
+        <FilmGrain strength={0.3} />
+      </Shader>
+    )
+  }
+
   if (preset === 'drifting-lights-8') {
     // "Drifting Lights 8" — understated dark-navy gradient + faint grid + grain.
     return (
