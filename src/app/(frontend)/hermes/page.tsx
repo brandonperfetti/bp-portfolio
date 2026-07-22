@@ -1,7 +1,7 @@
 import { type Metadata } from 'next'
 
 import { Container } from '@/components/Container'
-import { HermesChat } from '@/components/HermesChat'
+import HermesChat from '@/components/HermesChat'
 import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
