@@ -1,223 +1,92 @@
-import { unstable_cache } from 'next/cache'
-
-import { getCmsDefaultAuthor } from '@/lib/cms/authorsRepo'
-import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
-import { flattenBlockText, getNotionBlockTree } from '@/lib/cms/notion/blocks'
-import { notionRequest } from '@/lib/cms/notion/client'
-import { getNotionArticlesDataSourceId } from '@/lib/cms/notion/config'
-import type { NotionPage } from '@/lib/cms/notion/contracts'
-import {
-  mapNotionArticleSummary,
-  mapNotionAuthorProfile,
-} from '@/lib/cms/notion/mapper'
-import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
-import { getProperty, propertyToRelationIds } from '@/lib/cms/notion/property'
-import { mapWithConcurrency } from '@/lib/cms/notion/utils'
-import { getCmsProvider } from '@/lib/cms/provider'
+import { flattenBlockText } from '@/lib/cms/notion/blocks'
 import type { CmsArticleDetail, CmsArticleSummary } from '@/lib/cms/types'
+import { getPostBySlug, getPublishedPosts } from '@/lib/content/posts'
+import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
+import type { Media, Post, User } from '@/payload-types'
+
+/**
+ * Article repository backed by the Payload Local API (was Notion in v3).
+ *
+ * @remarks Keeps the v3 `CmsArticleSummary`/`CmsArticleDetail` shapes so the
+ * retained pages, RSS, llms.txt, and search consumers work unchanged. Only
+ * published posts are exposed here; drafts render solely through the
+ * authenticated admin preview flow.
+ */
 
 export type CmsArticleDetailResult = CmsArticleDetail & {
-  sourceType: 'notion'
+  sourceType: 'local' | 'notion'
 }
 
-const getCachedLocalArticles = unstable_cache(
-  async (): Promise<CmsArticleDetailResult[]> => [],
-  ['cms', 'local', 'articles'],
-  {
-    revalidate: CMS_REVALIDATE.articles,
-    tags: [CMS_TAGS.articles],
-  },
-)
-
-async function getNotionPublishedArticlePages(): Promise<NotionPage[]> {
-  return queryAllDataSourcePages(getNotionArticlesDataSourceId(), {
-    sorts: [
-      {
-        timestamp: 'last_edited_time',
-        direction: 'descending',
-      },
-    ],
-  })
+const mediaUrl = (media: Post['heroImage']): string | undefined => {
+  if (!media || typeof media !== 'object') return undefined
+  return (media as Media).url || undefined
 }
 
-const getCachedNotionArticleSummaries = unstable_cache(
-  async (): Promise<CmsArticleSummary[]> => {
-    const pages = await getNotionPublishedArticlePages()
-    const mappedByPage: Array<{
-      summary: CmsArticleSummary
-      authorId?: string
-    }> = []
+const termTitles = (terms: Post['categories'] | Post['tags']): string[] =>
+  (terms ?? [])
+    .map((t) => (typeof t === 'object' && t !== null ? t.title : null))
+    .filter((t): t is string => Boolean(t))
 
-    for (const page of pages) {
-      const summary = mapNotionArticleSummary(page)
-      if (!summary) {
-        continue
-      }
+const authorName = (post: Post): string => {
+  const first =
+    post.populatedAuthors?.[0]?.name ||
+    (post.authors?.[0] as User | undefined)?.name
+  return first || 'Brandon Perfetti'
+}
 
-      const authorIds = propertyToRelationIds(
-        getProperty(page.properties, ['Author', 'Authors']),
-      )
-
-      mappedByPage.push({
-        summary,
-        authorId: authorIds[0],
-      })
-    }
-
-    const authorIds = Array.from(
-      new Set(mappedByPage.map((item) => item.authorId).filter(Boolean)),
-    ) as string[]
-    const authorsById = new Map<
-      string,
-      NonNullable<ReturnType<typeof mapNotionAuthorProfile>>
-    >()
-
-    await mapWithConcurrency(
-      authorIds,
-      async (authorId) => {
-        try {
-          const page = (await notionRequest(`/pages/${authorId}`, {
-            method: 'GET',
-          })) as NotionPage
-          const author = mapNotionAuthorProfile(page)
-          if (author) {
-            authorsById.set(author.id, author)
-          }
-        } catch (error) {
-          console.warn('[cms:notion] author fetch degraded', {
-            authorId,
-            error: error instanceof Error ? error.message : String(error),
-          })
-        }
-      },
-      2,
-    )
-
-    const defaultAuthor = await getCmsDefaultAuthor()
-    const mapped = mappedByPage
-      .map(({ summary, authorId }) => ({
-        ...summary,
-        author:
-          (authorId ? authorsById.get(authorId) : undefined) ??
-          defaultAuthor ??
-          summary.author,
-      }))
-      .sort((a, b) => +new Date(b.date) - +new Date(a.date))
-
-    return mapped
-  },
-  ['cms', 'notion', 'articles'],
-  {
-    revalidate: CMS_REVALIDATE.articles,
-    tags: [CMS_TAGS.articles],
-  },
-)
-
-async function getNotionArticleDetailRaw(
-  slug: string,
-): Promise<CmsArticleDetailResult | null> {
-  const summaries = await getCachedNotionArticleSummaries()
-  const summary = summaries.find((article) => article.slug === slug)
-
-  if (!summary?.sourceArticlePageId) {
-    return null
-  }
-
-  let bodyBlocks: CmsArticleDetailResult['bodyBlocks'] = []
-  try {
-    bodyBlocks = await getNotionBlockTree(summary.sourceArticlePageId)
-  } catch (error) {
-    // Fail open for article body hydration so transient Notion read failures
-    // do not take down the entire static build for one slug.
-    console.warn('[cms:notion] article body blocks unavailable', {
-      slug,
-      sourceArticlePageId: summary.sourceArticlePageId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
-
+const toSummary = (post: Post): CmsArticleSummary => {
+  const topics = termTitles(post.categories)
+  const tech = termTitles(post.tags)
   return {
-    ...summary,
-    bodyBlocks,
-    searchText: flattenBlockText(bodyBlocks),
-    sourceType: 'notion',
+    slug: post.slug || '',
+    title: post.title,
+    description: post.excerpt || post.meta?.description || '',
+    seoTitle: post.meta?.title || undefined,
+    seoDescription: post.meta?.description || undefined,
+    date: post.publishedAt || post.createdAt,
+    updatedAt: post.updatedAt,
+    image: mediaUrl(post.heroImage) || mediaUrl(post.meta?.image ?? null),
+    author: authorName(post),
+    category: topics[0] ? { title: topics[0] } : undefined,
+    keywords: [...topics, ...tech],
+    topics,
+    tech,
+    sourceType: 'local',
   }
 }
 
-function getCachedNotionArticleDetail(slug: string) {
-  return unstable_cache(
-    async () => getNotionArticleDetailRaw(slug),
-    ['cms', 'notion', 'article', slug],
-    {
-      revalidate: CMS_REVALIDATE.articleDetail,
-      tags: [CMS_TAGS.articles, CMS_TAGS.article(slug)],
-    },
-  )()
+/** All published articles as v3-shaped summaries, newest first. */
+export async function getAllCmsArticleSummaries(): Promise<
+  CmsArticleSummary[]
+> {
+  const posts = await getPublishedPosts()
+  return posts.filter((p) => Boolean(p.slug)).map(toSummary)
 }
 
-const getCachedNotionSearchArticles = unstable_cache(
-  async (): Promise<CmsArticleDetailResult[]> => {
-    const summaries = await getCachedNotionArticleSummaries()
-
-    return summaries.map((summary) => {
-      const metadataSearchText = [
-        summary.title,
-        summary.description,
-        ...(summary.keywords ?? []),
-        ...(summary.topics ?? []),
-        ...(summary.tech ?? []),
-      ]
-        .join(' ')
-        .toLowerCase()
-        .trim()
-
-      const projectedSearchText = (summary.searchIndexText ?? '')
-        .toLowerCase()
-        .trim()
-
-      return {
-        ...summary,
-        sourceType: 'notion' as const,
-        bodyBlocks: [],
-        searchText: `${metadataSearchText} ${projectedSearchText}`.trim(),
-      }
-    })
-  },
-  ['cms', 'notion', 'articles', 'search'],
-  {
-    revalidate: CMS_REVALIDATE.search,
-    tags: [CMS_TAGS.articles],
-  },
-)
-
-export async function getAllCmsArticleSummaries() {
-  if (getCmsProvider() === 'notion') {
-    return getCachedNotionArticleSummaries()
-  }
-
-  return getCachedLocalArticles()
-}
-
+/** One published article (or admin draft preview) with converted body blocks. */
 export async function getCmsArticleBySlug(
   slug: string,
 ): Promise<CmsArticleDetailResult | null> {
-  if (getCmsProvider() === 'notion') {
-    return getCachedNotionArticleDetail(slug)
+  const post = await getPostBySlug(slug)
+  if (!post) return null
+  const bodyBlocks = lexicalToBlocks(post.content)
+  return {
+    ...toSummary(post),
+    bodyBlocks,
+    excerpt: post.excerpt || undefined,
+    searchText: flattenBlockText(bodyBlocks),
   }
-
-  return null
 }
 
+/** Summaries enriched with flattened body text for the search index. */
 export async function getCmsSearchArticles(): Promise<
-  CmsArticleDetailResult[]
+  Array<CmsArticleSummary & { searchText: string }>
 > {
-  if (getCmsProvider() !== 'notion') {
-    return getCachedLocalArticles()
-  }
-
-  return getCachedNotionSearchArticles()
-}
-
-export async function fetchNotionPageById(pageId: string) {
-  return notionRequest(`/pages/${pageId}`, { method: 'GET' })
+  const posts = await getPublishedPosts()
+  return posts
+    .filter((p) => Boolean(p.slug))
+    .map((post) => ({
+      ...toSummary(post),
+      searchText: flattenBlockText(lexicalToBlocks(post.content)),
+    }))
 }
