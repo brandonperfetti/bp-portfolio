@@ -2,77 +2,129 @@ name: CI
 
 on:
   pull_request:
-    branches: ['master']
+    branches: [develop, master]
   push:
-    branches: ['master']
+    branches: [develop, master, 'rebuild/**']
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_VERSION: '22'
+  PAYLOAD_SECRET: 'ci-not-a-real-secret'
+  NEXT_PUBLIC_SITE_URL: 'http://localhost:3000'
+  NEXT_PUBLIC_SITE_NAME: 'BP Portfolio (CI)'
+
 jobs:
-  lint-and-unit:
-    name: Lint and Unit Tests
+  quality:
+    name: Lint · Types · Unit
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
       - name: Install dependencies
-        run: npm ci
-
-      - name: Run lint
-        run: npm run lint
-
-      - name: Run unit tests
-        run: npm run test
+        run: pnpm install --frozen-lockfile
+      - name: Lint (ESLint + tsdoc)
+        run: pnpm lint
+      - name: Format check (Prettier)
+        run: pnpm format:check
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Verify generated Payload types are committed
+        run: |
+          pnpm generate:types
+          if ! git diff --quiet -- src/payload-types.ts; then
+            echo "::error::src/payload-types.ts is stale. Run 'pnpm generate:types' and commit."
+            git diff -- src/payload-types.ts
+            exit 1
+          fi
+      - name: Unit tests (Vitest + coverage)
+        run: pnpm test:coverage
 
   e2e:
-    name: Playwright E2E
-    needs: lint-and-unit
+    name: Build · E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
-
-      - name: Run Playwright tests
+    needs: quality
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
         env:
-          CI: true
-          NEXT_TELEMETRY_DISABLED: 1
-        run: npm run test:e2e
-
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bp_portfolio_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URI: 'postgres://postgres:postgres@localhost:5432/bp_portfolio_ci'
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run Payload migrations
+        run: pnpm migrate
+      - name: Install Playwright browser (Chromium)
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Build
+        run: pnpm build
+      - name: E2E tests (Playwright)
+        run: pnpm test:e2e
       - name: Upload Playwright report
-        if: failure()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: playwright-report
-          retention-days: 14
+          path: playwright-report/
+          retention-days: 7
 
-      - name: Upload Playwright test results
-        if: failure()
-        uses: actions/upload-artifact@v4
+  evals:
+    name: Evalite (Hermes)
+    runs-on: ubuntu-latest
+    needs: quality
+    continue-on-error: true # TODO(brandon): remove once eval thresholds are trusted
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip if no provider key
+        id: gate
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ] && [ -z "${ANTHROPIC_API_KEY}" ]; then
+            echo "No LLM key available (likely a fork PR); skipping evals."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Enable Corepack (pnpm)
+        if: steps.gate.outputs.run == 'true'
+        run: corepack enable
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true'
         with:
-          name: playwright-test-results
-          path: test-results
-          retention-days: 14
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        if: steps.gate.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Run evals
+        if: steps.gate.outputs.run == 'true'
+        run: pnpm eval:ci
