@@ -6,6 +6,8 @@ overrides:
   '@types/react': 19.2.14
   '@types/react-dom': 19.2.3
 allowBuilds:
+  autoevals: set this to true or false
+  better-sqlite3: set this to true or false
   bufferutil: true
   esbuild: true
   sharp: true
@@ -23,3 +25,8 @@ minimumReleaseAgeExclude:
   - next@16.2.11
   - '@next/eslint-plugin-next@16.2.11'
   - eslint-config-next@16.2.11
+  - '@ai-sdk/anthropic@3.0.100'
+  - '@ai-sdk/gateway@3.0.156'
+  - '@ai-sdk/openai@3.0.87'
+  - '@ai-sdk/react@3.0.236'
+  - ai@6.0.234
