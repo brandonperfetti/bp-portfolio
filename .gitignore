@@ -50,3 +50,5 @@ public/sitemap.xml
 
 # temporary files
 .tmp*
+# migration run artifacts (one-off reconciliation output, not source)
+scripts/migration-report.json
