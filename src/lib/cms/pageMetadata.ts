@@ -50,8 +50,8 @@ export function buildPageMetadata({
   const socialImage = resolvePageSocialImage(page, settings)
   const hasExplicitSocialImage = Boolean(
     page?.ogImage?.trim() ||
-      page?.heroImage?.trim() ||
-      settings.openGraphImage?.trim(),
+    page?.heroImage?.trim() ||
+    settings.openGraphImage?.trim(),
   )
 
   return {

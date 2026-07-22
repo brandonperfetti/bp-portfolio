@@ -4,13 +4,14 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "preinstall": "npx only-allow pnpm",
     "dev": "next dev",
     "prepare": "husky",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "format": "prettier . --write --ignore-path .gitignore",
-    "format:check": "prettier . --check --ignore-path .gitignore",
+    "format": "prettier . --write --ignore-path .gitignore --ignore-path .prettierignore",
+    "format:check": "prettier . --check --ignore-path .gitignore --ignore-path .prettierignore",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -62,9 +63,8 @@
     "sharp": "0.34.3",
     "vitest": "^4.0.17"
   },
-  "overrides": {
-    "prismjs": "1.30.0",
-    "@types/react": "19.2.14",
-    "@types/react-dom": "19.2.3"
+  "packageManager": "pnpm@11.15.1",
+  "engines": {
+    "node": ">=22"
   }
 }

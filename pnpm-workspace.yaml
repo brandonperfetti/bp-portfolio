@@ -1,0 +1,8 @@
+# pnpm settings (pnpm 11 reads these from pnpm-workspace.yaml, not package.json)
+overrides:
+  prismjs: 1.30.0
+  '@types/react': 19.2.14
+  '@types/react-dom': 19.2.3
+allowBuilds:
+  sharp: true
+  unrs-resolver: true

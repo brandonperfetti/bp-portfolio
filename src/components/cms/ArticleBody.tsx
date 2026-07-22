@@ -62,7 +62,7 @@ function richTextToPlain(values?: CmsRichText[]) {
 function renderBlockNodes(blocks: CmsArticleBlock[]) {
   const nodes: React.ReactNode[] = []
 
-  for (let index = 0; index < blocks.length; ) {
+  for (let index = 0; index < blocks.length;) {
     const block = blocks[index]
 
     if (
