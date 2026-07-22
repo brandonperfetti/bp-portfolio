@@ -418,7 +418,19 @@ const mapCodeLanguage = (lang?: string): string => {
 
 const run = async () => {
   console.log('[migrate] initializing Payload…')
+  // Keep the event loop alive so a hung init HANGS VISIBLY instead of letting
+  // node exit silently; watchdog names the likely culprit.
+  const keepalive = setInterval(() => {}, 30_000)
+  const watchdog = setTimeout(() => {
+    console.error(
+      '[migrate] still initializing after 20s — Payload init is stuck. ' +
+        'Most likely the DATABASE_URL connection is hanging (check the Neon ' +
+        'pooled URL, network, or sslmode). Ctrl+C to abort.',
+    )
+  }, 20_000)
   const payload: Payload = await getPayload({ config })
+  clearTimeout(watchdog)
+  clearInterval(keepalive)
   console.log('[migrate] Payload ready; querying Notion…')
   const report: Array<{
     slug: string
