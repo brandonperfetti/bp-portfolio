@@ -2,12 +2,24 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 import { vercelPostgresAdapter } from '@payloadcms/db-vercel-postgres'
-import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { vercelBlobStorage } from '@payloadcms/storage-vercel-blob'
 import { buildConfig } from 'payload'
 import sharp from 'sharp'
 
-import { Media, Users } from './collections'
+import {
+  Categories,
+  Media,
+  Pages,
+  Posts,
+  Projects,
+  Tags,
+  TechStack,
+  Users,
+  Uses,
+} from './collections'
+import { defaultLexical } from './fields/defaultLexical'
+import { Footer, Identity, Navigation, SiteSettings } from './globals'
+import { plugins } from './plugins'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -38,8 +50,18 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Media, Users],
-  editor: lexicalEditor(),
+  collections: [
+    Pages,
+    Posts,
+    Projects,
+    TechStack,
+    Uses,
+    Categories,
+    Tags,
+    Media,
+    Users,
+  ],
+  editor: defaultLexical,
   graphQL: {
     // Payload's default in production — asserted here so it can't regress.
     disablePlaygroundInProduction: true,
@@ -57,7 +79,9 @@ export default buildConfig({
     push: process.env.PAYLOAD_DB_PUSH === 'true',
   }),
   sharp,
+  globals: [SiteSettings, Navigation, Footer, Identity],
   plugins: [
+    ...plugins,
     vercelBlobStorage({
       enabled: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
       collections: {

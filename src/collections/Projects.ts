@@ -1,0 +1,65 @@
+import type { CollectionConfig } from 'payload'
+
+import { anyone } from '@/access/anyone'
+import { authenticated } from '@/access/authenticated'
+import { slugField } from '@/fields/slug'
+
+/** Portfolio projects shown on /projects. */
+export const Projects: CollectionConfig = {
+  slug: 'projects',
+  access: {
+    create: authenticated,
+    delete: authenticated,
+    read: anyone,
+    update: authenticated,
+  },
+  admin: {
+    defaultColumns: ['title', 'year', 'featured'],
+    useAsTitle: 'title',
+  },
+  fields: [
+    {
+      name: 'title',
+      type: 'text',
+      required: true,
+    },
+    {
+      name: 'description',
+      type: 'textarea',
+    },
+    {
+      name: 'link',
+      type: 'text',
+      admin: {
+        description: 'External URL (live site, repo, or case study).',
+      },
+    },
+    {
+      name: 'logo',
+      type: 'upload',
+      relationTo: 'media',
+    },
+    {
+      name: 'tech',
+      type: 'relationship',
+      hasMany: true,
+      relationTo: 'tech-stack',
+    },
+    {
+      name: 'featured',
+      type: 'checkbox',
+      admin: {
+        position: 'sidebar',
+      },
+      defaultValue: false,
+    },
+    {
+      name: 'year',
+      type: 'number',
+      admin: {
+        position: 'sidebar',
+      },
+    },
+    ...slugField(),
+  ],
+}

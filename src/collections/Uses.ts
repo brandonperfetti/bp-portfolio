@@ -1,0 +1,54 @@
+import type { CollectionConfig } from 'payload'
+
+import { anyone } from '@/access/anyone'
+import { authenticated } from '@/access/authenticated'
+
+/** Gear/software entries for /uses, grouped by category. */
+export const Uses: CollectionConfig = {
+  slug: 'uses',
+  access: {
+    create: authenticated,
+    delete: authenticated,
+    read: anyone,
+    update: authenticated,
+  },
+  admin: {
+    defaultColumns: ['title', 'category'],
+    useAsTitle: 'title',
+  },
+  fields: [
+    {
+      name: 'title',
+      type: 'text',
+      required: true,
+    },
+    {
+      name: 'category',
+      type: 'select',
+      options: [
+        { label: 'Workstation', value: 'workstation' },
+        { label: 'Development', value: 'development' },
+        { label: 'Design', value: 'design' },
+        { label: 'Productivity', value: 'productivity' },
+        { label: 'AI', value: 'ai' },
+      ],
+      required: true,
+    },
+    {
+      name: 'description',
+      type: 'textarea',
+    },
+    {
+      name: 'link',
+      type: 'text',
+    },
+    {
+      name: 'tech',
+      type: 'relationship',
+      admin: {
+        description: 'Optional link into the tech stack for the shared viz.',
+      },
+      relationTo: 'tech-stack',
+    },
+  ],
+}
