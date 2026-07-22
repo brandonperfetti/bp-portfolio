@@ -6,7 +6,6 @@ import { SimpleLayout } from '@/components/SimpleLayout'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsProjects } from '@/lib/cms/projectsRepo'
-import { isNotionProvider } from '@/lib/cms/provider'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import { getSiteUrl } from '@/lib/site'
@@ -93,7 +92,7 @@ export default async function Projects() {
   const [settings, page, cmsProjects] = await Promise.all([
     getCmsSiteSettings(),
     getCmsPageByPath('/projects'),
-    isNotionProvider() ? getCmsProjects() : Promise.resolve(null),
+    getCmsProjects(),
   ])
   const siteUrl = settings.canonicalUrl || getSiteUrl()
   const normalizedSiteUrl = siteUrl.replace(/\/+$/, '')

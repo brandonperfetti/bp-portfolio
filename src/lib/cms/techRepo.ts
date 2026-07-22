@@ -1,66 +1,41 @@
 import { unstable_cache } from 'next/cache'
+import { getPayload } from 'payload'
 
-import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
-import { getCmsProvider } from '@/lib/cms/provider'
-import { getNotionTechDataSourceId } from '@/lib/cms/notion/config'
-import { mapNotionEntity } from '@/lib/cms/notion/mapper'
-import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
+import configPromise from '@payload-config'
 import type { CmsEntityItem } from '@/lib/cms/types'
+import type { Media } from '@/payload-types'
 
-const getCachedNotionTech = unstable_cache(
-  async (): Promise<CmsEntityItem[]> => {
-    const pages = await queryAllDataSourcePages(getNotionTechDataSourceId(), {
-      sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
+const mediaUrl = (m: unknown): string | undefined =>
+  m && typeof m === 'object' ? (m as Media).url || undefined : undefined
+
+/**
+ * Tech stack from the Payload `tech-stack` collection (was Notion in v3),
+ * mapped to the v3 `CmsEntityItem` shape shared by /tech and /uses.
+ *
+ * @returns `null` when empty so pages fall back to hard-coded v3 content.
+ */
+export const getCmsTech = unstable_cache(
+  async (): Promise<CmsEntityItem[] | null> => {
+    const payload = await getPayload({ config: configPromise })
+    const { docs } = await payload.find({
+      collection: 'tech-stack',
+      depth: 1,
+      limit: 500,
+      overrideAccess: false,
+      sort: 'name',
     })
-
-    const mapped = pages
-      .map(mapNotionEntity)
-      .filter((tech): tech is CmsEntityItem => tech !== null)
-      .sort((a, b) => {
-        const orderCompare =
-          (a.order ?? Number.MAX_SAFE_INTEGER) -
-          (b.order ?? Number.MAX_SAFE_INTEGER)
-        if (orderCompare !== 0) {
-          return orderCompare
-        }
-
-        return +new Date(b.updatedAt ?? 0) - +new Date(a.updatedAt ?? 0)
-      })
-
-    const seen = new Set<string>()
-    const duplicates: string[] = []
-    const deduped: CmsEntityItem[] = []
-
-    for (const item of mapped) {
-      const key = (item.slug || item.name).toLowerCase().trim()
-      if (seen.has(key)) {
-        duplicates.push(item.name)
-        continue
-      }
-      seen.add(key)
-      deduped.push(item)
-    }
-
-    if (duplicates.length) {
-      console.warn('[cms:notion] duplicate tech entries skipped', {
-        count: duplicates.length,
-        items: duplicates,
-      })
-    }
-
-    return deduped
+    if (!docs.length) return null
+    return docs.map((t, index) => ({
+      slug: String(t.id),
+      name: t.name,
+      description: t.notes || '',
+      logo: mediaUrl(t.logo),
+      link: t.url ? { href: t.url, label: t.name } : undefined,
+      category: t.category || undefined,
+      order: index,
+      updatedAt: t.updatedAt,
+    }))
   },
-  ['cms', 'notion', 'tech'],
-  {
-    revalidate: CMS_REVALIDATE.tech,
-    tags: [CMS_TAGS.tech],
-  },
+  ['tech-stack'],
+  { tags: ['tech-stack'] },
 )
-
-export async function getCmsTech() {
-  if (getCmsProvider() !== 'notion') {
-    return null
-  }
-
-  return getCachedNotionTech()
-}

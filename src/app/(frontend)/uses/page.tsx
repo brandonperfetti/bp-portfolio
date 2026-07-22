@@ -6,7 +6,6 @@ import { Section } from '@/components/Section'
 import { SimpleLayout } from '@/components/SimpleLayout'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
-import { isNotionProvider } from '@/lib/cms/provider'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getCmsUses } from '@/lib/cms/usesRepo'
 
@@ -62,7 +61,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function Uses() {
   const page = await getCmsPageByPath('/uses')
-  const cmsUses = isNotionProvider() ? await getCmsUses() : null
+  const cmsUses = await getCmsUses()
   const title = page?.title || String(defaultUsesMeta.title)
   const intro = page?.subtitle || String(defaultUsesMeta.description)
 

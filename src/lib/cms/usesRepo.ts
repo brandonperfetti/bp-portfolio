@@ -1,79 +1,52 @@
 import { unstable_cache } from 'next/cache'
+import { getPayload } from 'payload'
 
-import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
-import { getNotionUsesDataSourceId } from '@/lib/cms/notion/config'
-import { NotionConfigError, NotionHttpError } from '@/lib/cms/notion/errors'
-import { mapNotionEntity } from '@/lib/cms/notion/mapper'
-import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
-import { getCmsProvider } from '@/lib/cms/provider'
-import type { CmsEntityItem, CmsUseSection } from '@/lib/cms/types'
+import configPromise from '@payload-config'
+import type { CmsUseSection } from '@/lib/cms/types'
 
-const getCachedNotionUses = unstable_cache(
-  async (): Promise<CmsEntityItem[]> => {
-    const pages = await queryAllDataSourcePages(getNotionUsesDataSourceId(), {
-      sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
+const CATEGORY_LABELS: Record<string, string> = {
+  workstation: 'Workstation',
+  development: 'Development',
+  design: 'Design',
+  productivity: 'Productivity',
+  ai: 'AI',
+}
+
+/**
+ * Uses entries from the Payload `uses` collection (was Notion in v3),
+ * grouped into the v3 `CmsUseSection[]` shape by category.
+ *
+ * @returns `null` when empty so /uses falls back to hard-coded v3 content.
+ */
+export const getCmsUses = unstable_cache(
+  async (): Promise<CmsUseSection[] | null> => {
+    const payload = await getPayload({ config: configPromise })
+    const { docs } = await payload.find({
+      collection: 'uses',
+      depth: 0,
+      limit: 500,
+      overrideAccess: false,
+      sort: 'createdAt',
     })
+    if (!docs.length) return null
 
-    return pages
-      .map(mapNotionEntity)
-      .filter((item): item is CmsEntityItem => item !== null)
-      .sort((a, b) => {
-        const categorySort = (a.category ?? '').localeCompare(b.category ?? '')
-        if (categorySort !== 0) {
-          return categorySort
-        }
-
-        return (
-          (a.order ?? Number.MAX_SAFE_INTEGER) -
-          (b.order ?? Number.MAX_SAFE_INTEGER)
-        )
+    const sections = new Map<string, CmsUseSection>()
+    docs.forEach((u, index) => {
+      const key = u.category || 'other'
+      if (!sections.has(key)) {
+        sections.set(key, { title: CATEGORY_LABELS[key] || 'Other', items: [] })
+      }
+      sections.get(key)!.items.push({
+        slug: String(u.id),
+        name: u.title,
+        description: u.description || '',
+        link: u.link ? { href: u.link, label: u.title } : undefined,
+        order: index,
+        updatedAt: u.updatedAt,
       })
+    })
+    return Array.from(sections.values())
   },
-  ['cms', 'notion', 'uses'],
-  {
-    revalidate: CMS_REVALIDATE.uses,
-    tags: [CMS_TAGS.uses],
-  },
+  ['uses'],
+  { tags: ['uses'] },
 )
-
-function groupUses(items: CmsEntityItem[]): CmsUseSection[] {
-  const bySection = new Map<string, CmsEntityItem[]>()
-
-  for (const item of items) {
-    const section = item.category || 'Tools'
-    const existing = bySection.get(section) ?? []
-    existing.push(item)
-    bySection.set(section, existing)
-  }
-
-  return [...bySection.entries()].map(([title, sectionItems]) => ({
-    title,
-    items: sectionItems,
-  }))
-}
-
-export async function getCmsUses() {
-  if (getCmsProvider() !== 'notion') {
-    return null
-  }
-
-  try {
-    const items = await getCachedNotionUses()
-    return groupUses(items)
-  } catch (error) {
-    if (
-      error instanceof NotionConfigError ||
-      error instanceof NotionHttpError
-    ) {
-      console.warn(
-        '[cms:notion] uses unavailable, falling back to local content',
-        {
-          error: error.message,
-        },
-      )
-      return null
-    }
-
-    throw error
-  }
-}

@@ -1,44 +1,43 @@
 import { unstable_cache } from 'next/cache'
+import { getPayload } from 'payload'
 
-import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
-import { getCmsProvider } from '@/lib/cms/provider'
-import { getNotionProjectsDataSourceId } from '@/lib/cms/notion/config'
-import { mapNotionEntity } from '@/lib/cms/notion/mapper'
-import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
+import configPromise from '@payload-config'
 import type { CmsEntityItem } from '@/lib/cms/types'
+import type { Media } from '@/payload-types'
 
-async function getNotionProjectsRaw(): Promise<CmsEntityItem[]> {
-  const pages = await queryAllDataSourcePages(getNotionProjectsDataSourceId(), {
-    sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
-  })
+const mediaUrl = (m: unknown): string | undefined =>
+  m && typeof m === 'object' ? (m as Media).url || undefined : undefined
 
-  return pages
-    .map(mapNotionEntity)
-    .filter((project): project is CmsEntityItem => project !== null)
-    .sort(
-      (a, b) =>
-        (a.order ?? Number.MAX_SAFE_INTEGER) -
-        (b.order ?? Number.MAX_SAFE_INTEGER),
-    )
-}
-
-const getCachedNotionProjects = unstable_cache(
-  async (): Promise<CmsEntityItem[]> => getNotionProjectsRaw(),
-  ['cms', 'notion', 'projects'],
-  {
-    revalidate: CMS_REVALIDATE.projects,
-    tags: [CMS_TAGS.projects],
+/**
+ * Projects from the Payload `projects` collection (was Notion in v3),
+ * mapped to the v3 `CmsEntityItem` shape the /projects page renders.
+ *
+ * @returns `null` when the collection is empty so the page falls back to its
+ * hard-coded v3 project list until content is populated.
+ */
+export const getCmsProjects = unstable_cache(
+  async (): Promise<CmsEntityItem[] | null> => {
+    const payload = await getPayload({ config: configPromise })
+    const { docs } = await payload.find({
+      collection: 'projects',
+      depth: 1,
+      limit: 200,
+      overrideAccess: false,
+      sort: '-year',
+    })
+    if (!docs.length) return null
+    return docs.map((p, index) => ({
+      slug: p.slug || String(p.id),
+      name: p.title,
+      description: p.description || '',
+      logo: mediaUrl(p.logo),
+      link: p.link
+        ? { href: p.link, label: new URL(p.link).hostname }
+        : undefined,
+      order: index,
+      updatedAt: p.updatedAt,
+    }))
   },
+  ['projects'],
+  { tags: ['projects'] },
 )
-
-export async function getCmsProjects() {
-  if (getCmsProvider() !== 'notion') {
-    return null
-  }
-
-  if (process.env.NODE_ENV !== 'production') {
-    return getNotionProjectsRaw()
-  }
-
-  return getCachedNotionProjects()
-}

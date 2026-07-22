@@ -3,7 +3,6 @@ import { SimpleLayout } from '@/components/SimpleLayout'
 import { TechExplorer } from '@/components/tech/TechExplorer'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
-import { isNotionProvider } from '@/lib/cms/provider'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getCmsTech } from '@/lib/cms/techRepo'
 import type { CmsEntityItem } from '@/lib/cms/types'
@@ -416,7 +415,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function TechStack() {
   const page = await getCmsPageByPath('/tech')
-  const cmsTech = isNotionProvider() ? await getCmsTech() : null
+  const cmsTech = await getCmsTech()
   // Normalize legacy tech names into URL-safe slugs: trim/lowercase, strip
   // non-alphanumeric chars (except spaces/hyphens), then collapse to hyphens.
   const localTech: CmsEntityItem[] = techStack.map((tech) => ({
