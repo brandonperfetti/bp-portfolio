@@ -71,7 +71,13 @@ export default function HermesChat() {
 
   const submit = useCallback(() => {
     const text = input.trim()
-    if (!text || isBusy) return
+    if (!text) {
+      // Retained v3 nicety: an empty submit refocuses the input instead of
+      // silently doing nothing.
+      inputRef.current?.focus()
+      return
+    }
+    if (isBusy) return
     void sendMessage({ text })
     setInput('')
     requestAnimationFrame(autosize)
@@ -194,7 +200,7 @@ export default function HermesChat() {
         />
         <button
           type="submit"
-          disabled={isBusy || !input.trim()}
+          disabled={isBusy}
           className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <span>Send</span>
