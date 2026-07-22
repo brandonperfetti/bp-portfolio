@@ -1,56 +1,31 @@
-import { unstable_cache } from 'next/cache'
-
-import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
-import { getOptionalNotionAuthorsDataSourceId } from '@/lib/cms/notion/config'
+import type { CmsAuthor } from '@/lib/cms/types'
 import {
-  mapNotionAuthorProfile,
-  DEFAULT_CMS_AUTHOR,
-} from '@/lib/cms/notion/mapper'
-import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
-import { getCmsProvider } from '@/lib/cms/provider'
-import type { CmsAuthor, CmsAuthorProfile } from '@/lib/cms/types'
+  PERSON_IMAGE_URL,
+  SITE_OWNER_JOB_TITLE,
+  SITE_OWNER_NAME,
+} from '@/lib/identity'
+
+/** Default site author (single-author site), sourced from identity constants. */
+export const DEFAULT_CMS_AUTHOR: CmsAuthor = {
+  name: SITE_OWNER_NAME,
+  href: '/about',
+  role: SITE_OWNER_JOB_TITLE,
+  image: PERSON_IMAGE_URL,
+}
 
 export const FALLBACK_AUTHOR: CmsAuthor = { ...DEFAULT_CMS_AUTHOR }
 
-const getCachedNotionAuthors = unstable_cache(
-  async (): Promise<CmsAuthorProfile[]> => {
-    const dataSourceId = getOptionalNotionAuthorsDataSourceId()
-    if (!dataSourceId) {
-      return []
-    }
-
-    const pages = await queryAllDataSourcePages(dataSourceId, {})
-    return pages
-      .map(mapNotionAuthorProfile)
-      .filter((author): author is CmsAuthorProfile => author !== null)
-      .sort(
-        (a, b) =>
-          (a.order ?? Number.MAX_SAFE_INTEGER) -
-          (b.order ?? Number.MAX_SAFE_INTEGER),
-      )
-  },
-  ['cms', 'notion', 'authors'],
-  {
-    revalidate: CMS_REVALIDATE.authors,
-    tags: [CMS_TAGS.authors],
-  },
-)
-
-export async function getCmsAuthors() {
-  if (getCmsProvider() !== 'notion') {
-    return []
-  }
-
-  return getCachedNotionAuthors()
+/**
+ * Article authors. v4 keeps the single-author fallback; Posts relate authors
+ * to Payload users (populateAuthors hook), so a separate surface is
+ * unnecessary. TODO(brandon): source image from the Identity global's Media
+ * upload once migrated off Cloudinary.
+ */
+export async function getCmsAuthors(): Promise<CmsAuthor[]> {
+  return [FALLBACK_AUTHOR]
 }
 
+/** The site's default (and only) author. */
 export async function getCmsDefaultAuthor(): Promise<CmsAuthor> {
-  if (getCmsProvider() !== 'notion') {
-    return FALLBACK_AUTHOR
-  }
-
-  const authors = await getCachedNotionAuthors()
-  return (
-    authors.find((author) => author.primary) ?? authors[0] ?? FALLBACK_AUTHOR
-  )
+  return FALLBACK_AUTHOR
 }
