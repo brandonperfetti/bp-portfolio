@@ -1,4 +1,6 @@
 # pnpm settings (pnpm 11 reads these from pnpm-workspace.yaml, not package.json)
+packages:
+  - '.'
 overrides:
   prismjs: 1.30.0
   '@types/react': 19.2.14
