@@ -57,18 +57,28 @@ export function ShaderHero({
   const enabled = !reducedMotion && gpuOk && onscreen
 
   return (
+    // Anchored to the page top (behind the header) and clipped to the same
+    // centered max-w-7xl panel the Layout draws, per Brandon's staging review
+    // — the canvas must never bleed past the content panel.
     <div
       ref={containerRef}
       aria-hidden
-      className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+      className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[36rem] sm:px-8"
     >
-      {/* Static fallback — paints instantly, intentional in both themes. */}
-      <div className="absolute inset-0 bg-gradient-to-br from-zinc-100 via-white to-teal-50 dark:from-zinc-950 dark:via-[#0b1329] dark:to-black" />
-      {enabled && (
-        <div className="absolute inset-0 opacity-0 transition-opacity duration-700 dark:opacity-100">
-          <ShaderBackground preset={preset} />
+      <div className="mx-auto h-full w-full max-w-7xl lg:px-8">
+        <div className="relative h-full overflow-hidden">
+          {/* Static fallback — paints instantly, intentional in both themes. */}
+          <div className="absolute inset-0 bg-gradient-to-br from-zinc-100 via-white to-teal-50 dark:from-zinc-950 dark:via-[#0b1329] dark:to-black" />
+          {enabled && (
+            <div className="absolute inset-0 opacity-0 transition-opacity duration-700 dark:opacity-100">
+              <ShaderBackground preset={preset} />
+            </div>
+          )}
+          {/* Legibility scrim over the text zone + fade into the page below. */}
+          <div className="absolute inset-0 bg-gradient-to-r from-white/60 via-white/20 to-transparent dark:from-zinc-900/70 dark:via-zinc-900/20 dark:to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-white dark:to-zinc-900" />
         </div>
-      )}
+      </div>
     </div>
   )
 }

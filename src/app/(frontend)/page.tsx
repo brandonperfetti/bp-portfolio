@@ -360,7 +360,7 @@ export default async function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: toSafeJsonLd(personSchema) }}
       />
-      <section className="relative isolate">
+      <section className="isolate">
         <ShaderHero />
         <Container className="pt-9 pb-16 sm:pb-20">
           <div className="max-w-2xl">

@@ -1,31 +1,72 @@
 'use client'
 
-import { Aurora, FilmGrain, Shader, Swirl } from 'shaders/react'
+import {
+  Aurora,
+  Circle,
+  FilmGrain,
+  LinearGradient,
+  RectangularCoordinates,
+  Shader,
+  Swirl,
+} from 'shaders/react'
 
 import type { ShaderPresetKey } from './presets'
+
+const canvasStyle = {
+  position: 'absolute',
+  inset: 0,
+  width: '100%',
+  height: '100%',
+} as const
 
 /**
  * The WebGPU canvas for the hero background (client-only — never SSR this).
  *
- * @remarks One `<Shader>` per effect area (shaders://guidelines); effects are
- * composed as children, FilmGrain last so it stylizes the whole stack via
- * sibling fallback. Grain strength follows the finishing-touches Pro Note's
- * dark-background calibration.
+ * @remarks One `<Shader>` per effect area; effects composed as children
+ * (shaders://guidelines). The aurora layer carries a right-side-reveal
+ * in-shader mask (hero-section-masking Pro Note) so it fades out under the
+ * left-aligned hero text — GPU masking, not CSS.
  */
 export default function ShaderBackground({
   preset,
 }: {
   preset: ShaderPresetKey
 }) {
-  // Northern Lights 2 (preset d7f61086-8561-4ffa-a8a8-35e078b402a3) is the
-  // confirmed default (§23). Other §23 presets can be added here — swapping
-  // is a one-line change in the registry.
-  void preset
+  if (preset === 'drifting-lights-8') {
+    // "Drifting Lights 8" — understated dark-navy gradient + faint grid + grain.
+    return (
+      <Shader style={canvasStyle}>
+        <LinearGradient
+          angle={{
+            mode: 'loop',
+            type: 'auto-animate',
+            speed: 1,
+            easing: 'linear',
+            outputMax: 360,
+            outputMin: 0,
+          }}
+          colorA="#212538"
+          colorB="#171b1f"
+          colorSpace="oklab"
+        />
+        <RectangularCoordinates edges="stretch" scale={3} />
+        <FilmGrain strength={0.1} />
+      </Shader>
+    )
+  }
+
+  // Default: "Northern Lights 2" aurora, masked away from the text zone.
   return (
-    <Shader
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-    >
+    <Shader style={canvasStyle}>
       <Swirl colorA="#0b1329" colorB="#0c0f17" detail={1.6} />
+      <Circle
+        id="heroMask"
+        visible={false}
+        color="#ffffff"
+        radius={2}
+        softness={1}
+        center={{ x: 1, y: 0.5 }}
+      />
       <Aurora
         balance={73}
         blendMode="linearDodge"
@@ -35,13 +76,14 @@ export default function ShaderBackground({
         colorC="#1122d9"
         colorSpace="oklab"
         curtainCount={1}
-        intensity={83}
+        intensity={70}
+        maskSource="heroMask"
         rayDensity={7}
         seed={14}
         speed={5.6}
         waviness={193}
       />
-      <FilmGrain strength={0.1} />
+      <FilmGrain strength={0.08} />
     </Shader>
   )
 }
