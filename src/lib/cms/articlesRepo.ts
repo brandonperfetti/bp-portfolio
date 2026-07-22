@@ -1,4 +1,4 @@
-import { flattenBlockText } from '@/lib/cms/notion/blocks'
+import { flattenBlockText } from '@/lib/content/flattenBlockText'
 import type { CmsArticleDetail, CmsArticleSummary } from '@/lib/cms/types'
 import { getPostBySlug, getPublishedPosts } from '@/lib/content/posts'
 import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'

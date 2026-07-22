@@ -1,12 +1,19 @@
-import * as cheerio from 'cheerio'
 import { Feed } from 'feed'
+
 import { getAllArticles } from '@/lib/articles'
-import { isFuturePublicationDate, toValidDate } from '@/lib/date'
+import { isFuturePublicationDate } from '@/lib/date'
 import { getSiteUrl, SITE_DESCRIPTION } from '@/lib/site'
 
 export const revalidate = 3600
 
-export async function GET(req: Request) {
+/**
+ * RSS 2.0 feed rendered directly from Payload content.
+ *
+ * @remarks v3 fetched each article's own HTML page and scraped it with
+ * cheerio; v4 renders item descriptions from the CMS excerpt/body text with
+ * no self-HTTP requests.
+ */
+export async function GET() {
   const siteUrl = getSiteUrl()
   const articles = (await getAllArticles()).filter(
     (article) => !article.noindex && !isFuturePublicationDate(article.date),
@@ -31,54 +38,17 @@ export async function GET(req: Request) {
     },
   })
 
-  for (const articleSummary of articles) {
-    const url = String(new URL(`/articles/${articleSummary.slug}`, req.url))
-    let html = ''
-    try {
-      const response = await fetch(url)
-
-      if (!response.ok) {
-        console.error('[feed.xml] Failed to fetch article', {
-          url,
-          status: response.status,
-        })
-        continue
-      }
-
-      html = await response.text()
-      if (!html || !html.trim()) {
-        console.error('[feed.xml] Empty article HTML response', { url })
-        continue
-      }
-    } catch (error) {
-      console.error('[feed.xml] Error fetching article', {
-        url,
-        error: error instanceof Error ? error.message : String(error),
-      })
-      continue
-    }
-
-    const $ = cheerio.load(html)
-
-    const publicUrl = `${siteUrl}/articles/${articleSummary.slug}`
-    const article = $('article').first()
-    const title = article.find('h1').first().text() || articleSummary.title
-    const date = article.find('time').first().attr('datetime')
-    const content = article.find('[data-mdx-content]').first().html() ?? ''
-
-    const freshnessDate = toValidDate(
-      articleSummary.updatedAt || date || articleSummary.date,
-    )
-    const fallbackDate = toValidDate(articleSummary.date)
+  for (const summary of articles) {
+    const url = `${siteUrl}/articles/${summary.slug}`
 
     feed.addItem({
-      title,
-      id: publicUrl,
-      link: publicUrl,
-      content,
+      title: summary.title,
+      id: url,
+      link: url,
+      description: summary.description,
       author: [author],
-      contributor: [author],
-      date: freshnessDate || fallbackDate || new Date(),
+      date: new Date(summary.date),
+      image: summary.image?.startsWith('http') ? summary.image : undefined,
     })
   }
 
@@ -86,7 +56,7 @@ export async function GET(req: Request) {
     status: 200,
     headers: {
       'content-type': 'application/xml',
-      'cache-control': 's-maxage=3600, stale-while-revalidate=86400',
+      'cache-control': 's-maxage=3600, stale-while-revalidate',
     },
   })
 }
