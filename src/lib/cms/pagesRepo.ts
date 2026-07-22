@@ -1,109 +1,75 @@
 import { unstable_cache } from 'next/cache'
+import { getPayload } from 'payload'
 
-import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
-import { getCmsProvider } from '@/lib/cms/provider'
-import { getNotionBlockTree } from '@/lib/cms/notion/blocks'
-import { getNotionPagesDataSourceId } from '@/lib/cms/notion/config'
-import { NotionConfigError, NotionHttpError } from '@/lib/cms/notion/errors'
-import { mapNotionPageContent } from '@/lib/cms/notion/mapper'
-import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
+import configPromise from '@payload-config'
+import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
 import type { CmsPageContent } from '@/lib/cms/types'
+import type { Media } from '@/payload-types'
 
 function normalizePath(path: string) {
   if (!path || path === '/') {
     return '/'
   }
-
   const withLeadingSlash = path.startsWith('/') ? path : `/${path}`
   return withLeadingSlash.replace(/\/+$/, '')
 }
 
-const getCachedNotionPages = unstable_cache(
-  async (): Promise<CmsPageContent[]> => {
-    const pages = await queryAllDataSourcePages(getNotionPagesDataSourceId(), {
-      sorts: [{ property: 'Sort Order', direction: 'ascending' }],
-    })
+/** Route path → Pages collection slug (`home` renders at `/`). */
+const pathToSlug = (path: string): string => {
+  const normalized = normalizePath(path)
+  return normalized === '/' ? 'home' : normalized.replace(/^\//, '')
+}
 
-    return pages.map(mapNotionPageContent).filter(Boolean) as CmsPageContent[]
-  },
-  ['cms', 'notion', 'pages'],
-  {
-    revalidate: CMS_REVALIDATE.pages,
-    tags: [CMS_TAGS.pages],
-  },
-)
-
-const getCachedPageByPath = unstable_cache(
-  async (
-    path: string,
-    includeBody: boolean,
-  ): Promise<CmsPageContent | null> => {
-    const targetPath = normalizePath(path)
-    const pages = await getCachedNotionPages()
-    const page = pages.find((candidate) => candidate.routeKey === targetPath)
-    if (!page) {
-      return null
-    }
-
-    if (!includeBody) {
-      return page
-    }
-
-    try {
-      const bodyBlocks = await getNotionBlockTree(page.pageId)
-      return { ...page, bodyBlocks }
-    } catch (error) {
-      console.warn('[cms:notion] page body blocks unavailable', {
-        path: targetPath,
-        pageId: page.pageId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      })
-      return page
-    }
-  },
-  ['cms', 'notion', 'page-by-path'],
-  {
-    revalidate: CMS_REVALIDATE.pages,
-    tags: [CMS_TAGS.pages],
-  },
-)
+const mediaUrl = (m: unknown): string | undefined =>
+  m && typeof m === 'object' ? (m as Media).url || undefined : undefined
 
 /**
- * Retrieves CMS page content by route path when Notion is the active provider.
+ * Page content by route path from the Payload `pages` collection (was Notion).
  *
- * @param path Route path to resolve (for example: `/` or `/about`).
- * @param options Optional lookup settings.
- * @param options.includeBody When true, fetches and attaches Notion body blocks.
- * @returns The mapped CMS page content, or `null` when provider is not Notion,
- * page is not found, or a recoverable Notion availability/config error occurs.
- * @throws Re-throws unexpected errors outside NotionConfigError/NotionHttpError.
+ * @param path - Route path to resolve (for example `/` or `/about`).
+ * @returns v3-shaped page content, or `null` when no published page exists —
+ * callers already treat `null` as "use hard-coded copy", which preserves the
+ * boots-with-empty-CMS behavior.
  */
-export async function getCmsPageByPath(
-  path: string,
-  options?: { includeBody?: boolean },
-): Promise<CmsPageContent | null> {
-  if (getCmsProvider() !== 'notion') {
-    return null
-  }
+export const getCmsPageByPath = unstable_cache(
+  async (
+    path: string,
+    options?: { includeBody?: boolean },
+  ): Promise<CmsPageContent | null> => {
+    const payload = await getPayload({ config: configPromise })
+    const slug = pathToSlug(path)
+    const { docs } = await payload.find({
+      collection: 'pages',
+      draft: false,
+      limit: 1,
+      overrideAccess: false,
+      pagination: false,
+      where: { slug: { equals: slug } },
+    })
+    const page = docs[0]
+    if (!page) return null
 
-  const includeBody = options?.includeBody ?? false
-  try {
-    return await getCachedPageByPath(path, includeBody)
-  } catch (error) {
-    if (
-      error instanceof NotionConfigError ||
-      error instanceof NotionHttpError
-    ) {
-      console.warn(
-        '[cms:notion] page content unavailable, falling back to local content',
-        {
-          path,
-          error: error.message,
-        },
-      )
-      return null
+    const content: CmsPageContent = {
+      pageId: String(page.id),
+      routeKey: normalizePath(path),
+      slug: page.slug || slug,
+      title: page.title,
+      subtitle: page.meta?.description || undefined,
+      seoTitle: page.meta?.title || undefined,
+      seoDescription: page.meta?.description || undefined,
+      heroImage: mediaUrl(page.hero?.media),
+      ogImage: mediaUrl(page.meta?.image),
+      updatedAt: page.updatedAt,
     }
 
-    throw error
-  }
-}
+    if (options?.includeBody) {
+      content.bodyBlocks = page.hero?.richText
+        ? lexicalToBlocks(page.hero.richText)
+        : []
+    }
+
+    return content
+  },
+  ['page-by-path'],
+  { tags: ['pages'] },
+)
