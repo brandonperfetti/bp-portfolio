@@ -16,7 +16,7 @@ import type { Post } from '@/payload-types'
  */
 export const canAccess = (
   isAuthenticated: boolean,
-  doc: Pick<Post, 'access'> | null | undefined,
+  doc: Partial<Pick<Post, 'access'>> | null | undefined,
 ): boolean => {
   const visibility = doc?.access?.visibility ?? 'public'
   if (visibility === 'public') return true

@@ -6,6 +6,7 @@ import clsx from 'clsx'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Container } from '@/components/Container'
+import { ShaderHero } from '@/components/heros/ShaderHero'
 import { NotFoundState } from '@/components/cms/NotFoundState'
 import { Messenger } from '@/components/home/Messenger'
 import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
@@ -359,39 +360,42 @@ export default async function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: toSafeJsonLd(personSchema) }}
       />
-      <Container className="mt-9">
-        <div className="max-w-2xl">
-          <AnimatedHeadline
-            text={homeTitle}
-            variant="typewriter"
-            className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100"
-          />
-          <ScrollReveal y={14} duration={0.78} delay={0.26}>
-            <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-              {homeSubtitle}
-            </p>
-          </ScrollReveal>
-          <ScrollReveal y={10} duration={0.68} delay={0.37}>
-            <div className="mt-6 flex gap-6">
-              <SocialLink
-                href="https://x.com/brandonperfetti"
-                aria-label="Follow on X"
-                icon={XIcon}
-              />
-              <SocialLink
-                href="https://github.com/brandonperfetti"
-                aria-label="Follow on GitHub"
-                icon={GitHubIcon}
-              />
-              <SocialLink
-                href="https://www.linkedin.com/in/brandonperfetti/"
-                aria-label="Follow on LinkedIn"
-                icon={LinkedInIcon}
-              />
-            </div>
-          </ScrollReveal>
-        </div>
-      </Container>
+      <section className="relative isolate">
+        <ShaderHero />
+        <Container className="pt-9 pb-16 sm:pb-20">
+          <div className="max-w-2xl">
+            <AnimatedHeadline
+              text={homeTitle}
+              variant="typewriter"
+              className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100"
+            />
+            <ScrollReveal y={14} duration={0.78} delay={0.26}>
+              <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
+                {homeSubtitle}
+              </p>
+            </ScrollReveal>
+            <ScrollReveal y={10} duration={0.68} delay={0.37}>
+              <div className="mt-6 flex gap-6">
+                <SocialLink
+                  href="https://x.com/brandonperfetti"
+                  aria-label="Follow on X"
+                  icon={XIcon}
+                />
+                <SocialLink
+                  href="https://github.com/brandonperfetti"
+                  aria-label="Follow on GitHub"
+                  icon={GitHubIcon}
+                />
+                <SocialLink
+                  href="https://www.linkedin.com/in/brandonperfetti/"
+                  aria-label="Follow on LinkedIn"
+                  icon={LinkedInIcon}
+                />
+              </div>
+            </ScrollReveal>
+          </div>
+        </Container>
+      </section>
       <ScrollReveal y={30} duration={0.96} start="top 92%">
         <Photos images={homeGalleryImages} />
       </ScrollReveal>
