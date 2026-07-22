@@ -2,6 +2,7 @@ import { flattenBlockText } from '@/lib/content/flattenBlockText'
 import type { CmsArticleDetail, CmsArticleSummary } from '@/lib/cms/types'
 import { getPostBySlug, getPublishedPosts } from '@/lib/content/posts'
 import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
+import { canAccess } from '@/access/canAccess'
 import type { Media, Post, User } from '@/payload-types'
 
 /**
@@ -14,6 +15,8 @@ import type { Media, Post, User } from '@/payload-types'
  */
 
 export type CmsArticleDetailResult = CmsArticleDetail & {
+  /** True when the body was withheld because the viewer lacks access (§12). */
+  gated?: boolean
   sourceType: 'local' | 'notion'
 }
 
@@ -63,18 +66,28 @@ export async function getAllCmsArticleSummaries(): Promise<
   return posts.filter((p) => Boolean(p.slug)).map(toSummary)
 }
 
-/** One published article (or admin draft preview) with converted body blocks. */
+/**
+ * One published article (or admin draft preview) with converted body blocks.
+ *
+ * @remarks Gating (§12) is enforced HERE, at the data layer: when the post is
+ * gated and the viewer is not authenticated, `bodyBlocks` is empty and
+ * `gated: true` — the full body never enters the RSC payload for anonymous
+ * visitors. Callers render a teaser + sign-in prompt off the `gated` flag.
+ */
 export async function getCmsArticleBySlug(
   slug: string,
+  viewer?: { isAuthenticated: boolean },
 ): Promise<CmsArticleDetailResult | null> {
   const post = await getPostBySlug(slug)
   if (!post) return null
-  const bodyBlocks = lexicalToBlocks(post.content)
+  const allowed = canAccess(viewer?.isAuthenticated ?? false, post)
+  const bodyBlocks = allowed ? lexicalToBlocks(post.content) : []
   return {
     ...toSummary(post),
     bodyBlocks,
     excerpt: post.excerpt || undefined,
-    searchText: flattenBlockText(bodyBlocks),
+    searchText: allowed ? flattenBlockText(bodyBlocks) : '',
+    gated: !allowed,
   }
 }
 

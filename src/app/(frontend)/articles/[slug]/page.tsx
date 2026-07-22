@@ -6,6 +6,7 @@ import { ArticleBody } from '@/components/cms/ArticleBody'
 import { ArticleMeta } from '@/components/cms/ArticleMeta'
 import { SyncErrorState } from '@/components/cms/SyncErrorState'
 import { UseWithAiMenu } from '@/components/cms/UseWithAiMenu'
+import { getViewer } from '@/lib/auth/getViewer'
 import { getAllArticles, getArticleBySlug } from '@/lib/articles'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
@@ -120,7 +121,7 @@ export async function generateMetadata({
 export default async function ArticlePage({ params }: PageProps) {
   const { slug } = await params
   const [article, settings] = await Promise.all([
-    getArticleBySlug(slug),
+    getArticleBySlug(slug, await getViewer()),
     getCmsSiteSettings(),
   ])
 
@@ -233,7 +234,26 @@ export default async function ArticlePage({ params }: PageProps) {
         topics={article.topics}
         tech={article.tech}
       />
-      {hasBodyBlocks ? <ArticleBody blocks={bodyBlocks} /> : <SyncErrorState />}
+      {article.gated ? (
+        <div className="mt-8 rounded-2xl border border-zinc-200 p-6 text-center dark:border-zinc-700/60">
+          <p className="text-base font-medium text-zinc-800 dark:text-zinc-100">
+            This article is for members.
+          </p>
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            Sign in (it&apos;s free) to read the full piece.
+          </p>
+          <a
+            href={`/sign-in?redirect_url=/articles/${article.slug}`}
+            className="mt-4 inline-flex items-center rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500"
+          >
+            Sign in to continue
+          </a>
+        </div>
+      ) : hasBodyBlocks ? (
+        <ArticleBody blocks={bodyBlocks} />
+      ) : (
+        <SyncErrorState />
+      )}
     </ArticleLayout>
   )
 }

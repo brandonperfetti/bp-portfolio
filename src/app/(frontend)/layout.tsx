@@ -1,6 +1,7 @@
 import { type Metadata } from 'next'
 
 import { Providers } from '@/app/(frontend)/providers'
+import { AuthProvider } from '@/components/auth/AuthProvider'
 import { Layout } from '@/components/Layout'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getSiteUrl } from '@/lib/site'
@@ -54,13 +55,15 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <body className="flex h-full bg-zinc-50 dark:bg-black">
-        <Providers>
-          <div className="flex w-full">
-            <Layout>{children}</Layout>
-            <Analytics />
-            <SpeedInsights />
-          </div>
-        </Providers>
+        <AuthProvider>
+          <Providers>
+            <div className="flex w-full">
+              <Layout>{children}</Layout>
+              <Analytics />
+              <SpeedInsights />
+            </div>
+          </Providers>
+        </AuthProvider>
       </body>
     </html>
   )

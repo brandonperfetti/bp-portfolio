@@ -40,6 +40,8 @@ export interface ArticleWithSlug extends Article {
 }
 
 export interface ArticleDetailWithSlug extends ArticleWithSlug {
+  /** True when the body was withheld pending sign-in (§12 gating). */
+  gated?: boolean
   bodyBlocks: CmsArticleDetailResult['bodyBlocks']
   sourceType: CmsArticleDetailResult['sourceType']
 }
@@ -69,8 +71,9 @@ export async function getAllArticles(): Promise<ArticleWithSlug[]> {
 
 export async function getArticleBySlug(
   slug: string,
+  viewer?: { isAuthenticated: boolean },
 ): Promise<ArticleDetailWithSlug | null> {
-  const article = await getCmsArticleBySlug(slug)
+  const article = await getCmsArticleBySlug(slug, viewer)
 
   if (!article) {
     return null

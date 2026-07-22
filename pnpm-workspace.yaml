@@ -30,3 +30,4 @@ minimumReleaseAgeExclude:
   - '@ai-sdk/openai@3.0.87'
   - '@ai-sdk/react@3.0.236'
   - ai@6.0.234
+  - '@clerk/nextjs@7.5.22'
