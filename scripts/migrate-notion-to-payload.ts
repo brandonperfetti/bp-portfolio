@@ -40,6 +40,26 @@ type NotionBlock = {
   [key: string]: unknown
 }
 
+console.log(
+  `[migrate] starting — dryRun=${process.env.DRY_RUN === 'true'} node=${process.version}`,
+)
+console.log(
+  `[migrate] env present: NOTION_API_TOKEN=${Boolean(process.env.NOTION_API_TOKEN)} ` +
+    `NOTION_CMS_ARTICLES_DATA_SOURCE=${Boolean(process.env.NOTION_CMS_ARTICLES_DATA_SOURCE)} ` +
+    `DATABASE=${Boolean(process.env.DATABASE_URI || process.env.POSTGRES_URL || process.env.DATABASE_URL)} ` +
+    `PAYLOAD_SECRET=${Boolean(process.env.PAYLOAD_SECRET)} ` +
+    `BLOB_TOKEN=${Boolean(process.env.BLOB_READ_WRITE_TOKEN)}`,
+)
+
+process.on('unhandledRejection', (err) => {
+  console.error('[migrate] unhandled rejection:', err)
+  process.exit(1)
+})
+process.on('uncaughtException', (err) => {
+  console.error('[migrate] uncaught exception:', err)
+  process.exit(1)
+})
+
 const NOTION_VERSION = process.env.NOTION_API_VERSION || '2025-09-03'
 const NOTION_TOKEN = process.env.NOTION_API_TOKEN
 const ARTICLES_SOURCE = (
@@ -397,7 +417,9 @@ const mapCodeLanguage = (lang?: string): string => {
 /* ------------------------- main ------------------------- */
 
 const run = async () => {
+  console.log('[migrate] initializing Payload…')
   const payload: Payload = await getPayload({ config })
+  console.log('[migrate] Payload ready; querying Notion…')
   const report: Array<{
     slug: string
     title: string
@@ -639,4 +661,7 @@ const run = async () => {
   process.exit(0)
 }
 
-void run()
+run().catch((err) => {
+  console.error('[migrate] fatal:', err)
+  process.exit(1)
+})
