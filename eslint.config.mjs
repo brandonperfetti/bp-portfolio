@@ -13,6 +13,9 @@ export default defineConfig([
     'coverage/**',
     'node_modules/**',
     'next-env.d.ts',
+    // Payload-generated artifacts — regenerated, not hand-maintained.
+    'src/payload-types.ts',
+    'src/app/(payload)/admin/importMap.js',
   ]),
   {
     files: ['next-env.d.ts'],
@@ -37,6 +40,13 @@ export default defineConfig([
           caughtErrorsIgnorePattern: '^_',
         },
       ],
+    },
+  },
+  {
+    // Payload migrations are generated DDL; unused args come from the template.
+    files: ['src/migrations/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unused-vars': 'off',
     },
   },
 ])

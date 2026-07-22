@@ -1,6 +1,6 @@
 import { type Metadata } from 'next'
 
-import { Providers } from '@/app/providers'
+import { Providers } from '@/app/(frontend)/providers'
 import { Layout } from '@/components/Layout'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getSiteUrl } from '@/lib/site'

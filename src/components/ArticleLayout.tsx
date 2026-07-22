@@ -4,7 +4,7 @@ import { useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
-import { AppContext } from '@/app/providers'
+import { AppContext } from '@/app/(frontend)/providers'
 import { Container } from '@/components/Container'
 import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'

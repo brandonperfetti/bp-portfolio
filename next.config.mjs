@@ -1,3 +1,5 @@
+import { withPayload } from '@payloadcms/next/withPayload'
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -7,6 +9,10 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'res.cloudinary.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.public.blob.vercel-storage.com',
       },
       {
         protocol: 'https',
@@ -33,7 +39,12 @@ const nextConfig = {
         hostname: 'zod.dev',
       },
     ],
+    localPatterns: [
+      { pathname: '/api/media/file/**' },
+      { pathname: '/_next/**' },
+      { pathname: '/images/**' },
+    ],
   },
 }
 
-export default nextConfig
+export default withPayload(nextConfig)
