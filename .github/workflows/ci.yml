@@ -44,6 +44,14 @@ jobs:
             git diff -- src/payload-types.ts
             exit 1
           fi
+      - name: Verify generated admin importMap is committed
+        run: |
+          pnpm generate:importmap
+          if ! git diff --quiet -- "src/app/(payload)/admin/importMap.js"; then
+            echo "::error::admin importMap is stale. Run 'pnpm generate:importmap' and commit."
+            git diff -- "src/app/(payload)/admin/importMap.js"
+            exit 1
+          fi
       - name: Unit tests (Vitest + coverage)
         run: pnpm test:coverage
 
