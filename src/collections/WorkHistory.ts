@@ -47,6 +47,10 @@ export const WorkHistory: CollectionConfig = {
       type: 'date',
       required: true,
       admin: {
+        date: {
+          pickerAppearance: 'dayOnly',
+          displayFormat: 'MMM d, yyyy',
+        },
         position: 'sidebar',
       },
     },
@@ -54,6 +58,10 @@ export const WorkHistory: CollectionConfig = {
       name: 'endDate',
       type: 'date',
       admin: {
+        date: {
+          pickerAppearance: 'dayOnly',
+          displayFormat: 'MMM d, yyyy',
+        },
         description: 'Leave empty for a current role.',
         position: 'sidebar',
       },

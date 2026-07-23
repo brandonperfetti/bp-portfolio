@@ -72,7 +72,12 @@ export const TechStack: CollectionConfig = {
       name: 'githubRepo',
       type: 'text',
       admin: {
-        description: 'owner/name — enables live GitHub signals on /tech.',
+        description:
+          'Optional single repo hint as owner/name (e.g. "vercel/next.js") — ' +
+          'NOT a profile URL. The /tech activity badges come from an ' +
+          'account-wide scan of the GITHUB_OWNER account; this field is only ' +
+          'a fallback to match this entry to scan results when its display ' +
+          'name differs from the package/topic name.',
       },
     },
     {
