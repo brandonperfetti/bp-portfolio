@@ -1,0 +1,49 @@
+import { Fragment } from 'react'
+
+import { CallToActionBlockComponent } from '@/blocks/CallToAction/Component'
+import { ContentBlockComponent } from '@/blocks/Content/Component'
+import { MediaBlockComponent } from '@/blocks/MediaBlock/Component'
+import { ShaderHeroBlockComponent } from '@/blocks/ShaderHero/Component'
+import { SpacerBlockComponent } from '@/blocks/Spacer/Component'
+import type { Page } from '@/payload-types'
+
+type LayoutBlock = NonNullable<Page['layout']>[number]
+
+/**
+ * CMS page-builder dispatcher: maps each layout block's `blockType` to its
+ * React component (the Brytecore/website-template pattern). Every block
+ * registered here has a matching Storybook story so the repo, Storybook,
+ * and the admin block picker stay a 1:1 set.
+ *
+ * @remarks Unknown block types render nothing rather than throwing, so a
+ * schema addition can ship ahead of its component without breaking pages.
+ */
+export function RenderBlocks({
+  blocks,
+}: {
+  blocks: LayoutBlock[] | null | undefined
+}) {
+  if (!blocks?.length) return null
+
+  return (
+    <Fragment>
+      {blocks.map((block, index) => {
+        const key = block.id ?? `${block.blockType}-${index}`
+        switch (block.blockType) {
+          case 'cta':
+            return <CallToActionBlockComponent key={key} {...block} />
+          case 'content':
+            return <ContentBlockComponent key={key} {...block} />
+          case 'mediaBlock':
+            return <MediaBlockComponent key={key} {...block} />
+          case 'shaderHero':
+            return <ShaderHeroBlockComponent key={key} {...block} />
+          case 'spacer':
+            return <SpacerBlockComponent key={key} {...block} />
+          default:
+            return null
+        }
+      })}
+    </Fragment>
+  )
+}

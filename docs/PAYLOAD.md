@@ -16,7 +16,11 @@ Payload is the single source of truth for site content. Admin at `/admin`
   blocks Banner/Code/MediaBlock. Removing one crashes every migrated article
   with minified Lexical error #17.
 - **Pages** — block-composed pages (hero + CallToAction/Content/MediaBlock/
-  Spacer/ShaderHero blocks) resolved by path.
+  Spacer/ShaderHero blocks) resolved by path. **Page builder:** any
+  published page whose slug isn't owned by a dedicated route renders at
+  `/[slug]` via `RenderHero` + `RenderBlocks` — compose new pages entirely
+  in admin, no code or deploy. Reserved slugs live in
+  `src/app/(frontend)/[slug]/page.tsx`.
 - **Projects**, **TechStack** (name/category/proficiency/logo/url/githubRepo),
   **Uses** (category-grouped tools), **Categories**, **Tags**, **Media**
   (Blob-backed), **Users** (admin operators).

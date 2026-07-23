@@ -34,6 +34,16 @@ shadcn CLI or MCP). Radix `Slot` composition, cva variants, design tokens in
   skills (gsap-react, gsap-scrolltrigger, …) when writing new GSAP code;
   `gsap.context` + cleanup on unmount is mandatory.
 
+## CMS page builder
+
+Block components live beside their configs (`src/blocks/<Name>/Component.tsx`)
+and are dispatched by `src/blocks/RenderBlocks.tsx` — the admin block picker,
+the components, and the `PageBuilder/RenderBlocks` stories are one 1:1 set.
+Adding a block: config + Component + RenderBlocks case + story, then
+`pnpm generate:types` / `generate:importmap` + a migration. Rich text renders
+through `RichTextContent` (article typography pipeline); links through
+`CMSLink` (internal refs keep the /articles contract).
+
 ## Storybook
 
 - Storybook 10 (`@storybook/nextjs-vite`): `pnpm storybook` (dev, port 6006),
