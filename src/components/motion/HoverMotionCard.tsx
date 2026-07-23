@@ -4,6 +4,7 @@ import clsx from 'clsx'
 import { gsap } from 'gsap'
 import { useEffect, useRef, useState } from 'react'
 
+import { EASE_OUT, HOVER_TIMING } from '@/lib/motion/timing'
 import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 
 /**
@@ -93,31 +94,31 @@ export function HoverMotionCard({
       gsap.to(root, {
         y,
         scale,
-        duration: 0.36,
-        ease: 'power2.out',
+        duration: HOVER_TIMING.enter.root,
+        ease: EASE_OUT,
         overwrite: 'auto',
       })
       if (overlayNodes.length > 0) {
         gsap.to(overlayNodes, {
           autoAlpha: 1,
-          duration: 0.28,
-          ease: 'power2.out',
+          duration: HOVER_TIMING.enter.overlay,
+          ease: EASE_OUT,
           overwrite: 'auto',
         })
       }
       if (imageNodes.length > 0) {
         gsap.to(imageNodes, {
           scale: imageScale,
-          duration: 0.46,
-          ease: 'power2.out',
+          duration: HOVER_TIMING.enter.image,
+          ease: EASE_OUT,
           overwrite: 'auto',
         })
       }
       if (iconNodes.length > 0) {
         gsap.to(iconNodes, {
           x: iconShiftX,
-          duration: 0.34,
-          ease: 'power2.out',
+          duration: HOVER_TIMING.enter.icon,
+          ease: EASE_OUT,
           overwrite: 'auto',
         })
       }
@@ -127,31 +128,31 @@ export function HoverMotionCard({
       gsap.to(root, {
         y: 0,
         scale: 1,
-        duration: 0.44,
-        ease: 'power2.out',
+        duration: HOVER_TIMING.leave.root,
+        ease: EASE_OUT,
         overwrite: 'auto',
       })
       if (overlayNodes.length > 0) {
         gsap.to(overlayNodes, {
           autoAlpha: 0,
-          duration: 0.36,
-          ease: 'power2.out',
+          duration: HOVER_TIMING.leave.overlay,
+          ease: EASE_OUT,
           overwrite: 'auto',
         })
       }
       if (imageNodes.length > 0) {
         gsap.to(imageNodes, {
           scale: 1,
-          duration: 0.52,
-          ease: 'power2.out',
+          duration: HOVER_TIMING.leave.image,
+          ease: EASE_OUT,
           overwrite: 'auto',
         })
       }
       if (iconNodes.length > 0) {
         gsap.to(iconNodes, {
           x: 0,
-          duration: 0.4,
-          ease: 'power2.out',
+          duration: HOVER_TIMING.leave.icon,
+          ease: EASE_OUT,
           overwrite: 'auto',
         })
       }

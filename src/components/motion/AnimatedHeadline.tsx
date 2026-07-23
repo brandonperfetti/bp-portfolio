@@ -5,12 +5,15 @@ import { gsap } from 'gsap'
 import { useEffect, useMemo, useRef } from 'react'
 
 import {
+  EASE_NONE,
+  EASE_OUT,
   LINE_WORD_DURATION,
   LINE_WORD_STAGGER,
+  TYPEWRITER_CARET_BLINK_DURATION,
   TYPEWRITER_CARET_START_BUFFER,
   TYPEWRITER_CHAR_DURATION,
   TYPEWRITER_CHAR_STAGGER,
-} from '@/lib/motion/headlineTiming'
+} from '@/lib/motion/timing'
 import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 
 type HeadlineTag = 'h1' | 'h2' | 'h3'
@@ -65,7 +68,7 @@ export function AnimatedHeadline({
             autoAlpha: 1,
             duration: TYPEWRITER_CHAR_DURATION,
             stagger: TYPEWRITER_CHAR_STAGGER,
-            ease: 'none',
+            ease: EASE_NONE,
             delay,
           },
         )
@@ -76,8 +79,8 @@ export function AnimatedHeadline({
             autoAlpha: 0,
             repeat: -1,
             yoyo: true,
-            duration: 0.82,
-            ease: 'none',
+            duration: TYPEWRITER_CARET_BLINK_DURATION,
+            ease: EASE_NONE,
             delay:
               delay +
               characterNodes.length * TYPEWRITER_CHAR_STAGGER +
@@ -100,7 +103,7 @@ export function AnimatedHeadline({
           y: 0,
           duration: LINE_WORD_DURATION,
           stagger: LINE_WORD_STAGGER,
-          ease: 'power2.out',
+          ease: EASE_OUT,
           delay,
         },
       )

@@ -5,6 +5,7 @@ import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useLayoutEffect, useRef } from 'react'
 
+import { EASE_OUT, REVEAL_GRID } from '@/lib/motion/timing'
 import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -16,10 +17,10 @@ gsap.registerPlugin(ScrollTrigger)
  * @param className Optional wrapper classes.
  * @param targets Target selector within the wrapper (or `'self'`). Defaults to `'self'`.
  * @param once Whether animation should play only once. Defaults to `true`.
- * @param y Initial vertical offset in pixels. Defaults to `18`.
- * @param duration Animation duration in seconds. Defaults to `0.86`.
- * @param stagger Stagger delay between multiple targets in seconds. Defaults to `0.09`.
- * @param start ScrollTrigger start position expression. Defaults to `'top 88%'`.
+ * @param y Initial vertical offset in pixels. Defaults to `REVEAL_GRID.y`.
+ * @param duration Animation duration in seconds. Defaults to `REVEAL_GRID.duration`.
+ * @param stagger Stagger delay between multiple targets in seconds. Defaults to `REVEAL_GRID.stagger`.
+ * @param start ScrollTrigger start position expression. Defaults to `REVEAL_GRID.start`.
  * @param delay Additional delay before animation starts in seconds. Defaults to `0`.
  * @remarks This component only changes visual presentation and does not alter focus order or keyboard interaction behavior.
  */
@@ -28,10 +29,10 @@ export function ScrollReveal({
   className,
   targets = 'self',
   once = true,
-  y = 18,
-  duration = 0.86,
-  stagger = 0.09,
-  start = 'top 88%',
+  y = REVEAL_GRID.y,
+  duration = REVEAL_GRID.duration,
+  stagger = REVEAL_GRID.stagger,
+  start = REVEAL_GRID.start,
   delay = 0,
 }: {
   children: React.ReactNode
@@ -72,7 +73,7 @@ export function ScrollReveal({
         duration,
         delay,
         stagger: elements.length > 1 ? stagger : 0,
-        ease: 'power2.out',
+        ease: EASE_OUT,
         scrollTrigger: {
           trigger: rootRef.current,
           start,

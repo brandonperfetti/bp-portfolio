@@ -8,6 +8,7 @@ import { AppContext } from '@/app/(frontend)/providers'
 import { Container } from '@/components/Container'
 import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
+import { REVEAL_ARTICLE } from '@/lib/motion/timing'
 import { Prose } from '@/components/Prose'
 import { formatDate } from '@/lib/formatDate'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
@@ -76,7 +77,7 @@ export function ArticleLayout({
                 className="mt-6 text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100"
               />
               {article.image ? (
-                <ScrollReveal y={20} duration={0.86} delay={0.1}>
+                <ScrollReveal {...REVEAL_ARTICLE}>
                   <div className="mt-8 overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800">
                     <Image
                       src={getOptimizedImageUrl(article.image, {

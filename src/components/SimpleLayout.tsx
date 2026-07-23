@@ -1,6 +1,7 @@
 import { Container } from '@/components/Container'
 import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
+import { REVEAL_INTRO } from '@/lib/motion/timing'
 
 export function SimpleLayout({
   title,
@@ -19,7 +20,7 @@ export function SimpleLayout({
           variant="line"
           className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100"
         />
-        <ScrollReveal y={14} duration={0.76} delay={0.14}>
+        <ScrollReveal {...REVEAL_INTRO}>
           <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
             {intro}
           </p>

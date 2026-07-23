@@ -18,7 +18,7 @@ function ToolsSection({
 }: React.ComponentPropsWithoutRef<typeof Section>) {
   return (
     <Section {...props}>
-      <ScrollReveal targets="li" y={20} stagger={0.07}>
+      <ScrollReveal targets="li">
         <ul role="list" className="space-y-16">
           {children}
         </ul>
@@ -83,7 +83,7 @@ export default async function Uses() {
           {cmsUses.length ? (
             cmsUses.map((section) => (
               <Section key={section.title} title={section.title}>
-                <ScrollReveal targets="li" y={20} stagger={0.07}>
+                <ScrollReveal targets="li">
                   <ul
                     role="list"
                     className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2"
