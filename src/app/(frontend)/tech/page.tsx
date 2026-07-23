@@ -188,7 +188,7 @@ const techStack = [
       href: 'https://tanstack.com/',
       label: 'tanstack.com',
     },
-    logo: 'https://tanstack.com/_build/assets/logo-color-100w-lPbOTx1K.png',
+    logo: 'https://avatars.githubusercontent.com/u/72518640?s=96&v=4',
   },
   {
     name: 'React Router',
