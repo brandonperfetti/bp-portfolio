@@ -10,6 +10,9 @@ import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 
 gsap.registerPlugin(ScrollTrigger)
 
+/** Upper bound on the last element's stagger delay in a single reveal. */
+const MAX_STAGGER_TAIL_SECONDS = 1.1
+
 /**
  * Reveals child content on scroll with configurable GSAP motion presets.
  *
@@ -66,13 +69,20 @@ export function ScrollReveal({
         return
       }
 
+      // Cap the total stagger tail so long grids (38 tech cards) finish
+      // revealing in ~1s instead of scaling linearly with item count.
+      const cappedStagger =
+        elements.length > 1
+          ? Math.min(stagger, MAX_STAGGER_TAIL_SECONDS / (elements.length - 1))
+          : 0
+
       gsap.set(elements, { autoAlpha: 0, y })
       gsap.to(elements, {
         autoAlpha: 1,
         y: 0,
         duration,
         delay,
-        stagger: elements.length > 1 ? stagger : 0,
+        stagger: cappedStagger,
         ease: EASE_OUT,
         scrollTrigger: {
           trigger: rootRef.current,

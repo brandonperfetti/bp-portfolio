@@ -19,6 +19,9 @@ export default defineConfig([
     'src/app/(payload)/admin/importMap.js',
     // Storybook build output.
     'storybook-static/**',
+    // Playwright artifacts (HTML report bundles its own minified JS).
+    'playwright-report/**',
+    'test-results/**',
   ]),
   {
     files: ['next-env.d.ts'],

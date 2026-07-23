@@ -244,7 +244,7 @@ export default async function ArticlePage({ params }: PageProps) {
           </p>
           <a
             href={`/sign-in?redirect_url=/articles/${article.slug}`}
-            className="mt-4 inline-flex items-center rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500"
+            className="mt-4 inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600"
           >
             Sign in to continue
           </a>

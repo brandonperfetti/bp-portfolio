@@ -147,7 +147,7 @@ export function CommandPalette() {
       >
         <Search aria-hidden className="h-4 w-4" />
         <span className="hidden sm:inline">Search</span>
-        <kbd className="pointer-events-none hidden items-center gap-0.5 rounded border border-zinc-300/70 px-1.5 font-sans text-[11px] leading-5 font-medium text-zinc-400 sm:inline-flex dark:border-zinc-600/70 dark:text-zinc-500">
+        <kbd className="pointer-events-none hidden items-center gap-0.5 rounded border border-zinc-300/70 px-1.5 font-sans text-[11px] leading-5 font-medium text-zinc-500 sm:inline-flex dark:border-zinc-600/70 dark:text-zinc-400">
           <span className="text-xs">⌘</span>K
         </kbd>
       </button>

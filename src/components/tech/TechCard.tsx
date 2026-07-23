@@ -154,7 +154,7 @@ export function TechCard({
         </div>
 
         {item.link?.label ? (
-          <p className="pointer-events-none relative z-20 mt-4 flex text-sm font-medium text-zinc-400 dark:text-zinc-200">
+          <p className="pointer-events-none relative z-20 mt-4 flex text-sm font-medium text-zinc-500 dark:text-zinc-200">
             <LinkIcon data-hover-icon className="h-6 w-6 flex-none" />
             <span className="ml-2">{item.link.label}</span>
           </p>

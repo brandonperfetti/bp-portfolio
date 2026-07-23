@@ -131,7 +131,7 @@ export default function HermesChat() {
                   <span
                     className={`inline-block rounded-xl px-4 py-2.5 ${
                       isAssistant
-                        ? 'rounded-bl-none bg-teal-600 text-white'
+                        ? 'rounded-bl-none bg-teal-700 text-white'
                         : 'rounded-br-none bg-zinc-500 text-white dark:bg-zinc-600'
                     }`}
                   >
@@ -201,7 +201,7 @@ export default function HermesChat() {
         <button
           type="submit"
           disabled={isBusy}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <span>Send</span>
           <SendIcon className="h-4 w-4" />

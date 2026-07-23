@@ -255,7 +255,7 @@ export function TechExplorer({
             }`}
           />
           {!query.trim() && (
-            <span className="pointer-events-none absolute inset-y-0 right-3 hidden items-center text-xs font-medium text-zinc-400 sm:inline-flex dark:text-zinc-500">
+            <span className="pointer-events-none absolute inset-y-0 right-3 hidden items-center text-xs font-medium text-zinc-500 sm:inline-flex dark:text-zinc-400">
               /
             </span>
           )}
@@ -276,7 +276,7 @@ export function TechExplorer({
                 aria-pressed={category === item}
                 className={`rounded-full px-3 py-1.5 text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80 ${
                   category === item
-                    ? 'bg-teal-500 text-white'
+                    ? 'bg-teal-700 text-white'
                     : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
                 }`}
               >

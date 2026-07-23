@@ -168,7 +168,7 @@ function NavItem({
         className={clsx(
           'relative block rounded-md px-3 py-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80',
           isActive
-            ? 'text-teal-500 dark:text-teal-400'
+            ? 'text-teal-700 dark:text-teal-400'
             : 'hover:text-teal-500 dark:hover:text-teal-400',
         )}
       >
