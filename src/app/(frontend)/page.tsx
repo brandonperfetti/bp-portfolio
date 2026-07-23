@@ -14,6 +14,7 @@ import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { GitHubIcon, LinkedInIcon, XIcon } from '@/icons'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
+import { getCmsIdentity } from '@/lib/cms/identityRepo'
 import { type ArticleWithSlug, getAllArticles } from '@/lib/articles'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
@@ -119,7 +120,10 @@ export default async function Home() {
     settings.siteDescription,
     canonicalSiteUrl,
   )
-  const personSchema = buildPersonSchema(canonicalSiteUrl)
+  const personSchema = buildPersonSchema(
+    canonicalSiteUrl,
+    await getCmsIdentity(),
+  )
 
   return (
     <>

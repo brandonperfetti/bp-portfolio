@@ -18,6 +18,7 @@ import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
+import { getCmsIdentity } from '@/lib/cms/identityRepo'
 import { buildPersonSchema } from '@/lib/seo/structuredData'
 import { getSiteUrl } from '@/lib/site'
 
@@ -212,7 +213,10 @@ export default async function About() {
       url: normalizedSiteUrl,
     },
   }
-  const personSchema = buildPersonSchema(normalizedSiteUrl)
+  const personSchema = buildPersonSchema(
+    normalizedSiteUrl,
+    await getCmsIdentity(),
+  )
   const breadcrumbSchema = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',

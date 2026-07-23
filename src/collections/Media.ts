@@ -8,7 +8,8 @@ import { authenticated } from '@/access/authenticated'
  * `@payloadcms/storage-vercel-blob` when `BLOB_READ_WRITE_TOKEN` is set.
  *
  * @remarks SVG is allowed because legacy content uses it; SVGs can carry
- * scripts, so only trusted staff should hold editor accounts.
+ * scripts, so only trusted staff should hold editor accounts. PDF is
+ * allowed for document uploads (the Identity global's CV file).
  */
 export const Media: CollectionConfig = {
   slug: 'media',
@@ -33,6 +34,7 @@ export const Media: CollectionConfig = {
       'image/avif',
       'image/gif',
       'image/svg+xml',
+      'application/pdf',
     ],
   },
 }

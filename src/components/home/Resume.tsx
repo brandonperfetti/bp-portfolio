@@ -1,6 +1,7 @@
 import Image, { type ImageProps } from 'next/image'
 
 import { Button } from '@/components/Button'
+import { getCmsIdentity } from '@/lib/cms/identityRepo'
 import { getCmsWorkHistory } from '@/lib/cms/workHistoryRepo'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 
@@ -147,6 +148,10 @@ const defaultResume: Array<Role> = [
 
 export async function Resume() {
   const cmsResume = await getCmsWorkHistory()
+  // CMS-uploaded CV (Identity global) wins; the repo's static asset is the
+  // fallback so the button never dead-links on an empty CMS.
+  const { resumeUrl } = await getCmsIdentity()
+  const resumeHref = resumeUrl || '/assets/Brandon_Perfetti_Resume.pdf'
   const resume: Array<Role> = cmsResume?.length
     ? cmsResume.map((entry) => ({
         company: entry.company,
@@ -169,7 +174,7 @@ export async function Resume() {
         ))}
       </ol>
       <Button
-        href="/assets/Brandon_Perfetti_Resume.pdf"
+        href={resumeHref}
         variant="secondary"
         className="group mt-6 w-full"
       >

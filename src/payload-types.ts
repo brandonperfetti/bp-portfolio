@@ -2088,6 +2088,10 @@ export interface Identity {
   jobTitle?: string | null;
   image?: (number | null) | Media;
   /**
+   * CV file (PDF) served by the “Download CV” button on the home-page Work card. Upload a fresh copy here whenever the resume changes — no deploy needed.
+   */
+  resume?: (number | null) | Media;
+  /**
    * Social profile URLs for the Person schema sameAs list.
    */
   sameAs?:
@@ -2165,6 +2169,7 @@ export interface IdentitySelect<T extends boolean = true> {
   name?: T;
   jobTitle?: T;
   image?: T;
+  resume?: T;
   sameAs?:
     | T
     | {

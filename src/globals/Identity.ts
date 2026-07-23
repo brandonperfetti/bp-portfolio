@@ -5,10 +5,12 @@ import { authenticated } from '@/access/authenticated'
 import { revalidateGlobal } from '@/hooks/revalidateGlobal'
 
 /**
- * Person schema fields for JSON-LD (ported from v3 `src/lib/identity.ts`).
+ * Person identity: JSON-LD Person schema fields plus the downloadable CV.
  *
- * @remarks Feeds `buildPersonSchema` in the SEO layer (Phase 2). The avatar
- * moves from Cloudinary to a Media upload during migration.
+ * @remarks Read via `getCmsIdentity` (identityRepo) — feeds
+ * `buildPersonSchema` in the SEO layer and the Resume card's Download CV
+ * button. Hard-coded `src/lib/identity.ts` constants remain the fallback
+ * while fields here are empty.
  */
 export const Identity: GlobalConfig = {
   slug: 'identity',
@@ -32,6 +34,15 @@ export const Identity: GlobalConfig = {
       name: 'image',
       type: 'upload',
       relationTo: 'media',
+    },
+    {
+      name: 'resume',
+      type: 'upload',
+      relationTo: 'media',
+      admin: {
+        description:
+          'CV file (PDF) served by the “Download CV” button on the home-page Work card. Upload a fresh copy here whenever the resume changes — no deploy needed.',
+      },
     },
     {
       name: 'sameAs',

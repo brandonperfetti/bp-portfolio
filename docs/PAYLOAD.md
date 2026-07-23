@@ -43,7 +43,10 @@ exclude={['photoStrip']} />`) so it never renders twice — editing that
 ## Globals
 
 `SiteSettings` (canonical URL, metadata defaults), `Navigation`, `Footer`,
-`Identity` (author/JSON-LD identity).
+`Identity` (author/JSON-LD identity + the uploaded CV: `getCmsIdentity`
+feeds `buildPersonSchema` and the Resume card's Download CV button; empty
+fields fall back to the `src/lib/identity.ts` constants and the static
+`/assets` PDF).
 
 ## Slugs
 
