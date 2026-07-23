@@ -1,18 +1,16 @@
 import { type Metadata } from 'next'
 import { Resume } from '@/components/home/Resume'
 import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
-import Image from 'next/image'
 import Link from 'next/link'
-import clsx from 'clsx'
 
 import { Card } from '@/components/Card'
 import { Container } from '@/components/Container'
 import { ShaderHero } from '@/components/heros/ShaderHero'
 import { NotFoundState } from '@/components/cms/NotFoundState'
 import { Messenger } from '@/components/home/Messenger'
+import { PhotoStrip } from '@/components/home/PhotoStrip'
 import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
 import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
-import { ParallaxGroup } from '@/components/motion/ParallaxGroup'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { GitHubIcon, LinkedInIcon, XIcon } from '@/icons'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
@@ -20,7 +18,6 @@ import { type ArticleWithSlug, getAllArticles } from '@/lib/articles'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { formatDate } from '@/lib/formatDate'
-import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import { buildPersonSchema, buildWebsiteSchema } from '@/lib/seo/structuredData'
@@ -89,63 +86,6 @@ function SocialLink({
   )
 }
 
-function Photos({ images }: { images: string[] }) {
-  const rotations = [
-    'rotate-2',
-    '-rotate-2',
-    'rotate-2',
-    'rotate-2',
-    '-rotate-2',
-  ]
-  const parallaxSpeeds = [0.8, -0.55, 0.95, -0.45, 0.7]
-
-  return (
-    <ParallaxGroup amount={10} start="top 95%" end="bottom 10%">
-      <div className="mt-16 sm:mt-20">
-        <div className="-my-4 flex justify-center gap-5 overflow-hidden py-4 sm:gap-8">
-          {images.map((image, imageIndex) => (
-            <div
-              key={image}
-              className={clsx(
-                'relative w-44 flex-none overflow-hidden rounded-xl bg-zinc-100 will-change-transform sm:w-72 sm:rounded-2xl dark:bg-zinc-800',
-                rotations[imageIndex % rotations.length],
-              )}
-              data-parallax-item
-              data-parallax-speed={
-                parallaxSpeeds[imageIndex % parallaxSpeeds.length]
-              }
-            >
-              <HoverMotionCard
-                y={0}
-                scale={1}
-                imageScale={1.035}
-                className="h-full"
-              >
-                <div className="aspect-9/10">
-                  <Image
-                    src={getOptimizedImageUrl(image, {
-                      width: 1000,
-                      height: 1125,
-                      crop: 'fill',
-                    })}
-                    alt=""
-                    width={1200}
-                    height={1400}
-                    sizes="(min-width: 640px) 18rem, 11rem"
-                    priority={imageIndex === 0}
-                    data-hover-image
-                    className="absolute inset-0 h-full w-full object-cover"
-                  />
-                </div>
-              </HoverMotionCard>
-            </div>
-          ))}
-        </div>
-      </div>
-    </ParallaxGroup>
-  )
-}
-
 export default async function Home() {
   const siteUrl = getSiteUrl()
   const settings = await getCmsSiteSettings()
@@ -161,15 +101,17 @@ export default async function Home() {
   const homeSubtitle =
     homePage?.subtitle ||
     "I'm Brandon, based in Orange County, CA. I help teams turn complex product goals into reliable, user-focused software."
+  // The Home page doc's PhotoStrip block feeds the hero-slot gallery below
+  // (CmsPageBlocks excludes it so it doesn't render twice at page end).
   const homeGalleryImagesRaw = Array.from(
     new Set(
-      (homePage?.homeImages ?? [])
+      (homePage?.photoStripImages ?? [])
         .map((image) => image?.trim())
         .filter(isNonEmptyString),
     ),
-  ).slice(0, 5)
+  )
   const homeGalleryImages =
-    homeGalleryImagesRaw && homeGalleryImagesRaw.length > 0
+    homeGalleryImagesRaw.length > 0
       ? homeGalleryImagesRaw
       : defaultHomeGalleryImages
   const websiteSchema = buildWebsiteSchema(
@@ -225,9 +167,7 @@ export default async function Home() {
           </div>
         </Container>
       </section>
-      <ScrollReveal y={30} duration={0.96} start="top 92%">
-        <Photos images={homeGalleryImages} />
-      </ScrollReveal>
+      <PhotoStrip images={homeGalleryImages} priority />
       <Container className="mt-24 mb-24 md:mt-28 md:mb-28">
         <div className="mx-auto grid max-w-xl grid-cols-1 gap-y-20 lg:max-w-none lg:grid-cols-2">
           <ScrollReveal targets="article" y={20} stagger={0.08}>
@@ -263,7 +203,7 @@ export default async function Home() {
             </div>
           </ScrollReveal>
         </div>
-        <CmsPageBlocks slug="home" />
+        <CmsPageBlocks slug="home" exclude={['photoStrip']} />
       </Container>
     </>
   )

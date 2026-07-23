@@ -133,7 +133,8 @@ export interface CmsPageContent {
   seoDescription?: string
   heroImage?: string
   ogImage?: string
-  homeImages?: string[]
+  /** Resolved image URLs of the layout's first `photoStrip` block, if any. */
+  photoStripImages?: string[]
   updatedAt?: string
   bodyBlocks?: CmsArticleBlock[]
 }

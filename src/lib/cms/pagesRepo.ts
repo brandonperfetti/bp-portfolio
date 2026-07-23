@@ -4,7 +4,7 @@ import { getPayload } from 'payload'
 import configPromise from '@payload-config'
 import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
 import type { CmsPageContent } from '@/lib/cms/types'
-import type { Media } from '@/payload-types'
+import type { Media, Page } from '@/payload-types'
 
 function normalizePath(path: string) {
   if (!path || path === '/') {
@@ -22,6 +22,22 @@ const pathToSlug = (path: string): string => {
 
 const mediaUrl = (m: unknown): string | undefined =>
   m && typeof m === 'object' ? (m as Media).url || undefined : undefined
+
+/**
+ * Image URLs of the layout's first `photoStrip` block. The home route
+ * consumes this for its hero-slot gallery (and excludes the block from its
+ * end-of-page CMS region so it doesn't render twice).
+ */
+function photoStripImagesFromLayout(
+  layout: Page['layout'] | null | undefined,
+): string[] | undefined {
+  const strip = layout?.find((block) => block.blockType === 'photoStrip')
+  if (!strip || strip.blockType !== 'photoStrip') return undefined
+  const urls = (strip.images ?? [])
+    .map((image) => mediaUrl(image))
+    .filter((url): url is string => Boolean(url))
+  return urls.length ? urls : undefined
+}
 
 /**
  * Page content by route path from the Payload `pages` collection (was Notion).
@@ -59,9 +75,7 @@ export const getCmsPageByPath = unstable_cache(
       seoDescription: page.meta?.description || undefined,
       heroImage: mediaUrl(page.hero?.media),
       ogImage: mediaUrl(page.meta?.image),
-      homeImages: (page.homeImages ?? [])
-        .map((image) => mediaUrl(image))
-        .filter((url): url is string => Boolean(url)),
+      photoStripImages: photoStripImagesFromLayout(page.layout),
       updatedAt: page.updatedAt,
     }
 

@@ -25,6 +25,9 @@ vi.mock('@/components/motion/ScrollReveal', () => ({
 vi.mock('@/components/motion/HoverMotionCard', () => ({
   HoverMotionCard: ({ children, as: As = 'div' }: any) => <As>{children}</As>,
 }))
+vi.mock('@/components/motion/ParallaxGroup', () => ({
+  ParallaxGroup: ({ children }: any) => <>{children}</>,
+}))
 // Server blocks reach the Payload config (unresolvable in jsdom); stub them.
 vi.mock('@/blocks/ArticlesArchive/Component', () => ({
   ArticlesArchiveComponent: () => null,
@@ -70,12 +73,19 @@ describe('RenderBlocks', () => {
         ],
       },
       { blockType: 'spacer', size: 'sm' },
+      {
+        blockType: 'photoStrip',
+        images: [{ id: 1, url: 'https://example.com/strip.jpg', alt: '' }],
+      },
       { blockType: 'mystery' } as unknown,
     ] as LayoutBlock[]
 
-    render(<RenderBlocks blocks={blocks} />)
+    const { container } = render(<RenderBlocks blocks={blocks} />)
     expect(screen.getByText('column copy')).toBeInTheDocument()
     expect(screen.getByText('cta copy')).toBeInTheDocument()
+    expect(
+      container.querySelector('img[src="https://example.com/strip.jpg"]'),
+    ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Go' })).toHaveAttribute(
       'href',
       'https://example.com',

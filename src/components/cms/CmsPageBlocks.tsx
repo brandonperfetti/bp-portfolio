@@ -31,11 +31,22 @@ const getPageLayout = unstable_cache(
  * routes don't grow stray whitespace before any real blocks are added.
  *
  * @param slug Pages collection slug for this route (`home` for `/`).
+ * @param exclude Block types the route consumes in a dedicated slot instead
+ * (home renders its `photoStrip` block under the hero, not down here).
  */
-export async function CmsPageBlocks({ slug }: { slug: string }) {
+export async function CmsPageBlocks({
+  slug,
+  exclude,
+}: {
+  slug: string
+  exclude?: string[]
+}) {
   const layout = await getPageLayout(slug)
   if (!layout?.length) return null
-  const meaningful = layout.some((block) => block.blockType !== 'spacer')
+  const blocks = exclude?.length
+    ? layout.filter((block) => !exclude.includes(block.blockType))
+    : layout
+  const meaningful = blocks.some((block) => block.blockType !== 'spacer')
   if (!meaningful) return null
-  return <RenderBlocks blocks={layout} />
+  return <RenderBlocks blocks={blocks} />
 }

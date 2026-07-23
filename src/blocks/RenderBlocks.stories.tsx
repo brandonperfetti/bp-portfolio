@@ -164,6 +164,17 @@ const DEMO_BLOCKS: LayoutBlock[] = [
   },
   { blockType: 'spacer', size: 'md' },
   {
+    blockType: 'photoStrip',
+    images: [
+      'https://picsum.photos/seed/strip-1/1000/1125',
+      'https://picsum.photos/seed/strip-2/1000/1125',
+      'https://picsum.photos/seed/strip-3/1000/1125',
+      'https://picsum.photos/seed/strip-4/1000/1125',
+      'https://picsum.photos/seed/strip-5/1000/1125',
+    ].map((url, i) => ({ id: i + 1, url, alt: '' })),
+  } as unknown as LayoutBlock,
+  { blockType: 'spacer', size: 'md' },
+  {
     blockType: 'shaderHero',
     preset: 'northern-lights-2',
     richText: richText(
@@ -213,4 +224,14 @@ export const ShaderSection: Story = {
 
 export const FeatureCards: Story = {
   args: { blocks: [DEMO_BLOCKS[4]] },
+}
+
+export const PhotoStripBlock: Story = {
+  args: {
+    blocks: [
+      DEMO_BLOCKS.find(
+        (block) => block.blockType === 'photoStrip',
+      ) as LayoutBlock,
+    ],
+  },
 }

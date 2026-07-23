@@ -13,6 +13,7 @@ import { ContentBlockComponent } from '@/blocks/Content/Component'
 import { FeatureCardGridComponent } from '@/blocks/FeatureCardGrid/Component'
 import { LogoCarouselComponent } from '@/blocks/LogoCarousel/Component'
 import { MediaBlockComponent } from '@/blocks/MediaBlock/Component'
+import { PhotoStripBlockComponent } from '@/blocks/PhotoStrip/Component'
 import { ShaderHeroBlockComponent } from '@/blocks/ShaderHero/Component'
 import { SpacerBlockComponent } from '@/blocks/Spacer/Component'
 import type { Page } from '@/payload-types'
@@ -50,6 +51,8 @@ export function RenderBlocks({
             return <LogoCarouselComponent key={key} {...block} />
           case 'mediaBlock':
             return <MediaBlockComponent key={key} {...block} />
+          case 'photoStrip':
+            return <PhotoStripBlockComponent key={key} {...block} />
           case 'shaderHero':
             return <ShaderHeroBlockComponent key={key} {...block} />
           case 'spacer':

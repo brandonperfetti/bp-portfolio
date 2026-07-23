@@ -39,7 +39,9 @@ shadcn CLI or MCP). Radix `Slot` composition, cva variants, design tokens in
 Block components live beside their configs (`src/blocks/<Name>/Component.tsx`)
 and are dispatched by `src/blocks/RenderBlocks.tsx` — the admin block picker,
 the components, and the `PageBuilder/RenderBlocks` stories are one 1:1 set.
-Adding a block: config + Component + RenderBlocks case + story, then
+Adding a block: config + Component + entry in `src/blocks/library.ts`
+(`pageBuilderBlocks` — every layout surface registers this one list) +
+RenderBlocks case + story, then
 `pnpm generate:types` / `generate:importmap` + a migration. Server blocks
 that reach the Payload Local API (ArticlesArchive, WorkHistoryCard) are
 aliased to visual stubs in `.storybook/main.ts` — stub any future one there.
