@@ -63,13 +63,19 @@ function SignalMeter({ intensity }: { intensity: number }) {
  *
  * @param item CMS entity row (tech or uses).
  * @param signal Live GitHub signal summary for this item, when available.
+ * @param monogram Show the first-letter fallback circle when the item has
+ * no logo. `/tech` keeps it (visual anchor per card); `/uses` passes
+ * `false` because its entries are logo-less by design and the circles
+ * read as missing images.
  */
 export function TechCard({
   item,
   signal,
+  monogram = true,
 }: {
   item: CmsEntityItem
   signal?: TechSignalSummary
+  monogram?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const detailId = useId()
@@ -77,6 +83,8 @@ export function TechCard({
     ? PROFICIENCY_LABELS[item.proficiency] || item.proficiency
     : null
   const hasDetails = Boolean(signal)
+  const showIcon = Boolean(item.logo) || monogram
+  const showIconRow = showIcon || Boolean(signal)
 
   return (
     <HoverMotionCard as="li">
@@ -96,44 +104,55 @@ export function TechCard({
           </>
         ) : null}
 
-        <div className="pointer-events-none relative z-20 flex items-start justify-between">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-md ring-1 shadow-zinc-800/5 ring-zinc-900/5 dark:border dark:border-zinc-700/50 dark:bg-zinc-800 dark:ring-0">
-            {item.logo ? (
-              <Image
-                height={48}
-                width={48}
-                src={getOptimizedImageUrl(item.logo, {
-                  width: 96,
-                  height: 96,
-                  crop: 'fit',
-                })}
-                alt={item.name}
-                className="h-8 w-8 rounded object-contain"
-                sizes="2rem"
-              />
+        {showIconRow ? (
+          <div className="pointer-events-none relative z-20 flex items-start justify-between">
+            {showIcon ? (
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-md ring-1 shadow-zinc-800/5 ring-zinc-900/5 dark:border dark:border-zinc-700/50 dark:bg-zinc-800 dark:ring-0">
+                {item.logo ? (
+                  <Image
+                    height={48}
+                    width={48}
+                    src={getOptimizedImageUrl(item.logo, {
+                      width: 96,
+                      height: 96,
+                      crop: 'fit',
+                    })}
+                    alt={item.name}
+                    className="h-8 w-8 rounded object-contain"
+                    sizes="2rem"
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="flex h-8 w-8 items-center justify-center rounded bg-zinc-100 text-sm font-semibold text-zinc-600 uppercase dark:bg-zinc-700/70 dark:text-zinc-200"
+                  >
+                    {item.name.charAt(0)}
+                  </span>
+                )}
+              </div>
             ) : (
-              <span
-                aria-hidden="true"
-                className="flex h-8 w-8 items-center justify-center rounded bg-zinc-100 text-sm font-semibold text-zinc-600 uppercase dark:bg-zinc-700/70 dark:text-zinc-200"
-              >
-                {item.name.charAt(0)}
-              </span>
+              // Keeps the signal badge right-aligned when the icon is off.
+              <span aria-hidden="true" />
             )}
-          </div>
-          {signal ? (
-            <span
-              className="mt-1 flex items-center gap-1.5 rounded-full bg-teal-50 px-2 py-1 text-[11px] font-medium text-teal-700 dark:bg-teal-950/50 dark:text-teal-300"
-              title={`Active in ${signal.repoCount} recent ${signal.repoCount === 1 ? 'repo' : 'repos'} on GitHub`}
-            >
-              <SignalMeter intensity={signal.intensity} />
-              <span>
-                {signal.repoCount} {signal.repoCount === 1 ? 'repo' : 'repos'}
+            {signal ? (
+              <span
+                className="mt-1 flex items-center gap-1.5 rounded-full bg-teal-50 px-2 py-1 text-[11px] font-medium text-teal-700 dark:bg-teal-950/50 dark:text-teal-300"
+                title={`Active in ${signal.repoCount} recent ${signal.repoCount === 1 ? 'repo' : 'repos'} on GitHub`}
+              >
+                <SignalMeter intensity={signal.intensity} />
+                <span>
+                  {signal.repoCount} {signal.repoCount === 1 ? 'repo' : 'repos'}
+                </span>
               </span>
-            </span>
-          ) : null}
-        </div>
+            ) : null}
+          </div>
+        ) : null}
 
-        <h2 className="pointer-events-none relative z-20 mt-6 text-base font-semibold text-zinc-800 dark:text-zinc-100">
+        <h2
+          className={`pointer-events-none relative z-20 text-base font-semibold text-zinc-800 dark:text-zinc-100 ${
+            showIconRow ? 'mt-6' : 'mt-1'
+          }`}
+        >
           {item.name}
         </h2>
         <p className="pointer-events-none relative z-20 mt-2 line-clamp-4 text-sm text-zinc-600 dark:text-zinc-400">

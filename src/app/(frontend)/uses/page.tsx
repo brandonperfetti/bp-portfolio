@@ -90,7 +90,9 @@ export default async function Uses() {
                     className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2"
                   >
                     {section.items.map((item) => (
-                      <TechCard key={item.slug} item={item} />
+                      // Uses entries are logo-less by design — no monogram
+                      // circle (Brandon's call; tech cards keep theirs).
+                      <TechCard key={item.slug} item={item} monogram={false} />
                     ))}
                   </ul>
                 </ScrollReveal>
