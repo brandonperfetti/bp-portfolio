@@ -1,12 +1,19 @@
 import type { CollectionConfig } from 'payload'
 
 import {
+  BlockquoteFeature,
   BlocksFeature,
+  ChecklistFeature,
   FixedToolbarFeature,
   HeadingFeature,
   HorizontalRuleFeature,
+  IndentFeature,
+  InlineCodeFeature,
   InlineToolbarFeature,
   lexicalEditor,
+  OrderedListFeature,
+  UnorderedListFeature,
+  UploadFeature,
 } from '@payloadcms/richtext-lexical'
 import {
   MetaDescriptionField,
@@ -109,6 +116,17 @@ export const Posts: CollectionConfig = {
                     FixedToolbarFeature(),
                     InlineToolbarFeature(),
                     HorizontalRuleFeature(),
+                    // Node types the Notion migration emits — without these
+                    // registered, parseEditorState throws Lexical #17 ("type
+                    // 'list' not found") and the editor error-boundaries on
+                    // every migrated article.
+                    UnorderedListFeature(),
+                    OrderedListFeature(),
+                    ChecklistFeature(),
+                    BlockquoteFeature(),
+                    UploadFeature(),
+                    InlineCodeFeature(),
+                    IndentFeature(),
                   ]
                 },
               }),
