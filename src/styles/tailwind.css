@@ -150,3 +150,14 @@
     outline-color: var(--color-teal-400);
   }
 }
+
+/* CMS LogoCarousel marquee: content is duplicated once, so -50% loops
+ * seamlessly. Only applied under motion-safe. */
+@keyframes logo-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}

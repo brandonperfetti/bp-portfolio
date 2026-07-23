@@ -2,6 +2,8 @@ import { Fragment } from 'react'
 
 import { CallToActionBlockComponent } from '@/blocks/CallToAction/Component'
 import { ContentBlockComponent } from '@/blocks/Content/Component'
+import { FeatureCardGridComponent } from '@/blocks/FeatureCardGrid/Component'
+import { LogoCarouselComponent } from '@/blocks/LogoCarousel/Component'
 import { MediaBlockComponent } from '@/blocks/MediaBlock/Component'
 import { ShaderHeroBlockComponent } from '@/blocks/ShaderHero/Component'
 import { SpacerBlockComponent } from '@/blocks/Spacer/Component'
@@ -34,6 +36,10 @@ export function RenderBlocks({
             return <CallToActionBlockComponent key={key} {...block} />
           case 'content':
             return <ContentBlockComponent key={key} {...block} />
+          case 'featureCardGrid':
+            return <FeatureCardGridComponent key={key} {...block} />
+          case 'logoCarousel':
+            return <LogoCarouselComponent key={key} {...block} />
           case 'mediaBlock':
             return <MediaBlockComponent key={key} {...block} />
           case 'shaderHero':

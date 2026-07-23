@@ -1,4 +1,5 @@
 import { type Metadata } from 'next'
+import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
 import { Suspense } from 'react'
 
 import { ArticlesExplorer } from '@/components/articles/ArticlesExplorer'
@@ -126,6 +127,7 @@ export default async function ArticlesIndex() {
             <ArticlesExplorer articles={articles} />
           </Suspense>
         )}
+        <CmsPageBlocks slug="articles" />
       </SimpleLayout>
     </>
   )

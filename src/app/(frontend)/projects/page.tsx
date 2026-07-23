@@ -1,4 +1,5 @@
 import { type Metadata } from 'next'
+import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
 
 import { EntityGrid } from '@/components/cms/EntityGrid'
 import { NotFoundState } from '@/components/cms/NotFoundState'
@@ -180,6 +181,7 @@ export default async function Projects() {
             description="No CMS project records are currently publish-safe."
           />
         )}
+        <CmsPageBlocks slug="projects" />
       </SimpleLayout>
     </>
   )

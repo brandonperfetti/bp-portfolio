@@ -2,6 +2,7 @@ import * as migration_20260722_024610_initial from './20260722_024610_initial'
 import * as migration_20260722_033130_phase1_content_model from './20260722_033130_phase1_content_model'
 import * as migration_20260723_134344_seed_collections from './20260723_134344_seed_collections'
 import * as migration_20260723_135530_pages_subtitle_home_images from './20260723_135530_pages_subtitle_home_images'
+import * as migration_20260723_153219_feature_grid_logo_carousel from './20260723_153219_feature_grid_logo_carousel'
 
 export const migrations = [
   {
@@ -23,5 +24,10 @@ export const migrations = [
     up: migration_20260723_135530_pages_subtitle_home_images.up,
     down: migration_20260723_135530_pages_subtitle_home_images.down,
     name: '20260723_135530_pages_subtitle_home_images',
+  },
+  {
+    up: migration_20260723_153219_feature_grid_logo_carousel.up,
+    down: migration_20260723_153219_feature_grid_logo_carousel.down,
+    name: '20260723_153219_feature_grid_logo_carousel',
   },
 ]

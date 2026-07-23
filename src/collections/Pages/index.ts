@@ -12,6 +12,8 @@ import { authenticated } from '@/access/authenticated'
 import { slugField } from '@/fields/slug'
 import { authenticatedOrPublished } from '@/access/authenticatedOrPublished'
 import { CallToAction } from '@/blocks/CallToAction/config'
+import { FeatureCardGrid } from '@/blocks/FeatureCardGrid/config'
+import { LogoCarousel } from '@/blocks/LogoCarousel/config'
 import { Content } from '@/blocks/Content/config'
 import { MediaBlock } from '@/blocks/MediaBlock/config'
 import { ShaderHero } from '@/blocks/ShaderHero/config'
@@ -91,7 +93,15 @@ export const Pages: CollectionConfig = {
             {
               name: 'layout',
               type: 'blocks',
-              blocks: [CallToAction, Content, MediaBlock, ShaderHero, Spacer],
+              blocks: [
+                CallToAction,
+                Content,
+                FeatureCardGrid,
+                LogoCarousel,
+                MediaBlock,
+                ShaderHero,
+                Spacer,
+              ],
               required: true,
               admin: {
                 initCollapsed: true,

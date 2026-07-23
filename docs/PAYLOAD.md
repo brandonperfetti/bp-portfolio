@@ -20,7 +20,10 @@ Payload is the single source of truth for site content. Admin at `/admin`
   published page whose slug isn't owned by a dedicated route renders at
   `/[slug]` via `RenderHero` + `RenderBlocks` — compose new pages entirely
   in admin, no code or deploy. Reserved slugs live in
-  `src/app/(frontend)/[slug]/page.tsx`.
+  `src/app/(frontend)/[slug]/page.tsx`. **Hybrid routes:** the seven
+  code-owned routes also render their Pages doc's layout via
+  `<CmsPageBlocks slug="…" />` (spacer-only layouts are treated as empty),
+  so admin-composed sections can be appended to bespoke pages too.
 - **Projects**, **TechStack** (name/category/proficiency/logo/url/githubRepo),
   **Uses** (category-grouped tools), **Categories**, **Tags**, **Media**
   (Blob-backed), **Users** (admin operators).

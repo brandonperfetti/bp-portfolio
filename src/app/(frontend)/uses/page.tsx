@@ -1,4 +1,5 @@
 import { type Metadata } from 'next'
+import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
 
 import { Card } from '@/components/Card'
 import { NotFoundState } from '@/components/cms/NotFoundState'
@@ -102,6 +103,7 @@ export default async function Uses() {
             />
           )}
         </div>
+        <CmsPageBlocks slug="uses" />
       </SimpleLayout>
     )
   }
@@ -182,6 +184,7 @@ export default async function Uses() {
           </Tool>
         </ToolsSection>
       </div>
+      <CmsPageBlocks slug="uses" />
     </SimpleLayout>
   )
 }

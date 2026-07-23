@@ -18,6 +18,13 @@ vi.mock('next/link', () => ({
   ),
 }))
 vi.mock('next/dynamic', () => ({ default: () => () => null }))
+// GSAP wrappers need matchMedia (absent in jsdom); render children directly.
+vi.mock('@/components/motion/ScrollReveal', () => ({
+  ScrollReveal: ({ children }: any) => <>{children}</>,
+}))
+vi.mock('@/components/motion/HoverMotionCard', () => ({
+  HoverMotionCard: ({ children, as: As = 'div' }: any) => <As>{children}</As>,
+}))
 
 const text = (value: string) => ({
   root: {

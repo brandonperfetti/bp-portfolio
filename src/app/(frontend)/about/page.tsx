@@ -1,4 +1,5 @@
 import { type Metadata } from 'next'
+import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
 import Image from 'next/image'
 import Link from 'next/link'
 import clsx from 'clsx'
@@ -330,6 +331,7 @@ export default async function About() {
             <SocialLinksList links={socialLinks} />
           </div>
         </div>
+        <CmsPageBlocks slug="about" />
       </Container>
     </>
   )

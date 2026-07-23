@@ -86,6 +86,36 @@ const DEMO_BLOCKS: LayoutBlock[] = [
   },
   { blockType: 'spacer', size: 'md' },
   {
+    blockType: 'featureCardGrid',
+    heading: 'What you get',
+    intro:
+      'Feature cards in the site card language — icon, eyebrow, title, copy, link.',
+    cards: [
+      {
+        id: 'f1',
+        eyebrow: 'Speed',
+        title: 'Fast by default',
+        copy: 'Static rendering with tag-based revalidation keeps pages instant.',
+        enableLink: false,
+      },
+      {
+        id: 'f2',
+        eyebrow: 'Editing',
+        title: 'Composed in the admin',
+        copy: 'Blocks map 1:1 to components — build pages without a deploy.',
+        enableLink: false,
+      },
+      {
+        id: 'f3',
+        eyebrow: 'Motion',
+        title: 'Reduced-motion safe',
+        copy: 'Every animated surface degrades to static, functional DOM.',
+        enableLink: false,
+      },
+    ],
+  },
+  { blockType: 'spacer', size: 'md' },
+  {
     blockType: 'shaderHero',
     preset: 'northern-lights-2',
     richText: richText(
@@ -130,5 +160,9 @@ export const CallToAction: Story = {
 }
 
 export const ShaderSection: Story = {
+  args: { blocks: [DEMO_BLOCKS[DEMO_BLOCKS.length - 1]] },
+}
+
+export const FeatureCards: Story = {
   args: { blocks: [DEMO_BLOCKS[4]] },
 }

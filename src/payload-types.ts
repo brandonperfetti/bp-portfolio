@@ -239,7 +239,15 @@ export interface Page {
       | null;
     media?: (number | null) | Media;
   };
-  layout: (CallToActionBlock | ContentBlock | MediaBlock | ShaderHeroBlock | SpacerBlock)[];
+  layout: (
+    | CallToActionBlock
+    | ContentBlock
+    | FeatureCardGridBlock
+    | LogoCarouselBlock
+    | MediaBlock
+    | ShaderHeroBlock
+    | SpacerBlock
+  )[];
   meta?: {
     title?: string | null;
     /**
@@ -484,6 +492,86 @@ export interface ContentBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'content';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FeatureCardGridBlock".
+ */
+export interface FeatureCardGridBlock {
+  /**
+   * Optional section heading rendered above the grid.
+   */
+  heading?: string | null;
+  /**
+   * Optional intro line under the heading.
+   */
+  intro?: string | null;
+  cards?:
+    | {
+        /**
+         * Optional icon (~96px square, SVG/PNG).
+         */
+        icon?: (number | null) | Media;
+        eyebrow?: string | null;
+        title: string;
+        copy?: string | null;
+        enableLink?: boolean | null;
+        link?: {
+          type?: ('reference' | 'custom') | null;
+          newTab?: boolean | null;
+          reference?:
+            | ({
+                relationTo: 'pages';
+                value: number | Page;
+              } | null)
+            | ({
+                relationTo: 'posts';
+                value: number | Post;
+              } | null);
+          url?: string | null;
+          label: string;
+          /**
+           * Choose how the link should be rendered.
+           */
+          appearance?: ('default' | 'outline') | null;
+        };
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'featureCardGrid';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "LogoCarouselBlock".
+ */
+export interface LogoCarouselBlock {
+  logos?:
+    | {
+        /**
+         * SVG or transparent PNG; displayed ~40px tall.
+         */
+        image: number | Media;
+        /**
+         * Optional hyperlink. Leave blank for no link.
+         */
+        url?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Display height of each logo in pixels.
+   */
+  logoHeight?: number | null;
+  layout?: ('scroll' | 'wrap') | null;
+  /**
+   * Marquee speed in pixels per second (0 disables).
+   */
+  scrollSpeed?: number | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'logoCarousel';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1111,6 +1199,8 @@ export interface PagesSelect<T extends boolean = true> {
     | {
         cta?: T | CallToActionBlockSelect<T>;
         content?: T | ContentBlockSelect<T>;
+        featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
+        logoCarousel?: T | LogoCarouselBlockSelect<T>;
         mediaBlock?: T | MediaBlockSelect<T>;
         shaderHero?: T | ShaderHeroBlockSelect<T>;
         spacer?: T | SpacerBlockSelect<T>;
@@ -1176,6 +1266,54 @@ export interface ContentBlockSelect<T extends boolean = true> {
             };
         id?: T;
       };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FeatureCardGridBlock_select".
+ */
+export interface FeatureCardGridBlockSelect<T extends boolean = true> {
+  heading?: T;
+  intro?: T;
+  cards?:
+    | T
+    | {
+        icon?: T;
+        eyebrow?: T;
+        title?: T;
+        copy?: T;
+        enableLink?: T;
+        link?:
+          | T
+          | {
+              type?: T;
+              newTab?: T;
+              reference?: T;
+              url?: T;
+              label?: T;
+              appearance?: T;
+            };
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "LogoCarouselBlock_select".
+ */
+export interface LogoCarouselBlockSelect<T extends boolean = true> {
+  logos?:
+    | T
+    | {
+        image?: T;
+        url?: T;
+        id?: T;
+      };
+  logoHeight?: T;
+  layout?: T;
+  scrollSpeed?: T;
   id?: T;
   blockName?: T;
 }

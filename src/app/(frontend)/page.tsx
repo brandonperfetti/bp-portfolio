@@ -1,4 +1,5 @@
 import { type Metadata } from 'next'
+import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
 import Image, { type ImageProps } from 'next/image'
 import Link from 'next/link'
 import clsx from 'clsx'
@@ -434,6 +435,7 @@ export default async function Home() {
             </div>
           </ScrollReveal>
         </div>
+        <CmsPageBlocks slug="home" />
       </Container>
     </>
   )

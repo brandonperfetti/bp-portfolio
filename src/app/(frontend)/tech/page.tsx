@@ -1,4 +1,5 @@
 import { NotFoundState } from '@/components/cms/NotFoundState'
+import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
 import { SimpleLayout } from '@/components/SimpleLayout'
 import { TechExplorer } from '@/components/tech/TechExplorer'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
@@ -453,6 +454,7 @@ export default async function TechStack() {
           description="No CMS tech records are currently publish-safe."
         />
       )}
+      <CmsPageBlocks slug="tech" />
     </SimpleLayout>
   )
 }

@@ -1,4 +1,5 @@
 import { type Metadata } from 'next'
+import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
 
 import { Container } from '@/components/Container'
 import HermesChat from '@/components/HermesChat'
@@ -53,6 +54,7 @@ export default async function HermesPage() {
           <HermesChat />
         </div>
       </div>
+      <CmsPageBlocks slug="hermes" />
     </Container>
   )
 }
