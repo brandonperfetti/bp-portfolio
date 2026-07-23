@@ -35,6 +35,13 @@ export const Projects: CollectionConfig = {
       },
     },
     {
+      name: 'linkLabel',
+      type: 'text',
+      admin: {
+        description: 'Display label for the link (defaults to the hostname).',
+      },
+    },
+    {
       name: 'logo',
       type: 'upload',
       relationTo: 'media',
@@ -60,6 +67,15 @@ export const Projects: CollectionConfig = {
         position: 'sidebar',
       },
     },
+    {
+      name: 'sortOrder',
+      type: 'number',
+      admin: {
+        description: 'Lower numbers sort first on /projects.',
+        position: 'sidebar',
+      },
+    },
     ...slugField(),
   ],
+  defaultSort: 'sortOrder',
 }

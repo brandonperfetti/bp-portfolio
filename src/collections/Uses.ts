@@ -27,8 +27,9 @@ export const Uses: CollectionConfig = {
       type: 'select',
       options: [
         { label: 'Workstation', value: 'workstation' },
-        { label: 'Development', value: 'development' },
+        { label: 'Development tools', value: 'development' },
         { label: 'Design', value: 'design' },
+        { label: 'Podcasts', value: 'podcasts' },
         { label: 'Productivity', value: 'productivity' },
         { label: 'AI', value: 'ai' },
       ],
@@ -50,5 +51,14 @@ export const Uses: CollectionConfig = {
       },
       relationTo: 'tech-stack',
     },
+    {
+      name: 'sortOrder',
+      type: 'number',
+      admin: {
+        description: 'Lower numbers sort first within each /uses section.',
+        position: 'sidebar',
+      },
+    },
   ],
+  defaultSort: 'sortOrder',
 }

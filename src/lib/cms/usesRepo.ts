@@ -6,8 +6,9 @@ import type { CmsUseSection } from '@/lib/cms/types'
 
 const CATEGORY_LABELS: Record<string, string> = {
   workstation: 'Workstation',
-  development: 'Development',
+  development: 'Development tools',
   design: 'Design',
+  podcasts: 'Podcasts',
   productivity: 'Productivity',
   ai: 'AI',
 }
@@ -26,7 +27,7 @@ export const getCmsUses = unstable_cache(
       depth: 0,
       limit: 500,
       overrideAccess: false,
-      sort: 'createdAt',
+      sort: 'sortOrder',
     })
     if (!docs.length) return null
 

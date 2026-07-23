@@ -23,7 +23,7 @@ export const getCmsProjects = unstable_cache(
       depth: 1,
       limit: 200,
       overrideAccess: false,
-      sort: '-year',
+      sort: 'sortOrder',
     })
     if (!docs.length) return null
     return docs.map((p, index) => ({
@@ -32,7 +32,7 @@ export const getCmsProjects = unstable_cache(
       description: p.description || '',
       logo: mediaUrl(p.logo),
       link: p.link
-        ? { href: p.link, label: new URL(p.link).hostname }
+        ? { href: p.link, label: p.linkLabel || new URL(p.link).hostname }
         : undefined,
       order: index,
       updatedAt: p.updatedAt,

@@ -10,14 +10,13 @@ const mediaUrl = (m: unknown): string | undefined =>
 
 /** Display labels for the collection's lowercase `category` select values. */
 const CATEGORY_LABELS: Record<string, string> = {
-  language: 'Language',
+  frontend: 'Frontend',
   framework: 'Framework',
-  library: 'Library',
+  backend: 'Backend',
+  testing: 'Testing',
+  data: 'Data',
   tooling: 'Tooling',
-  platform: 'Platform',
-  database: 'Database',
   ai: 'AI',
-  design: 'Design',
 }
 
 /**
@@ -34,7 +33,7 @@ export const getCmsTech = unstable_cache(
       depth: 1,
       limit: 500,
       overrideAccess: false,
-      sort: 'name',
+      sort: 'sortOrder',
     })
     if (!docs.length) return null
     return docs.map((t, index) => ({

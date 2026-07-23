@@ -17,6 +17,7 @@ import {
   TechStack,
   Users,
   Uses,
+  WorkHistory,
 } from './collections'
 import { defaultLexical } from './fields/defaultLexical'
 import { Footer, Identity, Navigation, SiteSettings } from './globals'
@@ -61,6 +62,7 @@ export default buildConfig({
     Tags,
     Media,
     Users,
+    WorkHistory,
   ],
   editor: defaultLexical,
   graphQL: {

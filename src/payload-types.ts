@@ -77,6 +77,7 @@ export interface Config {
     tags: Tag;
     media: Media;
     users: User;
+    'work-history': WorkHistory;
     redirects: Redirect;
     search: Search;
     'payload-mcp-api-keys': PayloadMcpApiKey;
@@ -97,6 +98,7 @@ export interface Config {
     tags: TagsSelect<false> | TagsSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
+    'work-history': WorkHistorySelect<false> | WorkHistorySelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     search: SearchSelect<false> | SearchSelect<true>;
     'payload-mcp-api-keys': PayloadMcpApiKeysSelect<false> | PayloadMcpApiKeysSelect<true>;
@@ -532,10 +534,18 @@ export interface Project {
    * External URL (live site, repo, or case study).
    */
   link?: string | null;
+  /**
+   * Display label for the link (defaults to the hostname).
+   */
+  linkLabel?: string | null;
   logo?: (number | null) | Media;
   tech?: (number | TechStack)[] | null;
   featured?: boolean | null;
   year?: number | null;
+  /**
+   * Lower numbers sort first on /projects.
+   */
+  sortOrder?: number | null;
   slug?: string | null;
   slugLock?: boolean | null;
   updatedAt: string;
@@ -548,7 +558,7 @@ export interface Project {
 export interface TechStack {
   id: number;
   name: string;
-  category: 'language' | 'framework' | 'library' | 'tooling' | 'platform' | 'database' | 'ai' | 'design';
+  category: 'frontend' | 'framework' | 'backend' | 'testing' | 'data' | 'tooling' | 'ai';
   /**
    * Lucide icon name; leave empty to use the uploaded logo.
    */
@@ -561,6 +571,11 @@ export interface TechStack {
    */
   githubRepo?: string | null;
   notes?: string | null;
+  featured?: boolean | null;
+  /**
+   * Lower numbers sort first on /tech.
+   */
+  sortOrder?: number | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -571,13 +586,40 @@ export interface TechStack {
 export interface Use {
   id: number;
   title: string;
-  category: 'workstation' | 'development' | 'design' | 'productivity' | 'ai';
+  category: 'workstation' | 'development' | 'design' | 'podcasts' | 'productivity' | 'ai';
   description?: string | null;
   link?: string | null;
   /**
    * Optional link into the tech stack for the shared viz.
    */
   tech?: (number | null) | TechStack;
+  /**
+   * Lower numbers sort first within each /uses section.
+   */
+  sortOrder?: number | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "work-history".
+ */
+export interface WorkHistory {
+  id: number;
+  company: string;
+  title: string;
+  description?: string | null;
+  logo?: (number | null) | Media;
+  startDate: string;
+  /**
+   * Leave empty for a current role.
+   */
+  endDate?: string | null;
+  current?: boolean | null;
+  /**
+   * Lower numbers sort first (most recent role on top).
+   */
+  sortOrder?: number | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -958,6 +1000,10 @@ export interface PayloadLockedDocument {
         value: number | User;
       } | null)
     | ({
+        relationTo: 'work-history';
+        value: number | WorkHistory;
+      } | null)
+    | ({
         relationTo: 'redirects';
         value: number | Redirect;
       } | null)
@@ -1199,10 +1245,12 @@ export interface ProjectsSelect<T extends boolean = true> {
   title?: T;
   description?: T;
   link?: T;
+  linkLabel?: T;
   logo?: T;
   tech?: T;
   featured?: T;
   year?: T;
+  sortOrder?: T;
   slug?: T;
   slugLock?: T;
   updatedAt?: T;
@@ -1221,6 +1269,8 @@ export interface TechStackSelect<T extends boolean = true> {
   url?: T;
   githubRepo?: T;
   notes?: T;
+  featured?: T;
+  sortOrder?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1234,6 +1284,7 @@ export interface UsesSelect<T extends boolean = true> {
   description?: T;
   link?: T;
   tech?: T;
+  sortOrder?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1299,6 +1350,22 @@ export interface UsersSelect<T extends boolean = true> {
         createdAt?: T;
         expiresAt?: T;
       };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "work-history_select".
+ */
+export interface WorkHistorySelect<T extends boolean = true> {
+  company?: T;
+  title?: T;
+  description?: T;
+  logo?: T;
+  startDate?: T;
+  endDate?: T;
+  current?: T;
+  sortOrder?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

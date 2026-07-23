@@ -30,15 +30,15 @@ export const TechStack: CollectionConfig = {
     {
       name: 'category',
       type: 'select',
+      // Mirrors the Notion planning taxonomy the content was authored in.
       options: [
-        { label: 'Language', value: 'language' },
+        { label: 'Frontend', value: 'frontend' },
         { label: 'Framework', value: 'framework' },
-        { label: 'Library', value: 'library' },
+        { label: 'Backend', value: 'backend' },
+        { label: 'Testing', value: 'testing' },
+        { label: 'Data', value: 'data' },
         { label: 'Tooling', value: 'tooling' },
-        { label: 'Platform', value: 'platform' },
-        { label: 'Database', value: 'database' },
         { label: 'AI', value: 'ai' },
-        { label: 'Design', value: 'design' },
       ],
       required: true,
     },
@@ -79,5 +79,22 @@ export const TechStack: CollectionConfig = {
       name: 'notes',
       type: 'textarea',
     },
+    {
+      name: 'featured',
+      type: 'checkbox',
+      admin: {
+        position: 'sidebar',
+      },
+      defaultValue: false,
+    },
+    {
+      name: 'sortOrder',
+      type: 'number',
+      admin: {
+        description: 'Lower numbers sort first on /tech.',
+        position: 'sidebar',
+      },
+    },
   ],
+  defaultSort: 'sortOrder',
 }
