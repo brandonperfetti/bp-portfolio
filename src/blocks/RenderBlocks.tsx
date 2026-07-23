@@ -1,6 +1,14 @@
 import { Fragment } from 'react'
 
+import { ArticlesArchiveComponent } from '@/blocks/ArticlesArchive/Component'
 import { CallToActionBlockComponent } from '@/blocks/CallToAction/Component'
+import { ContactFormComponent } from '@/blocks/ContactForm/Component'
+import { FaqListComponent } from '@/blocks/FaqList/Component'
+import { NewsletterSignupComponent } from '@/blocks/NewsletterSignup/Component'
+import { StatsComponent } from '@/blocks/Stats/Component'
+import { TestimonialsComponent } from '@/blocks/Testimonials/Component'
+import { VideoEmbedComponent } from '@/blocks/VideoEmbed/Component'
+import { WorkHistoryCardComponent } from '@/blocks/WorkHistoryCard/Component'
 import { ContentBlockComponent } from '@/blocks/Content/Component'
 import { FeatureCardGridComponent } from '@/blocks/FeatureCardGrid/Component'
 import { LogoCarouselComponent } from '@/blocks/LogoCarousel/Component'
@@ -46,6 +54,22 @@ export function RenderBlocks({
             return <ShaderHeroBlockComponent key={key} {...block} />
           case 'spacer':
             return <SpacerBlockComponent key={key} {...block} />
+          case 'articlesArchive':
+            return <ArticlesArchiveComponent key={key} {...block} />
+          case 'contactForm':
+            return <ContactFormComponent key={key} />
+          case 'faqList':
+            return <FaqListComponent key={key} {...block} />
+          case 'newsletterSignup':
+            return <NewsletterSignupComponent key={key} />
+          case 'stats':
+            return <StatsComponent key={key} {...block} />
+          case 'testimonials':
+            return <TestimonialsComponent key={key} {...block} />
+          case 'videoEmbed':
+            return <VideoEmbedComponent key={key} {...block} />
+          case 'workHistoryCard':
+            return <WorkHistoryCardComponent key={key} />
           default:
             return null
         }

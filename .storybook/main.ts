@@ -13,6 +13,20 @@ const config: StorybookConfig = {
   addons: ['@storybook/addon-a11y', '@storybook/addon-mcp'],
   framework: '@storybook/nextjs-vite',
   staticDirs: ['../public'],
+  viteFinal: async (viteConfig) => {
+    const path = await import('node:path')
+    const { fileURLToPath } = await import('node:url')
+    const here = path.dirname(fileURLToPath(import.meta.url))
+    const stub = path.resolve(here, './serverBlockStubs.tsx')
+    viteConfig.resolve = viteConfig.resolve ?? {}
+    viteConfig.resolve.alias = {
+      ...(viteConfig.resolve.alias ?? {}),
+      // Server blocks reach the Payload Local API — swap for visual stubs.
+      '@/blocks/ArticlesArchive/Component': stub,
+      '@/blocks/WorkHistoryCard/Component': stub,
+    }
+    return viteConfig
+  },
 }
 
 export default config

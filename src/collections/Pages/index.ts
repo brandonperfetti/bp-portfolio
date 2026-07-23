@@ -11,9 +11,17 @@ import {
 import { authenticated } from '@/access/authenticated'
 import { slugField } from '@/fields/slug'
 import { authenticatedOrPublished } from '@/access/authenticatedOrPublished'
+import { ArticlesArchive } from '@/blocks/ArticlesArchive/config'
 import { CallToAction } from '@/blocks/CallToAction/config'
+import { ContactForm } from '@/blocks/ContactForm/config'
+import { FaqList } from '@/blocks/FaqList/config'
 import { FeatureCardGrid } from '@/blocks/FeatureCardGrid/config'
 import { LogoCarousel } from '@/blocks/LogoCarousel/config'
+import { NewsletterSignup } from '@/blocks/NewsletterSignup/config'
+import { Stats } from '@/blocks/Stats/config'
+import { Testimonials } from '@/blocks/Testimonials/config'
+import { VideoEmbed } from '@/blocks/VideoEmbed/config'
+import { WorkHistoryCard } from '@/blocks/WorkHistoryCard/config'
 import { Content } from '@/blocks/Content/config'
 import { MediaBlock } from '@/blocks/MediaBlock/config'
 import { ShaderHero } from '@/blocks/ShaderHero/config'
@@ -94,13 +102,21 @@ export const Pages: CollectionConfig = {
               name: 'layout',
               type: 'blocks',
               blocks: [
+                ArticlesArchive,
                 CallToAction,
+                ContactForm,
                 Content,
+                FaqList,
                 FeatureCardGrid,
                 LogoCarousel,
                 MediaBlock,
+                NewsletterSignup,
                 ShaderHero,
                 Spacer,
+                Stats,
+                Testimonials,
+                VideoEmbed,
+                WorkHistoryCard,
               ],
               required: true,
               admin: {

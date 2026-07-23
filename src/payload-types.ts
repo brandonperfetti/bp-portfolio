@@ -240,13 +240,21 @@ export interface Page {
     media?: (number | null) | Media;
   };
   layout: (
+    | ArticlesArchiveBlock
     | CallToActionBlock
+    | ContactFormBlock
     | ContentBlock
+    | FaqListBlock
     | FeatureCardGridBlock
     | LogoCarouselBlock
     | MediaBlock
+    | NewsletterSignupBlock
     | ShaderHeroBlock
     | SpacerBlock
+    | StatsBlock
+    | TestimonialsBlock
+    | VideoEmbedBlock
+    | WorkHistoryCardBlock
   )[];
   meta?: {
     title?: string | null;
@@ -397,6 +405,20 @@ export interface User {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ArticlesArchiveBlock".
+ */
+export interface ArticlesArchiveBlock {
+  heading?: string | null;
+  /**
+   * How many recent articles to show.
+   */
+  limit?: number | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'articlesArchive';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "CallToActionBlock".
  */
 export interface CallToActionBlock {
@@ -442,6 +464,19 @@ export interface CallToActionBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'cta';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ContactFormBlock".
+ */
+export interface ContactFormBlock {
+  /**
+   * No configuration needed — renders the standard contact form.
+   */
+  note?: string | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'contactForm';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -492,6 +527,37 @@ export interface ContentBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'content';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FaqListBlock".
+ */
+export interface FaqListBlock {
+  heading?: string | null;
+  items?:
+    | {
+        question: string;
+        answer: {
+          root: {
+            type: string;
+            children: {
+              type: any;
+              version: number;
+              [k: string]: unknown;
+            }[];
+            direction: ('ltr' | 'rtl') | null;
+            format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+            indent: number;
+            version: number;
+          };
+          [k: string]: unknown;
+        };
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'faqList';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -585,6 +651,19 @@ export interface MediaBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "NewsletterSignupBlock".
+ */
+export interface NewsletterSignupBlock {
+  /**
+   * No configuration needed — renders the standard newsletter card.
+   */
+  note?: string | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'newsletterSignup';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ShaderHeroBlock".
  */
 export interface ShaderHeroBlock {
@@ -617,6 +696,74 @@ export interface SpacerBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'spacer';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "StatsBlock".
+ */
+export interface StatsBlock {
+  items?:
+    | {
+        /**
+         * e.g. "120+", "99.9%", "12 yrs"
+         */
+        value: string;
+        label: string;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'stats';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TestimonialsBlock".
+ */
+export interface TestimonialsBlock {
+  heading?: string | null;
+  items?:
+    | {
+        quote: string;
+        name: string;
+        role?: string | null;
+        avatar?: (number | null) | Media;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'testimonials';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "VideoEmbedBlock".
+ */
+export interface VideoEmbedBlock {
+  /**
+   * YouTube or Vimeo URL.
+   */
+  url: string;
+  /**
+   * Accessible title for the embed.
+   */
+  title: string;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'videoEmbed';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "WorkHistoryCardBlock".
+ */
+export interface WorkHistoryCardBlock {
+  /**
+   * No configuration needed — renders the work-history card.
+   */
+  note?: string | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'workHistoryCard';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1197,13 +1344,21 @@ export interface PagesSelect<T extends boolean = true> {
   layout?:
     | T
     | {
+        articlesArchive?: T | ArticlesArchiveBlockSelect<T>;
         cta?: T | CallToActionBlockSelect<T>;
+        contactForm?: T | ContactFormBlockSelect<T>;
         content?: T | ContentBlockSelect<T>;
+        faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
         logoCarousel?: T | LogoCarouselBlockSelect<T>;
         mediaBlock?: T | MediaBlockSelect<T>;
+        newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
         shaderHero?: T | ShaderHeroBlockSelect<T>;
         spacer?: T | SpacerBlockSelect<T>;
+        stats?: T | StatsBlockSelect<T>;
+        testimonials?: T | TestimonialsBlockSelect<T>;
+        videoEmbed?: T | VideoEmbedBlockSelect<T>;
+        workHistoryCard?: T | WorkHistoryCardBlockSelect<T>;
       };
   meta?:
     | T
@@ -1218,6 +1373,16 @@ export interface PagesSelect<T extends boolean = true> {
   updatedAt?: T;
   createdAt?: T;
   _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ArticlesArchiveBlock_select".
+ */
+export interface ArticlesArchiveBlockSelect<T extends boolean = true> {
+  heading?: T;
+  limit?: T;
+  id?: T;
+  blockName?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1245,6 +1410,15 @@ export interface CallToActionBlockSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ContactFormBlock_select".
+ */
+export interface ContactFormBlockSelect<T extends boolean = true> {
+  note?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ContentBlock_select".
  */
 export interface ContentBlockSelect<T extends boolean = true> {
@@ -1264,6 +1438,22 @@ export interface ContentBlockSelect<T extends boolean = true> {
               label?: T;
               appearance?: T;
             };
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FaqListBlock_select".
+ */
+export interface FaqListBlockSelect<T extends boolean = true> {
+  heading?: T;
+  items?:
+    | T
+    | {
+        question?: T;
+        answer?: T;
         id?: T;
       };
   id?: T;
@@ -1328,6 +1518,15 @@ export interface MediaBlockSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "NewsletterSignupBlock_select".
+ */
+export interface NewsletterSignupBlockSelect<T extends boolean = true> {
+  note?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ShaderHeroBlock_select".
  */
 export interface ShaderHeroBlockSelect<T extends boolean = true> {
@@ -1342,6 +1541,58 @@ export interface ShaderHeroBlockSelect<T extends boolean = true> {
  */
 export interface SpacerBlockSelect<T extends boolean = true> {
   size?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "StatsBlock_select".
+ */
+export interface StatsBlockSelect<T extends boolean = true> {
+  items?:
+    | T
+    | {
+        value?: T;
+        label?: T;
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TestimonialsBlock_select".
+ */
+export interface TestimonialsBlockSelect<T extends boolean = true> {
+  heading?: T;
+  items?:
+    | T
+    | {
+        quote?: T;
+        name?: T;
+        role?: T;
+        avatar?: T;
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "VideoEmbedBlock_select".
+ */
+export interface VideoEmbedBlockSelect<T extends boolean = true> {
+  url?: T;
+  title?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "WorkHistoryCardBlock_select".
+ */
+export interface WorkHistoryCardBlockSelect<T extends boolean = true> {
+  note?: T;
   id?: T;
   blockName?: T;
 }

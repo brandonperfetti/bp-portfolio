@@ -116,6 +116,54 @@ const DEMO_BLOCKS: LayoutBlock[] = [
   },
   { blockType: 'spacer', size: 'md' },
   {
+    blockType: 'stats',
+    items: [
+      { id: 's1', value: '12+', label: 'Years shipping software' },
+      { id: 's2', value: '50', label: 'Technologies in the stack' },
+      { id: 's3', value: '99.9%', label: 'Uptime attitude' },
+    ],
+  },
+  {
+    blockType: 'faqList',
+    heading: 'Questions',
+    items: [
+      {
+        id: 'q1',
+        question: 'Can I build pages without deploys?',
+        answer: richText('Yes — publish in the admin and the page is live.'),
+      },
+      {
+        id: 'q2',
+        question: 'Do blocks match Storybook?',
+        answer: richText('One 1:1 set across admin, components, and stories.'),
+      },
+    ],
+  },
+  {
+    blockType: 'testimonials',
+    heading: 'Kind words',
+    items: [
+      {
+        id: 't1',
+        quote: 'Brandon turned a vague roadmap into shipped software.',
+        name: 'A Happy Stakeholder',
+        role: 'VP Product',
+      },
+      {
+        id: 't2',
+        quote: 'The rare PM who reads the code before the ticket.',
+        name: 'A Fellow Engineer',
+        role: 'Staff Engineer',
+      },
+    ],
+  },
+  {
+    blockType: 'videoEmbed',
+    url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    title: 'Demo video',
+  },
+  { blockType: 'spacer', size: 'md' },
+  {
     blockType: 'shaderHero',
     preset: 'northern-lights-2',
     richText: richText(

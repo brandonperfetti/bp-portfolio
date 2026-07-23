@@ -25,6 +25,13 @@ vi.mock('@/components/motion/ScrollReveal', () => ({
 vi.mock('@/components/motion/HoverMotionCard', () => ({
   HoverMotionCard: ({ children, as: As = 'div' }: any) => <As>{children}</As>,
 }))
+// Server blocks reach the Payload config (unresolvable in jsdom); stub them.
+vi.mock('@/blocks/ArticlesArchive/Component', () => ({
+  ArticlesArchiveComponent: () => null,
+}))
+vi.mock('@/blocks/WorkHistoryCard/Component', () => ({
+  WorkHistoryCardComponent: () => null,
+}))
 
 const text = (value: string) => ({
   root: {

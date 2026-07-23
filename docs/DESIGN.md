@@ -40,7 +40,12 @@ Block components live beside their configs (`src/blocks/<Name>/Component.tsx`)
 and are dispatched by `src/blocks/RenderBlocks.tsx` — the admin block picker,
 the components, and the `PageBuilder/RenderBlocks` stories are one 1:1 set.
 Adding a block: config + Component + RenderBlocks case + story, then
-`pnpm generate:types` / `generate:importmap` + a migration. Rich text renders
+`pnpm generate:types` / `generate:importmap` + a migration. Server blocks
+that reach the Payload Local API (ArticlesArchive, WorkHistoryCard) are
+aliased to visual stubs in `.storybook/main.ts` — stub any future one there.
+The library is intentionally portable: blocks avoid app-specific imports
+beyond the repos/design system, so the set can later extract into a shared
+package for other Payload projects. Rich text renders
 through `RichTextContent` (article typography pipeline); links through
 `CMSLink` (internal refs keep the /articles contract).
 
