@@ -187,10 +187,6 @@ export interface Page {
    * Page intro line under the headline (distinct from SEO).
    */
   subtitle?: string | null;
-  /**
-   * Home photo strip (five images; home page only).
-   */
-  homeImages?: (number | Media)[] | null;
   hero: {
     type: 'none' | 'standard' | 'shader';
     /**
@@ -249,6 +245,7 @@ export interface Page {
     | LogoCarouselBlock
     | MediaBlock
     | NewsletterSignupBlock
+    | PhotoStripBlock
     | ShaderHeroBlock
     | SpacerBlock
     | StatsBlock
@@ -270,25 +267,6 @@ export interface Page {
   updatedAt: string;
   createdAt: string;
   _status?: ('draft' | 'published') | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "media".
- */
-export interface Media {
-  id: number;
-  alt: string;
-  updatedAt: string;
-  createdAt: string;
-  url?: string | null;
-  thumbnailURL?: string | null;
-  filename?: string | null;
-  mimeType?: string | null;
-  filesize?: number | null;
-  width?: number | null;
-  height?: number | null;
-  focalX?: number | null;
-  focalY?: number | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -317,6 +295,29 @@ export interface Post {
     };
     [k: string]: unknown;
   };
+  /**
+   * Optional page-builder sections rendered after the article body — CTA, newsletter signup, FAQ, related sections, and so on.
+   */
+  layout?:
+    | (
+        | ArticlesArchiveBlock
+        | CallToActionBlock
+        | ContactFormBlock
+        | ContentBlock
+        | FaqListBlock
+        | FeatureCardGridBlock
+        | LogoCarouselBlock
+        | MediaBlock
+        | NewsletterSignupBlock
+        | PhotoStripBlock
+        | ShaderHeroBlock
+        | SpacerBlock
+        | StatsBlock
+        | TestimonialsBlock
+        | VideoEmbedBlock
+        | WorkHistoryCardBlock
+      )[]
+    | null;
   relatedPosts?: (number | Post)[] | null;
   categories?: (number | Category)[] | null;
   tags?: (number | Tag)[] | null;
@@ -355,53 +356,22 @@ export interface Post {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories".
+ * via the `definition` "media".
  */
-export interface Category {
+export interface Media {
   id: number;
-  title: string;
-  slug?: string | null;
-  slugLock?: boolean | null;
+  alt: string;
   updatedAt: string;
   createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "tags".
- */
-export interface Tag {
-  id: number;
-  title: string;
-  slug?: string | null;
-  slugLock?: boolean | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "users".
- */
-export interface User {
-  id: number;
-  name?: string | null;
-  updatedAt: string;
-  createdAt: string;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  sessions?:
-    | {
-        id: string;
-        createdAt?: string | null;
-        expiresAt: string;
-      }[]
-    | null;
-  password?: string | null;
-  collection: 'users';
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -664,6 +634,19 @@ export interface NewsletterSignupBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "PhotoStripBlock".
+ */
+export interface PhotoStripBlock {
+  /**
+   * Photos for the parallax strip — about five fills it best. On the Home page this block replaces the default gallery under the hero.
+   */
+  images: (number | Media)[];
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'photoStrip';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ShaderHeroBlock".
  */
 export interface ShaderHeroBlock {
@@ -767,6 +750,56 @@ export interface WorkHistoryCardBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories".
+ */
+export interface Category {
+  id: number;
+  title: string;
+  slug?: string | null;
+  slugLock?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "tags".
+ */
+export interface Tag {
+  id: number;
+  title: string;
+  slug?: string | null;
+  slugLock?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "users".
+ */
+export interface User {
+  id: number;
+  name?: string | null;
+  updatedAt: string;
+  createdAt: string;
+  email: string;
+  resetPasswordToken?: string | null;
+  resetPasswordExpiration?: string | null;
+  salt?: string | null;
+  hash?: string | null;
+  loginAttempts?: number | null;
+  lockUntil?: string | null;
+  sessions?:
+    | {
+        id: string;
+        createdAt?: string | null;
+        expiresAt: string;
+      }[]
+    | null;
+  password?: string | null;
+  collection: 'users';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "projects".
  */
 export interface Project {
@@ -810,7 +843,7 @@ export interface TechStack {
   proficiency?: ('daily' | 'proficient' | 'familiar' | 'exploring') | null;
   url?: string | null;
   /**
-   * owner/name — enables live GitHub signals on /tech.
+   * Optional single repo hint as owner/name (e.g. "vercel/next.js") — NOT a profile URL. The /tech activity badges come from an account-wide scan of the GITHUB_OWNER account; this field is only a fallback to match this entry to scan results when its display name differs from the package/topic name.
    */
   githubRepo?: string | null;
   notes?: string | null;
@@ -1317,7 +1350,6 @@ export interface PayloadMigration {
 export interface PagesSelect<T extends boolean = true> {
   title?: T;
   subtitle?: T;
-  homeImages?: T;
   hero?:
     | T
     | {
@@ -1353,6 +1385,7 @@ export interface PagesSelect<T extends boolean = true> {
         logoCarousel?: T | LogoCarouselBlockSelect<T>;
         mediaBlock?: T | MediaBlockSelect<T>;
         newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
+        photoStrip?: T | PhotoStripBlockSelect<T>;
         shaderHero?: T | ShaderHeroBlockSelect<T>;
         spacer?: T | SpacerBlockSelect<T>;
         stats?: T | StatsBlockSelect<T>;
@@ -1527,6 +1560,15 @@ export interface NewsletterSignupBlockSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "PhotoStripBlock_select".
+ */
+export interface PhotoStripBlockSelect<T extends boolean = true> {
+  images?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ShaderHeroBlock_select".
  */
 export interface ShaderHeroBlockSelect<T extends boolean = true> {
@@ -1605,6 +1647,26 @@ export interface PostsSelect<T extends boolean = true> {
   excerpt?: T;
   heroImage?: T;
   content?: T;
+  layout?:
+    | T
+    | {
+        articlesArchive?: T | ArticlesArchiveBlockSelect<T>;
+        cta?: T | CallToActionBlockSelect<T>;
+        contactForm?: T | ContactFormBlockSelect<T>;
+        content?: T | ContentBlockSelect<T>;
+        faqList?: T | FaqListBlockSelect<T>;
+        featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
+        logoCarousel?: T | LogoCarouselBlockSelect<T>;
+        mediaBlock?: T | MediaBlockSelect<T>;
+        newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
+        photoStrip?: T | PhotoStripBlockSelect<T>;
+        shaderHero?: T | ShaderHeroBlockSelect<T>;
+        spacer?: T | SpacerBlockSelect<T>;
+        stats?: T | StatsBlockSelect<T>;
+        testimonials?: T | TestimonialsBlockSelect<T>;
+        videoEmbed?: T | VideoEmbedBlockSelect<T>;
+        workHistoryCard?: T | WorkHistoryCardBlockSelect<T>;
+      };
   relatedPosts?: T;
   categories?: T;
   tags?: T;

@@ -14,16 +14,28 @@ Payload is the single source of truth for site content. Admin at `/admin`
   **Editor features must keep every node type the Notion migration emitted
   registered** — lists (ordered/unordered/check), blockquote, upload — plus
   blocks Banner/Code/MediaBlock. Removing one crashes every migrated article
-  with minified Lexical error #17.
-- **Pages** — block-composed pages (hero + CallToAction/Content/MediaBlock/
-  Spacer/ShaderHero blocks) resolved by path. **Page builder:** any
-  published page whose slug isn't owned by a dedicated route renders at
+  with minified Lexical error #17. Posts also carry an optional
+  `layout` blocks field (the shared block library) rendered **below** the
+  article body by `<CmsPostBlocks slug="…" />` — per-article CTAs, newsletter
+  signups, FAQ sections. (Above-article is intentionally not offered: the
+  hero/title own that space.)
+- **Pages** — block-composed pages resolved by path. The block library lives
+  in `src/blocks/library.ts` (`pageBuilderBlocks`) — one alphabetical list
+  registered by every layout-capable surface (Pages + Posts), keeping the
+  admin picker, `RenderBlocks`, and Storybook a 1:1 set. **Page builder:**
+  any published page whose slug isn't owned by a dedicated route renders at
   `/[slug]` via `RenderHero` + `RenderBlocks` — compose new pages entirely
   in admin, no code or deploy. Reserved slugs live in
   `src/app/(frontend)/[slug]/page.tsx`. **Hybrid routes:** the seven
   code-owned routes also render their Pages doc's layout via
   `<CmsPageBlocks slug="…" />` (spacer-only layouts are treated as empty),
   so admin-composed sections can be appended to bespoke pages too.
+  **PhotoStrip special case:** the home route consumes its Pages doc's first
+  `photoStrip` block for the hero-slot gallery (via
+  `photoStripImagesFromLayout` in `pagesRepo`) and excludes `photoStrip`
+  from its end-of-page region (`<CmsPageBlocks slug="home"
+exclude={['photoStrip']} />`) so it never renders twice — editing that
+  block in admin swaps the home gallery in place.
 - **Projects**, **TechStack** (name/category/proficiency/logo/url/githubRepo),
   **Uses** (category-grouped tools), **Categories**, **Tags**, **Media**
   (Blob-backed), **Users** (admin operators).

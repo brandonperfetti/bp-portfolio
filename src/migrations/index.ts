@@ -4,6 +4,7 @@ import * as migration_20260723_134344_seed_collections from './20260723_134344_s
 import * as migration_20260723_135530_pages_subtitle_home_images from './20260723_135530_pages_subtitle_home_images'
 import * as migration_20260723_153219_feature_grid_logo_carousel from './20260723_153219_feature_grid_logo_carousel'
 import * as migration_20260723_155506_block_library_expansion from './20260723_155506_block_library_expansion'
+import * as migration_20260723_171916_photo_strip_posts_layout from './20260723_171916_photo_strip_posts_layout'
 
 export const migrations = [
   {
@@ -35,5 +36,10 @@ export const migrations = [
     up: migration_20260723_155506_block_library_expansion.up,
     down: migration_20260723_155506_block_library_expansion.down,
     name: '20260723_155506_block_library_expansion',
+  },
+  {
+    up: migration_20260723_171916_photo_strip_posts_layout.up,
+    down: migration_20260723_171916_photo_strip_posts_layout.down,
+    name: '20260723_171916_photo_strip_posts_layout',
   },
 ]

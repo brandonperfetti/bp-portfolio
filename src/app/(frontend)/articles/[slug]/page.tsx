@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { ArticleLayout } from '@/components/ArticleLayout'
 import { ArticleBody } from '@/components/cms/ArticleBody'
 import { ArticleMeta } from '@/components/cms/ArticleMeta'
+import { CmsPostBlocks } from '@/components/cms/CmsPostBlocks'
 import { SyncErrorState } from '@/components/cms/SyncErrorState'
 import { UseWithAiMenu } from '@/components/cms/UseWithAiMenu'
 import { getViewer } from '@/lib/auth/getViewer'
@@ -209,51 +210,54 @@ export default async function ArticlePage({ params }: PageProps) {
   }
 
   return (
-    <ArticleLayout
-      article={{
-        title: article.title,
-        date: article.date,
-        image: article.image,
-      }}
-    >
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(articleSchema) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
-      />
-      <ArticleMeta
-        author={article.author}
-        actions={
-          <UseWithAiMenu markdown={articleBlocksToMarkdown(bodyBlocks)} />
-        }
-        readingTimeMinutes={article.readingTimeMinutes}
-        category={article.category?.title}
-        topics={article.topics}
-        tech={article.tech}
-      />
-      {article.gated ? (
-        <div className="mt-8 rounded-2xl border border-zinc-200 p-6 text-center dark:border-zinc-700/60">
-          <p className="text-base font-medium text-zinc-800 dark:text-zinc-100">
-            This article is for members.
-          </p>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Sign in (it&apos;s free) to read the full piece.
-          </p>
-          <a
-            href={`/sign-in?redirect_url=/articles/${article.slug}`}
-            className="mt-4 inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600"
-          >
-            Sign in to continue
-          </a>
-        </div>
-      ) : hasBodyBlocks ? (
-        <ArticleBody blocks={bodyBlocks} />
-      ) : (
-        <SyncErrorState />
-      )}
-    </ArticleLayout>
+    <>
+      <ArticleLayout
+        article={{
+          title: article.title,
+          date: article.date,
+          image: article.image,
+        }}
+      >
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: toSafeJsonLd(articleSchema) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
+        />
+        <ArticleMeta
+          author={article.author}
+          actions={
+            <UseWithAiMenu markdown={articleBlocksToMarkdown(bodyBlocks)} />
+          }
+          readingTimeMinutes={article.readingTimeMinutes}
+          category={article.category?.title}
+          topics={article.topics}
+          tech={article.tech}
+        />
+        {article.gated ? (
+          <div className="mt-8 rounded-2xl border border-zinc-200 p-6 text-center dark:border-zinc-700/60">
+            <p className="text-base font-medium text-zinc-800 dark:text-zinc-100">
+              This article is for members.
+            </p>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              Sign in (it&apos;s free) to read the full piece.
+            </p>
+            <a
+              href={`/sign-in?redirect_url=/articles/${article.slug}`}
+              className="mt-4 inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600"
+            >
+              Sign in to continue
+            </a>
+          </div>
+        ) : hasBodyBlocks ? (
+          <ArticleBody blocks={bodyBlocks} />
+        ) : (
+          <SyncErrorState />
+        )}
+      </ArticleLayout>
+      <CmsPostBlocks slug={article.slug} />
+    </>
   )
 }

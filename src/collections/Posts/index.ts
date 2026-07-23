@@ -27,6 +27,7 @@ import { authenticated } from '@/access/authenticated'
 import { slugField } from '@/fields/slug'
 import { authenticatedOrPublished } from '@/access/authenticatedOrPublished'
 import { accessGroup } from '@/fields/accessGroup'
+import { pageBuilderBlocks } from '@/blocks/library'
 import { Banner } from '@/blocks/Banner/config'
 import { Code } from '@/blocks/Code/config'
 import { MediaBlock } from '@/blocks/MediaBlock/config'
@@ -132,6 +133,17 @@ export const Posts: CollectionConfig = {
               }),
               label: false,
               required: true,
+            },
+            {
+              name: 'layout',
+              type: 'blocks',
+              blocks: pageBuilderBlocks,
+              label: 'Below-article blocks',
+              admin: {
+                initCollapsed: true,
+                description:
+                  'Optional page-builder sections rendered after the article body — CTA, newsletter signup, FAQ, related sections, and so on.',
+              },
             },
           ],
           label: 'Content',

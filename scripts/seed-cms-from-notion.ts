@@ -853,7 +853,7 @@ const SEED = {
     siteName: 'Brandon Perfetti',
     canonicalUrl: 'https://brandonperfetti.com',
     seoDescription:
-      "I'm Brandon, a product and project manager plus software engineer based in Orange County, California.",
+      'Senior frontend-focused full-stack engineer delivering practical software systems with Next.js, TypeScript, GraphQL, and AI SDK + MCP workflows.',
     ogImageUrl:
       'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142617/bp-spotlight/images/avatar_jeycju.jpg',
   },
@@ -864,7 +864,7 @@ const SEED = {
       description: '',
       logoUrl:
         'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1774040299/bp-portfolio/logos/footer-brytecore-bug_xsf8iw.webp',
-      startDate: '2024-01-01',
+      startDate: '2024-01-01T12:00:00.000Z',
       endDate: null,
       current: true,
       sortOrder: 5,
@@ -876,8 +876,8 @@ const SEED = {
         'Led and delivered technical project and product initiatives in cross-functional environments.',
       logoUrl:
         'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562788/bp-portfolio/images/logos/lone-wolf_hpftff_fsqe3o.png',
-      startDate: '2021-01-01',
-      endDate: '2023-01-01',
+      startDate: '2021-01-01T12:00:00.000Z',
+      endDate: '2023-01-01T12:00:00.000Z',
       current: false,
       sortOrder: 20,
     },
@@ -888,8 +888,8 @@ const SEED = {
         'Drove enterprise data integration programs and technical delivery leadership.',
       logoUrl:
         'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
-      startDate: '2017-01-01',
-      endDate: '2020-01-01',
+      startDate: '2017-01-01T12:00:00.000Z',
+      endDate: '2020-01-01T12:00:00.000Z',
       current: false,
       sortOrder: 30,
     },
@@ -900,8 +900,8 @@ const SEED = {
         'Built and maintained integration pipelines and implementation workflows for client platforms.',
       logoUrl:
         'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
-      startDate: '2013-01-01',
-      endDate: '2017-01-01',
+      startDate: '2013-01-01T12:00:00.000Z',
+      endDate: '2017-01-01T12:00:00.000Z',
       current: false,
       sortOrder: 40,
     },
@@ -1125,10 +1125,10 @@ const run = async () => {
 
   for (const pg of SEED.pages) {
     const hero = await uploadLogo(pg.heroImageUrl, `${pg.slug} hero image`)
-    const homeImages: number[] = []
+    const stripImages: number[] = []
     for (const url of pg.homeImageUrls) {
-      const id = await uploadLogo(url, 'Home gallery photo')
-      if (id) homeImages.push(id)
+      const id = await uploadLogo(url, 'Photo strip image')
+      if (id) stripImages.push(id)
     }
     const found = await payload.find({
       collection: 'pages',
@@ -1149,8 +1149,11 @@ const run = async () => {
       meta: { title: pg.seoTitle, description: pg.seoDescription },
       // Pages requires at least one layout block; route components render
       // their own bodies today, so seeded pages carry a minimal spacer.
-      layout: [{ blockType: 'spacer' as const, size: 'sm' as const }],
-      ...(homeImages.length ? { homeImages } : {}),
+      // Home instead gets a PhotoStrip block — the home route consumes it
+      // for the hero-slot gallery (see src/app/(frontend)/page.tsx).
+      layout: stripImages.length
+        ? [{ blockType: 'photoStrip' as const, images: stripImages }]
+        : [{ blockType: 'spacer' as const, size: 'sm' as const }],
     }
     if (DRY_RUN) {
       payload.logger.info(
