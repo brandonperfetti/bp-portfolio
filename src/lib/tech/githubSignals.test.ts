@@ -65,6 +65,35 @@ describe('matchTechSignal', () => {
     expect(matchTechSignal(null, item({ name: 'Next.js' }))).toBeNull()
     expect(matchTechSignal(index, item({ name: 'COBOL' }))).toBeNull()
   })
+
+  it('collapses slashes/dots in display names (shadcn/ui → shadcn-ui)', () => {
+    const withShadcn: TechSignalsIndex = {
+      ...index,
+      byKey: { ...index.byKey, 'shadcn-ui': summary('shadcn-ui') },
+    }
+    expect(matchTechSignal(withShadcn, item({ name: 'shadcn/ui' }))?.key).toBe(
+      'shadcn-ui',
+    )
+  })
+
+  it('resolves scoped-package prefix aliases to the best-scoring key', () => {
+    const withTl: TechSignalsIndex = {
+      ...index,
+      byKey: {
+        ...index.byKey,
+        '@testing-library/react': summary('@testing-library/react', {
+          score: 12,
+          repoCount: 4,
+        }),
+        '@testing-library/jest-dom': summary('@testing-library/jest-dom', {
+          score: 9,
+        }),
+      },
+    }
+    const matched = matchTechSignal(withTl, item({ name: 'Testing Library' }))
+    expect(matched?.key).toBe('@testing-library/react')
+    expect(matched?.repoCount).toBe(4)
+  })
 })
 
 describe('buildSignalsBySlug', () => {

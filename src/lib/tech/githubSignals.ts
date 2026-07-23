@@ -86,8 +86,44 @@ export const getTechSignalsIndex = unstable_cache(
 )
 
 /**
- * Finds the signal summary for a CMS tech item, trying the canonicalized
- * display name first, then the repo short name from `githubRepo`.
+ * Display-name → scan-key aliases the generic canonicalization can't derive.
+ * Values ending in `/` are treated as key prefixes (scoped npm packages):
+ * the best-scoring key under that prefix wins.
+ */
+const NAME_ALIASES: Record<string, string[]> = {
+  'shadcn/ui': ['shadcn-ui'],
+  'testing library': ['@testing-library/'],
+  'fly.io': ['fly', 'flyio'],
+  'mongodb atlas': ['mongodb'],
+  'tanstack query': ['tanstack'],
+}
+
+/** Resolves one candidate (exact key, or `prefix/` pattern) against the index. */
+function lookupCandidate(
+  byKey: Record<string, TechSignalSummary>,
+  candidate: string,
+): TechSignalSummary | null {
+  if (!candidate.endsWith('/')) {
+    return byKey[candidate] ?? null
+  }
+  // Prefix pattern: best-scoring key under the scope (repoCount reads as
+  // "at least N repos" — scoped packages usually co-occur per repo).
+  let best: TechSignalSummary | null = null
+  for (const key of Object.keys(byKey)) {
+    if (key.startsWith(candidate) && (!best || byKey[key].score > best.score)) {
+      best = byKey[key]
+    }
+  }
+  return best
+}
+
+/**
+ * Finds the signal summary for a CMS tech item.
+ *
+ * Match order: canonicalized display name (`coerceTechKey`), then the name
+ * with slashes/dots collapsed to hyphens (`shadcn/ui` → `shadcn-ui`), then
+ * explicit aliases (including scoped-package prefixes like
+ * `@testing-library/`), then the `githubRepo` short name.
  *
  * @param index Cached scan output (or `null` when unconfigured).
  * @param item CMS tech row (name and optional `owner/name` repo hint).
@@ -101,14 +137,24 @@ export function matchTechSignal(
     return null
   }
 
-  const byName = index.byKey[coerceTechKey(item.name)]
-  if (byName) {
-    return byName
-  }
+  const lowerName = item.name.trim().toLowerCase()
+  const candidates: string[] = [
+    coerceTechKey(item.name),
+    // Collapse separators the canonicalizer leaves in place.
+    coerceTechKey(lowerName.replace(/[./]/g, '-')),
+    ...(NAME_ALIASES[lowerName] ?? []),
+  ]
 
   const repoShortName = item.githubRepo?.split('/')[1]?.trim()
   if (repoShortName) {
-    return index.byKey[coerceTechKey(repoShortName)] ?? null
+    candidates.push(coerceTechKey(repoShortName))
+  }
+
+  for (const candidate of candidates) {
+    const match = lookupCandidate(index.byKey, candidate)
+    if (match) {
+      return match
+    }
   }
 
   return null
