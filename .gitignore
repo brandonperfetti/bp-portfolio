@@ -52,3 +52,4 @@ public/sitemap.xml
 .tmp*
 # migration run artifacts (one-off reconciliation output, not source)
 scripts/migration-report.json
+storybook-static

@@ -55,6 +55,9 @@ jobs:
       - name: Unit tests (Vitest + coverage)
         run: pnpm test:coverage
 
+      - name: Build Storybook (story breakage gate)
+        run: pnpm build-storybook
+
   e2e:
     name: Build · E2E
     runs-on: ubuntu-latest

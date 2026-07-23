@@ -17,6 +17,8 @@ export default defineConfig([
     // Payload-generated artifacts — regenerated, not hand-maintained.
     'src/payload-types.ts',
     'src/app/(payload)/admin/importMap.js',
+    // Storybook build output.
+    'storybook-static/**',
   ]),
   {
     files: ['next-env.d.ts'],
