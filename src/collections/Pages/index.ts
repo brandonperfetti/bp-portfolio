@@ -64,6 +64,22 @@ export const Pages: CollectionConfig = {
       required: true,
     },
     {
+      name: 'subtitle',
+      type: 'textarea',
+      admin: {
+        description: 'Page intro line under the headline (distinct from SEO).',
+      },
+    },
+    {
+      name: 'homeImages',
+      type: 'upload',
+      hasMany: true,
+      relationTo: 'media',
+      admin: {
+        description: 'Home photo strip (five images; home page only).',
+      },
+    },
+    {
       type: 'tabs',
       tabs: [
         {

@@ -754,6 +754,109 @@ const SEED = {
       sortOrder: 7,
     },
   ],
+  pages: [
+    {
+      slug: 'home',
+      title:
+        'Senior frontend and full-stack engineer focused on practical software delivery.',
+      subtitle:
+        "I'm Brandon Perfetti from Orange County, CA. I build reliable web platforms with Next.js, TypeScript, GraphQL, and AI SDK + MCP workflows, with product-minded delivery leadership.",
+      seoTitle: 'Brandon Perfetti — Senior Frontend & Full-Stack Engineer',
+      seoDescription:
+        'Senior frontend-focused full-stack engineer delivering practical software systems with Next.js, TypeScript, GraphQL, and AI SDK + MCP workflows.',
+      heroImageUrl:
+        'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142617/bp-spotlight/images/avatar_jeycju.jpg',
+      homeImageUrls: [
+        'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684298666/image-1_ebktnx.jpg',
+        'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684298666/image-2_vutl5o.jpg',
+        'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684298667/image-3_rfkaku.jpg',
+        'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684298665/image-4_iten8l.jpg',
+        'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684298668/image-5_cpx20p.jpg',
+      ],
+    },
+    {
+      slug: 'about',
+      title:
+        'I build practical, high-impact software with frontend excellence and full-stack systems thinking.',
+      subtitle:
+        'Brandon Perfetti is a senior frontend and full-stack engineer from Orange County, CA, with product-minded delivery leadership across SaaS platforms.',
+      seoTitle:
+        'About Brandon Perfetti — Senior Frontend & Full-Stack Engineer',
+      seoDescription:
+        'Senior frontend-focused full-stack engineer building scalable SaaS systems with Next.js, TypeScript, GraphQL, and AI-enabled workflows.',
+      heroImageUrl:
+        'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142618/bp-spotlight/images/portrait_zdvgpf.jpg',
+      homeImageUrls: [],
+    },
+    {
+      slug: 'articles',
+      title:
+        'Writing on mindset, software design, leadership, and product execution.',
+      subtitle:
+        'AI-assisted, expert-guided notes on real engineering work. I use these articles to think clearly, improve execution, and share practical lessons as I learn.',
+      seoTitle: 'Articles | AI-Assisted Engineering Notes',
+      seoDescription:
+        'Practical articles on mindset, software design, leadership, and product execution. AI-assisted and guided by real engineering judgment and continuous learning.',
+      heroImageUrl: null,
+      homeImageUrls: [],
+    },
+    {
+      slug: 'projects',
+      title:
+        'Selected engineering projects across frontend architecture, full-stack delivery, and AI-enabled workflows.',
+      subtitle:
+        'A practical mix of SaaS platform builds, integration-heavy implementations, and product-minded execution.',
+      seoTitle: 'Projects — Brandon Perfetti | Frontend & Full-Stack Engineer',
+      seoDescription:
+        "Explore Brandon Perfetti's projects spanning Next.js, TypeScript, GraphQL, integrations, and AI-enabled engineering workflows.",
+      heroImageUrl: null,
+      homeImageUrls: [],
+    },
+    {
+      slug: 'tech',
+      title:
+        'Core technologies I use to build scalable web and AI-enabled systems.',
+      subtitle:
+        'A practical stack for frontend architecture, full-stack delivery, and reliable execution over time.',
+      seoTitle:
+        'Tech Stack — Brandon Perfetti | Frontend & Full-Stack Engineer',
+      seoDescription:
+        "Explore Brandon Perfetti's core stack: Next.js, TypeScript, React, GraphQL, integrations, and AI-enabled engineering workflows.",
+      heroImageUrl: null,
+      homeImageUrls: [],
+    },
+    {
+      slug: 'uses',
+      title:
+        'Software, hardware, and workflows I use to ship reliable products.',
+      subtitle:
+        'A practical stack for engineering execution, AI-assisted workflows, communication, and continuous learning.',
+      seoTitle: 'Uses — Brandon Perfetti | Tools, Stack, and Workflow',
+      seoDescription:
+        'Explore the software, hardware, and workflows Brandon Perfetti uses for engineering execution, AI-assisted work, and continuous learning.',
+      heroImageUrl: null,
+      homeImageUrls: [],
+    },
+    {
+      slug: 'hermes',
+      title: 'Hermes AI Assistant',
+      subtitle:
+        'A practical AI workspace for Q&A, prompt iteration, and image generation experiments tied to real engineering workflows.',
+      seoTitle: 'Hermes AI Assistant — Brandon Perfetti',
+      seoDescription:
+        "Explore Hermes, Brandon Perfetti's AI assistant workspace for practical Q&A, prompt iteration, and image generation workflows.",
+      heroImageUrl: null,
+      homeImageUrls: [],
+    },
+  ],
+  siteSettings: {
+    siteName: 'Brandon Perfetti',
+    canonicalUrl: 'https://brandonperfetti.com',
+    seoDescription:
+      "I'm Brandon, a product and project manager plus software engineer based in Orange County, California.",
+    ogImageUrl:
+      'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1683142617/bp-spotlight/images/avatar_jeycju.jpg',
+  },
   workHistory: [
     {
       company: 'Brytecore',
@@ -829,6 +932,21 @@ const SEED = {
     featured: boolean
     sortOrder: number
   }>
+  pages: Array<{
+    slug: string
+    title: string
+    subtitle: string
+    seoTitle: string
+    seoDescription: string
+    heroImageUrl: string | null
+    homeImageUrls: string[]
+  }>
+  siteSettings: {
+    siteName: string
+    canonicalUrl: string
+    seoDescription: string
+    ogImageUrl: string | null
+  }
   workHistory: Array<{
     company: string
     title: string
@@ -1003,6 +1121,80 @@ const run = async () => {
       },
       `${w.company} — ${w.title}`,
     )
+  }
+
+  for (const pg of SEED.pages) {
+    const hero = await uploadLogo(pg.heroImageUrl, `${pg.slug} hero image`)
+    const homeImages: number[] = []
+    for (const url of pg.homeImageUrls) {
+      const id = await uploadLogo(url, 'Home gallery photo')
+      if (id) homeImages.push(id)
+    }
+    const found = await payload.find({
+      collection: 'pages',
+      where: { slug: { equals: pg.slug } },
+      limit: 1,
+      draft: true,
+    })
+    const data = {
+      title: pg.title,
+      subtitle: pg.subtitle,
+      slug: pg.slug,
+      slugLock: true,
+      _status: 'published' as const,
+      hero: {
+        type: 'none' as const,
+        ...(hero ? { media: hero } : {}),
+      },
+      meta: { title: pg.seoTitle, description: pg.seoDescription },
+      // Pages requires at least one layout block; route components render
+      // their own bodies today, so seeded pages carry a minimal spacer.
+      layout: [{ blockType: 'spacer' as const, size: 'sm' as const }],
+      ...(homeImages.length ? { homeImages } : {}),
+    }
+    if (DRY_RUN) {
+      payload.logger.info(
+        `[seed] DRY_RUN ${found.docs[0] ? 'update' : 'create'} pages: ${pg.slug}`,
+      )
+      report.skipped += 1
+    } else if (found.docs[0]) {
+      await payload.update({
+        collection: 'pages',
+        id: found.docs[0].id,
+        data,
+        context: { disableRevalidate: true },
+      })
+      report.updated += 1
+    } else {
+      await payload.create({
+        collection: 'pages',
+        data,
+        draft: false,
+        context: { disableRevalidate: true },
+      })
+      report.created += 1
+    }
+  }
+
+  // SiteSettings global (single source for name/canonical/default SEO).
+  const og = await uploadLogo(SEED.siteSettings.ogImageUrl, 'Default OG image')
+  if (DRY_RUN) {
+    payload.logger.info('[seed] DRY_RUN update global site-settings')
+  } else {
+    await payload.updateGlobal({
+      slug: 'site-settings',
+      context: { disableRevalidate: true },
+      data: {
+        siteName: SEED.siteSettings.siteName,
+        canonicalUrl: SEED.siteSettings.canonicalUrl,
+        defaultSeo: {
+          title: SEED.siteSettings.siteName,
+          description: SEED.siteSettings.seoDescription,
+          ...(og ? { ogImage: og } : {}),
+        },
+      },
+    })
+    payload.logger.info('[seed] global site-settings updated')
   }
 
   payload.logger.info(

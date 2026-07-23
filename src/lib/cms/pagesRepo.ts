@@ -54,11 +54,14 @@ export const getCmsPageByPath = unstable_cache(
       routeKey: normalizePath(path),
       slug: page.slug || slug,
       title: page.title,
-      subtitle: page.meta?.description || undefined,
+      subtitle: page.subtitle || page.meta?.description || undefined,
       seoTitle: page.meta?.title || undefined,
       seoDescription: page.meta?.description || undefined,
       heroImage: mediaUrl(page.hero?.media),
       ogImage: mediaUrl(page.meta?.image),
+      homeImages: (page.homeImages ?? [])
+        .map((image) => mediaUrl(image))
+        .filter((url): url is string => Boolean(url)),
       updatedAt: page.updatedAt,
     }
 
