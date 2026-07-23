@@ -2,6 +2,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 import { vercelPostgresAdapter } from '@payloadcms/db-vercel-postgres'
+import { nodemailerAdapter } from '@payloadcms/email-nodemailer'
 import { vercelBlobStorage } from '@payloadcms/storage-vercel-blob'
 import { buildConfig } from 'payload'
 import sharp from 'sharp'
@@ -66,6 +67,27 @@ export default buildConfig({
     // Payload's default in production — asserted here so it can't regress.
     disablePlaygroundInProduction: true,
   },
+  // SendGrid SMTP relay (retained v3 investment, §17). Only active when the
+  // API key is present; otherwise Payload logs emails to console, so local
+  // dev and CI boot without SendGrid. Fixes forgot-password on staging.
+  ...(process.env.SENDGRID_API_KEY
+    ? {
+        email: nodemailerAdapter({
+          defaultFromAddress:
+            process.env.SENDGRID_FROM_EMAIL || 'info@brandonperfetti.com',
+          defaultFromName: process.env.NEXT_PUBLIC_SITE_NAME || 'BP Portfolio',
+          transportOptions: {
+            host: 'smtp.sendgrid.net',
+            port: 587,
+            auth: {
+              // SendGrid SMTP uses the literal username "apikey".
+              user: 'apikey',
+              pass: process.env.SENDGRID_API_KEY,
+            },
+          },
+        }),
+      }
+    : {}),
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
