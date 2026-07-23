@@ -1,85 +1,56 @@
 # Architecture
 
-## Runtime Model
+## Runtime model
 
-- Framework: Next.js App Router (`src/app`).
-- Rendering:
-  - Static and dynamic App Router rendering.
-  - Dynamic API routes for chat, image generation, contact, newsletter, and search index.
-- Content source:
-  - Local provider: fallback mode with empty article-safe behavior.
-  - Notion provider: metadata from `Portfolio CMS - Articles` data source and canonical body from `Source Article` page blocks.
+- Next.js 16 App Router (`src/app`), Turbopack builds, React 19 RSC-first.
+- Payload CMS 3 runs **inside** the Next app (`@payloadcms/next`): the admin
+  UI at `/admin` and the Payload REST/GraphQL APIs live in
+  `src/app/(payload)/`; server code queries content through the **Local API**
+  (`getPayload()`), never over HTTP.
+- Postgres via `@payloadcms/db-vercel-postgres` (Drizzle). Schema changes ship
+  as committed migrations (`pnpm migrate`); `PAYLOAD_DB_PUSH=true` enables dev
+  push mode locally only.
+- Media uploads live in Vercel Blob (`@payloadcms/storage-vercel-blob`),
+  enabled only when `BLOB_READ_WRITE_TOKEN` is set.
+- Clerk middleware runs from `src/proxy.ts` (Next 16 proxy convention), gated
+  on `isClerkEnabled()` so the app boots without Clerk keys.
 
-## Primary Layers
+## Layers
 
-- `src/app/`
-  - Route handlers and page entries.
-  - Dynamic article route (`src/app/articles/[slug]/page.tsx`).
-  - SEO routes (`sitemap.ts`, `robots.ts`, feed route).
-  - Metadata defaults in `layout.tsx`.
-- `src/components/`
-  - Reusable UI shell (`Layout`, `Header`, `Footer`, `Container`).
-  - Feature components (`HermesChat`, `ArticlesExplorer`, `HeaderSearch`, `Messenger`).
-- `src/lib/`
-  - Provider facade and CMS repositories (`src/lib/cms/*`).
-  - Article aggregation/parsing + metadata helpers.
-  - Shared debouncing utility.
-  - Work history provider (`src/lib/cms/workHistoryRepo.ts`) powers home-page resume data in Notion mode.
-  - Page content provider (`src/lib/cms/pagesRepo.ts`) powers home/about hero + content slots in Notion mode.
-- `src/icons/`
-  - Project-local icon set.
-- `src/styles/`
-  - Tailwind v4 entry + Prism theme.
+- `src/app/(frontend)/` — public pages (RSC). Dynamic article route:
+  `src/app/(frontend)/articles/[slug]/page.tsx` (v3 URL shape preserved).
+- `src/app/(payload)/` — Payload admin + generated API routes. Do not edit
+  `admin/importMap.js` by hand (generated; CI-gated).
+- `src/app/api/` — custom route handlers: `ai/chat` (Hermes), `search`
+  (palette index), `sendgrid` (contact/newsletter), `clerk/webhook` (email
+  capture), `revalidate` (secret-gated ISR).
+- `src/collections/`, `src/globals/`, `src/blocks/`, `src/fields/`,
+  `src/access/` — Payload schema. `src/payload.config.ts` is the single
+  config entry.
+- `src/lib/cms/*Repo.ts` — the content access layer. Each repo wraps the
+  Local API in `unstable_cache` with revalidation tags and maps Payload docs
+  to the stable Cms* shapes consumed by pages (`src/lib/cms/types.ts`).
+- `src/lib/content/lexicalToBlocks.ts` — converts Payload Lexical JSON into
+  the block shape the article renderer (`src/components/cms/ArticleBody.tsx`)
+  consumes.
+- `src/components/` — UI. `ui/` is shadcn primitives; `motion/` wraps GSAP;
+  `heros/` is the shader hero; `tech/`, `articles/`, `search/`, `cms/` are
+  feature components.
 
-## Content + Search Pipeline
+## Caching & revalidation
 
-1. Provider facade resolves `local` or `notion` mode (`CMS_PROVIDER`).
-2. Local mode returns empty article-safe data (non-Notion fallback behavior).
-3. Notion mode reads article projection records + canonical Source Article blocks via `src/lib/cms/notion/*`.
-4. Utility builds:
-   - `readingTimeMinutes`
-   - `searchText` (metadata + projected `Search Index` text)
-   - `Search Index` is written during projection sync from canonical Source Article blocks
-5. Search API (`/api/search`) emits a compact index consumed by header modal.
+- Repos cache by tag (`posts`, `pages`, `tech-stack`, `uses`, …).
+- Collection hooks (`revalidatePost`, `revalidateRedirects`) revalidate paths
+  and tags on publish/change — publishing in admin is live on the site
+  immediately.
+- `/api/revalidate` (secret `CMS_REVALIDATE_SECRET`) is the manual escape
+  hatch.
+- GitHub tech signals cache 6h under tag `tech-signals`
+  (`src/lib/tech/githubSignals.ts`).
 
-### Key files
+## Environments
 
-- `src/lib/articles.ts`
-- `src/app/api/search/route.ts`
-- `src/components/articles/ArticlesExplorer.tsx`
-- `src/components/search/HeaderSearch.tsx`
-
-## Route Highlights
-
-- `/articles` uses `ArticlesExplorer` for client-side filtering/search.
-- `/hermes` hosts AI chat UI and calls OpenAI endpoints.
-- `/api/openai/chat` streams NDJSON token chunks and applies request guardrails.
-- `/api/openai/image` returns base64 image payload and applies request guardrails.
-- `/api/sendgrid` handles contact form email send.
-- `/api/mailinglist` uses SendGrid marketing contacts API.
-
-Search/filter URL contract:
-
-- `q` = text query
-- `topic` = selected topic title
-- `category` = legacy compatibility alias still read from URL
-- Updates are applied with `router.replace(..., { scroll: false })` to keep context stable.
-
-Keyboard shortcuts:
-
-- Global: `Cmd/Ctrl + K` opens/closes header search modal.
-- Articles + Hermes inputs: `/` focuses the active page input when not already typing in another field.
-
-## Layout Composition
-
-- Global layout defined in `src/app/layout.tsx`.
-- `src/components/Layout.tsx` composes:
-  - Sticky/animated header
-  - page body
-  - footer (hidden on `/hermes` for chat-focused viewport)
-
-Hermes layout note:
-
-- `src/app/hermes/page.tsx` computes viewport-fit height and keeps scrolling inside the message panel instead of page-level overflow.
-- `src/components/HermesChat.tsx` uses multiline textarea input (`Enter` sends message, `Shift+Enter` creates a newline).
-- `src/lib/security/guardrails.ts` centralizes request guardrails for public endpoints (origin/referrer validation, rate limits, quotas, and optional Turnstile verification).
+- `master` = v3 production (do not touch until launch sign-off).
+- `rebuild/v4` = active branch → Vercel custom environment `staging`
+  (staging.brandonperfetti.com; Neon Postgres + Blob store).
+- Env vars are documented exhaustively in `.env.example`.

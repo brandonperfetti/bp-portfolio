@@ -1,30 +1,25 @@
-# Accessibility
+# Accessibility (acceptance criteria)
 
-## Existing Patterns to Preserve
+These are release gates, not aspirations:
 
-- Semantic interactive elements (`button`, `a`, form controls).
-- Explicit `aria-label` on icon-only controls (theme toggle, search controls, menu close).
-- Keyboard shortcuts augment but do not replace pointer interactions.
-- Focus-visible outline behavior using Tailwind outline utilities.
-- `prefers-reduced-motion` behavior for all new motion work (headline, reveal, parallax, hover, modal/chat transitions).
-
-## Search and Chat Considerations
-
-- Search modal should remain dismissible with Escape and outside click.
-- Inputs must keep clear placeholders and labels/context in surrounding copy.
-- Hermes streaming state should remain understandable without relying on animation alone.
-
-## Color and Contrast
-
-- Maintain contrast parity in both themes for:
-  - nav controls
-  - topic and tech chips
-  - chat bubbles and Markdown text
-  - form validation/error text
-
-## Regression Checklist
-
-- Tab through header controls and modal controls.
-- Validate keyboard-only open/close for search and chat shortcuts.
-- Verify no hidden route links in mobile nav causing dead-end navigation.
-- Validate reduced-motion mode does not rely on animation timing for content visibility.
+- **Keyboard**: every interactive component fully operable by keyboard —
+  palette (cmdk semantics), explorers, card links, expandable details
+  (aria-expanded/aria-controls), chat composer, theme toggle.
+- **Focus**: visible `focus-visible` rings everywhere (teal); focus order
+  follows DOM; overlays trap and restore focus (cmdk dialog does this).
+- **Reduced motion**: every animated surface — headline, scroll reveals,
+  hover lifts, parallax, shader hero, tech viz, expand/collapse — renders
+  static, fully functional DOM under `prefers-reduced-motion`. Motion
+  wrappers handle this; new surfaces must too (CSS transitions use
+  `motion-reduce:transition-none`).
+- **Light/dark parity**: both themes reviewed for contrast (WCAG AA) on
+  every new component; Storybook's theme toggle exists for exactly this.
+- **Semantics**: real elements over ARIA where possible (`button`, `nav`,
+  lists with `role="list"` where Tailwind resets apply); status text uses
+  `role="status"` + `aria-live="polite"` (see explorer result counts);
+  decorative art (shader canvas, signal meter) is `aria-hidden` with the
+  information carried in adjacent text.
+- **Images**: meaningful alt from CMS; empty alt for decorative.
+- **Automated checks**: Storybook a11y addon (serious ⇒ fail) + the
+  Playwright axe sweep in `e2e/` cover the baseline; manual keyboard passes
+  remain required for new interaction patterns.
