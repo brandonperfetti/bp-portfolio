@@ -6,6 +6,10 @@ import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getCmsTech } from '@/lib/cms/techRepo'
 import type { CmsEntityItem } from '@/lib/cms/types'
+import {
+  buildSignalsBySlug,
+  getTechSignalsIndex,
+} from '@/lib/tech/githubSignals'
 import { type Metadata } from 'next'
 import { Suspense } from 'react'
 
@@ -416,6 +420,9 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function TechStack() {
   const page = await getCmsPageByPath('/tech')
   const cmsTech = await getCmsTech()
+  // Live GitHub signals (cached 6h); null when GITHUB_OWNER/TOKEN are unset
+  // so the explorer renders without activity badges instead of failing.
+  const signalsIndex = await getTechSignalsIndex()
   // Normalize legacy tech names into URL-safe slugs: trim/lowercase, strip
   // non-alphanumeric chars (except spaces/hyphens), then collapse to hyphens.
   const localTech: CmsEntityItem[] = techStack.map((tech) => ({
@@ -426,6 +433,7 @@ export default async function TechStack() {
     link: tech.link,
   }))
   const items = cmsTech ?? localTech
+  const signals = buildSignalsBySlug(signalsIndex, items)
 
   return (
     <SimpleLayout
@@ -437,7 +445,7 @@ export default async function TechStack() {
     >
       {items.length ? (
         <Suspense fallback={<TechExplorerFallback />}>
-          <TechExplorer items={items} />
+          <TechExplorer items={items} signals={signals} />
         </Suspense>
       ) : (
         <NotFoundState

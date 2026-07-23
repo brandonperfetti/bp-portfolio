@@ -83,6 +83,10 @@ export interface CmsEntityItem {
   logo?: string
   link?: CmsLinkItem
   category?: string
+  /** Self-assessed proficiency tier (tech-stack rows only). */
+  proficiency?: string
+  /** `owner/name` GitHub repo hint for live signal matching. */
+  githubRepo?: string
   order?: number
   updatedAt?: string
 }

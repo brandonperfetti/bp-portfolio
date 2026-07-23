@@ -1,7 +1,5 @@
 'use client'
 
-import Image from 'next/image'
-import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   type ReactElement,
@@ -12,13 +10,10 @@ import {
   useState,
 } from 'react'
 
-import { Card } from '@/components/Card'
-import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
-import LinkIcon from '@/icons/LinkIcon'
+import { TechCard } from '@/components/tech/TechCard'
 import type { CmsEntityItem } from '@/lib/cms/types'
-import { getOptimizedImageUrl } from '@/lib/image-utils'
-import { getExternalLinkProps } from '@/lib/link-utils'
+import type { TechSignalSummary } from '@/lib/tech/githubSignals'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 
 const CATEGORY_BY_NAME: Record<string, string> = {
@@ -70,28 +65,41 @@ function resolveCategory(item: CmsEntityItem) {
   return CATEGORY_BY_NAME[item.name] ?? 'Tooling'
 }
 
+type SortMode = 'name' | 'active'
+
 /**
- * Interactive tech catalog with debounced search and category filtering.
+ * Interactive tech-stack visualization (wow moment #3): debounced search,
+ * category filter chips, A–Z / most-active sorting, and live GitHub activity
+ * badges with expandable evidence — all URL-synced.
  *
- * Syncs `q`/`category` state to URL params and supports `/` keyboard focus
- * shortcut for quick filtering.
+ * Syncs `q`/`category`/`sort` state to URL params and supports `/` keyboard
+ * focus shortcut for quick filtering. Motion (scroll reveal, hover lift,
+ * expand) degrades to a static grid under `prefers-reduced-motion`.
  *
  * @param items CMS tech rows to render.
+ * @param signals Slug-keyed live GitHub signal summaries (may be empty when
+ * the scan is unconfigured — badges and the sort toggle hide themselves).
  * @returns Rendered tech explorer UI.
  */
 export function TechExplorer({
   items,
+  signals = {},
 }: {
   items: CmsEntityItem[]
+  signals?: Record<string, TechSignalSummary>
 }): ReactElement {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const searchInputRef = useRef<HTMLInputElement>(null)
 
+  const hasSignals = Object.keys(signals).length > 0
   const [query, setQuery] = useState(searchParams.get('q') ?? '')
   const [category, setCategory] = useState(
     searchParams.get('category') ?? 'All',
+  )
+  const [sort, setSort] = useState<SortMode>(
+    searchParams.get('sort') === 'active' ? 'active' : 'name',
   )
   const debouncedQuery = useDebouncedValue(query, query.trim() ? 350 : 0)
 
@@ -120,6 +128,8 @@ export function TechExplorer({
     const nextCategory = categories.includes(requestedCategory)
       ? requestedCategory
       : 'All'
+    const nextSort: SortMode =
+      searchParams.get('sort') === 'active' ? 'active' : 'name'
     const isInputFocused = searchInputRef.current === document.activeElement
 
     if (!isInputFocused) {
@@ -128,6 +138,7 @@ export function TechExplorer({
     setCategory((current) =>
       current === nextCategory ? current : nextCategory,
     )
+    setSort((current) => (current === nextSort ? current : nextSort))
   }, [searchParams, categories])
 
   useEffect(() => {
@@ -160,7 +171,7 @@ export function TechExplorer({
   }, [])
 
   const updateUrl = useCallback(
-    (nextQuery: string, nextCategory: string) => {
+    (nextQuery: string, nextCategory: string, nextSort: SortMode) => {
       const currentQueryString = searchParams.toString()
       const params = new URLSearchParams(currentQueryString)
 
@@ -176,6 +187,12 @@ export function TechExplorer({
         params.delete('category')
       }
 
+      if (nextSort === 'active') {
+        params.set('sort', 'active')
+      } else {
+        params.delete('sort')
+      }
+
       const queryString = params.toString()
       if (queryString === currentQueryString) {
         return
@@ -189,12 +206,12 @@ export function TechExplorer({
   )
 
   useEffect(() => {
-    updateUrl(debouncedQuery, category)
-  }, [debouncedQuery, category, updateUrl])
+    updateUrl(debouncedQuery, category, sort)
+  }, [debouncedQuery, category, sort, updateUrl])
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = debouncedQuery.trim().toLowerCase()
-    return normalizedItems.filter((item) => {
+    const matches = normalizedItems.filter((item) => {
       const matchesCategory = category === 'All' || item.category === category
       const matchesQuery =
         normalizedQuery.length === 0 ||
@@ -206,7 +223,20 @@ export function TechExplorer({
 
       return matchesCategory && matchesQuery
     })
-  }, [normalizedItems, debouncedQuery, category])
+
+    if (sort === 'active') {
+      // Signal-backed items first by score, then everything else A–Z.
+      return [...matches].sort((a, b) => {
+        const scoreA = signals[a.slug]?.score ?? -1
+        const scoreB = signals[b.slug]?.score ?? -1
+        if (scoreA !== scoreB) {
+          return scoreB - scoreA
+        }
+        return a.name.localeCompare(b.name)
+      })
+    }
+    return matches
+  }, [normalizedItems, debouncedQuery, category, sort, signals])
   const normalizedQueryText = debouncedQuery.trim()
 
   return (
@@ -230,28 +260,58 @@ export function TechExplorer({
             </span>
           )}
         </div>
-        <div
-          className="flex flex-wrap gap-2"
-          role="group"
-          aria-label="Filter technologies by category"
-        >
-          {categories.map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => {
-                setCategory((current) => (current === item ? 'All' : item))
-              }}
-              aria-pressed={category === item}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80 ${
-                category === item
-                  ? 'bg-teal-500 text-white'
-                  : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
-              }`}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label="Filter technologies by category"
+          >
+            {categories.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => {
+                  setCategory((current) => (current === item ? 'All' : item))
+                }}
+                aria-pressed={category === item}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80 ${
+                  category === item
+                    ? 'bg-teal-500 text-white'
+                    : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
+                }`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+          {hasSignals ? (
+            <div
+              className="flex gap-1 rounded-full bg-zinc-100 p-1 dark:bg-zinc-800"
+              role="group"
+              aria-label="Sort technologies"
             >
-              {item}
-            </button>
-          ))}
+              {(
+                [
+                  { mode: 'name', label: 'A–Z' },
+                  { mode: 'active', label: 'Most active' },
+                ] as const
+              ).map(({ mode, label }) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setSort(mode)}
+                  aria-pressed={sort === mode}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80 ${
+                    sort === mode
+                      ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-50'
+                      : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
         <p
           role="status"
@@ -275,71 +335,15 @@ export function TechExplorer({
           className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2 lg:grid-cols-3"
         >
           {filteredItems.map((tech, index) => (
-            <HoverMotionCard
-              as="li"
+            <TechCard
               key={
                 tech.slug ||
                 tech.link?.href ||
                 `${tech.name}-${tech.category || 'uncategorized'}-${index}`
               }
-            >
-              <Card className="h-full rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm dark:border-zinc-700/40 dark:bg-zinc-900">
-                {tech.link?.href ? (
-                  <>
-                    <div
-                      data-hover-overlay
-                      className="absolute inset-0 z-0 rounded-2xl bg-zinc-50 opacity-0 transition dark:bg-zinc-800/40"
-                    />
-                    <Link
-                      href={tech.link.href}
-                      {...getExternalLinkProps(tech.link.href)}
-                      aria-label={`Open technology: ${tech.name}`}
-                      className="absolute inset-0 z-20 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 dark:focus-visible:ring-teal-400/70"
-                    />
-                  </>
-                ) : null}
-                <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-md ring-1 shadow-zinc-800/5 ring-zinc-900/5 dark:border dark:border-zinc-700/50 dark:bg-zinc-800 dark:ring-0">
-                  {tech.logo ? (
-                    <Image
-                      height={48}
-                      width={48}
-                      src={getOptimizedImageUrl(tech.logo, {
-                        width: 96,
-                        height: 96,
-                        crop: 'fit',
-                      })}
-                      alt={tech.name}
-                      className="h-8 w-8 rounded object-contain"
-                      sizes="2rem"
-                    />
-                  ) : (
-                    <span
-                      aria-hidden="true"
-                      className="flex h-8 w-8 items-center justify-center rounded bg-zinc-100 text-sm font-semibold text-zinc-600 uppercase dark:bg-zinc-700/70 dark:text-zinc-200"
-                    >
-                      {tech.name.charAt(0)}
-                    </span>
-                  )}
-                </div>
-                <h2 className="relative z-10 mt-6 text-base font-semibold text-zinc-800 dark:text-zinc-100">
-                  {tech.name}
-                </h2>
-                <p className="relative z-10 mt-2 line-clamp-4 text-sm text-zinc-600 dark:text-zinc-400">
-                  {tech.description}
-                </p>
-                <div className="relative z-10 mt-4 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                    {tech.category}
-                  </span>
-                </div>
-                {tech.link?.label ? (
-                  <p className="relative z-10 mt-4 flex text-sm font-medium text-zinc-400 dark:text-zinc-200">
-                    <LinkIcon data-hover-icon className="h-6 w-6 flex-none" />
-                    <span className="ml-2">{tech.link.label}</span>
-                  </p>
-                ) : null}
-              </Card>
-            </HoverMotionCard>
+              item={tech}
+              signal={signals[tech.slug]}
+            />
           ))}
         </ul>
       </ScrollReveal>

@@ -8,6 +8,18 @@ import type { Media } from '@/payload-types'
 const mediaUrl = (m: unknown): string | undefined =>
   m && typeof m === 'object' ? (m as Media).url || undefined : undefined
 
+/** Display labels for the collection's lowercase `category` select values. */
+const CATEGORY_LABELS: Record<string, string> = {
+  language: 'Language',
+  framework: 'Framework',
+  library: 'Library',
+  tooling: 'Tooling',
+  platform: 'Platform',
+  database: 'Database',
+  ai: 'AI',
+  design: 'Design',
+}
+
 /**
  * Tech stack from the Payload `tech-stack` collection (was Notion in v3),
  * mapped to the v3 `CmsEntityItem` shape shared by /tech and /uses.
@@ -31,7 +43,11 @@ export const getCmsTech = unstable_cache(
       description: t.notes || '',
       logo: mediaUrl(t.logo),
       link: t.url ? { href: t.url, label: t.name } : undefined,
-      category: t.category || undefined,
+      category: t.category
+        ? CATEGORY_LABELS[t.category] || t.category
+        : undefined,
+      proficiency: t.proficiency || undefined,
+      githubRepo: t.githubRepo || undefined,
       order: index,
       updatedAt: t.updatedAt,
     }))

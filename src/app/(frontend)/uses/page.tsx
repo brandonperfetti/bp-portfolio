@@ -2,8 +2,11 @@ import { type Metadata } from 'next'
 
 import { Card } from '@/components/Card'
 import { NotFoundState } from '@/components/cms/NotFoundState'
+import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
+import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { Section } from '@/components/Section'
 import { SimpleLayout } from '@/components/SimpleLayout'
+import { TechCard } from '@/components/tech/TechCard'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
@@ -15,13 +18,19 @@ function ToolsSection({
 }: React.ComponentPropsWithoutRef<typeof Section>) {
   return (
     <Section {...props}>
-      <ul role="list" className="space-y-16">
-        {children}
-      </ul>
+      <ScrollReveal targets="li" y={20} stagger={0.07}>
+        <ul role="list" className="space-y-16">
+          {children}
+        </ul>
+      </ScrollReveal>
     </Section>
   )
 }
 
+/**
+ * Fallback tool card sharing the tech-viz hover treatment (wow moment #3
+ * spans /tech and /uses); CMS-driven sections render `TechCard` directly.
+ */
 function Tool({
   title,
   href,
@@ -32,12 +41,14 @@ function Tool({
   children: React.ReactNode
 }) {
   return (
-    <Card as="li">
-      <Card.Title as="h3" href={href}>
-        {title}
-      </Card.Title>
-      <Card.Description>{children}</Card.Description>
-    </Card>
+    <HoverMotionCard as="li">
+      <Card>
+        <Card.Title as="h3" href={href}>
+          {title}
+        </Card.Title>
+        <Card.Description>{children}</Card.Description>
+      </Card>
+    </HoverMotionCard>
   )
 }
 
@@ -71,17 +82,18 @@ export default async function Uses() {
         <div className="space-y-20">
           {cmsUses.length ? (
             cmsUses.map((section) => (
-              <ToolsSection key={section.title} title={section.title}>
-                {section.items.map((item) => (
-                  <Tool
-                    key={item.slug}
-                    title={item.name}
-                    href={item.link?.href}
+              <Section key={section.title} title={section.title}>
+                <ScrollReveal targets="li" y={20} stagger={0.07}>
+                  <ul
+                    role="list"
+                    className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2"
                   >
-                    {item.description}
-                  </Tool>
-                ))}
-              </ToolsSection>
+                    {section.items.map((item) => (
+                      <TechCard key={item.slug} item={item} />
+                    ))}
+                  </ul>
+                </ScrollReveal>
+              </Section>
             ))
           ) : (
             <NotFoundState
