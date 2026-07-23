@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import path from 'path'
 import type { Where } from 'payload'
 import { getPayload } from 'payload'
@@ -19,7 +20,10 @@ import config from '../src/payload.config'
  * Idempotent: upserts by natural key (tech: name, uses: title, projects:
  * slug, work-history: company+title). Logos download from their source URLs
  * and upload to Media/Blob once (cached per URL within a run; re-runs reuse
- * an existing media doc matched by filename prefix).
+ * an existing media doc matched by a URL-unique filename key — parent path
+ * segment + basename + URL hash, because basenames alone collide: every
+ * tech logo lives at .../tech/<name>/logo.svg. A legacy fallback matches
+ * pre-fix docs by old basename key + exact alt so they aren't re-uploaded).
  */
 
 const DRY_RUN = process.env.DRY_RUN === 'true'
@@ -970,9 +974,25 @@ const run = async () => {
     if (!url) return null
     if (mediaCache.has(url)) return mediaCache.get(url)!
     try {
-      const base = path
-        .basename(new URL(url).pathname, path.extname(new URL(url).pathname))
-        .slice(0, 60)
+      const parsed = new URL(url)
+      const stem = path
+        .basename(parsed.pathname, path.extname(parsed.pathname))
+        .slice(0, 48)
+      // Basenames collide across folders (every tech logo is
+      // .../tech/<name>/logo.svg), so the reuse key must be URL-unique:
+      // parent path segment + basename + short URL hash.
+      const segments = parsed.pathname.split('/').filter(Boolean)
+      const parent =
+        [...segments]
+          .slice(0, -1)
+          .reverse()
+          .find((s) => !/^v\d+$/.test(s) && s !== 'upload') || ''
+      const hash = createHash('sha1').update(url).digest('hex').slice(0, 8)
+      const base = [parent, stem, hash]
+        .filter(Boolean)
+        .join('-')
+        .replace(/[^a-zA-Z0-9._-]+/g, '-')
+        .slice(0, 80)
       // Reuse an already-seeded media doc (idempotent re-runs).
       const existing = await payload.find({
         collection: 'media',
@@ -982,6 +1002,23 @@ const run = async () => {
       if (existing.docs[0]) {
         mediaCache.set(url, existing.docs[0].id as number)
         return existing.docs[0].id as number
+      }
+      // Legacy key (pre-fix runs): basename only, disambiguated by exact
+      // alt so correctly-seeded docs are reused instead of re-uploaded.
+      // (The colliding shared doc only matches its true owner's alt.)
+      const legacy = await payload.find({
+        collection: 'media',
+        limit: 1,
+        where: {
+          and: [
+            { filename: { contains: `seeded-${stem}` } },
+            { alt: { equals: alt } },
+          ],
+        },
+      })
+      if (legacy.docs[0]) {
+        mediaCache.set(url, legacy.docs[0].id as number)
+        return legacy.docs[0].id as number
       }
       if (DRY_RUN) {
         payload.logger.info(`[seed] DRY_RUN would upload ${url.slice(0, 90)}`)
@@ -1127,7 +1164,9 @@ const run = async () => {
     const hero = await uploadLogo(pg.heroImageUrl, `${pg.slug} hero image`)
     const stripImages: number[] = []
     for (const url of pg.homeImageUrls) {
-      const id = await uploadLogo(url, 'Photo strip image')
+      // Alt kept from the original seed so the legacy media lookup
+      // (filename + exact alt) reuses the already-uploaded photos.
+      const id = await uploadLogo(url, 'Home gallery photo')
       if (id) stripImages.push(id)
     }
     const found = await payload.find({
