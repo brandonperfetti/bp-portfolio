@@ -34,9 +34,11 @@ export default function ShaderBackground({
   preset: ShaderPresetKey
 }) {
   if (preset === 'static-noise-4') {
-    // "Static Noise 4" (light mode, §23) adapted: white→lavender gradient with
-    // a soft right-anchored blob. The preset's 16k-particle logo layer is a
-    // logo shader (needs a brand SVG/SDF) and is intentionally omitted for a
+    // "Static Noise 4" (light mode, §23) adapted: white gradient with a soft
+    // right-anchored blob recolored teal→emerald to match the site accent
+    // (the preset's stock blue→violet read as an off-palette lavender wash —
+    // staging feedback). The preset's 16k-particle logo layer is a logo
+    // shader (needs a brand SVG/SDF) and is intentionally omitted for a
     // background role.
     return (
       <Shader style={canvasStyle} toneMapping="neutral">
@@ -53,8 +55,8 @@ export default function ShaderBackground({
           size={0.5977}
           softness={1}
           stops={[
-            { color: '#6fa1ce', position: 0 },
-            { color: '#9659ef', position: 1 },
+            { color: '#5eead4', position: 0 },
+            { color: '#10b981', position: 1 },
           ]}
           visible={true}
         />

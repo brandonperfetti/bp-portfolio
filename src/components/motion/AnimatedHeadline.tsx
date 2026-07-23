@@ -2,7 +2,7 @@
 
 import clsx from 'clsx'
 import { gsap } from 'gsap'
-import { useEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 
 import {
   EASE_NONE,
@@ -50,8 +50,18 @@ export function AnimatedHeadline({
     [words],
   )
 
-  useEffect(() => {
-    if (prefersReducedMotion || !rootRef.current) {
+  // useLayoutEffect (not useEffect) so the initial hidden state applies
+  // before the browser paints the committed DOM — with useEffect, route
+  // navigations flashed the full server-rendered heading for a frame before
+  // GSAP hid it and started the animation.
+  useLayoutEffect(() => {
+    // Sync media check mirrors ScrollReveal: the hook's state is still false
+    // on the first client pass, and reduced-motion users must never see the
+    // animation start.
+    const prefersReducedMotionSync =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotionSync || prefersReducedMotion || !rootRef.current) {
       return
     }
 

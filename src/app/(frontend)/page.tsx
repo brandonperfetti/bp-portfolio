@@ -193,10 +193,10 @@ function Role({ role }: { role: Role }) {
 
 const defaultResume: Array<Role> = [
   {
-    company: 'Freelance',
-    title: 'Technical PM + Software Engineer',
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562733/bp-portfolio/images/logos/rocket-7757105_640_lcepwk_vd862c.png',
-    start: '2023',
+    company: 'Brytecore',
+    title: 'Senior Frontend Engineer',
+    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1774040299/bp-portfolio/logos/footer-brytecore-bug_xsf8iw.webp',
+    start: '2024',
     end: {
       label: 'Present',
       dateTime: new Date().getFullYear().toString(),
