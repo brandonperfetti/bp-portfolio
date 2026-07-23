@@ -36,9 +36,14 @@ jobs:
         run: pnpm format:check
       - name: Typecheck
         run: pnpm typecheck
+      # Both staleness gates prettier-format the regenerated file before
+      # diffing: committed copies are formatted by lint-staged at commit
+      # time, while Payload's generators write unformatted output — a raw
+      # diff would flag formatting noise, not real staleness.
       - name: Verify generated Payload types are committed
         run: |
           pnpm generate:types
+          pnpm exec prettier --write src/payload-types.ts
           if ! git diff --quiet -- src/payload-types.ts; then
             echo "::error::src/payload-types.ts is stale. Run 'pnpm generate:types' and commit."
             git diff -- src/payload-types.ts
@@ -47,6 +52,7 @@ jobs:
       - name: Verify generated admin importMap is committed
         run: |
           pnpm generate:importmap
+          pnpm exec prettier --write "src/app/(payload)/admin/importMap.js"
           if ! git diff --quiet -- "src/app/(payload)/admin/importMap.js"; then
             echo "::error::admin importMap is stale. Run 'pnpm generate:importmap' and commit."
             git diff -- "src/app/(payload)/admin/importMap.js"
