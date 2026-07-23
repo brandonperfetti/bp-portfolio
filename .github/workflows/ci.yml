@@ -104,6 +104,8 @@ jobs:
         run: pnpm build
       - name: E2E tests (Playwright)
         run: pnpm test:e2e
+      - name: Storybook interaction tests (Vitest browser mode)
+        run: pnpm test:storybook
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

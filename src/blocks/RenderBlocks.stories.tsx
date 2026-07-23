@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 import type { Page } from '@/payload-types'
@@ -216,6 +217,45 @@ export const ContentColumns: Story = {
 
 export const CallToAction: Story = {
   args: { blocks: [DEMO_BLOCKS[2]] },
+  // Interaction: both CMSLink-rendered actions resolve their hrefs.
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('link', { name: /visit the site/i }),
+    ).toHaveAttribute('href', 'https://brandonperfetti.com')
+    await expect(canvas.getByRole('link', { name: /github/i })).toHaveAttribute(
+      'href',
+      'https://github.com/brandonperfetti',
+    )
+  },
+}
+
+/**
+ * Interaction: the FAQ accordion is a native details/summary — keyboard and
+ * pointer operable with zero JS. The play toggles an item open and closed.
+ */
+export const FaqAccordion: Story = {
+  args: {
+    blocks: [
+      DEMO_BLOCKS.find((block) => block.blockType === 'faqList') as LayoutBlock,
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const question = canvas.getByText('Can I build pages without deploys?')
+    const details = question.closest('details')
+    await expect(details).not.toBeNull()
+    await expect(details).not.toHaveAttribute('open')
+
+    await userEvent.click(question)
+    await waitFor(() => expect(details).toHaveAttribute('open'))
+    await expect(
+      canvas.getByText(/publish in the admin and the page is live/i),
+    ).toBeVisible()
+
+    await userEvent.click(question)
+    await waitFor(() => expect(details).not.toHaveAttribute('open'))
+  },
 }
 
 export const ShaderSection: Story = {

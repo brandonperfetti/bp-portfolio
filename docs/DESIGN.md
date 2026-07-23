@@ -63,3 +63,6 @@ through `RichTextContent` (article typography pipeline); links through
   check existing stories/components before writing new UI.
 - Every shared component gets a story (Button, Card, TechCard, palette,
   ShaderHero, HermesChat idle are the seed set).
+- `@storybook/addon-vitest` runs every story as a browser-mode Vitest test
+  (`pnpm test:storybook`); add `play` functions for interactive components
+  so behavior — not just rendering — is CI-gated (see `docs/TESTING.md`).

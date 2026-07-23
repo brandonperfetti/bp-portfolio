@@ -54,6 +54,12 @@ const preview: Preview = {
       // Fail CI on serious/critical a11y violations (§13).
       test: 'error',
     },
+    nextjs: {
+      // App Router mocks (next/navigation useRouter etc.) — without this
+      // the framework mounts the Pages Router mock and any component
+      // calling useRouter throws "expected app router to be mounted".
+      appDirectory: true,
+    },
   },
   globalTypes: {
     theme: {

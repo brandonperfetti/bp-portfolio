@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { expect, within } from 'storybook/test'
 
 import { Card } from '@/components/Card'
 
@@ -38,6 +39,18 @@ export const Article: Story = {
       <Card.Cta>Read article</Card.Cta>
     </Card>
   ),
+  // Interaction: the title link carries the article href (full-card overlay
+  // pattern) and the time element keeps its machine-readable date.
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const link = canvas.getByRole('link', {
+      name: /writing tests for react/i,
+    })
+    await expect(link).toHaveAttribute('href', '/articles/example-post')
+    await expect(
+      canvasElement.querySelector('time[datetime="2026-01-05"]'),
+    ).toBeInTheDocument()
+  },
 }
 
 export const Plain: Story = {

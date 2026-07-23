@@ -6,11 +6,16 @@ import type { StorybookConfig } from '@storybook/nextjs-vite'
  * `@storybook/addon-mcp` exposes the component manifest at `/mcp` while the
  * dev server runs (`pnpm storybook`), so agents reuse these components
  * instead of reinventing them. a11y addon enforces the §13 acceptance
- * criteria per story.
+ * criteria per story. addon-vitest turns stories (and their play
+ * functions) into browser-mode Vitest tests — `pnpm test:storybook`.
  */
 const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(ts|tsx|mdx)'],
-  addons: ['@storybook/addon-a11y', '@storybook/addon-mcp'],
+  addons: [
+    '@storybook/addon-a11y',
+    '@storybook/addon-mcp',
+    '@storybook/addon-vitest',
+  ],
   framework: '@storybook/nextjs-vite',
   staticDirs: ['../public'],
   viteFinal: async (viteConfig) => {
