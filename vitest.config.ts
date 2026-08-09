@@ -31,6 +31,12 @@ export default defineConfig({
         extends: true,
         resolve: {
           alias: {
+            // Resolution-only stub: unit tests mock getPayload themselves,
+            // but route handlers import @payload-config at module scope.
+            '@payload-config': path.resolve(
+              rootDir,
+              'src/test/payloadConfigStub.ts',
+            ),
             '@': path.resolve(rootDir, 'src'),
           },
         },
