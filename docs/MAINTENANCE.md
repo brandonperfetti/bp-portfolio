@@ -15,6 +15,13 @@
   promotion. Blob store `bp-portfolio-media` is public-read.
 - **Storybook**: keep stories in sync with component changes (CI builds
   storybook, so breakage fails fast).
+- **TypeScript 7**: blocked (attempted 2026-08 on Next 16.3). The 10x
+  native `tsc` works (`pnpm add -D typescript@^7`; tsconfig is already
+  `baseUrl`-free for it), but typescript-eslint's latest stable (8.66,
+  peer `typescript <6.1`) hard-errors "does not support TS 7.0" and
+  `next build` requires TS7 to be the workspace `typescript` dep — no
+  clean dual-version path. Revisit when typescript-eslint ships TS7
+  support, then it's a one-line bump.
 
 ## Watchpoints
 
