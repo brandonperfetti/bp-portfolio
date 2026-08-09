@@ -188,13 +188,28 @@ export function getRequestClientIp(request: Request) {
  * Validates request source host against trusted site hosts.
  *
  * Requires at least one of `Origin` or `Referer` headers to be present and
- * parseable to an allowed host (localhost + `NEXT_PUBLIC_SITE_URL` host).
+ * parseable to an allowed host: localhost, the `NEXT_PUBLIC_SITE_URL` host,
+ * or the host serving THIS request (`x-forwarded-host`/`host`).
+ *
+ * @remarks The serving host must be allowed explicitly: staging/preview
+ * deploys intentionally keep `NEXT_PUBLIC_SITE_URL` pointed at production
+ * (SEO canonicals), so an env-only allowlist 403'd every same-origin chat
+ * request on staging. Browsers set `Origin` themselves, so a cross-site
+ * page still can't forge a match — this stays a CSRF guard, not less.
  *
  * @param request Incoming HTTP request.
  * @returns `true` when source is allowed; otherwise `false`.
  */
 export function isAllowedRequestSource(request: Request) {
   const hosts = getSiteHosts()
+
+  // Same-origin requests are always acceptable, whatever domain this
+  // deployment is being served from (staging, preview, production).
+  const servingHost =
+    request.headers.get('x-forwarded-host') ?? request.headers.get('host')
+  if (servingHost) {
+    hosts.add(servingHost.trim().toLowerCase())
+  }
 
   const origin = request.headers.get('origin')
   let originValid = false
