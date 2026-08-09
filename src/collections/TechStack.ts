@@ -106,8 +106,8 @@ export const TechStack: CollectionConfig = {
     },
   ],
   hooks: {
-    afterChange: [revalidateCollectionTag('tech-stack')],
-    afterDelete: [revalidateCollectionTagDelete('tech-stack')],
+    afterChange: [revalidateCollectionTag('tech-stack', ['/tech'])],
+    afterDelete: [revalidateCollectionTagDelete('tech-stack', ['/tech'])],
   },
   defaultSort: 'sortOrder',
 }

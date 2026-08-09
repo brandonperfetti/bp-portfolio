@@ -65,8 +65,8 @@ export const Uses: CollectionConfig = {
     },
   ],
   hooks: {
-    afterChange: [revalidateCollectionTag('uses')],
-    afterDelete: [revalidateCollectionTagDelete('uses')],
+    afterChange: [revalidateCollectionTag('uses', ['/uses'])],
+    afterDelete: [revalidateCollectionTagDelete('uses', ['/uses'])],
   },
   defaultSort: 'sortOrder',
 }

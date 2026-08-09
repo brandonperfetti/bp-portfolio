@@ -88,8 +88,8 @@ export const WorkHistory: CollectionConfig = {
     },
   ],
   hooks: {
-    afterChange: [revalidateCollectionTag('work-history')],
-    afterDelete: [revalidateCollectionTagDelete('work-history')],
+    afterChange: [revalidateCollectionTag('work-history', ['/'])],
+    afterDelete: [revalidateCollectionTagDelete('work-history', ['/'])],
   },
   defaultSort: 'sortOrder',
 }

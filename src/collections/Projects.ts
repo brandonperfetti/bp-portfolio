@@ -82,8 +82,8 @@ export const Projects: CollectionConfig = {
     ...slugField(),
   ],
   hooks: {
-    afterChange: [revalidateCollectionTag('projects')],
-    afterDelete: [revalidateCollectionTagDelete('projects')],
+    afterChange: [revalidateCollectionTag('projects', ['/projects'])],
+    afterDelete: [revalidateCollectionTagDelete('projects', ['/projects'])],
   },
   defaultSort: 'sortOrder',
 }
