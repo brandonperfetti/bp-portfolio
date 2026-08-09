@@ -66,7 +66,8 @@ admin to change (URL contract: never rename published article slugs).
 ## Operating via MCP (for agents)
 
 `plugin-mcp` exposes find/create/update/delete over Posts, Pages, Projects,
-TechStack, Uses, Categories, Tags, Media at `/api/mcp` (API-key Bearer auth;
+TechStack, Uses, Categories, Tags, WorkHistory, Media at `/api/mcp`
+(API-key Bearer auth;
 on deployed envs it also sits behind Vercel deployment protection, so pass
 `x-vercel-protection-bypass` alongside the Bearer token). Tool schemas are
 self-describing — an agent discovers _how_ to call them for free. What it

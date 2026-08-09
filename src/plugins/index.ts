@@ -81,6 +81,11 @@ export const plugins: Plugin[] = [
       uses: { enabled: true },
       categories: { enabled: true },
       tags: { enabled: true },
+      'work-history': {
+        enabled: true,
+        description:
+          'Résumé entries for the home Work card (company/title/dates/logo/sortOrder). Dates are day-precision timestamps — store noon UTC (T12:00:00.000Z) so admin pickers show the intended calendar day.',
+      },
       media: { enabled: { create: true, find: true, update: true } },
     },
   }),

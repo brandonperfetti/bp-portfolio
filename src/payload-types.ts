@@ -1102,6 +1102,24 @@ export interface PayloadMcpApiKey {
      */
     delete?: boolean | null;
   };
+  workHistory?: {
+    /**
+     * Allow clients to find work-history.
+     */
+    find?: boolean | null;
+    /**
+     * Allow clients to create work-history.
+     */
+    create?: boolean | null;
+    /**
+     * Allow clients to update work-history.
+     */
+    update?: boolean | null;
+    /**
+     * Allow clients to delete work-history.
+     */
+    delete?: boolean | null;
+  };
   media?: {
     /**
      * Allow clients to find media.
@@ -1928,6 +1946,14 @@ export interface PayloadMcpApiKeysSelect<T extends boolean = true> {
         delete?: T;
       };
   tags?:
+    | T
+    | {
+        find?: T;
+        create?: T;
+        update?: T;
+        delete?: T;
+      };
+  workHistory?:
     | T
     | {
         find?: T;
