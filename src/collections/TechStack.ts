@@ -2,6 +2,10 @@ import type { CollectionConfig } from 'payload'
 
 import { anyone } from '@/access/anyone'
 import { authenticated } from '@/access/authenticated'
+import {
+  revalidateCollectionTag,
+  revalidateCollectionTagDelete,
+} from '@/hooks/revalidateCollection'
 
 /**
  * Technologies powering the interactive /tech + /uses visualization.
@@ -101,5 +105,9 @@ export const TechStack: CollectionConfig = {
       },
     },
   ],
+  hooks: {
+    afterChange: [revalidateCollectionTag('tech-stack')],
+    afterDelete: [revalidateCollectionTagDelete('tech-stack')],
+  },
   defaultSort: 'sortOrder',
 }

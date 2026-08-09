@@ -2,6 +2,10 @@ import type { CollectionConfig } from 'payload'
 
 import { anyone } from '@/access/anyone'
 import { authenticated } from '@/access/authenticated'
+import {
+  revalidateCollectionTag,
+  revalidateCollectionTagDelete,
+} from '@/hooks/revalidateCollection'
 
 /**
  * Résumé entries for the home-page Work block.
@@ -83,5 +87,9 @@ export const WorkHistory: CollectionConfig = {
       },
     },
   ],
+  hooks: {
+    afterChange: [revalidateCollectionTag('work-history')],
+    afterDelete: [revalidateCollectionTagDelete('work-history')],
+  },
   defaultSort: 'sortOrder',
 }

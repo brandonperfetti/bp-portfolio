@@ -19,6 +19,11 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
       payload.logger.info(`Revalidating page at path: ${path}`)
 
       revalidatePath(path)
+      // The data layer (getCmsPageByPath / getPageLayout / CmsPageBlocks)
+      // caches under the 'pages' tag — revalidatePath alone regenerates the
+      // route against STALE data, so admin edits never surfaced without a
+      // redeploy.
+      revalidateTag('pages', 'max')
       revalidateTag('pages-sitemap', 'max')
     }
 
@@ -29,6 +34,7 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
       payload.logger.info(`Revalidating old page at path: ${oldPath}`)
 
       revalidatePath(oldPath)
+      revalidateTag('pages', 'max')
       revalidateTag('pages-sitemap', 'max')
     }
   }
@@ -42,6 +48,7 @@ export const revalidateDelete: CollectionAfterDeleteHook<Page> = ({
   if (!context.disableRevalidate) {
     const path = doc?.slug === 'home' ? '/' : `/${doc?.slug}`
     revalidatePath(path)
+    revalidateTag('pages', 'max')
     revalidateTag('pages-sitemap', 'max')
   }
 

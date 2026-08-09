@@ -2,6 +2,10 @@ import type { CollectionConfig } from 'payload'
 
 import { anyone } from '@/access/anyone'
 import { authenticated } from '@/access/authenticated'
+import {
+  revalidateCollectionTag,
+  revalidateCollectionTagDelete,
+} from '@/hooks/revalidateCollection'
 
 /** Gear/software entries for /uses, grouped by category. */
 export const Uses: CollectionConfig = {
@@ -60,5 +64,9 @@ export const Uses: CollectionConfig = {
       },
     },
   ],
+  hooks: {
+    afterChange: [revalidateCollectionTag('uses')],
+    afterDelete: [revalidateCollectionTagDelete('uses')],
+  },
   defaultSort: 'sortOrder',
 }
