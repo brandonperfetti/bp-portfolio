@@ -196,7 +196,7 @@ export default function HermesChat() {
           }}
           placeholder="Ask Hermes..."
           aria-label="Message Hermes"
-          className="min-h-[42px] flex-1 resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:ring-2 focus:ring-teal-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          className="min-h-[42px] flex-1 resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-base text-zinc-900 placeholder:text-zinc-400 focus:ring-2 focus:ring-teal-500 focus:outline-none sm:text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
         />
         <button
           type="submit"
