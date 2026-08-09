@@ -35,3 +35,7 @@ are not part of any recurring workflow.
 `/api/mcp` (plugin-mcp, API-key auth) lets agents CRUD content
 programmatically — the supported automation path now that Notion sync is
 gone.
+
+See `docs/PAYLOAD.md` → **Operating via MCP** for the invariants agents
+must respect (Lexical node set, locked slugs, live writes, home
+`photoStrip`) and the bulk-edit recipes.
