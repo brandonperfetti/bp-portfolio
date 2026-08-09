@@ -6,6 +6,7 @@ import * as migration_20260723_153219_feature_grid_logo_carousel from './2026072
 import * as migration_20260723_155506_block_library_expansion from './20260723_155506_block_library_expansion'
 import * as migration_20260723_171916_photo_strip_posts_layout from './20260723_171916_photo_strip_posts_layout'
 import * as migration_20260723_193654_identity_resume from './20260723_193654_identity_resume'
+import * as migration_20260809_182905_mcp_work_history_permissions from './20260809_182905_mcp_work_history_permissions'
 
 export const migrations = [
   {
@@ -47,5 +48,10 @@ export const migrations = [
     up: migration_20260723_193654_identity_resume.up,
     down: migration_20260723_193654_identity_resume.down,
     name: '20260723_193654_identity_resume',
+  },
+  {
+    up: migration_20260809_182905_mcp_work_history_permissions.up,
+    down: migration_20260809_182905_mcp_work_history_permissions.down,
+    name: '20260809_182905_mcp_work_history_permissions',
   },
 ]
