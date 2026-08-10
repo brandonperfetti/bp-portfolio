@@ -155,3 +155,61 @@ the pipeline. A skill that drafts for a declared audience, loops §6
 until §5's gates and the rubric pass, generates covers, and publishes
 via the Payload MCP needs no source of truth beyond those two documents
 plus the identity sources in §2.
+
+## 8. SEO metadata (editorial rules for the SEO tab)
+
+The Payload SEO plugin provides the fields; these rules fill them well.
+Start from user intent — what query should this article win? SEO title
+45–65 characters with concrete nouns and the target technology near the
+front; meta description 120–160 characters written as a compelling
+summary, not a teaser; primary keyword naturally in both; benefit-led
+wording over vague adjectives; no clickbait; one canonical topic per
+article; never duplicate an SEO title across published articles. Re-run
+this check whenever the headline, slug, intro/positioning, keyword
+targeting, or audience changes after initial publish.
+
+## 9. Cover & media direction
+
+**Folder map (Cloudinary, canonical):** articles →
+`bp-portfolio/images/articles/{slug}/`; X posts →
+`.../x-posts/{slug-or-id}/`; LinkedIn →
+`.../linkedin-posts/{slug-or-id}/`; other long-form →
+`.../long-form/{slug}/`. Cover variants `cover-a/b/c`; inline
+`inline-{topic}-{n}`; social `social-a/b/c`. No ad-hoc paths — extend
+the map deliberately instead.
+
+**Art direction vocabulary** (from the retired cover-control fields —
+now prompt inputs, not database columns): style profiles _Editorial
+Realistic_, _Technical Minimal_, _Studio Photoreal_; scene archetypes
+_Conceptual System_, _Abstract Workflow_, _Workbench_,
+_Architectural/Infra_, _Human Moment_; plus a short mood hint (e.g.
+"focused debugging tension, eventual clarity"). Rotate archetypes across
+articles — don't let every cover converge to a workstation scene — and
+avoid micro-scene/diorama compositions.
+
+**Prompt quality:** every cover prompt names a subject tied to the
+thesis, a style and mood, composition guidance (16:9), and negative
+constraints against rendered text/logo artifacts. Anti-patterns: vague
+subjectless prompts, prompts unrelated to the topic, near-duplicate
+variants.
+
+**Eligibility & retries:** a candidate wins only if it has no text
+artifacts, obvious topic relevance at a glance, cover-worthy
+composition, and production-usable quality. If no candidate is eligible,
+regenerate the full set with tightened negative constraints — max 3
+total attempts, then stop and get a human.
+
+**Inline images:** default zero. Add 1–3 only for architecture/data-flow
+explanation, visual tool comparison, or screenshot-worthy tutorial
+steps.
+
+## 10. Content dating rule (credibility hard gate)
+
+An article's publish date must be on or after the release date of every
+technology it references — with multiple dependencies, the latest
+release date is the floor. Timeless topics (language patterns,
+fundamentals, testing, a11y, CSS architecture) carry no restriction.
+Verify release dates fresh from primary sources at drafting time; do not
+trust any cached table (the archived SOP #7 table was a point-in-time
+snapshot). This matters most for backfill-dated content, where a single
+anachronism destroys credibility.
