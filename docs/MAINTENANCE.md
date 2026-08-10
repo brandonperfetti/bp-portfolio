@@ -13,6 +13,21 @@
   (`GITHUB_TOKEN`). Scan knobs: `GITHUB_TECH_*` in `.env.example`.
 - **Neon/Blob**: staging DB is the Neon store; production gets its own at
   promotion. Blob store `bp-portfolio-media` is public-read.
+- **Email deliverability (SendGrid domain auth)**: rides on three CNAMEs
+  in Hover DNS — `em3842`, `s1._domainkey`, `s2._domainkey` →
+  `*.u32673427.wl178.sendgrid.net`. These went missing in a past DNS
+  migration and every contact email junked (unaligned DKIM/DMARC) while
+  SendGrid's dashboard showed STALE "Verified" badges — the badges only
+  update when Verify is clicked. Restored + re-verified 2026-08-10. Any
+  future DNS/registrar move must carry these three records, then
+  re-click Verify in SendGrid Sender Authentication.
+- **Upstash Redis (rate limiting)**: `bp-portfolio-limiter` in AWS
+  us-east-1 — deliberately co-located with the Vercel functions (iad1,
+  measured via x-vercel-id) and the Neon DB, NOT near the maintainer.
+  Eviction stays OFF (eviction would silently reset limit counters);
+  no read regions (eventually-consistent reads are wrong for limits).
+  Holds transient counters only. Env: `UPSTASH_REDIS_REST_URL/TOKEN`,
+  Preview + staging scoped; production values at promotion.
 - **Storybook**: keep stories in sync with component changes (CI builds
   storybook, so breakage fails fast).
 - **TypeScript 7**: blocked (attempted 2026-08 on Next 16.3). The 10x
