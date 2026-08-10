@@ -58,6 +58,7 @@ surface only** — it is not a CMS and has no runtime integration.
 - AI (Hermes, guardrails, evals, providers): `docs/AI.md`
 - Auth, gating, and email capture (Clerk): `docs/AUTH.md`
 - Content workflow (Notion planning → Payload publishing): `docs/CONTENT_WORKFLOW.md`
+- Content voice, article types, and revision gates: `docs/CONTENT_STYLE.md`
 - SEO and indexing routes: `docs/SEO.md`
 - Dependencies and why they exist: `docs/DEPENDENCIES.md`
 - Workflow and contribution rules: `docs/WORKFLOW.md`

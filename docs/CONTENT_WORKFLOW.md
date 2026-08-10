@@ -67,7 +67,9 @@ topic, angle, audience, publish date — nothing else lives there).
 
 ### 2. Draft
 
-Write the article in-session; create it as a **draft** Post via MCP
+Write the article in-session per **docs/CONTENT_STYLE.md** (voice,
+article types, quality gates, revision loop — distilled from the retired
+Notion SOPs); create it as a **draft** Post via MCP
 (`createPosts`, `draft: true`, `_status: "draft"`). Full bodies fit in
 one call — a 16-paragraph/~12KB Lexical tree round-tripped byte-perfect
 (measured 2026-08-09; the historical ~2KB truncation applied to
