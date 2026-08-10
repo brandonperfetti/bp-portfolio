@@ -18,6 +18,14 @@ import type { Post } from '../../../payload-types'
  * is the load-bearing coupling here, pinned by `cache.test.ts` so a tag
  * rename can't silently break publish-time revalidation. Unpublishing also
  * purges the OLD slug's path so the stale page stops serving.
+ *
+ * Honest freshness semantics (measured 2026-08-10, see docs/MAINTENANCE.md
+ * → Watchpoints): the article's DETAIL page is fresh immediately; the
+ * `unstable_cache`-backed list surfaces (`/articles`, `/api/search`) were
+ * measured NOT reliably refreshed by these purges on Vercel and converge
+ * within their 300 s TTLs instead; the sitemap refreshes on its hourly
+ * revalidate (the `posts-sitemap` tag purge is aspirational — nothing
+ * caches under it, per docs/SEO.md).
  */
 export const revalidatePost: CollectionAfterChangeHook<Post> = ({
   doc,
@@ -55,8 +63,10 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
 
 /**
  * afterDelete companion to {@link revalidatePost}: purges the deleted
- * article's path plus the same 'posts'/'posts-sitemap' tags so lists,
- * search, and the sitemap drop the document immediately.
+ * article's path plus the same 'posts'/'posts-sitemap' tags. The detail
+ * page 404s immediately; list surfaces and search converge within their
+ * TTLs and the sitemap on its hourly revalidate (same measured semantics
+ * as {@link revalidatePost} — docs/MAINTENANCE.md → Watchpoints).
  */
 export const revalidateDelete: CollectionAfterDeleteHook<Post> = ({
   doc,

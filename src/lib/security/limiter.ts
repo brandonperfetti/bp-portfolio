@@ -17,37 +17,47 @@ const hasUpstash = Boolean(
 // The in-memory fallback is dev-only by design: per-instance buckets
 // multiply limits by warm-instance count and reset on cold start. A prod
 // deploy without Upstash should be LOUD about running degraded (fresh-eyes
-// review 2026-08, finding m3) — one warning per instance, not per request.
-let warnedDegraded = false
+// review 2026-08, finding m3) — module scope runs once per instance, so
+// this fires exactly one warning per instance.
 if (!hasUpstash && process.env.NODE_ENV === 'production') {
-  if (!warnedDegraded) {
-    warnedDegraded = true
-    console.error(
-      '[security/limiter] UPSTASH_REDIS_REST_URL/TOKEN missing in production — ' +
-        'rate limiting is degraded to per-instance memory. Configure Upstash.',
-    )
-  }
+  console.error(
+    '[security/limiter] UPSTASH_REDIS_REST_URL/TOKEN missing in production — ' +
+      'rate limiting is degraded to per-instance memory. Configure Upstash.',
+  )
 }
 
-let minuteLimiter: Ratelimit | null = null
-let dailyLimiter: Ratelimit | null = null
+// Limiter instances are cached PER (perMinute, perDay) CONFIG, not as a
+// single module singleton. The singleton version captured whichever
+// route's config warmed the instance first (second-pass review 2026-08-10,
+// finding N1): with a daily quota configured, a cold instance whose first
+// request was the contact form (perDay 0) built a zero-limit daily
+// limiter and then 429'd every chat request until instance recycle.
+const limiterCache = new Map<
+  string,
+  { minuteLimiter: Ratelimit; dailyLimiter: Ratelimit }
+>()
 
 const getLimiters = (perMinute: number, perDay: number) => {
   if (!hasUpstash) return null
-  if (!minuteLimiter || !dailyLimiter) {
+  const cacheKey = `${perMinute}:${perDay}`
+  let entry = limiterCache.get(cacheKey)
+  if (!entry) {
     const redis = Redis.fromEnv()
-    minuteLimiter = new Ratelimit({
-      redis,
-      limiter: Ratelimit.slidingWindow(perMinute, '60 s'),
-      prefix: 'hermes:rl',
-    })
-    dailyLimiter = new Ratelimit({
-      redis,
-      limiter: Ratelimit.fixedWindow(perDay, '86400 s'),
-      prefix: 'hermes:daily',
-    })
+    entry = {
+      minuteLimiter: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(perMinute, '60 s'),
+        prefix: 'hermes:rl',
+      }),
+      dailyLimiter: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(perDay, '86400 s'),
+        prefix: 'hermes:daily',
+      }),
+    }
+    limiterCache.set(cacheKey, entry)
   }
-  return { minuteLimiter, dailyLimiter }
+  return entry
 }
 
 /**

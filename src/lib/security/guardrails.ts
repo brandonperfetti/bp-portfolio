@@ -186,9 +186,15 @@ export function getRequestClientIp(request: Request) {
   if (realIp) return realIp
   const xff = request.headers.get('x-forwarded-for')
   if (xff) {
+    // Scan right-to-left for the first NON-EMPTY hop: a trailing comma
+    // (`"1.2.3.4,"`) previously yielded an empty rightmost entry and fell
+    // through to the shared 'unknown' bucket (second-pass review
+    // 2026-08-10 nit). Still never the leftmost unless it is the only hop.
     const hops = xff.split(',')
-    const candidate = hops[hops.length - 1]?.trim()
-    if (candidate) return candidate
+    for (let i = hops.length - 1; i >= 0; i--) {
+      const candidate = hops[i]?.trim()
+      if (candidate) return candidate
+    }
   }
   return 'unknown'
 }

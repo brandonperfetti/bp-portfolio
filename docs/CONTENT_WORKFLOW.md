@@ -10,9 +10,11 @@
 
 1. Draft in `/admin` → Posts (autosave + versions are on).
 2. Fill SEO tab (plugin-seo checks) and Meta tab (categories/tags).
-3. Publish (or schedule) — `revalidatePost` makes it live on
-   `/articles/[slug]` immediately; search index and sitemap update via
-   plugin-search sync + tag revalidation.
+3. Publish (or schedule) — `revalidatePost` makes the article's detail
+   page live at `/articles/[slug]` immediately. List surfaces converge on
+   their TTLs, not instantly (measured 2026-08-10, docs/MAINTENANCE.md →
+   Watchpoints): `/articles` and the search palette within ≤5 minutes,
+   the sitemap on its hourly revalidate.
 4. Slugs lock after creation (`slugLock`). Changing a published slug breaks
    the URL contract — add a redirect via plugin-redirects if truly needed.
 

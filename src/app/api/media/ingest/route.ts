@@ -82,7 +82,20 @@ export async function POST(request: Request) {
     )
   }
 
-  const upstream = await fetch(sourceUrl, { redirect: 'follow' })
+  // redirect: 'error' — the https+allowlist check above runs on the FIRST
+  // hop only, so following redirects would let a 3xx from the allowlisted
+  // host land anywhere (second-pass review 2026-08-10, finding N2).
+  // Cloudinary delivery URLs serve directly; a redirect here is always
+  // unexpected and rejecting it keeps the SSRF allowlist airtight.
+  let upstream: Response
+  try {
+    upstream = await fetch(sourceUrl, { redirect: 'error' })
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: 'source fetch failed (network error or redirect)' },
+      { status: 502 },
+    )
+  }
   if (!upstream.ok) {
     return NextResponse.json(
       { ok: false, error: `source fetch failed: ${upstream.status}` },
@@ -91,10 +104,32 @@ export async function POST(request: Request) {
   }
 
   const mimeType = upstream.headers.get('content-type')?.split(';')[0] ?? ''
-  if (!mimeType.startsWith(ALLOWED_MIME_PREFIX)) {
+  // svg+xml passes an `image/*` prefix check but can carry scripts, and
+  // this route exists for raster covers — reject it outright (N4).
+  if (
+    !mimeType.startsWith(ALLOWED_MIME_PREFIX) ||
+    mimeType === 'image/svg+xml'
+  ) {
     return NextResponse.json(
-      { ok: false, error: `source is not an image (${mimeType || 'unknown'})` },
+      {
+        ok: false,
+        error: `source is not a raster image (${mimeType || 'unknown'})`,
+      },
       { status: 415 },
+    )
+  }
+
+  // Reject oversized responses BEFORE buffering when the upstream declares
+  // a length (N3); the post-read check below stays as the enforcement for
+  // chunked/undeclared responses.
+  const declaredLength = Number(upstream.headers.get('content-length') ?? '')
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BYTES) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `source size out of bounds (${declaredLength} bytes declared)`,
+      },
+      { status: 413 },
     )
   }
 
@@ -110,16 +145,27 @@ export async function POST(request: Request) {
   }
 
   const payload = await getPayload({ config: configPromise })
-  const media = await payload.create({
-    collection: 'media',
-    data: { alt },
-    file: {
-      data: buffer,
-      name: filenameFromUrl(sourceUrl),
-      mimetype: mimeType,
-      size: buffer.byteLength,
-    },
-  })
+  let media
+  try {
+    media = await payload.create({
+      collection: 'media',
+      data: { alt },
+      file: {
+        data: buffer,
+        name: filenameFromUrl(sourceUrl),
+        mimetype: mimeType,
+        size: buffer.byteLength,
+      },
+    })
+  } catch (error) {
+    // e.g. a mime type that passes image/* here but isn't in the Media
+    // collection's allowlist (image/tiff) — a caller problem, not a crash.
+    payload.logger.error({ err: error }, 'media ingest: payload.create failed')
+    return NextResponse.json(
+      { ok: false, error: 'media creation rejected (unsupported type?)' },
+      { status: 422 },
+    )
+  }
 
   return NextResponse.json({
     ok: true,
