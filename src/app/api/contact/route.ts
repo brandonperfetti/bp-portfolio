@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import sgMail from '@sendgrid/mail'
+import { Resend } from 'resend'
 import * as z from 'zod'
 
 import {
@@ -27,7 +27,9 @@ const escapeHtml = (value: string) =>
     .replaceAll("'", '&#39;')
 
 /**
- * Contact-form delivery via SendGrid.
+ * Contact-form delivery via Resend (migrated from SendGrid 2026-08-10; the
+ * route also moved from `/api/sendgrid` to the vendor-neutral `/api/contact`
+ * so the next provider change touches zero URLs).
  *
  * @remarks Hardened to the same guardrail stack as the Hermes chat route
  * (fresh-eyes review 2026-08, finding M1): same-origin source guard, per-IP
@@ -39,11 +41,10 @@ const escapeHtml = (value: string) =>
  * behaves exactly as before, so previews and local dev need no setup.
  */
 export async function POST(req: Request) {
-  const apiKey = process.env.SENDGRID_API_KEY
-  const isEuResidency = process.env.SENDGRID_DATA_RESIDENCY === 'eu'
+  const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
     return NextResponse.json(
-      { message: 'SENDGRID_API_KEY is not configured.' },
+      { message: 'RESEND_API_KEY is not configured.' },
       { status: 500 },
     )
   }
@@ -102,38 +103,29 @@ export async function POST(req: Request) {
   }
   const { fullname, email, subject, message } = parsed.data
 
-  sgMail.setApiKey(apiKey)
-  if (isEuResidency) {
-    ;(
-      sgMail as { setDataResidency?: (region: 'eu') => void }
-    ).setDataResidency?.('eu')
-  }
-
   const to = process.env.CONTACT_TO_EMAIL ?? 'brandon@brandonperfetti.com'
   const from = process.env.CONTACT_FROM_EMAIL ?? 'info@brandonperfetti.com'
 
-  try {
-    await sgMail.send({
-      to,
-      from,
-      replyTo: email,
-      subject,
-      text: `New contact from ${fullname}\nEmail: ${email}\n\n${message}`,
-      html: `
-        <h3>New contact from ${escapeHtml(fullname)}</h3>
-        <p><strong>Email:</strong> ${escapeHtml(email)}</p>
-        <p><strong>Message:</strong> ${escapeHtml(message)}</p>
-      `,
-    })
+  const resend = new Resend(apiKey)
+  const { error } = await resend.emails.send({
+    to,
+    from,
+    replyTo: email,
+    subject,
+    text: `New contact from ${fullname}\nEmail: ${email}\n\n${message}`,
+    html: `
+      <h3>New contact from ${escapeHtml(fullname)}</h3>
+      <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+      <p><strong>Message:</strong> ${escapeHtml(message)}</p>
+    `,
+  })
 
-    return NextResponse.json({ message: 'Email sent successfully.' })
-  } catch (error) {
+  if (error) {
     return NextResponse.json(
-      {
-        message: 'Failed to send email.',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
+      { message: 'Failed to send email.', error: error.message },
       { status: 500 },
     )
   }
+
+  return NextResponse.json({ message: 'Email sent successfully.' })
 }

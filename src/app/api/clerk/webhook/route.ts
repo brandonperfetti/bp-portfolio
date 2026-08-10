@@ -1,13 +1,17 @@
 import { Webhook } from 'svix'
+import { Resend } from 'resend'
 
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
 
 /**
- * Clerk → SendGrid list sync (§12 email capture; replaces v3 api/mailinglist).
+ * Clerk → Resend contact sync (§12 email capture; replaces v3
+ * api/mailinglist, migrated from the SendGrid marketing list 2026-08-10
+ * when SendGrid's post-trial Marketing Campaigns paywall blocked list
+ * access entirely).
  *
  * Clerk fires `user.created` on sign-up; we verify the svix signature with
- * `CLERK_WEBHOOK_SIGNING_SECRET` and upsert the email into the SendGrid
- * marketing list.
+ * `CLERK_WEBHOOK_SIGNING_SECRET` and create the contact in Resend,
+ * optionally assigned to the segment in `RESEND_CONTACT_SEGMENT_ID`.
  *
  * @remarks Consent: the sign-up flow presents Clerk's legal/marketing consent;
  * TODO(brandon): if you enable a granular marketing opt-in field in Clerk,
@@ -51,31 +55,28 @@ export async function POST(req: Request) {
     return Response.json({ received: true })
   }
 
-  const apiKey = process.env.SENDGRID_API_KEY
-  const listId = process.env.SENDGRID_MARKETING_LIST_ID
+  const apiKey = process.env.RESEND_API_KEY
+  const segmentId = process.env.RESEND_CONTACT_SEGMENT_ID
   if (!apiKey) {
-    console.warn('[clerk/webhook] SENDGRID_API_KEY missing; skipping list sync')
+    console.warn('[clerk/webhook] RESEND_API_KEY missing; skipping capture')
     return Response.json({ received: true })
   }
 
-  const res = await fetch('https://api.sendgrid.com/v3/marketing/contacts', {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      ...(listId ? { list_ids: [listId] } : {}),
-      contacts: [{ email, first_name: firstName, last_name: lastName }],
-    }),
+  const resend = new Resend(apiKey)
+  const { error } = await resend.contacts.create({
+    email,
+    firstName,
+    lastName,
+    ...(segmentId ? { segments: [{ id: segmentId }] } : {}),
   })
 
-  if (!res.ok) {
-    console.error('[clerk/webhook] SendGrid sync failed', {
-      status: res.status,
-      body: (await res.text()).slice(0, 300),
+  if (error) {
+    console.error('[clerk/webhook] Resend contact sync failed', {
+      name: error.name,
+      message: error.message.slice(0, 300),
     })
-    // 200 anyway: Clerk retries are not useful for a bad SendGrid config.
+    // 200 anyway: Clerk retries are not useful for a bad Resend config, and
+    // a duplicate-contact error on webhook redelivery is expected noise.
   }
 
   return Response.json({ received: true })

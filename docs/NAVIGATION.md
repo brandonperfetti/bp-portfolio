@@ -26,5 +26,5 @@ with hard-coded fallbacks. The command palette mirrors primary nav.
 - `/admin` — Payload admin (own auth).
 - `/api/[...slug]`, `/api/graphql` — Payload (generated).
 - `/api/mcp` — Payload MCP (API key).
-- `/api/ai/chat`, `/api/search`, `/api/sendgrid`, `/api/clerk/webhook`,
+- `/api/ai/chat`, `/api/search`, `/api/contact`, `/api/clerk/webhook`,
   `/api/revalidate` — custom handlers (`src/app/api/`).

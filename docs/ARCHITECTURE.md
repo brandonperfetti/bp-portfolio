@@ -22,7 +22,7 @@
 - `src/app/(payload)/` — Payload admin + generated API routes. Do not edit
   `admin/importMap.js` by hand (generated; CI-gated).
 - `src/app/api/` — custom route handlers: `ai/chat` (Hermes), `search`
-  (palette index), `sendgrid` (contact/newsletter), `clerk/webhook` (email
+  (palette index), `contact` (contact form via Resend), `clerk/webhook` (email
   capture), `revalidate` (secret-gated ISR).
 - `src/collections/`, `src/globals/`, `src/blocks/`, `src/fields/`,
   `src/access/` — Payload schema. `src/payload.config.ts` is the single

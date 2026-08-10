@@ -12,7 +12,8 @@ one set, version-locked.
 - `@payloadcms/storage-vercel-blob` — media storage.
 - `@payloadcms/plugin-seo|redirects|search|mcp` — SEO fields, editorial
   redirects, search index, agent MCP endpoint.
-- `@payloadcms/email-nodemailer` — SendGrid SMTP transactional email.
+- `@payloadcms/email-resend` — Resend transactional email (first-party
+  adapter; replaced `@payloadcms/email-nodemailer` + SendGrid SMTP).
 - `sharp` — Payload image processing.
 
 ## App framework
@@ -44,7 +45,8 @@ one set, version-locked.
 - `next-themes` — class-based theming.
 - `@headlessui/react`, `@heroicons/react` — retained v3 UI (shrinking).
 - `feed` — RSS. `cheerio` — HTML utilities for llms/feed surfaces.
-- `@sendgrid/mail` — contact/newsletter API route.
+- `resend` — contact-form delivery (`/api/contact`) + Clerk sign-up email
+  capture (`/api/clerk/webhook`).
 - `@vercel/analytics`, `@vercel/speed-insights` — telemetry.
 
 ## Dev/test

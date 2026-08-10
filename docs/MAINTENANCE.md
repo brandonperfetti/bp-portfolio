@@ -13,14 +13,15 @@
   (`GITHUB_TOKEN`). Scan knobs: `GITHUB_TECH_*` in `.env.example`.
 - **Neon/Blob**: staging DB is the Neon store; production gets its own at
   promotion. Blob store `bp-portfolio-media` is public-read.
-- **Email deliverability (SendGrid domain auth)**: rides on three CNAMEs
-  in Hover DNS — `em3842`, `s1._domainkey`, `s2._domainkey` →
-  `*.u32673427.wl178.sendgrid.net`. These went missing in a past DNS
-  migration and every contact email junked (unaligned DKIM/DMARC) while
-  SendGrid's dashboard showed STALE "Verified" badges — the badges only
-  update when Verify is clicked. Restored + re-verified 2026-08-10. Any
-  future DNS/registrar move must carry these three records, then
-  re-click Verify in SendGrid Sender Authentication.
+- **Email deliverability (Resend domain auth)**: brandonperfetti.com is
+  verified in Resend (us-east-1 — co-located with the iad1 functions,
+  same logic as Upstash) via DNS records at Hover: an MX + SPF TXT on the
+  `send` return-path subdomain and a DKIM TXT (`resend._domainkey`).
+  Exact values live in Resend → Domains. Lesson carried over from the
+  SendGrid era (fixed 2026-08-10 after a DNS migration silently dropped
+  the auth CNAMEs and every email junked): any future DNS/registrar move
+  must carry these records, then re-verify in the Resend dashboard —
+  and never trust a dashboard's cached "verified" badge over `dig`.
 - **Upstash Redis (rate limiting)**: `bp-portfolio-limiter` in AWS
   us-east-1 — deliberately co-located with the Vercel functions (iad1,
   measured via x-vercel-id) and the Neon DB, NOT near the maintainer.
@@ -71,7 +72,7 @@
 
 1. Merge `rebuild/v4` per branch plan; retarget staging env to `develop`.
 2. Create production Neon DB + Blob token; set all `.env.example` production
-   vars in Vercel (Payload, Clerk, AI, Upstash, SendGrid, GitHub signals).
+   vars in Vercel (Payload, Clerk, AI, Upstash, Resend, GitHub signals).
    Generate FRESH production values (`openssl rand -hex 32`) for
    `CMS_REVALIDATE_SECRET` and `PREVIEW_SECRET` — never reuse the
    staging values, and remember both are scoped per-environment (a var

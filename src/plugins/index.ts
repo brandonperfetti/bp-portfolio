@@ -28,7 +28,7 @@ const generateURL: GenerateURL<Post | Page> = ({ doc, collectionSlug }) => {
  * plugin for Claude-driven content ops.
  *
  * @remarks plugin-form-builder and plugin-nested-docs are intentionally
- * omitted — the SendGrid contact route is retained and page hierarchy is
+ * omitted — the custom contact route (`/api/contact`) covers forms and page hierarchy is
  * flat. TODO(brandon): add either later if a real need appears.
  */
 export const plugins: Plugin[] = [

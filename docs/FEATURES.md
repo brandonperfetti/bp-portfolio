@@ -43,9 +43,10 @@
 
 ## Contact & newsletter
 
-- `/api/sendgrid` POST handles contact + list signup (SendGrid retained from
-  v3, optional EU data residency). Clerk webhook (`/api/clerk/webhook`, svix
-  verified) captures sign-up emails to the marketing list.
+- `/api/contact` POST delivers contact-form email via Resend (migrated from
+  SendGrid + renamed from `/api/sendgrid` 2026-08-10). Clerk webhook
+  (`/api/clerk/webhook`, svix verified) captures sign-up emails as Resend
+  contacts.
 
 ## SEO surfaces
 
