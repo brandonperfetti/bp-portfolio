@@ -63,6 +63,14 @@ const columnFields: Field[] = [
   }),
 ]
 
+/**
+ * General-purpose multi-column rich-text layout — the workhorse block for
+ * layout-builder pages that don't warrant a bespoke block.
+ *
+ * @remarks Column widths are a fixed vocabulary (`oneThird`…`full`) so the
+ * renderer maps them to a static grid; the per-column link only appears in
+ * the admin once `enableLink` is checked, keeping the common case uncluttered.
+ */
 export const Content: Block = {
   slug: 'content',
   interfaceName: 'ContentBlock',

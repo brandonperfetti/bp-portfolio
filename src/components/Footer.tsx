@@ -26,6 +26,10 @@ function NavLink({
   )
 }
 
+/**
+ * Default site footer using the static nav fallback — exists so layouts can
+ * drop in a footer without threading CMS navigation through props.
+ */
 export function Footer() {
   const defaultNavigationItems: Array<
     Pick<CmsNavigationItem, 'href' | 'label'>
@@ -33,6 +37,12 @@ export function Footer() {
   return <FooterWithNavigation navigationItems={defaultNavigationItems} />
 }
 
+/**
+ * Footer with caller-supplied (CMS-driven) navigation items.
+ *
+ * @remarks Renders nothing on `/hermes` — the chat surface owns its full
+ * viewport and a footer would push the composer off-screen.
+ */
 export function FooterWithNavigation({
   navigationItems,
 }: {

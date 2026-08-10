@@ -2,9 +2,10 @@ import { unstable_cache } from 'next/cache'
 import { getPayload } from 'payload'
 
 import configPromise from '@payload-config'
+import { mediaUrl } from '@/lib/cms/mediaUrl'
 import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
 import type { CmsPageContent } from '@/lib/cms/types'
-import type { Media, Page } from '@/payload-types'
+import type { Page } from '@/payload-types'
 
 function normalizePath(path: string) {
   if (!path || path === '/') {
@@ -19,9 +20,6 @@ const pathToSlug = (path: string): string => {
   const normalized = normalizePath(path)
   return normalized === '/' ? 'home' : normalized.replace(/^\//, '')
 }
-
-const mediaUrl = (m: unknown): string | undefined =>
-  m && typeof m === 'object' ? (m as Media).url || undefined : undefined
 
 /**
  * Image URLs of the layout's first `photoStrip` block. The home route

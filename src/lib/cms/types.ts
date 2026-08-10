@@ -1,4 +1,9 @@
-export type CmsProvider = 'local' | 'notion'
+/**
+ * Content provider marker. Only `'local'` (Payload) exists — the Notion
+ * runtime arm was removed with the v4 rebuild and must not return
+ * (CLAUDE.md invariant: never reintroduce Notion runtime code).
+ */
+export type CmsProvider = 'local'
 
 export interface CmsAuthor {
   name: string

@@ -71,6 +71,17 @@ function articleMatchesQuery(
   )
 }
 
+/**
+ * Client-side article browser for `/articles`: debounced free-text search
+ * plus topic/tech filter chips over a pre-fetched article list — filtering
+ * an in-memory list keeps the interaction instant with no server round-trip.
+ *
+ * @remarks Query and topic mirror into the URL (`?q`/`?topic`) via
+ * `router.replace` so filtered views are shareable and survive reload;
+ * legacy `?category` links are honored on read. The local input is not
+ * overwritten from the URL while focused, so the debounce loop can't clobber
+ * in-flight typing. `/` focuses search unless a typing target is active.
+ */
 export function ArticlesExplorer({
   articles,
 }: {

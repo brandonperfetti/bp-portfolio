@@ -33,6 +33,14 @@ async function copyText(value: string) {
   }
 }
 
+/**
+ * "Use with AI" dropdown on article pages: copies the article's Markdown
+ * export so readers can paste it into an LLM. Takes pre-rendered
+ * `markdown` because conversion happens server-side in the content layer.
+ *
+ * @remarks Copy falls back to a hidden-textarea `execCommand` path for
+ * non-secure contexts where the async clipboard API is unavailable.
+ */
 export function UseWithAiMenu({ markdown }: { markdown: string }) {
   const [copied, setCopied] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)

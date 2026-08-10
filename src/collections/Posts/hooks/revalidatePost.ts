@@ -7,6 +7,18 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 
 import type { Post } from '../../../payload-types'
 
+/**
+ * afterChange hook that keeps published articles live without a redeploy:
+ * pairs `revalidatePath` on `/articles/[slug]` with purges of the
+ * 'posts' and 'posts-sitemap' data-cache tags.
+ *
+ * @remarks Both purges are required — the tag purge refreshes list/search
+ * consumers cached under `CMS_TAGS.articles`, while `revalidatePath`
+ * regenerates the article's static shell. `CMS_TAGS.articles === 'posts'`
+ * is the load-bearing coupling here, pinned by `cache.test.ts` so a tag
+ * rename can't silently break publish-time revalidation. Unpublishing also
+ * purges the OLD slug's path so the stale page stops serving.
+ */
 export const revalidatePost: CollectionAfterChangeHook<Post> = ({
   doc,
   previousDoc,
@@ -37,6 +49,11 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
   return doc
 }
 
+/**
+ * afterDelete companion to {@link revalidatePost}: purges the deleted
+ * article's path plus the same 'posts'/'posts-sitemap' tags so lists,
+ * search, and the sitemap drop the document immediately.
+ */
 export const revalidateDelete: CollectionAfterDeleteHook<Post> = ({
   doc,
   req: { context },

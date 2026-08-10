@@ -2,11 +2,8 @@ import { unstable_cache } from 'next/cache'
 import { getPayload } from 'payload'
 
 import configPromise from '@payload-config'
+import { mediaUrl } from '@/lib/cms/mediaUrl'
 import type { CmsWorkHistoryItem } from '@/lib/cms/types'
-import type { Media } from '@/payload-types'
-
-const mediaUrl = (m: unknown): string | undefined =>
-  m && typeof m === 'object' ? (m as Media).url || undefined : undefined
 
 const toYearLabel = (iso: string) => new Date(iso).getUTCFullYear().toString()
 

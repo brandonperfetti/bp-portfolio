@@ -9,6 +9,11 @@ import {
 
 import { linkGroup } from '../../fields/linkGroup'
 
+/**
+ * Marketing CTA band: short rich-text pitch plus up to two link buttons.
+ * Capped at two links deliberately — a CTA with more choices stops being a
+ * call to a single action.
+ */
 export const CallToAction: Block = {
   slug: 'cta',
   interfaceName: 'CallToActionBlock',

@@ -280,6 +280,17 @@ function Avatar({
   )
 }
 
+/**
+ * Site-wide floating header: avatar, mobile/desktop nav, command palette,
+ * and theme toggle. Navigation items are injected (CMS-driven) with a
+ * static fallback so the header never renders empty.
+ *
+ * @remarks The home page gets the signature large-avatar-shrinks-on-scroll
+ * treatment. That choreography is driven by CSS custom properties updated
+ * in a passive scroll listener rather than React state — re-rendering on
+ * every scroll frame would jank; the DOM stays untouched and only
+ * `documentElement` style properties move.
+ */
 export function Header({
   navigationItems = DEFAULT_NAV_ITEMS,
 }: {

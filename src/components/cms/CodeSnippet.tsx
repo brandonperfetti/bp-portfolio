@@ -45,6 +45,15 @@ async function copyText(value: string) {
   }
 }
 
+/**
+ * Prism-highlighted code block with a copy button, fed by CMS code blocks.
+ *
+ * @remarks Language handling is deliberately defensive: rehype-prism runs
+ * with `ignoreMissing` and "plain" aliases collapse to a bare fence,
+ * because migrated articles carry language values outside prism's registry
+ * (e.g. `none`) that previously threw during render and 500'd the whole
+ * article page. Copy falls back to `execCommand` for non-secure contexts.
+ */
 export function CodeSnippet({
   language,
   code,

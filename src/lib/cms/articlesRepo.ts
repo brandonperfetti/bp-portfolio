@@ -1,5 +1,9 @@
 import { flattenBlockText } from '@/lib/content/flattenBlockText'
-import type { CmsArticleDetail, CmsArticleSummary } from '@/lib/cms/types'
+import type {
+  CmsArticleDetail,
+  CmsArticleSummary,
+  CmsProvider,
+} from '@/lib/cms/types'
 import {
   getGatedPostContent,
   getPostBySlug,
@@ -7,7 +11,8 @@ import {
 } from '@/lib/content/posts'
 import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
 import { canAccess } from '@/access/canAccess'
-import type { Media, Post, User } from '@/payload-types'
+import { mediaUrl } from '@/lib/cms/mediaUrl'
+import type { Post, User } from '@/payload-types'
 
 /**
  * Article repository backed by the Payload Local API (was Notion in v3).
@@ -21,12 +26,7 @@ import type { Media, Post, User } from '@/payload-types'
 export type CmsArticleDetailResult = CmsArticleDetail & {
   /** True when the body was withheld because the viewer lacks access (§12). */
   gated?: boolean
-  sourceType: 'local' | 'notion'
-}
-
-const mediaUrl = (media: Post['heroImage']): string | undefined => {
-  if (!media || typeof media !== 'object') return undefined
-  return (media as Media).url || undefined
+  sourceType: CmsProvider
 }
 
 const termTitles = (terms: Post['categories'] | Post['tags']): string[] =>

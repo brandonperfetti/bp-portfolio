@@ -1,26 +1,5 @@
-import { unstable_cache } from 'next/cache'
-import { getPayload } from 'payload'
-
-import configPromise from '@payload-config'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
-import type { Page } from '@/payload-types'
-
-const getPageLayout = unstable_cache(
-  async (slug: string): Promise<Page['layout'] | null> => {
-    const payload = await getPayload({ config: configPromise })
-    const { docs } = await payload.find({
-      collection: 'pages',
-      draft: false,
-      limit: 1,
-      overrideAccess: false,
-      pagination: false,
-      where: { slug: { equals: slug } },
-    })
-    return docs[0]?.layout ?? null
-  },
-  ['page-layout'],
-  { tags: ['pages'] },
-)
+import { getPageLayoutBySlug } from '@/lib/cms/layoutsRepo'
 
 /**
  * CMS block region for code-owned routes (hybrid pages): renders the
@@ -41,7 +20,7 @@ export async function CmsPageBlocks({
   slug: string
   exclude?: string[]
 }) {
-  const layout = await getPageLayout(slug)
+  const layout = await getPageLayoutBySlug(slug)
   if (!layout?.length) return null
   const blocks = exclude?.length
     ? layout.filter((block) => !exclude.includes(block.blockType))

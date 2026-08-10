@@ -1,3 +1,7 @@
+/**
+ * Inline empty-state card for CMS surfaces whose content is missing —
+ * lets a section degrade gracefully in place instead of 404ing the page.
+ */
 export function NotFoundState({
   title,
   description,

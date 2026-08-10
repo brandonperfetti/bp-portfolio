@@ -1,27 +1,6 @@
-import { unstable_cache } from 'next/cache'
-import { getPayload } from 'payload'
-
-import configPromise from '@payload-config'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 import { Container } from '@/components/Container'
-import type { Post } from '@/payload-types'
-
-const getPostLayout = unstable_cache(
-  async (slug: string): Promise<Post['layout'] | null> => {
-    const payload = await getPayload({ config: configPromise })
-    const { docs } = await payload.find({
-      collection: 'posts',
-      draft: false,
-      limit: 1,
-      overrideAccess: false,
-      pagination: false,
-      where: { slug: { equals: slug } },
-    })
-    return docs[0]?.layout ?? null
-  },
-  ['post-layout'],
-  { tags: ['posts'] },
-)
+import { getPostLayoutBySlug } from '@/lib/cms/layoutsRepo'
 
 /**
  * Below-article CMS block region for `/articles/[slug]`: renders the post's
@@ -35,7 +14,7 @@ const getPostLayout = unstable_cache(
  * @param slug Post slug (the article page's own slug).
  */
 export async function CmsPostBlocks({ slug }: { slug: string }) {
-  const layout = await getPostLayout(slug)
+  const layout = await getPostLayoutBySlug(slug)
   if (!layout?.length) return null
   const meaningful = layout.some((block) => block.blockType !== 'spacer')
   if (!meaningful) return null

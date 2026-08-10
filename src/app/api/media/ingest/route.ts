@@ -35,7 +35,9 @@ function filenameFromUrl(url: URL): string {
  * client-side fetch. This route is the server-side equivalent: POST
  * `{ secret, url, alt }` → Media doc in Blob → `{ id, url, filename }`.
  * Auth reuses `CMS_REVALIDATE_SECRET` (same trust level as the revalidate
- * route: agent ops, never public). The host allowlist is deliberate SSRF
+ * route: agent ops, never public). Deliberately NOT rate-limited: the
+ * secret gate already restricts callers to trusted automation, and a
+ * limit here would only throttle our own content runs. The host allowlist is deliberate SSRF
  * hygiene — widen `ALLOWED_SOURCE_HOSTS` only for hosts we control.
  */
 export async function POST(request: Request) {

@@ -1,5 +1,10 @@
 import { formatDate } from '@/lib/formatDate'
 
+/**
+ * Server-renderable article title + date header, matching the
+ * `ArticleLayout` header styling without its client-side animation —
+ * for surfaces that need the look but not the choreography.
+ */
 export function ArticleHeader({
   title,
   date,

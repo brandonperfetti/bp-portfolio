@@ -13,7 +13,7 @@ export const DEFAULT_CMS_AUTHOR: CmsAuthor = {
   image: PERSON_IMAGE_URL,
 }
 
-export const FALLBACK_AUTHOR: CmsAuthor = { ...DEFAULT_CMS_AUTHOR }
+const FALLBACK_AUTHOR: CmsAuthor = DEFAULT_CMS_AUTHOR
 
 /**
  * Article authors. v4 keeps the single-author fallback; Posts relate authors

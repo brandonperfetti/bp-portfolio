@@ -2,13 +2,13 @@ import { unstable_cache } from 'next/cache'
 import { getPayload } from 'payload'
 
 import configPromise from '@payload-config'
+import { mediaUrl } from '@/lib/cms/mediaUrl'
 import {
   PERSON_IMAGE_URL,
   SITE_OWNER_JOB_TITLE,
   SITE_OWNER_NAME,
   SITE_OWNER_SOCIAL_LINKS,
 } from '@/lib/identity'
-import type { Media } from '@/payload-types'
 
 /** Resolved person identity for JSON-LD and the Resume card. */
 export interface CmsIdentity {
@@ -21,9 +21,6 @@ export interface CmsIdentity {
   /** Uploaded CV file URL; `undefined` falls back to the static asset. */
   resumeUrl?: string
 }
-
-const mediaUrl = (m: unknown): string | undefined =>
-  m && typeof m === 'object' ? (m as Media).url || undefined : undefined
 
 /**
  * Person identity from the Payload `identity` global, with the v3

@@ -6,6 +6,13 @@ import {
   lexicalEditor,
 } from '@payloadcms/richtext-lexical'
 
+/**
+ * Inline callout banner (info/warning/error/success) for use inside rich
+ * text — exists so editors can flag caveats without hand-styling markup.
+ *
+ * @remarks Styling lives entirely in the renderer keyed off `style`, so the
+ * admin never encodes colors; the four variants are the whole vocabulary.
+ */
 export const Banner: Block = {
   slug: 'banner',
   fields: [
