@@ -90,3 +90,73 @@ export const getCmsPageByPath = unstable_cache(
   ['page-by-path'],
   { tags: ['pages'] },
 )
+
+/**
+ * Slugs owned by dedicated route components. The `[slug]` catch-all must
+ * never render or emit these, and the sitemap must not double-list them.
+ */
+export const RESERVED_PAGE_SLUGS = new Set([
+  'home',
+  'about',
+  'account',
+  'articles',
+  'hermes',
+  'projects',
+  'sign-in',
+  'sign-up',
+  'speaking',
+  'tech',
+  'thank-you',
+  'uses',
+])
+
+/**
+ * Draft-aware single-page query for the page-builder catch-all route.
+ * Draft mode (admin Live Preview) reads the newest draft with authenticated
+ * access; visitors only ever see published documents.
+ *
+ * @remarks Lives here (not in the route file) per docs/STATE.md — pages
+ * never call `getPayload()` directly (fresh-eyes review 2026-08, m5).
+ */
+export const getPageBySlugDraftAware = async (
+  slug: string,
+): Promise<Page | null> => {
+  const { draftMode } = await import('next/headers')
+  const { isEnabled: draft } = await draftMode()
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'pages',
+    draft,
+    limit: 1,
+    overrideAccess: draft,
+    pagination: false,
+    where: { slug: { equals: slug } },
+  })
+  return docs[0] ?? null
+}
+
+/**
+ * Published, non-reserved page-builder slugs — the set of pages the
+ * `[slug]` catch-all serves. Feeds `generateStaticParams` and the sitemap
+ * (fresh-eyes review 2026-08, M5: builder pages were missing from the
+ * sitemap entirely).
+ */
+export const getPublishedPageSlugs = unstable_cache(
+  async (): Promise<string[]> => {
+    const payload = await getPayload({ config: configPromise })
+    const { docs } = await payload.find({
+      collection: 'pages',
+      draft: false,
+      limit: 500,
+      overrideAccess: false,
+      pagination: false,
+      select: { slug: true },
+      where: { _status: { equals: 'published' } },
+    })
+    return docs
+      .map((doc) => doc.slug)
+      .filter((s): s is string => Boolean(s) && !RESERVED_PAGE_SLUGS.has(s!))
+  },
+  ['published-page-slugs'],
+  { tags: ['pages'] },
+)

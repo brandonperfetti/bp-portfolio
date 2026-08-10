@@ -19,12 +19,17 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
 
 ## Indexing surfaces
 
-- `src/app/sitemap.ts` — pages + published articles (tag-revalidated with
-  `posts-sitemap`).
+- `src/app/sitemap.ts` — static routes + published articles + published
+  page-builder pages. Regenerates hourly (`revalidate = 3600`); its data
+  flows through the `posts`/`pages`-tagged caches, so content edits appear
+  on the next hourly regeneration. (The `posts-sitemap`/`pages-sitemap`
+  tags the hooks fire are aspirational — nothing subscribes to them yet.)
 - `src/app/robots.ts` — allows crawling, disallows `/admin`, `/api`.
 - `/feed.xml` — RSS via `feed` from published posts.
 - `/llms.txt` + `/llms-full.txt` — LLM discovery endpoints
-  (`src/lib/llms/helpers.ts`): site map summary and full article corpus.
+  (`src/lib/llms/helpers.ts`): site map summary, and per-article metadata +
+  summaries (deliberately NOT full bodies — full-corpus emission would leak
+  gated content; keep it that way).
 
 ## Rules
 

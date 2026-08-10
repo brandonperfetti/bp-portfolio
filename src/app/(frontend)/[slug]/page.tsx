@@ -1,68 +1,24 @@
 import type { Metadata } from 'next'
-import { draftMode } from 'next/headers'
 import { notFound } from 'next/navigation'
-import { getPayload } from 'payload'
 import { cache } from 'react'
 
-import configPromise from '@payload-config'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 import { Container } from '@/components/Container'
 import { RenderHero } from '@/heros/RenderHero'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
+import {
+  RESERVED_PAGE_SLUGS,
+  getPageBySlugDraftAware,
+  getPublishedPageSlugs,
+} from '@/lib/cms/pagesRepo'
 import { getSiteUrl } from '@/lib/site'
 
-/**
- * Slugs owned by dedicated route components; the catch-all never renders
- * them (Next static routes win, but generateStaticParams must not emit
- * them either). `home` renders at `/`.
- */
-const RESERVED_SLUGS = new Set([
-  'home',
-  'about',
-  'account',
-  'articles',
-  'hermes',
-  'projects',
-  'sign-in',
-  'sign-up',
-  'speaking',
-  'tech',
-  'thank-you',
-  'uses',
-])
-
-/**
- * Draft-aware page query for the CMS page builder (catch-all route).
- * Draft mode (admin Live Preview / Preview button) reads the newest draft;
- * visitors only ever see published documents.
- */
-const queryPageBySlug = cache(async (slug: string) => {
-  const { isEnabled: draft } = await draftMode()
-  const payload = await getPayload({ config: configPromise })
-  const { docs } = await payload.find({
-    collection: 'pages',
-    draft,
-    limit: 1,
-    overrideAccess: draft,
-    pagination: false,
-    where: { slug: { equals: slug } },
-  })
-  return docs[0] ?? null
-})
+/** Request-deduped wrapper over the repo's draft-aware page query. */
+const queryPageBySlug = cache(getPageBySlugDraftAware)
 
 export async function generateStaticParams() {
-  const payload = await getPayload({ config: configPromise })
-  const { docs } = await payload.find({
-    collection: 'pages',
-    draft: false,
-    limit: 500,
-    overrideAccess: false,
-    pagination: false,
-    select: { slug: true },
-  })
-  return docs
-    .filter((doc) => doc.slug && !RESERVED_SLUGS.has(doc.slug))
-    .map((doc) => ({ slug: doc.slug as string }))
+  const slugs = await getPublishedPageSlugs()
+  return slugs.map((slug) => ({ slug }))
 }
 
 export async function generateMetadata({
@@ -93,7 +49,7 @@ export default async function CmsPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  if (RESERVED_SLUGS.has(slug)) {
+  if (RESERVED_PAGE_SLUGS.has(slug)) {
     notFound()
   }
 

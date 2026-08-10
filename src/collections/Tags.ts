@@ -3,6 +3,10 @@ import type { CollectionConfig } from 'payload'
 import { anyone } from '@/access/anyone'
 import { authenticated } from '@/access/authenticated'
 import { slugField } from '@/fields/slug'
+import {
+  revalidateCollectionTag,
+  revalidateCollectionTagDelete,
+} from '@/hooks/revalidateCollection'
 
 /** Free-form article tags (finer-grained than categories). */
 export const Tags: CollectionConfig = {
@@ -24,4 +28,11 @@ export const Tags: CollectionConfig = {
     },
     ...slugField(),
   ],
+  // Category/Tag titles render out of the posts cache (article topics) —
+  // without these, a rename stays stale until an unrelated post edit
+  // (fresh-eyes review 2026-08, m1).
+  hooks: {
+    afterChange: [revalidateCollectionTag('posts', ['/articles'])],
+    afterDelete: [revalidateCollectionTagDelete('posts', ['/articles'])],
+  },
 }

@@ -9,6 +9,10 @@ vi.mock('@/lib/articles', () => ({
   getAllArticles: mocks.getAllArticles,
 }))
 
+vi.mock('@/lib/cms/pagesRepo', () => ({
+  getPublishedPageSlugs: vi.fn(async () => ['now']),
+}))
+
 vi.mock('@/lib/site', () => ({
   getSiteUrl: mocks.getSiteUrl,
 }))

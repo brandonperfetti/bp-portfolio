@@ -2,6 +2,10 @@ import type { CollectionConfig } from 'payload'
 
 import { anyone } from '@/access/anyone'
 import { authenticated } from '@/access/authenticated'
+import {
+  revalidateCollectionTag,
+  revalidateCollectionTagDelete,
+} from '@/hooks/revalidateCollection'
 
 /**
  * Uploaded media (article covers, page images). Stored in Vercel Blob via
@@ -35,6 +39,18 @@ export const Media: CollectionConfig = {
       'image/gif',
       'image/svg+xml',
       'application/pdf',
+    ],
+  },
+  // Media (alt text, refreshed uploads) renders through both the posts and
+  // pages caches (fresh-eyes review 2026-08, m1).
+  hooks: {
+    afterChange: [
+      revalidateCollectionTag('posts', ['/articles']),
+      revalidateCollectionTag('pages', ['/']),
+    ],
+    afterDelete: [
+      revalidateCollectionTagDelete('posts', ['/articles']),
+      revalidateCollectionTagDelete('pages', ['/']),
     ],
   },
 }
