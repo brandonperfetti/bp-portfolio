@@ -105,6 +105,10 @@ describe('verifyRequestTurnstileToken', () => {
   })
 
   it('is a no-op (ok, not required) when TURNSTILE_SECRET_KEY is unset', async () => {
+    // Force-empty rather than assume-absent: developers with real Turnstile
+    // keys in their local .env (the expected state after setup) must not
+    // see this test flip — caught live on the first post-setup push.
+    vi.stubEnv('TURNSTILE_SECRET_KEY', '')
     const { verifyRequestTurnstileToken } =
       await import('@/lib/security/guardrails')
     const result = await verifyRequestTurnstileToken({ token: 'anything' })
