@@ -1,7 +1,12 @@
 export const CMS_REVALIDATE = {
   articles: 300,
   articleDetail: 300,
-  search: 1800,
+  // 1800 → 300 (2026-08-10): tag + path purges from the Posts hooks were
+  // measured NOT refreshing this unstable_cache-backed index on Vercel, so
+  // the TTL is the effective convergence bound after publish/delete. Keep
+  // at 300 until the list-surface staleness investigation lands
+  // (docs/MAINTENANCE.md → Watchpoints).
+  search: 300,
   projects: 900,
   tech: 900,
   uses: 900,

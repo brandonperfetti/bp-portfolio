@@ -25,6 +25,26 @@
 
 ## Watchpoints
 
+- **List-surface cache staleness (open, measured 2026-08-10)**: on Vercel,
+  `revalidateTag('posts', 'max')` and page-scope `revalidatePath('/articles')`
+  / `revalidatePath('/api/search')` from the Posts hooks fire (runtime logs
+  confirm) but measurably do **not** refresh the `unstable_cache`-backed list
+  surfaces — `/articles` (via `getPublishedPosts`) and `/api/search` served
+  identical stale payloads minutes after a publish and a delete, and search
+  staleness even survived a fresh deploy (Vercel Data Cache persists across
+  deployments). Empirical matrix: **detail pages** (`getPostBySlug`,
+  uncached) are fresh instantly; **`/articles`** converges within its
+  `x-nextjs-stale-time` of 300s; **`/api/search`** converges within its TTL
+  (now 300s — lowered from 1800 in `src/lib/cms/cache.ts` as the bounded
+  mitigation). The only purge rigorously proven live at runtime is
+  `revalidatePath('/', 'layout')` (globals hooks — Identity/CV flip).
+  Security impact: none — stale search entries carry teaser/excerpt text
+  only (gated bodies never enter the index, review finding B1). Full
+  diagnosis deferred to a dedicated session with fresh context; candidate
+  suspects are the two-arg `revalidateTag(tag, 'max')` soft/SWR semantics
+  vs. `unstable_cache` and TTL'd Data Cache entries outliving purges. The
+  planned `cacheComponents` migration (post-merge branch) retires this
+  caching model entirely and supersedes this watchpoint.
 - Stale generated artifacts are the classic admin breakage (empty SEO tab /
   dead editor) — CI gates both, but check first when admin misbehaves.
 - Lexical error #17 on articles ⇒ an editor feature for a migrated node type
