@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { isAllowedRequestSource } from '@/lib/security/guardrails'
+import {
+  getRequestClientIp,
+  isAllowedRequestSource,
+} from '@/lib/security/guardrails'
 
 /**
  * Regression suite for the Hermes chat source guard.
@@ -70,5 +73,28 @@ describe('isAllowedRequestSource', () => {
       origin: 'https://preview-abc123.vercel.app',
     })
     expect(isAllowedRequestSource(request)).toBe(true)
+  })
+})
+
+describe('getRequestClientIp', () => {
+  it('prefers the platform-set x-real-ip', () => {
+    const request = makeRequest({
+      'x-real-ip': '203.0.113.7',
+      'x-forwarded-for': 'spoofed.example, 203.0.113.7',
+    })
+    expect(getRequestClientIp(request)).toBe('203.0.113.7')
+  })
+
+  it('uses the RIGHTMOST x-forwarded-for hop, never the spoofable leftmost (M2 regression)', () => {
+    // The leftmost XFF entry is client-prependable; keying rate limits on
+    // it let attackers mint a fresh bucket per request.
+    const request = makeRequest({
+      'x-forwarded-for': '6.6.6.6, 203.0.113.9',
+    })
+    expect(getRequestClientIp(request)).toBe('203.0.113.9')
+  })
+
+  it('returns unknown when no proxy headers are present', () => {
+    expect(getRequestClientIp(makeRequest({}))).toBe('unknown')
   })
 })

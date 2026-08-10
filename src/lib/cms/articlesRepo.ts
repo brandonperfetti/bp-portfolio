@@ -1,6 +1,10 @@
 import { flattenBlockText } from '@/lib/content/flattenBlockText'
 import type { CmsArticleDetail, CmsArticleSummary } from '@/lib/cms/types'
-import { getPostBySlug, getPublishedPosts } from '@/lib/content/posts'
+import {
+  getGatedPostContent,
+  getPostBySlug,
+  getPublishedPosts,
+} from '@/lib/content/posts'
 import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
 import { canAccess } from '@/access/canAccess'
 import type { Media, Post, User } from '@/payload-types'
@@ -81,7 +85,14 @@ export async function getCmsArticleBySlug(
   const post = await getPostBySlug(slug)
   if (!post) return null
   const allowed = canAccess(viewer?.isAuthenticated ?? false, post)
-  const bodyBlocks = allowed ? lexicalToBlocks(post.content) : []
+  // Gated posts come back without `content` (field-level access hides it
+  // from unauthenticated Payload reads). Once the app-layer gate passes,
+  // refetch the body through the single trusted path.
+  let content = post.content
+  if (allowed && !content) {
+    content = (await getGatedPostContent(post.id)) ?? content
+  }
+  const bodyBlocks = allowed && content ? lexicalToBlocks(content) : []
   return {
     ...toSummary(post),
     bodyBlocks,
@@ -91,7 +102,14 @@ export async function getCmsArticleBySlug(
   }
 }
 
-/** Summaries enriched with flattened body text for the search index. */
+/**
+ * Summaries enriched with flattened body text for the search index.
+ *
+ * @remarks The index is served to ANONYMOUS clients via `/api/search`, so
+ * gated posts contribute only their excerpt — never the flattened body.
+ * Skipping this mirror of the {@link getCmsArticleBySlug} gate leaked full
+ * gated bodies through search (fresh-eyes review 2026-08, finding B1).
+ */
 export async function getCmsSearchArticles(): Promise<
   Array<CmsArticleSummary & { searchText: string }>
 > {
@@ -100,6 +118,8 @@ export async function getCmsSearchArticles(): Promise<
     .filter((p) => Boolean(p.slug))
     .map((post) => ({
       ...toSummary(post),
-      searchText: flattenBlockText(lexicalToBlocks(post.content)),
+      searchText: canAccess(false, post)
+        ? flattenBlockText(lexicalToBlocks(post.content))
+        : post.excerpt || '',
     }))
 }

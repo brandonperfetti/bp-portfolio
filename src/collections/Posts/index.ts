@@ -106,6 +106,18 @@ export const Posts: CollectionConfig = {
             {
               name: 'content',
               type: 'richText',
+              // Field-level gate (§12): without this, the public Payload
+              // REST/GraphQL surface returned gated bodies to anonymous
+              // callers — the app-layer canAccess() gate sits ABOVE Payload
+              // and never saw those requests (fresh-eyes review 2026-08,
+              // finding B2). Anonymous reads of gated posts now omit
+              // `content`; entitled Clerk viewers get bodies via the
+              // trusted refetch in the content layer (getGatedPostContent).
+              access: {
+                read: ({ req: { user }, doc }) =>
+                  Boolean(user) ||
+                  (doc?.access?.visibility ?? 'public') !== 'gated',
+              },
               editor: lexicalEditor({
                 features: ({ rootFeatures }) => {
                   return [

@@ -66,3 +66,29 @@ export const getPostBySlug = async (slug: string): Promise<Post | null> => {
   })
   return docs[0] || null
 }
+
+/**
+ * Trusted fetch of a gated post's `content` field, bypassing field-level
+ * access.
+ *
+ * @remarks The Posts `content` field carries field-level read access that
+ * hides gated bodies from every unauthenticated Payload read — including
+ * this app's own Local API calls, which run without a Payload user. Callers
+ * MUST have already authorized the viewer via `canAccess()` (Clerk-side);
+ * this function is the deliberate, single point where that app-layer
+ * decision is allowed to override the data-layer gate. Never call it before
+ * the gate. (Fresh-eyes review 2026-08, finding B2.)
+ */
+export const getGatedPostContent = async (
+  id: number,
+): Promise<Post['content'] | null> => {
+  const payload = await getPayload({ config: configPromise })
+  const doc = await payload.findByID({
+    collection: 'posts',
+    id,
+    depth: 2,
+    overrideAccess: true,
+    select: { content: true },
+  })
+  return doc?.content ?? null
+}

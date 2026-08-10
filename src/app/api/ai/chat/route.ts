@@ -79,11 +79,31 @@ export async function POST(req: Request) {
   // Never trust client roles: drop any system messages before the model call.
   const userFacing = messages.filter((m) => m.role !== 'system')
 
+  // Enforce the configured conversation-size limits (fresh-eyes review
+  // 2026-08, finding m2 — these env knobs existed but were never read):
+  // cap the window to the most recent maxMessages, reject oversized
+  // individual messages, and use the tunable completion-token ceiling.
+  const windowed = userFacing.slice(-limits.maxMessages)
+  const oversized = windowed.some((m) =>
+    m.parts.some(
+      (part) =>
+        part.type === 'text' && part.text.length > limits.maxMessageChars,
+    ),
+  )
+  if (oversized) {
+    return Response.json(
+      {
+        error: `Messages are limited to ${limits.maxMessageChars} characters.`,
+      },
+      { status: 413 },
+    )
+  }
+
   const result = streamText({
     model: getHermesModel(),
     system: HERMES_SYSTEM_PROMPT,
-    messages: await convertToModelMessages(userFacing),
-    maxOutputTokens: Number(process.env.AI_MAX_COMPLETION_TOKENS) || 1024,
+    messages: await convertToModelMessages(windowed),
+    maxOutputTokens: limits.maxCompletionTokens,
   })
 
   return result.toUIMessageStreamResponse()

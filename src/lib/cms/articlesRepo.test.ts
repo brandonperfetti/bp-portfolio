@@ -13,9 +13,11 @@ import type { Post } from '@/payload-types'
 // flattenBlockText are real: the tests cover the actual pipeline.
 const getPublishedPosts = vi.fn()
 const getPostBySlug = vi.fn()
+const getGatedPostContent = vi.fn()
 vi.mock('@/lib/content/posts', () => ({
   getPublishedPosts: (...args: unknown[]) => getPublishedPosts(...args),
   getPostBySlug: (...args: unknown[]) => getPostBySlug(...args),
+  getGatedPostContent: (...args: unknown[]) => getGatedPostContent(...args),
 }))
 
 const lexical = (text: string) => ({
@@ -170,5 +172,20 @@ describe('getCmsSearchArticles', () => {
     const [article] = await getCmsSearchArticles()
     expect(article.searchText).toContain('full article body text.')
     expect(article.slug).toBe('testing-react-without-tears')
+  })
+
+  it('never indexes gated bodies — gated posts contribute excerpt only (B1 regression)', async () => {
+    // The index is served to anonymous clients via /api/search; a gated
+    // post's flattened body leaking here defeats the §12 gating model.
+    getPublishedPosts.mockResolvedValue([
+      makePost({
+        access: { visibility: 'gated' },
+        excerpt: 'A public teaser.',
+      }),
+    ])
+
+    const [article] = await getCmsSearchArticles()
+    expect(article.searchText).toBe('A public teaser.')
+    expect(article.searchText).not.toContain('full article body text.')
   })
 })

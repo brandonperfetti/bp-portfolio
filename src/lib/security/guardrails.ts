@@ -168,19 +168,28 @@ function pruneGuardrailBuckets(nowMs = Date.now()) {
 }
 
 /**
- * Resolves a best-effort client IP from proxy headers.
+ * Resolves the platform-trusted client IP from proxy headers.
+ *
+ * @remarks Trust order matters (fresh-eyes review 2026-08, finding M2): the
+ * LEFTMOST `x-forwarded-for` entry is client-prependable, so keying rate
+ * limits on it let an attacker mint a fresh per-IP bucket per request. On
+ * Vercel the trustworthy values are `x-real-ip` (platform-set) and the
+ * RIGHTMOST `x-forwarded-for` hop (platform-appended). We prefer
+ * `x-real-ip`, fall back to the rightmost XFF entry, and never read the
+ * leftmost.
  *
  * @param request Incoming HTTP request.
- * @returns First forwarded/real IP, or `'unknown'` when unavailable.
+ * @returns Platform-trusted client IP, or `'unknown'` when unavailable.
  */
 export function getRequestClientIp(request: Request) {
-  const xff = request.headers.get('x-forwarded-for')
-  if (xff) {
-    const candidate = xff.split(',')[0]?.trim()
-    if (candidate) return candidate
-  }
   const realIp = request.headers.get('x-real-ip')?.trim()
   if (realIp) return realIp
+  const xff = request.headers.get('x-forwarded-for')
+  if (xff) {
+    const hops = xff.split(',')
+    const candidate = hops[hops.length - 1]?.trim()
+    if (candidate) return candidate
+  }
   return 'unknown'
 }
 
@@ -366,9 +375,13 @@ export function getSecurityLimits() {
       10000,
     ),
     maxMessages: toPositiveInt(process.env.HERMES_MAX_MESSAGES, 12, 100),
+    // HERMES_MAX_COMPLETION_TOKENS wins; AI_MAX_COMPLETION_TOKENS is the
+    // env knob deploys actually set today (.env.example) — honor it as the
+    // fallback so enforcing this limit doesn't silently shrink replies.
     maxCompletionTokens: toPositiveInt(
-      process.env.HERMES_MAX_COMPLETION_TOKENS,
-      700,
+      process.env.HERMES_MAX_COMPLETION_TOKENS ??
+        process.env.AI_MAX_COMPLETION_TOKENS,
+      1024,
       8000,
     ),
     imageDailyLimit: toPositiveInt(

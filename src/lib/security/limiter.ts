@@ -14,6 +14,21 @@ const hasUpstash = Boolean(
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN,
 )
 
+// The in-memory fallback is dev-only by design: per-instance buckets
+// multiply limits by warm-instance count and reset on cold start. A prod
+// deploy without Upstash should be LOUD about running degraded (fresh-eyes
+// review 2026-08, finding m3) — one warning per instance, not per request.
+let warnedDegraded = false
+if (!hasUpstash && process.env.NODE_ENV === 'production') {
+  if (!warnedDegraded) {
+    warnedDegraded = true
+    console.error(
+      '[security/limiter] UPSTASH_REDIS_REST_URL/TOKEN missing in production — ' +
+        'rate limiting is degraded to per-instance memory. Configure Upstash.',
+    )
+  }
+}
+
 let minuteLimiter: Ratelimit | null = null
 let dailyLimiter: Ratelimit | null = null
 

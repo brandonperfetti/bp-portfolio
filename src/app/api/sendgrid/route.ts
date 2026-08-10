@@ -1,6 +1,41 @@
 import { NextResponse } from 'next/server'
 import sgMail from '@sendgrid/mail'
+import * as z from 'zod'
 
+import {
+  getRequestClientIp,
+  getSecurityLimits,
+  isAllowedRequestSource,
+} from '@/lib/security/guardrails'
+import { checkChatLimits } from '@/lib/security/limiter'
+
+const bodySchema = z.object({
+  fullname: z.string().trim().min(1).max(200),
+  email: z.string().trim().email().max(320),
+  subject: z.string().trim().min(1).max(300),
+  message: z.string().trim().min(1).max(5000),
+})
+
+/** Minimal HTML entity escape for user-supplied strings in the email body. */
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+
+/**
+ * Contact-form delivery via SendGrid.
+ *
+ * @remarks Hardened to the same guardrail stack as the Hermes chat route
+ * (fresh-eyes review 2026-08, finding M1): same-origin source guard, per-IP
+ * rate limiting (`mailingListRatePerMinute`), Zod validation with a real
+ * email check, and HTML-escaped interpolation so user input cannot inject
+ * markup into the notification email. Turnstile remains deliberately
+ * unwired (needs a frontend widget + keys) — the rate limit is the abuse
+ * control until then.
+ */
 export async function POST(req: Request) {
   const apiKey = process.env.SENDGRID_API_KEY
   const isEuResidency = process.env.SENDGRID_DATA_RESIDENCY === 'eu'
@@ -11,46 +46,42 @@ export async function POST(req: Request) {
     )
   }
 
+  if (!isAllowedRequestSource(req)) {
+    return NextResponse.json({ message: 'Forbidden' }, { status: 403 })
+  }
+
+  const limits = getSecurityLimits()
+  const ip = getRequestClientIp(req)
+  const limit = await checkChatLimits(
+    `contact:${ip}`,
+    limits.mailingListRatePerMinute,
+    0,
+  )
+  if (!limit.allowed) {
+    const retryAfter = Math.max(
+      1,
+      Math.ceil((limit.resetAt - Date.now()) / 1000),
+    )
+    return NextResponse.json(
+      { message: 'Too many requests. Please slow down.' },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+    )
+  }
+
+  const parsed = bodySchema.safeParse(await req.json().catch(() => null))
+  if (!parsed.success) {
+    return NextResponse.json(
+      { message: 'fullname, valid email, subject, and message are required.' },
+      { status: 400 },
+    )
+  }
+  const { fullname, email, subject, message } = parsed.data
+
   sgMail.setApiKey(apiKey)
   if (isEuResidency) {
     ;(
       sgMail as { setDataResidency?: (region: 'eu') => void }
     ).setDataResidency?.('eu')
-  }
-
-  let parsedBody: unknown
-  try {
-    parsedBody = await req.json()
-  } catch (error) {
-    console.error('[api/sendgrid] Invalid JSON body', {
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return NextResponse.json(
-      { message: 'Invalid JSON in request body.' },
-      { status: 400 },
-    )
-  }
-
-  const body =
-    parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody)
-      ? (parsedBody as {
-          fullname?: unknown
-          email?: unknown
-          subject?: unknown
-          message?: unknown
-        })
-      : {}
-
-  const fullname = String(body.fullname ?? '').trim()
-  const email = String(body.email ?? '').trim()
-  const subject = String(body.subject ?? '').trim()
-  const message = String(body.message ?? '').trim()
-
-  if (!fullname || !email || !subject || !message) {
-    return NextResponse.json(
-      { message: 'fullname, email, subject, and message are required.' },
-      { status: 400 },
-    )
   }
 
   const to = process.env.CONTACT_TO_EMAIL ?? 'brandon@brandonperfetti.com'
@@ -62,10 +93,11 @@ export async function POST(req: Request) {
       from,
       replyTo: email,
       subject,
+      text: `New contact from ${fullname}\nEmail: ${email}\n\n${message}`,
       html: `
-        <h3>New contact from ${fullname}</h3>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Message:</strong> ${message}</p>
+        <h3>New contact from ${escapeHtml(fullname)}</h3>
+        <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+        <p><strong>Message:</strong> ${escapeHtml(message)}</p>
       `,
     })
 
