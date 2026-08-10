@@ -21,6 +21,16 @@
   production).
 - `guardrails.ts`: shared quota/limit application; kill switches
   `HERMES_DISABLE_CHAT` / `HERMES_DISABLE_IMAGE`.
+- Turnstile (wired 2026-08-10, env-gated): the contact form enforces
+  whenever `TURNSTILE_SECRET_KEY` + `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+  exist; chat is armed separately via the `TURNSTILE_PROTECT_CHAT` /
+  `NEXT_PUBLIC_TURNSTILE_PROTECT_CHAT` pair (both `'true'`, in lockstep).
+  Chat ships disarmed by design — its worst case is already bounded by
+  limits/quotas, and Turnstile's script is blocked by some privacy
+  blockers, which would break the signature feature. Arm on observed
+  abuse; soak-test armed on staging first. Client flow:
+  `useTurnstileToken` (invisible, fresh single-use token per request,
+  degrades to `null` when blocked so the server stays the decider).
 - Responses degrade with friendly copy when limited/disabled — keep that UX.
 
 ## Evals (Evalite)

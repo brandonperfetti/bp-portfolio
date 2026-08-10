@@ -6,6 +6,7 @@ import {
   getRequestClientIp,
   getSecurityLimits,
   isAllowedRequestSource,
+  verifyRequestTurnstileToken,
 } from '@/lib/security/guardrails'
 import { checkChatLimits } from '@/lib/security/limiter'
 
@@ -32,9 +33,10 @@ const escapeHtml = (value: string) =>
  * (fresh-eyes review 2026-08, finding M1): same-origin source guard, per-IP
  * rate limiting (`mailingListRatePerMinute`), Zod validation with a real
  * email check, and HTML-escaped interpolation so user input cannot inject
- * markup into the notification email. Turnstile remains deliberately
- * unwired (needs a frontend widget + keys) — the rate limit is the abuse
- * control until then.
+ * markup into the notification email. Turnstile is enforced whenever
+ * `TURNSTILE_SECRET_KEY` is set (the widget ships env-gated with the
+ * matching `NEXT_PUBLIC_TURNSTILE_SITE_KEY`); without keys the route
+ * behaves exactly as before, so previews and local dev need no setup.
  */
 export async function POST(req: Request) {
   const apiKey = process.env.SENDGRID_API_KEY
@@ -68,7 +70,30 @@ export async function POST(req: Request) {
     )
   }
 
-  const parsed = bodySchema.safeParse(await req.json().catch(() => null))
+  const raw: unknown = await req.json().catch(() => null)
+
+  // Bot gate (review finding m4, wired 2026-08-10): verification is a
+  // no-op until TURNSTILE_SECRET_KEY exists in the environment, then it
+  // becomes mandatory. Runs after the rate limit so the verification API
+  // can't itself be hammered through us.
+  const turnstile = await verifyRequestTurnstileToken({
+    token:
+      typeof (raw as { turnstileToken?: unknown })?.turnstileToken === 'string'
+        ? ((raw as { turnstileToken: string }).turnstileToken ?? '')
+        : '',
+    ip,
+  })
+  if (!turnstile.ok) {
+    return NextResponse.json(
+      {
+        message:
+          'Verification failed. Please refresh and try again — or email me directly.',
+      },
+      { status: 403 },
+    )
+  }
+
+  const parsed = bodySchema.safeParse(raw)
   if (!parsed.success) {
     return NextResponse.json(
       { message: 'fullname, valid email, subject, and message are required.' },

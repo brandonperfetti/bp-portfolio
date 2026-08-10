@@ -9,6 +9,7 @@ import { Copy as CopyIcon } from 'lucide-react'
 
 import { SendIcon } from '@/icons'
 import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
+import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
 
 /**
  * Hermes chat client on `useChat` + streamdown (replaces the v3 manual
@@ -34,6 +35,14 @@ export default function HermesChat() {
     [],
   )
   const { messages, sendMessage, status, error } = useChat({ transport })
+
+  // Chat's Turnstile flow is wired but armed separately from the contact
+  // form (rollout decision 2026-08-10): tokens are only acquired when
+  // NEXT_PUBLIC_TURNSTILE_PROTECT_CHAT is 'true', matching the server's
+  // TURNSTILE_PROTECT_CHAT enforcement flag — flip both to arm.
+  const { containerRef: turnstileRef, getToken } = useTurnstileToken({
+    enabled: process.env.NEXT_PUBLIC_TURNSTILE_PROTECT_CHAT === 'true',
+  })
 
   const isBusy = status === 'submitted' || status === 'streaming'
 
@@ -78,10 +87,20 @@ export default function HermesChat() {
       return
     }
     if (isBusy) return
-    void sendMessage({ text })
+    // Tokens are single-use, so each send fetches its own; getToken()
+    // resolves null instantly when chat protection is disarmed, keeping
+    // the default path free of any Turnstile latency.
+    void (async () => {
+      const turnstileToken = await getToken()
+      if (turnstileToken) {
+        void sendMessage({ text }, { body: { turnstileToken } })
+      } else {
+        void sendMessage({ text })
+      }
+    })()
     setInput('')
     requestAnimationFrame(autosize)
-  }, [autosize, input, isBusy, sendMessage])
+  }, [autosize, getToken, input, isBusy, sendMessage])
 
   const copyMessage = useCallback(async (id: string, text: string) => {
     try {
@@ -207,6 +226,9 @@ export default function HermesChat() {
           <SendIcon className="h-4 w-4" />
         </button>
       </form>
+      {/* Turnstile mount point — empty unless chat protection is armed AND
+          Cloudflare escalates to an interactive challenge. */}
+      <div ref={turnstileRef} className="empty:hidden [&:not(:empty)]:pt-2" />
     </div>
   )
 }

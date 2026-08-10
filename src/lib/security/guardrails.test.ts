@@ -98,3 +98,80 @@ describe('getRequestClientIp', () => {
     expect(getRequestClientIp(makeRequest({}))).toBe('unknown')
   })
 })
+
+describe('verifyRequestTurnstileToken', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('is a no-op (ok, not required) when TURNSTILE_SECRET_KEY is unset', async () => {
+    const { verifyRequestTurnstileToken } =
+      await import('@/lib/security/guardrails')
+    const result = await verifyRequestTurnstileToken({ token: 'anything' })
+    expect(result).toEqual({ required: false, ok: true })
+  })
+
+  it('fails closed when configured and the token is missing', async () => {
+    vi.stubEnv('TURNSTILE_SECRET_KEY', 'secret-1')
+    const { verifyRequestTurnstileToken } =
+      await import('@/lib/security/guardrails')
+    const result = await verifyRequestTurnstileToken({ token: '' })
+    expect(result).toEqual({ required: true, ok: false })
+  })
+
+  it('accepts when Cloudflare reports success', async () => {
+    vi.stubEnv('TURNSTILE_SECRET_KEY', 'secret-1')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ success: true }))),
+    )
+    const { verifyRequestTurnstileToken } =
+      await import('@/lib/security/guardrails')
+    const result = await verifyRequestTurnstileToken({
+      token: 'tok',
+      ip: '1.2.3.4',
+    })
+    expect(result).toEqual({ required: true, ok: true })
+    const call = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(String(call[0])).toContain('challenges.cloudflare.com')
+    expect(String(call[1].body)).toContain('remoteip=1.2.3.4')
+  })
+
+  it('rejects when Cloudflare reports failure', async () => {
+    vi.stubEnv('TURNSTILE_SECRET_KEY', 'secret-1')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ success: false }))),
+    )
+    const { verifyRequestTurnstileToken } =
+      await import('@/lib/security/guardrails')
+    const result = await verifyRequestTurnstileToken({ token: 'tok' })
+    expect(result).toEqual({ required: true, ok: false })
+  })
+
+  it('fails closed on verification API transport errors', async () => {
+    vi.stubEnv('TURNSTILE_SECRET_KEY', 'secret-1')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('network down')
+      }),
+    )
+    const { verifyRequestTurnstileToken } =
+      await import('@/lib/security/guardrails')
+    const result = await verifyRequestTurnstileToken({ token: 'tok' })
+    expect(result).toEqual({ required: true, ok: false })
+  })
+
+  it('fails closed on non-200 verification responses', async () => {
+    vi.stubEnv('TURNSTILE_SECRET_KEY', 'secret-1')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('nope', { status: 503 })),
+    )
+    const { verifyRequestTurnstileToken } =
+      await import('@/lib/security/guardrails')
+    const result = await verifyRequestTurnstileToken({ token: 'tok' })
+    expect(result).toEqual({ required: true, ok: false })
+  })
+})

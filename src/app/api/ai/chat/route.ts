@@ -6,6 +6,7 @@ import {
   getRequestClientIp,
   getSecurityLimits,
   isAllowedRequestSource,
+  verifyRequestTurnstileToken,
 } from '@/lib/security/guardrails'
 import { checkChatLimits } from '@/lib/security/limiter'
 
@@ -62,11 +63,36 @@ export async function POST(req: Request) {
     )
   }
 
+  let raw: unknown
   let parsedBody: z.infer<typeof bodySchema>
   try {
-    parsedBody = bodySchema.parse(await req.json())
+    raw = await req.json()
+    parsedBody = bodySchema.parse(raw)
   } catch {
     return Response.json({ error: 'Invalid request body.' }, { status: 400 })
+  }
+
+  // Bot gate behind its own arm switch (Turnstile rollout decision,
+  // 2026-08-10): the client flow ships wired but chat only ENFORCES when
+  // TURNSTILE_PROTECT_CHAT === 'true' alongside the secret. Rationale:
+  // chat's worst case is already bounded by per-IP + daily limits and
+  // token ceilings, while Turnstile's failure mode (privacy blockers
+  // eating the script) would break the site's signature feature for real
+  // visitors — so enforcement waits for observed abuse, one env flip away.
+  // Keep TURNSTILE_PROTECT_CHAT and NEXT_PUBLIC_TURNSTILE_PROTECT_CHAT in
+  // lockstep: server-on/client-off 403s every message.
+  if (process.env.TURNSTILE_PROTECT_CHAT === 'true') {
+    const token = (raw as { turnstileToken?: unknown })?.turnstileToken
+    const turnstile = await verifyRequestTurnstileToken({
+      token: typeof token === 'string' ? token : '',
+      ip,
+    })
+    if (!turnstile.ok) {
+      return Response.json(
+        { error: 'Verification failed. Please refresh and try again.' },
+        { status: 403 },
+      )
+    }
   }
 
   let messages
