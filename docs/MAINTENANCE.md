@@ -18,7 +18,11 @@
   pooler string (port 6543); pg_dump/restore uses SESSION mode (5432).
   Free-tier projects pause after ~1 week without traffic — if staging
   500s after a quiet stretch, unpause in the Supabase dashboard (Pro
-  removes pausing; revisit at promotion). Blob store `bp-portfolio-media`
+  removes pausing; revisit at promotion). Supabase's auto-generated REST
+  Data API is UNUSED by this stack (Payload speaks Postgres directly) —
+  keep it DISABLED in project Settings → Data API so the 136 RLS-less
+  Drizzle tables are never network-exposed; re-check this on the
+  production project at promotion. Blob store `bp-portfolio-media`
   is public-read.
 - **Email deliverability (Resend domain auth)**: brandonperfetti.com is
   verified in Resend (us-east-1 — co-located with the iad1 functions,
@@ -68,6 +72,19 @@
   vs. `unstable_cache` and TTL'd Data Cache entries outliving purges. The
   planned `cacheComponents` migration (post-merge branch) retires this
   caching model entirely and supersedes this watchpoint.
+- **Live Preview pane blank on iOS Safari (open, observed 2026-08-10)**:
+  the admin Live Preview iframe renders white on iPhone Safari while the
+  SAME deployment's pane works in desktop Chrome, and the external
+  Preview button (new tab) renders drafts correctly on the phone. Server
+  side is proven healthy: `/next/preview` 307s (secret + auth pass) and
+  the runtime logs show the iframe's follow-up request never arrives —
+  the failure is client-side redirect/iframe handling in iOS Safari.
+  Not the DB (draft version-table queries verified on Supabase), not
+  frame headers (none shipped). Editorial impact low: desktop pane +
+  mobile external preview both work. To diagnose properly: enable
+  iPhone Safari Web Inspector and watch the pane's network from desktop
+  Safari's Develop menu. May be mooted by the cacheComponents branch's
+  preview rework.
 - Stale generated artifacts are the classic admin breakage (empty SEO tab /
   dead editor) — CI gates both, but check first when admin misbehaves.
 - Lexical error #17 on articles ⇒ an editor feature for a migrated node type
