@@ -54,7 +54,9 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$SUPABASE_DB_URL" || { echo "::error::SUPABASE_DB_URL secret is not set"; exit 1; }
-          pg_dump "$SUPABASE_DB_URL" -Fc --no-owner --no-privileges -f db.dump
+          # runner preinstalls pg 16 client tools which shadow the pg17 install
+          # on PATH — invoke the versioned binary explicitly
+          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" -Fc --no-owner --no-privileges -f db.dump
           # sanity: an empty/failed dump is worse than a loud failure
           size=$(stat -c%s db.dump)
           echo "dump size: ${size} bytes"
