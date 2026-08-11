@@ -1,7 +1,7 @@
 import path from 'path'
 import { fileURLToPath } from 'url'
 
-import { vercelPostgresAdapter } from '@payloadcms/db-vercel-postgres'
+import { postgresAdapter } from '@payloadcms/db-postgres'
 import { resendAdapter } from '@payloadcms/email-resend'
 import { vercelBlobStorage } from '@payloadcms/storage-vercel-blob'
 import { buildConfig } from 'payload'
@@ -30,8 +30,9 @@ const dirname = path.dirname(filename)
  * Payload CMS configuration — the single source of truth for site content.
  *
  * @remarks
- * - Postgres via `@payloadcms/db-vercel-postgres` (Drizzle, Vercel-optimized
- *   pooling). Migrations run on deploy (`payload migrate`), not dev push.
+ * - Postgres via `@payloadcms/db-postgres` (Drizzle over node-postgres;
+ *   Supabase in staging/prod, local Postgres in dev). Migrations run on
+ *   deploy (`payload migrate`), not dev push.
  * - Media lives in Vercel Blob; the storage plugin is only enabled when
  *   `BLOB_READ_WRITE_TOKEN` is present so local dev can boot with only a
  *   database.
@@ -87,11 +88,20 @@ export default buildConfig({
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },
-  db: vercelPostgresAdapter({
+  // Plain node-postgres adapter (migrated from @payloadcms/db-vercel-postgres
+  // 2026-08-10 with the Neon → Supabase move): the Vercel adapter rides
+  // Neon's proprietary serverless driver and cannot speak to any other
+  // Postgres. Both adapters are Drizzle-Postgres underneath — schema and
+  // committed migrations are interchangeable by design.
+  db: postgresAdapter({
     pool: {
-      // DATABASE_URI is our canonical name; POSTGRES_URL / DATABASE_URL are
-      // what a Vercel Postgres (Neon) store auto-injects depending on flow —
-      // accept them so connecting a store needs zero manual copying.
+      // DATABASE_URI is our canonical name (POSTGRES_URL / DATABASE_URL
+      // accepted as fallbacks). On Supabase this must be the SUPAVISOR
+      // TRANSACTION-MODE pooler string (port 6543) — serverless functions
+      // need many transient connections. Transaction mode rejects prepared
+      // statements, which is fine: node-postgres does not use named
+      // prepared statements by default. pg_dump/restore against the same
+      // database use the session-mode string (port 5432) instead.
       connectionString:
         process.env.DATABASE_URI ||
         process.env.POSTGRES_URL ||

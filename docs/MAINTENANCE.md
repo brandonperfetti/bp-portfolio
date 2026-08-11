@@ -11,8 +11,15 @@
 - **GitHub tech-signal token**: fine-grained PAT (Contents: read) expires on
   the schedule chosen at creation — rotate in Vercel env
   (`GITHUB_TOKEN`). Scan knobs: `GITHUB_TECH_*` in `.env.example`.
-- **Neon/Blob**: staging DB is the Neon store; production gets its own at
-  promotion. Blob store `bp-portfolio-media` is public-read.
+- **Supabase/Blob**: staging DB is Supabase project `bp-portfolio`
+  (`wgzvcjhaltevthnxnack`, us-east-1, Sans Faux org — co-located with the
+  iad1 functions; migrated from Neon 2026-08-10); production gets its own
+  project at promotion. App traffic uses the Supavisor TRANSACTION-mode
+  pooler string (port 6543); pg_dump/restore uses SESSION mode (5432).
+  Free-tier projects pause after ~1 week without traffic — if staging
+  500s after a quiet stretch, unpause in the Supabase dashboard (Pro
+  removes pausing; revisit at promotion). Blob store `bp-portfolio-media`
+  is public-read.
 - **Email deliverability (Resend domain auth)**: brandonperfetti.com is
   verified in Resend (us-east-1 — co-located with the iad1 functions,
   same logic as Upstash) via DNS records at Hover: an MX + SPF TXT on the
@@ -24,7 +31,7 @@
   and never trust a dashboard's cached "verified" badge over `dig`.
 - **Upstash Redis (rate limiting)**: `bp-portfolio-limiter` in AWS
   us-east-1 — deliberately co-located with the Vercel functions (iad1,
-  measured via x-vercel-id) and the Neon DB, NOT near the maintainer.
+  measured via x-vercel-id) and the Supabase DB, NOT near the maintainer.
   Eviction stays OFF (eviction would silently reset limit counters);
   no read regions (eventually-consistent reads are wrong for limits).
   Holds transient counters only. Env: `UPSTASH_REDIS_REST_URL/TOKEN`,
@@ -71,7 +78,9 @@
 ## Promotion checklist (v4 → production, when signed off)
 
 1. Merge `rebuild/v4` per branch plan; retarget staging env to `develop`.
-2. Create production Neon DB + Blob token; set all `.env.example` production
+2. Create production Supabase project (Sans Faux org, us-east-1; decide
+   free vs Pro — free pauses after ~1 week idle) + Blob token; set all
+   `.env.example` production
    vars in Vercel (Payload, Clerk, AI, Upstash, Resend, GitHub signals).
    Generate FRESH production values (`openssl rand -hex 32`) for
    `CMS_REVALIDATE_SECRET` and `PREVIEW_SECRET` — never reuse the

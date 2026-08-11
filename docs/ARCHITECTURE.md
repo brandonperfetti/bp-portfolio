@@ -7,7 +7,8 @@
   UI at `/admin` and the Payload REST/GraphQL APIs live in
   `src/app/(payload)/`; server code queries content through the **Local API**
   (`getPayload()`), never over HTTP.
-- Postgres via `@payloadcms/db-vercel-postgres` (Drizzle). Schema changes ship
+- Postgres via `@payloadcms/db-postgres` (Drizzle/node-postgres; Supabase
+  in staging/prod). Schema changes ship
   as committed migrations (`pnpm migrate`); `PAYLOAD_DB_PUSH=true` enables dev
   push mode locally only.
 - Media uploads live in Vercel Blob (`@payloadcms/storage-vercel-blob`),
@@ -52,5 +53,5 @@
 
 - `master` = v3 production (do not touch until launch sign-off).
 - `rebuild/v4` = active branch → Vercel custom environment `staging`
-  (staging.brandonperfetti.com; Neon Postgres + Blob store).
+  (staging.brandonperfetti.com; Supabase Postgres + Blob store).
 - Env vars are documented exhaustively in `.env.example`.

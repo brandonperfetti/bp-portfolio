@@ -6,7 +6,8 @@ one set, version-locked.
 ## Content & data
 
 - `payload`, `@payloadcms/next` — CMS embedded in the app (admin + APIs).
-- `@payloadcms/db-vercel-postgres` — Drizzle/Postgres adapter (Neon).
+- `@payloadcms/db-postgres` — Drizzle/Postgres adapter over node-postgres
+  (Supabase; replaced the Neon-only `@payloadcms/db-vercel-postgres`).
 - `@payloadcms/richtext-lexical` — editor; Posts registers list/quote/upload
   features the migration requires (see docs/PAYLOAD.md).
 - `@payloadcms/storage-vercel-blob` — media storage.
