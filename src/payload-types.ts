@@ -459,6 +459,35 @@ export interface ContainerBlock {
    * Columns share a 12-column grid from the lg breakpoint up — two thirds plus one third fills a row, for example. They stack on smaller screens.
    */
   columns?: ColumnBlock[] | null;
+  /**
+   * Space between columns (and between them when stacked). Large widens from the lg breakpoint up to match the homepage’s two-column gutter.
+   */
+  gap: 'sm' | 'md' | 'lg';
+  /**
+   * How columns of different heights line up beside each other. A sticky column always aligns to the top.
+   */
+  verticalAlign: 'start' | 'center' | 'stretch';
+  /**
+   * How this section sits on the page: how wide it runs, how much air it carries, whether it can be linked to, and whether it renders at all.
+   */
+  section: {
+    /**
+     * Container keeps the page’s reading width. Full bleed escapes it edge to edge — the homepage photo-strip look.
+     */
+    width: 'container' | 'narrow' | 'fullBleed';
+    /**
+     * Extra space above and below the section, on top of the spacing its blocks already carry.
+     */
+    paddingY: 'none' | 'sm' | 'md' | 'lg';
+    /**
+     * Optional. Makes the section linkable as #anchor — lowercase letters, numbers, hyphens and underscores, starting with a letter.
+     */
+    anchorId?: string | null;
+    /**
+     * Leaves the section out of the page entirely — not hidden with CSS, so its content never reaches the browser.
+     */
+    hidden?: boolean | null;
+  };
   id?: string | null;
   blockName?: string | null;
   blockType: 'container';
@@ -472,6 +501,10 @@ export interface ColumnBlock {
    * Share of the 12-column grid from the lg breakpoint up. Every column is full width on smaller screens.
    */
   size: 'oneQuarter' | 'oneThird' | 'half' | 'twoThirds' | 'threeQuarters' | 'full';
+  /**
+   * Desktop only: from the lg breakpoint up this column follows the scroll beside its taller neighbour (the homepage rail). Below lg it stacks normally and nothing sticks.
+   */
+  sticky?: boolean | null;
   content?:
     | (
         | ArticlesArchiveBlock
@@ -1525,6 +1558,16 @@ export interface ContainerBlockSelect<T extends boolean = true> {
     | {
         column?: T | ColumnBlockSelect<T>;
       };
+  gap?: T;
+  verticalAlign?: T;
+  section?:
+    | T
+    | {
+        width?: T;
+        paddingY?: T;
+        anchorId?: T;
+        hidden?: T;
+      };
   id?: T;
   blockName?: T;
 }
@@ -1534,6 +1577,7 @@ export interface ContainerBlockSelect<T extends boolean = true> {
  */
 export interface ColumnBlockSelect<T extends boolean = true> {
   size?: T;
+  sticky?: T;
   content?:
     | T
     | {

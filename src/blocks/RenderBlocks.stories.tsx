@@ -186,13 +186,23 @@ const DEMO_BLOCKS: LayoutBlock[] = [
 ]
 
 /**
- * The layout block set (#23) as CMS data: a container whose two columns
- * hold different block types. Kept out of `DEMO_BLOCKS` because several
- * stories address that array by index.
+ * The layout block set (#23, #29, #30) as CMS data: a container whose two
+ * columns hold different block types, spaced at the homepage gutter, with a
+ * sticky rail and a linkable anchor — the whole control surface arriving the
+ * way the admin stores it. Kept out of `DEMO_BLOCKS` because several stories
+ * address that array by index.
  */
 const CONTAINER_DEMO: LayoutBlock[] = [
   {
     blockType: 'container',
+    gap: 'lg',
+    verticalAlign: 'stretch',
+    section: {
+      width: 'container',
+      paddingY: 'none',
+      anchorId: 'container-demo',
+      hidden: false,
+    },
     columns: [
       {
         blockType: 'column',
@@ -214,6 +224,7 @@ const CONTAINER_DEMO: LayoutBlock[] = [
         blockType: 'column',
         id: 'col-rail',
         size: 'oneThird',
+        sticky: true,
         content: [
           {
             blockType: 'stats',

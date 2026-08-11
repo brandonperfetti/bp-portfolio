@@ -12,10 +12,10 @@ import type { ColumnBlock } from '@/payload-types'
  * at render time, so the cycle resolves before anything is called.
  */
 export function ColumnBlockComponent(props: ColumnBlock) {
-  const { content, size } = props
+  const { content, size, sticky } = props
 
   return (
-    <ColumnShell size={size}>
+    <ColumnShell size={size} sticky={sticky}>
       <RenderBlocks blocks={content} />
     </ColumnShell>
   )

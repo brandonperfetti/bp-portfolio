@@ -114,3 +114,121 @@ export const ThreeQuartersPlusOneQuarter: Story = {
     ),
   },
 }
+
+/** Two equal columns — the shape the gap and width stories below vary. */
+const halves = (
+  <>
+    <ColumnShell size="half">
+      <Panel label="Left" body="Half the row from lg up." />
+    </ColumnShell>
+    <ColumnShell size="half">
+      <Panel label="Right" body="Half the row from lg up." />
+    </ColumnShell>
+  </>
+)
+
+/** Tight spacing, for columns meant to read as one cluster. */
+export const GapSmall: Story = {
+  args: { children: halves, gap: 'sm' },
+  play: async ({ canvasElement }) => {
+    const grid = canvasElement.querySelector('div.grid')
+    await expect(grid).toHaveClass('gap-4')
+  },
+}
+
+/** The default — and what every container rendered before #29 added the control. */
+export const GapMedium: Story = {
+  args: { children: halves, gap: 'md' },
+  play: async ({ canvasElement }) => {
+    const grid = canvasElement.querySelector('div.grid')
+    await expect(grid).toHaveClass('gap-8')
+  },
+}
+
+/**
+ * The homepage gutter: 32px stacked, 64px from `lg`, 96px from `xl` — the
+ * exact spacing the hard-coded home page gets from `lg:pl-16 xl:pl-24` on its
+ * right rail, which is what the Home migration's pixel-parity check compares.
+ */
+export const GapLarge: Story = {
+  args: { children: halves, gap: 'lg' },
+  play: async ({ canvasElement }) => {
+    const grid = canvasElement.querySelector('div.grid')
+    await expect(grid).toHaveClass('gap-8', 'lg:gap-16', 'xl:gap-24')
+  },
+}
+
+/** Columns of unequal height, centered against each other. */
+export const VerticalAlignCenter: Story = {
+  args: {
+    verticalAlign: 'center',
+    children: (
+      <>
+        <ColumnShell size="twoThirds">
+          <Panel
+            label="Tall"
+            body="A long column — an article list, a feature grid, whatever leads the section. Its height sets the row."
+          />
+        </ColumnShell>
+        <ColumnShell size="oneThird">
+          <Panel label="Short" body="Centered against its taller neighbour." />
+        </ColumnShell>
+      </>
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    const grid = canvasElement.querySelector('div.grid')
+    await expect(grid).toHaveClass('items-center')
+  },
+}
+
+/**
+ * The default section width: no width of its own, so it fills whatever the
+ * route's `<Container>` gives it. This is how every container rendered before
+ * #30, and how they still render unless an editor chooses otherwise.
+ */
+export const WidthContainer: Story = {
+  args: { children: halves, width: 'container' },
+  play: async ({ canvasElement }) => {
+    const section = canvasElement.querySelector('section')
+    await expect(section).not.toHaveClass('w-screen')
+    await expect(section).not.toHaveClass('max-w-2xl')
+  },
+}
+
+/** A centered reading measure, narrower than the route's width. */
+export const WidthNarrow: Story = {
+  args: { children: halves, width: 'narrow' },
+  play: async ({ canvasElement }) => {
+    const section = canvasElement.querySelector('section')
+    await expect(section).toHaveClass('mx-auto', 'max-w-2xl')
+  },
+}
+
+/**
+ * Full bleed: the section escapes its wrapper to the viewport edges — the
+ * homepage photo-strip look, which no block could reach before #30. The
+ * decorator's `max-w-4xl` frame is exactly what it breaks out of here.
+ */
+export const WidthFullBleed: Story = {
+  args: { children: halves, width: 'fullBleed' },
+  play: async ({ canvasElement }) => {
+    const section = canvasElement.querySelector('section')
+    await expect(section).toHaveClass(
+      'relative',
+      'left-1/2',
+      'w-screen',
+      '-translate-x-1/2',
+    )
+  },
+}
+
+/** A linkable, padded section — `#linkable-section` scrolls here. */
+export const AnchoredAndPadded: Story = {
+  args: { children: halves, anchorId: 'linkable-section', paddingY: 'lg' },
+  play: async ({ canvasElement }) => {
+    const section = canvasElement.querySelector('section')
+    await expect(section).toHaveAttribute('id', 'linkable-section')
+    await expect(section).toHaveClass('py-24', 'scroll-mt-16')
+  },
+}

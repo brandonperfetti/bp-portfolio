@@ -101,3 +101,94 @@ export const UnknownSizeFallsBackToFull: Story = {
     await expect(column).toHaveClass('lg:col-span-12')
   },
 }
+
+/** A long column, so a sticky neighbour has something to travel beside. */
+function TallColumn() {
+  return (
+    <ColumnShell size="twoThirds">
+      <div className="space-y-6">
+        {Array.from({ length: 6 }, (_, index) => (
+          <Panel key={index} label={`Article ${index + 1}`} />
+        ))}
+      </div>
+    </ColumnShell>
+  )
+}
+
+/**
+ * The layout #29 exists for: a rail that follows the scroll beside a longer
+ * main column, exactly as the hard-coded homepage does. Scroll the preview to
+ * watch it hold at `top-10`, then switch to a mobile viewport — below `lg`
+ * the rail is just a stacked block and nothing sticks.
+ */
+export const StickyRail: Story = {
+  args: { size: 'oneThird', sticky: true },
+  globals: { viewport: { value: 'desktop' } },
+  // Rendered as a sibling inside the meta's grid rather than through a
+  // decorator, so the rail and the tall column share one grid.
+  render: (args) => (
+    <>
+      <TallColumn />
+      <ColumnShell {...args} />
+    </>
+  ),
+  // Interaction: sticky is desktop-only and top-aligned. The bare `sticky`
+  // class would stick on phones too; without `self-start` the column
+  // stretches to the row height and has no slack to travel through.
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const rail = canvas.getByText('Column content').closest('div.col-span-12')
+
+    await expect(rail).toHaveClass('self-start', 'lg:sticky', 'lg:top-10')
+    await expect(rail).not.toHaveClass('sticky')
+    await expect(rail).not.toHaveClass('top-10')
+  },
+}
+
+/**
+ * The same rail on a phone: the columns are stacked, and every sticky class
+ * is behind `lg:`, so nothing sticks. #29 is explicit that sticky is a
+ * desktop behaviour — a rail that pinned itself on a phone would sit on top
+ * of the content it belongs beside.
+ */
+export const StickyRailMobile: Story = {
+  args: { size: 'oneThird', sticky: true },
+  globals: { viewport: { value: 'mobile1' } },
+  render: (args) => (
+    <>
+      <TallColumn />
+      <ColumnShell {...args} />
+    </>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const rail = canvas.getByText('Column content').closest('div.col-span-12')
+
+    // Same markup as the desktop story — the breakpoint prefixes are the
+    // only thing standing between this rail and a phone-sized sticky bug.
+    await expect(rail).toHaveClass('col-span-12')
+    for (const className of rail?.className.split(' ') ?? []) {
+      if (className.includes('sticky') || className.startsWith('top-')) {
+        await expect(className).toMatch(/^lg:/)
+      }
+    }
+  },
+}
+
+/** The same rail with the checkbox off — it scrolls away with the page. */
+export const StickyOff: Story = {
+  args: { size: 'oneThird', sticky: false },
+  render: (args) => (
+    <>
+      <TallColumn />
+      <ColumnShell {...args} />
+    </>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const rail = canvas.getByText('Column content').closest('div.col-span-12')
+
+    await expect(rail).not.toHaveClass('lg:sticky')
+    await expect(rail).not.toHaveClass('self-start')
+  },
+}

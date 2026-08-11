@@ -63,7 +63,8 @@ export const COLUMN_EXCLUDED_BLOCK_SLUGS = [
  * it. Only ever used nested — it is not registered at layout root.
  *
  * @remarks `size` names a share of the 12-column grid from `lg` up; every
- * column is full width below that (see `sizes.ts`). The explicit `enumName`
+ * column is full width below that (see `sizes.ts`), and `sticky` is the one
+ * blessed desktop sticky behaviour (see `sticky.ts`). The explicit `enumName`
  * keeps the Postgres enum identifier short and stable — the generated name
  * for a block this deeply nested runs at the 63-character limit, and it
  * would change again the moment the block moves.
@@ -93,6 +94,16 @@ export const Column: Block = {
       admin: {
         description:
           'Share of the 12-column grid from the lg breakpoint up. Every column is full width on smaller screens.',
+      },
+    },
+    {
+      name: 'sticky',
+      type: 'checkbox',
+      label: 'Stick to the top while scrolling',
+      defaultValue: false,
+      admin: {
+        description:
+          'Desktop only: from the lg breakpoint up this column follows the scroll beside its taller neighbour (the homepage rail). Below lg it stacks normally and nothing sticks.',
       },
     },
     {
