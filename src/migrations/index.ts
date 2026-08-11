@@ -9,6 +9,7 @@ import * as migration_20260723_193654_identity_resume from './20260723_193654_id
 import * as migration_20260809_182905_mcp_work_history_permissions from './20260809_182905_mcp_work_history_permissions'
 import * as migration_20260811_214354_container_column_layout_blocks from './20260811_214354_container_column_layout_blocks'
 import * as migration_20260811_223434_container_layout_section_controls from './20260811_223434_container_layout_section_controls'
+import * as migration_20260811_230657_container_section_background from './20260811_230657_container_section_background'
 
 export const migrations = [
   {
@@ -65,5 +66,10 @@ export const migrations = [
     up: migration_20260811_223434_container_layout_section_controls.up,
     down: migration_20260811_223434_container_layout_section_controls.down,
     name: '20260811_223434_container_layout_section_controls',
+  },
+  {
+    up: migration_20260811_230657_container_section_background.up,
+    down: migration_20260811_230657_container_section_background.down,
+    name: '20260811_230657_container_section_background',
   },
 ]

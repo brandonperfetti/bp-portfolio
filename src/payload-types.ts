@@ -487,6 +487,27 @@ export interface ContainerBlock {
      * Leaves the section out of the page entirely — not hidden with CSS, so its content never reaches the browser.
      */
     hidden?: boolean | null;
+    /**
+     * A curated zinc palette rather than a colour picker, so every section stays inside the design system and reads correctly in both light and dark. Backgrounds usually want some vertical padding above.
+     */
+    background: {
+      /**
+       * Paint the section with a flat tint or a two-stop gradient. None leaves the page background showing, as before.
+       */
+      style: 'none' | 'tint' | 'gradient';
+      /**
+       * Each tint carries its own light and dark value — pick by how much separation the section needs, not by colour.
+       */
+      tint?: ('subtle' | 'muted' | 'panel') | null;
+      /**
+       * Two zinc stops. Fade ends transparent, so the page background finishes the ramp.
+       */
+      gradient?: ('fade' | 'depth' | 'panel') | null;
+      /**
+       * Which way the gradient runs. Upwards reverses a ramp without needing a mirrored palette entry.
+       */
+      direction?: ('toBottom' | 'toTop' | 'toRight') | null;
+    };
   };
   id?: string | null;
   blockName?: string | null;
@@ -1567,6 +1588,14 @@ export interface ContainerBlockSelect<T extends boolean = true> {
         paddingY?: T;
         anchorId?: T;
         hidden?: T;
+        background?:
+          | T
+          | {
+              style?: T;
+              tint?: T;
+              gradient?: T;
+              direction?: T;
+            };
       };
   id?: T;
   blockName?: T;

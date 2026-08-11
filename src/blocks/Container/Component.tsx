@@ -24,6 +24,7 @@ export function ContainerBlockComponent(props: ContainerBlock) {
       width={section?.width}
       paddingY={section?.paddingY}
       anchorId={section?.anchorId}
+      background={section?.background}
     >
       {columns.map((column, index) => (
         <ColumnBlockComponent key={column.id ?? index} {...column} />

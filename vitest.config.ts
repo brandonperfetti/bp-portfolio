@@ -12,7 +12,10 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url))
  * Two projects share this config (run one with `--project=<name>`):
  *
  * - `unit` — jsdom component/unit tests (files matching `.test.ts(x)` under
- *   `src`), the fast default for `pnpm test` and coverage.
+ *   `src`), the fast default for `pnpm test` and coverage. It also picks up
+ *   tests beside the repo scripts: the page-parity harness (#24) keeps every
+ *   rule that decides pass/fail in a browserless module precisely so it can be
+ *   covered here rather than only in an environment with browsers installed.
  * - `storybook` — every story becomes a browser-mode test (Playwright
  *   Chromium) via addon-vitest; `play` functions are the interaction tests
  *   (Phase 7). `PLAYWRIGHT_EXECUTABLE_PATH` overrides the browser binary
@@ -44,7 +47,7 @@ export default defineConfig({
           name: 'unit',
           environment: 'jsdom',
           setupFiles: ['./vitest.setup.ts'],
-          include: ['src/**/*.test.{ts,tsx}'],
+          include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.{ts,tsx}'],
         },
       },
       {

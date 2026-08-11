@@ -53,7 +53,16 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+    // `overflow-x-clip` is what lets a full-bleed container section use
+    // `w-screen` (100vw, which counts a classic scrollbar) without producing a
+    // horizontal scrollbar of its own. `clip` rather than `hidden` on purpose:
+    // it clips without becoming a scroll container, so the sticky header and
+    // sticky columns keep sticking to the viewport.
+    <html
+      lang="en"
+      className="h-full overflow-x-clip antialiased"
+      suppressHydrationWarning
+    >
       <body className="flex h-full bg-zinc-50 dark:bg-black">
         <AuthProvider>
           <Providers>

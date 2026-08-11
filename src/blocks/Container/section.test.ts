@@ -1,4 +1,7 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+
 import type {
   CheckboxField,
   Field,
@@ -226,5 +229,30 @@ describe('section visibility', () => {
   it('offers a hidden checkbox that starts off', () => {
     expect(hiddenField.type).toBe('checkbox')
     expect(hiddenField.defaultValue).toBe(false)
+  })
+})
+
+describe('the full-bleed breakout has somewhere to overflow into', () => {
+  const layoutPath = path.resolve(
+    process.cwd(),
+    'src/app/(frontend)/layout.tsx',
+  )
+  const layout = readFileSync(layoutPath, 'utf8')
+
+  it('clips the frontend layout root horizontally', () => {
+    // `w-screen` is 100vw, which counts a classic scrollbar's width, so a
+    // full-bleed section is wider than the document on any browser that has
+    // one. Without this the breakout adds a horizontal scrollbar to every
+    // page that uses it (W1B3 flag 3).
+    expect(sectionWidthClass('fullBleed')).toContain('w-screen')
+    expect(layout).toMatch(/<html[^>]*\boverflow-x-clip\b/s)
+  })
+
+  it('clips rather than hides, so sticky positioning survives', () => {
+    // `overflow: hidden` on an ancestor makes it a scroll container and
+    // breaks `position: sticky` against the viewport — which the site header
+    // and the sticky column rail both rely on. `clip` does not.
+    expect(layout).not.toMatch(/<html[^>]*\boverflow-x-hidden\b/s)
+    expect(layout).not.toMatch(/<html[^>]*\boverflow-hidden\b/s)
   })
 })

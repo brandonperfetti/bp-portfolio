@@ -202,6 +202,7 @@ const CONTAINER_DEMO: LayoutBlock[] = [
       paddingY: 'none',
       anchorId: 'container-demo',
       hidden: false,
+      background: { style: 'tint', tint: 'subtle' },
     },
     columns: [
       {

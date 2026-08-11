@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, within } from 'storybook/test'
 
 import { ColumnShell } from '@/blocks/Column/ColumnShell'
+import type { SectionBackgroundValue } from '@/blocks/Container/background'
 import { ContainerGrid } from '@/blocks/Container/ContainerGrid'
 
 /** Stand-in for a block stacked inside a column. */
@@ -230,5 +231,174 @@ export const AnchoredAndPadded: Story = {
     const section = canvasElement.querySelector('section')
     await expect(section).toHaveAttribute('id', 'linkable-section')
     await expect(section).toHaveClass('py-24', 'scroll-mt-16')
+  },
+}
+
+/**
+ * The frontend's own page surface — `zinc-50` in light, black in dark — so the
+ * background stories below read the way they read on the site rather than
+ * against Storybook's neutral canvas. `panel` in particular is invisible on
+ * white and obvious on `zinc-50`.
+ */
+const onPageSurface: Story['decorators'] = (StoryFn) => (
+  <div className="-m-6 bg-zinc-50 p-6 dark:bg-black">
+    <StoryFn />
+  </div>
+)
+
+/** Shared shape for the background stories: padded, so the paint has room. */
+const backgroundStory = (
+  background: SectionBackgroundValue,
+  theme: 'light' | 'dark',
+): Story => ({
+  args: { children: halves, paddingY: 'md', background },
+  globals: { theme },
+  decorators: [onPageSurface],
+  // Interaction: the class list is the same static pair for every option in
+  // the family, and both custom properties carry a value — that is the whole
+  // bridge. `backgroundColor`/`backgroundImage` are read back from computed
+  // style so a var that fails to resolve fails the story rather than silently
+  // painting nothing.
+  play: async ({ canvasElement }) => {
+    const section = canvasElement.querySelector('section') as HTMLElement
+    const painted = window.getComputedStyle(section)
+
+    if (background?.style === 'tint') {
+      await expect(section).toHaveClass(
+        'bg-[var(--section-bg-color)]',
+        'dark:bg-[var(--section-bg-color-dark)]',
+      )
+      await expect(
+        section.style.getPropertyValue('--section-bg-color'),
+      ).not.toBe('')
+      await expect(
+        section.style.getPropertyValue('--section-bg-color-dark'),
+      ).not.toBe('')
+      await expect(painted.backgroundColor).not.toBe('rgba(0, 0, 0, 0)')
+    } else {
+      await expect(section).toHaveClass(
+        'bg-[image:var(--section-bg-image)]',
+        'dark:bg-[image:var(--section-bg-image-dark)]',
+      )
+      await expect(
+        section.style.getPropertyValue('--section-bg-image'),
+      ).toMatch(/^linear-gradient\(/)
+      await expect(
+        section.style.getPropertyValue('--section-bg-image-dark'),
+      ).toMatch(/^linear-gradient\(/)
+      await expect(painted.backgroundImage).toContain('gradient')
+    }
+  },
+})
+
+/** No background — the default, and how every container rendered before #37. */
+export const BackgroundNone: Story = {
+  args: { children: halves, background: { style: 'none' } },
+  decorators: [onPageSurface],
+  play: async ({ canvasElement }) => {
+    const section = canvasElement.querySelector('section')
+    await expect(section).not.toHaveAttribute('style')
+  },
+}
+
+/** Tint `subtle`: a whisper above the page. */
+export const BackgroundTintSubtle = backgroundStory(
+  { style: 'tint', tint: 'subtle' },
+  'light',
+)
+
+/** Tint `subtle`, dark theme — `zinc-900` lifting off black. */
+export const BackgroundTintSubtleDark = backgroundStory(
+  { style: 'tint', tint: 'subtle' },
+  'dark',
+)
+
+/** Tint `muted`: one step deeper, for a section that needs to be found. */
+export const BackgroundTintMuted = backgroundStory(
+  { style: 'tint', tint: 'muted' },
+  'light',
+)
+
+/** Tint `muted`, dark theme. */
+export const BackgroundTintMutedDark = backgroundStory(
+  { style: 'tint', tint: 'muted' },
+  'dark',
+)
+
+/** Tint `panel`: white on `zinc-50`, a quiet raised surface. */
+export const BackgroundTintPanel = backgroundStory(
+  { style: 'tint', tint: 'panel' },
+  'light',
+)
+
+/** Tint `panel`, dark theme — `zinc-950`, the least lift off black. */
+export const BackgroundTintPanelDark = backgroundStory(
+  { style: 'tint', tint: 'panel' },
+  'dark',
+)
+
+/** Gradient `fade`: tint into transparent, so the page finishes the ramp. */
+export const BackgroundGradientFade = backgroundStory(
+  { style: 'gradient', gradient: 'fade', direction: 'toBottom' },
+  'light',
+)
+
+/** Gradient `fade`, dark theme. */
+export const BackgroundGradientFadeDark = backgroundStory(
+  { style: 'gradient', gradient: 'fade', direction: 'toBottom' },
+  'dark',
+)
+
+/** Gradient `depth`: a soft two-step zinc ramp. */
+export const BackgroundGradientDepth = backgroundStory(
+  { style: 'gradient', gradient: 'depth', direction: 'toBottom' },
+  'light',
+)
+
+/** Gradient `depth`, dark theme. */
+export const BackgroundGradientDepthDark = backgroundStory(
+  { style: 'gradient', gradient: 'depth', direction: 'toBottom' },
+  'dark',
+)
+
+/** Gradient `panel`: surface to shadow, run sideways. */
+export const BackgroundGradientPanel = backgroundStory(
+  { style: 'gradient', gradient: 'panel', direction: 'toRight' },
+  'light',
+)
+
+/** Gradient `panel`, dark theme. */
+export const BackgroundGradientPanelDark = backgroundStory(
+  { style: 'gradient', gradient: 'panel', direction: 'toRight' },
+  'dark',
+)
+
+/** `toTop` reverses a ramp without a mirrored palette entry. */
+export const BackgroundGradientUpwards = backgroundStory(
+  { style: 'gradient', gradient: 'depth', direction: 'toTop' },
+  'light',
+)
+
+/**
+ * A background on a full-bleed section — the combination the Home migration
+ * needs, and the one that makes the layout root's `overflow-x-clip` matter.
+ */
+export const BackgroundFullBleed: Story = {
+  args: {
+    children: halves,
+    width: 'fullBleed',
+    paddingY: 'lg',
+    background: { style: 'tint', tint: 'muted' },
+  },
+  decorators: [onPageSurface],
+  play: async ({ canvasElement }) => {
+    const section = canvasElement.querySelector('section') as HTMLElement
+    await expect(section).toHaveClass(
+      'w-screen',
+      'bg-[var(--section-bg-color)]',
+    )
+    await expect(section.style.getPropertyValue('--section-bg-color')).not.toBe(
+      '',
+    )
   },
 }

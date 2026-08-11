@@ -353,3 +353,123 @@ describe('ContainerBlockComponent section shell (#30)', () => {
     expect(container.textContent).not.toContain('body copy')
   })
 })
+
+/** #37: backgrounds arrive as CSS custom properties, never as class names. */
+describe('ContainerBlockComponent section background (#37)', () => {
+  const sectionOf = (container: HTMLElement) =>
+    container.querySelector('section') as HTMLElement
+
+  it('writes no style attribute at all when there is no background', () => {
+    const { container } = render(
+      <ContainerBlockComponent
+        {...containerWith({ section: { background: { style: 'none' } } })}
+      />,
+    )
+    expect(sectionOf(container)).not.toHaveAttribute('style')
+    expect(sectionOf(container).className).toBe('my-12')
+  })
+
+  it('paints a tint through the colour custom properties', () => {
+    const { container } = render(
+      <ContainerBlockComponent
+        {...containerWith({
+          section: { background: { style: 'tint', tint: 'muted' } },
+        })}
+      />,
+    )
+    const section = sectionOf(container)
+
+    // Static classes — the same two strings whatever the editor picked.
+    expect(section).toHaveClass(
+      'bg-[var(--section-bg-color)]',
+      'dark:bg-[var(--section-bg-color-dark)]',
+    )
+    // Both themes get a value, and they differ.
+    const light = section.style.getPropertyValue('--section-bg-color')
+    const dark = section.style.getPropertyValue('--section-bg-color-dark')
+    expect(light).toContain('--color-zinc-200')
+    expect(dark).toContain('--color-zinc-800')
+    expect(light).not.toBe(dark)
+    expect(section.style.getPropertyValue('--section-bg-image')).toBe('')
+  })
+
+  it('paints a gradient through the image custom properties', () => {
+    const { container } = render(
+      <ContainerBlockComponent
+        {...containerWith({
+          section: {
+            background: {
+              style: 'gradient',
+              gradient: 'depth',
+              direction: 'toRight',
+            },
+          },
+        })}
+      />,
+    )
+    const section = sectionOf(container)
+
+    expect(section).toHaveClass(
+      'bg-[image:var(--section-bg-image)]',
+      'dark:bg-[image:var(--section-bg-image-dark)]',
+    )
+    expect(section.style.getPropertyValue('--section-bg-image')).toMatch(
+      /^linear-gradient\(to right, /,
+    )
+    expect(section.style.getPropertyValue('--section-bg-image-dark')).toMatch(
+      /^linear-gradient\(to right, /,
+    )
+    // A gradient must not leave a stale flat colour behind it.
+    expect(section.style.getPropertyValue('--section-bg-color')).toBe('')
+  })
+
+  it('never emits a class name built from the stored value', () => {
+    const { container } = render(
+      <ContainerBlockComponent
+        {...containerWith({
+          section: {
+            background: {
+              style: 'gradient',
+              gradient: 'panel',
+              direction: 'toTop',
+            },
+          },
+        })}
+      />,
+    )
+    // The stored option names appear nowhere in the class list; they only
+    // ever reach the DOM as values behind the custom properties.
+    const classes = sectionOf(container).className
+    expect(classes).not.toMatch(/panel|toTop|gradient-/)
+  })
+
+  it('paints nothing for an unrecognised stored style', () => {
+    const { container } = render(
+      <ContainerBlockComponent
+        {...containerWith({ section: { background: { style: 'photo' } } })}
+      />,
+    )
+    expect(sectionOf(container)).not.toHaveAttribute('style')
+  })
+
+  it('combines a background with the full-bleed breakout', () => {
+    const { container } = render(
+      <ContainerBlockComponent
+        {...containerWith({
+          section: {
+            width: 'fullBleed',
+            paddingY: 'lg',
+            background: { style: 'tint', tint: 'panel' },
+          },
+        })}
+      />,
+    )
+    const section = sectionOf(container)
+    expect(section).toHaveClass(
+      'w-screen',
+      'py-24',
+      'bg-[var(--section-bg-color)]',
+    )
+    expect(section.style.getPropertyValue('--section-bg-color')).not.toBe('')
+  })
+})
