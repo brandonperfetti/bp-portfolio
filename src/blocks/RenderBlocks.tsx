@@ -3,6 +3,7 @@ import { Fragment } from 'react'
 import { ArticlesArchiveComponent } from '@/blocks/ArticlesArchive/Component'
 import { CallToActionBlockComponent } from '@/blocks/CallToAction/Component'
 import { ContactFormComponent } from '@/blocks/ContactForm/Component'
+import { ContainerBlockComponent } from '@/blocks/Container/Component'
 import { FaqListComponent } from '@/blocks/FaqList/Component'
 import { NewsletterSignupComponent } from '@/blocks/NewsletterSignup/Component'
 import { StatsComponent } from '@/blocks/Stats/Component'
@@ -16,9 +17,17 @@ import { MediaBlockComponent } from '@/blocks/MediaBlock/Component'
 import { PhotoStripBlockComponent } from '@/blocks/PhotoStrip/Component'
 import { ShaderHeroBlockComponent } from '@/blocks/ShaderHero/Component'
 import { SpacerBlockComponent } from '@/blocks/Spacer/Component'
-import type { Page } from '@/payload-types'
+import type { ColumnBlock, Page } from '@/payload-types'
 
 type LayoutBlock = NonNullable<Page['layout']>[number]
+type ColumnContentBlock = NonNullable<ColumnBlock['content']>[number]
+
+/**
+ * Anything this dispatcher renders: a root-level layout block, or one of
+ * the leaf blocks a column may hold (a subset of the same set — columns
+ * exclude `container`, `content` and `shaderHero`).
+ */
+export type RenderableBlock = ColumnContentBlock | LayoutBlock
 
 /**
  * CMS page-builder dispatcher: maps each layout block's `blockType` to its
@@ -30,11 +39,15 @@ type LayoutBlock = NonNullable<Page['layout']>[number]
  * schema addition can ship ahead of its component without breaking pages —
  * but outside production a console warning names the missing registration,
  * because a silently blank section is a debugging trap.
+ *
+ * Also renders column content: `container` → `column` → blocks recurses
+ * back through here, so a column's leaf blocks reach the same dispatcher as
+ * root-level ones and stay a single set.
  */
 export function RenderBlocks({
   blocks,
 }: {
-  blocks: LayoutBlock[] | null | undefined
+  blocks: RenderableBlock[] | null | undefined
 }) {
   if (!blocks?.length) return null
 
@@ -45,6 +58,8 @@ export function RenderBlocks({
         switch (block.blockType) {
           case 'cta':
             return <CallToActionBlockComponent key={key} {...block} />
+          case 'container':
+            return <ContainerBlockComponent key={key} {...block} />
           case 'content':
             return <ContentBlockComponent key={key} {...block} />
           case 'featureCardGrid':

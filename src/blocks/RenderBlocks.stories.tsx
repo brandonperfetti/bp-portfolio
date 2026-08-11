@@ -186,6 +186,50 @@ const DEMO_BLOCKS: LayoutBlock[] = [
 ]
 
 /**
+ * The layout block set (#23) as CMS data: a container whose two columns
+ * hold different block types. Kept out of `DEMO_BLOCKS` because several
+ * stories address that array by index.
+ */
+const CONTAINER_DEMO: LayoutBlock[] = [
+  {
+    blockType: 'container',
+    columns: [
+      {
+        blockType: 'column',
+        id: 'col-main',
+        size: 'twoThirds',
+        content: [
+          {
+            blockType: 'cta',
+            id: 'col-main-cta',
+            richText: richText(
+              'Two thirds of the row from lg up. Below that it spans the full width and the rail drops beneath it.',
+              'Main column',
+            ),
+            links: [],
+          },
+        ],
+      },
+      {
+        blockType: 'column',
+        id: 'col-rail',
+        size: 'oneThird',
+        content: [
+          {
+            blockType: 'stats',
+            id: 'col-rail-stats',
+            items: [
+              { id: 'r1', value: '2/3', label: 'Main share' },
+              { id: 'r2', value: '1/3', label: 'Rail share' },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+]
+
+/**
  * CMS page-builder blocks (§ page builder): the exact components the
  * catch-all route renders for admin-composed pages. Each entry in the admin
  * block picker corresponds to a component dispatched by RenderBlocks and
@@ -273,5 +317,24 @@ export const PhotoStripBlock: Story = {
         (block) => block.blockType === 'photoStrip',
       ) as LayoutBlock,
     ],
+  },
+}
+
+/**
+ * The #23 acceptance layout as an editor composes it: one container, a 2/3
+ * main column and a 1/3 rail, different block types in each.
+ */
+export const ContainerColumns: Story = {
+  args: { blocks: CONTAINER_DEMO },
+  // Interaction: the columns claim 8 + 4 tracks and both keep the mobile
+  // full-row span that makes the grid stack below `lg`.
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const main = canvas.getByText('Main column').closest('div.col-span-12')
+    await expect(main).toHaveClass('col-span-12', 'lg:col-span-8')
+    await expect(main?.parentElement).toHaveClass('grid', 'grid-cols-12')
+
+    const rail = canvas.getByText('Rail share').closest('div.col-span-12')
+    await expect(rail).toHaveClass('col-span-12', 'lg:col-span-4')
   },
 }

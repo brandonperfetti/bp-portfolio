@@ -6,18 +6,20 @@ import { describe, expect, it } from 'vitest'
 
 import { Banner } from '@/blocks/Banner/config'
 import { Code } from '@/blocks/Code/config'
+import { Column } from '@/blocks/Column/config'
 import { pageBuilderBlocks } from '@/blocks/library'
 
 /**
- * Guards issue #22: every block an editor can pick — the 16 page-builder
- * blocks plus the two rich-text-only blocks (Banner, Code) — ships a
- * thumbnail under `public/images/cms/` so the admin picker is scannable.
+ * Guards issue #22: every block an editor can pick — the 17 page-builder
+ * blocks, the two rich-text-only blocks (Banner, Code), and the nested-only
+ * `column` (#23) — ships a thumbnail under `public/images/cms/` so the
+ * admin picker is scannable.
  */
 describe('block picker thumbnails', () => {
-  const allBlocks = [...pageBuilderBlocks, Banner, Code]
+  const allBlocks = [...pageBuilderBlocks, Banner, Code, Column]
 
   it('registers the expected page-builder library', () => {
-    expect(pageBuilderBlocks).toHaveLength(16)
+    expect(pageBuilderBlocks).toHaveLength(17)
   })
 
   it.each(allBlocks.map((block) => [block.slug, block] as const))(

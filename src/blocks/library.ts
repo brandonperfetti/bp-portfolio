@@ -3,6 +3,7 @@ import type { Block } from 'payload'
 import { ArticlesArchive } from '@/blocks/ArticlesArchive/config'
 import { CallToAction } from '@/blocks/CallToAction/config'
 import { ContactForm } from '@/blocks/ContactForm/config'
+import { Container } from '@/blocks/Container/config'
 import { Content } from '@/blocks/Content/config'
 import { FaqList } from '@/blocks/FaqList/config'
 import { FeatureCardGrid } from '@/blocks/FeatureCardGrid/config'
@@ -25,11 +26,16 @@ import { WorkHistoryCard } from '@/blocks/WorkHistoryCard/config'
  * @remarks Alphabetical so the admin picker stays scannable as the library
  * grows. Add new blocks here (plus RenderBlocks + a story) — collections
  * pick the list up automatically.
+ *
+ * `column` is deliberately absent: it exists only inside a `container`, so
+ * registering it at root would offer editors a width with nothing to be a
+ * share of. `container` itself is here, and is the only layout block.
  */
 export const pageBuilderBlocks: Block[] = [
   ArticlesArchive,
   CallToAction,
   ContactForm,
+  Container,
   Content,
   FaqList,
   FeatureCardGrid,

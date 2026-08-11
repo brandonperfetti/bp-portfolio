@@ -97,6 +97,35 @@ describe('RenderBlocks', () => {
     }
   })
 
+  it('recurses through container → column → block content', () => {
+    const blocks = [
+      {
+        blockType: 'container',
+        columns: [
+          {
+            blockType: 'column',
+            id: 'main',
+            size: 'twoThirds',
+            content: [
+              { blockType: 'cta', id: 'cta', richText: text('nested copy') },
+            ],
+          },
+          {
+            blockType: 'column',
+            id: 'rail',
+            size: 'oneThird',
+            content: [{ blockType: 'spacer', id: 'gap', size: 'sm' }],
+          },
+        ],
+      },
+    ] as unknown as LayoutBlock[]
+
+    const { container } = render(<RenderBlocks blocks={blocks} />)
+    expect(screen.getByText('nested copy')).toBeInTheDocument()
+    expect(container.querySelector('.lg\\:col-span-8')).toBeInTheDocument()
+    expect(container.querySelector('.lg\\:col-span-4')).toBeInTheDocument()
+  })
+
   it('warns about unknown blockTypes outside production, naming the type', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {

@@ -239,6 +239,7 @@ export interface Page {
     | ArticlesArchiveBlock
     | CallToActionBlock
     | ContactFormBlock
+    | ContainerBlock
     | ContentBlock
     | FaqListBlock
     | FeatureCardGridBlock
@@ -303,6 +304,7 @@ export interface Post {
         | ArticlesArchiveBlock
         | CallToActionBlock
         | ContactFormBlock
+        | ContainerBlock
         | ContentBlock
         | FaqListBlock
         | FeatureCardGridBlock
@@ -450,53 +452,47 @@ export interface ContactFormBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "ContentBlock".
+ * via the `definition` "ContainerBlock".
  */
-export interface ContentBlock {
-  columns?:
-    | {
-        size?: ('oneThird' | 'half' | 'twoThirds' | 'full') | null;
-        richText?: {
-          root: {
-            type: string;
-            children: {
-              type: any;
-              version: number;
-              [k: string]: unknown;
-            }[];
-            direction: ('ltr' | 'rtl') | null;
-            format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
-            indent: number;
-            version: number;
-          };
-          [k: string]: unknown;
-        } | null;
-        enableLink?: boolean | null;
-        link?: {
-          type?: ('reference' | 'custom') | null;
-          newTab?: boolean | null;
-          reference?:
-            | ({
-                relationTo: 'pages';
-                value: number | Page;
-              } | null)
-            | ({
-                relationTo: 'posts';
-                value: number | Post;
-              } | null);
-          url?: string | null;
-          label: string;
-          /**
-           * Choose how the link should be rendered.
-           */
-          appearance?: ('default' | 'outline') | null;
-        };
-        id?: string | null;
-      }[]
+export interface ContainerBlock {
+  /**
+   * Columns share a 12-column grid from the lg breakpoint up — two thirds plus one third fills a row, for example. They stack on smaller screens.
+   */
+  columns?: ColumnBlock[] | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'container';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ColumnBlock".
+ */
+export interface ColumnBlock {
+  /**
+   * Share of the 12-column grid from the lg breakpoint up. Every column is full width on smaller screens.
+   */
+  size: 'oneQuarter' | 'oneThird' | 'half' | 'twoThirds' | 'threeQuarters' | 'full';
+  content?:
+    | (
+        | ArticlesArchiveBlock
+        | CallToActionBlock
+        | ContactFormBlock
+        | FaqListBlock
+        | FeatureCardGridBlock
+        | LogoCarouselBlock
+        | MediaBlock
+        | NewsletterSignupBlock
+        | PhotoStripBlock
+        | SpacerBlock
+        | StatsBlock
+        | TestimonialsBlock
+        | VideoEmbedBlock
+        | WorkHistoryCardBlock
+      )[]
     | null;
   id?: string | null;
   blockName?: string | null;
-  blockType: 'content';
+  blockType: 'column';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -647,31 +643,6 @@ export interface PhotoStripBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "ShaderHeroBlock".
- */
-export interface ShaderHeroBlock {
-  preset: 'northern-lights-2' | 'ribbon-flows-4' | 'synthesis-14' | 'drifting-lights-8' | 'static-noise-4';
-  richText?: {
-    root: {
-      type: string;
-      children: {
-        type: any;
-        version: number;
-        [k: string]: unknown;
-      }[];
-      direction: ('ltr' | 'rtl') | null;
-      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
-      indent: number;
-      version: number;
-    };
-    [k: string]: unknown;
-  } | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'shaderHero';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "SpacerBlock".
  */
 export interface SpacerBlock {
@@ -747,6 +718,81 @@ export interface WorkHistoryCardBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'workHistoryCard';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ContentBlock".
+ */
+export interface ContentBlock {
+  columns?:
+    | {
+        size?: ('oneThird' | 'half' | 'twoThirds' | 'full') | null;
+        richText?: {
+          root: {
+            type: string;
+            children: {
+              type: any;
+              version: number;
+              [k: string]: unknown;
+            }[];
+            direction: ('ltr' | 'rtl') | null;
+            format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+            indent: number;
+            version: number;
+          };
+          [k: string]: unknown;
+        } | null;
+        enableLink?: boolean | null;
+        link?: {
+          type?: ('reference' | 'custom') | null;
+          newTab?: boolean | null;
+          reference?:
+            | ({
+                relationTo: 'pages';
+                value: number | Page;
+              } | null)
+            | ({
+                relationTo: 'posts';
+                value: number | Post;
+              } | null);
+          url?: string | null;
+          label: string;
+          /**
+           * Choose how the link should be rendered.
+           */
+          appearance?: ('default' | 'outline') | null;
+        };
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'content';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ShaderHeroBlock".
+ */
+export interface ShaderHeroBlock {
+  preset: 'northern-lights-2' | 'ribbon-flows-4' | 'synthesis-14' | 'drifting-lights-8' | 'static-noise-4';
+  richText?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'shaderHero';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1397,6 +1443,7 @@ export interface PagesSelect<T extends boolean = true> {
         articlesArchive?: T | ArticlesArchiveBlockSelect<T>;
         cta?: T | CallToActionBlockSelect<T>;
         contactForm?: T | ContactFormBlockSelect<T>;
+        container?: T | ContainerBlockSelect<T>;
         content?: T | ContentBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
@@ -1470,26 +1517,40 @@ export interface ContactFormBlockSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "ContentBlock_select".
+ * via the `definition` "ContainerBlock_select".
  */
-export interface ContentBlockSelect<T extends boolean = true> {
+export interface ContainerBlockSelect<T extends boolean = true> {
   columns?:
     | T
     | {
-        size?: T;
-        richText?: T;
-        enableLink?: T;
-        link?:
-          | T
-          | {
-              type?: T;
-              newTab?: T;
-              reference?: T;
-              url?: T;
-              label?: T;
-              appearance?: T;
-            };
-        id?: T;
+        column?: T | ColumnBlockSelect<T>;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ColumnBlock_select".
+ */
+export interface ColumnBlockSelect<T extends boolean = true> {
+  size?: T;
+  content?:
+    | T
+    | {
+        articlesArchive?: T | ArticlesArchiveBlockSelect<T>;
+        cta?: T | CallToActionBlockSelect<T>;
+        contactForm?: T | ContactFormBlockSelect<T>;
+        faqList?: T | FaqListBlockSelect<T>;
+        featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
+        logoCarousel?: T | LogoCarouselBlockSelect<T>;
+        mediaBlock?: T | MediaBlockSelect<T>;
+        newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
+        photoStrip?: T | PhotoStripBlockSelect<T>;
+        spacer?: T | SpacerBlockSelect<T>;
+        stats?: T | StatsBlockSelect<T>;
+        testimonials?: T | TestimonialsBlockSelect<T>;
+        videoEmbed?: T | VideoEmbedBlockSelect<T>;
+        workHistoryCard?: T | WorkHistoryCardBlockSelect<T>;
       };
   id?: T;
   blockName?: T;
@@ -1587,16 +1648,6 @@ export interface PhotoStripBlockSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "ShaderHeroBlock_select".
- */
-export interface ShaderHeroBlockSelect<T extends boolean = true> {
-  preset?: T;
-  richText?: T;
-  id?: T;
-  blockName?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "SpacerBlock_select".
  */
 export interface SpacerBlockSelect<T extends boolean = true> {
@@ -1658,6 +1709,42 @@ export interface WorkHistoryCardBlockSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ContentBlock_select".
+ */
+export interface ContentBlockSelect<T extends boolean = true> {
+  columns?:
+    | T
+    | {
+        size?: T;
+        richText?: T;
+        enableLink?: T;
+        link?:
+          | T
+          | {
+              type?: T;
+              newTab?: T;
+              reference?: T;
+              url?: T;
+              label?: T;
+              appearance?: T;
+            };
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ShaderHeroBlock_select".
+ */
+export interface ShaderHeroBlockSelect<T extends boolean = true> {
+  preset?: T;
+  richText?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "posts_select".
  */
 export interface PostsSelect<T extends boolean = true> {
@@ -1671,6 +1758,7 @@ export interface PostsSelect<T extends boolean = true> {
         articlesArchive?: T | ArticlesArchiveBlockSelect<T>;
         cta?: T | CallToActionBlockSelect<T>;
         contactForm?: T | ContactFormBlockSelect<T>;
+        container?: T | ContainerBlockSelect<T>;
         content?: T | ContentBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;

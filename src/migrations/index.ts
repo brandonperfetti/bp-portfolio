@@ -7,6 +7,7 @@ import * as migration_20260723_155506_block_library_expansion from './20260723_1
 import * as migration_20260723_171916_photo_strip_posts_layout from './20260723_171916_photo_strip_posts_layout'
 import * as migration_20260723_193654_identity_resume from './20260723_193654_identity_resume'
 import * as migration_20260809_182905_mcp_work_history_permissions from './20260809_182905_mcp_work_history_permissions'
+import * as migration_20260811_214354_container_column_layout_blocks from './20260811_214354_container_column_layout_blocks'
 
 export const migrations = [
   {
@@ -53,5 +54,10 @@ export const migrations = [
     up: migration_20260809_182905_mcp_work_history_permissions.up,
     down: migration_20260809_182905_mcp_work_history_permissions.down,
     name: '20260809_182905_mcp_work_history_permissions',
+  },
+  {
+    up: migration_20260811_214354_container_column_layout_blocks.up,
+    down: migration_20260811_214354_container_column_layout_blocks.down,
+    name: '20260811_214354_container_column_layout_blocks',
   },
 ]
