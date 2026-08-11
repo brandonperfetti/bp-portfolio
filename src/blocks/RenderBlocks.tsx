@@ -27,7 +27,9 @@ type LayoutBlock = NonNullable<Page['layout']>[number]
  * and the admin block picker stay a 1:1 set.
  *
  * @remarks Unknown block types render nothing rather than throwing, so a
- * schema addition can ship ahead of its component without breaking pages.
+ * schema addition can ship ahead of its component without breaking pages —
+ * but outside production a console warning names the missing registration,
+ * because a silently blank section is a debugging trap.
  */
 export function RenderBlocks({
   blocks,
@@ -73,8 +75,17 @@ export function RenderBlocks({
             return <VideoEmbedComponent key={key} {...block} />
           case 'workHistoryCard':
             return <WorkHistoryCardComponent key={key} />
-          default:
+          default: {
+            if (process.env.NODE_ENV !== 'production') {
+              // `block` is `never` here (the switch is exhaustive over the
+              // generated union), but CMS data can outrun the codebase.
+              const { blockType } = block as { blockType: string }
+              console.warn(
+                `[RenderBlocks] Unknown blockType "${blockType}" — no component is registered for it, so nothing was rendered. Add a case to RenderBlocks (and a matching story) or remove the block from the page.`,
+              )
+            }
             return null
+          }
         }
       })}
     </Fragment>

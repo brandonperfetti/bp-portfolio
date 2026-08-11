@@ -7,6 +7,8 @@ import type { Block } from 'payload'
 export const VideoEmbed: Block = {
   slug: 'videoEmbed',
   interfaceName: 'VideoEmbedBlock',
+  imageURL: '/images/cms/video-embed.svg',
+  imageAltText: 'Line-art preview of the Video Embed block',
   labels: { singular: 'Video Embed', plural: 'Video Embeds' },
   fields: [
     {

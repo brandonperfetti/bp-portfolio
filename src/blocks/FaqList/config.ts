@@ -9,6 +9,8 @@ import { defaultLexical } from '@/fields/defaultLexical'
 export const FaqList: Block = {
   slug: 'faqList',
   interfaceName: 'FaqListBlock',
+  imageURL: '/images/cms/faq-list.svg',
+  imageAltText: 'Line-art preview of the FAQ List block',
   labels: { singular: 'FAQ List', plural: 'FAQ Lists' },
   fields: [
     {

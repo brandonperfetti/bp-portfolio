@@ -4,7 +4,10 @@ import { CMSLink } from '@/components/cms/CMSLink'
 import { RichTextContent } from '@/components/cms/RichTextContent'
 import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
 import { ShaderHero } from '@/components/heros/ShaderHero'
-import type { ShaderPresetKey } from '@/components/heros/presets'
+import {
+  DEFAULT_SHADER_PRESET,
+  type ShaderPresetKey,
+} from '@/components/heros/presets'
 import type { Media, Page } from '@/payload-types'
 
 const mediaUrl = (m: unknown): Media | null =>
@@ -29,7 +32,7 @@ export function RenderHero({ page }: { page: Page }) {
       {type === 'shader' ? (
         <ShaderHero
           preset={
-            (hero?.shaderPreset ?? 'northern-lights-2') as ShaderPresetKey
+            (hero?.shaderPreset ?? DEFAULT_SHADER_PRESET) as ShaderPresetKey
           }
         />
       ) : null}

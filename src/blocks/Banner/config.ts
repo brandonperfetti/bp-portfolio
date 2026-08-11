@@ -45,4 +45,6 @@ export const Banner: Block = {
     },
   ],
   interfaceName: 'BannerBlock',
+  imageURL: '/images/cms/banner.svg',
+  imageAltText: 'Line-art preview of the Banner block',
 }

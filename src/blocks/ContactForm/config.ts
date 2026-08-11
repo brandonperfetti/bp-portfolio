@@ -4,6 +4,8 @@ import type { Block } from 'payload'
 export const ContactForm: Block = {
   slug: 'contactForm',
   interfaceName: 'ContactFormBlock',
+  imageURL: '/images/cms/contact-form.svg',
+  imageAltText: 'Line-art preview of the Contact Form block',
   labels: { singular: 'Contact Form', plural: 'Contact Forms' },
   fields: [
     {

@@ -1,17 +1,14 @@
 /**
- * Swappable shaders.com preset registry (§23) — mirrors the hero/ShaderHero
- * select options in the Payload config. Northern Lights 2 is the confirmed
- * default; the alternates are vetted in the handoff shortlist and land as
- * they're exported via the Shaders MCP.
+ * Frontend re-export of the shader preset registry (§23).
+ *
+ * @remarks The canonical list (ids + admin labels) lives in
+ * `src/heros/shaderPresets.ts` so the Payload configs and this frontend
+ * surface can never drift — this module exists so component-land keeps its
+ * established import path.
  */
-export const SHADER_PRESETS = [
-  'northern-lights-2',
-  'ribbon-flows-4',
-  'synthesis-14',
-  'drifting-lights-8',
-  'static-noise-4',
-] as const
-
-export type ShaderPresetKey = (typeof SHADER_PRESETS)[number]
-
-export const DEFAULT_SHADER_PRESET: ShaderPresetKey = 'northern-lights-2'
+export {
+  DEFAULT_SHADER_PRESET,
+  SHADER_PRESET_OPTIONS,
+  SHADER_PRESETS,
+  type ShaderPresetKey,
+} from '@/heros/shaderPresets'

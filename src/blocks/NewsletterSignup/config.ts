@@ -4,6 +4,8 @@ import type { Block } from 'payload'
 export const NewsletterSignup: Block = {
   slug: 'newsletterSignup',
   interfaceName: 'NewsletterSignupBlock',
+  imageURL: '/images/cms/newsletter-signup.svg',
+  imageAltText: 'Line-art preview of the Newsletter Signup block',
   labels: { singular: 'Newsletter Signup', plural: 'Newsletter Signups' },
   fields: [
     {

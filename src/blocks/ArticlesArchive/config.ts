@@ -8,6 +8,8 @@ import type { Block } from 'payload'
 export const ArticlesArchive: Block = {
   slug: 'articlesArchive',
   interfaceName: 'ArticlesArchiveBlock',
+  imageURL: '/images/cms/articles-archive.svg',
+  imageAltText: 'Line-art preview of the Articles Archive block',
   labels: { singular: 'Articles Archive', plural: 'Articles Archives' },
   fields: [
     { name: 'heading', type: 'text' },

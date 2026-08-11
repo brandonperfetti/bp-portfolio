@@ -19,7 +19,7 @@ const meta = {
   argTypes: {
     preset: {
       control: 'select',
-      options: Object.keys(SHADER_PRESETS),
+      options: [...SHADER_PRESETS],
     },
   },
   decorators: [

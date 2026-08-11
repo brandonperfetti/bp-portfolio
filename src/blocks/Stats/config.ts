@@ -4,6 +4,8 @@ import type { Block } from 'payload'
 export const Stats: Block = {
   slug: 'stats',
   interfaceName: 'StatsBlock',
+  imageURL: '/images/cms/stats.svg',
+  imageAltText: 'Line-art preview of the Stats block',
   labels: { singular: 'Stats Band', plural: 'Stats Bands' },
   fields: [
     {

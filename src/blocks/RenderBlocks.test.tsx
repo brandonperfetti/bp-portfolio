@@ -80,16 +80,56 @@ describe('RenderBlocks', () => {
       { blockType: 'mystery' } as unknown,
     ] as LayoutBlock[]
 
-    const { container } = render(<RenderBlocks blocks={blocks} />)
-    expect(screen.getByText('column copy')).toBeInTheDocument()
-    expect(screen.getByText('cta copy')).toBeInTheDocument()
-    expect(
-      container.querySelector('img[src="https://example.com/strip.jpg"]'),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Go' })).toHaveAttribute(
-      'href',
-      'https://example.com',
-    )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { container } = render(<RenderBlocks blocks={blocks} />)
+      expect(screen.getByText('column copy')).toBeInTheDocument()
+      expect(screen.getByText('cta copy')).toBeInTheDocument()
+      expect(
+        container.querySelector('img[src="https://example.com/strip.jpg"]'),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Go' })).toHaveAttribute(
+        'href',
+        'https://example.com',
+      )
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('warns about unknown blockTypes outside production, naming the type', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { container } = render(
+        <RenderBlocks
+          blocks={[{ blockType: 'mystery' } as unknown as LayoutBlock]}
+        />,
+      )
+      expect(container).toBeEmptyDOMElement()
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('Unknown blockType "mystery"'),
+      )
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('stays silent about unknown blockTypes in production', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { container } = render(
+        <RenderBlocks
+          blocks={[{ blockType: 'mystery' } as unknown as LayoutBlock]}
+        />,
+      )
+      expect(container).toBeEmptyDOMElement()
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+      vi.unstubAllEnvs()
+    }
   })
 
   it('renders nothing for empty layouts', () => {

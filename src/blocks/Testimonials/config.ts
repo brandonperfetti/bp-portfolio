@@ -4,6 +4,8 @@ import type { Block } from 'payload'
 export const Testimonials: Block = {
   slug: 'testimonials',
   interfaceName: 'TestimonialsBlock',
+  imageURL: '/images/cms/testimonials.svg',
+  imageAltText: 'Line-art preview of the Testimonials block',
   labels: { singular: 'Testimonials', plural: 'Testimonials' },
   fields: [
     {

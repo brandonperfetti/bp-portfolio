@@ -1,5 +1,10 @@
 import type { Block } from 'payload'
 
+import {
+  DEFAULT_SHADER_PRESET,
+  SHADER_PRESET_OPTIONS,
+} from '@/heros/shaderPresets'
+
 /**
  * Standalone shader background section for layout-builder pages (distinct
  * from the Pages hero group, which also supports a shader type).
@@ -11,18 +16,14 @@ import type { Block } from 'payload'
 export const ShaderHero: Block = {
   slug: 'shaderHero',
   interfaceName: 'ShaderHeroBlock',
+  imageURL: '/images/cms/shader-hero.svg',
+  imageAltText: 'Line-art preview of the Shader Hero block',
   fields: [
     {
       name: 'preset',
       type: 'select',
-      defaultValue: 'northern-lights-2',
-      options: [
-        { label: 'Northern Lights 2 (aurora)', value: 'northern-lights-2' },
-        { label: 'Ribbon Flows 4', value: 'ribbon-flows-4' },
-        { label: 'Synthesis 14', value: 'synthesis-14' },
-        { label: 'Drifting Lights 8', value: 'drifting-lights-8' },
-        { label: 'Static Noise 4 (light)', value: 'static-noise-4' },
-      ],
+      defaultValue: DEFAULT_SHADER_PRESET,
+      options: [...SHADER_PRESET_OPTIONS],
       required: true,
     },
     {

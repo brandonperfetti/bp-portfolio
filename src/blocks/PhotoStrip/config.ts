@@ -10,6 +10,8 @@ import type { Block } from 'payload'
 export const PhotoStrip: Block = {
   slug: 'photoStrip',
   interfaceName: 'PhotoStripBlock',
+  imageURL: '/images/cms/photo-strip.svg',
+  imageAltText: 'Line-art preview of the Photo Strip block',
   labels: {
     singular: 'Photo Strip',
     plural: 'Photo Strips',

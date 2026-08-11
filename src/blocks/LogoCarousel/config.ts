@@ -8,6 +8,8 @@ import type { Block } from 'payload'
 export const LogoCarousel: Block = {
   slug: 'logoCarousel',
   interfaceName: 'LogoCarouselBlock',
+  imageURL: '/images/cms/logo-carousel.svg',
+  imageAltText: 'Line-art preview of the Logo Carousel block',
   labels: {
     singular: 'Logo Carousel',
     plural: 'Logo Carousels',

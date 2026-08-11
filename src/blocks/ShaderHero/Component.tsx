@@ -4,7 +4,10 @@ import dynamic from 'next/dynamic'
 
 import { RichTextContent } from '@/components/cms/RichTextContent'
 import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
-import type { ShaderPresetKey } from '@/components/heros/presets'
+import {
+  DEFAULT_SHADER_PRESET,
+  type ShaderPresetKey,
+} from '@/components/heros/presets'
 import type { ShaderHeroBlock as ShaderHeroBlockProps } from '@/payload-types'
 import { useEffect, useState } from 'react'
 
@@ -48,7 +51,7 @@ export function ShaderHeroBlockComponent(props: ShaderHeroBlockProps) {
       {showCanvas ? (
         <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
           <ShaderBackground
-            preset={(props.preset ?? 'northern-lights-2') as ShaderPresetKey}
+            preset={(props.preset ?? DEFAULT_SHADER_PRESET) as ShaderPresetKey}
           />
         </div>
       ) : null}

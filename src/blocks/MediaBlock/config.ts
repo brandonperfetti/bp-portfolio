@@ -8,6 +8,8 @@ import type { Block } from 'payload'
 export const MediaBlock: Block = {
   slug: 'mediaBlock',
   interfaceName: 'MediaBlock',
+  imageURL: '/images/cms/media-block.svg',
+  imageAltText: 'Line-art preview of the Media block',
   fields: [
     {
       name: 'media',

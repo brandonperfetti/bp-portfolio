@@ -11,6 +11,8 @@ import { link } from '@/fields/link'
 export const FeatureCardGrid: Block = {
   slug: 'featureCardGrid',
   interfaceName: 'FeatureCardGridBlock',
+  imageURL: '/images/cms/feature-card-grid.svg',
+  imageAltText: 'Line-art preview of the Feature Card Grid block',
   labels: {
     singular: 'Feature Card Grid',
     plural: 'Feature Card Grids',
