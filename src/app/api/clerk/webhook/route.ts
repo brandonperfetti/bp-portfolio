@@ -1,7 +1,7 @@
 import { Webhook } from 'svix'
-import { Resend } from 'resend'
 
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
+import { captureContact } from '@/lib/email/captureContact'
 
 /**
  * Clerk → Resend contact sync (§12 email capture; replaces v3
@@ -55,29 +55,10 @@ export async function POST(req: Request) {
     return Response.json({ received: true })
   }
 
-  const apiKey = process.env.RESEND_API_KEY
-  const segmentId = process.env.RESEND_CONTACT_SEGMENT_ID
-  if (!apiKey) {
-    console.warn('[clerk/webhook] RESEND_API_KEY missing; skipping capture')
-    return Response.json({ received: true })
-  }
-
-  const resend = new Resend(apiKey)
-  const { error } = await resend.contacts.create({
-    email,
-    firstName,
-    lastName,
-    ...(segmentId ? { segments: [{ id: segmentId }] } : {}),
-  })
-
-  if (error) {
-    console.error('[clerk/webhook] Resend contact sync failed', {
-      name: error.name,
-      message: error.message.slice(0, 300),
-    })
-    // 200 anyway: Clerk retries are not useful for a bad Resend config, and
-    // a duplicate-contact error on webhook redelivery is expected noise.
-  }
+  // captureContact logs + swallows every failure, so this always 200s:
+  // Clerk retries are not useful for a bad Resend config, and a
+  // duplicate-contact error on webhook redelivery is expected noise.
+  await captureContact({ email, firstName, lastName })
 
   return Response.json({ received: true })
 }

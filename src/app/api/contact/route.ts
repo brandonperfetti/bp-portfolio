@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import * as z from 'zod'
 
+import { captureContact } from '@/lib/email/captureContact'
 import {
   getRequestClientIp,
   getSecurityLimits,
@@ -15,6 +16,9 @@ const bodySchema = z.object({
   email: z.string().trim().email().max(320),
   subject: z.string().trim().min(1).max(300),
   message: z.string().trim().min(1).max(5000),
+  // Explicit mailing-list opt-in (unchecked by default in the UI) — never
+  // capture a contact-form sender without this.
+  subscribe: z.boolean().optional(),
 })
 
 /** Minimal HTML entity escape for user-supplied strings in the email body. */
@@ -101,7 +105,7 @@ export async function POST(req: Request) {
       { status: 400 },
     )
   }
-  const { fullname, email, subject, message } = parsed.data
+  const { fullname, email, subject, message, subscribe } = parsed.data
 
   const to = process.env.CONTACT_TO_EMAIL ?? 'brandon@brandonperfetti.com'
   const from = process.env.CONTACT_FROM_EMAIL ?? 'info@brandonperfetti.com'
@@ -125,6 +129,18 @@ export async function POST(req: Request) {
       { message: 'Failed to send email.', error: error.message },
       { status: 500 },
     )
+  }
+
+  // Consent-gated capture, only after the message actually delivered —
+  // captureContact swallows its own failures, so a capture hiccup never
+  // turns a delivered message into a user-facing error.
+  if (subscribe) {
+    const [firstName, ...rest] = fullname.split(/\s+/)
+    await captureContact({
+      email,
+      firstName,
+      lastName: rest.join(' ') || undefined,
+    })
   }
 
   return NextResponse.json({ message: 'Email sent successfully.' })

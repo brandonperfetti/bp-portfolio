@@ -12,6 +12,10 @@
 /* shadcn/ui design tokens (zinc base). Light values on :root, dark values on
  * .dark — parity in both themes is an acceptance criterion. */
 :root {
+  /* Drives native UI (scrollbars, form controls) AND Clerk's default
+   * theme, whose dark mode keys off color-scheme — this is what makes
+   * Clerk components follow the site's next-themes toggle with no JS. */
+  color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
   --card: oklch(1 0 0);
@@ -35,6 +39,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.21 0.006 285.885);

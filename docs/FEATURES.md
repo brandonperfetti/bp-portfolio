@@ -44,7 +44,8 @@
 ## Contact & newsletter
 
 - `/api/contact` POST delivers contact-form email via Resend (migrated from
-  SendGrid + renamed from `/api/sendgrid` 2026-08-10). Clerk webhook
+  SendGrid + renamed from `/api/sendgrid` 2026-08-10), with an explicit
+  unchecked-by-default mailing-list opt-in checkbox. Clerk webhook
   (`/api/clerk/webhook`, svix verified) captures sign-up emails as Resend
   contacts.
 

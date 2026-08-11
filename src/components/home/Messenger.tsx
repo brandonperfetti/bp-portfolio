@@ -11,6 +11,9 @@ export function Messenger() {
   const [email, setEmail] = useState('')
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
+  // Mailing-list opt-in — deliberately unchecked by default (explicit
+  // consent only; the server ignores captures without this flag).
+  const [subscribe, setSubscribe] = useState(false)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [feedback, setFeedback] = useState('')
@@ -37,6 +40,7 @@ export function Messenger() {
           email,
           subject,
           message,
+          subscribe,
           ...(turnstileToken ? { turnstileToken } : {}),
         }),
       })
@@ -52,6 +56,7 @@ export function Messenger() {
         setEmail('')
         setSubject('')
         setMessage('')
+        setSubscribe(false)
       }
     } catch {
       setStatus('error')
@@ -112,6 +117,17 @@ export function Messenger() {
           />
         </div>
       </div>
+      <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+        <input
+          type="checkbox"
+          checked={subscribe}
+          onChange={(event) => setSubscribe(event.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-zinc-300 accent-teal-700 dark:border-zinc-600"
+        />
+        <span>
+          Keep me posted when new articles are published. Unsubscribe anytime.
+        </span>
+      </label>
       {/* Turnstile mount point — empty unless Cloudflare escalates to an
           interactive challenge, so it costs no layout otherwise. */}
       <div ref={turnstileRef} className="empty:hidden [&:not(:empty)]:py-2" />
