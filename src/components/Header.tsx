@@ -13,6 +13,7 @@ import {
 } from '@headlessui/react'
 import clsx from 'clsx'
 
+import { HeaderUserButton } from '@/components/auth/HeaderUserButton'
 import { Container } from '@/components/Container'
 import { CommandPalette } from '@/components/search/CommandPalette'
 import type { CmsNavigationItem } from '@/lib/cms/types'
@@ -293,8 +294,16 @@ function Avatar({
  */
 export function Header({
   navigationItems = DEFAULT_NAV_ITEMS,
+  showUserButton = false,
 }: {
   navigationItems?: NavigationItem[]
+  /**
+   * Whether to mount the signed-in account chip. Threaded from the server
+   * (`isClerkEnabled()`) because Clerk components require the provider that
+   * AuthProvider omits in keys-off environments — when false, the header
+   * renders byte-identical to the pre-auth design.
+   */
+  showUserButton?: boolean
 }) {
   const isHomePage = usePathname() === '/'
 
@@ -486,6 +495,7 @@ export function Header({
                 <div className="pointer-events-auto flex items-center gap-2 md:gap-3">
                   <CommandPalette />
                   <ThemeToggle />
+                  {showUserButton && <HeaderUserButton />}
                 </div>
               </div>
             </div>

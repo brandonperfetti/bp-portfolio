@@ -6,6 +6,11 @@
   convention), wrapped by `isClerkEnabled()` so missing keys never break
   boot. `<ClerkProvider>` mounts in the frontend layout under the same gate.
 - Routes: `/sign-in`, `/sign-up` (catch-all Clerk components), `/account`.
+- Header shows a signed-in-only `UserButton` chip (`HeaderUserButton`,
+  mounted only when `isClerkEnabled()` — anonymous visitors and keys-off
+  environments get the pre-auth header byte-identical). Sign-IN has no
+  persistent header entry by design; gated-article CTAs are the door.
+  "Manage account" navigates to `/account`, the one profile surface.
 - Payload admin auth is **separate** (Payload Users) — Clerk never guards
   `/admin`.
 

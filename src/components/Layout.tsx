@@ -1,5 +1,6 @@
 import { FooterWithNavigation } from '@/components/Footer'
 import { Header } from '@/components/Header'
+import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
 import { getCmsNavigation } from '@/lib/cms/navigationRepo'
 
 export async function Layout({ children }: { children: React.ReactNode }) {
@@ -15,7 +16,10 @@ export async function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
       <div className="relative flex w-full flex-col">
-        <Header navigationItems={navigationItems} />
+        <Header
+          navigationItems={navigationItems}
+          showUserButton={isClerkEnabled()}
+        />
         <main className="flex-auto">{children}</main>
         <FooterWithNavigation navigationItems={navigationItems} />
       </div>
