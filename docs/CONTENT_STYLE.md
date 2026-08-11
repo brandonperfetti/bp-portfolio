@@ -168,36 +168,66 @@ article; never duplicate an SEO title across published articles. Re-run
 this check whenever the headline, slug, intro/positioning, keyword
 targeting, or audience changes after initial publish.
 
-## 9. Cover & media direction
+## 9. Cover & media direction (code-rendered design system)
+
+Covers are **designed, not generated**. Every article cover is a
+code-rendered 16:9 vector composition (2048×1152) built from a shared
+shell plus a per-post motif, assembled by the tooling in
+`tools/covers/`. AI image generation is retired for covers as of
+2026-08 — the five live covers (posts 51–55) define the look.
+
+**The shell (brand constants — never vary):** zinc-950 (`#09090b`)
+ground; one or two radial accent glows in the post's hue; a 64px fine
+grid (`rgba(255,255,255,0.035)`) with a radial mask fade; a vignette;
+film grain via `feTurbulence` (baseFrequency 0.9, 2 octaves, 5% white
+alpha); thin-stroke vector geometry; constellation accents (4px dots +
+plus marks); **no text, ever** — words in covers break at thumbnail
+size and localize poorly.
+
+**Hue map (one accent hue per topic family):** emerald `#34d399`/
+`#0d806a` = databases & infrastructure; violet `#a78bfa`/`#7c3aed` =
+AI & agents; amber `#fbbf24`/`#d97706` = email & messaging; sky
+`#38bdf8`/`#0369a1` = Next.js & frontend architecture; rose `#fb7185`/
+`#be123c` = CMS & content engineering. New topic family → claim a new
+Tailwind-400/700 pair here before designing. One hue per cover;
+neutral zinc/white carries everything that isn't the accent.
+
+**Composition archetypes (the variety engine):** journey (dim legacy
+left → bright destination right), central monolith (one structure
+fills the frame), scatter-to-order (chaos funneled into structure),
+orbit/radial (elements circling a core), vertical ascent, macro
+close-up (one object, huge), cutaway/cross-section, symmetric
+face-off. **No archetype may repeat within the last 4 covers.**
+Reference set: 51 scatter-to-order, 52 central monolith, 53 journey,
+54 journey-through-portal, 55 pipeline/journey.
+
+**Distinctiveness gate (hard, pre-upload):** render the candidate into
+a thumbnail contact sheet beside the 5 most recent covers at index-card
+size. It must differ from every neighbor in silhouette or archetype —
+hue difference alone does not pass. If it reads as "same image, new
+color," redesign the motif before uploading.
+
+**Pipeline:** author the motif in `tools/covers/cover-{postId}.html`
+(inline SVG over the shared `base.css` shell) → `node render.mjs
+cover-NN` for the review PNG → get human approval → `python3
+assemble.py NN` to emit the standalone SVG (per-post glows live in its
+`GLOWS` dict) → minify + base64 → upload to Cloudinary as a data URI
+with `format: "png"` (server-side rasterization; SVG must be
+well-formed XML — no duplicate attributes) → verify the delivered PNG
+visually → ingest into Payload → set `heroImage` + `meta.image`.
+Cloudinary is the renderer of record; Playwright renders are the
+review proxy.
 
 **Folder map (Cloudinary, canonical):** articles →
 `bp-portfolio/images/articles/{slug}/`; X posts →
 `.../x-posts/{slug-or-id}/`; LinkedIn →
 `.../linkedin-posts/{slug-or-id}/`; other long-form →
-`.../long-form/{slug}/`. Cover variants `cover-a/b/c`; inline
-`inline-{topic}-{n}`; social `social-a/b/c`. No ad-hoc paths — extend
-the map deliberately instead.
+`.../long-form/{slug}/`. Design-system covers use the `cover-a/b/c`
+variant slots (backfills take the next free letter). No ad-hoc paths.
 
-**Art direction vocabulary** (from the retired cover-control fields —
-now prompt inputs, not database columns): style profiles _Editorial
-Realistic_, _Technical Minimal_, _Studio Photoreal_; scene archetypes
-_Conceptual System_, _Abstract Workflow_, _Workbench_,
-_Architectural/Infra_, _Human Moment_; plus a short mood hint (e.g.
-"focused debugging tension, eventual clarity"). Rotate archetypes across
-articles — don't let every cover converge to a workstation scene — and
-avoid micro-scene/diorama compositions.
-
-**Prompt quality:** every cover prompt names a subject tied to the
-thesis, a style and mood, composition guidance (16:9), and negative
-constraints against rendered text/logo artifacts. Anti-patterns: vague
-subjectless prompts, prompts unrelated to the topic, near-duplicate
-variants.
-
-**Eligibility & retries:** a candidate wins only if it has no text
-artifacts, obvious topic relevance at a glance, cover-worthy
-composition, and production-usable quality. If no candidate is eligible,
-regenerate the full set with tightened negative constraints — max 3
-total attempts, then stop and get a human.
+**Alt text:** describes the motif _as the thesis_, not as decoration —
+"an oversized mail machine narrows into a single glowing line," not
+"abstract illustration."
 
 **Inline images:** default zero. Add 1–3 only for architecture/data-flow
 explanation, visual tool comparison, or screenshot-worthy tutorial

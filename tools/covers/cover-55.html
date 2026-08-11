@@ -1,0 +1,338 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: violet (AI / agents) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 60% 45%,
+            rgba(109, 40, 217, 0.26),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 28% 78%,
+            rgba(109, 40, 217, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <linearGradient id="traceGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#52525b" />
+            <stop offset="0.5" stop-color="#7c3aed" />
+            <stop offset="1" stop-color="#a78bfa" />
+          </linearGradient>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="340" cy="180" r="4" />
+          <circle cx="1800" cy="220" r="4" />
+          <circle cx="1700" cy="960" r="4" />
+          <circle cx="200" cy="880" r="4" />
+        </g>
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
+          <path d="M 1560 150 h 26 M 1573 137 v 26" />
+          <path d="M 130 380 h 24 M 142 368 v 24" />
+          <path d="M 1930 620 h 24 M 1942 608 v 24" />
+        </g>
+
+        <!-- ===== the rotting runbook (left): pages stacked, prose fading ===== -->
+        <g transform="translate(430,560)">
+          <!-- back sheets, fanned -->
+          <rect
+            x="-190"
+            y="-252"
+            width="340"
+            height="480"
+            rx="22"
+            transform="rotate(-6)"
+            fill="rgba(255,255,255,0.02)"
+            stroke="rgba(255,255,255,0.14)"
+            stroke-width="3"
+          />
+          <rect
+            x="-178"
+            y="-248"
+            width="340"
+            height="480"
+            rx="22"
+            transform="rotate(-2.5)"
+            fill="rgba(255,255,255,0.02)"
+            stroke="rgba(255,255,255,0.20)"
+            stroke-width="3"
+          />
+          <!-- front page -->
+          <g>
+            <rect
+              x="-166"
+              y="-240"
+              width="340"
+              height="480"
+              rx="22"
+              fill="rgba(9,9,11,0.85)"
+              stroke="rgba(255,255,255,0.38)"
+              stroke-width="3.5"
+            />
+            <path
+              d="M 110 -240 L 174 -176 L 110 -176 Z"
+              fill="rgba(255,255,255,0.10)"
+              stroke="rgba(255,255,255,0.38)"
+              stroke-width="3.5"
+              stroke-linejoin="round"
+            />
+            <g stroke-linecap="round">
+              <line
+                x1="-116"
+                y1="-168"
+                x2="120"
+                y2="-168"
+                stroke="rgba(255,255,255,0.42)"
+                stroke-width="8"
+              />
+              <line
+                x1="-116"
+                y1="-116"
+                x2="80"
+                y2="-116"
+                stroke="rgba(255,255,255,0.34)"
+                stroke-width="8"
+              />
+              <line
+                x1="-116"
+                y1="-64"
+                x2="120"
+                y2="-64"
+                stroke="rgba(255,255,255,0.26)"
+                stroke-width="8"
+              />
+              <line
+                x1="-116"
+                y1="-12"
+                x2="56"
+                y2="-12"
+                stroke="rgba(255,255,255,0.18)"
+                stroke-width="8"
+              />
+              <line
+                x1="-116"
+                y1="40"
+                x2="98"
+                y2="40"
+                stroke="rgba(255,255,255,0.12)"
+                stroke-width="8"
+              />
+              <line
+                x1="-116"
+                y1="92"
+                x2="40"
+                y2="92"
+                stroke="rgba(255,255,255,0.07)"
+                stroke-width="8"
+              />
+              <line
+                x1="-116"
+                y1="144"
+                x2="84"
+                y2="144"
+                stroke="rgba(255,255,255,0.04)"
+                stroke-width="8"
+              />
+            </g>
+          </g>
+        </g>
+
+        <!-- ===== circuit traces: prose becomes wiring (Manhattan routing with vias) ===== -->
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path
+            d="M 616 392 H 780 Q 800 392 800 412 V 500 Q 800 520 820 520 H 1006"
+            stroke="url(#traceGrad)"
+            stroke-width="5"
+          />
+          <path
+            d="M 616 444 H 730 Q 750 444 750 464 V 556 Q 750 576 770 576 H 1006"
+            stroke="url(#traceGrad)"
+            stroke-width="5"
+            opacity="0.85"
+          />
+          <path
+            d="M 616 496 H 690 Q 710 496 710 516 V 612 Q 710 632 730 632 H 1006"
+            stroke="url(#traceGrad)"
+            stroke-width="5"
+            opacity="0.65"
+          />
+        </g>
+        <!-- vias at the corners -->
+        <g fill="#a78bfa">
+          <circle cx="800" cy="412" r="6" />
+          <circle cx="750" cy="464" r="6" />
+          <circle cx="710" cy="516" r="6" />
+        </g>
+
+        <!-- ===== the skill chip (center-right): hexagonal core with gate pins ===== -->
+        <g transform="translate(1180,576)">
+          <!-- chip body: hexagon -->
+          <path
+            d="M 0 -150 L 130 -75 L 130 75 L 0 150 L -130 75 L -130 -75 Z"
+            fill="rgba(109,40,217,0.12)"
+            stroke="#a78bfa"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
+          <path
+            d="M 0 -104 L 90 -52 L 90 52 L 0 104 L -90 52 L -90 -52 Z"
+            fill="none"
+            stroke="rgba(167,139,250,0.35)"
+            stroke-width="3"
+          />
+          <!-- core -->
+          <circle
+            r="30"
+            fill="rgba(124,58,237,0.35)"
+            stroke="#a78bfa"
+            stroke-width="4"
+          />
+          <circle r="10" fill="#a78bfa" />
+          <!-- input pins (left edge) -->
+          <g
+            stroke="rgba(167,139,250,0.8)"
+            stroke-width="5"
+            stroke-linecap="round"
+          >
+            <line x1="-174" y1="-56" x2="-134" y2="-56" />
+            <line x1="-174" y1="0" x2="-134" y2="0" />
+            <line x1="-174" y1="56" x2="-134" y2="56" />
+          </g>
+        </g>
+
+        <!-- ===== output: one disciplined beam through two gates to a verified terminal ===== -->
+        <path
+          d="M 1314 576 H 1868"
+          stroke="rgba(167,139,250,0.4)"
+          stroke-width="4.5"
+          fill="none"
+        />
+        <!-- gate 1 (sign-off): bright, break in the bar -->
+        <g transform="translate(1470,576)" filter="url(#accentGlow)">
+          <line
+            x1="0"
+            y1="-84"
+            x2="0"
+            y2="-26"
+            stroke="#a78bfa"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
+          <line
+            x1="0"
+            y1="26"
+            x2="0"
+            y2="84"
+            stroke="#a78bfa"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
+          <circle r="12" fill="#a78bfa" />
+        </g>
+        <!-- gate 2 -->
+        <g transform="translate(1650,576)">
+          <line
+            x1="0"
+            y1="-84"
+            x2="0"
+            y2="-26"
+            stroke="rgba(167,139,250,0.65)"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
+          <line
+            x1="0"
+            y1="26"
+            x2="0"
+            y2="84"
+            stroke="rgba(167,139,250,0.65)"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
+          <circle r="9" fill="rgba(167,139,250,0.65)" />
+        </g>
+        <!-- verified terminal -->
+        <g transform="translate(1868,576)" filter="url(#accentGlow)">
+          <circle
+            r="32"
+            fill="rgba(109,40,217,0.18)"
+            stroke="#a78bfa"
+            stroke-width="5"
+          />
+          <circle r="11" fill="#a78bfa" />
+          <circle
+            r="54"
+            fill="none"
+            stroke="rgba(167,139,250,0.22)"
+            stroke-width="3"
+          />
+        </g>
+        <!-- packet on the beam -->
+        <circle
+          cx="1560"
+          cy="576"
+          r="8"
+          fill="#a78bfa"
+          filter="url(#accentGlow)"
+        />
+
+        <!-- faint dotted loop: the skill feeds the next engagement -->
+        <path
+          d="M 1868 664 C 1760 900, 820 920, 470 830"
+          fill="none"
+          stroke="rgba(255,255,255,0.12)"
+          stroke-width="3"
+          stroke-dasharray="3 14"
+          stroke-linecap="round"
+        />
+
+        <!-- ground shadows -->
+        <ellipse cx="430" cy="864" rx="220" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse
+          cx="1180"
+          cy="770"
+          rx="200"
+          ry="20"
+          fill="rgba(109,40,217,0.12)"
+        />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>
