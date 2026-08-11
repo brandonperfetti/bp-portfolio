@@ -24,6 +24,19 @@
   Drizzle tables are never network-exposed; re-check this on the
   production project at promotion. Blob store `bp-portfolio-media`
   is public-read.
+- **Database backups (nightly, encrypted)**: Supabase free tier has NO
+  automated backups, and the DB is the canonical copy of all content —
+  `.github/workflows/db-backup.yml` runs a nightly `pg_dump` (session
+  pooler, pg17 client) at 09:17 UTC, encrypts with AES-256
+  (`BACKUP_PASSPHRASE` secret), and uploads a 14-day-retention Actions
+  artifact. Repo is PUBLIC, so the plaintext dump must never be uploaded
+  — encryption is load-bearing, not optional. Secrets: `SUPABASE_DB_URL`
+  (session-mode string, copied whole) + `BACKUP_PASSPHRASE` (also kept in
+  the password manager — losing it makes every backup unreadable).
+  Restore commands are in the workflow header. Watch for GitHub's
+  60-days-of-repo-inactivity cron disable; re-enable from the Actions
+  tab if it trips. Revisit at promotion: production project should get
+  this same workflow (new secrets) or Pro-plan backups.
 - **Email deliverability (Resend domain auth)**: brandonperfetti.com is
   verified in Resend (us-east-1 — co-located with the iad1 functions,
   same logic as Upstash) via DNS records at Hover: an MX + SPF TXT on the

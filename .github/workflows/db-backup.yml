@@ -1,0 +1,82 @@
+# Nightly encrypted Postgres backup (Supabase free tier has no automated
+# backups; this is the off-platform copy).
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL    — SESSION-mode pooler connection string (port 5432,
+#                        username postgres.<project-ref>). Copy it whole from
+#                        the Supabase Connect dialog — never hand-assemble.
+#   BACKUP_PASSPHRASE  — symmetric encryption key (e.g. `openssl rand -hex 32`).
+#                        Keep a copy in the password manager: without it the
+#                        backups are unreadable.
+#
+# Restore (locally):
+#   openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+#     -in db-YYYY-MM-DD.dump.enc -out db.dump -pass env:BACKUP_PASSPHRASE
+#   pg_restore --clean --if-exists --no-owner --no-privileges \
+#     -d "$TARGET_DB_URL" db.dump
+#
+# Notes:
+# - This repo is public: dumps contain drafts, gated content, and contact
+#   emails, so the artifact MUST stay encrypted. Never upload the plaintext.
+# - pg_dump major version must match the server (Postgres 17), hence the
+#   PGDG client install.
+# - GitHub disables cron workflows after 60 days without repo activity;
+#   the run-summary line makes silent failure visible in the Actions tab.
+
+name: db-backup
+
+on:
+  schedule:
+    - cron: '17 9 * * *' # daily 09:17 UTC (~02:17 PT)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Install postgresql-client-17 (matches server 17.6)
+        run: |
+          set -euo pipefail
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo tee /etc/apt/trusted.gpg.d/pgdg.asc > /dev/null
+          echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Dump database
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_DB_URL" || { echo "::error::SUPABASE_DB_URL secret is not set"; exit 1; }
+          pg_dump "$SUPABASE_DB_URL" -Fc --no-owner --no-privileges -f db.dump
+          # sanity: an empty/failed dump is worse than a loud failure
+          size=$(stat -c%s db.dump)
+          echo "dump size: ${size} bytes"
+          test "$size" -gt 100000 || { echo "::error::dump suspiciously small (${size} bytes)"; exit 1; }
+
+      - name: Encrypt dump
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          test -n "$BACKUP_PASSPHRASE" || { echo "::error::BACKUP_PASSPHRASE secret is not set"; exit 1; }
+          stamp=$(date -u +%Y-%m-%d)
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
+            -in db.dump -out "db-${stamp}.dump.enc" -pass env:BACKUP_PASSPHRASE
+          shred -u db.dump
+          echo "ARTIFACT_FILE=db-${stamp}.dump.enc" >> "$GITHUB_ENV"
+          echo "Encrypted backup: db-${stamp}.dump.enc ($(stat -c%s "db-${stamp}.dump.enc") bytes)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload encrypted artifact (14-day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_FILE }}
+          path: ${{ env.ARTIFACT_FILE }}
+          retention-days: 14
+          if-no-files-found: error
