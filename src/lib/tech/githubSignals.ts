@@ -1,4 +1,5 @@
 import { unstable_cache } from 'next/cache'
+import { draftMode } from 'next/headers'
 
 import {
   coerceTechKey,
@@ -32,17 +33,55 @@ export type TechSignalsIndex = {
 const SIGNALS_REVALIDATE_SECONDS = 6 * 60 * 60
 
 /**
+ * Wall-clock cap on one owner-wide scan.
+ *
+ * Deliberately generous: a healthy cold scan is measured at ~15–17s (the whole
+ * point of the 6h cache), so this is a circuit breaker for a stalled or
+ * rate-limited GitHub — the per-request 30s timeout and 3 retries inside
+ * `collectGithubTechSignals` otherwise compound across repos into minutes.
+ * A "several seconds" cap would fire on every legitimate cold hit and, given
+ * the caching semantics below, permanently blank the badges.
+ */
+const SCAN_TIMEOUT_MS = 25_000
+
+/**
+ * Resolves with the scan result, or `null` once `ms` elapses.
+ *
+ * @remarks The losing scan keeps running to completion in the background; its
+ * result is discarded and its rejection pre-handled so a post-race failure
+ * can't surface as an unhandled rejection.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  promise.catch(() => {})
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), ms)
+    }),
+  ]).finally(() => clearTimeout(timer))
+}
+
+/**
  * Owner-wide GitHub tech signals, cached for six hours per deployment.
  *
  * Wraps `collectGithubTechSignals` (ported verbatim from v3) and converts its
  * `Set`-bearing entries into plain serializable objects so the result
  * survives `unstable_cache`'s JSON round-trip.
  *
+ * @remarks A timeout returns `null` *inside* the cache scope, so the
+ * badge-less result is cached for the full 6h window rather than re-running a
+ * 25s scan on every subsequent request. This is deliberate and matches how
+ * rate limits already degrade (`catch {}` → `null`): when GitHub is unwell,
+ * one slow request per 6h is the price, and badges are cosmetic. Bypassing the
+ * cache instead (by throwing) would leave a wedged GitHub able to charge every
+ * visitor 25s — the failure this guard exists to prevent.
+ *
  * @returns `null` when the scan is unconfigured (missing `GITHUB_OWNER` /
- * `GITHUB_TOKEN`) or produced no signals — pages render without badges rather
- * than failing. Scan errors degrade the same way.
+ * `GITHUB_TOKEN`), timed out, or produced no signals — pages render without
+ * badges rather than failing. Scan errors degrade the same way.
  */
-export const getTechSignalsIndex = unstable_cache(
+const getCachedTechSignalsIndex = unstable_cache(
   async (): Promise<TechSignalsIndex | null> => {
     if (
       !process.env.GITHUB_OWNER?.trim() ||
@@ -52,8 +91,11 @@ export const getTechSignalsIndex = unstable_cache(
     }
 
     try {
-      const result = await collectGithubTechSignals()
-      if (!result.signals.length) {
+      const result = await withTimeout(
+        collectGithubTechSignals(),
+        SCAN_TIMEOUT_MS,
+      )
+      if (!result?.signals.length) {
         return null
       }
 
@@ -84,6 +126,34 @@ export const getTechSignalsIndex = unstable_cache(
   ['github-tech-signals'],
   { revalidate: SIGNALS_REVALIDATE_SECONDS, tags: ['tech-signals'] },
 )
+
+/**
+ * Request-scoped entry point for the cached scan.
+ *
+ * @remarks Draft mode (Payload admin live preview) opts the whole request out
+ * of Next's data cache, so every draft-session request would re-run the live
+ * owner-wide scan — measured at 15–17s server-side on `/tech` versus 0.4–1.1s
+ * for comparable routes. Draft sessions therefore skip the scan entirely and
+ * render without activity badges; the badges are a cosmetic overlay on CMS
+ * content, and previewing CMS content is what draft mode is for. Anonymous
+ * and production traffic is unaffected.
+ *
+ * The check has to live in this uncached wrapper rather than in the cached
+ * callback: dynamic APIs read inside a cache scope are unreliable (in Next
+ * 16.3 `draftMode()` there resolves against the enclosing store and can hand
+ * back an empty draft mode), and by then the request has already entered the
+ * scope that draft mode bypasses — i.e. already paid for the scan.
+ *
+ * @returns `null` in draft mode, otherwise the cached scan result (itself
+ * `null` when unconfigured, timed out, or empty).
+ */
+export async function getTechSignalsIndex(): Promise<TechSignalsIndex | null> {
+  const { isEnabled: draft } = await draftMode()
+  if (draft) {
+    return null
+  }
+  return getCachedTechSignalsIndex()
+}
 
 /**
  * Display-name → scan-key aliases the generic canonicalization can't derive.

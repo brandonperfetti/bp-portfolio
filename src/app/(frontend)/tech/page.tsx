@@ -421,8 +421,10 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function TechStack() {
   const page = await getCmsPageByPath('/tech')
   const cmsTech = await getCmsTech()
-  // Live GitHub signals (cached 6h); null when GITHUB_OWNER/TOKEN are unset
-  // so the explorer renders without activity badges instead of failing.
+  // Live GitHub signals (cached 6h); null when GITHUB_OWNER/TOKEN are unset,
+  // when the scan times out, or in draft mode (which bypasses the cache and
+  // would re-run the full scan per request) — the explorer then renders
+  // without activity badges instead of failing or stalling.
   const signalsIndex = await getTechSignalsIndex()
   // Normalize legacy tech names into URL-safe slugs: trim/lowercase, strip
   // non-alphanumeric chars (except spaces/hyphens), then collapse to hyphens.
