@@ -53,10 +53,16 @@ const COLUMN_ELIGIBLE_BLOCK_DIRS: Record<string, string> = {
 
 /**
  * The five blocks W1B5 left behind (#40's residual), plus every block added
- * since — all of which take their outer margin from the host.
+ * or rebuilt since — all of which take their outer margin from the host.
+ *
+ * `shaderHero` is here despite never being column-eligible: #39 rebuilt it on
+ * the hero card presentation and it now reads its rhythm from the host like
+ * every other leaf, which leaves no hard-coded `my-12` anywhere in the block
+ * library.
  */
 const RHYTHM_CONVERTED_BLOCKS = [
   'src/blocks/CallToAction/Component.tsx',
+  'src/blocks/ShaderHero/Component.tsx',
   'src/blocks/FaqList/Component.tsx',
   'src/blocks/Heading/Component.tsx',
   'src/blocks/Image/ImageView.tsx',

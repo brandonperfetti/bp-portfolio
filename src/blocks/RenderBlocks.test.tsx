@@ -322,6 +322,60 @@ describe('RenderBlocks host context', () => {
     expect(column).toHaveClass('space-y-10')
   })
 
+  /**
+   * #40's last slice: the three zero-config cards gained a heading and an
+   * intro, which only matter if the dispatcher actually hands the stored
+   * block to them — it used to pass `hosted` and nothing else.
+   */
+  it('passes the zero-config cards their stored heading and intro', () => {
+    const { container } = render(
+      <RenderBlocks
+        blocks={
+          [
+            {
+              blockType: 'newsletterSignup',
+              id: 'signup',
+              heading: 'Stay in the loop',
+              intro: 'Occasional notes on building software.',
+            },
+            {
+              blockType: 'contactForm',
+              id: 'contact',
+              heading: 'Say hello',
+            },
+          ] as unknown as LayoutBlock[]
+        }
+      />,
+    )
+
+    expect(
+      screen.getByRole('heading', { name: 'Stay in the loop' }).tagName,
+    ).toBe('H2')
+    expect(
+      screen.getByText('Occasional notes on building software.').tagName,
+    ).toBe('P')
+    expect(screen.getByRole('heading', { name: 'Say hello' })).toBeVisible()
+    // Chrome sits above the card, inside the block's own section.
+    for (const header of container.querySelectorAll('section > header')) {
+      expect(header).toHaveClass('mb-8')
+    }
+  })
+
+  it('leaves a stored card with no chrome exactly as it was', () => {
+    const { container } = render(
+      <RenderBlocks
+        blocks={
+          [
+            { blockType: 'newsletterSignup', id: 'signup' },
+          ] as unknown as LayoutBlock[]
+        }
+      />,
+    )
+
+    expect(container.querySelector('section > header')).toBeNull()
+    expect(container.querySelector('section')?.children).toHaveLength(1)
+  })
+
   it('counts grid columns off the block container, not the viewport', () => {
     const { container } = render(<RenderBlocks blocks={HOSTED_LEAVES} />)
     const grid = container.querySelector('ul[role="list"]')

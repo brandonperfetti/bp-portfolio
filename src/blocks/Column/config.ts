@@ -29,7 +29,13 @@ import { COLUMN_SIZE_OPTIONS, DEFAULT_COLUMN_SIZE } from '@/blocks/Column/sizes'
  * - `content` — the legacy rich-text block carries its own column array, so
  *   allowing it here means columns inside columns.
  * - `shaderHero` — hero-scale by construction (full-bleed animated panel);
- *   it stays a root-level block.
+ *   it stays a root-level block. Deprecated as of #39 on top of that, which
+ *   settles the question rather than reopening it: the block was never in
+ *   this list, and a block whose picker label reads "legacy" must not be
+ *   offered for *new* column content. Removing it here would have been a
+ *   no-op; leaving it out is the decision, and `COLUMN_EXCLUDED_BLOCK_SLUGS`
+ *   plus `config.test.ts` are what keep it out. Stored root-level
+ *   `shaderHero` blocks are untouched and keep rendering.
  *
  * @remarks Listed explicitly rather than filtered from `pageBuilderBlocks`
  * on purpose: `library.ts` imports the container, which imports this file,

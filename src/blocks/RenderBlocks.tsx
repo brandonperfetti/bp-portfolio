@@ -108,7 +108,9 @@ export function RenderBlocks({
           case 'prose':
             return <ProseBlockComponent key={key} {...block} hosted={hosted} />
           case 'shaderHero':
-            return <ShaderHeroBlockComponent key={key} {...block} />
+            return (
+              <ShaderHeroBlockComponent key={key} {...block} hosted={hosted} />
+            )
           case 'spacer':
             return <SpacerBlockComponent key={key} {...block} />
           case 'articlesArchive':
@@ -116,11 +118,13 @@ export function RenderBlocks({
               <ArticlesArchiveComponent key={key} {...block} hosted={hosted} />
             )
           case 'contactForm':
-            return <ContactFormComponent key={key} hosted={hosted} />
+            return <ContactFormComponent key={key} {...block} hosted={hosted} />
           case 'faqList':
             return <FaqListComponent key={key} {...block} hosted={hosted} />
           case 'newsletterSignup':
-            return <NewsletterSignupComponent key={key} hosted={hosted} />
+            return (
+              <NewsletterSignupComponent key={key} {...block} hosted={hosted} />
+            )
           case 'stats':
             return <StatsComponent key={key} {...block} hosted={hosted} />
           case 'testimonials':
@@ -134,7 +138,9 @@ export function RenderBlocks({
           case 'videoEmbed':
             return <VideoEmbedComponent key={key} {...block} hosted={hosted} />
           case 'workHistoryCard':
-            return <WorkHistoryCardComponent key={key} hosted={hosted} />
+            return (
+              <WorkHistoryCardComponent key={key} {...block} hosted={hosted} />
+            )
           default: {
             if (process.env.NODE_ENV !== 'production') {
               // `block` is `never` here (the switch is exhaustive over the

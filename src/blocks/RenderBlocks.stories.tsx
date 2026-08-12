@@ -470,3 +470,93 @@ export const ContainerColumns: Story = {
     await expect(rail).toHaveClass('col-span-12', 'lg:col-span-4')
   },
 }
+
+/**
+ * The three zero-config cards after #40: an optional heading and intro above
+ * the card, rendered identically wherever the block is hosted.
+ *
+ * @remarks `workHistoryCard` is a server block (it reads the work-history
+ * collection), so Storybook aliases it to a stub — its chrome is covered in
+ * `cardChrome.test.tsx` beside the other two. The pair shown here is the
+ * whole visual surface: `CardChromeHeader` is one component for all three.
+ */
+export const ZeroConfigCardChrome: Story = {
+  args: {
+    blocks: [
+      {
+        blockType: 'contactForm',
+        id: 'contact',
+        heading: 'Say hello',
+        intro: 'Tell me about the project. I answer every message myself.',
+      },
+      {
+        blockType: 'newsletterSignup',
+        id: 'signup',
+        heading: 'Stay in the loop',
+      },
+      // The third card is the guarantee, not a feature: a block stored before
+      // #40 has neither field and must render exactly what it always did.
+      { blockType: 'newsletterSignup', id: 'bare' },
+    ] as unknown as LayoutBlock[],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const [withBoth, headingOnly, bare] = Array.from(
+      canvasElement.querySelectorAll('section'),
+    )
+
+    await expect(
+      canvas.getByRole('heading', { name: 'Say hello' }),
+    ).toBeVisible()
+    await expect(
+      canvas.getByText(/I answer every message myself/).tagName,
+    ).toBe('P')
+
+    // Chrome sits inside the block's own section, above the card, at the same
+    // 32px gap the other heading-bearing blocks use.
+    const header = withBoth.querySelector(':scope > header') as HTMLElement
+    await expect(header.nextElementSibling).not.toBeNull()
+    await expect(getComputedStyle(header).marginBottom).toBe('32px')
+
+    // An intro is optional on its own (the card below has its own copy, so
+    // this looks at the chrome header and nothing else).
+    await expect(headingOnly.querySelector(':scope > header p')).toBeNull()
+    await expect(headingOnly.querySelector(':scope > header h2')).not.toBeNull()
+
+    // And with neither field, nothing at all — no header, no wrapper.
+    await expect(bare.querySelector(':scope > header')).toBeNull()
+    await expect(bare.children).toHaveLength(1)
+  },
+}
+
+/**
+ * The same chrome inside a column: the heading spans the width the editor
+ * picked (the card drops `max-w-xl` there), and the gap between chrome and
+ * card is unchanged — it is a margin *inside* the block, so the column's
+ * `space-y-*` never sees it.
+ */
+export const ZeroConfigCardChromeInAColumn: Story = {
+  args: {
+    blocks: [
+      {
+        blockType: 'contactForm',
+        id: 'contact',
+        heading: 'Say hello',
+        intro: 'Tell me about the project. I answer every message myself.',
+      },
+    ] as unknown as LayoutBlock[],
+    hosted: 'column',
+  },
+  play: async ({ canvasElement }) => {
+    const section = canvasElement.querySelector('section') as HTMLElement
+    const header = section.querySelector(':scope > header') as HTMLElement
+
+    await expect(section).toHaveClass('max-w-none')
+    await expect(section).not.toHaveClass('my-12')
+    await expect(getComputedStyle(header).marginBottom).toBe('32px')
+    // The heading fills the column, rather than stopping at a card measure.
+    await expect(Math.round(header.getBoundingClientRect().width)).toBe(
+      Math.round(section.getBoundingClientRect().width),
+    )
+  },
+}

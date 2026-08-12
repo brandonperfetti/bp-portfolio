@@ -467,7 +467,15 @@ export interface CallToActionBlock {
  */
 export interface ContactFormBlock {
   /**
-   * No configuration needed — renders the standard contact form.
+   * Optional section heading rendered above the card.
+   */
+  heading?: string | null;
+  /**
+   * Optional intro line under the heading.
+   */
+  intro?: string | null;
+  /**
+   * Retired placeholder — the form itself needs no configuration.
    */
   note?: string | null;
   id?: string | null;
@@ -761,7 +769,15 @@ export interface MediaBlock {
  */
 export interface NewsletterSignupBlock {
   /**
-   * No configuration needed — renders the standard newsletter card.
+   * Optional section heading rendered above the card.
+   */
+  heading?: string | null;
+  /**
+   * Optional intro line under the heading.
+   */
+  intro?: string | null;
+  /**
+   * Retired placeholder — the signup card itself needs no configuration.
    */
   note?: string | null;
   id?: string | null;
@@ -920,7 +936,15 @@ export interface VideoEmbedBlock {
  */
 export interface WorkHistoryCardBlock {
   /**
-   * No configuration needed — renders the work-history card.
+   * Optional section heading rendered above the card.
+   */
+  heading?: string | null;
+  /**
+   * Optional intro line under the heading.
+   */
+  intro?: string | null;
+  /**
+   * Retired placeholder — the work-history card itself needs no configuration.
    */
   note?: string | null;
   id?: string | null;
@@ -982,6 +1006,9 @@ export interface ContentBlock {
  * via the `definition` "ShaderHeroBlock".
  */
 export interface ShaderHeroBlock {
+  /**
+   * Existing content only. New shader sections belong in the page hero above (Hero type “Shader”, presentation “Card”), which draws this same panel and adds the headline, subtitle, links and social row.
+   */
   preset: 'northern-lights-2' | 'ribbon-flows-4' | 'synthesis-14' | 'drifting-lights-8' | 'static-noise-4';
   richText?: {
     root: {
@@ -1727,6 +1754,8 @@ export interface CallToActionBlockSelect<T extends boolean = true> {
  * via the `definition` "ContactFormBlock_select".
  */
 export interface ContactFormBlockSelect<T extends boolean = true> {
+  heading?: T;
+  intro?: T;
   note?: T;
   id?: T;
   blockName?: T;
@@ -1898,6 +1927,8 @@ export interface MediaBlockSelect<T extends boolean = true> {
  * via the `definition` "NewsletterSignupBlock_select".
  */
 export interface NewsletterSignupBlockSelect<T extends boolean = true> {
+  heading?: T;
+  intro?: T;
   note?: T;
   id?: T;
   blockName?: T;
@@ -1996,6 +2027,8 @@ export interface VideoEmbedBlockSelect<T extends boolean = true> {
  * via the `definition` "WorkHistoryCardBlock_select".
  */
 export interface WorkHistoryCardBlockSelect<T extends boolean = true> {
+  heading?: T;
+  intro?: T;
   note?: T;
   id?: T;
   blockName?: T;
