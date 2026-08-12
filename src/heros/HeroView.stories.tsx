@@ -11,6 +11,30 @@ import {
 } from '@/heros/presentation'
 import type { Page } from '@/payload-types'
 
+/**
+ * Forces `(prefers-reduced-motion: reduce)` for one story, before
+ * `ScrollReveal`'s `useLayoutEffect` reads `matchMedia` — a `beforeEach`, not
+ * a decorator, so the swap lands first. Returns the restore function.
+ */
+const forceReducedMotion = async () => {
+  const original = window.matchMedia
+  window.matchMedia = ((query: string) =>
+    ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList) as typeof window.matchMedia
+
+  return () => {
+    window.matchMedia = original
+  }
+}
+
 const richText = {
   root: {
     type: 'root',
@@ -402,6 +426,68 @@ export const WithSocialLinks: Story = {
           previous.getBoundingClientRect().bottom,
       ),
     ).toBe(24)
+  },
+}
+
+/**
+ * `revealContent: false` (the default): the subtitle and social row render
+ * bare — no `ScrollReveal` wrapper — so they share the content column with
+ * the headline exactly as they did before the control existed.
+ */
+export const RevealContentOff: Story = {
+  args: {
+    page: pageWithoutProse({
+      type: 'none',
+      showSocialLinks: true,
+      revealContent: false,
+    }),
+    socialLinks: identitySocialLinks,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const heading = canvas.getByRole('heading', { level: 1 })
+    const subtitle = canvas.getByText(/Product and project management/)
+    const row = canvasElement.querySelector('header section') as HTMLElement
+
+    // No reveal wrapper: subtitle and social row sit directly beside the
+    // headline in the same content column.
+    await expect(subtitle.parentElement).toBe(heading.parentElement)
+    await expect(row.parentElement?.parentElement).toBe(heading.parentElement)
+  },
+}
+
+/**
+ * `revealContent: true`, under `prefers-reduced-motion`: the homepage's two
+ * `ScrollReveal`s now wrap the subtitle and social row (each on its own
+ * wrapper, no longer a direct sibling of the headline), but the reveal renders
+ * static — both stay visible. On honours reduced motion via the shared
+ * component; off emits no wrapper (see {@link RevealContentOff}).
+ */
+export const RevealContentReducedMotion: Story = {
+  args: {
+    page: pageWithoutProse({
+      type: 'none',
+      showSocialLinks: true,
+      revealContent: true,
+    }),
+    socialLinks: identitySocialLinks,
+  },
+  beforeEach: forceReducedMotion,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const heading = canvas.getByRole('heading', { level: 1 })
+    const subtitle = canvas.getByText(/Product and project management/)
+    const row = canvasElement.querySelector('header section') as HTMLElement
+
+    // Each is wrapped now — its parent is a reveal wrapper, not the shared
+    // content column the headline sits in.
+    await expect(subtitle.parentElement).not.toBe(heading.parentElement)
+    await expect(row.parentElement?.parentElement).not.toBe(
+      heading.parentElement,
+    )
+    // Reduced motion: nothing is left faded out.
+    await expect(Number(getComputedStyle(subtitle).opacity)).toBe(1)
+    await expect(Number(getComputedStyle(row).opacity)).toBe(1)
   },
 }
 

@@ -28,5 +28,32 @@ export const PhotoStrip: Block = {
           'Photos for the parallax strip — about five fills it best. On the Home page this block replaces the default gallery under the hero.',
       },
     },
+    {
+      type: 'row',
+      fields: [
+        {
+          name: 'fullBleed',
+          type: 'checkbox',
+          label: 'Full bleed (edge to edge)',
+          defaultValue: false,
+          admin: {
+            width: '50%',
+            description:
+              'Break the strip out of the reading column to the full viewport width — the homepage gallery placement. Off by default, so the strip stays inside the column like every other block.',
+          },
+        },
+        {
+          name: 'priority',
+          type: 'checkbox',
+          label: 'Load as priority (LCP)',
+          defaultValue: false,
+          admin: {
+            width: '50%',
+            description:
+              'Mark the first photo as the page’s priority image — use only when this strip is the largest thing above the fold (the homepage hero slot). Off by default so it competes with nothing.',
+          },
+        },
+      ],
+    },
   ],
 }

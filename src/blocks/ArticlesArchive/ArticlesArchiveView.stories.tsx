@@ -6,6 +6,30 @@ import {
   ArticlesArchiveView,
 } from '@/blocks/ArticlesArchive/ArticlesArchiveView'
 
+/**
+ * Forces `(prefers-reduced-motion: reduce)` for one story, before
+ * `ScrollReveal`'s `useLayoutEffect` reads `matchMedia` — a `beforeEach`, not
+ * a decorator, so the swap lands first. Returns the restore function.
+ */
+const forceReducedMotion = async () => {
+  const original = window.matchMedia
+  window.matchMedia = ((query: string) =>
+    ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList) as typeof window.matchMedia
+
+  return () => {
+    window.matchMedia = original
+  }
+}
+
 const ARTICLES: ArticleCardItem[] = [
   {
     slug: 'shipping-a-page-builder',
@@ -155,6 +179,48 @@ export const StackedHoverOverlay: Story = {
     await waitFor(async () => {
       await expect(Number(getComputedStyle(overlay).opacity)).toBeGreaterThan(0)
     })
+  },
+}
+
+/**
+ * The stacked list with `revealOnScroll` OFF (the default): no `ScrollReveal`
+ * wrapper in the tree — `section > div` is the list itself. Byte-identical to
+ * the list the block has always rendered.
+ */
+export const StackedRevealOff: Story = {
+  args: { variant: 'stacked', articles: ARTICLES.slice(0, 3) },
+  play: async ({ canvasElement }) => {
+    const list = canvasElement.querySelector('section > div')
+    await expect(list).toHaveClass('flex', 'flex-col', 'gap-16')
+  },
+}
+
+/**
+ * The stacked list with `revealOnScroll` ON, under `prefers-reduced-motion`:
+ * the homepage's `ScrollReveal` wraps the list (so `section > div` is now the
+ * reveal wrapper and the list is one level deeper), but the reveal renders
+ * static — every article stays visible. On honours reduced motion via the
+ * shared component; off emits no wrapper at all (see {@link StackedRevealOff}).
+ */
+export const StackedRevealOnScroll: Story = {
+  args: {
+    variant: 'stacked',
+    articles: ARTICLES.slice(0, 3),
+    revealOnScroll: true,
+  },
+  beforeEach: forceReducedMotion,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // The reveal wrapper is interposed: the list is nested inside it now.
+    const list = canvasElement.querySelector('section > div > div.flex')
+    await expect(list).toHaveClass('flex', 'flex-col', 'gap-16')
+
+    // Reduced motion: nothing is left faded out.
+    const articles = canvas.getAllByRole('article')
+    await expect(articles).toHaveLength(3)
+    for (const article of articles) {
+      await expect(Number(getComputedStyle(article).opacity)).toBe(1)
+    }
   },
 }
 

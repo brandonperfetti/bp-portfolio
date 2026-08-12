@@ -159,6 +159,23 @@ export const GapLarge: Story = {
   },
 }
 
+/**
+ * Home parity: no column gap at all, so two `half` columns land at exactly
+ * `W/2` each, with the homepage's 80px (`gap-y-20`) once stacked. This is the
+ * grid half of Home's *asymmetric* two-column gutter — the rail's inset (see
+ * the Column `RailInset` story) supplies the other half. Unlike `lg`, which
+ * splits a symmetric gutter across both columns and leaves the article column
+ * ~32px narrow, this keeps the article column full width.
+ */
+export const GapHomeParity: Story = {
+  args: { children: halves, gap: 'homeParity' },
+  play: async ({ canvasElement }) => {
+    const grid = canvasElement.querySelector('div.grid')
+    await expect(grid).toHaveClass('gap-x-0', 'gap-y-20')
+    await expect(grid).not.toHaveClass('gap-8')
+  },
+}
+
 /** Columns of unequal height, centered against each other. */
 export const VerticalAlignCenter: Story = {
   args: {

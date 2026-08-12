@@ -2,12 +2,29 @@ import Link from 'next/link'
 
 import { Card } from '@/components/Card'
 import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
+import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { type BlockHostContext, blockRhythmClass } from '@/blocks/hostContext'
 import { formatDate } from '@/lib/formatDate'
 import { cn } from '@/lib/utils'
 
 /** The two article-list treatments that exist on the site today. */
 export type ArticlesArchiveVariant = 'grid' | 'stacked'
+
+/**
+ * The homepage's stacked-list scroll-reveal params, lifted from the route's
+ * `ScrollReveal targets="article" y={20} stagger={0.08}` around its article
+ * list. `homeParity.test.ts` reads these back out of the homepage source so
+ * they can't drift from the treatment they reproduce.
+ *
+ * @remarks Fixed capability, not editor-tunable: the numbers are Home's. The
+ * wrapper the `StackedArticle` doc comment says #42 has to decide on lives
+ * here now, opt-in and off by default.
+ */
+export const STACKED_REVEAL_PARAMS = {
+  targets: 'article',
+  y: 20,
+  stagger: 0.08,
+} as const
 
 /**
  * One article, reduced to what a card shows. Deliberately narrower than
@@ -31,6 +48,10 @@ export interface ArticleCardItem {
  * link), lifted from `src/app/(frontend)/page.tsx` — see `homeParity.test.ts`,
  * which reads both files and fails if they drift.
  * @param hosted - Where the block is rendering (see `hostContext.ts`).
+ * @param revealOnScroll - When true, wrap the stacked list in the homepage's
+ * `ScrollReveal` (see {@link STACKED_REVEAL_PARAMS}) so the articles stagger
+ * into view. Off by default, and only the stacked variant honors it — the
+ * grid has its own reveal story. Default-off emits no `ScrollReveal` at all.
  *
  * @remarks The grid sizes itself against its own container rather than the
  * viewport, so the same block reads as three columns in the route's content
@@ -44,11 +65,13 @@ export function ArticlesArchiveView({
   heading,
   variant = 'grid',
   hosted,
+  revealOnScroll = false,
 }: {
   articles: ArticleCardItem[]
   heading?: string | null
   variant?: ArticlesArchiveVariant | null
   hosted?: BlockHostContext
+  revealOnScroll?: boolean | null
 }) {
   if (!articles.length) return null
 
@@ -60,13 +83,11 @@ export function ArticlesArchiveView({
         </h2>
       ) : null}
       {variant === 'stacked' ? (
-        // No `mt-8` without a heading: the home page's list starts flush at
-        // the top of its column, and that flushness is the parity criterion.
-        <div className={cn(heading && 'mt-8', 'flex flex-col gap-16')}>
-          {articles.map((article) => (
-            <StackedArticle key={article.slug} article={article} />
-          ))}
-        </div>
+        <StackedList
+          articles={articles}
+          heading={heading}
+          revealOnScroll={Boolean(revealOnScroll)}
+        />
       ) : (
         <>
           <div className="@container mt-8">
@@ -96,6 +117,48 @@ export function ArticlesArchiveView({
         </>
       )}
     </section>
+  )
+}
+
+/**
+ * The stacked list itself: one article per row at the homepage's `gap-16`,
+ * flush to the top of its column unless a heading precedes it. Optionally
+ * wrapped in the homepage's `ScrollReveal` so the rows stagger into view.
+ *
+ * @remarks The wrapper is opt-in and, when off, absent entirely — no
+ * `ScrollReveal` div in the tree — so the default stays byte-identical to the
+ * list this block has always rendered. When on, the reveal targets the
+ * `article` elements the rows render, exactly as the route does.
+ */
+function StackedList({
+  articles,
+  heading,
+  revealOnScroll,
+}: {
+  articles: ArticleCardItem[]
+  heading?: string | null
+  revealOnScroll: boolean
+}) {
+  // No `mt-8` without a heading: the home page's list starts flush at the top
+  // of its column, and that flushness is the parity criterion.
+  const list = (
+    <div className={cn(heading && 'mt-8', 'flex flex-col gap-16')}>
+      {articles.map((article) => (
+        <StackedArticle key={article.slug} article={article} />
+      ))}
+    </div>
+  )
+
+  if (!revealOnScroll) return list
+
+  return (
+    <ScrollReveal
+      targets={STACKED_REVEAL_PARAMS.targets}
+      y={STACKED_REVEAL_PARAMS.y}
+      stagger={STACKED_REVEAL_PARAMS.stagger}
+    >
+      {list}
+    </ScrollReveal>
   )
 }
 

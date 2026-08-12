@@ -40,6 +40,7 @@ import {
  * | `media` | – | ✓ | – |
  * | `headlineVariant` | ✓ | ✓ | ✓ |
  * | `showSocialLinks` | ✓ | ✓ | ✓ |
+ * | `revealContent` | ✓ | ✓ | ✓ |
  *
  * The last two rows are unconditional because **all three types render the
  * content stack** — `type: none` is "no hero *decoration*", not "no hero":
@@ -111,6 +112,16 @@ export const hero: Field = {
       },
       defaultValue: false,
       label: 'Show social links',
+    },
+    {
+      name: 'revealContent',
+      type: 'checkbox',
+      admin: {
+        description:
+          'Fade the subtitle and social row up on scroll, the way the homepage hero does. Off by default. Honors reduced motion (renders static). The headline keeps its own animation either way.',
+      },
+      defaultValue: false,
+      label: 'Reveal subtitle and socials on scroll',
     },
     {
       name: 'richText',

@@ -108,3 +108,30 @@ export const HERO_SUBTITLE_CLASS =
  * this one class is the whole gap, and it is the homepage's `mt-6`.
  */
 export const HERO_SOCIAL_ROW_SPACING_CLASS = 'mt-6'
+
+/**
+ * The homepage's `ScrollReveal` params for the hero subtitle and social row,
+ * lifted from the route's two wrappers verbatim:
+ *
+ * - subtitle — `<ScrollReveal y={14} duration={0.78} delay={0.26}>`
+ * - social row — `<ScrollReveal y={10} duration={0.68} delay={0.37}>`
+ *
+ * @remarks Fixed capability, not editor-tunable — the numbers are Home's.
+ * `content.test.ts` reads them back out of the homepage source so a change on
+ * either side fails loudly. Plain numbers, so no Tailwind-scan concern; the
+ * `ScrollReveal` import stays out of this module (it is pulled into the
+ * Payload config, which may not import a `'use client'` module) and lives in
+ * `HeroView` instead.
+ */
+export const HERO_SUBTITLE_REVEAL = {
+  y: 14,
+  duration: 0.78,
+  delay: 0.26,
+} as const
+
+/** Homepage `ScrollReveal` params for the hero social row (see {@link HERO_SUBTITLE_REVEAL}). */
+export const HERO_SOCIAL_REVEAL = {
+  y: 10,
+  duration: 0.68,
+  delay: 0.37,
+} as const

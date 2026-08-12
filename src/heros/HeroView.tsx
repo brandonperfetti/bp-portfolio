@@ -1,10 +1,12 @@
 import Image from 'next/image'
+import { type ReactNode } from 'react'
 
 import { SocialLinksView } from '@/blocks/SocialLinks/SocialLinksView'
 import type { ResolvedSocialLink } from '@/blocks/SocialLinks/platforms'
 import { CMSLink } from '@/components/cms/CMSLink'
 import { RichTextContent } from '@/components/cms/RichTextContent'
 import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
+import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { ShaderHero } from '@/components/heros/ShaderHero'
 import {
   DEFAULT_SHADER_PRESET,
@@ -12,8 +14,10 @@ import {
 } from '@/components/heros/presets'
 import {
   HERO_HEADLINE_CLASS,
+  HERO_SOCIAL_REVEAL,
   HERO_SOCIAL_ROW_SPACING_CLASS,
   HERO_SUBTITLE_CLASS,
+  HERO_SUBTITLE_REVEAL,
   heroHeadlineVariant,
 } from '@/heros/content'
 import {
@@ -28,6 +32,31 @@ import type { Media, Page } from '@/payload-types'
 
 const mediaUrl = (m: unknown): Media | null =>
   m && typeof m === 'object' ? (m as Media) : null
+
+/**
+ * Wraps its children in a `ScrollReveal` with fixed params when `enabled`,
+ * and renders them bare otherwise — no wrapper element at all.
+ *
+ * @remarks "Bare when off" is the parity contract: a hero with
+ * `revealContent` off must emit exactly the DOM it did before the control
+ * existed, so the reveal is either the homepage's wrapper or nothing.
+ */
+function MaybeReveal({
+  enabled,
+  params,
+  children,
+}: {
+  enabled: boolean
+  params: { y: number; duration: number; delay: number }
+  children: ReactNode
+}) {
+  if (!enabled) return <>{children}</>
+  return (
+    <ScrollReveal y={params.y} duration={params.duration} delay={params.delay}>
+      {children}
+    </ScrollReveal>
+  )
+}
 
 /**
  * Title, subtitle, hero rich text, links and the social icon row — the same
@@ -57,6 +86,9 @@ function HeroContent({
   className?: string
 }) {
   const links = page.hero?.links
+  // Opt-in, off by default: when off, `MaybeReveal` renders its children bare,
+  // so the hero emits exactly the DOM it did before the control existed.
+  const revealContent = Boolean(page.hero?.revealContent)
 
   return (
     <div className={className ? `max-w-2xl ${className}` : 'max-w-2xl'}>
@@ -66,7 +98,9 @@ function HeroContent({
         className={HERO_HEADLINE_CLASS}
       />
       {page.subtitle ? (
-        <p className={HERO_SUBTITLE_CLASS}>{page.subtitle}</p>
+        <MaybeReveal enabled={revealContent} params={HERO_SUBTITLE_REVEAL}>
+          <p className={HERO_SUBTITLE_CLASS}>{page.subtitle}</p>
+        </MaybeReveal>
       ) : null}
       {page.hero?.richText ? (
         <div className="mt-6">
@@ -81,21 +115,23 @@ function HeroContent({
         </div>
       ) : null}
       {socialLinks.length ? (
-        <div className={HERO_SOCIAL_ROW_SPACING_CLASS}>
-          {/*
-           * The `socialLinks` block's own icon row, imported rather than
-           * rebuilt — one set of icons, one focus ring, one hover treatment
-           * for both surfaces. `hosted="column"` is how that view is told the
-           * host owns the vertical rhythm: at `root` it emits the blocks'
-           * `my-12`, which is a block's page rhythm and not a hero's.
-           * The `mt-6` above is the homepage's gap.
-           */}
-          <SocialLinksView
-            links={socialLinks}
-            variant="iconRow"
-            hosted="column"
-          />
-        </div>
+        <MaybeReveal enabled={revealContent} params={HERO_SOCIAL_REVEAL}>
+          <div className={HERO_SOCIAL_ROW_SPACING_CLASS}>
+            {/*
+             * The `socialLinks` block's own icon row, imported rather than
+             * rebuilt — one set of icons, one focus ring, one hover treatment
+             * for both surfaces. `hosted="column"` is how that view is told the
+             * host owns the vertical rhythm: at `root` it emits the blocks'
+             * `my-12`, which is a block's page rhythm and not a hero's.
+             * The `mt-6` above is the homepage's gap.
+             */}
+            <SocialLinksView
+              links={socialLinks}
+              variant="iconRow"
+              hosted="column"
+            />
+          </div>
+        </MaybeReveal>
       ) : null}
     </div>
   )

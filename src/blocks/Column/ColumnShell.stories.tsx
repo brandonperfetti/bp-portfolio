@@ -2,9 +2,37 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, within } from 'storybook/test'
 
 import { ColumnShell } from '@/blocks/Column/ColumnShell'
+import { COLUMN_REVEAL_PARAMS } from '@/blocks/Column/reveal'
 import { COLUMN_SIZES } from '@/blocks/Column/sizes'
 import { ContainerGrid } from '@/blocks/Container/ContainerGrid'
 import { RenderBlocks, type RenderableBlock } from '@/blocks/RenderBlocks'
+
+/**
+ * Forces `(prefers-reduced-motion: reduce)` for one story.
+ *
+ * @remarks A Storybook `beforeEach` rather than a decorator: the swap has to
+ * land before `ScrollReveal`'s own `useLayoutEffect` reads `matchMedia`, and
+ * a decorator's effects run after its children's. Returning the restore
+ * function keeps the override scoped to the story that asked for it.
+ */
+const forceReducedMotion = async () => {
+  const original = window.matchMedia
+  window.matchMedia = ((query: string) =>
+    ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList) as typeof window.matchMedia
+
+  return () => {
+    window.matchMedia = original
+  }
+}
 
 /** Stand-in for the blocks an editor stacks inside a column. */
 function Panel({ label }: { label: string }) {
@@ -385,6 +413,94 @@ export const HostedCardInFullColumn: Story = {
     // `max-w-xl` the card used to cap itself at.
     if ((column?.clientWidth ?? 0) > 576) {
       await expect(section?.clientWidth).toBe(column?.clientWidth)
+    }
+  },
+}
+
+/**
+ * The rail inset: the column half of the homepage's asymmetric two-column
+ * gutter. Paired with a container gap of `homeParity` (flush columns), the
+ * rail column pushes its own content in by `lg:pl-16 xl:pl-24` (64px / 96px),
+ * so the gutter falls between a full-width article column and the rail rather
+ * than being split across both.
+ */
+export const RailInset: Story = {
+  args: { size: 'half', inset: 'railGutter' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const column = canvas.getByText('Column content').closest('div.col-span-12')
+    await expect(column).toHaveClass('lg:pl-16', 'xl:pl-24')
+  },
+}
+
+/** No inset — the default, exactly as columns rendered before the control. */
+export const RailInsetNone: Story = {
+  args: { size: 'half', inset: 'none' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const column = canvas.getByText('Column content').closest('div.col-span-12')
+    await expect(column).not.toHaveClass('lg:pl-16')
+    await expect(column).not.toHaveClass('xl:pl-24')
+  },
+}
+
+/** Two panels carrying the reveal marker, the shape a revealing rail holds. */
+const revealItems = (
+  <>
+    <div data-reveal-item>
+      <Panel label="Contact" />
+    </div>
+    <div data-reveal-item>
+      <Panel label="Résumé" />
+    </div>
+  </>
+)
+
+/**
+ * The child-reveal control OFF (the default): no `ScrollReveal` wrapper at
+ * all, the column owns the stack spacing directly, and every child is fully
+ * visible from the start — byte-identical to a column that never had the
+ * control.
+ */
+export const RevealChildrenOff: Story = {
+  args: { size: 'oneThird', sticky: true },
+  render: (args) => <ColumnShell {...args}>{revealItems}</ColumnShell>,
+  play: async ({ canvasElement }) => {
+    const column = canvasElement.querySelector('div.col-span-12') as HTMLElement
+    // Stack spacing sits on the column itself, and the reveal items are its
+    // direct children — no interposed reveal wrapper.
+    await expect(column).toHaveClass('space-y-10')
+    const items = column.querySelectorAll(':scope > [data-reveal-item]')
+    await expect(items).toHaveLength(2)
+    for (const item of items) {
+      await expect(getComputedStyle(item).opacity).toBe('1')
+    }
+  },
+}
+
+/**
+ * The child-reveal control ON, under `prefers-reduced-motion`: the reveal
+ * wrapper is present and carries the stack spacing, but `ScrollReveal`
+ * renders its children static — nothing is hidden, every card stays visible.
+ * Reduced motion is honoured by the shared component, not reimplemented here.
+ */
+export const RevealChildrenReducedMotion: Story = {
+  args: { size: 'oneThird', sticky: true, reveal: COLUMN_REVEAL_PARAMS },
+  beforeEach: forceReducedMotion,
+  render: (args) => <ColumnShell {...args}>{revealItems}</ColumnShell>,
+  play: async ({ canvasElement }) => {
+    const column = canvasElement.querySelector('div.col-span-12') as HTMLElement
+    // The spacing moved onto the reveal wrapper so it still falls between the
+    // revealed children rather than around the single wrapper.
+    await expect(column).not.toHaveClass('space-y-10')
+    const wrapper = column.querySelector(':scope > .space-y-10') as HTMLElement
+    await expect(wrapper).not.toBeNull()
+
+    const items = wrapper.querySelectorAll(':scope > [data-reveal-item]')
+    await expect(items).toHaveLength(2)
+    // Reduced motion: the reveal is inert, so nothing is left faded out.
+    for (const item of items) {
+      await expect(getComputedStyle(item).opacity).toBe('1')
     }
   },
 }

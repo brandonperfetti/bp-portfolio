@@ -36,6 +36,14 @@ vi.mock('next/link', () => ({
 // The canvas is loaded through next/dynamic and never SSRs; jsdom has no
 // WebGPU either, so the static-gradient fallback is what renders here.
 vi.mock('next/dynamic', () => ({ default: () => () => null }))
+// GSAP wrapper (registers ScrollTrigger at import, which needs matchMedia):
+// render children straight through so the opt-in `revealContent` wrapping is
+// transparent here — the stories assert the reveal is real in a browser.
+vi.mock('@/components/motion/ScrollReveal', () => ({
+  ScrollReveal: ({ children }: { children: React.ReactNode }) => (
+    <div data-scroll-reveal>{children}</div>
+  ),
+}))
 // GSAP needs matchMedia (absent in jsdom); render the heading directly, but
 // keep the variant observable — choosing it is what #38 added.
 vi.mock('@/components/motion/AnimatedHeadline', () => ({

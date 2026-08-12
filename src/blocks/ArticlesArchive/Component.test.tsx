@@ -22,6 +22,11 @@ vi.mock('@/components/motion/HoverMotionCard', () => ({
     <div data-hover-motion-card>{children}</div>
   ),
 }))
+// GSAP wrapper (registers ScrollTrigger at import, which needs matchMedia):
+// the opt-in `revealOnScroll` reveal is a browser fact the stories assert.
+vi.mock('@/components/motion/ScrollReveal', () => ({
+  ScrollReveal: ({ children }: any) => <div data-scroll-reveal>{children}</div>,
+}))
 
 const { ArticlesArchiveComponent } =
   await import('@/blocks/ArticlesArchive/Component')

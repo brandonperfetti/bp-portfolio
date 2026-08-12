@@ -18,6 +18,11 @@ import { Stats } from '@/blocks/Stats/config'
 import { Testimonials } from '@/blocks/Testimonials/config'
 import { VideoEmbed } from '@/blocks/VideoEmbed/config'
 import { WorkHistoryCard } from '@/blocks/WorkHistoryCard/config'
+import {
+  COLUMN_INSET_ENUM_NAME,
+  COLUMN_INSET_OPTIONS,
+  DEFAULT_COLUMN_INSET,
+} from '@/blocks/Column/inset'
 import { COLUMN_SIZE_OPTIONS, DEFAULT_COLUMN_SIZE } from '@/blocks/Column/sizes'
 
 /**
@@ -118,6 +123,31 @@ export const Column: Block = {
       admin: {
         description:
           'Desktop only: from the lg breakpoint up this column follows the scroll beside its taller neighbour (the homepage rail). Below lg it stacks normally and nothing sticks.',
+      },
+    },
+    {
+      name: 'contentInset',
+      type: 'select',
+      // Optional (not required) so the additive field leaves existing
+      // ColumnBlock fixtures and stored docs valid without a value; the
+      // renderer treats a null/absent inset as `none` (see `inset.ts`).
+      defaultValue: DEFAULT_COLUMN_INSET,
+      enumName: COLUMN_INSET_ENUM_NAME,
+      options: [...COLUMN_INSET_OPTIONS],
+      label: 'Content inset',
+      admin: {
+        description:
+          'Push this column’s content in from its left edge, from the lg breakpoint up. Rail gutter (lg:pl-16 xl:pl-24) matches the homepage right rail — pair it with a container gap of “Home parity” so the columns sit flush and the gutter falls between them.',
+      },
+    },
+    {
+      name: 'revealChildren',
+      type: 'checkbox',
+      label: 'Reveal children on scroll',
+      defaultValue: false,
+      admin: {
+        description:
+          'Fade each block in this column up one after another as it scrolls into view — the homepage rail treatment. Off by default. Honors reduced motion (renders static). Below the lg breakpoint it reveals the same way.',
       },
     },
     {

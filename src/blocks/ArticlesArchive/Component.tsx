@@ -31,6 +31,7 @@ export async function ArticlesArchiveComponent(
       heading={props.heading}
       variant={props.variant}
       hosted={props.hosted}
+      revealOnScroll={props.revealOnScroll}
     />
   )
 }

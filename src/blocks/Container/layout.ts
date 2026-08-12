@@ -5,11 +5,19 @@
  *
  * @remarks Classes are complete literal strings so Tailwind's source scan
  * finds them; never build one by interpolating a stored value. The `lg` gap
- * is not a free choice: it reproduces the hard-coded homepage's two-column
- * gutter (`lg:pl-16 xl:pl-24` on the right rail — 64px / 96px), which is what
- * the Home migration's pixel-parity gate compares against. `layout.test.ts`
- * reads those numbers back out of the homepage source and asserts they still
- * match, so a change on either side fails loudly.
+ * approximates the hard-coded homepage's two-column gutter with a *symmetric*
+ * column gap (`lg:pl-16 xl:pl-24` on the right rail — 64px / 96px), and
+ * `layout.test.ts` reads those numbers back out of the homepage source so a
+ * change on either side fails loudly.
+ *
+ * A symmetric gap is not actually pixel-parity, though: splitting the gutter
+ * across both columns leaves the article column ~32px narrow. The homepage's
+ * gutter is *asymmetric* — the grid has no column gap at all (`gap-y-20`, no
+ * `gap-x`), so each column is exactly `W/2`, and the right rail insets its own
+ * content by `lg:pl-16 xl:pl-24` (see `Column/inset.ts`). `homeParity`
+ * reproduces the grid half of that: zero column gap so the columns land at
+ * `W/2`, with the homepage's 80px (`gap-y-20`) between them once stacked.
+ * Pair it with the column inset to reach Home exactly.
  */
 export const CONTAINER_GAPS = [
   {
@@ -26,6 +34,11 @@ export const CONTAINER_GAPS = [
     value: 'lg',
     label: 'Large (matches the homepage two-column gutter)',
     className: 'gap-8 lg:gap-16 xl:gap-24',
+  },
+  {
+    value: 'homeParity',
+    label: 'Home parity (flush columns, 80px stacked)',
+    className: 'gap-x-0 gap-y-20',
   },
 ] as const
 

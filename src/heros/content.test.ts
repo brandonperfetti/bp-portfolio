@@ -9,8 +9,10 @@ import {
   HERO_HEADLINE_VARIANTS,
   HERO_HEADLINE_VARIANT_ENUM_NAME,
   HERO_HEADLINE_VARIANT_OPTIONS,
+  HERO_SOCIAL_REVEAL,
   HERO_SOCIAL_ROW_SPACING_CLASS,
   HERO_SUBTITLE_CLASS,
+  HERO_SUBTITLE_REVEAL,
   heroHeadlineVariant,
 } from '@/heros/content'
 
@@ -89,6 +91,15 @@ describe('hero group config — content fields (#38)', () => {
     })
   })
 
+  it('exposes revealContent as a checkbox that defaults to off', () => {
+    // Opt-in and off by default, so a hero written before #42 emits no
+    // ScrollReveal — its subtitle and social row render exactly as they did.
+    expect(field('revealContent')).toMatchObject({
+      type: 'checkbox',
+      defaultValue: false,
+    })
+  })
+
   // The ticket said "not per-hero custom social lists" — the row is the
   // Identity global's, and the socialLinks block is where a bespoke list goes.
   it('offers no per-hero social list, only the Identity toggle', () => {
@@ -114,6 +125,7 @@ describe('hero group config — content fields (#38)', () => {
       media: { none: false, standard: true, shader: false },
       headlineVariant: { none: true, standard: true, shader: true },
       showSocialLinks: { none: true, standard: true, shader: true },
+      revealContent: { none: true, standard: true, shader: true },
     }
 
     for (const [name, byType] of Object.entries(expected)) {
@@ -161,5 +173,45 @@ describe('homepage hero parity', () => {
   it('reads its title and subtitle from the same Pages fields the hero does', () => {
     expect(homepage).toContain('homePage?.title')
     expect(homepage).toContain('homePage?.subtitle')
+  })
+
+  /**
+   * The opt-in `revealContent` reveal params (#42): when on, the hero wraps
+   * its subtitle and social row in the homepage's two `ScrollReveal`s. Read
+   * those literals back out of the route so the shared params can't drift
+   * from the treatment they reproduce.
+   */
+  it('carries the homepage subtitle reveal params', () => {
+    const subtitle = homepage.match(
+      /y=\{(\d+)\}\s+duration=\{([\d.]+)\}\s+delay=\{(0\.26)\}/,
+    )
+    expect(
+      subtitle,
+      'home route no longer wraps its subtitle in the expected ScrollReveal — re-derive HERO_SUBTITLE_REVEAL',
+    ).not.toBeNull()
+
+    const [, y, duration, delay] = subtitle as RegExpMatchArray
+    expect(HERO_SUBTITLE_REVEAL).toEqual({
+      y: Number(y),
+      duration: Number(duration),
+      delay: Number(delay),
+    })
+  })
+
+  it('carries the homepage social-row reveal params', () => {
+    const social = homepage.match(
+      /y=\{(\d+)\}\s+duration=\{([\d.]+)\}\s+delay=\{(0\.37)\}/,
+    )
+    expect(
+      social,
+      'home route no longer wraps its social row in the expected ScrollReveal — re-derive HERO_SOCIAL_REVEAL',
+    ).not.toBeNull()
+
+    const [, y, duration, delay] = social as RegExpMatchArray
+    expect(HERO_SOCIAL_REVEAL).toEqual({
+      y: Number(y),
+      duration: Number(duration),
+      delay: Number(delay),
+    })
   })
 })

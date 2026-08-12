@@ -2,7 +2,12 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
+import type { CheckboxField } from 'payload'
+
 import { describe, expect, it } from 'vitest'
+
+import { ArticlesArchive } from '@/blocks/ArticlesArchive/config'
+import { STACKED_REVEAL_PARAMS } from '@/blocks/ArticlesArchive/ArticlesArchiveView'
 
 const read = (relative: string) =>
   readFileSync(path.join(process.cwd(), relative), 'utf8')
@@ -86,5 +91,49 @@ describe('stacked articles ↔ home page parity', () => {
     // owns that flip). If the route ever imports the block, this batch's
     // premise — two copies, guarded — no longer holds.
     expect(homepage).not.toContain('ArticlesArchive')
+  })
+})
+
+/**
+ * #42's opt-in stacked-list reveal: the wrapper the `StackedArticle` doc
+ * comment said #42 would have to decide where to put. It lives on this block
+ * now — off by default, and when on it reproduces the route's
+ * `ScrollReveal targets="article" y={20} stagger={0.08}` around the list.
+ */
+describe('stacked reveal ↔ home page parity', () => {
+  const homepage = read(HOME_ROUTE)
+
+  const revealField = ArticlesArchive.fields.find(
+    (field): field is CheckboxField =>
+      field.type === 'checkbox' &&
+      'name' in field &&
+      field.name === 'revealOnScroll',
+  )
+
+  it('is an opt-in checkbox that defaults off', () => {
+    expect(revealField).toBeDefined()
+    expect(revealField?.defaultValue).toBe(false)
+  })
+
+  it('carries the homepage article-list reveal params', () => {
+    expect(STACKED_REVEAL_PARAMS).toEqual({
+      targets: 'article',
+      y: 20,
+      stagger: 0.08,
+    })
+  })
+
+  it('matches the reveal the home route wraps its article list in', () => {
+    const reveal = homepage.match(
+      /targets="article"\s+y=\{(\d+)\}\s+stagger=\{([\d.]+)\}/,
+    )
+    expect(
+      reveal,
+      'home route no longer wraps its article list in the expected ScrollReveal — re-derive STACKED_REVEAL_PARAMS',
+    ).not.toBeNull()
+
+    const [, y, stagger] = reveal as RegExpMatchArray
+    expect(STACKED_REVEAL_PARAMS.y).toBe(Number(y))
+    expect(STACKED_REVEAL_PARAMS.stagger).toBe(Number(stagger))
   })
 })

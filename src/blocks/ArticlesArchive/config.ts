@@ -41,5 +41,15 @@ export const ArticlesArchive: Block = {
       max: 12,
       admin: { description: 'How many recent articles to show.' },
     },
+    {
+      name: 'revealOnScroll',
+      type: 'checkbox',
+      label: 'Reveal articles on scroll',
+      defaultValue: false,
+      admin: {
+        description:
+          'Fade the articles up one after another as they scroll into view — the home-page treatment for the stacked list. Off by default. Honors reduced motion (renders static).',
+      },
+    },
   ],
 }

@@ -206,6 +206,10 @@ export interface Page {
      * Show the profile icon row under the hero, from the Identity global’s social links. Edit the list in Globals → Identity; per-page lists live in the Social links block instead.
      */
     showSocialLinks?: boolean | null;
+    /**
+     * Fade the subtitle and social row up on scroll, the way the homepage hero does. Off by default. Honors reduced motion (renders static). The headline keeps its own animation either way.
+     */
+    revealContent?: boolean | null;
     richText?: {
       root: {
         type: string;
@@ -409,6 +413,10 @@ export interface ArticlesArchiveBlock {
    * How many recent articles to show.
    */
   limit?: number | null;
+  /**
+   * Fade the articles up one after another as they scroll into view — the home-page treatment for the stacked list. Off by default. Honors reduced motion (renders static).
+   */
+  revealOnScroll?: boolean | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'articlesArchive';
@@ -494,7 +502,7 @@ export interface ContainerBlock {
   /**
    * Space between columns (and between them when stacked). Large widens from the lg breakpoint up to match the homepage’s two-column gutter.
    */
-  gap: 'sm' | 'md' | 'lg';
+  gap: 'sm' | 'md' | 'lg' | 'homeParity';
   /**
    * How columns of different heights line up beside each other. A sticky column always aligns to the top.
    */
@@ -558,6 +566,14 @@ export interface ColumnBlock {
    * Desktop only: from the lg breakpoint up this column follows the scroll beside its taller neighbour (the homepage rail). Below lg it stacks normally and nothing sticks.
    */
   sticky?: boolean | null;
+  /**
+   * Push this column’s content in from its left edge, from the lg breakpoint up. Rail gutter (lg:pl-16 xl:pl-24) matches the homepage right rail — pair it with a container gap of “Home parity” so the columns sit flush and the gutter falls between them.
+   */
+  contentInset?: ('none' | 'railGutter') | null;
+  /**
+   * Fade each block in this column up one after another as it scrolls into view — the homepage rail treatment. Off by default. Honors reduced motion (renders static). Below the lg breakpoint it reveals the same way.
+   */
+  revealChildren?: boolean | null;
   content?:
     | (
         | ArticlesArchiveBlock
@@ -793,6 +809,14 @@ export interface PhotoStripBlock {
    * Photos for the parallax strip — about five fills it best. On the Home page this block replaces the default gallery under the hero.
    */
   images: (number | Media)[];
+  /**
+   * Break the strip out of the reading column to the full viewport width — the homepage gallery placement. Off by default, so the strip stays inside the column like every other block.
+   */
+  fullBleed?: boolean | null;
+  /**
+   * Mark the first photo as the page’s priority image — use only when this strip is the largest thing above the fold (the homepage hero slot). Off by default so it competes with nothing.
+   */
+  priority?: boolean | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'photoStrip';
@@ -1657,6 +1681,7 @@ export interface PagesSelect<T extends boolean = true> {
         shaderPreset?: T;
         headlineVariant?: T;
         showSocialLinks?: T;
+        revealContent?: T;
         richText?: T;
         links?:
           | T
@@ -1722,6 +1747,7 @@ export interface ArticlesArchiveBlockSelect<T extends boolean = true> {
   heading?: T;
   variant?: T;
   limit?: T;
+  revealOnScroll?: T;
   id?: T;
   blockName?: T;
 }
@@ -1798,6 +1824,8 @@ export interface ContainerBlockSelect<T extends boolean = true> {
 export interface ColumnBlockSelect<T extends boolean = true> {
   size?: T;
   sticky?: T;
+  contentInset?: T;
+  revealChildren?: T;
   content?:
     | T
     | {
@@ -1939,6 +1967,8 @@ export interface NewsletterSignupBlockSelect<T extends boolean = true> {
  */
 export interface PhotoStripBlockSelect<T extends boolean = true> {
   images?: T;
+  fullBleed?: T;
+  priority?: T;
   id?: T;
   blockName?: T;
 }

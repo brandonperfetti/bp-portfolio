@@ -55,7 +55,12 @@ const alignField = selectField('verticalAlign')
  */
 describe('container gap map', () => {
   it('exposes the settled vocabulary in admin order', () => {
-    expect(CONTAINER_GAPS.map((gap) => gap.value)).toEqual(['sm', 'md', 'lg'])
+    expect(CONTAINER_GAPS.map((gap) => gap.value)).toEqual([
+      'sm',
+      'md',
+      'lg',
+      'homeParity',
+    ])
   })
 
   it('offers exactly the gaps the class map can render', () => {
@@ -79,9 +84,43 @@ describe('container gap map', () => {
   })
 
   it('writes complete literal classes Tailwind can scan', () => {
+    // Both symmetric (`gap-*`) and axis (`gap-x-*`/`gap-y-*`) forms, with or
+    // without an `lg:`/`xl:` breakpoint prefix — all complete literal strings.
     for (const { className } of CONTAINER_GAPS) {
-      expect(className).toMatch(/^gap-\d+( (lg|xl):gap-\d+)*$/)
+      expect(className).toMatch(
+        /^gap(-[xy])?-\d+( ((lg|xl):)?gap(-[xy])?-\d+)*$/,
+      )
     }
+  })
+
+  it('defaults are untouched by the added homeParity option', () => {
+    // The additive option must not restyle pages built before it existed.
+    expect(DEFAULT_CONTAINER_GAP).toBe('md')
+    expect(containerGapClass('md')).toBe('gap-8')
+    expect(containerGapClass('sm')).toBe('gap-4')
+    expect(containerGapClass('lg')).toBe('gap-8 lg:gap-16 xl:gap-24')
+  })
+
+  /**
+   * The grid half of the homepage's *asymmetric* two-column gutter: no column
+   * gap (so both columns land at exactly `W/2`) and the homepage's stacked
+   * spacing (`gap-y-20`). Reading the row gap out of the homepage grid means
+   * neither side can drift from the layout `homeParity` reproduces. The rail
+   * inset half of the gutter lives on the column (see `Column/inset.test.ts`).
+   */
+  it('reproduces the homepage grid: zero column gap, 80px stacked', () => {
+    const homepage = readFileSync(
+      path.join(process.cwd(), 'src/app/(frontend)/page.tsx'),
+      'utf8',
+    )
+    const rowGap = homepage.match(/grid-cols-1 gap-y-(\d+)/)
+    expect(
+      rowGap,
+      'homepage grid no longer carries `grid-cols-1 gap-y-*` — re-derive homeParity',
+    ).not.toBeNull()
+
+    const [, y] = rowGap as RegExpMatchArray
+    expect(CONTAINER_GAP_CLASSES.homeParity).toBe(`gap-x-0 gap-y-${y}`)
   })
 
   it('falls back to the default for missing or unknown values', () => {
