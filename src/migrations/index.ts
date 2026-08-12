@@ -19,6 +19,7 @@ import * as migration_20260812_141232_w3b1_home_enabling_vocab from './20260812_
 import * as migration_20260812_154813_w3b2_hero_rhythm from './20260812_154813_w3b2_hero_rhythm'
 import * as migration_20260812_173955_w3b4_home_grid_rhythm from './20260812_173955_w3b4_home_grid_rhythm'
 import * as migration_20260812_195230_w4b1_about_enabling_vocab from './20260812_195230_w4b1_about_enabling_vocab'
+import * as migration_20260812_230408_w4b1b_about_parity_vocab from './20260812_230408_w4b1b_about_parity_vocab'
 
 export const migrations = [
   {
@@ -125,5 +126,10 @@ export const migrations = [
     up: migration_20260812_195230_w4b1_about_enabling_vocab.up,
     down: migration_20260812_195230_w4b1_about_enabling_vocab.down,
     name: '20260812_195230_w4b1_about_enabling_vocab',
+  },
+  {
+    up: migration_20260812_230408_w4b1b_about_parity_vocab.up,
+    down: migration_20260812_230408_w4b1b_about_parity_vocab.down,
+    name: '20260812_230408_w4b1b_about_parity_vocab',
   },
 ]

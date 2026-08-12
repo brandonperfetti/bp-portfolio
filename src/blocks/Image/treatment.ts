@@ -13,6 +13,9 @@ export type ImageRounded = 'none' | 'lg' | '2xl' | 'full'
 /** Rotation. */
 export type ImageTilt = 'none' | 'left' | 'right'
 
+/** Horizontal inset — how far the image is padded in from the width it is given. */
+export type ImageInset = 'none' | 'xs'
+
 /**
  * Shape → the classes on the `img` itself.
  *
@@ -51,6 +54,22 @@ export const IMAGE_TILT_CLASSES: Record<ImageTilt, string> = {
   none: '',
   left: '-rotate-3',
   right: 'rotate-3',
+}
+
+/**
+ * Horizontal inset → the padding on the `figure`.
+ *
+ * @remarks `none` is the default and the behaviour the block always had: the
+ * image fills the width it is given (`ImageView`'s `w-full`). `xs` is the
+ * about-page portrait's `px-2.5` — 10px a side — which the hand-built page
+ * keeps on the portrait wrapper (`mx-auto max-w-xs px-2.5 lg:max-w-none`) so
+ * the photo breathes inside its narrow rail rather than running edge to edge.
+ * Pads the whole figure (image and caption alike), which is where that wrapper
+ * sits relative to the frame. Literal strings so Tailwind's scan finds them.
+ */
+export const IMAGE_INSET_CLASSES: Record<ImageInset, string> = {
+  none: '',
+  xs: 'px-2.5',
 }
 
 /** Fallback intrinsic size when the Media document carries none. */

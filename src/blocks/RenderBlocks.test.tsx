@@ -282,6 +282,164 @@ describe('RenderBlocks', () => {
 })
 
 /**
+ * Responsive visibility (audit gap #6): the one primitive the hand-built about
+ * page needs and the builder lacked. A block can render everywhere (the
+ * default), only on desktop, or only on mobile — applied here, at the wrapper,
+ * so any block gains it. `always` must add no wrapper at all, or the byte-
+ * identical guarantee every existing page relies on would break.
+ */
+describe('RenderBlocks responsive visibility', () => {
+  const imageBlock = (overrides: Record<string, unknown> = {}) =>
+    ({
+      blockType: 'image',
+      id: 'portrait',
+      media: {
+        id: 1,
+        url: 'https://example.com/portrait.jpg',
+        alt: 'Brandon Perfetti',
+        width: 800,
+        height: 800,
+      },
+      aspect: 'square',
+      rounded: '2xl',
+      tilt: 'right',
+      ...overrides,
+    }) as unknown as LayoutBlock
+
+  it('leaves a block bare when visibility is unset or always', () => {
+    const unset = render(<RenderBlocks blocks={[imageBlock()]} />)
+    const figure = unset.container.querySelector('figure')
+    // No interposed wrapper: the block is a direct child of the fragment,
+    // exactly as it rendered before the control existed.
+    expect(figure?.parentElement).toBe(unset.container)
+
+    const always = render(
+      <RenderBlocks blocks={[imageBlock({ visibility: 'always' })]} />,
+    )
+    expect(always.container.querySelector('figure')?.parentElement).toBe(
+      always.container,
+    )
+    // And no visibility utility leaks onto the page in the default case.
+    expect(always.container.querySelector('.hidden, .lg\\:hidden')).toBeNull()
+  })
+
+  it('wraps a desktop-only block in a hidden lg:block div', () => {
+    const { container } = render(
+      <RenderBlocks blocks={[imageBlock({ visibility: 'desktopOnly' })]} />,
+    )
+    const wrapper = container.querySelector('figure')?.parentElement
+    expect(wrapper?.tagName).toBe('DIV')
+    expect(wrapper).toHaveClass('hidden', 'lg:block')
+    expect(wrapper?.parentElement).toBe(container)
+  })
+
+  it('wraps a mobile-only block in an lg:hidden div', () => {
+    const { container } = render(
+      <RenderBlocks
+        blocks={[
+          {
+            blockType: 'socialLinks',
+            id: 'social',
+            visibility: 'mobileOnly',
+          } as unknown as LayoutBlock,
+        ]}
+      />,
+    )
+    const wrapper = container.querySelector(
+      '[data-social-links]',
+    )?.parentElement
+    expect(wrapper?.tagName).toBe('DIV')
+    expect(wrapper).toHaveClass('lg:hidden')
+  })
+
+  /**
+   * The mobile fix, end to end: the about page's two-column stack renders the
+   * rail (portrait + socials) *after* the whole left column, so on a phone the
+   * portrait would land at the bottom. Duplicating it — a desktop-only rail
+   * plus a mobile-only inline copy in the left column — is what puts it between
+   * the subtitle and the body. This asserts exactly that composition through
+   * the real dispatch path.
+   */
+  it('places the portrait inline on mobile and in the rail on desktop', () => {
+    const { container } = render(
+      <RenderBlocks
+        blocks={
+          [
+            {
+              blockType: 'container',
+              columns: [
+                {
+                  blockType: 'column',
+                  id: 'main',
+                  size: 'twoThirds',
+                  content: [
+                    {
+                      blockType: 'heading',
+                      id: 'h1',
+                      text: 'The headline',
+                      level: 'h1',
+                      variant: 'plain',
+                    },
+                    {
+                      blockType: 'lead',
+                      id: 'sub',
+                      text: 'The subtitle under it.',
+                      reveal: false,
+                    },
+                    imageBlock({ id: 'inline', visibility: 'mobileOnly' }),
+                    {
+                      blockType: 'prose',
+                      id: 'body',
+                      content: text('The body copy, off the hero.'),
+                    },
+                    {
+                      blockType: 'socialLinks',
+                      id: 'social-mobile',
+                      visibility: 'mobileOnly',
+                    },
+                  ],
+                },
+                {
+                  blockType: 'column',
+                  id: 'rail',
+                  size: 'oneThird',
+                  sticky: true,
+                  visibility: 'desktopOnly',
+                  content: [
+                    imageBlock({ id: 'rail-portrait' }),
+                    { blockType: 'socialLinks', id: 'social-rail' },
+                  ],
+                },
+              ],
+            },
+          ] as unknown as LayoutBlock[]
+        }
+      />,
+    )
+
+    // The rail as a whole is desktop-only: nothing in it shows on a phone.
+    const rail = container.querySelector('div.lg\\:col-span-4')
+    expect(rail).toHaveClass('hidden', 'lg:block')
+
+    // The inline portrait is a mobile-only *direct child* of the left column,
+    // so the column's `space-y-10` counts it in the stack — and it sits
+    // between the subtitle (lead) and the body (prose).
+    const left = container.querySelector('div.lg\\:col-span-8') as HTMLElement
+    const children = Array.from(left.children)
+    const inlineIdx = children.findIndex(
+      (child) =>
+        child.classList.contains('lg:hidden') &&
+        child.querySelector('figure') !== null,
+    )
+    // `.prose` may be the direct child itself, so match self-or-descendant.
+    const proseEl = left.querySelector('.prose')
+    const proseIdx = children.findIndex((child) => child.contains(proseEl))
+    expect(inlineIdx).toBeGreaterThanOrEqual(0)
+    expect(proseIdx).toBeGreaterThan(inlineIdx)
+  })
+})
+
+/**
  * Host context (#40, visual-QA F1–F3). A leaf block used to lay itself out as
  * if it owned the page: its own `my-12` on top of the column's row gap, a
  * `max-w-xl` card stranding half a background band, and grids counting

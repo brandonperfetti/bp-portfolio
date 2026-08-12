@@ -203,6 +203,42 @@ export const PriorityLcp: Story = {
 }
 
 /**
+ * The rail inset (#3): `xs` reproduces the `px-2.5` the about-page portrait
+ * keeps inside its narrow rail, so the photo breathes rather than running edge
+ * to edge. `none` — the default — fills the width it is given, shown alongside
+ * for the comparison.
+ */
+export const RailInset: Story = {
+  render: (args) => (
+    <div className="space-y-6">
+      <div data-testid="inset-none">
+        <ImageView {...args} inset="none" />
+      </div>
+      <div data-testid="inset-xs">
+        <ImageView {...args} inset="xs" />
+      </div>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const none = canvasElement.querySelector(
+      '[data-testid="inset-none"] figure',
+    )
+    const xs = canvasElement.querySelector('[data-testid="inset-xs"] figure')
+
+    await expect(none).not.toHaveClass('px-2.5')
+    await expect(xs).toHaveClass('px-2.5')
+    // The inset narrows the rendered image, exactly the ~20px the rail wants.
+    const noneImg = canvasElement.querySelector(
+      '[data-testid="inset-none"] img',
+    )
+    const xsImg = canvasElement.querySelector('[data-testid="inset-xs"] img')
+    await expect((xsImg as HTMLElement).clientWidth).toBeLessThan(
+      (noneImg as HTMLElement).clientWidth,
+    )
+  },
+}
+
+/**
  * The #40 contract: at root the block carries its own `my-12`; inside a
  * column the stack owns the rhythm and the block emits none.
  */

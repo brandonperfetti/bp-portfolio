@@ -522,3 +522,55 @@ export const StickyOff: Story = {
     await expect(rail).not.toHaveClass('self-start')
   },
 }
+
+/**
+ * Responsive visibility off — the default. No display toggle rides the column,
+ * so it shows at every width exactly as a column did before the control (audit
+ * gap #6) existed.
+ */
+export const VisibilityAlways: Story = {
+  args: { size: 'half', visibility: 'always' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const column = canvas.getByText('Column content').closest('div.col-span-12')
+    await expect(column).not.toHaveClass('hidden')
+    await expect(column).not.toHaveClass('lg:hidden')
+    await expect(column).not.toHaveClass('lg:block')
+  },
+}
+
+/**
+ * The about page's portrait rail: a desktop-only column (`hidden lg:block`).
+ * On a phone the whole rail is gone, and a mobile-only copy of the portrait
+ * rides inline in the content column instead — which is what places the photo
+ * between the subtitle and the body rather than at the bottom of the stack.
+ */
+export const VisibilityDesktopOnly: Story = {
+  args: { size: 'oneThird', sticky: true, visibility: 'desktopOnly' },
+  globals: { viewport: { value: 'mobile1' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const column = canvas.getByText('Column content').closest('div.col-span-12')
+    // Hidden below `lg`, shown from `lg` up — and it stays a real grid item
+    // at desktop (its span survives alongside the display toggle).
+    await expect(column).toHaveClass('hidden', 'lg:block', 'lg:col-span-4')
+    await expect(getComputedStyle(column as Element).display).toBe('none')
+  },
+}
+
+/**
+ * The mirror: a mobile-only column (`lg:hidden`), the treatment the about
+ * page's inline portrait and its mobile social row use. Present on a phone,
+ * gone from `lg` up.
+ */
+export const VisibilityMobileOnly: Story = {
+  args: { size: 'full', visibility: 'mobileOnly' },
+  globals: { viewport: { value: 'desktop' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const column = canvas.getByText('Column content').closest('div.col-span-12')
+    await expect(column).toHaveClass('lg:hidden')
+    // On this desktop viewport the `lg:hidden` has taken effect.
+    await expect(getComputedStyle(column as Element).display).toBe('none')
+  },
+}

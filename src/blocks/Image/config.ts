@@ -1,5 +1,7 @@
 import type { Block } from 'payload'
 
+import { visibilityField } from '@/blocks/visibility'
+
 /**
  * Single image (CMS page builder) with the treatment controls the hand-built
  * pages already use: the about-page portrait's tilt, rounding, square crop
@@ -84,6 +86,21 @@ export const ImageBlock: Block = {
       },
     },
     {
+      name: 'inset',
+      type: 'select',
+      required: true,
+      defaultValue: 'none',
+      enumName: 'enum_image_inset',
+      options: [
+        { label: 'None (fills its column)', value: 'none' },
+        { label: 'Extra small (about-page rail portrait)', value: 'xs' },
+      ],
+      admin: {
+        description:
+          'Pad the image in from the left and right edges of the space it was given. "Extra small" (px-2.5, 10px a side) reproduces the breathing room the about-page portrait keeps inside its narrow rail.',
+      },
+    },
+    {
       name: 'hoverScale',
       type: 'checkbox',
       label: 'Scale gently on hover',
@@ -110,5 +127,9 @@ export const ImageBlock: Block = {
         description: 'Optional. Renders as a caption beneath the image.',
       },
     },
+    // Responsive visibility — additive, optional, defaulting to `always`. A
+    // mobile-only copy of the portrait is half of how the about page places
+    // one image in the desktop rail and another inline on a phone.
+    visibilityField(),
   ],
 }

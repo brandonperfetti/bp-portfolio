@@ -5,6 +5,7 @@ import { type ColumnRevealParams } from '@/blocks/Column/reveal'
 import { columnSizeClass } from '@/blocks/Column/sizes'
 import { stickyColumnClass } from '@/blocks/Column/sticky'
 import { COLUMN_STACK_SPACING_CLASS } from '@/blocks/hostContext'
+import { visibilityClass } from '@/blocks/visibility'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { cn } from '@/lib/utils'
 
@@ -21,6 +22,11 @@ import { cn } from '@/lib/utils'
  * @param inset - Push the column's content in from its left edge from `lg`
  * up (see `inset.ts`). Empty by default, so a column with no inset renders
  * exactly where it always has.
+ * @param visibility - Responsive visibility for the whole column (see
+ * `visibility.ts`). Empty by default (`always`), so a column with no value set
+ * renders at every width exactly as before. `desktopOnly` is what lets the
+ * about page's portrait rail exist on desktop yet vanish on a phone, where the
+ * portrait instead rides inline in the content column.
  * @param reveal - When present, the column's children reveal on scroll with
  * these params (see `reveal.ts`), each child expected to carry the
  * `data-reveal-item` marker. When absent, no `ScrollReveal` is emitted at all
@@ -47,6 +53,7 @@ export function ColumnShell({
   size,
   sticky,
   inset,
+  visibility,
   reveal,
   children,
   className,
@@ -54,6 +61,7 @@ export function ColumnShell({
   size?: string | null
   sticky?: boolean | null
   inset?: string | null
+  visibility?: string | null
   reveal?: ColumnRevealParams
   children?: ReactNode
   className?: string
@@ -65,6 +73,7 @@ export function ColumnShell({
           columnSizeClass(size),
           stickyColumnClass(sticky),
           columnInsetClass(inset),
+          visibilityClass(visibility),
           className,
         )}
       >
@@ -86,6 +95,7 @@ export function ColumnShell({
         columnSizeClass(size),
         stickyColumnClass(sticky),
         columnInsetClass(inset),
+        visibilityClass(visibility),
         COLUMN_STACK_SPACING_CLASS,
         className,
       )}

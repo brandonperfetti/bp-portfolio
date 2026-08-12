@@ -27,6 +27,7 @@ export function ImageBlockComponent(
       aspect={props.aspect}
       rounded={props.rounded}
       tilt={props.tilt}
+      inset={props.inset}
       hoverScale={Boolean(props.hoverScale)}
       priority={Boolean(props.priority)}
       caption={props.caption}

@@ -4,9 +4,11 @@ import { type BlockHostContext, blockRhythmClass } from '@/blocks/hostContext'
 import {
   IMAGE_ASPECT_CLASSES,
   IMAGE_FALLBACK_DIMENSIONS,
+  IMAGE_INSET_CLASSES,
   IMAGE_ROUNDED_CLASSES,
   IMAGE_TILT_CLASSES,
   type ImageAspect,
+  type ImageInset,
   type ImageRounded,
   type ImageTilt,
 } from '@/blocks/Image/treatment'
@@ -25,13 +27,17 @@ import { cn } from '@/lib/utils'
  * @param aspect - Crop shape (see `treatment.ts`).
  * @param rounded - Corner treatment.
  * @param tilt - Rotation.
+ * @param inset - Horizontal padding on the figure (see `treatment.ts`). `none`
+ * by default, so the image fills the width it is given exactly as before.
  * @param hoverScale - Wrap in the site hover treatment.
  * @param priority - Preload as the LCP image instead of lazy-loading.
  * @param caption - Optional caption, rendered as a `figcaption`.
  * @param hosted - Where the block is rendering (see `hostContext.ts`).
  * @remarks The image always fills the width it is given (`w-full`) rather
  * than capping itself, because in a column the editor already chose the
- * width by choosing the column.
+ * width by choosing the column. The optional `inset` pads that width in from
+ * both sides — the about-page portrait's `px-2.5` inside its narrow rail — and
+ * is the only thing that ever narrows the image short of the column edge.
  *
  * `hoverScale` off means no `HoverMotionCard` at all — the block stays a
  * pure server render with no client JavaScript, which is the common case.
@@ -44,6 +50,7 @@ export function ImageView({
   aspect = 'auto',
   rounded = '2xl',
   tilt = 'none',
+  inset = 'none',
   hoverScale = false,
   priority = false,
   caption,
@@ -56,6 +63,7 @@ export function ImageView({
   aspect?: ImageAspect
   rounded?: ImageRounded
   tilt?: ImageTilt
+  inset?: ImageInset
   hoverScale?: boolean
   priority?: boolean
   caption?: string | null
@@ -86,7 +94,9 @@ export function ImageView({
   )
 
   return (
-    <figure className={blockRhythmClass(hosted)}>
+    <figure
+      className={cn(blockRhythmClass(hosted), IMAGE_INSET_CLASSES[inset])}
+    >
       {hoverScale ? (
         // The about-page portrait's exact settings: no lift, no root scale —
         // only the image behind the frame grows, so the rounded corners and

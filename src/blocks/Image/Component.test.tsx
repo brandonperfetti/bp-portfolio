@@ -106,4 +106,12 @@ describe('ImageBlockComponent', () => {
     const hosted = render(<ImageBlockComponent {...block()} hosted="column" />)
     expect(hosted.container.querySelector('figure')).not.toHaveClass('my-12')
   })
+
+  it('pads the figure only when the rail inset is asked for', () => {
+    const none = render(<ImageBlockComponent {...block({ inset: 'none' })} />)
+    expect(none.container.querySelector('figure')).not.toHaveClass('px-2.5')
+
+    const xs = render(<ImageBlockComponent {...block({ inset: 'xs' })} />)
+    expect(xs.container.querySelector('figure')).toHaveClass('px-2.5')
+  })
 })

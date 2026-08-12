@@ -25,6 +25,7 @@ import {
   DEFAULT_COLUMN_INSET,
 } from '@/blocks/Column/inset'
 import { COLUMN_SIZE_OPTIONS, DEFAULT_COLUMN_SIZE } from '@/blocks/Column/sizes'
+import { visibilityField } from '@/blocks/visibility'
 
 /**
  * The leaf blocks an editor can drop inside a column — the page-builder
@@ -142,6 +143,11 @@ export const Column: Block = {
           'Push this column’s content in from its left edge, from the lg breakpoint up. Rail gutter (lg:pl-16 xl:pl-24) matches the homepage right rail — pair it with a container gap of “Home parity” so the columns sit flush and the gutter falls between them.',
       },
     },
+    // Responsive visibility for the whole column — additive, optional,
+    // defaulting to `always`. `desktopOnly` is what lets the about page keep a
+    // sticky portrait rail on desktop that disappears on a phone, where a
+    // mobile-only copy of the portrait rides inline in the content column.
+    visibilityField(),
     {
       name: 'revealChildren',
       type: 'checkbox',

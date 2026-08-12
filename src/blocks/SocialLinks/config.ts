@@ -1,5 +1,7 @@
 import type { Block } from 'payload'
 
+import { visibilityField } from '@/blocks/visibility'
+
 /**
  * Social profile links (CMS page builder) in the site's two existing
  * treatments: Home's bare icon row and About's labeled list with its
@@ -108,5 +110,10 @@ export const SocialLinks: Block = {
           'Leave empty to use the address on the Identity global, so one edit there updates every page. Fill it in only when this page needs a different address. If both are empty the row is hidden rather than shown broken.',
       },
     },
+    // Responsive visibility — additive, optional, defaulting to `always`. The
+    // about page shows a mobile-only social row below the inline portrait while
+    // the same links live in the desktop rail (`mb-4 lg:hidden` in the
+    // hand-built page).
+    visibilityField(),
   ],
 }

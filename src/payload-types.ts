@@ -581,6 +581,10 @@ export interface ColumnBlock {
    */
   contentInset?: ('none' | 'railGutter' | 'aboutRail') | null;
   /**
+   * Show this everywhere (default), only on desktop (from the lg breakpoint up), or only on mobile (below lg). Use a desktop-only and a mobile-only copy to place the same block differently on each — the about-page portrait sits in the rail on desktop and inline on a phone.
+   */
+  visibility?: ('always' | 'desktopOnly' | 'mobileOnly') | null;
+  /**
    * Fade each block in this column up one after another as it scrolls into view — the homepage rail treatment. Off by default. Honors reduced motion (renders static). Below the lg breakpoint it reveals the same way.
    */
   revealChildren?: boolean | null;
@@ -731,6 +735,10 @@ export interface ImageBlock {
    */
   tilt: 'none' | 'left' | 'right';
   /**
+   * Pad the image in from the left and right edges of the space it was given. "Extra small" (px-2.5, 10px a side) reproduces the breathing room the about-page portrait keeps inside its narrow rail.
+   */
+  inset: 'none' | 'xs';
+  /**
    * Uses the site hover treatment. Disabled automatically for visitors who prefer reduced motion, and on touch devices.
    */
   hoverScale?: boolean | null;
@@ -742,6 +750,10 @@ export interface ImageBlock {
    * Optional. Renders as a caption beneath the image.
    */
   caption?: string | null;
+  /**
+   * Show this everywhere (default), only on desktop (from the lg breakpoint up), or only on mobile (below lg). Use a desktop-only and a mobile-only copy to place the same block differently on each — the about-page portrait sits in the rail on desktop and inline on a phone.
+   */
+  visibility?: ('always' | 'desktopOnly' | 'mobileOnly') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'image';
@@ -913,6 +925,10 @@ export interface SocialLinksBlock {
    * Leave empty to use the address on the Identity global, so one edit there updates every page. Fill it in only when this page needs a different address. If both are empty the row is hidden rather than shown broken.
    */
   email?: string | null;
+  /**
+   * Show this everywhere (default), only on desktop (from the lg breakpoint up), or only on mobile (below lg). Use a desktop-only and a mobile-only copy to place the same block differently on each — the about-page portrait sits in the rail on desktop and inline on a phone.
+   */
+  visibility?: ('always' | 'desktopOnly' | 'mobileOnly') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'socialLinks';
@@ -1856,6 +1872,7 @@ export interface ColumnBlockSelect<T extends boolean = true> {
   size?: T;
   sticky?: T;
   contentInset?: T;
+  visibility?: T;
   revealChildren?: T;
   content?:
     | T
@@ -1949,9 +1966,11 @@ export interface ImageBlockSelect<T extends boolean = true> {
   aspect?: T;
   rounded?: T;
   tilt?: T;
+  inset?: T;
   hoverScale?: T;
   priority?: T;
   caption?: T;
+  visibility?: T;
   id?: T;
   blockName?: T;
 }
@@ -2039,6 +2058,7 @@ export interface SocialLinksBlockSelect<T extends boolean = true> {
       };
   showEmailDivider?: T;
   email?: T;
+  visibility?: T;
   id?: T;
   blockName?: T;
 }
