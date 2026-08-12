@@ -12,6 +12,7 @@ import * as migration_20260811_223434_container_layout_section_controls from './
 import * as migration_20260811_230657_container_section_background from './20260811_230657_container_section_background'
 import * as migration_20260812_011542_hero_presentation from './20260812_011542_hero_presentation'
 import * as migration_20260812_014249_sociallinks_image_blocks from './20260812_014249_sociallinks_image_blocks'
+import * as migration_20260812_045105_hero_content_fields from './20260812_045105_hero_content_fields'
 
 export const migrations = [
   {
@@ -83,5 +84,10 @@ export const migrations = [
     up: migration_20260812_014249_sociallinks_image_blocks.up,
     down: migration_20260812_014249_sociallinks_image_blocks.down,
     name: '20260812_014249_sociallinks_image_blocks',
+  },
+  {
+    up: migration_20260812_045105_hero_content_fields.up,
+    down: migration_20260812_045105_hero_content_fields.down,
+    name: '20260812_045105_hero_content_fields',
   },
 ]

@@ -1,62 +1,30 @@
 import { render, screen } from '@testing-library/react'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { ResolvedSocialLink } from '@/blocks/SocialLinks/platforms'
 import { RenderHero } from '@/heros/RenderHero'
-import {
-  HERO_CARD_FRAME_CLASS,
-  HERO_CARD_SHELL_CLASS,
-  HERO_FULL_BLEED_FRAME_CLASS,
-} from '@/heros/presentation'
 import type { Page } from '@/payload-types'
 
-vi.mock('next/image', () => ({
-  // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
-  default: (props: Record<string, unknown>) => <img {...props} />,
-}))
-vi.mock('next/link', () => ({
-  default: ({
-    children,
-    href,
-    ...rest
-  }: {
-    children: React.ReactNode
-    href: string
-  }) => (
-    <a href={href} {...rest}>
-      {children}
-    </a>
-  ),
-}))
-// The canvas is loaded through next/dynamic and never SSRs; jsdom has no
-// WebGPU either, so the static-gradient fallback is what renders here.
-vi.mock('next/dynamic', () => ({ default: () => () => null }))
-// GSAP needs matchMedia (absent in jsdom); render the heading directly.
-vi.mock('@/components/motion/AnimatedHeadline', () => ({
-  AnimatedHeadline: ({ text }: { text: string }) => <h1>{text}</h1>,
+const getCmsIdentity = vi.fn()
+vi.mock('@/lib/cms/identityRepo', () => ({
+  getCmsIdentity: () => getCmsIdentity(),
 }))
 
-// jsdom ships no matchMedia; ShaderHero's reduced-motion hook calls it.
-beforeAll(() => {
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    value: (query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    }),
-  })
-  // jsdom has no canvas backend either; answer the WebGL2 probe with a plain
-  // "no GPU" instead of letting jsdom log "Not implemented" per render.
-  Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
-    writable: true,
-    value: () => null,
-  })
-})
+// The view has its own suite (`HeroView.test.tsx`) covering every pixel; here
+// it is a probe that reports what the server component resolved for it.
+vi.mock('@/heros/HeroView', () => ({
+  HeroView: ({
+    page,
+    socialLinks,
+  }: {
+    page: Page
+    socialLinks?: ResolvedSocialLink[]
+  }) => (
+    <div data-testid="hero-view" data-title={page.title}>
+      {JSON.stringify(socialLinks)}
+    </div>
+  ),
+}))
 
 const page = (hero: Partial<NonNullable<Page['hero']>> = {}) =>
   ({
@@ -64,165 +32,93 @@ const page = (hero: Partial<NonNullable<Page['hero']>> = {}) =>
     title: 'Consulting',
     subtitle: 'How I can help',
     slug: 'consulting',
-    hero: { type: 'none', ...hero },
+    hero: { type: 'shader', ...hero },
   }) as unknown as Page
 
-/** The decorative canvas frame, whatever presentation drew it. */
-const canvas = (container: HTMLElement) =>
-  container.querySelector('header > [aria-hidden="true"]')
+/** Render an async server component the way React would await it. */
+const renderHero = async (doc: Page) => render(await RenderHero({ page: doc }))
 
-const scrim = (container: HTMLElement) =>
-  container.querySelector('.bg-gradient-to-r')
-const bottomFade = (container: HTMLElement) => container.querySelector('.h-24')
+const resolved = () =>
+  JSON.parse(screen.getByTestId('hero-view').textContent || 'null') as
+    ResolvedSocialLink[] | null
 
-describe('RenderHero — type none', () => {
-  it('renders the headline and subtitle with no canvas', () => {
-    const { container } = render(<RenderHero page={page({ type: 'none' })} />)
-
-    expect(screen.getByRole('heading', { name: 'Consulting' })).toBeVisible()
-    expect(screen.getByText('How I can help')).toBeVisible()
-    expect(canvas(container)).toBeNull()
-    expect(container.querySelector('header')).toHaveClass('relative')
-    expect(container.querySelector('header')).not.toHaveClass('isolate')
+beforeEach(() => {
+  getCmsIdentity.mockReset()
+  getCmsIdentity.mockResolvedValue({
+    name: 'Brandon Perfetti',
+    sameAs: [
+      'https://x.com/brandonperfetti',
+      'https://github.com/brandonperfetti',
+      'https://www.linkedin.com/in/brandonperfetti/',
+    ],
   })
 })
 
-describe('RenderHero — type standard', () => {
-  it('renders the hero media below the text and no canvas', () => {
-    const { container } = render(
-      <RenderHero
-        page={page({
-          type: 'standard',
-          media: {
-            id: 2,
-            url: '/media/office.jpg',
-            alt: 'Office',
-            width: 1200,
-            height: 800,
-          },
-        } as Partial<NonNullable<Page['hero']>>)}
-      />,
-    )
+describe('RenderHero — Identity social links (#38)', () => {
+  it('resolves the Identity sameAs list to icon-row links', async () => {
+    await renderHero(page({ showSocialLinks: true }))
 
-    expect(screen.getByRole('img', { name: 'Office' })).toBeVisible()
-    expect(canvas(container)).toBeNull()
+    expect(resolved()).toEqual([
+      {
+        href: 'https://x.com/brandonperfetti',
+        label: 'Follow on X',
+        platform: 'x',
+      },
+      {
+        href: 'https://github.com/brandonperfetti',
+        label: 'Follow on GitHub',
+        platform: 'github',
+      },
+      {
+        href: 'https://www.linkedin.com/in/brandonperfetti/',
+        label: 'Follow on LinkedIn',
+        platform: 'linkedin',
+      },
+    ])
   })
 
-  it('ignores a shaderPreset it happens to carry', () => {
-    const { container } = render(
-      <RenderHero
-        page={page({ type: 'standard', shaderPreset: 'synthesis-14' })}
-      />,
-    )
+  it('does not query Identity at all when the row is off', async () => {
+    await renderHero(page({ showSocialLinks: false }))
 
-    expect(canvas(container)).toBeNull()
-  })
-})
-
-describe('RenderHero — type shader, presentation fullBleed', () => {
-  it('escapes the route container, keeps scrim and bottom fade', () => {
-    const { container } = render(
-      <RenderHero page={page({ type: 'shader', presentation: 'fullBleed' })} />,
-    )
-
-    expect(canvas(container)).toHaveAttribute(
-      'class',
-      HERO_FULL_BLEED_FRAME_CLASS,
-    )
-    expect(scrim(container)).not.toBeNull()
-    expect(bottomFade(container)).not.toBeNull()
+    expect(getCmsIdentity).not.toHaveBeenCalled()
+    expect(resolved()).toEqual([])
   })
 
-  // Regression, staging QA 2026-08-12: the header used to carry `isolate`,
-  // which trapped the -z-10 canvas in the header's own stacking context. The
-  // header then painted as one atomic unit above every following in-flow
-  // block, and a socialLinks container at y≈348 vanished behind the canvas.
-  // The isolation belongs on the route wrapper that holds hero *and* blocks
-  // (HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS); the header must only position.
-  it('positions the header without isolating it', () => {
-    const { container } = render(
-      <RenderHero page={page({ type: 'shader', presentation: 'fullBleed' })} />,
-    )
-    const header = container.querySelector('header')
+  it('treats a page written before the field existed as row-off', async () => {
+    await renderHero(page())
 
-    expect(header).toHaveClass('relative')
-    expect(header).not.toHaveClass('isolate')
-    expect(header).toHaveAttribute('class', 'relative')
+    expect(getCmsIdentity).not.toHaveBeenCalled()
+    expect(resolved()).toEqual([])
   })
 
-  it('keeps the canvas in the negative layer so page content paints over it', () => {
-    const { container } = render(
-      <RenderHero page={page({ type: 'shader', presentation: 'fullBleed' })} />,
-    )
+  // `getCmsIdentity` only filters falsy entries, so a whitespace-only row in
+  // the global still reaches here.
+  it('drops blank rows the global happens to carry', async () => {
+    getCmsIdentity.mockResolvedValue({
+      name: 'Brandon Perfetti',
+      sameAs: ['   ', 'https://github.com/brandonperfetti'],
+    })
 
-    expect(canvas(container)).toHaveClass('-z-10')
+    await renderHero(page({ showSocialLinks: true }))
+
+    expect(resolved()).toEqual([
+      {
+        href: 'https://github.com/brandonperfetti',
+        label: 'Follow on GitHub',
+        platform: 'github',
+      },
+    ])
   })
 
-  it('is what a page written before the field existed renders as', () => {
-    const { container } = render(<RenderHero page={page({ type: 'shader' })} />)
+  it('renders the hero even when Identity has no profiles', async () => {
+    getCmsIdentity.mockResolvedValue({ name: 'Brandon Perfetti', sameAs: [] })
 
-    expect(canvas(container)).toHaveAttribute(
-      'class',
-      HERO_FULL_BLEED_FRAME_CLASS,
+    await renderHero(page({ showSocialLinks: true }))
+
+    expect(screen.getByTestId('hero-view')).toHaveAttribute(
+      'data-title',
+      'Consulting',
     )
-  })
-
-  it('renders the hero text above the canvas, not inside a card', () => {
-    const { container } = render(
-      <RenderHero page={page({ type: 'shader', presentation: 'fullBleed' })} />,
-    )
-
-    expect(screen.getByRole('heading', { name: 'Consulting' })).toBeVisible()
-    expect(container.querySelector('header')).not.toHaveClass('rounded-2xl')
-  })
-})
-
-describe('RenderHero — type shader, presentation card', () => {
-  it('renders a bounded rounded panel with the canvas inside it', () => {
-    const { container } = render(
-      <RenderHero page={page({ type: 'shader', presentation: 'card' })} />,
-    )
-
-    expect(container.querySelector('header')).toHaveAttribute(
-      'class',
-      HERO_CARD_SHELL_CLASS,
-    )
-    expect(canvas(container)).toHaveAttribute('class', HERO_CARD_FRAME_CLASS)
-  })
-
-  it('drops the scrim and the page fade — a card has no page to blend into', () => {
-    const { container } = render(
-      <RenderHero page={page({ type: 'shader', presentation: 'card' })} />,
-    )
-
-    expect(scrim(container)).toBeNull()
-    expect(bottomFade(container)).toBeNull()
-  })
-
-  it('puts the hero text on the canvas with a legibility shadow', () => {
-    const { container } = render(
-      <RenderHero page={page({ type: 'shader', presentation: 'card' })} />,
-    )
-
-    expect(screen.getByRole('heading', { name: 'Consulting' })).toBeVisible()
-    expect(container.querySelector('[class*="text-shadow"]')).not.toBeNull()
-  })
-
-  it('falls back to full bleed for an unknown stored presentation', () => {
-    // A value the current vocabulary doesn't know — what a row written by a
-    // later (or rolled-back) schema looks like to this renderer.
-    const { container } = render(
-      <RenderHero
-        page={page({
-          type: 'shader',
-          presentation: 'billboard',
-        } as unknown as Partial<NonNullable<Page['hero']>>)}
-      />,
-    )
-
-    expect(canvas(container)).toHaveAttribute(
-      'class',
-      HERO_FULL_BLEED_FRAME_CLASS,
-    )
+    expect(resolved()).toEqual([])
   })
 })

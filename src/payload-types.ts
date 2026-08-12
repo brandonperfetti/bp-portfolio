@@ -198,6 +198,14 @@ export interface Page {
      */
     shaderPreset?:
       ('northern-lights-2' | 'ribbon-flows-4' | 'synthesis-14' | 'drifting-lights-8' | 'static-noise-4') | null;
+    /**
+     * How the page title animates in. Typewriter is the Home/About treatment; both fall back to static text under reduced motion.
+     */
+    headlineVariant?: ('line' | 'typewriter') | null;
+    /**
+     * Show the profile icon row under the hero, from the Identity global’s social links. Edit the list in Globals → Identity; per-page lists live in the Social links block instead.
+     */
+    showSocialLinks?: boolean | null;
     richText?: {
       root: {
         type: string;
@@ -1562,6 +1570,8 @@ export interface PagesSelect<T extends boolean = true> {
         type?: T;
         presentation?: T;
         shaderPreset?: T;
+        headlineVariant?: T;
+        showSocialLinks?: T;
         richText?: T;
         links?:
           | T
