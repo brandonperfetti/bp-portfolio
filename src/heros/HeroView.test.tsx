@@ -12,6 +12,7 @@ import {
   HERO_CARD_FRAME_CLASS,
   HERO_CARD_SHELL_CLASS,
   HERO_FULL_BLEED_FRAME_CLASS,
+  HERO_FULL_BLEED_HOME_FRAME_CLASS,
 } from '@/heros/presentation'
 import type { Page } from '@/payload-types'
 
@@ -260,6 +261,70 @@ describe('HeroView — type shader, presentation fullBleed', () => {
 
     expect(headline()).toBeVisible()
     expect(container.querySelector('header')).not.toHaveClass('rounded-2xl')
+  })
+})
+
+describe('HeroView — full-bleed canvas frame follows the route rhythm (#42)', () => {
+  it('uses the standard frame when the page sets no rhythm — byte-identical to before the field', () => {
+    const { container } = render(
+      <HeroView page={page({ type: 'shader', presentation: 'fullBleed' })} />,
+    )
+
+    expect(canvas(container)).toHaveAttribute(
+      'class',
+      HERO_FULL_BLEED_FRAME_CLASS,
+    )
+  })
+
+  it('uses the standard frame when the page opts into the standard rhythm', () => {
+    const { container } = render(
+      <HeroView
+        page={page({
+          type: 'shader',
+          presentation: 'fullBleed',
+          rhythm: 'standard',
+        })}
+      />,
+    )
+
+    expect(canvas(container)).toHaveAttribute(
+      'class',
+      HERO_FULL_BLEED_FRAME_CLASS,
+    )
+  })
+
+  it('uses the home-parity frame when the page opts into that rhythm', () => {
+    const { container } = render(
+      <HeroView
+        page={page({
+          type: 'shader',
+          presentation: 'fullBleed',
+          rhythm: 'homeParity',
+        })}
+      />,
+    )
+
+    expect(canvas(container)).toHaveAttribute(
+      'class',
+      HERO_FULL_BLEED_HOME_FRAME_CLASS,
+    )
+  })
+
+  it('falls back to the standard frame for a rhythm this build does not know', () => {
+    const { container } = render(
+      <HeroView
+        page={page({
+          type: 'shader',
+          presentation: 'fullBleed',
+          rhythm: 'flush',
+        } as unknown as Partial<NonNullable<Page['hero']>>)}
+      />,
+    )
+
+    expect(canvas(container)).toHaveAttribute(
+      'class',
+      HERO_FULL_BLEED_FRAME_CLASS,
+    )
   })
 })
 

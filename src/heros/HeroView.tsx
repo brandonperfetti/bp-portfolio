@@ -24,10 +24,10 @@ import {
   HERO_CARD_FRAME_CLASS,
   HERO_CARD_PANEL_CLASS,
   HERO_CARD_SHELL_CLASS,
-  HERO_FULL_BLEED_FRAME_CLASS,
   HERO_FULL_BLEED_PANEL_CLASS,
   heroPresentation,
 } from '@/heros/presentation'
+import { routeRhythmProfile } from '@/heros/routeRhythm'
 import type { Media, Page } from '@/payload-types'
 
 const mediaUrl = (m: unknown): Media | null =>
@@ -191,12 +191,20 @@ export function HeroView({
     )
   }
 
+  // The full-bleed canvas pull depends on the route rhythm the page opts into:
+  // `standard` keeps the historical frame (byte-identical for every existing
+  // page, whose `rhythm` is null → `standard`); `homeParity` uses the
+  // flush-hero frame. See {@link routeRhythmProfile}.
+  const fullBleedFrameClass = routeRhythmProfile(
+    hero?.rhythm,
+  ).heroFullBleedFrameClass
+
   return (
     <header className="relative">
       {type === 'shader' ? (
         <ShaderHero
           preset={preset}
-          className={HERO_FULL_BLEED_FRAME_CLASS}
+          className={fullBleedFrameClass}
           panelClassName={HERO_FULL_BLEED_PANEL_CLASS}
         />
       ) : null}

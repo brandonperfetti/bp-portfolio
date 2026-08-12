@@ -199,6 +199,10 @@ export interface Page {
     shaderPreset?:
       ('northern-lights-2' | 'ribbon-flows-4' | 'synthesis-14' | 'drifting-lights-8' | 'static-noise-4') | null;
     /**
+     * Home parity pulls the hero flush to the top with the homepage’s vertical rhythm (for a page meant to read like the homepage); standard keeps the page-builder default. Only affects the full-bleed treatment.
+     */
+    rhythm?: ('standard' | 'homeParity') | null;
+    /**
      * How the page title animates in. Typewriter is the Home/About treatment; both fall back to static text under reduced motion.
      */
     headlineVariant?: ('line' | 'typewriter') | null;
@@ -1679,6 +1683,7 @@ export interface PagesSelect<T extends boolean = true> {
         type?: T;
         presentation?: T;
         shaderPreset?: T;
+        rhythm?: T;
         headlineVariant?: T;
         showSocialLinks?: T;
         revealContent?: T;

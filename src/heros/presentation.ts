@@ -119,6 +119,27 @@ export const HERO_FULL_BLEED_FRAME_CLASS =
   'pointer-events-none absolute -top-32 left-1/2 -z-10 h-[36rem] w-screen -translate-x-1/2 sm:-top-48 sm:px-8'
 
 /**
+ * Full-bleed canvas frame for the **home-parity** route rhythm (see
+ * {@link ROUTE_RHYTHM_PROFILES} in `src/heros/routeRhythm.ts`).
+ *
+ * @remarks Same box as {@link HERO_FULL_BLEED_FRAME_CLASS} — a `w-screen`
+ * breakout centred on the hero and clipped to the panel — but a different
+ * vertical pull, because the home-parity rhythm changes what sits above the
+ * hero. There the route Container drops its `mt-16 sm:mt-32` and the hero
+ * instead carries the homepage's `pt-9`, so the hero `<header>` starts
+ * `64px (site header) + 36px (pt-9) = 100px` below the document top at every
+ * breakpoint — a single, breakpoint-independent offset, unlike the standard
+ * rhythm whose two margins need two values.
+ *
+ * `-top-24` (96px) is the *sensible default*, not a measured constant: the
+ * orchestrator dials the exact pull to pixel parity with live Home via the
+ * compose+diff. It is the one knob to turn for the hero-canvas position under
+ * home parity; the standard rhythm keeps {@link HERO_FULL_BLEED_FRAME_CLASS}.
+ */
+export const HERO_FULL_BLEED_HOME_FRAME_CLASS =
+  'pointer-events-none absolute -top-24 left-1/2 -z-10 h-[36rem] w-screen -translate-x-1/2 sm:px-8'
+
+/**
  * The class a route must put on the element that wraps **both** `RenderHero`
  * and the page's blocks, for a `fullBleed` hero to stack correctly.
  *

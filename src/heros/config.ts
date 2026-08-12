@@ -19,6 +19,11 @@ import {
   HERO_PRESENTATION_OPTIONS,
 } from '@/heros/presentation'
 import {
+  DEFAULT_ROUTE_RHYTHM,
+  ROUTE_RHYTHM_ENUM_NAME,
+  ROUTE_RHYTHM_OPTIONS,
+} from '@/heros/routeRhythm'
+import {
   DEFAULT_SHADER_PRESET,
   SHADER_PRESET_OPTIONS,
 } from '@/heros/shaderPresets'
@@ -90,6 +95,19 @@ export const hero: Field = {
       },
       defaultValue: DEFAULT_SHADER_PRESET,
       options: [...SHADER_PRESET_OPTIONS],
+    },
+    {
+      name: 'rhythm',
+      type: 'select',
+      admin: {
+        condition: (_, { type } = {}) => type === 'shader',
+        description:
+          'Home parity pulls the hero flush to the top with the homepage’s vertical rhythm (for a page meant to read like the homepage); standard keeps the page-builder default. Only affects the full-bleed treatment.',
+      },
+      defaultValue: DEFAULT_ROUTE_RHYTHM,
+      enumName: ROUTE_RHYTHM_ENUM_NAME,
+      label: 'Route rhythm',
+      options: [...ROUTE_RHYTHM_OPTIONS],
     },
     {
       name: 'headlineVariant',

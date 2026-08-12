@@ -122,6 +122,7 @@ describe('hero group config — content fields (#38)', () => {
     > = {
       presentation: { none: false, standard: false, shader: true },
       shaderPreset: { none: false, standard: false, shader: true },
+      rhythm: { none: false, standard: false, shader: true },
       media: { none: false, standard: true, shader: false },
       headlineVariant: { none: true, standard: true, shader: true },
       showSocialLinks: { none: true, standard: true, shader: true },

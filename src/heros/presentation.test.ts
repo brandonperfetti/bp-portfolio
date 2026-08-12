@@ -75,7 +75,7 @@ describe('hero group config', () => {
   })
 
   it('hides the shader-only fields unless the hero is a shader', () => {
-    for (const name of ['presentation', 'shaderPreset']) {
+    for (const name of ['presentation', 'shaderPreset', 'rhythm']) {
       const condition = (
         field(name) as { admin?: { condition?: (...args: never[]) => boolean } }
       ).admin?.condition
