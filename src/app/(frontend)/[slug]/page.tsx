@@ -59,7 +59,13 @@ export default async function CmsPage({
   }
 
   return (
-    <Container className="mt-16 sm:mt-32">
+    // `isolate` is load-bearing, not decoration: a full-bleed shader hero
+    // paints its canvas at `-z-10`, and this is the element that owns the
+    // stacking context the canvas sinks inside — the one wrapper that holds
+    // both the hero and the blocks, so the canvas lands under the blocks but
+    // still above the fixed page panel. See
+    // `HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS` in `src/heros/presentation.ts`.
+    <Container className="isolate mt-16 sm:mt-32">
       <RenderHero page={page} />
       <div className="mt-8">
         <RenderBlocks blocks={page.layout} />

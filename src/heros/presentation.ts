@@ -119,6 +119,37 @@ export const HERO_FULL_BLEED_FRAME_CLASS =
   'pointer-events-none absolute -top-32 left-1/2 -z-10 h-[36rem] w-screen -translate-x-1/2 sm:-top-48 sm:px-8'
 
 /**
+ * The class a route must put on the element that wraps **both** `RenderHero`
+ * and the page's blocks, for a `fullBleed` hero to stack correctly.
+ *
+ * @remarks This is the hero's one contract with its route, and it is not
+ * optional — `src/heros/presentation.test.ts` asserts the `[slug]` route
+ * carries it.
+ *
+ * The canvas is `-z-10`, so where it lands depends entirely on which ancestor
+ * owns the nearest stacking context:
+ *
+ * - *No stacking context anywhere* — `-z-10` resolves against the root, which
+ *   paints the negative layer **below** the `fixed` white panel `Layout`
+ *   draws. The canvas disappears behind the page background.
+ * - *Stacking context on the hero's own `<header>`* (what shipped in #31 and
+ *   what staging QA caught) — the canvas is correctly behind the hero text,
+ *   but the whole isolated header then paints as one atomic unit in the
+ *   positioned layer, i.e. **above** every following in-flow block. Any block
+ *   inside the canvas's 36rem span is occluded. Measured in Chrome: an
+ *   isolated ancestor paints as if it were `position: relative; z-index: 0`,
+ *   which is after in-flow block backgrounds either way — so dropping
+ *   `position: relative` from the header does *not* help.
+ * - *Stacking context on an ancestor of hero **and** blocks* — the canvas
+ *   sinks below every sibling in that container while the container as a whole
+ *   still paints above the fixed panel. Correct on both counts.
+ *
+ * The homepage does exactly the third thing: its `<section className="isolate">`
+ * wraps the canvas together with the content that must sit on top of it.
+ */
+export const HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS = 'isolate'
+
+/**
  * Clip panel inside the full-bleed frame — the centered `max-w-7xl` panel
  * the Layout paints.
  *

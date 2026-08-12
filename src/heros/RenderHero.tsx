@@ -69,8 +69,10 @@ function HeroContent({ page, className }: { page: Page; className?: string }) {
  *   pulled behind the site header and out to the content panel's edges, with
  *   scrim, bottom fade, offscreen GPU pause and the light-mode preset swap
  *   (all four live in that component, so this route inherits them by reuse).
- *   `isolate` is what keeps its `-z-10` canvas above the fixed panel the
- *   Layout paints — the same trick the homepage's wrapping `<section>` uses.
+ *   The `<header>` must **not** isolate: the canvas's `-z-10` has to resolve
+ *   against a stacking context that also contains the page's blocks, or the
+ *   canvas paints over every block inside its 36rem span. That context is the
+ *   route's own — see {@link HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS}.
  * - `shader` + `card` — the bounded rounded panel the `shaderHero` block
  *   renders, with the hero text on the canvas; no scrim, no bottom fade.
  *
@@ -104,7 +106,7 @@ export function RenderHero({ page }: { page: Page }) {
   }
 
   return (
-    <header className={type === 'shader' ? 'relative isolate' : 'relative'}>
+    <header className="relative">
       {type === 'shader' ? (
         <ShaderHero
           preset={preset}

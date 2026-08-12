@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { sectionWidthClass } from '@/blocks/Container/section'
@@ -9,6 +11,7 @@ import {
   HERO_CARD_SHELL_CLASS,
   HERO_FULL_BLEED_FRAME_CLASS,
   HERO_FULL_BLEED_PANEL_CLASS,
+  HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS,
   HERO_PRESENTATIONS,
   HERO_PRESENTATION_ENUM_NAME,
   HERO_PRESENTATION_OPTIONS,
@@ -153,5 +156,44 @@ describe('full-bleed geometry', () => {
       'relative isolate min-h-[20rem] overflow-hidden rounded-2xl',
     )
     expect(HERO_CARD_SHELL_CLASS).not.toContain('my-12')
+  })
+})
+
+/**
+ * The stacking contract, in the only place a test can see both halves of it.
+ *
+ * Staging QA (2026-08-12) found the full-bleed canvas painting over every
+ * block inside its 36rem span: the isolation sat on the hero's own `<header>`,
+ * so the canvas could only sink to the bottom of the header, and the header
+ * then painted above the blocks that follow it. The isolation has to sit on
+ * the wrapper that holds the hero *and* the blocks. Nothing in `src/heros`
+ * can enforce that on its own, so the route is read here.
+ */
+describe('full-bleed stacking contract with the route', () => {
+  const routeSource = readFileSync(
+    path.join(process.cwd(), 'src/app/(frontend)/[slug]/page.tsx'),
+    'utf8',
+  )
+
+  it('the [slug] route isolates the wrapper that holds hero and blocks', () => {
+    const container = routeSource.match(/<Container className="([^"]+)"/)
+    expect(container, 'the route should wrap its page in <Container>').not.toBe(
+      null,
+    )
+    expect(container![1].split(/\s+/)).toContain(
+      HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS,
+    )
+
+    // Both halves inside that one wrapper — the whole point of the contract.
+    const wrapper = routeSource.slice(
+      routeSource.indexOf('<Container'),
+      routeSource.indexOf('</Container>'),
+    )
+    expect(wrapper).toContain('<RenderHero')
+    expect(wrapper).toContain('<RenderBlocks')
+  })
+
+  it('the canvas sits in that context’s negative layer', () => {
+    expect(HERO_FULL_BLEED_FRAME_CLASS).toContain('-z-10')
   })
 })

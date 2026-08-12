@@ -6,6 +6,7 @@ import {
   HERO_CARD_FRAME_CLASS,
   HERO_CARD_SHELL_CLASS,
   HERO_FULL_BLEED_FRAME_CLASS,
+  HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS,
 } from '@/heros/presentation'
 import type { Page } from '@/payload-types'
 
@@ -63,17 +64,28 @@ const meta = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      // Stand-in for the route: `main` under a 64px header, then `Container`
-      // exactly as `src/components/Container.tsx` builds it (outer gutters,
-      // max-w-7xl panel, inner gutters, centered measure) with the `[slug]`
-      // route's `mt-16 sm:mt-32`. The full-bleed hero climbs out of all of it.
-      <div className="relative isolate min-h-[40rem] overflow-hidden bg-white dark:bg-zinc-900">
-        <div className="h-16" />
-        <div className="mt-16 sm:mt-32 sm:px-8">
-          <div className="mx-auto w-full max-w-7xl lg:px-8">
-            <div className="relative px-4 sm:px-8 lg:px-12">
-              <div className="mx-auto max-w-2xl lg:max-w-5xl">
-                <Story />
+      // Stand-in for the whole route chain, mirrored element for element
+      // because the full-bleed hero's geometry *and* its stacking both depend
+      // on it: the Layout's page panel as a positioned sibling (not an
+      // ancestor background — that distinction is what makes a lost
+      // `isolate` visible here), the content column, a 64px site header,
+      // then `Container` as `src/components/Container.tsx` builds it, carrying
+      // the `[slug]` route's `mt-16 sm:mt-32` and its load-bearing `isolate`.
+      <div className="relative min-h-[40rem] overflow-hidden">
+        <div
+          data-page-panel
+          className="absolute inset-0 bg-white dark:bg-zinc-900"
+        />
+        <div className="relative flex w-full flex-col">
+          <div className="h-16" />
+          <div
+            className={`mt-16 sm:mt-32 sm:px-8 ${HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS}`}
+          >
+            <div className="mx-auto w-full max-w-7xl lg:px-8">
+              <div className="relative px-4 sm:px-8 lg:px-12">
+                <div className="mx-auto max-w-2xl lg:max-w-5xl">
+                  <Story />
+                </div>
               </div>
             </div>
           </div>
@@ -159,6 +171,107 @@ export const ShaderFullBleed: Story = {
           (headerBox.left + headerBox.width / 2),
       ),
     ).toBeLessThan(1)
+  },
+}
+
+/**
+ * The stacking regression, staging QA 2026-08-12: a full-bleed canvas is
+ * 36rem tall, so the first blocks on the page render *inside* its span. They
+ * must paint on top of it. When the isolation sat on the hero's own
+ * `<header>` (#31 as shipped), the header painted as one atomic unit above
+ * every following in-flow block and a socialLinks container at y≈348 was
+ * completely occluded.
+ *
+ * @remarks Paint order is asserted by hit testing, which follows paint order:
+ * the canvas is `pointer-events-none` (so it is normally untouchable), and the
+ * probe re-enables it for the duration of the check only. A browser check
+ * beyond this story should confirm the same thing photographically — screenshot
+ * a block inside the span with the canvas shown and with it hidden, and count
+ * the block's own dark pixels; the counts must match (they were 408 vs 0 when
+ * this defect was live).
+ */
+export const ShaderFullBleedWithBlocksBelow: Story = {
+  args: { page: page({ type: 'shader', presentation: 'fullBleed' }) },
+  decorators: [
+    (Story) => (
+      <>
+        <Story />
+        {/* What `RenderBlocks` renders under the hero on the real route. */}
+        <div className="mt-8">
+          <section data-testid="block-in-span" className="my-12">
+            <div className="flex flex-wrap gap-6">
+              {['One', 'Two', 'Three'].map((label) => (
+                <span
+                  key={label}
+                  className="rounded-md bg-zinc-900 px-3 py-1 text-sm font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900"
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          </section>
+        </div>
+      </>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const frame = canvasFrame(canvasElement) as HTMLElement
+    const block = canvas.getByTestId('block-in-span')
+    const panel = canvasElement.querySelector(
+      '[data-page-panel]',
+    ) as HTMLElement
+
+    /** Paint order at a point, topmost first — hit testing follows painting. */
+    const stackAt = (x: number, y: number) => {
+      // The canvas is `pointer-events-none` by design, so it can never be hit;
+      // enable it for the probe only.
+      frame.style.pointerEvents = 'auto'
+      const stack = document.elementsFromPoint(x, y)
+      frame.style.pointerEvents = ''
+      return stack
+    }
+
+    // Probes 1 and 2 run at the top of the page, where the canvas band is.
+    window.scrollTo(0, 0)
+    const clip = frame.firstElementChild as HTMLElement
+    const clipBox = clip.getBoundingClientRect()
+    const heading = canvas.getByRole('heading', { name: 'Working together' })
+    const headingBox = heading.getBoundingClientRect()
+
+    // 1. The canvas paints above the page panel — the reason an isolating
+    //    ancestor is needed at all. (Without one, `-z-10` resolves against the
+    //    root and the canvas hides behind the panel.)
+    const overCanvas = stackAt(clipBox.left + 6, clipBox.top + 6)
+    await expect(overCanvas).toContain(frame)
+    await expect(overCanvas.indexOf(frame)).toBeLessThan(
+      overCanvas.indexOf(panel),
+    )
+
+    // 2. The hero's own text still paints above the canvas.
+    const overHeading = stackAt(
+      headingBox.left + 5,
+      headingBox.top + headingBox.height / 2,
+    )
+    await expect(overHeading.indexOf(frame)).toBeGreaterThan(0)
+
+    // 3. The block inside the canvas's span paints above the canvas — the
+    //    regression itself. It really is inside the span, or this would pass
+    //    for the wrong reason.
+    block.scrollIntoView({ block: 'center' })
+    const frameBox = frame.getBoundingClientRect()
+    const blockBox = block.getBoundingClientRect()
+    await expect(blockBox.top).toBeGreaterThan(frameBox.top)
+    await expect(blockBox.bottom).toBeLessThan(frameBox.bottom)
+
+    const overBlock = stackAt(
+      blockBox.left + blockBox.width / 2,
+      blockBox.top + blockBox.height / 2,
+    )
+    await expect(overBlock).toContain(frame)
+    await expect(overBlock.indexOf(block)).toBeLessThan(
+      overBlock.indexOf(frame),
+    )
   },
 }
 

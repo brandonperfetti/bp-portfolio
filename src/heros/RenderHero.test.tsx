@@ -133,12 +133,29 @@ describe('RenderHero — type shader, presentation fullBleed', () => {
     expect(bottomFade(container)).not.toBeNull()
   })
 
-  it('isolates the header so the -z-10 canvas stays above the page panel', () => {
+  // Regression, staging QA 2026-08-12: the header used to carry `isolate`,
+  // which trapped the -z-10 canvas in the header's own stacking context. The
+  // header then painted as one atomic unit above every following in-flow
+  // block, and a socialLinks container at y≈348 vanished behind the canvas.
+  // The isolation belongs on the route wrapper that holds hero *and* blocks
+  // (HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS); the header must only position.
+  it('positions the header without isolating it', () => {
+    const { container } = render(
+      <RenderHero page={page({ type: 'shader', presentation: 'fullBleed' })} />,
+    )
+    const header = container.querySelector('header')
+
+    expect(header).toHaveClass('relative')
+    expect(header).not.toHaveClass('isolate')
+    expect(header).toHaveAttribute('class', 'relative')
+  })
+
+  it('keeps the canvas in the negative layer so page content paints over it', () => {
     const { container } = render(
       <RenderHero page={page({ type: 'shader', presentation: 'fullBleed' })} />,
     )
 
-    expect(container.querySelector('header')).toHaveClass('relative', 'isolate')
+    expect(canvas(container)).toHaveClass('-z-10')
   })
 
   it('is what a page written before the field existed renders as', () => {
