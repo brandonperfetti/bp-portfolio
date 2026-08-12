@@ -11,6 +11,11 @@ import { revalidateGlobal } from '@/hooks/revalidateGlobal'
  * `buildPersonSchema` in the SEO layer and the Resume card's Download CV
  * button. Hard-coded `src/lib/identity.ts` constants remain the fallback
  * while fields here are empty.
+ *
+ * `email` is the exception: it has no constant fallback and no default. An
+ * address is the one identity field that is wrong to guess — a stale one
+ * routes real mail nowhere — so an empty field means "show no address"
+ * rather than "show the old one" (decided 2026-08-12, recorded on #32).
  */
 export const Identity: GlobalConfig = {
   slug: 'identity',
@@ -29,6 +34,14 @@ export const Identity: GlobalConfig = {
       name: 'jobTitle',
       type: 'text',
       defaultValue: 'Technical PM + Software Engineer',
+    },
+    {
+      name: 'email',
+      type: 'email',
+      admin: {
+        description:
+          'Public contact address. The Social Links block’s divider row uses it unless that block overrides it; leave this empty and no page shows an address at all.',
+      },
     },
     {
       name: 'image',

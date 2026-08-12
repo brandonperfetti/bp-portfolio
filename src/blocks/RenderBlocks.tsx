@@ -12,10 +12,12 @@ import { VideoEmbedComponent } from '@/blocks/VideoEmbed/Component'
 import { WorkHistoryCardComponent } from '@/blocks/WorkHistoryCard/Component'
 import { ContentBlockComponent } from '@/blocks/Content/Component'
 import { FeatureCardGridComponent } from '@/blocks/FeatureCardGrid/Component'
+import { HeadingBlockComponent } from '@/blocks/Heading/Component'
 import { ImageBlockComponent } from '@/blocks/Image/Component'
 import { LogoCarouselComponent } from '@/blocks/LogoCarousel/Component'
 import { MediaBlockComponent } from '@/blocks/MediaBlock/Component'
 import { PhotoStripBlockComponent } from '@/blocks/PhotoStrip/Component'
+import { ProseBlockComponent } from '@/blocks/Prose/Component'
 import { ShaderHeroBlockComponent } from '@/blocks/ShaderHero/Component'
 import { SocialLinksBlockComponent } from '@/blocks/SocialLinks/Component'
 import { SpacerBlockComponent } from '@/blocks/Spacer/Component'
@@ -89,6 +91,10 @@ export function RenderBlocks({
             return (
               <FeatureCardGridComponent key={key} {...block} hosted={hosted} />
             )
+          case 'heading':
+            return (
+              <HeadingBlockComponent key={key} {...block} hosted={hosted} />
+            )
           case 'image':
             return <ImageBlockComponent key={key} {...block} hosted={hosted} />
           case 'logoCarousel':
@@ -99,6 +105,8 @@ export function RenderBlocks({
             return <MediaBlockComponent key={key} {...block} hosted={hosted} />
           case 'photoStrip':
             return <PhotoStripBlockComponent key={key} {...block} />
+          case 'prose':
+            return <ProseBlockComponent key={key} {...block} hosted={hosted} />
           case 'shaderHero':
             return <ShaderHeroBlockComponent key={key} {...block} />
           case 'spacer':

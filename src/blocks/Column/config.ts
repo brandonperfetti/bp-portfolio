@@ -5,11 +5,13 @@ import { CallToAction } from '@/blocks/CallToAction/config'
 import { ContactForm } from '@/blocks/ContactForm/config'
 import { FaqList } from '@/blocks/FaqList/config'
 import { FeatureCardGrid } from '@/blocks/FeatureCardGrid/config'
+import { Heading } from '@/blocks/Heading/config'
 import { ImageBlock } from '@/blocks/Image/config'
 import { LogoCarousel } from '@/blocks/LogoCarousel/config'
 import { MediaBlock } from '@/blocks/MediaBlock/config'
 import { NewsletterSignup } from '@/blocks/NewsletterSignup/config'
 import { PhotoStrip } from '@/blocks/PhotoStrip/config'
+import { ProseBlock } from '@/blocks/Prose/config'
 import { SocialLinks } from '@/blocks/SocialLinks/config'
 import { Spacer } from '@/blocks/Spacer/config'
 import { Stats } from '@/blocks/Stats/config'
@@ -42,11 +44,13 @@ export const COLUMN_CONTENT_BLOCKS: Block[] = [
   ContactForm,
   FaqList,
   FeatureCardGrid,
+  Heading,
   ImageBlock,
   LogoCarousel,
   MediaBlock,
   NewsletterSignup,
   PhotoStrip,
+  ProseBlock,
   SocialLinks,
   Spacer,
   Stats,

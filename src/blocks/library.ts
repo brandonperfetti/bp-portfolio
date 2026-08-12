@@ -7,11 +7,13 @@ import { Container } from '@/blocks/Container/config'
 import { Content } from '@/blocks/Content/config'
 import { FaqList } from '@/blocks/FaqList/config'
 import { FeatureCardGrid } from '@/blocks/FeatureCardGrid/config'
+import { Heading } from '@/blocks/Heading/config'
 import { ImageBlock } from '@/blocks/Image/config'
 import { LogoCarousel } from '@/blocks/LogoCarousel/config'
 import { MediaBlock } from '@/blocks/MediaBlock/config'
 import { NewsletterSignup } from '@/blocks/NewsletterSignup/config'
 import { PhotoStrip } from '@/blocks/PhotoStrip/config'
+import { ProseBlock } from '@/blocks/Prose/config'
 import { ShaderHero } from '@/blocks/ShaderHero/config'
 import { SocialLinks } from '@/blocks/SocialLinks/config'
 import { Spacer } from '@/blocks/Spacer/config'
@@ -41,11 +43,13 @@ export const pageBuilderBlocks: Block[] = [
   Content,
   FaqList,
   FeatureCardGrid,
+  Heading,
   ImageBlock,
   LogoCarousel,
   MediaBlock,
   NewsletterSignup,
   PhotoStrip,
+  ProseBlock,
   ShaderHero,
   SocialLinks,
   Spacer,

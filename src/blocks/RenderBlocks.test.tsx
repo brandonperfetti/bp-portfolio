@@ -28,6 +28,14 @@ vi.mock('@/components/motion/HoverMotionCard', () => ({
 vi.mock('@/components/motion/ParallaxGroup', () => ({
   ParallaxGroup: ({ children }: any) => <>{children}</>,
 }))
+// GSAP + a live matchMedia read on mount; jsdom has neither. The tag and the
+// text are what the dispatcher owes it — the animation is asserted in the
+// heading block's own stories, in a browser.
+vi.mock('@/components/motion/AnimatedHeadline', () => ({
+  AnimatedHeadline: ({ text, as: As = 'h1', className }: any) => (
+    <As className={className}>{text}</As>
+  ),
+}))
 // jsdom has no matchMedia; the logo strip's marquee reads it on mount.
 vi.mock('@/lib/motion/usePrefersReducedMotion', () => ({
   usePrefersReducedMotion: () => false,
@@ -201,6 +209,39 @@ describe('RenderBlocks', () => {
     expect(screen.getByAltText('Brandon Perfetti')).toBeInTheDocument()
     expect(screen.getByText('On the pier').tagName).toBe('FIGCAPTION')
     expect(container.querySelector('[data-social-links]')).toBeInTheDocument()
+  })
+
+  it('dispatches the blocks added in W2B2 (#34, #35, #36)', () => {
+    const { container } = render(
+      <RenderBlocks
+        blocks={
+          [
+            {
+              blockType: 'prose',
+              id: 'body',
+              content: text('The about page body, off the hero at last.'),
+            },
+            {
+              blockType: 'heading',
+              id: 'title',
+              text: 'Working together',
+              level: 'h2',
+              variant: 'line',
+            },
+          ] as unknown as LayoutBlock[]
+        }
+      />,
+    )
+
+    expect(
+      screen.getByText('The about page body, off the hero at last.'),
+    ).toBeInTheDocument()
+    expect(container.querySelector('.prose')).toBeInTheDocument()
+    // The heading animates client-side; what the dispatcher owes it is the
+    // right tag and the accessible name.
+    expect(
+      screen.getByRole('heading', { name: 'Working together' }).tagName,
+    ).toBe('H2')
   })
 
   it('renders nothing for empty layouts', () => {

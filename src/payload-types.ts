@@ -255,11 +255,13 @@ export interface Page {
     | ContentBlock
     | FaqListBlock
     | FeatureCardGridBlock
+    | HeadingBlock
     | ImageBlock
     | LogoCarouselBlock
     | MediaBlock
     | NewsletterSignupBlock
     | PhotoStripBlock
+    | ProseBlock
     | ShaderHeroBlock
     | SocialLinksBlock
     | SpacerBlock
@@ -322,11 +324,13 @@ export interface Post {
         | ContentBlock
         | FaqListBlock
         | FeatureCardGridBlock
+        | HeadingBlock
         | ImageBlock
         | LogoCarouselBlock
         | MediaBlock
         | NewsletterSignupBlock
         | PhotoStripBlock
+        | ProseBlock
         | ShaderHeroBlock
         | SocialLinksBlock
         | SpacerBlock
@@ -397,6 +401,10 @@ export interface Media {
  */
 export interface ArticlesArchiveBlock {
   heading?: string | null;
+  /**
+   * Card grid is up to three cards across, ending in a “Browse all articles” link. Stacked list is the home page treatment: one article per row with the hover overlay and the whole card clickable, and no browse link — pair it with a column for the home-page layout.
+   */
+  variant: 'grid' | 'stacked';
   /**
    * How many recent articles to show.
    */
@@ -549,11 +557,13 @@ export interface ColumnBlock {
         | ContactFormBlock
         | FaqListBlock
         | FeatureCardGridBlock
+        | HeadingBlock
         | ImageBlock
         | LogoCarouselBlock
         | MediaBlock
         | NewsletterSignupBlock
         | PhotoStripBlock
+        | ProseBlock
         | SocialLinksBlock
         | SpacerBlock
         | StatsBlock
@@ -645,6 +655,27 @@ export interface FeatureCardGridBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'featureCardGrid';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "HeadingBlock".
+ */
+export interface HeadingBlock {
+  /**
+   * Plain text — the animation splits it into words or characters, so formatting would not survive.
+   */
+  text: string;
+  /**
+   * The tag that gets rendered, and the size that goes with it. Pages usually carry one h1 — pick h2 for a section heading.
+   */
+  level: 'h1' | 'h2' | 'h3';
+  /**
+   * Typewriter is the home and about page treatment. Either way, visitors who prefer reduced motion get the finished heading with no animation at all.
+   */
+  variant: 'line' | 'typewriter';
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'heading';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -752,6 +783,33 @@ export interface PhotoStripBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ProseBlock".
+ */
+export interface ProseBlock {
+  /**
+   * Long-form body copy. Renders with exactly the typography an article body gets.
+   */
+  content: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'prose';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "SocialLinksBlock".
  */
 export interface SocialLinksBlock {
@@ -784,7 +842,7 @@ export interface SocialLinksBlock {
    */
   showEmailDivider?: boolean | null;
   /**
-   * Address for the divider row.
+   * Leave empty to use the address on the Identity global, so one edit there updates every page. Fill it in only when this page needs a different address. If both are empty the row is hidden rather than shown broken.
    */
   email?: string | null;
   id?: string | null;
@@ -1600,11 +1658,13 @@ export interface PagesSelect<T extends boolean = true> {
         content?: T | ContentBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
+        heading?: T | HeadingBlockSelect<T>;
         image?: T | ImageBlockSelect<T>;
         logoCarousel?: T | LogoCarouselBlockSelect<T>;
         mediaBlock?: T | MediaBlockSelect<T>;
         newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
         photoStrip?: T | PhotoStripBlockSelect<T>;
+        prose?: T | ProseBlockSelect<T>;
         shaderHero?: T | ShaderHeroBlockSelect<T>;
         socialLinks?: T | SocialLinksBlockSelect<T>;
         spacer?: T | SpacerBlockSelect<T>;
@@ -1633,6 +1693,7 @@ export interface PagesSelect<T extends boolean = true> {
  */
 export interface ArticlesArchiveBlockSelect<T extends boolean = true> {
   heading?: T;
+  variant?: T;
   limit?: T;
   id?: T;
   blockName?: T;
@@ -1716,11 +1777,13 @@ export interface ColumnBlockSelect<T extends boolean = true> {
         contactForm?: T | ContactFormBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
+        heading?: T | HeadingBlockSelect<T>;
         image?: T | ImageBlockSelect<T>;
         logoCarousel?: T | LogoCarouselBlockSelect<T>;
         mediaBlock?: T | MediaBlockSelect<T>;
         newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
         photoStrip?: T | PhotoStripBlockSelect<T>;
+        prose?: T | ProseBlockSelect<T>;
         socialLinks?: T | SocialLinksBlockSelect<T>;
         spacer?: T | SpacerBlockSelect<T>;
         stats?: T | StatsBlockSelect<T>;
@@ -1774,6 +1837,17 @@ export interface FeatureCardGridBlockSelect<T extends boolean = true> {
             };
         id?: T;
       };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "HeadingBlock_select".
+ */
+export interface HeadingBlockSelect<T extends boolean = true> {
+  text?: T;
+  level?: T;
+  variant?: T;
   id?: T;
   blockName?: T;
 }
@@ -1834,6 +1908,15 @@ export interface NewsletterSignupBlockSelect<T extends boolean = true> {
  */
 export interface PhotoStripBlockSelect<T extends boolean = true> {
   images?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ProseBlock_select".
+ */
+export interface ProseBlockSelect<T extends boolean = true> {
+  content?: T;
   id?: T;
   blockName?: T;
 }
@@ -1972,11 +2055,13 @@ export interface PostsSelect<T extends boolean = true> {
         content?: T | ContentBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
+        heading?: T | HeadingBlockSelect<T>;
         image?: T | ImageBlockSelect<T>;
         logoCarousel?: T | LogoCarouselBlockSelect<T>;
         mediaBlock?: T | MediaBlockSelect<T>;
         newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
         photoStrip?: T | PhotoStripBlockSelect<T>;
+        prose?: T | ProseBlockSelect<T>;
         shaderHero?: T | ShaderHeroBlockSelect<T>;
         socialLinks?: T | SocialLinksBlockSelect<T>;
         spacer?: T | SpacerBlockSelect<T>;
@@ -2412,6 +2497,10 @@ export interface Identity {
   id: number;
   name: string;
   jobTitle?: string | null;
+  /**
+   * Public contact address. The Social Links block’s divider row uses it unless that block overrides it; leave this empty and no page shows an address at all.
+   */
+  email?: string | null;
   image?: (number | null) | Media;
   /**
    * CV file (PDF) served by the “Download CV” button on the home-page Work card. Upload a fresh copy here whenever the resume changes — no deploy needed.
@@ -2494,6 +2583,7 @@ export interface FooterSelect<T extends boolean = true> {
 export interface IdentitySelect<T extends boolean = true> {
   name?: T;
   jobTitle?: T;
+  email?: T;
   image?: T;
   resume?: T;
   sameAs?:

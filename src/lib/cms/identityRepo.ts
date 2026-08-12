@@ -14,6 +14,15 @@ import {
 export interface CmsIdentity {
   name: string
   jobTitle?: string
+  /**
+   * Public contact address, or `undefined` when the global has none.
+   *
+   * @remarks Deliberately without a constant fallback, unlike every other
+   * field here: an address that is merely plausible sends real mail into a
+   * void, so surfaces that show one (the social-links block's divider row)
+   * hide themselves instead of guessing.
+   */
+  email?: string
   /** Avatar URL for the Person schema `image`. */
   image?: string
   /** Social profile URLs for the Person schema `sameAs` list. */
@@ -42,6 +51,7 @@ export const getCmsIdentity = unstable_cache(
     return {
       name: identity?.name || SITE_OWNER_NAME,
       jobTitle: identity?.jobTitle || SITE_OWNER_JOB_TITLE,
+      email: identity?.email?.trim() || undefined,
       image: mediaUrl(identity?.image) || PERSON_IMAGE_URL,
       sameAs: sameAs.length ? sameAs : SITE_OWNER_SOCIAL_LINKS,
       resumeUrl: mediaUrl(identity?.resume),

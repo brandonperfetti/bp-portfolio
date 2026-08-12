@@ -1,8 +1,5 @@
 import type { Block } from 'payload'
 
-/** Default address for the About treatment's divider row. */
-export const DEFAULT_SOCIAL_EMAIL = 'info@brandonperfetti.com'
-
 /**
  * Social profile links (CMS page builder) in the site's two existing
  * treatments: Home's bare icon row and About's labeled list with its
@@ -101,13 +98,14 @@ export const SocialLinks: Block = {
     },
     {
       name: 'email',
-      type: 'text',
-      defaultValue: DEFAULT_SOCIAL_EMAIL,
+      type: 'email',
+      label: 'Override the address',
       admin: {
         condition: (_, siblingData) =>
           siblingData?.variant === 'labeledList' &&
           Boolean(siblingData?.showEmailDivider),
-        description: 'Address for the divider row.',
+        description:
+          'Leave empty to use the address on the Identity global, so one edit there updates every page. Fill it in only when this page needs a different address. If both are empty the row is hidden rather than shown broken.',
       },
     },
   ],

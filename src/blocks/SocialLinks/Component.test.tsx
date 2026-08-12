@@ -106,6 +106,100 @@ describe('SocialLinksBlockComponent', () => {
     ).toBeNull()
   })
 
+  /**
+   * The divider address, in one order: block override → Identity global →
+   * hidden (Brandon, 2026-08-12, recorded on #32). The block field survives
+   * as the per-page escape hatch; what it lost is its hard-coded default, so
+   * "the site's address" now lives in exactly one editable place.
+   */
+  describe('divider address resolution', () => {
+    const dividerBlock = (overrides: Partial<SocialLinksBlock> = {}) =>
+      block({ variant: 'labeledList', showEmailDivider: true, ...overrides })
+
+    const identityWith = (email?: string) =>
+      getCmsIdentity.mockResolvedValue({
+        name: 'Brandon Perfetti',
+        sameAs: ['https://github.com/brandonperfetti'],
+        email,
+      })
+
+    it('falls back to the Identity global when the block sets no override', async () => {
+      identityWith('hello@brandonperfetti.com')
+      render(await SocialLinksBlockComponent(dividerBlock()))
+
+      expect(
+        screen.getByRole('link', { name: 'hello@brandonperfetti.com' }),
+      ).toHaveAttribute('href', 'mailto:hello@brandonperfetti.com')
+    })
+
+    it('prefers the block override over the global', async () => {
+      identityWith('hello@brandonperfetti.com')
+      render(
+        await SocialLinksBlockComponent(
+          dividerBlock({ email: 'press@brandonperfetti.com' }),
+        ),
+      )
+
+      expect(
+        screen.getByRole('link', { name: 'press@brandonperfetti.com' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByText('hello@brandonperfetti.com')).toBeNull()
+    })
+
+    it('treats a blank override as no override, not as an empty address', async () => {
+      identityWith('hello@brandonperfetti.com')
+      render(await SocialLinksBlockComponent(dividerBlock({ email: '  ' })))
+
+      expect(
+        screen.getByRole('link', { name: 'hello@brandonperfetti.com' }),
+      ).toBeInTheDocument()
+    })
+
+    it('hides the row when neither the block nor the global has an address', async () => {
+      identityWith(undefined)
+      render(await SocialLinksBlockComponent(dividerBlock()))
+
+      // The profile link is still there; only the mail row is gone.
+      expect(screen.getAllByRole('listitem')).toHaveLength(1)
+      expect(screen.queryByText(/@brandonperfetti\.com/)).toBeNull()
+    })
+
+    it('reads the global for the address even when the links are custom', async () => {
+      identityWith('hello@brandonperfetti.com')
+      render(
+        await SocialLinksBlockComponent(
+          dividerBlock({
+            source: 'custom',
+            links: [{ id: 'a', url: 'https://github.com/someone' }],
+          }),
+        ),
+      )
+
+      expect(getCmsIdentity).toHaveBeenCalledTimes(1)
+      expect(
+        screen.getByRole('link', { name: 'hello@brandonperfetti.com' }),
+      ).toBeInTheDocument()
+    })
+
+    it('skips the global entirely when custom links carry their own override', async () => {
+      identityWith('hello@brandonperfetti.com')
+      render(
+        await SocialLinksBlockComponent(
+          dividerBlock({
+            source: 'custom',
+            email: 'press@brandonperfetti.com',
+            links: [{ id: 'a', url: 'https://github.com/someone' }],
+          }),
+        ),
+      )
+
+      expect(getCmsIdentity).not.toHaveBeenCalled()
+      expect(
+        screen.getByRole('link', { name: 'press@brandonperfetti.com' }),
+      ).toBeInTheDocument()
+    })
+  })
+
   it('renders nothing when there is nothing to render', async () => {
     getCmsIdentity.mockResolvedValue({ name: 'Brandon Perfetti', sameAs: [] })
     const { container } = render(await SocialLinksBlockComponent(block()))

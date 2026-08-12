@@ -162,6 +162,25 @@ export const EmailOnly: Story = {
 }
 
 /**
+ * No address anywhere — the block sets no override and the Identity global
+ * is empty — so the row is simply absent. A state the block could not reach
+ * until the field's hard-coded default was dropped (rider on #32, 2026-08-12):
+ * the resolution order is block override → Identity `email` → hidden, and
+ * this is what "hidden" looks like.
+ */
+export const LabeledListWithoutEmail: Story = {
+  args: { variant: 'labeledList', links: IDENTITY_LINKS, email: undefined },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const items = canvas.getAllByRole('listitem')
+
+    await expect(items).toHaveLength(IDENTITY_LINKS.length)
+    await expect(canvasElement.querySelector('.border-t')).toBeNull()
+    await expect(canvasElement.querySelector('a[href^="mailto:"]')).toBeNull()
+  },
+}
+
+/**
  * The #40 contract: at root the block carries its own `my-12`; inside a
  * column the stack owns the rhythm and the block emits none.
  */

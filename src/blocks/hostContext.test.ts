@@ -17,7 +17,9 @@ const read = (relative: string) =>
 
 /** The block grids that swapped viewport variants for container queries (F1). */
 const CONTEXT_AWARE_GRIDS = [
-  'src/blocks/ArticlesArchive/Component.tsx',
+  // The archive's grid moved to its presentational half in W2B2 (#34), where
+  // the stacked variant lives beside it.
+  'src/blocks/ArticlesArchive/ArticlesArchiveView.tsx',
   'src/blocks/FeatureCardGrid/Component.tsx',
   'src/blocks/Stats/Component.tsx',
   'src/blocks/Testimonials/Component.tsx',
@@ -34,11 +36,13 @@ const COLUMN_ELIGIBLE_BLOCK_DIRS: Record<string, string> = {
   cta: 'CallToAction',
   faqList: 'FaqList',
   featureCardGrid: 'FeatureCardGrid',
+  heading: 'Heading',
   image: 'Image',
   logoCarousel: 'LogoCarousel',
   mediaBlock: 'MediaBlock',
   newsletterSignup: 'NewsletterSignup',
   photoStrip: 'PhotoStrip',
+  prose: 'Prose',
   socialLinks: 'SocialLinks',
   spacer: 'Spacer',
   stats: 'Stats',
@@ -48,15 +52,17 @@ const COLUMN_ELIGIBLE_BLOCK_DIRS: Record<string, string> = {
 }
 
 /**
- * The five blocks W1B5 left behind (#40's residual) plus the two blocks
- * added in this batch, all of which take their outer margin from the host.
+ * The five blocks W1B5 left behind (#40's residual), plus every block added
+ * since — all of which take their outer margin from the host.
  */
 const RHYTHM_CONVERTED_BLOCKS = [
   'src/blocks/CallToAction/Component.tsx',
   'src/blocks/FaqList/Component.tsx',
+  'src/blocks/Heading/Component.tsx',
   'src/blocks/Image/ImageView.tsx',
   'src/blocks/LogoCarousel/Component.tsx',
   'src/blocks/MediaBlock/Component.tsx',
+  'src/blocks/Prose/Component.tsx',
   'src/blocks/SocialLinks/SocialLinksView.tsx',
   'src/blocks/VideoEmbed/Component.tsx',
 ]

@@ -193,6 +193,19 @@ const DEMO_BLOCKS: LayoutBlock[] = [
   } as unknown as LayoutBlock,
   { blockType: 'spacer', size: 'md' },
   {
+    blockType: 'heading',
+    text: 'A heading an editor can place anywhere',
+    level: 'h2',
+    variant: 'line',
+  } as unknown as LayoutBlock,
+  {
+    blockType: 'prose',
+    content: richText(
+      'Long-form body copy that renders with exactly the typography an article body gets — the block that lets a page keep its body out of the hero group.',
+    ),
+  } as unknown as LayoutBlock,
+  { blockType: 'spacer', size: 'md' },
+  {
     blockType: 'shaderHero',
     preset: 'northern-lights-2',
     richText: richText(
