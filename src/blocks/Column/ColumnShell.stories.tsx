@@ -4,6 +4,7 @@ import { expect, within } from 'storybook/test'
 import { ColumnShell } from '@/blocks/Column/ColumnShell'
 import { COLUMN_SIZES } from '@/blocks/Column/sizes'
 import { ContainerGrid } from '@/blocks/Container/ContainerGrid'
+import { RenderBlocks, type RenderableBlock } from '@/blocks/RenderBlocks'
 
 /** Stand-in for the blocks an editor stacks inside a column. */
 function Panel({ label }: { label: string }) {
@@ -171,6 +172,219 @@ export const StickyRailMobile: Story = {
       if (className.includes('sticky') || className.startsWith('top-')) {
         await expect(className).toMatch(/^lg:/)
       }
+    }
+  },
+}
+
+/**
+ * An archive-like card grid as the admin stores it — the shape that used to
+ * cram three columns into a half column because it sized itself off the
+ * window (visual-QA F1).
+ */
+const CARD_GRID = [
+  {
+    blockType: 'featureCardGrid',
+    id: 'hosted-grid',
+    heading: 'Recent work',
+    cards: [
+      {
+        id: 'g1',
+        title: 'A card',
+        copy: 'Cards pair up once the grid has room for two.',
+        enableLink: false,
+      },
+      {
+        id: 'g2',
+        title: 'Another card',
+        copy: 'And go three-up at the width the content column reaches.',
+        enableLink: false,
+      },
+      {
+        id: 'g3',
+        title: 'A third card',
+        copy: 'Below that they stack, however wide the window is.',
+        enableLink: false,
+      },
+    ],
+  },
+] as unknown as RenderableBlock[]
+
+/** The newsletter signup — one of the three cards with no width control. */
+const ZERO_CONFIG_CARD = [
+  { blockType: 'newsletterSignup', id: 'hosted-card' },
+] as unknown as RenderableBlock[]
+
+/**
+ * Columns the way the container renders them, so the fixtures exercise the
+ * real dispatch path (`hosted="column"`) rather than a hand-built stand-in.
+ */
+function HostedBlocks({ blocks }: { blocks: RenderableBlock[] }) {
+  return <RenderBlocks blocks={blocks} hosted="column" />
+}
+
+/** Track count Chrome resolved for a grid — the thing container queries move. */
+const renderedColumnCount = (grid: Element) =>
+  getComputedStyle(grid).gridTemplateColumns.split(' ').length
+
+/**
+ * What the thresholds in `hostContext.ts` say a grid of this container width
+ * should render: `@md` (448px) pairs the cards, `@3xl` (768px) goes three-up.
+ */
+const expectedColumnCount = (containerWidth: number) =>
+  containerWidth >= 768 ? 3 : containerWidth >= 448 ? 2 : 1
+
+/**
+ * Asserts the column's half of the bargain plus the grid's: the column states
+ * the rhythm, the hosted block states none, and the grid's column count
+ * follows *its own* container width at whatever size the runner's window is.
+ */
+async function expectContextAwareColumn(canvasElement: HTMLElement) {
+  const column = canvasElement.querySelector('div.col-span-12')
+  await expect(column).toHaveClass('space-y-10')
+
+  const section = column?.querySelector('section')
+  await expect(section).not.toHaveClass('my-12')
+
+  const queryContainer = canvasElement.querySelector<HTMLElement>(
+    '[class*="@container"]',
+  )
+  const grid = queryContainer?.querySelector('ul[role="list"]')
+  await expect(grid).not.toBeNull()
+  await expect(renderedColumnCount(grid as Element)).toBe(
+    expectedColumnCount(queryContainer?.clientWidth ?? 0),
+  )
+}
+
+/**
+ * F1, narrow end: a quarter-width column. The grid measures its own box, so
+ * the cards stack instead of splintering into unreadable strips — the same
+ * markup that goes three-up at root.
+ */
+export const HostedGridInNarrowColumn: Story = {
+  args: { size: 'oneQuarter' },
+  globals: { viewport: { value: 'desktop' } },
+  render: (args) => (
+    <ColumnShell {...args}>
+      <HostedBlocks blocks={CARD_GRID} />
+    </ColumnShell>
+  ),
+  play: async ({ canvasElement }) => {
+    await expectContextAwareColumn(canvasElement)
+  },
+}
+
+/**
+ * F1, the measured defect: a half column at desktop. This is where
+ * `lg:grid-cols-3` used to fire in ~470px and produce three ~150px columns.
+ */
+export const HostedGridInHalfColumn: Story = {
+  args: { size: 'half' },
+  globals: { viewport: { value: 'desktop' } },
+  render: (args) => (
+    <ColumnShell {...args}>
+      <HostedBlocks blocks={CARD_GRID} />
+    </ColumnShell>
+  ),
+  play: async ({ canvasElement }) => {
+    await expectContextAwareColumn(canvasElement)
+  },
+}
+
+/** F1, wide end: a full-width column, where the grid has room to spread. */
+export const HostedGridInFullColumn: Story = {
+  args: { size: 'full' },
+  globals: { viewport: { value: 'desktop' } },
+  render: (args) => (
+    <ColumnShell {...args}>
+      <HostedBlocks blocks={CARD_GRID} />
+    </ColumnShell>
+  ),
+  play: async ({ canvasElement }) => {
+    await expectContextAwareColumn(canvasElement)
+  },
+}
+
+/**
+ * F2, the stacked case: two blocks in one column. The blocks bring no margin
+ * of their own, so the space between them is the column's `space-y-10` —
+ * once, not a block margin on top of a row gap.
+ */
+export const HostedStackOwnsItsRhythm: Story = {
+  args: { size: 'full' },
+  globals: { viewport: { value: 'desktop' } },
+  render: (args) => (
+    <ColumnShell {...args}>
+      <HostedBlocks blocks={[...ZERO_CONFIG_CARD, ...CARD_GRID]} />
+    </ColumnShell>
+  ),
+  play: async ({ canvasElement }) => {
+    const column = canvasElement.querySelector('div.col-span-12')
+    const [first, second] = Array.from(
+      column?.querySelectorAll(':scope > section') ?? [],
+    )
+
+    // Nothing sticks out past the column's own edges: the stack's spacing
+    // lives between the blocks, not around them.
+    await expect(getComputedStyle(first).marginTop).toBe('0px')
+    await expect(getComputedStyle(second).marginBottom).toBe('0px')
+
+    // And between them it is stated exactly once (space-y-10 = 40px), rather
+    // than a block margin collapsing — or failing to — over a row gap.
+    const gap =
+      second.getBoundingClientRect().top - first.getBoundingClientRect().bottom
+    await expect(Math.round(gap)).toBe(40)
+  },
+}
+
+/**
+ * F3 in a half column: the card fills the width the editor chose. Its own
+ * `max-w-xl` only ever made sense at root, where it is a reading measure
+ * rather than a reason to leave half a background band empty.
+ */
+export const HostedCardInHalfColumn: Story = {
+  args: { size: 'half' },
+  globals: { viewport: { value: 'desktop' } },
+  render: (args) => (
+    <>
+      <ColumnShell {...args}>
+        <HostedBlocks blocks={ZERO_CONFIG_CARD} />
+      </ColumnShell>
+      <ColumnShell size="half">
+        <HostedBlocks blocks={CARD_GRID} />
+      </ColumnShell>
+    </>
+  ),
+  play: async ({ canvasElement }) => {
+    // Scoped to the column: the decorator's own ContainerGrid section is a
+    // root-level block and rightly still carries `my-12`.
+    const column = canvasElement.querySelector('div.col-span-12')
+    const section = column?.querySelector('section')
+    await expect(section).toHaveClass('max-w-none')
+    await expect(section).not.toHaveClass('max-w-xl')
+    await expect(section).not.toHaveClass('my-12')
+  },
+}
+
+/**
+ * F3 in a full column — the C6 case, where a capped card left the right half
+ * of a gradient band empty. The card now measures exactly the column.
+ */
+export const HostedCardInFullColumn: Story = {
+  args: { size: 'full' },
+  globals: { viewport: { value: 'desktop' } },
+  render: (args) => (
+    <ColumnShell {...args}>
+      <HostedBlocks blocks={ZERO_CONFIG_CARD} />
+    </ColumnShell>
+  ),
+  play: async ({ canvasElement }) => {
+    const column = canvasElement.querySelector('div.col-span-12')
+    const section = column?.querySelector('section')
+    await expect(section).toHaveClass('max-w-none')
+    // Only a meaningful comparison once the column is wider than the
+    // `max-w-xl` the card used to cap itself at.
+    if ((column?.clientWidth ?? 0) > 576) {
+      await expect(section?.clientWidth).toBe(column?.clientWidth)
     }
   },
 }

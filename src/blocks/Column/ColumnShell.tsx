@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 import { columnSizeClass } from '@/blocks/Column/sizes'
 import { stickyColumnClass } from '@/blocks/Column/sticky'
+import { COLUMN_STACK_SPACING_CLASS } from '@/blocks/hostContext'
 import { cn } from '@/lib/utils'
 
 /**
@@ -18,6 +19,13 @@ import { cn } from '@/lib/utils'
  * @param className - Extra classes for the column element.
  * @remarks Plain props, no CMS types — the block Component resolves data
  * and hands it here, and the stories drive this layer directly.
+ *
+ * The column owns the space between the blocks it stacks
+ * ({@link COLUMN_STACK_SPACING_CLASS}). Blocks rendered here drop the
+ * `my-12` they carry at root, so the rhythm is stated once, by the host,
+ * instead of every block's margin stacking on top of the grid's row gap —
+ * which is what put 128px between two stacked cards where the design wants
+ * the homepage rail's 40.
  */
 export function ColumnShell({
   size,
@@ -35,6 +43,7 @@ export function ColumnShell({
       className={cn(
         columnSizeClass(size),
         stickyColumnClass(sticky),
+        COLUMN_STACK_SPACING_CLASS,
         className,
       )}
     >

@@ -17,6 +17,10 @@ import { MediaBlockComponent } from '@/blocks/MediaBlock/Component'
 import { PhotoStripBlockComponent } from '@/blocks/PhotoStrip/Component'
 import { ShaderHeroBlockComponent } from '@/blocks/ShaderHero/Component'
 import { SpacerBlockComponent } from '@/blocks/Spacer/Component'
+import {
+  type BlockHostContext,
+  DEFAULT_BLOCK_HOST_CONTEXT,
+} from '@/blocks/hostContext'
 import type { ColumnBlock, Page } from '@/payload-types'
 
 type LayoutBlock = NonNullable<Page['layout']>[number]
@@ -43,11 +47,20 @@ export type RenderableBlock = ColumnContentBlock | LayoutBlock
  * Also renders column content: `container` → `column` → blocks recurses
  * back through here, so a column's leaf blocks reach the same dispatcher as
  * root-level ones and stay a single set.
+ *
+ * @param blocks - The blocks to dispatch, in stored order.
+ * @param hosted - Where these blocks are rendering (see
+ * {@link BlockHostContext}). Defaults to `root`, so every call site that
+ * predates this prop renders exactly as it did; the column block passes
+ * `column`, which is how a block learns it no longer owns the page width.
+ * Blocks that lay out identically in either context simply ignore it.
  */
 export function RenderBlocks({
   blocks,
+  hosted = DEFAULT_BLOCK_HOST_CONTEXT,
 }: {
   blocks: RenderableBlock[] | null | undefined
+  hosted?: BlockHostContext
 }) {
   if (!blocks?.length) return null
 
@@ -61,9 +74,13 @@ export function RenderBlocks({
           case 'container':
             return <ContainerBlockComponent key={key} {...block} />
           case 'content':
-            return <ContentBlockComponent key={key} {...block} />
+            return (
+              <ContentBlockComponent key={key} {...block} hosted={hosted} />
+            )
           case 'featureCardGrid':
-            return <FeatureCardGridComponent key={key} {...block} />
+            return (
+              <FeatureCardGridComponent key={key} {...block} hosted={hosted} />
+            )
           case 'logoCarousel':
             return <LogoCarouselComponent key={key} {...block} />
           case 'mediaBlock':
@@ -75,21 +92,25 @@ export function RenderBlocks({
           case 'spacer':
             return <SpacerBlockComponent key={key} {...block} />
           case 'articlesArchive':
-            return <ArticlesArchiveComponent key={key} {...block} />
+            return (
+              <ArticlesArchiveComponent key={key} {...block} hosted={hosted} />
+            )
           case 'contactForm':
-            return <ContactFormComponent key={key} />
+            return <ContactFormComponent key={key} hosted={hosted} />
           case 'faqList':
             return <FaqListComponent key={key} {...block} />
           case 'newsletterSignup':
-            return <NewsletterSignupComponent key={key} />
+            return <NewsletterSignupComponent key={key} hosted={hosted} />
           case 'stats':
-            return <StatsComponent key={key} {...block} />
+            return <StatsComponent key={key} {...block} hosted={hosted} />
           case 'testimonials':
-            return <TestimonialsComponent key={key} {...block} />
+            return (
+              <TestimonialsComponent key={key} {...block} hosted={hosted} />
+            )
           case 'videoEmbed':
             return <VideoEmbedComponent key={key} {...block} />
           case 'workHistoryCard':
-            return <WorkHistoryCardComponent key={key} />
+            return <WorkHistoryCardComponent key={key} hosted={hosted} />
           default: {
             if (process.env.NODE_ENV !== 'production') {
               // `block` is `never` here (the switch is exhaustive over the

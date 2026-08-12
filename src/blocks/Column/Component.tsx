@@ -16,7 +16,10 @@ export function ColumnBlockComponent(props: ColumnBlock) {
 
   return (
     <ColumnShell size={size} sticky={sticky}>
-      <RenderBlocks blocks={content} />
+      {/* `column` is what tells a leaf block it no longer owns the page
+          width: it drops its own outer margin (the shell stacks the blocks
+          instead) and fills the width the editor picked here. */}
+      <RenderBlocks blocks={content} hosted="column" />
     </ColumnShell>
   )
 }

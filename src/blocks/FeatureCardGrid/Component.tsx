@@ -3,6 +3,7 @@ import Image from 'next/image'
 import { CMSLink } from '@/components/cms/CMSLink'
 import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
+import { type BlockHostContext, blockRhythmClass } from '@/blocks/hostContext'
 import type { FeatureCardGridBlock, Media } from '@/payload-types'
 
 const media = (m: unknown): Media | null =>
@@ -12,13 +13,22 @@ const media = (m: unknown): Media | null =>
  * Feature card grid (CMS page builder): 1/2/3-column responsive grid in the
  * site's card language — icon disc, eyebrow, title, copy, optional link.
  * Reveal + hover motion come from the shared wrappers (reduced-motion safe).
+ *
+ * @param props - The stored block, plus `hosted`: where it is rendering.
+ * @remarks The grid counts columns from its own container width, not the
+ * viewport (see `hostContext.ts`), so the same three cards read as one
+ * column in a narrow column and three at root. The reveal wrapper doubles as
+ * the query container — it is the element that carries the grid's `mt-8`, so
+ * the margin still collapses into the section's exactly as before.
  */
-export function FeatureCardGridComponent(props: FeatureCardGridBlock) {
+export function FeatureCardGridComponent(
+  props: FeatureCardGridBlock & { hosted?: BlockHostContext },
+) {
   const { heading, intro, cards } = props
   if (!cards?.length) return null
 
   return (
-    <section className="my-12">
+    <section className={blockRhythmClass(props.hosted)}>
       {heading ? (
         <h2 className="text-2xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
           {heading}
@@ -29,11 +39,11 @@ export function FeatureCardGridComponent(props: FeatureCardGridBlock) {
           {intro}
         </p>
       ) : null}
-      <ScrollReveal targets="li">
+      <ScrollReveal targets="li" className="@container mt-8">
         <ul
           role="list"
-          className={`mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 ${
-            cards.length >= 3 ? 'lg:grid-cols-3' : ''
+          className={`grid grid-cols-1 gap-6 @md:grid-cols-2 ${
+            cards.length >= 3 ? '@3xl:grid-cols-3' : ''
           }`}
         >
           {cards.map((card, index) => {

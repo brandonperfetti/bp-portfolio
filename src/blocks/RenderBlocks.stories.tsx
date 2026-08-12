@@ -271,6 +271,73 @@ export const ContentColumns: Story = {
   args: { blocks: [DEMO_BLOCKS[0]] },
 }
 
+/** Widths that bracket the two container-query thresholds (`hostContext.ts`). */
+const HOSTED_WIDTHS = [
+  { width: 320, label: 'Narrow rail (320px)', columns: 1 },
+  { width: 470, label: 'Half column at desktop (470px)', columns: 2 },
+  { width: 900, label: 'Root content column (900px)', columns: 3 },
+]
+
+/**
+ * The F1 fix, pinned to widths instead of a window: the same block rendered
+ * in three boxes, counting its columns from the box it was given. Before
+ * this, all three read `lg:grid-cols-3` off the viewport and rendered three
+ * columns — including the 470px one, where the cards were ~150px wide.
+ *
+ * Deliberately not viewport-driven: container queries make this measurable
+ * without resizing anything, which is the whole point of the change.
+ */
+export const HostedGridFollowsItsContainer: Story = {
+  args: { blocks: [DEMO_BLOCKS[4]] },
+  render: (args) => (
+    <div className="space-y-8">
+      {HOSTED_WIDTHS.map(({ width, label }) => (
+        <div key={width} style={{ width }} data-testid={`box-${width}`}>
+          <p className="text-xs font-semibold text-zinc-500 uppercase">
+            {label}
+          </p>
+          <RenderBlocks {...args} hosted="column" />
+        </div>
+      ))}
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    for (const { width, columns } of HOSTED_WIDTHS) {
+      const box = canvasElement.querySelector(`[data-testid="box-${width}"]`)
+      const grid = box?.querySelector('ul[role="list"]')
+      const rendered = getComputedStyle(grid as Element)
+        .gridTemplateColumns.split(' ')
+        .filter(Boolean)
+
+      await expect(
+        rendered.length,
+        `a ${width}px container should render ${columns} column(s)`,
+      ).toBe(columns)
+    }
+  },
+}
+
+/**
+ * The other half of the same contract: root-hosted blocks are untouched.
+ * `hosted` defaults to `root`, so the margin and the reading measure the
+ * blocks have always shipped are still exactly what a route renders.
+ */
+export const RootHostedBlocksKeepTheirChrome: Story = {
+  args: {
+    blocks: [
+      { blockType: 'newsletterSignup', id: 'root-card' },
+      DEMO_BLOCKS[4],
+    ] as LayoutBlock[],
+  },
+  play: async ({ canvasElement }) => {
+    const [card, grid] = Array.from(canvasElement.querySelectorAll('section'))
+
+    await expect(card).toHaveClass('my-12', 'max-w-xl')
+    await expect(grid).toHaveClass('my-12')
+    await expect(getComputedStyle(card).marginTop).toBe('48px')
+  },
+}
+
 export const CallToAction: Story = {
   args: { blocks: [DEMO_BLOCKS[2]] },
   // Interaction: both CMSLink-rendered actions resolve their hrefs.
