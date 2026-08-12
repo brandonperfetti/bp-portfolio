@@ -19,16 +19,18 @@
   Free-tier projects pause after ~1 week without traffic — if staging
   500s after a quiet stretch, unpause in the Supabase dashboard (Pro
   removes pausing; revisit at promotion). Supabase's auto-generated REST
-  Data API is UNUSED by this stack (Payload speaks Postgres directly) —
-  keep it DISABLED in project Settings → Data API so the 136 RLS-less
-  Drizzle tables are never network-exposed; re-check this on the
-  production project at promotion. Known cosmetic side effect of the
-  disable (diagnosed 2026-08-11): PostgREST retries its schema-cache
-  load against Supabase's placeholder every ~30s, so Postgres logs
-  fill with `schema "pg_pgrst_no_exposed_schemas" does not exist`
-  (3F000) and the Observability page reports a high "database error
-  rate" (~54%). App traffic never touches PostgREST and is unaffected
-  — do NOT re-diagnose this or re-enable the Data API to silence it.
+  Data API is UNUSED by this stack (Payload speaks Postgres directly).
+  Current arrangement (decided 2026-08-12, superseding the 2026-08-11
+  keep-it-disabled note): the Data API is enabled but its ONLY exposed
+  schema is `api` — a deliberately empty schema created for this purpose
+  (see its COMMENT in the DB). This gives PostgREST a valid schema to
+  load, which silences the former log noise (`schema
+"pg_pgrst_no_exposed_schemas" does not exist` every ~30s + a bogus
+  ~54% "database error rate" in Observability), while the 136 RLS-less
+  Drizzle tables in `public` remain unexposed. Do NOT add `public` (or
+  any schema containing real tables) to the exposed-schemas list, and do
+  NOT create tables in `api`; re-check both on the production project at
+  promotion.
   Blob store `bp-portfolio-media` is public-read.
 - **Database backups (nightly, encrypted)**: Supabase free tier has NO
   automated backups, and the DB is the canonical copy of all content —
