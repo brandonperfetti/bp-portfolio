@@ -524,6 +524,10 @@ export interface ContainerBlock {
      */
     paddingY: 'none' | 'sm' | 'md' | 'lg';
     /**
+     * Outer spacing above and below the section. Default keeps the compact rhythm every container has always had; Home matches the two-column rhythm of the hard-coded homepage grid.
+     */
+    rhythm?: ('default' | 'home') | null;
+    /**
      * Optional. Makes the section linkable as #anchor — lowercase letters, numbers, hyphens and underscores, starting with a letter.
      */
     anchorId?: string | null;
@@ -1808,6 +1812,7 @@ export interface ContainerBlockSelect<T extends boolean = true> {
     | {
         width?: T;
         paddingY?: T;
+        rhythm?: T;
         anchorId?: T;
         hidden?: T;
         background?:

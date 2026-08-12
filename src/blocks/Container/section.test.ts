@@ -16,15 +16,20 @@ import { Container } from '@/blocks/Container/config'
 import {
   ANCHOR_ID_MAX_LENGTH,
   DEFAULT_SECTION_PADDING_Y,
+  DEFAULT_SECTION_RHYTHM,
   DEFAULT_SECTION_WIDTH,
   SECTION_PADDING_Y,
   SECTION_PADDING_Y_CLASSES,
   SECTION_PADDING_Y_OPTIONS,
+  SECTION_RHYTHMS,
+  SECTION_RHYTHM_CLASSES,
+  SECTION_RHYTHM_OPTIONS,
   SECTION_WIDTHS,
   SECTION_WIDTH_CLASSES,
   SECTION_WIDTH_OPTIONS,
   anchorIdAttribute,
   sectionPaddingYClass,
+  sectionRhythmClass,
   sectionWidthClass,
   validateAnchorId,
 } from '@/blocks/Container/section'
@@ -53,6 +58,7 @@ const fieldNamed = <T extends Field>(name: string): T => {
 
 const widthField = fieldNamed<SelectField>('width')
 const paddingField = fieldNamed<SelectField>('paddingY')
+const rhythmField = fieldNamed<SelectField>('rhythm')
 const anchorField = fieldNamed<TextField>('anchorId')
 const hiddenField = fieldNamed<CheckboxField>('hidden')
 
@@ -162,6 +168,62 @@ describe('section vertical padding map', () => {
     expect(sectionPaddingYClass(null)).toBe('')
     expect(sectionPaddingYClass('xl')).toBe('')
     expect(sectionPaddingYClass('md')).toBe('py-16')
+  })
+})
+
+describe('section vertical rhythm map (#42)', () => {
+  it('exposes the settled vocabulary in admin order', () => {
+    expect(SECTION_RHYTHMS.map((rhythm) => rhythm.value)).toEqual([
+      'default',
+      'home',
+    ])
+  })
+
+  it('offers exactly the rhythms the class map can render', () => {
+    expect(new Set(optionValues(rhythmField))).toEqual(
+      new Set(Object.keys(SECTION_RHYTHM_CLASSES)),
+    )
+    expect(rhythmField.options).toEqual(SECTION_RHYTHM_OPTIONS)
+  })
+
+  it('defaults to the compact my-12 every container has always had', () => {
+    expect(DEFAULT_SECTION_RHYTHM).toBe('default')
+    // The whole point of the opt-in: unless an editor chooses otherwise, the
+    // section keeps the exact margin it had before this control existed.
+    expect(sectionRhythmClass('default')).toBe('my-12')
+    expect(rhythmField.defaultValue).toBe(DEFAULT_SECTION_RHYTHM)
+    // Optional, mirroring the hero route-rhythm dial (#42 W3B2): the
+    // defaultValue pre-fills the compact rhythm, so leaving it untouched — or
+    // absent on a legacy container — renders `my-12` unchanged, without
+    // forcing the value into the type of every container-section fixture.
+    expect(rhythmField.required).toBeFalsy()
+  })
+
+  it('names the Postgres enum explicitly (63-char identifier limit)', () => {
+    expect(rhythmField.enumName).toBe('enum_container_section_rhythm')
+    expect(String(rhythmField.enumName).length).toBeLessThanOrEqual(63)
+  })
+
+  it('reproduces the homepage two-column rhythm as a complete literal', () => {
+    // Home's grid lives in `mt-24 mb-24 md:mt-28 md:mb-28` — a symmetric
+    // `my-24 md:my-28`. The delta over `my-12` is responsive (48px base,
+    // 64px desktop), which is why a flat padding can't match it and this
+    // second breakpoint-carrying value can. It must be the exact literal so
+    // Tailwind's source scan emits both classes.
+    expect(sectionRhythmClass('home')).toBe('my-24 md:my-28')
+  })
+
+  it('writes complete literal margin classes Tailwind can scan', () => {
+    for (const { className } of SECTION_RHYTHMS) {
+      expect(className).toMatch(/^my-\d+( md:my-\d+)?$/)
+    }
+  })
+
+  it('falls back to the compact default for missing or unknown values', () => {
+    expect(sectionRhythmClass(null)).toBe('my-12')
+    expect(sectionRhythmClass(undefined)).toBe('my-12')
+    // A stale value must not silently drop the section's margin.
+    expect(sectionRhythmClass('homeParity')).toBe('my-12')
   })
 })
 

@@ -241,6 +241,36 @@ export const WidthFullBleed: Story = {
   },
 }
 
+/**
+ * The default vertical rhythm: the compact `my-12` (48px) every container has
+ * always carried, and what a section renders unless an editor opts into the
+ * Home rhythm.
+ */
+export const RhythmDefault: Story = {
+  args: { children: halves, rhythm: 'default' },
+  play: async ({ canvasElement }) => {
+    const section = canvasElement.querySelector('section')
+    await expect(section).toHaveClass('my-12')
+    await expect(section).not.toHaveClass('my-24')
+  },
+}
+
+/**
+ * The Home rhythm (#42): `my-24 md:my-28` — the symmetric form of the
+ * hard-coded homepage grid's `mt-24 mb-24 md:mt-28 md:mb-28` (96px base, 112px
+ * from `md`). This is the opt-in that drops a flipped Home container the 48px
+ * (base) / 64px (desktop) it otherwise sits too high, and because the delta is
+ * responsive it takes a two-value margin rather than a flat padding to match.
+ */
+export const RhythmHome: Story = {
+  args: { children: halves, rhythm: 'home' },
+  play: async ({ canvasElement }) => {
+    const section = canvasElement.querySelector('section')
+    await expect(section).toHaveClass('my-24', 'md:my-28')
+    await expect(section).not.toHaveClass('my-12')
+  },
+}
+
 /** A linkable, padded section — `#linkable-section` scrolls here. */
 export const AnchoredAndPadded: Story = {
   args: { children: halves, anchorId: 'linkable-section', paddingY: 'lg' },

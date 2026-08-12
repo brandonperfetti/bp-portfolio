@@ -473,3 +473,52 @@ describe('ContainerBlockComponent section background (#37)', () => {
     expect(section.style.getPropertyValue('--section-bg-color')).not.toBe('')
   })
 })
+
+/**
+ * #42: the opt-in vertical-rhythm dial that closes the flipped Home's grid
+ * gap. Default off must be byte-identical to the pre-existing `my-12`; on must
+ * reproduce Home's `my-24 md:my-28`.
+ */
+describe('ContainerBlockComponent section rhythm (#42)', () => {
+  it('renders the compact my-12 when nothing is stored — the byte-identical default', () => {
+    // A container built before this control existed carries no `rhythm`. It
+    // must render exactly as it always has: a bare `my-12`, nothing added.
+    const { container } = render(
+      <ContainerBlockComponent {...containerWith({})} />,
+    )
+    expect(container.querySelector('section')?.className).toBe('my-12')
+  })
+
+  it('keeps the compact my-12 when the rhythm is explicitly the default', () => {
+    const { container } = render(
+      <ContainerBlockComponent
+        {...containerWith({ section: { rhythm: 'default' } })}
+      />,
+    )
+    const section = container.querySelector('section')
+    expect(section?.className).toBe('my-12')
+    expect(section).not.toHaveClass('my-24', 'md:my-28')
+  })
+
+  it('reproduces the homepage two-column rhythm when opted in', () => {
+    const { container } = render(
+      <ContainerBlockComponent
+        {...containerWith({ section: { rhythm: 'home' } })}
+      />,
+    )
+    const section = container.querySelector('section')
+    expect(section).toHaveClass('my-24', 'md:my-28')
+    // ...in place of the compact default, not alongside it.
+    expect(section).not.toHaveClass('my-12')
+  })
+
+  it('falls back to the compact default for a stale stored rhythm', () => {
+    const { container } = render(
+      <ContainerBlockComponent
+        {...containerWith({ section: { rhythm: 'homeParity' } })}
+      />,
+    )
+    const section = container.querySelector('section')
+    expect(section?.className).toBe('my-12')
+  })
+})

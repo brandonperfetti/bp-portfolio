@@ -17,6 +17,7 @@ import * as migration_20260812_052856_w2b2_articles_prose_heading_identity_email
 import * as migration_20260812_115519_w2c_card_chrome from './20260812_115519_w2c_card_chrome'
 import * as migration_20260812_141232_w3b1_home_enabling_vocab from './20260812_141232_w3b1_home_enabling_vocab'
 import * as migration_20260812_154813_w3b2_hero_rhythm from './20260812_154813_w3b2_hero_rhythm'
+import * as migration_20260812_173955_w3b4_home_grid_rhythm from './20260812_173955_w3b4_home_grid_rhythm'
 
 export const migrations = [
   {
@@ -113,5 +114,10 @@ export const migrations = [
     up: migration_20260812_154813_w3b2_hero_rhythm.up,
     down: migration_20260812_154813_w3b2_hero_rhythm.down,
     name: '20260812_154813_w3b2_hero_rhythm',
+  },
+  {
+    up: migration_20260812_173955_w3b4_home_grid_rhythm.up,
+    down: migration_20260812_173955_w3b4_home_grid_rhythm.down,
+    name: '20260812_173955_w3b4_home_grid_rhythm',
   },
 ]

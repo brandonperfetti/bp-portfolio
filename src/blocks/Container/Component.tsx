@@ -23,6 +23,7 @@ export function ContainerBlockComponent(props: ContainerBlock) {
       verticalAlign={verticalAlign}
       width={section?.width}
       paddingY={section?.paddingY}
+      rhythm={section?.rhythm}
       anchorId={section?.anchorId}
       background={section?.background}
     >

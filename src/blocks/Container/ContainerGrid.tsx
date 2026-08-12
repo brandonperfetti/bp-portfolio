@@ -12,6 +12,7 @@ import {
 import {
   anchorIdAttribute,
   sectionPaddingYClass,
+  sectionRhythmClass,
   sectionWidthClass,
 } from '@/blocks/Container/section'
 import { cn } from '@/lib/utils'
@@ -26,6 +27,8 @@ import { cn } from '@/lib/utils'
  * @param width - Section width: the route's container, a narrow reading
  * measure, or a full-bleed breakout to the viewport edges.
  * @param paddingY - Extra vertical padding on the section.
+ * @param rhythm - The section's outer vertical margin. Defaults to the
+ * pre-existing `my-12`; `home` opts into the Home page's `my-24 md:my-28`.
  * @param anchorId - Optional `id`, making the section linkable as `#anchor`.
  * @param background - Optional tint or gradient, resolved through the
  * CSS-variable bridge rather than into class names.
@@ -52,6 +55,7 @@ export function ContainerGrid({
   verticalAlign,
   width,
   paddingY,
+  rhythm,
   anchorId,
   background,
   className,
@@ -62,6 +66,7 @@ export function ContainerGrid({
   verticalAlign?: string | null
   width?: string | null
   paddingY?: string | null
+  rhythm?: string | null
   anchorId?: string | null
   background?: SectionBackgroundValue
   className?: string
@@ -74,7 +79,7 @@ export function ContainerGrid({
       id={id}
       style={sectionBackgroundStyle(background)}
       className={cn(
-        'my-12',
+        sectionRhythmClass(rhythm),
         sectionWidthClass(width),
         sectionPaddingYClass(paddingY),
         sectionBackgroundClass(background),

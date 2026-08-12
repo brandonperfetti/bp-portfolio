@@ -19,8 +19,10 @@ import {
 } from '@/blocks/Container/layout'
 import {
   DEFAULT_SECTION_PADDING_Y,
+  DEFAULT_SECTION_RHYTHM,
   DEFAULT_SECTION_WIDTH,
   SECTION_PADDING_Y_OPTIONS,
+  SECTION_RHYTHM_OPTIONS,
   SECTION_WIDTH_OPTIONS,
   validateAnchorId,
 } from '@/blocks/Container/section'
@@ -129,6 +131,17 @@ export const Container: Block = {
               },
             },
           ],
+        },
+        {
+          name: 'rhythm',
+          type: 'select',
+          defaultValue: DEFAULT_SECTION_RHYTHM,
+          enumName: 'enum_container_section_rhythm',
+          options: [...SECTION_RHYTHM_OPTIONS],
+          admin: {
+            description:
+              'Outer spacing above and below the section. Default keeps the compact rhythm every container has always had; Home matches the two-column rhythm of the hard-coded homepage grid.',
+          },
         },
         {
           name: 'anchorId',

@@ -133,6 +133,62 @@ export function sectionPaddingYClass(
 }
 
 /**
+ * Vertical-rhythm vocabulary of a container section — the outer margin the
+ * section carries above and below itself.
+ *
+ * @remarks `default` is the margin every container has always had (`my-12`,
+ * 48px), so it stays the default and existing sections render byte-identically.
+ * `home` opts a section into the hard-coded Home page's two-column rhythm:
+ * `mt-24 mb-24 md:mt-28 md:mb-28` — a symmetric `my-24 md:my-28` (96px base,
+ * 112px from `md`). Home's grid sits 48px lower at base and 64px lower at
+ * desktop than a plain `my-12` container, and because that gap is responsive a
+ * flat padding can't match both widths — a two-value margin can. Classes are
+ * complete literal strings so Tailwind's source scan finds them; never
+ * interpolate a stored value into a class name.
+ */
+export const SECTION_RHYTHMS = [
+  {
+    value: 'default',
+    label: 'Default (compact)',
+    className: 'my-12',
+  },
+  {
+    value: 'home',
+    label: 'Home (matches the homepage two-column rhythm)',
+    className: 'my-24 md:my-28',
+  },
+] as const
+
+/** Rhythm vocabulary of a container section, derived from {@link SECTION_RHYTHMS}. */
+export type SectionRhythm = (typeof SECTION_RHYTHMS)[number]['value']
+
+/** Rhythm a new section starts at — `default` (`my-12`), the pre-existing behaviour. */
+export const DEFAULT_SECTION_RHYTHM: SectionRhythm = 'default'
+
+/** Select options for the section group's `rhythm` field. */
+export const SECTION_RHYTHM_OPTIONS: { label: string; value: SectionRhythm }[] =
+  SECTION_RHYTHMS.map(({ label, value }) => ({ label, value }))
+
+/** Rhythm classes by value — the renderer's only rhythm lookup. */
+export const SECTION_RHYTHM_CLASSES = Object.fromEntries(
+  SECTION_RHYTHMS.map(({ className, value }) => [value, className]),
+) as Record<SectionRhythm, string>
+
+/**
+ * Rhythm classes for a stored value, tolerating `string | null | undefined`.
+ *
+ * @param rhythm - Stored rhythm value, if any.
+ * @returns Literal Tailwind margin classes, falling back to the default
+ * `my-12` so an unknown or absent value keeps the pre-existing spacing.
+ */
+export function sectionRhythmClass(rhythm: string | null | undefined): string {
+  return (
+    SECTION_RHYTHM_CLASSES[rhythm as SectionRhythm] ??
+    SECTION_RHYTHM_CLASSES[DEFAULT_SECTION_RHYTHM]
+  )
+}
+
+/**
  * Characters an anchor id may use: lowercase letters, digits, hyphens and
  * underscores, starting with a letter.
  *
