@@ -190,6 +190,10 @@ export interface Page {
   hero: {
     type: 'none' | 'standard' | 'shader';
     /**
+     * Full bleed runs the shader behind the header like the homepage; card keeps it inside a bounded panel.
+     */
+    presentation?: ('fullBleed' | 'card') | null;
+    /**
      * shaders.com preset rendered behind the hero text.
      */
     shaderPreset?:
@@ -1472,6 +1476,7 @@ export interface PagesSelect<T extends boolean = true> {
     | T
     | {
         type?: T;
+        presentation?: T;
         shaderPreset?: T;
         richText?: T;
         links?:

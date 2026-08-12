@@ -55,3 +55,32 @@ export const DriftingLights: Story = {
 export const StaticNoiseLight: Story = {
   args: { preset: 'static-noise-4' },
 }
+
+/**
+ * The framing the CMS hero's `card` presentation passes: the canvas fills a
+ * bounded panel instead of the page top, with the scrim and the bottom fade
+ * off — both exist to blend a page-top background into the page below, which
+ * a card must not do (#31).
+ */
+export const CardFraming: Story = {
+  args: {
+    preset: 'northern-lights-2',
+    className: 'pointer-events-none absolute inset-0 -z-10',
+    panelClassName: 'h-full w-full',
+    scrim: false,
+    bottomFade: false,
+  },
+  decorators: [
+    (Story) => (
+      <div className="relative isolate min-h-[20rem] overflow-hidden rounded-2xl">
+        <Story />
+        <div className="relative z-10 flex min-h-[20rem] items-center p-8 sm:p-12">
+          <p className="max-w-xl text-zinc-100 [text-shadow:0_1px_8px_rgba(0,0,0,0.25)]">
+            Bounded card framing — the panel clips the canvas and the text sits
+            on top of it.
+          </p>
+        </div>
+      </div>
+    ),
+  ],
+}

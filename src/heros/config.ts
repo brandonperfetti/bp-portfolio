@@ -9,6 +9,11 @@ import {
 
 import { linkGroup } from '@/fields/linkGroup'
 import {
+  DEFAULT_HERO_PRESENTATION,
+  HERO_PRESENTATION_ENUM_NAME,
+  HERO_PRESENTATION_OPTIONS,
+} from '@/heros/presentation'
+import {
   DEFAULT_SHADER_PRESET,
   SHADER_PRESET_OPTIONS,
 } from '@/heros/shaderPresets'
@@ -36,6 +41,18 @@ export const hero: Field = {
         { label: 'Shader', value: 'shader' },
       ],
       required: true,
+    },
+    {
+      name: 'presentation',
+      type: 'select',
+      admin: {
+        condition: (_, { type } = {}) => type === 'shader',
+        description:
+          'Full bleed runs the shader behind the header like the homepage; card keeps it inside a bounded panel.',
+      },
+      defaultValue: DEFAULT_HERO_PRESENTATION,
+      enumName: HERO_PRESENTATION_ENUM_NAME,
+      options: [...HERO_PRESENTATION_OPTIONS],
     },
     {
       name: 'shaderPreset',
