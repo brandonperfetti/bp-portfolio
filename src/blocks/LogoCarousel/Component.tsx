@@ -3,8 +3,10 @@
 import Image from 'next/image'
 import Link from 'next/link'
 
+import { type BlockHostContext, blockRhythmClass } from '@/blocks/hostContext'
 import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 import { getExternalLinkProps } from '@/lib/link-utils'
+import { cn } from '@/lib/utils'
 import type { LogoCarouselBlock, Media } from '@/payload-types'
 
 const media = (m: unknown): Media | null =>
@@ -14,8 +16,14 @@ const media = (m: unknown): Media | null =>
  * Logo strip (CMS page builder): seamless CSS marquee, or a static wrapped
  * row. The marquee duplicates the row for the loop and is fully disabled
  * under reduced motion (§13) — logos then render as the wrap layout.
+ *
+ * @param props - The stored block, plus `hosted`: where it is rendering. In
+ * a column the stack owns the rhythm, so the strip drops its own margin
+ * (#40 / visual-QA F2 — see `hostContext.ts`).
  */
-export function LogoCarouselComponent(props: LogoCarouselBlock) {
+export function LogoCarouselComponent(
+  props: LogoCarouselBlock & { hosted?: BlockHostContext },
+) {
   const reducedMotion = usePrefersReducedMotion()
   const { logos, logoHeight, layout, scrollSpeed } = props
   if (!logos?.length) return null
@@ -60,7 +68,7 @@ export function LogoCarouselComponent(props: LogoCarouselBlock) {
 
   if (!scroll) {
     return (
-      <section className="my-12">
+      <section className={blockRhythmClass(props.hosted)}>
         <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-8">
           {logos.map((logo, index) => renderLogo(logo, `${logo.id ?? index}`))}
         </div>
@@ -69,7 +77,10 @@ export function LogoCarouselComponent(props: LogoCarouselBlock) {
   }
 
   return (
-    <section className="my-12 overflow-hidden" aria-label="Logos">
+    <section
+      className={cn(blockRhythmClass(props.hosted), 'overflow-hidden')}
+      aria-label="Logos"
+    >
       <div
         className="flex w-max will-change-transform motion-safe:animate-[logo-marquee_linear_infinite]"
         style={{ animationDuration: `${duration}s` }}

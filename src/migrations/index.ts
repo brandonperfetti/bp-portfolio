@@ -11,6 +11,7 @@ import * as migration_20260811_214354_container_column_layout_blocks from './202
 import * as migration_20260811_223434_container_layout_section_controls from './20260811_223434_container_layout_section_controls'
 import * as migration_20260811_230657_container_section_background from './20260811_230657_container_section_background'
 import * as migration_20260812_011542_hero_presentation from './20260812_011542_hero_presentation'
+import * as migration_20260812_014249_sociallinks_image_blocks from './20260812_014249_sociallinks_image_blocks'
 
 export const migrations = [
   {
@@ -77,5 +78,10 @@ export const migrations = [
     up: migration_20260812_011542_hero_presentation.up,
     down: migration_20260812_011542_hero_presentation.down,
     name: '20260812_011542_hero_presentation',
+  },
+  {
+    up: migration_20260812_014249_sociallinks_image_blocks.up,
+    down: migration_20260812_014249_sociallinks_image_blocks.down,
+    name: '20260812_014249_sociallinks_image_blocks',
   },
 ]

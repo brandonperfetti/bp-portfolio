@@ -34,16 +34,32 @@ const COLUMN_ELIGIBLE_BLOCK_DIRS: Record<string, string> = {
   cta: 'CallToAction',
   faqList: 'FaqList',
   featureCardGrid: 'FeatureCardGrid',
+  image: 'Image',
   logoCarousel: 'LogoCarousel',
   mediaBlock: 'MediaBlock',
   newsletterSignup: 'NewsletterSignup',
   photoStrip: 'PhotoStrip',
+  socialLinks: 'SocialLinks',
   spacer: 'Spacer',
   stats: 'Stats',
   testimonials: 'Testimonials',
   videoEmbed: 'VideoEmbed',
   workHistoryCard: 'WorkHistoryCard',
 }
+
+/**
+ * The five blocks W1B5 left behind (#40's residual) plus the two blocks
+ * added in this batch, all of which take their outer margin from the host.
+ */
+const RHYTHM_CONVERTED_BLOCKS = [
+  'src/blocks/CallToAction/Component.tsx',
+  'src/blocks/FaqList/Component.tsx',
+  'src/blocks/Image/ImageView.tsx',
+  'src/blocks/LogoCarousel/Component.tsx',
+  'src/blocks/MediaBlock/Component.tsx',
+  'src/blocks/SocialLinks/SocialLinksView.tsx',
+  'src/blocks/VideoEmbed/Component.tsx',
+]
 
 /** The blocks with no width control of their own (F3). */
 const ZERO_CONFIG_CARDS = [
@@ -122,14 +138,15 @@ describe('context-aware block grids', () => {
     expect(source).not.toMatch(/(?<![@\w-])(sm|md|lg|xl):col-span-/)
   })
 
-  it.each([...CONTEXT_AWARE_GRIDS, ...ZERO_CONFIG_CARDS])(
-    '%s takes its outer rhythm from the host context',
-    (file) => {
-      const source = read(file)
-      expect(source).toContain('blockRhythmClass')
-      expect(source).not.toContain('"my-12')
-    },
-  )
+  it.each([
+    ...CONTEXT_AWARE_GRIDS,
+    ...ZERO_CONFIG_CARDS,
+    ...RHYTHM_CONVERTED_BLOCKS,
+  ])('%s takes its outer rhythm from the host context', (file) => {
+    const source = read(file)
+    expect(source).toContain('blockRhythmClass')
+    expect(source).not.toContain('"my-12')
+  })
 
   it.each(ZERO_CONFIG_CARDS)('%s fills the column it is given', (file) => {
     expect(read(file)).toContain('zeroConfigCardWidthClass')
@@ -144,25 +161,20 @@ describe('context-aware block grids', () => {
   })
 
   /**
-   * Every block a column can hold that still hard-codes `my-12` keeps the
-   * doubled rhythm F2 is about, because the column's `space-y-*` cannot
-   * undo a margin the block sets on itself. This batch converted the eight
-   * blocks in its fence; this test names the remainder out loud so the gap
-   * is a list someone can pick up rather than a surprise in a QA walk.
+   * A block a column can hold that still hard-codes `my-12` keeps the
+   * doubled rhythm F2 is about, because the column's `space-y-*` cannot undo
+   * a margin the block sets on itself. W1B5 converted eight blocks and named
+   * the five it left behind (`cta`, `faqList`, `logoCarousel`, `mediaBlock`,
+   * `videoEmbed`) here as a list someone could pick up; this batch converted
+   * them, so the list is now empty and the assertion is the guard.
    */
-  it('names the column-eligible blocks still carrying their own margin', () => {
+  it('leaves no column-eligible block carrying its own margin', () => {
     const stillHardCoded = Object.entries(COLUMN_ELIGIBLE_BLOCK_DIRS)
       .filter(([, dir]) =>
         read(`src/blocks/${dir}/Component.tsx`).includes('my-12'),
       )
       .map(([slug]) => slug)
 
-    expect(stillHardCoded).toEqual([
-      'cta',
-      'faqList',
-      'logoCarousel',
-      'mediaBlock',
-      'videoEmbed',
-    ])
+    expect(stillHardCoded).toEqual([])
   })
 })

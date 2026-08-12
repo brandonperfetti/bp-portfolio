@@ -247,11 +247,13 @@ export interface Page {
     | ContentBlock
     | FaqListBlock
     | FeatureCardGridBlock
+    | ImageBlock
     | LogoCarouselBlock
     | MediaBlock
     | NewsletterSignupBlock
     | PhotoStripBlock
     | ShaderHeroBlock
+    | SocialLinksBlock
     | SpacerBlock
     | StatsBlock
     | TestimonialsBlock
@@ -312,11 +314,13 @@ export interface Post {
         | ContentBlock
         | FaqListBlock
         | FeatureCardGridBlock
+        | ImageBlock
         | LogoCarouselBlock
         | MediaBlock
         | NewsletterSignupBlock
         | PhotoStripBlock
         | ShaderHeroBlock
+        | SocialLinksBlock
         | SpacerBlock
         | StatsBlock
         | TestimonialsBlock
@@ -537,10 +541,12 @@ export interface ColumnBlock {
         | ContactFormBlock
         | FaqListBlock
         | FeatureCardGridBlock
+        | ImageBlock
         | LogoCarouselBlock
         | MediaBlock
         | NewsletterSignupBlock
         | PhotoStripBlock
+        | SocialLinksBlock
         | SpacerBlock
         | StatsBlock
         | TestimonialsBlock
@@ -634,6 +640,40 @@ export interface FeatureCardGridBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ImageBlock".
+ */
+export interface ImageBlock {
+  /**
+   * Alt text comes from the Media document, so it stays correct everywhere the asset is used.
+   */
+  media: number | Media;
+  /**
+   * Anything but "original" crops the image to fill the shape (object-cover).
+   */
+  aspect: 'auto' | 'square' | 'portrait' | 'video' | 'wide';
+  rounded: 'none' | 'lg' | '2xl' | 'full';
+  /**
+   * A 3° rotation, the way the about-page portrait sits.
+   */
+  tilt: 'none' | 'left' | 'right';
+  /**
+   * Uses the site hover treatment. Disabled automatically for visitors who prefer reduced motion, and on touch devices.
+   */
+  hoverScale?: boolean | null;
+  /**
+   * Turn on for the one image above the fold on this page — it is preloaded instead of lazy-loaded. More than one per page makes every one of them slower.
+   */
+  priority?: boolean | null;
+  /**
+   * Optional. Renders as a caption beneath the image.
+   */
+  caption?: string | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'image';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LogoCarouselBlock".
  */
 export interface LogoCarouselBlock {
@@ -668,6 +708,9 @@ export interface LogoCarouselBlock {
  * via the `definition` "MediaBlock".
  */
 export interface MediaBlock {
+  /**
+   * Existing content only. New images belong in the Image block, which adds cropping, corners, tilt, hover and the above-the-fold loading hint.
+   */
   media: number | Media;
   id?: string | null;
   blockName?: string | null;
@@ -698,6 +741,47 @@ export interface PhotoStripBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'photoStrip';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "SocialLinksBlock".
+ */
+export interface SocialLinksBlock {
+  /**
+   * Icon row is the compact glyph strip under the home hero. Labeled list is the about-page rail: icon plus "Follow on …" text, one per line.
+   */
+  variant: 'iconRow' | 'labeledList';
+  /**
+   * Identity uses the profile URLs on the Identity global, so editing them there updates every page at once.
+   */
+  source: 'identity' | 'custom';
+  /**
+   * The icon is derived from the URL (X, GitHub, LinkedIn, Instagram, email — anything else gets a generic link glyph).
+   */
+  links?:
+    | {
+        /**
+         * Profile URL, or an email address for a mail row (mailto: is added for you).
+         */
+        url: string;
+        /**
+         * Optional. Defaults to "Follow on <platform>" — the wording both pages use today.
+         */
+        label?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * The about-page treatment: a rule above a final mail row, set apart from the profile links.
+   */
+  showEmailDivider?: boolean | null;
+  /**
+   * Address for the divider row.
+   */
+  email?: string | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'socialLinks';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1506,11 +1590,13 @@ export interface PagesSelect<T extends boolean = true> {
         content?: T | ContentBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
+        image?: T | ImageBlockSelect<T>;
         logoCarousel?: T | LogoCarouselBlockSelect<T>;
         mediaBlock?: T | MediaBlockSelect<T>;
         newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
         photoStrip?: T | PhotoStripBlockSelect<T>;
         shaderHero?: T | ShaderHeroBlockSelect<T>;
+        socialLinks?: T | SocialLinksBlockSelect<T>;
         spacer?: T | SpacerBlockSelect<T>;
         stats?: T | StatsBlockSelect<T>;
         testimonials?: T | TestimonialsBlockSelect<T>;
@@ -1620,10 +1706,12 @@ export interface ColumnBlockSelect<T extends boolean = true> {
         contactForm?: T | ContactFormBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
+        image?: T | ImageBlockSelect<T>;
         logoCarousel?: T | LogoCarouselBlockSelect<T>;
         mediaBlock?: T | MediaBlockSelect<T>;
         newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
         photoStrip?: T | PhotoStripBlockSelect<T>;
+        socialLinks?: T | SocialLinksBlockSelect<T>;
         spacer?: T | SpacerBlockSelect<T>;
         stats?: T | StatsBlockSelect<T>;
         testimonials?: T | TestimonialsBlockSelect<T>;
@@ -1681,6 +1769,21 @@ export interface FeatureCardGridBlockSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ImageBlock_select".
+ */
+export interface ImageBlockSelect<T extends boolean = true> {
+  media?: T;
+  aspect?: T;
+  rounded?: T;
+  tilt?: T;
+  hoverScale?: T;
+  priority?: T;
+  caption?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LogoCarouselBlock_select".
  */
 export interface LogoCarouselBlockSelect<T extends boolean = true> {
@@ -1721,6 +1824,25 @@ export interface NewsletterSignupBlockSelect<T extends boolean = true> {
  */
 export interface PhotoStripBlockSelect<T extends boolean = true> {
   images?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "SocialLinksBlock_select".
+ */
+export interface SocialLinksBlockSelect<T extends boolean = true> {
+  variant?: T;
+  source?: T;
+  links?:
+    | T
+    | {
+        url?: T;
+        label?: T;
+        id?: T;
+      };
+  showEmailDivider?: T;
+  email?: T;
   id?: T;
   blockName?: T;
 }
@@ -1840,11 +1962,13 @@ export interface PostsSelect<T extends boolean = true> {
         content?: T | ContentBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
+        image?: T | ImageBlockSelect<T>;
         logoCarousel?: T | LogoCarouselBlockSelect<T>;
         mediaBlock?: T | MediaBlockSelect<T>;
         newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
         photoStrip?: T | PhotoStripBlockSelect<T>;
         shaderHero?: T | ShaderHeroBlockSelect<T>;
+        socialLinks?: T | SocialLinksBlockSelect<T>;
         spacer?: T | SpacerBlockSelect<T>;
         stats?: T | StatsBlockSelect<T>;
         testimonials?: T | TestimonialsBlockSelect<T>;

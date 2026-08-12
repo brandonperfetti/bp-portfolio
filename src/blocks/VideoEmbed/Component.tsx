@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import { type BlockHostContext, blockRhythmClass } from '@/blocks/hostContext'
 import { getExternalLinkProps } from '@/lib/link-utils'
 import type { VideoEmbedBlock } from '@/payload-types'
 
@@ -32,13 +33,21 @@ export function resolveEmbedUrl(raw: string): string | null {
   return null
 }
 
-/** Responsive 16:9 video embed (CMS page builder). */
-export function VideoEmbedComponent(props: VideoEmbedBlock) {
+/**
+ * Responsive 16:9 video embed (CMS page builder).
+ *
+ * @param props - The stored block, plus `hosted`: where it is rendering. In
+ * a column the stack owns the rhythm, so the embed drops its own margin
+ * (#40 / visual-QA F2 — see `hostContext.ts`).
+ */
+export function VideoEmbedComponent(
+  props: VideoEmbedBlock & { hosted?: BlockHostContext },
+) {
   const embed = resolveEmbedUrl(props.url)
 
   if (!embed) {
     return (
-      <p className="my-12">
+      <p className={blockRhythmClass(props.hosted)}>
         <Link
           href={props.url}
           {...getExternalLinkProps(props.url)}
@@ -51,7 +60,7 @@ export function VideoEmbedComponent(props: VideoEmbedBlock) {
   }
 
   return (
-    <figure className="my-12">
+    <figure className={blockRhythmClass(props.hosted)}>
       <div className="aspect-video overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800">
         <iframe
           src={embed}

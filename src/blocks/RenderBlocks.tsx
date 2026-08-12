@@ -12,10 +12,12 @@ import { VideoEmbedComponent } from '@/blocks/VideoEmbed/Component'
 import { WorkHistoryCardComponent } from '@/blocks/WorkHistoryCard/Component'
 import { ContentBlockComponent } from '@/blocks/Content/Component'
 import { FeatureCardGridComponent } from '@/blocks/FeatureCardGrid/Component'
+import { ImageBlockComponent } from '@/blocks/Image/Component'
 import { LogoCarouselComponent } from '@/blocks/LogoCarousel/Component'
 import { MediaBlockComponent } from '@/blocks/MediaBlock/Component'
 import { PhotoStripBlockComponent } from '@/blocks/PhotoStrip/Component'
 import { ShaderHeroBlockComponent } from '@/blocks/ShaderHero/Component'
+import { SocialLinksBlockComponent } from '@/blocks/SocialLinks/Component'
 import { SpacerBlockComponent } from '@/blocks/Spacer/Component'
 import {
   type BlockHostContext,
@@ -70,7 +72,13 @@ export function RenderBlocks({
         const key = block.id ?? `${block.blockType}-${index}`
         switch (block.blockType) {
           case 'cta':
-            return <CallToActionBlockComponent key={key} {...block} />
+            return (
+              <CallToActionBlockComponent
+                key={key}
+                {...block}
+                hosted={hosted}
+              />
+            )
           case 'container':
             return <ContainerBlockComponent key={key} {...block} />
           case 'content':
@@ -81,10 +89,14 @@ export function RenderBlocks({
             return (
               <FeatureCardGridComponent key={key} {...block} hosted={hosted} />
             )
+          case 'image':
+            return <ImageBlockComponent key={key} {...block} hosted={hosted} />
           case 'logoCarousel':
-            return <LogoCarouselComponent key={key} {...block} />
+            return (
+              <LogoCarouselComponent key={key} {...block} hosted={hosted} />
+            )
           case 'mediaBlock':
-            return <MediaBlockComponent key={key} {...block} />
+            return <MediaBlockComponent key={key} {...block} hosted={hosted} />
           case 'photoStrip':
             return <PhotoStripBlockComponent key={key} {...block} />
           case 'shaderHero':
@@ -98,7 +110,7 @@ export function RenderBlocks({
           case 'contactForm':
             return <ContactFormComponent key={key} hosted={hosted} />
           case 'faqList':
-            return <FaqListComponent key={key} {...block} />
+            return <FaqListComponent key={key} {...block} hosted={hosted} />
           case 'newsletterSignup':
             return <NewsletterSignupComponent key={key} hosted={hosted} />
           case 'stats':
@@ -107,8 +119,12 @@ export function RenderBlocks({
             return (
               <TestimonialsComponent key={key} {...block} hosted={hosted} />
             )
+          case 'socialLinks':
+            return (
+              <SocialLinksBlockComponent key={key} {...block} hosted={hosted} />
+            )
           case 'videoEmbed':
-            return <VideoEmbedComponent key={key} {...block} />
+            return <VideoEmbedComponent key={key} {...block} hosted={hosted} />
           case 'workHistoryCard':
             return <WorkHistoryCardComponent key={key} hosted={hosted} />
           default: {

@@ -1,3 +1,4 @@
+import { type BlockHostContext, blockRhythmClass } from '@/blocks/hostContext'
 import { RichTextContent } from '@/components/cms/RichTextContent'
 import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
@@ -12,8 +13,14 @@ const answerPlainText = (answer: unknown): string =>
 /**
  * FAQ accordion (CMS page builder): native details/summary disclosures
  * (keyboard-operable, zero JS) plus FAQPage JSON-LD for rich results.
+ *
+ * @param props - The stored block, plus `hosted`: where it is rendering. In
+ * a column the stack owns the rhythm, so the list drops its own margin
+ * (#40 / visual-QA F2 — see `hostContext.ts`).
  */
-export function FaqListComponent(props: FaqListBlock) {
+export function FaqListComponent(
+  props: FaqListBlock & { hosted?: BlockHostContext },
+) {
   const { heading, items } = props
   if (!items?.length) return null
 
@@ -31,7 +38,7 @@ export function FaqListComponent(props: FaqListBlock) {
   }
 
   return (
-    <section className="my-12">
+    <section className={blockRhythmClass(props.hosted)}>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: toSafeJsonLd(jsonLd) }}

@@ -66,6 +66,10 @@ export default defineConfig({
               replacement: serverBlockStub,
             },
             {
+              find: /^@\/blocks\/SocialLinks\/Component$/,
+              replacement: serverBlockStub,
+            },
+            {
               find: /^@\//,
               replacement: `${path.resolve(rootDir, 'src')}/`,
             },

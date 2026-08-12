@@ -176,6 +176,23 @@ const DEMO_BLOCKS: LayoutBlock[] = [
   } as unknown as LayoutBlock,
   { blockType: 'spacer', size: 'md' },
   {
+    blockType: 'image',
+    media: {
+      id: 1,
+      url: 'https://picsum.photos/seed/bp-portrait/1024/1024',
+      alt: 'Brandon Perfetti',
+      width: 1024,
+      height: 1024,
+    },
+    aspect: 'square',
+    rounded: '2xl',
+    tilt: 'right',
+    hoverScale: true,
+    priority: false,
+    caption: 'The about-page portrait, now reachable from the CMS.',
+  } as unknown as LayoutBlock,
+  { blockType: 'spacer', size: 'md' },
+  {
     blockType: 'shaderHero',
     preset: 'northern-lights-2',
     richText: richText(
@@ -387,6 +404,29 @@ export const ShaderSection: Story = {
 
 export const FeatureCards: Story = {
   args: { blocks: [DEMO_BLOCKS[4]] },
+}
+
+/**
+ * The #33 block as CMS data, through the dispatcher: the about-page portrait
+ * treatment plus a caption. The control matrix lives in
+ * `PageBuilder/Image`; this is the registration check.
+ */
+export const ImageBlock: Story = {
+  args: {
+    blocks: [
+      DEMO_BLOCKS.find((block) => block.blockType === 'image') as LayoutBlock,
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const figure = canvasElement.querySelector('figure')
+
+    await expect(figure).toHaveClass('my-12')
+    await expect(figure?.querySelector('.rotate-3')).not.toBeNull()
+    await expect(canvas.getByText(/reachable from the CMS/).tagName).toBe(
+      'FIGCAPTION',
+    )
+  },
 }
 
 export const PhotoStripBlock: Story = {

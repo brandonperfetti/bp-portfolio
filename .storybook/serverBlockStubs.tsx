@@ -19,3 +19,12 @@ export function WorkHistoryCardComponent() {
     </div>
   )
 }
+
+export function SocialLinksBlockComponent() {
+  return (
+    <div className="my-12 rounded-2xl border border-dashed border-zinc-300 p-8 text-sm text-zinc-500 dark:border-zinc-600 dark:text-zinc-400">
+      SocialLinks resolves the Identity global at runtime (server block — see
+      PageBuilder/SocialLinks for the rendered treatments).
+    </div>
+  )
+}

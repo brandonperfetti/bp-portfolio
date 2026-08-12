@@ -29,6 +29,7 @@ const config: StorybookConfig = {
       // Server blocks reach the Payload Local API — swap for visual stubs.
       '@/blocks/ArticlesArchive/Component': stub,
       '@/blocks/WorkHistoryCard/Component': stub,
+      '@/blocks/SocialLinks/Component': stub,
     }
     return viteConfig
   },

@@ -28,12 +28,23 @@ vi.mock('@/components/motion/HoverMotionCard', () => ({
 vi.mock('@/components/motion/ParallaxGroup', () => ({
   ParallaxGroup: ({ children }: any) => <>{children}</>,
 }))
+// jsdom has no matchMedia; the logo strip's marquee reads it on mount.
+vi.mock('@/lib/motion/usePrefersReducedMotion', () => ({
+  usePrefersReducedMotion: () => false,
+}))
 // Server blocks reach the Payload config (unresolvable in jsdom); stub them.
 vi.mock('@/blocks/ArticlesArchive/Component', () => ({
   ArticlesArchiveComponent: () => null,
 }))
 vi.mock('@/blocks/WorkHistoryCard/Component', () => ({
   WorkHistoryCardComponent: () => null,
+}))
+// `socialLinks` with `source: identity` reads the Identity global, so the
+// real component reaches Payload too; its own suite covers the data path.
+vi.mock('@/blocks/SocialLinks/Component', () => ({
+  SocialLinksBlockComponent: (props: any) => (
+    <section data-social-links className={props.hosted ? '' : 'my-12'} />
+  ),
 }))
 
 const text = (value: string) => ({
@@ -161,6 +172,37 @@ describe('RenderBlocks', () => {
     }
   })
 
+  it('dispatches the blocks added in W2B1 (#32, #33)', () => {
+    const { container } = render(
+      <RenderBlocks
+        blocks={
+          [
+            {
+              blockType: 'image',
+              id: 'portrait',
+              media: {
+                id: 1,
+                url: 'https://example.com/portrait.jpg',
+                alt: 'Brandon Perfetti',
+                width: 800,
+                height: 800,
+              },
+              aspect: 'square',
+              rounded: '2xl',
+              tilt: 'right',
+              caption: 'On the pier',
+            },
+            { blockType: 'socialLinks', id: 'social' },
+          ] as unknown as LayoutBlock[]
+        }
+      />,
+    )
+
+    expect(screen.getByAltText('Brandon Perfetti')).toBeInTheDocument()
+    expect(screen.getByText('On the pier').tagName).toBe('FIGCAPTION')
+    expect(container.querySelector('[data-social-links]')).toBeInTheDocument()
+  })
+
   it('renders nothing for empty layouts', () => {
     const { container } = render(<RenderBlocks blocks={[]} />)
     expect(container).toBeEmptyDOMElement()
@@ -249,5 +291,85 @@ describe('RenderBlocks host context', () => {
     // The query container is the wrapper that already carries the margin, so
     // the grid's `mt-8` still collapses into the section's rhythm.
     expect(grid?.parentElement).toHaveClass('@container', 'mt-8')
+  })
+})
+
+/**
+ * #40's residual, closed in W2B1: the five column-eligible blocks W1B5 named
+ * but did not convert. Each one used to hard-code `my-12`, which a column's
+ * `space-y-*` cannot undo — the doubled rhythm of visual-QA F2.
+ */
+describe('RenderBlocks rhythm for the #40 residual blocks', () => {
+  const RESIDUAL_BLOCKS = [
+    { blockType: 'cta', id: 'cta', richText: text('cta copy'), links: [] },
+    {
+      blockType: 'faqList',
+      id: 'faq',
+      items: [{ id: 'q', question: 'Q?', answer: text('A.') }],
+    },
+    {
+      blockType: 'logoCarousel',
+      id: 'logos',
+      layout: 'wrap',
+      logos: [
+        {
+          id: 'l',
+          image: { id: 2, url: 'https://example.com/logo.png', alt: 'Logo' },
+        },
+      ],
+    },
+    {
+      blockType: 'mediaBlock',
+      id: 'media',
+      media: { id: 3, url: 'https://example.com/shot.jpg', alt: 'Shot' },
+    },
+    {
+      blockType: 'videoEmbed',
+      id: 'video',
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      title: 'Demo',
+    },
+  ] as unknown as LayoutBlock[]
+
+  it('keeps every one of them at my-12 when hosted at layout root', () => {
+    const { container } = render(<RenderBlocks blocks={RESIDUAL_BLOCKS} />)
+    const outers = Array.from(container.querySelectorAll(':scope > *'))
+
+    expect(outers).toHaveLength(RESIDUAL_BLOCKS.length)
+    for (const outer of outers) expect(outer).toHaveClass('my-12')
+  })
+
+  it('drops the margin on every one of them inside a column', () => {
+    const { container } = render(
+      <RenderBlocks blocks={RESIDUAL_BLOCKS} hosted="column" />,
+    )
+    const outers = Array.from(container.querySelectorAll(':scope > *'))
+
+    expect(outers).toHaveLength(RESIDUAL_BLOCKS.length)
+    for (const outer of outers) expect(outer).not.toHaveClass('my-12')
+  })
+
+  it('renders the unrecognized-host fallback without a margin in a column', () => {
+    // The one block with two outer elements to choose between: an embeddable
+    // URL becomes a figure, anything else a paragraph with a plain link.
+    const { container } = render(
+      <RenderBlocks
+        blocks={
+          [
+            {
+              blockType: 'videoEmbed',
+              id: 'v',
+              url: 'https://example.com/not-a-video',
+              title: 'Elsewhere',
+            },
+          ] as unknown as LayoutBlock[]
+        }
+        hosted="column"
+      />,
+    )
+
+    const paragraph = container.querySelector('p')
+    expect(paragraph).not.toBeNull()
+    expect(paragraph).not.toHaveClass('my-12')
   })
 })
