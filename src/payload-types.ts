@@ -188,7 +188,7 @@ export interface Page {
    */
   subtitle?: string | null;
   hero: {
-    type: 'none' | 'standard' | 'shader';
+    type: 'blank' | 'none' | 'standard' | 'shader';
     /**
      * Full bleed runs the shader behind the header like the homepage; card keeps it inside a bounded panel.
      */
@@ -265,6 +265,7 @@ export interface Page {
     | FeatureCardGridBlock
     | HeadingBlock
     | ImageBlock
+    | LeadBlock
     | LogoCarouselBlock
     | MediaBlock
     | NewsletterSignupBlock
@@ -334,6 +335,7 @@ export interface Post {
         | FeatureCardGridBlock
         | HeadingBlock
         | ImageBlock
+        | LeadBlock
         | LogoCarouselBlock
         | MediaBlock
         | NewsletterSignupBlock
@@ -577,7 +579,7 @@ export interface ColumnBlock {
   /**
    * Push this column’s content in from its left edge, from the lg breakpoint up. Rail gutter (lg:pl-16 xl:pl-24) matches the homepage right rail — pair it with a container gap of “Home parity” so the columns sit flush and the gutter falls between them.
    */
-  contentInset?: ('none' | 'railGutter') | null;
+  contentInset?: ('none' | 'railGutter' | 'aboutRail') | null;
   /**
    * Fade each block in this column up one after another as it scrolls into view — the homepage rail treatment. Off by default. Honors reduced motion (renders static). Below the lg breakpoint it reveals the same way.
    */
@@ -591,6 +593,7 @@ export interface ColumnBlock {
         | FeatureCardGridBlock
         | HeadingBlock
         | ImageBlock
+        | LeadBlock
         | LogoCarouselBlock
         | MediaBlock
         | NewsletterSignupBlock
@@ -742,6 +745,23 @@ export interface ImageBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'image';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "LeadBlock".
+ */
+export interface LeadBlock {
+  /**
+   * The lead paragraph under a headline — the about page’s subtitle treatment. Plain text; for long-form body copy use the Prose block instead.
+   */
+  text: string;
+  /**
+   * Fade the paragraph up on scroll, the way the about page’s subtitle does. Off by default. Honors reduced motion (renders static).
+   */
+  reveal?: boolean | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'lead';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1721,6 +1741,7 @@ export interface PagesSelect<T extends boolean = true> {
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
         heading?: T | HeadingBlockSelect<T>;
         image?: T | ImageBlockSelect<T>;
+        lead?: T | LeadBlockSelect<T>;
         logoCarousel?: T | LogoCarouselBlockSelect<T>;
         mediaBlock?: T | MediaBlockSelect<T>;
         newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
@@ -1846,6 +1867,7 @@ export interface ColumnBlockSelect<T extends boolean = true> {
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
         heading?: T | HeadingBlockSelect<T>;
         image?: T | ImageBlockSelect<T>;
+        lead?: T | LeadBlockSelect<T>;
         logoCarousel?: T | LogoCarouselBlockSelect<T>;
         mediaBlock?: T | MediaBlockSelect<T>;
         newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
@@ -1930,6 +1952,16 @@ export interface ImageBlockSelect<T extends boolean = true> {
   hoverScale?: T;
   priority?: T;
   caption?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "LeadBlock_select".
+ */
+export interface LeadBlockSelect<T extends boolean = true> {
+  text?: T;
+  reveal?: T;
   id?: T;
   blockName?: T;
 }
@@ -2130,6 +2162,7 @@ export interface PostsSelect<T extends boolean = true> {
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
         heading?: T | HeadingBlockSelect<T>;
         image?: T | ImageBlockSelect<T>;
+        lead?: T | LeadBlockSelect<T>;
         logoCarousel?: T | LogoCarouselBlockSelect<T>;
         mediaBlock?: T | MediaBlockSelect<T>;
         newsletterSignup?: T | NewsletterSignupBlockSelect<T>;

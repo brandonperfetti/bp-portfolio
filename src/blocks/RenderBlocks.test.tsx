@@ -244,6 +244,37 @@ describe('RenderBlocks', () => {
     ).toBe('H2')
   })
 
+  it('dispatches the lead block added in W4B1 (#44)', () => {
+    const { container } = render(
+      <RenderBlocks
+        blocks={
+          [
+            {
+              blockType: 'lead',
+              id: 'intro',
+              text: 'A plain lead paragraph under the headline.',
+              reveal: false,
+            },
+          ] as unknown as LayoutBlock[]
+        }
+      />,
+    )
+
+    const paragraph = screen.getByText(
+      'A plain lead paragraph under the headline.',
+    )
+    expect(paragraph.tagName).toBe('P')
+    // The about page's lead classes ride the wrapping div.
+    expect(paragraph.parentElement).toHaveClass(
+      'mt-6',
+      'text-base',
+      'text-zinc-600',
+    )
+    // ScrollReveal is mocked to render children straight through, so the
+    // reveal-off default leaves the paragraph directly in the block output.
+    expect(container).not.toBeEmptyDOMElement()
+  })
+
   it('renders nothing for empty layouts', () => {
     const { container } = render(<RenderBlocks blocks={[]} />)
     expect(container).toBeEmptyDOMElement()

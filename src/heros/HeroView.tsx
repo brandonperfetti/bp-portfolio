@@ -141,6 +141,10 @@ function HeroContent({
  * The CMS page hero, presentational: every pixel a hero can draw, from plain
  * props. {@link RenderHero} is the server component that feeds it.
  *
+ * - `blank` — nothing at all: no `<header>`, no content stack. The one type
+ *   that does not render the headline, for a page (the about page) whose H1
+ *   lives inside its body as a `heading` block, so the hero must not draw a
+ *   second one. Opt-in; every other type renders the content stack.
  * - `none` — headline + subtitle (SimpleLayout look), no background.
  * - `standard` — the same stack above the uploaded hero media.
  * - `shader` + `fullBleed` — the homepage treatment: the shared `ShaderHero`
@@ -166,6 +170,13 @@ export function HeroView({
 }) {
   const hero = page.hero
   const type = hero?.type ?? 'none'
+
+  // `blank` draws no hero at all — no `<header>`, no content stack — so a page
+  // that carries its headline in an in-column `heading` block (the about page)
+  // is not doubled by a hero rendering its own. Opt-in and additive: no stored
+  // page selects it until an edit does, so every existing page is unaffected.
+  if (type === 'blank') return null
+
   const media = mediaUrl(hero?.media)
   const preset = (hero?.shaderPreset ??
     DEFAULT_SHADER_PRESET) as ShaderPresetKey

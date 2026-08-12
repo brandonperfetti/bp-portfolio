@@ -199,6 +199,11 @@ const DEMO_BLOCKS: LayoutBlock[] = [
     variant: 'line',
   } as unknown as LayoutBlock,
   {
+    blockType: 'lead',
+    text: 'A plain lead paragraph under a headline — the about page’s subtitle treatment, not article typography.',
+    reveal: false,
+  } as unknown as LayoutBlock,
+  {
     blockType: 'prose',
     content: richText(
       'Long-form body copy that renders with exactly the typography an article body gets — the block that lets a page keep its body out of the hero group.',

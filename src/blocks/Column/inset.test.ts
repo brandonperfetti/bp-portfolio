@@ -1,4 +1,7 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+
 import type { SelectField } from 'payload'
 
 import { describe, expect, it } from 'vitest'
@@ -22,6 +25,9 @@ const configValues = (insetField?.options ?? []).map((option) =>
   typeof option === 'string' ? option : option.value,
 )
 
+const read = (relative: string) =>
+  readFileSync(path.join(process.cwd(), relative), 'utf8')
+
 /**
  * Guards the column half of the homepage's asymmetric two-column gutter: the
  * admin's inset vocabulary and the renderer's class lookup are the same set,
@@ -33,6 +39,7 @@ describe('column content inset map', () => {
     expect(COLUMN_INSETS.map((inset) => inset.value)).toEqual([
       'none',
       'railGutter',
+      'aboutRail',
     ])
   })
 
@@ -71,6 +78,7 @@ describe('column content inset map', () => {
     expect(columnInsetClass(undefined)).toBe('')
     expect(columnInsetClass('wide')).toBe('')
     expect(columnInsetClass('railGutter')).toBe('lg:pl-16 xl:pl-24')
+    expect(columnInsetClass('aboutRail')).toBe('lg:pl-20')
   })
 
   /**
@@ -81,5 +89,18 @@ describe('column content inset map', () => {
    */
   it('reproduces the homepage right-rail inset', () => {
     expect(COLUMN_INSET_CLASSES.railGutter).toBe('lg:pl-16 xl:pl-24')
+  })
+
+  /**
+   * The pixel-parity gate for the about-page rail inset. Unlike Home, the
+   * about page is still hand-built at `about/page.tsx`, so its rail inset can
+   * be read straight out of the source (rather than pinned to a literal): the
+   * rail column carries `lg:pl-20`, and `aboutRail` *is* that inset, so a
+   * future edit to either the page or the vocabulary fails loudly here.
+   */
+  it('reproduces the about-page rail inset read from about/page.tsx', () => {
+    const aboutSource = read('src/app/(frontend)/about/page.tsx')
+    expect(aboutSource).toContain('lg:pl-20')
+    expect(COLUMN_INSET_CLASSES.aboutRail).toBe('lg:pl-20')
   })
 })

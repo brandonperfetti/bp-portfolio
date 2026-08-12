@@ -24,7 +24,7 @@ const field = (name: string) =>
   heroFields.find((f) => 'name' in f && f.name === name)
 
 /** Every hero type, so a matrix assertion can't quietly skip one. */
-const HERO_TYPES = ['none', 'standard', 'shader'] as const
+const HERO_TYPES = ['blank', 'none', 'standard', 'shader'] as const
 
 const conditionOf = (name: string) =>
   (field(name) as { admin?: { condition?: unknown } } | undefined)?.admin
@@ -109,24 +109,46 @@ describe('hero group config — content fields (#38)', () => {
   })
 
   /*
-   * The visibility matrix, asserted rather than described. `headlineVariant`
-   * and `showSocialLinks` are unconditional because all three hero types
-   * render the content stack — `type: none` is "no hero decoration", not "no
-   * hero" (HeroView.test.tsx pins that behaviour). Gating them off `none`
-   * would hide a control that visibly does something.
+   * The visibility matrix, asserted rather than described. `headlineVariant`,
+   * `showSocialLinks` and `revealContent` are visible for `none`, `standard`
+   * and `shader` because those three render the content stack — `type: none`
+   * is "no hero decoration", not "no hero" (HeroView.test.tsx pins that
+   * behaviour). `blank` is the one type that renders nothing at all, so every
+   * field is meaningless under it and gated off (HeroView returns null for
+   * `blank`; HeroView.test.tsx pins that too).
    */
   it('gates each field to the types it can actually affect', () => {
     const expected: Record<
       string,
       Record<(typeof HERO_TYPES)[number], boolean>
     > = {
-      presentation: { none: false, standard: false, shader: true },
-      shaderPreset: { none: false, standard: false, shader: true },
-      rhythm: { none: false, standard: false, shader: true },
-      media: { none: false, standard: true, shader: false },
-      headlineVariant: { none: true, standard: true, shader: true },
-      showSocialLinks: { none: true, standard: true, shader: true },
-      revealContent: { none: true, standard: true, shader: true },
+      presentation: {
+        blank: false,
+        none: false,
+        standard: false,
+        shader: true,
+      },
+      shaderPreset: {
+        blank: false,
+        none: false,
+        standard: false,
+        shader: true,
+      },
+      rhythm: { blank: false, none: false, standard: false, shader: true },
+      media: { blank: false, none: false, standard: true, shader: false },
+      headlineVariant: {
+        blank: false,
+        none: true,
+        standard: true,
+        shader: true,
+      },
+      showSocialLinks: {
+        blank: false,
+        none: true,
+        standard: true,
+        shader: true,
+      },
+      revealContent: { blank: false, none: true, standard: true, shader: true },
     }
 
     for (const [name, byType] of Object.entries(expected)) {
@@ -142,6 +164,28 @@ describe('hero group config — content fields (#38)', () => {
 
   it('carries no subtitle of its own — Pages.subtitle is the single source', () => {
     expect(field('subtitle')).toBeUndefined()
+  })
+
+  /*
+   * `blank` (W4B1): an additive fourth type that renders no hero at all, for a
+   * page whose H1 lives in an in-column `heading` block (the about page). It is
+   * added alongside the existing three, never replacing them, and the default
+   * stays `standard`, so no stored page becomes blank without a deliberate edit.
+   */
+  it('offers a blank type alongside the existing three, still defaulting to standard', () => {
+    const type = field('type') as {
+      options?: { value: string }[]
+      defaultValue?: string
+      required?: boolean
+    }
+    expect(type.options?.map((option) => option.value)).toEqual([
+      'blank',
+      'none',
+      'standard',
+      'shader',
+    ])
+    expect(type.defaultValue).toBe('standard')
+    expect(type.required).toBe(true)
   })
 })
 

@@ -11,6 +11,13 @@
  * rail rather than splitting it across both. `inset.test.ts` reads those
  * numbers back out of the homepage source so neither side can drift silently.
  *
+ * `aboutRail` (`lg:pl-20`, 80px from `lg`) is the about page's portrait rail,
+ * whose inset differs from Home's — a single, non-responsive step rather than
+ * Home's `lg`/`xl` pair. It lets the about page's right rail reproduce its
+ * exact gutter once that page is composed on the builder; `inset.test.ts`
+ * reads `lg:pl-20` straight out of the hand-built `about/page.tsx`, the way
+ * Home's numbers are pinned to the literal Home shipped.
+ *
  * Classes are complete literal strings so Tailwind's source scan finds them;
  * never build one by interpolating a stored value. Each entry is full width
  * below `lg` (no inset) and takes its offset from `lg` up, so a stacked
@@ -26,6 +33,11 @@ export const COLUMN_INSETS = [
     value: 'railGutter',
     label: 'Rail gutter (matches the homepage right rail)',
     className: 'lg:pl-16 xl:pl-24',
+  },
+  {
+    value: 'aboutRail',
+    label: 'About rail (matches the about page portrait rail)',
+    className: 'lg:pl-20',
   },
 ] as const
 

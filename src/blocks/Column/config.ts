@@ -7,6 +7,7 @@ import { FaqList } from '@/blocks/FaqList/config'
 import { FeatureCardGrid } from '@/blocks/FeatureCardGrid/config'
 import { Heading } from '@/blocks/Heading/config'
 import { ImageBlock } from '@/blocks/Image/config'
+import { Lead } from '@/blocks/Lead/config'
 import { LogoCarousel } from '@/blocks/LogoCarousel/config'
 import { MediaBlock } from '@/blocks/MediaBlock/config'
 import { NewsletterSignup } from '@/blocks/NewsletterSignup/config'
@@ -57,6 +58,7 @@ export const COLUMN_CONTENT_BLOCKS: Block[] = [
   FeatureCardGrid,
   Heading,
   ImageBlock,
+  Lead,
   LogoCarousel,
   MediaBlock,
   NewsletterSignup,

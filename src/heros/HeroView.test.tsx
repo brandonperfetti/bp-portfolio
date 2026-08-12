@@ -157,6 +157,38 @@ describe('HeroView — type none', () => {
   })
 })
 
+describe('HeroView — type blank', () => {
+  // `blank` is the one type that renders nothing at all — no <header>, no
+  // headline — so an about-style page can carry its H1 in a body `heading`
+  // block without the hero drawing a second one. The content fields are gated
+  // off `blank` in config precisely because this renders none of them.
+  it('renders no header and no headline', () => {
+    const { container } = render(<HeroView page={page({ type: 'blank' })} />)
+
+    expect(container).toBeEmptyDOMElement()
+    expect(container.querySelector('header')).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Consulting' })).toBeNull()
+  })
+
+  it('renders nothing even when content fields happen to be stored', () => {
+    // A page switched to `blank` after carrying hero content: the stored
+    // values are inert, not resurrected.
+    const { container } = render(
+      <HeroView
+        page={page({
+          type: 'blank',
+          headlineVariant: 'typewriter',
+          showSocialLinks: true,
+        })}
+        socialLinks={socialLinks}
+      />,
+    )
+
+    expect(container).toBeEmptyDOMElement()
+    expect(screen.queryByRole('link', { name: 'Follow on X' })).toBeNull()
+  })
+})
+
 describe('HeroView — type standard', () => {
   it('renders the hero media below the text and no canvas', () => {
     const { container } = render(

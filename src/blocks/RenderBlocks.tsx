@@ -14,6 +14,7 @@ import { ContentBlockComponent } from '@/blocks/Content/Component'
 import { FeatureCardGridComponent } from '@/blocks/FeatureCardGrid/Component'
 import { HeadingBlockComponent } from '@/blocks/Heading/Component'
 import { ImageBlockComponent } from '@/blocks/Image/Component'
+import { LeadBlockComponent } from '@/blocks/Lead/Component'
 import { LogoCarouselComponent } from '@/blocks/LogoCarousel/Component'
 import { MediaBlockComponent } from '@/blocks/MediaBlock/Component'
 import { PhotoStripBlockComponent } from '@/blocks/PhotoStrip/Component'
@@ -97,6 +98,8 @@ export function RenderBlocks({
             )
           case 'image':
             return <ImageBlockComponent key={key} {...block} hosted={hosted} />
+          case 'lead':
+            return <LeadBlockComponent key={key} {...block} hosted={hosted} />
           case 'logoCarousel':
             return (
               <LogoCarouselComponent key={key} {...block} hosted={hosted} />

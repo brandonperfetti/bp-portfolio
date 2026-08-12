@@ -38,6 +38,7 @@ const COLUMN_ELIGIBLE_BLOCK_DIRS: Record<string, string> = {
   featureCardGrid: 'FeatureCardGrid',
   heading: 'Heading',
   image: 'Image',
+  lead: 'Lead',
   logoCarousel: 'LogoCarousel',
   mediaBlock: 'MediaBlock',
   newsletterSignup: 'NewsletterSignup',

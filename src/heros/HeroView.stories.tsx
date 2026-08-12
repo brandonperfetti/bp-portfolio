@@ -153,6 +153,23 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
+/**
+ * `type: blank` — the hero renders nothing at all: no `<header>`, no headline.
+ * For a page (the about page) whose H1 lives in an in-column `heading` block,
+ * so the hero must not draw a second one.
+ */
+export const TypeBlank: Story = {
+  args: { page: page({ type: 'blank' }) },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('header')).toBeNull()
+    await expect(
+      within(canvasElement).queryByRole('heading', {
+        name: 'Working together',
+      }),
+    ).toBeNull()
+  },
+}
+
 /** `type: none` — the SimpleLayout look: headline, subtitle, no background. */
 export const TypeNone: Story = {
   args: { page: page({ type: 'none' }) },

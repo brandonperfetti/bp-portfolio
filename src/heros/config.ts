@@ -38,21 +38,30 @@ import {
  *
  * **Visibility matrix** (`admin.condition`, asserted in `content.test.ts`):
  *
- * | field | none | standard | shader |
- * | --- | --- | --- | --- |
- * | `presentation` | – | – | ✓ |
- * | `shaderPreset` | – | – | ✓ |
- * | `media` | – | ✓ | – |
- * | `headlineVariant` | ✓ | ✓ | ✓ |
- * | `showSocialLinks` | ✓ | ✓ | ✓ |
- * | `revealContent` | ✓ | ✓ | ✓ |
+ * | field | blank | none | standard | shader |
+ * | --- | --- | --- | --- | --- |
+ * | `presentation` | – | – | – | ✓ |
+ * | `shaderPreset` | – | – | – | ✓ |
+ * | `media` | – | – | ✓ | – |
+ * | `headlineVariant` | – | ✓ | ✓ | ✓ |
+ * | `showSocialLinks` | – | ✓ | ✓ | ✓ |
+ * | `revealContent` | – | ✓ | ✓ | ✓ |
  *
- * The last two rows are unconditional because **all three types render the
+ * The `headlineVariant`/`showSocialLinks`/`revealContent` rows are true for
+ * `none`, `standard` and `shader` because **those three types render the
  * content stack** — `type: none` is "no hero *decoration*", not "no hero":
  * it renders the page title, subtitle, hero rich text and links in the
  * SimpleLayout look (see `HeroView`). Gating them off `none` would hide a
  * control that visibly does something. If `none` ever stops rendering a
  * headline, the matrix test is the place that says so.
+ *
+ * `blank` is the exception, and the reason every content-field row shows `–`
+ * for it: `blank` renders **nothing at all** (no `<header>`, no content
+ * stack — see `HeroView`), so a page whose headline lives in an in-column
+ * `heading` block, the way the about page composes it, is not doubled by a
+ * hero drawing its own. Every field is therefore meaningless under `blank`
+ * and gated off it. `blank` is opt-in: the default is `standard`, and no
+ * stored page selects it until an edit does.
  *
  * The hero group has **no `subtitle`** on purpose: `Pages.subtitle` already
  * exists and already feeds this hero, the homepage and the meta description.
@@ -68,6 +77,10 @@ export const hero: Field = {
       defaultValue: 'standard',
       label: 'Type',
       options: [
+        {
+          label: 'Blank (no hero — headline lives in the page body)',
+          value: 'blank',
+        },
         { label: 'None', value: 'none' },
         { label: 'Standard', value: 'standard' },
         { label: 'Shader', value: 'shader' },
@@ -113,6 +126,9 @@ export const hero: Field = {
       name: 'headlineVariant',
       type: 'select',
       admin: {
+        // Every content field is hidden under `blank`, which renders no hero
+        // at all (see the visibility matrix above and `HeroView`).
+        condition: (_, { type } = {}) => type !== 'blank',
         description:
           'How the page title animates in. Typewriter is the Home/About treatment; both fall back to static text under reduced motion.',
       },
@@ -125,6 +141,7 @@ export const hero: Field = {
       name: 'showSocialLinks',
       type: 'checkbox',
       admin: {
+        condition: (_, { type } = {}) => type !== 'blank',
         description:
           'Show the profile icon row under the hero, from the Identity global’s social links. Edit the list in Globals → Identity; per-page lists live in the Social links block instead.',
       },
@@ -135,6 +152,7 @@ export const hero: Field = {
       name: 'revealContent',
       type: 'checkbox',
       admin: {
+        condition: (_, { type } = {}) => type !== 'blank',
         description:
           'Fade the subtitle and social row up on scroll, the way the homepage hero does. Off by default. Honors reduced motion (renders static). The headline keeps its own animation either way.',
       },
