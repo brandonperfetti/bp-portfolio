@@ -105,21 +105,13 @@ describe('block host context', () => {
   })
 
   /**
-   * The parity gate for the column stack, in the shape `layout.test.ts` uses
-   * for the container gutter: the intra-column rhythm is the homepage rail's
-   * stacked-card spacing, read back out of the homepage so neither side can
-   * drift silently.
+   * The parity gate for the column stack: the intra-column rhythm is Home's
+   * rail stacked-card spacing (`space-y-10`). Since #42 flipped Home onto the
+   * builder, its rail is a `Column`, so this constant *is* that rhythm. Pinned
+   * to the literal Home shipped.
    */
   it('stacks column blocks at the homepage rail rhythm', () => {
-    const homepage = read('src/app/(frontend)/page.tsx')
-    const rail = homepage.match(/space-y-(\d+) lg:sticky/)
-    expect(
-      rail,
-      'homepage rail no longer stacks its cards with space-y-* — re-derive the column stack spacing',
-    ).not.toBeNull()
-
-    const [, spacing] = rail as RegExpMatchArray
-    expect(COLUMN_STACK_SPACING_CLASS).toBe(`space-y-${spacing}`)
+    expect(COLUMN_STACK_SPACING_CLASS).toBe('space-y-10')
   })
 
   it('puts that spacing on the column shell itself', () => {

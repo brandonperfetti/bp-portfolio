@@ -146,73 +146,48 @@ describe('hero group config — content fields (#38)', () => {
 })
 
 /*
- * The hero content stack exists to reproduce the homepage's, and the homepage
- * still hard-codes its own (#42 migrates it). Until then these read the
- * homepage source and fail loudly if either side drifts — the guard
- * `hostContext.test.ts` uses for the column stack spacing.
+ * The hero content stack reproduces live Home's treatment. Since #42 flipped
+ * `/` onto the page builder, `HeroView` *is* what renders Home's hero, so these
+ * constants are now the single source of that treatment rather than a copy of a
+ * hard-coded route. This block pins them to the literals Home shipped so the
+ * builder hero can't silently drift; `HeroView.test.tsx` asserts the constants
+ * actually reach the rendered DOM.
+ *
+ * (Before the flip these read `src/app/(frontend)/page.tsx` and cross-checked
+ * against the hard-coded home JSX; that JSX is gone, so the cross-check is now
+ * a literal pin.)
  */
 describe('homepage hero parity', () => {
-  const homepage = read('src/app/(frontend)/page.tsx')
-
   it('shares the homepage headline classes', () => {
-    expect(homepage).toContain(HERO_HEADLINE_CLASS)
+    expect(HERO_HEADLINE_CLASS).toBe(
+      'text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100',
+    )
   })
 
   it('shares the homepage subtitle classes', () => {
-    expect(homepage).toContain(HERO_SUBTITLE_CLASS)
+    expect(HERO_SUBTITLE_CLASS).toBe(
+      'mt-6 text-base text-zinc-600 dark:text-zinc-400',
+    )
   })
 
   it('offers the typewriter variant the homepage headline uses', () => {
-    expect(homepage).toContain('variant="typewriter"')
     expect(HERO_HEADLINE_VARIANTS.map((v) => v.value)).toContain('typewriter')
   })
 
   it('spaces the social row the way the homepage does', () => {
-    expect(homepage).toContain(`${HERO_SOCIAL_ROW_SPACING_CLASS} flex gap-6`)
-  })
-
-  it('reads its title and subtitle from the same Pages fields the hero does', () => {
-    expect(homepage).toContain('homePage?.title')
-    expect(homepage).toContain('homePage?.subtitle')
+    expect(HERO_SOCIAL_ROW_SPACING_CLASS).toBe('mt-6')
   })
 
   /**
-   * The opt-in `revealContent` reveal params (#42): when on, the hero wraps
-   * its subtitle and social row in the homepage's two `ScrollReveal`s. Read
-   * those literals back out of the route so the shared params can't drift
-   * from the treatment they reproduce.
+   * The opt-in `revealContent` reveal params (#42): when on, the hero wraps its
+   * subtitle and social row in Home's two `ScrollReveal`s. Pinned to Home's
+   * literals so the shared params can't drift from the treatment they reproduce.
    */
   it('carries the homepage subtitle reveal params', () => {
-    const subtitle = homepage.match(
-      /y=\{(\d+)\}\s+duration=\{([\d.]+)\}\s+delay=\{(0\.26)\}/,
-    )
-    expect(
-      subtitle,
-      'home route no longer wraps its subtitle in the expected ScrollReveal — re-derive HERO_SUBTITLE_REVEAL',
-    ).not.toBeNull()
-
-    const [, y, duration, delay] = subtitle as RegExpMatchArray
-    expect(HERO_SUBTITLE_REVEAL).toEqual({
-      y: Number(y),
-      duration: Number(duration),
-      delay: Number(delay),
-    })
+    expect(HERO_SUBTITLE_REVEAL).toEqual({ y: 14, duration: 0.78, delay: 0.26 })
   })
 
   it('carries the homepage social-row reveal params', () => {
-    const social = homepage.match(
-      /y=\{(\d+)\}\s+duration=\{([\d.]+)\}\s+delay=\{(0\.37)\}/,
-    )
-    expect(
-      social,
-      'home route no longer wraps its social row in the expected ScrollReveal — re-derive HERO_SOCIAL_REVEAL',
-    ).not.toBeNull()
-
-    const [, y, duration, delay] = social as RegExpMatchArray
-    expect(HERO_SOCIAL_REVEAL).toEqual({
-      y: Number(y),
-      duration: Number(duration),
-      delay: Number(delay),
-    })
+    expect(HERO_SOCIAL_REVEAL).toEqual({ y: 10, duration: 0.68, delay: 0.37 })
   })
 })

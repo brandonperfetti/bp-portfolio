@@ -1,7 +1,4 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
-
 import type { SelectField } from 'payload'
 
 import { describe, expect, it } from 'vitest'
@@ -77,22 +74,12 @@ describe('column content inset map', () => {
   })
 
   /**
-   * The pixel-parity gate: the homepage rail insets its content with
-   * `lg:pl-16 xl:pl-24`, and `railGutter` has to produce the same 64px / 96px.
-   * Reading it back out of the homepage source means neither side can drift.
+   * The pixel-parity gate for the Home rail inset. Home's right rail insets its
+   * content by `lg:pl-16 xl:pl-24` (64px / 96px); since #42 flipped Home onto
+   * the builder, its rail is a `Column` with `contentInset: railGutter`, so this
+   * constant *is* that inset. Pinned to the literal Home shipped.
    */
   it('reproduces the homepage right-rail inset', () => {
-    const homepage = readFileSync(
-      path.join(process.cwd(), 'src/app/(frontend)/page.tsx'),
-      'utf8',
-    )
-    const gutter = homepage.match(/lg:pl-(\d+) xl:pl-(\d+)/)
-    expect(
-      gutter,
-      'homepage rail no longer carries an lg:pl-* xl:pl-* inset — re-derive railGutter',
-    ).not.toBeNull()
-
-    const [, lg, xl] = gutter as RegExpMatchArray
-    expect(COLUMN_INSET_CLASSES.railGutter).toBe(`lg:pl-${lg} xl:pl-${xl}`)
+    expect(COLUMN_INSET_CLASSES.railGutter).toBe('lg:pl-16 xl:pl-24')
   })
 })

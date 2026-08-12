@@ -1,7 +1,4 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
-
 import type { CheckboxField } from 'payload'
 
 import { describe, expect, it } from 'vitest'
@@ -55,26 +52,17 @@ describe('column child reveal', () => {
   })
 
   /**
-   * The pixel-parity gate: the homepage wraps its sticky rail in exactly this
-   * ScrollReveal, marking each rail card with `data-reveal-item`. Reading the
-   * params back out of the route means neither side can drift silently.
+   * The pixel-parity gate for the Home rail reveal. Home wraps its sticky rail
+   * in exactly this `ScrollReveal`, marking each rail card with
+   * `data-reveal-item`; since #42 flipped Home onto the builder, its rail is a
+   * `Column` with `revealChildren` on, so these params *are* that reveal. Pinned
+   * to the literals Home shipped.
    */
   it('matches the homepage rail reveal', () => {
-    const homepage = readFileSync(
-      path.join(process.cwd(), 'src/app/(frontend)/page.tsx'),
-      'utf8',
-    )
-    const reveal = homepage.match(
-      /targets="\[data-reveal-item\]"\s+y=\{(\d+)\}\s+stagger=\{([\d.]+)\}/,
-    )
-    expect(
-      reveal,
-      'homepage rail no longer wraps its children in the expected ScrollReveal — re-derive COLUMN_REVEAL_PARAMS',
-    ).not.toBeNull()
-
-    const [, y, stagger] = reveal as RegExpMatchArray
-    expect(COLUMN_REVEAL_PARAMS.y).toBe(Number(y))
-    expect(COLUMN_REVEAL_PARAMS.stagger).toBe(Number(stagger))
-    expect(homepage).toContain('data-reveal-item')
+    expect(COLUMN_REVEAL_PARAMS).toEqual({
+      targets: '[data-reveal-item]',
+      y: 20,
+      stagger: 0.16,
+    })
   })
 })

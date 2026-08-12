@@ -2,10 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { cache } from 'react'
 
-import { RenderBlocks } from '@/blocks/RenderBlocks'
-import { Container } from '@/components/Container'
-import { RenderHero } from '@/heros/RenderHero'
-import { ROUTE_RHYTHM_PROFILES, routeRhythm } from '@/heros/routeRhythm'
+import { RenderRhythmPage } from '@/heros/RenderRhythmPage'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import {
   RESERVED_PAGE_SLUGS,
@@ -59,41 +56,11 @@ export default async function CmsPage({
     notFound()
   }
 
-  // Opt-in, additive: a page whose hero selects the `homeParity` rhythm
-  // reproduces live Home's flush-hero spacing; every other page (rhythm null →
-  // `standard`) takes the default branch below, byte-identical to before this
-  // field existed. Both branches keep `HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS`
-  // on the one `<Container>` that wraps hero *and* blocks — the full-bleed
-  // stacking contract (`src/heros/presentation.ts`). The class knobs live in
-  // `ROUTE_RHYTHM_PROFILES` so the orchestrator dials pixel parity in one place.
-  if (routeRhythm(page.hero?.rhythm) === 'homeParity') {
-    const profile = ROUTE_RHYTHM_PROFILES.homeParity
-    return (
-      <Container className={profile.containerClass}>
-        <div className={profile.heroWrapperClass ?? undefined}>
-          <RenderHero page={page} />
-        </div>
-        <div className={profile.blocksWrapperClass}>
-          <RenderBlocks blocks={page.layout} />
-        </div>
-      </Container>
-    )
-  }
-
-  return (
-    // `isolate` is load-bearing, not decoration: a full-bleed shader hero
-    // paints its canvas at `-z-10`, and this is the element that owns the
-    // stacking context the canvas sinks inside — the one wrapper that holds
-    // both the hero and the blocks, so the canvas lands under the blocks but
-    // still above the fixed page panel. See
-    // `HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS` in `src/heros/presentation.ts`.
-    // Kept verbatim as the `standard` rhythm; `routeRhythm.ts` mirrors these
-    // literals and `[slug]/page.test.tsx` asserts the two never drift.
-    <Container className="isolate mt-16 sm:mt-32">
-      <RenderHero page={page} />
-      <div className="mt-8">
-        <RenderBlocks blocks={page.layout} />
-      </div>
-    </Container>
-  )
+  // Hero + blocks, spaced by the page's route rhythm, in the one Container that
+  // owns the full-bleed stacking context. Rendered through the shared
+  // `RenderRhythmPage` seam so `/` (the home flip, #42) and this catch-all can
+  // never drift; the rhythm profiles (`ROUTE_RHYTHM_PROFILES`) are where the
+  // orchestrator dials pixel parity. `[slug]/page.test.tsx` pins the emitted
+  // DOM for both `standard` and `homeParity`.
+  return <RenderRhythmPage page={page} />
 }

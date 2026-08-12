@@ -1,7 +1,4 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
-
 import type { Field, SelectField } from 'payload'
 
 import { describe, expect, it } from 'vitest'
@@ -102,25 +99,15 @@ describe('container gap map', () => {
   })
 
   /**
-   * The grid half of the homepage's *asymmetric* two-column gutter: no column
-   * gap (so both columns land at exactly `W/2`) and the homepage's stacked
-   * spacing (`gap-y-20`). Reading the row gap out of the homepage grid means
-   * neither side can drift from the layout `homeParity` reproduces. The rail
-   * inset half of the gutter lives on the column (see `Column/inset.test.ts`).
+   * The grid half of Home's *asymmetric* two-column gutter: no column gap (so
+   * both columns land at exactly `W/2`) and Home's stacked spacing (`gap-y-20`).
+   * Since #42 flipped Home onto the builder, its grid is a `Container` with
+   * `gap: homeParity`, so this constant *is* that layout. Pinned to the literal
+   * Home shipped; the rail-inset half of the gutter lives on the column (see
+   * `Column/inset.test.ts`).
    */
   it('reproduces the homepage grid: zero column gap, 80px stacked', () => {
-    const homepage = readFileSync(
-      path.join(process.cwd(), 'src/app/(frontend)/page.tsx'),
-      'utf8',
-    )
-    const rowGap = homepage.match(/grid-cols-1 gap-y-(\d+)/)
-    expect(
-      rowGap,
-      'homepage grid no longer carries `grid-cols-1 gap-y-*` — re-derive homeParity',
-    ).not.toBeNull()
-
-    const [, y] = rowGap as RegExpMatchArray
-    expect(CONTAINER_GAP_CLASSES.homeParity).toBe(`gap-x-0 gap-y-${y}`)
+    expect(CONTAINER_GAP_CLASSES.homeParity).toBe('gap-x-0 gap-y-20')
   })
 
   it('falls back to the default for missing or unknown values', () => {
@@ -132,24 +119,12 @@ describe('container gap map', () => {
   })
 
   /**
-   * The pixel-parity gate for the Home migration. The hard-coded homepage
-   * puts its two-column gutter on the rail as `lg:pl-16 xl:pl-24`; the `lg`
-   * gap has to produce the same 64px / 96px. Reading the numbers out of the
-   * homepage source means neither side can drift silently.
+   * The `lg` gap reproduces the 64px / 96px step Home's two-column gutter uses
+   * (`lg:pl-16 xl:pl-24` on the rail). Pinned to the literal, in step with the
+   * inset half in `Column/inset.test.ts`.
    */
   it('reproduces the homepage two-column gutter at the lg gap', () => {
-    const homepage = readFileSync(
-      path.join(process.cwd(), 'src/app/(frontend)/page.tsx'),
-      'utf8',
-    )
-    const gutter = homepage.match(/lg:pl-(\d+) xl:pl-(\d+)/)
-    expect(
-      gutter,
-      'homepage rail no longer carries an lg:pl-* xl:pl-* gutter — re-derive the lg gap',
-    ).not.toBeNull()
-
-    const [, lg, xl] = gutter as RegExpMatchArray
-    expect(CONTAINER_GAP_CLASSES.lg).toBe(`gap-8 lg:gap-${lg} xl:gap-${xl}`)
+    expect(CONTAINER_GAP_CLASSES.lg).toBe('gap-8 lg:gap-16 xl:gap-24')
   })
 })
 

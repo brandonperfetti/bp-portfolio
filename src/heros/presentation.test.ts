@@ -19,6 +19,7 @@ import {
   ROUTE_HEADER_HEIGHT_PX,
   heroPresentation,
 } from '@/heros/presentation'
+import { ROUTE_RHYTHM_PROFILES } from '@/heros/routeRhythm'
 
 /** Tailwind spacing step in px — `-top-32` is 32 × 4px. */
 const SPACING_STEP_PX = 4
@@ -166,31 +167,39 @@ describe('full-bleed geometry', () => {
  * block inside its 36rem span: the isolation sat on the hero's own `<header>`,
  * so the canvas could only sink to the bottom of the header, and the header
  * then painted above the blocks that follow it. The isolation has to sit on
- * the wrapper that holds the hero *and* the blocks. Nothing in `src/heros`
- * can enforce that on its own, so the route is read here.
+ * the wrapper that holds the hero *and* the blocks.
+ *
+ * Since #42 both `/` and the `[slug]` catch-all render through the shared
+ * `RenderRhythmPage`, so the contract is enforced there: the one `<Container>`
+ * that holds hero and blocks, whose class comes from the rhythm profile — and
+ * every profile must carry the isolation.
  */
-describe('full-bleed stacking contract with the route', () => {
-  const routeSource = readFileSync(
-    path.join(process.cwd(), 'src/app/(frontend)/[slug]/page.tsx'),
+describe('full-bleed stacking contract with the shared renderer', () => {
+  const rendererSource = readFileSync(
+    path.join(process.cwd(), 'src/heros/RenderRhythmPage.tsx'),
     'utf8',
   )
 
-  it('the [slug] route isolates the wrapper that holds hero and blocks', () => {
-    const container = routeSource.match(/<Container className="([^"]+)"/)
-    expect(container, 'the route should wrap its page in <Container>').not.toBe(
-      null,
-    )
-    expect(container![1].split(/\s+/)).toContain(
-      HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS,
+  it('wraps hero and blocks in the one Container fed by the rhythm profile', () => {
+    expect(rendererSource).toContain(
+      '<Container className={profile.containerClass}>',
     )
 
     // Both halves inside that one wrapper — the whole point of the contract.
-    const wrapper = routeSource.slice(
-      routeSource.indexOf('<Container'),
-      routeSource.indexOf('</Container>'),
+    const wrapper = rendererSource.slice(
+      rendererSource.indexOf('<Container'),
+      rendererSource.indexOf('</Container>'),
     )
     expect(wrapper).toContain('<RenderHero')
     expect(wrapper).toContain('<RenderBlocks')
+  })
+
+  it('every rhythm profile isolates that Container', () => {
+    for (const profile of Object.values(ROUTE_RHYTHM_PROFILES)) {
+      expect(profile.containerClass.split(/\s+/)).toContain(
+        HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS,
+      )
+    }
   })
 
   it('the canvas sits in that context’s negative layer', () => {

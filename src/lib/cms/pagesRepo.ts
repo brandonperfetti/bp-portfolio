@@ -22,22 +22,6 @@ const pathToSlug = (path: string): string => {
 }
 
 /**
- * Image URLs of the layout's first `photoStrip` block. The home route
- * consumes this for its hero-slot gallery (and excludes the block from its
- * end-of-page CMS region so it doesn't render twice).
- */
-function photoStripImagesFromLayout(
-  layout: Page['layout'] | null | undefined,
-): string[] | undefined {
-  const strip = layout?.find((block) => block.blockType === 'photoStrip')
-  if (!strip || strip.blockType !== 'photoStrip') return undefined
-  const urls = (strip.images ?? [])
-    .map((image) => mediaUrl(image))
-    .filter((url): url is string => Boolean(url))
-  return urls.length ? urls : undefined
-}
-
-/**
  * Page content by route path from the Payload `pages` collection (was Notion).
  *
  * @param path - Route path to resolve (for example `/` or `/about`).
@@ -73,7 +57,6 @@ export const getCmsPageByPath = unstable_cache(
       seoDescription: page.meta?.description || undefined,
       heroImage: mediaUrl(page.hero?.media),
       ogImage: mediaUrl(page.meta?.image),
-      photoStripImages: photoStripImagesFromLayout(page.layout),
       updatedAt: page.updatedAt,
     }
 
@@ -92,9 +75,16 @@ export const getCmsPageByPath = unstable_cache(
 /**
  * Slugs owned by dedicated route components. The `[slug]` catch-all must
  * never render or emit these, and the sitemap must not double-list them.
+ *
+ * @remarks `home` is deliberately absent. It is a real page-builder document,
+ * rendered by the dedicated `/` route through the same {@link RenderRhythmPage}
+ * seam the catch-all uses (the #42 home flip). Its `/home` URL is a permanent
+ * redirect to `/` (`next.config.mjs`), so the catch-all never serves it; the
+ * one place that still needs `home` filtered — the sitemap/static-params slug
+ * list — excludes it explicitly in {@link getPublishedPageSlugs} below, because
+ * `/home` must not appear as a second, redirecting URL.
  */
 export const RESERVED_PAGE_SLUGS = new Set([
-  'home',
   'about',
   'account',
   'articles',
@@ -134,10 +124,21 @@ export const getPageBySlugDraftAware = async (
 }
 
 /**
+ * Slug served by the dedicated `/` route (redirected away from `/home`), so it
+ * is never a catch-all URL and must not surface in the slug list below.
+ */
+const HOME_PAGE_SLUG = 'home'
+
+/**
  * Published, non-reserved page-builder slugs — the set of pages the
  * `[slug]` catch-all serves. Feeds `generateStaticParams` and the sitemap
  * (fresh-eyes review 2026-08, M5: builder pages were missing from the
  * sitemap entirely).
+ *
+ * @remarks Excludes {@link HOME_PAGE_SLUG} as well as {@link RESERVED_PAGE_SLUGS}:
+ * `home` renders at `/` (not `/home`, which permanently redirects), so listing
+ * it here would emit `/home` as a second, redirecting sitemap URL and statically
+ * generate a page the redirect immediately shadows.
  */
 export const getPublishedPageSlugs = unstable_cache(
   async (): Promise<string[]> => {
@@ -153,7 +154,10 @@ export const getPublishedPageSlugs = unstable_cache(
     })
     return docs
       .map((doc) => doc.slug)
-      .filter((s): s is string => Boolean(s) && !RESERVED_PAGE_SLUGS.has(s!))
+      .filter(
+        (s): s is string =>
+          Boolean(s) && s !== HOME_PAGE_SLUG && !RESERVED_PAGE_SLUGS.has(s!),
+      )
   },
   ['published-page-slugs'],
   { tags: ['pages'] },
