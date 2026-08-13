@@ -289,6 +289,22 @@ export interface Page {
     image?: (number | null) | Media;
     description?: string | null;
   };
+  /**
+   * Hide the Share control on this entry (kill switch).
+   */
+  disableSharing?: boolean | null;
+  /**
+   * Force-enable these targets on top of the site default.
+   */
+  shareTargetsAdd?: ('x' | 'linkedin' | 'facebook' | 'reddit' | 'hackernews' | 'email' | 'copylink')[] | null;
+  /**
+   * Force-remove these targets from the site default.
+   */
+  shareTargetsRemove?: ('x' | 'linkedin' | 'facebook' | 'reddit' | 'hackernews' | 'email' | 'copylink')[] | null;
+  /**
+   * auto = follow the global generated-OG toggle · bespoke = always this entry’s own image · generated = always a generated card.
+   */
+  ogImageMode?: ('auto' | 'bespoke' | 'generated') | null;
   publishedAt?: string | null;
   slug?: string | null;
   slugLock?: boolean | null;
@@ -363,6 +379,22 @@ export interface Post {
     image?: (number | null) | Media;
     description?: string | null;
   };
+  /**
+   * Hide the Share control on this entry (kill switch).
+   */
+  disableSharing?: boolean | null;
+  /**
+   * Force-enable these targets on top of the site default.
+   */
+  shareTargetsAdd?: ('x' | 'linkedin' | 'facebook' | 'reddit' | 'hackernews' | 'email' | 'copylink')[] | null;
+  /**
+   * Force-remove these targets from the site default.
+   */
+  shareTargetsRemove?: ('x' | 'linkedin' | 'facebook' | 'reddit' | 'hackernews' | 'email' | 'copylink')[] | null;
+  /**
+   * auto = follow the global generated-OG toggle · bespoke = always this entry’s own image · generated = always a generated card.
+   */
+  ogImageMode?: ('auto' | 'bespoke' | 'generated') | null;
   publishedAt?: string | null;
   authors?: (number | Author)[] | null;
   populatedAuthors?:
@@ -1816,6 +1848,10 @@ export interface PagesSelect<T extends boolean = true> {
         image?: T;
         description?: T;
       };
+  disableSharing?: T;
+  shareTargetsAdd?: T;
+  shareTargetsRemove?: T;
+  ogImageMode?: T;
   publishedAt?: T;
   slug?: T;
   slugLock?: T;
@@ -2245,6 +2281,10 @@ export interface PostsSelect<T extends boolean = true> {
         image?: T;
         description?: T;
       };
+  disableSharing?: T;
+  shareTargetsAdd?: T;
+  shareTargetsRemove?: T;
+  ogImageMode?: T;
   publishedAt?: T;
   authors?: T;
   populatedAuthors?:
@@ -2629,6 +2669,9 @@ export interface SiteSetting {
   canonicalUrl?: string | null;
   defaultSeo?: {
     title?: string | null;
+    /**
+     * Default meta description. Empty → the built-in site description.
+     */
     description?: string | null;
     ogImage?: (number | null) | Media;
   };
@@ -2639,6 +2682,22 @@ export interface SiteSetting {
         id?: string | null;
       }[]
     | null;
+  /**
+   * Show the Copy-page button on articles.
+   */
+  copyPageEnabled?: boolean | null;
+  /**
+   * Button label. Empty → "Copy page".
+   */
+  copyPageLabel?: string | null;
+  /**
+   * Globally enabled share destinations (desktop modal). Copy-link is the floor.
+   */
+  shareTargets?: ('x' | 'linkedin' | 'facebook' | 'reddit' | 'hackernews' | 'email' | 'copylink')[] | null;
+  /**
+   * Global toggle for dynamic generated OG title-cards (T7).
+   */
+  generatedOgEnabled?: boolean | null;
   updatedAt?: string | null;
   createdAt?: string | null;
 }
@@ -2725,6 +2784,10 @@ export interface SiteSettingsSelect<T extends boolean = true> {
         url?: T;
         id?: T;
       };
+  copyPageEnabled?: T;
+  copyPageLabel?: T;
+  shareTargets?: T;
+  generatedOgEnabled?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;

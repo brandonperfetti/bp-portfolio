@@ -23,6 +23,7 @@ import * as migration_20260812_230408_w4b1b_about_parity_vocab from './20260812_
 import * as migration_20260813_003358_w4b1c_image_size from './20260813_003358_w4b1c_image_size'
 import * as migration_20260813_154606_authors_collection from './20260813_154606_authors_collection'
 import * as migration_20260813_165552_assign_owner_author_backfill from './20260813_165552_assign_owner_author_backfill'
+import * as migration_20260813_230343_t1_post_actions_schema from './20260813_230343_t1_post_actions_schema'
 
 export const migrations = [
   {
@@ -149,5 +150,10 @@ export const migrations = [
     up: migration_20260813_165552_assign_owner_author_backfill.up,
     down: migration_20260813_165552_assign_owner_author_backfill.down,
     name: '20260813_165552_assign_owner_author_backfill',
+  },
+  {
+    up: migration_20260813_230343_t1_post_actions_schema.up,
+    down: migration_20260813_230343_t1_post_actions_schema.down,
+    name: '20260813_230343_t1_post_actions_schema',
   },
 ]
