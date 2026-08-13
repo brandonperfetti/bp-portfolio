@@ -98,6 +98,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Run Payload migrations
         run: pnpm migrate
+      - name: Seed e2e content
+        run: pnpm seed:e2e
       - name: Install Playwright browser (Chromium)
         run: pnpm exec playwright install --with-deps chromium
       - name: Build

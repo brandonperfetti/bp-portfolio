@@ -171,6 +171,10 @@ export const StickyRail: Story = {
     await expect(rail).toHaveClass('self-start', 'lg:sticky', 'lg:top-10')
     await expect(rail).not.toHaveClass('sticky')
     await expect(rail).not.toHaveClass('top-10')
+
+    // A sticky column carries the rail testid on the element that actually
+    // sticks — the anchor the home rail regression test grabs.
+    await expect(rail).toHaveAttribute('data-testid', 'cms-sticky-rail')
   },
 }
 
@@ -520,6 +524,9 @@ export const StickyOff: Story = {
 
     await expect(rail).not.toHaveClass('lg:sticky')
     await expect(rail).not.toHaveClass('self-start')
+
+    // No sticky, no rail testid — a non-sticky column is untouched.
+    await expect(rail).not.toHaveAttribute('data-testid')
   },
 }
 

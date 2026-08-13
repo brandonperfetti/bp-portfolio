@@ -238,6 +238,18 @@ describe('getTechSignalsIndex', () => {
 
     await expect(getTechSignalsIndex()).resolves.toBeNull()
     expect(collectMock).not.toHaveBeenCalled()
+    // The unconfigured short-circuit lives in the request-scoped wrapper,
+    // *before* the cache scope, so a tokenless deployment (CI's production
+    // build) renders /tech from fallback without even entering unstable_cache.
+    expect(cacheRegistry.entries[0].invocations).toBe(0)
+  })
+
+  it('does not enter the cache scope when GITHUB_OWNER is missing', async () => {
+    vi.stubEnv('GITHUB_OWNER', '')
+
+    await expect(getTechSignalsIndex()).resolves.toBeNull()
+    expect(collectMock).not.toHaveBeenCalled()
+    expect(cacheRegistry.entries[0].invocations).toBe(0)
   })
 
   it('degrades to null when the scan rejects', async () => {

@@ -10,6 +10,22 @@ import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { cn } from '@/lib/utils'
 
 /**
+ * Stable hook for e2e/QA to grab a sticky column's rendered shell.
+ *
+ * @remarks Emitted only when `sticky` is true, on the outer grid item that
+ * actually carries the sticky classes — i.e. the element whose pinned
+ * position the home rail regression test measures. It replaces the
+ * `home-sticky-rail-anchor` testid that lived in the hard-coded homepage JSX
+ * before the #42 page-builder flip: nothing rendered that anchor once the
+ * home became CMS blocks, so the rail test had no element to target. This is
+ * a static attribute on the rendered element, not a CMS field — no schema
+ * change. The about page still emits its own `about-sticky-rail-anchor` from
+ * hard-coded JSX; when About flips to the builder (W4B2) its test retargets
+ * to this same testid.
+ */
+export const STICKY_RAIL_TEST_ID = 'cms-sticky-rail'
+
+/**
  * Presentational shell for one column of a Container grid: takes a width
  * from the shared size vocabulary, an optional desktop sticky behaviour, an
  * optional left content inset, and stacks its children.
@@ -66,9 +82,14 @@ export function ColumnShell({
   children?: ReactNode
   className?: string
 }) {
+  // Only a sticky column gets the rail testid; React omits a `undefined`
+  // attribute, so a non-sticky column renders exactly as before.
+  const stickyTestId = sticky ? STICKY_RAIL_TEST_ID : undefined
+
   if (reveal) {
     return (
       <div
+        data-testid={stickyTestId}
         className={cn(
           columnSizeClass(size),
           stickyColumnClass(sticky),
@@ -91,6 +112,7 @@ export function ColumnShell({
 
   return (
     <div
+      data-testid={stickyTestId}
       className={cn(
         columnSizeClass(size),
         stickyColumnClass(sticky),

@@ -81,15 +81,25 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
  * `GITHUB_TOKEN`), timed out, or produced no signals — pages render without
  * badges rather than failing. Scan errors degrade the same way.
  */
+/**
+ * Whether the owner-wide scan is configured to run at all.
+ *
+ * @remarks Both `GITHUB_OWNER` and `GITHUB_TOKEN` are required. This gate is
+ * checked in the request-scoped wrapper ({@link getTechSignalsIndex}), *before*
+ * the cache scope — an unauthenticated deployment (CI's production build carries
+ * no token) then renders `/tech` from its fallback data immediately, never
+ * entering `unstable_cache` and never touching the network. Reading env in the
+ * request scope also keeps it reliable: like `draftMode()`, env reads *inside*
+ * a cache scope are best avoided (see {@link getTechSignalsIndex}).
+ */
+function isTechScanConfigured(): boolean {
+  return Boolean(
+    process.env.GITHUB_OWNER?.trim() && process.env.GITHUB_TOKEN?.trim(),
+  )
+}
+
 const getCachedTechSignalsIndex = unstable_cache(
   async (): Promise<TechSignalsIndex | null> => {
-    if (
-      !process.env.GITHUB_OWNER?.trim() ||
-      !process.env.GITHUB_TOKEN?.trim()
-    ) {
-      return null
-    }
-
     try {
       const result = await withTimeout(
         collectGithubTechSignals(),
@@ -150,6 +160,13 @@ const getCachedTechSignalsIndex = unstable_cache(
 export async function getTechSignalsIndex(): Promise<TechSignalsIndex | null> {
   const { isEnabled: draft } = await draftMode()
   if (draft) {
+    return null
+  }
+  // Short-circuit an unconfigured scan here, outside the cache scope, so a
+  // tokenless deployment renders `/tech` from its fallback without paying the
+  // cache round-trip or risking the live scan (CI's production build has no
+  // token — this is what keeps `/tech` fast there). Mirrors the draft skip.
+  if (!isTechScanConfigured()) {
     return null
   }
   return getCachedTechSignalsIndex()
