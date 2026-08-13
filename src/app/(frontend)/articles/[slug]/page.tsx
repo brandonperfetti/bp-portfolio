@@ -15,6 +15,7 @@ import { isFuturePublicationDate } from '@/lib/date'
 import { canonicalizeArticleUrl } from '@/lib/seo/canonical'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import { getSiteUrl } from '@/lib/site'
+import type { CmsAuthor } from '@/lib/cms/types'
 
 export const dynamicParams = true
 
@@ -147,10 +148,24 @@ export default async function ArticlePage({ params }: PageProps) {
     canonicalSiteUrl,
     settings.openGraphImage || '/favicon.ico',
   )
+  // The declared author type omits `sameAs` (defined only on CmsAuthor in the
+  // CMS layer); the runtime object carries it, so narrow via CmsAuthor here.
+  const authorObject =
+    typeof article.author === 'object' && article.author
+      ? (article.author as unknown as CmsAuthor)
+      : undefined
   const authorName =
     typeof article.author === 'string'
       ? article.author.trim() || undefined
-      : article.author?.name?.trim() || undefined
+      : authorObject?.name?.trim() || undefined
+  const authorSameAs = Array.from(
+    new Set(
+      (authorObject?.sameAs ?? []).map((url) => url.trim()).filter(Boolean),
+    ),
+  )
+  const authorUrl = authorObject?.href
+    ? toAbsoluteImageUrl(canonicalSiteUrl, authorObject.href)
+    : undefined
   const articleKeywords = getArticleKeywords(article)
   const articleSchema = {
     '@context': 'https://schema.org',
@@ -168,6 +183,8 @@ export default async function ArticlePage({ params }: PageProps) {
           {
             '@type': 'Person',
             name: authorName,
+            ...(authorUrl ? { url: authorUrl } : {}),
+            ...(authorSameAs.length > 0 ? { sameAs: authorSameAs } : {}),
           },
         ]
       : undefined,

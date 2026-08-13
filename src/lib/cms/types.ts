@@ -10,12 +10,18 @@ export interface CmsAuthor {
   href?: string
   role?: string
   image?: string
+  /**
+   * Public profile URLs for the author, surfaced as the schema.org
+   * `author.sameAs` array in Article JSON-LD.
+   */
+  sameAs?: string[]
 }
 
 export interface CmsAuthorProfile extends CmsAuthor {
   id: string
   slug: string
   bio?: string
+  email?: string
   primary?: boolean
   order?: number
 }

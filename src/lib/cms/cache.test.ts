@@ -15,6 +15,7 @@ describe('CMS_TAGS vocabulary', () => {
   it('matches the literal tags the repos cache under', () => {
     expect(CMS_TAGS).toEqual({
       articles: 'posts', // src/lib/content/posts.ts, CmsPostBlocks
+      authors: 'authors', // src/lib/cms/authorsRepo.ts
       projects: 'projects', // src/lib/cms/projectsRepo.ts
       tech: 'tech-stack', // src/lib/cms/techRepo.ts
       uses: 'uses', // src/lib/cms/usesRepo.ts

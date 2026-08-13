@@ -1,3 +1,4 @@
+export { Authors } from './Authors'
 export { Categories } from './Categories'
 export { Media } from './Media'
 export { Pages } from './Pages'

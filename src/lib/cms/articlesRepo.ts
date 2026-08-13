@@ -2,6 +2,7 @@ import { flattenBlockText } from '@/lib/content/flattenBlockText'
 import type {
   CmsArticleDetail,
   CmsArticleSummary,
+  CmsAuthor,
   CmsProvider,
 } from '@/lib/cms/types'
 import {
@@ -12,7 +13,7 @@ import {
 import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
 import { canAccess } from '@/access/canAccess'
 import { mediaUrl } from '@/lib/cms/mediaUrl'
-import type { Post, User } from '@/payload-types'
+import type { Author, Post } from '@/payload-types'
 
 /**
  * Article repository backed by the Payload Local API (was Notion in v3).
@@ -34,11 +35,39 @@ const termTitles = (terms: Post['categories'] | Post['tags']): string[] =>
     .map((t) => (typeof t === 'object' && t !== null ? t.title : null))
     .filter((t): t is string => Boolean(t))
 
-const authorName = (post: Post): string => {
-  const first =
-    post.populatedAuthors?.[0]?.name ||
-    (post.authors?.[0] as User | undefined)?.name
-  return first || 'Brandon Perfetti'
+/** Site-owner byline preserved verbatim when a post has no author relation. */
+const SITE_OWNER_FALLBACK = 'Brandon Perfetti'
+
+const authorHref = (author: Author): string | undefined =>
+  // The site owner routes to /about (matches ArticleMeta's owner heuristic);
+  // guest authors have no dedicated route yet, so they render without a link.
+  author.name?.trim().toLowerCase() === 'brandon perfetti'
+    ? '/about'
+    : undefined
+
+/**
+ * Resolve a post's byline. Prefers the populated `authors` relation — a public
+ * collection, so anonymous depth-2 reads carry the full name/role/avatar/
+ * socials — and returns a rich {@link CmsAuthor}. When no relation is
+ * populated it degrades to the `{id,name}` mirror or the site-owner string,
+ * keeping migrated posts' bylines byte-identical.
+ */
+const buildAuthor = (post: Post): CmsAuthor | string => {
+  const rel = post.authors?.[0]
+  const author = rel && typeof rel === 'object' ? (rel as Author) : undefined
+  if (!author) {
+    return post.populatedAuthors?.[0]?.name || SITE_OWNER_FALLBACK
+  }
+  const sameAs = (author.socials ?? [])
+    .map((social) => social?.url?.trim())
+    .filter((url): url is string => Boolean(url))
+  return {
+    name: author.name,
+    role: author.role || undefined,
+    image: mediaUrl(author.avatar) || undefined,
+    href: authorHref(author),
+    sameAs: sameAs.length > 0 ? sameAs : undefined,
+  }
 }
 
 const toSummary = (post: Post): CmsArticleSummary => {
@@ -53,7 +82,7 @@ const toSummary = (post: Post): CmsArticleSummary => {
     date: post.publishedAt || post.createdAt,
     updatedAt: post.updatedAt,
     image: mediaUrl(post.heroImage) || mediaUrl(post.meta?.image ?? null),
-    author: authorName(post),
+    author: buildAuthor(post),
     category: topics[0] ? { title: topics[0] } : undefined,
     keywords: [...topics, ...tech],
     topics,

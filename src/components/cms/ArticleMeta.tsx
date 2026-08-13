@@ -9,11 +9,32 @@ function isSiteOwnerAuthor(name: string) {
   return name.trim().toLowerCase() === 'brandon perfetti'
 }
 
+const SOCIAL_LABELS: Record<string, string> = {
+  'x.com': 'X',
+  'twitter.com': 'X',
+  'github.com': 'GitHub',
+  'linkedin.com': 'LinkedIn',
+  'youtube.com': 'YouTube',
+  'instagram.com': 'Instagram',
+  'mastodon.social': 'Mastodon',
+  'bsky.app': 'Bluesky',
+}
+
+/** Friendly label for a social profile URL, falling back to its hostname. */
+function socialLabel(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '')
+    return SOCIAL_LABELS[host] ?? host
+  } catch {
+    return url
+  }
+}
+
 /**
  * Renders article metadata chips and author/actions row when metadata exists.
  *
  * @param author Author identity, either a string label or object with optional
- * `name`, `role`, and `href`.
+ * `name`, `role`, `href`, `image` (avatar URL), and `sameAs` (social links).
  * @param actions Optional right-aligned action slot.
  * @param readingTimeMinutes Optional reading-time value.
  * @param category Optional fallback category when topic chips are absent.
@@ -37,6 +58,8 @@ export function ArticleMeta({
         href?: string
         name?: string
         role?: string
+        image?: string
+        sameAs?: string[]
       }
   actions?: React.ReactNode
   readingTimeMinutes?: number
@@ -52,12 +75,16 @@ export function ArticleMeta({
           name: rawAuthorName,
           role: '',
           href: undefined,
+          image: undefined as string | undefined,
+          sameAs: [] as string[],
         }
       : author
         ? {
             name: rawAuthorName || (author.href || author.role ? 'Author' : ''),
             role: author.role ?? '',
             href: author.href,
+            image: author.image,
+            sameAs: author.sameAs ?? [],
           }
         : null
 
@@ -75,6 +102,12 @@ export function ArticleMeta({
           : undefined
         : undefined)
     : undefined
+
+  const socialLinks = Array.from(
+    new Set(
+      (authorMeta?.sameAs ?? []).map((url) => url.trim()).filter(Boolean),
+    ),
+  ).map((href) => ({ href, label: socialLabel(href) }))
 
   const topicChips = Array.from(
     new Set((topics ?? []).map((item) => item.trim()).filter(Boolean)),
@@ -104,25 +137,55 @@ export function ArticleMeta({
       {authorMeta || actions ? (
         <div className="flex items-start justify-between gap-3">
           {authorMeta ? (
-            <div>
-              {authorHref ? (
-                <Link
-                  href={authorHref}
-                  {...getExternalLinkProps(authorHref)}
-                  className="text-sm font-semibold text-zinc-800 no-underline transition hover:text-teal-500 hover:underline hover:underline-offset-2 dark:text-zinc-100 dark:hover:text-teal-400"
-                >
-                  {authorMeta.name}
-                </Link>
-              ) : (
-                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-                  {authorMeta.name}
-                </p>
-              )}
-              {authorMeta.role ? (
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  {authorMeta.role}
-                </p>
+            <div className="flex items-start gap-3">
+              {authorMeta.image ? (
+                // Decorative: the adjacent name/link carries the accessible
+                // identity, so the avatar is hidden from assistive tech.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={authorMeta.image}
+                  alt=""
+                  aria-hidden="true"
+                  width={40}
+                  height={40}
+                  className="mt-0.5 h-10 w-10 shrink-0 rounded-full object-cover"
+                />
               ) : null}
+              <div>
+                {authorHref ? (
+                  <Link
+                    href={authorHref}
+                    {...getExternalLinkProps(authorHref)}
+                    className="text-sm font-semibold text-zinc-800 no-underline transition hover:text-teal-500 hover:underline hover:underline-offset-2 dark:text-zinc-100 dark:hover:text-teal-400"
+                  >
+                    {authorMeta.name}
+                  </Link>
+                ) : (
+                  <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                    {authorMeta.name}
+                  </p>
+                )}
+                {authorMeta.role ? (
+                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                    {authorMeta.role}
+                  </p>
+                ) : null}
+                {socialLinks.length > 0 ? (
+                  <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                    {socialLinks.map((link) => (
+                      <li key={link.href}>
+                        <a
+                          href={link.href}
+                          {...getExternalLinkProps(link.href)}
+                          className="text-xs font-medium text-zinc-500 transition hover:text-teal-500 dark:text-zinc-400 dark:hover:text-teal-400"
+                        >
+                          {link.label}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             </div>
           ) : (
             <span />

@@ -251,9 +251,17 @@ export const Posts: CollectionConfig = {
         position: 'sidebar',
       },
       hasMany: true,
-      relationTo: 'users',
+      // Re-pointed users → authors (W5B1, #25): bylines now carry a public,
+      // per-author name/role/avatar/socials, and a guest author is addable
+      // without a Payload admin account. The migration seeds one Author from
+      // the site-owner identity and repoints existing relationships so every
+      // published post keeps its `Brandon Perfetti` byline.
+      relationTo: 'authors',
     },
-    // Populated via `populateAuthors` (users collection is access-locked).
+    // Populated via `populateAuthors`. Kept as the admin-hidden {id,name}
+    // fallback surface; the rich byline (role/avatar/socials) is resolved
+    // from the populated `authors` relation in articlesRepo (authors are
+    // publicly readable, so anonymous reads populate them directly).
     {
       name: 'populatedAuthors',
       type: 'array',

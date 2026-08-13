@@ -8,6 +8,7 @@ import { buildConfig } from 'payload'
 import sharp from 'sharp'
 
 import {
+  Authors,
   Categories,
   Media,
   Pages,
@@ -63,6 +64,7 @@ export default buildConfig({
     Tags,
     Media,
     Users,
+    Authors,
     WorkHistory,
   ],
   editor: defaultLexical,

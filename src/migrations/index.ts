@@ -21,6 +21,7 @@ import * as migration_20260812_173955_w3b4_home_grid_rhythm from './20260812_173
 import * as migration_20260812_195230_w4b1_about_enabling_vocab from './20260812_195230_w4b1_about_enabling_vocab'
 import * as migration_20260812_230408_w4b1b_about_parity_vocab from './20260812_230408_w4b1b_about_parity_vocab'
 import * as migration_20260813_003358_w4b1c_image_size from './20260813_003358_w4b1c_image_size'
+import * as migration_20260813_154606_authors_collection from './20260813_154606_authors_collection'
 
 export const migrations = [
   {
@@ -137,5 +138,10 @@ export const migrations = [
     up: migration_20260813_003358_w4b1c_image_size.up,
     down: migration_20260813_003358_w4b1c_image_size.down,
     name: '20260813_003358_w4b1c_image_size',
+  },
+  {
+    up: migration_20260813_154606_authors_collection.up,
+    down: migration_20260813_154606_authors_collection.down,
+    name: '20260813_154606_authors_collection',
   },
 ]

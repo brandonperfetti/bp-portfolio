@@ -165,6 +165,87 @@ describe('getCmsArticleBySlug', () => {
   })
 })
 
+describe('byline resolution (buildAuthor)', () => {
+  it('builds a rich author from the populated authors relation', async () => {
+    getPublishedPosts.mockResolvedValue([
+      makePost({
+        authors: [
+          {
+            id: 7,
+            name: 'Ada Lovelace',
+            role: 'Guest Author',
+            avatar: { id: 9, url: '/api/media/file/ada.jpg' },
+            // Blank/whitespace social URLs are dropped, not rendered.
+            socials: [
+              { url: 'https://github.com/ada' },
+              { url: '  ' },
+              { url: 'https://x.com/ada' },
+            ],
+          } as never,
+        ],
+      }),
+    ])
+
+    const [summary] = await getAllCmsArticleSummaries()
+    expect(summary.author).toEqual({
+      name: 'Ada Lovelace',
+      role: 'Guest Author',
+      image: '/api/media/file/ada.jpg',
+      href: undefined,
+      sameAs: ['https://github.com/ada', 'https://x.com/ada'],
+    })
+  })
+
+  it('routes the site-owner byline to /about', async () => {
+    getPublishedPosts.mockResolvedValue([
+      makePost({ authors: [{ id: 1, name: 'Brandon Perfetti' } as never] }),
+    ])
+
+    const [summary] = await getAllCmsArticleSummaries()
+    expect(summary.author).toMatchObject({
+      name: 'Brandon Perfetti',
+      href: '/about',
+    })
+  })
+
+  it('omits sameAs when the author has no socials', async () => {
+    getPublishedPosts.mockResolvedValue([
+      makePost({ authors: [{ id: 2, name: 'No Links' } as never] }),
+    ])
+
+    const [summary] = await getAllCmsArticleSummaries()
+    expect(summary.author).toEqual({
+      name: 'No Links',
+      role: undefined,
+      image: undefined,
+      href: undefined,
+      sameAs: undefined,
+    })
+  })
+
+  it('keeps the site-owner string when no author relation is populated', async () => {
+    getPublishedPosts.mockResolvedValue([
+      makePost({ authors: undefined, populatedAuthors: undefined }),
+    ])
+
+    const [summary] = await getAllCmsArticleSummaries()
+    // Byte-identical to the pre-#25 fallback — migrated posts are unaffected.
+    expect(summary.author).toBe('Brandon Perfetti')
+  })
+
+  it('uses the populatedAuthors {id,name} mirror when the relation is unpopulated', async () => {
+    getPublishedPosts.mockResolvedValue([
+      makePost({
+        authors: undefined,
+        populatedAuthors: [{ id: '3', name: 'Mirror Only' }],
+      }),
+    ])
+
+    const [summary] = await getAllCmsArticleSummaries()
+    expect(summary.author).toBe('Mirror Only')
+  })
+})
+
 describe('getCmsSearchArticles', () => {
   it('enriches summaries with flattened body text for the search index', async () => {
     getPublishedPosts.mockResolvedValue([makePost()])

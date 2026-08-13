@@ -32,6 +32,7 @@ export const CMS_REVALIDATE = {
  */
 export const CMS_TAGS = {
   articles: 'posts',
+  authors: 'authors',
   projects: 'projects',
   tech: 'tech-stack',
   uses: 'uses',
