@@ -3,7 +3,6 @@ import { getPayload } from 'payload'
 
 import configPromise from '@payload-config'
 import { mediaUrl } from '@/lib/cms/mediaUrl'
-import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
 import type { CmsPageContent } from '@/lib/cms/types'
 import type { Page } from '@/payload-types'
 
@@ -30,10 +29,7 @@ const pathToSlug = (path: string): string => {
  * boots-with-empty-CMS behavior.
  */
 export const getCmsPageByPath = unstable_cache(
-  async (
-    path: string,
-    options?: { includeBody?: boolean },
-  ): Promise<CmsPageContent | null> => {
+  async (path: string): Promise<CmsPageContent | null> => {
     const payload = await getPayload({ config: configPromise })
     const slug = pathToSlug(path)
     const { docs } = await payload.find({
@@ -60,12 +56,6 @@ export const getCmsPageByPath = unstable_cache(
       updatedAt: page.updatedAt,
     }
 
-    if (options?.includeBody) {
-      content.bodyBlocks = page.hero?.richText
-        ? lexicalToBlocks(page.hero.richText)
-        : []
-    }
-
     return content
   },
   ['page-by-path'],
@@ -83,6 +73,17 @@ export const getCmsPageByPath = unstable_cache(
  * one place that still needs `home` filtered — the sitemap/static-params slug
  * list — excludes it explicitly in {@link getPublishedPageSlugs} below, because
  * `/home` must not appear as a second, redirecting URL.
+ *
+ * `about` is the counter-case, and it stays: the #44 about flip put `/about`
+ * on the same {@link RenderRhythmPage} seam (rendering the `about` Pages doc),
+ * but — unlike `home` — its slug *already equals its path*. A dedicated
+ * `about/page.tsx` static segment always shadows the `[slug]` dynamic segment
+ * for `/about`, so the catch-all never serves it and no `/home`-style redirect
+ * is needed. Keeping `about` reserved is what yields exactly one canonical
+ * `/about`: it holds `about` out of {@link getPublishedPageSlugs} (no duplicate
+ * sitemap URL, no dead catch-all static param) and keeps the catch-all's guard
+ * defensively rejecting it. Removing it would gain nothing and force a second
+ * explicit exclusion below, so the decision is to leave it in place.
  */
 export const RESERVED_PAGE_SLUGS = new Set([
   'about',

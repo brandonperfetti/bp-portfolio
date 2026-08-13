@@ -139,7 +139,11 @@ test('about desktop sticky right rail remains pinned while scrolling', async ({
     (topOffset) => window.scrollTo(0, topOffset),
     Math.round(viewportHeight * 0.9),
   )
-  const railAnchor = page.getByTestId('about-sticky-rail-anchor')
+  // About is now a CMS page-builder doc (#44 flip): its right rail is the
+  // sticky Column shell rather than the old hard-coded `about-sticky-rail-anchor`
+  // JSX — target the stable testid ColumnShell emits when `sticky` is on (the
+  // same anchor the home rail test grabs).
+  const railAnchor = page.getByTestId('cms-sticky-rail')
   await expect(railAnchor).toBeVisible()
   const firstY = await getStableBoundingBoxY(page, railAnchor)
 

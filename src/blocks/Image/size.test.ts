@@ -1,16 +1,10 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
-
 import type { SelectField } from 'payload'
 
 import { describe, expect, it } from 'vitest'
 
 import { ImageBlock } from '@/blocks/Image/config'
 import { IMAGE_SIZE_CLASSES } from '@/blocks/Image/treatment'
-
-const read = (relative: string) =>
-  readFileSync(path.join(process.cwd(), relative), 'utf8')
 
 const sizeField = ImageBlock.fields.find(
   (field): field is SelectField =>
@@ -60,17 +54,14 @@ describe('image size map', () => {
   })
 
   /**
-   * The parity gate for the about-page rail portrait's mobile half: its
-   * wrapper is `mx-auto max-w-xs px-2.5 lg:max-w-none`, so on a phone it
-   * centers at `max-w-xs` and from `lg` up it releases to full width. `px-2.5`
-   * is the existing `inset: xs`; `compact` *is* the `mx-auto max-w-xs
-   * lg:max-w-none` half, read straight out of the hand-built page the way
-   * `inset.test.ts` reads its rail inset so the treatment can't drift.
+   * The parity pin for the about-page rail portrait's mobile half: on a phone
+   * it centers at `max-w-xs` and from `lg` up releases to full width, so
+   * `compact` *is* `mx-auto max-w-xs lg:max-w-none`. The #44 flip put `/about`
+   * on the page builder and deleted the hand-built JSX this once cross-checked
+   * (the way the #42 home flip retired its source guards), so `treatment.ts` is
+   * now the sole source of truth for the literal.
    */
-  it('reproduces the about-page portrait compact treatment read from about/page.tsx', () => {
-    const aboutSource = read('src/app/(frontend)/about/page.tsx')
-    expect(aboutSource).toContain('max-w-xs')
-    expect(aboutSource).toContain('lg:max-w-none')
+  it('pins the about-page portrait compact treatment', () => {
     expect(IMAGE_SIZE_CLASSES.compact).toBe('mx-auto max-w-xs lg:max-w-none')
   })
 })

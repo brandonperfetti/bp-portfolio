@@ -1,7 +1,4 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
-
 import type { SelectField } from 'payload'
 
 import { describe, expect, it } from 'vitest'
@@ -24,9 +21,6 @@ const insetField = Column.fields.find(
 const configValues = (insetField?.options ?? []).map((option) =>
   typeof option === 'string' ? option : option.value,
 )
-
-const read = (relative: string) =>
-  readFileSync(path.join(process.cwd(), relative), 'utf8')
 
 /**
  * Guards the column half of the homepage's asymmetric two-column gutter: the
@@ -92,15 +86,13 @@ describe('column content inset map', () => {
   })
 
   /**
-   * The pixel-parity gate for the about-page rail inset. Unlike Home, the
-   * about page is still hand-built at `about/page.tsx`, so its rail inset can
-   * be read straight out of the source (rather than pinned to a literal): the
-   * rail column carries `lg:pl-20`, and `aboutRail` *is* that inset, so a
-   * future edit to either the page or the vocabulary fails loudly here.
+   * The pixel-parity pin for the about-page rail inset. The #44 flip put
+   * `/about` on the builder, so its rail is a `Column` with
+   * `contentInset: aboutRail` and the hand-built `about/page.tsx` JSX this once
+   * cross-checked is gone (the way #42 retired the `railGutter` source guard
+   * just above). `aboutRail` *is* the `lg:pl-20` the hand-built rail carried.
    */
-  it('reproduces the about-page rail inset read from about/page.tsx', () => {
-    const aboutSource = read('src/app/(frontend)/about/page.tsx')
-    expect(aboutSource).toContain('lg:pl-20')
+  it('pins the about-page rail inset', () => {
     expect(COLUMN_INSET_CLASSES.aboutRail).toBe('lg:pl-20')
   })
 })

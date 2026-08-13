@@ -1,7 +1,4 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
-
 import type { CheckboxField, TextareaField } from 'payload'
 
 import { describe, expect, it } from 'vitest'
@@ -9,32 +6,26 @@ import { describe, expect, it } from 'vitest'
 import { Lead } from '@/blocks/Lead/config'
 import { LEAD_CLASS, LEAD_REVEAL } from '@/blocks/Lead/lead'
 
-const read = (relative: string) =>
-  readFileSync(path.join(process.cwd(), relative), 'utf8')
-
 const field = (name: string) =>
   Lead.fields.find((f) => 'name' in f && f.name === name)
 
 /**
- * The pixel-parity gate for the about page's lead paragraph. Unlike Home, the
- * about page is still hand-built at `about/page.tsx`, so its lead treatment can
- * be read straight out of the source: the class string and the `ScrollReveal`
- * params are pinned to what that page renders, so a future edit to either the
- * page or this block fails loudly.
+ * The pixel-parity pins for the about page's lead paragraph. The #44 flip put
+ * `/about` on the page builder and deleted the hand-built `about/page.tsx` JSX
+ * these once cross-checked (the way the #42 home flip retired its source
+ * guards), so `lead.ts` is now the sole source of truth: the class string and
+ * the `ScrollReveal` params are pinned to the exact literals the hand-built
+ * page rendered, so a future edit to the block fails loudly.
  */
 describe('lead paragraph vocabulary', () => {
-  it('reproduces the about page lead classes read from about/page.tsx', () => {
-    const aboutSource = read('src/app/(frontend)/about/page.tsx')
+  it('pins the about page lead classes', () => {
     expect(LEAD_CLASS).toBe(
       'mt-6 space-y-7 text-base text-zinc-600 dark:text-zinc-400',
     )
-    expect(aboutSource).toContain(LEAD_CLASS)
   })
 
-  it('reproduces the about page lead reveal params read from about/page.tsx', () => {
-    const aboutSource = read('src/app/(frontend)/about/page.tsx')
+  it('pins the about page lead reveal params', () => {
     expect(LEAD_REVEAL).toEqual({ y: 14, duration: 0.72, delay: 0.24 })
-    expect(aboutSource).toContain('y={14} duration={0.72} delay={0.24}')
   })
 })
 

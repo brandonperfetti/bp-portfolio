@@ -56,6 +56,15 @@ const block = (
  * produces; unknown nodes degrade to paragraphs of their inline text.
  * TODO(brandon): retire alongside the v3 block renderer if we move article
  * bodies to a native Lexical renderer in a later polish pass.
+ *
+ * Embedded blocks (`type: 'block'`) are mapped by their `blockType`: `code`
+ * and `banner` from the page-builder Prose editor, plus `mediaBlock` — the
+ * one media node a Posts body can embed (`Banner`, `Code`, `MediaBlock` are
+ * the Posts editor's `BlocksFeature`). `mediaBlock` maps to an `image` block
+ * exactly as a bare `upload` node does, which settles #44's #45: without this
+ * case an embedded media block rendered nothing in article bodies. The Prose
+ * *block* editor deliberately omits `mediaBlock` (see `Prose/config.ts`), so
+ * this case is reached only by Posts content, never by a page's prose block.
  */
 export const lexicalToBlocks = (content: unknown): CmsArticleBlock[] => {
   const root = (content as { root?: { children?: LexicalNode[] } } | null)?.root
@@ -137,6 +146,7 @@ export const lexicalToBlocks = (content: unknown): CmsArticleBlock[] => {
             language?: string
             content?: unknown
             style?: string
+            media?: unknown
           }
           if (fields.blockType === 'code') {
             out.push(
@@ -153,6 +163,20 @@ export const lexicalToBlocks = (content: unknown): CmsArticleBlock[] => {
                 ),
               }),
             )
+          } else if (fields.blockType === 'mediaBlock') {
+            // #45: an embedded media block. Mirror the bare `upload` case —
+            // emit an `image` block only when the upload is populated (a depth
+            // that returns a bare ID leaves it out rather than rendering broken).
+            const media = fields.media as
+              { url?: string; alt?: string } | number | undefined
+            if (media && typeof media === 'object' && media.url) {
+              out.push(
+                block('image', {
+                  url: media.url,
+                  caption: media.alt ? [{ plainText: media.alt }] : [],
+                }),
+              )
+            }
           }
           break
         }

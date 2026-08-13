@@ -19,13 +19,14 @@ import {
  * chrome fails with it. This script seeds the minimum for the e2e suite to
  * exercise the real UI: the home images, the Identity + SiteSettings globals, a
  * few published Posts (so `/articles` shows its search UI), and the published
- * `home` doc carrying the *real* composed home layout, so `/` renders the true
- * home and its sticky rail.
+ * `home` and `about` docs carrying their *real* composed layouts, so `/` and
+ * the flipped `/about` (#44) render the true pages and their sticky rails —
+ * both `notFound()` without a published doc.
  *
  * Notion-free by design — CI has no Notion creds. Constants come from
  * `src/lib/identity.ts`; media are pulled from public Cloudinary URLs (CI has
  * internet). Idempotent: media reuse by a URL-unique filename key, globals via
- * `updateGlobal`, posts/home upserted by slug — so a re-run creates nothing new.
+ * `updateGlobal`, posts/home/about upserted by slug — so a re-run creates nothing new.
  *
  * Usage:
  *   pnpm seed:e2e            # → payload run scripts/seed-e2e.ts
@@ -48,6 +49,14 @@ const HOME_TITLE =
   'Senior frontend and full-stack engineer focused on practical software delivery.'
 const HOME_SUBTITLE =
   "I'm Brandon Perfetti from Orange County, CA. I build reliable web platforms with Next.js, TypeScript, GraphQL, and AI SDK + MCP workflows, with product-minded delivery leadership."
+
+/** About headline/subtitle/body — the flipped `/about` route's fallback copy. */
+const ABOUT_TITLE =
+  'I build software with a product mindset and an execution-first approach.'
+const ABOUT_SUBTITLE =
+  "I'm Brandon Perfetti, a product and project manager plus software engineer based in Orange County, California. Over the last decade, I've worked across startup and client teams where clear priorities, fast iteration, and reliable delivery are non-negotiable."
+const ABOUT_BODY =
+  'I lead and contribute across diverse teams, shifting between strategic planning and hands-on implementation as the work demands. That adaptability keeps teams aligned in fast-moving, ambiguous environments and turns complex product goals into reliable, user-focused software.'
 
 /** A few published articles so `/articles` renders its search UI, not the empty state. */
 const POSTS = [
@@ -105,7 +114,12 @@ const lexicalParagraph = (text: string) => ({
 
 const run = async () => {
   const payload = await getPayload({ config })
-  const report = { mediaCreated: 0, postsUpserted: 0, home: 'skipped' }
+  const report = {
+    mediaCreated: 0,
+    postsUpserted: 0,
+    home: 'skipped',
+    about: 'skipped',
+  }
 
   /**
    * Upload a Cloudinary image into Media once, reusing an existing doc on
@@ -330,8 +344,117 @@ const run = async () => {
     report.home = 'created'
   }
 
+  // 6. The published `about` doc, carrying the composed About layout so the
+  //    flipped `/about` (#44) renders instead of `notFound()`-ing. The portrait
+  //    reuses the Identity/person media (`heroMediaId`). The hero is `blank` —
+  //    About's H1 lives in the left column's `heading` block, so the hero draws
+  //    no `<header>` of its own.
+  const aboutImageBase = {
+    blockType: 'image' as const,
+    media: heroMediaId,
+    aspect: 'square' as const,
+    rounded: '2xl' as const,
+    tilt: 'right' as const,
+    hoverScale: true,
+  }
+  const aboutSocial = {
+    blockType: 'socialLinks' as const,
+    variant: 'labeledList' as const,
+    source: 'identity' as const,
+    showEmailDivider: true,
+  }
+  const aboutLayout = [
+    {
+      blockType: 'container' as const,
+      gap: 'homeParity' as const,
+      verticalAlign: 'stretch' as const,
+      section: {
+        width: 'container' as const,
+        paddingY: 'none' as const,
+      },
+      columns: [
+        {
+          blockType: 'column' as const,
+          size: 'half' as const,
+          content: [
+            {
+              blockType: 'heading' as const,
+              text: ABOUT_TITLE,
+              level: 'h1' as const,
+              variant: 'typewriter' as const,
+            },
+            {
+              blockType: 'lead' as const,
+              text: ABOUT_SUBTITLE,
+              reveal: true,
+            },
+            {
+              ...aboutImageBase,
+              inset: 'none' as const,
+              size: 'full' as const,
+              visibility: 'mobileOnly' as const,
+            },
+            {
+              blockType: 'prose' as const,
+              content: lexicalParagraph(ABOUT_BODY),
+            },
+            { ...aboutSocial, visibility: 'mobileOnly' as const },
+          ],
+        },
+        {
+          blockType: 'column' as const,
+          size: 'half' as const,
+          sticky: true,
+          contentInset: 'aboutRail' as const,
+          visibility: 'desktopOnly' as const,
+          content: [
+            { ...aboutImageBase, inset: 'xs' as const, priority: true },
+            { ...aboutSocial },
+          ],
+        },
+      ],
+    },
+  ]
+  const aboutData = {
+    title: ABOUT_TITLE,
+    subtitle: ABOUT_SUBTITLE,
+    slug: 'about',
+    slugLock: true,
+    _status: 'published' as const,
+    hero: { type: 'blank' as const },
+    layout: aboutLayout,
+    meta: {
+      title: 'About — Brandon Perfetti',
+      description:
+        'Brandon Perfetti is a product and project leader plus software engineer based in Orange County, California.',
+    },
+  }
+  const foundAbout = await payload.find({
+    collection: 'pages',
+    where: { slug: { equals: 'about' } },
+    limit: 1,
+    draft: true,
+  })
+  if (foundAbout.docs[0]) {
+    await payload.update({
+      collection: 'pages',
+      id: foundAbout.docs[0].id,
+      data: aboutData as never,
+      context: { disableRevalidate: true },
+    })
+    report.about = 'updated'
+  } else {
+    await payload.create({
+      collection: 'pages',
+      data: aboutData as never,
+      draft: false,
+      context: { disableRevalidate: true },
+    })
+    report.about = 'created'
+  }
+
   payload.logger.info(
-    `[seed:e2e] done: mediaCreated=${report.mediaCreated} postsUpserted=${report.postsUpserted} home=${report.home}`,
+    `[seed:e2e] done: mediaCreated=${report.mediaCreated} postsUpserted=${report.postsUpserted} home=${report.home} about=${report.about}`,
   )
 }
 

@@ -1,16 +1,10 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
-
 import type { SelectField } from 'payload'
 
 import { describe, expect, it } from 'vitest'
 
 import { ImageBlock } from '@/blocks/Image/config'
 import { IMAGE_INSET_CLASSES } from '@/blocks/Image/treatment'
-
-const read = (relative: string) =>
-  readFileSync(path.join(process.cwd(), relative), 'utf8')
 
 const insetField = ImageBlock.fields.find(
   (field): field is SelectField =>
@@ -52,14 +46,13 @@ describe('image inset map', () => {
   })
 
   /**
-   * The pixel-parity gate for the about-page rail portrait: its wrapper is
-   * `mx-auto max-w-xs px-2.5 lg:max-w-none`, so at `lg` it fills the rail but
-   * keeps `px-2.5`. `xs` *is* that inset, read straight out of the hand-built
-   * page the way `Column/inset.test.ts` reads its rail gutter.
+   * The pixel-parity pin for the about-page rail portrait: it fills the rail
+   * but keeps `px-2.5`, so `xs` *is* that inset. The #44 flip put `/about` on
+   * the page builder and deleted the hand-built JSX this once cross-checked
+   * (the way the #42 home flip retired its source guards), so `treatment.ts` is
+   * now the sole source of truth for the literal.
    */
-  it('reproduces the about-page rail portrait inset read from about/page.tsx', () => {
-    const aboutSource = read('src/app/(frontend)/about/page.tsx')
-    expect(aboutSource).toContain('px-2.5')
+  it('pins the about-page rail portrait inset', () => {
     expect(IMAGE_INSET_CLASSES.xs).toBe('px-2.5')
   })
 })

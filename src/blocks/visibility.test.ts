@@ -1,7 +1,4 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
-
 import type { Block, SelectField } from 'payload'
 
 import { describe, expect, it } from 'vitest'
@@ -18,9 +15,6 @@ import {
   visibilityClass,
   visibilityField,
 } from '@/blocks/visibility'
-
-const read = (relative: string) =>
-  readFileSync(path.join(process.cwd(), relative), 'utf8')
 
 const visibilityFieldOf = (block: Block) =>
   block.fields.find(
@@ -72,20 +66,15 @@ describe('responsive visibility map', () => {
   })
 
   /**
-   * The pixel-parity gate for the about page's photo placement. The hand-built
-   * `about/page.tsx` is still the read-only target: its portrait rail is
-   * `hidden lg:block` (desktop only), and its inline mobile portrait plus the
-   * mobile social row are `lg:hidden` (mobile only). `desktopOnly`/`mobileOnly`
-   * *are* those classes, so a future edit to either the page or the vocabulary
-   * fails loudly here — the way `inset.test.ts` pins the rail inset.
+   * The pixel-parity pin for the about page's photo placement. The #44 flip put
+   * `/about` on the page builder and deleted the hand-built `about/page.tsx` JSX
+   * this once cross-checked (the way the #42 home flip retired its 7 source
+   * guards), so the vocabulary is now the sole source of truth: the about
+   * portrait rail is `desktopOnly` (`hidden lg:block`), and its inline mobile
+   * portrait plus mobile social row are `mobileOnly` (`lg:hidden`). These
+   * literals are the exact breakpoint classes the hand-built page used.
    */
-  it('reproduces the about-page breakpoint read from about/page.tsx', () => {
-    const aboutSource = read('src/app/(frontend)/about/page.tsx')
-    // The mobile-only portrait and social row toggle contiguously.
-    expect(aboutSource).toContain('lg:hidden')
-    // The desktop rail toggles with the same two tokens the vocab uses.
-    expect(aboutSource).toContain('hidden')
-    expect(aboutSource).toContain('lg:block')
+  it('pins the about-page desktop/mobile breakpoint classes', () => {
     expect(BLOCK_VISIBILITY_CLASSES.desktopOnly).toBe('hidden lg:block')
     expect(BLOCK_VISIBILITY_CLASSES.mobileOnly).toBe('lg:hidden')
   })
