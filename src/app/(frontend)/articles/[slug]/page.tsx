@@ -6,7 +6,7 @@ import { ArticleBody } from '@/components/cms/ArticleBody'
 import { ArticleMeta } from '@/components/cms/ArticleMeta'
 import { CmsPostBlocks } from '@/components/cms/CmsPostBlocks'
 import { SyncErrorState } from '@/components/cms/SyncErrorState'
-import { UseWithAiMenu } from '@/components/cms/UseWithAiMenu'
+import { CopyPageButton } from '@/components/cms/CopyPageButton'
 import { getViewer } from '@/lib/auth/getViewer'
 import { getAllArticles, getArticleBySlug } from '@/lib/articles'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
@@ -246,7 +246,7 @@ export default async function ArticlePage({ params }: PageProps) {
         <ArticleMeta
           author={article.author}
           actions={
-            <UseWithAiMenu markdown={articleBlocksToMarkdown(bodyBlocks)} />
+            <CopyPageButton markdown={articleBlocksToMarkdown(bodyBlocks)} />
           }
           readingTimeMinutes={article.readingTimeMinutes}
           category={article.category?.title}
