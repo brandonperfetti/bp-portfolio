@@ -10,11 +10,14 @@ import {
   HERO_CARD_FRAME_CLASS,
   HERO_CARD_SHELL_CLASS,
   HERO_FULL_BLEED_FRAME_CLASS,
+  HERO_FULL_BLEED_HOME_FRAME_CLASS,
   HERO_FULL_BLEED_PANEL_CLASS,
   HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS,
   HERO_PRESENTATIONS,
   HERO_PRESENTATION_ENUM_NAME,
   HERO_PRESENTATION_OPTIONS,
+  HOME_HEADER_HEIGHT_PX,
+  HOME_HERO_TOP_PADDING_PX,
   ROUTE_CONTAINER_TOP_MARGIN_PX,
   ROUTE_HEADER_HEIGHT_PX,
   heroPresentation,
@@ -157,6 +160,73 @@ describe('full-bleed geometry', () => {
       'relative isolate min-h-[20rem] overflow-hidden rounded-2xl',
     )
     expect(HERO_CARD_SHELL_CLASS).not.toContain('my-12')
+  })
+})
+
+/**
+ * The home-parity full-bleed frame, pinned to its derivation.
+ *
+ * Wave-3 QA measured H1/grid/columns but never the shader's top bleed, so the
+ * shipped `-top-24` (96px) left a constant 120px dark band behind the ~180px
+ * home header (staging 2026-08-13). The pull is now derived from the home
+ * header height so the aurora reaches the document top, and the height is
+ * extended so the bottom fade stays put. These assertions are that arithmetic,
+ * written down — the frame box, not pixel-parity magic.
+ */
+describe('home-parity full-bleed geometry', () => {
+  const REM_PX = 16
+  // Top of the hero `<header>` under home parity: the isolate Container has no
+  // top margin, so it sits at the site header's bottom, and the hero wrapper's
+  // `pt-9` is the only gap below it.
+  const heroHeaderTopPx = HOME_HEADER_HEIGHT_PX + HOME_HERO_TOP_PADDING_PX
+  // The frame that shipped and left the gap, for computing the bottom we must
+  // preserve.
+  const shippedPullPx = 24 * SPACING_STEP_PX // -top-24
+  const shippedHeightPx = 36 * REM_PX // h-[36rem]
+  // Bottom of the shipped canvas = the fade-into-content point we must hold.
+  const currentBottomPx = heroHeaderTopPx - shippedPullPx + shippedHeightPx
+
+  it('derives the pull from the home header, not the 64px route bar', () => {
+    // The bug: the shipped pull assumed ROUTE_HEADER_HEIGHT_PX (64) but `/`
+    // renders the tall home header, so the correct pull is anchored to it.
+    expect(heroHeaderTopPx).toBe(216)
+    expect(HERO_FULL_BLEED_HOME_FRAME_CLASS).toContain(
+      `-top-[${heroHeaderTopPx}px]`,
+    )
+    expect(heroHeaderTopPx).toBeGreaterThan(ROUTE_HEADER_HEIGHT_PX)
+  })
+
+  it('pulls the canvas top to the document top — no dark band behind the header', () => {
+    const canvasTopPx = heroHeaderTopPx - heroHeaderTopPx // pull === header top
+    expect(canvasTopPx).toBeLessThanOrEqual(0)
+    // And the pull covers the full home header height, so nothing shows above.
+    expect(heroHeaderTopPx).toBeGreaterThanOrEqual(HOME_HEADER_HEIGHT_PX)
+  })
+
+  it('extends the height so the bottom fade stays where it was (~696px)', () => {
+    expect(currentBottomPx).toBe(696)
+    const newHeightRem = currentBottomPx / REM_PX // top is 0, so height == bottom
+    expect(newHeightRem).toBe(43.5)
+    expect(HERO_FULL_BLEED_HOME_FRAME_CLASS).toContain(`h-[${newHeightRem}rem]`)
+  })
+
+  it('keeps the same breakout and clip as the standard full-bleed frame', () => {
+    for (const token of [
+      'pointer-events-none',
+      '-z-10',
+      'w-screen',
+      'left-1/2',
+      '-translate-x-1/2',
+      'sm:px-8',
+    ]) {
+      expect(HERO_FULL_BLEED_HOME_FRAME_CLASS).toContain(token)
+    }
+  })
+
+  it('leaves the standard rhythm frame untouched — this bug is home-parity only', () => {
+    expect(HERO_FULL_BLEED_FRAME_CLASS).toContain('-top-32')
+    expect(HERO_FULL_BLEED_FRAME_CLASS).toContain('sm:-top-48')
+    expect(HERO_FULL_BLEED_FRAME_CLASS).toContain('h-[36rem]')
   })
 })
 

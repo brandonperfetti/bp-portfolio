@@ -81,6 +81,31 @@ export function heroPresentation(
 export const ROUTE_HEADER_HEIGHT_PX = 64
 
 /**
+ * Height of the site header on `/` at rest (px).
+ *
+ * @remarks Unlike every other route (see {@link ROUTE_HEADER_HEIGHT_PX}), `/`
+ * mounts the enlarged-avatar home header, which occupies ~180px of document
+ * height above `<main>` rather than the 64px `h-16` bar — measured on staging
+ * 2026-08-13 (`--header-height` = 180px; header spans y=0..180 at 1440/768/390,
+ * no breakpoint variance). The home-parity full-bleed canvas has to reach up
+ * past all of it, so its pull is derived from this, not from
+ * {@link ROUTE_HEADER_HEIGHT_PX}. See {@link HERO_FULL_BLEED_HOME_FRAME_CLASS}.
+ */
+export const HOME_HEADER_HEIGHT_PX = 180
+
+/**
+ * Top padding the home-parity hero wrapper (`pt-9`) puts between the isolate
+ * Container's top and `RenderHero`'s `<header>` (px).
+ *
+ * @remarks The home-parity rhythm drops the route Container's `mt-16 sm:mt-32`
+ * and instead wraps the hero in the homepage's `pt-9 pb-16 sm:pb-20`
+ * (`ROUTE_RHYTHM_PROFILES.homeParity` in `src/heros/routeRhythm.ts`). `pt-9` is
+ * `2.25rem` = 36px, breakpoint-independent, so it is the only gap between the
+ * site header and the hero `<header>` under home parity.
+ */
+export const HOME_HERO_TOP_PADDING_PX = 36
+
+/**
  * Top margin the `[slug]` route's `<Container className="mt-16 sm:mt-32">`
  * puts between `<main>` and the hero (px, per breakpoint).
  */
@@ -127,17 +152,41 @@ export const HERO_FULL_BLEED_FRAME_CLASS =
  * vertical pull, because the home-parity rhythm changes what sits above the
  * hero. There the route Container drops its `mt-16 sm:mt-32` and the hero
  * instead carries the homepage's `pt-9`, so the hero `<header>` starts
- * `64px (site header) + 36px (pt-9) = 100px` below the document top at every
- * breakpoint — a single, breakpoint-independent offset, unlike the standard
- * rhythm whose two margins need two values.
+ * {@link HOME_HEADER_HEIGHT_PX} (180px) + {@link HOME_HERO_TOP_PADDING_PX}
+ * (36px, `pt-9`) = **216px** below the document top at every breakpoint — a
+ * single, breakpoint-independent offset, unlike the standard rhythm whose two
+ * margins need two values.
  *
- * `-top-24` (96px) is the *sensible default*, not a measured constant: the
- * orchestrator dials the exact pull to pixel parity with live Home via the
- * compose+diff. It is the one knob to turn for the hero-canvas position under
- * home parity; the standard rhythm keeps {@link HERO_FULL_BLEED_FRAME_CLASS}.
+ * *Chosen fix (Option A — dial + extend).* The pull that shipped, `-top-24`
+ * (96px), was a documented sensible default that was never dialed, and its
+ * arithmetic silently assumed the 64px {@link ROUTE_HEADER_HEIGHT_PX} bar. But
+ * `/` renders the *tall* enlarged-avatar home header (~180px). At 96px of pull
+ * the canvas landed at 216 − 96 = **120px**, leaving a constant 120px dark band
+ * at y=0..120 behind the header at every width (staging 2026-08-13). The
+ * original hard-coded Home never had this: `SHADER_HERO_FRAME_CLASS` anchors its
+ * canvas `top-0` to the `<section className="isolate">` that overlaps the
+ * header, so it self-adjusts. Re-anchoring that way here (Option B) would mean
+ * dropping `relative` from `HeroView`'s shared `<header>` and positioning the
+ * Container — which is shared with the standard rhythm and would risk the
+ * `[slug]` byte-parity the tests pin. So instead we *dial the pull* to reach the
+ * document top and *extend the height* to hold the bottom, both derived and both
+ * scoped to this one string.
+ *
+ * - *Pull* `-top-[216px]` = {@link HOME_HEADER_HEIGHT_PX} +
+ *   {@link HOME_HERO_TOP_PADDING_PX} = the hero `<header>`'s own top, so the
+ *   canvas top lands at document top (0), painting the aurora behind the full
+ *   180px header — no gap. The pull is at least the home header height by
+ *   construction, which is the "covers the header" guarantee the test pins.
+ * - *Height* `h-[43.5rem]` (696px) keeps the canvas bottom exactly where it was
+ *   (216 − 96 + 576 = 696px, the current fade-into-content point). The pull grew
+ *   by 120px, so the height grows by the same 120px (576 → 696) and the bottom
+ *   fade does not move up — a +120px correction of upward reach, nothing else.
+ *
+ * This is the one knob to turn for the hero-canvas position under home parity;
+ * the standard rhythm keeps {@link HERO_FULL_BLEED_FRAME_CLASS} unchanged.
  */
 export const HERO_FULL_BLEED_HOME_FRAME_CLASS =
-  'pointer-events-none absolute -top-24 left-1/2 -z-10 h-[36rem] w-screen -translate-x-1/2 sm:px-8'
+  'pointer-events-none absolute -top-[216px] left-1/2 -z-10 h-[43.5rem] w-screen -translate-x-1/2 sm:px-8'
 
 /**
  * The class a route must put on the element that wraps **both** `RenderHero`

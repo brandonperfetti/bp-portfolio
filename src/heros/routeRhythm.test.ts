@@ -85,10 +85,14 @@ describe('route rhythm profiles', () => {
     expect(HERO_FULL_BLEED_HOME_FRAME_CLASS).not.toBe(
       HERO_FULL_BLEED_FRAME_CLASS,
     )
-    // Same breakout box, only the vertical pull differs.
+    // Same horizontal breakout box; the vertical pull and the height differ,
+    // because home parity reaches the tall home header (pull) and then extends
+    // the box to hold the same bottom fade (height). See
+    // HERO_FULL_BLEED_HOME_FRAME_CLASS in `src/heros/presentation.ts`.
     expect(HERO_FULL_BLEED_HOME_FRAME_CLASS).toContain('w-screen')
     expect(HERO_FULL_BLEED_HOME_FRAME_CLASS).toContain('-z-10')
-    expect(HERO_FULL_BLEED_HOME_FRAME_CLASS).toContain('h-[36rem]')
+    expect(HERO_FULL_BLEED_HOME_FRAME_CLASS).toContain('h-[43.5rem]')
+    expect(HERO_FULL_BLEED_HOME_FRAME_CLASS).not.toContain('h-[36rem]')
   })
 
   it('routeRhythmProfile resolves a stored value straight to its profile', () => {
