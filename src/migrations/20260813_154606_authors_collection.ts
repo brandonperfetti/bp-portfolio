@@ -78,8 +78,13 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
   })
 
   // Re-point published rows AND version-history rows (path = 'authors').
+  // node-postgres runs a PARAMETERIZED execute via the extended (prepared-
+  // statement) protocol, which is one-command-per-execute — so these two
+  // parameterized UPDATEs MUST be separate db.execute calls. (Steps 1 and 3
+  // are param-free, so their multi-statement simple-query batches are fine.)
   await db.execute(sql`
-  UPDATE "posts_rels"    SET "authors_id" = ${author.id}, "users_id" = NULL WHERE "path" = 'authors';
+  UPDATE "posts_rels"    SET "authors_id" = ${author.id}, "users_id" = NULL WHERE "path" = 'authors';`)
+  await db.execute(sql`
   UPDATE "_posts_v_rels" SET "authors_id" = ${author.id}, "users_id" = NULL WHERE "path" = 'authors';`)
 
   // 3. Now that no row references it, drop the legacy users linkage column.
