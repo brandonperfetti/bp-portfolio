@@ -239,6 +239,39 @@ export const RailInset: Story = {
 }
 
 /**
+ * The mobile size control: `compact` reproduces the about-page portrait's
+ * phone treatment — centered at a small max-width (`mx-auto max-w-xs`) below
+ * `lg`, released to full width from `lg` up (`lg:max-w-none`). `full` — the
+ * default — fills the width it is given, shown alongside for the comparison.
+ * Both are unconstrained at this story's width, so the assertion is on the
+ * classes the figure carries rather than a rendered pixel width.
+ */
+export const MobileSize: Story = {
+  render: (args) => (
+    <div className="space-y-6">
+      <div data-testid="size-full">
+        <ImageView {...args} size="full" />
+      </div>
+      <div data-testid="size-compact">
+        <ImageView {...args} size="compact" />
+      </div>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const full = canvasElement.querySelector('[data-testid="size-full"] figure')
+    const compact = canvasElement.querySelector(
+      '[data-testid="size-compact"] figure',
+    )
+
+    // `full` adds no width class — byte-identical to before the option.
+    await expect(full).not.toHaveClass('max-w-xs')
+    await expect(full).not.toHaveClass('mx-auto')
+    // `compact` centers at a small max-width below lg, released from lg up.
+    await expect(compact).toHaveClass('mx-auto', 'max-w-xs', 'lg:max-w-none')
+  },
+}
+
+/**
  * The #40 contract: at root the block carries its own `my-12`; inside a
  * column the stack owns the rhythm and the block emits none.
  */

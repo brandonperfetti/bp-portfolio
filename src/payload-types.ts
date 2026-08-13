@@ -739,6 +739,10 @@ export interface ImageBlock {
    */
   inset: 'none' | 'xs';
   /**
+   * Mobile only. "Full" (default) fills the width it is given. "Compact" centers the image at a small max-width on phones (mx-auto max-w-xs), then releases it to full width from the lg breakpoint up (lg:max-w-none) — the about-page portrait's compact-centered treatment. Desktop is identical to "Full".
+   */
+  size: 'full' | 'compact';
+  /**
    * Uses the site hover treatment. Disabled automatically for visitors who prefer reduced motion, and on touch devices.
    */
   hoverScale?: boolean | null;
@@ -1967,6 +1971,7 @@ export interface ImageBlockSelect<T extends boolean = true> {
   rounded?: T;
   tilt?: T;
   inset?: T;
+  size?: T;
   hoverScale?: T;
   priority?: T;
   caption?: T;

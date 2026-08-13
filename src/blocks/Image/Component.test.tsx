@@ -114,4 +114,20 @@ describe('ImageBlockComponent', () => {
     const xs = render(<ImageBlockComponent {...block({ inset: 'xs' })} />)
     expect(xs.container.querySelector('figure')).toHaveClass('px-2.5')
   })
+
+  it('forwards the stored mobile size to the figure', () => {
+    const full = render(<ImageBlockComponent {...block({ size: 'full' })} />)
+    const fullFigure = full.container.querySelector('figure')
+    expect(fullFigure).not.toHaveClass('max-w-xs')
+    expect(fullFigure).not.toHaveClass('mx-auto')
+
+    const compact = render(
+      <ImageBlockComponent {...block({ size: 'compact' })} />,
+    )
+    expect(compact.container.querySelector('figure')).toHaveClass(
+      'mx-auto',
+      'max-w-xs',
+      'lg:max-w-none',
+    )
+  })
 })

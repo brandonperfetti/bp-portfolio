@@ -6,10 +6,12 @@ import {
   IMAGE_FALLBACK_DIMENSIONS,
   IMAGE_INSET_CLASSES,
   IMAGE_ROUNDED_CLASSES,
+  IMAGE_SIZE_CLASSES,
   IMAGE_TILT_CLASSES,
   type ImageAspect,
   type ImageInset,
   type ImageRounded,
+  type ImageSize,
   type ImageTilt,
 } from '@/blocks/Image/treatment'
 import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
@@ -29,6 +31,9 @@ import { cn } from '@/lib/utils'
  * @param tilt - Rotation.
  * @param inset - Horizontal padding on the figure (see `treatment.ts`). `none`
  * by default, so the image fills the width it is given exactly as before.
+ * @param size - Mobile width treatment on the figure (see `treatment.ts`).
+ * `full` by default, so the image fills the width it is given exactly as
+ * before; `compact` centers it at a small max-width below `lg` only.
  * @param hoverScale - Wrap in the site hover treatment.
  * @param priority - Preload as the LCP image instead of lazy-loading.
  * @param caption - Optional caption, rendered as a `figcaption`.
@@ -51,6 +56,7 @@ export function ImageView({
   rounded = '2xl',
   tilt = 'none',
   inset = 'none',
+  size = 'full',
   hoverScale = false,
   priority = false,
   caption,
@@ -64,6 +70,7 @@ export function ImageView({
   rounded?: ImageRounded
   tilt?: ImageTilt
   inset?: ImageInset
+  size?: ImageSize
   hoverScale?: boolean
   priority?: boolean
   caption?: string | null
@@ -95,7 +102,11 @@ export function ImageView({
 
   return (
     <figure
-      className={cn(blockRhythmClass(hosted), IMAGE_INSET_CLASSES[inset])}
+      className={cn(
+        blockRhythmClass(hosted),
+        IMAGE_INSET_CLASSES[inset],
+        IMAGE_SIZE_CLASSES[size],
+      )}
     >
       {hoverScale ? (
         // The about-page portrait's exact settings: no lift, no root scale —

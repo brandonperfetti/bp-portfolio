@@ -101,6 +101,24 @@ export const ImageBlock: Block = {
       },
     },
     {
+      name: 'size',
+      type: 'select',
+      required: true,
+      defaultValue: 'full',
+      enumName: 'enum_image_size',
+      options: [
+        { label: 'Full width (fills its column)', value: 'full' },
+        {
+          label: 'Compact on mobile (about-page portrait)',
+          value: 'compact',
+        },
+      ],
+      admin: {
+        description:
+          'Mobile only. "Full" (default) fills the width it is given. "Compact" centers the image at a small max-width on phones (mx-auto max-w-xs), then releases it to full width from the lg breakpoint up (lg:max-w-none) — the about-page portrait\'s compact-centered treatment. Desktop is identical to "Full".',
+      },
+    },
+    {
       name: 'hoverScale',
       type: 'checkbox',
       label: 'Scale gently on hover',

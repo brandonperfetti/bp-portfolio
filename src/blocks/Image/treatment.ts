@@ -16,6 +16,9 @@ export type ImageTilt = 'none' | 'left' | 'right'
 /** Horizontal inset — how far the image is padded in from the width it is given. */
 export type ImageInset = 'none' | 'xs'
 
+/** Mobile size — how wide the figure sits below `lg`; unconstrained from `lg` up. */
+export type ImageSize = 'full' | 'compact'
+
 /**
  * Shape → the classes on the `img` itself.
  *
@@ -70,6 +73,24 @@ export const IMAGE_TILT_CLASSES: Record<ImageTilt, string> = {
 export const IMAGE_INSET_CLASSES: Record<ImageInset, string> = {
   none: '',
   xs: 'px-2.5',
+}
+
+/**
+ * Mobile size → the width treatment on the `figure`.
+ *
+ * @remarks `full` is the default and the behaviour the block always had: the
+ * image fills the width it is given (`ImageView`'s `w-full`), so this map
+ * contributes nothing (`''`) and every existing block stays byte-identical.
+ * `compact` is the about-page portrait's mobile half — its wrapper is
+ * `mx-auto max-w-xs px-2.5 lg:max-w-none`, where `px-2.5` is the existing
+ * `inset: xs` and `mx-auto max-w-xs lg:max-w-none` is supplied here: centered
+ * at a small max-width below `lg`, unconstrained from `lg` up. Only the phone
+ * view changes; desktop (`lg+`) is identical to `full`. Literal, unprefixed-
+ * plus-`lg:` strings so Tailwind's source scan finds every class.
+ */
+export const IMAGE_SIZE_CLASSES: Record<ImageSize, string> = {
+  full: '',
+  compact: 'mx-auto max-w-xs lg:max-w-none',
 }
 
 /** Fallback intrinsic size when the Media document carries none. */
