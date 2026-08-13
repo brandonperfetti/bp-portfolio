@@ -26,16 +26,20 @@ Payload is the single source of truth for site content. Admin at `/admin`
   any published page whose slug isn't owned by a dedicated route renders at
   `/[slug]` via `RenderHero` + `RenderBlocks` — compose new pages entirely
   in admin, no code or deploy. Reserved slugs live in
-  `src/app/(frontend)/[slug]/page.tsx`. **Hybrid routes:** the seven
-  code-owned routes also render their Pages doc's layout via
-  `<CmsPageBlocks slug="…" />` (spacer-only layouts are treated as empty),
-  so admin-composed sections can be appended to bespoke pages too.
-  **PhotoStrip special case:** the home route consumes its Pages doc's first
-  `photoStrip` block for the hero-slot gallery (via
-  `photoStripImagesFromLayout` in `pagesRepo`) and excludes `photoStrip`
-  from its end-of-page region (`<CmsPageBlocks slug="home"
-exclude={['photoStrip']} />`) so it never renders twice — editing that
-  block in admin swaps the home gallery in place.
+  `src/app/(frontend)/[slug]/page.tsx`. **Hybrid routes:** five code-owned
+  content routes — `/articles`, `/tech`, `/projects`, `/hermes`, `/uses` —
+  also render their Pages doc's layout via `<CmsPageBlocks slug="…" />`
+  (spacer-only layouts are treated as empty), so admin-composed sections can
+  be appended to bespoke pages too. (`/` and `/about` instead render their
+  whole Pages doc through the shared `RenderRhythmPage` seam — see below —
+  and so are not in this set.)
+  **Home (`/`):** since #42 the home route renders its Pages doc through the
+  shared page-builder seam `src/heros/RenderRhythmPage.tsx` — the same
+  draft-aware renderer the `/[slug]` catch-all uses — so `photoStrip` is now a
+  normal layout block rendered inline by `RenderBlocks`, editable in admin like
+  any other. The old hybrid mechanism (`photoStripImagesFromLayout` in
+  `pagesRepo`, `<CmsPageBlocks slug="home" exclude={['photoStrip']} />`) is
+  retired: there is no hero-slot gallery extraction and no exclusion.
 - **Projects**, **TechStack** (name/category/proficiency/logo/url/githubRepo),
   **Uses** (category-grouped tools), **Categories**, **Tags**, **Media**
   (Blob-backed), **Users** (admin operators).
@@ -87,10 +91,10 @@ cannot infer are the invariants below; encode those, not the mechanics.
 - **Writes are live.** There is no dry-run; create/update/delete hit a real
   DB immediately. `find` (with a narrow `select`) to confirm state before any
   write.
-- **Home `photoStrip`.** The home Pages doc's first `photoStrip` block feeds
-  the hero-slot gallery and is excluded from the end-of-page region;
-  reordering or removing it via `updatePages` desyncs the hero (see the
-  PhotoStrip note under **Pages**).
+- **Home `photoStrip`.** Since #42 the home doc's `photoStrip` is a plain
+  layout block rendered inline through the shared page-builder seam — no
+  hero-slot extraction, no exclusion. Reorder or edit it via `updatePages`
+  like any other block (see the Home note under **Pages**).
 - **Out of scope for MCP.** Globals (`SiteSettings`/`Navigation`/`Footer`/
   `Identity`) and `Users` are not exposed. Nav, footer, and identity edits are
   admin or code, never MCP.
@@ -121,8 +125,7 @@ never reads this file — the only channel that travels with the tools is the
 schema itself. Mirror the load-bearing guardrails into collection/field
 `admin.description` so every agent sees them. Highest-value targets: Posts
 `content` (Lexical node set) and the slug field (`src/fields/slug/`, lock
-contract) in `src/collections/*`, and the Pages `layout` home-photoStrip
-special case.
+contract) in `src/collections/*`.
 
 ## Generated artifacts (committed + CI-gated)
 

@@ -15,7 +15,6 @@ with hard-coded fallbacks. The command palette mirrors primary nav.
 | `/tech`                                    | TechStack + GitHub signals    | `q`/`category`/`sort` params         |
 | `/uses`                                    | Uses collection               | Shares tech viz cards                |
 | `/hermes`                                  | —                             | AI chat surface                      |
-| `/speaking`                                | Pages/fallback                |                                      |
 | `/thank-you`                               | —                             | Post-contact landing                 |
 | `/sign-in`, `/sign-up`, `/account`         | Clerk                         | Render only when Clerk enabled       |
 | `/next/preview`, `/next/exit-preview`      | —                             | Draft preview (secret-gated)         |

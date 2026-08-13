@@ -1,9 +1,7 @@
 import { type Metadata } from 'next'
 import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
 
-import { Card } from '@/components/Card'
 import { NotFoundState } from '@/components/cms/NotFoundState'
-import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { Section } from '@/components/Section'
 import { SimpleLayout } from '@/components/SimpleLayout'
@@ -12,46 +10,6 @@ import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getCmsUses } from '@/lib/cms/usesRepo'
-
-function ToolsSection({
-  children,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof Section>) {
-  return (
-    <Section {...props}>
-      <ScrollReveal targets="li">
-        <ul role="list" className="space-y-16">
-          {children}
-        </ul>
-      </ScrollReveal>
-    </Section>
-  )
-}
-
-/**
- * Fallback tool card sharing the tech-viz hover treatment (wow moment #3
- * spans /tech and /uses); CMS-driven sections render `TechCard` directly.
- */
-function Tool({
-  title,
-  href,
-  children,
-}: {
-  title: string
-  href?: string
-  children: React.ReactNode
-}) {
-  return (
-    <HoverMotionCard as="li">
-      <Card>
-        <Card.Title as="h3" href={href}>
-          {title}
-        </Card.Title>
-        <Card.Description>{children}</Card.Description>
-      </Card>
-    </HoverMotionCard>
-  )
-}
 
 const defaultUsesMeta: Metadata = {
   title: 'Uses',
@@ -76,115 +34,34 @@ export default async function Uses() {
   const cmsUses = await getCmsUses()
   const title = page?.title || String(defaultUsesMeta.title)
   const intro = page?.subtitle || String(defaultUsesMeta.description)
-
-  if (cmsUses) {
-    return (
-      <SimpleLayout title={title} intro={intro}>
-        <div className="space-y-20">
-          {cmsUses.length ? (
-            cmsUses.map((section) => (
-              <Section key={section.title} title={section.title}>
-                <ScrollReveal targets="li">
-                  <ul
-                    role="list"
-                    className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2"
-                  >
-                    {section.items.map((item) => (
-                      // Uses entries are logo-less by design — no monogram
-                      // circle (Brandon's call; tech cards keep theirs).
-                      <TechCard key={item.slug} item={item} monogram={false} />
-                    ))}
-                  </ul>
-                </ScrollReveal>
-              </Section>
-            ))
-          ) : (
-            <NotFoundState
-              title="No published uses entries"
-              description="No CMS uses records are currently publish-safe."
-            />
-          )}
-        </div>
-        <CmsPageBlocks slug="uses" />
-      </SimpleLayout>
-    )
-  }
+  const sections = cmsUses ?? []
 
   return (
     <SimpleLayout title={title} intro={intro}>
       <div className="space-y-20">
-        <ToolsSection title="Workstation">
-          <Tool title="14-inch MacBook Pro, Apple M2 Pro, 16GB RAM (2023)">
-            Strong performance for daily development, project management, and
-            content work.
-          </Tool>
-          <Tool title="Dual 27-inch LG UltraFine UHD 4K HDR monitors">
-            When attention to detail pays the bills, multiple 4K screens are
-            always preferred.
-          </Tool>
-          <Tool title="Apple Magic Keyboard">
-            A dependable, low-friction setup I&apos;ve used for years.
-          </Tool>
-          <Tool title="Apple Magic Trackpad">
-            Gesture support keeps navigation and context-switching fast.
-          </Tool>
-          <Tool title="FAMISKY electric standing desk">
-            I have been coding standing up for nearly a decade. It helps me
-            maintain energy over long sessions.
-          </Tool>
-          <Tool title="Audio Pro USB-C microphone">
-            Clean audio quality improves remote collaboration and pair
-            programming.
-          </Tool>
-        </ToolsSection>
-
-        <ToolsSection title="Development tools">
-          <Tool title="Visual Studio Code">
-            The extension ecosystem and speed make VS Code my daily driver for
-            most engineering work.
-          </Tool>
-          <Tool title="GitKraken">
-            Helpful when I need high-level context across many repositories and
-            branching workflows.
-          </Tool>
-          <Tool title="Insomnia">
-            Great for managing and testing large sets of REST and GraphQL
-            requests across environments.
-          </Tool>
-        </ToolsSection>
-
-        <ToolsSection title="Design">
-          <Tool title="Figma">
-            Started as a design tool and became a collaborative workspace for
-            planning and iteration.
-          </Tool>
-          <Tool title="Whimsical">
-            Fast way to turn rough ideas into diagrams that teams can discuss
-            and improve quickly.
-          </Tool>
-          <Tool title="Pixelmator Pro">
-            My default for lightweight graphic work when I need to move quickly.
-          </Tool>
-        </ToolsSection>
-
-        <ToolsSection title="Podcasts">
-          <Tool title="Syntax.fm">
-            Practical web development conversations covering modern tooling and
-            frameworks.
-          </Tool>
-          <Tool title="The Changelog">
-            Deep interviews and weekly updates across software engineering, open
-            source, and leadership.
-          </Tool>
-          <Tool title="Nav.al">
-            Technology and business entrepreneurship perspectives that
-            consistently challenge assumptions.
-          </Tool>
-          <Tool title="The Tim Ferriss Show">
-            Long-form conversations that surface useful mental models, habits,
-            and systems.
-          </Tool>
-        </ToolsSection>
+        {sections.length ? (
+          sections.map((section) => (
+            <Section key={section.title} title={section.title}>
+              <ScrollReveal targets="li">
+                <ul
+                  role="list"
+                  className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2"
+                >
+                  {section.items.map((item) => (
+                    // Uses entries are logo-less by design — no monogram
+                    // circle (Brandon's call; tech cards keep theirs).
+                    <TechCard key={item.slug} item={item} monogram={false} />
+                  ))}
+                </ul>
+              </ScrollReveal>
+            </Section>
+          ))
+        ) : (
+          <NotFoundState
+            title="Uses list coming soon"
+            description="I'm putting together the gear, apps, and tools I use day to day. Check back shortly."
+          />
+        )}
       </div>
       <CmsPageBlocks slug="uses" />
     </SimpleLayout>

@@ -93,7 +93,6 @@ export const RESERVED_PAGE_SLUGS = new Set([
   'projects',
   'sign-in',
   'sign-up',
-  'speaking',
   'tech',
   'thank-you',
   'uses',

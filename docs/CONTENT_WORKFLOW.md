@@ -28,9 +28,11 @@ Admin Live Preview / Preview buttons hit `/next/preview` (secret:
 The v3 archive was migrated from Notion by
 `scripts/migrate-notion-to-payload.ts` (one-time): slugs preserved and
 locked, bodies converted to Lexical, covers uploaded to Blob, everything
-landed as drafts for review-then-publish. `scripts/fix-migrated-posts.ts`
-audited node counts and backfilled authors. Both stay for reference; they
-are not part of any recurring workflow.
+landed as drafts for review-then-publish. It stays for reference; it is not
+part of any recurring workflow. The one-off `Posts.authors` backfill now
+lives in the applied migration
+`src/migrations/20260813_154606_authors_collection.ts` (the spent
+`scripts/fix-migrated-posts.ts` audit script was removed in W5).
 
 ## Payload MCP
 

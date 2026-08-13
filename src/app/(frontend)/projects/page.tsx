@@ -11,69 +11,10 @@ import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import { getSiteUrl } from '@/lib/site'
 
-const projects = [
-  {
-    name: "Brandon Perfetti's Portfolio",
-    description: 'Source code for my personal site and content platform.',
-    link: {
-      href: 'https://github.com/brandonperfetti/bp-portfolio',
-      label: 'github.com/brandonperfetti/bp-portfolio',
-    },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713915478/bp-portfolio/images/Head_Shot_vvk5yr.png',
-  },
-  {
-    name: 'Top Timelines',
-    description: 'Event timelines made simple for teams and organizations.',
-    link: { href: 'https://toptimelines.com/', label: 'toptimelines.com' },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1710096798/top-timelines/top_timelines_logo_nzgxaq.svg',
-  },
-  {
-    name: 'Sans Faux Studios',
-    description: 'A web studio focused on modern product websites and apps.',
-    link: { href: 'https://sansfaux.com/', label: 'sansfaux.com' },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713742159/bp-portfolio/images/logos/favicon_m2unhm.png',
-  },
-  {
-    name: 'Dev Flow',
-    description: 'A Stack Overflow style question-and-answer platform.',
-    link: {
-      href: 'https://devflow-coral2.vercel.app/',
-      label: 'devflow-coral2.vercel.app',
-    },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1722822416/DevFlow/site-logo_wicnp6.svg',
-  },
-  {
-    name: 'Filmpire',
-    description: 'A media experience for exploring and tracking movies.',
-    link: {
-      href: 'https://filmpire-beta.vercel.app/',
-      label: 'filmpire-beta.vercel.app',
-    },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1724377796/Filmpire/site-logo_io51hi.svg',
-  },
-  {
-    name: 'EMP Consultants',
-    description: 'A modernized web presence for a forensic engineering firm.',
-    link: { href: 'https://empconsultants.com/', label: 'empconsultants.com' },
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713727772/emp/favicon_jqaems.png',
-  },
-]
-
 const defaultProjectsMeta: Metadata = {
   title: 'Projects',
   description:
     'Selected products, platforms, and client builds I have shipped or led.',
-}
-
-function slugify(value: string) {
-  const normalized = value
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-
-  return normalized || 'project'
 }
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -97,15 +38,7 @@ export default async function Projects() {
   ])
   const siteUrl = settings.canonicalUrl || getSiteUrl()
   const normalizedSiteUrl = siteUrl.replace(/\/+$/, '')
-  const items = cmsProjects
-    ? cmsProjects
-    : projects.map((project) => ({
-        slug: slugify(project.name),
-        name: project.name,
-        description: project.description,
-        logo: project.logo,
-        link: project.link,
-      }))
+  const items = cmsProjects ?? []
   const collectionSchema = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
@@ -177,8 +110,8 @@ export default async function Projects() {
           <EntityGrid items={items} />
         ) : (
           <NotFoundState
-            title="No published projects"
-            description="No CMS project records are currently publish-safe."
+            title="Projects coming soon"
+            description="I'm assembling a selection of products and builds to feature here. Check back shortly."
           />
         )}
         <CmsPageBlocks slug="projects" />

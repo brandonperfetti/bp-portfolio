@@ -61,11 +61,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'weekly',
       priority: 0.6,
     },
-    {
-      url: `${siteUrl}/speaking`,
-      changeFrequency: 'monthly',
-      priority: 0.6,
-    },
   ]
 
   const articleRoutes: MetadataRoute.Sitemap = publicArticles.map(
