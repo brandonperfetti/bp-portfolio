@@ -43,40 +43,55 @@ describe('ArticleMeta byline', () => {
     expect(avatar).toHaveAttribute('src', 'https://img.example/ada.jpg')
     expect(avatar).toHaveAttribute('aria-hidden', 'true')
 
-    const github = screen.getByRole('link', { name: 'GitHub' })
+    // Socials are icon links; the accessible name is the resolver's label.
+    const github = screen.getByRole('link', { name: 'Follow on GitHub' })
     expect(github).toHaveAttribute('href', 'https://github.com/ada')
     expect(github).toHaveAttribute('target', '_blank')
-    expect(screen.getByRole('link', { name: 'X' })).toHaveAttribute(
+    expect(github.querySelector('svg')).not.toBeNull()
+    expect(screen.getByRole('link', { name: 'Follow on X' })).toHaveAttribute(
       'href',
       'https://x.com/ada',
     )
   })
 
-  it('separates social links with a bullet only BETWEEN items (no leading bullet)', () => {
+  it('renders socials as icon links (shared icon set), unknown host → link fallback, no bullet separators', () => {
     render(
       <ArticleMeta
         author={{
           name: 'Ada Lovelace',
           sameAs: [
-            'https://github.com/ada',
             'https://x.com/ada',
+            'https://github.com/ada',
             'https://www.linkedin.com/in/ada/',
+            'https://example.com/ada', // unknown host → generic link icon
           ],
         }}
       />,
     )
 
+    // Known platforms resolve to their brand accessible name...
+    expect(screen.getByRole('link', { name: 'Follow on X' })).toHaveAttribute(
+      'href',
+      'https://x.com/ada',
+    )
+    expect(
+      screen.getByRole('link', { name: 'Follow on GitHub' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Follow on LinkedIn' }),
+    ).toBeInTheDocument()
+    // ...and an unknown host falls back to the generic link icon, labeled by
+    // its hostname (the "all scenarios covered" case).
+    expect(screen.getByRole('link', { name: 'example.com' })).toHaveAttribute(
+      'href',
+      'https://example.com/ada',
+    )
+
+    // Icons, not text: every social is an <svg> and there are no bullets.
     const items = screen.getAllByRole('listitem')
-    expect(items).toHaveLength(3)
-    // The first link has no separator in front of it...
-    expect(items[0].textContent).not.toContain('•')
-    // ...every later link is introduced by one.
-    expect(items[1].textContent).toContain('•')
-    expect(items[2].textContent).toContain('•')
-    // Exactly links-1 separators, and each is decorative (aria-hidden).
-    const bullets = screen.getAllByText('•')
-    expect(bullets).toHaveLength(2)
-    bullets.forEach((b) => expect(b).toHaveAttribute('aria-hidden', 'true'))
+    expect(items).toHaveLength(4)
+    items.forEach((li) => expect(li.querySelector('svg')).not.toBeNull())
+    expect(screen.queryByText('•')).toBeNull()
   })
 
   it('links the site-owner byline to /about with no avatar or links', () => {

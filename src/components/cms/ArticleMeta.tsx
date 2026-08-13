@@ -1,33 +1,17 @@
 import Link from 'next/link'
 import type { ReactElement } from 'react'
 
+import {
+  resolveSocialLink,
+  SOCIAL_PLATFORM_ICONS,
+  type ResolvedSocialLink,
+} from '@/blocks/SocialLinks/platforms'
 import { getExternalLinkProps } from '@/lib/link-utils'
 
 function isSiteOwnerAuthor(name: string) {
   // TODO(backlog): centralize site-owner identity constant across CMS rendering.
   // Notion: https://www.notion.so/Centralize-site-owner-identity-constant-across-CMS-rendering-31cbe01e1e06818ea6f4f1c037fc8ef3
   return name.trim().toLowerCase() === 'brandon perfetti'
-}
-
-const SOCIAL_LABELS: Record<string, string> = {
-  'x.com': 'X',
-  'twitter.com': 'X',
-  'github.com': 'GitHub',
-  'linkedin.com': 'LinkedIn',
-  'youtube.com': 'YouTube',
-  'instagram.com': 'Instagram',
-  'mastodon.social': 'Mastodon',
-  'bsky.app': 'Bluesky',
-}
-
-/** Friendly label for a social profile URL, falling back to its hostname. */
-function socialLabel(url: string): string {
-  try {
-    const host = new URL(url).hostname.replace(/^www\./, '')
-    return SOCIAL_LABELS[host] ?? host
-  } catch {
-    return url
-  }
 }
 
 /**
@@ -103,11 +87,17 @@ export function ArticleMeta({
         : undefined)
     : undefined
 
+  // Reuse the site's shared social system (same resolver + icon set as the
+  // home hero's SocialLinksView `iconRow`): each `sameAs` URL resolves to a
+  // platform + accessible label, and unknown hosts fall back to `link` → the
+  // generic LinkIcon, so every URL renders an icon.
   const socialLinks = Array.from(
     new Set(
       (authorMeta?.sameAs ?? []).map((url) => url.trim()).filter(Boolean),
     ),
-  ).map((href) => ({ href, label: socialLabel(href) }))
+  )
+    .map((url) => resolveSocialLink(url))
+    .filter((link): link is ResolvedSocialLink => link !== null)
 
   const topicChips = Array.from(
     new Set((topics ?? []).map((item) => item.trim()).filter(Boolean)),
@@ -133,7 +123,12 @@ export function ArticleMeta({
   }
 
   return (
-    <div className="mt-5 space-y-3 text-xs text-zinc-500 dark:text-zinc-400">
+    // `not-prose`: the byline renders inside the article `<Prose>` wrapper
+    // (ArticleLayout). Opting the whole block out of typography drops the
+    // paragraph margins that pushed the social row away from name/role, and
+    // removes the `ul > li` disc markers — spacing is set explicitly below.
+    // The topic/tech/reading-time rows use utilities, so they're unaffected.
+    <div className="not-prose mt-5 space-y-3 text-xs text-zinc-500 dark:text-zinc-400">
       {authorMeta || actions ? (
         <div className="flex items-start justify-between gap-3">
           {authorMeta ? (
@@ -171,31 +166,26 @@ export function ArticleMeta({
                   </p>
                 ) : null}
                 {socialLinks.length > 0 ? (
-                  // `not-prose`: the byline renders inside the article `<Prose>`
-                  // wrapper, whose typography styles give `ul > li` a disc
-                  // marker before EVERY item (the stray leading "•"). Opt out of
-                  // prose here and place separators explicitly — a bullet before
-                  // each item except the first, so they sit only BETWEEN links.
-                  <ul className="not-prose mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                    {socialLinks.map((link, index) => (
-                      <li key={link.href} className="flex items-center gap-x-2">
-                        {index > 0 ? (
-                          <span
-                            aria-hidden="true"
-                            className="text-zinc-300 select-none dark:text-zinc-600"
+                  // Icon-only row grouped tightly under name/role (mt-2), so it
+                  // reads as part of the author unit — not the Topics/Tech block
+                  // below. Reuses the shared icon set; compact (h-5) with the
+                  // byline's zinc→teal hover and SocialLinksView's focus ring.
+                  <ul className="mt-2 flex flex-wrap items-center gap-4">
+                    {socialLinks.map((link) => {
+                      const Icon = SOCIAL_PLATFORM_ICONS[link.platform]
+                      return (
+                        <li key={link.href}>
+                          <a
+                            href={link.href}
+                            {...getExternalLinkProps(link.href)}
+                            aria-label={link.label}
+                            className="group -m-1 block rounded-md p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80"
                           >
-                            &bull;
-                          </span>
-                        ) : null}
-                        <a
-                          href={link.href}
-                          {...getExternalLinkProps(link.href)}
-                          className="text-xs font-medium text-zinc-500 transition hover:text-teal-500 dark:text-zinc-400 dark:hover:text-teal-400"
-                        >
-                          {link.label}
-                        </a>
-                      </li>
-                    ))}
+                            <Icon className="h-5 w-5 fill-zinc-500 transition group-hover:fill-teal-500 dark:fill-zinc-400 dark:group-hover:fill-teal-400" />
+                          </a>
+                        </li>
+                      )
+                    })}
                   </ul>
                 ) : null}
               </div>

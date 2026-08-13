@@ -79,12 +79,20 @@ export const GuestAuthor: Story = {
     await expect(avatar).not.toBeNull()
     await expect(avatar).toHaveAttribute('aria-hidden', 'true')
 
-    const github = canvas.getByRole('link', { name: 'GitHub' })
+    // Socials render as brand icons (shared SOCIAL_PLATFORM_ICONS set); the
+    // accessible name comes from the resolver's label via aria-label.
+    const github = canvas.getByRole('link', { name: 'Follow on GitHub' })
     await expect(github).toHaveAttribute(
       'href',
       'https://github.com/adalovelace',
     )
     await expect(github).toHaveAttribute('target', '_blank')
-    await expect(canvas.getByRole('link', { name: 'LinkedIn' })).toBeVisible()
+    await expect(github.querySelector('svg')).not.toBeNull()
+    await expect(
+      canvas.getByRole('link', { name: 'Follow on X' }),
+    ).toBeVisible()
+    await expect(
+      canvas.getByRole('link', { name: 'Follow on LinkedIn' }),
+    ).toBeVisible()
   },
 }
