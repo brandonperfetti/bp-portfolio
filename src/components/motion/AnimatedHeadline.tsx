@@ -14,7 +14,10 @@ import {
   TYPEWRITER_CHAR_DURATION,
   TYPEWRITER_CHAR_STAGGER,
 } from '@/lib/motion/timing'
-import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
+import {
+  getPrefersReducedMotion,
+  usePrefersReducedMotion,
+} from '@/lib/motion/usePrefersReducedMotion'
 
 type HeadlineTag = 'h1' | 'h2' | 'h3'
 
@@ -57,10 +60,9 @@ export function AnimatedHeadline({
   useLayoutEffect(() => {
     // Sync media check mirrors ScrollReveal: the hook's state is still false
     // on the first client pass, and reduced-motion users must never see the
-    // animation start.
-    const prefersReducedMotionSync =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // animation start. Reads the shared source rather than re-checking
+    // `matchMedia` inline (#26).
+    const prefersReducedMotionSync = getPrefersReducedMotion()
     if (prefersReducedMotionSync || prefersReducedMotion || !rootRef.current) {
       return
     }

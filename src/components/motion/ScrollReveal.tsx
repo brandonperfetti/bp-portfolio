@@ -6,7 +6,10 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useLayoutEffect, useRef } from 'react'
 
 import { EASE_OUT, REVEAL_GRID } from '@/lib/motion/timing'
-import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
+import {
+  getPrefersReducedMotion,
+  usePrefersReducedMotion,
+} from '@/lib/motion/usePrefersReducedMotion'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -52,9 +55,10 @@ export function ScrollReveal({
   const prefersReducedMotion = usePrefersReducedMotion()
 
   useLayoutEffect(() => {
-    const prefersReducedMotionSync =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // Read the shared source, not an inline `matchMedia` re-check (#26): the
+    // hook's state is still false on the first client pass, so gate on the
+    // synchronous value here.
+    const prefersReducedMotionSync = getPrefersReducedMotion()
     if (prefersReducedMotionSync || prefersReducedMotion || !rootRef.current) {
       return
     }

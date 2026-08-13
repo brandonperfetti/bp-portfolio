@@ -5,7 +5,10 @@ import { gsap } from 'gsap'
 import { useEffect, useRef, useState } from 'react'
 
 import { EASE_OUT, HOVER_TIMING } from '@/lib/motion/timing'
-import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
+import {
+  getPrefersReducedMotion,
+  usePrefersReducedMotion,
+} from '@/lib/motion/usePrefersReducedMotion'
 
 /**
  * Applies hover/focus motion treatment to a card container and optional descendants.
@@ -72,9 +75,10 @@ export function HoverMotionCard({
 
   useEffect(() => {
     const root = rootRef.current
-    const prefersReducedMotionSync =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // Read the shared source, not an inline `matchMedia` re-check (#26): the
+    // hook's state is still false on the first client pass, so gate on the
+    // synchronous value here.
+    const prefersReducedMotionSync = getPrefersReducedMotion()
     if (
       !root ||
       prefersReducedMotionSync ||
