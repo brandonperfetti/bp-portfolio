@@ -171,9 +171,22 @@ export function ArticleMeta({
                   </p>
                 ) : null}
                 {socialLinks.length > 0 ? (
-                  <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                    {socialLinks.map((link) => (
-                      <li key={link.href}>
+                  // `not-prose`: the byline renders inside the article `<Prose>`
+                  // wrapper, whose typography styles give `ul > li` a disc
+                  // marker before EVERY item (the stray leading "•"). Opt out of
+                  // prose here and place separators explicitly — a bullet before
+                  // each item except the first, so they sit only BETWEEN links.
+                  <ul className="not-prose mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {socialLinks.map((link, index) => (
+                      <li key={link.href} className="flex items-center gap-x-2">
+                        {index > 0 ? (
+                          <span
+                            aria-hidden="true"
+                            className="text-zinc-300 select-none dark:text-zinc-600"
+                          >
+                            &bull;
+                          </span>
+                        ) : null}
                         <a
                           href={link.href}
                           {...getExternalLinkProps(link.href)}

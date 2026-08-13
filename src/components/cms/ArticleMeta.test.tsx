@@ -52,6 +52,33 @@ describe('ArticleMeta byline', () => {
     )
   })
 
+  it('separates social links with a bullet only BETWEEN items (no leading bullet)', () => {
+    render(
+      <ArticleMeta
+        author={{
+          name: 'Ada Lovelace',
+          sameAs: [
+            'https://github.com/ada',
+            'https://x.com/ada',
+            'https://www.linkedin.com/in/ada/',
+          ],
+        }}
+      />,
+    )
+
+    const items = screen.getAllByRole('listitem')
+    expect(items).toHaveLength(3)
+    // The first link has no separator in front of it...
+    expect(items[0].textContent).not.toContain('•')
+    // ...every later link is introduced by one.
+    expect(items[1].textContent).toContain('•')
+    expect(items[2].textContent).toContain('•')
+    // Exactly links-1 separators, and each is decorative (aria-hidden).
+    const bullets = screen.getAllByText('•')
+    expect(bullets).toHaveLength(2)
+    bullets.forEach((b) => expect(b).toHaveAttribute('aria-hidden', 'true'))
+  })
+
   it('links the site-owner byline to /about with no avatar or links', () => {
     render(
       <ArticleMeta
