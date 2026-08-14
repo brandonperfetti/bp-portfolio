@@ -30,10 +30,20 @@ async function copyText(value: string) {
  * @remarks Collapsed from a menu-of-one dropdown to a single button (#25/W5B1e)
  * — there was only ever one action. Copy falls back to a hidden-textarea
  * `execCommand` path for non-secure contexts where the async clipboard API is
- * unavailable. The label is hardcoded; a SiteSettings-configurable label is a
- * separate future ticket.
+ * unavailable. The `label` is supplied by SiteSettings (resolved upstream in
+ * `getCmsSiteSettings`, empty → "Copy page"); whether the button renders at all
+ * is decided by the article page, not here.
+ *
+ * @param markdown Pre-rendered Markdown export copied to the clipboard.
+ * @param label Idle button label; defaults to `'Copy page'`.
  */
-export function CopyPageButton({ markdown }: { markdown: string }) {
+export function CopyPageButton({
+  markdown,
+  label = 'Copy page',
+}: {
+  markdown: string
+  label?: string
+}) {
   const [copied, setCopied] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -68,7 +78,7 @@ export function CopyPageButton({ markdown }: { markdown: string }) {
       }}
     >
       <ClipboardDocumentIcon className="h-4 w-4" />
-      {copied ? 'Copied' : 'Copy page'}
+      {copied ? 'Copied' : label}
     </button>
   )
 }

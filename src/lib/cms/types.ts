@@ -115,6 +115,10 @@ export interface CmsSiteSettings {
   openGraphImage?: string
   twitterCard?: 'summary' | 'summary_large_image'
   keywords?: string[]
+  /** Whether the article "Copy page" action is shown. */
+  copyPageEnabled: boolean
+  /** Resolved label for the article "Copy page" action (empty → "Copy page"). */
+  copyPageLabel: string
 }
 
 export interface CmsNavigationItem {

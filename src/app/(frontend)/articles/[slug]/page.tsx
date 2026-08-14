@@ -246,7 +246,12 @@ export default async function ArticlePage({ params }: PageProps) {
         <ArticleMeta
           author={article.author}
           actions={
-            <CopyPageButton markdown={articleBlocksToMarkdown(bodyBlocks)} />
+            settings.copyPageEnabled ? (
+              <CopyPageButton
+                markdown={articleBlocksToMarkdown(bodyBlocks)}
+                label={settings.copyPageLabel}
+              />
+            ) : undefined
           }
           readingTimeMinutes={article.readingTimeMinutes}
           category={article.category?.title}

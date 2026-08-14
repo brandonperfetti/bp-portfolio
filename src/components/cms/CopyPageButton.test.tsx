@@ -31,6 +31,23 @@ describe('CopyPageButton', () => {
     expect(screen.queryByText('Copy as Markdown')).toBeNull()
   })
 
+  it('renders the default "Copy page" label when `label` is omitted', () => {
+    render(<CopyPageButton markdown={MARKDOWN} />)
+
+    expect(
+      screen.getByRole('button', { name: /copy page/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('renders a custom `label` when provided', () => {
+    render(<CopyPageButton markdown={MARKDOWN} label="Copy article" />)
+
+    expect(
+      screen.getByRole('button', { name: /copy article/i }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /copy page/i })).toBeNull()
+  })
+
   it('copies the markdown and shows "Copied" on click', async () => {
     render(<CopyPageButton markdown={MARKDOWN} />)
 

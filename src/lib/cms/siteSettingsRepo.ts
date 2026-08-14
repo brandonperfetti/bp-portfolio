@@ -12,6 +12,8 @@ const DEFAULT_SITE_SETTINGS: CmsSiteSettings = {
   siteDescription: SITE_DESCRIPTION,
   canonicalUrl: getSiteUrl(),
   twitterCard: 'summary_large_image',
+  copyPageEnabled: true,
+  copyPageLabel: 'Copy page',
 }
 
 /**
@@ -45,6 +47,8 @@ export const getCmsSiteSettings = unstable_cache(
         settings?.canonicalUrl || DEFAULT_SITE_SETTINGS.canonicalUrl,
       openGraphImage: ogImage,
       twitterCard: 'summary_large_image',
+      copyPageEnabled: settings?.copyPageEnabled ?? true,
+      copyPageLabel: settings?.copyPageLabel || 'Copy page',
     }
   },
   ['site-settings'],
