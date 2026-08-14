@@ -51,7 +51,15 @@ export const getCmsSiteSettings = unstable_cache(
       twitterCard: 'summary_large_image',
       copyPageEnabled: settings?.copyPageEnabled ?? true,
       copyPageLabel: settings?.copyPageLabel || 'Copy page',
-      shareTargets: settings?.shareTargets ?? [...SHARE_TARGET_IDS],
+      // Empty === unset === all ids: there is no "disable Share globally"
+      // concept (the per-post `disableSharing` kill switch is the only opt-out),
+      // and a pre-existing global row can carry a nullable/empty column that
+      // never got the admin defaultValue. So an empty array falls back to the
+      // full pinned vocabulary — Share ships live on every article (copy-link
+      // floor) rather than being hidden site-wide.
+      shareTargets: settings?.shareTargets?.length
+        ? settings.shareTargets
+        : [...SHARE_TARGET_IDS],
     }
   },
   ['site-settings'],

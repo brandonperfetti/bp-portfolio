@@ -44,13 +44,17 @@ describe('getCmsSiteSettings share targets', () => {
     expect(settings.shareTargets).toEqual(['x', 'linkedin', 'copylink'])
   })
 
-  it('honors an explicitly emptied share set (all destinations off)', async () => {
+  it('treats an empty share set as unset and falls back to all ids', async () => {
+    // A pre-existing global row can carry a nullable/empty column that never
+    // got the admin defaultValue. There is no "disable Share globally" concept
+    // (per-post `disableSharing` is the only opt-out), so empty === unset ===
+    // all — Share must ship live on every article, not be hidden site-wide.
     findGlobal.mockResolvedValue({
       siteName: 'Brandon Perfetti',
       shareTargets: [],
     })
 
     const settings = await getCmsSiteSettings()
-    expect(settings.shareTargets).toEqual([])
+    expect(settings.shareTargets).toEqual([...SHARE_TARGET_IDS])
   })
 })
