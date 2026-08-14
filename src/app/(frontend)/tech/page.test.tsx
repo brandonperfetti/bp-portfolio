@@ -9,7 +9,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  */
 
 const getCmsTech = vi.fn()
-const getCmsPageByPath = vi.fn(async (_path?: string) => null)
+const getCmsPageByPath = vi.fn(
+  async (_path?: string): Promise<Record<string, unknown> | null> => null,
+)
 
 vi.mock('@/lib/cms/techRepo', () => ({
   getCmsTech: () => getCmsTech(),
@@ -23,15 +25,20 @@ vi.mock('@/lib/cms/siteSettingsRepo', () => ({
     siteTitle: 'Brandon Perfetti',
     siteDescription: 'Product and software.',
     canonicalUrl: 'https://example.com',
+    shareTargets: ['x', 'copylink'],
   })),
+}))
+vi.mock('@/lib/site', () => ({
+  getSiteUrl: () => 'https://example.com',
 }))
 vi.mock('@/lib/tech/githubSignals', () => ({
   getTechSignalsIndex: vi.fn(async () => null),
   buildSignalsBySlug: vi.fn(() => ({})),
 }))
 
-// Probes — the explorer, page-builder blocks, and layout own their pixels
-// elsewhere; here we only care which branch the route renders.
+// Probes — the explorer, page-builder blocks, layout, and share control own
+// their pixels elsewhere; here we only care which branch the route renders.
+// The layout probe surfaces the `actions` slot so share assertions can see it.
 vi.mock('@/components/tech/TechExplorer', () => ({
   TechExplorer: ({ items }: { items: unknown[] }) => (
     <div data-testid="tech-explorer" data-count={items.length} />
@@ -40,9 +47,27 @@ vi.mock('@/components/tech/TechExplorer', () => ({
 vi.mock('@/components/cms/CmsPageBlocks', () => ({
   CmsPageBlocks: () => <div data-testid="cms-page-blocks" />,
 }))
+vi.mock('@/components/cms/ShareButton', () => ({
+  ShareButton: ({ url, targetIds }: { url: string; targetIds: string[] }) => (
+    <div
+      data-testid="share-button"
+      data-url={url}
+      data-count={targetIds.length}
+    />
+  ),
+}))
 vi.mock('@/components/SimpleLayout', () => ({
-  SimpleLayout: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
+  SimpleLayout: ({
+    actions,
+    children,
+  }: {
+    actions?: React.ReactNode
+    children: React.ReactNode
+  }) => (
+    <div>
+      {actions}
+      {children}
+    </div>
   ),
 }))
 
@@ -73,5 +98,24 @@ describe('tech route — collection-honest rendering (#27)', () => {
     expect(screen.queryByTestId('tech-explorer')).toBeNull()
     // The page-builder region still renders below the empty state.
     expect(screen.getByTestId('cms-page-blocks')).toBeInTheDocument()
+  })
+})
+
+describe('tech route — reader Share control', () => {
+  it('renders the Share control by default (global targets, no page override)', async () => {
+    getCmsTech.mockResolvedValue(null)
+    render(await TechStack())
+
+    const share = screen.getByTestId('share-button')
+    expect(share).toHaveAttribute('data-url', 'https://example.com/tech')
+    expect(share).toHaveAttribute('data-count', '2')
+  })
+
+  it('hides the Share control when the page sets disableSharing', async () => {
+    getCmsTech.mockResolvedValue(null)
+    getCmsPageByPath.mockResolvedValue({ disableSharing: true })
+    render(await TechStack())
+
+    expect(screen.queryByTestId('share-button')).toBeNull()
   })
 })

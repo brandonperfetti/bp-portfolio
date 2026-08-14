@@ -1,11 +1,14 @@
 import { NotFoundState } from '@/components/cms/NotFoundState'
 import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
+import { ShareButton } from '@/components/cms/ShareButton'
 import { SimpleLayout } from '@/components/SimpleLayout'
 import { TechExplorer } from '@/components/tech/TechExplorer'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
+import { resolvePageShareTargetIds } from '@/lib/cms/pageShareTargets'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getCmsTech } from '@/lib/cms/techRepo'
+import { getSiteUrl } from '@/lib/site'
 import {
   buildSignalsBySlug,
   getTechSignalsIndex,
@@ -41,6 +44,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function TechStack() {
+  const settings = await getCmsSiteSettings()
   const page = await getCmsPageByPath('/tech')
   const cmsTech = await getCmsTech()
   // Live GitHub signals (cached 6h); null when GITHUB_OWNER/TOKEN are unset,
@@ -51,12 +55,35 @@ export default async function TechStack() {
   const items = cmsTech ?? []
   const signals = buildSignalsBySlug(signalsIndex, items)
 
+  const normalizedSiteUrl = (settings.canonicalUrl || getSiteUrl()).replace(
+    /\/+$/,
+    '',
+  )
+  // Reader Share control, right-aligned below the hero. Resolved server-side
+  // (global ± per-page targets); the per-page `disableSharing` kill switch
+  // collapses it to [], which hides the button. `ShareButton` — the sole
+  // client boundary — receives only serializable props.
+  const shareTargetIds = resolvePageShareTargetIds(
+    page ?? {},
+    settings.shareTargets,
+  )
+  const shareTitle = page?.seoTitle || String(defaultTechMeta.title)
+
   return (
     <SimpleLayout
       title={page?.title || 'Core technologies I reach for first.'}
       intro={
         page?.subtitle ||
         'A practical stack for product delivery, engineering execution, and long-term maintainability.'
+      }
+      actions={
+        shareTargetIds.length > 0 ? (
+          <ShareButton
+            url={`${normalizedSiteUrl}/tech`}
+            title={shareTitle}
+            targetIds={shareTargetIds}
+          />
+        ) : undefined
       }
     >
       {items.length ? (

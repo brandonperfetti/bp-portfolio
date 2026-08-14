@@ -54,6 +54,9 @@ export const getCmsPageByPath = unstable_cache(
       heroImage: mediaUrl(page.hero?.media),
       ogImage: mediaUrl(page.meta?.image),
       updatedAt: page.updatedAt,
+      disableSharing: page.disableSharing ?? undefined,
+      shareTargetsAdd: page.shareTargetsAdd ?? undefined,
+      shareTargetsRemove: page.shareTargetsRemove ?? undefined,
     }
 
     return content

@@ -3,8 +3,10 @@ import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
 
 import { EntityGrid } from '@/components/cms/EntityGrid'
 import { NotFoundState } from '@/components/cms/NotFoundState'
+import { ShareButton } from '@/components/cms/ShareButton'
 import { SimpleLayout } from '@/components/SimpleLayout'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
+import { resolvePageShareTargetIds } from '@/lib/cms/pageShareTargets'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsProjects } from '@/lib/cms/projectsRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
@@ -80,6 +82,16 @@ export default async function Projects() {
     })),
   }
 
+  // Reader Share control, right-aligned below the hero. Resolved server-side
+  // (global ± per-page targets); the per-page `disableSharing` kill switch
+  // collapses it to [], which hides the button. `ShareButton` — the sole
+  // client boundary — receives only serializable props.
+  const shareTargetIds = resolvePageShareTargetIds(
+    page ?? {},
+    settings.shareTargets,
+  )
+  const shareTitle = page?.seoTitle || String(defaultProjectsMeta.title)
+
   return (
     <>
       <script
@@ -104,6 +116,15 @@ export default async function Projects() {
         intro={
           page?.subtitle ||
           'A practical mix of platform builds, client delivery, and product experiments.'
+        }
+        actions={
+          shareTargetIds.length > 0 ? (
+            <ShareButton
+              url={`${normalizedSiteUrl}/projects`}
+              title={shareTitle}
+              targetIds={shareTargetIds}
+            />
+          ) : undefined
         }
       >
         {items.length ? (

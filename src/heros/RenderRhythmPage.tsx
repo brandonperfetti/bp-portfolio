@@ -13,12 +13,14 @@ import type { Page } from '@/payload-types'
  *
  * @param page - The page document to render (hero group + `layout` blocks).
  * @param actions - Optional page-header action slot (e.g. the Share control).
- * When present it renders as a right-aligned row at the very top of the
- * `<Container>`, in normal flow *above* the hero — the same spot for every hero
- * type (`standard`, `blank`, `shader`), so it sits above a full-bleed canvas
- * rather than being swallowed by it. When omitted the emitted DOM is
- * byte-identical to before this slot existed (the seam's parity tests pin this),
- * so the actions-free routes — Home included — do not shift.
+ * When present it renders in normal flow *below* the hero — so Share reads as
+ * sitting under the hero's title/subtitle, the same relative spot the
+ * SimpleLayout routes place it. This is uniform across hero types: a `blank`
+ * hero renders no element, so on such a page (today: about) the row falls to
+ * the top of the body — that outcome is the page's own hero configuration, not
+ * a special case here. When omitted the emitted DOM is byte-identical to before
+ * this slot existed (the seam's parity tests pin this), so the actions-free
+ * routes — Home included — do not shift.
  *
  * @remarks Both the dedicated `/` home route and the `[slug]` catch-all render
  * through here, so the two paths cannot drift: the same document renders
@@ -51,9 +53,6 @@ export function RenderRhythmPage({
   const profile = routeRhythmProfile(page.hero?.rhythm)
   return (
     <Container className={profile.containerClass}>
-      {actions ? (
-        <div className="mb-6 flex justify-end sm:mb-8">{actions}</div>
-      ) : null}
       {profile.heroWrapperClass === null ? (
         <RenderHero page={page} />
       ) : (
@@ -61,6 +60,7 @@ export function RenderRhythmPage({
           <RenderHero page={page} />
         </div>
       )}
+      {actions ? <div className="mt-8 flex justify-end">{actions}</div> : null}
       <div className={profile.blocksWrapperClass}>
         <RenderBlocks blocks={page.layout} />
       </div>

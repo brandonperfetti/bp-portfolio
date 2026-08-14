@@ -2,14 +2,17 @@ import { type Metadata } from 'next'
 import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
 
 import { NotFoundState } from '@/components/cms/NotFoundState'
+import { ShareButton } from '@/components/cms/ShareButton'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { Section } from '@/components/Section'
 import { SimpleLayout } from '@/components/SimpleLayout'
 import { TechCard } from '@/components/tech/TechCard'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
+import { resolvePageShareTargetIds } from '@/lib/cms/pageShareTargets'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getCmsUses } from '@/lib/cms/usesRepo'
+import { getSiteUrl } from '@/lib/site'
 
 const defaultUsesMeta: Metadata = {
   title: 'Uses',
@@ -30,14 +33,41 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Uses() {
+  const settings = await getCmsSiteSettings()
   const page = await getCmsPageByPath('/uses')
   const cmsUses = await getCmsUses()
   const title = page?.title || String(defaultUsesMeta.title)
   const intro = page?.subtitle || String(defaultUsesMeta.description)
   const sections = cmsUses ?? []
 
+  const normalizedSiteUrl = (settings.canonicalUrl || getSiteUrl()).replace(
+    /\/+$/,
+    '',
+  )
+  // Reader Share control, right-aligned below the hero. Resolved server-side
+  // (global ± per-page targets); the per-page `disableSharing` kill switch
+  // collapses it to [], which hides the button. `ShareButton` — the sole
+  // client boundary — receives only serializable props.
+  const shareTargetIds = resolvePageShareTargetIds(
+    page ?? {},
+    settings.shareTargets,
+  )
+  const shareTitle = page?.seoTitle || String(defaultUsesMeta.title)
+
   return (
-    <SimpleLayout title={title} intro={intro}>
+    <SimpleLayout
+      title={title}
+      intro={intro}
+      actions={
+        shareTargetIds.length > 0 ? (
+          <ShareButton
+            url={`${normalizedSiteUrl}/uses`}
+            title={shareTitle}
+            targetIds={shareTargetIds}
+          />
+        ) : undefined
+      }
+    >
       <div className="space-y-20">
         {sections.length ? (
           sections.map((section) => (

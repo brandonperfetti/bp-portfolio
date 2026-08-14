@@ -4,9 +4,11 @@ import { Suspense } from 'react'
 
 import { ArticlesExplorer } from '@/components/articles/ArticlesExplorer'
 import { NotFoundState } from '@/components/cms/NotFoundState'
+import { ShareButton } from '@/components/cms/ShareButton'
 import { SimpleLayout } from '@/components/SimpleLayout'
 import { getSearchArticles } from '@/lib/articles'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
+import { resolvePageShareTargetIds } from '@/lib/cms/pageShareTargets'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
@@ -87,6 +89,16 @@ export default async function ArticlesIndex() {
     : null
   const scriptPayload = itemListSchema ? toSafeJsonLd(itemListSchema) : null
 
+  // Reader Share control, right-aligned below the hero. Resolved server-side
+  // (global ± per-page targets); the per-page `disableSharing` kill switch
+  // collapses it to [], which hides the button. `ShareButton` — the sole
+  // client boundary — receives only serializable props.
+  const shareTargetIds = resolvePageShareTargetIds(
+    page ?? {},
+    settings.shareTargets,
+  )
+  const shareTitle = page?.seoTitle || String(defaultArticlesMeta.title)
+
   return (
     <>
       <script
@@ -111,6 +123,15 @@ export default async function ArticlesIndex() {
         intro={
           page?.subtitle ||
           'Browse by category or search by topic. These are practical notes from real projects, engineering leadership, and continuous learning.'
+        }
+        actions={
+          shareTargetIds.length > 0 ? (
+            <ShareButton
+              url={`${canonicalSiteUrl}/articles`}
+              title={shareTitle}
+              targetIds={shareTargetIds}
+            />
+          ) : undefined
         }
       >
         {!hasArticles ? (

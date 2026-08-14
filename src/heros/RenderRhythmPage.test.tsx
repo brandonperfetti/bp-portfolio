@@ -74,7 +74,7 @@ describe('RenderRhythmPage — standard rhythm (byte-identical to legacy [slug])
 })
 
 describe('RenderRhythmPage — optional actions slot', () => {
-  it('renders the actions node in a right-aligned row above the hero', () => {
+  it('renders the actions node in a right-aligned row below the hero', () => {
     render(
       <RenderRhythmPage
         page={page()}
@@ -84,17 +84,24 @@ describe('RenderRhythmPage — optional actions slot', () => {
 
     const actions = screen.getByTestId('page-actions')
     const row = actions.parentElement as HTMLElement
-    // The row reads as a deliberate page-header action: right-aligned, spaced.
-    expect(row).toHaveClass('flex', 'justify-end')
+    // The row reads as a deliberate page-header action: right-aligned, spaced
+    // from the hero above it.
+    expect(row).toHaveClass('mt-8', 'flex', 'justify-end')
 
-    // The row and the hero share the seam's inner content wrapper, and the row
-    // is the first child there — it sits at the very top, above the hero.
+    // The row shares the seam's inner content wrapper with the hero, sits
+    // *after* the hero (Share reads as below the hero's title/subtitle), and
+    // *before* the blocks that follow.
     const hero = screen.getByTestId('render-hero')
     const contentWrapper = hero.parentElement as HTMLElement
     expect(row.parentElement).toBe(contentWrapper)
-    expect(contentWrapper.firstElementChild).toBe(row)
     expect(
-      row.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING,
+      hero.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    const blocksWrapper = screen.getByTestId('render-blocks')
+      .parentElement as HTMLElement
+    expect(
+      row.compareDocumentPosition(blocksWrapper) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
   })
 

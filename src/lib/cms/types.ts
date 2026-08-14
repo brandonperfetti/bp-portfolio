@@ -1,3 +1,5 @@
+import type { ShareTargetId } from '@/lib/share/shareTargets'
+
 /**
  * Content provider marker. Only `'local'` (Payload) exists — the Notion
  * runtime arm was removed with the v4 rebuild and must not return
@@ -160,4 +162,11 @@ export interface CmsPageContent {
   ogImage?: string
   updatedAt?: string
   bodyBlocks?: CmsArticleBlock[]
+  /** When true, this page offers no share affordance regardless of the global
+   * share set (per-page kill switch). */
+  disableSharing?: boolean | null
+  /** Share-target ids layered on top of the global set for this page. */
+  shareTargetsAdd?: ShareTargetId[] | null
+  /** Share-target ids subtracted from the global set for this page. */
+  shareTargetsRemove?: ShareTargetId[] | null
 }
