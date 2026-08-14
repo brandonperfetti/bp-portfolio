@@ -35,7 +35,9 @@ describe('getCmsAuthors', () => {
           name: 'Brandon Perfetti',
           slug: 'brandon-perfetti',
           role: 'Technical PM + Software Engineer',
-          avatar: { url: '/api/media/file/bp.jpg' },
+          avatar: {
+            url: 'https://examplestore.public.blob.vercel-storage.com/bp.jpg',
+          },
           // Whitespace-only URLs are trimmed away.
           socials: [{ url: 'https://x.com/brandonperfetti' }, { url: '  ' }],
         },
@@ -50,7 +52,7 @@ describe('getCmsAuthors', () => {
       slug: 'brandon-perfetti',
       name: 'Brandon Perfetti',
       role: 'Technical PM + Software Engineer',
-      image: '/api/media/file/bp.jpg',
+      image: 'https://examplestore.public.blob.vercel-storage.com/bp.jpg',
       href: '/about',
       sameAs: ['https://x.com/brandonperfetti'],
       primary: true,

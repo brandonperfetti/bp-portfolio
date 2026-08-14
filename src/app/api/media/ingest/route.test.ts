@@ -101,7 +101,7 @@ describe('POST /api/media/ingest', () => {
     )
     createMock.mockResolvedValue({
       id: 99,
-      url: '/api/media/file/my-post-cover-A.png',
+      url: 'https://examplestore.public.blob.vercel-storage.com/my-post-cover-A.png',
       filename: 'my-post-cover-A.png',
     })
 

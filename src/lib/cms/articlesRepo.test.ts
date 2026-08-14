@@ -64,7 +64,10 @@ describe('getAllCmsArticleSummaries', () => {
       makePost({
         categories: [{ id: 1, title: 'Engineering' } as never],
         tags: [{ id: 2, title: 'React' } as never, 3 as never],
-        heroImage: { id: 4, url: '/api/media/file/hero.jpg' } as never,
+        heroImage: {
+          id: 4,
+          url: 'https://examplestore.public.blob.vercel-storage.com/hero.jpg',
+        } as never,
         populatedAuthors: [{ id: '1', name: 'Brandon Perfetti' }],
         meta: { title: 'SEO title', description: 'SEO description' },
       }),
@@ -78,7 +81,9 @@ describe('getAllCmsArticleSummaries', () => {
     expect(summary.description).toBe('A testing strategy that sticks.')
     expect(summary.seoTitle).toBe('SEO title')
     expect(summary.date).toBe('2026-01-05T00:00:00.000Z')
-    expect(summary.image).toBe('/api/media/file/hero.jpg')
+    expect(summary.image).toBe(
+      'https://examplestore.public.blob.vercel-storage.com/hero.jpg',
+    )
     expect(summary.author).toBe('Brandon Perfetti')
     expect(summary.category).toEqual({ title: 'Engineering' })
     expect(summary.topics).toEqual(['Engineering'])
@@ -244,7 +249,10 @@ describe('byline resolution (buildAuthor)', () => {
             id: 7,
             name: 'Ada Lovelace',
             role: 'Guest Author',
-            avatar: { id: 9, url: '/api/media/file/ada.jpg' },
+            avatar: {
+              id: 9,
+              url: 'https://examplestore.public.blob.vercel-storage.com/ada.jpg',
+            },
             // Blank/whitespace social URLs are dropped, not rendered.
             socials: [
               { url: 'https://github.com/ada' },
@@ -260,7 +268,7 @@ describe('byline resolution (buildAuthor)', () => {
     expect(summary.author).toEqual({
       name: 'Ada Lovelace',
       role: 'Guest Author',
-      image: '/api/media/file/ada.jpg',
+      image: 'https://examplestore.public.blob.vercel-storage.com/ada.jpg',
       href: undefined,
       sameAs: ['https://github.com/ada', 'https://x.com/ada'],
     })
