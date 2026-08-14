@@ -190,6 +190,9 @@ export interface Page {
    */
   subtitle?: string | null;
   hero: {
+    /**
+     * Controls what the hero renders above the page body. Blank draws nothing — use it when the headline lives in the Content tab (e.g. the About page). None, Standard, and Shader all render the Title, Subtitle, and the Hero text field below; Standard adds an image and Shader adds an animated background. If your headline/intro already live in the Content tab, choose Blank so they do not render twice.
+     */
     type: 'blank' | 'none' | 'standard' | 'shader';
     /**
      * Full bleed runs the shader behind the header like the homepage; card keeps it inside a bounded panel.
@@ -216,6 +219,9 @@ export interface Page {
      * Fade the subtitle and social row up on scroll, the way the homepage hero does. Off by default. Honors reduced motion (renders static). The headline keeps its own animation either way.
      */
     revealContent?: boolean | null;
+    /**
+     * Rich text shown inside the hero, below the subtitle. Rendered for None, Standard, and Shader; ignored when Type is Blank. Keep this distinct from the page body in the Content tab — putting the same copy in both renders it twice.
+     */
     richText?: {
       root: {
         type: string;

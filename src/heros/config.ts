@@ -76,14 +76,28 @@ export const hero: Field = {
       type: 'select',
       defaultValue: 'standard',
       label: 'Type',
+      admin: {
+        description:
+          'Controls what the hero renders above the page body. Blank draws nothing — use it when the headline lives in the Content tab (e.g. the About page). None, Standard, and Shader all render the Title, Subtitle, and the Hero text field below; Standard adds an image and Shader adds an animated background. If your headline/intro already live in the Content tab, choose Blank so they do not render twice.',
+      },
       options: [
         {
-          label: 'Blank (no hero — headline lives in the page body)',
+          label: 'Blank — no hero at all (headline lives in the page body)',
           value: 'blank',
         },
-        { label: 'None', value: 'none' },
-        { label: 'Standard', value: 'standard' },
-        { label: 'Shader', value: 'shader' },
+        {
+          label: 'None — title + subtitle + hero text, no background image',
+          value: 'none',
+        },
+        {
+          label: 'Standard — title + subtitle + hero text, with an image',
+          value: 'standard',
+        },
+        {
+          label:
+            'Shader — title + subtitle + hero text, over an animated background',
+          value: 'shader',
+        },
       ],
       required: true,
     },
@@ -162,6 +176,14 @@ export const hero: Field = {
     {
       name: 'richText',
       type: 'richText',
+      admin: {
+        // Hidden under `blank` like every other hero content field: a blank
+        // hero renders nothing, so a hero-text editor there only invites the
+        // duplication it caused on the about page (see HeroView / #58).
+        condition: (_, { type } = {}) => type !== 'blank',
+        description:
+          'Rich text shown inside the hero, below the subtitle. Rendered for None, Standard, and Shader; ignored when Type is Blank. Keep this distinct from the page body in the Content tab — putting the same copy in both renders it twice.',
+      },
       editor: lexicalEditor({
         features: ({ rootFeatures }) => {
           return [
@@ -172,8 +194,9 @@ export const hero: Field = {
           ]
         },
       }),
-      label: false,
+      label: 'Hero text',
     },
+
     linkGroup({
       overrides: {
         maxRows: 2,
