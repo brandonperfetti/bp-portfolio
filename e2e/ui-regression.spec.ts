@@ -42,15 +42,37 @@ async function getStableBoundingBoxY(page: Page, locator: Locator) {
   throw new Error('Sticky rail position did not stabilize in time.')
 }
 
+/**
+ * Waits for `/articles` to hydrate into exactly one of its two mutually
+ * exclusive states before the skip decision is made.
+ *
+ * @remarks The search input is client-only (it lives in `ArticlesExplorer`,
+ * mounted under `<Suspense>`), so a bare `count()` right after `goto` races
+ * hydration and can read 0 while articles actually exist. Blocking on the
+ * `searchInput.or(emptyState)` locator removes that race so both members of
+ * the articles test pair skip in the correct environment.
+ *
+ * @param page - Active Playwright page positioned on `/articles`.
+ * @returns `'articles'` when published articles are present, otherwise
+ * `'empty'`.
+ */
+async function resolveArticlesState(page: Page): Promise<'articles' | 'empty'> {
+  const searchInput = page.getByPlaceholder('Search articles')
+  const emptyState = page.getByText('No published articles')
+  // Wait until hydration resolves to one state or the other before deciding.
+  await expect(searchInput.or(emptyState).first()).toBeVisible()
+  return (await searchInput.count()) > 0 ? 'articles' : 'empty'
+}
+
 test('articles query syncs to URL', async ({ page }) => {
   await page.goto('/articles')
 
-  const searchInput = page.getByPlaceholder('Search articles')
   test.skip(
-    (await searchInput.count()) === 0,
+    (await resolveArticlesState(page)) === 'empty',
     'No published articles available in this environment to exercise query sync.',
   )
 
+  const searchInput = page.getByPlaceholder('Search articles')
   await expect(searchInput).toBeVisible()
   await searchInput.fill('react')
 
@@ -64,9 +86,8 @@ test('articles shows empty-state message when no published articles', async ({
 }) => {
   await page.goto('/articles')
 
-  const searchInput = page.getByPlaceholder('Search articles')
   test.skip(
-    (await searchInput.count()) > 0,
+    (await resolveArticlesState(page)) === 'articles',
     'Published articles are available in this environment.',
   )
 
