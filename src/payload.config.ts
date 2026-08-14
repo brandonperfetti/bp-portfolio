@@ -22,6 +22,7 @@ import {
 } from './collections'
 import { defaultLexical } from './fields/defaultLexical'
 import { Footer, Identity, Navigation, SiteSettings } from './globals'
+import { buildMediaBlobUrl } from './lib/storage/mediaBlobUrl'
 import { plugins } from './plugins'
 
 const filename = fileURLToPath(import.meta.url)
@@ -121,7 +122,16 @@ export default buildConfig({
     vercelBlobStorage({
       enabled: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
       collections: {
-        media: true,
+        media: {
+          // Emit the public blob origin as `media.url` instead of the
+          // canonical-domain `/api/media/file/**` route, so OG/social and every
+          // media URL resolves to where the bytes live regardless of the serving
+          // host (fixes production-pinned OG image URLs that 404 off-production).
+          // `generateFileURL` is checked before `disablePayloadAccessControl` in
+          // the url afterRead hook, so the static file route stays registered.
+          generateFileURL: ({ filename, prefix }) =>
+            buildMediaBlobUrl({ filename, prefix }),
+        },
       },
       token: process.env.BLOB_READ_WRITE_TOKEN || '',
     }),
