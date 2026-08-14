@@ -73,6 +73,44 @@ describe('RenderRhythmPage — standard rhythm (byte-identical to legacy [slug])
   })
 })
 
+describe('RenderRhythmPage — optional actions slot', () => {
+  it('renders the actions node in a right-aligned row above the hero', () => {
+    render(
+      <RenderRhythmPage
+        page={page()}
+        actions={<button data-testid="page-actions">Share</button>}
+      />,
+    )
+
+    const actions = screen.getByTestId('page-actions')
+    const row = actions.parentElement as HTMLElement
+    // The row reads as a deliberate page-header action: right-aligned, spaced.
+    expect(row).toHaveClass('flex', 'justify-end')
+
+    // The row and the hero share the seam's inner content wrapper, and the row
+    // is the first child there — it sits at the very top, above the hero.
+    const hero = screen.getByTestId('render-hero')
+    const contentWrapper = hero.parentElement as HTMLElement
+    expect(row.parentElement).toBe(contentWrapper)
+    expect(contentWrapper.firstElementChild).toBe(row)
+    expect(
+      row.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('emits no extra wrapper when actions is absent (byte-identical seam)', () => {
+    render(<RenderRhythmPage page={page()} />)
+
+    const hero = screen.getByTestId('render-hero')
+    const contentWrapper = hero.parentElement as HTMLElement
+    // No actions row node anywhere, and the wrapper holds only the bare hero
+    // probe plus the blocks wrapper — unchanged from before the slot existed.
+    expect(contentWrapper.querySelector('.justify-end')).toBeNull()
+    expect(contentWrapper.children).toHaveLength(2)
+    expect(contentWrapper.firstElementChild).toBe(hero)
+  })
+})
+
 describe('RenderRhythmPage — home parity rhythm', () => {
   it('drops the container top margin and keeps the isolation', () => {
     const { container } = render(

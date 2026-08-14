@@ -2,9 +2,11 @@ import { type Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { cache } from 'react'
 
+import { ShareButton } from '@/components/cms/ShareButton'
 import { RenderRhythmPage } from '@/heros/RenderRhythmPage'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { getCmsIdentity } from '@/lib/cms/identityRepo'
+import { resolvePageShareTargetIds } from '@/lib/cms/pageShareTargets'
 import { getCmsPageByPath, getPageBySlugDraftAware } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
@@ -91,6 +93,13 @@ export default async function About() {
     ],
   }
 
+  // Page actions row (top-right, above the hero). Share only when the resolved
+  // (global ± per-page) target set is non-empty; the per-page `disableSharing`
+  // kill switch collapses it to []. Resolved server-side; `ShareButton` — the
+  // sole client boundary — receives only serializable props.
+  const shareTargetIds = resolvePageShareTargetIds(page, settings.shareTargets)
+  const pageTitle = page.meta?.title || page.title
+
   return (
     <>
       <script
@@ -105,7 +114,18 @@ export default async function About() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
       />
-      <RenderRhythmPage page={page} />
+      <RenderRhythmPage
+        page={page}
+        actions={
+          shareTargetIds.length > 0 ? (
+            <ShareButton
+              url={`${normalizedSiteUrl}/about`}
+              title={pageTitle}
+              targetIds={shareTargetIds}
+            />
+          ) : undefined
+        }
+      />
     </>
   )
 }

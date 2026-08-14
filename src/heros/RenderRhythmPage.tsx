@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 import { Container } from '@/components/Container'
 import { RenderHero } from '@/heros/RenderHero'
@@ -10,6 +12,13 @@ import type { Page } from '@/payload-types'
  * the page's route rhythm.
  *
  * @param page - The page document to render (hero group + `layout` blocks).
+ * @param actions - Optional page-header action slot (e.g. the Share control).
+ * When present it renders as a right-aligned row at the very top of the
+ * `<Container>`, in normal flow *above* the hero — the same spot for every hero
+ * type (`standard`, `blank`, `shader`), so it sits above a full-bleed canvas
+ * rather than being swallowed by it. When omitted the emitted DOM is
+ * byte-identical to before this slot existed (the seam's parity tests pin this),
+ * so the actions-free routes — Home included — do not shift.
  *
  * @remarks Both the dedicated `/` home route and the `[slug]` catch-all render
  * through here, so the two paths cannot drift: the same document renders
@@ -32,10 +41,19 @@ import type { Page } from '@/payload-types'
  * `-z-10` sinks below the blocks yet above the fixed page panel
  * (`src/heros/presentation.ts`).
  */
-export function RenderRhythmPage({ page }: { page: Page }) {
+export function RenderRhythmPage({
+  page,
+  actions,
+}: {
+  page: Page
+  actions?: ReactNode
+}) {
   const profile = routeRhythmProfile(page.hero?.rhythm)
   return (
     <Container className={profile.containerClass}>
+      {actions ? (
+        <div className="mb-6 flex justify-end sm:mb-8">{actions}</div>
+      ) : null}
       {profile.heroWrapperClass === null ? (
         <RenderHero page={page} />
       ) : (
