@@ -80,6 +80,35 @@ const POSTS = [
   },
 ]
 
+/**
+ * `tech-stack` rows for the /tech explorer. `category` uses the collection's
+ * lowercase select values (mapped to display labels by `techRepo`), so the
+ * seeded categories surface as the "Frontend"/"Testing"/… filter chips the
+ * `tech-viz` e2e suite asserts against.
+ */
+const TECH_STACK = [
+  { name: 'TypeScript', category: 'tooling' as const },
+  { name: 'Vitest', category: 'testing' as const },
+  { name: 'Playwright', category: 'testing' as const },
+  { name: 'React', category: 'frontend' as const },
+  { name: 'Next.js', category: 'framework' as const },
+  { name: 'Supabase', category: 'data' as const },
+  { name: 'Tailwind CSS', category: 'frontend' as const },
+]
+
+/**
+ * `uses` rows for /uses. `category` uses the collection's lowercase select
+ * values; `usesRepo` groups them into `<Section>`s whose titles are the display
+ * labels ("Workstation", "Development tools", …) the e2e suite reads.
+ */
+const USES = [
+  { title: 'Framework Laptop 16', category: 'workstation' as const },
+  { title: 'Herman Miller Aeron', category: 'workstation' as const },
+  { title: 'VS Code', category: 'development' as const },
+  { title: 'Warp Terminal', category: 'development' as const },
+  { title: 'Figma', category: 'design' as const },
+]
+
 /** A minimal Lexical rich-text value (one paragraph) for a seeded post body. */
 const lexicalParagraph = (text: string) => ({
   root: {
@@ -117,8 +146,79 @@ const run = async () => {
   const report = {
     mediaCreated: 0,
     postsUpserted: 0,
+    techUpserted: 0,
+    usesUpserted: 0,
     home: 'skipped',
     about: 'skipped',
+  }
+
+  /**
+   * Upsert the `tech-stack` rows by unique `name` (find-then-create), so a
+   * re-run against a populated DB creates nothing new. No `logo`/media is
+   * attached — the seed stays network-free for the tech collection.
+   */
+  const seedTechStack = async (): Promise<void> => {
+    for (const [index, tech] of TECH_STACK.entries()) {
+      const found = await payload.find({
+        collection: 'tech-stack',
+        where: { name: { equals: tech.name } },
+        limit: 1,
+      })
+      const data = {
+        name: tech.name,
+        category: tech.category,
+        sortOrder: index,
+      }
+      if (found.docs[0]) {
+        await payload.update({
+          collection: 'tech-stack',
+          id: found.docs[0].id,
+          data,
+          context: { disableRevalidate: true },
+        })
+      } else {
+        await payload.create({
+          collection: 'tech-stack',
+          data,
+          context: { disableRevalidate: true },
+        })
+      }
+      report.techUpserted += 1
+    }
+  }
+
+  /**
+   * Upsert the `uses` rows by unique `title` (find-then-create), so a re-run
+   * creates nothing new. No media is attached.
+   */
+  const seedUses = async (): Promise<void> => {
+    for (const [index, use] of USES.entries()) {
+      const found = await payload.find({
+        collection: 'uses',
+        where: { title: { equals: use.title } },
+        limit: 1,
+      })
+      const data = {
+        title: use.title,
+        category: use.category,
+        sortOrder: index,
+      }
+      if (found.docs[0]) {
+        await payload.update({
+          collection: 'uses',
+          id: found.docs[0].id,
+          data,
+          context: { disableRevalidate: true },
+        })
+      } else {
+        await payload.create({
+          collection: 'uses',
+          data,
+          context: { disableRevalidate: true },
+        })
+      }
+      report.usesUpserted += 1
+    }
   }
 
   /**
@@ -250,7 +350,13 @@ const run = async () => {
     report.postsUpserted += 1
   }
 
-  // 5. The published `home` doc, carrying the real composed home layout so `/`
+  // 5. Tech-stack + uses rows so `/tech` and `/uses` render the real
+  //    visualization (filter chips, cards, grouped sections) instead of the
+  //    empty `NotFoundState` — the `tech-viz.spec.ts` e2e suite depends on them.
+  await seedTechStack()
+  await seedUses()
+
+  // 6. The published `home` doc, carrying the real composed home layout so `/`
   //    renders the true home hero + photo strip + the two-column rail. Media
   //    references use the ids captured above rather than hard-coded numbers, so
   //    the doc is valid on whatever serial ids this fresh DB assigned.
@@ -344,7 +450,7 @@ const run = async () => {
     report.home = 'created'
   }
 
-  // 6. The published `about` doc, carrying the composed About layout so the
+  // 7. The published `about` doc, carrying the composed About layout so the
   //    flipped `/about` (#44) renders instead of `notFound()`-ing. The portrait
   //    reuses the Identity/person media (`heroMediaId`). The hero is `blank` —
   //    About's H1 lives in the left column's `heading` block, so the hero draws
@@ -454,7 +560,7 @@ const run = async () => {
   }
 
   payload.logger.info(
-    `[seed:e2e] done: mediaCreated=${report.mediaCreated} postsUpserted=${report.postsUpserted} home=${report.home} about=${report.about}`,
+    `[seed:e2e] done: mediaCreated=${report.mediaCreated} postsUpserted=${report.postsUpserted} techUpserted=${report.techUpserted} usesUpserted=${report.usesUpserted} home=${report.home} about=${report.about}`,
   )
 }
 

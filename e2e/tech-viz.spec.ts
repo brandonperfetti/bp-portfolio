@@ -10,9 +10,9 @@ import { expect, test } from '@playwright/test'
 test('tech category filter syncs to URL and back', async ({ page }) => {
   await page.goto('/tech')
 
-  const chip = page.getByRole('button', { name: 'Language', exact: true })
+  const chip = page.getByRole('button', { name: 'Testing', exact: true })
   await chip.click()
-  await expect(page).toHaveURL(/category=Language/)
+  await expect(page).toHaveURL(/category=Testing/)
   await expect(chip).toHaveAttribute('aria-pressed', 'true')
 
   // Toggling the active chip clears the filter.
