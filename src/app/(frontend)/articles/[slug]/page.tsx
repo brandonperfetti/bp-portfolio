@@ -12,6 +12,7 @@ import { getViewer } from '@/lib/auth/getViewer'
 import { getAllArticles, getArticleBySlug } from '@/lib/articles'
 import { resolveArticleShareTargetIds } from '@/lib/cms/articlesRepo'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
+import { resolveArticleSocialImage } from '@/lib/cms/pageMetadata'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { isFuturePublicationDate } from '@/lib/date'
 import { canonicalizeArticleUrl } from '@/lib/seo/canonical'
@@ -82,7 +83,13 @@ export async function generateMetadata({
     article.canonicalUrl,
   )
 
-  const image = toAbsoluteImageUrl(canonicalBase, article.image)
+  // Cover, else the site-default OG image, else the last-resort — a cover-less
+  // article still shares a branded card rather than no image (T6).
+  const image = resolveArticleSocialImage(
+    article.image,
+    settings,
+    canonicalBase,
+  )
   const shouldNoindex = article.noindex || isFuturePublicationDate(article.date)
 
   const effectiveTitle = article.seoTitle || article.title
@@ -145,7 +152,11 @@ export default async function ArticlePage({ params }: PageProps) {
     article.slug,
     article.canonicalUrl,
   )
-  const schemaImage = toAbsoluteImageUrl(canonicalSiteUrl, article.image)
+  const schemaImage = resolveArticleSocialImage(
+    article.image,
+    settings,
+    canonicalSiteUrl,
+  )
   const publisherLogo = toAbsoluteImageUrl(
     canonicalSiteUrl,
     settings.openGraphImage || '/favicon.ico',

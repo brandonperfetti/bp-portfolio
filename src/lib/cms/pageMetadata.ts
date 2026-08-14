@@ -28,6 +28,24 @@ export function resolvePageSocialImage(
   )
 }
 
+/**
+ * Social/OG image for an article: its own cover if it has one, else the
+ * site-default OG image, else the hardcoded last resort — so a cover-less
+ * article still shares a branded card instead of no image at all. Mirrors
+ * {@link resolvePageSocialImage} for the article route.
+ */
+export function resolveArticleSocialImage(
+  articleImage: string | undefined,
+  settings: Pick<CmsSiteSettings, 'openGraphImage'>,
+  siteUrl: string,
+) {
+  return (
+    toAbsoluteUrl(articleImage, siteUrl) ??
+    toAbsoluteUrl(settings.openGraphImage, siteUrl) ??
+    toAbsoluteUrl(DEFAULT_SOCIAL_IMAGE, siteUrl)
+  )
+}
+
 export function buildPageMetadata({
   page,
   settings,
