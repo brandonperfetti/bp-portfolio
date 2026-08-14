@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 
 import type { CmsPageContent, CmsSiteSettings } from '@/lib/cms/types'
+import { shouldUseGeneratedOg } from '@/lib/og/resolveOgImage'
+import type { OgImageMode } from '@/lib/og/types'
 import { DEFAULT_SOCIAL_IMAGE, getSiteUrl } from '@/lib/site'
 
 function toAbsoluteUrl(url: string | undefined, siteUrl: string) {
@@ -15,33 +17,82 @@ function toAbsoluteUrl(url: string | undefined, siteUrl: string) {
   return `${siteUrl}${url.startsWith('/') ? '' : '/'}${url}`
 }
 
+/** Absolute base for generated-OG URLs, with any trailing slash removed so the
+ * result is never `https://host//api/og/...`. */
+function normalizeBase(siteUrl: string) {
+  return siteUrl.replace(/\/+$/, '')
+}
+
+/**
+ * Social/OG image for a page-builder page. When the page resolves to a generated
+ * card (T7 — see {@link shouldUseGeneratedOg}) this returns the
+ * `/api/og/page/[slug]` URL; otherwise it's the page's own OG/hero image, then
+ * the site default, then the hardcoded last resort.
+ */
 export function resolvePageSocialImage(
   page: CmsPageContent | null,
   settings: CmsSiteSettings,
 ) {
   const siteUrl = settings.canonicalUrl || getSiteUrl()
-  return (
+  const ownImage =
     toAbsoluteUrl(page?.ogImage, siteUrl) ??
-    toAbsoluteUrl(page?.heroImage, siteUrl) ??
+    toAbsoluteUrl(page?.heroImage, siteUrl)
+
+  if (
+    page &&
+    shouldUseGeneratedOg({
+      mode: page.ogImageMode,
+      generatedOgEnabled: settings.generatedOgEnabled,
+      hasOwnImage: Boolean(ownImage),
+    })
+  ) {
+    return `${normalizeBase(siteUrl)}/api/og/page/${page.slug}`
+  }
+
+  return (
+    ownImage ??
     toAbsoluteUrl(settings.openGraphImage, siteUrl) ??
     toAbsoluteUrl(DEFAULT_SOCIAL_IMAGE, siteUrl)
   )
 }
 
 /**
- * Social/OG image for an article: its own cover if it has one, else the
- * site-default OG image, else the hardcoded last resort — so a cover-less
+ * Social/OG image for an article. When the article resolves to a generated card
+ * (T7) this returns the passed generated-card URL; otherwise its own cover, then
+ * the site-default OG image, then the hardcoded last resort — so a cover-less
  * article still shares a branded card instead of no image at all. Mirrors
  * {@link resolvePageSocialImage} for the article route.
  */
-export function resolveArticleSocialImage(
-  articleImage: string | undefined,
-  settings: Pick<CmsSiteSettings, 'openGraphImage'>,
-  siteUrl: string,
-) {
+export function resolveArticleSocialImage({
+  articleImage,
+  mode,
+  generatedOgEnabled,
+  generatedImageUrl,
+  openGraphImage,
+  siteUrl,
+}: {
+  articleImage: string | undefined
+  mode: OgImageMode | undefined
+  generatedOgEnabled: boolean
+  generatedImageUrl: string
+  openGraphImage: string | undefined
+  siteUrl: string
+}) {
+  const ownImage = toAbsoluteUrl(articleImage, siteUrl)
+
+  if (
+    shouldUseGeneratedOg({
+      mode,
+      generatedOgEnabled,
+      hasOwnImage: Boolean(ownImage),
+    })
+  ) {
+    return generatedImageUrl
+  }
+
   return (
-    toAbsoluteUrl(articleImage, siteUrl) ??
-    toAbsoluteUrl(settings.openGraphImage, siteUrl) ??
+    ownImage ??
+    toAbsoluteUrl(openGraphImage, siteUrl) ??
     toAbsoluteUrl(DEFAULT_SOCIAL_IMAGE, siteUrl)
   )
 }
@@ -66,11 +117,25 @@ export function buildPageMetadata({
   const title = page?.seoTitle || fallbackTitle
   const description = page?.seoDescription || fallbackDescription
   const socialImage = resolvePageSocialImage(page, settings)
-  const hasExplicitSocialImage = Boolean(
-    page?.ogImage?.trim() ||
-    page?.heroImage?.trim() ||
-    settings.openGraphImage?.trim(),
+  const usesGeneratedCard = Boolean(
+    page &&
+      shouldUseGeneratedOg({
+        mode: page.ogImageMode,
+        generatedOgEnabled: settings.generatedOgEnabled,
+        hasOwnImage: Boolean(
+          page.ogImage?.trim() || page.heroImage?.trim(),
+        ),
+      }),
   )
+  // A generated 1200×630 card is a large image, so it earns the large Twitter
+  // card just like an explicit cover / site-default OG image does.
+  const hasExplicitSocialImage =
+    usesGeneratedCard ||
+    Boolean(
+      page?.ogImage?.trim() ||
+        page?.heroImage?.trim() ||
+        settings.openGraphImage?.trim(),
+    )
 
   return {
     title,

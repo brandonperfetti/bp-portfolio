@@ -57,6 +57,7 @@ export const getCmsPageByPath = unstable_cache(
       // rather than surfacing a hidden/stale hero image (see heroSocialImageUrl).
       heroImage: heroSocialImageUrl(page.hero),
       ogImage: mediaUrl(page.meta?.image),
+      ogImageMode: page.ogImageMode ?? undefined,
       updatedAt: page.updatedAt,
       disableSharing: page.disableSharing ?? undefined,
       shareTargetsAdd: page.shareTargetsAdd ?? undefined,

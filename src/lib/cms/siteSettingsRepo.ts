@@ -16,6 +16,7 @@ const DEFAULT_SITE_SETTINGS: CmsSiteSettings = {
   copyPageEnabled: true,
   copyPageLabel: 'Copy page',
   shareTargets: [...SHARE_TARGET_IDS],
+  generatedOgEnabled: false,
 }
 
 /**
@@ -60,6 +61,9 @@ export const getCmsSiteSettings = unstable_cache(
       shareTargets: settings?.shareTargets?.length
         ? settings.shareTargets
         : [...SHARE_TARGET_IDS],
+      // Master switch for T7 generated OG cards; defaults off so nothing changes
+      // until it's explicitly enabled in the admin.
+      generatedOgEnabled: settings?.generatedOgEnabled ?? false,
     }
   },
   ['site-settings'],

@@ -83,13 +83,18 @@ export async function generateMetadata({
     article.canonicalUrl,
   )
 
-  // Cover, else the site-default OG image, else the last-resort — a cover-less
-  // article still shares a branded card rather than no image (T6).
-  const image = resolveArticleSocialImage(
-    article.image,
-    settings,
-    canonicalBase,
-  )
+  // Cover, else a generated card (T7), else the site-default OG image, else the
+  // last-resort — a cover-less article still shares a branded card rather than
+  // no image (T6). Generation is gated by the article's ogImageMode + the global
+  // toggle (see resolveArticleSocialImage / shouldUseGeneratedOg).
+  const image = resolveArticleSocialImage({
+    articleImage: article.image,
+    mode: article.ogImageMode,
+    generatedOgEnabled: settings.generatedOgEnabled,
+    generatedImageUrl: `${canonicalBase}/api/og/article/${article.slug}`,
+    openGraphImage: settings.openGraphImage,
+    siteUrl: canonicalBase,
+  })
   const shouldNoindex = article.noindex || isFuturePublicationDate(article.date)
 
   const effectiveTitle = article.seoTitle || article.title
@@ -152,11 +157,14 @@ export default async function ArticlePage({ params }: PageProps) {
     article.slug,
     article.canonicalUrl,
   )
-  const schemaImage = resolveArticleSocialImage(
-    article.image,
-    settings,
-    canonicalSiteUrl,
-  )
+  const schemaImage = resolveArticleSocialImage({
+    articleImage: article.image,
+    mode: article.ogImageMode,
+    generatedOgEnabled: settings.generatedOgEnabled,
+    generatedImageUrl: `${canonicalSiteUrl}/api/og/article/${article.slug}`,
+    openGraphImage: settings.openGraphImage,
+    siteUrl: canonicalSiteUrl,
+  })
   const publisherLogo = toAbsoluteImageUrl(
     canonicalSiteUrl,
     settings.openGraphImage || '/favicon.ico',

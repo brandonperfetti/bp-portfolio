@@ -5,6 +5,7 @@ import {
   type CmsArticleDetailResult,
 } from '@/lib/cms/articlesRepo'
 import { isFuturePublicationDate } from '@/lib/date'
+import type { OgImageMode } from '@/lib/og/types'
 
 interface Article {
   title: string
@@ -32,6 +33,8 @@ interface Article {
   topics?: string[]
   tech?: string[]
   noindex?: boolean
+  /** How this article's social image resolves (auto/bespoke/generated, T7). */
+  ogImageMode?: OgImageMode
 }
 
 export interface ArticleWithSlug extends Article {

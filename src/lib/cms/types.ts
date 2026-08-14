@@ -1,3 +1,4 @@
+import type { OgImageMode } from '@/lib/og/types'
 import type { ShareTargetId } from '@/lib/share/shareTargets'
 
 /**
@@ -53,6 +54,10 @@ export interface CmsArticleSummary {
   searchIndexText?: string
   sourceArticlePageId?: string
   sourceType: CmsProvider
+  /** How this article's social image resolves — `auto` follows the global
+   * generated-OG toggle, `bespoke` forces its own cover, `generated` forces a
+   * generated card. Absent → `auto`. */
+  ogImageMode?: OgImageMode
 }
 
 export interface CmsRichText {
@@ -131,6 +136,9 @@ export interface CmsSiteSettings {
   /** Globally enabled share-target ids — the base set every shareable entry
    * starts from before per-entry add/remove is applied. */
   shareTargets: string[]
+  /** Global master switch for dynamic generated OG title-cards (T7). When off,
+   * `auto`-mode entries never generate a card regardless of cover state. */
+  generatedOgEnabled: boolean
 }
 
 export interface CmsNavigationItem {
@@ -160,6 +168,8 @@ export interface CmsPageContent {
   seoDescription?: string
   heroImage?: string
   ogImage?: string
+  /** How this page's social image resolves (see {@link CmsArticleSummary.ogImageMode}). */
+  ogImageMode?: OgImageMode
   updatedAt?: string
   bodyBlocks?: CmsArticleBlock[]
   /** When true, this page offers no share affordance regardless of the global

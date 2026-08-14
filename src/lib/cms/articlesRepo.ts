@@ -92,6 +92,7 @@ const toSummary = (post: Post): CmsArticleSummary => {
     topics,
     tech,
     sourceType: 'local',
+    ogImageMode: post.ogImageMode ?? undefined,
   }
 }
 
