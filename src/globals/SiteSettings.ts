@@ -3,27 +3,16 @@ import type { GlobalConfig } from 'payload'
 import { anyone } from '@/access/anyone'
 import { authenticated } from '@/access/authenticated'
 import { revalidateGlobal } from '@/hooks/revalidateGlobal'
+import { SHARE_TARGET_IDS, SHARE_TARGET_OPTIONS } from '@/lib/share/vocabulary'
 
 /**
- * The share destinations the post-actions feature knows how to render. Pinned
- * ids — T2 builds its share module against exactly these values, and every
- * per-entry add/remove select and the global enable list draw from the same
- * vocabulary. `copylink` is the floor: the Copy-link action is always offered.
+ * The share-destination vocabulary now lives in `@/lib/share/vocabulary` (a
+ * client-safe module with no payload/next imports) so client components can
+ * value-import it without dragging `revalidateGlobal` → `next/cache` into the
+ * browser bundle. Re-exported here so Posts/Pages — which import these from
+ * `@/globals/SiteSettings` — keep working unchanged.
  */
-export const SHARE_TARGET_OPTIONS = [
-  { label: 'X', value: 'x' },
-  { label: 'LinkedIn', value: 'linkedin' },
-  { label: 'Facebook', value: 'facebook' },
-  { label: 'Reddit', value: 'reddit' },
-  { label: 'Hacker News', value: 'hackernews' },
-  { label: 'Email', value: 'email' },
-  { label: 'Copy link', value: 'copylink' },
-] as const
-
-/** The bare `value` ids of {@link SHARE_TARGET_OPTIONS}, in pinned order. */
-export const SHARE_TARGET_IDS = SHARE_TARGET_OPTIONS.map(
-  (option) => option.value,
-)
+export { SHARE_TARGET_OPTIONS, SHARE_TARGET_IDS } from '@/lib/share/vocabulary'
 
 /** Site-wide settings: name, canonical URL, default SEO/OG, social links. */
 export const SiteSettings: GlobalConfig = {

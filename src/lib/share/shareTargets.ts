@@ -7,7 +7,7 @@ import {
   RedditIcon,
   XIcon,
 } from '@/icons'
-import { SHARE_TARGET_IDS, SHARE_TARGET_OPTIONS } from '@/globals/SiteSettings'
+import { SHARE_TARGET_IDS, SHARE_TARGET_OPTIONS } from '@/lib/share/vocabulary'
 
 /**
  * One of the pinned share-destination ids (`x`, `linkedin`, `facebook`,
@@ -123,22 +123,26 @@ function isShareTargetId(value: string): value is ShareTargetId {
 }
 
 /**
- * Resolves the effective set of share targets for a page.
+ * Resolves the effective set of share-target ids for a page.
  *
  * @param global - The site-wide enabled ids (the SiteSettings default list).
  * @param add - Per-entry additions layered on top of the global set.
  * @param remove - Per-entry removals subtracted from the union.
- * @returns The `(global ∪ add) \ remove` set as full
- * {@link ResolvedShareTarget}s, deduped and ordered by {@link SHARE_TARGET_IDS}
- * (canonical order), with any unknown ids ignored.
- * @remarks Order is imposed by the canonical vocabulary, not by input order,
- * so the row reads the same regardless of how editors sequenced their picks.
+ * @returns The `(global ∪ add) \ remove` set of {@link ShareTargetId}s, deduped
+ * and ordered by {@link SHARE_TARGET_IDS} (canonical order), with any unknown
+ * ids ignored.
+ * @remarks The serializable half of {@link resolveShareTargets}: an RSC page
+ * can resolve ids on the server and hand this plain string array across the
+ * server→client boundary, letting the client rehydrate the full
+ * (non-serializable) {@link ResolvedShareTarget}s from {@link SHARE_TARGETS}.
+ * Order is imposed by the canonical vocabulary, not by input order, so the row
+ * reads the same regardless of how editors sequenced their picks.
  */
-export function resolveShareTargets(
+export function resolveShareTargetIds(
   global: readonly string[] = [],
   add: readonly string[] = [],
   remove: readonly string[] = [],
-): ResolvedShareTarget[] {
+): ShareTargetId[] {
   const removed = new Set(remove)
   const enabled = new Set<ShareTargetId>()
 
@@ -146,7 +150,24 @@ export function resolveShareTargets(
     if (isShareTargetId(id) && !removed.has(id)) enabled.add(id)
   }
 
-  return SHARE_TARGET_IDS.filter((id) => enabled.has(id)).map(
+  return SHARE_TARGET_IDS.filter((id) => enabled.has(id))
+}
+
+/**
+ * Resolves the effective set of share targets for a page.
+ *
+ * @param global - The site-wide enabled ids (the SiteSettings default list).
+ * @param add - Per-entry additions layered on top of the global set.
+ * @param remove - Per-entry removals subtracted from the union.
+ * @returns The resolved id set (see {@link resolveShareTargetIds}) mapped to
+ * full {@link ResolvedShareTarget}s.
+ */
+export function resolveShareTargets(
+  global: readonly string[] = [],
+  add: readonly string[] = [],
+  remove: readonly string[] = [],
+): ResolvedShareTarget[] {
+  return resolveShareTargetIds(global, add, remove).map(
     (id) => SHARE_TARGETS[id],
   )
 }
