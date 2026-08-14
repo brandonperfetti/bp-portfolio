@@ -44,6 +44,12 @@ export interface ArticleDetailWithSlug extends ArticleWithSlug {
   gated?: boolean
   bodyBlocks: CmsArticleDetailResult['bodyBlocks']
   sourceType: CmsArticleDetailResult['sourceType']
+  /** When true, this article offers no share affordance (per-post kill switch). */
+  disableSharing?: boolean
+  /** Share-target ids layered on top of the global set for this article. */
+  shareTargetsAdd?: string[]
+  /** Share-target ids subtracted from the global set for this article. */
+  shareTargetsRemove?: string[]
 }
 
 export async function getAllArticles(): Promise<ArticleWithSlug[]> {

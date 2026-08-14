@@ -4,7 +4,9 @@ import {
   getAllCmsArticleSummaries,
   getCmsArticleBySlug,
   getCmsSearchArticles,
+  resolveArticleShareTargetIds,
 } from '@/lib/cms/articlesRepo'
+import { SHARE_TARGET_IDS } from '@/lib/share/vocabulary'
 import type { Post } from '@/payload-types'
 
 // The repo's data access goes through lib/content/posts (Payload Local API +
@@ -162,6 +164,74 @@ describe('getCmsArticleBySlug', () => {
 
     expect(article?.gated).toBe(false)
     expect(article?.bodyBlocks.length).toBeGreaterThan(0)
+  })
+
+  it('maps the per-article share fields onto the detail', async () => {
+    getPostBySlug.mockResolvedValue(
+      makePost({
+        disableSharing: true,
+        shareTargetsAdd: ['reddit'],
+        shareTargetsRemove: ['x'],
+      }),
+    )
+
+    const article = await getCmsArticleBySlug('testing-react-without-tears')
+
+    expect(article?.disableSharing).toBe(true)
+    expect(article?.shareTargetsAdd).toEqual(['reddit'])
+    expect(article?.shareTargetsRemove).toEqual(['x'])
+  })
+
+  it('defaults the share fields (off / empty) when the post omits them', async () => {
+    getPostBySlug.mockResolvedValue(makePost())
+
+    const article = await getCmsArticleBySlug('testing-react-without-tears')
+
+    expect(article?.disableSharing).toBe(false)
+    expect(article?.shareTargetsAdd).toEqual([])
+    expect(article?.shareTargetsRemove).toEqual([])
+  })
+})
+
+describe('resolveArticleShareTargetIds', () => {
+  it('returns the global set unchanged when no per-article picks apply', () => {
+    expect(resolveArticleShareTargetIds({}, [...SHARE_TARGET_IDS])).toEqual([
+      ...SHARE_TARGET_IDS,
+    ])
+  })
+
+  it('hides every target when the article disables sharing', () => {
+    expect(
+      resolveArticleShareTargetIds(
+        {
+          disableSharing: true,
+          shareTargetsAdd: ['reddit'],
+        },
+        [...SHARE_TARGET_IDS],
+      ),
+    ).toEqual([])
+  })
+
+  it('honors add/remove and imposes canonical order', () => {
+    // Global has just linkedin; add x + reddit, remove linkedin. The result is
+    // ordered by the pinned vocabulary (x before reddit), not by input order.
+    expect(
+      resolveArticleShareTargetIds(
+        {
+          shareTargetsAdd: ['reddit', 'x'],
+          shareTargetsRemove: ['linkedin'],
+        },
+        ['linkedin'],
+      ),
+    ).toEqual(['x', 'reddit'])
+  })
+
+  it('drops unknown ids from the resolved set', () => {
+    expect(
+      resolveArticleShareTargetIds({ shareTargetsAdd: ['not-a-target'] }, [
+        'x',
+      ]),
+    ).toEqual(['x'])
   })
 })
 

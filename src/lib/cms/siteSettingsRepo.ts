@@ -3,6 +3,7 @@ import { getPayload } from 'payload'
 
 import configPromise from '@payload-config'
 import type { CmsSiteSettings } from '@/lib/cms/types'
+import { SHARE_TARGET_IDS } from '@/lib/share/vocabulary'
 import { getSiteUrl, SITE_DESCRIPTION } from '@/lib/site'
 
 const DEFAULT_SITE_SETTINGS: CmsSiteSettings = {
@@ -14,6 +15,7 @@ const DEFAULT_SITE_SETTINGS: CmsSiteSettings = {
   twitterCard: 'summary_large_image',
   copyPageEnabled: true,
   copyPageLabel: 'Copy page',
+  shareTargets: [...SHARE_TARGET_IDS],
 }
 
 /**
@@ -49,6 +51,7 @@ export const getCmsSiteSettings = unstable_cache(
       twitterCard: 'summary_large_image',
       copyPageEnabled: settings?.copyPageEnabled ?? true,
       copyPageLabel: settings?.copyPageLabel || 'Copy page',
+      shareTargets: settings?.shareTargets ?? [...SHARE_TARGET_IDS],
     }
   },
   ['site-settings'],

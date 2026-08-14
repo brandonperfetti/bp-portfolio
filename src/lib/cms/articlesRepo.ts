@@ -13,6 +13,10 @@ import {
 import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
 import { canAccess } from '@/access/canAccess'
 import { mediaUrl } from '@/lib/cms/mediaUrl'
+import {
+  resolveShareTargetIds,
+  type ShareTargetId,
+} from '@/lib/share/shareTargets'
 import type { Author, Post } from '@/payload-types'
 
 /**
@@ -128,7 +132,38 @@ export async function getCmsArticleBySlug(
     excerpt: post.excerpt || undefined,
     searchText: allowed ? flattenBlockText(bodyBlocks) : '',
     gated: !allowed,
+    disableSharing: post.disableSharing ?? false,
+    shareTargetsAdd: post.shareTargetsAdd ?? [],
+    shareTargetsRemove: post.shareTargetsRemove ?? [],
   }
+}
+
+/**
+ * Resolve the ordered share-target ids to offer for one article.
+ *
+ * @remarks Pure and server-side: it applies the per-article kill switch
+ * (`disableSharing`) before layering the article's add/remove picks onto the
+ * global set via {@link resolveShareTargetIds}. Extracted here so the article
+ * page's Share-visibility rule is unit-testable without rendering the RSC, and
+ * so the resolution stays off the server→client boundary — the page hands the
+ * resulting plain `string[]` to the client `ShareButton`.
+ * @param article - The article's per-entry share configuration.
+ * @param globalShareTargets - The site-wide enabled ids (SiteSettings default).
+ * @returns The effective {@link ShareTargetId} set, empty when sharing is off.
+ */
+export function resolveArticleShareTargetIds(
+  article: Pick<
+    CmsArticleDetail,
+    'disableSharing' | 'shareTargetsAdd' | 'shareTargetsRemove'
+  >,
+  globalShareTargets: readonly string[],
+): ShareTargetId[] {
+  if (article.disableSharing) return []
+  return resolveShareTargetIds(
+    globalShareTargets,
+    article.shareTargetsAdd,
+    article.shareTargetsRemove,
+  )
 }
 
 /**

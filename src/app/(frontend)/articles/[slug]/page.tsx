@@ -7,8 +7,10 @@ import { ArticleMeta } from '@/components/cms/ArticleMeta'
 import { CmsPostBlocks } from '@/components/cms/CmsPostBlocks'
 import { SyncErrorState } from '@/components/cms/SyncErrorState'
 import { CopyPageButton } from '@/components/cms/CopyPageButton'
+import { ShareButton } from '@/components/cms/ShareButton'
 import { getViewer } from '@/lib/auth/getViewer'
 import { getAllArticles, getArticleBySlug } from '@/lib/articles'
+import { resolveArticleShareTargetIds } from '@/lib/cms/articlesRepo'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { isFuturePublicationDate } from '@/lib/date'
@@ -167,6 +169,18 @@ export default async function ArticlePage({ params }: PageProps) {
     ? toAbsoluteImageUrl(canonicalSiteUrl, authorObject.href)
     : undefined
   const articleKeywords = getArticleKeywords(article)
+  // Article actions row. Copy follows the global toggle; Share is offered only
+  // when the resolved (global ± per-article) target set is non-empty — the
+  // per-post `disableSharing` kill switch collapses it to []. `shareTargetIds`
+  // is a plain string[] resolved here (server), the sole client boundary being
+  // `ShareButton`, which receives only serializable props.
+  const effectiveTitle = article.seoTitle || article.title
+  const shareTargetIds = resolveArticleShareTargetIds(
+    article,
+    settings.shareTargets,
+  )
+  const showCopy = settings.copyPageEnabled
+  const showShare = shareTargetIds.length > 0
   const articleSchema = {
     '@context': 'https://schema.org',
     '@type': 'Article',
@@ -246,11 +260,22 @@ export default async function ArticlePage({ params }: PageProps) {
         <ArticleMeta
           author={article.author}
           actions={
-            settings.copyPageEnabled ? (
-              <CopyPageButton
-                markdown={articleBlocksToMarkdown(bodyBlocks)}
-                label={settings.copyPageLabel}
-              />
+            showCopy || showShare ? (
+              <div className="flex items-center gap-2">
+                {showCopy ? (
+                  <CopyPageButton
+                    markdown={articleBlocksToMarkdown(bodyBlocks)}
+                    label={settings.copyPageLabel}
+                  />
+                ) : null}
+                {showShare ? (
+                  <ShareButton
+                    url={canonical}
+                    title={effectiveTitle}
+                    targetIds={shareTargetIds}
+                  />
+                ) : null}
+              </div>
             ) : undefined
           }
           readingTimeMinutes={article.readingTimeMinutes}

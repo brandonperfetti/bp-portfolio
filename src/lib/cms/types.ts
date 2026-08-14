@@ -80,6 +80,13 @@ export interface CmsArticleDetail extends CmsArticleSummary {
   searchText: string
   bodyBlocks: CmsArticleBlock[]
   excerpt?: string
+  /** When true, this article offers no share affordance regardless of the
+   * global share set (per-post kill switch). */
+  disableSharing?: boolean
+  /** Share-target ids layered on top of the global set for this article. */
+  shareTargetsAdd?: string[]
+  /** Share-target ids subtracted from the global set for this article. */
+  shareTargetsRemove?: string[]
 }
 
 export interface CmsLinkItem {
@@ -119,6 +126,9 @@ export interface CmsSiteSettings {
   copyPageEnabled: boolean
   /** Resolved label for the article "Copy page" action (empty → "Copy page"). */
   copyPageLabel: string
+  /** Globally enabled share-target ids — the base set every shareable entry
+   * starts from before per-entry add/remove is applied. */
+  shareTargets: string[]
 }
 
 export interface CmsNavigationItem {
