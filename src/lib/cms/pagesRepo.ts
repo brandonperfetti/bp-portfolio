@@ -2,6 +2,7 @@ import { unstable_cache } from 'next/cache'
 import { getPayload } from 'payload'
 
 import configPromise from '@payload-config'
+import { heroSocialImageUrl } from '@/lib/cms/heroSocialImage'
 import { mediaUrl } from '@/lib/cms/mediaUrl'
 import type { CmsPageContent } from '@/lib/cms/types'
 import type { Page } from '@/payload-types'
@@ -51,7 +52,10 @@ export const getCmsPageByPath = unstable_cache(
       subtitle: page.subtitle || page.meta?.description || undefined,
       seoTitle: page.meta?.title || undefined,
       seoDescription: page.meta?.description || undefined,
-      heroImage: mediaUrl(page.hero?.media),
+      // Only a `standard` hero renders an image, so only it seeds the OG
+      // fallback — shader/blank/none pages fall through to the site default
+      // rather than surfacing a hidden/stale hero image (see heroSocialImageUrl).
+      heroImage: heroSocialImageUrl(page.hero),
       ogImage: mediaUrl(page.meta?.image),
       updatedAt: page.updatedAt,
       disableSharing: page.disableSharing ?? undefined,
