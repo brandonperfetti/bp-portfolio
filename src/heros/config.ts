@@ -13,6 +13,7 @@ import {
   HERO_HEADLINE_VARIANT_ENUM_NAME,
   HERO_HEADLINE_VARIANT_OPTIONS,
 } from '@/heros/content'
+import { normalizeHeroHook } from '@/heros/normalizeHeroByType'
 import {
   DEFAULT_HERO_PRESENTATION,
   HERO_PRESENTATION_ENUM_NAME,
@@ -70,6 +71,11 @@ import {
 export const hero: Field = {
   name: 'hero',
   type: 'group',
+  hooks: {
+    // Keep the stored hero consistent with its type — clear content the type
+    // does not render so it can't linger hidden and resurface (see #58).
+    beforeChange: [normalizeHeroHook],
+  },
   fields: [
     {
       name: 'type',
