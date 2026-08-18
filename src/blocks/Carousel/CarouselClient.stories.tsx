@@ -166,3 +166,42 @@ export const KeyboardEnabled: Story = {
     ).toBeEnabled()
   },
 }
+
+/**
+ * Brand-token pagination (#66): the active bullet is the site's teal accent —
+ * the resolved `--color-teal-500` token, never Swiper's default blue
+ * (`#007aff` / `rgb(0, 122, 255)`) that staging QA found leaking through.
+ */
+export const PaginationBranded: Story = {
+  args: { navigation: false, pagination: true },
+  play: async ({ canvasElement }) => {
+    const container = canvasElement.querySelector(
+      '[data-testid="carousel"]',
+    ) as HTMLElement
+
+    const active = await waitFor(() => {
+      const el = container.querySelector('.swiper-pagination-bullet-active')
+      if (!el) throw new Error('no active bullet yet')
+      return el as HTMLElement
+    })
+
+    // Resolve the brand token to the rgb the browser paints, via a probe, so
+    // the assertion tracks the theme instead of hard-coding an oklch/rgb value.
+    const probe = document.createElement('div')
+    probe.style.backgroundColor = 'var(--color-teal-500)'
+    document.body.appendChild(probe)
+    const teal = getComputedStyle(probe).backgroundColor
+    probe.remove()
+
+    const activeBg = getComputedStyle(active).backgroundColor
+    await expect(activeBg).toBe(teal)
+    await expect(activeBg).not.toBe('rgb(0, 122, 255)')
+
+    // The theme override is present so no default blue leaks from Swiper.
+    await expect(
+      getComputedStyle(container)
+        .getPropertyValue('--swiper-theme-color')
+        .trim().length,
+    ).toBeGreaterThan(0)
+  },
+}

@@ -158,8 +158,26 @@ export function CarouselClient(props: CarouselClientProps) {
   const arrowClass =
     'flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 bg-white/90 text-zinc-700 shadow-sm transition hover:bg-white focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-200'
 
+  // Reconcile Swiper's pagination to the brand palette (#66): the active
+  // bullet takes the site's teal accent (the `ring-teal-500` the arrows use),
+  // inactive bullets the muted zinc the site uses for secondary text
+  // (`zinc-500 dark:zinc-400`), and `--swiper-theme-color` is overridden so
+  // none of Swiper's default blue (`#007aff`) leaks through. Set as Tailwind
+  // arbitrary-property classes so the `dark:` variant handles light/dark and
+  // the referenced theme tokens resolve from `tailwind.css`.
+  const paginationTokenClass = cn(
+    '[--swiper-pagination-color:var(--color-teal-500)]',
+    '[--swiper-theme-color:var(--color-teal-500)]',
+    '[--swiper-pagination-bullet-inactive-color:var(--color-zinc-500)]',
+    '[--swiper-pagination-bullet-inactive-opacity:0.6]',
+    'dark:[--swiper-pagination-bullet-inactive-color:var(--color-zinc-400)]',
+  )
+
   return (
-    <div className="relative" data-testid="carousel">
+    <div
+      className={cn('relative', paginationTokenClass)}
+      data-testid="carousel"
+    >
       <Swiper
         onSwiper={(swiper) => {
           swiperRef.current = swiper
