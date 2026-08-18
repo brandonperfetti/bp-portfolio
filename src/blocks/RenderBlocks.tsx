@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from 'react'
 
 import { ArticlesArchiveComponent } from '@/blocks/ArticlesArchive/Component'
 import { CallToActionBlockComponent } from '@/blocks/CallToAction/Component'
+import { CarouselComponent } from '@/blocks/Carousel/Component'
 import { ContactFormComponent } from '@/blocks/ContactForm/Component'
 import { ContainerBlockComponent } from '@/blocks/Container/Component'
 import { FaqListComponent } from '@/blocks/FaqList/Component'
@@ -93,6 +94,8 @@ export function RenderBlocks({
                   hosted={hosted}
                 />
               )
+            case 'carousel':
+              return <CarouselComponent key={key} {...block} hosted={hosted} />
             case 'container':
               return <ContainerBlockComponent key={key} {...block} />
             case 'content':

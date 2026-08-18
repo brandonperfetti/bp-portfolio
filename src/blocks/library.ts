@@ -2,6 +2,7 @@ import type { Block } from 'payload'
 
 import { ArticlesArchive } from '@/blocks/ArticlesArchive/config'
 import { CallToAction } from '@/blocks/CallToAction/config'
+import { Carousel } from '@/blocks/Carousel/config'
 import { ContactForm } from '@/blocks/ContactForm/config'
 import { Container } from '@/blocks/Container/config'
 import { Content } from '@/blocks/Content/config'
@@ -39,6 +40,7 @@ import { WorkHistoryCard } from '@/blocks/WorkHistoryCard/config'
 export const pageBuilderBlocks: Block[] = [
   ArticlesArchive,
   CallToAction,
+  Carousel,
   ContactForm,
   Container,
   Content,

@@ -24,6 +24,7 @@ import * as migration_20260813_003358_w4b1c_image_size from './20260813_003358_w
 import * as migration_20260813_154606_authors_collection from './20260813_154606_authors_collection'
 import * as migration_20260813_165552_assign_owner_author_backfill from './20260813_165552_assign_owner_author_backfill'
 import * as migration_20260813_230343_t1_post_actions_schema from './20260813_230343_t1_post_actions_schema'
+import * as migration_20260818_153420_w6b1_carousel_block from './20260818_153420_w6b1_carousel_block'
 
 export const migrations = [
   {
@@ -155,5 +156,10 @@ export const migrations = [
     up: migration_20260813_230343_t1_post_actions_schema.up,
     down: migration_20260813_230343_t1_post_actions_schema.down,
     name: '20260813_230343_t1_post_actions_schema',
+  },
+  {
+    up: migration_20260818_153420_w6b1_carousel_block.up,
+    down: migration_20260818_153420_w6b1_carousel_block.down,
+    name: '20260818_153420_w6b1_carousel_block',
   },
 ]

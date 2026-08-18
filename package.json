@@ -78,6 +78,7 @@
     "shaders": "^3.0.442",
     "streamdown": "^2.5.0",
     "svix": "^1.98.0",
+    "swiper": "^14.1.0",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.1.15",
     "zod": "^4.4.3"

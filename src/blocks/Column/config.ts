@@ -2,6 +2,7 @@ import type { Block } from 'payload'
 
 import { ArticlesArchive } from '@/blocks/ArticlesArchive/config'
 import { CallToAction } from '@/blocks/CallToAction/config'
+import { Carousel } from '@/blocks/Carousel/config'
 import { ContactForm } from '@/blocks/ContactForm/config'
 import { FaqList } from '@/blocks/FaqList/config'
 import { FeatureCardGrid } from '@/blocks/FeatureCardGrid/config'
@@ -54,6 +55,7 @@ import { visibilityField } from '@/blocks/visibility'
 export const COLUMN_CONTENT_BLOCKS: Block[] = [
   ArticlesArchive,
   CallToAction,
+  Carousel,
   ContactForm,
   FaqList,
   FeatureCardGrid,

@@ -32,6 +32,7 @@ const CONTEXT_AWARE_GRIDS = [
  */
 const COLUMN_ELIGIBLE_BLOCK_DIRS: Record<string, string> = {
   articlesArchive: 'ArticlesArchive',
+  carousel: 'Carousel',
   contactForm: 'ContactForm',
   cta: 'CallToAction',
   faqList: 'FaqList',

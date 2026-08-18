@@ -266,6 +266,7 @@ export interface Page {
   layout: (
     | ArticlesArchiveBlock
     | CallToActionBlock
+    | CarouselBlock
     | ContactFormBlock
     | ContainerBlock
     | ContentBlock
@@ -352,6 +353,7 @@ export interface Post {
     | (
         | ArticlesArchiveBlock
         | CallToActionBlock
+        | CarouselBlock
         | ContactFormBlock
         | ContainerBlock
         | ContentBlock
@@ -517,6 +519,63 @@ export interface CallToActionBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "CarouselBlock".
+ */
+export interface CarouselBlock {
+  /**
+   * Cards render an image with a title and text; Media renders the image edge-to-edge. Both obey every behaviour knob below.
+   */
+  variant: 'cards' | 'media';
+  slides?:
+    | {
+        image: number | Media;
+        title?: string | null;
+        text?: string | null;
+        /**
+         * Optional link the whole slide points to.
+         */
+        href?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Slides shown at once on desktop (1–6). Fade always shows one.
+   */
+  slidesPerView?: number | null;
+  /**
+   * Slides shown at once on small screens.
+   */
+  slidesPerViewMobile?: number | null;
+  /**
+   * Slide moves the track horizontally; Fade cross-fades one slide at a time (a single slide per view). Reduced motion collapses Fade to Slide.
+   */
+  effect: 'slide' | 'fade';
+  /**
+   * Wrap from the last slide back to the first.
+   */
+  loop?: boolean | null;
+  /**
+   * Show previous / next arrows.
+   */
+  navigation?: boolean | null;
+  /**
+   * Show the pagination dots.
+   */
+  pagination?: boolean | null;
+  /**
+   * Advance slides automatically. Off by default, and always disabled for readers who prefer reduced motion.
+   */
+  autoplay?: boolean | null;
+  /**
+   * Milliseconds each slide dwells before autoplay advances (min 1000).
+   */
+  interval?: number | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'carousel';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ContactFormBlock".
  */
 export interface ContactFormBlock {
@@ -632,6 +691,7 @@ export interface ColumnBlock {
     | (
         | ArticlesArchiveBlock
         | CallToActionBlock
+        | CarouselBlock
         | ContactFormBlock
         | FaqListBlock
         | FeatureCardGridBlock
@@ -1826,6 +1886,7 @@ export interface PagesSelect<T extends boolean = true> {
     | {
         articlesArchive?: T | ArticlesArchiveBlockSelect<T>;
         cta?: T | CallToActionBlockSelect<T>;
+        carousel?: T | CarouselBlockSelect<T>;
         contactForm?: T | ContactFormBlockSelect<T>;
         container?: T | ContainerBlockSelect<T>;
         content?: T | ContentBlockSelect<T>;
@@ -1903,6 +1964,32 @@ export interface CallToActionBlockSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "CarouselBlock_select".
+ */
+export interface CarouselBlockSelect<T extends boolean = true> {
+  variant?: T;
+  slides?:
+    | T
+    | {
+        image?: T;
+        title?: T;
+        text?: T;
+        href?: T;
+        id?: T;
+      };
+  slidesPerView?: T;
+  slidesPerViewMobile?: T;
+  effect?: T;
+  loop?: T;
+  navigation?: T;
+  pagination?: T;
+  autoplay?: T;
+  interval?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ContactFormBlock_select".
  */
 export interface ContactFormBlockSelect<T extends boolean = true> {
@@ -1959,6 +2046,7 @@ export interface ColumnBlockSelect<T extends boolean = true> {
     | {
         articlesArchive?: T | ArticlesArchiveBlockSelect<T>;
         cta?: T | CallToActionBlockSelect<T>;
+        carousel?: T | CarouselBlockSelect<T>;
         contactForm?: T | ContactFormBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
@@ -2256,6 +2344,7 @@ export interface PostsSelect<T extends boolean = true> {
     | {
         articlesArchive?: T | ArticlesArchiveBlockSelect<T>;
         cta?: T | CallToActionBlockSelect<T>;
+        carousel?: T | CarouselBlockSelect<T>;
         contactForm?: T | ContactFormBlockSelect<T>;
         container?: T | ContainerBlockSelect<T>;
         content?: T | ContentBlockSelect<T>;

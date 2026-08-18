@@ -20,8 +20,9 @@ describe('block picker thumbnails', () => {
 
   it('registers the expected page-builder library', () => {
     // 17 through W1B5, plus `socialLinks` (#32) and `image` (#33) in W2B1,
-    // plus `prose` (#35) and `heading` (#36) in W2B2, plus `lead` (#44/W4B1).
-    expect(pageBuilderBlocks).toHaveLength(22)
+    // plus `prose` (#35) and `heading` (#36) in W2B2, plus `lead` (#44/W4B1),
+    // plus `carousel` (#41/W6B1).
+    expect(pageBuilderBlocks).toHaveLength(23)
   })
 
   it.each(allBlocks.map((block) => [block.slug, block] as const))(
