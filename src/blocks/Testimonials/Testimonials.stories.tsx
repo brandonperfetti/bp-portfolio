@@ -193,3 +193,39 @@ export const CarouselPaginationBranded: Story = {
     ).toBeGreaterThan(0)
   },
 }
+
+/**
+ * Mobile no-overflow (#67 fix): Swiper's `effect-cards` CSS makes `.swiper-cards`
+ * `overflow: visible`, so the stacked/rotated back-cards spilled ~42px past a
+ * ~390px viewport and produced a real horizontal page scroll. The deck root now
+ * carries `overflow-x: clip`, containing the spill. In a fixed 390px column the
+ * deck no longer overflows, and the grid path is untouched (pinned by GridLayout).
+ */
+export const CarouselMobileNoOverflow: Story = {
+  args: { layout: 'carousel' },
+  decorators: [
+    (Story) => (
+      <div data-testid="mobile-col" style={{ width: 390 }}>
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const swiper = await getSwiper(canvasElement)
+    await waitFor(() => expect(swiper.params.effect).toBe('cards'))
+
+    const root = canvasElement.querySelector(
+      '[data-testid="testimonials-carousel"]',
+    ) as HTMLElement
+    // The deck clips its horizontal spill (not a scroll container).
+    await expect(getComputedStyle(root).overflowX).toBe('clip')
+
+    // The 390px column has no horizontal overflow from the deck.
+    const col = canvasElement.querySelector(
+      '[data-testid="mobile-col"]',
+    ) as HTMLElement
+    await waitFor(() =>
+      expect(col.scrollWidth).toBeLessThanOrEqual(col.clientWidth + 1),
+    )
+  },
+}

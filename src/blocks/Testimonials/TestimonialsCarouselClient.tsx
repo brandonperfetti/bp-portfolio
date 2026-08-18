@@ -102,8 +102,16 @@ export function TestimonialsCarouselClient(
   )
 
   return (
+    // `overflow-x-clip` contains the Cards Stack deck (#67): Swiper's
+    // `effect-cards` CSS makes `.swiper-cards` `overflow: visible`, so the
+    // rotated/offset back-cards spill horizontally and, on a ~390px viewport,
+    // push a real ~42px horizontal page scroll. Clipping only the x-axis on the
+    // full-width deck root stops the page overflow at mobile while leaving the
+    // stacked look and the peek intact at wider widths (the spill stays well
+    // inside the column there); `clip` (not `hidden`) avoids making this a
+    // scroll container, matching the root layout's own `overflow-x-clip`.
     <div
-      className={cn('relative', paginationTokenClass)}
+      className={cn('relative overflow-x-clip', paginationTokenClass)}
       data-testid="testimonials-carousel"
     >
       <div className="mx-auto max-w-md">
