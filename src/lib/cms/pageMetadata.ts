@@ -119,13 +119,11 @@ export function buildPageMetadata({
   const socialImage = resolvePageSocialImage(page, settings)
   const usesGeneratedCard = Boolean(
     page &&
-      shouldUseGeneratedOg({
-        mode: page.ogImageMode,
-        generatedOgEnabled: settings.generatedOgEnabled,
-        hasOwnImage: Boolean(
-          page.ogImage?.trim() || page.heroImage?.trim(),
-        ),
-      }),
+    shouldUseGeneratedOg({
+      mode: page.ogImageMode,
+      generatedOgEnabled: settings.generatedOgEnabled,
+      hasOwnImage: Boolean(page.ogImage?.trim() || page.heroImage?.trim()),
+    }),
   )
   // A generated 1200×630 card is a large image, so it earns the large Twitter
   // card just like an explicit cover / site-default OG image does.
@@ -133,8 +131,8 @@ export function buildPageMetadata({
     usesGeneratedCard ||
     Boolean(
       page?.ogImage?.trim() ||
-        page?.heroImage?.trim() ||
-        settings.openGraphImage?.trim(),
+      page?.heroImage?.trim() ||
+      settings.openGraphImage?.trim(),
     )
 
   return {

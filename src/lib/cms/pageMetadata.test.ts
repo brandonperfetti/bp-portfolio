@@ -44,15 +44,15 @@ describe('resolveArticleSocialImage', () => {
   })
 
   it('falls back to the hardcoded default when there is no cover and no site default', () => {
-    expect(
-      resolveArticleSocialImage(args({ openGraphImage: undefined })),
-    ).toBe(DEFAULT_SOCIAL_IMAGE)
+    expect(resolveArticleSocialImage(args({ openGraphImage: undefined }))).toBe(
+      DEFAULT_SOCIAL_IMAGE,
+    )
   })
 
   it('generates a card for a cover-less article when the global toggle is on (auto)', () => {
-    expect(
-      resolveArticleSocialImage(args({ generatedOgEnabled: true })),
-    ).toBe(GEN)
+    expect(resolveArticleSocialImage(args({ generatedOgEnabled: true }))).toBe(
+      GEN,
+    )
   })
 
   it('keeps a real cover over a generated card in auto mode, even with the toggle on', () => {

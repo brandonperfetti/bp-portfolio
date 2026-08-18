@@ -35,7 +35,9 @@ export function loadOgCardFonts(): OgCardFont[] {
 
   cached = GEIST_WEIGHTS.map((weight) => ({
     name: 'Geist',
-    data: readFileSync(new URL(`./fonts/geist-${weight}.woff`, import.meta.url)),
+    data: readFileSync(
+      new URL(`./fonts/geist-${weight}.woff`, import.meta.url),
+    ),
     weight,
     style: 'normal' as const,
   }))
