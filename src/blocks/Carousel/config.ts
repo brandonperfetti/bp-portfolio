@@ -2,12 +2,16 @@ import type { Block } from 'payload'
 
 import {
   DEFAULT_AUTOPLAY_INTERVAL_MS,
+  DEFAULT_EXPO_ROTATE,
   DEFAULT_SLIDES_PER_VIEW,
   DEFAULT_SLIDES_PER_VIEW_MOBILE,
+  EXPO_MAX_ROTATE,
   MAX_SLIDES_PER_VIEW,
   MIN_AUTOPLAY_INTERVAL_MS,
+  carouselDirectionField,
   carouselEffectField,
   carouselVariantField,
+  isExpoEffectSelected,
 } from '@/blocks/Carousel/options'
 
 /**
@@ -89,6 +93,37 @@ export const Carousel: Block = {
           ],
         },
         carouselEffectField(),
+        // Expo-only controls (#62 addendum), gated on `effect === 'expo'` so the
+        // generic slide/fade carousels stay uncluttered. All nullable-with-
+        // default, so existing CarouselBlock rows/fixtures stay valid.
+        {
+          type: 'row',
+          fields: [
+            carouselDirectionField(),
+            {
+              name: 'rotate',
+              type: 'number',
+              defaultValue: DEFAULT_EXPO_ROTATE,
+              min: 0,
+              max: EXPO_MAX_ROTATE,
+              admin: {
+                width: '50%',
+                condition: isExpoEffectSelected,
+                description: `Expo only: side-slide tilt in degrees (0–${EXPO_MAX_ROTATE}). 0 keeps them flat.`,
+              },
+            },
+          ],
+        },
+        {
+          name: 'grayscale',
+          type: 'checkbox',
+          defaultValue: true,
+          admin: {
+            condition: isExpoEffectSelected,
+            description:
+              'Expo only: desaturate the off-centre slides so the centred photo stays the focus. On by default.',
+          },
+        },
         {
           type: 'row',
           fields: [

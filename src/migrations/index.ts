@@ -26,6 +26,8 @@ import * as migration_20260813_165552_assign_owner_author_backfill from './20260
 import * as migration_20260813_230343_t1_post_actions_schema from './20260813_230343_t1_post_actions_schema'
 import * as migration_20260818_153420_w6b1_carousel_block from './20260818_153420_w6b1_carousel_block'
 import * as migration_20260818_175338_w6b2_testimonials_layout from './20260818_175338_w6b2_testimonials_layout'
+import * as migration_20260818_204408_w6b3_carousel_expo_effect from './20260818_204408_w6b3_carousel_expo_effect'
+import * as migration_20260818_212608_w6b3_carousel_expo_controls from './20260818_212608_w6b3_carousel_expo_controls'
 
 export const migrations = [
   {
@@ -167,5 +169,15 @@ export const migrations = [
     up: migration_20260818_175338_w6b2_testimonials_layout.up,
     down: migration_20260818_175338_w6b2_testimonials_layout.down,
     name: '20260818_175338_w6b2_testimonials_layout',
+  },
+  {
+    up: migration_20260818_204408_w6b3_carousel_expo_effect.up,
+    down: migration_20260818_204408_w6b3_carousel_expo_effect.down,
+    name: '20260818_204408_w6b3_carousel_expo_effect',
+  },
+  {
+    up: migration_20260818_212608_w6b3_carousel_expo_controls.up,
+    down: migration_20260818_212608_w6b3_carousel_expo_controls.down,
+    name: '20260818_212608_w6b3_carousel_expo_controls',
   },
 ]

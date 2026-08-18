@@ -16,6 +16,8 @@ import 'swiper/css'
 import 'swiper/css/pagination'
 import 'swiper/css/effect-fade'
 
+import EffectExpo from '@/blocks/Carousel/effectExpo'
+import '@/blocks/Carousel/effectExpo.css'
 import {
   type CarouselBehaviorInput,
   type CarouselVariant,
@@ -86,9 +88,11 @@ function SlideLink({
  * `navigation={{ prevEl, nextEl }}` selector coupling: the custom arrows call
  * `swiper.slidePrev()` / `slideNext()` on the instance captured by `onSwiper`,
  * so there is no DOM-selector handshake to get wrong. Keyboard and A11y modules
- * are always loaded (arrows/tab reach slides); Autoplay, EffectFade and
- * Pagination load only when the resolved behaviour asks for them, keeping the
- * shipped Swiper surface minimal.
+ * are always loaded (arrows/tab reach slides); Autoplay, EffectFade, the ported
+ * {@link EffectExpo} (parallax + scale, #62) and Pagination load only when the
+ * resolved behaviour asks for them, keeping the shipped Swiper surface minimal.
+ * Because `expo` collapses to `slide` under reduced motion in the mapper, the
+ * Expo module and its transformed DOM never mount for a reduced-motion reader.
  *
  * @param props - Resolved slides + variant + the serializable behaviour knobs.
  */
@@ -102,12 +106,65 @@ export function CarouselClient(props: CarouselClientProps) {
 
   const behavior = resolveCarouselBehavior(props, { reducedMotion })
 
+  // Key everything off the RESOLVED effect: reduced motion has already
+  // collapsed `expo` (and `fade`) to `slide` in the mapper, so under reduced
+  // motion `isExpo` is false and neither the Expo module nor its DOM/transforms
+  // mount — the media slide renders as a plain, static image instead.
+  const isExpo = behavior.effect === 'expo'
+  // Vertical is reachable only through expo (the mapper resolves every other
+  // effect — and any reduced-motion collapse — to `horizontal`).
+  const isVertical = behavior.direction === 'vertical'
+
   const modules = [Keyboard, A11y]
   if (behavior.pagination) modules.push(Pagination)
   if (behavior.effect === 'fade') modules.push(EffectFade)
+  if (isExpo) modules.push(EffectExpo)
   if (behavior.autoplay) modules.push(Autoplay)
 
   const renderSlide = (slide: CarouselSlideData) => {
+    // Expo requires its own per-slide DOM (`.expo-container` > `.expo-image` +
+    // optional `.expo-content`) on the actual transformed elements. A plain
+    // `<img className="expo-image">` is used deliberately: `next/image` with
+    // `fill` injects inline `position:absolute; inset:0; width/height:100%`
+    // styles onto the `<img>`, which would override the effect's required
+    // `--expo-image-offset` width/left calc (inline beats the stylesheet) and
+    // break the parallax. The centred showcase pairs with the `media` framing.
+    if (isExpo) {
+      return (
+        <SlideLink href={slide.href} className="block h-full">
+          <div
+            className={cn(
+              'expo-container w-full bg-zinc-100 dark:bg-zinc-800',
+              // Horizontal: the slide takes its height from the photo's aspect
+              // ratio. Vertical: Swiper sizes each slide's height from the
+              // bounded track height, so the container just fills it.
+              isVertical ? 'h-full' : 'aspect-[3/4]',
+            )}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- see note above: next/image fill breaks the Expo positioning */}
+            <img
+              className="expo-image"
+              src={slide.src}
+              alt={slide.alt}
+              loading="lazy"
+              decoding="async"
+            />
+            {slide.title || slide.text ? (
+              <div className="expo-content absolute inset-x-0 bottom-0 bg-gradient-to-t from-zinc-950/70 to-transparent p-4 sm:p-6">
+                {slide.title ? (
+                  <h3 className="text-base font-semibold text-white">
+                    {slide.title}
+                  </h3>
+                ) : null}
+                {slide.text ? (
+                  <p className="mt-1 text-sm text-zinc-200">{slide.text}</p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </SlideLink>
+      )
+    }
     if (variant === 'media') {
       return (
         <SlideLink href={slide.href} className="block h-full">
@@ -179,12 +236,37 @@ export function CarouselClient(props: CarouselClientProps) {
       data-testid="carousel"
     >
       <Swiper
+        // Remount across the expo boundary so a runtime collapse to `slide`
+        // (reduced motion turning on after a first expo paint) starts from a
+        // clean instance: Swiper adds its `swiper-expo` modifier class and
+        // `--expo-padding` imperatively at init and does not reconcile them when
+        // the effect later changes, so without a fresh key the degraded track
+        // would keep expo's chrome. Non-expo effects share one key, so `fade`↔
+        // `slide` still transition in place as before.
+        key={isExpo ? 'carousel-expo' : 'carousel-plain'}
         onSwiper={(swiper) => {
           swiperRef.current = swiper
           setReady(true)
           onSwiper?.(swiper)
         }}
+        onBeforeInit={(swiper) => {
+          // Expo's params are a custom (non-core) Swiper param, so they can't
+          // ride a `<Swiper>` prop without leaking as an unknown DOM attribute.
+          // The ported module installs these exact defaults via `extendParams`;
+          // assigning here keeps the resolved value the single source and lets
+          // any future CMS override flow through. Runs before `init` (where the
+          // effect reads `expoEffect`), so the first paint is already correct.
+          if (behavior.expoEffect) {
+            ;(
+              swiper.params as typeof swiper.params & {
+                expoEffect?: typeof behavior.expoEffect
+              }
+            ).expoEffect = behavior.expoEffect
+          }
+        }}
         slidesPerView={behavior.slidesPerViewMobile}
+        direction={behavior.direction}
+        centeredSlides={behavior.centeredSlides}
         spaceBetween={16}
         breakpoints={{
           [behavior.desktopBreakpoint]: {
@@ -201,7 +283,14 @@ export function CarouselClient(props: CarouselClientProps) {
         keyboard={{ enabled: true }}
         a11y={{ enabled: true }}
         modules={modules}
-        className="!pb-10"
+        // Vertical expo needs a bounded track height or Swiper collapses its
+        // slides to zero (the Pro demo sets a height on `.swiper` for vertical);
+        // a viewport-relative height, capped, keeps 0 overflow at every width
+        // (the effect's cross-axis padding lives inside `box-sizing: border-box`).
+        // Horizontal keeps the bottom padding that seats the pagination dots.
+        className={cn(
+          isVertical ? 'h-[70vh] max-h-[640px] min-h-[420px]' : '!pb-10',
+        )}
       >
         {slides.map((slide, index) => (
           <SwiperSlide key={slide.id ?? index} className="h-auto">

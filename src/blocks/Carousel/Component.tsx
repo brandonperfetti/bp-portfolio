@@ -60,6 +60,9 @@ export function CarouselComponent(
         effect={props.effect}
         navigation={props.navigation}
         pagination={props.pagination}
+        direction={props.direction}
+        rotate={props.rotate}
+        grayscale={props.grayscale}
       />
     </section>
   )

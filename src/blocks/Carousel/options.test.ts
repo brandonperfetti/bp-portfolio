@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest'
 import {
   CAROUSEL_DESKTOP_BREAKPOINT_PX,
   DEFAULT_AUTOPLAY_INTERVAL_MS,
+  EXPO_EFFECT_DEFAULTS,
+  EXPO_MAX_ROTATE,
+  EXPO_SLIDES_PER_VIEW,
+  EXPO_SLIDES_PER_VIEW_MOBILE,
   MAX_SLIDES_PER_VIEW,
   MIN_AUTOPLAY_INTERVAL_MS,
   resolveCarouselBehavior,
@@ -129,5 +133,112 @@ describe('resolveCarouselBehavior', () => {
   it('always keeps keyboard navigation on', () => {
     expect(resolveCarouselBehavior({}, motion).keyboard).toBe(true)
     expect(resolveCarouselBehavior({}, reduced).keyboard).toBe(true)
+  })
+
+  // ── expo (#62): the ported UI-Initiative parallax + scale showcase ─────────
+
+  it('recognizes the expo effect and does not normalize it away', () => {
+    expect(resolveCarouselBehavior({ effect: 'expo' }, motion).effect).toBe(
+      'expo',
+    )
+  })
+
+  it('forces a fractional slides-per-view for expo, exempt from the whole-number clamp', () => {
+    const b = resolveCarouselBehavior({ effect: 'expo' }, motion)
+    // The default `1` would hide the neighbours, so expo falls back to its
+    // fractional default rather than the clamped `1` a plain track would use.
+    expect(b.slidesPerView).toBe(EXPO_SLIDES_PER_VIEW)
+    expect(b.slidesPerViewMobile).toBe(EXPO_SLIDES_PER_VIEW_MOBILE)
+    expect(b.slidesPerView).not.toBe(1)
+  })
+
+  it('lets an editor override the expo count with a fractional value, capped at MAX', () => {
+    const b = resolveCarouselBehavior(
+      { effect: 'expo', slidesPerView: 2.5, slidesPerViewMobile: 1.3 },
+      motion,
+    )
+    expect(b.slidesPerView).toBe(2.5)
+    expect(b.slidesPerViewMobile).toBe(1.3)
+    expect(
+      resolveCarouselBehavior({ effect: 'expo', slidesPerView: 99 }, motion)
+        .slidesPerView,
+    ).toBe(MAX_SLIDES_PER_VIEW)
+  })
+
+  it('forces centeredSlides and passes the expoEffect params only for expo', () => {
+    const expo = resolveCarouselBehavior({ effect: 'expo' }, motion)
+    expect(expo.centeredSlides).toBe(true)
+    expect(expo.expoEffect).toEqual(EXPO_EFFECT_DEFAULTS)
+
+    const slide = resolveCarouselBehavior({ effect: 'slide' }, motion)
+    expect(slide.centeredSlides).toBe(false)
+    expect(slide.expoEffect).toBeUndefined()
+  })
+
+  it('collapses expo to a plain slide under reduced motion, dropping the effect params', () => {
+    const b = resolveCarouselBehavior({ effect: 'expo' }, reduced)
+    expect(b.effect).toBe('slide')
+    expect(b.centeredSlides).toBe(false)
+    expect(b.expoEffect).toBeUndefined()
+    // And it is no longer forced fractional — it maps like any plain track.
+    expect(b.slidesPerView).toBe(1)
+  })
+
+  // ── expo editor controls (#62 addendum): direction / rotate / grayscale ────
+
+  it('resolves the expo direction, defaulting horizontal, and never vertical off expo', () => {
+    expect(resolveCarouselBehavior({ effect: 'expo' }, motion).direction).toBe(
+      'horizontal',
+    )
+    expect(
+      resolveCarouselBehavior({ effect: 'expo', direction: 'vertical' }, motion)
+        .direction,
+    ).toBe('vertical')
+    // Direction is expo-only: a vertical value on a plain track is ignored.
+    expect(
+      resolveCarouselBehavior(
+        { effect: 'slide', direction: 'vertical' },
+        motion,
+      ).direction,
+    ).toBe('horizontal')
+  })
+
+  it('carries rotate and grayscale into the resolved expoEffect, merged over the Pro defaults', () => {
+    const b = resolveCarouselBehavior(
+      { effect: 'expo', rotate: 20, grayscale: false },
+      motion,
+    )
+    expect(b.expoEffect).toEqual({
+      ...EXPO_EFFECT_DEFAULTS,
+      rotate: 20,
+      grayscale: false,
+    })
+  })
+
+  it('defaults rotate to 0 and grayscale to true when the editor sets neither', () => {
+    const b = resolveCarouselBehavior({ effect: 'expo' }, motion)
+    expect(b.expoEffect?.rotate).toBe(0)
+    expect(b.expoEffect?.grayscale).toBe(true)
+  })
+
+  it('clamps the expo rotate angle into [0, EXPO_MAX_ROTATE]', () => {
+    expect(
+      resolveCarouselBehavior({ effect: 'expo', rotate: -10 }, motion)
+        .expoEffect?.rotate,
+    ).toBe(0)
+    expect(
+      resolveCarouselBehavior({ effect: 'expo', rotate: 999 }, motion)
+        .expoEffect?.rotate,
+    ).toBe(EXPO_MAX_ROTATE)
+  })
+
+  it('resets direction to horizontal (and drops rotate/grayscale) under reduced motion', () => {
+    const b = resolveCarouselBehavior(
+      { effect: 'expo', direction: 'vertical', rotate: 30, grayscale: false },
+      reduced,
+    )
+    expect(b.effect).toBe('slide')
+    expect(b.direction).toBe('horizontal')
+    expect(b.expoEffect).toBeUndefined()
   })
 })

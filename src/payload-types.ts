@@ -547,9 +547,21 @@ export interface CarouselBlock {
    */
   slidesPerViewMobile?: number | null;
   /**
-   * Slide moves the track horizontally; Fade cross-fades one slide at a time (a single slide per view). Reduced motion collapses Fade to Slide.
+   * Slide moves the track horizontally; Fade cross-fades one slide at a time (a single slide per view); Expo is a centred parallax + scale photo showcase (pairs with the Media variant). Reduced motion collapses Fade and Expo to Slide.
    */
-  effect: 'slide' | 'fade';
+  effect: 'slide' | 'fade' | 'expo';
+  /**
+   * Expo only: run the parallax track horizontally or vertically. Vertical gets a bounded height so slides never collapse.
+   */
+  direction?: ('horizontal' | 'vertical') | null;
+  /**
+   * Expo only: side-slide tilt in degrees (0–30). 0 keeps them flat.
+   */
+  rotate?: number | null;
+  /**
+   * Expo only: desaturate the off-centre slides so the centred photo stays the focus. On by default.
+   */
+  grayscale?: boolean | null;
   /**
    * Wrap from the last slide back to the first.
    */
@@ -1984,6 +1996,9 @@ export interface CarouselBlockSelect<T extends boolean = true> {
   slidesPerView?: T;
   slidesPerViewMobile?: T;
   effect?: T;
+  direction?: T;
+  rotate?: T;
+  grayscale?: T;
   loop?: T;
   navigation?: T;
   pagination?: T;

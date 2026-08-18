@@ -36,10 +36,15 @@ export const DEFAULT_CAROUSEL_VARIANT: CarouselVariant = 'cards'
  */
 export const CAROUSEL_VARIANT_ENUM_NAME = 'enum_carousel_variant'
 
-/** The transition between slides. `slide` translates; `fade` cross-fades. */
+/**
+ * The transition between slides. `slide` translates; `fade` cross-fades;
+ * `expo` is the ported UI-Initiative parallax + scale photo showcase (#62),
+ * which pairs with `variant: 'media'` and runs a centred, fractional track.
+ */
 export const CAROUSEL_EFFECTS = [
   { label: 'Slide', value: 'slide' },
   { label: 'Fade', value: 'fade' },
+  { label: 'Expo (parallax + scale)', value: 'expo' },
 ] as const
 
 /** Carousel effect vocabulary, derived from {@link CAROUSEL_EFFECTS}. */
@@ -51,6 +56,25 @@ export const DEFAULT_CAROUSEL_EFFECT: CarouselEffect = 'slide'
 /** Postgres enum backing the `effect` select (see {@link CAROUSEL_VARIANT_ENUM_NAME}). */
 export const CAROUSEL_EFFECT_ENUM_NAME = 'enum_carousel_effect'
 
+/**
+ * Track orientation. Only the `expo` effect surfaces this to editors (#62
+ * addendum) — the Pro Expo demo's HORIZONTAL / VERTICAL toggle. `slide` and
+ * `fade` are always horizontal, so the field is expo-gated in admin.
+ */
+export const CAROUSEL_DIRECTIONS = [
+  { label: 'Horizontal', value: 'horizontal' },
+  { label: 'Vertical', value: 'vertical' },
+] as const
+
+/** Carousel direction vocabulary, derived from {@link CAROUSEL_DIRECTIONS}. */
+export type CarouselDirection = (typeof CAROUSEL_DIRECTIONS)[number]['value']
+
+/** The orientation a carousel starts at — a normal horizontal track. */
+export const DEFAULT_CAROUSEL_DIRECTION: CarouselDirection = 'horizontal'
+
+/** Postgres enum backing the `direction` select (see {@link CAROUSEL_VARIANT_ENUM_NAME}). */
+export const CAROUSEL_DIRECTION_ENUM_NAME = 'enum_carousel_direction'
+
 /** Slides shown at once on desktop when the editor sets nothing. */
 export const DEFAULT_SLIDES_PER_VIEW = 1
 
@@ -59,6 +83,68 @@ export const DEFAULT_SLIDES_PER_VIEW_MOBILE = 1
 
 /** Upper bound on slides-per-view — past this a slide is an unreadable strip. */
 export const MAX_SLIDES_PER_VIEW = 6
+
+/**
+ * Slides shown at once for the `expo` effect on desktop. Expo is a *centred*
+ * carousel that shows a sliver of the neighbouring slides so the parallax +
+ * scale reads — it needs a fractional count and does NOT support Swiper's
+ * `slidesPerView: 'auto'`. 1.5 is the value the Pro effect is designed around.
+ */
+export const EXPO_SLIDES_PER_VIEW = 1.5
+
+/** Slides shown at once for the `expo` effect below the desktop breakpoint. */
+export const EXPO_SLIDES_PER_VIEW_MOBILE = 1.15
+
+/**
+ * The Pro `expoEffect` params object the ported effect reads. Kept here (not in
+ * the Swiper-coupled leaf) so it stays a plain, serializable data shape and the
+ * mapping layer can hand it to the client without importing any Swiper code —
+ * the same server→client discipline the rest of this module keeps.
+ */
+export interface ExpoEffectParams {
+  /** Image scale multiplier for the centred slide (1.125 is the Pro minimum). */
+  imageScale: number
+  /** Image overscan multiplier that drives the parallax (1.25 is the Pro minimum). */
+  imageOffset: number
+  /** Side-slide scale multiplier (1.25 is the Pro minimum). */
+  scale: number
+  /** Side-slide rotate angle, in degrees (0 = flat). */
+  rotate: number
+  /** Desaturate off-centre slides as they leave the centre. */
+  grayscale: boolean
+}
+
+/**
+ * The Pro Expo defaults. The mapper merges the two editor-surfaced params
+ * (`rotate`, `grayscale`) over this, so an unset field keeps the Pro value;
+ * `imageScale`/`imageOffset`/`scale` are not editor-exposed and always hold.
+ *
+ * @remarks `grayscale: true` is a deliberate brand default, kept from the Pro
+ * source: desaturating the off-centre slides concentrates attention on the
+ * full-colour centred photo and reads as intentional editorial restraint on the
+ * site's zinc palette — the opposite of a distracting, equally-saturated wall of
+ * images. The active slide is always full colour. Editors can turn it off per
+ * carousel (#62 addendum). `rotate` defaults flat (`0`).
+ */
+export const EXPO_EFFECT_DEFAULTS: ExpoEffectParams = {
+  imageScale: 1.125,
+  imageOffset: 1.25,
+  scale: 1.25,
+  rotate: 0,
+  grayscale: true,
+}
+
+/** The flat default for the editor-facing expo `rotate` angle (degrees). */
+export const DEFAULT_EXPO_ROTATE = 0
+
+/**
+ * Upper bound on the expo side-slide rotate angle (degrees). Past ~30° the 3D
+ * tilt reads as a gimmick and the effect's `setSize` padding bump (×1.35) eats
+ * too much vertical room; 30 keeps it tasteful. The field is a number of
+ * degrees rather than a boolean so an editor can dial the tilt (the faithful
+ * Pro param), not just flip a fixed angle on.
+ */
+export const EXPO_MAX_ROTATE = 30
 
 /** Autoplay dwell per slide (ms) when the editor enables autoplay but sets no interval. */
 export const DEFAULT_AUTOPLAY_INTERVAL_MS = 5000
@@ -84,6 +170,12 @@ export interface CarouselBehaviorInput {
   effect?: CarouselEffect | string | null
   navigation?: boolean | null
   pagination?: boolean | null
+  /** Expo-only track orientation (ignored for `slide`/`fade`). */
+  direction?: CarouselDirection | string | null
+  /** Expo-only side-slide rotate angle, in degrees. */
+  rotate?: number | null
+  /** Expo-only: desaturate off-centre slides. */
+  grayscale?: boolean | null
 }
 
 /** Resolved autoplay settings, shaped for Swiper's `autoplay` prop. */
@@ -110,8 +202,29 @@ export interface ResolvedCarouselBehavior {
   desktopBreakpoint: number
   /** Whether the track wraps seamlessly. */
   loop: boolean
-  /** The resolved transition — never `fade` under reduced motion. */
+  /** The resolved transition — never `fade` or `expo` under reduced motion. */
   effect: CarouselEffect
+  /**
+   * The resolved track orientation, passed to Swiper's `direction` for a
+   * correct first paint. Only `expo` can resolve to `vertical`; every other
+   * effect — and any reduced-motion collapse — resolves to `horizontal`, so a
+   * degraded reader never gets the vertical height treatment.
+   */
+  direction: CarouselDirection
+  /**
+   * Whether Swiper centres the active slide. Forced on for `expo` (a centred
+   * carousel), off otherwise. The `expo` effect also forces this internally via
+   * `overwriteParams`, but the leaf passes it so the very first paint is centred
+   * rather than snapping after init.
+   */
+  centeredSlides: boolean
+  /**
+   * The `expoEffect` params, present only when {@link effect} is `expo` (so the
+   * leaf both keys the module mount and passes the params off one field). Absent
+   * for every other effect, including when reduced motion has collapsed `expo`
+   * to `slide` — the transforms and the module must NOT mount then.
+   */
+  expoEffect?: ExpoEffectParams
   /** Autoplay settings, or `false` when autoplay is off (the default) or suppressed. */
   autoplay: ResolvedAutoplay | false
   /** Whether prev/next arrows show. */
@@ -134,11 +247,63 @@ function clampPerView(
   return Math.min(Math.max(n, 1), MAX_SLIDES_PER_VIEW)
 }
 
+/** The recognized effect values, derived from {@link CAROUSEL_EFFECTS}. */
+const KNOWN_EFFECTS: readonly CarouselEffect[] = CAROUSEL_EFFECTS.map(
+  (e) => e.value,
+)
+
 /** Normalize a stored effect string to a known {@link CarouselEffect}. */
 function normalizeEffect(
   value: CarouselEffect | string | null | undefined,
 ): CarouselEffect {
-  return value === 'fade' ? 'fade' : DEFAULT_CAROUSEL_EFFECT
+  return KNOWN_EFFECTS.includes(value as CarouselEffect)
+    ? (value as CarouselEffect)
+    : DEFAULT_CAROUSEL_EFFECT
+}
+
+/**
+ * Resolve the slides-per-view for the `expo` effect. Expo is centred and needs
+ * a fractional count, so it is exempt from the whole-number clamp the plain
+ * track uses: an editor's fractional value passes through (capped at MAX), and
+ * anything that is not a usable fractional count (unset, or the default `1`
+ * that would hide the neighbouring slides) falls back to the Pro-designed
+ * default rather than being floored to `1`.
+ */
+function expoPerView(
+  value: number | null | undefined,
+  fallback: number,
+): number {
+  const usable =
+    typeof value === 'number' && Number.isFinite(value) && value > 1
+  return Math.min(usable ? value : fallback, MAX_SLIDES_PER_VIEW)
+}
+
+/** Normalize a stored direction to a known {@link CarouselDirection}. */
+function normalizeDirection(
+  value: CarouselDirection | string | null | undefined,
+): CarouselDirection {
+  return value === 'vertical' ? 'vertical' : DEFAULT_CAROUSEL_DIRECTION
+}
+
+/** Clamp a stored expo rotate angle into `[0, EXPO_MAX_ROTATE]` degrees. */
+function clampRotate(value: number | null | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_EXPO_ROTATE
+  }
+  return Math.min(Math.max(value, 0), EXPO_MAX_ROTATE)
+}
+
+/**
+ * Build the resolved {@link ExpoEffectParams} from the editor's two exposed
+ * knobs, merged over the Pro defaults so an unset field keeps its default:
+ * `rotate` is clamped to `[0, EXPO_MAX_ROTATE]`, `grayscale` defaults `true`.
+ */
+function resolveExpoEffect(input: CarouselBehaviorInput): ExpoEffectParams {
+  return {
+    ...EXPO_EFFECT_DEFAULTS,
+    rotate: clampRotate(input.rotate),
+    grayscale: input.grayscale ?? EXPO_EFFECT_DEFAULTS.grayscale,
+  }
 }
 
 /**
@@ -158,12 +323,24 @@ function normalizeEffect(
  *   motion.** Only an explicit `autoplay: true` with motion allowed yields an
  *   autoplay object; anything else is `false`, so the carousel never moves on
  *   its own unless the editor asked and the reader allows it.
- * - **Reduced motion also neutralizes the `fade` flourish**, collapsing it to
- *   a plain `slide` so the transition is static-ish rather than a cross-fade.
+ * - **Reduced motion also neutralizes the `fade` and `expo` flourishes**,
+ *   collapsing them to a plain `slide` so the transition is static-ish rather
+ *   than a cross-fade or a parallax. When `expo` collapses this way the resolved
+ *   `expoEffect` is left `undefined`, so the leaf mounts neither the Expo module
+ *   nor its DOM/transforms.
  *
- * Fade also forces a single slide per view (a cross-fade of a multi-slide
- * track is incoherent), keeping the mapping honest rather than passing an
- * impossible combination to Swiper.
+ * Fade forces a single slide per view (a cross-fade of a multi-slide track is
+ * incoherent). Expo instead forces its own *fractional* count (~1.5) because it
+ * is a centred carousel that must reveal its neighbours — the one effect exempt
+ * from the whole-number clamp. Either way the mapping never hands Swiper an
+ * impossible combination.
+ *
+ * The three Expo-only editor knobs (#62 addendum) are resolved here too, and
+ * only for `expo`: `direction` (horizontal/vertical), and `rotate` + `grayscale`
+ * merged over {@link EXPO_EFFECT_DEFAULTS} into the resolved {@link ExpoEffectParams}.
+ * Under a reduced-motion collapse they all fall away — `direction` resolves
+ * `horizontal` and `expoEffect` stays `undefined` — so the degraded reader gets
+ * a plain horizontal media slide with no tilt, desaturation, or vertical height.
  */
 export function resolveCarouselBehavior(
   input: CarouselBehaviorInput,
@@ -176,11 +353,18 @@ export function resolveCarouselBehavior(
   const slidesPerView =
     effect === 'fade'
       ? 1
-      : clampPerView(input.slidesPerView, DEFAULT_SLIDES_PER_VIEW)
+      : effect === 'expo'
+        ? expoPerView(input.slidesPerView, EXPO_SLIDES_PER_VIEW)
+        : clampPerView(input.slidesPerView, DEFAULT_SLIDES_PER_VIEW)
   const slidesPerViewMobile =
     effect === 'fade'
       ? 1
-      : clampPerView(input.slidesPerViewMobile, DEFAULT_SLIDES_PER_VIEW_MOBILE)
+      : effect === 'expo'
+        ? expoPerView(input.slidesPerViewMobile, EXPO_SLIDES_PER_VIEW_MOBILE)
+        : clampPerView(
+            input.slidesPerViewMobile,
+            DEFAULT_SLIDES_PER_VIEW_MOBILE,
+          )
 
   const autoplayOn = input.autoplay === true && !reducedMotion
   const delay = Math.max(
@@ -196,6 +380,12 @@ export function resolveCarouselBehavior(
     desktopBreakpoint: CAROUSEL_DESKTOP_BREAKPOINT_PX,
     loop: input.loop === true,
     effect,
+    direction:
+      effect === 'expo'
+        ? normalizeDirection(input.direction)
+        : DEFAULT_CAROUSEL_DIRECTION,
+    centeredSlides: effect === 'expo',
+    expoEffect: effect === 'expo' ? resolveExpoEffect(input) : undefined,
     autoplay: autoplayOn
       ? { delay, disableOnInteraction: true, pauseOnMouseEnter: true }
       : false,
@@ -255,7 +445,44 @@ export function carouselEffectField(): SelectField {
     options: [...CAROUSEL_EFFECT_OPTIONS],
     admin: {
       description:
-        'Slide moves the track horizontally; Fade cross-fades one slide at a time (a single slide per view). Reduced motion collapses Fade to Slide.',
+        'Slide moves the track horizontally; Fade cross-fades one slide at a time (a single slide per view); Expo is a centred parallax + scale photo showcase (pairs with the Media variant). Reduced motion collapses Fade and Expo to Slide.',
+    },
+  }
+}
+
+/**
+ * Show a field only when the sibling `effect` select is `expo`. Mirrors the
+ * `interval`-on-`autoplay` gate so the three Expo controls stay hidden for the
+ * generic `slide`/`fade` carousels and never clutter the common case. Both the
+ * live block config and the config test read this one predicate.
+ *
+ * @param _data - The full document data (unused; the effect is a sibling).
+ * @param siblingData - The block's own data, where `effect` lives.
+ * @returns Whether the Expo-only field should render.
+ */
+export const isExpoEffectSelected = (
+  _data: unknown,
+  siblingData: unknown,
+): boolean =>
+  (siblingData as { effect?: string } | undefined)?.effect === 'expo'
+
+/**
+ * Build the expo-only `direction` select field (horizontal / vertical).
+ *
+ * @returns A Payload select on {@link CAROUSEL_DIRECTION_ENUM_NAME}, defaulting
+ * to {@link DEFAULT_CAROUSEL_DIRECTION}, shown only when `effect === 'expo'`.
+ */
+export function carouselDirectionField(): SelectField {
+  return {
+    name: 'direction',
+    type: 'select',
+    defaultValue: DEFAULT_CAROUSEL_DIRECTION,
+    enumName: CAROUSEL_DIRECTION_ENUM_NAME,
+    options: CAROUSEL_DIRECTIONS.map(({ label, value }) => ({ label, value })),
+    admin: {
+      condition: isExpoEffectSelected,
+      description:
+        'Expo only: run the parallax track horizontally or vertically. Vertical gets a bounded height so slides never collapse.',
     },
   }
 }

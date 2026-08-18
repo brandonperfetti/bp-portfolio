@@ -5,10 +5,13 @@ import { describe, expect, it } from 'vitest'
 
 import { Carousel } from '@/blocks/Carousel/config'
 import {
+  CAROUSEL_DIRECTION_ENUM_NAME,
   CAROUSEL_EFFECT_ENUM_NAME,
   CAROUSEL_VARIANT_ENUM_NAME,
+  DEFAULT_CAROUSEL_DIRECTION,
   DEFAULT_CAROUSEL_EFFECT,
   DEFAULT_CAROUSEL_VARIANT,
+  EXPO_MAX_ROTATE,
 } from '@/blocks/Carousel/options'
 
 const named = (fields: Field[], name: string): Field | undefined =>
@@ -52,6 +55,53 @@ describe('Carousel block config', () => {
       CAROUSEL_EFFECT_ENUM_NAME,
     ]) {
       expect(name.length).toBeLessThanOrEqual(63)
+    }
+  })
+
+  it('offers the expo effect alongside slide and fade (#62)', () => {
+    const effect = behaviourFields().find(
+      (f): f is SelectField => 'name' in f && f.name === 'effect',
+    ) as SelectField
+    const values = (effect.options as { value: string }[]).map((o) => o.value)
+    expect(values).toEqual(['slide', 'fade', 'expo'])
+  })
+
+  it('adds the three expo controls, each gated on effect === expo (#62 addendum)', () => {
+    const fields = behaviourFields()
+    const cond = (f: unknown) =>
+      (f as { admin?: { condition?: (d: unknown, s: unknown) => boolean } })
+        .admin?.condition
+
+    const direction = fields.find(
+      (f): f is SelectField => 'name' in f && f.name === 'direction',
+    ) as SelectField
+    expect(direction.type).toBe('select')
+    expect(direction.enumName).toBe(CAROUSEL_DIRECTION_ENUM_NAME)
+    expect(direction.defaultValue).toBe(DEFAULT_CAROUSEL_DIRECTION)
+    expect(
+      (direction.options as { value: string }[]).map((o) => o.value),
+    ).toEqual(['horizontal', 'vertical'])
+
+    const rotate = fields.find(
+      (f) => 'name' in f && f.name === 'rotate',
+    ) as Field & { type: string; min?: number; max?: number }
+    expect(rotate.type).toBe('number')
+    expect(rotate.min).toBe(0)
+    expect(rotate.max).toBe(EXPO_MAX_ROTATE)
+
+    const grayscale = fields.find(
+      (f) => 'name' in f && f.name === 'grayscale',
+    ) as Field & { type: string; defaultValue?: unknown }
+    expect(grayscale.type).toBe('checkbox')
+    expect(grayscale.defaultValue).toBe(true)
+
+    // All three render only for expo, and vanish for slide/fade.
+    for (const f of [direction, rotate, grayscale]) {
+      const c = cond(f)
+      expect(c).toBeTypeOf('function')
+      expect(c!({}, { effect: 'expo' })).toBe(true)
+      expect(c!({}, { effect: 'slide' })).toBe(false)
+      expect(c!({}, {})).toBe(false)
     }
   })
 
