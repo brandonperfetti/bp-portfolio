@@ -1071,6 +1071,10 @@ export interface StatsBlock {
  * via the `definition` "TestimonialsBlock".
  */
 export interface TestimonialsBlock {
+  /**
+   * Grid lays the testimonials out as a responsive card grid; Carousel shows the same cards as a swipeable stacked-cards deck (autoplay off, reduced-motion safe).
+   */
+  layout?: ('grid' | 'carousel') | null;
   heading?: string | null;
   items?:
     | {
@@ -2260,6 +2264,7 @@ export interface StatsBlockSelect<T extends boolean = true> {
  * via the `definition` "TestimonialsBlock_select".
  */
 export interface TestimonialsBlockSelect<T extends boolean = true> {
+  layout?: T;
   heading?: T;
   items?:
     | T

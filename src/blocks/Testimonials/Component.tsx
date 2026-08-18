@@ -1,33 +1,65 @@
 import Image from 'next/image'
 
 import { type BlockHostContext, blockRhythmClass } from '@/blocks/hostContext'
+import {
+  type TestimonialSlideData,
+  TestimonialsCarouselClient,
+} from '@/blocks/Testimonials/TestimonialsCarouselClient'
 import type { Media, TestimonialsBlock } from '@/payload-types'
 
 const media = (m: unknown): Media | null =>
   m && typeof m === 'object' ? (m as Media) : null
 
 /**
- * Testimonial card grid (CMS page builder).
+ * Testimonial cards (CMS page builder).
  *
  * @param props - The stored block, plus `hosted`: where it is rendering.
- * @remarks Column count comes from the grid's own container width rather
- * than the viewport (see `hostContext.ts`), so quotes in a rail stack instead
- * of shrinking to unreadable strips. The query container is the wrapper that
- * already carries the list's `mt-8`, leaving margin collapsing untouched.
+ * @remarks Two layouts share one item shape (mirrors LogoCarousel's
+ * scroll|static): `grid` — the default — lays the testimonials out as a
+ * responsive `@container` card grid, its column count coming from the grid's
+ * own container width rather than the viewport (see `hostContext.ts`) so quotes
+ * in a rail stack instead of shrinking to unreadable strips. `carousel` hands
+ * the same items to the client Swiper leaf as a stacked-cards deck (#61),
+ * reusing the shared carousel behaviour mapping. Only the resolved, serializable
+ * item data crosses the server→client boundary.
  */
 export function TestimonialsComponent(
   props: TestimonialsBlock & { hosted?: BlockHostContext },
 ) {
-  const { heading, items } = props
+  const { heading, items, layout } = props
   if (!items?.length) return null
+
+  const headingEl = heading ? (
+    <h2 className="text-2xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
+      {heading}
+    </h2>
+  ) : null
+
+  if (layout === 'carousel') {
+    const slides: TestimonialSlideData[] = items.map((item, index) => {
+      const avatar = media(item.avatar)
+      return {
+        id: item.id ?? String(index),
+        quote: item.quote,
+        name: item.name,
+        role: item.role,
+        avatarUrl: avatar?.url ?? null,
+      }
+    })
+
+    return (
+      <section className={blockRhythmClass(props.hosted)}>
+        {headingEl}
+        <div className="mt-8">
+          <TestimonialsCarouselClient items={slides} />
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section className={blockRhythmClass(props.hosted)}>
-      {heading ? (
-        <h2 className="text-2xl font-bold tracking-tight text-zinc-800 sm:text-3xl dark:text-zinc-100">
-          {heading}
-        </h2>
-      ) : null}
+      {headingEl}
       <div className="@container mt-8">
         <ul
           role="list"
