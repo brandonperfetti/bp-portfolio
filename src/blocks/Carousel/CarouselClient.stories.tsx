@@ -304,6 +304,45 @@ export const MediaExpoRotated: Story = {
   },
 }
 
+/**
+ * Horizontal overscan present (#68 fix): Tailwind Preflight's
+ * `img { max-width: 100% }` used to clamp the `.expo-image`'s 125% horizontal
+ * overscan back to 100%, so the parallax translate exposed the container's zinc
+ * background as a gray gap. With `max-width: none` the image is wider than its
+ * container again (no gap), and the hero-scale bounded height keeps 0 horizontal
+ * page overflow.
+ */
+export const ExpoHorizontalOverscan: Story = {
+  args: { variant: 'media', effect: 'expo' },
+  play: async ({ canvasElement }) => {
+    const swiper = await getSwiper(canvasElement)
+    await waitFor(() => expect(swiper.params.effect).toBe('expo'))
+
+    // Hero-scale height applied (bounded, not collapsed to an aspect box).
+    const track = canvasElement.querySelector('.swiper') as HTMLElement
+    await waitFor(() => expect(track.clientHeight).toBeGreaterThan(300))
+
+    const container = canvasElement.querySelector(
+      '.expo-container',
+    ) as HTMLElement
+    const image = container.querySelector('.expo-image') as HTMLElement
+
+    // The image overscans its container (≈125%) — not clamped to 100%.
+    await waitFor(() => {
+      const cw = container.getBoundingClientRect().width
+      const iw = image.getBoundingClientRect().width
+      expect(iw).toBeGreaterThan(cw * 1.1)
+    })
+
+    // Compositor hint landed on the transformed layers (INP mitigation).
+    await expect(getComputedStyle(image).willChange).toContain('transform')
+
+    // Bounded hero height → no horizontal page overflow.
+    const doc = document.documentElement
+    await expect(doc.scrollWidth).toBeLessThanOrEqual(doc.clientWidth + 1)
+  },
+}
+
 // ── interaction (the behaviour axis) ─────────────────────────────────────────
 
 /**

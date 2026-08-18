@@ -23,9 +23,44 @@ import {
   type CarouselVariant,
   resolveCarouselBehavior,
 } from '@/blocks/Carousel/options'
+import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
 import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 import { cn } from '@/lib/utils'
+
+/** Candidate widths for the Expo `<img>` responsive `srcset` (px). */
+const EXPO_IMAGE_WIDTHS = [640, 960, 1280, 1600] as const
+
+/** The display-width hint for the Expo image (centred ~1.5-up track). */
+const EXPO_IMAGE_SIZES =
+  '(min-width: 1024px) 60vw, (min-width: 768px) 70vw, 85vw'
+
+/**
+ * Build a Cloudinary-backed `srcset` for the Expo `<img>` so the browser
+ * fetches a viewport-appropriate image instead of the multi-MB original (the
+ * biggest nav-INP win, #68). A plain `<img>` — required because `next/image`
+ * `fill` injects inline positioning that breaks the effect — can still carry
+ * `srcset`/`sizes`; only `fill` is incompatible. Non-Cloudinary sources (e.g.
+ * Storybook placeholders) can't be width-transformed, so no `srcset` is emitted
+ * and the plain `src` is used; document media is Cloudinary in production.
+ *
+ * @param src - The resolved media URL.
+ * @returns `{ src, srcSet? }` for the `<img>`.
+ */
+function expoImageSource(src: string): { src: string; srcSet?: string } {
+  const optimized = getOptimizedImageUrl(src, {
+    width: EXPO_IMAGE_WIDTHS[EXPO_IMAGE_WIDTHS.length - 1],
+  })
+  // getOptimizedImageUrl only rewrites Cloudinary URLs; if it changed the URL,
+  // width variants are available and a real srcset is worthwhile.
+  if (optimized === src) return { src }
+  return {
+    src: getOptimizedImageUrl(src, { width: 1280 }),
+    srcSet: EXPO_IMAGE_WIDTHS.map(
+      (w) => `${getOptimizedImageUrl(src, { width: w })} ${w}w`,
+    ).join(', '),
+  }
+}
 
 /** One slide, already resolved by the server Component to plain, serializable data. */
 export interface CarouselSlideData {
@@ -111,9 +146,6 @@ export function CarouselClient(props: CarouselClientProps) {
   // motion `isExpo` is false and neither the Expo module nor its DOM/transforms
   // mount — the media slide renders as a plain, static image instead.
   const isExpo = behavior.effect === 'expo'
-  // Vertical is reachable only through expo (the mapper resolves every other
-  // effect — and any reduced-motion collapse — to `horizontal`).
-  const isVertical = behavior.direction === 'vertical'
 
   const modules = [Keyboard, A11y]
   if (behavior.pagination) modules.push(Pagination)
@@ -130,21 +162,16 @@ export function CarouselClient(props: CarouselClientProps) {
     // `--expo-image-offset` width/left calc (inline beats the stylesheet) and
     // break the parallax. The centred showcase pairs with the `media` framing.
     if (isExpo) {
+      const img = expoImageSource(slide.src)
       return (
         <SlideLink href={slide.href} className="block h-full">
-          <div
-            className={cn(
-              'expo-container w-full bg-zinc-100 dark:bg-zinc-800',
-              // Horizontal: the slide takes its height from the photo's aspect
-              // ratio. Vertical: Swiper sizes each slide's height from the
-              // bounded track height, so the container just fills it.
-              isVertical ? 'h-full' : 'aspect-[3/4]',
-            )}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element -- see note above: next/image fill breaks the Expo positioning */}
+          <div className="expo-container h-full w-full bg-zinc-100 dark:bg-zinc-800">
+            {/* eslint-disable-next-line @next/next/no-img-element -- see note above: next/image fill breaks the Expo positioning; a plain <img> keeps srcset/sizes */}
             <img
               className="expo-image"
-              src={slide.src}
+              src={img.src}
+              srcSet={img.srcSet}
+              sizes={img.srcSet ? EXPO_IMAGE_SIZES : undefined}
               alt={slide.alt}
               loading="lazy"
               decoding="async"
@@ -283,17 +310,21 @@ export function CarouselClient(props: CarouselClientProps) {
         keyboard={{ enabled: true }}
         a11y={{ enabled: true }}
         modules={modules}
-        // Vertical expo needs a bounded track height or Swiper collapses its
-        // slides to zero (the Pro demo sets a height on `.swiper` for vertical);
-        // a viewport-relative height, capped, keeps 0 overflow at every width
-        // (the effect's cross-axis padding lives inside `box-sizing: border-box`).
-        // Horizontal keeps the bottom padding that seats the pagination dots.
-        className={cn(
-          isVertical ? 'h-[70vh] max-h-[640px] min-h-[420px]' : '!pb-10',
-        )}
+        // Expo's bounded track height (hero-scale horizontal + capped vertical)
+        // lives in `effectExpo.css`, scoped to `.swiper-expo.swiper-horizontal`
+        // / `.swiper-vertical`, so the viewport calc stays in raw CSS and the
+        // effect's setSize reads a stable height. Non-expo keeps the bottom
+        // padding that seats the pagination dots.
+        className={cn(!isExpo && '!pb-10')}
       >
         {slides.map((slide, index) => (
-          <SwiperSlide key={slide.id ?? index} className="h-auto">
+          <SwiperSlide
+            key={slide.id ?? index}
+            // Expo fills a bounded track height, so its slides take full height
+            // (horizontal: 100% of the fixed Swiper height; vertical: Swiper's
+            // computed per-slide height). Other variants stay auto-height.
+            className={isExpo ? 'h-full' : 'h-auto'}
+          >
             {renderSlide(slide)}
           </SwiperSlide>
         ))}
