@@ -12,6 +12,7 @@ import {
   carouselEffectField,
   carouselVariantField,
   isExpoEffectSelected,
+  isHeroEffectSelected,
 } from '@/blocks/Carousel/options'
 
 /**
@@ -130,9 +131,9 @@ export const Carousel: Block = {
           defaultValue: true,
           label: 'Full bleed (edge to edge)',
           admin: {
-            condition: isExpoEffectSelected,
+            condition: isHeroEffectSelected,
             description:
-              'Expo (horizontal) only: break the carousel out to the full viewport width so the parallax side panels reach the screen edges. On by default; ignored for the vertical direction.',
+              'Expo (horizontal) and Carousel 3D only: break the carousel out to the full viewport width so the side panels reach the screen edges. On by default; ignored for the Expo vertical direction.',
           },
         },
         {

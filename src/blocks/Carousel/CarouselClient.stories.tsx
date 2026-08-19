@@ -80,6 +80,21 @@ const SLIDES: CarouselSlideData[] = [
   },
 ]
 
+/**
+ * Carousel-3D is an infinite loop designed for ≥5 slides (#63), so it gets a
+ * six-slide fixture rather than the four the other effects use.
+ */
+const CAROUSEL3D_SLIDES: CarouselSlideData[] = Array.from(
+  { length: 6 },
+  (_, i) => ({
+    id: `c3d-${i + 1}`,
+    src: `https://picsum.photos/seed/bp-carousel3d-${i + 1}/1200/900`,
+    alt: `Showcase image ${i + 1}`,
+    title: `Feature ${i + 1}`,
+    text: 'An infinite 3D carousel of media cards.',
+  }),
+)
+
 const meta = {
   title: 'PageBuilder/Carousel',
   component: CarouselClient,
@@ -102,7 +117,10 @@ const meta = {
   },
   argTypes: {
     variant: { control: 'inline-radio', options: ['cards', 'media'] },
-    effect: { control: 'inline-radio', options: ['slide', 'fade', 'expo'] },
+    effect: {
+      control: 'inline-radio',
+      options: ['slide', 'fade', 'expo', 'carousel3d'],
+    },
     direction: {
       control: 'inline-radio',
       options: ['horizontal', 'vertical'],
@@ -405,6 +423,178 @@ export const ExpoFullBleed: Story = {
         window.innerHeight,
       ),
     )
+  },
+}
+
+// ── carousel3d (#63): the ported infinite 3D carousel ────────────────────────
+
+/**
+ * media × carousel3d — the ported UI-Initiative infinite 3D carousel (#63): a
+ * centred `slidesPerView: 'auto'` loop whose side slides recede in scale and
+ * opacity. Uses a six-slide fixture (the effect is designed for ≥5).
+ */
+export const MediaCarousel3D: Story = {
+  args: { variant: 'media', effect: 'carousel3d', slides: CAROUSEL3D_SLIDES },
+}
+
+/**
+ * Effect-mounted (the React-availability + Swiper-14 receipt): with motion
+ * allowed the ported Carousel-3D module mounts on the installed Swiper — the
+ * instance reports `effect: 'carousel3d'` with `slidesPerView: 'auto'`, the
+ * container carries the `swiper-carousel3d` modifier class, the custom
+ * `carousel3dEffect` params are installed, and the effect's `progress` handler
+ * has written real `translateX(...) scale(...)` transforms onto the slides.
+ */
+export const Carousel3DEffectMounted: Story = {
+  args: { variant: 'media', effect: 'carousel3d', slides: CAROUSEL3D_SLIDES },
+  play: async ({ canvasElement }) => {
+    const swiper = await getSwiper(canvasElement)
+
+    await waitFor(() => expect(swiper.params.effect).toBe('carousel3d'))
+    await expect(swiper.params.slidesPerView).toBe('auto')
+    await expect(
+      (swiper.params as { carousel3dEffect?: { sideSlides?: number } })
+        .carousel3dEffect?.sideSlides,
+    ).toBe(2)
+
+    const container = canvasElement.querySelector('.swiper') as HTMLElement
+    await expect(container.classList.contains('swiper-carousel3d')).toBe(true)
+
+    // The effect drives a per-slide transform (proof it runs on Swiper 14).
+    await waitFor(() => {
+      const slides = Array.from(
+        canvasElement.querySelectorAll('.swiper-carousel3d .swiper-slide'),
+      ) as HTMLElement[]
+      expect(
+        slides.some(
+          (s) =>
+            s.style.transform.includes('scale') &&
+            s.style.transform.includes('translateX'),
+        ),
+      ).toBe(true)
+    })
+  },
+}
+
+/** Instance-ref navigation advances the loop under carousel3d. */
+export const Carousel3DNavigation: Story = {
+  args: { variant: 'media', effect: 'carousel3d', slides: CAROUSEL3D_SLIDES },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const swiper = await getSwiper(canvasElement)
+    await waitFor(() => expect(swiper.realIndex).toBe(0))
+
+    await userEvent.click(canvas.getByRole('button', { name: 'Next slide' }))
+    await waitFor(() => expect(swiper.realIndex).toBe(1))
+  },
+}
+
+/** Keyboard nav stays wired under carousel3d (an AC of #41 the effect must not regress). */
+export const Carousel3DKeyboardEnabled: Story = {
+  args: { variant: 'media', effect: 'carousel3d', slides: CAROUSEL3D_SLIDES },
+  play: async ({ canvasElement }) => {
+    const swiper = await getSwiper(canvasElement)
+    await expect(swiper.keyboard?.enabled).toBe(true)
+  },
+}
+
+/**
+ * Reduced-motion degrade (#63 AC): with the platform preference forced to
+ * reduce, carousel3d collapses to a plain `slide` in the mapper — so the module
+ * is NOT mounted (`effect !== 'carousel3d'`), the `swiper-carousel3d` class is
+ * absent, and none of its DOM (`.carousel3d-image`) is emitted. The media slide
+ * renders plain. The deterministic collapse is also unit-proven in options.test.
+ */
+export const Carousel3DReducedMotionDegrades: Story = {
+  args: { variant: 'media', effect: 'carousel3d', slides: CAROUSEL3D_SLIDES },
+  beforeEach: () => forceReducedMotion(),
+  play: async ({ canvasElement }) => {
+    const swiper = await getSwiper(canvasElement)
+    const container = canvasElement.querySelector('.swiper') as HTMLElement
+
+    await waitFor(() => expect(swiper.params.effect).not.toBe('carousel3d'))
+    await expect(container.classList.contains('swiper-carousel3d')).toBe(false)
+    await expect(canvasElement.querySelector('.carousel3d-image')).toBeNull()
+  },
+}
+
+/**
+ * Teal pagination (#66) under carousel3d: the active bullet takes the brand
+ * `--color-teal-500` token, never Swiper's default blue — the same token class
+ * the other leaves declare, re-declared on this leaf.
+ */
+export const Carousel3DPaginationBranded: Story = {
+  args: {
+    variant: 'media',
+    effect: 'carousel3d',
+    slides: CAROUSEL3D_SLIDES,
+    navigation: false,
+    pagination: true,
+  },
+  play: async ({ canvasElement }) => {
+    const container = canvasElement.querySelector(
+      '[data-testid="carousel"]',
+    ) as HTMLElement
+    const active = await waitFor(() => {
+      const el = container.querySelector('.swiper-pagination-bullet-active')
+      if (!el) throw new Error('no active bullet yet')
+      return el as HTMLElement
+    })
+
+    const probe = document.createElement('div')
+    probe.style.backgroundColor = 'var(--color-teal-500)'
+    document.body.appendChild(probe)
+    const teal = getComputedStyle(probe).backgroundColor
+    probe.remove()
+
+    await expect(getComputedStyle(active).backgroundColor).toBe(teal)
+    await expect(getComputedStyle(active).backgroundColor).not.toBe(
+      'rgb(0, 122, 255)',
+    )
+  },
+}
+
+/**
+ * Full-bleed carousel3d (#63, default ON): the infinite carousel breaks out to
+ * the full viewport width via the shared `Container/section.ts` idiom (the same
+ * toggle Expo uses, widened to cover carousel3d). Framed in a production-like
+ * `overflow-x: clip` page wrapper inside a narrow column so the breakout is real.
+ */
+export const Carousel3DFullBleed: Story = {
+  args: {
+    variant: 'media',
+    effect: 'carousel3d',
+    slides: CAROUSEL3D_SLIDES,
+    fullBleed: true,
+  },
+  decorators: [
+    (Story) => (
+      <div className="overflow-x-clip" data-testid="clip-page">
+        <div className="mx-auto max-w-md">
+          <Story />
+        </div>
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const swiper = await getSwiper(canvasElement)
+    await waitFor(() => expect(swiper.params.effect).toBe('carousel3d'))
+
+    const column = canvasElement.querySelector('.max-w-md') as HTMLElement
+    const wrapper = canvasElement.querySelector(
+      '[data-testid="carousel"]',
+    ) as HTMLElement
+    for (const cls of ['w-screen', 'left-1/2', '-translate-x-1/2']) {
+      await expect(wrapper.classList.contains(cls)).toBe(true)
+    }
+    await waitFor(() => {
+      expect(wrapper.getBoundingClientRect().width).toBeGreaterThanOrEqual(
+        window.innerWidth - 2,
+      )
+      expect(wrapper.getBoundingClientRect().width).toBeGreaterThan(
+        column.getBoundingClientRect().width,
+      )
+    })
   },
 }
 

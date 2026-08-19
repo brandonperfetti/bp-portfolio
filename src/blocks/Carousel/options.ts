@@ -39,12 +39,16 @@ export const CAROUSEL_VARIANT_ENUM_NAME = 'enum_carousel_variant'
 /**
  * The transition between slides. `slide` translates; `fade` cross-fades;
  * `expo` is the ported UI-Initiative parallax + scale photo showcase (#62),
- * which pairs with `variant: 'media'` and runs a centred, fractional track.
+ * which pairs with `variant: 'media'` and runs a centred, fractional track;
+ * `carousel3d` is the ported UI-Initiative infinite 3D carousel (#63) — a
+ * centred `slidesPerView: 'auto'` loop whose side slides recede in scale +
+ * opacity. Both Pro effects pair with `variant: 'media'`.
  */
 export const CAROUSEL_EFFECTS = [
   { label: 'Slide', value: 'slide' },
   { label: 'Fade', value: 'fade' },
   { label: 'Expo (parallax + scale)', value: 'expo' },
+  { label: 'Carousel 3D (infinite)', value: 'carousel3d' },
 ] as const
 
 /** Carousel effect vocabulary, derived from {@link CAROUSEL_EFFECTS}. */
@@ -146,6 +150,33 @@ export const DEFAULT_EXPO_ROTATE = 0
  */
 export const EXPO_MAX_ROTATE = 30
 
+/**
+ * The Pro `carousel3dEffect` params object the ported infinite-3D effect reads
+ * (#63). Kept here — like {@link ExpoEffectParams} — as a plain serializable
+ * shape so the mapping layer hands it to the client without importing any Swiper
+ * code, preserving the server→client discipline this module keeps.
+ */
+export interface Carousel3DEffectParams {
+  /** Opacity lost per side-slide step as a slide recedes from centre. */
+  opacityStep: number
+  /** Scale lost per side-slide step. */
+  scaleStep: number
+  /** How many slides deep each side stays visible (the effect clamps 1–3). */
+  sideSlides: number
+}
+
+/**
+ * The Pro Carousel-3D defaults (`dist/effect-carousel.esm.js`). Not editor-
+ * exposed in this batch (the effect's look is fixed like Expo's fixed image
+ * params), so the mapper always resolves these; a later addendum can surface
+ * them the way #62's did for Expo.
+ */
+export const CAROUSEL3D_EFFECT_DEFAULTS: Carousel3DEffectParams = {
+  opacityStep: 0.33,
+  scaleStep: 0.2,
+  sideSlides: 2,
+}
+
 /** Autoplay dwell per slide (ms) when the editor enables autoplay but sets no interval. */
 export const DEFAULT_AUTOPLAY_INTERVAL_MS = 5000
 
@@ -200,11 +231,19 @@ export interface ResolvedCarouselBehavior {
   slidesPerViewMobile: number
   /** Slides at once from the desktop breakpoint up. */
   slidesPerView: number
+  /**
+   * Whether the track sizes slides by their own CSS width — Swiper's
+   * `slidesPerView: 'auto'` — instead of the numeric {@link slidesPerView}. True
+   * only for `carousel3d`, whose Pro effect requires auto sizing; false
+   * everywhere else, so the numeric counts still drive `slide`/`fade`/`expo` and
+   * a reduced-motion collapse falls back to a plain numeric track.
+   */
+  slidesPerViewAuto: boolean
   /** Where {@link slidesPerView} takes over from {@link slidesPerViewMobile}. */
   desktopBreakpoint: number
   /** Whether the track wraps seamlessly. */
   loop: boolean
-  /** The resolved transition — never `fade` or `expo` under reduced motion. */
+  /** The resolved transition — never `fade`, `expo`, or `carousel3d` under reduced motion. */
   effect: CarouselEffect
   /**
    * The resolved track orientation, passed to Swiper's `direction` for a
@@ -214,10 +253,10 @@ export interface ResolvedCarouselBehavior {
    */
   direction: CarouselDirection
   /**
-   * Whether Swiper centres the active slide. Forced on for `expo` (a centred
-   * carousel), off otherwise. The `expo` effect also forces this internally via
-   * `overwriteParams`, but the leaf passes it so the very first paint is centred
-   * rather than snapping after init.
+   * Whether Swiper centres the active slide. Forced on for the centred Pro
+   * effects (`expo`, `carousel3d`), off otherwise. Those effects also force it
+   * internally, but the leaf passes it so the very first paint is centred rather
+   * than snapping after init.
    */
   centeredSlides: boolean
   /**
@@ -228,12 +267,20 @@ export interface ResolvedCarouselBehavior {
    */
   expoEffect?: ExpoEffectParams
   /**
-   * Whether the carousel breaks out to the full viewport width. True only for a
-   * horizontal `expo` (its parallax side-panels want the screen edges, not the
-   * reading-column cap) whose stored field is not `false` — defaulting on.
-   * False for every other effect/direction and under a reduced-motion collapse,
-   * so a degraded plain slide stays inside its column. Applied by the leaf via
-   * the shared `Container/section.ts` breakout idiom.
+   * The `carousel3dEffect` params, present only when {@link effect} is
+   * `carousel3d` (the leaf keys the module mount + passes the params off this
+   * one field). Absent for every other effect, including a reduced-motion
+   * collapse to `slide` — the module and its per-slide transforms must NOT
+   * mount then.
+   */
+  carousel3dEffect?: Carousel3DEffectParams
+  /**
+   * Whether the carousel breaks out to the full viewport width. True for a
+   * horizontal `expo` or any `carousel3d` (both hero-scale showcases whose side
+   * panels want the screen edges, not the reading-column cap) whose stored field
+   * is not `false` — defaulting on. False for every other effect/direction and
+   * under a reduced-motion collapse, so a degraded plain slide stays inside its
+   * column. Applied by the leaf via the shared `Container/section.ts` idiom.
    */
   fullBleed: boolean
   /** Autoplay settings, or `false` when autoplay is off (the default) or suppressed. */
@@ -334,11 +381,12 @@ function resolveExpoEffect(input: CarouselBehaviorInput): ExpoEffectParams {
  *   motion.** Only an explicit `autoplay: true` with motion allowed yields an
  *   autoplay object; anything else is `false`, so the carousel never moves on
  *   its own unless the editor asked and the reader allows it.
- * - **Reduced motion also neutralizes the `fade` and `expo` flourishes**,
- *   collapsing them to a plain `slide` so the transition is static-ish rather
- *   than a cross-fade or a parallax. When `expo` collapses this way the resolved
- *   `expoEffect` is left `undefined`, so the leaf mounts neither the Expo module
- *   nor its DOM/transforms.
+ * - **Reduced motion also neutralizes the `fade`, `expo`, and `carousel3d`
+ *   flourishes**, collapsing them to a plain `slide` so the transition is
+ *   static-ish rather than a cross-fade, parallax, or 3D loop. When `expo` or
+ *   `carousel3d` collapses this way its resolved params object is left
+ *   `undefined` (and `slidesPerViewAuto` false), so the leaf mounts neither the
+ *   ported module nor its per-slide transforms.
  *
  * Fade forces a single slide per view (a cross-fade of a multi-slide track is
  * incoherent). Expo instead forces its own *fractional* count (~1.5) because it
@@ -395,22 +443,31 @@ export function resolveCarouselBehavior(
       ? normalizeDirection(input.direction)
       : DEFAULT_CAROUSEL_DIRECTION
 
-  // Full bleed is a horizontal-Expo-only breakout, defaulting on. It falls away
-  // for every other effect/direction and — because `effect` is already `slide`
-  // here under reduced motion — automatically for a reduced-motion collapse, so
-  // a degraded plain slide never breaks out of its reading column.
+  // Full bleed is a hero-scale breakout, defaulting on for a horizontal Expo or
+  // any Carousel-3D. It falls away for every other effect/direction and —
+  // because `effect` is already `slide` here under reduced motion —
+  // automatically for a reduced-motion collapse, so a degraded plain slide
+  // never breaks out of its reading column.
   const fullBleed =
-    effect === 'expo' && direction === 'horizontal' && input.fullBleed !== false
+    ((effect === 'expo' && direction === 'horizontal') ||
+      effect === 'carousel3d') &&
+    input.fullBleed !== false
 
   return {
     slidesPerViewMobile,
     slidesPerView,
+    // Carousel-3D sizes slides by CSS width (its Pro effect requires 'auto').
+    slidesPerViewAuto: effect === 'carousel3d',
     desktopBreakpoint: CAROUSEL_DESKTOP_BREAKPOINT_PX,
-    loop: input.loop === true,
+    // Carousel-3D is the *infinite* carousel — loop defaults ON (unless the
+    // editor turns it off); every other effect keeps loop opt-in.
+    loop: effect === 'carousel3d' ? input.loop !== false : input.loop === true,
     effect,
     direction,
-    centeredSlides: effect === 'expo',
+    centeredSlides: effect === 'expo' || effect === 'carousel3d',
     expoEffect: effect === 'expo' ? resolveExpoEffect(input) : undefined,
+    carousel3dEffect:
+      effect === 'carousel3d' ? { ...CAROUSEL3D_EFFECT_DEFAULTS } : undefined,
     fullBleed,
     autoplay: autoplayOn
       ? { delay, disableOnInteraction: true, pauseOnMouseEnter: true }
@@ -471,7 +528,7 @@ export function carouselEffectField(): SelectField {
     options: [...CAROUSEL_EFFECT_OPTIONS],
     admin: {
       description:
-        'Slide moves the track horizontally; Fade cross-fades one slide at a time (a single slide per view); Expo is a centred parallax + scale photo showcase (pairs with the Media variant). Reduced motion collapses Fade and Expo to Slide.',
+        'Slide moves the track horizontally; Fade cross-fades one slide at a time (a single slide per view); Expo is a centred parallax + scale photo showcase; Carousel 3D is an infinite 3D carousel whose side slides recede in scale + opacity (both pair with the Media variant). Reduced motion collapses Fade, Expo, and Carousel 3D to Slide.',
     },
   }
 }
@@ -491,6 +548,24 @@ export const isExpoEffectSelected = (
   siblingData: unknown,
 ): boolean =>
   (siblingData as { effect?: string } | undefined)?.effect === 'expo'
+
+/**
+ * Show a field when the sibling `effect` is either Pro hero effect — `expo` or
+ * `carousel3d`. Backs the `fullBleed` control, which both hero-scale showcases
+ * share (#63 widened it from expo-only). Kept beside {@link isExpoEffectSelected}
+ * so the live config and its test read one predicate.
+ *
+ * @param _data - The full document data (unused; the effect is a sibling).
+ * @param siblingData - The block's own data, where `effect` lives.
+ * @returns Whether the shared hero-effect field should render.
+ */
+export const isHeroEffectSelected = (
+  _data: unknown,
+  siblingData: unknown,
+): boolean => {
+  const effect = (siblingData as { effect?: string } | undefined)?.effect
+  return effect === 'expo' || effect === 'carousel3d'
+}
 
 /**
  * Build the expo-only `direction` select field (horizontal / vertical).

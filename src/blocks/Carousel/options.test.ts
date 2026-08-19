@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  CAROUSEL3D_EFFECT_DEFAULTS,
   CAROUSEL_DESKTOP_BREAKPOINT_PX,
   DEFAULT_AUTOPLAY_INTERVAL_MS,
   EXPO_EFFECT_DEFAULTS,
@@ -286,5 +287,74 @@ describe('resolveCarouselBehavior', () => {
       resolveCarouselBehavior({ effect: 'expo', fullBleed: true }, reduced)
         .fullBleed,
     ).toBe(false)
+  })
+
+  // ── carousel3d (#63): the ported infinite 3D carousel ──────────────────────
+
+  it('recognizes carousel3d and does not normalize it away', () => {
+    expect(
+      resolveCarouselBehavior({ effect: 'carousel3d' }, motion).effect,
+    ).toBe('carousel3d')
+  })
+
+  it('forces slidesPerView auto + centeredSlides for carousel3d', () => {
+    const b = resolveCarouselBehavior({ effect: 'carousel3d' }, motion)
+    expect(b.slidesPerViewAuto).toBe(true)
+    expect(b.centeredSlides).toBe(true)
+    // Other effects size by a numeric count, not 'auto'.
+    expect(
+      resolveCarouselBehavior({ effect: 'slide' }, motion).slidesPerViewAuto,
+    ).toBe(false)
+  })
+
+  it('defaults loop ON for the infinite carousel3d, but honours an explicit off', () => {
+    expect(resolveCarouselBehavior({ effect: 'carousel3d' }, motion).loop).toBe(
+      true,
+    )
+    expect(
+      resolveCarouselBehavior({ effect: 'carousel3d', loop: false }, motion)
+        .loop,
+    ).toBe(false)
+    // Non-carousel3d effects keep loop opt-in (default off).
+    expect(resolveCarouselBehavior({ effect: 'slide' }, motion).loop).toBe(
+      false,
+    )
+  })
+
+  it('resolves the carousel3dEffect params only for carousel3d', () => {
+    expect(
+      resolveCarouselBehavior({ effect: 'carousel3d' }, motion)
+        .carousel3dEffect,
+    ).toEqual(CAROUSEL3D_EFFECT_DEFAULTS)
+    expect(
+      resolveCarouselBehavior({ effect: 'slide' }, motion).carousel3dEffect,
+    ).toBeUndefined()
+  })
+
+  it('defaults fullBleed ON for carousel3d (a hero-scale showcase), off when unticked', () => {
+    expect(
+      resolveCarouselBehavior({ effect: 'carousel3d' }, motion).fullBleed,
+    ).toBe(true)
+    expect(
+      resolveCarouselBehavior(
+        { effect: 'carousel3d', fullBleed: false },
+        motion,
+      ).fullBleed,
+    ).toBe(false)
+  })
+
+  it('collapses carousel3d to a plain slide under reduced motion, dropping all its knobs', () => {
+    // Loop left unset so the carousel3d forced-on default is what is under test.
+    const b = resolveCarouselBehavior(
+      { effect: 'carousel3d', fullBleed: true },
+      reduced,
+    )
+    expect(b.effect).toBe('slide')
+    expect(b.slidesPerViewAuto).toBe(false)
+    expect(b.centeredSlides).toBe(false)
+    expect(b.carousel3dEffect).toBeUndefined()
+    expect(b.fullBleed).toBe(false)
+    // Loop reverts to the plain opt-in default (the forced-on is carousel3d-only).
+    expect(b.loop).toBe(false)
   })
 })

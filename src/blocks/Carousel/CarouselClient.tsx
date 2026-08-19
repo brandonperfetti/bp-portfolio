@@ -16,6 +16,8 @@ import 'swiper/css'
 import 'swiper/css/pagination'
 import 'swiper/css/effect-fade'
 
+import EffectCarousel3D from '@/blocks/Carousel/effectCarousel3D'
+import '@/blocks/Carousel/effectCarousel3D.css'
 import EffectExpo from '@/blocks/Carousel/effectExpo'
 import '@/blocks/Carousel/effectExpo.css'
 import { carouselFullBleedClass } from '@/blocks/Carousel/fullBleed'
@@ -147,14 +149,59 @@ export function CarouselClient(props: CarouselClientProps) {
   // motion `isExpo` is false and neither the Expo module nor its DOM/transforms
   // mount — the media slide renders as a plain, static image instead.
   const isExpo = behavior.effect === 'expo'
+  // Carousel-3D is the ported infinite 3D loop (#63). Like Expo it is gated on
+  // the RESOLVED effect, so a reduced-motion collapse to `slide` mounts neither
+  // its module nor its per-slide transforms — the media track renders plain.
+  const isCarousel3d = behavior.effect === 'carousel3d'
 
   const modules = [Keyboard, A11y]
   if (behavior.pagination) modules.push(Pagination)
   if (behavior.effect === 'fade') modules.push(EffectFade)
   if (isExpo) modules.push(EffectExpo)
+  if (isCarousel3d) modules.push(EffectCarousel3D)
   if (behavior.autoplay) modules.push(Autoplay)
 
   const renderSlide = (slide: CarouselSlideData) => {
+    // Carousel-3D transforms the `.swiper-slide` itself and fades the
+    // `.swiper-carousel-animate-opacity` wrapper by progress. A plain `<img>`
+    // (with srcset/sizes) is used for the same reason as Expo — `next/image`
+    // `fill`'s inline positioning would fight the effect. The whole media card
+    // (image + optional caption) sits inside the animate-opacity wrapper so they
+    // fade together as the slide recedes.
+    if (isCarousel3d) {
+      const img = expoImageSource(slide.src)
+      return (
+        <SlideLink
+          href={slide.href}
+          className="swiper-carousel-animate-opacity block overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- next/image fill breaks the effect's slide transform; a plain <img> keeps srcset/sizes */}
+          <img
+            className="carousel3d-image"
+            src={img.src}
+            srcSet={img.srcSet}
+            sizes={img.srcSet ? EXPO_IMAGE_SIZES : undefined}
+            alt={slide.alt}
+            loading="lazy"
+            decoding="async"
+          />
+          {slide.title || slide.text ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-zinc-950/70 to-transparent p-4 sm:p-6">
+              {slide.title ? (
+                <h3 className="text-base font-semibold text-white">
+                  {slide.title}
+                </h3>
+              ) : null}
+              {slide.text ? (
+                <p className="mt-1 line-clamp-2 text-sm text-zinc-200">
+                  {slide.text}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </SlideLink>
+      )
+    }
     // Expo requires its own per-slide DOM (`.expo-container` > `.expo-image` +
     // optional `.expo-content`) on the actual transformed elements. A plain
     // `<img className="expo-image">` is used deliberately: `next/image` with
@@ -273,44 +320,64 @@ export function CarouselClient(props: CarouselClientProps) {
       data-testid="carousel"
     >
       <Swiper
-        // Remount across the expo boundary so a runtime collapse to `slide`
-        // (reduced motion turning on after a first expo paint) starts from a
-        // clean instance: Swiper adds its `swiper-expo` modifier class and
-        // `--expo-padding` imperatively at init and does not reconcile them when
-        // the effect later changes, so without a fresh key the degraded track
-        // would keep expo's chrome. Non-expo effects share one key, so `fade`↔
-        // `slide` still transition in place as before.
-        key={isExpo ? 'carousel-expo' : 'carousel-plain'}
+        // Remount across the Pro-effect boundaries so a runtime collapse to
+        // `slide` (reduced motion turning on after a first Pro paint) starts from
+        // a clean instance: each ported effect pushes its own modifier class and
+        // writes inline transforms/opacity imperatively at init and does not
+        // reconcile them when the effect later changes, so without a fresh key
+        // the degraded track would keep that chrome. `slide`/`fade` share one key
+        // and still transition in place as before.
+        key={
+          isExpo
+            ? 'carousel-expo'
+            : isCarousel3d
+              ? 'carousel-3d'
+              : 'carousel-plain'
+        }
         onSwiper={(swiper) => {
           swiperRef.current = swiper
           setReady(true)
           onSwiper?.(swiper)
         }}
         onBeforeInit={(swiper) => {
-          // Expo's params are a custom (non-core) Swiper param, so they can't
-          // ride a `<Swiper>` prop without leaking as an unknown DOM attribute.
-          // The ported module installs these exact defaults via `extendParams`;
-          // assigning here keeps the resolved value the single source and lets
-          // any future CMS override flow through. Runs before `init` (where the
-          // effect reads `expoEffect`), so the first paint is already correct.
-          if (behavior.expoEffect) {
-            ;(
-              swiper.params as typeof swiper.params & {
-                expoEffect?: typeof behavior.expoEffect
-              }
-            ).expoEffect = behavior.expoEffect
+          // The Pro effects' params are custom (non-core) Swiper params, so they
+          // can't ride a `<Swiper>` prop without leaking as unknown DOM
+          // attributes. Each ported module installs these exact defaults via
+          // `extendParams`; assigning here keeps the resolved value the single
+          // source and lets any future CMS override flow through. Runs before
+          // `init` (where the effects read their params), so the first paint is
+          // already correct.
+          const params = swiper.params as typeof swiper.params & {
+            expoEffect?: typeof behavior.expoEffect
+            carousel3dEffect?: typeof behavior.carousel3dEffect
+          }
+          if (behavior.expoEffect) params.expoEffect = behavior.expoEffect
+          if (behavior.carousel3dEffect) {
+            params.carousel3dEffect = behavior.carousel3dEffect
           }
         }}
-        slidesPerView={behavior.slidesPerViewMobile}
+        slidesPerView={
+          behavior.slidesPerViewAuto ? 'auto' : behavior.slidesPerViewMobile
+        }
         direction={behavior.direction}
         centeredSlides={behavior.centeredSlides}
         spaceBetween={16}
-        breakpoints={{
-          [behavior.desktopBreakpoint]: {
-            slidesPerView: behavior.slidesPerView,
-          },
-        }}
+        // Carousel-3D sizes slides by CSS ('auto'), so it takes no numeric
+        // per-breakpoint override; every other effect keys its desktop count off
+        // the breakpoint.
+        breakpoints={
+          behavior.slidesPerViewAuto
+            ? undefined
+            : {
+                [behavior.desktopBreakpoint]: {
+                  slidesPerView: behavior.slidesPerView,
+                },
+              }
+        }
         loop={behavior.loop}
+        // The infinite Carousel-3D wants a spare cloned slide either side for a
+        // seamless wrap (the Pro demo's `loopAdditionalSlides: 1`).
+        loopAdditionalSlides={isCarousel3d ? 1 : undefined}
         effect={behavior.effect}
         fadeEffect={
           behavior.effect === 'fade' ? { crossFade: true } : undefined
