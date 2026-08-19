@@ -103,6 +103,18 @@ describe('hero group config — content fields (#38)', () => {
     })
   })
 
+  it('exposes the B6.1 banner toggles as checkboxes that default on', () => {
+    // showContent gates the overlaid text block (image + carousel);
+    // navigation/pagination toggle the carousel hero's overlaid controls.
+    // All three default ON, so an existing banner is unchanged.
+    for (const name of ['showContent', 'navigation', 'pagination']) {
+      expect(field(name), name).toMatchObject({
+        type: 'checkbox',
+        defaultValue: true,
+      })
+    }
+  })
+
   it('exposes revealContent as a checkbox that defaults to off', () => {
     // Opt-in and off by default, so a hero written before #42 emits no
     // ScrollReveal — its subtitle and social row render exactly as they did.
@@ -207,6 +219,32 @@ describe('hero group config — content fields (#38)', () => {
         standard: true,
         shader: true,
         image: true,
+        carousel: true,
+      },
+      // `showContent` (B6.1) gates the overlaid text block on the two banner
+      // heroes; `navigation`/`pagination` toggle the carousel hero's controls.
+      showContent: {
+        blank: false,
+        none: false,
+        standard: false,
+        shader: false,
+        image: true,
+        carousel: true,
+      },
+      navigation: {
+        blank: false,
+        none: false,
+        standard: false,
+        shader: false,
+        image: false,
+        carousel: true,
+      },
+      pagination: {
+        blank: false,
+        none: false,
+        standard: false,
+        shader: false,
+        image: false,
         carousel: true,
       },
     }

@@ -13,7 +13,7 @@ import {
   HERO_CARD_SHELL_CLASS,
   HERO_FULL_BLEED_FRAME_CLASS,
   HERO_FULL_BLEED_HOME_FRAME_CLASS,
-  HERO_MEDIA_FULL_BLEED_CLASS,
+  HERO_MEDIA_FULLSCREEN_FRAME_CLASS,
   HERO_MEDIA_TEXT_SHADOW_CLASS,
 } from '@/heros/presentation'
 import type { Page } from '@/payload-types'
@@ -74,6 +74,7 @@ vi.mock('@/blocks/Carousel/CarouselClient', () => ({
     <div
       data-testid="carousel-client"
       data-variant={String(props.variant)}
+      data-presentation={String(props.presentation)}
       data-effect={String(props.effect)}
       data-full-bleed={String(props.fullBleed)}
       data-autoplay={String(props.autoplay)}
@@ -242,8 +243,8 @@ describe('HeroView — type standard', () => {
   })
 })
 
-describe('HeroView — type image', () => {
-  const imagePage = () =>
+describe('HeroView — type image (full-screen, B6.1)', () => {
+  const imagePage = (extra: Partial<NonNullable<Page['hero']>> = {}) =>
     page({
       type: 'image',
       media: {
@@ -253,23 +254,30 @@ describe('HeroView — type image', () => {
         width: 1600,
         height: 900,
       },
+      ...extra,
     } as Partial<NonNullable<Page['hero']>>)
 
-  it('renders the media full-bleed behind the overlaid content, with a scrim', () => {
+  const header = (container: HTMLElement) =>
+    container.querySelector('header') as HTMLElement
+
+  it('renders a 100dvh full-screen banner pulled behind the header', () => {
     const { container } = render(<HeroView page={imagePage()} />)
 
-    // The banner sits in the shared full-bleed frame (default rhythm), as a
-    // decoration layer behind the content — aria-hidden like the shader canvas,
-    // with the meaning carried by the overlaid title/subtitle text.
-    const frame = canvas(container)
-    expect(frame).toHaveAttribute('class', HERO_FULL_BLEED_FRAME_CLASS)
-    expect(frame?.querySelector('img')).toHaveAttribute(
+    // The banner IS the header: the full-screen frame (h-dvh + w-screen breakout
+    // + negative-margin pull), a positive-flow box, edge-to-edge top and bottom.
+    expect(header(container)).toHaveAttribute(
+      'class',
+      HERO_MEDIA_FULLSCREEN_FRAME_CLASS,
+    )
+    // The uploaded media fills it (a direct `fill` child), with a legibility
+    // scrim (both themes covered by its dark: stops).
+    expect(header(container).querySelector('img')).toHaveAttribute(
       'src',
       '/media/banner.jpg',
     )
-    // Legibility scrim (both themes covered by its dark: stops).
     expect(scrim(container)).not.toBeNull()
-    expect(bottomFade(container)).not.toBeNull()
+    // Edge-to-edge bottom: no fade-into-white band (nothing below the fold).
+    expect(bottomFade(container)).toBeNull()
   })
 
   it('overlays the content stack with a legibility text-shadow', () => {
@@ -277,30 +285,50 @@ describe('HeroView — type image', () => {
 
     expect(headline()).toBeVisible()
     expect(contentStack(container)).toHaveClass(HERO_MEDIA_TEXT_SHADOW_CLASS)
+    // The overlay never blocks the media beneath it.
+    expect(contentStack(container).parentElement).toHaveClass(
+      'pointer-events-none',
+    )
   })
 
-  it('follows the route rhythm for its full-bleed frame, like the shader hero', () => {
+  it('hides the whole text block when showContent is off, keeping the media', () => {
+    const { container } = render(
+      <HeroView page={imagePage({ showContent: false })} />,
+    )
+
+    // The full-screen media still renders…
+    expect(header(container)).toHaveAttribute(
+      'class',
+      HERO_MEDIA_FULLSCREEN_FRAME_CLASS,
+    )
+    expect(header(container).querySelector('img')).not.toBeNull()
+    // …but no overlaid text block (no headline, subtitle or overlay wrapper).
+    expect(screen.queryByRole('heading', { name: 'Consulting' })).toBeNull()
+    expect(screen.queryByText('How I can help')).toBeNull()
+  })
+
+  it('keeps the social row when showContent is off but showSocialLinks is on', () => {
     const { container } = render(
       <HeroView
-        page={page({
-          type: 'image',
-          rhythm: 'homeParity',
-          media: { id: 3, url: '/media/banner.jpg', alt: 'A wide banner' },
-        } as Partial<NonNullable<Page['hero']>>)}
+        page={imagePage({ showContent: false })}
+        socialLinks={socialLinks}
       />,
     )
 
-    expect(canvas(container)).toHaveAttribute(
-      'class',
-      HERO_FULL_BLEED_HOME_FRAME_CLASS,
-    )
+    // showSocialLinks is independent: the row renders even with the text hidden.
+    expect(screen.getByRole('link', { name: 'Follow on X' })).toBeVisible()
+    // Still no text block.
+    expect(screen.queryByRole('heading', { name: 'Consulting' })).toBeNull()
+    // The social row is overlaid on the banner.
+    expect(socialRow(container)).not.toBeNull()
   })
 
   it('renders the content stack even when no media is stored', () => {
     const { container } = render(<HeroView page={page({ type: 'image' })} />)
 
     expect(headline()).toBeVisible()
-    expect(canvas(container)).toBeNull()
+    expect(header(container)).toHaveClass('relative')
+    expect(header(container)).not.toHaveClass('w-screen')
   })
 })
 
@@ -312,7 +340,7 @@ describe('HeroView — type carousel', () => {
 
   const carouselClient = () => screen.queryByTestId('carousel-client')
 
-  it('mounts the reused CarouselClient with the fixed hero knobs', () => {
+  it('mounts the reused CarouselClient in hero presentation with the fixed knobs', () => {
     render(
       <HeroView
         page={page({ type: 'carousel', effect: 'expo' })}
@@ -322,10 +350,12 @@ describe('HeroView — type carousel', () => {
 
     const leaf = carouselClient()
     expect(leaf).not.toBeNull()
-    // The reuse contract: media variant, hero-owned frame (fullBleed off so the
-    // leaf's effect-gated breakout is never applied twice), autoplay off,
-    // nav/pagination on, the editor's effect passed through, resolved slides.
+    // The reuse contract: media variant, hero presentation (fill + overlaid
+    // controls), hero-owned frame (fullBleed off so the leaf's effect-gated
+    // breakout is never applied twice), autoplay off, nav/pagination default on,
+    // the editor's effect passed through, resolved slides.
     expect(leaf).toHaveAttribute('data-variant', 'media')
+    expect(leaf).toHaveAttribute('data-presentation', 'hero')
     expect(leaf).toHaveAttribute('data-full-bleed', 'false')
     expect(leaf).toHaveAttribute('data-autoplay', 'false')
     expect(leaf).toHaveAttribute('data-navigation', 'true')
@@ -334,15 +364,16 @@ describe('HeroView — type carousel', () => {
     expect(leaf).toHaveAttribute('data-slide-count', '2')
   })
 
-  it('owns the full-bleed frame and overlays content that never blocks the carousel', () => {
+  it('renders a 100dvh full-screen frame and overlays content that never blocks the carousel', () => {
     const { container } = render(
       <HeroView page={page({ type: 'carousel' })} heroSlides={heroSlides} />,
     )
 
-    // The hero owns the horizontal breakout (the leaf gets fullBleed=false).
+    // The hero owns the full-screen frame (h-dvh + w-screen breakout + pull);
+    // the leaf gets fullBleed=false so the breakout is never doubled.
     expect(container.querySelector('header')).toHaveAttribute(
       'class',
-      HERO_MEDIA_FULL_BLEED_CLASS,
+      HERO_MEDIA_FULLSCREEN_FRAME_CLASS,
     )
     // Overlaid content is pointer-events-none so drag/arrows/keyboard reach the
     // carousel beneath it; the scrim likewise never intercepts.
@@ -351,6 +382,55 @@ describe('HeroView — type carousel', () => {
     expect(scrim(container)).toHaveClass('pointer-events-none')
     expect(contentStack(container)).toHaveClass(HERO_MEDIA_TEXT_SHADOW_CLASS)
     expect(headline()).toBeVisible()
+  })
+
+  it('respects the per-hero navigation and pagination toggles', () => {
+    render(
+      <HeroView
+        page={page({
+          type: 'carousel',
+          navigation: false,
+          pagination: false,
+        })}
+        heroSlides={heroSlides}
+      />,
+    )
+
+    expect(carouselClient()).toHaveAttribute('data-navigation', 'false')
+    expect(carouselClient()).toHaveAttribute('data-pagination', 'false')
+  })
+
+  it('hides the text block when showContent is off but keeps the carousel', () => {
+    const { container } = render(
+      <HeroView
+        page={page({ type: 'carousel', showContent: false })}
+        heroSlides={heroSlides}
+      />,
+    )
+
+    // The carousel still mounts full-screen…
+    expect(carouselClient()).not.toBeNull()
+    expect(container.querySelector('header')).toHaveAttribute(
+      'class',
+      HERO_MEDIA_FULLSCREEN_FRAME_CLASS,
+    )
+    // …but no overlaid text block, and no empty overlay layer either.
+    expect(screen.queryByRole('heading', { name: 'Consulting' })).toBeNull()
+    expect(contentStack(container)).toBeNull()
+  })
+
+  it('keeps the social row when showContent is off but showSocialLinks is on', () => {
+    const { container } = render(
+      <HeroView
+        page={page({ type: 'carousel', showContent: false })}
+        socialLinks={socialLinks}
+        heroSlides={heroSlides}
+      />,
+    )
+
+    expect(screen.getByRole('link', { name: 'Follow on X' })).toBeVisible()
+    expect(screen.queryByRole('heading', { name: 'Consulting' })).toBeNull()
+    expect(socialRow(container)).not.toBeNull()
   })
 
   it('falls back to the bare content stack when no slides resolve', () => {

@@ -99,6 +99,25 @@ export interface CarouselSlideData {
 export interface CarouselClientProps extends CarouselBehaviorInput {
   variant: CarouselVariant
   slides: CarouselSlideData[]
+  /**
+   * How the leaf presents itself, an opt-in purely presentational knob (B6.1):
+   *
+   * - `'inline'` (default) — today's exact DOM: `media` slides render in a
+   *   `16/9` rounded box, the nav arrows sit in a row *below* the track, and the
+   *   pagination is seated by the track's `!pb-10` bottom padding. Every
+   *   existing caller (block/testimonials/lab body) leaves this unset, so their
+   *   markup is byte-identical.
+   * - `'hero'` — the `image`/`carousel` full-screen hero: `media` slides **fill**
+   *   their slide box (`h-full`, no aspect ratio, no rounding) so a slide fills
+   *   the 100dvh hero, and the nav arrows + pagination render **overlaid at the
+   *   bottom-centre inside the swiper** rather than below it. Nothing else about
+   *   the leaf changes — the instance-ref nav, keyboard, a11y and every effect
+   *   are identical; only slide sizing and control *position* differ.
+   *
+   * Kept a leaf prop, not a stored knob on {@link CarouselBehaviorInput}: the
+   * mapping layer (`resolveCarouselBehavior`) is untouched.
+   */
+  presentation?: 'inline' | 'hero'
   /** Test/Storybook hook to capture the Swiper instance; never passed by the server render. */
   onSwiper?: (swiper: SwiperClass) => void
 }
@@ -144,7 +163,10 @@ function SlideLink({
  * @param props - Resolved slides + variant + the serializable behaviour knobs.
  */
 export function CarouselClient(props: CarouselClientProps) {
-  const { variant, slides, onSwiper } = props
+  const { variant, slides, presentation = 'inline', onSwiper } = props
+  // Opt-in full-screen hero mode (B6.1). Default `'inline'` keeps every existing
+  // caller byte-identical; `'hero'` fills slides and overlays the controls.
+  const isHero = presentation === 'hero'
   const reducedMotion = usePrefersReducedMotion()
   const swiperRef = useRef<SwiperClass | null>(null)
   const [ready, setReady] = useState(false)
@@ -268,14 +290,23 @@ export function CarouselClient(props: CarouselClientProps) {
       )
     }
     if (variant === 'media') {
+      // Hero mode fills the slide box — full height, no `16/9` aspect box, no
+      // rounding — so the slide fills the 100dvh hero the leaf sits in. Inline
+      // keeps the exact `aspect-[16/9] rounded-2xl` box (byte-identical).
       return (
         <SlideLink href={slide.href} className="block h-full">
-          <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800">
+          <div
+            className={
+              isHero
+                ? 'relative h-full w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800'
+                : 'relative aspect-[16/9] w-full overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800'
+            }
+          >
             <Image
               src={slide.src}
               alt={slide.alt}
               fill
-              sizes="(min-width: 768px) 60vw, 100vw"
+              sizes={isHero ? '100vw' : '(min-width: 768px) 60vw, 100vw'}
               className="object-cover"
             />
           </div>
@@ -341,6 +372,8 @@ export function CarouselClient(props: CarouselClientProps) {
       // other carousel renders inside its wrapper exactly as before.
       className={cn(
         'relative',
+        // Hero mode fills the 100dvh hero container it sits in; a no-op inline.
+        isHero && 'h-full',
         carouselFullBleedClass(behavior.fullBleed),
         paginationTokenClass,
       )}
@@ -444,15 +477,23 @@ export function CarouselClient(props: CarouselClientProps) {
         // padding that seats the pagination dots. Spring adds its own modifier
         // class so `effectSpring.css` can scope the cubic-bezier slide timing to
         // this track only (never leaking to another carousel or a degraded one).
-        className={cn(!isExpo && '!pb-10', isSpring && 'swiper-spring')}
+        // Hero mode fills the container (`h-full`) and drops the `!pb-10` that
+        // seats the pagination below the track — in hero mode the dots overlay
+        // the slide at its bottom edge instead. Inline is unchanged.
+        className={cn(
+          !isExpo && !isHero && '!pb-10',
+          isHero && 'h-full',
+          isSpring && 'swiper-spring',
+        )}
       >
         {slides.map((slide, index) => (
           <SwiperSlide
             key={slide.id ?? index}
             // Expo fills a bounded track height, so its slides take full height
             // (horizontal: 100% of the fixed Swiper height; vertical: Swiper's
-            // computed per-slide height). Other variants stay auto-height.
-            className={isExpo ? 'h-full' : 'h-auto'}
+            // computed per-slide height). Hero mode likewise fills the 100dvh
+            // hero. Other variants stay auto-height.
+            className={isExpo || isHero ? 'h-full' : 'h-auto'}
           >
             {renderSlide(slide)}
           </SwiperSlide>
@@ -460,7 +501,21 @@ export function CarouselClient(props: CarouselClientProps) {
       </Swiper>
 
       {behavior.navigation ? (
-        <div className="mt-4 flex items-center justify-center gap-3">
+        // Hero mode overlays the arrows at the bottom-centre *inside* the swiper
+        // (within the 100dvh, above the pagination dots), kept an auto-width
+        // centred row so a drag on the rest of the bottom band still reaches the
+        // slides. Inline keeps the `mt-4` row below the track. The exact
+        // `bottom-*` offset is dialed on staging.
+        <div
+          // Positional class first so inline stays byte-identical to the
+          // original `mt-4 flex items-center justify-center gap-3` string.
+          className={cn(
+            isHero
+              ? 'absolute bottom-8 left-1/2 z-10 -translate-x-1/2'
+              : 'mt-4',
+            'flex items-center justify-center gap-3',
+          )}
+        >
           <button
             type="button"
             aria-label="Previous slide"

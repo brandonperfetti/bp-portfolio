@@ -9,7 +9,7 @@ import {
   HERO_CARD_SHELL_CLASS,
   HERO_FULL_BLEED_FRAME_CLASS,
   HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS,
-  HERO_MEDIA_FULL_BLEED_CLASS,
+  HERO_MEDIA_FULLSCREEN_FRAME_CLASS,
 } from '@/heros/presentation'
 import type { Page } from '@/payload-types'
 
@@ -600,10 +600,11 @@ const heroSlides: CarouselSlideData[] = [
 ]
 
 /**
- * `type: image` — a full-bleed image banner. The uploaded media fills the same
- * frame the shader full-bleed uses (`-z-10`, edge-to-edge, pulled up behind the
- * header), with a legibility scrim and the content stack overlaid on top with a
- * text-shadow. Distinct from `standard`, whose image is inset *below* the stack.
+ * `type: image` — a full-screen (100dvh) image banner (B6.1). The uploaded
+ * media fills exactly one dynamic viewport height, pulled up behind the header
+ * (edge-to-edge top and bottom), with a legibility scrim and the content stack
+ * overlaid on top with a text-shadow. Distinct from `standard`, whose image is
+ * inset *below* the stack.
  */
 export const TypeImage: Story = {
   args: {
@@ -620,11 +621,14 @@ export const TypeImage: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    const frame = canvasFrame(canvasElement)
-    await expect(frame).toHaveAttribute('class', HERO_FULL_BLEED_FRAME_CLASS)
-    // The banner is a decoration layer (aria-hidden, like the shader canvas),
-    // so it is queried structurally, not by an accessible img role.
-    await expect(frame?.querySelector('img')).not.toBeNull()
+    // The banner IS the header: the full-screen frame (h-dvh + w-screen + pull).
+    const header = canvasElement.querySelector('header') as HTMLElement
+    await expect(header).toHaveAttribute(
+      'class',
+      HERO_MEDIA_FULLSCREEN_FRAME_CLASS,
+    )
+    // The uploaded media fills it (a direct `fill` child).
+    await expect(header.querySelector('img')).not.toBeNull()
     // Scrim present for legibility over the photo, in both themes.
     await expect(
       canvasElement.querySelector('.bg-gradient-to-r'),
@@ -636,9 +640,48 @@ export const TypeImage: Story = {
 }
 
 /**
- * `type: carousel` — a full-bleed image carousel banner. The reused
- * `CarouselClient` (media variant, autoplay off, keyboard/nav/pagination on)
- * fills a hero-owned horizontal breakout, and the content stack overlays it
+ * `type: image, showContent: false` — the clean-banner treatment (B6.1): the
+ * full-screen image renders with no overlaid text block at all (no headline,
+ * subtitle, hero text or CTAs), for a page that wants the photo to speak for
+ * itself. The social row would still render independently if `showSocialLinks`
+ * were on.
+ */
+export const TypeImageNoContent: Story = {
+  args: {
+    page: page({
+      type: 'image',
+      showContent: false,
+      media: {
+        id: 1,
+        url: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684298666/image-1_ebktnx.jpg',
+        alt: 'Desk with a laptop and notebook',
+        width: 1600,
+        height: 900,
+      },
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const header = canvasElement.querySelector('header') as HTMLElement
+    // The media still fills the full-screen frame…
+    await expect(header).toHaveAttribute(
+      'class',
+      HERO_MEDIA_FULLSCREEN_FRAME_CLASS,
+    )
+    await expect(header.querySelector('img')).not.toBeNull()
+    // …but no overlaid headline, and no empty overlay layer.
+    await expect(
+      canvas.queryByRole('heading', { name: 'Working together' }),
+    ).toBeNull()
+    await expect(header.querySelector('.max-w-2xl')).toBeNull()
+  },
+}
+
+/**
+ * `type: carousel` — a full-screen (100dvh) image carousel banner (B6.1). The
+ * reused `CarouselClient` runs in `presentation="hero"` mode — slides fill the
+ * frame and the nav/pagination overlay at the bottom edge — inside the
+ * hero-owned full-screen frame. The content stack overlays it
  * `pointer-events-none` so drag / arrows / keyboard all still reach the
  * carousel. The five effects are selectable; this story uses the default slide.
  */
@@ -653,9 +696,11 @@ export const TypeCarousel: Story = {
     await expect(
       canvasElement.querySelector('[data-testid="carousel"]'),
     ).not.toBeNull()
-    // The hero owns the full-bleed breakout.
+    // The hero owns the full-screen frame.
     const header = canvasElement.querySelector('header') as HTMLElement
-    await expect(header).toHaveClass(...HERO_MEDIA_FULL_BLEED_CLASS.split(' '))
+    await expect(header).toHaveClass(
+      ...HERO_MEDIA_FULLSCREEN_FRAME_CLASS.split(' '),
+    )
     // The overlaid content never blocks the carousel beneath it. Scope the
     // query inside the hero header — the story decorator carries its own
     // `max-w-2xl` reading-column wrapper as an ancestor.
@@ -664,6 +709,58 @@ export const TypeCarousel: Story = {
     await expect(
       canvas.getByRole('heading', { name: 'Working together' }),
     ).toBeVisible()
+  },
+}
+
+/**
+ * `type: carousel` with the controls overlaid at the bottom of the hero (B6.1):
+ * the nav arrows and the pagination dots render *inside* the swiper at the
+ * bottom-centre (within the 100dvh), not in a row below it — the opt-in
+ * `CarouselClient` hero mode. Both are on here; each is independently toggleable
+ * per hero via `navigation` / `pagination`.
+ */
+export const TypeCarouselOverlaidControls: Story = {
+  args: {
+    page: page({ type: 'carousel' }),
+    heroSlides,
+  },
+  play: async ({ canvasElement }) => {
+    const carousel = canvasElement.querySelector(
+      '[data-testid="carousel"]',
+    ) as HTMLElement
+    // The nav-arrow row is absolutely positioned inside the carousel (overlaid),
+    // not a static `mt-4` row below it.
+    const prev = canvasElement.querySelector(
+      'button[aria-label="Previous slide"]',
+    ) as HTMLElement
+    const navRow = prev.parentElement as HTMLElement
+    await expect(navRow).toHaveClass('absolute')
+    await expect(carousel.contains(navRow)).toBe(true)
+    // The nav row's bottom sits within the carousel box (not below it).
+    await expect(navRow.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      carousel.getBoundingClientRect().bottom + 1,
+    )
+  },
+}
+
+/**
+ * `type: carousel` with both controls off (B6.1): `navigation: false` and
+ * `pagination: false` remove the arrows and the dots — the per-hero toggles,
+ * default on, turned off here. The carousel still drags and keyboard-navigates.
+ */
+export const TypeCarouselControlsOff: Story = {
+  args: {
+    page: page({ type: 'carousel', navigation: false, pagination: false }),
+    heroSlides,
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      canvasElement.querySelector('[data-testid="carousel"]'),
+    ).not.toBeNull()
+    await expect(
+      canvasElement.querySelector('button[aria-label="Next slide"]'),
+    ).toBeNull()
+    await expect(canvasElement.querySelector('.swiper-pagination')).toBeNull()
   },
 }
 

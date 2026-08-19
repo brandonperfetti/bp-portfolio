@@ -281,6 +281,18 @@ export interface Page {
      * How the carousel transitions between slides. Reduced motion collapses Fade, Expo, Carousel 3D, and Spring to Slide.
      */
     effect?: ('slide' | 'fade' | 'expo' | 'carousel3d' | 'spring') | null;
+    /**
+     * Overlay the Title, Subtitle, Hero text, and CTA links on the full-screen banner. Turn off for a clean image/carousel with no text over it. The social icon row is controlled separately by “Show social links”.
+     */
+    showContent?: boolean | null;
+    /**
+     * Show the previous/next arrows, overlaid at the bottom of the carousel hero.
+     */
+    navigation?: boolean | null;
+    /**
+     * Show the pagination dots, overlaid at the bottom of the carousel hero.
+     */
+    pagination?: boolean | null;
   };
   layout: (
     | ArticlesArchiveBlock
@@ -1929,6 +1941,9 @@ export interface PagesSelect<T extends boolean = true> {
               id?: T;
             };
         effect?: T;
+        showContent?: T;
+        navigation?: T;
+        pagination?: T;
       };
   layout?:
     | T

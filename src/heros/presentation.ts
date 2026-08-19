@@ -289,6 +289,43 @@ export const HERO_MEDIA_FULL_BLEED_CLASS =
   'relative left-1/2 w-screen -translate-x-1/2'
 
 /**
+ * The **full-screen** frame for the `image` and `carousel` heroes (B6.1) — a
+ * true 100dvh banner pulled up behind the site header, edge-to-edge top *and*
+ * bottom, with nothing pushed below the fold.
+ *
+ * @remarks Three things, each the smallest mechanism that works, all held as
+ * complete literal strings so Tailwind's scan finds them:
+ *
+ * - *Height*: `h-dvh` — exactly one **dynamic** viewport height, so the banner
+ *   fills the screen and the mobile URL bar collapsing/expanding never leaves a
+ *   gap or an overflow (the reason `dvh`, not `vh`).
+ * - *Vertical pull*: `-mt-32 sm:-mt-48` (128px / 192px) — the same arithmetic
+ *   the shader frame's `-top-32/-48` uses, but as a **negative top margin** on a
+ *   positive-flow box rather than a `-z-10` absolute offset: the 64px
+ *   {@link ROUTE_HEADER_HEIGHT_PX} header + the route Container's `mt-16`
+ *   (64px) / `sm:mt-32` (128px), so the hero's top reaches the document top and
+ *   the fixed header floats over it with no gray band above. Because the box
+ *   stays in normal flow, the first page block sits directly below the 100dvh
+ *   hero with no occlusion (unlike the shader's `-z-10` isolation trap) — the
+ *   pull just moves the hero *and* everything after it up by the header+margin.
+ * - *Horizontal breakout*: the same `left-1/2 w-screen -translate-x-1/2` idiom
+ *   {@link HERO_MEDIA_FULL_BLEED_CLASS} uses, so the banner reaches the viewport
+ *   edges from inside the route's centered reading column (the classic-scrollbar
+ *   caveat the route layout's `overflow-x: clip` absorbs, W1B4).
+ *
+ * `relative` (positive-flow, **not** `-z-10`): the carousel hero must stay
+ * interactive — its slides drag, its arrows click — so it can't sit in the
+ * negative layer, and its overlaid content + scrim + controls position against
+ * this box.
+ *
+ * The exact pull/height numbers are a **starting point**: like the shader/Expo
+ * height work, the orchestrator dials them on staging across three widths. Get
+ * the structure right here; pixel-perfect is a QA step.
+ */
+export const HERO_MEDIA_FULLSCREEN_FRAME_CLASS =
+  'relative left-1/2 -mt-32 h-dvh w-screen -translate-x-1/2 sm:-mt-48'
+
+/**
  * Legibility scrim over an overlaid-content hero (`image`, `carousel`) — the
  * same left-to-right wash the shader hero paints (`ShaderHero`'s `scrim`), so
  * the title stays readable over a busy photo in both themes. `pointer-events-none`

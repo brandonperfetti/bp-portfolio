@@ -29,7 +29,7 @@ import {
   HERO_CARD_PANEL_CLASS,
   HERO_CARD_SHELL_CLASS,
   HERO_FULL_BLEED_PANEL_CLASS,
-  HERO_MEDIA_FULL_BLEED_CLASS,
+  HERO_MEDIA_FULLSCREEN_FRAME_CLASS,
   HERO_MEDIA_SCRIM_CLASS,
   HERO_MEDIA_TEXT_SHADOW_CLASS,
   heroPresentation,
@@ -82,15 +82,22 @@ function MaybeReveal({
  * is what removes the row.
  * @param className - Extra classes for the text column: the card
  * presentation adds a text shadow, since its text sits directly on the canvas.
+ * @param showText - Whether to render the text block (title + subtitle + hero
+ * rich text + CTA links). Default `true`. The banner heroes (`image`,
+ * `carousel`) pass `false` when their `showContent` toggle is off, which hides
+ * the whole text block while the social row still renders independently (gated
+ * only by `showSocialLinks`, which upstream already emptied `socialLinks`).
  */
 function HeroContent({
   page,
   socialLinks,
   className,
+  showText = true,
 }: {
   page: Page
   socialLinks: ResolvedSocialLink[]
   className?: string
+  showText?: boolean
 }) {
   const links = page.hero?.links
   // Opt-in, off by default: when off, `MaybeReveal` renders its children bare,
@@ -99,22 +106,26 @@ function HeroContent({
 
   return (
     <div className={className ? `max-w-2xl ${className}` : 'max-w-2xl'}>
-      <AnimatedHeadline
-        text={page.title}
-        variant={heroHeadlineVariant(page.hero?.headlineVariant)}
-        className={HERO_HEADLINE_CLASS}
-      />
-      {page.subtitle ? (
-        <MaybeReveal enabled={revealContent} params={HERO_SUBTITLE_REVEAL}>
-          <p className={HERO_SUBTITLE_CLASS}>{page.subtitle}</p>
-        </MaybeReveal>
+      {showText ? (
+        <>
+          <AnimatedHeadline
+            text={page.title}
+            variant={heroHeadlineVariant(page.hero?.headlineVariant)}
+            className={HERO_HEADLINE_CLASS}
+          />
+          {page.subtitle ? (
+            <MaybeReveal enabled={revealContent} params={HERO_SUBTITLE_REVEAL}>
+              <p className={HERO_SUBTITLE_CLASS}>{page.subtitle}</p>
+            </MaybeReveal>
+          ) : null}
+          {page.hero?.richText ? (
+            <div className="mt-6">
+              <RichTextContent content={page.hero.richText} />
+            </div>
+          ) : null}
+        </>
       ) : null}
-      {page.hero?.richText ? (
-        <div className="mt-6">
-          <RichTextContent content={page.hero.richText} />
-        </div>
-      ) : null}
-      {links?.length ? (
+      {showText && links?.length ? (
         // `pointer-events-auto` opts the CTA row back in when this stack is
         // overlaid inside the carousel hero's `pointer-events-none` frame, so
         // the links stay clickable while a drag on empty overlay area still
@@ -243,55 +254,73 @@ export function HeroView({
     hero?.rhythm,
   ).heroFullBleedFrameClass
 
-  // `image` — a full-bleed image banner. It mirrors the `shader`+fullBleed
-  // frame (the same `-z-10` decoration pull and clip panel, so it inherits the
-  // route's isolation contract), swapping the shader canvas for the uploaded
-  // media, and overlays the content stack on top with a scrim + text-shadow for
-  // legibility over a photo. Both themes are covered by the scrim's `dark:`
-  // stops. An image is static — nothing to degrade under reduced motion.
+  // The banner heroes' overlaid-content toggle (B6.1), default ON: when off,
+  // `HeroContent` renders no text block (title/subtitle/richText/links) — the
+  // social row still renders independently, gated only by `showSocialLinks`
+  // (which upstream already emptied `socialLinks` when off).
+  const showContent = hero?.showContent ?? true
+
+  // The overlaid stack for a banner hero (`image`/`carousel`): the content
+  // column, vertically centred over the media, `pointer-events-none` so a drag
+  // on empty overlay area still reaches the carousel beneath (the CTA/social
+  // rows opt back in). Omitted entirely when there is nothing to overlay —
+  // `showContent` off and no social row — so a clean banner has no empty layer.
+  const bannerOverlay =
+    showContent || socialLinks.length ? (
+      <div className="pointer-events-none absolute inset-0 z-10 flex items-center px-4 sm:px-8">
+        <HeroContent
+          page={page}
+          socialLinks={socialLinks}
+          className={HERO_MEDIA_TEXT_SHADOW_CLASS}
+          showText={showContent}
+        />
+      </div>
+    ) : null
+
+  // `image` — a full-screen (100dvh) image banner (B6.1): the uploaded media
+  // fills exactly one dynamic viewport height, pulled up behind the site header
+  // (edge-to-edge top and bottom, nothing below the fold), with a legibility
+  // scrim and the content stack overlaid on top. Both themes are covered by the
+  // scrim's `dark:` stops. An image is static — nothing to degrade under reduced
+  // motion. With no media it falls back to the bare content stack (`none` look).
   if (type === 'image') {
+    if (!media?.url) {
+      return (
+        <header className="relative">
+          <HeroContent page={page} socialLinks={socialLinks} />
+        </header>
+      )
+    }
     return (
-      <header className="relative">
-        {media?.url ? (
-          <div aria-hidden className={fullBleedFrameClass}>
-            <div className={HERO_FULL_BLEED_PANEL_CLASS}>
-              <div className="relative h-full overflow-hidden">
-                <Image
-                  src={media.url}
-                  alt={media.alt || ''}
-                  fill
-                  sizes="100vw"
-                  className="object-cover"
-                  priority
-                />
-                <div className={HERO_MEDIA_SCRIM_CLASS} />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-white dark:to-zinc-900" />
-              </div>
-            </div>
-          </div>
-        ) : null}
-        <div className="relative z-10">
-          <HeroContent
-            page={page}
-            socialLinks={socialLinks}
-            className={HERO_MEDIA_TEXT_SHADOW_CLASS}
-          />
-        </div>
+      <header className={HERO_MEDIA_FULLSCREEN_FRAME_CLASS}>
+        <Image
+          src={media.url}
+          alt={media.alt || ''}
+          fill
+          sizes="100vw"
+          className="object-cover"
+          priority
+        />
+        <div className={HERO_MEDIA_SCRIM_CLASS} />
+        {bannerOverlay}
       </header>
     )
   }
 
-  // `carousel` — a full-bleed image carousel banner. Unlike the shader/image
-  // decoration (which sits at `-z-10`, `pointer-events-none`), the carousel must
-  // stay interactive, so the hero owns a *positive-flow* horizontal breakout and
-  // renders the reused `CarouselClient` inside it. `fullBleed={false}` because
-  // the leaf's own breakout is effect-gated (only expo/carousel3d/spring) and
-  // the hero already owns the frame — passing it on would double the breakout.
-  // The scrim and the content stack overlay the carousel `pointer-events-none`,
-  // so a drag, an arrow click, keyboard nav and pagination all reach the leaf
-  // beneath. Full-bleed, autoplay-off and nav/pagination are fixed here, not
-  // editor knobs. A carousel with no resolvable slides falls back to the bare
-  // content stack (the `none` look) rather than a broken zero-height overlay.
+  // `carousel` — a full-screen (100dvh) image carousel banner (B6.1). Like the
+  // image hero it fills one dynamic viewport height pulled behind the header,
+  // but the carousel must stay interactive (its slides drag, its arrows click),
+  // so the frame is a *positive-flow* box (not a `-z-10` decoration) and the
+  // reused `CarouselClient` renders inside it in `presentation="hero"` mode —
+  // slides fill the frame and the nav/pagination overlay at the bottom edge.
+  // `fullBleed={false}` because the leaf's own breakout is effect-gated (only
+  // expo/carousel3d/spring) and the hero already owns the frame — passing it on
+  // would double the breakout. `navigation`/`pagination` are per-hero toggles
+  // (default on); autoplay is fixed off. The scrim and the content stack overlay
+  // the carousel `pointer-events-none`, so a drag, an arrow click, keyboard nav
+  // and pagination all reach the leaf beneath. A carousel with no resolvable
+  // slides falls back to the bare content stack (the `none` look) rather than a
+  // broken zero-height overlay.
   if (type === 'carousel') {
     if (!heroSlides.length) {
       return (
@@ -301,24 +330,19 @@ export function HeroView({
       )
     }
     return (
-      <header className={HERO_MEDIA_FULL_BLEED_CLASS}>
+      <header className={HERO_MEDIA_FULLSCREEN_FRAME_CLASS}>
         <CarouselClient
           variant="media"
+          presentation="hero"
           slides={heroSlides}
           effect={hero?.effect}
           autoplay={false}
-          navigation
-          pagination
+          navigation={hero?.navigation ?? true}
+          pagination={hero?.pagination ?? true}
           fullBleed={false}
         />
         <div className={HERO_MEDIA_SCRIM_CLASS} />
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center px-4 sm:px-8">
-          <HeroContent
-            page={page}
-            socialLinks={socialLinks}
-            className={HERO_MEDIA_TEXT_SHADOW_CLASS}
-          />
-        </div>
+        {bannerOverlay}
       </header>
     )
   }

@@ -441,6 +441,95 @@ export const ExpoFullBleed: Story = {
   },
 }
 
+// ── hero presentation (B6.1): the opt-in full-screen hero mode ──────────────
+
+/**
+ * `presentation: 'hero'` (B6.1) — the opt-in full-screen hero mode the
+ * `image`/`carousel` heroes use. Two things change from the default `'inline'`
+ * mode, nothing else: `media` slides **fill** their box (`h-full`, no
+ * `aspect-[16/9]`, no `rounded-2xl`) so a slide fills the 100dvh hero, and the
+ * nav arrows + pagination render **overlaid at the bottom-centre inside the
+ * swiper** rather than in a row below. Framed here in a fixed-height box (the
+ * hero gives `h-dvh` in production) so the `h-full` fill chain has a definite
+ * height to resolve against.
+ */
+export const HeroPresentationMode: Story = {
+  args: { variant: 'media', presentation: 'hero' },
+  decorators: [
+    (Story) => (
+      <div className="h-[70vh] w-full" data-testid="hero-frame">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const carousel = canvasElement.querySelector(
+      '[data-testid="carousel"]',
+    ) as HTMLElement
+    // The leaf fills its host: the container, the swiper and the slides all take
+    // full height, and the `!pb-10` that seats inline pagination is dropped.
+    await expect(carousel).toHaveClass('h-full')
+    const swiper = canvasElement.querySelector('.swiper') as HTMLElement
+    await expect(swiper).toHaveClass('h-full')
+    await expect(swiper.classList.contains('!pb-10')).toBe(false)
+
+    // Media slides fill — no aspect box, no rounding.
+    const slideBox = canvasElement.querySelector(
+      '.swiper-slide .relative',
+    ) as HTMLElement
+    await expect(slideBox).toHaveClass('h-full')
+    await expect(slideBox.classList.contains('aspect-[16/9]')).toBe(false)
+    await expect(slideBox.classList.contains('rounded-2xl')).toBe(false)
+
+    // The nav-arrow row is overlaid absolutely inside the swiper (not a row
+    // below it), and its bottom stays within the carousel box.
+    const prev = canvasElement.querySelector(
+      'button[aria-label="Previous slide"]',
+    ) as HTMLElement
+    const navRow = prev.parentElement as HTMLElement
+    await expect(navRow).toHaveClass('absolute')
+    await expect(navRow.classList.contains('mt-4')).toBe(false)
+    await expect(navRow.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      carousel.getBoundingClientRect().bottom + 1,
+    )
+
+    // Pagination overlays the slide at the bottom (present, inside the swiper).
+    await expect(swiper.querySelector('.swiper-pagination')).not.toBeNull()
+  },
+}
+
+/**
+ * The proof the hero mode is strictly opt-in: the default `'inline'` render is
+ * byte-identical to before B6.1 — `media` slides keep their aspect box and
+ * rounding, the swiper keeps its `!pb-10`, and the nav arrows sit in the `mt-4`
+ * row below the track (not overlaid). Every existing carousel (block /
+ * testimonials / lab body) leaves `presentation` unset and renders exactly this.
+ */
+export const InlinePresentationUnchanged: Story = {
+  args: { variant: 'media' },
+  play: async ({ canvasElement }) => {
+    const swiper = canvasElement.querySelector('.swiper') as HTMLElement
+    // Inline keeps the pagination-seating padding and does NOT fill.
+    await expect(swiper.classList.contains('!pb-10')).toBe(true)
+    await expect(swiper.classList.contains('h-full')).toBe(false)
+
+    // Media slides keep the aspect box + rounding.
+    const slideBox = canvasElement.querySelector(
+      '.swiper-slide .relative',
+    ) as HTMLElement
+    await expect(slideBox.classList.contains('aspect-[16/9]')).toBe(true)
+    await expect(slideBox.classList.contains('rounded-2xl')).toBe(true)
+
+    // Nav arrows sit in the row below the track, not overlaid.
+    const prev = canvasElement.querySelector(
+      'button[aria-label="Previous slide"]',
+    ) as HTMLElement
+    const navRow = prev.parentElement as HTMLElement
+    await expect(navRow).toHaveClass('mt-4')
+    await expect(navRow.classList.contains('absolute')).toBe(false)
+  },
+}
+
 // ── carousel3d (#63): the ported infinite 3D carousel ────────────────────────
 
 /**

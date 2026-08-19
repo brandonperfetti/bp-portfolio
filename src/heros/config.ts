@@ -52,6 +52,14 @@ import {
  * | `headlineVariant` | – | ✓ | ✓ | ✓ | ✓ | ✓ |
  * | `showSocialLinks` | – | ✓ | ✓ | ✓ | ✓ | ✓ |
  * | `revealContent` | – | ✓ | ✓ | ✓ | ✓ | ✓ |
+ * | `showContent` | – | – | – | – | ✓ | ✓ |
+ * | `navigation` | – | – | – | – | – | ✓ |
+ * | `pagination` | – | – | – | – | – | ✓ |
+ *
+ * `showContent` (default on) gates the overlaid text block on the two
+ * full-screen banner heroes (`image`, `carousel`); `navigation`/`pagination`
+ * (default on) toggle the carousel hero's overlaid arrows/dots. All three are
+ * additive booleans defaulting on, so an existing banner is unchanged.
  *
  * The `headlineVariant`/`showSocialLinks`/`revealContent` rows are true for
  * every type except `blank` because **all of them render the content stack** —
@@ -285,6 +293,48 @@ export const hero: Field = {
       enumName: HERO_CAROUSEL_EFFECT_ENUM_NAME,
       label: 'Carousel effect',
       options: [...CAROUSEL_EFFECT_OPTIONS],
+    },
+    {
+      // The overlaid-content toggle for the two full-screen banner heroes
+      // (`image`, `carousel`). Default ON, so an existing banner keeps its
+      // overlaid title/subtitle/hero-text/links. When OFF, `HeroView` renders
+      // NO overlaid text block — just the image/carousel — while the social row
+      // stays independently controlled by `showSocialLinks` (see HeroView).
+      name: 'showContent',
+      type: 'checkbox',
+      admin: {
+        condition: (_, { type } = {}) =>
+          type === 'image' || type === 'carousel',
+        description:
+          'Overlay the Title, Subtitle, Hero text, and CTA links on the full-screen banner. Turn off for a clean image/carousel with no text over it. The social icon row is controlled separately by “Show social links”.',
+      },
+      defaultValue: true,
+      label: 'Show hero content',
+    },
+    {
+      // Per-hero carousel control toggles (default ON), passed straight through
+      // to `CarouselClient`. Carousel-only — the arrows/dots have nothing to
+      // toggle on the other hero types.
+      name: 'navigation',
+      type: 'checkbox',
+      admin: {
+        condition: (_, { type } = {}) => type === 'carousel',
+        description:
+          'Show the previous/next arrows, overlaid at the bottom of the carousel hero.',
+      },
+      defaultValue: true,
+      label: 'Show carousel arrows',
+    },
+    {
+      name: 'pagination',
+      type: 'checkbox',
+      admin: {
+        condition: (_, { type } = {}) => type === 'carousel',
+        description:
+          'Show the pagination dots, overlaid at the bottom of the carousel hero.',
+      },
+      defaultValue: true,
+      label: 'Show carousel dots',
     },
   ],
   label: false,

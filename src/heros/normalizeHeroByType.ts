@@ -15,6 +15,11 @@ import type { FieldHook } from 'payload'
  *   carry orphan slide uploads or a stray effect the moment its type changes.
  *   `slides` clears to `[]` (an array field clears empty, not null — Payload
  *   rejects a null write to the array relation), `effect` to `null`.
+ * - `showContent` renders only for the two banner heroes (`image`, `carousel`);
+ *   `navigation` / `pagination` only for `carousel`. Cleared off the types that
+ *   don't render them, to `null` — they are nullable boolean columns (unlike
+ *   `slides`, only the array field had the null-write bug), so a re-switch back
+ *   picks up the field's own `DEFAULT true` again.
  * - `richText` / `links` render for every type but `blank`.
  *
  * Pure and non-mutating; the field hook below applies it on every save.
@@ -30,7 +35,10 @@ export function normalizeHeroByType<
         effect?: unknown
         links?: unknown
         media?: unknown
+        navigation?: unknown
+        pagination?: unknown
         richText?: unknown
+        showContent?: unknown
         slides?: unknown
         type?: unknown
       }
@@ -50,6 +58,15 @@ export function normalizeHeroByType<
     // The nullable `effect` enum column clears fine with null.
     next.slides = []
     next.effect = null
+    // Carousel-only control toggles — nullable boolean columns, so `null` is a
+    // safe clear (not the array-null bug above); a re-switch re-applies DEFAULT.
+    next.navigation = null
+    next.pagination = null
+  }
+  if (!(next.type === 'image' || next.type === 'carousel')) {
+    // The overlaid-content toggle only means anything on the two banner heroes;
+    // clear it (nullable boolean) off every other type.
+    next.showContent = null
   }
   if (next.type === 'blank') {
     next.richText = null
