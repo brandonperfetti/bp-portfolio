@@ -547,9 +547,9 @@ export interface CarouselBlock {
    */
   slidesPerViewMobile?: number | null;
   /**
-   * Slide moves the track horizontally; Fade cross-fades one slide at a time (a single slide per view); Expo is a centred parallax + scale photo showcase; Carousel 3D is an infinite 3D carousel whose side slides recede in scale + opacity (both pair with the Media variant). Reduced motion collapses Fade, Expo, and Carousel 3D to Slide.
+   * Slide moves the track horizontally; Fade cross-fades one slide at a time (a single slide per view); Expo is a centred parallax + scale photo showcase; Carousel 3D is an infinite 3D carousel whose side slides recede in scale + opacity (both pair with the Media variant); Spring is a multi-card track whose cards spring in on a staggered trailing delay (pairs with the Cards variant). Reduced motion collapses Fade, Expo, Carousel 3D, and Spring to Slide.
    */
-  effect: 'slide' | 'fade' | 'expo' | 'carousel3d';
+  effect: 'slide' | 'fade' | 'expo' | 'carousel3d' | 'spring';
   /**
    * Expo only: run the parallax track horizontally or vertically. Vertical gets a bounded height so slides never collapse.
    */
@@ -563,7 +563,7 @@ export interface CarouselBlock {
    */
   grayscale?: boolean | null;
   /**
-   * Expo (horizontal) and Carousel 3D only: break the carousel out to the full viewport width so the side panels reach the screen edges. On by default; ignored for the Expo vertical direction.
+   * Expo (horizontal), Carousel 3D, and Spring only: break the carousel out to the full viewport width so the side panels reach the screen edges. On by default; ignored for the Expo vertical direction.
    */
   fullBleed?: boolean | null;
   /**

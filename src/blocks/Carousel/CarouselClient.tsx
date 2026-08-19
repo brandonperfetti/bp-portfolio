@@ -6,6 +6,7 @@ import { useRef, useState } from 'react'
 import {
   A11y,
   Autoplay,
+  EffectCreative,
   EffectFade,
   Keyboard,
   Pagination,
@@ -15,16 +16,21 @@ import { Swiper, SwiperSlide, type SwiperClass } from 'swiper/react'
 import 'swiper/css'
 import 'swiper/css/pagination'
 import 'swiper/css/effect-fade'
+import 'swiper/css/effect-creative'
 
 import EffectCarousel3D from '@/blocks/Carousel/effectCarousel3D'
 import '@/blocks/Carousel/effectCarousel3D.css'
 import EffectExpo from '@/blocks/Carousel/effectExpo'
 import '@/blocks/Carousel/effectExpo.css'
+import { createSpringStagger } from '@/blocks/Carousel/effectSpring'
+import '@/blocks/Carousel/effectSpring.css'
 import { carouselFullBleedClass } from '@/blocks/Carousel/fullBleed'
 import {
   type CarouselBehaviorInput,
   type CarouselVariant,
   resolveCarouselBehavior,
+  SPRING_FOLLOW_FINGER,
+  SPRING_SPEED,
 } from '@/blocks/Carousel/options'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
@@ -127,10 +133,13 @@ function SlideLink({
  * `swiper.slidePrev()` / `slideNext()` on the instance captured by `onSwiper`,
  * so there is no DOM-selector handshake to get wrong. Keyboard and A11y modules
  * are always loaded (arrows/tab reach slides); Autoplay, EffectFade, the ported
- * {@link EffectExpo} (parallax + scale, #62) and Pagination load only when the
- * resolved behaviour asks for them, keeping the shipped Swiper surface minimal.
- * Because `expo` collapses to `slide` under reduced motion in the mapper, the
- * Expo module and its transformed DOM never mount for a reduced-motion reader.
+ * {@link EffectExpo} (parallax + scale, #62), {@link EffectCarousel3D} (#63),
+ * Swiper's native `EffectCreative` (which backs the ported Spring effect, #64 —
+ * the CMS `spring` maps to Swiper `effect: 'creative'`), and Pagination load
+ * only when the resolved behaviour asks for them, keeping the shipped Swiper
+ * surface minimal. Because `expo`/`carousel3d`/`spring` collapse to `slide`
+ * under reduced motion in the mapper, their modules and transformed DOM/stagger
+ * never mount for a reduced-motion reader.
  *
  * @param props - Resolved slides + variant + the serializable behaviour knobs.
  */
@@ -139,6 +148,12 @@ export function CarouselClient(props: CarouselClientProps) {
   const reducedMotion = usePrefersReducedMotion()
   const swiperRef = useRef<SwiperClass | null>(null)
   const [ready, setReady] = useState(false)
+  // One stateful Spring stagger instance per carousel (holds `previousProgress`
+  // + the `isTouched` drag guard). Created once via a lazy `useState` initializer
+  // so its closure state survives re-renders and no new instance is allocated
+  // per render; harmless when the effect is not `spring` (its handlers are only
+  // wired then). See `effectSpring.ts`.
+  const [springStagger] = useState(() => createSpringStagger())
 
   if (!slides.length) return null
 
@@ -153,12 +168,24 @@ export function CarouselClient(props: CarouselClientProps) {
   // the RESOLVED effect, so a reduced-motion collapse to `slide` mounts neither
   // its module nor its per-slide transforms — the media track renders plain.
   const isCarousel3d = behavior.effect === 'carousel3d'
+  // Spring is the ported UI-Initiative Spring slider (#64). It is a wrapper over
+  // Swiper's NATIVE `EffectCreative`, so — unlike Expo/Carousel-3D — the leaf
+  // registers a native Swiper module and maps the CMS `spring` effect to Swiper
+  // `effect: 'creative'` (the indirection below). Gated on the RESOLVED effect,
+  // so a reduced-motion collapse to `slide` mounts neither `EffectCreative`, the
+  // creative config, the stagger handlers, nor the spring timing CSS.
+  const isSpring = behavior.effect === 'spring'
+  // CMS `effect: 'spring'` → Swiper `effect: 'creative'`; every other effect
+  // passes its CMS value straight through. Single-sourced here so the module
+  // gate, the prop, and the tests never drift.
+  const swiperEffect = isSpring ? 'creative' : behavior.effect
 
   const modules = [Keyboard, A11y]
   if (behavior.pagination) modules.push(Pagination)
   if (behavior.effect === 'fade') modules.push(EffectFade)
   if (isExpo) modules.push(EffectExpo)
   if (isCarousel3d) modules.push(EffectCarousel3D)
+  if (isSpring) modules.push(EffectCreative)
   if (behavior.autoplay) modules.push(Autoplay)
 
   const renderSlide = (slide: CarouselSlideData) => {
@@ -332,7 +359,9 @@ export function CarouselClient(props: CarouselClientProps) {
             ? 'carousel-expo'
             : isCarousel3d
               ? 'carousel-3d'
-              : 'carousel-plain'
+              : isSpring
+                ? 'carousel-spring'
+                : 'carousel-plain'
         }
         onSwiper={(swiper) => {
           swiperRef.current = swiper
@@ -378,10 +407,31 @@ export function CarouselClient(props: CarouselClientProps) {
         // The infinite Carousel-3D wants a spare cloned slide either side for a
         // seamless wrap (the Pro demo's `loopAdditionalSlides: 1`).
         loopAdditionalSlides={isCarousel3d ? 1 : undefined}
-        effect={behavior.effect}
+        effect={swiperEffect}
         fadeEffect={
           behavior.effect === 'fade' ? { crossFade: true } : undefined
         }
+        // Spring rides Swiper's native Creative effect: the ±100% translate is a
+        // real Swiper param (unlike the Expo/Carousel-3D custom params installed
+        // via onBeforeInit), so it passes straight on the prop. `speed: 720` +
+        // `followFinger: false` are the Pro source's, and the stagger reads
+        // `params.speed` to size each per-slide delay, so they must be set here.
+        creativeEffect={isSpring ? behavior.springEffect : undefined}
+        speed={isSpring ? SPRING_SPEED : undefined}
+        followFinger={isSpring ? SPRING_FOLLOW_FINGER : undefined}
+        // The ported Spring stagger (effectSpring.ts): on each progress tick it
+        // staggers every slide's transitionDelay; the drag guard + delay resets
+        // ride touch/transition/resize. Wired only for spring so no other effect
+        // pays for the handlers.
+        onProgress={isSpring ? (s) => springStagger.onProgress(s) : undefined}
+        onTouchStart={
+          isSpring ? (s) => springStagger.onTouchStart(s) : undefined
+        }
+        onTouchEnd={isSpring ? (s) => springStagger.onTouchEnd(s) : undefined}
+        onTransitionEnd={
+          isSpring ? (s) => springStagger.onTransitionEnd(s) : undefined
+        }
+        onResize={isSpring ? (s) => springStagger.onResize(s) : undefined}
         autoplay={behavior.autoplay}
         pagination={behavior.pagination ? { clickable: true } : false}
         keyboard={{ enabled: true }}
@@ -391,8 +441,10 @@ export function CarouselClient(props: CarouselClientProps) {
         // lives in `effectExpo.css`, scoped to `.swiper-expo.swiper-horizontal`
         // / `.swiper-vertical`, so the viewport calc stays in raw CSS and the
         // effect's setSize reads a stable height. Non-expo keeps the bottom
-        // padding that seats the pagination dots.
-        className={cn(!isExpo && '!pb-10')}
+        // padding that seats the pagination dots. Spring adds its own modifier
+        // class so `effectSpring.css` can scope the cubic-bezier slide timing to
+        // this track only (never leaking to another carousel or a degraded one).
+        className={cn(!isExpo && '!pb-10', isSpring && 'swiper-spring')}
       >
         {slides.map((slide, index) => (
           <SwiperSlide

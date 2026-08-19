@@ -133,7 +133,7 @@ export const Carousel: Block = {
           admin: {
             condition: isHeroEffectSelected,
             description:
-              'Expo (horizontal) and Carousel 3D only: break the carousel out to the full viewport width so the side panels reach the screen edges. On by default; ignored for the Expo vertical direction.',
+              'Expo (horizontal), Carousel 3D, and Spring only: break the carousel out to the full viewport width so the side panels reach the screen edges. On by default; ignored for the Expo vertical direction.',
           },
         },
         {

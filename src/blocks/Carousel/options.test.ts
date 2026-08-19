@@ -12,6 +12,7 @@ import {
   MAX_SLIDES_PER_VIEW,
   MIN_AUTOPLAY_INTERVAL_MS,
   resolveCarouselBehavior,
+  SPRING_CREATIVE_EFFECT,
 } from '@/blocks/Carousel/options'
 
 const motion = { reducedMotion: false }
@@ -356,5 +357,93 @@ describe('resolveCarouselBehavior', () => {
     expect(b.fullBleed).toBe(false)
     // Loop reverts to the plain opt-in default (the forced-on is carousel3d-only).
     expect(b.loop).toBe(false)
+  })
+
+  // ── spring (#64): the ported UI-Initiative Spring slider ───────────────────
+
+  it('recognizes spring and does not normalize it away', () => {
+    expect(resolveCarouselBehavior({ effect: 'spring' }, motion).effect).toBe(
+      'spring',
+    )
+  })
+
+  it('resolves spring on the plain numeric slides-per-view path (no fractional/auto)', () => {
+    // Spring is a normal multi-card track, not a centred/auto one: it uses the
+    // whole-number clamp, defaults to 1, and never sizes by CSS width.
+    const dflt = resolveCarouselBehavior({ effect: 'spring' }, motion)
+    expect(dflt.slidesPerView).toBe(1)
+    expect(dflt.slidesPerViewMobile).toBe(1)
+    expect(dflt.slidesPerViewAuto).toBe(false)
+
+    const set = resolveCarouselBehavior(
+      { effect: 'spring', slidesPerView: 3, slidesPerViewMobile: 2 },
+      motion,
+    )
+    expect(set.slidesPerView).toBe(3)
+    expect(set.slidesPerViewMobile).toBe(2)
+    // Fractional editor values are floored (unlike expo's fractional exemption).
+    expect(
+      resolveCarouselBehavior({ effect: 'spring', slidesPerView: 2.9 }, motion)
+        .slidesPerView,
+    ).toBe(2)
+    expect(
+      resolveCarouselBehavior({ effect: 'spring', slidesPerView: 99 }, motion)
+        .slidesPerView,
+    ).toBe(MAX_SLIDES_PER_VIEW)
+  })
+
+  it('keeps spring a normal track: centeredSlides off, loop opt-in, horizontal', () => {
+    const b = resolveCarouselBehavior({ effect: 'spring' }, motion)
+    expect(b.centeredSlides).toBe(false)
+    expect(b.direction).toBe('horizontal')
+    // Loop is opt-in for spring (only carousel3d defaults loop on).
+    expect(b.loop).toBe(false)
+    expect(
+      resolveCarouselBehavior({ effect: 'spring', loop: true }, motion).loop,
+    ).toBe(true)
+  })
+
+  it('resolves the native springEffect (creativeEffect) params only for spring', () => {
+    expect(
+      resolveCarouselBehavior({ effect: 'spring' }, motion).springEffect,
+    ).toEqual(SPRING_CREATIVE_EFFECT)
+    // The ±100% translate and limitProgress are the Pro source's.
+    expect(
+      resolveCarouselBehavior({ effect: 'spring' }, motion).springEffect,
+    ).toEqual({
+      limitProgress: 100,
+      prev: { translate: ['-100%', 0, 0] },
+      next: { translate: ['100%', 0, 0] },
+    })
+    // Absent for every other effect (so the leaf mounts neither EffectCreative
+    // nor the stagger).
+    expect(
+      resolveCarouselBehavior({ effect: 'slide' }, motion).springEffect,
+    ).toBeUndefined()
+    expect(
+      resolveCarouselBehavior({ effect: 'carousel3d' }, motion).springEffect,
+    ).toBeUndefined()
+  })
+
+  it('defaults fullBleed ON for spring, off when unticked (no direction axis)', () => {
+    expect(
+      resolveCarouselBehavior({ effect: 'spring' }, motion).fullBleed,
+    ).toBe(true)
+    expect(
+      resolveCarouselBehavior({ effect: 'spring', fullBleed: false }, motion)
+        .fullBleed,
+    ).toBe(false)
+  })
+
+  it('collapses spring to a plain slide under reduced motion, dropping all its knobs', () => {
+    const b = resolveCarouselBehavior(
+      { effect: 'spring', fullBleed: true },
+      reduced,
+    )
+    expect(b.effect).toBe('slide')
+    expect(b.springEffect).toBeUndefined()
+    expect(b.slidesPerViewAuto).toBe(false)
+    expect(b.centeredSlides).toBe(false)
+    expect(b.fullBleed).toBe(false)
   })
 })

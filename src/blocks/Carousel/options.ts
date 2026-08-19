@@ -42,13 +42,24 @@ export const CAROUSEL_VARIANT_ENUM_NAME = 'enum_carousel_variant'
  * which pairs with `variant: 'media'` and runs a centred, fractional track;
  * `carousel3d` is the ported UI-Initiative infinite 3D carousel (#63) — a
  * centred `slidesPerView: 'auto'` loop whose side slides recede in scale +
- * opacity. Both Pro effects pair with `variant: 'media'`.
+ * opacity. `spring` is the ported UI-Initiative Spring slider (#64) — a normal
+ * multi-card track whose slides ride Swiper's native `EffectCreative` (a ±100%
+ * creative translate) with a cascading per-slide `transitionDelay` stagger, so
+ * the cards spring in on a trailing delay. Expo and Carousel-3D pair with
+ * `variant: 'media'`; Spring pairs with `variant: 'cards'`.
+ *
+ * @remarks `spring` is the one effect whose CMS value does NOT map straight to a
+ * Swiper `effect` string: it resolves to Swiper's native `effect: 'creative'`
+ * under the hood (the leaf performs the `spring` → `creative` indirection and
+ * registers `EffectCreative`), because Spring is a wrapper over the Creative
+ * effect rather than a self-contained custom module like `expo`/`carousel3d`.
  */
 export const CAROUSEL_EFFECTS = [
   { label: 'Slide', value: 'slide' },
   { label: 'Fade', value: 'fade' },
   { label: 'Expo (parallax + scale)', value: 'expo' },
   { label: 'Carousel 3D (infinite)', value: 'carousel3d' },
+  { label: 'Spring', value: 'spring' },
 ] as const
 
 /** Carousel effect vocabulary, derived from {@link CAROUSEL_EFFECTS}. */
@@ -177,6 +188,54 @@ export const CAROUSEL3D_EFFECT_DEFAULTS: Carousel3DEffectParams = {
   sideSlides: 2,
 }
 
+/**
+ * The Pro Spring slider's `creativeEffect` object (#64). Spring is a wrapper
+ * over Swiper's native Creative effect, so — unlike {@link ExpoEffectParams} and
+ * {@link Carousel3DEffectParams}, which the ported custom modules read off a
+ * private param — this shape is Swiper's own native `creativeEffect` param and
+ * rides the `<Swiper creativeEffect={…}>` prop directly. Kept here as plain,
+ * serializable data (the same server→client discipline this module keeps) with
+ * `translate` typed `(string | number)[]` to match Swiper's own
+ * `CreativeEffectTransform` so it is assignable to the prop without importing
+ * any Swiper code. The ±100% translate slides a card fully off-axis to its
+ * neighbour's edge; the springy trail comes from the per-slide `transitionDelay`
+ * stagger the leaf wires (see `effectSpring.ts`), not from this object.
+ */
+export interface SpringCreativeEffect {
+  /** Limit progress/offset to this many side slides (the Pro value is 100). */
+  limitProgress: number
+  /** Transform applied to the slides before the active one. */
+  prev: { translate: (string | number)[] }
+  /** Transform applied to the slides after the active one. */
+  next: { translate: (string | number)[] }
+}
+
+/**
+ * The Pro Spring `creativeEffect` defaults, byte-for-byte the source
+ * (`demo-vite/spring-slider.js`): a full ±100% X translate on either side, with
+ * `limitProgress: 100` so the whole track shares the creative offset. Not
+ * editor-exposed (Spring's look is fixed, like Carousel-3D's).
+ */
+export const SPRING_CREATIVE_EFFECT: SpringCreativeEffect = {
+  limitProgress: 100,
+  prev: { translate: ['-100%', 0, 0] },
+  next: { translate: ['100%', 0, 0] },
+}
+
+/**
+ * Spring's transition duration (ms), from the Pro source (`speed: 720`). The
+ * per-slide stagger derives its step from this (`speed / 16`), so the leaf must
+ * pass this exact value to Swiper for the trail to read as designed.
+ */
+export const SPRING_SPEED = 720
+
+/**
+ * Spring disables follow-finger (the Pro source's `followFinger: false`): the
+ * track commits to a whole slide on release rather than tracking the drag, which
+ * is what lets the staggered spring cascade play on every transition.
+ */
+export const SPRING_FOLLOW_FINGER = false
+
 /** Autoplay dwell per slide (ms) when the editor enables autoplay but sets no interval. */
 export const DEFAULT_AUTOPLAY_INTERVAL_MS = 5000
 
@@ -243,7 +302,7 @@ export interface ResolvedCarouselBehavior {
   desktopBreakpoint: number
   /** Whether the track wraps seamlessly. */
   loop: boolean
-  /** The resolved transition — never `fade`, `expo`, or `carousel3d` under reduced motion. */
+  /** The resolved transition — never `fade`, `expo`, `carousel3d`, or `spring` under reduced motion. */
   effect: CarouselEffect
   /**
    * The resolved track orientation, passed to Swiper's `direction` for a
@@ -275,12 +334,22 @@ export interface ResolvedCarouselBehavior {
    */
   carousel3dEffect?: Carousel3DEffectParams
   /**
+   * The native Swiper `creativeEffect` params, present only when {@link effect}
+   * is `spring` (the leaf keys the `EffectCreative` module mount + the
+   * `spring` → `creative` indirection off this one field, and passes it straight
+   * to the `<Swiper creativeEffect={…}>` prop). Absent for every other effect,
+   * including a reduced-motion collapse to `slide` — neither `EffectCreative`,
+   * the creative config, the stagger, nor the spring timing CSS must mount then.
+   */
+  springEffect?: SpringCreativeEffect
+  /**
    * Whether the carousel breaks out to the full viewport width. True for a
-   * horizontal `expo` or any `carousel3d` (both hero-scale showcases whose side
-   * panels want the screen edges, not the reading-column cap) whose stored field
-   * is not `false` — defaulting on. False for every other effect/direction and
-   * under a reduced-motion collapse, so a degraded plain slide stays inside its
-   * column. Applied by the leaf via the shared `Container/section.ts` idiom.
+   * horizontal `expo`, any `carousel3d`, or any `spring` (hero-scale / edge-to-
+   * edge showcases whose panels want the screen edges, not the reading-column
+   * cap) whose stored field is not `false` — defaulting on. False for every
+   * other effect/direction and under a reduced-motion collapse, so a degraded
+   * plain slide stays inside its column. Applied by the leaf via the shared
+   * `Container/section.ts` idiom.
    */
   fullBleed: boolean
   /** Autoplay settings, or `false` when autoplay is off (the default) or suppressed. */
@@ -381,12 +450,13 @@ function resolveExpoEffect(input: CarouselBehaviorInput): ExpoEffectParams {
  *   motion.** Only an explicit `autoplay: true` with motion allowed yields an
  *   autoplay object; anything else is `false`, so the carousel never moves on
  *   its own unless the editor asked and the reader allows it.
- * - **Reduced motion also neutralizes the `fade`, `expo`, and `carousel3d`
- *   flourishes**, collapsing them to a plain `slide` so the transition is
- *   static-ish rather than a cross-fade, parallax, or 3D loop. When `expo` or
- *   `carousel3d` collapses this way its resolved params object is left
+ * - **Reduced motion also neutralizes the `fade`, `expo`, `carousel3d`, and
+ *   `spring` flourishes**, collapsing them to a plain `slide` so the transition
+ *   is static-ish rather than a cross-fade, parallax, 3D loop, or springy trail.
+ *   When `expo`, `carousel3d`, or `spring` collapses this way its resolved
+ *   params object (`expoEffect` / `carousel3dEffect` / `springEffect`) is left
  *   `undefined` (and `slidesPerViewAuto` false), so the leaf mounts neither the
- *   ported module nor its per-slide transforms.
+ *   effect module nor its per-slide transforms/stagger.
  *
  * Fade forces a single slide per view (a cross-fade of a multi-slide track is
  * incoherent). Expo instead forces its own *fractional* count (~1.5) because it
@@ -443,14 +513,16 @@ export function resolveCarouselBehavior(
       ? normalizeDirection(input.direction)
       : DEFAULT_CAROUSEL_DIRECTION
 
-  // Full bleed is a hero-scale breakout, defaulting on for a horizontal Expo or
-  // any Carousel-3D. It falls away for every other effect/direction and —
-  // because `effect` is already `slide` here under reduced motion —
-  // automatically for a reduced-motion collapse, so a degraded plain slide
-  // never breaks out of its reading column.
+  // Full bleed is a hero-scale breakout, defaulting on for a horizontal Expo,
+  // any Carousel-3D, or any Spring. Spring has no direction axis, so it is
+  // always eligible like Carousel-3D. It falls away for every other
+  // effect/direction and — because `effect` is already `slide` here under
+  // reduced motion — automatically for a reduced-motion collapse, so a degraded
+  // plain slide never breaks out of its reading column.
   const fullBleed =
     ((effect === 'expo' && direction === 'horizontal') ||
-      effect === 'carousel3d') &&
+      effect === 'carousel3d' ||
+      effect === 'spring') &&
     input.fullBleed !== false
 
   return {
@@ -468,6 +540,11 @@ export function resolveCarouselBehavior(
     expoEffect: effect === 'expo' ? resolveExpoEffect(input) : undefined,
     carousel3dEffect:
       effect === 'carousel3d' ? { ...CAROUSEL3D_EFFECT_DEFAULTS } : undefined,
+    // Spring resolves the native `creativeEffect` params only when it is the
+    // effect (so never under reduced motion, which has already forced `slide`),
+    // so the leaf mounts neither `EffectCreative` nor the stagger otherwise.
+    springEffect:
+      effect === 'spring' ? { ...SPRING_CREATIVE_EFFECT } : undefined,
     fullBleed,
     autoplay: autoplayOn
       ? { delay, disableOnInteraction: true, pauseOnMouseEnter: true }
@@ -528,7 +605,7 @@ export function carouselEffectField(): SelectField {
     options: [...CAROUSEL_EFFECT_OPTIONS],
     admin: {
       description:
-        'Slide moves the track horizontally; Fade cross-fades one slide at a time (a single slide per view); Expo is a centred parallax + scale photo showcase; Carousel 3D is an infinite 3D carousel whose side slides recede in scale + opacity (both pair with the Media variant). Reduced motion collapses Fade, Expo, and Carousel 3D to Slide.',
+        'Slide moves the track horizontally; Fade cross-fades one slide at a time (a single slide per view); Expo is a centred parallax + scale photo showcase; Carousel 3D is an infinite 3D carousel whose side slides recede in scale + opacity (both pair with the Media variant); Spring is a multi-card track whose cards spring in on a staggered trailing delay (pairs with the Cards variant). Reduced motion collapses Fade, Expo, Carousel 3D, and Spring to Slide.',
     },
   }
 }
@@ -550,10 +627,11 @@ export const isExpoEffectSelected = (
   (siblingData as { effect?: string } | undefined)?.effect === 'expo'
 
 /**
- * Show a field when the sibling `effect` is either Pro hero effect — `expo` or
- * `carousel3d`. Backs the `fullBleed` control, which both hero-scale showcases
- * share (#63 widened it from expo-only). Kept beside {@link isExpoEffectSelected}
- * so the live config and its test read one predicate.
+ * Show a field when the sibling `effect` is a full-bleed-eligible Pro effect —
+ * `expo`, `carousel3d`, or `spring`. Backs the `fullBleed` control, which every
+ * edge-to-edge showcase shares (#63 widened it from expo-only; #64 added
+ * spring). Kept beside {@link isExpoEffectSelected} so the live config and its
+ * test read one predicate.
  *
  * @param _data - The full document data (unused; the effect is a sibling).
  * @param siblingData - The block's own data, where `effect` lives.
@@ -564,7 +642,7 @@ export const isHeroEffectSelected = (
   siblingData: unknown,
 ): boolean => {
   const effect = (siblingData as { effect?: string } | undefined)?.effect
-  return effect === 'expo' || effect === 'carousel3d'
+  return effect === 'expo' || effect === 'carousel3d' || effect === 'spring'
 }
 
 /**

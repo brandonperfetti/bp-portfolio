@@ -58,12 +58,12 @@ describe('Carousel block config', () => {
     }
   })
 
-  it('offers the Pro effects (expo, carousel3d) alongside slide and fade (#62/#63)', () => {
+  it('offers the Pro effects (expo, carousel3d, spring) alongside slide and fade (#62/#63/#64)', () => {
     const effect = behaviourFields().find(
       (f): f is SelectField => 'name' in f && f.name === 'effect',
     ) as SelectField
     const values = (effect.options as { value: string }[]).map((o) => o.value)
-    expect(values).toEqual(['slide', 'fade', 'expo', 'carousel3d'])
+    expect(values).toEqual(['slide', 'fade', 'expo', 'carousel3d', 'spring'])
   })
 
   it('adds the three expo controls, each gated on effect === expo (#62 addendum)', () => {
@@ -105,7 +105,7 @@ describe('Carousel block config', () => {
     }
   })
 
-  it('adds the fullBleed control as a hero-effect-gated checkbox defaulting on (#68.2/#63)', () => {
+  it('adds the fullBleed control as a hero-effect-gated checkbox defaulting on (#68.2/#63/#64)', () => {
     const fullBleed = behaviourFields().find(
       (f) => 'name' in f && f.name === 'fullBleed',
     ) as Field & {
@@ -116,11 +116,13 @@ describe('Carousel block config', () => {
     expect(fullBleed.type).toBe('checkbox')
     expect(fullBleed.defaultValue).toBe(true)
 
-    // Shown for both hero effects (expo, carousel3d); hidden for slide/fade.
+    // Shown for every full-bleed effect (expo, carousel3d, spring); hidden for
+    // slide/fade.
     const c = fullBleed.admin?.condition
     expect(c).toBeTypeOf('function')
     expect(c!({}, { effect: 'expo' })).toBe(true)
     expect(c!({}, { effect: 'carousel3d' })).toBe(true)
+    expect(c!({}, { effect: 'spring' })).toBe(true)
     expect(c!({}, { effect: 'slide' })).toBe(false)
     expect(c!({}, { effect: 'fade' })).toBe(false)
     expect(c!({}, {})).toBe(false)

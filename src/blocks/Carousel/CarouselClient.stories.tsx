@@ -95,6 +95,21 @@ const CAROUSEL3D_SLIDES: CarouselSlideData[] = Array.from(
   }),
 )
 
+/**
+ * Spring is a normal multi-card track (#64) whose cascade reads best at 2–4
+ * cards, so it gets a six-card fixture for the multi-`slidesPerView` stories.
+ */
+const SPRING_SLIDES: CarouselSlideData[] = Array.from(
+  { length: 6 },
+  (_, i) => ({
+    id: `spring-${i + 1}`,
+    src: `https://picsum.photos/seed/bp-spring-${i + 1}/1200/900`,
+    alt: `Spring card ${i + 1}`,
+    title: `Card ${i + 1}`,
+    text: 'A card that springs in on a staggered trailing delay.',
+  }),
+)
+
 const meta = {
   title: 'PageBuilder/Carousel',
   component: CarouselClient,
@@ -119,7 +134,7 @@ const meta = {
     variant: { control: 'inline-radio', options: ['cards', 'media'] },
     effect: {
       control: 'inline-radio',
-      options: ['slide', 'fade', 'expo', 'carousel3d'],
+      options: ['slide', 'fade', 'expo', 'carousel3d', 'spring'],
     },
     direction: {
       control: 'inline-radio',
@@ -579,6 +594,200 @@ export const Carousel3DFullBleed: Story = {
   play: async ({ canvasElement }) => {
     const swiper = await getSwiper(canvasElement)
     await waitFor(() => expect(swiper.params.effect).toBe('carousel3d'))
+
+    const column = canvasElement.querySelector('.max-w-md') as HTMLElement
+    const wrapper = canvasElement.querySelector(
+      '[data-testid="carousel"]',
+    ) as HTMLElement
+    for (const cls of ['w-screen', 'left-1/2', '-translate-x-1/2']) {
+      await expect(wrapper.classList.contains(cls)).toBe(true)
+    }
+    await waitFor(() => {
+      expect(wrapper.getBoundingClientRect().width).toBeGreaterThanOrEqual(
+        window.innerWidth - 2,
+      )
+      expect(wrapper.getBoundingClientRect().width).toBeGreaterThan(
+        column.getBoundingClientRect().width,
+      )
+    })
+  },
+}
+
+// ── spring (#64): the ported UI-Initiative Spring slider ─────────────────────
+
+/**
+ * cards × spring — the ported UI-Initiative Spring slider (#64): a normal
+ * multi-card track whose cards ride Swiper's native Creative effect (a ±100%
+ * translate) with a cascading per-slide `transitionDelay` stagger, so they
+ * spring in on a trailing delay. Pairs with the `cards` variant (not media).
+ */
+export const CardsSpring: Story = {
+  args: {
+    variant: 'cards',
+    effect: 'spring',
+    slides: SPRING_SLIDES,
+    slidesPerView: 3,
+    slidesPerViewMobile: 2,
+  },
+}
+
+/**
+ * Effect-mounted + stagger-applied (the React-availability + Swiper-14 receipt):
+ * with motion allowed, the CMS `spring` maps to Swiper's native creative effect
+ * — the instance reports `effect: 'creative'` with `speed: 720`, the ±100%
+ * `creativeEffect` translate installed, and the container carries the
+ * `swiper-spring` modifier class. Driving progress deterministically
+ * (`setProgress`) then proves the ported stagger runs on Swiper 14: it writes a
+ * real per-slide `transitionDelay` onto the slides.
+ */
+export const SpringEffectMounted: Story = {
+  args: {
+    variant: 'cards',
+    effect: 'spring',
+    slides: SPRING_SLIDES,
+    slidesPerView: 3,
+    slidesPerViewMobile: 2,
+  },
+  play: async ({ canvasElement }) => {
+    const swiper = await getSwiper(canvasElement)
+
+    // The spring → creative indirection: Swiper runs the native Creative effect.
+    await waitFor(() => expect(swiper.params.effect).toBe('creative'))
+    await expect(swiper.params.speed).toBe(720)
+    await expect(swiper.params.followFinger).toBe(false)
+    await expect(
+      (
+        swiper.params as {
+          creativeEffect?: { next?: { translate?: (string | number)[] } }
+        }
+      ).creativeEffect?.next?.translate,
+    ).toEqual(['100%', 0, 0])
+
+    const container = canvasElement.querySelector('.swiper') as HTMLElement
+    await expect(container.classList.contains('swiper-spring')).toBe(true)
+
+    // The ported stagger runs on Swiper 14: once the track is laid out (visible
+    // slides computed), a forward progress tick writes a real per-slide
+    // transitionDelay. The progress event is emitted synchronously and the delays
+    // read immediately (with `animating` pinned off, so no rAF deferral and no
+    // transitionEnd reset can intervene between the write and the assertion). The
+    // delay maths itself is exhaustively unit-proven in effectSpring.test.ts.
+    await waitFor(() =>
+      expect(swiper.visibleSlidesIndexes.length).toBeGreaterThan(0),
+    )
+    swiper.animating = false
+    swiper.progress = 0
+    swiper.emit('progress', swiper, 0) // establish the baseline previousProgress
+    swiper.progress = 0.9
+    swiper.emit('progress', swiper, 0.9) // a forward tick → stagger the delays
+    const slides = Array.from(
+      canvasElement.querySelectorAll('.swiper-spring .swiper-slide'),
+    ) as HTMLElement[]
+    await expect(
+      slides.some(
+        (s) =>
+          s.style.transitionDelay.endsWith('ms') &&
+          s.style.transitionDelay !== '0ms',
+      ),
+    ).toBe(true)
+  },
+}
+
+/** Instance-ref navigation advances the spring track just like a plain one. */
+export const SpringNavigation: Story = {
+  args: {
+    variant: 'cards',
+    effect: 'spring',
+    slides: SPRING_SLIDES,
+    slidesPerView: 3,
+    slidesPerViewMobile: 2,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const swiper = await getSwiper(canvasElement)
+    await waitFor(() => expect(swiper.realIndex).toBe(0))
+
+    await userEvent.click(canvas.getByRole('button', { name: 'Next slide' }))
+    await waitFor(() => expect(swiper.realIndex).toBe(1))
+
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Previous slide' }),
+    )
+    await waitFor(() => expect(swiper.realIndex).toBe(0))
+  },
+}
+
+/** Keyboard nav stays wired under spring (an AC of #41 the effect must not regress). */
+export const SpringKeyboardEnabled: Story = {
+  args: {
+    variant: 'cards',
+    effect: 'spring',
+    slides: SPRING_SLIDES,
+    slidesPerView: 3,
+  },
+  play: async ({ canvasElement }) => {
+    const swiper = await getSwiper(canvasElement)
+    await expect(swiper.keyboard?.enabled).toBe(true)
+  },
+}
+
+/**
+ * Reduced-motion degrade (#64 AC): with the platform preference forced to
+ * reduce, spring collapses to a plain `slide` in the mapper — so Swiper does NOT
+ * run the Creative effect (`effect !== 'creative'`), the `swiper-spring` class is
+ * absent, and no `creativeEffect` config is installed, so neither the stagger nor
+ * the spring timing CSS can apply. The cards render as a plain static track. The
+ * deterministic collapse is also unit-proven in options.test.
+ */
+export const SpringReducedMotionDegrades: Story = {
+  args: {
+    variant: 'cards',
+    effect: 'spring',
+    slides: SPRING_SLIDES,
+    slidesPerView: 3,
+    slidesPerViewMobile: 2,
+  },
+  beforeEach: () => forceReducedMotion(),
+  play: async ({ canvasElement }) => {
+    const swiper = await getSwiper(canvasElement)
+    const container = canvasElement.querySelector('.swiper') as HTMLElement
+
+    await waitFor(() => expect(swiper.params.effect).not.toBe('creative'))
+    await expect(container.classList.contains('swiper-spring')).toBe(false)
+    await expect(
+      (swiper.params as { creativeEffect?: unknown }).creativeEffect,
+    ).toBeUndefined()
+  },
+}
+
+/**
+ * Full-bleed spring (#64, default ON): the spring cards track breaks out to the
+ * full viewport width via the shared `Container/section.ts` idiom (the same
+ * toggle Expo/Carousel-3D use, widened to cover spring — spring has no direction
+ * axis, so it is always eligible). Framed in a production-like `overflow-x: clip`
+ * page wrapper inside a narrow column so the breakout is real.
+ */
+export const SpringFullBleed: Story = {
+  args: {
+    variant: 'cards',
+    effect: 'spring',
+    slides: SPRING_SLIDES,
+    slidesPerView: 3,
+    slidesPerViewMobile: 2,
+    fullBleed: true,
+  },
+  decorators: [
+    (Story) => (
+      <div className="overflow-x-clip" data-testid="clip-page">
+        <div className="mx-auto max-w-md">
+          <Story />
+        </div>
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const swiper = await getSwiper(canvasElement)
+    await waitFor(() => expect(swiper.params.effect).toBe('creative'))
 
     const column = canvasElement.querySelector('.max-w-md') as HTMLElement
     const wrapper = canvasElement.querySelector(
