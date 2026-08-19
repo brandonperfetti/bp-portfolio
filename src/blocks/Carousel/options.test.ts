@@ -241,4 +241,50 @@ describe('resolveCarouselBehavior', () => {
     expect(b.direction).toBe('horizontal')
     expect(b.expoEffect).toBeUndefined()
   })
+
+  // ── full bleed (#68.2): horizontal-Expo-only breakout, default on ──────────
+
+  it('defaults fullBleed ON for a horizontal expo', () => {
+    expect(resolveCarouselBehavior({ effect: 'expo' }, motion).fullBleed).toBe(
+      true,
+    )
+    expect(
+      resolveCarouselBehavior(
+        { effect: 'expo', direction: 'horizontal', fullBleed: true },
+        motion,
+      ).fullBleed,
+    ).toBe(true)
+  })
+
+  it('lets an editor turn fullBleed off on a horizontal expo', () => {
+    expect(
+      resolveCarouselBehavior({ effect: 'expo', fullBleed: false }, motion)
+        .fullBleed,
+    ).toBe(false)
+  })
+
+  it('never breaks out a vertical expo, another effect, or a reduced-motion collapse', () => {
+    // Vertical expo: the breakout is horizontal-only.
+    expect(
+      resolveCarouselBehavior(
+        { effect: 'expo', direction: 'vertical', fullBleed: true },
+        motion,
+      ).fullBleed,
+    ).toBe(false)
+    // Other effects never full-bleed, even if the stored flag says true.
+    expect(
+      resolveCarouselBehavior({ effect: 'slide', fullBleed: true }, motion)
+        .fullBleed,
+    ).toBe(false)
+    expect(
+      resolveCarouselBehavior({ effect: 'fade', fullBleed: true }, motion)
+        .fullBleed,
+    ).toBe(false)
+    // Reduced motion collapses expo → slide, so the degraded plain slide stays
+    // inside its column.
+    expect(
+      resolveCarouselBehavior({ effect: 'expo', fullBleed: true }, reduced)
+        .fullBleed,
+    ).toBe(false)
+  })
 })

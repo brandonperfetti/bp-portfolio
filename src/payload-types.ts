@@ -563,6 +563,10 @@ export interface CarouselBlock {
    */
   grayscale?: boolean | null;
   /**
+   * Expo (horizontal) only: break the carousel out to the full viewport width so the parallax side panels reach the screen edges. On by default; ignored for the vertical direction.
+   */
+  fullBleed?: boolean | null;
+  /**
    * Wrap from the last slide back to the first.
    */
   loop?: boolean | null;
@@ -1999,6 +2003,7 @@ export interface CarouselBlockSelect<T extends boolean = true> {
   direction?: T;
   rotate?: T;
   grayscale?: T;
+  fullBleed?: T;
   loop?: T;
   navigation?: T;
   pagination?: T;

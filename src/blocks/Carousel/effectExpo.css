@@ -41,14 +41,18 @@
 .swiper-expo.swiper-horizontal {
   padding-top: var(--expo-padding, 0px);
   padding-bottom: var(--expo-padding, 0px);
-  /* Header offset = the sticky `[slug]` header bar (`h-16` = `--spacing(16)` =
-     4rem; the home route's enlarged avatar header does not apply here). */
-  --expo-hero-header: 4rem;
-  /* Hero-scale the horizontal track (#68): fill the viewport below the header,
-     capped. `svh` so mobile browser chrome can't push the page past one screen;
-     `box-sizing: border-box` keeps the effect's padding inside this height, so
-     the block never overflows the page. */
-  height: clamp(420px, calc(100svh - var(--expo-hero-header)), 820px);
+  /* Viewport offset the hero-scale height must leave free = the sticky `[slug]`
+     header bar (`h-16` = `--spacing(16)` = 4rem) PLUS the below-swiper chrome
+     rendered outside the track (pagination dots + the nav-arrow row + their
+     margins). #68 subtracted only the 4rem header, so the arrows fell off the
+     bottom [measured: swiper 748 + arrows → 814 > 812vp]; 12rem leaves room for
+     everything [measured: arrows at 723 < 763]. */
+  --expo-hero-offset: 12rem;
+  /* Hero-scale the horizontal track (#68/#68.2): fill the viewport below the
+     header, minus that chrome, capped. `svh` so mobile browser chrome can't
+     push the page past one screen; `box-sizing: border-box` keeps the effect's
+     padding inside this height, so the block never overflows the page. */
+  height: clamp(360px, calc(100svh - var(--expo-hero-offset)), 760px);
 }
 .swiper-expo.swiper-vertical {
   padding-left: var(--expo-padding, 0px);

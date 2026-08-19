@@ -18,6 +18,7 @@ import 'swiper/css/effect-fade'
 
 import EffectExpo from '@/blocks/Carousel/effectExpo'
 import '@/blocks/Carousel/effectExpo.css'
+import { carouselFullBleedClass } from '@/blocks/Carousel/fullBleed'
 import {
   type CarouselBehaviorInput,
   type CarouselVariant,
@@ -259,7 +260,16 @@ export function CarouselClient(props: CarouselClientProps) {
 
   return (
     <div
-      className={cn('relative', paginationTokenClass)}
+      // A horizontal Expo breaks out to the full viewport width (#68.2) so its
+      // parallax side-panels reach the screen edges instead of being cut by the
+      // reading column — the shared `Container/section.ts` idiom, resolved in the
+      // mapper (never under reduced motion). Empty string when off, so every
+      // other carousel renders inside its wrapper exactly as before.
+      className={cn(
+        'relative',
+        carouselFullBleedClass(behavior.fullBleed),
+        paginationTokenClass,
+      )}
       data-testid="carousel"
     >
       <Swiper

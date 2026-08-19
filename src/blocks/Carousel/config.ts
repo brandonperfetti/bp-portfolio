@@ -125,6 +125,17 @@ export const Carousel: Block = {
           },
         },
         {
+          name: 'fullBleed',
+          type: 'checkbox',
+          defaultValue: true,
+          label: 'Full bleed (edge to edge)',
+          admin: {
+            condition: isExpoEffectSelected,
+            description:
+              'Expo (horizontal) only: break the carousel out to the full viewport width so the parallax side panels reach the screen edges. On by default; ignored for the vertical direction.',
+          },
+        },
+        {
           type: 'row',
           fields: [
             {

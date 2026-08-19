@@ -63,6 +63,7 @@ export function CarouselComponent(
         direction={props.direction}
         rotate={props.rotate}
         grayscale={props.grayscale}
+        fullBleed={props.fullBleed}
       />
     </section>
   )

@@ -176,6 +176,8 @@ export interface CarouselBehaviorInput {
   rotate?: number | null
   /** Expo-only: desaturate off-centre slides. */
   grayscale?: boolean | null
+  /** Expo-horizontal-only: break the carousel out to the full viewport width. */
+  fullBleed?: boolean | null
 }
 
 /** Resolved autoplay settings, shaped for Swiper's `autoplay` prop. */
@@ -225,6 +227,15 @@ export interface ResolvedCarouselBehavior {
    * to `slide` — the transforms and the module must NOT mount then.
    */
   expoEffect?: ExpoEffectParams
+  /**
+   * Whether the carousel breaks out to the full viewport width. True only for a
+   * horizontal `expo` (its parallax side-panels want the screen edges, not the
+   * reading-column cap) whose stored field is not `false` — defaulting on.
+   * False for every other effect/direction and under a reduced-motion collapse,
+   * so a degraded plain slide stays inside its column. Applied by the leaf via
+   * the shared `Container/section.ts` breakout idiom.
+   */
+  fullBleed: boolean
   /** Autoplay settings, or `false` when autoplay is off (the default) or suppressed. */
   autoplay: ResolvedAutoplay | false
   /** Whether prev/next arrows show. */
@@ -341,6 +352,11 @@ function resolveExpoEffect(input: CarouselBehaviorInput): ExpoEffectParams {
  * Under a reduced-motion collapse they all fall away — `direction` resolves
  * `horizontal` and `expoEffect` stays `undefined` — so the degraded reader gets
  * a plain horizontal media slide with no tilt, desaturation, or vertical height.
+ *
+ * `fullBleed` (#68.2) is resolved here too: a horizontal-Expo-only breakout to
+ * the viewport width, defaulting on. It is `false` for any other effect or the
+ * vertical direction, and — since a reduced-motion collapse has already made
+ * `effect` plain `slide` — `false` for the degraded slide as well.
  */
 export function resolveCarouselBehavior(
   input: CarouselBehaviorInput,
@@ -374,18 +390,28 @@ export function resolveCarouselBehavior(
     MIN_AUTOPLAY_INTERVAL_MS,
   )
 
+  const direction =
+    effect === 'expo'
+      ? normalizeDirection(input.direction)
+      : DEFAULT_CAROUSEL_DIRECTION
+
+  // Full bleed is a horizontal-Expo-only breakout, defaulting on. It falls away
+  // for every other effect/direction and — because `effect` is already `slide`
+  // here under reduced motion — automatically for a reduced-motion collapse, so
+  // a degraded plain slide never breaks out of its reading column.
+  const fullBleed =
+    effect === 'expo' && direction === 'horizontal' && input.fullBleed !== false
+
   return {
     slidesPerViewMobile,
     slidesPerView,
     desktopBreakpoint: CAROUSEL_DESKTOP_BREAKPOINT_PX,
     loop: input.loop === true,
     effect,
-    direction:
-      effect === 'expo'
-        ? normalizeDirection(input.direction)
-        : DEFAULT_CAROUSEL_DIRECTION,
+    direction,
     centeredSlides: effect === 'expo',
     expoEffect: effect === 'expo' ? resolveExpoEffect(input) : undefined,
+    fullBleed,
     autoplay: autoplayOn
       ? { delay, disableOnInteraction: true, pauseOnMouseEnter: true }
       : false,

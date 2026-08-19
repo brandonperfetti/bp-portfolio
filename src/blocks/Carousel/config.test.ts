@@ -105,6 +105,24 @@ describe('Carousel block config', () => {
     }
   })
 
+  it('adds the fullBleed control as an expo-gated checkbox defaulting on (#68.2)', () => {
+    const fullBleed = behaviourFields().find(
+      (f) => 'name' in f && f.name === 'fullBleed',
+    ) as Field & {
+      type: string
+      defaultValue?: unknown
+      admin?: { condition?: (d: unknown, s: unknown) => boolean }
+    }
+    expect(fullBleed.type).toBe('checkbox')
+    expect(fullBleed.defaultValue).toBe(true)
+
+    const c = fullBleed.admin?.condition
+    expect(c).toBeTypeOf('function')
+    expect(c!({}, { effect: 'expo' })).toBe(true)
+    expect(c!({}, { effect: 'slide' })).toBe(false)
+    expect(c!({}, {})).toBe(false)
+  })
+
   it('models slides as a non-empty array with a required image', () => {
     const slides = named(Carousel.fields, 'slides') as ArrayField
     expect(slides.type).toBe('array')

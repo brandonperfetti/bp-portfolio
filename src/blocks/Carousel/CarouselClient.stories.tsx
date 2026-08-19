@@ -94,6 +94,11 @@ const meta = {
     navigation: true,
     pagination: true,
     autoplay: false,
+    // The horizontal-Expo full-bleed breakout defaults ON in production, but the
+    // effect/behaviour stories run inside a bounded decorator column, so it is
+    // pinned OFF here to keep their geometry stable; `ExpoFullBleed` exercises
+    // the breakout explicitly in a production-like clipped frame.
+    fullBleed: false,
   },
   argTypes: {
     variant: { control: 'inline-radio', options: ['cards', 'media'] },
@@ -104,6 +109,7 @@ const meta = {
     },
     rotate: { control: { type: 'range', min: 0, max: 30, step: 1 } },
     grayscale: { control: 'boolean' },
+    fullBleed: { control: 'boolean' },
   },
   decorators: [
     (Story) => (
@@ -340,6 +346,65 @@ export const ExpoHorizontalOverscan: Story = {
     // Bounded hero height → no horizontal page overflow.
     const doc = document.documentElement
     await expect(doc.scrollWidth).toBeLessThanOrEqual(doc.clientWidth + 1)
+  },
+}
+
+/**
+ * Full-bleed horizontal expo (#68.2, default ON): the carousel breaks out of its
+ * reading column to the full viewport width (the shared `Container/section.ts`
+ * idiom) so the parallax side-panels reach the screen edges instead of leaving
+ * gray page-background bands. Framed here in a production-like `overflow-x: clip`
+ * page wrapper (the root layout carries that clip), inside a narrow reading
+ * column, so the breakout is real rather than theoretical. Asserts the wrapper
+ * spans ~the viewport width, no horizontal overflow, and the shorter hero height
+ * fits the whole carousel (track + arrows) within one screen.
+ */
+export const ExpoFullBleed: Story = {
+  args: { variant: 'media', effect: 'expo', fullBleed: true },
+  decorators: [
+    (Story) => (
+      <div className="overflow-x-clip" data-testid="clip-page">
+        <div className="mx-auto max-w-md">
+          <Story />
+        </div>
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const swiper = await getSwiper(canvasElement)
+    await waitFor(() => expect(swiper.params.effect).toBe('expo'))
+
+    const column = canvasElement.querySelector('.max-w-md') as HTMLElement
+    const wrapper = canvasElement.querySelector(
+      '[data-testid="carousel"]',
+    ) as HTMLElement
+
+    // The breakout idiom is applied (single-sourced from Container/section.ts),
+    // mirroring the PhotoStrip full-bleed story's class assertion.
+    for (const cls of ['w-screen', 'left-1/2', '-translate-x-1/2']) {
+      await expect(wrapper.classList.contains(cls)).toBe(true)
+    }
+
+    // It actually breaks out: the wrapper spans ~the viewport width, far past
+    // the narrow reading column it sits in. (0 horizontal *page* overflow is
+    // guaranteed by the root layout's `overflow-x: clip` — the shared contract
+    // this idiom relies on, measured 0 in the live prototype.)
+    await waitFor(() => {
+      expect(wrapper.getBoundingClientRect().width).toBeGreaterThanOrEqual(
+        window.innerWidth - 2,
+      )
+      expect(wrapper.getBoundingClientRect().width).toBeGreaterThan(
+        column.getBoundingClientRect().width,
+      )
+    })
+
+    // Shorter hero height (#68.2): the whole carousel (track + arrows) fits in
+    // one screen — the arrows no longer fall off the bottom.
+    await waitFor(() =>
+      expect(wrapper.getBoundingClientRect().height).toBeLessThanOrEqual(
+        window.innerHeight,
+      ),
+    )
   },
 }
 
