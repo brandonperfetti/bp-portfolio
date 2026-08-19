@@ -88,6 +88,16 @@ export const HERO_HEADLINE_CLASS =
   'text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100'
 
 /**
+ * Headline treatment when the stack is overlaid on a **photo/carousel** banner
+ * (`HeroContent`'s `onMedia`): the same type scale, but **white in both app
+ * themes** rather than the theme-aware zinc above — text on media reads light
+ * over the dark scrim in light *and* dark mode (staging QA B6.1). The `dark:`
+ * stop is dropped because the colour must not follow the app theme here.
+ */
+export const HERO_HEADLINE_ON_MEDIA_CLASS =
+  'text-4xl font-bold tracking-tight text-white sm:text-5xl'
+
+/**
  * The intro line under the headline, from the same homepage source.
  *
  * @remarks It renders the Pages doc's own top-level `subtitle` field. The
@@ -99,6 +109,13 @@ export const HERO_HEADLINE_CLASS =
  */
 export const HERO_SUBTITLE_CLASS =
   'mt-6 text-base text-zinc-600 dark:text-zinc-400'
+
+/**
+ * Subtitle treatment when overlaid on a photo/carousel banner (`onMedia`):
+ * light (`text-zinc-200`) in both app themes, paired with
+ * {@link HERO_HEADLINE_ON_MEDIA_CLASS} over the dark scrim (staging QA B6.1).
+ */
+export const HERO_SUBTITLE_ON_MEDIA_CLASS = 'mt-6 text-base text-zinc-200'
 
 /**
  * Space above the social icon row.

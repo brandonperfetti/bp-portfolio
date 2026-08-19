@@ -10,12 +10,14 @@ import { hero } from '@/heros/config'
 import {
   DEFAULT_HERO_HEADLINE_VARIANT,
   HERO_HEADLINE_CLASS,
+  HERO_HEADLINE_ON_MEDIA_CLASS,
   HERO_HEADLINE_VARIANTS,
   HERO_HEADLINE_VARIANT_ENUM_NAME,
   HERO_HEADLINE_VARIANT_OPTIONS,
   HERO_SOCIAL_REVEAL,
   HERO_SOCIAL_ROW_SPACING_CLASS,
   HERO_SUBTITLE_CLASS,
+  HERO_SUBTITLE_ON_MEDIA_CLASS,
   HERO_SUBTITLE_REVEAL,
   heroHeadlineVariant,
 } from '@/heros/content'
@@ -383,5 +385,28 @@ describe('homepage hero parity', () => {
 
   it('carries the homepage social-row reveal params', () => {
     expect(HERO_SOCIAL_REVEAL).toEqual({ y: 10, duration: 0.68, delay: 0.37 })
+  })
+})
+
+/*
+ * The on-media overlay treatment (B6.1): text overlaid on a photo/carousel
+ * banner must read light in BOTH app themes over the dark scrim, not the
+ * theme-aware zinc the page-background stack uses (which turned dark-on-dark in
+ * light mode — the staging defect). These pin the light variants and prove they
+ * carry no theme-aware `dark:` colour stop.
+ */
+describe('on-media hero text treatment (B6.1)', () => {
+  it('keeps the same headline scale but forces white in both themes', () => {
+    expect(HERO_HEADLINE_ON_MEDIA_CLASS).toBe(
+      'text-4xl font-bold tracking-tight text-white sm:text-5xl',
+    )
+    // Light in both themes — no theme-aware stop that flips dark in light mode.
+    expect(HERO_HEADLINE_ON_MEDIA_CLASS).not.toContain('dark:')
+    expect(HERO_HEADLINE_ON_MEDIA_CLASS).not.toContain('text-zinc-800')
+  })
+
+  it('renders the subtitle light in both themes', () => {
+    expect(HERO_SUBTITLE_ON_MEDIA_CLASS).toBe('mt-6 text-base text-zinc-200')
+    expect(HERO_SUBTITLE_ON_MEDIA_CLASS).not.toContain('dark:')
   })
 })

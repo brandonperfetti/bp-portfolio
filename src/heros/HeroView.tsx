@@ -18,9 +18,11 @@ import {
 } from '@/components/heros/presets'
 import {
   HERO_HEADLINE_CLASS,
+  HERO_HEADLINE_ON_MEDIA_CLASS,
   HERO_SOCIAL_REVEAL,
   HERO_SOCIAL_ROW_SPACING_CLASS,
   HERO_SUBTITLE_CLASS,
+  HERO_SUBTITLE_ON_MEDIA_CLASS,
   HERO_SUBTITLE_REVEAL,
   heroHeadlineVariant,
 } from '@/heros/content'
@@ -87,17 +89,26 @@ function MaybeReveal({
  * `carousel`) pass `false` when their `showContent` toggle is off, which hides
  * the whole text block while the social row still renders independently (gated
  * only by `showSocialLinks`, which upstream already emptied `socialLinks`).
+ * @param onMedia - Whether the stack is overlaid on a photo/carousel banner.
+ * Default `false`. When `true`, the whole stack — headline, subtitle, hero rich
+ * text, CTA links and the social icon row — renders **light in both app
+ * themes** (over the dark {@link HERO_MEDIA_SCRIM_CLASS}) instead of the
+ * theme-aware zinc it uses on a page background, so text on a dark photo stays
+ * legible in light *and* dark app mode (staging QA B6.1). Passed only by the
+ * banner overlay; every other caller omits it, so their DOM is byte-identical.
  */
 function HeroContent({
   page,
   socialLinks,
   className,
   showText = true,
+  onMedia = false,
 }: {
   page: Page
   socialLinks: ResolvedSocialLink[]
   className?: string
   showText?: boolean
+  onMedia?: boolean
 }) {
   const links = page.hero?.links
   // Opt-in, off by default: when off, `MaybeReveal` renders its children bare,
@@ -111,16 +122,30 @@ function HeroContent({
           <AnimatedHeadline
             text={page.title}
             variant={heroHeadlineVariant(page.hero?.headlineVariant)}
-            className={HERO_HEADLINE_CLASS}
+            className={
+              onMedia ? HERO_HEADLINE_ON_MEDIA_CLASS : HERO_HEADLINE_CLASS
+            }
           />
           {page.subtitle ? (
             <MaybeReveal enabled={revealContent} params={HERO_SUBTITLE_REVEAL}>
-              <p className={HERO_SUBTITLE_CLASS}>{page.subtitle}</p>
+              <p
+                className={
+                  onMedia ? HERO_SUBTITLE_ON_MEDIA_CLASS : HERO_SUBTITLE_CLASS
+                }
+              >
+                {page.subtitle}
+              </p>
             </MaybeReveal>
           ) : null}
           {page.hero?.richText ? (
+            // `prose-invert` forces the prose palette light over the dark scrim
+            // in both themes (Prose is otherwise `prose dark:prose-invert`); a
+            // no-op class off media.
             <div className="mt-6">
-              <RichTextContent content={page.hero.richText} />
+              <RichTextContent
+                content={page.hero.richText}
+                className={onMedia ? 'prose-invert' : undefined}
+              />
             </div>
           ) : null}
         </>
@@ -130,10 +155,19 @@ function HeroContent({
         // overlaid inside the carousel hero's `pointer-events-none` frame, so
         // the links stay clickable while a drag on empty overlay area still
         // reaches the carousel. A no-op everywhere else — `pointer-events-auto`
-        // is the default — so the other hero types render unchanged.
+        // is the default — so the other hero types render unchanged. On media,
+        // plain (non-button) links render white for legibility over the photo.
         <div className="pointer-events-auto mt-8 flex flex-wrap gap-3">
           {links.map((row, index) => (
-            <CMSLink key={row.id ?? index} link={row.link} />
+            <CMSLink
+              key={row.id ?? index}
+              link={row.link}
+              className={
+                onMedia && !row.link.appearance
+                  ? 'font-medium text-white transition hover:text-zinc-200'
+                  : undefined
+              }
+            />
           ))}
         </div>
       ) : null}
@@ -141,9 +175,15 @@ function HeroContent({
         <MaybeReveal enabled={revealContent} params={HERO_SOCIAL_REVEAL}>
           {/* `pointer-events-auto` for the same reason as the CTA row above:
               keep the icon row clickable when overlaid on the carousel hero,
-              a no-op outside that `pointer-events-none` ancestor. */}
+              a no-op outside that `pointer-events-none` ancestor. On media,
+              `[&_svg]:fill-white` forces the imported icons (which paint with
+              `fill-zinc-*`, not `currentColor`) light over the dark scrim. */}
           <div
-            className={`${HERO_SOCIAL_ROW_SPACING_CLASS} pointer-events-auto`}
+            className={
+              onMedia
+                ? `${HERO_SOCIAL_ROW_SPACING_CLASS} pointer-events-auto [&_svg]:fill-white`
+                : `${HERO_SOCIAL_ROW_SPACING_CLASS} pointer-events-auto`
+            }
           >
             {/*
              * The `socialLinks` block's own icon row, imported rather than
@@ -273,6 +313,7 @@ export function HeroView({
           socialLinks={socialLinks}
           className={HERO_MEDIA_TEXT_SHADOW_CLASS}
           showText={showContent}
+          onMedia
         />
       </div>
     ) : null

@@ -326,13 +326,19 @@ export const HERO_MEDIA_FULLSCREEN_FRAME_CLASS =
   'relative left-1/2 -mt-32 h-dvh w-screen -translate-x-1/2 sm:-mt-48'
 
 /**
- * Legibility scrim over an overlaid-content hero (`image`, `carousel`) — the
- * same left-to-right wash the shader hero paints (`ShaderHero`'s `scrim`), so
- * the title stays readable over a busy photo in both themes. `pointer-events-none`
- * so it never intercepts a drag meant for the carousel beneath it.
+ * Legibility scrim over an overlaid-content banner hero (`image`, `carousel`).
+ *
+ * @remarks A left-to-right wash that is **dark in both app themes** — unlike the
+ * shader hero's theme-aware scrim, whose text sits on the page background. This
+ * text sits on a **photo/carousel**, so it must read as the universal "text on
+ * media" pattern: light text over a dark wash, in light *and* dark app mode
+ * (staging QA B6.1 — a light-mode `from-white/*` wash left dark zinc text
+ * unreadable over a dark photo). Paired with the light overlay treatment
+ * `HeroContent` renders under `onMedia`. `pointer-events-none` so it never
+ * intercepts a drag meant for the carousel beneath it.
  */
 export const HERO_MEDIA_SCRIM_CLASS =
-  'pointer-events-none absolute inset-0 bg-gradient-to-r from-white/60 via-white/20 to-transparent dark:from-zinc-900/70 dark:via-zinc-900/20 dark:to-transparent'
+  'pointer-events-none absolute inset-0 bg-gradient-to-r from-zinc-950/70 via-zinc-950/20 to-transparent'
 
 /**
  * The text-shadow the overlaid content stack wears when it sits directly on a

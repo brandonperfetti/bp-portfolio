@@ -678,6 +678,45 @@ export const TypeImageNoContent: Story = {
 }
 
 /**
+ * The legibility fix (staging QA B6.1): the overlay text on a banner hero reads
+ * **light in both app themes** over a **dark scrim**, not the theme-aware zinc
+ * that turned dark-on-dark in light mode. Rendered here in the default (light)
+ * app theme — the case that was broken — asserting the headline paints white and
+ * the social icons paint white via computed style (not just classes).
+ */
+export const TypeImageLegibleOverPhoto: Story = {
+  args: {
+    page: pageWithoutProse({
+      type: 'image',
+      showSocialLinks: true,
+      media: {
+        id: 1,
+        url: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684298666/image-1_ebktnx.jpg',
+        alt: 'Desk with a laptop and notebook',
+        width: 1600,
+        height: 900,
+      },
+    }),
+    socialLinks: identitySocialLinks,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const heading = canvas.getByRole('heading', { name: 'Working together' })
+    // White headline in the light app theme (the previously-broken case).
+    await expect(getComputedStyle(heading).color).toBe('rgb(255, 255, 255)')
+    // The imported social icons are forced light (they paint `fill-*`).
+    const icon = canvasElement.querySelector('header section svg') as SVGElement
+    await expect(getComputedStyle(icon).fill).toBe('rgb(255, 255, 255)')
+    // The scrim is dark in both themes (no light-mode white wash).
+    const scrim = canvasElement.querySelector(
+      '.bg-gradient-to-r',
+    ) as HTMLElement
+    await expect(scrim.className).toContain('from-zinc-950/70')
+    await expect(scrim.className).not.toContain('from-white')
+  },
+}
+
+/**
  * `type: carousel` — a full-screen (100dvh) image carousel banner (B6.1). The
  * reused `CarouselClient` runs in `presentation="hero"` mode — slides fill the
  * frame and the nav/pagination overlay at the bottom edge — inside the

@@ -5,6 +5,7 @@ import type { ResolvedSocialLink } from '@/blocks/SocialLinks/platforms'
 import { HeroView } from '@/heros/HeroView'
 import {
   HERO_HEADLINE_CLASS,
+  HERO_HEADLINE_ON_MEDIA_CLASS,
   HERO_SOCIAL_ROW_SPACING_CLASS,
   HERO_SUBTITLE_CLASS,
 } from '@/heros/content'
@@ -291,6 +292,25 @@ describe('HeroView — type image (full-screen, B6.1)', () => {
     )
   })
 
+  it('renders the overlay text light in both themes, over a dark scrim (B6.1)', () => {
+    const { container } = render(
+      <HeroView page={imagePage()} socialLinks={socialLinks} />,
+    )
+
+    // Text on a photo is light in BOTH app themes — no theme-aware zinc that
+    // turns dark-on-dark in light mode (the staging defect).
+    expect(headline()).toHaveAttribute('class', HERO_HEADLINE_ON_MEDIA_CLASS)
+    expect(headline()).not.toHaveClass('text-zinc-800')
+    // The social icons are forced light too (they paint with `fill-*`, not
+    // currentColor, so the overlay carries `[&_svg]:fill-white`).
+    expect(socialRow(container)?.parentElement).toHaveClass(
+      '[&_svg]:fill-white',
+    )
+    // The scrim is dark in both themes (no light-mode `from-white/*`).
+    expect(scrim(container)).toHaveClass('from-zinc-950/70')
+    expect(scrim(container)?.className).not.toContain('from-white')
+  })
+
   it('hides the whole text block when showContent is off, keeping the media', () => {
     const { container } = render(
       <HeroView page={imagePage({ showContent: false })} />,
@@ -382,6 +402,10 @@ describe('HeroView — type carousel', () => {
     expect(scrim(container)).toHaveClass('pointer-events-none')
     expect(contentStack(container)).toHaveClass(HERO_MEDIA_TEXT_SHADOW_CLASS)
     expect(headline()).toBeVisible()
+    // Overlay text is light-on-media (legible over the photo in both themes),
+    // and the scrim is dark in both themes.
+    expect(headline()).toHaveAttribute('class', HERO_HEADLINE_ON_MEDIA_CLASS)
+    expect(scrim(container)).toHaveClass('from-zinc-950/70')
   })
 
   it('respects the per-hero navigation and pagination toggles', () => {
