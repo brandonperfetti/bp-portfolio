@@ -20,7 +20,7 @@ describe('normalizeHeroByType', () => {
     ).toEqual({
       type: 'blank',
       media: null,
-      slides: null,
+      slides: [],
       effect: null,
       richText: null,
       links: [],
@@ -33,7 +33,7 @@ describe('normalizeHeroByType', () => {
     ).toEqual({
       type: 'none',
       media: null,
-      slides: null,
+      slides: [],
       effect: null,
       richText,
       links,
@@ -46,7 +46,7 @@ describe('normalizeHeroByType', () => {
     ).toEqual({
       type: 'shader',
       media: null,
-      slides: null,
+      slides: [],
       effect: null,
       richText,
       links,
@@ -66,7 +66,7 @@ describe('normalizeHeroByType', () => {
     ).toEqual({
       type: 'standard',
       media: 5,
-      slides: null,
+      slides: [],
       effect: null,
       richText,
       links,
@@ -81,7 +81,7 @@ describe('normalizeHeroByType', () => {
     ).toEqual({
       type: 'image',
       media: 5,
-      slides: null,
+      slides: [],
       effect: null,
       richText,
       links,
@@ -111,12 +111,15 @@ describe('normalizeHeroByType', () => {
   it('strips orphan slides + effect off a non-carousel hero', () => {
     // The new rule: a page switched away from `carousel` must not carry its
     // old slide uploads or effect, hidden and ready to resurface on a re-switch.
+    // `slides` clears to `[]`, NOT `null`: Payload rejects a null write to the
+    // array relation and 500s every non-carousel hero save otherwise (staging
+    // QA). The nullable `effect` enum column clears fine with `null`.
     const result = normalizeHeroByType({
       type: 'standard',
       slides,
       effect: 'spring',
     })
-    expect(result.slides).toBeNull()
+    expect(result.slides).toEqual([])
     expect(result.effect).toBeNull()
   })
 

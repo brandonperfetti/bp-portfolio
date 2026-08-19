@@ -13,6 +13,8 @@ import type { FieldHook } from 'payload'
  * - `media` renders only for `standard` (inset below) or `image` (full-bleed).
  * - `slides` / `effect` render only for `carousel`; a non-carousel hero must not
  *   carry orphan slide uploads or a stray effect the moment its type changes.
+ *   `slides` clears to `[]` (an array field clears empty, not null — Payload
+ *   rejects a null write to the array relation), `effect` to `null`.
  * - `richText` / `links` render for every type but `blank`.
  *
  * Pure and non-mutating; the field hook below applies it on every save.
@@ -43,7 +45,10 @@ export function normalizeHeroByType<
     next.media = null
   }
   if (next.type !== 'carousel') {
-    next.slides = null
+    // `[]`, not `null`: Payload cannot write null to the `slides` array
+    // relation and 500s on every non-carousel hero save if we do (staging QA).
+    // The nullable `effect` enum column clears fine with null.
+    next.slides = []
     next.effect = null
   }
   if (next.type === 'blank') {
