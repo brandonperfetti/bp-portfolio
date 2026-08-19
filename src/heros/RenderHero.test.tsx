@@ -16,11 +16,17 @@ vi.mock('@/heros/HeroView', () => ({
   HeroView: ({
     page,
     socialLinks,
+    heroSlides,
   }: {
     page: Page
     socialLinks?: ResolvedSocialLink[]
+    heroSlides?: unknown[]
   }) => (
-    <div data-testid="hero-view" data-title={page.title}>
+    <div
+      data-testid="hero-view"
+      data-title={page.title}
+      data-slides={JSON.stringify(heroSlides)}
+    >
       {JSON.stringify(socialLinks)}
     </div>
   ),
@@ -41,6 +47,11 @@ const renderHero = async (doc: Page) => render(await RenderHero({ page: doc }))
 const resolved = () =>
   JSON.parse(screen.getByTestId('hero-view').textContent || 'null') as
     ResolvedSocialLink[] | null
+
+const resolvedSlides = () =>
+  JSON.parse(
+    screen.getByTestId('hero-view').getAttribute('data-slides') || 'null',
+  )
 
 beforeEach(() => {
   getCmsIdentity.mockReset()
@@ -120,5 +131,76 @@ describe('RenderHero — Identity social links (#38)', () => {
       'Consulting',
     )
     expect(resolved()).toEqual([])
+  })
+})
+
+describe('RenderHero — carousel slide resolution (#65)', () => {
+  const slide = (over: Record<string, unknown> = {}) => ({
+    id: 'a',
+    image: {
+      id: 9,
+      url: '/media/1.jpg',
+      alt: 'One',
+      width: 1600,
+      height: 900,
+    },
+    title: 'One',
+    text: 'First',
+    href: '/one',
+    ...over,
+  })
+
+  it('resolves each carousel slide upload to plain, serializable slide data', async () => {
+    await renderHero(
+      page({ type: 'carousel', slides: [slide()] } as unknown as Partial<
+        NonNullable<Page['hero']>
+      >),
+    )
+
+    expect(resolvedSlides()).toEqual([
+      {
+        id: 'a',
+        src: '/media/1.jpg',
+        alt: 'One',
+        width: 1600,
+        height: 900,
+        title: 'One',
+        text: 'First',
+        href: '/one',
+      },
+    ])
+  })
+
+  it('drops a slide whose image has no resolvable URL (the media variant needs one)', async () => {
+    await renderHero(
+      page({
+        type: 'carousel',
+        slides: [
+          slide({ id: 'a', image: 42 }), // unresolved relationship id, no object
+          slide({ id: 'b' }),
+        ],
+      } as unknown as Partial<NonNullable<Page['hero']>>),
+    )
+
+    const slides = resolvedSlides() as { id: string }[]
+    expect(slides).toHaveLength(1)
+    expect(slides[0].id).toBe('b')
+  })
+
+  it('resolves no slides for a non-carousel hero', async () => {
+    await renderHero(
+      page({
+        type: 'standard',
+        slides: [slide()],
+      } as unknown as Partial<NonNullable<Page['hero']>>),
+    )
+
+    expect(resolvedSlides()).toEqual([])
+  })
+
+  it('resolves an empty array for a carousel hero with no slides', async () => {
+    await renderHero(page({ type: 'carousel' }))
+
+    expect(resolvedSlides()).toEqual([])
   })
 })

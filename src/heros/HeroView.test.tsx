@@ -13,6 +13,8 @@ import {
   HERO_CARD_SHELL_CLASS,
   HERO_FULL_BLEED_FRAME_CLASS,
   HERO_FULL_BLEED_HOME_FRAME_CLASS,
+  HERO_MEDIA_FULL_BLEED_CLASS,
+  HERO_MEDIA_TEXT_SHADOW_CLASS,
 } from '@/heros/presentation'
 import type { Page } from '@/payload-types'
 
@@ -60,6 +62,25 @@ vi.mock('@/components/motion/AnimatedHeadline', () => ({
     <h1 data-variant={variant} className={className}>
       {text}
     </h1>
+  ),
+}))
+
+// The carousel leaf is a Swiper client component with its own suite; here it
+// is a probe that records the props HeroView hands it, so the hero test asserts
+// the reuse contract (variant, effect, fixed knobs, resolved slides) without
+// mounting Swiper.
+vi.mock('@/blocks/Carousel/CarouselClient', () => ({
+  CarouselClient: (props: Record<string, unknown>) => (
+    <div
+      data-testid="carousel-client"
+      data-variant={String(props.variant)}
+      data-effect={String(props.effect)}
+      data-full-bleed={String(props.fullBleed)}
+      data-autoplay={String(props.autoplay)}
+      data-navigation={String(props.navigation)}
+      data-pagination={String(props.pagination)}
+      data-slide-count={String((props.slides as unknown[])?.length)}
+    />
   ),
 }))
 
@@ -218,6 +239,173 @@ describe('HeroView — type standard', () => {
     )
 
     expect(canvas(container)).toBeNull()
+  })
+})
+
+describe('HeroView — type image', () => {
+  const imagePage = () =>
+    page({
+      type: 'image',
+      media: {
+        id: 3,
+        url: '/media/banner.jpg',
+        alt: 'A wide banner',
+        width: 1600,
+        height: 900,
+      },
+    } as Partial<NonNullable<Page['hero']>>)
+
+  it('renders the media full-bleed behind the overlaid content, with a scrim', () => {
+    const { container } = render(<HeroView page={imagePage()} />)
+
+    // The banner sits in the shared full-bleed frame (default rhythm), as a
+    // decoration layer behind the content — aria-hidden like the shader canvas,
+    // with the meaning carried by the overlaid title/subtitle text.
+    const frame = canvas(container)
+    expect(frame).toHaveAttribute('class', HERO_FULL_BLEED_FRAME_CLASS)
+    expect(frame?.querySelector('img')).toHaveAttribute(
+      'src',
+      '/media/banner.jpg',
+    )
+    // Legibility scrim (both themes covered by its dark: stops).
+    expect(scrim(container)).not.toBeNull()
+    expect(bottomFade(container)).not.toBeNull()
+  })
+
+  it('overlays the content stack with a legibility text-shadow', () => {
+    const { container } = render(<HeroView page={imagePage()} />)
+
+    expect(headline()).toBeVisible()
+    expect(contentStack(container)).toHaveClass(HERO_MEDIA_TEXT_SHADOW_CLASS)
+  })
+
+  it('follows the route rhythm for its full-bleed frame, like the shader hero', () => {
+    const { container } = render(
+      <HeroView
+        page={page({
+          type: 'image',
+          rhythm: 'homeParity',
+          media: { id: 3, url: '/media/banner.jpg', alt: 'A wide banner' },
+        } as Partial<NonNullable<Page['hero']>>)}
+      />,
+    )
+
+    expect(canvas(container)).toHaveAttribute(
+      'class',
+      HERO_FULL_BLEED_HOME_FRAME_CLASS,
+    )
+  })
+
+  it('renders the content stack even when no media is stored', () => {
+    const { container } = render(<HeroView page={page({ type: 'image' })} />)
+
+    expect(headline()).toBeVisible()
+    expect(canvas(container)).toBeNull()
+  })
+})
+
+describe('HeroView — type carousel', () => {
+  const heroSlides = [
+    { id: 'a', src: '/media/1.jpg', alt: 'One' },
+    { id: 'b', src: '/media/2.jpg', alt: 'Two' },
+  ]
+
+  const carouselClient = () => screen.queryByTestId('carousel-client')
+
+  it('mounts the reused CarouselClient with the fixed hero knobs', () => {
+    render(
+      <HeroView
+        page={page({ type: 'carousel', effect: 'expo' })}
+        heroSlides={heroSlides}
+      />,
+    )
+
+    const leaf = carouselClient()
+    expect(leaf).not.toBeNull()
+    // The reuse contract: media variant, hero-owned frame (fullBleed off so the
+    // leaf's effect-gated breakout is never applied twice), autoplay off,
+    // nav/pagination on, the editor's effect passed through, resolved slides.
+    expect(leaf).toHaveAttribute('data-variant', 'media')
+    expect(leaf).toHaveAttribute('data-full-bleed', 'false')
+    expect(leaf).toHaveAttribute('data-autoplay', 'false')
+    expect(leaf).toHaveAttribute('data-navigation', 'true')
+    expect(leaf).toHaveAttribute('data-pagination', 'true')
+    expect(leaf).toHaveAttribute('data-effect', 'expo')
+    expect(leaf).toHaveAttribute('data-slide-count', '2')
+  })
+
+  it('owns the full-bleed frame and overlays content that never blocks the carousel', () => {
+    const { container } = render(
+      <HeroView page={page({ type: 'carousel' })} heroSlides={heroSlides} />,
+    )
+
+    // The hero owns the horizontal breakout (the leaf gets fullBleed=false).
+    expect(container.querySelector('header')).toHaveAttribute(
+      'class',
+      HERO_MEDIA_FULL_BLEED_CLASS,
+    )
+    // Overlaid content is pointer-events-none so drag/arrows/keyboard reach the
+    // carousel beneath it; the scrim likewise never intercepts.
+    const overlay = contentStack(container).parentElement as HTMLElement
+    expect(overlay).toHaveClass('pointer-events-none')
+    expect(scrim(container)).toHaveClass('pointer-events-none')
+    expect(contentStack(container)).toHaveClass(HERO_MEDIA_TEXT_SHADOW_CLASS)
+    expect(headline()).toBeVisible()
+  })
+
+  it('falls back to the bare content stack when no slides resolve', () => {
+    const { container } = render(
+      <HeroView page={page({ type: 'carousel' })} heroSlides={[]} />,
+    )
+
+    expect(carouselClient()).toBeNull()
+    expect(headline()).toBeVisible()
+    expect(container.querySelector('header')).toHaveClass('relative')
+    expect(container.querySelector('header')).not.toHaveClass('w-screen')
+  })
+
+  it('passes no effect through untouched (the leaf defaults it)', () => {
+    render(
+      <HeroView page={page({ type: 'carousel' })} heroSlides={heroSlides} />,
+    )
+
+    // Unset effect reaches the leaf as undefined; the leaf's mapper defaults it.
+    expect(carouselClient()).toHaveAttribute('data-effect', 'undefined')
+  })
+
+  it('re-enables pointer events on the CTA + social wrappers, not the headline', () => {
+    const { container } = render(
+      <HeroView
+        page={page({
+          type: 'carousel',
+          links: [
+            {
+              id: 'a',
+              link: { type: 'custom', url: '/contact', label: 'Get in touch' },
+            },
+          ],
+        } as unknown as Partial<NonNullable<Page['hero']>>)}
+        socialLinks={socialLinks}
+        heroSlides={heroSlides}
+      />,
+    )
+
+    // The overlay stays pointer-events-none, so a drag on empty overlay area
+    // still reaches the carousel beneath.
+    const overlay = contentStack(container).parentElement as HTMLElement
+    expect(overlay).toHaveClass('pointer-events-none')
+
+    // The two interactive wrappers opt back in so they stay clickable.
+    const cta = screen.getByRole('link', { name: 'Get in touch' })
+      .parentElement as HTMLElement
+    expect(cta).toHaveClass('pointer-events-auto')
+    const row = container.querySelector('header section') as HTMLElement
+    expect(row.parentElement).toHaveClass('pointer-events-auto')
+
+    // The headline and the content column stay non-interactive — no opt-in, so
+    // a drag starting on the title still reaches the carousel.
+    expect(headline()).not.toHaveClass('pointer-events-auto')
+    expect(contentStack(container)).not.toHaveClass('pointer-events-auto')
   })
 })
 
@@ -506,9 +694,12 @@ describe('HeroView — social icon row (#38)', () => {
     )
     const row = socialRow(container) as HTMLElement
 
+    // The homepage's `mt-6` gap, plus the `pointer-events-auto` that keeps the
+    // row clickable when this stack is overlaid on the carousel hero (a no-op
+    // in this shader context, where the ancestor already accepts events).
     expect(row.parentElement).toHaveAttribute(
       'class',
-      HERO_SOCIAL_ROW_SPACING_CLASS,
+      `${HERO_SOCIAL_ROW_SPACING_CLASS} pointer-events-auto`,
     )
     // `my-12` is a *block's* page rhythm; a hero owns its own stack spacing.
     expect(row).not.toHaveClass('my-12')

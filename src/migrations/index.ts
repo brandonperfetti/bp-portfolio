@@ -31,6 +31,7 @@ import * as migration_20260818_212608_w6b3_carousel_expo_controls from './202608
 import * as migration_20260819_000348_w6b3_carousel_full_bleed from './20260819_000348_w6b3_carousel_full_bleed'
 import * as migration_20260819_011112_w6b4_carousel3d_effect from './20260819_011112_w6b4_carousel3d_effect'
 import * as migration_20260819_154529_w6b5_carousel_spring_effect from './20260819_154529_w6b5_carousel_spring_effect'
+import * as migration_20260819_164717_w6b6_hero_image_carousel_types from './20260819_164717_w6b6_hero_image_carousel_types'
 
 export const migrations = [
   {
@@ -197,5 +198,10 @@ export const migrations = [
     up: migration_20260819_154529_w6b5_carousel_spring_effect.up,
     down: migration_20260819_154529_w6b5_carousel_spring_effect.down,
     name: '20260819_154529_w6b5_carousel_spring_effect',
+  },
+  {
+    up: migration_20260819_164717_w6b6_hero_image_carousel_types.up,
+    down: migration_20260819_164717_w6b6_hero_image_carousel_types.down,
+    name: '20260819_164717_w6b6_hero_image_carousel_types',
   },
 ]

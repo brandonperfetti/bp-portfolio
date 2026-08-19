@@ -2,6 +2,10 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import {
+  CAROUSEL_EFFECT_OPTIONS,
+  DEFAULT_CAROUSEL_EFFECT,
+} from '@/blocks/Carousel/options'
 import { hero } from '@/heros/config'
 import {
   DEFAULT_HERO_HEADLINE_VARIANT,
@@ -15,6 +19,7 @@ import {
   HERO_SUBTITLE_REVEAL,
   heroHeadlineVariant,
 } from '@/heros/content'
+import { HERO_CAROUSEL_EFFECT_ENUM_NAME } from '@/heros/presentation'
 
 const read = (relative: string) =>
   readFileSync(path.join(process.cwd(), relative), 'utf8')
@@ -24,7 +29,14 @@ const field = (name: string) =>
   heroFields.find((f) => 'name' in f && f.name === name)
 
 /** Every hero type, so a matrix assertion can't quietly skip one. */
-const HERO_TYPES = ['blank', 'none', 'standard', 'shader'] as const
+const HERO_TYPES = [
+  'blank',
+  'none',
+  'standard',
+  'shader',
+  'image',
+  'carousel',
+] as const
 
 const conditionOf = (name: string) =>
   (field(name) as { admin?: { condition?: unknown } } | undefined)?.admin
@@ -127,28 +139,76 @@ describe('hero group config — content fields (#38)', () => {
         none: false,
         standard: false,
         shader: true,
+        image: false,
+        carousel: false,
       },
       shaderPreset: {
         blank: false,
         none: false,
         standard: false,
         shader: true,
+        image: false,
+        carousel: false,
       },
-      rhythm: { blank: false, none: false, standard: false, shader: true },
-      media: { blank: false, none: false, standard: true, shader: false },
+      rhythm: {
+        blank: false,
+        none: false,
+        standard: false,
+        shader: true,
+        image: false,
+        carousel: false,
+      },
+      // `media` widens to `image` (the full-bleed banner reuses the one upload);
+      // still hidden for none/shader/carousel.
+      media: {
+        blank: false,
+        none: false,
+        standard: true,
+        shader: false,
+        image: true,
+        carousel: false,
+      },
+      // `slides` and `effect` are the carousel type's own controls.
+      slides: {
+        blank: false,
+        none: false,
+        standard: false,
+        shader: false,
+        image: false,
+        carousel: true,
+      },
+      effect: {
+        blank: false,
+        none: false,
+        standard: false,
+        shader: false,
+        image: false,
+        carousel: true,
+      },
       headlineVariant: {
         blank: false,
         none: true,
         standard: true,
         shader: true,
+        image: true,
+        carousel: true,
       },
       showSocialLinks: {
         blank: false,
         none: true,
         standard: true,
         shader: true,
+        image: true,
+        carousel: true,
       },
-      revealContent: { blank: false, none: true, standard: true, shader: true },
+      revealContent: {
+        blank: false,
+        none: true,
+        standard: true,
+        shader: true,
+        image: true,
+        carousel: true,
+      },
     }
 
     for (const [name, byType] of Object.entries(expected)) {
@@ -167,12 +227,12 @@ describe('hero group config — content fields (#38)', () => {
   })
 
   /*
-   * `blank` (W4B1): an additive fourth type that renders no hero at all, for a
-   * page whose H1 lives in an in-column `heading` block (the about page). It is
-   * added alongside the existing three, never replacing them, and the default
-   * stays `standard`, so no stored page becomes blank without a deliberate edit.
+   * The full type vocabulary. `blank` (W4B1) renders no hero; `image` and
+   * `carousel` (#65) are the two full-bleed overlaid-content types added last.
+   * All are additive — the existing options keep their order and the default
+   * stays `standard`, so no stored page changes type without a deliberate edit.
    */
-  it('offers a blank type alongside the existing three, still defaulting to standard', () => {
+  it('offers every hero type in order, still defaulting to standard', () => {
     const type = field('type') as {
       options?: { value: string }[]
       defaultValue?: string
@@ -183,9 +243,61 @@ describe('hero group config — content fields (#38)', () => {
       'none',
       'standard',
       'shader',
+      'image',
+      'carousel',
     ])
     expect(type.defaultValue).toBe('standard')
     expect(type.required).toBe(true)
+  })
+
+  /*
+   * The carousel hero's `effect` select draws the block's five-effect
+   * vocabulary but on its OWN hero-scoped Postgres enum, distinct from the
+   * block's `enum_carousel_effect` — the hero carries its own `effect` column
+   * on `pages`/`_pages_v`. Named explicitly (like the headline/presentation
+   * enums) and within the 63-char identifier limit.
+   */
+  it('exposes the carousel effect select on its own hero-scoped enum', () => {
+    const effect = field('effect') as {
+      type?: string
+      defaultValue?: string
+      enumName?: string
+      options?: unknown
+    }
+    expect(effect).toMatchObject({
+      type: 'select',
+      defaultValue: DEFAULT_CAROUSEL_EFFECT,
+      enumName: HERO_CAROUSEL_EFFECT_ENUM_NAME,
+    })
+    expect(effect.options).toEqual(CAROUSEL_EFFECT_OPTIONS)
+    expect(HERO_CAROUSEL_EFFECT_ENUM_NAME).not.toBe('enum_carousel_effect')
+    expect(String(effect.enumName).length).toBeLessThanOrEqual(63)
+  })
+
+  /*
+   * The carousel hero's slides mirror the block's slide shape (image + title +
+   * text + href) so `RenderHero` resolves them exactly as `CarouselComponent`
+   * does. `minRows: 1` is a soft floor — with no `required`, Payload skips
+   * length validation for the empty array a non-carousel page carries, so those
+   * pages still save.
+   */
+  it('exposes a carousel slides array in the block’s slide shape', () => {
+    const slides = field('slides') as {
+      type?: string
+      minRows?: number
+      required?: boolean
+      fields?: { name?: string; type?: string; required?: boolean }[]
+    }
+    expect(slides).toMatchObject({ type: 'array', minRows: 1 })
+    expect(slides.required).toBeFalsy()
+    expect(slides.fields?.map((f) => f.name)).toEqual([
+      'image',
+      'title',
+      'text',
+      'href',
+    ])
+    const image = slides.fields?.find((f) => f.name === 'image')
+    expect(image).toMatchObject({ type: 'upload', required: true })
   })
 })
 

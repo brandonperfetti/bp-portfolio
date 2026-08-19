@@ -1,6 +1,10 @@
 import Image from 'next/image'
 import { type ReactNode } from 'react'
 
+import {
+  CarouselClient,
+  type CarouselSlideData,
+} from '@/blocks/Carousel/CarouselClient'
 import { SocialLinksView } from '@/blocks/SocialLinks/SocialLinksView'
 import type { ResolvedSocialLink } from '@/blocks/SocialLinks/platforms'
 import { CMSLink } from '@/components/cms/CMSLink'
@@ -25,6 +29,9 @@ import {
   HERO_CARD_PANEL_CLASS,
   HERO_CARD_SHELL_CLASS,
   HERO_FULL_BLEED_PANEL_CLASS,
+  HERO_MEDIA_FULL_BLEED_CLASS,
+  HERO_MEDIA_SCRIM_CLASS,
+  HERO_MEDIA_TEXT_SHADOW_CLASS,
   heroPresentation,
 } from '@/heros/presentation'
 import { routeRhythmProfile } from '@/heros/routeRhythm'
@@ -108,7 +115,12 @@ function HeroContent({
         </div>
       ) : null}
       {links?.length ? (
-        <div className="mt-8 flex flex-wrap gap-3">
+        // `pointer-events-auto` opts the CTA row back in when this stack is
+        // overlaid inside the carousel hero's `pointer-events-none` frame, so
+        // the links stay clickable while a drag on empty overlay area still
+        // reaches the carousel. A no-op everywhere else — `pointer-events-auto`
+        // is the default — so the other hero types render unchanged.
+        <div className="pointer-events-auto mt-8 flex flex-wrap gap-3">
           {links.map((row, index) => (
             <CMSLink key={row.id ?? index} link={row.link} />
           ))}
@@ -116,7 +128,12 @@ function HeroContent({
       ) : null}
       {socialLinks.length ? (
         <MaybeReveal enabled={revealContent} params={HERO_SOCIAL_REVEAL}>
-          <div className={HERO_SOCIAL_ROW_SPACING_CLASS}>
+          {/* `pointer-events-auto` for the same reason as the CTA row above:
+              keep the icon row clickable when overlaid on the carousel hero,
+              a no-op outside that `pointer-events-none` ancestor. */}
+          <div
+            className={`${HERO_SOCIAL_ROW_SPACING_CLASS} pointer-events-auto`}
+          >
             {/*
              * The `socialLinks` block's own icon row, imported rather than
              * rebuilt — one set of icons, one focus ring, one hover treatment
@@ -157,16 +174,32 @@ function HeroContent({
  *   route's own — see {@link HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS}.
  * - `shader` + `card` — the bounded rounded panel the `shaderHero` block
  *   renders, with the hero text on the canvas; no scrim, no bottom fade.
+ * - `image` — a full-bleed image banner: the uploaded `media` fills the same
+ *   `shader`+fullBleed frame edge-to-edge, with a legibility scrim and the
+ *   content stack overlaid on top (a magazine-cover look, distinct from
+ *   `standard`'s inset image below the stack).
+ * - `carousel` — a full-bleed image carousel banner: the reused
+ *   {@link CarouselClient} (`variant='media'`, autoplay off, keyboard/nav/
+ *   pagination on) fills a hero-owned horizontal breakout, with the content
+ *   stack overlaid `pointer-events-none` so the carousel stays interactive.
+ *   The hero owns the breakout and passes `fullBleed={false}` to the leaf,
+ *   whose own breakout is effect-gated (only expo/carousel3d/spring), so the
+ *   frame is applied once.
  *
  * @param page - The page document to render a hero for.
  * @param socialLinks - Resolved Identity profile links, or `[]` for no row.
+ * @param heroSlides - The `carousel` hero's slides, already resolved from
+ * uploads to plain URLs by {@link RenderHero} (the server/presentational split
+ * the carousel block established). Empty for every other type.
  */
 export function HeroView({
   page,
   socialLinks = [],
+  heroSlides = [],
 }: {
   page: Page
   socialLinks?: ResolvedSocialLink[]
+  heroSlides?: CarouselSlideData[]
 }) {
   const hero = page.hero
   const type = hero?.type ?? 'none'
@@ -209,6 +242,86 @@ export function HeroView({
   const fullBleedFrameClass = routeRhythmProfile(
     hero?.rhythm,
   ).heroFullBleedFrameClass
+
+  // `image` — a full-bleed image banner. It mirrors the `shader`+fullBleed
+  // frame (the same `-z-10` decoration pull and clip panel, so it inherits the
+  // route's isolation contract), swapping the shader canvas for the uploaded
+  // media, and overlays the content stack on top with a scrim + text-shadow for
+  // legibility over a photo. Both themes are covered by the scrim's `dark:`
+  // stops. An image is static — nothing to degrade under reduced motion.
+  if (type === 'image') {
+    return (
+      <header className="relative">
+        {media?.url ? (
+          <div aria-hidden className={fullBleedFrameClass}>
+            <div className={HERO_FULL_BLEED_PANEL_CLASS}>
+              <div className="relative h-full overflow-hidden">
+                <Image
+                  src={media.url}
+                  alt={media.alt || ''}
+                  fill
+                  sizes="100vw"
+                  className="object-cover"
+                  priority
+                />
+                <div className={HERO_MEDIA_SCRIM_CLASS} />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-white dark:to-zinc-900" />
+              </div>
+            </div>
+          </div>
+        ) : null}
+        <div className="relative z-10">
+          <HeroContent
+            page={page}
+            socialLinks={socialLinks}
+            className={HERO_MEDIA_TEXT_SHADOW_CLASS}
+          />
+        </div>
+      </header>
+    )
+  }
+
+  // `carousel` — a full-bleed image carousel banner. Unlike the shader/image
+  // decoration (which sits at `-z-10`, `pointer-events-none`), the carousel must
+  // stay interactive, so the hero owns a *positive-flow* horizontal breakout and
+  // renders the reused `CarouselClient` inside it. `fullBleed={false}` because
+  // the leaf's own breakout is effect-gated (only expo/carousel3d/spring) and
+  // the hero already owns the frame — passing it on would double the breakout.
+  // The scrim and the content stack overlay the carousel `pointer-events-none`,
+  // so a drag, an arrow click, keyboard nav and pagination all reach the leaf
+  // beneath. Full-bleed, autoplay-off and nav/pagination are fixed here, not
+  // editor knobs. A carousel with no resolvable slides falls back to the bare
+  // content stack (the `none` look) rather than a broken zero-height overlay.
+  if (type === 'carousel') {
+    if (!heroSlides.length) {
+      return (
+        <header className="relative">
+          <HeroContent page={page} socialLinks={socialLinks} />
+        </header>
+      )
+    }
+    return (
+      <header className={HERO_MEDIA_FULL_BLEED_CLASS}>
+        <CarouselClient
+          variant="media"
+          slides={heroSlides}
+          effect={hero?.effect}
+          autoplay={false}
+          navigation
+          pagination
+          fullBleed={false}
+        />
+        <div className={HERO_MEDIA_SCRIM_CLASS} />
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center px-4 sm:px-8">
+          <HeroContent
+            page={page}
+            socialLinks={socialLinks}
+            className={HERO_MEDIA_TEXT_SHADOW_CLASS}
+          />
+        </div>
+      </header>
+    )
+  }
 
   return (
     <header className="relative">

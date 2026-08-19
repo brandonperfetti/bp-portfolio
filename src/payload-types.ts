@@ -191,9 +191,9 @@ export interface Page {
   subtitle?: string | null;
   hero: {
     /**
-     * Controls what the hero renders above the page body. Blank draws nothing — use it when the headline lives in the Content tab (e.g. the About page). None, Standard, and Shader all render the Title, Subtitle, and the Hero text field below; Standard adds an image and Shader adds an animated background. If your headline/intro already live in the Content tab, choose Blank so they do not render twice.
+     * Controls what the hero renders above the page body. Blank draws nothing — use it when the headline lives in the Content tab (e.g. the About page). None, Standard, Shader, Image, and Carousel all render the Title, Subtitle, and the Hero text field; Standard adds an inset image below, Shader an animated background, and Image and Carousel bleed a full-width image (or image carousel) with the content overlaid. If your headline/intro already live in the Content tab, choose Blank so they do not render twice.
      */
-    type: 'blank' | 'none' | 'standard' | 'shader';
+    type: 'blank' | 'none' | 'standard' | 'shader' | 'image' | 'carousel';
     /**
      * Full bleed runs the shader behind the header like the homepage; card keeps it inside a bounded panel.
      */
@@ -262,6 +262,25 @@ export interface Page {
         }[]
       | null;
     media?: (number | null) | Media;
+    /**
+     * Slides for the full-bleed carousel hero. Each needs an image; the title and text overlay the slide, and an optional link points the whole slide somewhere.
+     */
+    slides?:
+      | {
+          image: number | Media;
+          title?: string | null;
+          text?: string | null;
+          /**
+           * Optional link the whole slide points to.
+           */
+          href?: string | null;
+          id?: string | null;
+        }[]
+      | null;
+    /**
+     * How the carousel transitions between slides. Reduced motion collapses Fade, Expo, Carousel 3D, and Spring to Slide.
+     */
+    effect?: ('slide' | 'fade' | 'expo' | 'carousel3d' | 'spring') | null;
   };
   layout: (
     | ArticlesArchiveBlock
@@ -1900,6 +1919,16 @@ export interface PagesSelect<T extends boolean = true> {
               id?: T;
             };
         media?: T;
+        slides?:
+          | T
+          | {
+              image?: T;
+              title?: T;
+              text?: T;
+              href?: T;
+              id?: T;
+            };
+        effect?: T;
       };
   layout?:
     | T

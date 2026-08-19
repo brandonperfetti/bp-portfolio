@@ -3,11 +3,13 @@ import { expect, within } from 'storybook/test'
 
 import type { ResolvedSocialLink } from '@/blocks/SocialLinks/platforms'
 import { HeroView } from '@/heros/HeroView'
+import type { CarouselSlideData } from '@/blocks/Carousel/CarouselClient'
 import {
   HERO_CARD_FRAME_CLASS,
   HERO_CARD_SHELL_CLASS,
   HERO_FULL_BLEED_FRAME_CLASS,
   HERO_FULL_BLEED_ROUTE_ISOLATION_CLASS,
+  HERO_MEDIA_FULL_BLEED_CLASS,
 } from '@/heros/presentation'
 import type { Page } from '@/payload-types'
 
@@ -572,5 +574,118 @@ export const HomeHeroStack: Story = {
     await expect(subtitle.getBoundingClientRect().bottom).toBeLessThanOrEqual(
       row.getBoundingClientRect().top,
     )
+  },
+}
+
+/** Resolved slides for the carousel hero — real images so the leaf mounts. */
+const heroSlides: CarouselSlideData[] = [
+  {
+    id: '1',
+    src: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684298666/image-1_ebktnx.jpg',
+    alt: 'Desk with a laptop and notebook',
+    width: 1600,
+    height: 900,
+    title: 'Shipping calmly',
+    text: 'A steady cadence beats a heroic sprint.',
+  },
+  {
+    id: '2',
+    src: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684298666/image-2_hxvz0p.jpg',
+    alt: 'A team collaborating at a whiteboard',
+    width: 1600,
+    height: 900,
+    title: 'Working together',
+    text: 'The plan is only as good as the people who own it.',
+  },
+]
+
+/**
+ * `type: image` — a full-bleed image banner. The uploaded media fills the same
+ * frame the shader full-bleed uses (`-z-10`, edge-to-edge, pulled up behind the
+ * header), with a legibility scrim and the content stack overlaid on top with a
+ * text-shadow. Distinct from `standard`, whose image is inset *below* the stack.
+ */
+export const TypeImage: Story = {
+  args: {
+    page: page({
+      type: 'image',
+      media: {
+        id: 1,
+        url: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684298666/image-1_ebktnx.jpg',
+        alt: 'Desk with a laptop and notebook',
+        width: 1600,
+        height: 900,
+      },
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const frame = canvasFrame(canvasElement)
+    await expect(frame).toHaveAttribute('class', HERO_FULL_BLEED_FRAME_CLASS)
+    // The banner is a decoration layer (aria-hidden, like the shader canvas),
+    // so it is queried structurally, not by an accessible img role.
+    await expect(frame?.querySelector('img')).not.toBeNull()
+    // Scrim present for legibility over the photo, in both themes.
+    await expect(
+      canvasElement.querySelector('.bg-gradient-to-r'),
+    ).not.toBeNull()
+    await expect(
+      canvas.getByRole('heading', { name: 'Working together' }),
+    ).toBeVisible()
+  },
+}
+
+/**
+ * `type: carousel` — a full-bleed image carousel banner. The reused
+ * `CarouselClient` (media variant, autoplay off, keyboard/nav/pagination on)
+ * fills a hero-owned horizontal breakout, and the content stack overlays it
+ * `pointer-events-none` so drag / arrows / keyboard all still reach the
+ * carousel. The five effects are selectable; this story uses the default slide.
+ */
+export const TypeCarousel: Story = {
+  args: {
+    page: page({ type: 'carousel' }),
+    heroSlides,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // The reused leaf mounted.
+    await expect(
+      canvasElement.querySelector('[data-testid="carousel"]'),
+    ).not.toBeNull()
+    // The hero owns the full-bleed breakout.
+    const header = canvasElement.querySelector('header') as HTMLElement
+    await expect(header).toHaveClass(...HERO_MEDIA_FULL_BLEED_CLASS.split(' '))
+    // The overlaid content never blocks the carousel beneath it. Scope the
+    // query inside the hero header — the story decorator carries its own
+    // `max-w-2xl` reading-column wrapper as an ancestor.
+    const stack = header.querySelector('.max-w-2xl') as HTMLElement
+    await expect(stack.parentElement).toHaveClass('pointer-events-none')
+    await expect(
+      canvas.getByRole('heading', { name: 'Working together' }),
+    ).toBeVisible()
+  },
+}
+
+/**
+ * The carousel hero under `prefers-reduced-motion`: the reused leaf inherits
+ * the carousel foundation's reduced-motion collapse (Fade/Expo/Carousel-3D/
+ * Spring all fall back to a plain, static-ish Slide), so a reduced-motion
+ * reader gets a plain track with the same overlaid, readable content.
+ */
+export const TypeCarouselReducedMotion: Story = {
+  args: {
+    page: page({ type: 'carousel', effect: 'fade' }),
+    heroSlides,
+  },
+  beforeEach: forceReducedMotion,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvasElement.querySelector('[data-testid="carousel"]'),
+    ).not.toBeNull()
+    await expect(
+      canvas.getByRole('heading', { name: 'Working together' }),
+    ).toBeVisible()
   },
 }
