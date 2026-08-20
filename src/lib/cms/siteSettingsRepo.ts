@@ -1,12 +1,10 @@
 import { unstable_cache } from 'next/cache'
+import { getPayload } from 'payload'
 
-import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
-import { getCmsProvider } from '@/lib/cms/provider'
-import { getNotionSiteSettingsDataSourceId } from '@/lib/cms/notion/config'
-import { mapSiteSettings } from '@/lib/cms/notion/mapper'
-import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
-import { getSiteUrl, SITE_DESCRIPTION } from '@/lib/site'
+import configPromise from '@payload-config'
 import type { CmsSiteSettings } from '@/lib/cms/types'
+import { SHARE_TARGET_IDS } from '@/lib/share/vocabulary'
+import { getSiteUrl, SITE_DESCRIPTION } from '@/lib/site'
 
 const DEFAULT_SITE_SETTINGS: CmsSiteSettings = {
   siteName: 'Brandon Perfetti',
@@ -15,37 +13,59 @@ const DEFAULT_SITE_SETTINGS: CmsSiteSettings = {
   siteDescription: SITE_DESCRIPTION,
   canonicalUrl: getSiteUrl(),
   twitterCard: 'summary_large_image',
+  copyPageEnabled: true,
+  copyPageLabel: 'Copy page',
+  shareTargets: [...SHARE_TARGET_IDS],
+  generatedOgEnabled: false,
 }
 
-const getCachedNotionSiteSettings = unstable_cache(
+/**
+ * Site settings from the Payload `site-settings` global (was Notion in v3),
+ * cached under `global_site-settings` and revalidated by its afterChange hook.
+ *
+ * @remarks Falls back to hard defaults so the site renders with an empty CMS
+ * (the Phase 0 "boots with only a database" invariant).
+ */
+export const getCmsSiteSettings = unstable_cache(
   async (): Promise<CmsSiteSettings> => {
-    const pages = await queryAllDataSourcePages(
-      getNotionSiteSettingsDataSourceId(),
-      {
-        sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
-      },
-    )
+    const payload = await getPayload({ config: configPromise })
+    const settings = await payload.findGlobal({
+      slug: 'site-settings',
+      depth: 1,
+    })
 
-    for (const page of pages) {
-      const settings = mapSiteSettings(page)
-      if (settings) {
-        return settings
-      }
+    const ogImage =
+      settings?.defaultSeo?.ogImage &&
+      typeof settings.defaultSeo.ogImage === 'object'
+        ? settings.defaultSeo.ogImage.url || undefined
+        : undefined
+
+    return {
+      siteName: settings?.siteName || DEFAULT_SITE_SETTINGS.siteName,
+      siteTitle: settings?.defaultSeo?.title || DEFAULT_SITE_SETTINGS.siteTitle,
+      siteDescription:
+        settings?.defaultSeo?.description ||
+        DEFAULT_SITE_SETTINGS.siteDescription,
+      canonicalUrl:
+        settings?.canonicalUrl || DEFAULT_SITE_SETTINGS.canonicalUrl,
+      openGraphImage: ogImage,
+      twitterCard: 'summary_large_image',
+      copyPageEnabled: settings?.copyPageEnabled ?? true,
+      copyPageLabel: settings?.copyPageLabel || 'Copy page',
+      // Empty === unset === all ids: there is no "disable Share globally"
+      // concept (the per-post `disableSharing` kill switch is the only opt-out),
+      // and a pre-existing global row can carry a nullable/empty column that
+      // never got the admin defaultValue. So an empty array falls back to the
+      // full pinned vocabulary — Share ships live on every article (copy-link
+      // floor) rather than being hidden site-wide.
+      shareTargets: settings?.shareTargets?.length
+        ? settings.shareTargets
+        : [...SHARE_TARGET_IDS],
+      // Master switch for T7 generated OG cards; defaults off so nothing changes
+      // until it's explicitly enabled in the admin.
+      generatedOgEnabled: settings?.generatedOgEnabled ?? false,
     }
-
-    return DEFAULT_SITE_SETTINGS
   },
-  ['cms', 'notion', 'site-settings'],
-  {
-    revalidate: CMS_REVALIDATE.settings,
-    tags: [CMS_TAGS.settings],
-  },
+  ['site-settings'],
+  { tags: ['global_site-settings'] },
 )
-
-export async function getCmsSiteSettings() {
-  if (getCmsProvider() !== 'notion') {
-    return DEFAULT_SITE_SETTINGS
-  }
-
-  return getCachedNotionSiteSettings()
-}

@@ -1,0 +1,230 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: emerald (databases / infra) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 58% 40%,
+            rgba(13, 128, 106, 0.3),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 25% 80%,
+            rgba(13, 128, 106, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="26" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <linearGradient id="pathGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#52525b" />
+            <stop offset="0.42" stop-color="#0d806a" />
+            <stop offset="1" stop-color="#34d399" />
+          </linearGradient>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="300" cy="210" r="4" />
+          <circle cx="1730" cy="180" r="4" />
+          <circle cx="1560" cy="950" r="4" />
+          <circle cx="240" cy="930" r="4" />
+        </g>
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
+          <path d="M 760 170 h 28 M 774 156 v 28" />
+          <path d="M 1880 700 h 24 M 1892 688 v 24" />
+          <path d="M 160 560 h 24 M 172 548 v 24" />
+        </g>
+
+        <!-- ===== THE PORTAL: a closing ring of time (center-right of middle) ===== -->
+        <g transform="translate(1052,520)">
+          <!-- countdown ticks around the ring, fading = window closing -->
+          <g stroke-linecap="round">
+            <g stroke="rgba(52,211,153,0.9)" stroke-width="5">
+              <line x1="0" y1="-322" x2="0" y2="-282" transform="rotate(0)" />
+              <line x1="0" y1="-322" x2="0" y2="-282" transform="rotate(30)" />
+              <line x1="0" y1="-322" x2="0" y2="-282" transform="rotate(60)" />
+              <line x1="0" y1="-322" x2="0" y2="-282" transform="rotate(90)" />
+            </g>
+            <g stroke="rgba(52,211,153,0.45)" stroke-width="4.5">
+              <line x1="0" y1="-322" x2="0" y2="-286" transform="rotate(120)" />
+              <line x1="0" y1="-322" x2="0" y2="-286" transform="rotate(150)" />
+            </g>
+            <g stroke="rgba(255,255,255,0.18)" stroke-width="4">
+              <line x1="0" y1="-320" x2="0" y2="-290" transform="rotate(180)" />
+              <line x1="0" y1="-320" x2="0" y2="-290" transform="rotate(210)" />
+            </g>
+            <g stroke="rgba(255,255,255,0.08)" stroke-width="4">
+              <line x1="0" y1="-318" x2="0" y2="-292" transform="rotate(240)" />
+              <line x1="0" y1="-318" x2="0" y2="-292" transform="rotate(270)" />
+              <line x1="0" y1="-318" x2="0" y2="-292" transform="rotate(300)" />
+              <line x1="0" y1="-318" x2="0" y2="-292" transform="rotate(330)" />
+            </g>
+          </g>
+          <!-- the ring: bright arc (time remaining) + dim remainder -->
+          <circle
+            r="252"
+            fill="none"
+            stroke="rgba(255,255,255,0.10)"
+            stroke-width="5"
+          />
+          <path
+            d="M 0 -252 A 252 252 0 0 1 252 0 A 252 252 0 0 1 88 236"
+            fill="none"
+            stroke="#34d399"
+            stroke-width="7"
+            stroke-linecap="round"
+            filter="url(#bigGlow)"
+          />
+          <!-- inner echo rings -->
+          <circle
+            r="208"
+            fill="rgba(13,128,106,0.05)"
+            stroke="rgba(52,211,153,0.22)"
+            stroke-width="3"
+          />
+          <circle
+            r="170"
+            fill="none"
+            stroke="rgba(52,211,153,0.10)"
+            stroke-width="2.5"
+          />
+        </g>
+
+        <!-- ===== source database: below-left, dim, dashed = already history ===== -->
+        <g transform="translate(360,760)">
+          <g
+            stroke="rgba(255,255,255,0.35)"
+            stroke-width="3.5"
+            fill="rgba(255,255,255,0.02)"
+          >
+            <path d="M -128 -100 V 100 A 128 38 0 0 0 128 100 V -100" />
+            <path d="M -128 -28 A 128 38 0 0 0 128 -28" fill="none" />
+            <path d="M -128 40 A 128 38 0 0 0 128 40" fill="none" />
+            <ellipse
+              cx="0"
+              cy="-100"
+              rx="128"
+              ry="38"
+              fill="rgba(255,255,255,0.04)"
+            />
+          </g>
+          <ellipse
+            cx="0"
+            cy="-100"
+            rx="168"
+            ry="52"
+            fill="none"
+            stroke="rgba(255,255,255,0.14)"
+            stroke-width="3"
+            stroke-dasharray="4 12"
+          />
+        </g>
+
+        <!-- ===== target database: upper-right beyond the portal, alive ===== -->
+        <g transform="translate(1700,340)">
+          <g
+            stroke="#34d399"
+            stroke-width="4"
+            fill="rgba(13,128,106,0.12)"
+            filter="url(#accentGlow)"
+          >
+            <path d="M -122 -92 V 92 A 122 36 0 0 0 122 92 V -92" />
+            <path d="M -122 -26 A 122 36 0 0 0 122 -26" fill="none" />
+            <path d="M -122 36 A 122 36 0 0 0 122 36" fill="none" />
+            <ellipse
+              cx="0"
+              cy="-92"
+              rx="122"
+              ry="36"
+              fill="rgba(13,128,106,0.20)"
+            />
+          </g>
+          <circle cx="0" cy="-92" r="9" fill="#34d399" />
+        </g>
+
+        <!-- ===== the migration arc: sweeps up from old, threads the ring, lands in new =====
+         segment 1 drawn behind ring edge illusion via layering: path drawn after ring = in front; acceptable -->
+        <path
+          d="M 470 690 C 700 640, 800 600, 1010 520 C 1220 440, 1400 380, 1568 356"
+          fill="none"
+          stroke="url(#pathGrad)"
+          stroke-width="6"
+          stroke-linecap="round"
+        />
+        <!-- speed trail near the head -->
+        <g stroke="#34d399" stroke-linecap="round" filter="url(#accentGlow)">
+          <line
+            x1="1380"
+            y1="404"
+            x2="1470"
+            y2="380"
+            stroke-width="4"
+            opacity="0.5"
+          />
+          <line
+            x1="1330"
+            y1="428"
+            x2="1400"
+            y2="410"
+            stroke-width="3.5"
+            opacity="0.3"
+          />
+        </g>
+        <!-- data packets -->
+        <g fill="#34d399" filter="url(#accentGlow)">
+          <circle cx="1010" cy="520" r="11" />
+          <circle cx="1250" cy="431" r="9" />
+          <circle cx="1450" cy="379" r="8" />
+        </g>
+        <g fill="rgba(255,255,255,0.5)">
+          <circle cx="690" cy="633" r="6" />
+          <circle cx="850" cy="583" r="6" />
+        </g>
+
+        <!-- ground shadows -->
+        <ellipse cx="360" cy="905" rx="170" ry="22" fill="rgba(0,0,0,0.5)" />
+        <ellipse
+          cx="1700"
+          cy="475"
+          rx="150"
+          ry="18"
+          fill="rgba(13,128,106,0.18)"
+        />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

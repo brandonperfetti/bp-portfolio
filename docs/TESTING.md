@@ -1,70 +1,41 @@
 # Testing
 
-## Current State
+## Layers
 
-- Automated test stack is wired:
-  - `Vitest` for unit/integration tests
-  - `Playwright` for browser E2E smoke coverage
-- Current focused regression coverage includes Notion property parsing and publish-gate validation paths.
+- **Unit/component** — Vitest + Testing Library (jsdom), the `unit`
+  project (`pnpm test` = `vitest run --project=unit`). Co-located
+  `*.test.ts(x)`. Pattern reference: `ArticlesExplorer.test.tsx` (next/*
+  mocks), `TechCard.test.tsx` (aria-expanded toggle), `canAccess.test.ts`.
+- **E2E** — Playwright (`e2e/`), production server in CI
+  (`pnpm test:e2e`). Sandboxed runners can pin the browser via
+  `PLAYWRIGHT_EXECUTABLE_PATH`. Conditional skips guard content-dependent
+  specs (e.g. empty article DB).
+- **Storybook** — `pnpm build-storybook` is a CI gate (story breakage);
+  a11y addon fails stories on serious violations. **Interaction tests**:
+  `@storybook/addon-vitest` runs every story as a Vitest browser-mode test
+  (Playwright Chromium) — the `storybook` project, `pnpm test:storybook`.
+  `play` functions are the interactions (composer typing/refocus, FAQ
+  accordion, link resolution). Notes: preview sets
+  `nextjs.appDirectory: true` (next/navigation mocks need it or
+  `useRouter` throws), the project's alias array stubs the server blocks
+  before `@/` resolves (mirrors `.storybook/main.ts` viteFinal), and
+  sandboxes pin the browser via `PLAYWRIGHT_EXECUTABLE_PATH`.
+- **Evals** — Evalite for Hermes (see `docs/AI.md`).
 
-## Commands
+## CI (`.github/workflows/ci.yml`)
 
-- `npm run test` — run Vitest once
-- `npm run test:watch` — Vitest watch mode
-- `npm run test:coverage` — Vitest with V8 coverage report
-- `npm run test:e2e` — Playwright E2E suite
-- `npm run test:e2e:headed` — headed Playwright run
+Quality job: lint (ESLint + tsdoc) → prettier check → typecheck → generated
+payload-types staleness gate → generated importMap staleness gate → unit
+tests + coverage → Storybook build. E2E job: pgvector/pg16 service,
+migrations, production build, Playwright e2e, then Storybook interaction
+tests (reuses the job's installed Chromium). Evalite job runs when a
+provider key secret is present.
 
-## Minimum Validation Before Merge
+## Policy
 
-- `npm run lint`
-- `npm run build`
-- `npm run test`
-- Note: lint uses ESLint flat config from `eslint.config.mjs`.
-- Manual page pass:
-  - `/`
-  - `/articles`
-  - `/hermes`
-  - `/about`, `/projects`, `/tech`, `/uses`
-- Motion/interaction smoke:
-  - headline/scroll/hover motion renders without console/runtime errors
-  - sticky desktop right rails on Home/About behave without internal rail scrollbars
-  - header search modal/result transitions remain smooth and key-stable
-  - Hermes empty submit re-focuses input
-- API smoke checks (as relevant):
-  - `/api/search`
-  - `/api/openai/chat`
-  - `/api/openai/image`
-  - `/api/sendgrid`
-  - `/api/mailinglist`
-  - Hermes guardrail responses:
-    - `429` on rate-limit breach
-    - `403` on failed/invalid source verification
-    - `403` when Turnstile verification is enabled and token is missing/invalid
-
-## Test Update Policy
-
-- Add/update tests whenever behavior changes, not only when files are added.
-- UI interaction/state changes:
-  - Prefer Playwright coverage for route-level behavior.
-  - Add component tests for targeted UI logic where full E2E is unnecessary.
-- Logic/data transformations:
-  - Add or update Vitest unit tests close to the changed module.
-- Motion/accessibility changes:
-  - Validate keyboard behavior and reduced-motion parity.
-- Bug fixes:
-  - Add a regression test that proves the fixed behavior when practical.
-- If no test is added, include explicit justification in PR testing notes.
-
-## Coverage Priorities (Next)
-
-- Expand Playwright flows:
-  - article filtering/search query sync
-  - header search modal open/close behavior
-  - reduced-motion behavior parity for key routes/components
-  - publish-gate happy/fail API scenarios (fixture-backed)
-- Add component tests for high-change UI areas:
-  - header search interactions
-  - article explorer query/topic controls
-  - Hermes textarea behavior (`Enter` send, `Shift+Enter` newline)
-  - Hermes guardrail contract tests for chat/image API routes
+- Behavior change ⇒ test change in the same commit (component or e2e for UI,
+  unit for logic, eval for Hermes).
+- Bug fixes ship a regression test that failed before the fix.
+- Motion/a11y changes validate the keyboard path and reduced-motion
+  rendering.
+- If no test accompanies a change, say why in the PR notes.

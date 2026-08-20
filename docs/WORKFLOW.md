@@ -1,96 +1,46 @@
 # Workflow
 
-## Local Dev Flow
+## Package management
 
-1. `npm install`
-2. Configure `.env.local`
-3. `npm run dev`
-4. Validate changed route(s) in both light and dark theme when relevant.
+- **pnpm only** — enforced by `preinstall: npx only-allow pnpm` and the
+  `packageManager` pin (Corepack). Vercel needs
+  `ENABLE_EXPERIMENTAL_COREPACK=1`.
+- pnpm 11 settings live in `pnpm-workspace.yaml` (overrides + `allowBuilds`
+  with real boolean values). Native-build approvals go there, not
+  package.json.
+- Dependency majors are pinned. All `payload` + `@payloadcms/*` packages move
+  in lockstep — never upgrade one alone.
 
-## Build/Lint Gate
+## Branching & releases
 
-Before merging significant changes:
+- `master` — v3 production. Frozen until v4 launch sign-off.
+- `rebuild/v4` — active v4 branch; auto-deploys the Vercel `staging`
+  environment. Work lands here in small conventional commits
+  (`feat(scope): …`, `fix(scope): …`) with a draft PR and phase status
+  comments.
+- After merge, `develop` becomes the integration branch and staging retargets
+  to it (planned).
 
-- `npm run lint`
-- `npm run format:check`
-- `npm run typecheck`
-- `npm run build`
-- `npm run test`
-- Linting is configured via flat config in `eslint.config.mjs`.
+## Local hooks
 
-For UI-, route-, or middleware-affecting changes, also run:
+- Husky pre-commit: lint-staged (prettier + eslint on staged files).
+- Pre-push: typecheck + unit tests. Stale `.next` types can false-fail the
+  push — remove `.next` and retry before suspecting real breakage.
 
-- `npm run test:e2e`
+## Generated files
 
-## Git Hook Gates
+After schema/plugin changes run `pnpm generate:types` and
+`pnpm generate:importmap`, commit the results (CI gates staleness). These
+files are prettier-ignored — never hand-format them.
 
-- `pre-commit` runs:
-  - `npm run format:check`
-  - `npm run lint`
-- `pre-push` runs:
-  - `npm run typecheck`
-  - `npm run test`
-- Hooks are installed by `npm run prepare`.
-- Bypass (`--no-verify`) should be emergency-only and followed by immediate fix-forward.
+## Review
 
-## Content Workflow (Articles)
+- CodeRabbit reviews PRs; triage suggestions against product intent — apply,
+  or note why skipped (inline comment only when non-obvious).
+- GitGuardian: the CI `PAYLOAD_SECRET: "ci-not-a-real-secret"` literal is an
+  intentional dummy — dismiss as false positive.
 
-- Local provider: no local article corpus; expect empty article-safe states.
-- Dynamic route delivery remains `src/app/articles/[slug]/page.tsx`.
-- Notion provider: keep canonical body in `Source Article` page blocks (not a single DB body text field).
-- Notion provider: assign `Author` relation for every article (strongly recommended). Missing author relation no longer blocks projection publish; runtime fallback author is applied.
-- Notion provider: ensure `Portfolio CMS - Articles` has a `Search Index` rich-text property. Projection sync writes normalized body text there from `Source Article` so `/api/search` does not need to fetch all block trees at request time.
-- If projection sync is used, set `NOTION_CMS_DEFAULT_AUTHOR_PAGE_ID` so newly projected articles are automatically assigned an author.
-- Verify article appears:
-  - in `/articles`
-  - in header search modal results
-  - in sitemap route output
+## Secrets
 
-For complete Notion setup and operations (env variables, webhook security, projection sync endpoints), see `docs/NOTION_CMS.md`.
-For automation ownership boundaries (cron-safe vs Codex-only), see `Runtime boundary (Cron vs Codex)` in `docs/NOTION_CMS.md`.
-
-## Portfolio Backlog Workflow
-
-- Portfolio engineering backlog operations are documented in `docs/PORTFOLIO_BACKLOG.md`.
-- Keep `docs/PORTFOLIO_BACKLOG_TODOS.md` synchronized from Notion before release notes or PR handoff work.
-
-## Content Workflow (Pages CMS)
-
-- Source: `Portfolio CMS - Pages` (`NOTION_CMS_PAGES_DATA_SOURCE`).
-- Current consumers:
-  - `/` (home hero + featured image strip)
-  - `/about` (hero + body content block tree)
-- Publish rule:
-  - `Status` must be `Published` (or `Approved` where supported in mapper).
-- Social image fallback chain for page metadata:
-  1. `OG Image`
-  2. `Hero Image`
-  3. Site-level OG image from `Portfolio CMS - Site Settings`
-  4. Hardcoded default social image
-
-## Feature Work Principles
-
-- Reuse existing component patterns before introducing new abstractions.
-- Preserve keyboard shortcuts (`Cmd/Ctrl+K`, `/`) unless intentionally redesigning UX.
-- Keep API route error responses user-safe and log-friendly.
-
-## Test Update Policy
-
-- User-visible behavior changes require at least one automated test update/addition.
-- UI interaction/state changes should be covered by Playwright and/or component tests.
-- Logic-only changes should be covered by Vitest unit tests.
-- Motion/accessibility changes should validate keyboard interaction and reduced-motion behavior.
-- Bug fixes should include a regression test when feasible.
-- If no new test is added, record rationale in PR testing notes.
-
-## Branching / PR Hygiene
-
-- Keep PR scope narrow and documented.
-- Update `README.md` + affected `docs/*.md` when behavior or architecture changes.
-
-## Review Suggestion Triage
-
-- Treat automated review comments as inputs, not mandates; confirm correctness against current behavior and scope.
-- If a suggestion is intentionally skipped, record rationale in the PR.
-- Add an inline code comment only when the skip would be surprising to future maintainers.
-- For deferred valid improvements, add a TODO/backlog reference so follow-up is explicit.
+`.env*` never enters git; `.env.example` documents every variable. Brandon
+populates Vercel/GitHub secrets as features land.

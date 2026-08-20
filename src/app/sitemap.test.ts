@@ -9,6 +9,10 @@ vi.mock('@/lib/articles', () => ({
   getAllArticles: mocks.getAllArticles,
 }))
 
+vi.mock('@/lib/cms/pagesRepo', () => ({
+  getPublishedPageSlugs: vi.fn(async () => ['now']),
+}))
+
 vi.mock('@/lib/site', () => ({
   getSiteUrl: mocks.getSiteUrl,
 }))
@@ -43,6 +47,8 @@ describe('sitemap', () => {
     expect(urls).toContain('https://example.com/articles/public-article')
     expect(urls).not.toContain('https://example.com/articles/noindex-article')
     expect(urls).not.toContain('https://example.com/articles/scheduled-article')
+    // #28 — the /speaking route was removed; it must not appear in the sitemap.
+    expect(urls).not.toContain('https://example.com/speaking')
   })
 
   it('sets /articles lastModified from the newest public article freshness', async () => {

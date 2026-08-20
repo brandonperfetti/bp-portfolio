@@ -1,3 +1,11 @@
+/**
+ * Non-blocking banner shown when a CMS fetch partially fails, signalling
+ * that the page is serving last known-good cached content rather than
+ * erroring the route.
+ *
+ * @remarks `role="status"` + `aria-live="polite"` so assistive tech hears
+ * the degradation notice without it interrupting reading.
+ */
 export function SyncErrorState() {
   return (
     <div

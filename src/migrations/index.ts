@@ -1,0 +1,213 @@
+import * as migration_20260722_024610_initial from './20260722_024610_initial'
+import * as migration_20260722_033130_phase1_content_model from './20260722_033130_phase1_content_model'
+import * as migration_20260723_134344_seed_collections from './20260723_134344_seed_collections'
+import * as migration_20260723_135530_pages_subtitle_home_images from './20260723_135530_pages_subtitle_home_images'
+import * as migration_20260723_153219_feature_grid_logo_carousel from './20260723_153219_feature_grid_logo_carousel'
+import * as migration_20260723_155506_block_library_expansion from './20260723_155506_block_library_expansion'
+import * as migration_20260723_171916_photo_strip_posts_layout from './20260723_171916_photo_strip_posts_layout'
+import * as migration_20260723_193654_identity_resume from './20260723_193654_identity_resume'
+import * as migration_20260809_182905_mcp_work_history_permissions from './20260809_182905_mcp_work_history_permissions'
+import * as migration_20260811_214354_container_column_layout_blocks from './20260811_214354_container_column_layout_blocks'
+import * as migration_20260811_223434_container_layout_section_controls from './20260811_223434_container_layout_section_controls'
+import * as migration_20260811_230657_container_section_background from './20260811_230657_container_section_background'
+import * as migration_20260812_011542_hero_presentation from './20260812_011542_hero_presentation'
+import * as migration_20260812_014249_sociallinks_image_blocks from './20260812_014249_sociallinks_image_blocks'
+import * as migration_20260812_045105_hero_content_fields from './20260812_045105_hero_content_fields'
+import * as migration_20260812_052856_w2b2_articles_prose_heading_identity_email from './20260812_052856_w2b2_articles_prose_heading_identity_email'
+import * as migration_20260812_115519_w2c_card_chrome from './20260812_115519_w2c_card_chrome'
+import * as migration_20260812_141232_w3b1_home_enabling_vocab from './20260812_141232_w3b1_home_enabling_vocab'
+import * as migration_20260812_154813_w3b2_hero_rhythm from './20260812_154813_w3b2_hero_rhythm'
+import * as migration_20260812_173955_w3b4_home_grid_rhythm from './20260812_173955_w3b4_home_grid_rhythm'
+import * as migration_20260812_195230_w4b1_about_enabling_vocab from './20260812_195230_w4b1_about_enabling_vocab'
+import * as migration_20260812_230408_w4b1b_about_parity_vocab from './20260812_230408_w4b1b_about_parity_vocab'
+import * as migration_20260813_003358_w4b1c_image_size from './20260813_003358_w4b1c_image_size'
+import * as migration_20260813_154606_authors_collection from './20260813_154606_authors_collection'
+import * as migration_20260813_165552_assign_owner_author_backfill from './20260813_165552_assign_owner_author_backfill'
+import * as migration_20260813_230343_t1_post_actions_schema from './20260813_230343_t1_post_actions_schema'
+import * as migration_20260818_153420_w6b1_carousel_block from './20260818_153420_w6b1_carousel_block'
+import * as migration_20260818_175338_w6b2_testimonials_layout from './20260818_175338_w6b2_testimonials_layout'
+import * as migration_20260818_204408_w6b3_carousel_expo_effect from './20260818_204408_w6b3_carousel_expo_effect'
+import * as migration_20260818_212608_w6b3_carousel_expo_controls from './20260818_212608_w6b3_carousel_expo_controls'
+import * as migration_20260819_000348_w6b3_carousel_full_bleed from './20260819_000348_w6b3_carousel_full_bleed'
+import * as migration_20260819_011112_w6b4_carousel3d_effect from './20260819_011112_w6b4_carousel3d_effect'
+import * as migration_20260819_154529_w6b5_carousel_spring_effect from './20260819_154529_w6b5_carousel_spring_effect'
+import * as migration_20260819_164717_w6b6_hero_image_carousel_types from './20260819_164717_w6b6_hero_image_carousel_types'
+import * as migration_20260819_184317_w6b6a_hero_banner_toggles from './20260819_184317_w6b6a_hero_banner_toggles'
+
+export const migrations = [
+  {
+    up: migration_20260722_024610_initial.up,
+    down: migration_20260722_024610_initial.down,
+    name: '20260722_024610_initial',
+  },
+  {
+    up: migration_20260722_033130_phase1_content_model.up,
+    down: migration_20260722_033130_phase1_content_model.down,
+    name: '20260722_033130_phase1_content_model',
+  },
+  {
+    up: migration_20260723_134344_seed_collections.up,
+    down: migration_20260723_134344_seed_collections.down,
+    name: '20260723_134344_seed_collections',
+  },
+  {
+    up: migration_20260723_135530_pages_subtitle_home_images.up,
+    down: migration_20260723_135530_pages_subtitle_home_images.down,
+    name: '20260723_135530_pages_subtitle_home_images',
+  },
+  {
+    up: migration_20260723_153219_feature_grid_logo_carousel.up,
+    down: migration_20260723_153219_feature_grid_logo_carousel.down,
+    name: '20260723_153219_feature_grid_logo_carousel',
+  },
+  {
+    up: migration_20260723_155506_block_library_expansion.up,
+    down: migration_20260723_155506_block_library_expansion.down,
+    name: '20260723_155506_block_library_expansion',
+  },
+  {
+    up: migration_20260723_171916_photo_strip_posts_layout.up,
+    down: migration_20260723_171916_photo_strip_posts_layout.down,
+    name: '20260723_171916_photo_strip_posts_layout',
+  },
+  {
+    up: migration_20260723_193654_identity_resume.up,
+    down: migration_20260723_193654_identity_resume.down,
+    name: '20260723_193654_identity_resume',
+  },
+  {
+    up: migration_20260809_182905_mcp_work_history_permissions.up,
+    down: migration_20260809_182905_mcp_work_history_permissions.down,
+    name: '20260809_182905_mcp_work_history_permissions',
+  },
+  {
+    up: migration_20260811_214354_container_column_layout_blocks.up,
+    down: migration_20260811_214354_container_column_layout_blocks.down,
+    name: '20260811_214354_container_column_layout_blocks',
+  },
+  {
+    up: migration_20260811_223434_container_layout_section_controls.up,
+    down: migration_20260811_223434_container_layout_section_controls.down,
+    name: '20260811_223434_container_layout_section_controls',
+  },
+  {
+    up: migration_20260811_230657_container_section_background.up,
+    down: migration_20260811_230657_container_section_background.down,
+    name: '20260811_230657_container_section_background',
+  },
+  {
+    up: migration_20260812_011542_hero_presentation.up,
+    down: migration_20260812_011542_hero_presentation.down,
+    name: '20260812_011542_hero_presentation',
+  },
+  {
+    up: migration_20260812_014249_sociallinks_image_blocks.up,
+    down: migration_20260812_014249_sociallinks_image_blocks.down,
+    name: '20260812_014249_sociallinks_image_blocks',
+  },
+  {
+    up: migration_20260812_045105_hero_content_fields.up,
+    down: migration_20260812_045105_hero_content_fields.down,
+    name: '20260812_045105_hero_content_fields',
+  },
+  {
+    up: migration_20260812_052856_w2b2_articles_prose_heading_identity_email.up,
+    down: migration_20260812_052856_w2b2_articles_prose_heading_identity_email.down,
+    name: '20260812_052856_w2b2_articles_prose_heading_identity_email',
+  },
+  {
+    up: migration_20260812_115519_w2c_card_chrome.up,
+    down: migration_20260812_115519_w2c_card_chrome.down,
+    name: '20260812_115519_w2c_card_chrome',
+  },
+  {
+    up: migration_20260812_141232_w3b1_home_enabling_vocab.up,
+    down: migration_20260812_141232_w3b1_home_enabling_vocab.down,
+    name: '20260812_141232_w3b1_home_enabling_vocab',
+  },
+  {
+    up: migration_20260812_154813_w3b2_hero_rhythm.up,
+    down: migration_20260812_154813_w3b2_hero_rhythm.down,
+    name: '20260812_154813_w3b2_hero_rhythm',
+  },
+  {
+    up: migration_20260812_173955_w3b4_home_grid_rhythm.up,
+    down: migration_20260812_173955_w3b4_home_grid_rhythm.down,
+    name: '20260812_173955_w3b4_home_grid_rhythm',
+  },
+  {
+    up: migration_20260812_195230_w4b1_about_enabling_vocab.up,
+    down: migration_20260812_195230_w4b1_about_enabling_vocab.down,
+    name: '20260812_195230_w4b1_about_enabling_vocab',
+  },
+  {
+    up: migration_20260812_230408_w4b1b_about_parity_vocab.up,
+    down: migration_20260812_230408_w4b1b_about_parity_vocab.down,
+    name: '20260812_230408_w4b1b_about_parity_vocab',
+  },
+  {
+    up: migration_20260813_003358_w4b1c_image_size.up,
+    down: migration_20260813_003358_w4b1c_image_size.down,
+    name: '20260813_003358_w4b1c_image_size',
+  },
+  {
+    up: migration_20260813_154606_authors_collection.up,
+    down: migration_20260813_154606_authors_collection.down,
+    name: '20260813_154606_authors_collection',
+  },
+  {
+    up: migration_20260813_165552_assign_owner_author_backfill.up,
+    down: migration_20260813_165552_assign_owner_author_backfill.down,
+    name: '20260813_165552_assign_owner_author_backfill',
+  },
+  {
+    up: migration_20260813_230343_t1_post_actions_schema.up,
+    down: migration_20260813_230343_t1_post_actions_schema.down,
+    name: '20260813_230343_t1_post_actions_schema',
+  },
+  {
+    up: migration_20260818_153420_w6b1_carousel_block.up,
+    down: migration_20260818_153420_w6b1_carousel_block.down,
+    name: '20260818_153420_w6b1_carousel_block',
+  },
+  {
+    up: migration_20260818_175338_w6b2_testimonials_layout.up,
+    down: migration_20260818_175338_w6b2_testimonials_layout.down,
+    name: '20260818_175338_w6b2_testimonials_layout',
+  },
+  {
+    up: migration_20260818_204408_w6b3_carousel_expo_effect.up,
+    down: migration_20260818_204408_w6b3_carousel_expo_effect.down,
+    name: '20260818_204408_w6b3_carousel_expo_effect',
+  },
+  {
+    up: migration_20260818_212608_w6b3_carousel_expo_controls.up,
+    down: migration_20260818_212608_w6b3_carousel_expo_controls.down,
+    name: '20260818_212608_w6b3_carousel_expo_controls',
+  },
+  {
+    up: migration_20260819_000348_w6b3_carousel_full_bleed.up,
+    down: migration_20260819_000348_w6b3_carousel_full_bleed.down,
+    name: '20260819_000348_w6b3_carousel_full_bleed',
+  },
+  {
+    up: migration_20260819_011112_w6b4_carousel3d_effect.up,
+    down: migration_20260819_011112_w6b4_carousel3d_effect.down,
+    name: '20260819_011112_w6b4_carousel3d_effect',
+  },
+  {
+    up: migration_20260819_154529_w6b5_carousel_spring_effect.up,
+    down: migration_20260819_154529_w6b5_carousel_spring_effect.down,
+    name: '20260819_154529_w6b5_carousel_spring_effect',
+  },
+  {
+    up: migration_20260819_164717_w6b6_hero_image_carousel_types.up,
+    down: migration_20260819_164717_w6b6_hero_image_carousel_types.down,
+    name: '20260819_164717_w6b6_hero_image_carousel_types',
+  },
+  {
+    up: migration_20260819_184317_w6b6a_hero_banner_toggles.up,
+    down: migration_20260819_184317_w6b6a_hero_banner_toggles.down,
+    name: '20260819_184317_w6b6a_hero_banner_toggles',
+  },
+]

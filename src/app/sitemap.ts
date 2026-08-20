@@ -1,6 +1,7 @@
 import { type MetadataRoute } from 'next'
 
 import { getAllArticles } from '@/lib/articles'
+import { getPublishedPageSlugs } from '@/lib/cms/pagesRepo'
 import { isFuturePublicationDate, toValidDate } from '@/lib/date'
 import { getSiteUrl } from '@/lib/site'
 
@@ -71,5 +72,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }),
   )
 
-  return [...staticRoutes, ...articleRoutes]
+  // Published page-builder pages served by the [slug] catch-all (M5 —
+  // these were previously missing from the sitemap entirely).
+  const pageSlugs = await getPublishedPageSlugs()
+  const pageRoutes: MetadataRoute.Sitemap = pageSlugs.map((slug) => ({
+    url: `${siteUrl}/${slug}`,
+    changeFrequency: 'monthly',
+    priority: 0.5,
+  }))
+
+  return [...staticRoutes, ...articleRoutes, ...pageRoutes]
 }

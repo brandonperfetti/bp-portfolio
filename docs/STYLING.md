@@ -1,51 +1,28 @@
 # Styling
 
-## Stack
+## Tailwind v4 (CSS-first)
 
-- Tailwind CSS 4 via `src/styles/tailwind.css`.
-- Typography plugin configured through `typography.ts`.
-- Prism code highlighting styles in `src/styles/prism.css`.
-- Image delivery uses Next Image + Cloudinary transform helper in `src/lib/image-utils.ts` for responsive `f_auto/q_auto` variants.
+- Entry: `src/styles/tailwind.css` — `@import 'tailwindcss'`, typography
+  plugin, `@config '../../typography.ts'`, shadcn design tokens on `:root` /
+  `.dark`, and `@custom-variant dark (&:where(.dark, .dark *))`.
+- Dark mode is class-based via next-themes. **Every new component ships with
+  light and dark treatments** — parity is an acceptance criterion.
+- Palette: zinc neutrals, teal accent (interactive), indigo for proficiency
+  chips. Prism theme in `src/styles/prism.css`.
 
-## Conventions
+## Component conventions
 
-- Keep utility-first styling inline in components.
-- Reuse existing component primitives (`Button`, `Card`, `Container`) before introducing new wrappers.
-- Prefer existing color semantics (`zinc`, `teal`) to keep visual consistency.
-
-## Motion Conventions
-
-- Prefer shared motion primitives over one-off animation logic:
-  - `AnimatedHeadline`
-  - `ScrollReveal`
-  - `ParallaxGroup`
-  - `HoverMotionCard`
-- Keep motion subtle and compositional (small y/opacity/scale offsets, restrained stagger).
-- When adding GSAP effects in hooks, always include cleanup (`context.revert()`, `timeline.kill()`, or `tween.kill()`).
-
-## Mobile Input Font Size
-
-- To prevent iOS Safari auto-zoom on focus, form controls must render at `16px` on mobile.
-- Use `text-base sm:text-sm` for `input`, `textarea`, and `select` controls unless a specific control requires a larger size.
-- Keep this rule consistent across Hermes, search, and all form surfaces.
-
-## Cursor UX Rules
-
-Global base layer in `tailwind.css` sets:
-
-- pointer cursor for interactive controls
-- not-allowed for disabled controls
-
-When adding controls, preserve semantic `button`/`a` usage and disabled states to benefit from this baseline.
-
-## Theme Support
-
-- Uses `next-themes`.
-- Dark mode driven by `.dark` class variant.
-- Components should include dark mode classes for readable contrast.
-
-## Icons
-
-- Project-local icon components in `src/icons` are the default pattern.
-- Heroicons are used where already introduced (e.g., search modal close icon).
-- Match existing line weight and size rhythm when adding/replacing icons.
+- New primitives come from shadcn/ui via the CLI/MCP into
+  `src/components/ui/` (radix-based, cva variants). Prefer these over the
+  legacy v3 primitives; the legacy `src/components/Button.tsx` is
+  port-remnant and slated for removal.
+- Feature components live in folder-per-domain (`tech/`, `articles/`,
+  `search/`, `cms/`, `heros/`, `motion/`).
+- `cn()` (`src/lib/utils.ts`) for class merging in ui primitives; `clsx`
+  elsewhere is fine.
+- Icons: lucide-react (v1 — no brand logos; source those as media), a few
+  project-local icons in `src/icons`, Heroicons only where already adopted.
+- Focus states: visible `focus-visible` rings (teal) on every interactive
+  element; never remove outlines without a replacement.
+- Card hover/reveal motion comes from `src/components/motion/` wrappers —
+  don't hand-roll GSAP in feature components (see `docs/DESIGN.md`).

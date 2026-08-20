@@ -13,8 +13,9 @@ import {
 } from '@headlessui/react'
 import clsx from 'clsx'
 
+import { HeaderUserButton } from '@/components/auth/HeaderUserButton'
 import { Container } from '@/components/Container'
-import { HeaderSearch } from '@/components/search/HeaderSearch'
+import { CommandPalette } from '@/components/search/CommandPalette'
 import type { CmsNavigationItem } from '@/lib/cms/types'
 import { PERSON_IMAGE_URL } from '@/lib/identity'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
@@ -168,7 +169,7 @@ function NavItem({
         className={clsx(
           'relative block rounded-md px-3 py-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80',
           isActive
-            ? 'text-teal-500 dark:text-teal-400'
+            ? 'text-teal-700 dark:text-teal-400'
             : 'hover:text-teal-500 dark:hover:text-teal-400',
         )}
       >
@@ -280,10 +281,29 @@ function Avatar({
   )
 }
 
+/**
+ * Site-wide floating header: avatar, mobile/desktop nav, command palette,
+ * and theme toggle. Navigation items are injected (CMS-driven) with a
+ * static fallback so the header never renders empty.
+ *
+ * @remarks The home page gets the signature large-avatar-shrinks-on-scroll
+ * treatment. That choreography is driven by CSS custom properties updated
+ * in a passive scroll listener rather than React state — re-rendering on
+ * every scroll frame would jank; the DOM stays untouched and only
+ * `documentElement` style properties move.
+ */
 export function Header({
   navigationItems = DEFAULT_NAV_ITEMS,
+  showUserButton = false,
 }: {
   navigationItems?: NavigationItem[]
+  /**
+   * Whether to mount the signed-in account chip. Threaded from the server
+   * (`isClerkEnabled()`) because Clerk components require the provider that
+   * AuthProvider omits in keys-off environments — when false, the header
+   * renders byte-identical to the pre-auth design.
+   */
+  showUserButton?: boolean
 }) {
   const isHomePage = usePathname() === '/'
 
@@ -473,8 +493,9 @@ export function Header({
               </div>
               <div className="flex justify-end md:flex-1">
                 <div className="pointer-events-auto flex items-center gap-2 md:gap-3">
-                  <HeaderSearch />
+                  <CommandPalette />
                   <ThemeToggle />
+                  {showUserButton && <HeaderUserButton />}
                 </div>
               </div>
             </div>

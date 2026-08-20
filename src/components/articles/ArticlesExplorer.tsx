@@ -71,6 +71,17 @@ function articleMatchesQuery(
   )
 }
 
+/**
+ * Client-side article browser for `/articles`: debounced free-text search
+ * plus topic/tech filter chips over a pre-fetched article list — filtering
+ * an in-memory list keeps the interaction instant with no server round-trip.
+ *
+ * @remarks Query and topic mirror into the URL (`?q`/`?topic`) via
+ * `router.replace` so filtered views are shareable and survive reload;
+ * legacy `?category` links are honored on read. The local input is not
+ * overwritten from the URL while focused, so the debounce loop can't clobber
+ * in-flight typing. `/` focuses search unless a typing target is active.
+ */
 export function ArticlesExplorer({
   articles,
 }: {
@@ -313,7 +324,7 @@ export function ArticlesExplorer({
             }`}
           />
           {!query.trim() && (
-            <span className="pointer-events-none absolute inset-y-0 right-3 hidden items-center text-xs font-medium text-zinc-400 sm:inline-flex dark:text-zinc-500">
+            <span className="pointer-events-none absolute inset-y-0 right-3 hidden items-center text-xs font-medium text-zinc-500 sm:inline-flex dark:text-zinc-400">
               /
             </span>
           )}
@@ -328,7 +339,7 @@ export function ArticlesExplorer({
               }}
               className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80 ${
                 isActiveFilter(item)
-                  ? 'bg-teal-500 text-white'
+                  ? 'bg-teal-700 text-white'
                   : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
               }`}
             >
@@ -360,7 +371,7 @@ export function ArticlesExplorer({
                 }}
                 className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80 ${
                   isActiveFilter(item)
-                    ? 'bg-teal-500 text-white'
+                    ? 'bg-teal-700 text-white'
                     : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
                 }`}
               >
@@ -374,8 +385,8 @@ export function ArticlesExplorer({
       <ScrollReveal
         className="mx-auto mt-10 max-w-2xl lg:mx-0 lg:max-w-none"
         targets="article"
-        stagger={0.07}
-        y={20}
+        immediate={queryText.length > 0 || topic !== 'All'}
+        revealKey={`${queryText}|${topic}`}
       >
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           {filtered.map((article) => {

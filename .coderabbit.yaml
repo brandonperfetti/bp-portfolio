@@ -1,0 +1,44 @@
+language: 'en-US'
+early_access: false
+reviews:
+  profile: 'chill' # "assertive" for more nitpicks
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches: ['develop', 'master']
+  path_filters:
+    - '!**/pnpm-lock.yaml'
+    - '!**/*.generated.ts'
+    - '!src/payload-types.ts'
+    - '!src/app/(payload)/**'
+    - '!src/migrations/**'
+    - '!**/*.snap'
+  path_instructions:
+    - path: 'src/collections/**'
+      instructions: >
+        Payload collection configs. Flag missing/loose access control, missing TSDoc on custom
+        fields/hooks/endpoints, and any gated content that could be served without a server-side
+        access check. Verify drafts/versions are enabled where expected.
+    - path: 'src/app/api/ai/**'
+      instructions: >
+        AI routes. Ensure the system prompt is enforced server-side, rate limiting is applied,
+        inputs are Zod-validated, provider keys never reach the client, and errors return safe
+        messages with correct status codes.
+    - path: 'src/app/api/**'
+      instructions: >
+        Route handlers. Check auth/secret gating, Zod input validation, and error handling on
+        every handler. Confirm no secrets are logged.
+    - path: 'src/**/*.tsx'
+      instructions: >
+        React/Next components. Check accessibility (keyboard nav, ARIA, focus, reduced-motion),
+        light/dark parity, and that server components don't leak secrets or import client-only libs.
+  tools:
+    eslint:
+      enabled: true
+chat:
+  auto_reply: true

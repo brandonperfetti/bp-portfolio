@@ -12,11 +12,21 @@ import type { CmsEntityItem } from '@/lib/cms/types'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { getExternalLinkProps } from '@/lib/link-utils'
 
+/**
+ * Responsive card grid for CMS entity lists (projects, tech stack): logo,
+ * name, description, optional full-card link — one shared surface so every
+ * entity collection renders identically.
+ *
+ * @remarks Each card's overlay link is wired to its visible heading via a
+ * `useId`-scoped `aria-labelledby`, keeping the full-card click target
+ * accessible without duplicating the name; keys fall back to name+index
+ * because CMS items may lack slugs.
+ */
 export function EntityGrid({ items }: { items: CmsEntityItem[] }) {
   const instanceId = useId().replace(/[:]/g, '')
 
   return (
-    <ScrollReveal targets="li" y={20} stagger={0.08}>
+    <ScrollReveal targets="li">
       <ul
         role="list"
         className="grid grid-cols-1 gap-x-12 gap-y-12 sm:grid-cols-2 sm:gap-y-16 lg:grid-cols-3"

@@ -168,19 +168,34 @@ function pruneGuardrailBuckets(nowMs = Date.now()) {
 }
 
 /**
- * Resolves a best-effort client IP from proxy headers.
+ * Resolves the platform-trusted client IP from proxy headers.
+ *
+ * @remarks Trust order matters (fresh-eyes review 2026-08, finding M2): the
+ * LEFTMOST `x-forwarded-for` entry is client-prependable, so keying rate
+ * limits on it let an attacker mint a fresh per-IP bucket per request. On
+ * Vercel the trustworthy values are `x-real-ip` (platform-set) and the
+ * RIGHTMOST `x-forwarded-for` hop (platform-appended). We prefer
+ * `x-real-ip`, fall back to the rightmost XFF entry, and never read the
+ * leftmost.
  *
  * @param request Incoming HTTP request.
- * @returns First forwarded/real IP, or `'unknown'` when unavailable.
+ * @returns Platform-trusted client IP, or `'unknown'` when unavailable.
  */
 export function getRequestClientIp(request: Request) {
-  const xff = request.headers.get('x-forwarded-for')
-  if (xff) {
-    const candidate = xff.split(',')[0]?.trim()
-    if (candidate) return candidate
-  }
   const realIp = request.headers.get('x-real-ip')?.trim()
   if (realIp) return realIp
+  const xff = request.headers.get('x-forwarded-for')
+  if (xff) {
+    // Scan right-to-left for the first NON-EMPTY hop: a trailing comma
+    // (`"1.2.3.4,"`) previously yielded an empty rightmost entry and fell
+    // through to the shared 'unknown' bucket (second-pass review
+    // 2026-08-10 nit). Still never the leftmost unless it is the only hop.
+    const hops = xff.split(',')
+    for (let i = hops.length - 1; i >= 0; i--) {
+      const candidate = hops[i]?.trim()
+      if (candidate) return candidate
+    }
+  }
   return 'unknown'
 }
 
@@ -188,13 +203,28 @@ export function getRequestClientIp(request: Request) {
  * Validates request source host against trusted site hosts.
  *
  * Requires at least one of `Origin` or `Referer` headers to be present and
- * parseable to an allowed host (localhost + `NEXT_PUBLIC_SITE_URL` host).
+ * parseable to an allowed host: localhost, the `NEXT_PUBLIC_SITE_URL` host,
+ * or the host serving THIS request (`x-forwarded-host`/`host`).
+ *
+ * @remarks The serving host must be allowed explicitly: staging/preview
+ * deploys intentionally keep `NEXT_PUBLIC_SITE_URL` pointed at production
+ * (SEO canonicals), so an env-only allowlist 403'd every same-origin chat
+ * request on staging. Browsers set `Origin` themselves, so a cross-site
+ * page still can't forge a match — this stays a CSRF guard, not less.
  *
  * @param request Incoming HTTP request.
  * @returns `true` when source is allowed; otherwise `false`.
  */
 export function isAllowedRequestSource(request: Request) {
   const hosts = getSiteHosts()
+
+  // Same-origin requests are always acceptable, whatever domain this
+  // deployment is being served from (staging, preview, production).
+  const servingHost =
+    request.headers.get('x-forwarded-host') ?? request.headers.get('host')
+  if (servingHost) {
+    hosts.add(servingHost.trim().toLowerCase())
+  }
 
   const origin = request.headers.get('origin')
   let originValid = false
@@ -351,9 +381,13 @@ export function getSecurityLimits() {
       10000,
     ),
     maxMessages: toPositiveInt(process.env.HERMES_MAX_MESSAGES, 12, 100),
+    // HERMES_MAX_COMPLETION_TOKENS wins; AI_MAX_COMPLETION_TOKENS is the
+    // env knob deploys actually set today (.env.example) — honor it as the
+    // fallback so enforcing this limit doesn't silently shrink replies.
     maxCompletionTokens: toPositiveInt(
-      process.env.HERMES_MAX_COMPLETION_TOKENS,
-      700,
+      process.env.HERMES_MAX_COMPLETION_TOKENS ??
+        process.env.AI_MAX_COMPLETION_TOKENS,
+      1024,
       8000,
     ),
     imageDailyLimit: toPositiveInt(

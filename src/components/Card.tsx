@@ -16,6 +16,16 @@ function ChevronRightIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
   )
 }
 
+/**
+ * Compound card primitive used across list surfaces (articles, projects,
+ * uses). `Card` is only the positioned `group` shell; the pieces attach as
+ * statics (`Card.Link`, `.Title`, `.Description`, `.Cta`, `.Eyebrow`) so
+ * callers compose exactly the parts they need while hover/focus styling
+ * stays coordinated through the shared group scope.
+ *
+ * @remarks Polymorphic via `as` (defaults to `div`) so cards can be
+ * semantic `li`/`article` elements without wrapper nesting.
+ */
 export function Card<T extends React.ElementType = 'div'>({
   as,
   className,
@@ -35,6 +45,10 @@ export function Card<T extends React.ElementType = 'div'>({
   )
 }
 
+/**
+ * Full-card link: an inset overlay span makes the whole card clickable
+ * while the hover background stays behind the content layers.
+ */
 Card.Link = function CardLink({
   children,
   ...props
@@ -50,6 +64,7 @@ Card.Link = function CardLink({
   )
 }
 
+/** Card heading; wraps itself in {@link Card.Link} when `href` is given. */
 Card.Title = function CardTitle<T extends React.ElementType = 'h2'>({
   as,
   href,
@@ -67,6 +82,7 @@ Card.Title = function CardTitle<T extends React.ElementType = 'h2'>({
   )
 }
 
+/** Muted supporting copy, layered above the hover background. */
 Card.Description = function CardDescription({
   children,
 }: {
@@ -79,11 +95,15 @@ Card.Description = function CardDescription({
   )
 }
 
+/**
+ * Decorative "read more" affordance. `aria-hidden` because the whole card
+ * is already the link — announcing it would duplicate the accessible name.
+ */
 Card.Cta = function CardCta({ children }: { children: React.ReactNode }) {
   return (
     <div
       aria-hidden="true"
-      className="relative z-10 mt-4 flex items-center text-sm font-medium text-teal-500"
+      className="relative z-10 mt-4 flex items-center text-sm font-medium text-teal-700 dark:text-teal-400"
     >
       {children}
       <ChevronRightIcon className="relative top-px ml-1 h-4 w-4 shrink-0 stroke-current" />
@@ -91,6 +111,7 @@ Card.Cta = function CardCta({ children }: { children: React.ReactNode }) {
   )
 }
 
+/** Small leading meta line (e.g. date); `decorate` adds the tick mark. */
 Card.Eyebrow = function CardEyebrow<T extends React.ElementType = 'p'>({
   as,
   decorate = false,

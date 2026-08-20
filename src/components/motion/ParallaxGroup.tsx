@@ -5,6 +5,7 @@ import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useEffect, useRef } from 'react'
 
+import { EASE_NONE, PARALLAX_SCRUB } from '@/lib/motion/timing'
 import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -53,12 +54,12 @@ export function ParallaxGroup({
           { yPercent: -delta },
           {
             yPercent: delta,
-            ease: 'none',
+            ease: EASE_NONE,
             scrollTrigger: {
               trigger: rootRef.current,
               start,
               end,
-              scrub: 0.85,
+              scrub: PARALLAX_SCRUB,
               invalidateOnRefresh: true,
             },
           },

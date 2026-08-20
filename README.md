@@ -26,7 +26,7 @@ This project is the active codebase for [brandonperfetti.com](https://brandonper
   - Articles page explorer with topic chips + query-string syncing.
 - Dynamic article route at `/articles/[slug]` with `generateStaticParams`, `dynamicParams=true`, and route-level `generateMetadata()`.
 - Hermes chat experience with streaming OpenAI responses and image generation.
-- Contact form integration through SendGrid mail API.
+- Contact form delivery through the Resend API.
 - SEO endpoints: sitemap, robots, RSS feed metadata.
 
 ## Tech Stack
@@ -37,7 +37,7 @@ This project is the active codebase for [brandonperfetti.com](https://brandonper
 - [Tailwind CSS 4](https://tailwindcss.com/)
 - [GSAP](https://gsap.com/) for motion primitives and choreography
 - [Headless UI](https://headlessui.com/) (menu/popover primitives)
-- [SendGrid](https://sendgrid.com/) for contact + marketing list APIs
+- [Resend](https://resend.com/) for contact-form delivery, transactional email, and sign-up email capture
 - [OpenAI API](https://platform.openai.com/docs/api-reference) for Hermes chat + image generation
 - [Heroicons](https://heroicons.com/) + project-local icon components
 
@@ -49,7 +49,7 @@ This project is the active codebase for [brandonperfetti.com](https://brandonper
 - Global header modal search (`Cmd/Ctrl + K`).
 - Hermes AI chat with streaming text and image generation modes.
 - Hermes input supports multiline prompts (`Enter` to send, `Shift+Enter` for newline).
-- SendGrid-backed contact workflow (newsletter API is present; home-page newsletter UI is currently hidden).
+- Resend-backed contact workflow (home-page newsletter UI is currently hidden).
 - SEO routes: sitemap, robots, and feed endpoint metadata.
 
 ## Environment Variables
@@ -67,20 +67,14 @@ This file includes the minimal runtime env contract. Full Notion CMS setup and o
 ```bash
 NEXT_PUBLIC_SITE_URL=...
 OPENAI_API_KEY=...
-SENDGRID_API_KEY=...
+RESEND_API_KEY=...
 ```
 
 ### Optional
 
 ```bash
-# Newsletter list destination (either key supported)
-SENDGRID_MAILING_ID=...
-# or
-SENDGRID_LIST_ID=...
-
-# Regional SendGrid API base (optional)
-# set to "eu" for EU residency account routing
-SENDGRID_DATA_RESIDENCY=eu
+# Segment for captured sign-up emails (Clerk webhook)
+RESEND_CONTACT_SEGMENT_ID=...
 
 # Contact form routing overrides
 CONTACT_TO_EMAIL=you@example.com
@@ -255,9 +249,9 @@ If you need implementation internals first, start with:
 
 ## Troubleshooting
 
-### SendGrid marketing API errors
+### Resend API errors
 
-If newsletter subscribe fails with access/scope errors, verify your SendGrid key has marketing contacts permissions and that `SENDGRID_MAILING_ID` / `SENDGRID_LIST_ID` is set.
+If contact-form delivery fails, verify `RESEND_API_KEY` is set and the from-address domain is verified in Resend (Domains tab).
 
 ### Hermes API failures
 

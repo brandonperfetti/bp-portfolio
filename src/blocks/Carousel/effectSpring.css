@@ -1,0 +1,29 @@
+/**
+ * UI Initiative Spring Slider
+ *
+ * Fancy "spring" transition effect between slides
+ *
+ * https://uiinitiative.com
+ *
+ * Copyright 2026 UI Initiative
+ *
+ * Released under the UI Initiative Regular License
+ *
+ * ---------------------------------------------------------------------------
+ * Port note (bp-portfolio, #64): the only style the Pro effect ships
+ * (`demo-vite/spring-slider.scss`) — the slide transition timing-function that,
+ * combined with the per-slide `transitionDelay` stagger the ported
+ * `effectSpring.ts` writes, produces the springy trail. Byte-for-byte the source
+ * cubic-bezier. One deliberate deviation for the CMS context: the Pro source
+ * scopes it to `.spring-slider .swiper-slide` (its demo wrapper); here it is
+ * scoped to `.swiper-spring .swiper-slide` — the container-modifier class the
+ * leaf adds only when the resolved effect is `spring` — so the timing never
+ * leaks to any other carousel, and a reduced-motion collapse (which drops the
+ * class) never gets it. The demo chrome (`main.scss`: padding/height/`#803205`
+ * colours) is NOT ported — the site's zinc card styling + #66 teal pagination
+ * stand in.
+ */
+
+.swiper-spring .swiper-slide {
+  transition-timing-function: cubic-bezier(0.76, 0.09, 0.215, 1);
+}

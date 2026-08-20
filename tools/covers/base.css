@@ -1,0 +1,81 @@
+/* BP blog cover design system — v1
+   Canvas: 2048x1152 (16:9). Palette: zinc-950 ground, teal accent
+   (site colorPrimary #0f766e, highlight #2dd4be). No text in covers. */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html,
+body {
+  width: 2048px;
+  height: 1152px;
+  overflow: hidden;
+}
+body {
+  background: #09090b;
+  position: relative;
+}
+/* layered ground: radial teal glow, vignette */
+.glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 1400px 900px at 62% 42%,
+      rgba(15, 118, 110, 0.28),
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse 1000px 700px at 30% 75%,
+      rgba(15, 118, 110, 0.1),
+      transparent 60%
+    );
+}
+.vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 1600px 1000px at 50% 50%,
+    transparent 55%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+}
+/* fine grid */
+.grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(
+    ellipse 1500px 950px at 50% 45%,
+    black 40%,
+    transparent 85%
+  );
+  -webkit-mask-image: radial-gradient(
+    ellipse 1500px 950px at 50% 45%,
+    black 40%,
+    transparent 85%
+  );
+}
+.stage {
+  position: absolute;
+  inset: 0;
+}
+svg.motif {
+  position: absolute;
+  inset: 0;
+  width: 2048px;
+  height: 1152px;
+}
+/* grain overlay sits on top */
+svg.grain {
+  position: absolute;
+  inset: 0;
+  width: 2048px;
+  height: 1152px;
+  opacity: 0.5;
+  mix-blend-mode: overlay;
+}

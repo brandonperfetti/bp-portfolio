@@ -5,6 +5,7 @@ import {
   type CmsArticleDetailResult,
 } from '@/lib/cms/articlesRepo'
 import { isFuturePublicationDate } from '@/lib/date'
+import type { OgImageMode } from '@/lib/og/types'
 
 interface Article {
   title: string
@@ -32,6 +33,8 @@ interface Article {
   topics?: string[]
   tech?: string[]
   noindex?: boolean
+  /** How this article's social image resolves (auto/bespoke/generated, T7). */
+  ogImageMode?: OgImageMode
 }
 
 export interface ArticleWithSlug extends Article {
@@ -40,8 +43,16 @@ export interface ArticleWithSlug extends Article {
 }
 
 export interface ArticleDetailWithSlug extends ArticleWithSlug {
+  /** True when the body was withheld pending sign-in (§12 gating). */
+  gated?: boolean
   bodyBlocks: CmsArticleDetailResult['bodyBlocks']
   sourceType: CmsArticleDetailResult['sourceType']
+  /** When true, this article offers no share affordance (per-post kill switch). */
+  disableSharing?: boolean
+  /** Share-target ids layered on top of the global set for this article. */
+  shareTargetsAdd?: string[]
+  /** Share-target ids subtracted from the global set for this article. */
+  shareTargetsRemove?: string[]
 }
 
 export async function getAllArticles(): Promise<ArticleWithSlug[]> {
@@ -69,8 +80,9 @@ export async function getAllArticles(): Promise<ArticleWithSlug[]> {
 
 export async function getArticleBySlug(
   slug: string,
+  viewer?: { isAuthenticated: boolean },
 ): Promise<ArticleDetailWithSlug | null> {
-  const article = await getCmsArticleBySlug(slug)
+  const article = await getCmsArticleBySlug(slug, viewer)
 
   if (!article) {
     return null

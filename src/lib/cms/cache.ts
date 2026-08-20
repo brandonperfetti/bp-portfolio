@@ -1,7 +1,12 @@
 export const CMS_REVALIDATE = {
   articles: 300,
   articleDetail: 300,
-  search: 1800,
+  // 1800 → 300 (2026-08-10): tag + path purges from the Posts hooks were
+  // measured NOT refreshing this unstable_cache-backed index on Vercel, so
+  // the TTL is the effective convergence bound after publish/delete. Keep
+  // at 300 until the list-surface staleness investigation lands
+  // (docs/MAINTENANCE.md → Watchpoints).
+  search: 300,
   projects: 900,
   tech: 900,
   uses: 900,
@@ -12,15 +17,28 @@ export const CMS_REVALIDATE = {
   navigation: 300,
 } as const
 
+/**
+ * The single cache-tag vocabulary. These MUST be the literal tag strings
+ * the repo modules cache under — the values below are consumed by the
+ * search cache, the `/api/revalidate` fallback list, and (indirectly) the
+ * collection/global revalidation hooks.
+ *
+ * @remarks History (fresh-eyes review 2026-08, finding M3): this file
+ * previously defined a parallel `cms:*` namespace nobody cached under, so
+ * the search index was never purged by content edits and a default-body
+ * `/api/revalidate` call was a near-no-op. One vocabulary, one source of
+ * truth; `cache.test.ts` pins the mapping so the two sides cannot drift
+ * apart silently again.
+ */
 export const CMS_TAGS = {
-  articles: 'cms:articles',
-  article: (slug: string) => `cms:article:${slug}`,
-  projects: 'cms:projects',
-  tech: 'cms:tech',
-  uses: 'cms:uses',
-  workHistory: 'cms:work-history',
-  authors: 'cms:authors',
-  pages: 'cms:pages',
-  settings: 'cms:settings',
-  navigation: 'cms:navigation',
+  articles: 'posts',
+  authors: 'authors',
+  projects: 'projects',
+  tech: 'tech-stack',
+  uses: 'uses',
+  workHistory: 'work-history',
+  pages: 'pages',
+  settings: 'global_site-settings',
+  navigation: 'global_navigation',
+  identity: 'global_identity',
 } as const

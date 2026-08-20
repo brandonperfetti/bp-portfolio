@@ -1,85 +1,58 @@
-# Dependencies
+# Dependencies (why each exists)
 
-## Core Runtime
+Majors are pinned; upgrade deliberately. `payload` + `@payloadcms/*` move as
+one set, version-locked.
 
-- `next`, `react`, `react-dom`, `typescript`
+## Content & data
 
-## UI and Interaction
+- `payload`, `@payloadcms/next` — CMS embedded in the app (admin + APIs).
+- `@payloadcms/db-postgres` — Drizzle/Postgres adapter over node-postgres
+  (Supabase; replaced the Neon-only `@payloadcms/db-vercel-postgres`).
+- `@payloadcms/richtext-lexical` — editor; Posts registers list/quote/upload
+  features the migration requires (see docs/PAYLOAD.md).
+- `@payloadcms/storage-vercel-blob` — media storage.
+- `@payloadcms/plugin-seo|redirects|search|mcp` — SEO fields, editorial
+  redirects, search index, agent MCP endpoint.
+- `@payloadcms/email-resend` — Resend transactional email (first-party
+  adapter; replaced `@payloadcms/email-nodemailer` + SendGrid SMTP).
+- `sharp` — Payload image processing.
 
-- `@headlessui/react`
-- `next-themes`
-- `clsx`
-- `@heroicons/react`
-- `gsap`
-  - Purpose: reusable motion primitives (headline, reveal, parallax, hover) and interaction choreography (search modal, Hermes message entrances).
-  - Accessibility: all motion must respect reduced-motion preferences through `usePrefersReducedMotion` and non-motion fallbacks.
-  - Audit date: 2026-03-08.
-  - Risk outcome: No findings.
-  - Security/compatibility notes: no known Sonatype security flags; tightly coupled to animation timing and reduced-motion fallbacks.
-  - Upgrade-risk classification: Medium (animation behavior/timing drift can affect UX polish).
+## App framework
 
-## Content and Rendering
+- `next` 16 (Turbopack), `react`/`react-dom` 19, `typescript` 5.
+- `@clerk/nextjs` — visitor auth + gating identity (admin auth is Payload's).
+- `svix` — Clerk webhook signature verification.
 
-- `remark-gfm`
-- `@mapbox/rehype-prism`
-- `cheerio` (content parsing helpers)
+## AI
 
-## APIs and Integrations
+- `ai` + `@ai-sdk/openai` + `@ai-sdk/anthropic` + `@ai-sdk/react` — Hermes
+  chat, provider-switchable via env.
+- `openai` — image/audio endpoints retained from v3.
+- `streamdown`, `react-markdown`, `remark-gfm` — streaming markdown render.
+- `zod` — request validation (chat, webhooks, forms).
+- `@upstash/ratelimit` + `@upstash/redis` — global rate limiting.
+- `evalite` + `autoevals` (dev) — Hermes behavior evals.
 
-- `openai`
-- `@sendgrid/mail`
-- `feed`
+## UI
 
-## Observability
+- `tailwindcss` v4 + `@tailwindcss/postcss` + `@tailwindcss/typography` —
+  CSS-first styling; `typography.ts` config retained from v3.
+- `radix-ui`, `class-variance-authority`, `tailwind-merge`, `clsx`,
+  `tw-animate-css` — shadcn/ui stack (`src/components/ui`).
+- `lucide-react` v1 — icons (no brand logos in v1).
+- `cmdk` — command palette semantics; `okapibm25` — palette ranking.
+- `gsap` — motion (tokens in `src/lib/motion/timing.ts`).
+- `shaders` — shaders.com hero presets (client-only).
+- `next-themes` — class-based theming.
+- `@headlessui/react`, `@heroicons/react` — retained v3 UI (shrinking).
+- `feed` — RSS. `cheerio` — HTML utilities for llms/feed surfaces.
+- `resend` — contact-form delivery (`/api/contact`) + Clerk sign-up email
+  capture (`/api/clerk/webhook`).
+- `@vercel/analytics`, `@vercel/speed-insights` — telemetry.
 
-- `@vercel/analytics`
-  - Purpose: lightweight page and traffic analytics from Vercel with minimal integration overhead.
-  - Audit date: 2026-03-08.
-  - Risk outcome: No findings.
-  - Security/compatibility notes: Sonatype reports no vulnerability/malicious/EOL flags at `1.6.1`; runtime impact is limited to analytics instrumentation.
-  - Upgrade-risk classification: Low.
-- `@vercel/speed-insights`
-  - Purpose: real-user performance telemetry (web vitals + page responsiveness) to track frontend UX regressions.
-  - Audit date: 2026-03-08.
-  - Risk outcome: No findings.
-  - Security/compatibility notes: no known Sonatype risk indicators; ensure version stays aligned with Next major upgrades.
-  - Upgrade-risk classification: Low.
+## Dev/test
 
-## Styling Toolchain
-
-- `tailwindcss`, `@tailwindcss/postcss`, `@tailwindcss/typography`
-- `prettier`, `prettier-plugin-tailwindcss`
-- `eslint`, `eslint-config-next`
-
-## Testing Toolchain
-
-- `vitest`
-- `@vitest/coverage-v8`
-- `jsdom`
-- `@testing-library/react`
-- `@testing-library/jest-dom`
-- `@testing-library/user-event`
-  - Purpose: higher-fidelity user interaction simulation (typing, clicking, keyboard flow) beyond low-level event dispatch.
-  - Audit date: 2026-03-08.
-  - Risk outcome: No findings.
-  - Security/compatibility notes: Sonatype shows clean metadata at `14.6.1`; requires modern package exports support (compatible with current TS/Next setup).
-  - Upgrade-risk classification: Low.
-- `@playwright/test`
-
-## Workflow Tooling
-
-- `husky` (`^9.1.7`)
-  - Purpose: local Git hooks to enforce pre-commit/pre-push quality checks (`format:check`, `lint`, `typecheck`, `test`) before code leaves a workstation.
-  - Security: hooks execute local repo scripts only; keep hook commands minimal, pin through lockfile, and avoid untrusted shell/install scripts.
-  - Compatibility: validated in this repo with Node 24 + npm workflows; CI remains the source of truth for server-side checks and does not depend on Husky.
-  - Sonatype check: completed on 2026-03-05 for `pkg:npm/husky@9.1.7` (license `MIT`, `malicious=false`, `endOfLife=false`).
-
-## Image Processing
-
-- `sharp` (required by Next image optimization pipeline)
-
-When removing dependencies, check:
-
-1. `src/app/api/*`
-2. `next.config.mjs`
-3. `typography.ts`
+- `vitest` + Testing Library + `jsdom`; `@playwright/test`; Storybook 10
+  (`@storybook/nextjs-vite`, addon-a11y, addon-mcp); `eslint` 9 +
+  `eslint-config-next` + `eslint-plugin-tsdoc`; `prettier` +
+  tailwind plugin; `husky` + lint-staged.
