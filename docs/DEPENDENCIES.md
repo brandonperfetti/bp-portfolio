@@ -56,3 +56,15 @@ one set, version-locked.
   (`@storybook/nextjs-vite`, addon-a11y, addon-mcp); `eslint` 9 +
   `eslint-config-next` + `eslint-plugin-tsdoc`; `prettier` +
   tailwind plugin; `husky` + lint-staged.
+
+## Observability
+
+- `@sentry/nextjs` — error monitoring + performance tracing (server, client,
+  edge). Entirely env-gated on `NEXT_PUBLIC_SENTRY_DSN` (server/edge may use a
+  separate `SENTRY_DSN`): with no DSN the SDK is never imported by
+  `next.config.mjs` and every `Sentry.init` is skipped, so local dev and CI
+  boot with zero Sentry activity. Source-map upload (via the Sentry Vercel
+  integration) additionally needs `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` +
+  `SENTRY_PROJECT` at build time; without them the build still succeeds and
+  just skips the upload. Session replay, cron monitoring, and alerting rules
+  are intentionally not wired — defaults first (#73).

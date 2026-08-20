@@ -36,6 +36,14 @@
   NOT create tables in `api`; re-check both on the production project at
   promotion.
   Blob store `bp-portfolio-media` is public-read.
+- **Sentry (#73)**: env vars `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` /
+  `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` (+ optional
+  `NEXT_PUBLIC_SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE`) live in Vercel's
+  per-environment settings; the Sentry Vercel integration populates the
+  auth-token/org/project automatically once connected, leaving only
+  `NEXT_PUBLIC_SENTRY_DSN` to set by hand per environment. No DSN → Sentry is
+  fully inert (no import, no init). `SENTRY_AUTH_TOKEN` is a build-only secret
+  (source-map upload); rotate it like Resend/Blob if exposed.
 - **Database backups (nightly, encrypted)**: Supabase free tier has NO
   automated backups, and the DB is the canonical copy of all content —
   `.github/workflows/db-backup.yml` runs a nightly `pg_dump` (session
