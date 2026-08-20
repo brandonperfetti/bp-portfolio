@@ -4,7 +4,11 @@ on:
   pull_request:
     branches: [develop, master]
   push:
-    branches: [develop, master, 'rebuild/**']
+    # Quality (Lint · Types · Unit) runs on every branch push to catch
+    # breakage branch-by-branch before it reaches develop. The heavier
+    # Build · E2E and Evalite jobs gate themselves back to trunk pushes
+    # + PRs via job-level `if:` conditions below.
+    branches: ['**']
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -68,6 +72,14 @@ jobs:
     name: Build · E2E
     runs-on: ubuntu-latest
     needs: quality
+    # Heavy job (Postgres service, Playwright, build) — run only on trunk
+    # pushes (develop/master/rebuild/**) and pull requests, not on every
+    # feature-branch push. Quality above still runs everywhere.
+    if: >-
+      github.event_name == 'pull_request'
+      || github.ref == 'refs/heads/develop'
+      || github.ref == 'refs/heads/master'
+      || startsWith(github.ref, 'refs/heads/rebuild/')
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -120,6 +132,15 @@ jobs:
     name: Evalite (Hermes)
     runs-on: ubuntu-latest
     needs: quality
+    # Evalite spends real AI-provider dollars per run — run only on trunk
+    # pushes (develop/master/rebuild/**) and pull requests, never on every
+    # feature-branch push. (The step-level key gate still skips it when no
+    # provider key is present, e.g. fork PRs.)
+    if: >-
+      github.event_name == 'pull_request'
+      || github.ref == 'refs/heads/develop'
+      || github.ref == 'refs/heads/master'
+      || startsWith(github.ref, 'refs/heads/rebuild/')
     continue-on-error: true # TODO(brandon): remove once eval thresholds are trusted
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
