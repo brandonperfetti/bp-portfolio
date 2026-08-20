@@ -26,8 +26,12 @@
   (see its COMMENT in the DB). This gives PostgREST a valid schema to
   load, which silences the former log noise (`schema
 "pg_pgrst_no_exposed_schemas" does not exist` every ~30s + a bogus
-  ~54% "database error rate" in Observability), while the 136 RLS-less
-  Drizzle tables in `public` remain unexposed. Do NOT add `public` (or
+  ~54% "database error rate" in Observability), while the `public` tables
+  (Drizzle-managed) remain unexposed — and, as of #72, additionally locked
+  with default-deny RLS plus revoked `anon`/`authenticated` grants (see the
+  new-table RLS convention in `docs/PAYLOAD.md`), so even adding `public` to
+  the exposed schemas could no longer leak rows on its own. Do NOT add
+  `public` (or
   any schema containing real tables) to the exposed-schemas list, and do
   NOT create tables in `api`; re-check both on the production project at
   promotion.
