@@ -385,6 +385,8 @@ export function ArticlesExplorer({
       <ScrollReveal
         className="mx-auto mt-10 max-w-2xl lg:mx-0 lg:max-w-none"
         targets="article"
+        immediate={queryText.length > 0 || topic !== 'All'}
+        revealKey={`${queryText}|${topic}`}
       >
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           {filtered.map((article) => {

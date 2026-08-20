@@ -329,7 +329,11 @@ export function TechExplorer({
         </p>
       </div>
 
-      <ScrollReveal targets="li">
+      <ScrollReveal
+        targets="li"
+        immediate={normalizedQueryText.length > 0 || category !== 'All'}
+        revealKey={`${normalizedQueryText}|${category}`}
+      >
         <ul
           role="list"
           className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2 lg:grid-cols-3"
