@@ -8,6 +8,11 @@
   SEO tab populated) before pushing.
 - **Next/React upgrades**: majors are deliberate events; check Payload's
   supported Next range first (Payload pins minimums).
+- **Node version policy (#69)**: `engines` stays broad (`>=22 <25`) so a
+  current Node never trips the unsupported-engine warning; `.nvmrc` pins 24
+  for local dev; CI runs Node 24 (part-2 Batch 0). Vercel's project-level
+  Node setting is overridden by `engines` — keep it on 24.x anyway so the
+  build cache stays warm. Bump all three together at the next Node major.
 - **GitHub tech-signal token**: fine-grained PAT (Contents: read) expires on
   the schedule chosen at creation — rotate in Vercel env
   (`GITHUB_TOKEN`). Scan knobs: `GITHUB_TECH_*` in `.env.example`.
