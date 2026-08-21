@@ -70,6 +70,11 @@ describe('getTracesSampleRate', () => {
     expect(getTracesSampleRate()).toBe(0.1)
   })
 
+  it('falls back to the default on a whitespace-only override (Number("  ") is 0 — must not silently disable tracing)', () => {
+    vi.stubEnv('SENTRY_TRACES_SAMPLE_RATE', '   ')
+    expect(getTracesSampleRate()).toBe(0.1)
+  })
+
   it('falls back to the default on an unparsable override', () => {
     vi.stubEnv('SENTRY_TRACES_SAMPLE_RATE', 'not-a-number')
     expect(getTracesSampleRate()).toBe(0.1)
@@ -136,6 +141,12 @@ describe('isNoisyTransaction', () => {
   it('does not flag ordinary frontend/API routes', () => {
     expect(isNoisyTransaction('/articles/some-post')).toBe(false)
     expect(isNoisyTransaction('/api/ai/chat')).toBe(false)
+  })
+
+  it('does not flag routes that merely CONTAIN a noisy pattern (segment-boundary match)', () => {
+    expect(isNoisyTransaction('/articles/admin-guide')).toBe(false)
+    expect(isNoisyTransaction('/api/users/metrics')).toBe(false)
+    expect(isNoisyTransaction('/administrivia')).toBe(false)
   })
 
   it('treats a missing name as not noisy', () => {

@@ -54,7 +54,10 @@ const DEFAULT_TRACES_SAMPLE_RATE = 0.1
  * than silently disabling or over-sampling tracing.
  */
 export function getTracesSampleRate(): number {
-  const raw = process.env.SENTRY_TRACES_SAMPLE_RATE
+  // Trimmed before parsing: Number('   ') is 0, so an accidental
+  // whitespace-only value would silently DISABLE tracing instead of using
+  // the documented default.
+  const raw = process.env.SENTRY_TRACES_SAMPLE_RATE?.trim()
   if (!raw) return DEFAULT_TRACES_SAMPLE_RATE
   const parsed = Number(raw)
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1
@@ -117,7 +120,12 @@ const NOISY_TRANSACTION_PATTERNS = [
  */
 export function isNoisyTransaction(name: string | undefined): boolean {
   if (!name) return false
-  return NOISY_TRANSACTION_PATTERNS.some((pattern) => name.includes(pattern))
+  // Segment-boundary match, not substring: bare includes() would also
+  // suppress unrelated routes that merely CONTAIN a pattern (e.g.
+  // /articles/admin-guide contains /admin).
+  return NOISY_TRANSACTION_PATTERNS.some(
+    (pattern) => name === pattern || name.startsWith(`${pattern}/`),
+  )
 }
 
 /**
