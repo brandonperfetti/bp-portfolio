@@ -93,16 +93,7 @@ export function ArticlesArchiveView({
           <div className="@container mt-8">
             <div className="grid grid-cols-1 gap-10 @md:grid-cols-2 @3xl:grid-cols-3">
               {articles.map((article) => (
-                <Card as="article" key={article.slug}>
-                  <Card.Title href={`/articles/${article.slug}`}>
-                    {article.title}
-                  </Card.Title>
-                  <Card.Eyebrow as="time" dateTime={article.date} decorate>
-                    {formatDate(article.date)}
-                  </Card.Eyebrow>
-                  <Card.Description>{article.description}</Card.Description>
-                  <Card.Cta>Read article</Card.Cta>
-                </Card>
+                <ArticleCard key={article.slug} article={article} />
               ))}
             </div>
           </div>
@@ -144,7 +135,7 @@ function StackedList({
   const list = (
     <div className={cn(heading && 'mt-8', 'flex flex-col gap-16')}>
       {articles.map((article) => (
-        <StackedArticle key={article.slug} article={article} />
+        <ArticleCard key={article.slug} article={article} />
       ))}
     </div>
   )
@@ -163,19 +154,16 @@ function StackedList({
 }
 
 /**
- * One row of the home page's article list: the hover overlay, the full-card
- * link, and the icon that shifts on hover — copied element for element from
- * the route's `Article` function.
- *
- * @remarks Byte-identical duplication is the point, not an accident. The
- * route keeps its own copy until #42 flips the home page onto the page
- * builder, and `homeParity.test.ts` asserts the two stay identical in the
- * meantime. The scroll-reveal stagger the route wraps this list in
- * (`ScrollReveal targets="article"`) is *not* reproduced here — it belongs to
- * the page's reveal choreography, not to the list — so #42 has to decide
- * where that wrapper lives.
+ * One article card — the whole-card hover treatment (hover overlay, full-card
+ * link, and the "Read article" icon that shifts on hover). Shared by BOTH the
+ * grid and stacked variants so every article card on the site reads and
+ * behaves identically; the variants differ only in their container (a
+ * responsive grid vs. a `gap-16` column) and the grid's "Browse all articles"
+ * link. The whole card is the link — the title is a plain heading — matching
+ * the page-builder home page's list, whose hover markers `homeParity.test.ts`
+ * pins.
  */
-function StackedArticle({ article }: { article: ArticleCardItem }) {
+function ArticleCard({ article }: { article: ArticleCardItem }) {
   return (
     <HoverMotionCard>
       <Card as="article">

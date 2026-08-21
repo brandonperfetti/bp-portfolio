@@ -93,14 +93,24 @@ describe('ArticlesArchiveComponent', () => {
     expect(screen.queryByText(/Browse all articles/)).toBeNull()
   })
 
-  it('keeps the grid treatment on its per-card title link', async () => {
-    render(await ArticlesArchiveComponent(block({ limit: 1 })))
-
-    expect(screen.getByRole('link', { name: 'Article 1' })).toHaveAttribute(
-      'href',
-      '/articles/article-1',
+  it('gives grid cards the same whole-card hover treatment as the stacked variant', async () => {
+    const { container } = render(
+      await ArticlesArchiveComponent(block({ limit: 1 })),
     )
-    expect(screen.queryByLabelText(/Read article:/)).toBeNull()
+
+    // Whole-card link with the read-article label (like the home/stacked
+    // cards), not a title-only link — so the hover treatment covers the card,
+    // not just the heading.
+    expect(
+      screen.getByRole('link', { name: 'Read article: Article 1' }),
+    ).toHaveAttribute('href', '/articles/article-1')
+    expect(screen.queryByRole('link', { name: 'Article 1' })).toBeNull()
+    expect(container.querySelector('[data-hover-overlay]')).not.toBeNull()
+    expect(container.querySelector('[data-hover-motion-card]')).not.toBeNull()
+    // ...but the grid keeps its browse-all link (the stacked variant hasn't).
+    expect(
+      screen.getByRole('link', { name: /Browse all articles/ }),
+    ).toHaveAttribute('href', '/articles')
   })
 
   it('shows a heading only when one is stored', async () => {
