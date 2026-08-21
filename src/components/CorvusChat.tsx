@@ -8,12 +8,13 @@ import { Streamdown } from 'streamdown'
 
 import { Copy as CopyIcon } from 'lucide-react'
 
-import { SendIcon } from '@/icons'
+import { MicIcon, SendIcon } from '@/icons'
 import {
   createCorvusChatFetch,
   SIGN_IN_REQUIRED_CODE,
 } from '@/lib/ai/corvusChatFetch'
 import { getCorvusGreeting } from '@/lib/corvus/greeting'
+import { useSpeechInput } from '@/lib/corvus/useSpeechInput'
 import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
 import { RavenMark } from '@/components/corvus/RavenMark'
 import {
@@ -78,6 +79,18 @@ function ClerkFirstNameProbe({
   return null
 }
 
+export interface CorvusChatProps {
+  /**
+   * The compact in-card agent header's name — CMS-driven (`page?.title`)
+   * from the caller. Also rendered as the page's single `<h1>` for SEO.
+   * Defaults to `'Corvus'` for callers (Storybook, tests) that render this
+   * component with no CMS page behind it.
+   */
+  title?: string
+  /** The agent header's subtitle line, one row below `title`. */
+  subtitle?: string
+}
+
 /**
  * Corvus chat client on `useChat` + streamdown (replaces the v3 manual
  * `ReadableStream` reader over a hand-rolled NDJSON protocol).
@@ -94,10 +107,22 @@ function ClerkFirstNameProbe({
  * instead of vendoring theirs ("Path B"). The Corvus visual identity theme
  * (the atlas palette, dynamic greeting) is layered on separately via
  * `data-slot`-scoped CSS under `.corvus-surface` in `src/styles/tailwind.css`
- * (#78) — this component's own utility classes are the zinc/teal default
+ * (#78, re-skinned to the approved mock in the composer/bubble/header pass
+ * below) — this component's own utility classes are the zinc/teal default
  * and stay that way outside `.corvus-surface` (e.g. in Storybook).
+ *
+ * Owns the page's compact in-card agent header (raven avatar, `title` as an
+ * `<h1>`, `subtitle`, a green "online" dot) — `CorvusPage` no longer renders
+ * a separate hero-style header, so this component is the single source of
+ * that identity band. Also owns the Web Speech voice-input mic button (#80)
+ * via {@link useSpeechInput}: transcribed speech lands in the same composer
+ * state as typed text and sends through the same `/api/ai/chat` path, so the
+ * #74 guardrails apply identically regardless of input method.
  */
-export default function CorvusChat() {
+export default function CorvusChat({
+  title = 'Corvus',
+  subtitle = 'Prefix your prompt with image: or Dali: to generate an image.',
+}: CorvusChatProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [input, setInput] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -165,6 +190,27 @@ export default function CorvusChat() {
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`
   }, [])
 
+  // Web Speech voice input (#80). Transcribed text — interim and final — is
+  // set directly as the composer value, exactly like typed input: it flows
+  // through the same `submit()` below, so #74's guardrails and the
+  // sign-in-required disable apply identically. No new backend involved.
+  const handleTranscript = useCallback(
+    (text: string) => {
+      setInput(text)
+      requestAnimationFrame(autosize)
+    },
+    [autosize],
+  )
+  const speech = useSpeechInput({ onTranscript: handleTranscript })
+  const toggleListening = useCallback(() => {
+    if (speech.listening) {
+      speech.stop()
+    } else {
+      inputRef.current?.focus()
+      speech.start()
+    }
+  }, [speech])
+
   const submit = useCallback(() => {
     const text = input.trim()
     if (!text) {
@@ -216,9 +262,46 @@ export default function CorvusChat() {
   return (
     <div
       data-slot="chat-card"
-      className="flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100 p-4 dark:border-zinc-700/40"
+      className="flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100 p-3 sm:p-4 dark:border-zinc-700/40"
     >
       {CLERK_ENABLED_CLIENT && <ClerkFirstNameProbe onChange={setFirstName} />}
+
+      {/* Compact in-card agent header (replaces the separate hero-style
+          header/constellation backdrop the page used to render — that
+          "went overboard"; this is the whole identity band now). `title`
+          is the page's one accessible `<h1>`. */}
+      <div
+        data-slot="agent-header"
+        className="mb-3 flex shrink-0 items-center gap-3 border-b border-zinc-100 pb-3 dark:border-zinc-700/40"
+      >
+        <div
+          data-slot="agent-avatar"
+          aria-hidden="true"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+        >
+          <RavenMark aria-hidden="true" className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <h1
+            data-slot="agent-name"
+            className="truncate text-[15px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-100"
+          >
+            {title}
+          </h1>
+          <p
+            data-slot="agent-subtitle"
+            className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400"
+          >
+            {subtitle}
+          </p>
+        </div>
+        <span
+          data-slot="agent-status"
+          aria-hidden="true"
+          className="ml-auto h-2 w-2 shrink-0 rounded-full bg-emerald-500"
+        />
+      </div>
+
       <Conversation>
         <ConversationContent>
           {messages.length === 0 && (
@@ -243,10 +326,22 @@ export default function CorvusChat() {
             const from = isAssistant ? 'assistant' : 'user'
             return (
               <Message key={message.id} from={from}>
+                {isAssistant && (
+                  <div
+                    data-slot="message-avatar"
+                    aria-hidden="true"
+                    className="flex h-[26px] w-[26px] shrink-0 items-center justify-center self-end rounded-full bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                  >
+                    <RavenMark
+                      aria-hidden="true"
+                      className="h-[15px] w-[15px]"
+                    />
+                  </div>
+                )}
                 <div className="mx-1 max-w-[92%] space-y-2 lg:max-w-[80%]">
                   <MessageContent from={from}>
                     {isAssistant ? (
-                      <div className="corvus-markdown max-w-none text-white">
+                      <div className="corvus-markdown max-w-none">
                         <Streamdown>{text}</Streamdown>
                       </div>
                     ) : (
@@ -318,43 +413,73 @@ export default function CorvusChat() {
       </Conversation>
 
       <form
-        className="mt-3 flex items-end gap-2"
+        className="mt-3 shrink-0"
         onSubmit={(event) => {
           event.preventDefault()
           submit()
         }}
       >
-        <textarea
-          ref={inputRef}
-          data-slot="composer-input"
-          value={input}
-          rows={1}
-          disabled={signInRequired}
-          onChange={(event) => {
-            setInput(event.target.value)
-            autosize()
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault()
-              submit()
-            }
-          }}
-          placeholder={
-            signInRequired ? 'Sign in to keep chatting…' : 'Ask Corvus...'
-          }
-          aria-label="Message Corvus"
-          className="min-h-[42px] flex-1 resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-base text-zinc-900 placeholder:text-zinc-400 focus:ring-2 focus:ring-teal-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-        />
-        <button
-          type="submit"
-          data-slot="composer-send"
-          disabled={isBusy || signInRequired}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+        {/* The ElevenLabs-style composer pill: one rounded field holding the
+            text input, then two ghost icon buttons — mic, then send. No big
+            colored Send button, no teal. */}
+        <div
+          data-slot="composer-field"
+          className="flex items-end gap-1 rounded-2xl border border-zinc-200 bg-white py-1.5 pr-1.5 pl-4 transition-shadow focus-within:ring-2 focus-within:ring-teal-500 dark:border-zinc-700 dark:bg-zinc-900"
         >
-          <span>Send</span>
-          <SendIcon className="h-4 w-4" />
-        </button>
+          <textarea
+            ref={inputRef}
+            data-slot="composer-input"
+            value={input}
+            rows={1}
+            disabled={signInRequired}
+            onChange={(event) => {
+              setInput(event.target.value)
+              autosize()
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault()
+                submit()
+              }
+            }}
+            placeholder={
+              signInRequired ? 'Sign in to keep chatting…' : 'Ask Corvus...'
+            }
+            aria-label="Message Corvus"
+            className="min-h-[24px] flex-1 resize-none border-0 bg-transparent py-1.5 text-base text-zinc-900 outline-none placeholder:text-zinc-400 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm dark:text-zinc-100 dark:placeholder:text-zinc-500"
+          />
+          {speech.supported && (
+            <button
+              type="button"
+              data-slot="composer-mic"
+              data-listening={speech.listening ? 'true' : undefined}
+              aria-pressed={speech.listening}
+              aria-label={speech.listening ? 'Stop' : 'Speak'}
+              disabled={signInRequired}
+              onClick={toggleListening}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            >
+              <MicIcon className="h-[19px] w-[19px]" />
+            </button>
+          )}
+          <button
+            type="submit"
+            data-slot="composer-send"
+            aria-label="Send"
+            disabled={isBusy || signInRequired}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-teal-600 disabled:cursor-not-allowed disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-teal-400"
+          >
+            <SendIcon className="h-[19px] w-[19px] rotate-90" />
+          </button>
+        </div>
+        {speech.permissionDenied && (
+          <p
+            data-slot="composer-mic-note"
+            className="mt-1.5 px-1 text-xs text-zinc-500 dark:text-zinc-400"
+          >
+            Enable microphone access to speak.
+          </p>
+        )}
       </form>
       {/* Turnstile mount point — empty unless chat protection is armed AND
           Cloudflare escalates to an interactive challenge. */}
