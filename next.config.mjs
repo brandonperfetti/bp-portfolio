@@ -98,10 +98,10 @@ if (sentryDsnConfigured) {
     errorHandler: (error) => {
       console.warn('[sentry] next.config build step warning:', error)
     },
-    // Defaults first (#73): explicitly no Vercel Cron Monitor
-    // auto-registration (this app builds with Turbopack, not webpack, so
-    // the SDK's webpack.treeshake debug-logging options don't apply here).
-    automaticVercelMonitors: false,
+    // Sentry's own build-time telemetry about this plugin's usage — not
+    // app telemetry, not user data. Off; cosmetic (silences the
+    // "Sending telemetry data" build log line).
+    telemetry: false,
   })
 }
 

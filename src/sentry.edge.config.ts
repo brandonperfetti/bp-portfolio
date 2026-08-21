@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/nextjs'
 import {
   getSentryEnvironment,
   getServerSentryDsn,
+  SENTRY_CONSOLE_LOG_LEVELS,
   sentryTracesSampler,
 } from '@/lib/observability/sentryConfig'
 
@@ -24,5 +25,13 @@ if (dsn) {
     environment: getSentryEnvironment(),
     tracesSampler: sentryTracesSampler,
     debug: false,
+    // Sentry Logs (structured logging view, separate from error/tracing) —
+    // console.warn/console.error only, see SENTRY_CONSOLE_LOG_LEVELS.
+    enableLogs: true,
+    integrations: [
+      Sentry.consoleLoggingIntegration({
+        levels: [...SENTRY_CONSOLE_LOG_LEVELS],
+      }),
+    ],
   })
 }

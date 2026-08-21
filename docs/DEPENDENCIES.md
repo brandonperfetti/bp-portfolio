@@ -66,5 +66,7 @@ one set, version-locked.
   boot with zero Sentry activity. Source-map upload (via the Sentry Vercel
   integration) additionally needs `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` +
   `SENTRY_PROJECT` at build time; without them the build still succeeds and
-  just skips the upload. Session replay, cron monitoring, and alerting rules
-  are intentionally not wired — defaults first (#73).
+  just skips the upload. Sentry Logs is enabled on server/client/edge,
+  forwarding `console.warn` / `console.error` (not `log`/`info`/`debug`).
+  Session replay, cron monitoring, and alerting rules are intentionally not
+  wired — defaults first (#73).

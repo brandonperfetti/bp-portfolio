@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/nextjs'
 import {
   getSentryEnvironment,
   getServerSentryDsn,
+  SENTRY_CONSOLE_LOG_LEVELS,
   sentryTracesSampler,
 } from '@/lib/observability/sentryConfig'
 
@@ -18,8 +19,10 @@ import {
  * no tracing, no outbound requests.
  *
  * Defaults first (#73): no session replay, no cron monitoring, no
- * alerting-rule buildout — just error capture (always on) and low-rate
- * tracing via the shared `tracesSampler`.
+ * alerting-rule buildout — just error capture (always on), low-rate
+ * tracing via the shared `tracesSampler`, and Sentry Logs
+ * (`console.warn`/`console.error` only — see
+ * {@link SENTRY_CONSOLE_LOG_LEVELS}).
  */
 const dsn = getServerSentryDsn()
 
@@ -31,5 +34,12 @@ if (dsn) {
     // Internal SDK debug logging only, not app logs — keep it off outside
     // of manual troubleshooting.
     debug: false,
+    // Sentry Logs (structured logging view, separate from error/tracing).
+    enableLogs: true,
+    integrations: [
+      Sentry.consoleLoggingIntegration({
+        levels: [...SENTRY_CONSOLE_LOG_LEVELS],
+      }),
+    ],
   })
 }

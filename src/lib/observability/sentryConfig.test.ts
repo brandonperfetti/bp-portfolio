@@ -6,6 +6,7 @@ import {
   getServerSentryDsn,
   getTracesSampleRate,
   isNoisyTransaction,
+  SENTRY_CONSOLE_LOG_LEVELS,
   sentryTracesSampler,
 } from '@/lib/observability/sentryConfig'
 
@@ -151,5 +152,14 @@ describe('sentryTracesSampler', () => {
   it('applies the configured sample rate to everything else', () => {
     vi.stubEnv('SENTRY_TRACES_SAMPLE_RATE', '0.5')
     expect(sentryTracesSampler({ name: '/articles/some-post' })).toBe(0.5)
+  })
+})
+
+describe('SENTRY_CONSOLE_LOG_LEVELS', () => {
+  it('forwards only warn and error to Sentry Logs — not the noisier log/info/debug/trace/assert defaults', () => {
+    expect(SENTRY_CONSOLE_LOG_LEVELS).toEqual(['warn', 'error'])
+    expect(SENTRY_CONSOLE_LOG_LEVELS).not.toContain('log')
+    expect(SENTRY_CONSOLE_LOG_LEVELS).not.toContain('info')
+    expect(SENTRY_CONSOLE_LOG_LEVELS).not.toContain('debug')
   })
 })

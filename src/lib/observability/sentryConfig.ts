@@ -137,3 +137,20 @@ export function sentryTracesSampler(samplingContext: {
   if (isNoisyTransaction(samplingContext.name)) return 0
   return getTracesSampleRate()
 }
+
+/**
+ * Console levels forwarded to Sentry Logs by every runtime's
+ * `Sentry.consoleLoggingIntegration({ levels: [...SENTRY_CONSOLE_LOG_LEVELS] })`.
+ *
+ * @remarks
+ * Deliberately `warn`/`error` only — the integration's own default also
+ * forwards `log`/`info`/`debug`/`trace`/`assert`, which would flood
+ * Sentry Logs with routine console noise instead of the signal Brandon
+ * actually wants there. Exported as a single constant so the three
+ * runtime entrypoints (`instrumentation-client.ts`,
+ * `sentry.server.config.ts`, `sentry.edge.config.ts`) can't drift from
+ * each other. This module stays framework-free (no `@sentry/nextjs`
+ * import) — the entrypoints own the actual
+ * `Sentry.consoleLoggingIntegration(...)` call.
+ */
+export const SENTRY_CONSOLE_LOG_LEVELS = ['warn', 'error'] as const

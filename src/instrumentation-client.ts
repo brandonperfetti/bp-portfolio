@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/nextjs'
 import {
   getClientSentryDsn,
   getSentryEnvironment,
+  SENTRY_CONSOLE_LOG_LEVELS,
   sentryTracesSampler,
 } from '@/lib/observability/sentryConfig'
 
@@ -21,8 +22,9 @@ import {
  * pre-init.
  *
  * Defaults first (#73): no session replay, no user feedback widget — just
- * error capture (always on) and low-rate browser tracing via the shared
- * `tracesSampler`.
+ * error capture (always on), low-rate browser tracing via the shared
+ * `tracesSampler`, and Sentry Logs (`console.warn`/`console.error` only —
+ * see {@link SENTRY_CONSOLE_LOG_LEVELS}).
  */
 const dsn = getClientSentryDsn()
 
@@ -32,6 +34,13 @@ if (dsn) {
     environment: getSentryEnvironment(),
     tracesSampler: sentryTracesSampler,
     debug: false,
+    // Sentry Logs (structured logging view, separate from error/tracing).
+    enableLogs: true,
+    integrations: [
+      Sentry.consoleLoggingIntegration({
+        levels: [...SENTRY_CONSOLE_LOG_LEVELS],
+      }),
+    ],
   })
 }
 
