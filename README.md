@@ -75,9 +75,11 @@ notes elsewhere). Behavior is eval-gated in CI (`pnpm eval:ci`).
 GitFlow: `master` → production ([brandonperfetti.com](https://brandonperfetti.com));
 `develop` → integration; the active QA branch serves
 [staging.brandonperfetti.com](https://staging.brandonperfetti.com). Vercel builds
-with corepack-pinned pnpm; migrations run on deploy (`pnpm migrate && pnpm build`).
-CI runs quality (lint/types/unit) on every branch push, and Build·E2E + Evalite on
-trunk pushes and PRs. The staging database gets nightly encrypted `pg_dump`
+with corepack-pinned pnpm; migrations run on deploy (`pnpm migrate && pnpm build` —
+the committed chain is idempotent and tracked in `payload_migrations`, so re-runs
+no-op). CI runs the quality job (lint/types/unit) on every branch push; Build·E2E
+and Evalite run on pushes to `develop`/`master`/`rebuild/**` and on PRs targeting
+`develop`/`master`. The staging database gets nightly encrypted `pg_dump`
 backups via GitHub Actions.
 
 ## Documentation map
