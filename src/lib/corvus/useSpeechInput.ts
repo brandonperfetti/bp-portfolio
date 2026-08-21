@@ -70,6 +70,14 @@ export interface UseSpeechInputOptions {
    * the same guardrails — no separate backend is involved).
    */
   onTranscript: (text: string) => void
+  /**
+   * Optional diagnostics hook, fired whenever the recognizer emits an error,
+   * with the raw `event.error` code and whether a transcript had already
+   * arrived in this session. Lets the consumer record the actual error codes
+   * from the field (e.g. to Sentry Logs) rather than inferring them — the
+   * hook itself stays free of any telemetry dependency.
+   */
+  onError?: (detail: { error: string; hadTranscript: boolean }) => void
 }
 
 export interface UseSpeechInputResult {
@@ -118,6 +126,7 @@ export interface UseSpeechInputResult {
  */
 export function useSpeechInput({
   onTranscript,
+  onError,
 }: UseSpeechInputOptions): UseSpeechInputResult {
   const [supported, setSupported] = useState(false)
   const [listening, setListening] = useState(false)
@@ -126,6 +135,8 @@ export function useSpeechInput({
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const onTranscriptRef = useRef(onTranscript)
   onTranscriptRef.current = onTranscript
+  const onErrorRef = useRef(onError)
+  onErrorRef.current = onError
   // Whether this recognizer has ever produced a transcript. Used to tell a
   // browser that genuinely can't run recognition (Brave: `network` error with
   // no transcript, ever) apart from one that works but emits a spurious
@@ -173,6 +184,12 @@ export function useSpeechInput({
       onTranscriptRef.current(text)
     }
     recognition.onerror = (event) => {
+      // Surface the raw code + transcript state for diagnostics before it's
+      // reduced to UI flags below.
+      onErrorRef.current?.({
+        error: event.error,
+        hadTranscript: hasTranscribedRef.current,
+      })
       if (PERMISSION_ERRORS.has(event.error)) {
         setPermissionDenied(true)
       } else if (event.error === 'audio-capture') {

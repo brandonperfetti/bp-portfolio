@@ -182,9 +182,16 @@ export function HoverMotionCard({
       root.removeEventListener('focusin', onFocusIn)
       root.removeEventListener('focusout', onFocusOut)
       gsap.set(root, { clearProps: 'transform' })
-      gsap.set(imageNodes, { clearProps: 'transform' })
-      gsap.set(iconNodes, { clearProps: 'transform' })
-      gsap.set(overlayNodes, { clearProps: 'opacity,visibility' })
+      // Guard on a non-empty collection like runEnter/runLeave above: a card
+      // without hover images/icons/overlays yields an empty NodeList, and
+      // gsap.set(<empty NodeList>) logs "GSAP target [object NodeList] not
+      // found" on every unmount — which floods the console (and Sentry Logs
+      // via the console integration) on a grid of cards.
+      if (imageNodes.length > 0)
+        gsap.set(imageNodes, { clearProps: 'transform' })
+      if (iconNodes.length > 0) gsap.set(iconNodes, { clearProps: 'transform' })
+      if (overlayNodes.length > 0)
+        gsap.set(overlayNodes, { clearProps: 'opacity,visibility' })
     }
   }, [iconShiftX, imageScale, isHoverable, prefersReducedMotion, scale, y])
 

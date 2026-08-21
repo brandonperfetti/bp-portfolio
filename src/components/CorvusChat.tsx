@@ -15,6 +15,7 @@ import {
 } from '@/lib/ai/corvusChatFetch'
 import { getCorvusGreeting } from '@/lib/corvus/greeting'
 import { useSpeechInput } from '@/lib/corvus/useSpeechInput'
+import { reportSpeechRecognitionError } from '@/lib/observability/clientTelemetry'
 import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
 import { RavenMark } from '@/components/corvus/RavenMark'
 import {
@@ -209,7 +210,13 @@ export default function CorvusChat({
     },
     [autosize],
   )
-  const speech = useSpeechInput({ onTranscript: handleTranscript })
+  const speech = useSpeechInput({
+    onTranscript: handleTranscript,
+    // Record the real recognizer error codes to Sentry Logs (diagnostics
+    // only — no Sentry Issue), so the iOS-Safari `network`-error behavior is
+    // measurable in the field rather than inferred.
+    onError: reportSpeechRecognitionError,
+  })
   const toggleListening = useCallback(() => {
     if (speech.listening) {
       speech.stop()

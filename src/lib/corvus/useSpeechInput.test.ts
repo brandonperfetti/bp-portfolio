@@ -183,4 +183,25 @@ describe('useSpeechInput (recognizer present)', () => {
 
     expect(result.current.unavailable).toBe(false)
   })
+
+  it('reports the raw error code and transcript state to onError (diagnostics)', () => {
+    installRecognizer()
+    const onError = vi.fn()
+    const { result } = renderHook(() =>
+      useSpeechInput({ onTranscript: vi.fn(), onError }),
+    )
+    act(() => result.current.start())
+    act(() =>
+      instance?.onresult?.({
+        resultIndex: 0,
+        results: Object.assign([[{ transcript: 'hi' }]], { length: 1 }),
+      }),
+    )
+    act(() => instance?.onerror?.({ error: 'network' }))
+
+    expect(onError).toHaveBeenCalledWith({
+      error: 'network',
+      hadTranscript: true,
+    })
+  })
 })
