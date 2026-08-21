@@ -37,6 +37,10 @@ const getAuthedChatRatePerMinuteMock = vi.fn()
 const getAuthedChatDailyQuotaMock = vi.fn()
 
 vi.mock('@/lib/security/chatGate', () => ({
+  // Deterministic stand-in for the real HMAC digest — the route must build
+  // anon limiter keys through this, so assertions can prove the raw IP never
+  // reaches checkChatLimits.
+  anonIpKeyDigest: (ip: string) => `digest(${ip})`,
   peekAnonFreeMessageCount: (...args: unknown[]) =>
     peekAnonFreeMessageCountMock(...args),
   incrementAnonFreeMessageCount: (...args: unknown[]) =>
@@ -217,10 +221,14 @@ describe('POST /api/ai/chat — signed-in users skip the free-message gate', () 
 })
 
 describe('POST /api/ai/chat — anon abuse limiter stays IP-keyed and runs first', () => {
-  it('keys checkChatLimits by IP for anon requests', async () => {
+  it('keys checkChatLimits by the HMAC-digested IP (never the raw address) for anon requests', async () => {
     await POST(makeRequest(validBody))
 
-    expect(checkChatLimitsMock).toHaveBeenCalledWith(ANON_IP, 10, 0)
+    expect(checkChatLimitsMock).toHaveBeenCalledWith(
+      `ip:digest(${ANON_IP})`,
+      10,
+      0,
+    )
   })
 
   it('a 429 from the abuse limiter blocks the request before the free-message gate runs', async () => {

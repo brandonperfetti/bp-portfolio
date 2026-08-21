@@ -7,6 +7,7 @@ import {
   getAnonFreeMessageLimit,
   getAuthedChatDailyQuota,
   getAuthedChatRatePerMinute,
+  anonIpKeyDigest,
   incrementAnonFreeMessageCount,
   peekAnonFreeMessageCount,
 } from '@/lib/security/chatGate'
@@ -72,7 +73,12 @@ export async function POST(req: Request) {
   // IP-keyed bucket with every other visitor behind the same NAT/proxy.
   const authedViewer =
     viewer.isAuthenticated && viewer.userId ? viewer.userId : null
-  const limiterKey = authedViewer ? `user:${authedViewer}` : ip
+  // Anonymous limiter keys carry an HMAC digest of the IP, never the raw
+  // address — Redis retains no personal identifier (chatGate hashes its own
+  // keys the same way).
+  const limiterKey = authedViewer
+    ? `user:${authedViewer}`
+    : `ip:${anonIpKeyDigest(ip)}`
   const limiterPerMinute = authedViewer
     ? getAuthedChatRatePerMinute()
     : limits.chatRatePerMinute

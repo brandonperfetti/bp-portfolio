@@ -16,6 +16,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * `TURNSTILE_SECRET_KEY`.
  */
 
+import { createHmac } from 'node:crypto'
+
+/**
+ * Mirrors chatGate's anonIpKeyDigest with the dev pepper (PAYLOAD_SECRET is
+ * unset under vitest) so tests can assert the exact stored key while proving
+ * it contains no raw IP.
+ */
+const digestOf = (ip: string) =>
+  createHmac('sha256', 'bp-anon-ip-dev-pepper')
+    .update(ip)
+    .digest('hex')
+    .slice(0, 32)
+
 const redisGet = vi.fn()
 const redisIncr = vi.fn()
 const redisExpire = vi.fn()
@@ -48,7 +61,9 @@ describe('chatGate — Upstash-backed (distributed)', () => {
     redisGet.mockResolvedValue(null)
     const { peekAnonFreeMessageCount } = await import('@/lib/security/chatGate')
     await expect(peekAnonFreeMessageCount('203.0.113.1')).resolves.toBe(0)
-    expect(redisGet).toHaveBeenCalledWith('chat:anon-free:203.0.113.1')
+    expect(redisGet).toHaveBeenCalledWith(
+      `chat:anon-free:${digestOf('203.0.113.1')}`,
+    )
   })
 
   it('increments via Redis INCR and sets a TTL only on the first write', async () => {
@@ -58,7 +73,7 @@ describe('chatGate — Upstash-backed (distributed)', () => {
 
     await expect(incrementAnonFreeMessageCount('203.0.113.1')).resolves.toBe(1)
     expect(redisExpire).toHaveBeenCalledWith(
-      'chat:anon-free:203.0.113.1',
+      `chat:anon-free:${digestOf('203.0.113.1')}`,
       30 * 24 * 60 * 60,
     )
 
@@ -67,9 +82,31 @@ describe('chatGate — Upstash-backed (distributed)', () => {
     expect(redisExpire).not.toHaveBeenCalled()
   })
 
+  it('never sends a raw client IP to Redis — keys carry only the HMAC digest', async () => {
+    redisGet.mockResolvedValue(null)
+    redisIncr.mockResolvedValue(1)
+    const { peekAnonFreeMessageCount, incrementAnonFreeMessageCount } =
+      await import('@/lib/security/chatGate')
+
+    await peekAnonFreeMessageCount('203.0.113.1')
+    await incrementAnonFreeMessageCount('203.0.113.1')
+
+    const allKeys = [
+      ...redisGet.mock.calls,
+      ...redisIncr.mock.calls,
+      ...redisExpire.mock.calls,
+    ].map((call) => String(call[0]))
+    expect(allKeys.length).toBeGreaterThan(0)
+    for (const key of allKeys) {
+      expect(key).not.toContain('203.0.113.1')
+    }
+    // Same IP → same digest → same key (the counter still accumulates).
+    expect(new Set(allKeys).size).toBe(1)
+  })
+
   it('keys distinct IPs to distinct Redis keys (no cross-visitor bleed)', async () => {
     redisGet.mockImplementation(async (key: string) =>
-      key.endsWith('203.0.113.1') ? 3 : 0,
+      key.endsWith(digestOf('203.0.113.1')) ? 3 : 0,
     )
     const { peekAnonFreeMessageCount } = await import('@/lib/security/chatGate')
     await expect(peekAnonFreeMessageCount('203.0.113.1')).resolves.toBe(3)

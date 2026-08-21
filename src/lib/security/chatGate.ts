@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto'
+
 import { Redis } from '@upstash/redis'
 
 /**
@@ -38,7 +40,27 @@ function getRedis(): Redis | null {
   return redisClient
 }
 
-const anonFreeMessageRedisKey = (key: string) => `chat:anon-free:${key}`
+/**
+ * Stable digest of an anonymous visitor's IP, used as the storage identity
+ * for every anon counter key (this gate's 30-day counter, and the route's
+ * per-minute/daily limiter keys).
+ *
+ * @remarks Raw IPs are personal data and IPv4 space is small enough to
+ * enumerate, so an unkeyed hash would be trivially reversible — this is an
+ * HMAC-SHA256 keyed by `PAYLOAD_SECRET` (server-only, always set in
+ * staging/prod), truncated to 32 hex chars. Redis therefore never stores a
+ * raw client IP. The fixed dev pepper keeps the digest deterministic in
+ * local dev/tests where `PAYLOAD_SECRET` may be unset; rotating
+ * `PAYLOAD_SECRET` rotates the keyspace (counters reset), which is an
+ * acceptable property for a free-taste counter and short-TTL rate limits.
+ */
+export function anonIpKeyDigest(ip: string): string {
+  const secret = process.env.PAYLOAD_SECRET || 'bp-anon-ip-dev-pepper'
+  return createHmac('sha256', secret).update(ip).digest('hex').slice(0, 32)
+}
+
+const anonFreeMessageRedisKey = (key: string) =>
+  `chat:anon-free:${anonIpKeyDigest(key)}`
 
 type AnonCountStore = Map<string, number>
 
@@ -131,7 +153,7 @@ export async function peekAnonFreeMessageCount(key: string): Promise<number> {
     const value = await redis.get<number>(anonFreeMessageRedisKey(key))
     return typeof value === 'number' ? value : 0
   }
-  return getMemoryStore().get(key) ?? 0
+  return getMemoryStore().get(anonIpKeyDigest(key)) ?? 0
 }
 
 /**
@@ -165,8 +187,9 @@ export async function incrementAnonFreeMessageCount(
     return next
   }
   const store = getMemoryStore()
-  const next = (store.get(key) ?? 0) + 1
-  store.set(key, next)
+  const digest = anonIpKeyDigest(key)
+  const next = (store.get(digest) ?? 0) + 1
+  store.set(digest, next)
   return next
 }
 
