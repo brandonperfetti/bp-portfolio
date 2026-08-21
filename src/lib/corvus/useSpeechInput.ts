@@ -55,6 +55,19 @@ declare global {
 /** Browser permission-denial error codes the Web Speech API reports. */
 const PERMISSION_ERRORS = new Set(['not-allowed', 'service-not-allowed'])
 
+/**
+ * Error codes that mean recognition can't run in THIS browser even though a
+ * recognizer constructor exists — distinct from a permission denial the
+ * visitor can fix. `network` is the signature Brave produces: it ships
+ * `webkitSpeechRecognition` (so feature-detection passes) but disables the
+ * Google speech backend the API depends on, so every attempt fails with a
+ * network error and no transcript (brave/brave-browser#18569, #3725). It's
+ * also what a genuinely offline browser reports. `audio-capture` means no
+ * usable microphone. Either way the mic can't produce text here, so the UI
+ * shows an explanatory note rather than silently doing nothing.
+ */
+const UNAVAILABLE_ERRORS = new Set(['network', 'audio-capture'])
+
 function getRecognitionConstructor(): SpeechRecognitionConstructor | null {
   if (typeof window === 'undefined') return null
   return window.SpeechRecognition ?? window.webkitSpeechRecognition ?? null
@@ -88,6 +101,13 @@ export interface UseSpeechInputResult {
    * small inline note rather than crashing or silently doing nothing.
    */
   permissionDenied: boolean
+  /**
+   * Set when recognition can't run in this browser at all (a `network` error —
+   * e.g. Brave with its speech backend disabled, or an offline browser — or
+   * `audio-capture` with no usable mic), as opposed to a fixable permission
+   * denial. Cleared on the next `start()`. Callers show an explanatory note.
+   */
+  unavailable: boolean
   /** Starts listening. No-op when unsupported or already listening. */
   start: () => void
   /** Stops listening. No-op when not currently listening. */
@@ -115,6 +135,7 @@ export function useSpeechInput({
   const [supported, setSupported] = useState(false)
   const [listening, setListening] = useState(false)
   const [permissionDenied, setPermissionDenied] = useState(false)
+  const [unavailable, setUnavailable] = useState(false)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const onTranscriptRef = useRef(onTranscript)
   onTranscriptRef.current = onTranscript
@@ -149,6 +170,8 @@ export function useSpeechInput({
     recognition.onerror = (event) => {
       if (PERMISSION_ERRORS.has(event.error)) {
         setPermissionDenied(true)
+      } else if (UNAVAILABLE_ERRORS.has(event.error)) {
+        setUnavailable(true)
       }
       recognitionRef.current = null
       setListening(false)
@@ -160,6 +183,7 @@ export function useSpeechInput({
 
     recognitionRef.current = recognition
     setPermissionDenied(false)
+    setUnavailable(false)
     setListening(true)
     recognition.start()
   }, [])
@@ -172,5 +196,5 @@ export function useSpeechInput({
     }
   }, [])
 
-  return { supported, listening, permissionDenied, start, stop }
+  return { supported, listening, permissionDenied, unavailable, start, stop }
 }

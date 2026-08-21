@@ -338,7 +338,7 @@ export default function CorvusChat({
                     />
                   </div>
                 )}
-                <div className="mx-1 max-w-[92%] space-y-2 lg:max-w-[80%]">
+                <div className="mx-1 flex max-w-[92%] flex-col items-start gap-1.5 lg:max-w-[80%]">
                   <MessageContent from={from}>
                     {isAssistant ? (
                       <div className="corvus-markdown max-w-none">
@@ -472,12 +472,14 @@ export default function CorvusChat({
             <SendIcon className="h-[19px] w-[19px] rotate-90" />
           </button>
         </div>
-        {speech.permissionDenied && (
+        {(speech.permissionDenied || speech.unavailable) && (
           <p
             data-slot="composer-mic-note"
             className="mt-1.5 px-1 text-xs text-zinc-500 dark:text-zinc-400"
           >
-            Enable microphone access to speak.
+            {speech.permissionDenied
+              ? 'Enable microphone access to speak.'
+              : "Voice input isn't available in this browser — try Chrome, Edge, or Safari."}
           </p>
         )}
       </form>

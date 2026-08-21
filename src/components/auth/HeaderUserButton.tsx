@@ -25,8 +25,11 @@ export function HeaderUserButton() {
         userProfileUrl="/account"
         appearance={{
           elements: {
+            // `size-9!` (36px) matches the search / theme-toggle bubbles in the
+            // header cluster; Clerk's own avatar rule (1.75rem) outranks a
+            // plain utility, so the important flag is what makes the size win.
             userButtonAvatarBox:
-              'h-8 w-8 ring-1 ring-zinc-900/5 dark:ring-white/10',
+              'size-9! ring-1 ring-zinc-900/5 dark:ring-white/10',
           },
         }}
       />

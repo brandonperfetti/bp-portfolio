@@ -239,7 +239,9 @@
 
   color-scheme: dark;
   color: var(--corvus-ink);
-  font-family: var(--font-corvus-body), ui-sans-serif, system-ui, sans-serif;
+  /* No font-family override — the chat inherits the site's default font so it
+   * reads as part of the site (Brandon: the custom display/body/mono fonts
+   * clashed, like the gold did). */
 }
 
 :root:not(.dark) .corvus-surface {
@@ -269,17 +271,10 @@
   color-scheme: light;
 }
 
-.corvus-surface h1,
-.corvus-surface h2,
-.corvus-surface h3 {
-  font-family: var(--font-corvus-display), ui-serif, Georgia, serif;
-}
-
 .corvus-surface kbd {
   border-radius: 0.25rem;
   border: 1px solid var(--corvus-border);
   padding: 0 0.25rem;
-  font-family: var(--font-corvus-mono), ui-monospace, SFMono-Regular, monospace;
   color: var(--corvus-muted);
 }
 
@@ -348,7 +343,6 @@
 
 .corvus-surface [data-slot='conversation-empty-state-title'] {
   color: var(--corvus-ink);
-  font-family: var(--font-corvus-display), ui-serif, Georgia, serif;
   font-size: 1.1875rem;
   font-weight: 600;
 }
