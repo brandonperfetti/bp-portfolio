@@ -1,260 +1,104 @@
-# Brandon Perfetti's Portfolio
+# BP Portfolio (brandonperfetti.com)
 
-Personal portfolio and content platform built on Next.js App Router with a provider-switched CMS runtime (Notion primary, local fallback), migrated from [Tailwind Plus Spotlight](https://tailwindcss.com/plus/templates/spotlight) and customized with production features (article search/filtering, Corvus AI chat, contact workflow, SEO routes, and custom content pages).
+Personal portfolio and content platform — the v4 ground-up rebuild on **Next.js 16
+(App Router) + Payload CMS 3** over Supabase Postgres. Every page on the site is
+constructible from CMS blocks alone: layout grammar (containers → columns → 20+
+blocks), a six-type hero system, carousels, and reader actions (Copy page / Share /
+generated OG cards) are all editorial acts, not deploys. The site ships with
+**Corvus**, a general-purpose AI assistant with server-enforced guardrails, and is
+hardened for production: database-level RLS, Sentry monitoring, and server-side
+auth gating throughout. Notion is a planning surface only — it has no runtime
+integration.
 
-## Table of Contents
+## Tech stack
 
-1. Overview
-2. Tech Stack
-3. Quick Features
-4. Environment Variables
-5. Local Development
-6. Build and Run
-7. Testing
-8. Documentation Map
-9. Troubleshooting
+- [Next.js 16](https://nextjs.org/) (App Router, Turbopack) · [React 19](https://react.dev/) · [TypeScript 5](https://www.typescriptlang.org/)
+- [Payload CMS 3](https://payloadcms.com/) — the single content source (Postgres via Drizzle/node-postgres; Supabase in staging/prod, default-deny RLS)
+- [Tailwind CSS v4](https://tailwindcss.com/) (CSS-first) + [shadcn/ui](https://ui.shadcn.com/) · [GSAP](https://gsap.com/) motion · [Swiper](https://swiperjs.com/) carousels · [shaders.com](https://shaders.com) hero
+- [Clerk](https://clerk.com/) end-user auth + server-side content gating · [Vercel AI SDK](https://sdk.vercel.ai/) (OpenAI `gpt-5-mini`; Anthropic optional) for Corvus
+- [Upstash Redis](https://upstash.com/) rate limiting + chat quotas · [Resend](https://resend.com/) email · [Sentry](https://sentry.io/) monitoring · [Vercel Blob](https://vercel.com/storage/blob) media
+- [Vitest](https://vitest.dev/) unit/component · [Storybook 10](https://storybook.js.org/) with interaction + a11y tests · [Playwright](https://playwright.dev/) e2e · [Evalite](https://evalite.dev/) AI evals
+- **pnpm only** (`only-allow` + `packageManager` pin) · Node 24 (`.nvmrc`; engines `>=22 <25`)
 
-## Overview
-
-This project is the active codebase for [brandonperfetti.com](https://brandonperfetti.com) and includes:
-
-- Content-driven article system with provider switch:
-  - `local`: fallback mode (non-Notion providers + empty article-safe states)
-  - `notion`: Notion CMS article projection + canonical Source Article page blocks
-- Search in two places:
-  - Header modal (`Cmd/Ctrl + K`) with title/description/full article body matching.
-  - Articles page explorer with topic chips + query-string syncing.
-- Dynamic article route at `/articles/[slug]` with `generateStaticParams`, `dynamicParams=true`, and route-level `generateMetadata()`.
-- Corvus chat experience with streaming OpenAI responses and image generation.
-- Contact form delivery through the Resend API.
-- SEO endpoints: sitemap, robots, RSS feed metadata.
-
-## Tech Stack
-
-- [Next.js 16](https://nextjs.org/) (App Router)
-- [React 19](https://react.dev/)
-- [TypeScript 5](https://www.typescriptlang.org/)
-- [Tailwind CSS 4](https://tailwindcss.com/)
-- [GSAP](https://gsap.com/) for motion primitives and choreography
-- [Headless UI](https://headlessui.com/) (menu/popover primitives)
-- [Resend](https://resend.com/) for contact-form delivery, transactional email, and sign-up email capture
-- [OpenAI API](https://platform.openai.com/docs/api-reference) for Corvus chat + image generation
-- [Heroicons](https://heroicons.com/) + project-local icon components
-
-## Quick Features
-
-- Home page with article highlights, contact card, and work/resume summary.
-- Reusable motion system for headline, reveal, parallax, and hover animations.
-- Articles route with full-text + topic filtering.
-- Global header modal search (`Cmd/Ctrl + K`).
-- Corvus AI chat with streaming text and image generation modes.
-- Corvus input supports multiline prompts (`Enter` to send, `Shift+Enter` for newline).
-- Resend-backed contact workflow (home-page newsletter UI is currently hidden).
-- SEO routes: sitemap, robots, and feed endpoint metadata.
-
-## Environment Variables
-
-Start from `.env.example` and copy into `.env.local` (or `.env`) in project root.
+## Getting started
 
 ```bash
-cp .env.example .env.local
+nvm use                      # or fnm/asdf — .nvmrc pins Node 24
+corepack enable              # honors the pnpm@11 packageManager pin
+cp .env.example .env.local   # then fill in what you need (comments explain each var)
+pnpm install
+pnpm migrate                 # applies the committed migration chain to DATABASE_URI
+pnpm dev                     # http://localhost:3000 · admin at /admin
 ```
 
-This file includes the minimal runtime env contract. Full Notion CMS setup and operational details live in `docs/NOTION_CMS.md`.
+`DATABASE_URI` decides your database. Local dev works against any Postgres 16+
+(the CI image is `pgvector/pgvector:pg16`); staging/production use Supabase's
+transaction-mode pooler string. The app boots with only a database — Blob, Clerk,
+AI, Resend, Sentry, and Turnstile are all env-gated and simply stay inert until
+their keys exist.
 
-### Required
+## Scripts
 
-```bash
-NEXT_PUBLIC_SITE_URL=...
-OPENAI_API_KEY=...
-RESEND_API_KEY=...
-```
+`pnpm dev` / `pnpm build` / `pnpm start` — the Next lifecycle (Turbopack dev).
+`pnpm typecheck` · `pnpm lint` · `pnpm format` / `format:check` — static gates.
+`pnpm test` (unit) · `pnpm test:storybook` (browser-mode interaction + a11y) ·
+`pnpm test:e2e` (Playwright, runs under reduced motion) · `pnpm eval` /
+`pnpm eval:ci` (Corvus behavior against a threshold).
+`pnpm migrate` / `migrate:create` — Payload migrations (committed, the schema
+source of truth; dev push is opt-in via `PAYLOAD_DB_PUSH`).
+`pnpm generate:types` / `generate:importmap` — regenerate the committed Payload
+artifacts after any schema/plugin change (CI fails on drift).
+`pnpm storybook` — component workbench. `pnpm payload` — Payload CLI.
 
-### Optional
+## How content works
 
-```bash
-# Segment for captured sign-up emails (Clerk webhook)
-RESEND_CONTACT_SEGMENT_ID=...
+Payload → typed repo modules (`src/lib/cms/*Repo.ts`) → React Server Components.
+Editors compose pages from a block library (containers with backgrounds/full-bleed,
+columns with sticky rails, prose, media, carousels with five effects, testimonials,
+stats, FAQs, …) plus a hero group (`blank | none | standard | shader | image |
+carousel`). Collection hooks pair `revalidateTag` with `revalidatePath`, so admin
+edits go live in seconds without a redeploy. Articles carry reader actions —
+Copy page (Markdown), Share targets, and branded/generated OG cards — all
+CMS-configurable.
 
-# Contact form routing overrides
-CONTACT_TO_EMAIL=you@example.com
-CONTACT_FROM_EMAIL=no-reply@example.com
-```
+## Corvus
 
-### CMS switch
+`/corvus` is a general-purpose assistant (Brandon's work as home base, not a
+fence) on the Vercel AI SDK. The system prompt is **server-enforced**; anonymous
+visitors get a few free messages (Upstash-backed, per-IP) before a Clerk sign-in
+gate; signed-in users get higher ceilings keyed by user id. Voice dictation ships
+as progressive enhancement via the Web Speech API (Chrome/Edge/Safari; graceful
+notes elsewhere). Behavior is eval-gated in CI (`pnpm eval:ci`).
 
-```bash
-# local = fallback mode (hard-coded providers + no local article corpus)
-# notion = Notion CMS providers
-CMS_PROVIDER=local
-```
+## Branches & deployment
 
-### Notion CMS automation/auth (when `CMS_PROVIDER=notion`)
+GitFlow: `master` → production ([brandonperfetti.com](https://brandonperfetti.com));
+`develop` → integration; the active QA branch serves
+[staging.brandonperfetti.com](https://staging.brandonperfetti.com). Vercel builds
+with corepack-pinned pnpm; migrations run on deploy (`pnpm migrate && pnpm build`).
+CI runs quality (lint/types/unit) on every branch push, and Build·E2E + Evalite on
+trunk pushes and PRs. The staging database gets nightly encrypted `pg_dump`
+backups via GitHub Actions.
 
-```bash
-# Manual sync endpoint auth
-CMS_REVALIDATE_SECRET=...
-# Cron endpoint auth
-CRON_SECRET=...
-# Webhook auth/verification
-NOTION_WEBHOOK_VERIFICATION_TOKEN=...
-NOTION_WEBHOOK_SECRET=...
-```
+## Documentation map
 
-For full Notion configuration (all `NOTION_*` env vars, webhook/revalidate secrets, projection sync, runbooks), see:
-
-- `docs/NOTION_CMS.md`
-
-### Tech Curation (Notion)
-
-The `Portfolio CMS - Tech` database is maintained by the tech curation cron using GitHub signals.
-
-- Recency is gated with `GITHUB_TECH_MAX_REPO_AGE_MONTHS` (default: `24`) so old repos do not dominate current stack telemetry.
-- Auto-create remains catalog-driven (high-confidence technologies only), then rows are enriched with summary/reference/logo and Cloudinary-hosted `Logo URL`.
-- Site visibility is controlled in Notion:
-  - `Status = Published` to show on the site.
-  - `Featured = true` only for highlighted tech sections.
-
-## Local Development
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Run standard dev server:
-
-```bash
-npm run dev
-```
-
-App default URL: [http://localhost:3000](http://localhost:3000)
-
-## Build and Run
-
-Production build:
-
-```bash
-npm run build
-```
-
-Start production server:
-
-```bash
-npm run start
-```
-
-Lint:
-
-```bash
-npm run lint
-```
-
-Uses ESLint flat config in `eslint.config.mjs` (not legacy `.eslintrc*`).
-
-Format:
-
-```bash
-npm run format
-```
-
-Format check (no writes):
-
-```bash
-npm run format:check
-```
-
-Type check:
-
-```bash
-npm run typecheck
-```
-
-## Testing
-
-Unit/integration tests (Vitest):
-
-```bash
-npm run test
-```
-
-Watch mode:
-
-```bash
-npm run test:watch
-```
-
-Coverage:
-
-```bash
-npm run test:coverage
-```
-
-E2E smoke (Playwright):
-
-```bash
-npm run test:e2e
-```
-
-## Git Hooks
-
-This repo uses Husky hooks for local quality gates:
-
-- `pre-commit`: `npm run format:check` and `npm run lint`
-- `pre-push`: `npm run typecheck` and `npm run test`
-
-Hooks are installed via:
-
-```bash
-npm run prepare
-```
-
-## Documentation Map
-
-This repo uses progressive disclosure docs for coding agents and collaborators.
-
-Primary instruction entrypoint:
-
-- `.github/copilot-instructions.md`
-
-Compatibility entry files (symlinked):
-
-- `AGENTS.md`
-- `CLAUDE.md`
-
-Detailed topic docs live in `docs/`:
-
-- `docs/ARCHITECTURE.md`
-- `docs/FEATURES.md`
-- `docs/STYLING.md`
-- `docs/STATE.md`
-- `docs/NAVIGATION.md`
-- `docs/SEO.md`
-- `docs/DEPENDENCIES.md`
-- `docs/WORKFLOW.md`
-- `docs/ACCESSIBILITY.md`
-- `docs/TESTING.md`
-- `docs/MAINTENANCE.md`
-- `docs/DOCUMENTATION.md`
-- `docs/NOTION_CMS.md`
-- `docs/notion-integration.md`
-- `docs/agent-notion-operations.md`
-
-If you need implementation internals first, start with:
-
-- `docs/ARCHITECTURE.md`
-- `docs/STATE.md`
-- `docs/NAVIGATION.md`
+`AGENTS.md` / `CLAUDE.md` symlink to `.github/copilot-instructions.md` — the thin
+top layer (invariants + index) for AI agents and humans alike. Depth lives in
+`docs/`: `ARCHITECTURE`, `PAYLOAD` (collections/blocks/migrations/MCP), `FEATURES`,
+`NAVIGATION`, `STATE`, `STYLING`, `DESIGN`, `AI` (Corvus/guardrails/evals), `AUTH`,
+`CONTENT_WORKFLOW` + `CONTENT_STYLE`, `SEO`, `DEPENDENCIES`, `WORKFLOW`,
+`ACCESSIBILITY`, `TESTING`, `MAINTENANCE` (upkeep + watchpoints + the production
+promotion checklist), and `DOCUMENTATION` (these standards).
 
 ## Troubleshooting
 
-### Resend API errors
-
-If contact-form delivery fails, verify `RESEND_API_KEY` is set and the from-address domain is verified in Resend (Domains tab).
-
-### Corvus API failures
-
-Confirm `OPENAI_API_KEY` is present and valid. Chat and image endpoints are server-side and return explicit JSON errors for missing keys.
-If public Corvus routes start returning `429`/`403`, verify Corvus guardrail env settings (`CORVUS_*`) and `TURNSTILE_SECRET_KEY` behavior.
-If memory pressure is observed under high-cardinality traffic, tune optional in-memory guardrail controls: `CORVUS_GUARDRAILS_MAX_BUCKETS` and `CORVUS_GUARDRAILS_BUCKET_TTL_MS`.
+- **Admin misbehaves (empty SEO tab, dead editor)** — stale generated artifacts:
+  `pnpm generate:types && pnpm generate:importmap` (CI gates both).
+- **Pre-push fails on `.next` types after a route rename** — stale dev-server
+  output: `rm -rf .next` and retry.
+- **pnpm "ignored builds" error** — a new dep's postinstall needs an
+  `allowBuilds` entry in `pnpm-workspace.yaml`.
+- **Lexical error #17 on an article** — an editor feature for a migrated node
+  type was removed; see `docs/PAYLOAD.md`.
+- More in `docs/MAINTENANCE.md` (incl. the >2MB list-cache watchpoint and the
+  cacheComponents migration that retires it).
