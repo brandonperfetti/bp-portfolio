@@ -32,6 +32,12 @@ vi.mock('streamdown', () => ({
     <div>{children}</div>
   ),
 }))
+// CorvusChat's ClerkFirstNameProbe calls useUser when
+// NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is set (local/CI); rendered bare here with
+// no <ClerkProvider> it would throw, so mock it (null user = anonymous path).
+vi.mock('@clerk/nextjs', () => ({
+  useUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
+}))
 
 beforeEach(() => {
   // jsdom has no Element#scrollTo; the component scroll-follows messages.

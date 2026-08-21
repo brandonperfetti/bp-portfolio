@@ -38,6 +38,14 @@ vi.mock('streamdown', () => ({
     <div>{children}</div>
   ),
 }))
+// CorvusChat mounts a ClerkFirstNameProbe (calling useUser) whenever
+// NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is set — which it is in local/CI envs but
+// not the isolated build sandbox. Rendering the component bare (no
+// <ClerkProvider>) then makes useUser throw, so mock it here; a null user
+// exercises the anonymous, nameless greeting path.
+vi.mock('@clerk/nextjs', () => ({
+  useUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
+}))
 vi.mock('@/lib/motion/usePrefersReducedMotion', () => ({
   usePrefersReducedMotion: () => true,
 }))
