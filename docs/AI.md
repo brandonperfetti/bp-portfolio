@@ -20,7 +20,19 @@
   by IP. Without Upstash env, dev fails open (never ship that state to
   production).
 - `guardrails.ts`: shared quota/limit application; kill switches
-  `HERMES_DISABLE_CHAT` / `HERMES_DISABLE_IMAGE`.
+  `HERMES_DISABLE_CHAT` / `HERMES_DISABLE_IMAGE`. The in-memory
+  `applyRateLimit`/`applyDailyQuota` here are the DEV-ONLY fallback for
+  `limiter.ts` — not a prod path.
+- `chatGate.ts` (#74, folds #18): anonymous free-message soft-gate — a
+  CUMULATIVE per-IP count in Upstash (default 3, `HERMES_ANON_FREE_MESSAGES`),
+  distinct from `limiter.ts`'s per-minute/daily RATE. The (N+1)th anonymous
+  chat request returns `{ code: 'sign_in_required' }` (HTTP 401) BEFORE the
+  model runs; the client (`HermesChat.tsx`) renders a Clerk sign-in prompt,
+  not an error. Signed-in users skip the free-gate and are keyed by `userId`
+  (not IP) in `limiter.ts` at a higher ceiling
+  (`HERMES_CHAT_RATE_LIMIT_PER_MINUTE_AUTHED` / `HERMES_CHAT_DAILY_QUOTA_AUTHED`).
+  Every decision is server-resolved (Clerk session + trusted IP), never the
+  request body.
 - Turnstile (wired 2026-08-10, env-gated): the contact form enforces
   whenever `TURNSTILE_SECRET_KEY` + `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
   exist; chat is armed separately via the `TURNSTILE_PROTECT_CHAT` /

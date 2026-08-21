@@ -12,6 +12,21 @@ import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
 
 /**
+ * Matches the `code: 'sign_in_required'` body the chat route returns once an
+ * anonymous visitor has used their free messages (#74). `useChat`'s fetch
+ * transport turns a non-ok response into `new Error(await response.text())`
+ * (the AI SDK's `DefaultChatTransport`), so the JSON body's stringified text
+ * — not a parsed object — is all `error.message` ever holds; matching a
+ * substring here is the same pattern the rate-limit branch below already
+ * uses against the 429 route's body text.
+ */
+const SIGN_IN_REQUIRED_CODE = 'sign_in_required'
+
+function isSignInRequiredError(error: Error | undefined): boolean {
+  return Boolean(error?.message?.includes(SIGN_IN_REQUIRED_CODE))
+}
+
+/**
  * Hermes chat client on `useChat` + streamdown (replaces the v3 manual
  * `ReadableStream` reader over a hand-rolled NDJSON protocol).
  *
@@ -45,6 +60,11 @@ export default function HermesChat() {
   })
 
   const isBusy = status === 'submitted' || status === 'streaming'
+  // Friendly sign-in prompt, not an error: the server rejected this message
+  // because the anonymous free-message budget is spent (#74). Composer stays
+  // disabled while this is showing — resubmitting would just hit the same
+  // gate again.
+  const signInRequired = isSignInRequiredError(error)
 
   // `/` focuses the chat input from anywhere on the page (v3 behavior).
   useEffect(() => {
@@ -86,7 +106,7 @@ export default function HermesChat() {
       inputRef.current?.focus()
       return
     }
-    if (isBusy) return
+    if (isBusy || signInRequired) return
     // Tokens are single-use, so each send fetches its own; getToken()
     // resolves null instantly when chat protection is disarmed, keeping
     // the default path free of any Turnstile latency.
@@ -100,7 +120,7 @@ export default function HermesChat() {
     })()
     setInput('')
     requestAnimationFrame(autosize)
-  }, [autosize, getToken, input, isBusy, sendMessage])
+  }, [autosize, getToken, input, isBusy, sendMessage, signInRequired])
 
   const copyMessage = useCallback(async (id: string, text: string) => {
     try {
@@ -116,6 +136,15 @@ export default function HermesChat() {
     message.parts
       .map((part) => (part.type === 'text' ? part.text : ''))
       .join('')
+
+  // Bring the visitor back to wherever they were chatting from. Read at
+  // render time (this block only ever shows after a client-side error, well
+  // past hydration) rather than hardcoding /hermes, since HermesChat could
+  // be mounted elsewhere.
+  const signInRedirectUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.pathname}${window.location.search}`
+      : '/hermes'
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100 p-4 dark:border-zinc-700/40">
@@ -182,14 +211,35 @@ export default function HermesChat() {
             Hermes is thinking…
           </p>
         )}
-        {error && (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-            {error.message.includes('429') ||
-            error.message.toLowerCase().includes('rate')
-              ? 'Hermes needs a breather — you have hit the rate limit. Try again in a minute.'
-              : 'Something went wrong reaching Hermes. Please try again.'}
-          </p>
-        )}
+        {error &&
+          (signInRequired ? (
+            // Friendly, on-brand prompt — not framed as an error. Mirrors
+            // the gated-article sign-in CTA (articles/[slug]/page.tsx) so
+            // the "sign in, it's free" pattern reads the same everywhere on
+            // the site. No entrance animation to gate behind reduced
+            // motion: this block is static from the moment it mounts.
+            <div className="rounded-2xl border border-zinc-200 p-4 text-center dark:border-zinc-700/60">
+              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                You&apos;ve used your free Hermes messages.
+              </p>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                Sign in (it&apos;s free) to keep chatting.
+              </p>
+              <a
+                href={`/sign-in?redirect_url=${encodeURIComponent(signInRedirectUrl)}`}
+                className="mt-3 inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none"
+              >
+                Sign in to continue
+              </a>
+            </div>
+          ) : (
+            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+              {error.message.includes('429') ||
+              error.message.toLowerCase().includes('rate')
+                ? 'Hermes needs a breather — you have hit the rate limit. Try again in a minute.'
+                : 'Something went wrong reaching Hermes. Please try again.'}
+            </p>
+          ))}
       </div>
 
       <form
@@ -203,6 +253,7 @@ export default function HermesChat() {
           ref={inputRef}
           value={input}
           rows={1}
+          disabled={signInRequired}
           onChange={(event) => {
             setInput(event.target.value)
             autosize()
@@ -213,13 +264,15 @@ export default function HermesChat() {
               submit()
             }
           }}
-          placeholder="Ask Hermes..."
+          placeholder={
+            signInRequired ? 'Sign in to keep chatting…' : 'Ask Hermes...'
+          }
           aria-label="Message Hermes"
-          className="min-h-[42px] flex-1 resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-base text-zinc-900 placeholder:text-zinc-400 focus:ring-2 focus:ring-teal-500 focus:outline-none sm:text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          className="min-h-[42px] flex-1 resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-base text-zinc-900 placeholder:text-zinc-400 focus:ring-2 focus:ring-teal-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
         />
         <button
           type="submit"
-          disabled={isBusy}
+          disabled={isBusy || signInRequired}
           className="inline-flex items-center gap-1.5 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <span>Send</span>

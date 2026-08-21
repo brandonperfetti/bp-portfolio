@@ -132,6 +132,43 @@ describe('HermesChat', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/rate limit/i)
   })
 
+  it('shows the sign-in prompt, not the red error alert, when the anon free-message gate rejects (#74)', () => {
+    // useChat's fetch transport turns a non-ok response into
+    // `new Error(await response.text())` — the route's JSON body text ends
+    // up verbatim in `error.message`, exactly like the 429 case above.
+    chatState.status = 'error'
+    chatState.error = new Error(
+      JSON.stringify({
+        error:
+          "You've used your free Hermes messages — sign in to keep chatting.",
+        code: 'sign_in_required',
+      }),
+    )
+    render(<HermesChat />)
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/used your free hermes messages/i),
+    ).toBeInTheDocument()
+
+    const signInLink = screen.getByRole('link', {
+      name: /sign in to continue/i,
+    })
+    expect(signInLink).toHaveAttribute(
+      'href',
+      expect.stringContaining('/sign-in?redirect_url='),
+    )
+  })
+
+  it('disables the composer while the sign-in prompt is showing, so a gated attempt cannot be typed', () => {
+    chatState.status = 'error'
+    chatState.error = new Error(JSON.stringify({ code: 'sign_in_required' }))
+    render(<HermesChat />)
+
+    expect(screen.getByLabelText('Message Hermes')).toBeDisabled()
+    expect(screen.getByRole('button', { name: /send/i })).toBeDisabled()
+  })
+
   it('renders assistant messages with a working copy button', async () => {
     chatState.messages = [assistantMessage('m1', 'Hello from Hermes')]
     const writeText = vi.fn().mockResolvedValue(undefined)

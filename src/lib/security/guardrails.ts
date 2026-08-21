@@ -54,8 +54,14 @@ export function getStores(): GuardrailStores {
   }
 
   if (!globalForGuardrails.__bpHermesGuardrails) {
-    // TODO(hermes-guardrails): Replace in-memory buckets with a distributed
-    // store (e.g., Redis/Upstash) for stable limits across serverless restarts.
+    // Stale-TODO refresh (#74): this used to read "replace with a
+    // distributed store" — that's already done. `checkChatLimits`
+    // (@/lib/security/limiter) is Upstash-backed whenever
+    // UPSTASH_REDIS_REST_URL/TOKEN are set; `applyRateLimit`/
+    // `applyDailyQuota` below are its INTENTIONAL dev-only, per-instance
+    // fallback, used only when Upstash isn't configured. The #74 anon
+    // free-message gate (@/lib/security/chatGate) follows the same
+    // Upstash-with-in-memory-dev-fallback shape.
     globalForGuardrails.__bpHermesGuardrails = {
       rateBuckets: new Map<string, RateBucket>(),
       dailyBuckets: new Map<string, DailyBucket>(),
