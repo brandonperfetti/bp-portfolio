@@ -323,7 +323,7 @@ export default function CorvusChat({
         />
       </div>
 
-      <Conversation>
+      <Conversation aria-busy={isBusy || undefined}>
         <ConversationContent>
           {messages.length === 0 && (
             <ConversationEmptyState
@@ -476,6 +476,11 @@ export default function CorvusChat({
               data-listening={speech.listening ? 'true' : undefined}
               aria-pressed={speech.listening}
               aria-label={speech.listening ? 'Stop' : 'Speak'}
+              aria-describedby={
+                speech.permissionDenied || speech.unavailable
+                  ? 'corvus-mic-note'
+                  : undefined
+              }
               disabled={signInRequired}
               onClick={toggleListening}
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
@@ -495,6 +500,7 @@ export default function CorvusChat({
         </div>
         {(speech.permissionDenied || speech.unavailable) && (
           <p
+            id="corvus-mic-note"
             data-slot="composer-mic-note"
             className="mt-1.5 px-1 text-xs text-zinc-500 dark:text-zinc-400"
           >

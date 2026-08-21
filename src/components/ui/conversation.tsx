@@ -43,7 +43,12 @@ function useStickToBottom() {
   const isAtBottomRef = React.useRef(true)
   const prefersReducedMotion = usePrefersReducedMotion()
   const prefersReducedMotionRef = React.useRef(prefersReducedMotion)
-  prefersReducedMotionRef.current = prefersReducedMotion
+  // Latest-value ref updated in an effect (not during render): renders can
+  // be discarded/replayed under concurrent rendering, so a render-phase
+  // write could record a value for UI that never commits.
+  React.useEffect(() => {
+    prefersReducedMotionRef.current = prefersReducedMotion
+  }, [prefersReducedMotion])
 
   const setAtBottom = React.useCallback((value: boolean) => {
     isAtBottomRef.current = value
@@ -103,9 +108,22 @@ function Conversation({
     <ConversationContext.Provider value={stick}>
       <div
         ref={stick.scrollRef}
-        aria-live="polite"
+        // role="log" (an implicitly polite, additions-only live region)
+        // instead of aria-live on the whole scroll container: paired with
+        // aria-atomic={false} and the aria-busy the consumer sets while a
+        // response is streaming, a screen reader announces each message once
+        // when it completes — not every token of a growing reply.
+        role="log"
+        aria-atomic={false}
+        // Programmatically focusable so ConversationScrollButton can hand
+        // focus somewhere real before it unmounts (it renders only while
+        // scrolled up); not in the tab order.
+        tabIndex={-1}
         data-slot="conversation"
-        className={cn('relative min-h-0 flex-1 overflow-auto', className)}
+        className={cn(
+          'relative min-h-0 flex-1 overflow-auto outline-none',
+          className,
+        )}
         {...props}
       >
         {children}
@@ -195,7 +213,7 @@ function ConversationScrollButton({
   className,
   ...props
 }: React.ComponentProps<'button'>) {
-  const { isAtBottom, scrollToBottom } = useConversationContext(
+  const { isAtBottom, scrollToBottom, scrollRef } = useConversationContext(
     'ConversationScrollButton',
   )
 
@@ -204,7 +222,13 @@ function ConversationScrollButton({
   return (
     <button
       type="button"
-      onClick={() => scrollToBottom()}
+      onClick={() => {
+        // Reaching the bottom unmounts this button (isAtBottom flips true),
+        // which would drop keyboard focus to document.body — move it to the
+        // (tabIndex=-1) viewport first so focus survives the unmount.
+        scrollToBottom()
+        scrollRef.current?.focus({ preventScroll: true })
+      }}
       data-slot="conversation-scroll-button"
       aria-label="Scroll to latest message"
       className={cn(
