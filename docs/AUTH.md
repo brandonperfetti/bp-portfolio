@@ -23,6 +23,10 @@
     bodies are excluded from the payload for anonymous viewers — a teaser +
     sign-in prompt renders instead. Client `<Protect>`-style components are
     UX only.
+- `getViewer()` returns `{ isAuthenticated, userId }` (`userId` added #74). The
+  Corvus chat route is the first consumer keying a rate limit by Clerk `userId`
+  — anonymous visitors hit an IP-keyed free-taste gate + abuse limit, signed-in
+  users a `userId`-keyed higher ceiling (see `docs/AI.md`).
 - **Billing flip (do not build until asked):** enable Clerk Billing, replace
   the `canAccess` internals with plan/feature checks (`has({ plan })`), and
   the field seams light up. `// TODO(brandon): enable Clerk Billing` marks

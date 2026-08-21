@@ -58,8 +58,57 @@ const nextConfig = {
         destination: '/',
         permanent: true,
       },
+      // Corvus was renamed from Hermes (#77); preserve any inbound /hermes links.
+      {
+        source: '/hermes',
+        destination: '/corvus',
+        permanent: true,
+      },
     ]
   },
 }
 
-export default withPayload(nextConfig)
+const configuredNextConfig = withPayload(nextConfig)
+
+// Sentry (#73) is entirely env-gated on a DSN being present, mirroring the
+// Resend/Blob pattern above `db:`/`plugins:` in `src/payload.config.ts`.
+// With no NEXT_PUBLIC_SENTRY_DSN/SENTRY_DSN, `@sentry/nextjs` is never even
+// imported (dynamic import below, only reached inside the `if`) — local dev
+// and CI build with zero Sentry build-time instrumentation (no tunnel
+// rewrite, no source-map upload attempt, no added bundle weight) and don't
+// need the dependency installed at all to boot, not just a runtime no-op.
+const sentryDsnConfigured = Boolean(
+  process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN,
+)
+
+let finalNextConfig = configuredNextConfig
+
+if (sentryDsnConfigured) {
+  const { withSentryConfig } = await import('@sentry/nextjs')
+  finalNextConfig = withSentryConfig(configuredNextConfig, {
+    org: process.env.SENTRY_ORG,
+    project: process.env.SENTRY_PROJECT,
+    // CI/Vercel-only secret; the plugin skips source-map upload
+    // gracefully (a warning, not a build failure) when it's absent, so a
+    // DSN-configured-but-token-less preview build still succeeds.
+    authToken: process.env.SENTRY_AUTH_TOKEN,
+    // Route browser events through our own origin so ad-blockers that
+    // block *.sentry.io/ingest don't eat them (#73 acceptance).
+    tunnelRoute: '/monitoring',
+    // Only Sentry's own upload-progress logging is noisy in a local
+    // `next build`; let CI see it.
+    silent: !process.env.CI,
+    widenClientFileUpload: true,
+    // Never fail the app build over a Sentry upload hiccup (network blip,
+    // misconfigured token) — warn and continue.
+    errorHandler: (error) => {
+      console.warn('[sentry] next.config build step warning:', error)
+    },
+    // Sentry's own build-time telemetry about this plugin's usage — not
+    // app telemetry, not user data. Off; cosmetic (silences the
+    // "Sending telemetry data" build log line).
+    telemetry: false,
+  })
+}
+
+export default finalNextConfig

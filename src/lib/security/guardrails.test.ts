@@ -6,7 +6,7 @@ import {
 } from '@/lib/security/guardrails'
 
 /**
- * Regression suite for the Hermes chat source guard.
+ * Regression suite for the Corvus chat source guard.
  *
  * The staging incident (2026-08): staging keeps `NEXT_PUBLIC_SITE_URL`
  * pointed at production for SEO canonicals, so an env-only allowlist
@@ -62,7 +62,7 @@ describe('isAllowedRequestSource', () => {
   it('accepts a valid Referer when Origin is absent', () => {
     const request = makeRequest({
       'x-forwarded-host': 'staging.brandonperfetti.com',
-      referer: 'https://staging.brandonperfetti.com/hermes',
+      referer: 'https://staging.brandonperfetti.com/corvus',
     })
     expect(isAllowedRequestSource(request)).toBe(true)
   })

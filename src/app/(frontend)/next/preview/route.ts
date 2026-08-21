@@ -27,7 +27,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     // env var not scoped to the custom "staging" environment — the exact
     // failure CMS_REVALIDATE_SECRET had), the admin bakes an empty secret
     // into the preview URL and every preview 403s with no signal in the
-    // runtime logs. Same class as the Hermes source-guard incident:
+    // runtime logs. Same class as the Corvus source-guard incident:
     // env-coupled behavior that no local test or CI run can catch.
     if (!process.env.PREVIEW_SECRET) {
       payload.logger.error(

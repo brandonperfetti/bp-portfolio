@@ -167,3 +167,397 @@
     transform: translateX(-50%);
   }
 }
+
+/* ShimmeringText (src/components/ui/shimmering-text.tsx): sweeps a lighter
+ * band across background-clip:text. Applied only when the component's own
+ * usePrefersReducedMotion() check is false; the @media guard here is a
+ * belt-and-suspenders backstop for any consumer that applies the class
+ * without going through the component's JS gate. */
+@keyframes text-shimmer {
+  from {
+    background-position: 150% center;
+  }
+  to {
+    background-position: -50% center;
+  }
+}
+
+.animate-text-shimmer {
+  animation: text-shimmer 2.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-text-shimmer {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------------
+ * Corvus visual identity ("star-atlas night", #78) — scoped entirely to
+ * `.corvus-surface`, the wrapper only `src/app/(frontend)/corvus/page.tsx`
+ * applies. Every rule below either targets `.corvus-surface`/its
+ * descendants, or is a uniquely-named class/keyframe used only by the
+ * Corvus marks — nothing here changes appearance anywhere else on the site,
+ * including the #79 chat components' Storybook stories, which render
+ * outside `.corvus-surface` and keep their original zinc/teal look. */
+
+.corvus-surface {
+  /* Dark palette — the default look; light-theme override follows below,
+   * keyed off the same `.dark` class next-themes toggles on <html>. Corvus
+   * is aligned to the SITE's own palette (teal accent + zinc neutrals, read
+   * from Button.tsx and the shadcn tokens above) rather than a standalone
+   * atlas theme, so the chat reads as part of the site (Brandon: the gold
+   * "clashes with the teal"). The chat surface is a border on the page with
+   * no fill; --corvus-panel is only the subtle raised surface (gate, scroll
+   * pill). */
+  --corvus-ground: #000000; /* site body is bg-black */
+  --corvus-panel: rgb(255 255 255 / 4%); /* subtle raised surface only */
+  --corvus-ink: #fafafa; /* zinc-50 */
+  --corvus-muted: #a1a1aa; /* zinc-400 */
+  /* Accent: text/icon reads teal-400 in dark like the nav's active link;
+   * fills use teal-700 → teal-600 hover, identical to the primary Button. */
+  --corvus-accent: #2dd4bf; /* teal-400 — text/icon */
+  --corvus-accent-hover: #5eead4; /* teal-300 */
+  --corvus-accent-ink: #ffffff; /* text on a teal fill */
+  --corvus-accent-solid: #0f766e; /* teal-700 — filled CTA (Button primary) */
+  --corvus-accent-solid-hover: #0d9488; /* teal-600 */
+  --corvus-border: rgb(255 255 255 / 10%); /* shadcn --border (dark) */
+  --corvus-status: #10b981; /* emerald-500 online dot */
+
+  /* Message bubbles (Option A): user is the site's teal; assistant is a
+   * neutral zinc panel — so the accent lives in the conversation the same
+   * way it lives in the site's buttons, and the assistant bubble never
+   * competes with it. */
+  --corvus-bubble-assistant: #27272a; /* zinc-800 */
+  --corvus-bubble-assistant-text: var(--corvus-ink);
+  --corvus-bubble-user: #0f766e; /* teal-700 */
+  --corvus-bubble-user-text: #ffffff;
+
+  /* Composer pill field. */
+  --corvus-input-bg: rgb(255 255 255 / 4%);
+  --corvus-input-border: rgb(255 255 255 / 12%);
+
+  color-scheme: dark;
+  color: var(--corvus-ink);
+  /* No font-family override — the chat inherits the site's default font so it
+   * reads as part of the site (Brandon: the custom display/body/mono fonts
+   * clashed, like the gold did). */
+}
+
+:root:not(.dark) .corvus-surface {
+  /* Light-theme override — zinc neutrals on the site's zinc-50 page, teal-700
+   * text/icon accent (the nav's light active-link color). --corvus-accent-ink
+   * (#fff), --corvus-accent-solid (teal-700), and --corvus-status are NOT
+   * redefined, so they inherit the dark values above — teal fills and their
+   * white text are identical in both themes, matching the primary Button. */
+  --corvus-ground: #fafafa;
+  --corvus-panel: #f4f4f5; /* zinc-100 — subtle raised surface only */
+  --corvus-ink: #18181b; /* zinc-900 */
+  --corvus-muted: #71717a; /* zinc-500 */
+  --corvus-accent: #0f766e; /* teal-700 — text/icon */
+  --corvus-accent-hover: #0d9488; /* teal-600 */
+  --corvus-border: #e4e4e7; /* zinc-200 (shadcn --border light) */
+
+  /* Bubbles (Option A): user is the site's teal (inherited), assistant is a
+   * neutral zinc-100 panel that lifts off the page. */
+  --corvus-bubble-assistant: #f4f4f5; /* zinc-100 */
+  --corvus-bubble-assistant-text: var(--corvus-ink);
+  --corvus-bubble-user: #0f766e; /* teal-700 */
+  --corvus-bubble-user-text: #ffffff;
+
+  --corvus-input-bg: #ffffff;
+  --corvus-input-border: #e4e4e7;
+
+  color-scheme: light;
+}
+
+.corvus-surface kbd {
+  border-radius: 0.25rem;
+  border: 1px solid var(--corvus-border);
+  padding: 0 0.25rem;
+  color: var(--corvus-muted);
+}
+
+/* Focus rings read gold on the atlas surface instead of the sitewide teal
+ * set in @layer base above — unlayered here so it wins regardless of
+ * selector specificity. */
+.corvus-surface
+  :where(
+    a,
+    button,
+    input,
+    textarea,
+    select,
+    summary,
+    [role='button'],
+    [tabindex]:not([tabindex='-1'])
+  ):focus-visible {
+  outline-color: var(--corvus-accent);
+}
+
+/* Chat card shell (CorvusChat.tsx's root element): a border on the page, no
+ * fill of its own — the same treatment the rest of the site uses (bordered
+ * nav pill, the old chat surface) so the chat doesn't read as a foreign
+ * panel dropped onto the page. The teal user bubbles and neutral assistant
+ * bubbles supply the contrast inside; the composer/gate get their own subtle
+ * raised surface (--corvus-panel). */
+.corvus-surface [data-slot='chat-card'] {
+  border-color: var(--corvus-border);
+  background-color: transparent;
+}
+
+/* Compact in-card agent header: raven avatar, name (h1), subtitle, status
+ * dot. Replaces the old separate hero-style header + constellation backdrop
+ * the page used to render. */
+.corvus-surface [data-slot='agent-header'] {
+  border-color: var(--corvus-border);
+}
+
+.corvus-surface [data-slot='agent-avatar'] {
+  background: radial-gradient(
+    circle at 35% 30%,
+    color-mix(in srgb, var(--corvus-accent) 22%, transparent),
+    color-mix(in srgb, var(--corvus-accent) 5%, transparent)
+  );
+  border: 1px solid color-mix(in srgb, var(--corvus-accent) 30%, transparent);
+  color: var(--corvus-accent);
+}
+
+.corvus-surface [data-slot='agent-name'] {
+  color: var(--corvus-ink);
+}
+
+.corvus-surface [data-slot='agent-subtitle'] {
+  color: var(--corvus-muted);
+}
+
+.corvus-surface [data-slot='agent-status'] {
+  background-color: var(--corvus-status);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--corvus-status) 55%, transparent);
+}
+
+/* Empty-state (idle) intro: raven mark, dynamic greeting, helper copy. */
+.corvus-surface [data-slot='conversation-empty-state-icon'] {
+  color: var(--corvus-accent);
+}
+
+.corvus-surface [data-slot='conversation-empty-state-title'] {
+  color: var(--corvus-ink);
+  font-size: 1.1875rem;
+  font-weight: 600;
+}
+
+.corvus-surface [data-slot='conversation-empty-state-description'] {
+  color: var(--corvus-muted);
+}
+
+/* "Scroll to latest" pill. */
+.corvus-surface [data-slot='conversation-scroll-button'] {
+  border-color: var(--corvus-border);
+  background-color: var(--corvus-panel);
+  color: var(--corvus-muted);
+}
+
+.corvus-surface [data-slot='conversation-scroll-button']:hover {
+  color: var(--corvus-accent);
+}
+
+/* Assistant mini-avatar beside its bubble. */
+.corvus-surface [data-slot='message-avatar'] {
+  background-color: color-mix(in srgb, var(--corvus-accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--corvus-accent) 30%, transparent);
+  color: var(--corvus-accent);
+}
+
+/* Message bubbles (Option A): the user bubble is the site's teal (teal-700,
+ * the primary Button color) with white text; the assistant bubble is a
+ * neutral zinc panel. Same left/right flow as before — only the palette is
+ * aligned to the site so the accent lives in the conversation the way it
+ * lives in the site's buttons. See the --corvus-bubble-* tokens above. */
+.corvus-surface [data-slot='message-content'][data-from='assistant'] {
+  background-color: var(--corvus-bubble-assistant);
+  color: var(--corvus-bubble-assistant-text);
+  border: 1px solid var(--corvus-border);
+  border-bottom-left-radius: 0.375rem;
+}
+
+.corvus-surface [data-slot='message-content'][data-from='user'] {
+  background-color: var(--corvus-bubble-user);
+  color: var(--corvus-bubble-user-text);
+  border-bottom-right-radius: 0.375rem;
+}
+
+.corvus-surface [data-slot='message-content'] .corvus-markdown {
+  color: inherit;
+}
+
+.corvus-surface [data-slot='message-content'] .corvus-markdown a {
+  color: var(--corvus-accent);
+  text-decoration-line: underline;
+  text-underline-offset: 2px;
+}
+
+.corvus-surface [data-slot='message-content'] .corvus-markdown code {
+  background-color: color-mix(in srgb, currentcolor 12%, transparent);
+  border-radius: 0.25rem;
+  padding: 0.05em 0.35em;
+}
+
+.corvus-surface [data-slot='message-copy-button'] {
+  color: var(--corvus-muted);
+}
+
+.corvus-surface [data-slot='message-copy-button']:hover {
+  color: var(--corvus-accent);
+}
+
+/* Thinking indicator ("Corvus is out looking…"): the shimmer sweep reads
+ * gold-on-panel instead of the default zinc sweep. Applies whether or not
+ * motion is animating — under reduced motion this just renders as a static,
+ * unmoving gold-tinted fill rather than a flat single color. */
+.corvus-surface [data-slot='shimmering-text'] {
+  background-image: linear-gradient(
+    to right,
+    var(--corvus-muted),
+    var(--corvus-accent),
+    var(--corvus-muted)
+  );
+  background-size: 200% 100%;
+}
+
+/* Sign-in gate (#74's copy, atlas-themed chrome only). */
+.corvus-surface [data-slot='sign-in-gate'] {
+  border-color: var(--corvus-border);
+  background-color: var(--corvus-panel);
+}
+
+.corvus-surface [data-slot='sign-in-gate-title'] {
+  color: var(--corvus-ink);
+}
+
+.corvus-surface [data-slot='sign-in-gate-body'] {
+  color: var(--corvus-muted);
+}
+
+.corvus-surface [data-slot='sign-in-gate-cta'] {
+  background-color: var(--corvus-accent-solid);
+  color: var(--corvus-accent-ink);
+}
+
+.corvus-surface [data-slot='sign-in-gate-cta']:hover {
+  background-color: var(--corvus-accent-solid-hover);
+}
+
+/* Overrides the CTA's own teal focus ring (a `ring-*` box-shadow, not the
+ * `:focus-visible` outline the sitewide rule above already re-colors) so
+ * the one focus indicator that opts out of the outline still reads gold. */
+.corvus-surface [data-slot='sign-in-gate-cta']:focus-visible {
+  box-shadow: none;
+  outline: 2px solid var(--corvus-accent);
+  outline-offset: 2px;
+}
+
+/* Composer — the ElevenLabs-style pill: one rounded field holding the text
+ * input, then two ghost icon buttons (mic, send). No big colored Send
+ * button, no teal. */
+.corvus-surface [data-slot='composer-field'] {
+  background-color: var(--corvus-input-bg);
+  border-color: var(--corvus-input-border);
+}
+
+.corvus-surface [data-slot='composer-field']:focus-within {
+  border-color: color-mix(in srgb, var(--corvus-accent) 50%, transparent);
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--corvus-accent) 12%, transparent);
+}
+
+.corvus-surface [data-slot='composer-input'] {
+  color: var(--corvus-ink);
+}
+
+.corvus-surface [data-slot='composer-input']::placeholder {
+  color: var(--corvus-muted);
+}
+
+.corvus-surface [data-slot='composer-mic'],
+.corvus-surface [data-slot='composer-send'] {
+  color: var(--corvus-muted);
+}
+
+.corvus-surface [data-slot='composer-mic']:not(:disabled):hover,
+.corvus-surface [data-slot='composer-send']:not(:disabled):hover {
+  color: var(--corvus-ink);
+  background-color: color-mix(in srgb, var(--corvus-muted) 12%, transparent);
+}
+
+.corvus-surface [data-slot='composer-send']:not(:disabled):hover {
+  color: var(--corvus-accent);
+}
+
+/* Listening state: the mic reads gold and gently pulses. Reduced-motion-safe
+ * — the media query below drops the animation to a flat gold fill. */
+.corvus-surface [data-slot='composer-mic'][data-listening='true'] {
+  color: var(--corvus-accent);
+  animation: corvus-mic-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes corvus-mic-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .corvus-surface [data-slot='composer-mic'][data-listening='true'] {
+    animation: none;
+  }
+}
+
+.corvus-surface [data-slot='composer-mic-note'] {
+  color: var(--corvus-muted);
+}
+
+/* ConstellationMark (src/components/corvus/ConstellationMark.tsx): gentle
+ * per-star opacity twinkle, applied when its `animate` prop (default true)
+ * is set. Pure CSS, so `prefers-reduced-motion: reduce` disables it below
+ * with no JS gate needed — the component's `animate` prop is a separate,
+ * independent off-switch. */
+.corvus-constellation-twinkle circle {
+  animation: corvus-twinkle 4.5s ease-in-out infinite;
+}
+
+.corvus-constellation-twinkle circle:nth-of-type(2) {
+  animation-delay: 0.6s;
+}
+
+.corvus-constellation-twinkle circle:nth-of-type(3) {
+  animation-delay: 1.3s;
+}
+
+.corvus-constellation-twinkle circle:nth-of-type(4) {
+  animation-delay: 2.1s;
+}
+
+.corvus-constellation-twinkle circle:nth-of-type(5) {
+  animation-delay: 2.8s;
+}
+
+@keyframes corvus-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .corvus-constellation-twinkle circle {
+    animation: none;
+  }
+}

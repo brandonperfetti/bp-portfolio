@@ -10,7 +10,7 @@ import { expect, test } from '@playwright/test'
  * contrast is checked against the rendered theme, which is why both themes
  * are swept.
  */
-const ROUTES = ['/', '/articles', '/tech', '/uses', '/hermes']
+const ROUTES = ['/', '/articles', '/tech', '/uses', '/corvus']
 const THEMES = ['light', 'dark'] as const
 
 /** Severities that fail the build (§13). */

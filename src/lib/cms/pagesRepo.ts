@@ -97,6 +97,11 @@ export const RESERVED_PAGE_SLUGS = new Set([
   'about',
   'account',
   'articles',
+  'corvus',
+  // 'hermes' stays reserved after the #77 rename: the deploy-level
+  // /hermes -> /corvus 308 shadows the route, so a published 'hermes' CMS
+  // doc could never render -- reserving it keeps such a doc out of the
+  // sitemap and static generation (final review 2026-08-21, G-1).
   'hermes',
   'projects',
   'sign-in',

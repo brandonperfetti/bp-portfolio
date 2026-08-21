@@ -32,7 +32,7 @@ const NAV_ACTIONS: Array<{ label: string; href: string }> = [
   { label: 'Articles', href: '/articles' },
   { label: 'Projects', href: '/projects' },
   { label: 'Tech', href: '/tech' },
-  { label: 'Hermes', href: '/hermes' },
+  { label: 'Corvus', href: '/corvus' },
   { label: 'Uses', href: '/uses' },
 ]
 
@@ -40,7 +40,7 @@ const INDEX_TTL_MS = 5 * 60 * 1000
 
 /**
  * Cmd/Ctrl+K command palette (wow moment #2): ranked article search plus
- * actions (navigate, theme toggle, open Hermes, copy link).
+ * actions (navigate, theme toggle, open Corvus, copy link).
  *
  * @remarks Replaces v3's substring-over-sessionStorage HeaderSearch. Ranking
  * is BM25 over the `/api/search` index (fetched once per open, cached with a
@@ -243,12 +243,12 @@ export function CommandPalette() {
               Switch to {otherTheme} mode
             </Command.Item>
             <Command.Item
-              value="action-hermes"
-              onSelect={() => go('/hermes')}
+              value="action-corvus"
+              onSelect={() => go('/corvus')}
               className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm text-zinc-700 data-[selected=true]:bg-zinc-100 data-[selected=true]:text-zinc-900 dark:text-zinc-300 dark:data-[selected=true]:bg-zinc-800 dark:data-[selected=true]:text-zinc-50"
             >
               <MessageCircle aria-hidden className="h-4 w-4 text-zinc-400" />
-              Ask Hermes
+              Ask Corvus
             </Command.Item>
             <Command.Item
               value="action-copy-url"

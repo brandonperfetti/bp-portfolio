@@ -1,7 +1,16 @@
 import { convertToModelMessages, streamText, validateUIMessages } from 'ai'
 import * as z from 'zod'
 
-import { getHermesModel, HERMES_SYSTEM_PROMPT } from '@/lib/ai/hermes'
+import { getCorvusModel, CORVUS_SYSTEM_PROMPT } from '@/lib/ai/corvus'
+import { getViewer } from '@/lib/auth/getViewer'
+import {
+  getAnonFreeMessageLimit,
+  getAuthedChatDailyQuota,
+  getAuthedChatRatePerMinute,
+  anonIpKeyDigest,
+  incrementAnonFreeMessageCount,
+  peekAnonFreeMessageCount,
+} from '@/lib/security/chatGate'
 import {
   getRequestClientIp,
   getSecurityLimits,
@@ -17,16 +26,34 @@ const bodySchema = z.object({
 })
 
 /**
- * Hermes chat endpoint on the Vercel AI SDK (replaces v3's hand-rolled
+ * Machine-readable code the client matches on to render the sign-in prompt
+ * instead of a generic error (see `CorvusChat.tsx`'s `isSignInRequiredError`).
+ */
+const SIGN_IN_REQUIRED_CODE = 'sign_in_required'
+
+/**
+ * Corvus chat endpoint on the Vercel AI SDK (replaces v3's hand-rolled
  * OpenAI NDJSON streaming).
  *
  * @remarks Security invariants (§9): the system prompt is server-enforced and
  * client-supplied system messages are stripped; input is Zod-validated;
  * limits come from a shared Redis store in staging/prod. Provider keys never
  * reach the client.
+ *
+ * @remarks Auth soft-gate (#74, folds #18): anonymous visitors get a small
+ * cumulative free taste (`getAnonFreeMessageLimit()`, default 3 messages,
+ * distributed via Upstash — see `@/lib/security/chatGate`); the (N+1)th
+ * anonymous request is rejected here with a `sign_in_required` JSON body
+ * BEFORE `streamText` ever runs, never as a stream chunk. Signed-in users
+ * skip the free-message gate entirely and are instead keyed by `userId` (not
+ * IP) in the existing `checkChatLimits` abuse limiter, at a higher ceiling —
+ * every decision is made from server-resolved state (Clerk session, trusted
+ * client IP), never from anything in the request body, so a crafted payload
+ * cannot claim a lower message count or a fake identity to bypass either
+ * gate.
  */
 export async function POST(req: Request) {
-  if (process.env.HERMES_DISABLE_CHAT === 'true') {
+  if (process.env.CORVUS_DISABLE_CHAT === 'true') {
     return Response.json(
       { error: 'Chat is temporarily disabled.' },
       { status: 503 },
@@ -39,10 +66,30 @@ export async function POST(req: Request) {
 
   const limits = getSecurityLimits()
   const ip = getRequestClientIp(req)
+  const viewer = await getViewer()
+
+  // Abuse limiter (unchanged mechanism, `checkChatLimits`): signed-in
+  // requests are keyed by userId at a higher ceiling instead of sharing an
+  // IP-keyed bucket with every other visitor behind the same NAT/proxy.
+  const authedViewer =
+    viewer.isAuthenticated && viewer.userId ? viewer.userId : null
+  // Anonymous limiter keys carry an HMAC digest of the IP, never the raw
+  // address — Redis retains no personal identifier (chatGate hashes its own
+  // keys the same way).
+  const limiterKey = authedViewer
+    ? `user:${authedViewer}`
+    : `ip:${anonIpKeyDigest(ip)}`
+  const limiterPerMinute = authedViewer
+    ? getAuthedChatRatePerMinute()
+    : limits.chatRatePerMinute
+  const limiterPerDay = authedViewer
+    ? getAuthedChatDailyQuota()
+    : Number(process.env.CORVUS_CHAT_DAILY_QUOTA) || 0
+
   const limit = await checkChatLimits(
-    ip,
-    limits.chatRatePerMinute,
-    Number(process.env.HERMES_CHAT_DAILY_QUOTA) || 0,
+    limiterKey,
+    limiterPerMinute,
+    limiterPerDay,
   )
   if (!limit.allowed) {
     const retryAfter = Math.max(
@@ -61,6 +108,27 @@ export async function POST(req: Request) {
         },
       },
     )
+  }
+
+  // Anon free-message gate (#74, folds #18): a CUMULATIVE per-IP count,
+  // distinct from the per-minute/per-day abuse limiter above. Checked early
+  // (peek only, no increment) so an already-gated visitor doesn't pay for
+  // body parsing or a Turnstile round-trip. Signed-in visitors never touch
+  // this — they skip straight past.
+  const isAnon = !authedViewer
+  const anonFreeLimit = getAnonFreeMessageLimit()
+  if (isAnon) {
+    const freeCount = await peekAnonFreeMessageCount(ip)
+    if (freeCount >= anonFreeLimit) {
+      return Response.json(
+        {
+          error:
+            "You've used your free Corvus messages — sign in to keep chatting.",
+          code: SIGN_IN_REQUIRED_CODE,
+        },
+        { status: 401 },
+      )
+    }
   }
 
   let raw: unknown
@@ -125,9 +193,16 @@ export async function POST(req: Request) {
     )
   }
 
+  // Every other guard has passed and we're committed to streaming — this is
+  // the point at which an anon request actually spends one of its free
+  // messages (never on a request that was going to be rejected anyway).
+  if (isAnon) {
+    await incrementAnonFreeMessageCount(ip)
+  }
+
   const result = streamText({
-    model: getHermesModel(),
-    system: HERMES_SYSTEM_PROMPT,
+    model: getCorvusModel(),
+    system: CORVUS_SYSTEM_PROMPT,
     messages: await convertToModelMessages(windowed),
     maxOutputTokens: limits.maxCompletionTokens,
   })

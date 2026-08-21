@@ -19,8 +19,11 @@ export default middleware
 
 export const config = {
   matcher: [
-    // All app routes except static assets, Next internals, and the Payload admin.
-    '/((?!_next|admin|api/media|.*\\.(?:png|jpg|jpeg|gif|webp|avif|svg|ico|css|js|txt|xml|pdf|woff2?)).*)',
+    // All app routes except static assets, Next internals, the Payload
+    // admin, and the Sentry tunnel (`tunnelRoute: '/monitoring'` in
+    // next.config.mjs — Clerk session context is irrelevant to error/trace
+    // ingestion, and running it needlessly processes every tunneled event).
+    '/((?!_next|admin|api/media|monitoring|.*\\.(?:png|jpg|jpeg|gif|webp|avif|svg|ico|css|js|txt|xml|pdf|woff2?)).*)',
     // API routes that need auth context (gating-aware content APIs + AI chat).
     '/api/ai/:path*',
     '/api/search',

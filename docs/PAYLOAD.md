@@ -27,7 +27,7 @@ Payload is the single source of truth for site content. Admin at `/admin`
   `/[slug]` via `RenderHero` + `RenderBlocks` — compose new pages entirely
   in admin, no code or deploy. Reserved slugs live in
   `src/app/(frontend)/[slug]/page.tsx`. **Hybrid routes:** five code-owned
-  content routes — `/articles`, `/tech`, `/projects`, `/hermes`, `/uses` —
+  content routes — `/articles`, `/tech`, `/projects`, `/corvus`, `/uses` —
   also render their Pages doc's layout via `<CmsPageBlocks slug="…" />`
   (spacer-only layouts are treated as empty), so admin-composed sections can
   be appended to bespoke pages too. (`/` and `/about` instead render their
@@ -145,3 +145,29 @@ unrenderable editor).
   reference; DRY_RUN/ONLY_SLUG knobs. Note: `payload run` kills floating
   promises at module-eval end — scripts must top-level `await`.
 - `scripts/set-admin-password.ts` — Local API admin bootstrap/password reset.
+
+### New-table RLS convention (#72)
+
+Every table in `public` has Row Level Security enabled with **no policies**
+(default-deny) as of the `20260820_221032_rls_lockdown` migration, and
+`ALTER DEFAULT PRIVILEGES` strips `anon`/`authenticated` table+sequence grants
+from tables created afterward. Payload connects as the table **owner**, and
+owners bypass RLS — so this is invisible to the app and to `payload migrate`.
+It exists solely to keep Supabase's `anon`/`authenticated` Data API roles
+locked out of `public`, independent of the Data API's exposed-schema config.
+
+When you add a collection or global (a new table via `pnpm migrate:create`),
+add a one-line follow-up in the **same** migration enabling RLS on the new
+table and any paired `_v` / `_rels` table Payload generates:
+
+```ts
+await db.execute(sql`ALTER TABLE "new_table" ENABLE ROW LEVEL SECURITY;`)
+```
+
+`ALTER DEFAULT PRIVILEGES` already handles the grant side for new tables, but
+it does **not** touch RLS state — that still needs the explicit `ENABLE` per
+table. For a bulk sweep, reuse the `pg_tables` loop in
+`20260820_221032_rls_lockdown.ts` rather than hand-listing tables. **Never** set
+`FORCE ROW LEVEL SECURITY` — with no policies it would default-deny Payload's
+own owner connection. RLS here is owner-transparent, not an app access layer
+(Payload's gating is `src/access/*` + `getViewer()`).

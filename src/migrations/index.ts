@@ -33,6 +33,7 @@ import * as migration_20260819_011112_w6b4_carousel3d_effect from './20260819_01
 import * as migration_20260819_154529_w6b5_carousel_spring_effect from './20260819_154529_w6b5_carousel_spring_effect'
 import * as migration_20260819_164717_w6b6_hero_image_carousel_types from './20260819_164717_w6b6_hero_image_carousel_types'
 import * as migration_20260819_184317_w6b6a_hero_banner_toggles from './20260819_184317_w6b6a_hero_banner_toggles'
+import * as migration_20260820_221032_rls_lockdown from './20260820_221032_rls_lockdown'
 
 export const migrations = [
   {
@@ -209,5 +210,10 @@ export const migrations = [
     up: migration_20260819_184317_w6b6a_hero_banner_toggles.up,
     down: migration_20260819_184317_w6b6a_hero_banner_toggles.down,
     name: '20260819_184317_w6b6a_hero_banner_toggles',
+  },
+  {
+    up: migration_20260820_221032_rls_lockdown.up,
+    down: migration_20260820_221032_rls_lockdown.down,
+    name: '20260820_221032_rls_lockdown',
   },
 ]

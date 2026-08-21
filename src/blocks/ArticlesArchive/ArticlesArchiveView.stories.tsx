@@ -103,9 +103,10 @@ export const Grid: Story = {
     await expect(
       canvas.getByRole('link', { name: /Browse all articles/ }),
     ).toHaveAttribute('href', '/articles')
-    // The grid links from the card title, not from the whole card.
+    // Grid cards use the same whole-card link treatment as the stacked/home
+    // cards — the whole card is the link (read-article label), not the title.
     await expect(
-      canvas.getByRole('link', { name: ARTICLES[0].title }),
+      canvas.getByRole('link', { name: `Read article: ${ARTICLES[0].title}` }),
     ).toHaveAttribute('href', `/articles/${ARTICLES[0].slug}`)
   },
 }

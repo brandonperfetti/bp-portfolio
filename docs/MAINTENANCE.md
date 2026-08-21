@@ -8,6 +8,11 @@
   SEO tab populated) before pushing.
 - **Next/React upgrades**: majors are deliberate events; check Payload's
   supported Next range first (Payload pins minimums).
+- **Node version policy (#69)**: `engines` stays broad (`>=22 <25`) so a
+  current Node never trips the unsupported-engine warning; `.nvmrc` pins 24
+  for local dev; CI runs Node 24 (part-2 Batch 0). Vercel's project-level
+  Node setting is overridden by `engines` — keep it on 24.x anyway so the
+  build cache stays warm. Bump all three together at the next Node major.
 - **GitHub tech-signal token**: fine-grained PAT (Contents: read) expires on
   the schedule chosen at creation — rotate in Vercel env
   (`GITHUB_TOKEN`). Scan knobs: `GITHUB_TECH_*` in `.env.example`.
@@ -26,12 +31,24 @@
   (see its COMMENT in the DB). This gives PostgREST a valid schema to
   load, which silences the former log noise (`schema
 "pg_pgrst_no_exposed_schemas" does not exist` every ~30s + a bogus
-  ~54% "database error rate" in Observability), while the 136 RLS-less
-  Drizzle tables in `public` remain unexposed. Do NOT add `public` (or
+  ~54% "database error rate" in Observability), while the `public` tables
+  (Drizzle-managed) remain unexposed — and, as of #72, additionally locked
+  with default-deny RLS plus revoked `anon`/`authenticated` grants (see the
+  new-table RLS convention in `docs/PAYLOAD.md`), so even adding `public` to
+  the exposed schemas could no longer leak rows on its own. Do NOT add
+  `public` (or
   any schema containing real tables) to the exposed-schemas list, and do
   NOT create tables in `api`; re-check both on the production project at
   promotion.
   Blob store `bp-portfolio-media` is public-read.
+- **Sentry (#73)**: env vars `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` /
+  `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` (+ optional
+  `NEXT_PUBLIC_SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE`) live in Vercel's
+  per-environment settings; the Sentry Vercel integration populates the
+  auth-token/org/project automatically once connected, leaving only
+  `NEXT_PUBLIC_SENTRY_DSN` to set by hand per environment. No DSN → Sentry is
+  fully inert (no import, no init). `SENTRY_AUTH_TOKEN` is a build-only secret
+  (source-map upload); rotate it like Resend/Blob if exposed.
 - **Database backups (nightly, encrypted)**: Supabase free tier has NO
   automated backups, and the DB is the canonical copy of all content —
   `.github/workflows/db-backup.yml` runs a nightly `pg_dump` (session

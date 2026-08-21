@@ -842,13 +842,13 @@ const SEED = {
       homeImageUrls: [],
     },
     {
-      slug: 'hermes',
-      title: 'Hermes AI Assistant',
+      slug: 'corvus',
+      title: 'Corvus AI Assistant',
       subtitle:
         'A practical AI workspace for Q&A, prompt iteration, and image generation experiments tied to real engineering workflows.',
-      seoTitle: 'Hermes AI Assistant — Brandon Perfetti',
+      seoTitle: 'Corvus AI Assistant — Brandon Perfetti',
       seoDescription:
-        "Explore Hermes, Brandon Perfetti's AI assistant workspace for practical Q&A, prompt iteration, and image generation workflows.",
+        "Explore Corvus, Brandon Perfetti's AI assistant workspace for practical Q&A, prompt iteration, and image generation workflows.",
       heroImageUrl: null,
       homeImageUrls: [],
     },

@@ -23,7 +23,7 @@ Rules:
 - **Theme:** `next-themes` (`attribute="class"`) + `ThemeWatcher` system sync
   (`src/app/(frontend)/providers.tsx`). Components read `resolvedTheme` only
   after mount (hydration guard).
-- **Chat:** `useChat` (Vercel AI SDK) inside `HermesChat`; transient UI state
+- **Chat:** `useChat` (Vercel AI SDK) inside `CorvusChat`; transient UI state
   only, no persistence.
 - **Palette:** open/query state local to `CommandPalette`; index fetch cached
   in a ref with a 5-minute TTL.

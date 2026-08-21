@@ -1,7 +1,7 @@
 # BP Portfolio v4 — AI Agent Instructions
 
 Next.js 16 App Router portfolio with **Payload CMS** (Postgres/Drizzle) as the
-single content source, Clerk auth + server-side gating, Hermes AI chat
+single content source, Clerk auth + server-side gating, Corvus AI chat
 (Vercel AI SDK), and a shaders.com animated hero. Notion is a **planning
 surface only** — it is not a CMS and has no runtime integration.
 
@@ -20,7 +20,7 @@ surface only** — it is not a CMS and has no runtime integration.
 - **URLs:** `/articles/[slug]` shape and existing slugs are preserved from v3.
 - **Payload is the only CMS.** Content flows Payload → repo modules
   (`src/lib/cms/*Repo.ts`) → RSC pages. Never reintroduce Notion runtime code.
-- **Hermes system prompt is server-enforced** (`src/lib/ai/hermes.ts`); client
+- **Corvus system prompt is server-enforced** (`src/lib/ai/corvus.ts`); client
   system messages are never trusted. Rate limiting via Upstash Redis.
 - **Gating is server-side** (`src/access/canAccess.ts` + `getViewer()`); UI
   components like `<Protect>` are conveniences, never the enforcement point.
@@ -44,7 +44,7 @@ surface only** — it is not a CMS and has no runtime integration.
 - New UI starts from shadcn/ui primitives (`src/components/ui`) and gets a
   Storybook story; serious a11y violations fail the story.
 - Tests accompany behavior changes: Vitest unit/component, Playwright e2e,
-  Evalite for Hermes behavior.
+  Evalite for Corvus behavior.
 
 ## Progressive disclosure (read the doc that matches the task)
 
@@ -55,7 +55,7 @@ surface only** — it is not a CMS and has no runtime integration.
 - State and data flow: `docs/STATE.md`
 - Styling and component conventions: `docs/STYLING.md`
 - Design system (shadcn, shader hero, motion, Storybook): `docs/DESIGN.md`
-- AI (Hermes, guardrails, evals, providers): `docs/AI.md`
+- AI (Corvus, guardrails, evals, providers): `docs/AI.md`
 - Auth, gating, and email capture (Clerk): `docs/AUTH.md`
 - Content workflow (Notion planning → Payload publishing): `docs/CONTENT_WORKFLOW.md`
 - Content voice, article types, and revision gates: `docs/CONTENT_STYLE.md`
