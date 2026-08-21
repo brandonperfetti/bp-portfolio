@@ -27,7 +27,7 @@ Payload is the single source of truth for site content. Admin at `/admin`
   `/[slug]` via `RenderHero` + `RenderBlocks` — compose new pages entirely
   in admin, no code or deploy. Reserved slugs live in
   `src/app/(frontend)/[slug]/page.tsx`. **Hybrid routes:** five code-owned
-  content routes — `/articles`, `/tech`, `/projects`, `/hermes`, `/uses` —
+  content routes — `/articles`, `/tech`, `/projects`, `/corvus`, `/uses` —
   also render their Pages doc's layout via `<CmsPageBlocks slug="…" />`
   (spacer-only layouts are treated as empty), so admin-composed sections can
   be appended to bespoke pages too. (`/` and `/about` instead render their

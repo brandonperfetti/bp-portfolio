@@ -11,7 +11,7 @@
   visitors — enforcement in the RSC via `canAccess`, not the client.
 - Per-article "Use with AI" menu + JSON-LD + canonical URLs.
 
-## Hermes chat (`/hermes`)
+## Corvus chat (`/corvus`)
 
 - Streaming chat over `/api/ai/chat` (Vercel AI SDK). Server-enforced persona
   prompt, Zod-validated payloads, Upstash rate limits + daily quota.
@@ -22,7 +22,7 @@
 
 - `src/components/search/CommandPalette.tsx` (cmdk): BM25-ranked article
   search over `/api/search` (plugin-search index, short-TTL cached),
-  navigation, theme switch, copy-link, Ask Hermes.
+  navigation, theme switch, copy-link, Ask Corvus.
 
 ## Tech-stack visualization (`/tech`, shared with `/uses`)
 

@@ -1,6 +1,6 @@
 # Brandon Perfetti's Portfolio
 
-Personal portfolio and content platform built on Next.js App Router with a provider-switched CMS runtime (Notion primary, local fallback), migrated from [Tailwind Plus Spotlight](https://tailwindcss.com/plus/templates/spotlight) and customized with production features (article search/filtering, Hermes AI chat, contact workflow, SEO routes, and custom content pages).
+Personal portfolio and content platform built on Next.js App Router with a provider-switched CMS runtime (Notion primary, local fallback), migrated from [Tailwind Plus Spotlight](https://tailwindcss.com/plus/templates/spotlight) and customized with production features (article search/filtering, Corvus AI chat, contact workflow, SEO routes, and custom content pages).
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ This project is the active codebase for [brandonperfetti.com](https://brandonper
   - Header modal (`Cmd/Ctrl + K`) with title/description/full article body matching.
   - Articles page explorer with topic chips + query-string syncing.
 - Dynamic article route at `/articles/[slug]` with `generateStaticParams`, `dynamicParams=true`, and route-level `generateMetadata()`.
-- Hermes chat experience with streaming OpenAI responses and image generation.
+- Corvus chat experience with streaming OpenAI responses and image generation.
 - Contact form delivery through the Resend API.
 - SEO endpoints: sitemap, robots, RSS feed metadata.
 
@@ -38,7 +38,7 @@ This project is the active codebase for [brandonperfetti.com](https://brandonper
 - [GSAP](https://gsap.com/) for motion primitives and choreography
 - [Headless UI](https://headlessui.com/) (menu/popover primitives)
 - [Resend](https://resend.com/) for contact-form delivery, transactional email, and sign-up email capture
-- [OpenAI API](https://platform.openai.com/docs/api-reference) for Hermes chat + image generation
+- [OpenAI API](https://platform.openai.com/docs/api-reference) for Corvus chat + image generation
 - [Heroicons](https://heroicons.com/) + project-local icon components
 
 ## Quick Features
@@ -47,8 +47,8 @@ This project is the active codebase for [brandonperfetti.com](https://brandonper
 - Reusable motion system for headline, reveal, parallax, and hover animations.
 - Articles route with full-text + topic filtering.
 - Global header modal search (`Cmd/Ctrl + K`).
-- Hermes AI chat with streaming text and image generation modes.
-- Hermes input supports multiline prompts (`Enter` to send, `Shift+Enter` for newline).
+- Corvus AI chat with streaming text and image generation modes.
+- Corvus input supports multiline prompts (`Enter` to send, `Shift+Enter` for newline).
 - Resend-backed contact workflow (home-page newsletter UI is currently hidden).
 - SEO routes: sitemap, robots, and feed endpoint metadata.
 
@@ -253,8 +253,8 @@ If you need implementation internals first, start with:
 
 If contact-form delivery fails, verify `RESEND_API_KEY` is set and the from-address domain is verified in Resend (Domains tab).
 
-### Hermes API failures
+### Corvus API failures
 
 Confirm `OPENAI_API_KEY` is present and valid. Chat and image endpoints are server-side and return explicit JSON errors for missing keys.
-If public Hermes routes start returning `429`/`403`, verify Hermes guardrail env settings (`HERMES_*`) and `TURNSTILE_SECRET_KEY` behavior.
-If memory pressure is observed under high-cardinality traffic, tune optional in-memory guardrail controls: `HERMES_GUARDRAILS_MAX_BUCKETS` and `HERMES_GUARDRAILS_BUCKET_TTL_MS`.
+If public Corvus routes start returning `429`/`403`, verify Corvus guardrail env settings (`CORVUS_*`) and `TURNSTILE_SECRET_KEY` behavior.
+If memory pressure is observed under high-cardinality traffic, tune optional in-memory guardrail controls: `CORVUS_GUARDRAILS_MAX_BUCKETS` and `CORVUS_GUARDRAILS_BUCKET_TTL_MS`.

@@ -20,7 +20,7 @@
   `useRouter` throws), the project's alias array stubs the server blocks
   before `@/` resolves (mirrors `.storybook/main.ts` viteFinal), and
   sandboxes pin the browser via `PLAYWRIGHT_EXECUTABLE_PATH`.
-- **Evals** — Evalite for Hermes (see `docs/AI.md`).
+- **Evals** — Evalite for Corvus (see `docs/AI.md`).
 
 ## CI (`.github/workflows/ci.yml`)
 
@@ -34,7 +34,7 @@ provider key secret is present.
 ## Policy
 
 - Behavior change ⇒ test change in the same commit (component or e2e for UI,
-  unit for logic, eval for Hermes).
+  unit for logic, eval for Corvus).
 - Bug fixes ship a regression test that failed before the fix.
 - Motion/a11y changes validate the keyboard path and reduced-motion
   rendering.

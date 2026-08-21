@@ -24,7 +24,7 @@
     sign-in prompt renders instead. Client `<Protect>`-style components are
     UX only.
 - `getViewer()` returns `{ isAuthenticated, userId }` (`userId` added #74). The
-  Hermes chat route is the first consumer keying a rate limit by Clerk `userId`
+  Corvus chat route is the first consumer keying a rate limit by Clerk `userId`
   — anonymous visitors hit an IP-keyed free-taste gate + abuse limit, signed-in
   users a `userId`-keyed higher ceiling (see `docs/AI.md`).
 - **Billing flip (do not build until asked):** enable Clerk Billing, replace

@@ -1,13 +1,13 @@
-# AI (Hermes)
+# AI (Corvus)
 
 ## Surface
 
-`/hermes` renders `HermesChat` (Vercel AI SDK `useChat`) streaming from
+`/corvus` renders `CorvusChat` (Vercel AI SDK `useChat`) streaming from
 `POST /api/ai/chat`. Markdown rendering via streamdown/react-markdown.
 
-## Server enforcement (`src/lib/ai/hermes.ts` + route)
+## Server enforcement (`src/lib/ai/corvus.ts` + route)
 
-- `HERMES_SYSTEM_PROMPT` is applied **server-side on every request**; client
+- `CORVUS_SYSTEM_PROMPT` is applied **server-side on every request**; client
   system messages are ignored. Never trust or forward client roles other
   than user/assistant history.
 - Request bodies are Zod-validated; oversize/malformed input is rejected.
@@ -20,17 +20,18 @@
   by IP. Without Upstash env, dev fails open (never ship that state to
   production).
 - `guardrails.ts`: shared quota/limit application; kill switches
-  `HERMES_DISABLE_CHAT` / `HERMES_DISABLE_IMAGE`. The in-memory
-  `applyRateLimit`/`applyDailyQuota` here are the DEV-ONLY fallback for
-  `limiter.ts` — not a prod path.
+  `CORVUS_DISABLE_CHAT` / `CORVUS_DISABLE_IMAGE` (renamed from `HERMES_*`,
+  #77). The in-memory `applyRateLimit`/`applyDailyQuota` here are
+  the DEV-ONLY fallback for `limiter.ts` — not a prod path.
 - `chatGate.ts` (#74, folds #18): anonymous free-message soft-gate — a
-  CUMULATIVE per-IP count in Upstash (default 3, `HERMES_ANON_FREE_MESSAGES`),
-  distinct from `limiter.ts`'s per-minute/daily RATE. The (N+1)th anonymous
-  chat request returns `{ code: 'sign_in_required' }` (HTTP 401) BEFORE the
-  model runs; the client (`HermesChat.tsx`) renders a Clerk sign-in prompt,
-  not an error. Signed-in users skip the free-gate and are keyed by `userId`
-  (not IP) in `limiter.ts` at a higher ceiling
-  (`HERMES_CHAT_RATE_LIMIT_PER_MINUTE_AUTHED` / `HERMES_CHAT_DAILY_QUOTA_AUTHED`).
+  CUMULATIVE per-IP count in Upstash (default 3, `CORVUS_ANON_FREE_MESSAGES`),
+  distinct from
+  `limiter.ts`'s per-minute/daily RATE. The (N+1)th anonymous chat request
+  returns `{ code: 'sign_in_required' }` (HTTP 401) BEFORE the model runs;
+  the client (`CorvusChat.tsx`) renders a Clerk sign-in prompt, not an
+  error. Signed-in users skip the free-gate and are keyed by `userId` (not
+  IP) in `limiter.ts` at a higher ceiling
+  (`CORVUS_CHAT_RATE_LIMIT_PER_MINUTE_AUTHED` / `CORVUS_CHAT_DAILY_QUOTA_AUTHED`).
   Every decision is server-resolved (Clerk session + trusted IP), never the
   request body.
 - Turnstile (wired 2026-08-10, env-gated): the contact form enforces
@@ -51,5 +52,5 @@
 - `evals/safety.eval.ts` — out-of-scope refusal + redirection, DAN-style
   injection resistance, system prompt never revealed.
 - `pnpm eval` (watch) / `pnpm eval:ci` (threshold 80). CI job runs only when
-  a provider key secret exists. Behavior changes to Hermes require an eval
+  a provider key secret exists. Behavior changes to Corvus require an eval
   update, not just unit tests.

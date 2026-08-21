@@ -25,13 +25,13 @@ one set, version-locked.
 
 ## AI
 
-- `ai` + `@ai-sdk/openai` + `@ai-sdk/anthropic` + `@ai-sdk/react` — Hermes
+- `ai` + `@ai-sdk/openai` + `@ai-sdk/anthropic` + `@ai-sdk/react` — Corvus
   chat, provider-switchable via env.
 - `openai` — image/audio endpoints retained from v3.
 - `streamdown`, `react-markdown`, `remark-gfm` — streaming markdown render.
 - `zod` — request validation (chat, webhooks, forms).
 - `@upstash/ratelimit` + `@upstash/redis` — global rate limiting.
-- `evalite` + `autoevals` (dev) — Hermes behavior evals.
+- `evalite` + `autoevals` (dev) — Corvus behavior evals.
 
 ## UI
 
