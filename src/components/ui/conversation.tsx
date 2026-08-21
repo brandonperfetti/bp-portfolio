@@ -158,14 +158,27 @@ function ConversationEmptyState({
       )}
       {...props}
     >
-      {icon && <div className="text-zinc-400 dark:text-zinc-500">{icon}</div>}
+      {icon && (
+        <div
+          data-slot="conversation-empty-state-icon"
+          className="text-zinc-400 dark:text-zinc-500"
+        >
+          {icon}
+        </div>
+      )}
       {title && (
-        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+        <p
+          data-slot="conversation-empty-state-title"
+          className="text-sm font-medium text-zinc-700 dark:text-zinc-200"
+        >
           {title}
         </p>
       )}
       {description && (
-        <div className="max-w-sm text-sm text-zinc-500 dark:text-zinc-400">
+        <div
+          data-slot="conversation-empty-state-description"
+          className="max-w-sm text-sm text-zinc-500 dark:text-zinc-400"
+        >
           {description}
         </div>
       )}

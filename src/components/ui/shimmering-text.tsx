@@ -27,6 +27,7 @@ export function ShimmeringText({ text, className }: ShimmeringTextProps) {
 
   return (
     <span
+      data-slot="shimmering-text"
       className={cn(
         'bg-clip-text text-transparent',
         prefersReducedMotion

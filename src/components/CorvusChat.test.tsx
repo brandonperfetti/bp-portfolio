@@ -58,10 +58,19 @@ beforeEach(() => {
 })
 
 describe('CorvusChat', () => {
-  it('renders the idle intro and an enabled composer', () => {
+  it('renders the idle intro (dynamic time-of-day greeting) and an enabled composer', () => {
+    // Fixed clock so the greeting bucket is deterministic (#78): the
+    // component computes it from `new Date().getHours()` at render time.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T09:00:00'))
+
     render(<CorvusChat />)
-    expect(screen.getByText(/corvus here/i)).toBeInTheDocument()
+
+    expect(screen.getByText('Morning.')).toBeInTheDocument()
+    expect(screen.getByText(/ask about brandon's work/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /send/i })).toBeEnabled()
+
+    vi.useRealTimers()
   })
 
   it('sends trimmed input on Enter and clears the composer', async () => {
@@ -105,7 +114,7 @@ describe('CorvusChat', () => {
     render(<CorvusChat />)
 
     expect(screen.getByRole('button', { name: /send/i })).toBeDisabled()
-    expect(screen.getByText(/corvus is thinking/i)).toBeInTheDocument()
+    expect(screen.getByText(/corvus is out looking/i)).toBeInTheDocument()
 
     // Enter must not fire while a response is in flight.
     const input = screen.getByLabelText('Message Corvus')

@@ -1,18 +1,21 @@
 'use client'
 
 import { useChat } from '@ai-sdk/react'
+import { useUser } from '@clerk/nextjs'
 import { DefaultChatTransport } from 'ai'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Streamdown } from 'streamdown'
 
-import { Copy as CopyIcon, MessagesSquare } from 'lucide-react'
+import { Copy as CopyIcon } from 'lucide-react'
 
 import { SendIcon } from '@/icons'
 import {
   createCorvusChatFetch,
   SIGN_IN_REQUIRED_CODE,
 } from '@/lib/ai/corvusChatFetch'
+import { getCorvusGreeting } from '@/lib/corvus/greeting'
 import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
+import { RavenMark } from '@/components/corvus/RavenMark'
 import {
   Conversation,
   ConversationContent,
@@ -39,6 +42,43 @@ function isSignInRequiredError(error: Error | undefined): boolean {
 }
 
 /**
+ * Whether Clerk is configured for this deployment, read the client-safe way.
+ *
+ * @remarks `isClerkEnabled` (`@/lib/auth/clerkEnabled`) also checks
+ * `CLERK_SECRET_KEY`, which is never inlined into client bundles — calling
+ * it here would always read `false`. This mirrors the half of that check
+ * `AuthProvider` can see server-side to decide whether to mount
+ * `<ClerkProvider>`, so whenever this is `true` a provider is guaranteed to
+ * be present in the tree.
+ */
+const CLERK_ENABLED_CLIENT = Boolean(
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+)
+
+/**
+ * Resolves the signed-in visitor's Clerk first name for the empty-state
+ * greeting.
+ *
+ * @remarks Isolated into its own component — rendered only when
+ * {@link CLERK_ENABLED_CLIENT} is true — because `useUser` throws when
+ * called outside a `<ClerkProvider>`, which `AuthProvider` never mounts in
+ * keys-off environments. `CorvusChat` must never call `useUser` directly.
+ */
+function ClerkFirstNameProbe({
+  onChange,
+}: {
+  onChange: (firstName: string | null) => void
+}) {
+  const { user } = useUser()
+
+  useEffect(() => {
+    onChange(user?.firstName ?? null)
+  }, [user, onChange])
+
+  return null
+}
+
+/**
  * Corvus chat client on `useChat` + streamdown (replaces the v3 manual
  * `ReadableStream` reader over a hand-rolled NDJSON protocol).
  *
@@ -51,14 +91,30 @@ function isSignInRequiredError(error: Error | undefined): boolean {
  * than ElevenLabs UI's registry — ui.elevenlabs.io rate-limits/blocks
  * automated pulls (403/429) from this build sandbox, so #79 reconstructed
  * equivalent presentational components against our own design tokens
- * instead of vendoring theirs ("Path B"). The Corvus visual identity/theme
- * (a distinct palette, dynamic greeting copy, etc.) is separate follow-up
- * work tracked in #78 — this pass is presentation-shape only.
+ * instead of vendoring theirs ("Path B"). The Corvus visual identity theme
+ * (the atlas palette, dynamic greeting) is layered on separately via
+ * `data-slot`-scoped CSS under `.corvus-surface` in `src/styles/tailwind.css`
+ * (#78) — this component's own utility classes are the zinc/teal default
+ * and stay that way outside `.corvus-surface` (e.g. in Storybook).
  */
 export default function CorvusChat() {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [input, setInput] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [mounted, setMounted] = useState(false)
+  const [firstName, setFirstName] = useState<string | null>(null)
+
+  // The empty-state greeting is time-of-day (and optionally name) flavored —
+  // both are only knowable client-side, so the first paint renders a
+  // neutral greeting and the real one fills in after mount. This must never
+  // run during SSR: the server has no visitor-local clock, so rendering a
+  // guess there would either flash the wrong greeting or mismatch hydration.
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+  const greeting = mounted
+    ? getCorvusGreeting(new Date().getHours(), firstName)
+    : 'Welcome.'
 
   const transport = useMemo(
     () =>
@@ -158,16 +214,21 @@ export default function CorvusChat() {
       : '/corvus'
 
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100 p-4 dark:border-zinc-700/40">
+    <div
+      data-slot="chat-card"
+      className="flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100 p-4 dark:border-zinc-700/40"
+    >
+      {CLERK_ENABLED_CLIENT && <ClerkFirstNameProbe onChange={setFirstName} />}
       <Conversation>
         <ConversationContent>
           {messages.length === 0 && (
             <ConversationEmptyState
-              icon={<MessagesSquare className="h-6 w-6" />}
+              icon={<RavenMark className="h-7 w-7" />}
+              title={greeting}
               description={
                 <>
-                  Corvus here — ask about Brandon&apos;s work, articles,
-                  projects, or tech stack. Press{' '}
+                  Ask about Brandon&apos;s work — or whatever else is on your
+                  mind. Press{' '}
                   <kbd className="rounded border border-zinc-300 px-1 dark:border-zinc-600">
                     /
                   </kbd>{' '}
@@ -195,6 +256,7 @@ export default function CorvusChat() {
                   {isAssistant && text && (
                     <button
                       type="button"
+                      data-slot="message-copy-button"
                       onClick={() => void copyMessage(message.id, text)}
                       className="inline-flex items-center gap-1 rounded px-1 text-xs text-zinc-500 hover:text-teal-600 dark:text-zinc-400 dark:hover:text-teal-400"
                     >
@@ -207,7 +269,7 @@ export default function CorvusChat() {
             )
           })}
           {status === 'submitted' && (
-            <ShimmeringText text="Corvus is thinking…" className="text-sm" />
+            <ShimmeringText text="Corvus is out looking…" className="text-sm" />
           )}
           {error &&
             (signInRequired ? (
@@ -216,14 +278,24 @@ export default function CorvusChat() {
               // the "sign in, it's free" pattern reads the same everywhere on
               // the site. No entrance animation to gate behind reduced
               // motion: this block is static from the moment it mounts.
-              <div className="rounded-2xl border border-zinc-200 p-4 text-center dark:border-zinc-700/60">
-                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+              <div
+                data-slot="sign-in-gate"
+                className="rounded-2xl border border-zinc-200 p-4 text-center dark:border-zinc-700/60"
+              >
+                <p
+                  data-slot="sign-in-gate-title"
+                  className="text-sm font-medium text-zinc-800 dark:text-zinc-100"
+                >
                   You&apos;ve used your free Corvus messages.
                 </p>
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                <p
+                  data-slot="sign-in-gate-body"
+                  className="mt-1 text-sm text-zinc-600 dark:text-zinc-400"
+                >
                   Sign in (it&apos;s free) to keep chatting.
                 </p>
                 <a
+                  data-slot="sign-in-gate-cta"
                   href={`/sign-in?redirect_url=${encodeURIComponent(signInRedirectUrl)}`}
                   className="mt-3 inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none"
                 >
@@ -254,6 +326,7 @@ export default function CorvusChat() {
       >
         <textarea
           ref={inputRef}
+          data-slot="composer-input"
           value={input}
           rows={1}
           disabled={signInRequired}
@@ -275,6 +348,7 @@ export default function CorvusChat() {
         />
         <button
           type="submit"
+          data-slot="composer-send"
           disabled={isBusy || signInRequired}
           className="inline-flex items-center gap-1.5 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
         >

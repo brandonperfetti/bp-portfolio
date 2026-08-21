@@ -191,3 +191,245 @@
     animation: none;
   }
 }
+
+/* ------------------------------------------------------------------------
+ * Corvus visual identity ("star-atlas night", #78) — scoped entirely to
+ * `.corvus-surface`, the wrapper only `src/app/(frontend)/corvus/page.tsx`
+ * applies. Every rule below either targets `.corvus-surface`/its
+ * descendants, or is a uniquely-named class/keyframe used only by the
+ * Corvus marks — nothing here changes appearance anywhere else on the site,
+ * including the #79 chat components' Storybook stories, which render
+ * outside `.corvus-surface` and keep their original zinc/teal look. */
+
+.corvus-surface {
+  /* Dark ("night") palette — the default look. Light-theme override
+   * (Atlas Paper) follows below, keyed off the same `.dark` class
+   * next-themes toggles on <html> for the rest of the app's tokens above. */
+  --corvus-ground: #0e1320;
+  --corvus-panel: #161d2e;
+  --corvus-panel-elevated: #1e2740;
+  --corvus-ink: #e8ebf2;
+  --corvus-muted: #8a93a8;
+  --corvus-accent: #d8b25e;
+  --corvus-accent-hover: #e6c274;
+  --corvus-accent-ink: #14192a;
+  --corvus-border: rgb(232 235 242 / 12%);
+
+  color-scheme: dark;
+  color: var(--corvus-ink);
+  font-family: var(--font-corvus-body), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root:not(.dark) .corvus-surface {
+  /* Atlas Paper — light-theme override. Gold is deepened from the night
+   * palette's --corvus-accent for AA contrast on a light ground (audited:
+   * dark ink text on this gold is ~4.77:1; see #78 report). */
+  --corvus-ground: #f5f6fa;
+  --corvus-panel: #fcfcfe;
+  --corvus-panel-elevated: #edeff6;
+  --corvus-ink: #14192a;
+  --corvus-muted: #5b6478;
+  --corvus-accent: #a87f2e;
+  --corvus-accent-hover: #8f6a24;
+  --corvus-accent-ink: #14192a;
+  --corvus-border: rgb(20 25 42 / 12%);
+
+  color-scheme: light;
+}
+
+.corvus-surface h1,
+.corvus-surface h2,
+.corvus-surface h3 {
+  font-family: var(--font-corvus-display), ui-serif, Georgia, serif;
+}
+
+.corvus-surface kbd {
+  border-radius: 0.25rem;
+  border: 1px solid var(--corvus-border);
+  padding: 0 0.25rem;
+  font-family: var(--font-corvus-mono), ui-monospace, SFMono-Regular, monospace;
+  color: var(--corvus-muted);
+}
+
+/* Focus rings read gold on the atlas surface instead of the sitewide teal
+ * set in @layer base above — unlayered here so it wins regardless of
+ * selector specificity. */
+.corvus-surface
+  :where(
+    a,
+    button,
+    input,
+    textarea,
+    select,
+    summary,
+    [role='button'],
+    [tabindex]:not([tabindex='-1'])
+  ):focus-visible {
+  outline-color: var(--corvus-accent);
+}
+
+/* Chat card shell (CorvusChat.tsx's root element). */
+.corvus-surface [data-slot='chat-card'] {
+  border-color: var(--corvus-border);
+  background-color: var(--corvus-panel);
+}
+
+/* Empty-state (idle) intro: raven mark, dynamic greeting, helper copy. */
+.corvus-surface [data-slot='conversation-empty-state-icon'] {
+  color: var(--corvus-accent);
+}
+
+.corvus-surface [data-slot='conversation-empty-state-title'] {
+  color: var(--corvus-ink);
+}
+
+.corvus-surface [data-slot='conversation-empty-state-description'] {
+  color: var(--corvus-muted);
+}
+
+/* "Scroll to latest" pill. */
+.corvus-surface [data-slot='conversation-scroll-button'] {
+  border-color: var(--corvus-border);
+  background-color: var(--corvus-panel);
+  color: var(--corvus-muted);
+}
+
+.corvus-surface [data-slot='conversation-scroll-button']:hover {
+  color: var(--corvus-accent);
+}
+
+/* Message bubbles: assistant reads as the gold "voice" (gold rule, panel
+ * fill), user as a plain elevated panel — both keep ink text in both
+ * themes. */
+.corvus-surface [data-slot='message-content'] {
+  color: var(--corvus-ink);
+}
+
+.corvus-surface [data-slot='message-content'][data-from='assistant'] {
+  border-left: 3px solid var(--corvus-accent);
+  border-bottom-left-radius: 0.25rem;
+  background-color: var(--corvus-panel);
+}
+
+.corvus-surface [data-slot='message-content'][data-from='user'] {
+  background-color: var(--corvus-panel-elevated);
+}
+
+.corvus-surface [data-slot='message-content'] .corvus-markdown {
+  color: var(--corvus-ink);
+}
+
+.corvus-surface [data-slot='message-copy-button'] {
+  color: var(--corvus-muted);
+}
+
+.corvus-surface [data-slot='message-copy-button']:hover {
+  color: var(--corvus-accent);
+}
+
+/* Thinking indicator ("Corvus is out looking…"): the shimmer sweep reads
+ * gold-on-panel instead of the default zinc sweep. Applies whether or not
+ * motion is animating — under reduced motion this just renders as a static,
+ * unmoving gold-tinted fill rather than a flat single color. */
+.corvus-surface [data-slot='shimmering-text'] {
+  background-image: linear-gradient(
+    to right,
+    var(--corvus-muted),
+    var(--corvus-accent),
+    var(--corvus-muted)
+  );
+  background-size: 200% 100%;
+}
+
+/* Sign-in gate (#74's copy, atlas-themed chrome only). */
+.corvus-surface [data-slot='sign-in-gate'] {
+  border-color: var(--corvus-border);
+  background-color: var(--corvus-panel);
+}
+
+.corvus-surface [data-slot='sign-in-gate-title'] {
+  color: var(--corvus-ink);
+}
+
+.corvus-surface [data-slot='sign-in-gate-body'] {
+  color: var(--corvus-muted);
+}
+
+.corvus-surface [data-slot='sign-in-gate-cta'] {
+  background-color: var(--corvus-accent);
+  color: var(--corvus-accent-ink);
+}
+
+.corvus-surface [data-slot='sign-in-gate-cta']:hover {
+  background-color: var(--corvus-accent-hover);
+}
+
+/* Overrides the CTA's own teal focus ring (a `ring-*` box-shadow, not the
+ * `:focus-visible` outline the sitewide rule above already re-colors) so
+ * the one focus indicator that opts out of the outline still reads gold. */
+.corvus-surface [data-slot='sign-in-gate-cta']:focus-visible {
+  box-shadow: none;
+  outline: 2px solid var(--corvus-accent);
+  outline-offset: 2px;
+}
+
+/* Composer. */
+.corvus-surface [data-slot='composer-input'] {
+  border-color: var(--corvus-border);
+  background-color: var(--corvus-panel);
+  color: var(--corvus-ink);
+}
+
+.corvus-surface [data-slot='composer-input']::placeholder {
+  color: var(--corvus-muted);
+}
+
+.corvus-surface [data-slot='composer-send'] {
+  background-color: var(--corvus-accent);
+  color: var(--corvus-accent-ink);
+}
+
+.corvus-surface [data-slot='composer-send']:not(:disabled):hover {
+  background-color: var(--corvus-accent-hover);
+}
+
+/* ConstellationMark (src/components/corvus/ConstellationMark.tsx): gentle
+ * per-star opacity twinkle, applied when its `animate` prop (default true)
+ * is set. Pure CSS, so `prefers-reduced-motion: reduce` disables it below
+ * with no JS gate needed — the component's `animate` prop is a separate,
+ * independent off-switch. */
+.corvus-constellation-twinkle circle {
+  animation: corvus-twinkle 4.5s ease-in-out infinite;
+}
+
+.corvus-constellation-twinkle circle:nth-of-type(2) {
+  animation-delay: 0.6s;
+}
+
+.corvus-constellation-twinkle circle:nth-of-type(3) {
+  animation-delay: 1.3s;
+}
+
+.corvus-constellation-twinkle circle:nth-of-type(4) {
+  animation-delay: 2.1s;
+}
+
+.corvus-constellation-twinkle circle:nth-of-type(5) {
+  animation-delay: 2.8s;
+}
+
+@keyframes corvus-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .corvus-constellation-twinkle circle {
+    animation: none;
+  }
+}
