@@ -125,6 +125,10 @@ export default function CorvusChat({
 }: CorvusChatProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [input, setInput] = useState('')
+  // True only while a dictation session is actively feeding the composer.
+  // Cleared on send so a late final transcript can't repopulate the box after
+  // it's been cleared (the "voice message doesn't clear on send" bug).
+  const dictatingRef = useRef(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
   const [firstName, setFirstName] = useState<string | null>(null)
@@ -196,6 +200,10 @@ export default function CorvusChat({
   // sign-in-required disable apply identically. No new backend involved.
   const handleTranscript = useCallback(
     (text: string) => {
+      // Ignore transcripts that arrive once dictation is over (e.g. a trailing
+      // final result after the message was already sent) — otherwise they'd
+      // refill the just-cleared composer.
+      if (!dictatingRef.current) return
       setInput(text)
       requestAnimationFrame(autosize)
     },
@@ -206,6 +214,7 @@ export default function CorvusChat({
     if (speech.listening) {
       speech.stop()
     } else {
+      dictatingRef.current = true
       inputRef.current?.focus()
       speech.start()
     }
@@ -220,6 +229,11 @@ export default function CorvusChat({
       return
     }
     if (isBusy || signInRequired) return
+    // End any in-flight dictation and drop its trailing transcript so a
+    // voice-composed message clears the composer on send exactly like a typed
+    // one (handleTranscript no-ops once dictatingRef is false).
+    dictatingRef.current = false
+    speech.stop()
     // Tokens are single-use, so each send fetches its own; getToken()
     // resolves null instantly when chat protection is disarmed, keeping
     // the default path free of any Turnstile latency.
@@ -233,7 +247,7 @@ export default function CorvusChat({
     })()
     setInput('')
     requestAnimationFrame(autosize)
-  }, [autosize, getToken, input, isBusy, sendMessage, signInRequired])
+  }, [autosize, getToken, input, isBusy, sendMessage, signInRequired, speech])
 
   const copyMessage = useCallback(async (id: string, text: string) => {
     try {

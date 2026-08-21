@@ -55,19 +55,6 @@ declare global {
 /** Browser permission-denial error codes the Web Speech API reports. */
 const PERMISSION_ERRORS = new Set(['not-allowed', 'service-not-allowed'])
 
-/**
- * Error codes that mean recognition can't run in THIS browser even though a
- * recognizer constructor exists — distinct from a permission denial the
- * visitor can fix. `network` is the signature Brave produces: it ships
- * `webkitSpeechRecognition` (so feature-detection passes) but disables the
- * Google speech backend the API depends on, so every attempt fails with a
- * network error and no transcript (brave/brave-browser#18569, #3725). It's
- * also what a genuinely offline browser reports. `audio-capture` means no
- * usable microphone. Either way the mic can't produce text here, so the UI
- * shows an explanatory note rather than silently doing nothing.
- */
-const UNAVAILABLE_ERRORS = new Set(['network', 'audio-capture'])
-
 function getRecognitionConstructor(): SpeechRecognitionConstructor | null {
   if (typeof window === 'undefined') return null
   return window.SpeechRecognition ?? window.webkitSpeechRecognition ?? null
@@ -139,6 +126,12 @@ export function useSpeechInput({
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const onTranscriptRef = useRef(onTranscript)
   onTranscriptRef.current = onTranscript
+  // Whether this recognizer has ever produced a transcript. Used to tell a
+  // browser that genuinely can't run recognition (Brave: `network` error with
+  // no transcript, ever) apart from one that works but emits a spurious
+  // `network` error mid-session (iOS Safari does this even while transcribing
+  // fine) — only the former should surface the "unavailable" note.
+  const hasTranscribedRef = useRef(false)
 
   useEffect(() => {
     setSupported(Boolean(getRecognitionConstructor()))
@@ -155,22 +148,41 @@ export function useSpeechInput({
     if (!Recognition) return // unsupported — no-op, never throws
 
     const recognition = new Recognition()
-    recognition.continuous = false
+    // `continuous = true` so a brief pause mid-sentence doesn't end the
+    // session and truncate the utterance (notably with Bluetooth mics like
+    // AirPods, which also clip the very start while the mic spins up — a
+    // hardware latency we can't fully recover in JS). The consumer stops
+    // recognition explicitly (tapping the mic, or sending).
+    recognition.continuous = true
     recognition.interimResults = true
     recognition.lang =
       typeof navigator !== 'undefined' ? navigator.language : 'en-US'
 
     recognition.onresult = (event) => {
+      // Accumulate EVERY result from index 0, not from `event.resultIndex`:
+      // once a segment finalizes, the recognizer advances `resultIndex` past
+      // it, so reading from there drops the already-finalized start and the
+      // composer would show only the latest segment (the "it replaced my text
+      // with the end after I paused" bug). Concatenating all results — final
+      // and interim, in order — rebuilds the full transcript each time.
       let text = ''
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+      for (let i = 0; i < event.results.length; i += 1) {
         text += event.results[i][0]?.transcript ?? ''
       }
+      if (text) hasTranscribedRef.current = true
       onTranscriptRef.current(text)
     }
     recognition.onerror = (event) => {
       if (PERMISSION_ERRORS.has(event.error)) {
         setPermissionDenied(true)
-      } else if (UNAVAILABLE_ERRORS.has(event.error)) {
+      } else if (event.error === 'audio-capture') {
+        // No usable microphone — genuinely unavailable regardless of browser.
+        setUnavailable(true)
+      } else if (event.error === 'network' && !hasTranscribedRef.current) {
+        // `network` only means "this browser can't run recognition" when it
+        // has NEVER transcribed (Brave, whose backend is disabled). A network
+        // error after a successful transcript is a transient Safari hiccup —
+        // don't mislabel a working browser as unsupported.
         setUnavailable(true)
       }
       recognitionRef.current = null

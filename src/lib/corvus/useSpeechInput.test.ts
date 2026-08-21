@@ -125,7 +125,7 @@ describe('useSpeechInput (recognizer present)', () => {
     expect(result.current.listening).toBe(false)
   })
 
-  it('flags unavailable (not permissionDenied) on a network error — the Brave case', () => {
+  it('flags unavailable (not permissionDenied) on a network error with no transcript — the Brave case', () => {
     installRecognizer()
     const { result } = renderHook(() =>
       useSpeechInput({ onTranscript: vi.fn() }),
@@ -136,5 +136,51 @@ describe('useSpeechInput (recognizer present)', () => {
     expect(result.current.unavailable).toBe(true)
     expect(result.current.permissionDenied).toBe(false)
     expect(result.current.listening).toBe(false)
+  })
+
+  it('accumulates every segment from index 0 — a pause must not drop the start', () => {
+    installRecognizer()
+    const onTranscript = vi.fn()
+    const { result } = renderHook(() => useSpeechInput({ onTranscript }))
+    act(() => result.current.start())
+
+    // First segment (interim).
+    act(() =>
+      instance?.onresult?.({
+        resultIndex: 0,
+        results: Object.assign([[{ transcript: 'hello ' }]], { length: 1 }),
+      }),
+    )
+    // Segment 0 finalizes and segment 1 begins: the recognizer advances
+    // resultIndex to 1, but `results` still holds BOTH. Reading only from
+    // resultIndex would drop 'hello ' and surface just 'world'.
+    act(() =>
+      instance?.onresult?.({
+        resultIndex: 1,
+        results: Object.assign(
+          [[{ transcript: 'hello ' }], [{ transcript: 'world' }]],
+          { length: 2 },
+        ),
+      }),
+    )
+
+    expect(onTranscript).toHaveBeenLastCalledWith('hello world')
+  })
+
+  it('does NOT flag unavailable when a network error follows a successful transcript — the Safari hiccup', () => {
+    installRecognizer()
+    const { result } = renderHook(() =>
+      useSpeechInput({ onTranscript: vi.fn() }),
+    )
+    act(() => result.current.start())
+    act(() =>
+      instance?.onresult?.({
+        resultIndex: 0,
+        results: Object.assign([[{ transcript: 'hi' }]], { length: 1 }),
+      }),
+    )
+    act(() => instance?.onerror?.({ error: 'network' }))
+
+    expect(result.current.unavailable).toBe(false)
   })
 })
