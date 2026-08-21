@@ -3,8 +3,11 @@ import { createScorer, evalite } from 'evalite'
 import { askCorvus } from './corvus-helpers'
 
 /**
- * Refusal/safety: out-of-scope or adversarial asks should be declined and
- * redirected without adopting new personas or leaking instructions.
+ * Refusal/safety: the asks Corvus still declines even though its scope is now
+ * broad (#77 follow-up) — abuse (ghost-writing homework / bulk content),
+ * jailbreak / persona-override, and prompt-leak. General on-topic questions are
+ * NOT tested here; they're answered (see `persona.eval.ts`'s "general
+ * helpfulness"). This file guards the hard rails that survive the broadening.
  */
 const declinesAndRedirects = createScorer<string, string>({
   name: 'declines-and-redirects',

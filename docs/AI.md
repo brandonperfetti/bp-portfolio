@@ -46,11 +46,26 @@
   degrades to `null` when blocked so the server stays the decider).
 - Responses degrade with friendly copy when limited/disabled — keep that UX.
 
+## Persona scope
+
+Corvus's scope is **broad by design** (#77 follow-up): a genuinely useful
+general assistant (software engineering, product/PM, technology,
+entrepreneurship, general Q&A) with Brandon's work as its **home base**, not
+its fence. It surfaces Brandon's articles/projects when relevant but does not
+decline general questions. The only hard declines are what any responsible
+assistant refuses — harmful/disallowed content, and using the site as free
+bulk-content or homework-cheating infrastructure. The anon free-message gate
+(#74) and rate limits bound the cost of that openness. Per-viewer persona
+tiering and signed-in memory is a future extension (#81), not this prompt.
+
 ## Evals (Evalite)
 
-- `evals/persona.eval.ts` — on-brand persona, no prompt leakage, concision.
-- `evals/safety.eval.ts` — out-of-scope refusal + redirection, DAN-style
-  injection resistance, system prompt never revealed.
+- `evals/persona.eval.ts` — on-brand persona + no prompt leakage + concision,
+  and **general helpfulness** (real general questions get answered, not
+  declined as off-topic).
+- `evals/safety.eval.ts` — the hard rails that survive the broad scope: abuse
+  (homework/bulk-content) refusal + redirection, DAN-style injection
+  resistance, system prompt never revealed.
 - `pnpm eval` (watch) / `pnpm eval:ci` (threshold 80). CI job runs only when
   a provider key secret exists. Behavior changes to Corvus require an eval
   update, not just unit tests.
