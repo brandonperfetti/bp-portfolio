@@ -42,14 +42,18 @@ export interface MessageContentProps extends React.ComponentProps<'div'> {
  * The chat bubble itself — colored, padded, and rounded, with the
  * speaking-side corner squared off (the "tail" side).
  *
- * @remarks Token-driven (zinc/teal, matching light+dark parity elsewhere in
- * the app) — this is deliberately the *current* Corvus palette, not the
- * Corvus visual-identity work tracked separately in #78.
+ * @remarks The zinc/teal utility classes are the *base* palette used anywhere
+ * this component renders outside a Corvus surface (e.g. Storybook). Inside
+ * `.corvus-surface`, the scoped rules in `src/styles/tailwind.css` key on
+ * `[data-slot='message-content'][data-from='...']` and override the bubble to
+ * the #78 Corvus identity palette — so `data-from` must live on THIS element
+ * (not only the parent `Message` row) for that override to match.
  */
 function MessageContent({ from, className, ...props }: MessageContentProps) {
   return (
     <div
       data-slot="message-content"
+      data-from={from}
       className={cn(
         'inline-block rounded-xl px-4 py-2.5 text-sm',
         from === 'assistant'
