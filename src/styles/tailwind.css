@@ -214,6 +214,13 @@
   --corvus-accent: #d8b25e;
   --corvus-accent-hover: #e6c274;
   --corvus-accent-ink: #14192a;
+  /* Filled-button gold — kept distinct from --corvus-accent so the light
+   * theme can deepen the *text* gold for AA contrast on paper without
+   * turning the filled sign-in CTA muddy. Bright in both themes (the dark
+   * CTA Brandon signed off on); the light override deliberately does NOT
+   * redefine it, so light inherits this same bright gold. */
+  --corvus-accent-solid: #d8b25e;
+  --corvus-accent-solid-hover: #e6c274;
   --corvus-border: rgb(232 235 242 / 12%);
   --corvus-status: #3ecf8e;
 
@@ -239,7 +246,12 @@
    * palette's --corvus-accent for AA contrast on a light ground (audited:
    * dark ink text on this gold is ~4.77:1; see #78 report). */
   --corvus-ground: #f5f6fa;
-  --corvus-panel: #fcfcfe;
+  /* Card/panel surface. On the site's zinc-50 (#fafafa) light page a near-
+   * white card vanishes, so the panel takes on the soft blue-gray that used
+   * to sit *behind* the chat (Brandon: "take that outer gray and make it the
+   * chat background") — giving the card real contrast now that the wrapper
+   * paints no background. */
+  --corvus-panel: #e8ecf4;
   --corvus-panel-elevated: #edeff6;
   --corvus-ink: #14192a;
   --corvus-muted: #5b6478;
@@ -248,11 +260,11 @@
   --corvus-accent-ink: #14192a;
   --corvus-border: rgb(20 25 42 / 12%);
 
-  /* Bubbles invert in light mode: assistant reads as a light panel, user as
-   * a dark bubble — matching the mock rather than simply reusing
-   * --corvus-panel/--corvus-ink (which would make both bubbles identical to
-   * the page background). */
-  --corvus-bubble-assistant: var(--corvus-panel-elevated);
+  /* Bubbles in light mode: assistant is white so it lifts off the soft-gray
+   * card (a light-panel bubble would blend into the card now that the card
+   * itself is gray), user is a dark navy bubble — the two read as distinct
+   * surfaces without reusing the card color. */
+  --corvus-bubble-assistant: #ffffff;
   --corvus-bubble-assistant-text: var(--corvus-ink);
   --corvus-bubble-user: #161d2e;
   --corvus-bubble-user-text: #eef0f5;
@@ -435,12 +447,12 @@
 }
 
 .corvus-surface [data-slot='sign-in-gate-cta'] {
-  background-color: var(--corvus-accent);
+  background-color: var(--corvus-accent-solid);
   color: var(--corvus-accent-ink);
 }
 
 .corvus-surface [data-slot='sign-in-gate-cta']:hover {
-  background-color: var(--corvus-accent-hover);
+  background-color: var(--corvus-accent-solid-hover);
 }
 
 /* Overrides the CTA's own teal focus ring (a `ring-*` box-shadow, not the

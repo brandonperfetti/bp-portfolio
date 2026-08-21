@@ -68,9 +68,11 @@ export default async function CorvusPage() {
           separate hero-style header + constellation backdrop this page used
           to render (Brandon: "went overboard"). This wrapper just supplies
           the atlas palette/fonts and the fixed-height flex frame so the chat
-          fills the space and the composer stays pinned at the bottom. */}
+          fills the space and the composer stays pinned at the bottom. No
+          background of its own — the chat card sits directly on the site
+          page (zinc-50 / black), so there's no darker band behind it. */}
       <div
-        className={`corvus-surface flex h-[calc(100dvh-5.75rem)] min-h-0 flex-col overflow-hidden rounded-3xl bg-[var(--corvus-ground)] px-3 pt-8 pb-2 sm:h-[calc(100dvh-6.25rem)] sm:px-4 sm:pt-10 sm:pb-3 ${fraunces.variable} ${instrumentSans.variable} ${jetbrainsMono.variable}`}
+        className={`corvus-surface flex h-[calc(100dvh-5.75rem)] min-h-0 flex-col overflow-hidden rounded-3xl px-3 pt-8 pb-2 sm:h-[calc(100dvh-6.25rem)] sm:px-4 sm:pt-10 sm:pb-3 ${fraunces.variable} ${instrumentSans.variable} ${jetbrainsMono.variable}`}
       >
         <div className="min-h-0 flex-1">
           <CorvusChat title={headingText} subtitle={subtitleText} />
