@@ -5,15 +5,22 @@ import { DefaultChatTransport } from 'ai'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Streamdown } from 'streamdown'
 
-import { Copy as CopyIcon } from 'lucide-react'
+import { Copy as CopyIcon, MessagesSquare } from 'lucide-react'
 
 import { SendIcon } from '@/icons'
 import {
   createCorvusChatFetch,
   SIGN_IN_REQUIRED_CODE,
 } from '@/lib/ai/corvusChatFetch'
-import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from '@/components/ui/conversation'
+import { Message, MessageContent } from '@/components/ui/message'
+import { ShimmeringText } from '@/components/ui/shimmering-text'
 
 /**
  * Custom `fetch` for `DefaultChatTransport` — normalizes the sign-in-gate
@@ -38,15 +45,18 @@ function isSignInRequiredError(error: Error | undefined): boolean {
  * @remarks Retained v3 niceties: `/` focuses the input, Enter submits
  * (Shift+Enter for newline), textarea autosize, assistant copy buttons, and a
  * reduced-motion-aware intro (no entrance animation when reduced motion is
- * set). TODO(brandon): swap the bubble shell for ElevenLabs UI
- * Conversation/Message components via `@elevenlabs/cli` (registry is
- * unreachable from the build sandbox; props here mirror them so the swap is
- * mechanical).
+ * set). Presentation is built on our own reconstructed
+ * `Conversation`/`Message`/`ShimmeringText` components
+ * (`src/components/ui/{conversation,message,shimmering-text}.tsx`) rather
+ * than ElevenLabs UI's registry — ui.elevenlabs.io rate-limits/blocks
+ * automated pulls (403/429) from this build sandbox, so #79 reconstructed
+ * equivalent presentational components against our own design tokens
+ * instead of vendoring theirs ("Path B"). The Corvus visual identity/theme
+ * (a distinct palette, dynamic greeting copy, etc.) is separate follow-up
+ * work tracked in #78 — this pass is presentation-shape only.
  */
 export default function CorvusChat() {
-  const prefersReducedMotion = usePrefersReducedMotion()
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
   const [input, setInput] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
@@ -91,14 +101,6 @@ export default function CorvusChat() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
-
-  // Keep the newest message in view; jump instantly under reduced motion.
-  useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: prefersReducedMotion ? 'auto' : 'smooth',
-    })
-  }, [messages, prefersReducedMotion])
 
   const autosize = useCallback(() => {
     const el = inputRef.current
@@ -157,41 +159,31 @@ export default function CorvusChat() {
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100 p-4 dark:border-zinc-700/40">
-      <div
-        ref={scrollRef}
-        aria-live="polite"
-        className="min-h-0 flex-1 space-y-4 overflow-auto p-2"
-      >
-        {messages.length === 0 && (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Corvus here — ask about Brandon&apos;s work, articles, projects, or
-            tech stack. Press{' '}
-            <kbd className="rounded border border-zinc-300 px-1 dark:border-zinc-600">
-              /
-            </kbd>{' '}
-            to focus this chat anytime.
-          </p>
-        )}
-        {messages.map((message) => {
-          const text = messageText(message)
-          const isAssistant = message.role === 'assistant'
-          return (
-            <div key={message.id} className="chat-message">
-              <div
-                className={`flex items-end ${isAssistant ? '' : 'justify-end'}`}
-              >
-                <div
-                  className={`mx-1 max-w-[92%] space-y-2 text-sm lg:max-w-[80%] ${
-                    isAssistant ? 'items-start' : 'items-end'
-                  }`}
-                >
-                  <span
-                    className={`inline-block rounded-xl px-4 py-2.5 ${
-                      isAssistant
-                        ? 'rounded-bl-none bg-teal-700 text-white'
-                        : 'rounded-br-none bg-zinc-500 text-white dark:bg-zinc-600'
-                    }`}
-                  >
+      <Conversation>
+        <ConversationContent>
+          {messages.length === 0 && (
+            <ConversationEmptyState
+              icon={<MessagesSquare className="h-6 w-6" />}
+              description={
+                <>
+                  Corvus here — ask about Brandon&apos;s work, articles,
+                  projects, or tech stack. Press{' '}
+                  <kbd className="rounded border border-zinc-300 px-1 dark:border-zinc-600">
+                    /
+                  </kbd>{' '}
+                  to focus this chat anytime.
+                </>
+              }
+            />
+          )}
+          {messages.map((message) => {
+            const text = messageText(message)
+            const isAssistant = message.role === 'assistant'
+            const from = isAssistant ? 'assistant' : 'user'
+            return (
+              <Message key={message.id} from={from}>
+                <div className="mx-1 max-w-[92%] space-y-2 lg:max-w-[80%]">
+                  <MessageContent from={from}>
                     {isAssistant ? (
                       <div className="corvus-markdown max-w-none text-white">
                         <Streamdown>{text}</Streamdown>
@@ -199,7 +191,7 @@ export default function CorvusChat() {
                     ) : (
                       <span className="whitespace-pre-wrap">{text}</span>
                     )}
-                  </span>
+                  </MessageContent>
                   {isAssistant && text && (
                     <button
                       type="button"
@@ -211,45 +203,47 @@ export default function CorvusChat() {
                     </button>
                   )}
                 </div>
+              </Message>
+            )
+          })}
+          {status === 'submitted' && (
+            <ShimmeringText text="Corvus is thinking…" className="text-sm" />
+          )}
+          {error &&
+            (signInRequired ? (
+              // Friendly, on-brand prompt — not framed as an error. Mirrors
+              // the gated-article sign-in CTA (articles/[slug]/page.tsx) so
+              // the "sign in, it's free" pattern reads the same everywhere on
+              // the site. No entrance animation to gate behind reduced
+              // motion: this block is static from the moment it mounts.
+              <div className="rounded-2xl border border-zinc-200 p-4 text-center dark:border-zinc-700/60">
+                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                  You&apos;ve used your free Corvus messages.
+                </p>
+                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                  Sign in (it&apos;s free) to keep chatting.
+                </p>
+                <a
+                  href={`/sign-in?redirect_url=${encodeURIComponent(signInRedirectUrl)}`}
+                  className="mt-3 inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none"
+                >
+                  Sign in to continue
+                </a>
               </div>
-            </div>
-          )
-        })}
-        {status === 'submitted' && (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Corvus is thinking…
-          </p>
-        )}
-        {error &&
-          (signInRequired ? (
-            // Friendly, on-brand prompt — not framed as an error. Mirrors
-            // the gated-article sign-in CTA (articles/[slug]/page.tsx) so
-            // the "sign in, it's free" pattern reads the same everywhere on
-            // the site. No entrance animation to gate behind reduced
-            // motion: this block is static from the moment it mounts.
-            <div className="rounded-2xl border border-zinc-200 p-4 text-center dark:border-zinc-700/60">
-              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                You&apos;ve used your free Corvus messages.
-              </p>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                Sign in (it&apos;s free) to keep chatting.
-              </p>
-              <a
-                href={`/sign-in?redirect_url=${encodeURIComponent(signInRedirectUrl)}`}
-                className="mt-3 inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none"
+            ) : (
+              <p
+                role="alert"
+                className="text-sm text-red-600 dark:text-red-400"
               >
-                Sign in to continue
-              </a>
-            </div>
-          ) : (
-            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-              {error.message.includes('429') ||
-              error.message.toLowerCase().includes('rate')
-                ? 'Corvus needs a breather — you have hit the rate limit. Try again in a minute.'
-                : 'Something went wrong reaching Corvus. Please try again.'}
-            </p>
-          ))}
-      </div>
+                {error.message.includes('429') ||
+                error.message.toLowerCase().includes('rate')
+                  ? 'Corvus needs a breather — you have hit the rate limit. Try again in a minute.'
+                  : 'Something went wrong reaching Corvus. Please try again.'}
+              </p>
+            ))}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
 
       <form
         className="mt-3 flex items-end gap-2"

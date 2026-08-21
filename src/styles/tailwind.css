@@ -167,3 +167,27 @@
     transform: translateX(-50%);
   }
 }
+
+/* ShimmeringText (src/components/ui/shimmering-text.tsx): sweeps a lighter
+ * band across background-clip:text. Applied only when the component's own
+ * usePrefersReducedMotion() check is false; the @media guard here is a
+ * belt-and-suspenders backstop for any consumer that applies the class
+ * without going through the component's JS gate. */
+@keyframes text-shimmer {
+  from {
+    background-position: 150% center;
+  }
+  to {
+    background-position: -50% center;
+  }
+}
+
+.animate-text-shimmer {
+  animation: text-shimmer 2.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-text-shimmer {
+    animation: none;
+  }
+}
