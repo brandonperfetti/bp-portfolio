@@ -23,8 +23,14 @@ const meta = {
   component: Conversation,
   tags: ['autodocs'],
   decorators: [
+    // A bounded flex column, mirroring how CorvusChat mounts the viewport:
+    // `Conversation` is `flex-1 min-h-0 overflow-auto`, so it only clips (and
+    // thus overflows enough for the scroll button to appear) inside a
+    // flex-column parent with a fixed height. A plain `h-96` block lets the
+    // viewport grow to its content instead, which is why the ScrolledUp play
+    // function couldn't surface the button.
     (Story) => (
-      <div className="mx-auto h-96 max-w-lg rounded-2xl border border-zinc-200 dark:border-zinc-700/60">
+      <div className="mx-auto flex h-96 max-w-lg flex-col rounded-2xl border border-zinc-200 dark:border-zinc-700/60">
         <Story />
       </div>
     ),
