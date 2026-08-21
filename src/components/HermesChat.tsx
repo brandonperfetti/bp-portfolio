@@ -8,19 +8,24 @@ import { Streamdown } from 'streamdown'
 import { Copy as CopyIcon } from 'lucide-react'
 
 import { SendIcon } from '@/icons'
+import {
+  createHermesChatFetch,
+  SIGN_IN_REQUIRED_CODE,
+} from '@/lib/ai/hermesChatFetch'
 import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
 
 /**
- * Matches the `code: 'sign_in_required'` body the chat route returns once an
- * anonymous visitor has used their free messages (#74). `useChat`'s fetch
- * transport turns a non-ok response into `new Error(await response.text())`
- * (the AI SDK's `DefaultChatTransport`), so the JSON body's stringified text
- * — not a parsed object — is all `error.message` ever holds; matching a
- * substring here is the same pattern the rate-limit branch below already
- * uses against the 429 route's body text.
+ * Custom `fetch` for `DefaultChatTransport` — normalizes the sign-in-gate
+ * 401 to a message `isSignInRequiredError` can trust (#74 addendum 2, see
+ * `@/lib/ai/hermesChatFetch` for the full mobile-staging story: matching
+ * against the SDK's own `error.message` surfacing proved unreliable on real
+ * mobile Safari). Module-scope singleton — stateless, no per-render
+ * dependencies, and its default `baseFetch` resolves the global `fetch` at
+ * CALL time, so it still picks up whatever `fetch` is current when a
+ * request actually fires.
  */
-const SIGN_IN_REQUIRED_CODE = 'sign_in_required'
+const hermesChatFetch = createHermesChatFetch()
 
 function isSignInRequiredError(error: Error | undefined): boolean {
   return Boolean(error?.message?.includes(SIGN_IN_REQUIRED_CODE))
@@ -46,7 +51,11 @@ export default function HermesChat() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const transport = useMemo(
-    () => new DefaultChatTransport({ api: '/api/ai/chat' }),
+    () =>
+      new DefaultChatTransport({
+        api: '/api/ai/chat',
+        fetch: hermesChatFetch,
+      }),
     [],
   )
   const { messages, sendMessage, status, error } = useChat({ transport })
