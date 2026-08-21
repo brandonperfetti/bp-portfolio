@@ -16,8 +16,10 @@
 
 ## Guardrails (`src/lib/security/`)
 
-- `limiter.ts`: Upstash Redis rate limits — per-minute and daily quota keyed
-  by IP. Without Upstash env, dev fails open (never ship that state to
+- `limiter.ts`: Upstash Redis rate limits — per-minute and daily quota,
+  keyed by (HMAC-hashed) IP for anonymous requests and by Clerk `userId`
+  for signed-in ones (the route builds the key; see the chatGate bullet).
+  Without Upstash env, dev fails open (never ship that state to
   production).
 - `guardrails.ts`: shared quota/limit application; kill switches
   `CORVUS_DISABLE_CHAT` / `CORVUS_DISABLE_IMAGE` (renamed from `HERMES_*`,

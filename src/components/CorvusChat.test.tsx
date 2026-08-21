@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import CorvusChat from '@/components/CorvusChat'
 
@@ -66,6 +66,13 @@ beforeEach(() => {
 })
 
 describe('CorvusChat', () => {
+  afterEach(() => {
+    // The fake-clock test below restores real timers itself, but only when
+    // its assertions pass — restore here too so a failed assertion can't
+    // leave fake timers active for the rest of the file.
+    vi.useRealTimers()
+  })
+
   it('renders the idle intro (dynamic time-of-day greeting) and an enabled composer', () => {
     // Fixed clock so the greeting bucket is deterministic (#78): the
     // component computes it from `new Date().getHours()` at render time.

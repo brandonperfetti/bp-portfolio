@@ -116,10 +116,11 @@ export interface UseSpeechInputResult {
  * @remarks Deliberately dumb: recognized text streams into the caller's
  * `onTranscript` exactly like typed input — no new backend, no ElevenLabs or
  * other STT service, no change to the guardrails in `/api/ai/chat` (#74).
- * `continuous` is `false` and `interimResults` is `true`, so a single
- * utterance streams interim transcripts as the visitor speaks; the
- * recognizer's own `onend` (utterance complete, or `stop()` called) is
- * treated as the end of the listening session. `lang` is read from
+ * `continuous` is `true` and `interimResults` is `true`, so a brief pause
+ * mid-sentence doesn't end the session and interim transcripts stream as
+ * the visitor speaks; the recognizer's own `onend` (`stop()` called — mic
+ * tap or send — or the recognizer ending on its own) is treated as the end
+ * of the listening session. `lang` is read from
  * `navigator.language` at `start()` time. Unsupported browsers get
  * `supported: false` — `start`/`stop` are no-ops so a consumer that forgets
  * to gate on `supported` still can't crash.
@@ -134,9 +135,14 @@ export function useSpeechInput({
   const [unavailable, setUnavailable] = useState(false)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const onTranscriptRef = useRef(onTranscript)
-  onTranscriptRef.current = onTranscript
   const onErrorRef = useRef(onError)
-  onErrorRef.current = onError
+  // Latest-value refs updated in an effect (not during render): renders can
+  // be discarded/replayed under concurrent rendering, so a render-phase
+  // write could capture callbacks for a render that never commits.
+  useEffect(() => {
+    onTranscriptRef.current = onTranscript
+    onErrorRef.current = onError
+  }, [onTranscript, onError])
   // Whether this recognizer has ever produced a transcript. Used to tell a
   // browser that genuinely can't run recognition (Brave: `network` error with
   // no transcript, ever) apart from one that works but emits a spurious

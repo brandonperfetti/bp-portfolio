@@ -398,7 +398,7 @@
 }
 
 .corvus-surface [data-slot='message-content'] .corvus-markdown code {
-  background-color: color-mix(in srgb, currentColor 12%, transparent);
+  background-color: color-mix(in srgb, currentcolor 12%, transparent);
   border-radius: 0.25rem;
   padding: 0.05em 0.35em;
 }
