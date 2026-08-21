@@ -2,35 +2,35 @@ import { type Metadata } from 'next'
 import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
 
 import { Container } from '@/components/Container'
-import HermesChat from '@/components/HermesChat'
+import CorvusChat from '@/components/CorvusChat'
 import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 
-const defaultHermesMeta: Metadata = {
-  title: 'Hermes',
+const defaultCorvusMeta: Metadata = {
+  title: 'Corvus',
   description:
-    'Chat with Hermes using streaming responses and image generation prompts.',
+    'Chat with Corvus using streaming responses and image generation prompts.',
 }
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getCmsSiteSettings()
-  const page = await getCmsPageByPath('/hermes')
+  const page = await getCmsPageByPath('/corvus')
 
   return buildPageMetadata({
     page,
     settings,
-    fallbackTitle: String(defaultHermesMeta.title),
-    fallbackDescription: String(defaultHermesMeta.description),
-    path: '/hermes',
+    fallbackTitle: String(defaultCorvusMeta.title),
+    fallbackDescription: String(defaultCorvusMeta.description),
+    path: '/corvus',
   })
 }
 
-export default async function HermesPage() {
-  const page = await getCmsPageByPath('/hermes')
-  const headingText = page?.title || 'Hermes'
+export default async function CorvusPage() {
+  const page = await getCmsPageByPath('/corvus')
+  const headingText = page?.title || 'Corvus'
   const subtitleText =
     page?.subtitle ||
     'Prefix your prompt with image: or Dali: to generate an image.'
@@ -51,10 +51,10 @@ export default async function HermesPage() {
           </ScrollReveal>
         </div>
         <div className="mt-3 min-h-0 flex-1">
-          <HermesChat />
+          <CorvusChat />
         </div>
       </div>
-      <CmsPageBlocks slug="hermes" />
+      <CmsPageBlocks slug="corvus" />
     </Container>
   )
 }

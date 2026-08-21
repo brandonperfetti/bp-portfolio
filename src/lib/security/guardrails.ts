@@ -16,7 +16,7 @@ export type GuardrailStores = {
 }
 
 const globalForGuardrails = globalThis as typeof globalThis & {
-  __bpHermesGuardrails?: GuardrailStores
+  __bpGuardrails?: GuardrailStores
 }
 
 let injectedGuardrailStores: GuardrailStores | null = null
@@ -29,15 +29,15 @@ let injectedGuardrailStores: GuardrailStores | null = null
  *
  * Side effects:
  * - Mutates module singleton (`injectedGuardrailStores`).
- * - Mutates global fallback holder (`globalForGuardrails.__bpHermesGuardrails`).
+ * - Mutates global fallback holder (`globalForGuardrails.__bpGuardrails`).
  */
 export function setGuardrailStores(store: GuardrailStores | null) {
   injectedGuardrailStores = store
   if (store) {
-    globalForGuardrails.__bpHermesGuardrails = store
+    globalForGuardrails.__bpGuardrails = store
     return
   }
-  delete globalForGuardrails.__bpHermesGuardrails
+  delete globalForGuardrails.__bpGuardrails
 }
 
 /**
@@ -53,7 +53,7 @@ export function getStores(): GuardrailStores {
     return injectedGuardrailStores
   }
 
-  if (!globalForGuardrails.__bpHermesGuardrails) {
+  if (!globalForGuardrails.__bpGuardrails) {
     // Stale-TODO refresh (#74): this used to read "replace with a
     // distributed store" — that's already done. `checkChatLimits`
     // (@/lib/security/limiter) is Upstash-backed whenever
@@ -62,13 +62,13 @@ export function getStores(): GuardrailStores {
     // fallback, used only when Upstash isn't configured. The #74 anon
     // free-message gate (@/lib/security/chatGate) follows the same
     // Upstash-with-in-memory-dev-fallback shape.
-    globalForGuardrails.__bpHermesGuardrails = {
+    globalForGuardrails.__bpGuardrails = {
       rateBuckets: new Map<string, RateBucket>(),
       dailyBuckets: new Map<string, DailyBucket>(),
     }
   }
 
-  return globalForGuardrails.__bpHermesGuardrails
+  return globalForGuardrails.__bpGuardrails
 }
 
 function getSiteHosts() {
@@ -108,12 +108,12 @@ function getDayKey(now = new Date()) {
 }
 
 function getGuardrailMaxEntries() {
-  return toPositiveInt(process.env.HERMES_GUARDRAILS_MAX_BUCKETS, 5000, 50000)
+  return toPositiveInt(process.env.CORVUS_GUARDRAILS_MAX_BUCKETS, 5000, 50000)
 }
 
 function getGuardrailBucketTtlMs() {
   return toPositiveInt(
-    process.env.HERMES_GUARDRAILS_BUCKET_TTL_MS,
+    process.env.CORVUS_GUARDRAILS_BUCKET_TTL_MS,
     24 * 60 * 60 * 1000,
     7 * 24 * 60 * 60 * 1000,
   )
@@ -121,7 +121,7 @@ function getGuardrailBucketTtlMs() {
 
 function getGuardrailPruneIntervalMs() {
   return toPositiveInt(
-    process.env.HERMES_GUARDRAILS_PRUNE_INTERVAL_MS,
+    process.env.CORVUS_GUARDRAILS_PRUNE_INTERVAL_MS,
     60_000,
     60 * 60 * 1000,
   )
@@ -363,12 +363,12 @@ export function applyDailyQuota(options: {
  */
 export function getSecurityLimits() {
   const chatRatePerMinute = toPositiveInt(
-    process.env.HERMES_CHAT_RATE_LIMIT_PER_MINUTE,
+    process.env.CORVUS_CHAT_RATE_LIMIT_PER_MINUTE,
     10,
     200,
   )
   const mailingListRatePerMinute = toPositiveInt(
-    process.env.HERMES_MAILINGLIST_RATE_LIMIT_PER_MINUTE,
+    process.env.CORVUS_MAILINGLIST_RATE_LIMIT_PER_MINUTE,
     chatRatePerMinute,
     200,
   )
@@ -377,32 +377,34 @@ export function getSecurityLimits() {
     chatRatePerMinute,
     mailingListRatePerMinute,
     imageRatePerMinute: toPositiveInt(
-      process.env.HERMES_IMAGE_RATE_LIMIT_PER_MINUTE,
+      process.env.CORVUS_IMAGE_RATE_LIMIT_PER_MINUTE,
       2,
       100,
     ),
     maxMessageChars: toPositiveInt(
-      process.env.HERMES_MAX_MESSAGE_CHARS,
+      process.env.CORVUS_MAX_MESSAGE_CHARS,
       1500,
       10000,
     ),
-    maxMessages: toPositiveInt(process.env.HERMES_MAX_MESSAGES, 12, 100),
-    // HERMES_MAX_COMPLETION_TOKENS wins; AI_MAX_COMPLETION_TOKENS is the
-    // env knob deploys actually set today (.env.example) — honor it as the
-    // fallback so enforcing this limit doesn't silently shrink replies.
+    maxMessages: toPositiveInt(process.env.CORVUS_MAX_MESSAGES, 12, 100),
+    // CORVUS_MAX_COMPLETION_TOKENS is
+    // honored as a one-release fallback (#77 rename), and
+    // AI_MAX_COMPLETION_TOKENS is the env knob deploys actually set today
+    // (.env.example) — honor it as the last fallback so enforcing this
+    // limit doesn't silently shrink replies.
     maxCompletionTokens: toPositiveInt(
-      process.env.HERMES_MAX_COMPLETION_TOKENS ??
+      process.env.CORVUS_MAX_COMPLETION_TOKENS ||
         process.env.AI_MAX_COMPLETION_TOKENS,
       1024,
       8000,
     ),
     imageDailyLimit: toPositiveInt(
-      process.env.HERMES_IMAGE_DAILY_LIMIT,
+      process.env.CORVUS_IMAGE_DAILY_LIMIT,
       0,
       10000,
     ),
-    publicChatEnabled: !toBoolean(process.env.HERMES_DISABLE_CHAT, false),
-    publicImageEnabled: !toBoolean(process.env.HERMES_DISABLE_IMAGE, false),
+    publicChatEnabled: !toBoolean(process.env.CORVUS_DISABLE_CHAT, false),
+    publicImageEnabled: !toBoolean(process.env.CORVUS_DISABLE_IMAGE, false),
   }
 }
 

@@ -8,7 +8,7 @@ import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
  * @returns `isAuthenticated` false whenever Clerk is unconfigured — gated
  * content then always renders its teaser, never its body. `userId` is the
  * Clerk user id when authenticated, otherwise `null` (added for #74: the
- * Hermes chat gate keys signed-in abuse limits by userId instead of IP).
+ * Corvus chat gate keys signed-in abuse limits by userId instead of IP).
  */
 export async function getViewer(): Promise<{
   isAuthenticated: boolean

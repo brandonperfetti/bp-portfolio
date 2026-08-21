@@ -40,7 +40,7 @@ export function Footer() {
 /**
  * Footer with caller-supplied (CMS-driven) navigation items.
  *
- * @remarks Renders nothing on `/hermes` — the chat surface owns its full
+ * @remarks Renders nothing on `/corvus` — the chat surface owns its full
  * viewport and a footer would push the composer off-screen.
  */
 export function FooterWithNavigation({
@@ -50,7 +50,7 @@ export function FooterWithNavigation({
 }) {
   const pathname = usePathname()
 
-  if (pathname === '/hermes') {
+  if (pathname === '/corvus') {
     return null
   }
 

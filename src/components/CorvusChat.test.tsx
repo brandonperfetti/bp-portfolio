@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import HermesChat from '@/components/HermesChat'
+import CorvusChat from '@/components/CorvusChat'
 
 // useChat is mocked so each test controls transport state (status, messages,
 // error) without a network; the component's own composer/submit/copy logic
@@ -57,17 +57,17 @@ beforeEach(() => {
   Element.prototype.scrollTo = vi.fn()
 })
 
-describe('HermesChat', () => {
+describe('CorvusChat', () => {
   it('renders the idle intro and an enabled composer', () => {
-    render(<HermesChat />)
-    expect(screen.getByText(/hermes here/i)).toBeInTheDocument()
+    render(<CorvusChat />)
+    expect(screen.getByText(/corvus here/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /send/i })).toBeEnabled()
   })
 
   it('sends trimmed input on Enter and clears the composer', async () => {
     const user = userEvent.setup()
-    render(<HermesChat />)
-    const input = screen.getByLabelText('Message Hermes')
+    render(<CorvusChat />)
+    const input = screen.getByLabelText('Message Corvus')
 
     await user.type(input, '  What does Brandon build?  ')
     await user.keyboard('{Enter}')
@@ -80,8 +80,8 @@ describe('HermesChat', () => {
 
   it('does not submit on Shift+Enter (newline stays in the composer)', async () => {
     const user = userEvent.setup()
-    render(<HermesChat />)
-    const input = screen.getByLabelText('Message Hermes')
+    render(<CorvusChat />)
+    const input = screen.getByLabelText('Message Corvus')
 
     await user.type(input, 'line one')
     await user.keyboard('{Shift>}{Enter}{/Shift}')
@@ -91,24 +91,24 @@ describe('HermesChat', () => {
 
   it('refocuses the composer on empty submit instead of sending (v3 nicety)', async () => {
     const user = userEvent.setup()
-    render(<HermesChat />)
+    render(<CorvusChat />)
 
     await user.click(screen.getByRole('button', { name: /send/i }))
 
     expect(chatState.sendMessage).not.toHaveBeenCalled()
-    expect(screen.getByLabelText('Message Hermes')).toHaveFocus()
+    expect(screen.getByLabelText('Message Corvus')).toHaveFocus()
   })
 
   it('disables Send and shows the thinking indicator while submitted', async () => {
     chatState.status = 'submitted'
     const user = userEvent.setup()
-    render(<HermesChat />)
+    render(<CorvusChat />)
 
     expect(screen.getByRole('button', { name: /send/i })).toBeDisabled()
-    expect(screen.getByText(/hermes is thinking/i)).toBeInTheDocument()
+    expect(screen.getByText(/corvus is thinking/i)).toBeInTheDocument()
 
     // Enter must not fire while a response is in flight.
-    const input = screen.getByLabelText('Message Hermes')
+    const input = screen.getByLabelText('Message Corvus')
     await user.type(input, 'another question')
     await user.keyboard('{Enter}')
     expect(chatState.sendMessage).not.toHaveBeenCalled()
@@ -117,17 +117,17 @@ describe('HermesChat', () => {
   it('shows the generic error state as an alert', () => {
     chatState.status = 'error'
     chatState.error = new Error('fetch failed')
-    render(<HermesChat />)
+    render(<CorvusChat />)
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      /something went wrong reaching hermes/i,
+      /something went wrong reaching corvus/i,
     )
   })
 
   it('shows the rate-limit copy for 429-flavored errors', () => {
     chatState.status = 'error'
     chatState.error = new Error('Request failed with status 429')
-    render(<HermesChat />)
+    render(<CorvusChat />)
 
     expect(screen.getByRole('alert')).toHaveTextContent(/rate limit/i)
   })
@@ -140,15 +140,15 @@ describe('HermesChat', () => {
     chatState.error = new Error(
       JSON.stringify({
         error:
-          "You've used your free Hermes messages — sign in to keep chatting.",
+          "You've used your free Corvus messages — sign in to keep chatting.",
         code: 'sign_in_required',
       }),
     )
-    render(<HermesChat />)
+    render(<CorvusChat />)
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(
-      screen.getByText(/used your free hermes messages/i),
+      screen.getByText(/used your free corvus messages/i),
     ).toBeInTheDocument()
 
     const signInLink = screen.getByRole('link', {
@@ -163,14 +163,14 @@ describe('HermesChat', () => {
   it('disables the composer while the sign-in prompt is showing, so a gated attempt cannot be typed', () => {
     chatState.status = 'error'
     chatState.error = new Error(JSON.stringify({ code: 'sign_in_required' }))
-    render(<HermesChat />)
+    render(<CorvusChat />)
 
-    expect(screen.getByLabelText('Message Hermes')).toBeDisabled()
+    expect(screen.getByLabelText('Message Corvus')).toBeDisabled()
     expect(screen.getByRole('button', { name: /send/i })).toBeDisabled()
   })
 
   it('renders assistant messages with a working copy button', async () => {
-    chatState.messages = [assistantMessage('m1', 'Hello from Hermes')]
+    chatState.messages = [assistantMessage('m1', 'Hello from Corvus')]
     const writeText = vi.fn().mockResolvedValue(undefined)
     const user = userEvent.setup()
     // Define AFTER setup(): userEvent installs its own clipboard stub, and
@@ -180,19 +180,19 @@ describe('HermesChat', () => {
       value: { writeText },
     })
 
-    render(<HermesChat />)
-    expect(screen.getByText('Hello from Hermes')).toBeInTheDocument()
+    render(<CorvusChat />)
+    expect(screen.getByText('Hello from Corvus')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /copy/i }))
-    expect(writeText).toHaveBeenCalledWith('Hello from Hermes')
+    expect(writeText).toHaveBeenCalledWith('Hello from Corvus')
     expect(await screen.findByText('Copied')).toBeInTheDocument()
   })
 
   it('focuses the composer when / is pressed outside a field', () => {
-    render(<HermesChat />)
+    render(<CorvusChat />)
 
     fireEvent.keyDown(window, { key: '/' })
 
-    expect(screen.getByLabelText('Message Hermes')).toHaveFocus()
+    expect(screen.getByLabelText('Message Corvus')).toHaveFocus()
   })
 })

@@ -1,17 +1,17 @@
 import { Redis } from '@upstash/redis'
 
 /**
- * Anonymous free-message gate for Hermes chat (#74, folds #18).
+ * Anonymous free-message gate for Corvus chat (#74, folds #18).
  *
  * @remarks This is a CUMULATIVE per-IP counter — "how many free messages has
  * this visitor ever sent" — distinct from `checkChatLimits` in
  * `@/lib/security/limiter`, which is a per-minute/per-day RATE. Anonymous
- * visitors get a small free taste (default 3 messages, `HERMES_ANON_FREE_MESSAGES`);
+ * visitors get a small free taste (default 3 messages, `CORVUS_ANON_FREE_MESSAGES`);
  * the (N+1)th request is rejected server-side with a sign-in-required
  * response instead of ever reaching the model. Signed-in users skip this
  * gate entirely and are keyed by `userId` in `checkChatLimits` instead, at a
- * higher ceiling (`HERMES_CHAT_RATE_LIMIT_PER_MINUTE_AUTHED` /
- * `HERMES_CHAT_DAILY_QUOTA_AUTHED`).
+ * higher ceiling (`CORVUS_CHAT_RATE_LIMIT_PER_MINUTE_AUTHED` /
+ * `CORVUS_CHAT_DAILY_QUOTA_AUTHED`).
  *
  * Distributed via Upstash Redis (same backing store as `checkChatLimits`) so
  * the count holds across serverless instances; falls back to an in-memory,
@@ -38,12 +38,12 @@ function getRedis(): Redis | null {
   return redisClient
 }
 
-const anonFreeMessageRedisKey = (key: string) => `hermes:anon-free:${key}`
+const anonFreeMessageRedisKey = (key: string) => `chat:anon-free:${key}`
 
 type AnonCountStore = Map<string, number>
 
 const globalForChatGate = globalThis as typeof globalThis & {
-  __bpHermesAnonFreeCounts?: AnonCountStore
+  __bpAnonFreeCounts?: AnonCountStore
 }
 
 /**
@@ -55,10 +55,10 @@ const globalForChatGate = globalThis as typeof globalThis & {
  * Upstash (the module-scope warning below fires once per instance).
  */
 function getMemoryStore(): AnonCountStore {
-  if (!globalForChatGate.__bpHermesAnonFreeCounts) {
-    globalForChatGate.__bpHermesAnonFreeCounts = new Map<string, number>()
+  if (!globalForChatGate.__bpAnonFreeCounts) {
+    globalForChatGate.__bpAnonFreeCounts = new Map<string, number>()
   }
-  return globalForChatGate.__bpHermesAnonFreeCounts
+  return globalForChatGate.__bpAnonFreeCounts
 }
 
 if (!hasUpstash && process.env.NODE_ENV === 'production') {
@@ -75,28 +75,28 @@ function toPositiveIntEnv(value: string | undefined, fallback: number) {
   return parsed
 }
 
-/** Anonymous free-message ceiling (`HERMES_ANON_FREE_MESSAGES`, default 3). */
+/** Anonymous free-message ceiling (`CORVUS_ANON_FREE_MESSAGES`, default 3). */
 export function getAnonFreeMessageLimit(): number {
-  return toPositiveIntEnv(process.env.HERMES_ANON_FREE_MESSAGES, 3)
+  return toPositiveIntEnv(process.env.CORVUS_ANON_FREE_MESSAGES, 3)
 }
 
 /**
  * Signed-in per-minute chat rate ceiling
- * (`HERMES_CHAT_RATE_LIMIT_PER_MINUTE_AUTHED`, default 30 — well above the
+ * (`CORVUS_CHAT_RATE_LIMIT_PER_MINUTE_AUTHED`, default 30 — well above the
  * anonymous default of 10 since authed traffic is keyed by `userId`, not a
  * possibly-shared IP).
  */
 export function getAuthedChatRatePerMinute(): number {
   return toPositiveIntEnv(
-    process.env.HERMES_CHAT_RATE_LIMIT_PER_MINUTE_AUTHED,
+    process.env.CORVUS_CHAT_RATE_LIMIT_PER_MINUTE_AUTHED,
     30,
   )
 }
 
 /**
- * Signed-in daily chat quota (`HERMES_CHAT_DAILY_QUOTA_AUTHED`, default
+ * Signed-in daily chat quota (`CORVUS_CHAT_DAILY_QUOTA_AUTHED`, default
  * 1000; 0 or negative disables the daily check, same convention as
- * `HERMES_CHAT_DAILY_QUOTA`).
+ * `CORVUS_CHAT_DAILY_QUOTA`).
  *
  * @remarks `Number(x) || 1000` would silently turn an explicit `'0'`
  * (disable) into `1000` (default), since `0` is falsy — that was the
@@ -106,7 +106,7 @@ export function getAuthedChatRatePerMinute(): number {
  * `perDay <= 0` as "no daily check") to actually disable the quota.
  */
 export function getAuthedChatDailyQuota(): number {
-  const raw = process.env.HERMES_CHAT_DAILY_QUOTA_AUTHED
+  const raw = process.env.CORVUS_CHAT_DAILY_QUOTA_AUTHED
   if (!raw) return 1000
   const parsed = Number(raw)
   return Number.isFinite(parsed) ? parsed : 1000
@@ -176,5 +176,5 @@ export async function incrementAnonFreeMessageCount(
  * client instead, which each test constructs fresh).
  */
 export function __resetAnonFreeMessageMemoryStoreForTests() {
-  globalForChatGate.__bpHermesAnonFreeCounts = new Map<string, number>()
+  globalForChatGate.__bpAnonFreeCounts = new Map<string, number>()
 }

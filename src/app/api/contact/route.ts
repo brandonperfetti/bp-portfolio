@@ -35,7 +35,7 @@ const escapeHtml = (value: string) =>
  * route also moved from `/api/sendgrid` to the vendor-neutral `/api/contact`
  * so the next provider change touches zero URLs).
  *
- * @remarks Hardened to the same guardrail stack as the Hermes chat route
+ * @remarks Hardened to the same guardrail stack as the Corvus chat route
  * (fresh-eyes review 2026-08, finding M1): same-origin source guard, per-IP
  * rate limiting (`mailingListRatePerMinute`), Zod validation with a real
  * email check, and HTML-escaped interpolation so user input cannot inject

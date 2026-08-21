@@ -48,7 +48,7 @@ describe('chatGate — Upstash-backed (distributed)', () => {
     redisGet.mockResolvedValue(null)
     const { peekAnonFreeMessageCount } = await import('@/lib/security/chatGate')
     await expect(peekAnonFreeMessageCount('203.0.113.1')).resolves.toBe(0)
-    expect(redisGet).toHaveBeenCalledWith('hermes:anon-free:203.0.113.1')
+    expect(redisGet).toHaveBeenCalledWith('chat:anon-free:203.0.113.1')
   })
 
   it('increments via Redis INCR and sets a TTL only on the first write', async () => {
@@ -58,7 +58,7 @@ describe('chatGate — Upstash-backed (distributed)', () => {
 
     await expect(incrementAnonFreeMessageCount('203.0.113.1')).resolves.toBe(1)
     expect(redisExpire).toHaveBeenCalledWith(
-      'hermes:anon-free:203.0.113.1',
+      'chat:anon-free:203.0.113.1',
       30 * 24 * 60 * 60,
     )
 
@@ -114,60 +114,60 @@ describe('chatGate — in-memory fallback (Upstash unconfigured)', () => {
 
 describe('getAnonFreeMessageLimit / getAuthedChat* env knobs', () => {
   it('defaults to 3 free anon messages when unset', async () => {
-    vi.stubEnv('HERMES_ANON_FREE_MESSAGES', '')
+    vi.stubEnv('CORVUS_ANON_FREE_MESSAGES', '')
     const { getAnonFreeMessageLimit } = await import('@/lib/security/chatGate')
     expect(getAnonFreeMessageLimit()).toBe(3)
   })
 
-  it('honors HERMES_ANON_FREE_MESSAGES when set to a positive integer', async () => {
-    vi.stubEnv('HERMES_ANON_FREE_MESSAGES', '5')
+  it('honors CORVUS_ANON_FREE_MESSAGES when set to a positive integer', async () => {
+    vi.stubEnv('CORVUS_ANON_FREE_MESSAGES', '5')
     const { getAnonFreeMessageLimit } = await import('@/lib/security/chatGate')
     expect(getAnonFreeMessageLimit()).toBe(5)
   })
 
   it('falls back to the default on a non-positive or non-numeric override', async () => {
-    vi.stubEnv('HERMES_ANON_FREE_MESSAGES', '0')
+    vi.stubEnv('CORVUS_ANON_FREE_MESSAGES', '0')
     const { getAnonFreeMessageLimit } = await import('@/lib/security/chatGate')
     expect(getAnonFreeMessageLimit()).toBe(3)
   })
 
   it('defaults the authed per-minute ceiling above the anon default (10)', async () => {
-    vi.stubEnv('HERMES_CHAT_RATE_LIMIT_PER_MINUTE_AUTHED', '')
+    vi.stubEnv('CORVUS_CHAT_RATE_LIMIT_PER_MINUTE_AUTHED', '')
     const { getAuthedChatRatePerMinute } =
       await import('@/lib/security/chatGate')
     expect(getAuthedChatRatePerMinute()).toBe(30)
   })
 
   it('defaults the authed daily quota well above the anon default (200)', async () => {
-    vi.stubEnv('HERMES_CHAT_DAILY_QUOTA_AUTHED', '')
+    vi.stubEnv('CORVUS_CHAT_DAILY_QUOTA_AUTHED', '')
     const { getAuthedChatDailyQuota } = await import('@/lib/security/chatGate')
     expect(getAuthedChatDailyQuota()).toBe(1000)
   })
 
   describe('getAuthedChatDailyQuota — explicit 0 disables (orchestrator finding 1)', () => {
     it('defaults to 1000 when unset', async () => {
-      vi.stubEnv('HERMES_CHAT_DAILY_QUOTA_AUTHED', '')
+      vi.stubEnv('CORVUS_CHAT_DAILY_QUOTA_AUTHED', '')
       const { getAuthedChatDailyQuota } =
         await import('@/lib/security/chatGate')
       expect(getAuthedChatDailyQuota()).toBe(1000)
     })
 
     it('honors an explicit "0" as disabled, not the default (0 is falsy, not "unset")', async () => {
-      vi.stubEnv('HERMES_CHAT_DAILY_QUOTA_AUTHED', '0')
+      vi.stubEnv('CORVUS_CHAT_DAILY_QUOTA_AUTHED', '0')
       const { getAuthedChatDailyQuota } =
         await import('@/lib/security/chatGate')
       expect(getAuthedChatDailyQuota()).toBe(0)
     })
 
     it('passes through a positive override', async () => {
-      vi.stubEnv('HERMES_CHAT_DAILY_QUOTA_AUTHED', '2000')
+      vi.stubEnv('CORVUS_CHAT_DAILY_QUOTA_AUTHED', '2000')
       const { getAuthedChatDailyQuota } =
         await import('@/lib/security/chatGate')
       expect(getAuthedChatDailyQuota()).toBe(2000)
     })
 
     it('falls back to the default on a non-numeric override', async () => {
-      vi.stubEnv('HERMES_CHAT_DAILY_QUOTA_AUTHED', 'abc')
+      vi.stubEnv('CORVUS_CHAT_DAILY_QUOTA_AUTHED', 'abc')
       const { getAuthedChatDailyQuota } =
         await import('@/lib/security/chatGate')
       expect(getAuthedChatDailyQuota()).toBe(1000)

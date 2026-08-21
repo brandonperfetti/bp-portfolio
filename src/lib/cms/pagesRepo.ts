@@ -97,7 +97,7 @@ export const RESERVED_PAGE_SLUGS = new Set([
   'about',
   'account',
   'articles',
-  'hermes',
+  'corvus',
   'projects',
   'sign-in',
   'sign-up',

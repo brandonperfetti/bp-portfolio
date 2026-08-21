@@ -111,10 +111,10 @@ test('command palette opens and closes via escape', async ({ page }) => {
   await expect(paletteInput).not.toBeVisible()
 })
 
-test('hermes empty submit focuses input', async ({ page }) => {
-  await page.goto('/hermes')
+test('corvus empty submit focuses input', async ({ page }) => {
+  await page.goto('/corvus')
 
-  const input = page.getByPlaceholder('Ask Hermes...')
+  const input = page.getByPlaceholder('Ask Corvus...')
   await expect(input).toBeVisible()
 
   await page.getByRole('button', { name: /send/i }).click()

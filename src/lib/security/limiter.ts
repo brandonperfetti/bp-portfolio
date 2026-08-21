@@ -47,12 +47,12 @@ const getLimiters = (perMinute: number, perDay: number) => {
       minuteLimiter: new Ratelimit({
         redis,
         limiter: Ratelimit.slidingWindow(perMinute, '60 s'),
-        prefix: 'hermes:rl',
+        prefix: 'chat:rl',
       }),
       dailyLimiter: new Ratelimit({
         redis,
         limiter: Ratelimit.fixedWindow(perDay, '86400 s'),
-        prefix: 'hermes:daily',
+        prefix: 'chat:daily',
       }),
     }
     limiterCache.set(cacheKey, entry)

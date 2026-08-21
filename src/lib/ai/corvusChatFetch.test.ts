@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
-  createHermesChatFetch,
+  createCorvusChatFetch,
   SIGN_IN_REQUIRED_CODE,
-} from '@/lib/ai/hermesChatFetch'
+} from '@/lib/ai/corvusChatFetch'
 
 /**
  * Mobile-staging fix (#74 addendum 2): the wrapper's job is to normalize the
- * sign-in-gate 401 into a message `HermesChat`'s `isSignInRequiredError` can
+ * sign-in-gate 401 into a message `CorvusChat`'s `isSignInRequiredError` can
  * trust, WITHOUT relying on how the AI SDK transport happens to surface a
  * response body as `error.message` (that reliance was the original bug).
  * Every other response must pass through byte-for-byte untouched.
@@ -19,18 +19,18 @@ const jsonResponse = (body: unknown, status: number) =>
     headers: { 'content-type': 'application/json' },
   })
 
-describe('createHermesChatFetch', () => {
+describe('createCorvusChatFetch', () => {
   it('throws a normalized SIGN_IN_REQUIRED_CODE error on a 401 with the gate code', async () => {
     const baseFetch = vi.fn(async () =>
       jsonResponse(
         {
-          error: "You've used your free Hermes messages.",
+          error: "You've used your free Corvus messages.",
           code: 'sign_in_required',
         },
         401,
       ),
     )
-    const wrapped = createHermesChatFetch(baseFetch)
+    const wrapped = createCorvusChatFetch(baseFetch)
 
     await expect(wrapped('/api/ai/chat')).rejects.toThrow(SIGN_IN_REQUIRED_CODE)
   })
@@ -38,7 +38,7 @@ describe('createHermesChatFetch', () => {
   it('passes a 200 streaming response through untouched', async () => {
     const streamResponse = new Response('stream-body', { status: 200 })
     const baseFetch = vi.fn(async () => streamResponse)
-    const wrapped = createHermesChatFetch(baseFetch)
+    const wrapped = createCorvusChatFetch(baseFetch)
 
     const result = await wrapped('/api/ai/chat')
 
@@ -50,7 +50,7 @@ describe('createHermesChatFetch', () => {
     const baseFetch = vi.fn(async () =>
       jsonResponse({ error: 'Unauthorized' }, 401),
     )
-    const wrapped = createHermesChatFetch(baseFetch)
+    const wrapped = createCorvusChatFetch(baseFetch)
 
     const result = await wrapped('/api/ai/chat')
 
@@ -62,7 +62,7 @@ describe('createHermesChatFetch', () => {
     const baseFetch = vi.fn(
       async () => new Response('plain text failure', { status: 401 }),
     )
-    const wrapped = createHermesChatFetch(baseFetch)
+    const wrapped = createCorvusChatFetch(baseFetch)
 
     const result = await wrapped('/api/ai/chat')
 
@@ -76,7 +76,7 @@ describe('createHermesChatFetch', () => {
       429,
     )
     const baseFetch = vi.fn(async () => rateLimited)
-    const wrapped = createHermesChatFetch(baseFetch)
+    const wrapped = createCorvusChatFetch(baseFetch)
 
     const result = await wrapped('/api/ai/chat')
 
@@ -86,7 +86,7 @@ describe('createHermesChatFetch', () => {
   it('passes a 500 (or any other status) through untouched', async () => {
     const serverError = new Response('boom', { status: 500 })
     const baseFetch = vi.fn(async () => serverError)
-    const wrapped = createHermesChatFetch(baseFetch)
+    const wrapped = createCorvusChatFetch(baseFetch)
 
     const result = await wrapped('/api/ai/chat')
 
@@ -114,7 +114,7 @@ describe('createHermesChatFetch', () => {
       clone: () => clonedJsonResponse,
     } as unknown as Response
     const baseFetch = vi.fn(async () => fakeResponse)
-    const wrapped = createHermesChatFetch(baseFetch)
+    const wrapped = createCorvusChatFetch(baseFetch)
 
     await expect(wrapped('/api/ai/chat')).rejects.toThrow(SIGN_IN_REQUIRED_CODE)
     expect(textSpy).not.toHaveBeenCalled()
@@ -122,7 +122,7 @@ describe('createHermesChatFetch', () => {
 
   it('forwards input/init to baseFetch unchanged (credentials/body/headers preserved)', async () => {
     const baseFetch = vi.fn(async () => new Response('ok', { status: 200 }))
-    const wrapped = createHermesChatFetch(baseFetch)
+    const wrapped = createCorvusChatFetch(baseFetch)
     const init: RequestInit = {
       method: 'POST',
       body: JSON.stringify({ messages: [] }),

@@ -1,5 +1,5 @@
 /**
- * Custom `fetch` for HermesChat's `DefaultChatTransport` (mobile-staging fix
+ * Custom `fetch` for CorvusChat's `DefaultChatTransport` (mobile-staging fix
  * to #74, addendum 2).
  *
  * @remarks Why this exists: the original client-side detection matched
@@ -17,7 +17,7 @@
  * this reads the gate's JSON body OURSELVES, ahead of the SDK transport, and
  * throws a value the SDK can only pass through unmodified — removing the
  * SDK's own error-message surfacing from the trust chain entirely.
- * `HermesChat.tsx`'s `isSignInRequiredError` keeps matching
+ * `CorvusChat.tsx`'s `isSignInRequiredError` keeps matching
  * `error.message.includes(SIGN_IN_REQUIRED_CODE)` — now against a message
  * WE control, not whatever the transport happened to do with the body text.
  *
@@ -40,7 +40,7 @@ type FetchLike = typeof fetch
  * or story before triggering a request still takes effect) so the wrapper
  * itself can be unit-tested without a real network.
  */
-export function createHermesChatFetch(
+export function createCorvusChatFetch(
   baseFetch: FetchLike = (...args: Parameters<FetchLike>) => fetch(...args),
 ): FetchLike {
   return async (input, init) => {

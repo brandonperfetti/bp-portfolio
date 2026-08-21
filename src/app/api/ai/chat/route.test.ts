@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * Server-enforced Hermes auth soft-gate (#74, folds #18). Every dependency
+ * Server-enforced Corvus auth soft-gate (#74, folds #18). Every dependency
  * is mocked so these tests pin the route's ORCHESTRATION — gate order,
  * which key/limit each branch uses, and that nothing in the request body
  * can influence the decision — without touching a real model, Redis, or
@@ -9,9 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * separately in `@/lib/security/chatGate.test.ts`.
  */
 
-vi.mock('@/lib/ai/hermes', () => ({
-  getHermesModel: vi.fn(() => ({ modelId: 'mock-model' })),
-  HERMES_SYSTEM_PROMPT: 'You are Hermes.',
+vi.mock('@/lib/ai/corvus', () => ({
+  getCorvusModel: vi.fn(() => ({ modelId: 'mock-model' })),
+  CORVUS_SYSTEM_PROMPT: 'You are Corvus.',
 }))
 
 const streamTextMock = vi.fn()
@@ -164,7 +164,7 @@ describe('POST /api/ai/chat — anon free-message gate', () => {
     expect(res.status).toBe(401)
   })
 
-  it('respects a raised HERMES_ANON_FREE_MESSAGES ceiling', async () => {
+  it('respects a raised CORVUS_ANON_FREE_MESSAGES ceiling', async () => {
     getAnonFreeMessageLimitMock.mockReturnValue(10)
     peekAnonFreeMessageCountMock.mockResolvedValue(5) // under a limit of 10
 
@@ -276,8 +276,8 @@ describe('POST /api/ai/chat — a crafted payload cannot bypass the gate', () =>
 })
 
 describe('POST /api/ai/chat — existing guards still run, in order, ahead of the new gate', () => {
-  it('HERMES_DISABLE_CHAT still short-circuits before any gate logic', async () => {
-    vi.stubEnv('HERMES_DISABLE_CHAT', 'true')
+  it('CORVUS_DISABLE_CHAT still short-circuits before any gate logic', async () => {
+    vi.stubEnv('CORVUS_DISABLE_CHAT', 'true')
 
     const res = await POST(makeRequest(validBody))
 

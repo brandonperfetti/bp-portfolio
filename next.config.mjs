@@ -58,6 +58,12 @@ const nextConfig = {
         destination: '/',
         permanent: true,
       },
+      // Corvus was renamed from Hermes (#77); preserve any inbound /hermes links.
+      {
+        source: '/hermes',
+        destination: '/corvus',
+        permanent: true,
+      },
     ]
   },
 }

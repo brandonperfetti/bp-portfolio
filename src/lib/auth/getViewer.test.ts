@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * `getViewer()` extended for #74: the Hermes chat gate needs a userId to key
+ * `getViewer()` extended for #74: the Corvus chat gate needs a userId to key
  * signed-in abuse limits (`user:${userId}`) instead of sharing an IP-keyed
  * bucket. This pins the shape addition without regressing the pre-existing
  * Clerk-disabled behavior gated content already relies on.

@@ -2,12 +2,12 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import HermesChat from '@/components/HermesChat'
+import CorvusChat from '@/components/CorvusChat'
 
 /**
  * Fidelity regression test for the #74 mobile-staging bug (addendum 2).
  *
- * `HermesChat.test.tsx` mocks `@ai-sdk/react`'s `useChat` entirely, feeding
+ * `CorvusChat.test.tsx` mocks `@ai-sdk/react`'s `useChat` entirely, feeding
  * it a hand-built `error` object — that only proves the UI branch renders
  * correctly GIVEN an already-normalized error. It never exercised the real
  * `useChat` → `DefaultChatTransport` → `fetch` pipeline, and that pipeline
@@ -19,7 +19,7 @@ import HermesChat from '@/components/HermesChat'
  * This file mocks NOTHING in the `@ai-sdk/react`/`ai` chain — only
  * `global.fetch`, at the actual network boundary — so it reproduces the real
  * conditions of the bug and guards the fix
- * (`@/lib/ai/hermesChatFetch`'s `createHermesChatFetch`) end-to-end: real
+ * (`@/lib/ai/corvusChatFetch`'s `createCorvusChatFetch`) end-to-end: real
  * `fetch` → real `DefaultChatTransport` → real `useChat` → the sign-in
  * prompt.
  */
@@ -42,7 +42,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('HermesChat — real useChat/DefaultChatTransport pipeline', () => {
+describe('CorvusChat — real useChat/DefaultChatTransport pipeline', () => {
   it('renders the sign-in prompt (not the generic red error) for the real sign_in_required 401 response', async () => {
     // The exact shape src/app/api/ai/chat/route.ts returns: a clean JSON
     // 401, not a crash — matching what Sentry showed on staging (zero 500s).
@@ -53,7 +53,7 @@ describe('HermesChat — real useChat/DefaultChatTransport pipeline', () => {
           new Response(
             JSON.stringify({
               error:
-                "You've used your free Hermes messages — sign in to keep chatting.",
+                "You've used your free Corvus messages — sign in to keep chatting.",
               code: 'sign_in_required',
             }),
             {
@@ -65,10 +65,10 @@ describe('HermesChat — real useChat/DefaultChatTransport pipeline', () => {
     )
 
     const user = userEvent.setup()
-    render(<HermesChat />)
+    render(<CorvusChat />)
 
     await user.type(
-      screen.getByLabelText('Message Hermes'),
+      screen.getByLabelText('Message Corvus'),
       'One more question?',
     )
     await user.keyboard('{Enter}')
@@ -83,7 +83,7 @@ describe('HermesChat — real useChat/DefaultChatTransport pipeline', () => {
     // The regression: this must NOT be the generic role="alert" red error.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(
-      screen.getByText(/used your free hermes messages/i),
+      screen.getByText(/used your free corvus messages/i),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /send/i })).toBeDisabled()
   })
@@ -104,13 +104,13 @@ describe('HermesChat — real useChat/DefaultChatTransport pipeline', () => {
     )
 
     const user = userEvent.setup()
-    render(<HermesChat />)
+    render(<CorvusChat />)
 
-    await user.type(screen.getByLabelText('Message Hermes'), 'Hi')
+    await user.type(screen.getByLabelText('Message Corvus'), 'Hi')
     await user.keyboard('{Enter}')
 
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent(/something went wrong reaching hermes/i)
+    expect(alert).toHaveTextContent(/something went wrong reaching corvus/i)
     expect(
       screen.queryByRole('link', { name: /sign in to continue/i }),
     ).not.toBeInTheDocument()

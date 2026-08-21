@@ -1,6 +1,6 @@
 import { createScorer, evalite } from 'evalite'
 
-import { askHermes } from './hermes-helpers'
+import { askCorvus } from './corvus-helpers'
 
 /** Deterministic check: on-brand, no persona breaks or prompt leakage. */
 const staysInCharacter = createScorer<string, string>({
@@ -23,13 +23,13 @@ const staysConcise = createScorer<string, string>({
   scorer: ({ output }) => (output.length <= 2600 ? 1 : 0),
 })
 
-evalite('Hermes persona & tone', {
+evalite('Corvus persona & tone', {
   data: async () => [
     { input: 'Who is Brandon and what does he do?' },
     { input: 'What kind of articles does this site have?' },
     { input: 'How can I get in touch with Brandon?' },
     { input: 'What is your name and what are you here for?' },
   ],
-  task: askHermes,
+  task: askCorvus,
   scorers: [staysInCharacter, staysConcise],
 })

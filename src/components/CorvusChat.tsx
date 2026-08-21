@@ -9,30 +9,30 @@ import { Copy as CopyIcon } from 'lucide-react'
 
 import { SendIcon } from '@/icons'
 import {
-  createHermesChatFetch,
+  createCorvusChatFetch,
   SIGN_IN_REQUIRED_CODE,
-} from '@/lib/ai/hermesChatFetch'
+} from '@/lib/ai/corvusChatFetch'
 import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
 import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
 
 /**
  * Custom `fetch` for `DefaultChatTransport` — normalizes the sign-in-gate
  * 401 to a message `isSignInRequiredError` can trust (#74 addendum 2, see
- * `@/lib/ai/hermesChatFetch` for the full mobile-staging story: matching
+ * `@/lib/ai/corvusChatFetch` for the full mobile-staging story: matching
  * against the SDK's own `error.message` surfacing proved unreliable on real
  * mobile Safari). Module-scope singleton — stateless, no per-render
  * dependencies, and its default `baseFetch` resolves the global `fetch` at
  * CALL time, so it still picks up whatever `fetch` is current when a
  * request actually fires.
  */
-const hermesChatFetch = createHermesChatFetch()
+const corvusChatFetch = createCorvusChatFetch()
 
 function isSignInRequiredError(error: Error | undefined): boolean {
   return Boolean(error?.message?.includes(SIGN_IN_REQUIRED_CODE))
 }
 
 /**
- * Hermes chat client on `useChat` + streamdown (replaces the v3 manual
+ * Corvus chat client on `useChat` + streamdown (replaces the v3 manual
  * `ReadableStream` reader over a hand-rolled NDJSON protocol).
  *
  * @remarks Retained v3 niceties: `/` focuses the input, Enter submits
@@ -43,7 +43,7 @@ function isSignInRequiredError(error: Error | undefined): boolean {
  * unreachable from the build sandbox; props here mirror them so the swap is
  * mechanical).
  */
-export default function HermesChat() {
+export default function CorvusChat() {
   const prefersReducedMotion = usePrefersReducedMotion()
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -54,7 +54,7 @@ export default function HermesChat() {
     () =>
       new DefaultChatTransport({
         api: '/api/ai/chat',
-        fetch: hermesChatFetch,
+        fetch: corvusChatFetch,
       }),
     [],
   )
@@ -148,12 +148,12 @@ export default function HermesChat() {
 
   // Bring the visitor back to wherever they were chatting from. Read at
   // render time (this block only ever shows after a client-side error, well
-  // past hydration) rather than hardcoding /hermes, since HermesChat could
+  // past hydration) rather than hardcoding /corvus, since CorvusChat could
   // be mounted elsewhere.
   const signInRedirectUrl =
     typeof window !== 'undefined'
       ? `${window.location.pathname}${window.location.search}`
-      : '/hermes'
+      : '/corvus'
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100 p-4 dark:border-zinc-700/40">
@@ -164,7 +164,7 @@ export default function HermesChat() {
       >
         {messages.length === 0 && (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Hermes here — ask about Brandon&apos;s work, articles, projects, or
+            Corvus here — ask about Brandon&apos;s work, articles, projects, or
             tech stack. Press{' '}
             <kbd className="rounded border border-zinc-300 px-1 dark:border-zinc-600">
               /
@@ -193,7 +193,7 @@ export default function HermesChat() {
                     }`}
                   >
                     {isAssistant ? (
-                      <div className="hermes-markdown max-w-none text-white">
+                      <div className="corvus-markdown max-w-none text-white">
                         <Streamdown>{text}</Streamdown>
                       </div>
                     ) : (
@@ -217,7 +217,7 @@ export default function HermesChat() {
         })}
         {status === 'submitted' && (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Hermes is thinking…
+            Corvus is thinking…
           </p>
         )}
         {error &&
@@ -229,7 +229,7 @@ export default function HermesChat() {
             // motion: this block is static from the moment it mounts.
             <div className="rounded-2xl border border-zinc-200 p-4 text-center dark:border-zinc-700/60">
               <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                You&apos;ve used your free Hermes messages.
+                You&apos;ve used your free Corvus messages.
               </p>
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                 Sign in (it&apos;s free) to keep chatting.
@@ -245,8 +245,8 @@ export default function HermesChat() {
             <p role="alert" className="text-sm text-red-600 dark:text-red-400">
               {error.message.includes('429') ||
               error.message.toLowerCase().includes('rate')
-                ? 'Hermes needs a breather — you have hit the rate limit. Try again in a minute.'
-                : 'Something went wrong reaching Hermes. Please try again.'}
+                ? 'Corvus needs a breather — you have hit the rate limit. Try again in a minute.'
+                : 'Something went wrong reaching Corvus. Please try again.'}
             </p>
           ))}
       </div>
@@ -274,9 +274,9 @@ export default function HermesChat() {
             }
           }}
           placeholder={
-            signInRequired ? 'Sign in to keep chatting…' : 'Ask Hermes...'
+            signInRequired ? 'Sign in to keep chatting…' : 'Ask Corvus...'
           }
-          aria-label="Message Hermes"
+          aria-label="Message Corvus"
           className="min-h-[42px] flex-1 resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-base text-zinc-900 placeholder:text-zinc-400 focus:ring-2 focus:ring-teal-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
         />
         <button

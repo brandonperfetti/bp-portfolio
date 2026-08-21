@@ -1,17 +1,17 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
 
-import HermesChat from '@/components/HermesChat'
+import CorvusChat from '@/components/CorvusChat'
 
 /**
- * Hermes chat surface (Vercel AI SDK). `Idle` renders the empty state —
+ * Corvus chat surface (Vercel AI SDK). `Idle` renders the empty state —
  * intro, suggestions, and composer. `RateLimited` and `SignInRequired` stub
  * `fetch` to drive the chat route's two non-stream error responses (#74)
  * through the real `useChat` error branch, without a real backend.
  */
 const meta = {
-  title: 'AI/HermesChat',
-  component: HermesChat,
+  title: 'AI/CorvusChat',
+  component: CorvusChat,
   tags: ['autodocs'],
   decorators: [
     (Story) => (
@@ -20,7 +20,7 @@ const meta = {
       </div>
     ),
   ],
-} satisfies Meta<typeof HermesChat>
+} satisfies Meta<typeof CorvusChat>
 
 export default meta
 type Story = StoryObj<typeof meta>
@@ -34,7 +34,7 @@ export const Idle: Story = {}
 export const ComposerInteractions: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    const input = canvas.getByPlaceholderText('Ask Hermes...')
+    const input = canvas.getByPlaceholderText('Ask Corvus...')
     const send = canvas.getByRole('button', { name: /send/i })
 
     // Empty submit: no navigation/request — focus returns to the input.
@@ -52,7 +52,7 @@ export const ComposerInteractions: Story = {
  * Rate-limit error state (existing `checkChatLimits` 429 branch, #74's
  * regression bar). The play function stubs `fetch` to return the route's
  * real 429 shape so `useChat`'s transport throws the same `Error` it would
- * in production (`new Error(await response.text())`), driving HermesChat's
+ * in production (`new Error(await response.text())`), driving CorvusChat's
  * own error-branch matching rather than a hand-rolled mock of `useChat`.
  */
 export const RateLimited: Story = {
@@ -66,7 +66,7 @@ export const RateLimited: Story = {
 
     try {
       const canvas = within(canvasElement)
-      const input = canvas.getByPlaceholderText('Ask Hermes...')
+      const input = canvas.getByPlaceholderText('Ask Corvus...')
       await userEvent.type(input, 'How many messages do I get?')
       await userEvent.click(canvas.getByRole('button', { name: /send/i }))
 
@@ -94,7 +94,7 @@ export const SignInRequired: Story = {
       new Response(
         JSON.stringify({
           error:
-            "You've used your free Hermes messages — sign in to keep chatting.",
+            "You've used your free Corvus messages — sign in to keep chatting.",
           code: 'sign_in_required',
         }),
         { status: 401 },
@@ -102,7 +102,7 @@ export const SignInRequired: Story = {
 
     try {
       const canvas = within(canvasElement)
-      const input = canvas.getByPlaceholderText('Ask Hermes...')
+      const input = canvas.getByPlaceholderText('Ask Corvus...')
       await userEvent.type(input, 'One more question?')
       await userEvent.click(canvas.getByRole('button', { name: /send/i }))
 
@@ -115,7 +115,7 @@ export const SignInRequired: Story = {
       )
       await expect(canvas.queryByRole('alert')).not.toBeInTheDocument()
       await expect(canvas.getByRole('button', { name: /send/i })).toBeDisabled()
-      await expect(canvas.getByLabelText('Message Hermes')).toBeDisabled()
+      await expect(canvas.getByLabelText('Message Corvus')).toBeDisabled()
     } finally {
       window.fetch = originalFetch
     }

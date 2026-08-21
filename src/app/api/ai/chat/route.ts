@@ -1,7 +1,7 @@
 import { convertToModelMessages, streamText, validateUIMessages } from 'ai'
 import * as z from 'zod'
 
-import { getHermesModel, HERMES_SYSTEM_PROMPT } from '@/lib/ai/hermes'
+import { getCorvusModel, CORVUS_SYSTEM_PROMPT } from '@/lib/ai/corvus'
 import { getViewer } from '@/lib/auth/getViewer'
 import {
   getAnonFreeMessageLimit,
@@ -26,12 +26,12 @@ const bodySchema = z.object({
 
 /**
  * Machine-readable code the client matches on to render the sign-in prompt
- * instead of a generic error (see `HermesChat.tsx`'s `isSignInRequiredError`).
+ * instead of a generic error (see `CorvusChat.tsx`'s `isSignInRequiredError`).
  */
 const SIGN_IN_REQUIRED_CODE = 'sign_in_required'
 
 /**
- * Hermes chat endpoint on the Vercel AI SDK (replaces v3's hand-rolled
+ * Corvus chat endpoint on the Vercel AI SDK (replaces v3's hand-rolled
  * OpenAI NDJSON streaming).
  *
  * @remarks Security invariants (§9): the system prompt is server-enforced and
@@ -52,7 +52,7 @@ const SIGN_IN_REQUIRED_CODE = 'sign_in_required'
  * gate.
  */
 export async function POST(req: Request) {
-  if (process.env.HERMES_DISABLE_CHAT === 'true') {
+  if (process.env.CORVUS_DISABLE_CHAT === 'true') {
     return Response.json(
       { error: 'Chat is temporarily disabled.' },
       { status: 503 },
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     : limits.chatRatePerMinute
   const limiterPerDay = authedViewer
     ? getAuthedChatDailyQuota()
-    : Number(process.env.HERMES_CHAT_DAILY_QUOTA) || 0
+    : Number(process.env.CORVUS_CHAT_DAILY_QUOTA) || 0
 
   const limit = await checkChatLimits(
     limiterKey,
@@ -117,7 +117,7 @@ export async function POST(req: Request) {
       return Response.json(
         {
           error:
-            "You've used your free Hermes messages — sign in to keep chatting.",
+            "You've used your free Corvus messages — sign in to keep chatting.",
           code: SIGN_IN_REQUIRED_CODE,
         },
         { status: 401 },
@@ -195,8 +195,8 @@ export async function POST(req: Request) {
   }
 
   const result = streamText({
-    model: getHermesModel(),
-    system: HERMES_SYSTEM_PROMPT,
+    model: getCorvusModel(),
+    system: CORVUS_SYSTEM_PROMPT,
     messages: await convertToModelMessages(windowed),
     maxOutputTokens: limits.maxCompletionTokens,
   })
