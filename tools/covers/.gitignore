@@ -2,4 +2,4 @@
 *.svg
 *.min.b64
 noise.b64
-node_modules/
+node_modules
