@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: sky (React/Next & frontend patterns) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 44% 50%,
+            rgba(3, 105, 161, 0.3),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 84% 30%,
+            rgba(3, 105, 161, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="296" cy="186" r="4" />
+          <circle cx="1812" cy="212" r="4" />
+          <circle cx="1726" cy="938" r="4" />
+          <circle cx="218" cy="896" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1538 144 h 26 M 1551 131 v 26" />
+          <path d="M 156 458 h 24 M 168 446 v 24" />
+          <path d="M 1914 652 h 24 M 1926 640 v 24" />
+        </g>
+
+        <!-- ===== the render cyclone: renders spinning round and round ===== -->
+        <g transform="translate(820,540)">
+          <!-- three orbiting render frames at different phases -->
+          <g fill="none" stroke="rgba(56,189,248,0.35)" stroke-width="4">
+            <ellipse rx="330" ry="220" />
+            <ellipse rx="330" ry="220" transform="rotate(32)"
+              stroke="rgba(56,189,248,0.22)" stroke-dasharray="14 12" />
+          </g>
+          <!-- direction arrows on the orbit -->
+          <path d="M 300 -94 L 336 -80 L 306 -56 Z" fill="rgba(56,189,248,0.5)" />
+          <path d="M -300 94 L -336 80 L -306 56 Z" fill="rgba(56,189,248,0.5)" />
+          <!-- render frames riding the loop: same UI, successive passes -->
+          <g transform="translate(-250,-160) rotate(-12)">
+            <rect x="-80" y="-54" width="160" height="108" rx="14"
+              fill="rgba(9,9,11,0.88)" stroke="rgba(56,189,248,0.6)" stroke-width="4" />
+            <rect x="-52" y="-26" width="104" height="10" rx="5" fill="rgba(56,189,248,0.45)" />
+            <rect x="-52" y="0" width="76" height="10" rx="5" fill="rgba(255,255,255,0.14)" />
+          </g>
+          <g transform="translate(290,-40) rotate(10)" opacity="0.8">
+            <rect x="-80" y="-54" width="160" height="108" rx="14"
+              fill="rgba(9,9,11,0.85)" stroke="rgba(56,189,248,0.5)" stroke-width="3.5" />
+            <rect x="-52" y="-26" width="104" height="10" rx="5" fill="rgba(56,189,248,0.35)" />
+            <rect x="-52" y="0" width="76" height="10" rx="5" fill="rgba(255,255,255,0.12)" />
+          </g>
+          <g transform="translate(-60,206) rotate(4)" opacity="0.65">
+            <rect x="-80" y="-54" width="160" height="108" rx="14"
+              fill="rgba(9,9,11,0.82)" stroke="rgba(56,189,248,0.4)" stroke-width="3.5" />
+            <rect x="-52" y="-26" width="104" height="10" rx="5" fill="rgba(56,189,248,0.3)" />
+          </g>
+          <!-- render counter ticks at center -->
+          <g stroke="rgba(56,189,248,0.4)" stroke-width="4" stroke-linecap="round">
+            <line x1="-24" y1="-8" x2="-24" y2="8" />
+            <line x1="-8" y1="-14" x2="-8" y2="14" />
+            <line x1="8" y1="-8" x2="8" y2="8" />
+            <line x1="24" y1="-14" x2="24" y2="14" />
+          </g>
+        </g>
+
+        <!-- ===== the ref vault: pinned outside the cyclone, unmoved ===== -->
+        <g transform="translate(1600,540)">
+          <!-- anchor post into the ground -->
+          <line x1="0" y1="120" x2="0" y2="330" stroke="rgba(56,189,248,0.45)"
+            stroke-width="6" stroke-linecap="round" />
+          <path d="M -40 290 C -20 322, 20 322, 40 290" fill="none"
+            stroke="rgba(56,189,248,0.45)" stroke-width="5" stroke-linecap="round" />
+          <!-- the vault box -->
+          <rect x="-130" y="-130" width="260" height="250" rx="22"
+            fill="rgba(9,9,11,0.9)" stroke="#38bdf8" stroke-width="5.5" filter="url(#bigGlow)" />
+          <!-- .current slot: one steady cell -->
+          <rect x="-80" y="-60" width="160" height="70" rx="12"
+            fill="rgba(3,105,161,0.35)" stroke="#38bdf8" stroke-width="4" />
+          <circle cx="0" cy="-25" r="14" fill="#38bdf8" filter="url(#accentGlow)" />
+          <!-- dial: mutable, silent — no bell -->
+          <g transform="translate(0,60)">
+            <rect x="-56" y="-16" width="112" height="32" rx="16"
+              fill="rgba(255,255,255,0.06)" stroke="rgba(56,189,248,0.45)" stroke-width="3.5" />
+            <circle cx="-28" cy="0" r="10" fill="rgba(56,189,248,0.55)" />
+          </g>
+          <!-- crossed-out bell: mutating never rings a re-render -->
+          <g transform="translate(150,-160)">
+            <path d="M -14 8 C -14 -10, -8 -20, 0 -22 C 8 -20, 14 -10, 14 8 H -14 Z"
+              fill="none" stroke="rgba(56,189,248,0.5)" stroke-width="3.5"
+              stroke-linejoin="round" />
+            <circle cx="0" cy="14" r="4" fill="rgba(56,189,248,0.5)" />
+            <line x1="-22" y1="-24" x2="22" y2="22" stroke="rgba(56,189,248,0.6)"
+              stroke-width="4" stroke-linecap="round" />
+          </g>
+        </g>
+
+        <!-- tether: every render pass reads the same vault, vault never spins -->
+        <path d="M 1150 480 C 1260 440, 1360 440, 1450 470" fill="none"
+          stroke="#38bdf8" stroke-width="4.5" stroke-dasharray="2 14"
+          stroke-linecap="round" opacity="0.8" />
+        <path d="M 1150 620 C 1260 660, 1360 660, 1450 630" fill="none"
+          stroke="rgba(56,189,248,0.45)" stroke-width="4" stroke-dasharray="2 14"
+          stroke-linecap="round" />
+        <!-- state chip inside the loop for contrast: this one DOES ring renders -->
+        <g transform="translate(500,820)">
+          <rect x="-90" y="-40" width="180" height="80" rx="18"
+            fill="rgba(9,9,11,0.88)" stroke="rgba(56,189,248,0.5)" stroke-width="4" />
+          <circle cx="-44" cy="0" r="11" fill="rgba(56,189,248,0.6)" />
+          <rect x="-16" y="-8" width="76" height="16" rx="8" fill="rgba(56,189,248,0.4)" />
+          <!-- ringing marks -->
+          <g stroke="rgba(56,189,248,0.5)" stroke-width="3.5" stroke-linecap="round">
+            <path d="M 104 -26 C 112 -18, 112 18, 104 26" fill="none" />
+            <path d="M 118 -38 C 130 -24, 130 24, 118 38" fill="none" opacity="0.6" />
+          </g>
+        </g>
+        <path d="M 560 760 C 620 720, 680 690, 730 670" fill="none"
+          stroke="rgba(56,189,248,0.3)" stroke-width="3.5" stroke-dasharray="3 12"
+          stroke-linecap="round" />
+
+        <!-- ground shadow -->
+        <ellipse cx="1050" cy="1000" rx="620" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1600" cy="955" rx="240" ry="16" fill="rgba(3,105,161,0.12)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

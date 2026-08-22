@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: indigo (engineering practice & architecture) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 50% 52%,
+            rgba(67, 56, 202, 0.3),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 18% 24%,
+            rgba(67, 56, 202, 0.12),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="306" cy="192" r="4" />
+          <circle cx="1798" cy="194" r="4" />
+          <circle cx="1734" cy="944" r="4" />
+          <circle cx="234" cy="892" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1546 140 h 26 M 1559 127 v 26" />
+          <path d="M 152 456 h 24 M 164 444 v 24" />
+          <path d="M 1916 660 h 24 M 1928 648 v 24" />
+        </g>
+
+        <!-- ===== LEFT: the monorepo campus — one big building, shared core ===== -->
+        <g transform="translate(520,560)">
+          <!-- campus outline -->
+          <rect x="-300" y="-260" width="600" height="520" rx="26"
+            fill="rgba(9,9,11,0.88)" stroke="#818cf8" stroke-width="5" filter="url(#bigGlow)" />
+          <!-- shared core atrium in the middle -->
+          <rect x="-90" y="-90" width="180" height="180" rx="18"
+            fill="rgba(67,56,202,0.35)" stroke="#818cf8" stroke-width="4.5"
+            filter="url(#accentGlow)" />
+          <circle r="14" fill="#818cf8" />
+          <!-- wings: apps and packages as rooms -->
+          <g fill="rgba(9,9,11,0.9)" stroke="rgba(129,140,248,0.55)" stroke-width="3.5">
+            <rect x="-260" y="-220" width="130" height="100" rx="12" />
+            <rect x="130" y="-220" width="130" height="100" rx="12" />
+            <rect x="-260" y="120" width="130" height="100" rx="12" />
+            <rect x="130" y="120" width="130" height="100" rx="12" />
+          </g>
+          <!-- internal corridors: everything reaches the shared core -->
+          <g stroke="rgba(129,140,248,0.5)" stroke-width="4" stroke-linecap="round">
+            <line x1="-150" y1="-150" x2="-70" y2="-70" />
+            <line x1="150" y1="-150" x2="70" y2="-70" />
+            <line x1="-150" y1="150" x2="-70" y2="70" />
+            <line x1="150" y1="150" x2="70" y2="70" />
+          </g>
+          <!-- one shared roof beam: single CI pipeline overhead -->
+          <path d="M -320 -300 C -160 -340, 160 -340, 320 -300" fill="none"
+            stroke="rgba(129,140,248,0.5)" stroke-width="4.5" stroke-linecap="round" />
+          <g fill="rgba(129,140,248,0.5)">
+            <circle cx="-160" cy="-322" r="7" />
+            <circle cx="0" cy="-330" r="7" />
+            <circle cx="160" cy="-322" r="7" />
+          </g>
+        </g>
+
+        <!-- ===== divider ===== -->
+        <path d="M 1024 240 V 900" stroke="rgba(255,255,255,0.14)" stroke-width="3.5"
+          stroke-dasharray="4 18" stroke-linecap="round" />
+
+        <!-- ===== RIGHT: the polyrepo village — small houses, roads between ===== -->
+        <g transform="translate(1520,560)">
+          <!-- four independent houses -->
+          <g>
+            <g transform="translate(-190,-180)">
+              <rect x="-80" y="-40" width="160" height="110" rx="14"
+                fill="rgba(9,9,11,0.9)" stroke="#818cf8" stroke-width="4" filter="url(#accentGlow)" />
+              <path d="M -92 -40 L 0 -110 L 92 -40" fill="none" stroke="#818cf8"
+                stroke-width="4.5" stroke-linejoin="round" />
+              <rect x="-28" y="10" width="56" height="60" rx="8" fill="rgba(129,140,248,0.35)" />
+            </g>
+            <g transform="translate(190,-140)">
+              <rect x="-70" y="-36" width="140" height="96" rx="12"
+                fill="rgba(9,9,11,0.9)" stroke="rgba(129,140,248,0.6)" stroke-width="3.5" />
+              <path d="M -82 -36 L 0 -96 L 82 -36" fill="none"
+                stroke="rgba(129,140,248,0.6)" stroke-width="4" stroke-linejoin="round" />
+            </g>
+            <g transform="translate(-170,180)">
+              <rect x="-70" y="-36" width="140" height="96" rx="12"
+                fill="rgba(9,9,11,0.9)" stroke="rgba(129,140,248,0.6)" stroke-width="3.5" />
+              <path d="M -82 -36 L 0 -96 L 82 -36" fill="none"
+                stroke="rgba(129,140,248,0.6)" stroke-width="4" stroke-linejoin="round" />
+            </g>
+            <g transform="translate(210,220)">
+              <rect x="-70" y="-36" width="140" height="96" rx="12"
+                fill="rgba(9,9,11,0.9)" stroke="rgba(129,140,248,0.6)" stroke-width="3.5" />
+              <path d="M -82 -36 L 0 -96 L 82 -36" fill="none"
+                stroke="rgba(129,140,248,0.6)" stroke-width="4" stroke-linejoin="round" />
+            </g>
+          </g>
+          <!-- version-pinned roads between houses: dashed with parcel dots -->
+          <g stroke="rgba(129,140,248,0.4)" stroke-width="4" stroke-dasharray="12 12"
+            stroke-linecap="round" fill="none">
+            <path d="M -110 -140 C -20 -120, 60 -130, 120 -150" />
+            <path d="M -150 -90 C -170 10, -170 80, -170 120" />
+            <path d="M 180 -60 C 190 40, 200 100, 210 150" />
+            <path d="M -90 210 C 0 230, 80 230, 140 224" />
+          </g>
+          <!-- version parcels traveling the roads -->
+          <g fill="rgba(129,140,248,0.55)">
+            <rect x="-20" y="-142" width="30" height="22" rx="6" />
+            <rect x="-184" y="20" width="30" height="22" rx="6" />
+            <rect x="26" y="212" width="30" height="22" rx="6" />
+          </g>
+          <!-- each house has its own tiny CI chimney puff -->
+          <g fill="none" stroke="rgba(129,140,248,0.4)" stroke-width="3.5"
+            stroke-linecap="round">
+            <path d="M -150 -300 C -144 -310, -156 -318, -150 -328" />
+            <path d="M 230 -250 C 236 -260, 224 -268, 230 -278" />
+            <path d="M -130 60 C -124 50, -136 42, -130 32" />
+          </g>
+        </g>
+
+        <!-- ground shadows -->
+        <ellipse cx="520" cy="995" rx="360" ry="24" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1520" cy="995" rx="360" ry="24" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1024" cy="950" rx="240" ry="14" fill="rgba(67,56,202,0.12)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>
