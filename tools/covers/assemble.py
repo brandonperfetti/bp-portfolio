@@ -67,7 +67,8 @@ def shell(post, motif):
 
 for post in sys.argv[1:]:
     html = open(f'cover-{post}.html').read()
-    m = re.search(r'<svg class="motif"[^>]*>(.*)</svg>\s*</div>', html, re.S)
+    # \s+ between attrs: prettier splits the svg tag across lines
+    m = re.search(r'<svg\s+class="motif".*?>(.*)</svg>\s*</div>', html, re.S)
     if not m:
         sys.exit(f'motif not found in cover-{post}.html')
     svg = shell(post, m.group(1))

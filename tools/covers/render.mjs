@@ -14,7 +14,10 @@ const page = await browser.newPage({
 for (const name of targets) {
   const html = readFileSync(`${name}.html`, 'utf8')
     .replace('<!--GRAIN-->', grain)
-    .replace('<link rel="stylesheet" href="base.css">', `<style>${css}</style>`)
+    // tolerate prettier's self-closing form (`<link ... />`) — a missed
+    // replace here silently renders an unstyled page (file:///tmp cannot
+    // resolve the relative stylesheet), which looks like a broken motif
+    .replace(/<link rel="stylesheet" href="base.css"\s*\/?>/, `<style>${css}</style>`)
   writeFileSync(`/tmp/${name}.rendered.html`, html)
   await page.goto(`file:///tmp/${name}.rendered.html`)
   await page.waitForTimeout(250)
