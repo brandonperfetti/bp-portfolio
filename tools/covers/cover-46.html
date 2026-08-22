@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: emerald (databases & infra) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 52% 42%,
+            rgba(13, 128, 106, 0.28),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 78% 80%,
+            rgba(13, 128, 106, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="310" cy="180" r="4" />
+          <circle cx="1810" cy="220" r="4" />
+          <circle cx="1730" cy="960" r="4" />
+          <circle cx="220" cy="900" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1580 150 h 26 M 1593 137 v 26" />
+          <path d="M 140 480 h 24 M 152 468 v 24" />
+          <path d="M 1930 640 h 24 M 1942 628 v 24" />
+        </g>
+
+        <!-- ===== MACRO: the B-tree, fanning down to the row heap ===== -->
+        <!-- root -->
+        <g transform="translate(1024,240)" filter="url(#bigGlow)">
+          <rect x="-90" y="-44" width="180" height="88" rx="18"
+            fill="rgba(13,128,106,0.16)" stroke="#34d399" stroke-width="5" />
+          <g fill="#34d399">
+            <circle cx="-36" r="8" /><circle cx="36" r="8" />
+          </g>
+        </g>
+        <!-- internal nodes -->
+        <g stroke-width="4" fill="rgba(9,9,11,0.88)">
+          <rect x="510" y="420" width="150" height="72" rx="16" stroke="rgba(255,255,255,0.3)" />
+          <rect x="949" y="420" width="150" height="72" rx="16" stroke="#34d399" filter="url(#accentGlow)" />
+          <rect x="1388" y="420" width="150" height="72" rx="16" stroke="rgba(255,255,255,0.3)" />
+        </g>
+        <!-- edges root → internal -->
+        <g fill="none" stroke-linecap="round">
+          <path d="M 970 280 C 800 340, 680 380, 600 418" stroke="rgba(255,255,255,0.22)" stroke-width="4" />
+          <path d="M 1024 284 V 418" stroke="#34d399" stroke-width="5.5" filter="url(#accentGlow)" />
+          <path d="M 1078 280 C 1250 340, 1380 380, 1460 418" stroke="rgba(255,255,255,0.22)" stroke-width="4" />
+        </g>
+        <!-- leaf nodes -->
+        <g stroke-width="3.5" fill="rgba(9,9,11,0.88)">
+          <rect x="420" y="610" width="120" height="60" rx="14" stroke="rgba(255,255,255,0.24)" />
+          <rect x="640" y="610" width="120" height="60" rx="14" stroke="rgba(255,255,255,0.24)" />
+          <rect x="880" y="610" width="120" height="60" rx="14" stroke="rgba(255,255,255,0.24)" />
+          <rect x="1052" y="610" width="120" height="60" rx="14" stroke="#34d399" stroke-width="4.5" filter="url(#accentGlow)" />
+          <rect x="1290" y="610" width="120" height="60" rx="14" stroke="rgba(255,255,255,0.24)" />
+          <rect x="1510" y="610" width="120" height="60" rx="14" stroke="rgba(255,255,255,0.24)" />
+        </g>
+        <!-- edges internal → leaves -->
+        <g fill="none" stroke-linecap="round" stroke-width="3.5" stroke="rgba(255,255,255,0.18)">
+          <path d="M 560 492 C 520 540, 500 570, 484 608" />
+          <path d="M 610 492 C 650 540, 680 570, 698 608" />
+          <path d="M 1000 492 C 970 540, 950 570, 942 608" />
+          <path d="M 1470 492 C 1430 540, 1400 570, 1372 608" />
+          <path d="M 1510 492 C 1550 540, 1570 570, 1572 608" />
+        </g>
+        <path d="M 1048 492 C 1080 540, 1100 570, 1110 608" fill="none"
+          stroke="#34d399" stroke-width="5.5" stroke-linecap="round" filter="url(#accentGlow)" />
+
+        <!-- the row heap at the bottom -->
+        <g stroke-linecap="round">
+          <line x1="380" y1="780" x2="1660" y2="780" stroke="rgba(255,255,255,0.14)" stroke-width="4" />
+          <line x1="380" y1="836" x2="1660" y2="836" stroke="rgba(255,255,255,0.11)" stroke-width="4" />
+          <line x1="380" y1="892" x2="1660" y2="892" stroke="rgba(255,255,255,0.08)" stroke-width="4" />
+        </g>
+        <!-- ctid pointer from lit leaf to the one row -->
+        <path d="M 1112 672 C 1130 710, 1150 740, 1168 774" fill="none"
+          stroke="#34d399" stroke-width="5" stroke-linecap="round" filter="url(#accentGlow)" />
+        <circle cx="1172" cy="780" r="10" fill="#34d399" filter="url(#accentGlow)" />
+        <!-- the highlighted row segment -->
+        <line x1="1120" y1="780" x2="1330" y2="780" stroke="rgba(52,211,153,0.65)"
+          stroke-width="8" stroke-linecap="round" />
+
+        <!-- the seq scan it avoided: a long dashed crawl across every row -->
+        <path d="M 400 946 H 1640" fill="none" stroke="rgba(255,255,255,0.16)"
+          stroke-width="4" stroke-dasharray="26 18" stroke-linecap="round" />
+        <g transform="translate(1668,946)" stroke="rgba(255,255,255,0.22)" stroke-width="3.5">
+          <line x1="-12" y1="-12" x2="12" y2="12" stroke-linecap="round" />
+          <line x1="12" y1="-12" x2="-12" y2="12" stroke-linecap="round" />
+        </g>
+
+        <!-- entry beam into the root -->
+        <path d="M 1024 120 V 192" stroke="#34d399" stroke-width="5.5"
+          stroke-linecap="round" filter="url(#accentGlow)" fill="none" />
+        <path d="M 1008 174 L 1024 198 L 1040 174" fill="none" stroke="#34d399"
+          stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+
+        <!-- ground shadow -->
+        <ellipse cx="1024" cy="1010" rx="560" ry="24" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1100" cy="970" rx="220" ry="14" fill="rgba(13,128,106,0.12)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

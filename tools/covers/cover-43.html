@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: sky (React & Next.js) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 50% 46%,
+            rgba(3, 105, 161, 0.3),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 20% 78%,
+            rgba(3, 105, 161, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="330" cy="180" r="4" />
+          <circle cx="1790" cy="200" r="4" />
+          <circle cx="1720" cy="960" r="4" />
+          <circle cx="230" cy="870" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1560 150 h 26 M 1573 137 v 26" />
+          <path d="M 140 520 h 24 M 152 508 v 24" />
+          <path d="M 1920 680 h 24 M 1932 668 v 24" />
+        </g>
+
+        <!-- ===== THREE-WAY FACE-OFF: stores on pedestals, wiring tells the story ===== -->
+
+        <!-- pedestal bases -->
+        <g stroke="rgba(255,255,255,0.22)" stroke-width="3.5" fill="rgba(255,255,255,0.02)">
+          <rect x="270" y="760" width="360" height="46" rx="14" />
+          <rect x="844" y="760" width="360" height="46" rx="14" />
+          <rect x="1418" y="760" width="360" height="46" rx="14" />
+        </g>
+
+        <!-- ===== LEFT: Context — the tree itself carries the state ===== -->
+        <g transform="translate(450,540)">
+          <!-- provider ring at top -->
+          <circle cy="-160" r="34" fill="rgba(3,105,161,0.14)"
+            stroke="rgba(56,189,248,0.6)" stroke-width="4" />
+          <circle cy="-160" r="10" fill="rgba(56,189,248,0.6)" />
+          <!-- tree fanning down; every edge tinted = every child re-renders -->
+          <g stroke="rgba(56,189,248,0.4)" stroke-width="3.5" fill="none" stroke-linecap="round">
+            <path d="M 0 -126 L -90 -20" />
+            <path d="M 0 -126 L 90 -20" />
+            <path d="M -90 20 L -150 130" />
+            <path d="M -90 20 L -30 130" />
+            <path d="M 90 20 L 30 130" />
+            <path d="M 90 20 L 150 130" />
+          </g>
+          <g fill="rgba(9,9,11,0.88)" stroke="rgba(56,189,248,0.45)" stroke-width="3.5">
+            <circle cx="-90" r="24" />
+            <circle cx="90" r="24" />
+            <circle cx="-150" cy="154" r="20" />
+            <circle cx="-30" cy="154" r="20" />
+            <circle cx="30" cy="154" r="20" />
+            <circle cx="150" cy="154" r="20" />
+          </g>
+          <!-- ripple arcs: broad re-render -->
+          <path d="M -180 60 A 190 190 0 0 1 180 60" fill="none"
+            stroke="rgba(56,189,248,0.2)" stroke-width="3" stroke-dasharray="2 12"
+            stroke-linecap="round" />
+        </g>
+
+        <!-- ===== CENTER: Zustand — one small bright store, direct lines ===== -->
+        <g transform="translate(1024,540)">
+          <circle r="56" fill="rgba(3,105,161,0.18)" stroke="#38bdf8" stroke-width="5"
+            filter="url(#bigGlow)" />
+          <circle r="14" fill="#38bdf8" />
+          <!-- three subscribers, straight cheap lines, only they light up -->
+          <g stroke="#38bdf8" stroke-width="4.5" stroke-linecap="round" opacity="0.75">
+            <line x1="-40" y1="40" x2="-130" y2="140" />
+            <line x1="0" y1="56" x2="0" y2="150" />
+            <line x1="40" y1="40" x2="130" y2="140" />
+          </g>
+          <g fill="rgba(9,9,11,0.88)" stroke="#38bdf8" stroke-width="4">
+            <circle cx="-140" cy="166" r="22" />
+            <circle cx="0" cy="176" r="22" />
+            <circle cx="140" cy="166" r="22" />
+          </g>
+          <g fill="#38bdf8">
+            <circle cx="-140" cy="166" r="7" />
+            <circle cx="0" cy="176" r="7" />
+            <circle cx="140" cy="166" r="7" />
+          </g>
+          <!-- untouched neighbors stay dark -->
+          <g fill="rgba(9,9,11,0.7)" stroke="rgba(255,255,255,0.16)" stroke-width="3.5">
+            <circle cx="-240" cy="120" r="18" />
+            <circle cx="240" cy="120" r="18" />
+          </g>
+        </g>
+
+        <!-- ===== RIGHT: Redux — the full machinery, orderly but heavy ===== -->
+        <g transform="translate(1598,540)">
+          <!-- store block -->
+          <rect x="-70" y="-210" width="140" height="90" rx="16"
+            fill="rgba(9,9,11,0.88)" stroke="rgba(56,189,248,0.5)" stroke-width="4" />
+          <circle cy="-165" r="9" fill="rgba(56,189,248,0.5)" />
+          <!-- dispatch loop: action → reducer → store → view, a rigid circuit -->
+          <g fill="rgba(9,9,11,0.88)" stroke="rgba(255,255,255,0.3)" stroke-width="3.5">
+            <rect x="-190" y="-40" width="120" height="64" rx="14" />
+            <rect x="70" y="-40" width="120" height="64" rx="14" />
+            <rect x="-60" y="110" width="120" height="64" rx="14" />
+          </g>
+          <g fill="none" stroke="rgba(56,189,248,0.45)" stroke-width="4" stroke-linecap="round">
+            <path d="M -130 -46 C -130 -110, -90 -140, -74 -152" />
+            <path d="M 74 -152 C 90 -140, 130 -110, 130 -46" />
+            <path d="M 130 30 C 130 80, 60 120, 62 138" />
+            <path d="M -62 138 C -60 120, -130 80, -130 30" />
+          </g>
+          <!-- direction arrowheads -->
+          <g fill="rgba(56,189,248,0.45)">
+            <path d="M -84 -144 L -70 -156 L -78 -138 Z" />
+            <path d="M 122 -62 L 132 -42 L 112 -50 Z" />
+          </g>
+          <!-- devtools tape: a strict ordered log -->
+          <g stroke="rgba(255,255,255,0.22)" stroke-width="5" stroke-linecap="round">
+            <line x1="230" y1="-80" x2="300" y2="-80" />
+            <line x1="230" y1="-40" x2="290" y2="-40" />
+            <line x1="230" y1="0" x2="304" y2="0" />
+            <line x1="230" y1="40" x2="280" y2="40" />
+          </g>
+        </g>
+
+        <!-- ground shadows -->
+        <ellipse cx="450" cy="880" rx="240" ry="22" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1024" cy="880" rx="240" ry="22" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1598" cy="880" rx="240" ry="22" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1024" cy="930" rx="220" ry="14" fill="rgba(3,105,161,0.12)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

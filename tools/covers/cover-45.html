@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: emerald (databases & infra) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 50% 48%,
+            rgba(13, 128, 106, 0.28),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 20% 25%,
+            rgba(13, 128, 106, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="330" cy="190" r="4" />
+          <circle cx="1790" cy="180" r="4" />
+          <circle cx="1720" cy="960" r="4" />
+          <circle cx="210" cy="870" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1560 140 h 26 M 1573 127 v 26" />
+          <path d="M 140 500 h 24 M 152 488 v 24" />
+          <path d="M 1920 700 h 24 M 1932 688 v 24" />
+        </g>
+
+        <!-- ===== THE DATA-LAYER MONOLITH: schema → client → db, one solid stack ===== -->
+        <g transform="translate(1024,560)">
+          <!-- outer block -->
+          <rect x="-340" y="-340" width="680" height="680" rx="34"
+            fill="rgba(9,9,11,0.88)" stroke="#34d399" stroke-width="5" filter="url(#bigGlow)" />
+
+          <!-- course 1: the schema (source of truth) -->
+          <rect x="-280" y="-284" width="560" height="150" rx="20"
+            fill="rgba(13,128,106,0.14)" stroke="rgba(52,211,153,0.6)" stroke-width="3.5" />
+          <g stroke-linecap="round">
+            <line x1="-232" y1="-240" x2="-60" y2="-240" stroke="rgba(52,211,153,0.8)" stroke-width="8" />
+            <line x1="-232" y1="-186" x2="120" y2="-186" stroke="rgba(255,255,255,0.3)" stroke-width="8" />
+            <circle cx="212" cy="-240" r="10" fill="#34d399" filter="url(#accentGlow)" />
+          </g>
+
+          <!-- generation seam: typed client emitted from the schema -->
+          <g stroke="rgba(52,211,153,0.55)" stroke-width="4.5" stroke-linecap="round" fill="none">
+            <path d="M -120 -134 V -94" />
+            <path d="M 0 -134 V -94" />
+            <path d="M 120 -134 V -94" />
+          </g>
+          <g fill="rgba(52,211,153,0.7)">
+            <path d="M -132 -102 L -120 -84 L -108 -102 Z" />
+            <path d="M -12 -102 L 0 -84 L 12 -102 Z" />
+            <path d="M 108 -102 L 120 -84 L 132 -102 Z" />
+          </g>
+
+          <!-- course 2: the generated client (typed surface) -->
+          <rect x="-280" y="-74" width="560" height="150" rx="20"
+            fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.32)" stroke-width="3.5" />
+          <g stroke-linecap="round">
+            <line x1="-232" y1="-28" x2="0" y2="-28" stroke="rgba(255,255,255,0.38)" stroke-width="8" />
+            <line x1="-232" y1="26" x2="80" y2="26" stroke="rgba(255,255,255,0.26)" stroke-width="8" />
+            <!-- type-check tick on the client course -->
+            <path d="M 196 -38 l 12 12 l 24 -26" stroke="#34d399" stroke-width="5"
+              fill="none" filter="url(#accentGlow)" />
+          </g>
+
+          <!-- course 3: postgres foundation -->
+          <g transform="translate(0,210)">
+            <g stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="rgba(9,9,11,0.9)">
+              <path d="M -160 -60 V 60 A 160 40 0 0 0 160 60 V -60" />
+              <ellipse cx="0" cy="-60" rx="160" ry="40" />
+            </g>
+            <ellipse cx="0" cy="-60" rx="100" ry="24" fill="none"
+              stroke="rgba(52,211,153,0.4)" stroke-width="3.5" />
+          </g>
+          <!-- connection seam client → db -->
+          <line x1="0" y1="76" x2="0" y2="110" stroke="rgba(52,211,153,0.55)"
+            stroke-width="5" stroke-linecap="round" />
+        </g>
+
+        <!-- migration ledger trail on the left: committed steps -->
+        <g stroke-linecap="round">
+          <line x1="360" y1="360" x2="520" y2="360" stroke="rgba(255,255,255,0.25)" stroke-width="7" />
+          <line x1="360" y1="440" x2="500" y2="440" stroke="rgba(255,255,255,0.2)" stroke-width="7" />
+          <line x1="360" y1="520" x2="530" y2="520" stroke="rgba(255,255,255,0.16)" stroke-width="7" />
+          <g stroke="rgba(52,211,153,0.6)" stroke-width="4" fill="none">
+            <path d="M 310 352 l 8 8 l 16 -18" />
+            <path d="M 310 432 l 8 8 l 16 -18" />
+            <path d="M 310 512 l 8 8 l 16 -18" />
+          </g>
+        </g>
+        <!-- app calls arriving on the right: three typed sockets -->
+        <g stroke="rgba(52,211,153,0.7)" stroke-width="5" stroke-linecap="round">
+          <line x1="1420" y1="440" x2="1600" y2="440" />
+          <line x1="1420" y1="540" x2="1640" y2="540" />
+          <line x1="1420" y1="640" x2="1600" y2="640" />
+        </g>
+        <g fill="#34d399" filter="url(#accentGlow)">
+          <circle cx="1600" cy="440" r="9" />
+          <circle cx="1640" cy="540" r="9" />
+          <circle cx="1600" cy="640" r="9" />
+        </g>
+
+        <!-- ground shadow -->
+        <ellipse cx="1024" cy="940" rx="380" ry="28" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1024" cy="900" rx="240" ry="18" fill="rgba(13,128,106,0.12)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

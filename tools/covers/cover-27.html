@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: emerald (databases & infra) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 38% 48%,
+            rgba(13, 128, 106, 0.28),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 80% 70%,
+            rgba(13, 128, 106, 0.08),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="300" cy="180" r="4" />
+          <circle cx="1800" cy="200" r="4" />
+          <circle cx="1740" cy="950" r="4" />
+          <circle cx="230" cy="890" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1540 150 h 26 M 1553 137 v 26" />
+          <path d="M 150 640 h 24 M 162 628 v 24" />
+          <path d="M 1910 480 h 24 M 1922 468 v 24" />
+        </g>
+
+        <!-- ===== LEFT: Postgres, compact and lit, doing the searching ===== -->
+        <g transform="translate(600,576)">
+          <!-- the cylinder -->
+          <g stroke="#34d399" stroke-width="5" fill="rgba(9,9,11,0.88)" filter="url(#bigGlow)">
+            <path d="M -160 -180 V 180 A 160 48 0 0 0 160 180 V -180" />
+            <ellipse cx="0" cy="-180" rx="160" ry="48" />
+          </g>
+          <!-- tsvector rows inside: text lines with lit token ticks -->
+          <g stroke-linecap="round">
+            <line x1="-104" y1="-90" x2="30" y2="-90" stroke="rgba(255,255,255,0.35)" stroke-width="8" />
+            <rect x="52" y="-102" width="26" height="24" rx="7" fill="rgba(52,211,153,0.75)" />
+            <line x1="-104" y1="-18" x2="60" y2="-18" stroke="rgba(255,255,255,0.28)" stroke-width="8" />
+            <rect x="84" y="-30" width="26" height="24" rx="7" fill="rgba(52,211,153,0.5)" />
+            <line x1="-104" y1="54" x2="10" y2="54" stroke="rgba(255,255,255,0.28)" stroke-width="8" />
+            <rect x="34" y="42" width="26" height="24" rx="7" fill="rgba(52,211,153,0.5)" />
+            <line x1="-104" y1="126" x2="44" y2="126" stroke="rgba(255,255,255,0.2)" stroke-width="8" />
+          </g>
+          <!-- the query lens over the rows -->
+          <g transform="translate(120,-140)" filter="url(#accentGlow)">
+            <circle r="42" fill="rgba(13,128,106,0.2)" stroke="#34d399" stroke-width="5" />
+            <line x1="30" y1="30" x2="66" y2="66" stroke="#34d399" stroke-width="7" stroke-linecap="round" />
+          </g>
+          <!-- ranked results emerging: three bars, ordered -->
+          <g stroke-linecap="round">
+            <line x1="230" y1="-40" x2="420" y2="-40" stroke="rgba(52,211,153,0.85)" stroke-width="9" />
+            <line x1="230" y1="16" x2="380" y2="16" stroke="rgba(52,211,153,0.55)" stroke-width="9" />
+            <line x1="230" y1="72" x2="344" y2="72" stroke="rgba(52,211,153,0.3)" stroke-width="9" />
+          </g>
+        </g>
+
+        <!-- ===== RIGHT: the search cluster you didn't deploy, dim and dashed ===== -->
+        <g transform="translate(1520,560)" stroke="rgba(255,255,255,0.18)" stroke-width="3.5"
+          fill="rgba(255,255,255,0.015)">
+          <!-- three-node tower, dashed = hypothetical -->
+          <rect x="-200" y="-260" width="180" height="160" rx="18" stroke-dasharray="10 12" />
+          <rect x="20" y="-260" width="180" height="160" rx="18" stroke-dasharray="10 12" />
+          <rect x="-90" y="-60" width="180" height="160" rx="18" stroke-dasharray="10 12" />
+          <!-- coordination wiring between them -->
+          <g fill="none" stroke-dasharray="4 12">
+            <path d="M -110 -100 L -60 -60" />
+            <path d="M 110 -100 L 60 -60" />
+            <path d="M -20 -260 h 40" transform="translate(0,80)" />
+          </g>
+          <!-- ops burden: wrench-ish tick + sync arrows, all faint -->
+          <g stroke="rgba(255,255,255,0.14)" fill="none">
+            <path d="M -90 160 a 60 60 0 0 1 180 0" stroke-dasharray="3 12" />
+            <circle cx="0" cy="220" r="26" stroke-dasharray="6 10" />
+          </g>
+        </g>
+        <!-- the sync pipeline that never got built: dashed, broken mid-way -->
+        <g fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="4" stroke-linecap="round">
+          <path d="M 900 700 H 1080" stroke-dasharray="18 18" />
+          <path d="M 1160 700 H 1260" stroke-dasharray="18 18" opacity="0.5" />
+        </g>
+        <g transform="translate(1120,700)" stroke="rgba(255,255,255,0.22)" stroke-width="3.5">
+          <line x1="-12" y1="-12" x2="12" y2="12" stroke-linecap="round" />
+          <line x1="12" y1="-12" x2="-12" y2="12" stroke-linecap="round" />
+        </g>
+
+        <!-- ground shadows -->
+        <ellipse cx="600" cy="900" rx="300" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1520" cy="880" rx="280" ry="22" fill="rgba(0,0,0,0.35)" />
+        <ellipse cx="600" cy="860" rx="200" ry="16" fill="rgba(13,128,106,0.12)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>
