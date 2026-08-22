@@ -1,0 +1,136 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: fuchsia (JS/TS language) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 50% 48%,
+            rgba(162, 28, 175, 0.26),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 18% 76%,
+            rgba(162, 28, 175, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="300" cy="195" r="4" />
+          <circle cx="1805" cy="185" r="4" />
+          <circle cx="1735" cy="955" r="4" />
+          <circle cx="225" cy="895" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1540 150 h 26 M 1553 137 v 26" />
+          <path d="M 152 450 h 24 M 164 438 v 24" />
+          <path d="M 1922 660 h 24 M 1934 648 v 24" />
+        </g>
+
+        <!-- ===== LEFT: interface — the open, extensible frame ===== -->
+        <g transform="translate(560,540)">
+          <!-- main frame with an open right edge -->
+          <path d="M 120 -180 H -160 A 24 24 0 0 0 -184 -156 V 156 A 24 24 0 0 0 -160 180 H 120"
+            fill="rgba(9,9,11,0.88)" stroke="#e879f9" stroke-width="5"
+            stroke-linecap="round" fill-rule="evenodd" filter="url(#bigGlow)" />
+          <!-- members -->
+          <g stroke="rgba(232,121,249,0.55)" stroke-width="5" stroke-linecap="round">
+            <line x1="-140" y1="-110" x2="40" y2="-110" />
+            <line x1="-140" y1="-40" x2="70" y2="-40" />
+            <line x1="-140" y1="30" x2="20" y2="30" />
+          </g>
+          <!-- extension panel snapping onto the open edge (declaration merging) -->
+          <g transform="translate(210,0)">
+            <path d="M -50 -180 H 90 A 24 24 0 0 1 114 -156 V 156 A 24 24 0 0 1 90 180 H -50"
+              fill="rgba(162,28,175,0.14)" stroke="#e879f9" stroke-width="4.5"
+              stroke-dasharray="16 12" stroke-linecap="round" />
+            <line x1="-20" y1="100" x2="70" y2="100" stroke="rgba(232,121,249,0.55)"
+              stroke-width="5" stroke-linecap="round" />
+          </g>
+          <!-- docking chevrons between the halves -->
+          <g stroke="#e879f9" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"
+            fill="none" filter="url(#accentGlow)">
+            <path d="M 138 -60 l 22 18 l -22 18" />
+            <path d="M 138 30 l 22 18 l -22 18" />
+          </g>
+          <!-- extends arrow climbing from below -->
+          <path d="M -80 260 C -60 226, -40 208, -20 196" fill="none"
+            stroke="rgba(232,121,249,0.4)" stroke-width="4" stroke-dasharray="3 12"
+            stroke-linecap="round" />
+          <g transform="translate(-130,300)">
+            <rect x="-70" y="-34" width="140" height="68" rx="14"
+              fill="rgba(9,9,11,0.85)" stroke="rgba(232,121,249,0.45)" stroke-width="3.5" />
+            <line x1="-40" y1="0" x2="40" y2="0" stroke="rgba(232,121,249,0.45)"
+              stroke-width="5" stroke-linecap="round" />
+          </g>
+        </g>
+
+        <!-- ===== divider ===== -->
+        <path d="M 1024 250 V 890" stroke="rgba(255,255,255,0.14)" stroke-width="3.5"
+          stroke-dasharray="4 18" stroke-linecap="round" />
+
+        <!-- ===== RIGHT: type — the sealed composition ===== -->
+        <g transform="translate(1480,540)">
+          <!-- sealed hex-ish composed shape from two union halves -->
+          <path d="M -190 -60 L -60 -180 H 60 L 190 -60 V 80 L 60 180 H -60 L -190 80 Z"
+            fill="rgba(9,9,11,0.9)" stroke="#e879f9" stroke-width="5"
+            stroke-linejoin="round" filter="url(#bigGlow)" />
+          <!-- union seam: pipe joint down the middle -->
+          <line x1="0" y1="-180" x2="0" y2="180" stroke="rgba(232,121,249,0.5)"
+            stroke-width="4.5" stroke-dasharray="14 12" stroke-linecap="round" />
+          <!-- left variant glyph: circle -->
+          <circle cx="-90" cy="0" r="42" fill="rgba(162,28,175,0.25)"
+            stroke="#e879f9" stroke-width="4" />
+          <!-- right variant glyph: square -->
+          <rect x="52" y="-38" width="76" height="76" rx="12"
+            fill="rgba(162,28,175,0.25)" stroke="#e879f9" stroke-width="4" />
+          <!-- intersection band clipping across both -->
+          <path d="M -150 96 H 150" stroke="rgba(232,121,249,0.4)" stroke-width="10"
+            stroke-linecap="round" />
+          <!-- sealed lock: no re-opening -->
+          <g transform="translate(0,-236)">
+            <rect x="-30" y="-8" width="60" height="48" rx="10"
+              fill="rgba(9,9,11,0.9)" stroke="#e879f9" stroke-width="4" filter="url(#accentGlow)" />
+            <path d="M -16 -8 V -22 A 16 16 0 0 1 16 -22 V -8" fill="none"
+              stroke="#e879f9" stroke-width="4" stroke-linecap="round" />
+            <circle cx="0" cy="16" r="6" fill="#e879f9" />
+          </g>
+          <!-- mapped/conditional sparks orbiting -->
+          <g fill="rgba(232,121,249,0.4)">
+            <circle cx="250" cy="-140" r="7" />
+            <circle cx="290" cy="40" r="5" />
+            <circle cx="-260" cy="150" r="5" />
+          </g>
+        </g>
+
+        <!-- ground shadows -->
+        <ellipse cx="560" cy="990" rx="330" ry="24" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1480" cy="990" rx="330" ry="24" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1024" cy="945" rx="260" ry="14" fill="rgba(162,28,175,0.1)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

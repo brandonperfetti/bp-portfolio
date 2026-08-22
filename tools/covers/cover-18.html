@@ -1,0 +1,150 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: indigo (engineering practice & architecture) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 46% 50%,
+            rgba(67, 56, 202, 0.3),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 82% 74%,
+            rgba(67, 56, 202, 0.12),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="305" cy="190" r="4" />
+          <circle cx="1800" cy="195" r="4" />
+          <circle cx="1730" cy="940" r="4" />
+          <circle cx="235" cy="890" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1545 142 h 26 M 1558 129 v 26" />
+          <path d="M 150 458 h 24 M 162 446 v 24" />
+          <path d="M 1918 662 h 24 M 1930 650 v 24" />
+        </g>
+
+        <!-- ===== the balance beam: heavy original vs light optimized ===== -->
+        <!-- fulcrum -->
+        <g transform="translate(960,640)">
+          <path d="M 0 -30 L 70 90 H -70 Z" fill="rgba(9,9,11,0.9)"
+            stroke="#818cf8" stroke-width="5" stroke-linejoin="round" filter="url(#accentGlow)" />
+          <!-- beam, tilted: heavy side down. NOTE: drawn as a slightly-curved path
+               (not a flat line) and without a glow filter — a filter's percentage
+               region collapses on a zero-height bbox and the beam vanishes. -->
+          <path d="M -553 58 C -200 -10, 200 -70, 553 -118" fill="none"
+            stroke="#818cf8" stroke-width="6" stroke-linecap="round" />
+          <!-- hang lines to the two pans -->
+          <line x1="-483" y1="46" x2="-483" y2="110" stroke="rgba(129,140,248,0.5)"
+            stroke-width="4" />
+          <line x1="483" y1="-108" x2="483" y2="-172" stroke="rgba(129,140,248,0.5)"
+            stroke-width="4" />
+        </g>
+
+        <!-- heavy original image: fat frame, dragging low -->
+        <g transform="translate(470,760)">
+          <rect x="-190" y="-140" width="380" height="280" rx="18"
+            fill="rgba(9,9,11,0.88)" stroke="#818cf8" stroke-width="8" filter="url(#bigGlow)" />
+          <!-- picture glyph: mountains + sun, thick and dense -->
+          <circle cx="-100" cy="-66" r="26" fill="rgba(129,140,248,0.45)" />
+          <path d="M -160 100 L -50 -30 L 30 60 L 90 0 L 160 100 Z"
+            fill="rgba(129,140,248,0.3)" stroke="rgba(129,140,248,0.55)" stroke-width="4"
+            stroke-linejoin="round" />
+          <!-- weight plates stacked under it -->
+          <g fill="rgba(255,255,255,0.14)">
+            <rect x="-90" y="150" width="180" height="20" rx="10" />
+            <rect x="-70" y="178" width="140" height="20" rx="10" />
+          </g>
+        </g>
+
+        <!-- light optimized image: slim frame, riding high -->
+        <g transform="translate(1440,470)">
+          <rect x="-150" y="-110" width="300" height="220" rx="16"
+            fill="rgba(9,9,11,0.88)" stroke="#818cf8" stroke-width="4" filter="url(#accentGlow)" />
+          <circle cx="-76" cy="-48" r="20" fill="rgba(129,140,248,0.5)" />
+          <path d="M -124 78 L -40 -22 L 20 44 L 66 -4 L 124 78 Z"
+            fill="rgba(129,140,248,0.35)" stroke="rgba(129,140,248,0.6)" stroke-width="3.5"
+            stroke-linejoin="round" />
+          <!-- feather mark: it weighs nothing -->
+          <path d="M 190 -80 C 230 -110, 260 -110, 280 -90 C 250 -84, 230 -70, 214 -50 Z"
+            fill="rgba(129,140,248,0.35)" stroke="rgba(129,140,248,0.5)" stroke-width="3" />
+        </g>
+
+        <!-- ===== srcset ladder: the responsive size steps ===== -->
+        <g transform="translate(1750,760)">
+          <g fill="rgba(9,9,11,0.85)" stroke="rgba(129,140,248,0.5)" stroke-width="3.5">
+            <rect x="-130" y="-30" width="70" height="50" rx="8" />
+            <rect x="-44" y="-46" width="94" height="66" rx="10" />
+            <rect x="66" y="-66" width="120" height="86" rx="12" />
+          </g>
+          <g stroke="rgba(129,140,248,0.4)" stroke-width="3" stroke-dasharray="2 10"
+            stroke-linecap="round">
+            <line x1="-60" y1="-5" x2="-44" y2="-13" />
+            <line x1="50" y1="-13" x2="66" y2="-23" />
+          </g>
+        </g>
+
+        <!-- ===== lazy-load horizon: images below the fold still asleep ===== -->
+        <line x1="180" y1="330" x2="900" y2="330" stroke="rgba(255,255,255,0.16)"
+          stroke-width="3.5" stroke-dasharray="16 14" stroke-linecap="round" />
+        <g opacity="0.4">
+          <rect x="230" y="200" width="150" height="100" rx="12"
+            fill="rgba(9,9,11,0.8)" stroke="rgba(129,140,248,0.4)" stroke-width="3" />
+          <circle cx="270" cy="234" r="10" fill="rgba(129,140,248,0.35)" />
+          <path d="M 244 288 L 296 232 L 336 270 L 376 288 Z"
+            fill="rgba(129,140,248,0.25)" />
+        </g>
+        <!-- sleeping placeholder: just a shimmer bar -->
+        <g opacity="0.35">
+          <rect x="440" y="220" width="150" height="100" rx="12"
+            fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.18)" stroke-width="3" />
+          <line x1="470" y1="270" x2="560" y2="270" stroke="rgba(255,255,255,0.2)"
+            stroke-width="6" stroke-linecap="round" />
+        </g>
+        <!-- CLS ghost: reserved box outline holding space -->
+        <g opacity="0.5">
+          <rect x="650" y="210" width="150" height="100" rx="12" fill="none"
+            stroke="rgba(129,140,248,0.45)" stroke-width="3.5" stroke-dasharray="10 10" />
+          <g stroke="rgba(129,140,248,0.45)" stroke-width="3" stroke-linecap="round">
+            <path d="M 700 260 h 50 M 725 235 v 50" />
+          </g>
+        </g>
+
+        <!-- delivery bolt: CDN edge spark by the optimized side -->
+        <path d="M 1310 260 l -18 48 h 24 l -18 48" fill="none"
+          stroke="rgba(129,140,248,0.55)" stroke-width="4.5" stroke-linecap="round"
+          stroke-linejoin="round" />
+
+        <!-- ground shadow -->
+        <ellipse cx="1000" cy="1005" rx="640" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="960" cy="960" rx="280" ry="16" fill="rgba(67,56,202,0.14)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>
