@@ -28,6 +28,24 @@ export async function generateMetadata(): Promise<Metadata> {
         'application/rss+xml': `${siteUrl}/feed.xml`,
       },
     },
+    // Home-screen/browser-tab identity: PNG favicons + the apple-touch-icon
+    // iOS reads for add-to-home-screen (Android icons live in manifest.ts;
+    // src/app/favicon.ico is auto-served by Next's file convention).
+    icons: {
+      icon: [
+        {
+          url: '/assets/favicons/favicon-32x32.png',
+          sizes: '32x32',
+          type: 'image/png',
+        },
+        {
+          url: '/assets/favicons/favicon-16x16.png',
+          sizes: '16x16',
+          type: 'image/png',
+        },
+      ],
+      apple: '/assets/favicons/apple-touch-icon.png',
+    },
     openGraph: {
       type: 'website',
       url: siteUrl,
