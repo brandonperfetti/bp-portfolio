@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: emerald (databases & infra) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 50% 50%,
+            rgba(13, 128, 106, 0.28),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 82% 22%,
+            rgba(13, 128, 106, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <linearGradient id="railGrad" gradientUnits="userSpaceOnUse"
+            x1="220" y1="0" x2="1828" y2="0">
+            <stop offset="0" stop-color="#0d806a" />
+            <stop offset="0.5" stop-color="#34d399" />
+            <stop offset="1" stop-color="#0d806a" />
+          </linearGradient>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="310" cy="180" r="4" />
+          <circle cx="1800" cy="210" r="4" />
+          <circle cx="1720" cy="960" r="4" />
+          <circle cx="230" cy="900" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1580 150 h 26 M 1593 137 v 26" />
+          <path d="M 140 460 h 24 M 152 448 v 24" />
+          <path d="M 1910 700 h 24 M 1922 688 v 24" />
+        </g>
+
+        <!-- ===== the live-traffic rail: requests never stop flowing ===== -->
+        <path d="M 220 380 H 1828" stroke="rgba(255,255,255,0.14)" stroke-width="4"
+          fill="none" stroke-linecap="round" />
+        <g fill="rgba(255,255,255,0.3)">
+          <circle cx="420" cy="380" r="6" />
+          <circle cx="760" cy="380" r="6" />
+          <circle cx="1160" cy="380" r="6" />
+          <circle cx="1560" cy="380" r="6" />
+        </g>
+
+        <!-- ===== the migration pipeline below: expand → backfill → contract ===== -->
+        <path d="M 220 700 H 1828" stroke="url(#railGrad)" stroke-width="6"
+          fill="none" stroke-linecap="round" />
+
+        <!-- stage 1: EXPAND — schema grows an extra column (additive, safe) -->
+        <g transform="translate(500,700)">
+          <rect x="-130" y="-150" width="200" height="300" rx="20"
+            fill="rgba(9,9,11,0.88)" stroke="rgba(255,255,255,0.35)" stroke-width="3.5" />
+          <!-- existing columns -->
+          <g stroke-linecap="round">
+            <line x1="-96" y1="-96" x2="20" y2="-96" stroke="rgba(255,255,255,0.35)" stroke-width="8" />
+            <line x1="-96" y1="-32" x2="36" y2="-32" stroke="rgba(255,255,255,0.28)" stroke-width="8" />
+            <line x1="-96" y1="32" x2="10" y2="32" stroke="rgba(255,255,255,0.28)" stroke-width="8" />
+            <line x1="-96" y1="96" x2="30" y2="96" stroke="rgba(255,255,255,0.2)" stroke-width="8" />
+          </g>
+          <!-- the new column, added alongside -->
+          <rect x="86" y="-150" width="72" height="300" rx="18"
+            fill="rgba(13,128,106,0.16)" stroke="#34d399" stroke-width="4"
+            filter="url(#accentGlow)" />
+          <line x1="106" y1="-96" x2="138" y2="-96" stroke="rgba(52,211,153,0.8)"
+            stroke-width="7" stroke-linecap="round" />
+        </g>
+
+        <!-- stage 2: BACKFILL — batched rows copying over -->
+        <g transform="translate(1024,700)">
+          <circle r="76" fill="rgba(9,9,11,0.88)" stroke="#34d399" stroke-width="5"
+            filter="url(#bigGlow)" />
+          <!-- batch arcs: partial progress ring -->
+          <path d="M 0 -52 A 52 52 0 0 1 52 0" fill="none"
+            stroke="#34d399" stroke-width="7" stroke-linecap="round" />
+          <path d="M 52 0 A 52 52 0 0 1 0 52" fill="none"
+            stroke="rgba(52,211,153,0.5)" stroke-width="7" stroke-linecap="round" />
+          <path d="M 0 52 A 52 52 0 0 1 -52 0" fill="none"
+            stroke="rgba(52,211,153,0.22)" stroke-width="7" stroke-linecap="round" />
+          <circle r="12" fill="#34d399" />
+          <!-- small batch packets entering -->
+          <g fill="rgba(52,211,153,0.7)">
+            <rect x="-150" y="-10" width="22" height="20" rx="6" />
+            <rect x="-186" y="-10" width="22" height="20" rx="6" opacity="0.55" />
+            <rect x="-222" y="-10" width="22" height="20" rx="6" opacity="0.3" />
+          </g>
+        </g>
+
+        <!-- stage 3: CONTRACT — old column removed, slim table -->
+        <g transform="translate(1560,700)">
+          <rect x="-100" y="-150" width="200" height="300" rx="20"
+            fill="rgba(9,9,11,0.88)" stroke="#34d399" stroke-width="4.5"
+            filter="url(#accentGlow)" />
+          <g stroke-linecap="round">
+            <line x1="-64" y1="-96" x2="52" y2="-96" stroke="rgba(255,255,255,0.4)" stroke-width="8" />
+            <line x1="-64" y1="-32" x2="64" y2="-32" stroke="rgba(52,211,153,0.7)" stroke-width="8" />
+            <line x1="-64" y1="32" x2="40" y2="32" stroke="rgba(255,255,255,0.3)" stroke-width="8" />
+            <line x1="-64" y1="96" x2="58" y2="96" stroke="rgba(255,255,255,0.22)" stroke-width="8" />
+          </g>
+          <!-- ghost of the removed old column, drifting off -->
+          <rect x="130" y="-120" width="60" height="240" rx="16" fill="none"
+            stroke="rgba(255,255,255,0.14)" stroke-width="3.5" stroke-dasharray="8 12"
+            transform="rotate(6 160 0)" />
+        </g>
+
+        <!-- uptime link: the traffic rail never touches the danger zone -->
+        <g stroke="rgba(52,211,153,0.4)" stroke-width="3.5" stroke-linecap="round" fill="none">
+          <path d="M 500 420 V 520" stroke-dasharray="3 12" />
+          <path d="M 1024 420 V 594" stroke-dasharray="3 12" />
+          <path d="M 1560 420 V 520" stroke-dasharray="3 12" />
+        </g>
+
+        <!-- ground shadows -->
+        <ellipse cx="1024" cy="960" rx="520" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1024" cy="900" rx="220" ry="16" fill="rgba(13,128,106,0.12)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

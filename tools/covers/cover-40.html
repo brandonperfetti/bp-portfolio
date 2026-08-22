@@ -1,0 +1,132 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: emerald (databases & infra) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 56% 46%,
+            rgba(13, 128, 106, 0.28),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 18% 78%,
+            rgba(13, 128, 106, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="290" cy="190" r="4" />
+          <circle cx="1810" cy="180" r="4" />
+          <circle cx="1750" cy="950" r="4" />
+          <circle cx="210" cy="870" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1500 150 h 26 M 1513 137 v 26" />
+          <path d="M 150 600 h 24 M 162 588 v 24" />
+          <path d="M 1920 520 h 24 M 1932 508 v 24" />
+        </g>
+
+        <!-- ===== MACRO: inside the embedding space, one query finding its kin ===== -->
+        <!-- faint space boundary: rounded frame implying we're inside the DB -->
+        <rect x="330" y="150" width="1390" height="850" rx="40"
+          fill="rgba(255,255,255,0.015)" stroke="rgba(255,255,255,0.16)" stroke-width="3.5" />
+        <!-- cylinder chip in the corner: it's still just Postgres -->
+        <g transform="translate(430,250)" stroke="rgba(255,255,255,0.35)" stroke-width="3.5" fill="rgba(9,9,11,0.85)">
+          <ellipse cx="0" cy="-26" rx="46" ry="15" />
+          <path d="M -46 -26 V 26 A 46 15 0 0 0 46 26 V -26" />
+          <line x1="-46" y1="0" x2="-46" y2="0" />
+        </g>
+
+        <!-- scattered embedding points: dim, various clusters -->
+        <g fill="rgba(255,255,255,0.2)">
+          <circle cx="620" cy="320" r="7" />
+          <circle cx="720" cy="450" r="6" />
+          <circle cx="560" cy="560" r="7" />
+          <circle cx="680" cy="700" r="6" />
+          <circle cx="820" cy="840" r="7" />
+          <circle cx="960" cy="290" r="6" />
+          <circle cx="1500" cy="280" r="7" />
+          <circle cx="1640" cy="420" r="6" />
+          <circle cx="1580" cy="820" r="7" />
+          <circle cx="1400" cy="900" r="6" />
+          <circle cx="900" cy="920" r="6" />
+        </g>
+
+        <!-- ===== the query point: bright core ===== -->
+        <g transform="translate(1150,560)" filter="url(#bigGlow)">
+          <circle r="26" fill="rgba(13,128,106,0.3)" stroke="#34d399" stroke-width="5" />
+          <circle r="9" fill="#34d399" />
+        </g>
+        <!-- similarity radius rings -->
+        <circle cx="1150" cy="560" r="120" fill="none"
+          stroke="rgba(52,211,153,0.35)" stroke-width="3.5" />
+        <circle cx="1150" cy="560" r="230" fill="none"
+          stroke="rgba(52,211,153,0.16)" stroke-width="3" stroke-dasharray="2 14"
+          stroke-linecap="round" />
+
+        <!-- nearest neighbors: lit, connected by distance beams -->
+        <g>
+          <g stroke="rgba(52,211,153,0.55)" stroke-width="4" stroke-linecap="round">
+            <line x1="1150" y1="560" x2="1058" y2="486" />
+            <line x1="1150" y1="560" x2="1244" y2="628" />
+            <line x1="1150" y1="560" x2="1090" y2="668" />
+          </g>
+          <g fill="#34d399" filter="url(#accentGlow)">
+            <circle cx="1058" cy="486" r="10" />
+            <circle cx="1244" cy="628" r="10" />
+            <circle cx="1090" cy="668" r="10" />
+          </g>
+          <!-- second-tier matches on the outer ring, half-lit -->
+          <g fill="rgba(52,211,153,0.45)">
+            <circle cx="1330" cy="440" r="8" />
+            <circle cx="940" cy="620" r="8" />
+          </g>
+        </g>
+
+        <!-- the far cluster it correctly ignored -->
+        <g fill="rgba(255,255,255,0.16)">
+          <circle cx="1560" cy="600" r="6" />
+          <circle cx="1610" cy="650" r="7" />
+          <circle cx="1550" cy="690" r="6" />
+        </g>
+        <line x1="1290" y1="580" x2="1500" y2="615" stroke="rgba(255,255,255,0.1)"
+          stroke-width="3" stroke-dasharray="3 14" stroke-linecap="round" />
+
+        <!-- index lattice hint: HNSW-ish faint links between dim points -->
+        <g stroke="rgba(255,255,255,0.08)" stroke-width="2.5" fill="none">
+          <path d="M 620 320 L 720 450 L 560 560 L 680 700 L 820 840" />
+          <path d="M 960 290 L 1058 486" />
+          <path d="M 1640 420 L 1500 280" />
+        </g>
+
+        <!-- ground shadow -->
+        <ellipse cx="1024" cy="1010" rx="480" ry="24" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1150" cy="950" rx="220" ry="16" fill="rgba(13,128,106,0.12)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

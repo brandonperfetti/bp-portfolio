@@ -1,0 +1,136 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: sky (React & Next.js) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 50% 50%,
+            rgba(3, 105, 161, 0.3),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 80% 25%,
+            rgba(3, 105, 161, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="320" cy="190" r="4" />
+          <circle cx="1800" cy="200" r="4" />
+          <circle cx="1720" cy="950" r="4" />
+          <circle cx="230" cy="890" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1600 160 h 26 M 1613 147 v 26" />
+          <path d="M 140 480 h 24 M 152 468 v 24" />
+          <path d="M 1900 640 h 24 M 1912 628 v 24" />
+        </g>
+
+        <!-- ===== THE BOUNDARY: client | server, face to face ===== -->
+        <line x1="1024" y1="150" x2="1024" y2="1000" stroke="rgba(56,189,248,0.35)"
+          stroke-width="4" stroke-dasharray="18 20" stroke-linecap="round" />
+
+        <!-- ===== CLIENT (left): the form, mid-submit ===== -->
+        <g transform="translate(520,576)">
+          <rect x="-230" y="-270" width="460" height="540" rx="26"
+            fill="rgba(9,9,11,0.85)" stroke="rgba(255,255,255,0.35)" stroke-width="3.5" />
+          <!-- fields -->
+          <rect x="-170" y="-190" width="340" height="62" rx="16"
+            fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.3)" stroke-width="3.5" />
+          <line x1="-130" y1="-159" x2="40" y2="-159" stroke="rgba(255,255,255,0.3)"
+            stroke-width="8" stroke-linecap="round" />
+          <rect x="-170" y="-96" width="340" height="62" rx="16"
+            fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.3)" stroke-width="3.5" />
+          <line x1="-130" y1="-65" x2="90" y2="-65" stroke="rgba(255,255,255,0.3)"
+            stroke-width="8" stroke-linecap="round" />
+          <!-- submit button: pending state, spinner arc -->
+          <rect x="-170" y="6" width="340" height="70" rx="18"
+            fill="rgba(3,105,161,0.18)" stroke="#38bdf8" stroke-width="4.5"
+            filter="url(#accentGlow)" />
+          <path d="M -20 41 a 22 22 0 1 1 22 22" fill="none" stroke="#38bdf8"
+            stroke-width="5" stroke-linecap="round" />
+          <!-- optimistic row already painted below, translucent -->
+          <rect x="-170" y="120" width="340" height="56" rx="14"
+            fill="rgba(56,189,248,0.08)" stroke="rgba(56,189,248,0.35)"
+            stroke-width="3.5" stroke-dasharray="10 10" />
+          <line x1="-130" y1="148" x2="60" y2="148" stroke="rgba(56,189,248,0.4)"
+            stroke-width="8" stroke-linecap="round" />
+        </g>
+
+        <!-- ===== the action crossing the boundary ===== -->
+        <path d="M 770 440 C 900 440, 940 440, 1010 440" stroke="rgba(56,189,248,0.7)"
+          stroke-width="5.5" fill="none" stroke-linecap="round" filter="url(#accentGlow)" />
+        <path d="M 990 426 L 1018 440 L 990 454 Z" fill="rgba(56,189,248,0.7)" />
+        <!-- the response coming back lower -->
+        <path d="M 1038 700 C 960 700, 900 700, 790 700" stroke="rgba(56,189,248,0.45)"
+          stroke-width="5" fill="none" stroke-linecap="round" />
+        <path d="M 812 686 L 784 700 L 812 714 Z" fill="rgba(56,189,248,0.45)" />
+
+        <!-- ===== SERVER (right): the action, mutation, revalidate ===== -->
+        <g transform="translate(1520,576)">
+          <rect x="-230" y="-270" width="460" height="540" rx="26"
+            fill="rgba(9,9,11,0.85)" stroke="#38bdf8" stroke-width="5" filter="url(#bigGlow)" />
+          <!-- 'use server' badge: solid corner block -->
+          <rect x="-230" y="-270" width="120" height="54" rx="16"
+            fill="rgba(3,105,161,0.3)" stroke="none" />
+          <circle cx="-196" cy="-243" r="8" fill="#38bdf8" filter="url(#accentGlow)" />
+          <line x1="-176" y1="-243" x2="-134" y2="-243" stroke="rgba(56,189,248,0.7)"
+            stroke-width="6" stroke-linecap="round" />
+          <!-- action fn block -->
+          <rect x="-170" y="-170" width="340" height="120" rx="18"
+            fill="rgba(3,105,161,0.14)" stroke="rgba(56,189,248,0.6)" stroke-width="4" />
+          <g stroke-linecap="round">
+            <line x1="-130" y1="-136" x2="80" y2="-136" stroke="rgba(255,255,255,0.38)" stroke-width="8" />
+            <line x1="-130" y1="-84" x2="20" y2="-84" stroke="rgba(255,255,255,0.26)" stroke-width="8" />
+          </g>
+          <!-- db cylinder it mutates -->
+          <g transform="translate(-90,60)" stroke="rgba(255,255,255,0.35)" stroke-width="3.5"
+            fill="rgba(9,9,11,0.9)">
+            <ellipse cx="0" cy="-30" rx="52" ry="16" />
+            <path d="M -52 -30 V 30 A 52 16 0 0 0 52 30 V -30" />
+          </g>
+          <path d="M -90 -50 V 6" stroke="rgba(56,189,248,0.6)" stroke-width="4.5"
+            stroke-linecap="round" fill="none" />
+          <!-- revalidate ring: cache refreshed -->
+          <g transform="translate(110,80)">
+            <circle r="52" fill="none" stroke="rgba(56,189,248,0.55)" stroke-width="4.5" />
+            <path d="M 36 -38 L 52 -52 L 56 -30 Z" fill="rgba(56,189,248,0.55)" />
+            <circle r="10" fill="#38bdf8" filter="url(#accentGlow)" />
+          </g>
+          <!-- fresh UI payload row at the bottom -->
+          <line x1="-130" y1="200" x2="120" y2="200" stroke="rgba(255,255,255,0.24)"
+            stroke-width="8" stroke-linecap="round" />
+        </g>
+
+        <!-- ground shadows -->
+        <ellipse cx="520" cy="900" rx="280" ry="24" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1520" cy="900" rx="280" ry="24" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1024" cy="1010" rx="180" ry="14" fill="rgba(3,105,161,0.12)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

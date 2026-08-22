@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: fuchsia (JS/TS language internals) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 55% 48%,
+            rgba(162, 28, 175, 0.26),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 20% 75%,
+            rgba(162, 28, 175, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="300" cy="200" r="4" />
+          <circle cx="1820" cy="190" r="4" />
+          <circle cx="1740" cy="940" r="4" />
+          <circle cx="220" cy="860" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1520 150 h 26 M 1533 137 v 26" />
+          <path d="M 140 500 h 24 M 152 488 v 24" />
+          <path d="M 1930 720 h 24 M 1942 708 v 24" />
+        </g>
+
+        <!-- ===== UNKNOWN territory (left): shapeless blobs of untrusted data ===== -->
+        <g fill="rgba(255,255,255,0.03)" stroke-width="3.5">
+          <path d="M 260 320 q 50 -50 110 -14 q 60 30 24 84 q -30 50 -90 30 q -70 -22 -44 -100 Z"
+            stroke="rgba(255,255,255,0.28)" />
+          <path d="M 420 540 q 60 -30 100 14 q 36 44 -10 80 q -50 36 -94 -4 q -40 -40 4 -90 Z"
+            stroke="rgba(255,255,255,0.22)" />
+          <path d="M 240 700 q 40 -56 104 -30 q 64 26 34 90 q -26 56 -92 34 q -70 -26 -46 -94 Z"
+            stroke="rgba(255,255,255,0.26)" />
+          <path d="M 470 830 q 46 -34 88 0 q 40 34 6 74 q -38 42 -84 8 q -44 -34 -10 -82 Z"
+            stroke="rgba(255,255,255,0.16)" />
+        </g>
+        <!-- question ticks inside the blobs -->
+        <g stroke="rgba(255,255,255,0.3)" stroke-width="4" stroke-linecap="round" fill="none">
+          <path d="M 320 350 q 16 -18 32 0 q 14 16 -8 28 m -2 22 v 2" />
+          <path d="M 300 740 q 16 -18 32 0 q 14 16 -8 28 m -2 22 v 2" />
+        </g>
+
+        <!-- drift lines toward the gate -->
+        <g fill="none" stroke-linecap="round">
+          <path d="M 430 380 C 600 420, 720 480, 850 520" stroke="rgba(232,121,249,0.4)" stroke-width="4.5" />
+          <path d="M 540 590 C 680 590, 760 578, 850 570" stroke="rgba(232,121,249,0.55)" stroke-width="4.5" />
+          <path d="M 420 760 C 600 720, 740 660, 850 620" stroke="rgba(232,121,249,0.4)" stroke-width="4.5" />
+        </g>
+
+        <!-- ===== THE SCHEMA GATE: parse, don't validate ===== -->
+        <g transform="translate(1000,576)">
+          <rect x="-110" y="-230" width="220" height="460" rx="26"
+            fill="rgba(9,9,11,0.88)" stroke="#e879f9" stroke-width="5" filter="url(#bigGlow)" />
+          <!-- stencil aperture: the one shape allowed through -->
+          <path d="M -44 -60 h 88 v 44 h -44 v 76 h -44 Z"
+            fill="rgba(162,28,175,0.2)" stroke="#e879f9" stroke-width="4.5"
+            stroke-linejoin="round" />
+          <!-- rejection chute: refined error dropping out the bottom -->
+          <path d="M 0 230 V 300" stroke="rgba(232,121,249,0.45)" stroke-width="4.5"
+            stroke-linecap="round" stroke-dasharray="4 14" fill="none" />
+          <g transform="translate(0,330)" stroke="rgba(232,121,249,0.6)" stroke-width="3.5">
+            <rect x="-52" y="-20" width="104" height="40" rx="12" fill="rgba(9,9,11,0.85)" />
+            <line x1="-30" y1="0" x2="30" y2="0" stroke-linecap="round" stroke-width="6" />
+          </g>
+        </g>
+
+        <!-- ===== TYPED territory (right): crisp geometry, guaranteed shape ===== -->
+        <g fill="none" stroke-linecap="round">
+          <path d="M 1150 545 H 1330" stroke="#e879f9" stroke-width="5.5" filter="url(#accentGlow)" />
+        </g>
+        <g transform="translate(1560,576)">
+          <rect x="-200" y="-240" width="400" height="480" rx="24"
+            fill="rgba(9,9,11,0.88)" stroke="rgba(232,121,249,0.7)" stroke-width="4.5" />
+          <!-- typed fields: aligned key/value rows with solid checks -->
+          <g stroke-linecap="round">
+            <line x1="-150" y1="-166" x2="-60" y2="-166" stroke="rgba(232,121,249,0.75)" stroke-width="8" />
+            <line x1="-20" y1="-166" x2="120" y2="-166" stroke="rgba(255,255,255,0.35)" stroke-width="8" />
+            <line x1="-150" y1="-88" x2="-76" y2="-88" stroke="rgba(232,121,249,0.55)" stroke-width="8" />
+            <line x1="-20" y1="-88" x2="80" y2="-88" stroke="rgba(255,255,255,0.3)" stroke-width="8" />
+            <line x1="-150" y1="-10" x2="-52" y2="-10" stroke="rgba(232,121,249,0.55)" stroke-width="8" />
+            <line x1="-20" y1="-10" x2="140" y2="-10" stroke="rgba(255,255,255,0.3)" stroke-width="8" />
+            <line x1="-150" y1="68" x2="-84" y2="68" stroke="rgba(232,121,249,0.4)" stroke-width="8" />
+            <line x1="-20" y1="68" x2="60" y2="68" stroke="rgba(255,255,255,0.24)" stroke-width="8" />
+          </g>
+          <!-- verified checks on the right rail -->
+          <g stroke="#e879f9" stroke-width="4.5" stroke-linecap="round" fill="none" filter="url(#accentGlow)">
+            <path d="M 148 -176 l 10 10 l 20 -22" />
+            <path d="M 148 -98 l 10 10 l 20 -22" opacity="0.75" />
+            <path d="M 148 -20 l 10 10 l 20 -22" opacity="0.75" />
+            <path d="M 148 58 l 10 10 l 20 -22" opacity="0.5" />
+          </g>
+          <!-- inferred-type badge: small nested brackets -->
+          <g stroke="rgba(232,121,249,0.6)" stroke-width="4" stroke-linecap="round" fill="none">
+            <path d="M -168 152 l -16 20 l 16 20" />
+            <path d="M 168 152 l 16 20 l -16 20" />
+          </g>
+          <line x1="-120" y1="172" x2="120" y2="172" stroke="rgba(255,255,255,0.22)"
+            stroke-width="7" stroke-linecap="round" />
+        </g>
+
+        <!-- ground shadows -->
+        <ellipse cx="1560" cy="870" rx="260" ry="24" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1000" cy="960" rx="180" ry="20" fill="rgba(0,0,0,0.45)" />
+        <ellipse cx="380" cy="930" rx="200" ry="18" fill="rgba(162,28,175,0.12)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>
