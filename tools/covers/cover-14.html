@@ -108,8 +108,10 @@
         <!-- ===== MATCH LINES (the join, no Venn in sight) ===== -->
         <g fill="none" stroke-linecap="round">
           <!-- straight match -->
-          <path d="M 582 416 C 800 416, 1250 416, 1466 416"
-            stroke="url(#matchGrad)" stroke-width="6" filter="url(#accentGlow)" />
+          <!-- no filter here: a flat path's bbox is degenerate, so the
+               percentage-sized filter region collapses and hides the line -->
+          <path d="M 582 416 C 800 420, 1250 412, 1466 416"
+            stroke="url(#matchGrad)" stroke-width="6" />
           <!-- crossing match: left row2 -> right row2 (lower) -->
           <path d="M 582 514 C 850 514, 1200 562, 1466 562"
             stroke="url(#matchGrad)" stroke-width="6" opacity="0.85" />
