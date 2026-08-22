@@ -1,0 +1,168 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: cyan (CSS & design systems) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 50% 54%,
+            rgba(15, 118, 110, 0.3),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 82% 24%,
+            rgba(15, 118, 110, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="315" cy="175" r="4" />
+          <circle cx="1805" cy="205" r="4" />
+          <circle cx="1735" cy="940" r="4" />
+          <circle cx="240" cy="895" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1555 140 h 26 M 1568 127 v 26" />
+          <path d="M 148 450 h 24 M 160 438 v 24" />
+          <path d="M 1918 655 h 24 M 1930 643 v 24" />
+        </g>
+
+        <!-- ===== FOUNDATION: the token slab ===== -->
+        <g transform="translate(1024,830)">
+          <rect x="-560" y="-70" width="1120" height="140" rx="20"
+            fill="rgba(9,9,11,0.88)" stroke="#2dd4bf" stroke-width="5" filter="url(#bigGlow)" />
+          <!-- token chips: color swatches, radius chip, spacing ruler, type-scale bars -->
+          <g transform="translate(-440,0)">
+            <rect x="-36" y="-36" width="72" height="72" rx="12" fill="rgba(45,212,191,0.55)" />
+          </g>
+          <g transform="translate(-320,0)">
+            <rect x="-36" y="-36" width="72" height="72" rx="12" fill="rgba(45,212,191,0.32)" />
+          </g>
+          <g transform="translate(-200,0)">
+            <rect x="-36" y="-36" width="72" height="72" rx="12" fill="rgba(255,255,255,0.14)" />
+          </g>
+          <!-- radius token: square with one heavily rounded corner -->
+          <g transform="translate(-60,0)">
+            <path d="M -36 36 V -6 A 42 42 0 0 1 6 -36 H 36 V 36 Z"
+              fill="none" stroke="rgba(45,212,191,0.7)" stroke-width="4.5" />
+          </g>
+          <!-- spacing token: ruler ticks -->
+          <g stroke="rgba(45,212,191,0.7)" stroke-width="4" stroke-linecap="round">
+            <line x1="80" y1="24" x2="200" y2="24" />
+            <line x1="80" y1="10" x2="80" y2="24" />
+            <line x1="120" y1="-2" x2="120" y2="24" />
+            <line x1="160" y1="-14" x2="160" y2="24" />
+            <line x1="200" y1="-26" x2="200" y2="24" />
+          </g>
+          <!-- type-scale token: three bars stepping up -->
+          <g fill="rgba(255,255,255,0.25)">
+            <rect x="270" y="8" width="120" height="10" rx="5" />
+            <rect x="270" y="-14" width="90" height="14" rx="7" />
+            <rect x="270" y="-44" width="60" height="20" rx="8" />
+          </g>
+          <circle cx="480" cy="0" r="10" fill="#2dd4bf" filter="url(#accentGlow)" />
+        </g>
+
+        <!-- rising feeds: tokens flowing up into primitives -->
+        <g stroke="rgba(45,212,191,0.4)" stroke-width="3.5" stroke-dasharray="3 12"
+          stroke-linecap="round" fill="none">
+          <path d="M 700 752 C 700 700, 720 670, 740 648" />
+          <path d="M 1024 752 V 648" />
+          <path d="M 1350 752 C 1350 700, 1330 670, 1310 648" />
+        </g>
+
+        <!-- ===== MIDDLE TIER: primitives ===== -->
+        <!-- button -->
+        <g transform="translate(700,580)">
+          <rect x="-130" y="-44" width="260" height="88" rx="44"
+            fill="rgba(15,118,110,0.3)" stroke="#2dd4bf" stroke-width="4.5" filter="url(#accentGlow)" />
+          <rect x="-70" y="-9" width="140" height="18" rx="9" fill="rgba(45,212,191,0.6)" />
+        </g>
+        <!-- input -->
+        <g transform="translate(1024,580)">
+          <rect x="-150" y="-44" width="300" height="88" rx="16"
+            fill="rgba(9,9,11,0.88)" stroke="rgba(45,212,191,0.6)" stroke-width="4" />
+          <line x1="-110" y1="0" x2="-104" y2="0" stroke="#2dd4bf" stroke-width="4" />
+          <rect x="-112" y="-22" width="6" height="44" rx="3" fill="#2dd4bf" />
+          <rect x="-88" y="-8" width="120" height="16" rx="8" fill="rgba(255,255,255,0.12)" />
+        </g>
+        <!-- toggle -->
+        <g transform="translate(1330,580)">
+          <rect x="-72" y="-36" width="144" height="72" rx="36"
+            fill="rgba(15,118,110,0.3)" stroke="#2dd4bf" stroke-width="4.5" />
+          <circle cx="30" cy="0" r="25" fill="#2dd4bf" />
+        </g>
+
+        <!-- rising feeds: primitives composing upward -->
+        <g stroke="rgba(45,212,191,0.4)" stroke-width="3.5" stroke-dasharray="3 12"
+          stroke-linecap="round" fill="none">
+          <path d="M 760 528 C 800 470, 880 430, 940 408" />
+          <path d="M 1024 528 V 430" />
+          <path d="M 1290 528 C 1250 470, 1170 430, 1110 408" />
+        </g>
+
+        <!-- ===== TOP: the composed component ===== -->
+        <g transform="translate(1024,290)">
+          <rect x="-260" y="-120" width="520" height="240" rx="22"
+            fill="rgba(9,9,11,0.9)" stroke="#2dd4bf" stroke-width="5" filter="url(#bigGlow)" />
+          <circle cx="-190" cy="-52" r="30" fill="rgba(45,212,191,0.35)" />
+          <rect x="-130" y="-70" width="240" height="14" rx="7" fill="rgba(45,212,191,0.55)" />
+          <rect x="-130" y="-40" width="180" height="12" rx="6" fill="rgba(255,255,255,0.16)" />
+          <line x1="-220" y1="10" x2="220" y2="10" stroke="rgba(255,255,255,0.14)"
+            stroke-width="3" />
+          <rect x="-220" y="44" width="150" height="48" rx="24"
+            fill="rgba(15,118,110,0.35)" stroke="rgba(45,212,191,0.7)" stroke-width="3.5" />
+          <rect x="-180" y="62" width="70" height="12" rx="6" fill="rgba(45,212,191,0.6)" />
+          <rect x="90" y="44" width="130" height="48" rx="16"
+            fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="3.5" />
+        </g>
+
+        <!-- ===== the governance caliper, measuring the stack ===== -->
+        <g stroke="rgba(45,212,191,0.5)" stroke-width="3.5" stroke-linecap="round" fill="none">
+          <path d="M 1720 200 h 40 M 1740 200 V 760 M 1720 760 h 40" />
+        </g>
+        <g fill="rgba(45,212,191,0.5)">
+          <circle cx="1740" cy="410" r="6" />
+          <circle cx="1740" cy="560" r="6" />
+        </g>
+        <!-- drift, crossed out: one rogue swatch rejected -->
+        <g transform="translate(280,420)">
+          <rect x="-34" y="-34" width="68" height="68" rx="12"
+            fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.25)" stroke-width="3.5" />
+          <line x1="-24" y1="-24" x2="24" y2="24" stroke="rgba(255,255,255,0.35)"
+            stroke-width="4" stroke-linecap="round" />
+        </g>
+        <path d="M 320 480 C 380 560, 480 640, 580 700" fill="none"
+          stroke="rgba(255,255,255,0.12)" stroke-width="3" stroke-dasharray="3 12"
+          stroke-linecap="round" />
+
+        <!-- ground shadow -->
+        <ellipse cx="1024" cy="990" rx="640" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1024" cy="945" rx="300" ry="16" fill="rgba(15,118,110,0.12)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

@@ -1,0 +1,161 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: sky (React/Next & frontend patterns) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 46% 50%,
+            rgba(3, 105, 161, 0.3),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 84% 30%,
+            rgba(3, 105, 161, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="295" cy="185" r="4" />
+          <circle cx="1815" cy="215" r="4" />
+          <circle cx="1725" cy="935" r="4" />
+          <circle cx="215" cy="895" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1535 145 h 26 M 1548 132 v 26" />
+          <path d="M 158 460 h 24 M 170 448 v 24" />
+          <path d="M 1912 650 h 24 M 1924 638 v 24" />
+        </g>
+
+        <!-- ===== the interface: a calm wireframe page ===== -->
+        <g transform="translate(880,560)">
+          <rect x="-460" y="-360" width="920" height="720" rx="26"
+            fill="rgba(9,9,11,0.85)" stroke="rgba(56,189,248,0.45)" stroke-width="4.5" />
+          <!-- header: skip link landing + nav -->
+          <line x1="-460" y1="-270" x2="460" y2="-270" stroke="rgba(56,189,248,0.3)"
+            stroke-width="3.5" />
+          <rect x="-410" y="-330" width="120" height="26" rx="13" fill="rgba(255,255,255,0.14)" />
+          <!-- nav links -->
+          <rect x="60" y="-328" width="90" height="22" rx="11" fill="rgba(255,255,255,0.12)" />
+          <rect x="180" y="-328" width="90" height="22" rx="11" fill="rgba(255,255,255,0.12)" />
+          <rect x="300" y="-328" width="90" height="22" rx="11" fill="rgba(255,255,255,0.12)" />
+
+          <!-- stop 1: nav link with the focus ring NOW -->
+          <g transform="translate(225,-317)">
+            <rect x="-70" y="-28" width="140" height="56" rx="16" fill="none"
+              stroke="#38bdf8" stroke-width="5" filter="url(#accentGlow)" />
+          </g>
+
+          <!-- heading bars -->
+          <rect x="-410" y="-210" width="380" height="22" rx="11" fill="rgba(56,189,248,0.4)" />
+          <rect x="-410" y="-170" width="280" height="14" rx="7" fill="rgba(255,255,255,0.14)" />
+
+          <!-- stop 2: input field -->
+          <g transform="translate(-230,-60)">
+            <rect x="-180" y="-36" width="360" height="72" rx="14"
+              fill="rgba(9,9,11,0.9)" stroke="rgba(56,189,248,0.55)" stroke-width="4" />
+            <rect x="-150" y="-8" width="140" height="16" rx="8" fill="rgba(255,255,255,0.12)" />
+            <!-- its label, tied on: the line a11y draws -->
+            <rect x="-180" y="-84" width="130" height="18" rx="9" fill="rgba(56,189,248,0.35)" />
+          </g>
+
+          <!-- stop 3: primary button -->
+          <g transform="translate(150,-60)">
+            <rect x="-120" y="-38" width="240" height="76" rx="38"
+              fill="rgba(3,105,161,0.35)" stroke="rgba(56,189,248,0.6)" stroke-width="4" />
+            <rect x="-64" y="-9" width="128" height="18" rx="9" fill="rgba(56,189,248,0.55)" />
+          </g>
+
+          <!-- content rows below -->
+          <rect x="-410" y="80" width="820" height="14" rx="7" fill="rgba(255,255,255,0.1)" />
+          <rect x="-410" y="120" width="700" height="14" rx="7" fill="rgba(255,255,255,0.08)" />
+          <rect x="-410" y="160" width="760" height="14" rx="7" fill="rgba(255,255,255,0.08)" />
+
+          <!-- stop 4: card link at the bottom -->
+          <g transform="translate(-180,270)">
+            <rect x="-160" y="-56" width="320" height="112" rx="18"
+              fill="rgba(9,9,11,0.9)" stroke="rgba(56,189,248,0.5)" stroke-width="3.5" />
+            <rect x="-120" y="-20" width="180" height="14" rx="7" fill="rgba(56,189,248,0.4)" />
+            <rect x="-120" y="8" width="130" height="12" rx="6" fill="rgba(255,255,255,0.12)" />
+          </g>
+
+          <!-- ===== the focus journey: numbered dotted path through the stops ===== -->
+          <path d="M 225 -290 C 220 -220, -40 -160, -230 -120"
+            fill="none" stroke="#38bdf8" stroke-width="4" stroke-dasharray="2 14"
+            stroke-linecap="round" opacity="0.8" />
+          <path d="M -140 -60 C -60 -60, 0 -60, 30 -60"
+            fill="none" stroke="#38bdf8" stroke-width="4" stroke-dasharray="2 14"
+            stroke-linecap="round" opacity="0.8" />
+          <path d="M 150 -18 C 120 100, -40 180, -160 216"
+            fill="none" stroke="#38bdf8" stroke-width="4" stroke-dasharray="2 14"
+            stroke-linecap="round" opacity="0.8" />
+          <!-- stop markers -->
+          <g>
+            <circle cx="225" cy="-260" r="12" fill="#38bdf8" filter="url(#accentGlow)" />
+            <circle cx="-230" cy="-116" r="10" fill="rgba(56,189,248,0.7)" />
+            <circle cx="118" cy="-60" r="10" fill="rgba(56,189,248,0.7)" />
+            <circle cx="-166" cy="212" r="10" fill="rgba(56,189,248,0.7)" />
+          </g>
+        </g>
+
+        <!-- ===== the announcer: screen reader speaking the focused link ===== -->
+        <g transform="translate(1710,340)">
+          <circle r="40" fill="rgba(9,9,11,0.88)" stroke="#38bdf8" stroke-width="4.5"
+            filter="url(#accentGlow)" />
+          <!-- speaker glyph drawn -->
+          <path d="M -14 -8 h 8 l 12 -10 v 36 l -12 -10 h -8 z" fill="rgba(56,189,248,0.7)" />
+          <!-- announce arcs -->
+          <path d="M 8 -10 A 14 14 0 0 1 8 10" fill="none" stroke="#38bdf8"
+            stroke-width="3.5" stroke-linecap="round" />
+          <path d="M 14 -18 A 24 24 0 0 1 14 18" fill="none" stroke="rgba(56,189,248,0.6)"
+            stroke-width="3.5" stroke-linecap="round" />
+          <path d="M 20 -26 A 34 34 0 0 1 20 26" fill="none" stroke="rgba(56,189,248,0.35)"
+            stroke-width="3.5" stroke-linecap="round" />
+        </g>
+        <!-- thread from the focused element to the announcer -->
+        <path d="M 1140 250 C 1350 220, 1520 260, 1668 322" fill="none"
+          stroke="rgba(56,189,248,0.3)" stroke-width="3.5" stroke-dasharray="3 12"
+          stroke-linecap="round" />
+
+        <!-- keyboard hint: a lone Tab-ish keycap, no letters, just the jump arrow -->
+        <g transform="translate(280,760)">
+          <rect x="-58" y="-40" width="116" height="80" rx="14"
+            fill="rgba(9,9,11,0.88)" stroke="rgba(56,189,248,0.5)" stroke-width="4" />
+          <path d="M -26 0 h 44 M 4 -12 l 14 12 l -14 12 M -26 -14 v 28" fill="none"
+            stroke="rgba(56,189,248,0.7)" stroke-width="4" stroke-linecap="round"
+            stroke-linejoin="round" />
+        </g>
+        <path d="M 350 730 C 420 680, 480 640, 540 610" fill="none"
+          stroke="rgba(56,189,248,0.3)" stroke-width="3.5" stroke-dasharray="3 12"
+          stroke-linecap="round" />
+
+        <!-- ground shadow -->
+        <ellipse cx="1000" cy="1000" rx="600" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="880" cy="960" rx="260" ry="16" fill="rgba(3,105,161,0.12)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>
