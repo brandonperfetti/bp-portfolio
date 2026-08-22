@@ -174,7 +174,9 @@ Covers are **designed, not generated**. Every article cover is a
 code-rendered 16:9 vector composition (2048×1152) built from a shared
 shell plus a per-post motif, assembled by the tooling in
 `tools/covers/`. AI image generation is retired for covers as of
-2026-08 — the five live covers (posts 51–55) define the look.
+2026-08. The 2026-08 backfill replaced every AI-era cover: **all 47
+published articles now carry design-system covers**, so the full
+catalog — not just a reference set — defines the look.
 
 **The shell (brand constants — never vary):** zinc-950 (`#09090b`)
 ground; one or two radial accent glows in the post's hue; a 64px fine
@@ -184,11 +186,15 @@ alpha); thin-stroke vector geometry; constellation accents (4px dots +
 plus marks); **no text, ever** — words in covers break at thumbnail
 size and localize poorly.
 
-**Hue map (one accent hue per topic family):** emerald `#34d399`/
-`#0d806a` = databases & infrastructure; violet `#a78bfa`/`#7c3aed` =
-AI & agents; amber `#fbbf24`/`#d97706` = email & messaging; sky
-`#38bdf8`/`#0369a1` = Next.js & frontend architecture; rose `#fb7185`/
-`#be123c` = CMS & content engineering. New topic family → claim a new
+**Hue map (one accent hue per topic family — 8 hues, expanded during
+the 2026-08 backfill):** emerald `#34d399`/`#0d806a` = databases &
+infrastructure; violet `#a78bfa`/`#7c3aed` = AI & agents; sky
+`#38bdf8`/`#0369a1` = React, Next.js & frontend architecture; cyan
+`#2dd4bf`/`#0f766e` = CSS & design systems; fuchsia `#e879f9`/
+`#a21caf` = JavaScript & TypeScript language topics; amber `#fbbf24`/
+`#d97706` = Node.js, APIs & messaging; rose `#fb7185`/`#be123c` = CMS
+& content engineering; indigo `#818cf8`/`#4338ca` = engineering
+practice & architecture decisions. New topic family → claim a new
 Tailwind-400/700 pair here before designing. One hue per cover;
 neutral zinc/white carries everything that isn't the accent.
 
@@ -211,19 +217,50 @@ color," redesign the motif before uploading.
 (inline SVG over the shared `base.css` shell) → `node render.mjs
 cover-NN` for the review PNG → get human approval → `python3
 assemble.py NN` to emit the standalone SVG (per-post glows live in its
-`GLOWS` dict) → minify + base64 → upload to Cloudinary as a data URI
-with `format: "png"` (server-side rasterization; SVG must be
-well-formed XML — no duplicate attributes) → verify the delivered PNG
-visually → ingest into Payload → set `heroImage` + `meta.image`.
-Cloudinary is the renderer of record; Playwright renders are the
-review proxy.
+`GLOWS` dict) → `python3 minify.py NN` for the minified + base64
+payload → upload to Cloudinary as a data URI with `format: "png"`
+(server-side rasterization; SVG must be well-formed XML — no duplicate
+attributes) → verify the delivered PNG visually → ingest into Payload
+→ set `heroImage` + `meta.image`. Cloudinary is the renderer of
+record; Playwright renders are the review proxy.
+
+**Pipeline gotchas (each cost a debugging round — don't relearn them):**
+
+- **Degenerate bounding boxes.** A gradient or `filter` referenced by
+  a perfectly horizontal/vertical line or flat path silently collapses
+  (percentage-based filter regions and `objectBoundingBox` gradients
+  need a 2-D bbox). Use `gradientUnits="userSpaceOnUse"` on gradients,
+  and for flat strokes either add slight curvature or drop the filter.
+  Bit covers 5, 14, 18, and 26 during the backfill.
+- **Base64 transcription duplication.** When a long (~10K-char) base64
+  payload is hand-carried into an upload call, whole attribute or
+  motif-body blocks can end up duplicated in the sent payload —
+  stacked geometry compounds the glows and over-brightens the render.
+  After every upload of a long payload, scan what was actually sent
+  for repeated distinctive substrings. PNG byte size is **not**
+  diagnostic (grain noise dominates). Recovery: re-upload the same
+  `public_id` with `overwrite: true, invalidate: true` and point the
+  ingest at the **new version URL**.
+- **Silent Cloudinary collisions.** `overwrite: false` against an
+  already-occupied `public_id` returns the OLD asset with
+  `existing: true` — no error. Always check the response for
+  `existing: false` plus the expected 2048×1152 dimensions.
+- **Vercel Authentication on staging.** Every automated request to
+  staging (including `/api/media/ingest`) must send the
+  `x-vercel-protection-bypass` header with the "Protection Bypass for
+  Automation" secret. Custom production domains are not covered by
+  Standard Protection, so production needs no header.
 
 **Folder map (Cloudinary, canonical):** articles →
 `bp-portfolio/images/articles/{slug}/`; X posts →
 `.../x-posts/{slug-or-id}/`; LinkedIn →
 `.../linkedin-posts/{slug-or-id}/`; other long-form →
-`.../long-form/{slug}/`. Design-system covers use the `cover-a/b/c`
-variant slots (backfills take the next free letter). No ad-hoc paths.
+`.../long-form/{slug}/`. **Design-system covers use the `cover-ds-A`
+series** (`cover-ds-B`, `-C` for future variants). The retired AI-era
+covers still occupy the original `cover-a/b/c` slots in every article
+folder, and because collisions are silent (see gotchas above), the
+design-system era claims its own deterministic namespace instead of
+reusing those letters. No ad-hoc paths.
 
 **Alt text:** describes the motif _as the thesis_, not as decoration —
 "an oversized mail machine narrows into a single glowing line," not
