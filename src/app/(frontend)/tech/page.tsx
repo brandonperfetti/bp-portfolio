@@ -8,6 +8,7 @@ import { resolvePageShareTargetIds } from '@/lib/cms/pageShareTargets'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getCmsTech } from '@/lib/cms/techRepo'
+import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import { getSiteUrl } from '@/lib/site'
 import {
   buildSignalsBySlug,
@@ -69,34 +70,96 @@ export default async function TechStack() {
   )
   const shareTitle = page?.seoTitle || String(defaultTechMeta.title)
 
+  // Structured data mirroring /articles and /projects (the pattern this page
+  // was missing): CollectionPage + BreadcrumbList always, ItemList when there
+  // is content. Tech entries have no detail routes, so list items are
+  // name-only ListItems.
+  const collectionSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: page?.title || String(defaultTechMeta.title),
+    description: page?.subtitle || String(defaultTechMeta.description),
+    url: `${normalizedSiteUrl}/tech`,
+    isPartOf: {
+      '@type': 'WebSite',
+      url: normalizedSiteUrl,
+      name: settings.siteName,
+    },
+  }
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Home',
+        item: `${normalizedSiteUrl}`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Tech',
+        item: `${normalizedSiteUrl}/tech`,
+      },
+    ],
+  }
+  const itemListSchema = items.length
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'ItemList',
+        itemListElement: items.slice(0, 50).map((item, index) => ({
+          '@type': 'ListItem',
+          position: index + 1,
+          name: item.name,
+        })),
+      }
+    : null
+
   return (
-    <SimpleLayout
-      title={page?.title || 'Core technologies I reach for first.'}
-      intro={
-        page?.subtitle ||
-        'A practical stack for product delivery, engineering execution, and long-term maintainability.'
-      }
-      actions={
-        shareTargetIds.length > 0 ? (
-          <ShareButton
-            url={`${normalizedSiteUrl}/tech`}
-            title={shareTitle}
-            targetIds={shareTargetIds}
-          />
-        ) : undefined
-      }
-    >
-      {items.length ? (
-        <Suspense fallback={<TechExplorerFallback />}>
-          <TechExplorer items={items} signals={signals} />
-        </Suspense>
-      ) : (
-        <NotFoundState
-          title="Tech stack coming soon"
-          description="I'm curating the tools and technologies I reach for. Check back shortly."
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(collectionSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
+      />
+      {itemListSchema ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: toSafeJsonLd(itemListSchema) }}
         />
-      )}
-      <CmsPageBlocks slug="tech" />
-    </SimpleLayout>
+      ) : null}
+      <SimpleLayout
+        title={page?.title || 'Core technologies I reach for first.'}
+        intro={
+          page?.subtitle ||
+          'A practical stack for product delivery, engineering execution, and long-term maintainability.'
+        }
+        actions={
+          shareTargetIds.length > 0 ? (
+            <ShareButton
+              url={`${normalizedSiteUrl}/tech`}
+              title={shareTitle}
+              targetIds={shareTargetIds}
+            />
+          ) : undefined
+        }
+      >
+        {items.length ? (
+          <Suspense fallback={<TechExplorerFallback />}>
+            <TechExplorer items={items} signals={signals} />
+          </Suspense>
+        ) : (
+          <NotFoundState
+            title="Tech stack coming soon"
+            description="I'm curating the tools and technologies I reach for. Check back shortly."
+          />
+        )}
+        <CmsPageBlocks slug="tech" />
+      </SimpleLayout>
+    </>
   )
 }

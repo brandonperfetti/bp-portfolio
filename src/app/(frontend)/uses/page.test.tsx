@@ -79,28 +79,43 @@ beforeEach(() => {
   getCmsPageByPath.mockResolvedValue(null)
 })
 
+/** Concatenated JSON-LD script contents, for schema-presence assertions. */
+const scriptText = (container: HTMLElement) =>
+  Array.from(container.querySelectorAll('script[type="application/ld+json"]'))
+    .map((s) => s.textContent)
+    .join(' ')
+
 describe('uses route — collection-honest rendering (#27)', () => {
-  it('renders category sections and cards when the collection is populated', async () => {
+  it('renders category sections, cards, and the ItemList schema when populated', async () => {
     getCmsUses.mockResolvedValue([
       {
         title: 'Workstation',
         items: [{ slug: 'x', name: 'Laptop', description: 'A laptop.' }],
       },
     ])
-    render(await Uses())
+    const { container } = render(await Uses())
 
     expect(screen.getByText('Workstation')).toBeInTheDocument()
     expect(screen.getByTestId('tech-card')).toHaveTextContent('Laptop')
     expect(screen.queryByText('Uses list coming soon')).toBeNull()
+    const combined = scriptText(container)
+    expect(combined).toContain('CollectionPage')
+    expect(combined).toContain('BreadcrumbList')
+    expect(combined).toContain('ItemList')
+    expect(combined).toContain('Laptop')
   })
 
-  it('renders the deliberate empty state when the collection is empty (repo null)', async () => {
+  it('renders the deliberate empty state and omits the ItemList schema when empty (repo null)', async () => {
     getCmsUses.mockResolvedValue(null)
-    render(await Uses())
+    const { container } = render(await Uses())
 
     expect(screen.getByText('Uses list coming soon')).toBeInTheDocument()
     expect(screen.queryByTestId('tech-card')).toBeNull()
     expect(screen.getByTestId('cms-page-blocks')).toBeInTheDocument()
+    const combined = scriptText(container)
+    expect(combined).toContain('CollectionPage')
+    expect(combined).toContain('BreadcrumbList')
+    expect(combined).not.toContain('ItemList"')
   })
 })
 

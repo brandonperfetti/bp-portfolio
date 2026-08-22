@@ -78,26 +78,41 @@ beforeEach(() => {
   getCmsPageByPath.mockResolvedValue(null)
 })
 
+/** Concatenated JSON-LD script contents, for schema-presence assertions. */
+const scriptText = (container: HTMLElement) =>
+  Array.from(container.querySelectorAll('script[type="application/ld+json"]'))
+    .map((s) => s.textContent)
+    .join(' ')
+
 describe('tech route — collection-honest rendering (#27)', () => {
-  it('renders the explorer when the CMS tech collection is populated', async () => {
+  it('renders the explorer and the ItemList schema when populated', async () => {
     getCmsTech.mockResolvedValue([
       { slug: 'alpha', name: 'Alpha', description: 'An entry.' },
     ])
-    render(await TechStack())
+    const { container } = render(await TechStack())
 
     const explorer = screen.getByTestId('tech-explorer')
     expect(explorer).toHaveAttribute('data-count', '1')
     expect(screen.queryByText('Tech stack coming soon')).toBeNull()
+    const combined = scriptText(container)
+    expect(combined).toContain('CollectionPage')
+    expect(combined).toContain('BreadcrumbList')
+    expect(combined).toContain('ItemList')
+    expect(combined).toContain('Alpha')
   })
 
-  it('renders the deliberate empty state when the collection is empty (repo null)', async () => {
+  it('renders the deliberate empty state and omits the ItemList schema when empty (repo null)', async () => {
     getCmsTech.mockResolvedValue(null)
-    render(await TechStack())
+    const { container } = render(await TechStack())
 
     expect(screen.getByText('Tech stack coming soon')).toBeInTheDocument()
     expect(screen.queryByTestId('tech-explorer')).toBeNull()
     // The page-builder region still renders below the empty state.
     expect(screen.getByTestId('cms-page-blocks')).toBeInTheDocument()
+    const combined = scriptText(container)
+    expect(combined).toContain('CollectionPage')
+    expect(combined).toContain('BreadcrumbList')
+    expect(combined).not.toContain('ItemList"')
   })
 })
 
