@@ -1,0 +1,167 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: indigo (engineering practice & architecture) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 50% 52%,
+            rgba(67, 56, 202, 0.3),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 82% 22%,
+            rgba(67, 56, 202, 0.12),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="304" cy="190" r="4" />
+          <circle cx="1800" cy="196" r="4" />
+          <circle cx="1736" cy="946" r="4" />
+          <circle cx="230" cy="894" r="4" />
+        </g>
+        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+          <path d="M 1548 140 h 26 M 1561 127 v 26" />
+          <path d="M 150 454 h 24 M 162 442 v 24" />
+          <path d="M 1918 658 h 24 M 1930 646 v 24" />
+        </g>
+
+        <!-- ===== the instrument console ===== -->
+        <rect x="220" y="300" width="1608" height="560" rx="28"
+          fill="rgba(9,9,11,0.88)" stroke="#818cf8" stroke-width="5" filter="url(#bigGlow)" />
+        <line x1="756" y1="300" x2="756" y2="860" stroke="rgba(129,140,248,0.25)"
+          stroke-width="3.5" />
+        <line x1="1292" y1="300" x2="1292" y2="860" stroke="rgba(129,140,248,0.25)"
+          stroke-width="3.5" />
+
+        <!-- ===== dial 1: LCP — the big image finally painting ===== -->
+        <g transform="translate(488,540)">
+          <!-- gauge arc -->
+          <path d="M -150 60 A 160 160 0 0 1 150 60" fill="none"
+            stroke="rgba(129,140,248,0.3)" stroke-width="10" stroke-linecap="round" />
+          <path d="M -150 60 A 160 160 0 0 1 30 -98" fill="none"
+            stroke="#818cf8" stroke-width="10" stroke-linecap="round" filter="url(#accentGlow)" />
+          <!-- needle in the good zone -->
+          <line x1="0" y1="30" x2="36" y2="-86" stroke="#818cf8" stroke-width="6"
+            stroke-linecap="round" />
+          <circle cy="30" r="12" fill="#818cf8" />
+          <!-- hero image sliding into its frame beneath -->
+          <g transform="translate(0,180)">
+            <rect x="-130" y="-70" width="260" height="140" rx="14"
+              fill="rgba(9,9,11,0.9)" stroke="rgba(129,140,248,0.55)" stroke-width="4" />
+            <circle cx="-70" cy="-24" r="18" fill="rgba(129,140,248,0.45)" />
+            <path d="M -110 52 L -30 -20 L 30 30 L 70 -6 L 110 52 Z"
+              fill="rgba(129,140,248,0.3)" stroke="rgba(129,140,248,0.5)" stroke-width="3.5"
+              stroke-linejoin="round" />
+            <!-- paint sweep line -->
+            <line x1="60" y1="-70" x2="60" y2="70" stroke="#818cf8" stroke-width="4"
+              stroke-dasharray="6 8" />
+          </g>
+        </g>
+
+        <!-- ===== dial 2: CLS — blocks held steady by a pin ===== -->
+        <g transform="translate(1024,540)">
+          <path d="M -150 60 A 160 160 0 0 1 150 60" fill="none"
+            stroke="rgba(129,140,248,0.3)" stroke-width="10" stroke-linecap="round" />
+          <path d="M -150 60 A 160 160 0 0 1 -96 -68" fill="none"
+            stroke="#818cf8" stroke-width="10" stroke-linecap="round" filter="url(#accentGlow)" />
+          <line x1="0" y1="30" x2="-78" y2="-58" stroke="#818cf8" stroke-width="6"
+            stroke-linecap="round" />
+          <circle cy="30" r="12" fill="#818cf8" />
+          <!-- layout blocks: steady stack + a ghost of where it would have jumped -->
+          <g transform="translate(0,180)">
+            <rect x="-130" y="-64" width="260" height="52" rx="10"
+              fill="rgba(129,140,248,0.3)" stroke="rgba(129,140,248,0.55)" stroke-width="3.5" />
+            <rect x="-130" y="4" width="260" height="52" rx="10"
+              fill="rgba(9,9,11,0.9)" stroke="rgba(129,140,248,0.55)" stroke-width="3.5" />
+            <rect x="-108" y="34" width="216" height="52" rx="10" fill="none"
+              stroke="rgba(255,255,255,0.18)" stroke-width="3" stroke-dasharray="10 10" />
+            <!-- the anchor pin holding it -->
+            <g transform="translate(150,-40) rotate(20)">
+              <circle r="10" fill="#818cf8" />
+              <line x1="0" y1="10" x2="0" y2="36" stroke="#818cf8" stroke-width="4.5"
+                stroke-linecap="round" />
+            </g>
+          </g>
+        </g>
+
+        <!-- ===== dial 3: INP — the tap answered instantly ===== -->
+        <g transform="translate(1560,540)">
+          <path d="M -150 60 A 160 160 0 0 1 150 60" fill="none"
+            stroke="rgba(129,140,248,0.3)" stroke-width="10" stroke-linecap="round" />
+          <path d="M -150 60 A 160 160 0 0 1 96 -68" fill="none"
+            stroke="#818cf8" stroke-width="10" stroke-linecap="round" filter="url(#accentGlow)" />
+          <line x1="0" y1="30" x2="80" y2="-56" stroke="#818cf8" stroke-width="6"
+            stroke-linecap="round" />
+          <circle cy="30" r="12" fill="#818cf8" />
+          <!-- tap + instant ripple response -->
+          <g transform="translate(0,180)">
+            <rect x="-120" y="-30" width="240" height="76" rx="38"
+              fill="rgba(67,56,202,0.35)" stroke="#818cf8" stroke-width="4" />
+            <rect x="-58" y="0" width="116" height="16" rx="8" fill="rgba(129,140,248,0.55)" />
+            <!-- pointer dot + rings -->
+            <circle cx="70" cy="-46" r="10" fill="#818cf8" filter="url(#accentGlow)" />
+            <circle cx="70" cy="-46" r="26" fill="none" stroke="rgba(129,140,248,0.4)"
+              stroke-width="3" />
+            <circle cx="70" cy="-46" r="42" fill="none" stroke="rgba(129,140,248,0.2)"
+              stroke-width="3" />
+          </g>
+        </g>
+
+        <!-- tuning wrench resting on the console edge: fixes, not vanity -->
+        <g transform="translate(1730,270) rotate(-28)">
+          <path d="M -10 -46 A 22 22 0 1 0 10 -46 L 10 30 A 14 14 0 0 1 -10 30 Z"
+            fill="rgba(9,9,11,0.9)" stroke="rgba(129,140,248,0.55)" stroke-width="4"
+            stroke-linejoin="round" />
+        </g>
+
+        <!-- lab-vs-field trace: a wavy field line entering the console -->
+        <path d="M 140 220 C 400 180, 700 240, 960 200 C 1220 160, 1500 220, 1740 190"
+          fill="none" stroke="rgba(129,140,248,0.3)" stroke-width="3.5"
+          stroke-dasharray="14 12" stroke-linecap="round" />
+        <g fill="rgba(129,140,248,0.5)">
+          <circle cx="520" cy="212" r="6" />
+          <circle cx="1180" cy="182" r="6" />
+        </g>
+
+        <!-- discarded vanity metric ticket, crumpled at the console base -->
+        <g opacity="0.4" transform="translate(320,950) rotate(-10)">
+          <path d="M -50 -20 L 50 -26 L 44 22 L -40 28 Z" fill="rgba(255,255,255,0.05)"
+            stroke="rgba(255,255,255,0.25)" stroke-width="3" stroke-linejoin="round" />
+          <line x1="-28" y1="-6" x2="26" y2="-10" stroke="rgba(255,255,255,0.2)"
+            stroke-width="3" stroke-linecap="round" />
+          <line x1="-34" y1="-24" x2="40" y2="26" stroke="rgba(255,255,255,0.3)"
+            stroke-width="3.5" stroke-linecap="round" />
+        </g>
+
+        <!-- ground shadow -->
+        <ellipse cx="1024" cy="1000" rx="700" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1024" cy="950" rx="320" ry="16" fill="rgba(67,56,202,0.14)" />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>
