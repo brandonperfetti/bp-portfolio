@@ -1,27 +1,39 @@
-# Nightly encrypted Postgres backup (Supabase free tier has no automated
-# backups; this is the off-platform copy).
+# Nightly encrypted Postgres backups (Supabase free tier has no automated
+# backups; these are the off-platform copies). TWO targets, one schedule:
+# staging (the shared content DB) and production (bp-portfolio-prod).
+# The nightly connection doubles as the free-tier keep-alive for BOTH
+# projects (a free Supabase project pauses after ~7 idle days).
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
-#   SUPABASE_DB_URL    — SESSION-mode pooler connection string (port 5432,
-#                        username postgres.<project-ref>). Copy it whole from
-#                        the Supabase Connect dialog — never hand-assemble.
-#   BACKUP_PASSPHRASE  — symmetric encryption key (e.g. `openssl rand -hex 32`).
-#                        Keep a copy in the password manager: without it the
-#                        backups are unreadable.
+#   SUPABASE_DB_URL          — STAGING session-mode pooler string (port 5432,
+#                              username postgres.<project-ref>). Copy it whole
+#                              from the Supabase Connect dialog — never
+#                              hand-assemble.
+#   BACKUP_PASSPHRASE        — staging symmetric encryption key
+#                              (e.g. `openssl rand -hex 32`). Keep a copy in
+#                              the password manager: without it the backups
+#                              are unreadable.
+#   SUPABASE_DB_URL_PROD     — PRODUCTION session-mode pooler string.
+#   BACKUP_PASSPHRASE_PROD   — production encryption key. Fresh value — never
+#                              reuse the staging passphrase.
 #
-# Restore (locally):
+# Restore (locally — use the passphrase matching the artifact's target):
 #   openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
-#     -in db-YYYY-MM-DD.dump.enc -out db.dump -pass env:BACKUP_PASSPHRASE
+#     -in db-<target>-YYYY-MM-DD.dump.enc -out db.dump -pass env:BACKUP_PASSPHRASE
 #   pg_restore --clean --if-exists --no-owner --no-privileges \
 #     -d "$TARGET_DB_URL" db.dump
 #
 # Notes:
 # - This repo is public: dumps contain drafts, gated content, and contact
-#   emails, so the artifact MUST stay encrypted. Never upload the plaintext.
+#   emails, so the artifacts MUST stay encrypted. Never upload the plaintext.
 # - pg_dump major version must match the server (Postgres 17), hence the
 #   PGDG client install.
 # - GitHub disables cron workflows after 60 days without repo activity;
 #   the run-summary line makes silent failure visible in the Actions tab.
+# - min_bytes: staging holds real content (100KB floor). Production is empty
+#   until the merge-day promotion, so its floor starts at 1KB (catches
+#   zero-byte/failed dumps) — RAISE IT TO 100000 after the DB promotion
+#   (tracked in the master-cutover runbook, Phase F).
 
 name: db-backup
 
@@ -37,6 +49,19 @@ jobs:
   dump:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false # one target's failure must not cancel the other's backup
+      matrix:
+        include:
+          - target: staging
+            url_secret: SUPABASE_DB_URL
+            pass_secret: BACKUP_PASSPHRASE
+            min_bytes: 100000
+          - target: prod
+            url_secret: SUPABASE_DB_URL_PROD
+            pass_secret: BACKUP_PASSPHRASE_PROD
+            min_bytes: 1000 # empty until promotion — raise to 100000 at cutover
+    name: dump (${{ matrix.target }})
     steps:
       - name: Install postgresql-client-17 (matches server 17.6)
         run: |
@@ -48,32 +73,33 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-17
 
-      - name: Dump database
+      - name: Dump database (${{ matrix.target }})
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          DB_URL: ${{ secrets[matrix.url_secret] }}
         run: |
           set -euo pipefail
-          test -n "$SUPABASE_DB_URL" || { echo "::error::SUPABASE_DB_URL secret is not set"; exit 1; }
+          test -n "$DB_URL" || { echo "::error::${{ matrix.url_secret }} secret is not set"; exit 1; }
           # runner preinstalls pg 16 client tools which shadow the pg17 install
           # on PATH — invoke the versioned binary explicitly
-          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" -Fc --no-owner --no-privileges -f db.dump
+          /usr/lib/postgresql/17/bin/pg_dump "$DB_URL" -Fc --no-owner --no-privileges -f db.dump
           # sanity: an empty/failed dump is worse than a loud failure
           size=$(stat -c%s db.dump)
           echo "dump size: ${size} bytes"
-          test "$size" -gt 100000 || { echo "::error::dump suspiciously small (${size} bytes)"; exit 1; }
+          test "$size" -gt ${{ matrix.min_bytes }} || { echo "::error::dump suspiciously small (${size} bytes, floor ${{ matrix.min_bytes }})"; exit 1; }
 
-      - name: Encrypt dump
+      - name: Encrypt dump (${{ matrix.target }})
         env:
-          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          PASSPHRASE: ${{ secrets[matrix.pass_secret] }}
         run: |
           set -euo pipefail
-          test -n "$BACKUP_PASSPHRASE" || { echo "::error::BACKUP_PASSPHRASE secret is not set"; exit 1; }
+          test -n "$PASSPHRASE" || { echo "::error::${{ matrix.pass_secret }} secret is not set"; exit 1; }
           stamp=$(date -u +%Y-%m-%d)
+          out="db-${{ matrix.target }}-${stamp}.dump.enc"
           openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
-            -in db.dump -out "db-${stamp}.dump.enc" -pass env:BACKUP_PASSPHRASE
+            -in db.dump -out "$out" -pass env:PASSPHRASE
           shred -u db.dump
-          echo "ARTIFACT_FILE=db-${stamp}.dump.enc" >> "$GITHUB_ENV"
-          echo "Encrypted backup: db-${stamp}.dump.enc ($(stat -c%s "db-${stamp}.dump.enc") bytes)" >> "$GITHUB_STEP_SUMMARY"
+          echo "ARTIFACT_FILE=${out}" >> "$GITHUB_ENV"
+          echo "Encrypted backup: ${out} ($(stat -c%s "$out") bytes)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload encrypted artifact (14-day retention)
         uses: actions/upload-artifact@v4
