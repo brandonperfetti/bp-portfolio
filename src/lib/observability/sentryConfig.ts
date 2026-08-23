@@ -162,3 +162,64 @@ export function sentryTracesSampler(samplingContext: {
  * `Sentry.consoleLoggingIntegration(...)` call.
  */
 export const SENTRY_CONSOLE_LOG_LEVELS = ['warn', 'error'] as const
+
+/**
+ * Browser event source URLs to drop entirely (Sentry `denyUrls`, applied
+ * by the default event-filters integration).
+ *
+ * @remarks
+ * The Vercel Toolbar's live-feedback widget — served only to the
+ * authenticated project owner from `app:///_next-live/…` — throws
+ * `InvalidNodeTypeError` from its own `requestAnimationFrame` handler
+ * (#95 / BP-PORTFOLIO-4). It is toolbar noise, never a site defect, seen
+ * by 0 real users, so any event whose frames originate in the injected
+ * `_next-live` bundle is dropped. Client-only: server/edge stacks have no
+ * such frames.
+ */
+export const SENTRY_DENY_URLS: RegExp[] = [/_next-live\//]
+
+/**
+ * Browser error messages to drop (Sentry `ignoreErrors`), belt-and-
+ * suspenders alongside {@link SENTRY_DENY_URLS} for the same Vercel
+ * Toolbar feedback error (#95 / BP-PORTFOLIO-4), in case a future toolbar
+ * build reports it without a `_next-live` frame.
+ */
+export const SENTRY_IGNORE_ERRORS: Array<string | RegExp> = [
+  /Failed to execute 'selectNode' on 'Range'/,
+]
+
+/**
+ * Substrings identifying benign, high-volume log lines the console-logging
+ * integration would otherwise forward to Sentry Logs as noise (#95).
+ *
+ * @remarks
+ * - `vm.USE_MAIN_CONTEXT_DEFAULT_LOADER` — a benign Node experimental-
+ *   feature warning (`ExperimentalWarning`) emitted server-side and
+ *   forwarded to Logs; pure noise (#95).
+ * - `[Cloudflare Turnstile] Error: 300031` — Turnstile's documented
+ *   transient/retriable "generic challenge failure" baseline (a client
+ *   `console.warn`). The hostname misconfiguration is already fixed; this
+ *   residual is the expected baseline every Turnstile deployment emits,
+ *   folded in per #94. Drop this one entry to keep every Turnstile warning
+ *   visible.
+ */
+const SUPPRESSED_LOG_MESSAGE_PATTERNS = [
+  'vm.USE_MAIN_CONTEXT_DEFAULT_LOADER',
+  '[Cloudflare Turnstile] Error: 300031',
+] as const
+
+/**
+ * Whether a forwarded console log message is known-benign noise that
+ * should not reach Sentry Logs — used by each runtime's `beforeSendLog`.
+ *
+ * @param message - The log message body. Coerce non-strings before
+ * calling; an empty message is never suppressed.
+ * @returns `true` when `message` contains a
+ * {@link SUPPRESSED_LOG_MESSAGE_PATTERNS} entry.
+ */
+export function isSuppressedSentryLogMessage(message: string): boolean {
+  if (!message) return false
+  return SUPPRESSED_LOG_MESSAGE_PATTERNS.some((pattern) =>
+    message.includes(pattern),
+  )
+}

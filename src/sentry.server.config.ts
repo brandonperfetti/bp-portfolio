@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/nextjs'
 import {
   getSentryEnvironment,
   getServerSentryDsn,
+  isSuppressedSentryLogMessage,
   SENTRY_CONSOLE_LOG_LEVELS,
   sentryTracesSampler,
 } from '@/lib/observability/sentryConfig'
@@ -36,6 +37,10 @@ if (dsn) {
     debug: false,
     // Sentry Logs (structured logging view, separate from error/tracing).
     enableLogs: true,
+    // Keep the benign Node `vm.USE_MAIN_CONTEXT_DEFAULT_LOADER` experimental
+    // warning out of Sentry Logs (#95).
+    beforeSendLog: (log) =>
+      isSuppressedSentryLogMessage(String(log.message ?? '')) ? null : log,
     integrations: [
       Sentry.consoleLoggingIntegration({
         levels: [...SENTRY_CONSOLE_LOG_LEVELS],

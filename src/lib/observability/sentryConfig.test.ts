@@ -6,7 +6,10 @@ import {
   getServerSentryDsn,
   getTracesSampleRate,
   isNoisyTransaction,
+  isSuppressedSentryLogMessage,
   SENTRY_CONSOLE_LOG_LEVELS,
+  SENTRY_DENY_URLS,
+  SENTRY_IGNORE_ERRORS,
   sentryTracesSampler,
 } from '@/lib/observability/sentryConfig'
 
@@ -172,5 +175,70 @@ describe('SENTRY_CONSOLE_LOG_LEVELS', () => {
     expect(SENTRY_CONSOLE_LOG_LEVELS).not.toContain('log')
     expect(SENTRY_CONSOLE_LOG_LEVELS).not.toContain('info')
     expect(SENTRY_CONSOLE_LOG_LEVELS).not.toContain('debug')
+  })
+})
+
+describe('isSuppressedSentryLogMessage', () => {
+  it('suppresses the benign Node vm experimental warning (#95)', () => {
+    expect(
+      isSuppressedSentryLogMessage(
+        '(node:4) ExperimentalWarning: vm.USE_MAIN_CONTEXT_DEFAULT_LOADER is an experimental feature',
+      ),
+    ).toBe(true)
+  })
+
+  it('suppresses the transient Turnstile 300031 baseline warning (#94)', () => {
+    expect(
+      isSuppressedSentryLogMessage('[Cloudflare Turnstile] Error: 300031.'),
+    ).toBe(true)
+  })
+
+  it('does not suppress an ordinary warn/error message that is real signal', () => {
+    expect(
+      isSuppressedSentryLogMessage('Failed to load article: 500 from CMS'),
+    ).toBe(false)
+    // A different Turnstile error code is NOT the benign baseline — keep it.
+    expect(
+      isSuppressedSentryLogMessage('[Cloudflare Turnstile] Error: 110200.'),
+    ).toBe(false)
+  })
+
+  it('never suppresses an empty message', () => {
+    expect(isSuppressedSentryLogMessage('')).toBe(false)
+  })
+})
+
+describe('SENTRY_DENY_URLS', () => {
+  it('drops events sourced in the Vercel Toolbar `_next-live` bundle (BP-4, #95)', () => {
+    const url = 'app:///_next-live/feedback/feedback.js'
+    expect(SENTRY_DENY_URLS.some((pattern) => pattern.test(url))).toBe(true)
+  })
+
+  it('leaves ordinary app bundle frames alone', () => {
+    const url = 'app:///_next/static/chunks/main-app.js'
+    expect(SENTRY_DENY_URLS.some((pattern) => pattern.test(url))).toBe(false)
+  })
+})
+
+describe('SENTRY_IGNORE_ERRORS', () => {
+  const matches = (message: string) =>
+    SENTRY_IGNORE_ERRORS.some((pattern) =>
+      typeof pattern === 'string'
+        ? message.includes(pattern)
+        : pattern.test(message),
+    )
+
+  it('matches the Vercel Toolbar InvalidNodeTypeError message (BP-4, #95)', () => {
+    expect(
+      matches(
+        "InvalidNodeTypeError: Failed to execute 'selectNode' on 'Range': the given Node has no parent.",
+      ),
+    ).toBe(true)
+  })
+
+  it('does not match unrelated errors', () => {
+    expect(matches('TypeError: Cannot read properties of undefined')).toBe(
+      false,
+    )
   })
 })

@@ -3,7 +3,10 @@ import * as Sentry from '@sentry/nextjs'
 import {
   getClientSentryDsn,
   getSentryEnvironment,
+  isSuppressedSentryLogMessage,
   SENTRY_CONSOLE_LOG_LEVELS,
+  SENTRY_DENY_URLS,
+  SENTRY_IGNORE_ERRORS,
   sentryTracesSampler,
 } from '@/lib/observability/sentryConfig'
 
@@ -36,6 +39,13 @@ if (dsn) {
     debug: false,
     // Sentry Logs (structured logging view, separate from error/tracing).
     enableLogs: true,
+    // Drop Vercel Toolbar live-feedback noise (BP-PORTFOLIO-4, #95) — owner-
+    // only, 0 real users — by both its injected source and its error message.
+    denyUrls: SENTRY_DENY_URLS,
+    ignoreErrors: SENTRY_IGNORE_ERRORS,
+    // Keep known-benign, high-volume warnings out of Sentry Logs (#95, #94).
+    beforeSendLog: (log) =>
+      isSuppressedSentryLogMessage(String(log.message ?? '')) ? null : log,
     integrations: [
       Sentry.consoleLoggingIntegration({
         levels: [...SENTRY_CONSOLE_LOG_LEVELS],
