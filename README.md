@@ -1,14 +1,50 @@
 # BP Portfolio (brandonperfetti.com)
 
-Personal portfolio and content platform — the v4 ground-up rebuild on **Next.js 16
-(App Router) + Payload CMS 3** over Supabase Postgres. Every page on the site is
-constructible from CMS blocks alone: layout grammar (containers → columns → 20+
-blocks), a six-type hero system, carousels, and reader actions (Copy page / Share /
-generated OG cards) are all editorial acts, not deploys. The site ships with
-**Corvus**, a general-purpose AI assistant with server-enforced guardrails, and is
-hardened for production: database-level RLS, Sentry monitoring, and server-side
-auth gating throughout. Notion is a planning surface only — it has no runtime
-integration.
+Personal portfolio and content platform — the v4 ground-up rebuild on **Next.js
+16 (App Router) + Payload CMS 3** over Supabase Postgres. Every page on the site
+is constructible from CMS blocks alone, the site ships with **Corvus** (a
+general-purpose AI assistant with server-enforced guardrails), and the whole
+thing is hardened for production: database-level RLS, Sentry monitoring, and
+server-side auth gating throughout.
+
+## Table of contents
+
+1. [Overview](#overview)
+2. [Tech stack](#tech-stack)
+3. [Getting started](#getting-started)
+4. [Environment variables](#environment-variables)
+5. [Scripts](#scripts)
+6. [How content works](#how-content-works)
+7. [Corvus](#corvus)
+8. [Testing](#testing)
+9. [Branches & deployment](#branches--deployment)
+10. [Documentation map](#documentation-map)
+11. [Troubleshooting](#troubleshooting)
+
+## Overview
+
+The active codebase for [brandonperfetti.com](https://brandonperfetti.com):
+
+- **Block-built pages** — a layout grammar (containers → columns → 20+ blocks),
+  a six-type hero system (blank/none/standard/shader/image/carousel), carousels
+  with five effects, testimonials, stats, FAQs, and more. New pages and section
+  rearrangements are editorial acts, not deploys.
+- **Article platform** at `/articles/[slug]` (slugs preserved from v3) with
+  reader actions on every post: Copy page (Markdown), configurable Share
+  targets, and branded or generated OG cards.
+- **Corvus AI assistant** at `/corvus` — streaming chat with a server-enforced
+  persona, anonymous free messages before a Clerk sign-in gate, Upstash-backed
+  rate limits, and Web Speech voice dictation as progressive enhancement.
+- **Server-side auth & gating** — Clerk end-user auth with content gating
+  enforced in server code (`src/access/canAccess.ts`), never in UI components.
+- **Instant publishing** — collection hooks pair `revalidateTag` with
+  `revalidatePath`, so admin edits go live in seconds without a redeploy.
+- **Production hardening** — default-deny RLS on every public table, Sentry
+  error monitoring + logs across all three runtimes, Turnstile bot protection,
+  and nightly encrypted database backups.
+- **Motion with restraint** — GSAP choreography and a shaders.com animated
+  hero, with `prefers-reduced-motion` honored by every animated surface.
+- Notion is a **planning surface only** — it has no runtime integration.
 
 ## Tech stack
 
@@ -31,11 +67,28 @@ pnpm migrate                 # applies the committed migration chain to DATABASE
 pnpm dev                     # http://localhost:3000 · admin at /admin
 ```
 
-`DATABASE_URI` decides your database. Local dev works against any Postgres 16+
-(the CI image is `pgvector/pgvector:pg16`); staging/production use Supabase's
-transaction-mode pooler string. The app boots with only a database — Blob, Clerk,
-AI, Resend, Sentry, and Turnstile are all env-gated and simply stay inert until
-their keys exist.
+The app boots with only a database — everything else stays inert until its keys
+exist (see below).
+
+## Environment variables
+
+[`.env.example`](.env.example) is the annotated source of truth — every variable
+carries a comment explaining what it does and where its value comes from. The
+shape of the config:
+
+- **Required**: `PAYLOAD_SECRET` and `DATABASE_URI`. Local dev works against
+  any Postgres 16+ (the CI image is `pgvector/pgvector:pg16`); staging and
+  production use Supabase's **transaction-mode** pooler string (port 6543) for
+  the app, and the session-mode string (5432) only for `pg_dump`/restore.
+- **Env-gated services** — Blob media, Clerk auth, Corvus AI (provider, model,
+  quotas, and free-message knobs), Upstash rate limiting, Turnstile, Resend
+  email, and Sentry are each activated by their key group and simply stay off
+  without it. No service key is ever required to boot.
+- **Removed in v4** (do not re-add): the Notion, Cloudinary, SendGrid, and Neon
+  families — `.env.example` lists them explicitly as tombstones.
+
+Real secrets live in Vercel (per-environment) and GitHub Actions — never in the
+repo. Staging and production never share values.
 
 ## Scripts
 
@@ -52,35 +105,50 @@ artifacts after any schema/plugin change (CI fails on drift).
 
 ## How content works
 
-Payload → typed repo modules (`src/lib/cms/*Repo.ts`) → React Server Components.
-Editors compose pages from a block library (containers with backgrounds/full-bleed,
-columns with sticky rails, prose, media, carousels with five effects, testimonials,
-stats, FAQs, …) plus a hero group (`blank | none | standard | shader | image |
-carousel`). Collection hooks pair `revalidateTag` with `revalidatePath`, so admin
-edits go live in seconds without a redeploy. Articles carry reader actions —
-Copy page (Markdown), Share targets, and branded/generated OG cards — all
-CMS-configurable.
+Payload → typed repo modules (`src/lib/cms/*Repo.ts`) → React Server
+Components. Editors compose pages from the block library plus the hero group;
+collection hooks revalidate tags and paths on save, so edits are live in
+seconds. Articles carry the reader actions (Copy page, Share, OG cards), all
+CMS-configurable per entry. The full block reference lives in
+`docs/PAYLOAD.md`; the feature inventory in `docs/FEATURES.md`.
 
 ## Corvus
 
 `/corvus` is a general-purpose assistant (Brandon's work as home base, not a
-fence) on the Vercel AI SDK. The system prompt is **server-enforced**; anonymous
-visitors get a few free messages (Upstash-backed, per-IP) before a Clerk sign-in
-gate; signed-in users get higher ceilings keyed by user id. Voice dictation ships
-as progressive enhancement via the Web Speech API (Chrome/Edge/Safari; graceful
-notes elsewhere). Behavior is eval-gated in CI (`pnpm eval:ci`).
+fence) on the Vercel AI SDK. The system prompt is **server-enforced**; client
+messages are never trusted with it. Anonymous visitors get a few free messages
+(Upstash-backed, per-IP) before a Clerk sign-in gate; signed-in users get
+higher ceilings keyed by user id. Voice dictation ships as progressive
+enhancement via the Web Speech API (Chrome/Edge/Safari; graceful notes
+elsewhere). Behavior is eval-gated in CI (`pnpm eval:ci`).
+
+## Testing
+
+Four layers, each with its own command and CI gate:
+
+- **Unit / component** (Vitest + Testing Library) — `pnpm test`; runs on every
+  branch push and in the pre-push hook.
+- **Storybook browser tests** — `pnpm test:storybook`; interaction + a11y
+  checks per story (serious violations fail the story).
+- **End-to-end** (Playwright) — `pnpm test:e2e`; boots the built app against a
+  real Postgres, runs under reduced motion, and includes an axe WCAG-AA sweep
+  of key routes in both themes.
+- **AI evals** (Evalite) — `pnpm eval:ci`; scores Corvus behavior against a
+  threshold so persona regressions fail CI.
+
+E2E and evals run on pushes to `develop`/`master`/`rebuild/**` and on PRs
+targeting `develop`/`master`; feature-branch pushes run the quality job only
+(lint/types/unit), so trunk and PRs are where the full gate lives.
 
 ## Branches & deployment
 
 GitFlow: `master` → production ([brandonperfetti.com](https://brandonperfetti.com));
 `develop` → integration; the active QA branch serves
-[staging.brandonperfetti.com](https://staging.brandonperfetti.com). Vercel builds
-with corepack-pinned pnpm; migrations run on deploy (`pnpm migrate && pnpm build` —
-the committed chain is idempotent and tracked in `payload_migrations`, so re-runs
-no-op). CI runs the quality job (lint/types/unit) on every branch push; Build·E2E
-and Evalite run on pushes to `develop`/`master`/`rebuild/**` and on PRs targeting
-`develop`/`master`. The staging database gets nightly encrypted `pg_dump`
-backups via GitHub Actions.
+[staging.brandonperfetti.com](https://staging.brandonperfetti.com). Vercel
+builds with corepack-pinned pnpm; migrations run on deploy (`pnpm migrate &&
+pnpm build` — the committed chain is idempotent and tracked in
+`payload_migrations`, so re-runs no-op). The staging database gets nightly
+encrypted `pg_dump` backups via GitHub Actions.
 
 ## Documentation map
 
