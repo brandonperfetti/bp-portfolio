@@ -24,18 +24,34 @@
     <div class="glow"></div>
     <div class="grid"></div>
     <div class="stage">
-      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
         <defs>
           <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="14" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
           <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="24" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
-          <linearGradient id="eventGrad" gradientUnits="userSpaceOnUse"
-            x1="180" y1="0" x2="900" y2="0">
+          <linearGradient
+            id="eventGrad"
+            gradientUnits="userSpaceOnUse"
+            x1="180"
+            y1="0"
+            x2="900"
+            y2="0"
+          >
             <stop offset="0" stop-color="#d97706" />
             <stop offset="1" stop-color="#fbbf24" />
           </linearGradient>
@@ -48,33 +64,78 @@
           <circle cx="1730" cy="960" r="4" />
           <circle cx="200" cy="880" r="4" />
         </g>
-        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
           <path d="M 1540 140 h 26 M 1553 127 v 26" />
           <path d="M 130 540 h 24 M 142 528 v 24" />
           <path d="M 1930 680 h 24 M 1942 668 v 24" />
         </g>
 
         <!-- ===== external event arriving: bolt packet from off-frame ===== -->
-        <path d="M 180 520 H 560" stroke="url(#eventGrad)" stroke-width="6"
-          fill="none" stroke-linecap="round" />
+        <path
+          d="M 180 520 H 560"
+          stroke="url(#eventGrad)"
+          stroke-width="6"
+          fill="none"
+          stroke-linecap="round"
+        />
         <g transform="translate(400,520)" filter="url(#accentGlow)">
-          <path d="M 8 -26 l -22 30 l 14 0 l -8 22 l 22 -30 l -14 0 Z"
-            fill="#fbbf24" stroke="#fbbf24" stroke-width="2" stroke-linejoin="round" />
+          <path
+            d="M 8 -26 l -22 30 l 14 0 l -8 22 l 22 -30 l -14 0 Z"
+            fill="#fbbf24"
+            stroke="#fbbf24"
+            stroke-width="2"
+            stroke-linejoin="round"
+          />
         </g>
 
         <!-- ===== the signature gate: verify before anything else ===== -->
         <g transform="translate(640,520)">
-          <rect x="-80" y="-130" width="160" height="260" rx="24"
-            fill="rgba(9,9,11,0.88)" stroke="#fbbf24" stroke-width="5" filter="url(#bigGlow)" />
+          <rect
+            x="-80"
+            y="-130"
+            width="160"
+            height="260"
+            rx="24"
+            fill="rgba(9,9,11,0.88)"
+            stroke="#fbbf24"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
           <!-- keyhole -->
-          <circle cy="-26" r="24" fill="none" stroke="rgba(251,191,36,0.8)" stroke-width="5" />
-          <line x1="0" y1="-4" x2="0" y2="44" stroke="rgba(251,191,36,0.8)"
-            stroke-width="6" stroke-linecap="round" />
+          <circle
+            cy="-26"
+            r="24"
+            fill="none"
+            stroke="rgba(251,191,36,0.8)"
+            stroke-width="5"
+          />
+          <line
+            x1="0"
+            y1="-4"
+            x2="0"
+            y2="44"
+            stroke="rgba(251,191,36,0.8)"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
           <!-- rejected forgery bouncing off, downward -->
-          <path d="M -60 150 C -110 220, -160 240, -220 250" fill="none"
-            stroke="rgba(255,255,255,0.18)" stroke-width="4" stroke-dasharray="4 14"
-            stroke-linecap="round" />
-          <g transform="translate(-240,254)" stroke="rgba(255,255,255,0.25)" stroke-width="3.5">
+          <path
+            d="M -60 150 C -110 220, -160 240, -220 250"
+            fill="none"
+            stroke="rgba(255,255,255,0.18)"
+            stroke-width="4"
+            stroke-dasharray="4 14"
+            stroke-linecap="round"
+          />
+          <g
+            transform="translate(-240,254)"
+            stroke="rgba(255,255,255,0.25)"
+            stroke-width="3.5"
+          >
             <circle r="18" fill="rgba(9,9,11,0.7)" />
             <line x1="-10" y1="-10" x2="10" y2="10" stroke-linecap="round" />
             <line x1="10" y1="-10" x2="-10" y2="10" stroke-linecap="round" />
@@ -82,56 +143,139 @@
         </g>
 
         <!-- ===== the durable queue: ack fast, work later ===== -->
-        <path d="M 720 520 H 1080" stroke="rgba(251,191,36,0.55)" stroke-width="5"
-          fill="none" stroke-linecap="round" />
+        <path
+          d="M 720 520 H 1080"
+          stroke="rgba(251,191,36,0.55)"
+          stroke-width="5"
+          fill="none"
+          stroke-linecap="round"
+        />
         <g transform="translate(1180,520)">
-          <rect x="-100" y="-110" width="200" height="220" rx="22"
-            fill="rgba(9,9,11,0.88)" stroke="rgba(255,255,255,0.35)" stroke-width="3.5" />
+          <rect
+            x="-100"
+            y="-110"
+            width="200"
+            height="220"
+            rx="22"
+            fill="rgba(9,9,11,0.88)"
+            stroke="rgba(255,255,255,0.35)"
+            stroke-width="3.5"
+          />
           <!-- queued events, oldest brightest -->
           <g stroke-linecap="round">
-            <rect x="-64" y="-74" width="128" height="34" rx="10"
-              fill="rgba(180,83,9,0.2)" stroke="rgba(251,191,36,0.7)" stroke-width="3.5" />
-            <rect x="-64" y="-17" width="128" height="34" rx="10"
-              fill="rgba(180,83,9,0.12)" stroke="rgba(251,191,36,0.45)" stroke-width="3.5" />
-            <rect x="-64" y="40" width="128" height="34" rx="10"
-              fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.22)" stroke-width="3.5" />
+            <rect
+              x="-64"
+              y="-74"
+              width="128"
+              height="34"
+              rx="10"
+              fill="rgba(180,83,9,0.2)"
+              stroke="rgba(251,191,36,0.7)"
+              stroke-width="3.5"
+            />
+            <rect
+              x="-64"
+              y="-17"
+              width="128"
+              height="34"
+              rx="10"
+              fill="rgba(180,83,9,0.12)"
+              stroke="rgba(251,191,36,0.45)"
+              stroke-width="3.5"
+            />
+            <rect
+              x="-64"
+              y="40"
+              width="128"
+              height="34"
+              rx="10"
+              fill="rgba(255,255,255,0.03)"
+              stroke="rgba(255,255,255,0.22)"
+              stroke-width="3.5"
+            />
           </g>
           <!-- fast 200 ack pinging back above the line -->
-          <path d="M -80 -140 C -200 -210, -420 -210, -520 -160" fill="none"
-            stroke="rgba(251,191,36,0.4)" stroke-width="4" stroke-linecap="round" />
-          <path d="M -498 -178 L -528 -156 L -494 -146 Z" fill="rgba(251,191,36,0.4)" />
+          <path
+            d="M -80 -140 C -200 -210, -420 -210, -520 -160"
+            fill="none"
+            stroke="rgba(251,191,36,0.4)"
+            stroke-width="4"
+            stroke-linecap="round"
+          />
+          <path
+            d="M -498 -178 L -528 -156 L -494 -146 Z"
+            fill="rgba(251,191,36,0.4)"
+          />
         </g>
 
         <!-- ===== the handler: does the real work, with a retry loop ===== -->
-        <path d="M 1280 520 H 1560" stroke="rgba(251,191,36,0.55)" stroke-width="5"
-          fill="none" stroke-linecap="round" />
+        <path
+          d="M 1280 520 H 1560"
+          stroke="rgba(251,191,36,0.55)"
+          stroke-width="5"
+          fill="none"
+          stroke-linecap="round"
+        />
         <g transform="translate(1690,520)">
-          <circle r="110" fill="rgba(9,9,11,0.88)" stroke="#fbbf24" stroke-width="5"
-            filter="url(#bigGlow)" />
+          <circle
+            r="110"
+            fill="rgba(9,9,11,0.88)"
+            stroke="#fbbf24"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
           <!-- gear teeth hint: three ticks -->
-          <g stroke="rgba(251,191,36,0.7)" stroke-width="5" stroke-linecap="round">
+          <g
+            stroke="rgba(251,191,36,0.7)"
+            stroke-width="5"
+            stroke-linecap="round"
+          >
             <line x1="0" y1="-84" x2="0" y2="-62" />
             <line x1="73" y1="42" x2="54" y2="31" />
             <line x1="-73" y1="42" x2="-54" y2="31" />
           </g>
-          <circle r="34" fill="rgba(180,83,9,0.2)" stroke="#fbbf24" stroke-width="4.5" />
+          <circle
+            r="34"
+            fill="rgba(180,83,9,0.2)"
+            stroke="#fbbf24"
+            stroke-width="4.5"
+          />
           <circle r="11" fill="#fbbf24" filter="url(#accentGlow)" />
           <!-- idempotency ledger tick: same event, one effect -->
-          <g transform="translate(0,152)" stroke="rgba(255,255,255,0.3)" stroke-width="4"
-            stroke-linecap="round" fill="none">
+          <g
+            transform="translate(0,152)"
+            stroke="rgba(255,255,255,0.3)"
+            stroke-width="4"
+            stroke-linecap="round"
+            fill="none"
+          >
             <path d="M -18 0 l 12 12 l 26 -28" />
           </g>
         </g>
         <!-- retry loop arcing back to the queue -->
-        <path d="M 1650 400 C 1560 300, 1330 300, 1240 396" fill="none"
-          stroke="rgba(251,191,36,0.4)" stroke-width="4" stroke-dasharray="24 16"
-          stroke-linecap="round" />
-        <path d="M 1262 372 L 1234 402 L 1270 404 Z" fill="rgba(251,191,36,0.4)" />
+        <path
+          d="M 1650 400 C 1560 300, 1330 300, 1240 396"
+          fill="none"
+          stroke="rgba(251,191,36,0.4)"
+          stroke-width="4"
+          stroke-dasharray="24 16"
+          stroke-linecap="round"
+        />
+        <path
+          d="M 1262 372 L 1234 402 L 1270 404 Z"
+          fill="rgba(251,191,36,0.4)"
+        />
 
         <!-- ground shadows -->
         <ellipse cx="1690" cy="880" rx="240" ry="24" fill="rgba(0,0,0,0.5)" />
         <ellipse cx="1180" cy="850" rx="200" ry="20" fill="rgba(0,0,0,0.45)" />
-        <ellipse cx="640" cy="850" rx="180" ry="18" fill="rgba(180,83,9,0.12)" />
+        <ellipse
+          cx="640"
+          cy="850"
+          rx="180"
+          ry="18"
+          fill="rgba(180,83,9,0.12)"
+        />
       </svg>
     </div>
     <!--GRAIN-->

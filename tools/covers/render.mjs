@@ -17,7 +17,10 @@ for (const name of targets) {
     // tolerate prettier's self-closing form (`<link ... />`) — a missed
     // replace here silently renders an unstyled page (file:///tmp cannot
     // resolve the relative stylesheet), which looks like a broken motif
-    .replace(/<link rel="stylesheet" href="base.css"\s*\/?>/, `<style>${css}</style>`)
+    .replace(
+      /<link rel="stylesheet" href="base.css"\s*\/?>/,
+      `<style>${css}</style>`,
+    )
   writeFileSync(`/tmp/${name}.rendered.html`, html)
   await page.goto(`file:///tmp/${name}.rendered.html`)
   await page.waitForTimeout(250)

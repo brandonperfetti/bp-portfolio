@@ -24,15 +24,25 @@
     <div class="glow"></div>
     <div class="grid"></div>
     <div class="stage">
-      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
         <defs>
           <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="14" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
           <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="24" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
         </defs>
 
@@ -43,7 +53,11 @@
           <circle cx="1738" cy="948" r="4" />
           <circle cx="232" cy="898" r="4" />
         </g>
-        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
           <path d="M 1548 142 h 26 M 1561 129 v 26" />
           <path d="M 152 458 h 24 M 164 446 v 24" />
           <path d="M 1917 660 h 24 M 1929 648 v 24" />
@@ -52,10 +66,22 @@
         <!-- ===== LEFT: the document store — flexible, nested ===== -->
         <g transform="translate(540,540)">
           <!-- big cylinder -->
-          <path d="M -180 -170 A 180 56 0 0 0 180 -170 V 170 A 180 56 0 0 1 -180 170 Z"
-            fill="rgba(9,9,11,0.88)" stroke="#34d399" stroke-width="5" filter="url(#bigGlow)" />
-          <ellipse cx="0" cy="-170" rx="180" ry="56" fill="rgba(13,128,106,0.25)"
-            stroke="#34d399" stroke-width="5" />
+          <path
+            d="M -180 -170 A 180 56 0 0 0 180 -170 V 170 A 180 56 0 0 1 -180 170 Z"
+            fill="rgba(9,9,11,0.88)"
+            stroke="#34d399"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
+          <ellipse
+            cx="0"
+            cy="-170"
+            rx="180"
+            ry="56"
+            fill="rgba(13,128,106,0.25)"
+            stroke="#34d399"
+            stroke-width="5"
+          />
           <!-- nested document blocks inside: ragged, deep -->
           <g fill="rgba(52,211,153,0.4)">
             <rect x="-130" y="-90" width="120" height="24" rx="8" />
@@ -65,46 +91,107 @@
             <rect x="-70" y="62" width="110" height="24" rx="8" />
           </g>
           <!-- nesting brackets on the side -->
-          <path d="M -150 -96 C -166 -84, -166 76, -150 92" fill="none"
-            stroke="rgba(52,211,153,0.55)" stroke-width="4" stroke-linecap="round" />
-          <path d="M -128 -56 C -140 -48, -140 44, -128 56" fill="none"
-            stroke="rgba(52,211,153,0.35)" stroke-width="3.5" stroke-linecap="round" />
+          <path
+            d="M -150 -96 C -166 -84, -166 76, -150 92"
+            fill="none"
+            stroke="rgba(52,211,153,0.55)"
+            stroke-width="4"
+            stroke-linecap="round"
+          />
+          <path
+            d="M -128 -56 C -140 -48, -140 44, -128 56"
+            fill="none"
+            stroke="rgba(52,211,153,0.35)"
+            stroke-width="3.5"
+            stroke-linecap="round"
+          />
           <!-- a shape-shifting doc drifting in: schema-on-read -->
           <g transform="translate(-260,-250) rotate(-10)">
-            <rect x="-40" y="-52" width="80" height="104" rx="12"
-              fill="rgba(9,9,11,0.85)" stroke="rgba(52,211,153,0.5)" stroke-width="3.5" />
-            <g stroke="rgba(52,211,153,0.5)" stroke-width="4" stroke-linecap="round">
+            <rect
+              x="-40"
+              y="-52"
+              width="80"
+              height="104"
+              rx="12"
+              fill="rgba(9,9,11,0.85)"
+              stroke="rgba(52,211,153,0.5)"
+              stroke-width="3.5"
+            />
+            <g
+              stroke="rgba(52,211,153,0.5)"
+              stroke-width="4"
+              stroke-linecap="round"
+            >
               <line x1="-22" y1="-26" x2="22" y2="-26" />
               <line x1="-22" y1="0" x2="10" y2="0" />
               <line x1="-12" y1="26" x2="18" y2="26" />
             </g>
           </g>
-          <path d="M -238 -190 C -220 -140, -206 -110, -192 -86" fill="none"
-            stroke="rgba(52,211,153,0.35)" stroke-width="3.5" stroke-dasharray="3 12"
-            stroke-linecap="round" />
+          <path
+            d="M -238 -190 C -220 -140, -206 -110, -192 -86"
+            fill="none"
+            stroke="rgba(52,211,153,0.35)"
+            stroke-width="3.5"
+            stroke-dasharray="3 12"
+            stroke-linecap="round"
+          />
         </g>
 
         <!-- ===== CENTER: the decision signpost ===== -->
         <g transform="translate(1024,470)">
-          <line x1="0" y1="-190" x2="0" y2="330" stroke="rgba(255,255,255,0.22)"
-            stroke-width="7" stroke-linecap="round" />
+          <line
+            x1="0"
+            y1="-190"
+            x2="0"
+            y2="330"
+            stroke="rgba(255,255,255,0.22)"
+            stroke-width="7"
+            stroke-linecap="round"
+          />
           <!-- two arrow boards pointing opposite ways -->
           <g filter="url(#accentGlow)">
-            <path d="M -30 -160 H -190 L -230 -128 L -190 -96 H -30 Z"
-              fill="rgba(9,9,11,0.9)" stroke="#34d399" stroke-width="4.5"
-              stroke-linejoin="round" />
-            <path d="M 30 -60 H 190 L 230 -28 L 190 4 H 30 Z"
-              fill="rgba(9,9,11,0.9)" stroke="#34d399" stroke-width="4.5"
-              stroke-linejoin="round" />
+            <path
+              d="M -30 -160 H -190 L -230 -128 L -190 -96 H -30 Z"
+              fill="rgba(9,9,11,0.9)"
+              stroke="#34d399"
+              stroke-width="4.5"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M 30 -60 H 190 L 230 -28 L 190 4 H 30 Z"
+              fill="rgba(9,9,11,0.9)"
+              stroke="#34d399"
+              stroke-width="4.5"
+              stroke-linejoin="round"
+            />
           </g>
-          <line x1="-170" y1="-128" x2="-70" y2="-128" stroke="rgba(52,211,153,0.55)"
-            stroke-width="5" stroke-linecap="round" />
-          <line x1="70" y1="-28" x2="170" y2="-28" stroke="rgba(52,211,153,0.55)"
-            stroke-width="5" stroke-linecap="round" />
+          <line
+            x1="-170"
+            y1="-128"
+            x2="-70"
+            y2="-128"
+            stroke="rgba(52,211,153,0.55)"
+            stroke-width="5"
+            stroke-linecap="round"
+          />
+          <line
+            x1="70"
+            y1="-28"
+            x2="170"
+            y2="-28"
+            stroke="rgba(52,211,153,0.55)"
+            stroke-width="5"
+            stroke-linecap="round"
+          />
           <!-- compass at the base of the post -->
           <g transform="translate(0,392)">
-            <circle r="52" fill="rgba(9,9,11,0.9)" stroke="#34d399" stroke-width="4.5"
-              filter="url(#accentGlow)" />
+            <circle
+              r="52"
+              fill="rgba(9,9,11,0.9)"
+              stroke="#34d399"
+              stroke-width="4.5"
+              filter="url(#accentGlow)"
+            />
             <path d="M 0 -30 L 12 8 L 0 0 L -12 8 Z" fill="#34d399" />
             <circle r="7" fill="rgba(52,211,153,0.6)" />
           </g>
@@ -112,11 +199,26 @@
 
         <!-- ===== RIGHT: the relational table — strict rows and joins ===== -->
         <g transform="translate(1520,540)">
-          <rect x="-200" y="-190" width="400" height="280" rx="18"
-            fill="rgba(9,9,11,0.88)" stroke="#34d399" stroke-width="5" filter="url(#bigGlow)" />
+          <rect
+            x="-200"
+            y="-190"
+            width="400"
+            height="280"
+            rx="18"
+            fill="rgba(9,9,11,0.88)"
+            stroke="#34d399"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
           <!-- column headers -->
-          <line x1="-200" y1="-120" x2="200" y2="-120" stroke="rgba(52,211,153,0.55)"
-            stroke-width="4" />
+          <line
+            x1="-200"
+            y1="-120"
+            x2="200"
+            y2="-120"
+            stroke="rgba(52,211,153,0.55)"
+            stroke-width="4"
+          />
           <g stroke="rgba(52,211,153,0.35)" stroke-width="3.5">
             <line x1="-70" y1="-190" x2="-70" y2="90" />
             <line x1="70" y1="-190" x2="70" y2="90" />
@@ -126,19 +228,51 @@
             <line x1="-200" y1="20" x2="200" y2="20" />
           </g>
           <!-- key cell lit -->
-          <rect x="-186" y="-106" width="102" height="42" rx="8"
-            fill="rgba(52,211,153,0.4)" />
+          <rect
+            x="-186"
+            y="-106"
+            width="102"
+            height="42"
+            rx="8"
+            fill="rgba(52,211,153,0.4)"
+          />
           <!-- second small table joined below -->
-          <rect x="-60" y="170" width="260" height="120" rx="14"
-            fill="rgba(9,9,11,0.88)" stroke="rgba(52,211,153,0.55)" stroke-width="4" />
-          <line x1="-60" y1="212" x2="200" y2="212" stroke="rgba(52,211,153,0.4)"
-            stroke-width="3.5" />
-          <line x1="70" y1="170" x2="70" y2="290" stroke="rgba(52,211,153,0.3)"
-            stroke-width="3" />
+          <rect
+            x="-60"
+            y="170"
+            width="260"
+            height="120"
+            rx="14"
+            fill="rgba(9,9,11,0.88)"
+            stroke="rgba(52,211,153,0.55)"
+            stroke-width="4"
+          />
+          <line
+            x1="-60"
+            y1="212"
+            x2="200"
+            y2="212"
+            stroke="rgba(52,211,153,0.4)"
+            stroke-width="3.5"
+          />
+          <line
+            x1="70"
+            y1="170"
+            x2="70"
+            y2="290"
+            stroke="rgba(52,211,153,0.3)"
+            stroke-width="3"
+          />
           <!-- the join: keyed line linking the two -->
-          <path d="M -135 -85 C -220 20, -180 160, -60 210" fill="none"
-            stroke="#34d399" stroke-width="4.5" stroke-dasharray="16 12"
-            stroke-linecap="round" filter="url(#accentGlow)" />
+          <path
+            d="M -135 -85 C -220 20, -180 160, -60 210"
+            fill="none"
+            stroke="#34d399"
+            stroke-width="4.5"
+            stroke-dasharray="16 12"
+            stroke-linecap="round"
+            filter="url(#accentGlow)"
+          />
           <circle cx="-135" cy="-85" r="8" fill="#34d399" />
           <circle cx="-56" cy="208" r="8" fill="#34d399" />
         </g>
@@ -146,7 +280,13 @@
         <!-- ground shadows -->
         <ellipse cx="540" cy="990" rx="320" ry="24" fill="rgba(0,0,0,0.5)" />
         <ellipse cx="1520" cy="990" rx="340" ry="24" fill="rgba(0,0,0,0.5)" />
-        <ellipse cx="1024" cy="945" rx="240" ry="14" fill="rgba(13,128,106,0.12)" />
+        <ellipse
+          cx="1024"
+          cy="945"
+          rx="240"
+          ry="14"
+          fill="rgba(13,128,106,0.12)"
+        />
       </svg>
     </div>
     <!--GRAIN-->

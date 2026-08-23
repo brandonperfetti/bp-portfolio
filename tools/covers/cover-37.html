@@ -24,15 +24,25 @@
     <div class="glow"></div>
     <div class="grid"></div>
     <div class="stage">
-      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
         <defs>
           <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="14" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
           <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="24" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
         </defs>
 
@@ -43,7 +53,11 @@
           <circle cx="1728" cy="940" r="4" />
           <circle cx="220" cy="898" r="4" />
         </g>
-        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
           <path d="M 1540 142 h 26 M 1553 129 v 26" />
           <path d="M 154 456 h 24 M 166 444 v 24" />
           <path d="M 1916 654 h 24 M 1928 642 v 24" />
@@ -51,11 +65,33 @@
 
         <!-- ===== the source component: logic being lifted out ===== -->
         <g transform="translate(560,620)">
-          <rect x="-280" y="-240" width="560" height="480" rx="24"
-            fill="rgba(9,9,11,0.88)" stroke="#38bdf8" stroke-width="5" filter="url(#bigGlow)" />
-          <line x1="-280" y1="-160" x2="280" y2="-160" stroke="rgba(56,189,248,0.3)"
-            stroke-width="3.5" />
-          <rect x="-240" y="-212" width="140" height="22" rx="11" fill="rgba(255,255,255,0.14)" />
+          <rect
+            x="-280"
+            y="-240"
+            width="560"
+            height="480"
+            rx="24"
+            fill="rgba(9,9,11,0.88)"
+            stroke="#38bdf8"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
+          <line
+            x1="-280"
+            y1="-160"
+            x2="280"
+            y2="-160"
+            stroke="rgba(56,189,248,0.3)"
+            stroke-width="3.5"
+          />
+          <rect
+            x="-240"
+            y="-212"
+            width="140"
+            height="22"
+            rx="11"
+            fill="rgba(255,255,255,0.14)"
+          />
           <!-- remaining calm markup rows -->
           <g fill="rgba(255,255,255,0.12)">
             <rect x="-240" y="60" width="440" height="14" rx="7" />
@@ -64,50 +100,113 @@
           </g>
           <!-- the tangle of stateful logic, glowing, mid-lift -->
           <g transform="translate(-20,-60)">
-            <path d="M -120 20 C -80 -30, -20 -50, 30 -20 C 80 10, 120 -10, 150 -50"
-              fill="none" stroke="#38bdf8" stroke-width="5" stroke-linecap="round"
-              filter="url(#accentGlow)" />
-            <path d="M -100 -30 C -60 10, 0 30, 60 10" fill="none"
-              stroke="rgba(56,189,248,0.55)" stroke-width="4" stroke-linecap="round" />
+            <path
+              d="M -120 20 C -80 -30, -20 -50, 30 -20 C 80 10, 120 -10, 150 -50"
+              fill="none"
+              stroke="#38bdf8"
+              stroke-width="5"
+              stroke-linecap="round"
+              filter="url(#accentGlow)"
+            />
+            <path
+              d="M -100 -30 C -60 10, 0 30, 60 10"
+              fill="none"
+              stroke="rgba(56,189,248,0.55)"
+              stroke-width="4"
+              stroke-linecap="round"
+            />
             <circle cx="-120" cy="20" r="9" fill="#38bdf8" />
             <circle cx="60" cy="10" r="8" fill="rgba(56,189,248,0.6)" />
           </g>
           <!-- the small inline snippet that stays, with a calm check -->
           <g transform="translate(150,190)">
-            <rect x="-90" y="-26" width="180" height="52" rx="12"
-              fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.25)" stroke-width="3" />
-            <rect x="-64" y="-7" width="80" height="14" rx="7" fill="rgba(255,255,255,0.16)" />
-            <path d="M 38 -4 l 8 9 l 17 -19" fill="none" stroke="rgba(56,189,248,0.6)"
-              stroke-width="4" stroke-linecap="round" />
+            <rect
+              x="-90"
+              y="-26"
+              width="180"
+              height="52"
+              rx="12"
+              fill="rgba(255,255,255,0.05)"
+              stroke="rgba(255,255,255,0.25)"
+              stroke-width="3"
+            />
+            <rect
+              x="-64"
+              y="-7"
+              width="80"
+              height="14"
+              rx="7"
+              fill="rgba(255,255,255,0.16)"
+            />
+            <path
+              d="M 38 -4 l 8 9 l 17 -19"
+              fill="none"
+              stroke="rgba(56,189,248,0.6)"
+              stroke-width="4"
+              stroke-linecap="round"
+            />
           </g>
         </g>
 
         <!-- ===== the crane hook lifting the logic ===== -->
         <g transform="translate(710,240)">
-          <line x1="0" y1="-140" x2="0" y2="30" stroke="rgba(56,189,248,0.55)"
-            stroke-width="4.5" stroke-linecap="round" />
-          <path d="M 0 30 C 0 70, -44 76, -50 46 C -54 26, -38 18, -26 28"
-            fill="none" stroke="#38bdf8" stroke-width="5.5" stroke-linecap="round"
-            filter="url(#accentGlow)" />
+          <line
+            x1="0"
+            y1="-140"
+            x2="0"
+            y2="30"
+            stroke="rgba(56,189,248,0.55)"
+            stroke-width="4.5"
+            stroke-linecap="round"
+          />
+          <path
+            d="M 0 30 C 0 70, -44 76, -50 46 C -54 26, -38 18, -26 28"
+            fill="none"
+            stroke="#38bdf8"
+            stroke-width="5.5"
+            stroke-linecap="round"
+            filter="url(#accentGlow)"
+          />
         </g>
 
         <!-- ===== the extracted hook capsule ===== -->
         <g transform="translate(1330,340)">
-          <rect x="-170" y="-80" width="340" height="160" rx="80"
-            fill="rgba(3,105,161,0.35)" stroke="#38bdf8" stroke-width="5.5"
-            filter="url(#bigGlow)" />
+          <rect
+            x="-170"
+            y="-80"
+            width="340"
+            height="160"
+            rx="80"
+            fill="rgba(3,105,161,0.35)"
+            stroke="#38bdf8"
+            stroke-width="5.5"
+            filter="url(#bigGlow)"
+          />
           <!-- miniature of the tangle, now tidy: a neat coil -->
-          <path d="M -90 10 C -60 -30, -10 -30, 10 0 C 30 30, 80 30, 100 -10"
-            fill="none" stroke="#38bdf8" stroke-width="5" stroke-linecap="round" />
+          <path
+            d="M -90 10 C -60 -30, -10 -30, 10 0 C 30 30, 80 30, 100 -10"
+            fill="none"
+            stroke="#38bdf8"
+            stroke-width="5"
+            stroke-linecap="round"
+          />
           <circle cx="-90" cy="10" r="8" fill="#38bdf8" />
           <circle cx="100" cy="-10" r="8" fill="#38bdf8" />
           <!-- handle notch: the use- prefix as a grip -->
-          <path d="M -170 0 h -40" stroke="rgba(56,189,248,0.55)" stroke-width="5"
-            stroke-linecap="round" />
+          <path
+            d="M -170 0 h -40"
+            stroke="rgba(56,189,248,0.55)"
+            stroke-width="5"
+            stroke-linecap="round"
+          />
         </g>
 
         <!-- ===== consumers wired to the capsule ===== -->
-        <g fill="rgba(9,9,11,0.88)" stroke="rgba(56,189,248,0.55)" stroke-width="4">
+        <g
+          fill="rgba(9,9,11,0.88)"
+          stroke="rgba(56,189,248,0.55)"
+          stroke-width="4"
+        >
           <rect x="1580" y="580" width="240" height="150" rx="18" />
           <rect x="1180" y="640" width="240" height="150" rx="18" />
         </g>
@@ -117,14 +216,23 @@
           <rect x="1220" y="690" width="150" height="12" rx="6" />
           <rect x="1220" y="720" width="110" height="12" rx="6" />
         </g>
-        <g stroke="rgba(56,189,248,0.45)" stroke-width="4" stroke-dasharray="3 12"
-          stroke-linecap="round" fill="none">
+        <g
+          stroke="rgba(56,189,248,0.45)"
+          stroke-width="4"
+          stroke-dasharray="3 12"
+          stroke-linecap="round"
+          fill="none"
+        >
           <path d="M 1420 420 C 1500 480, 1600 530, 1680 578" />
           <path d="M 1310 424 C 1300 490, 1300 560, 1300 636" />
         </g>
 
         <!-- rule-of-three tally beside the capsule: extract when it repeats -->
-        <g stroke="rgba(56,189,248,0.55)" stroke-width="4.5" stroke-linecap="round">
+        <g
+          stroke="rgba(56,189,248,0.55)"
+          stroke-width="4.5"
+          stroke-linecap="round"
+        >
           <line x1="1590" y1="240" x2="1590" y2="290" />
           <line x1="1614" y1="240" x2="1614" y2="290" />
           <line x1="1638" y1="240" x2="1638" y2="290" />
@@ -132,15 +240,37 @@
 
         <!-- premature-extraction ghost: an empty capsule shelved, dusty -->
         <g opacity="0.4" transform="translate(300,930)">
-          <rect x="-110" y="-40" width="220" height="80" rx="40" fill="none"
-            stroke="rgba(255,255,255,0.28)" stroke-width="3.5" stroke-dasharray="12 10" />
-          <line x1="-60" y1="0" x2="60" y2="0" stroke="rgba(255,255,255,0.18)"
-            stroke-width="3" stroke-dasharray="4 8" />
+          <rect
+            x="-110"
+            y="-40"
+            width="220"
+            height="80"
+            rx="40"
+            fill="none"
+            stroke="rgba(255,255,255,0.28)"
+            stroke-width="3.5"
+            stroke-dasharray="12 10"
+          />
+          <line
+            x1="-60"
+            y1="0"
+            x2="60"
+            y2="0"
+            stroke="rgba(255,255,255,0.18)"
+            stroke-width="3"
+            stroke-dasharray="4 8"
+          />
         </g>
 
         <!-- ground shadow -->
         <ellipse cx="1000" cy="1000" rx="640" ry="26" fill="rgba(0,0,0,0.5)" />
-        <ellipse cx="1330" cy="955" rx="260" ry="16" fill="rgba(3,105,161,0.12)" />
+        <ellipse
+          cx="1330"
+          cy="955"
+          rx="260"
+          ry="16"
+          fill="rgba(3,105,161,0.12)"
+        />
       </svg>
     </div>
     <!--GRAIN-->

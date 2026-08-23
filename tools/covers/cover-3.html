@@ -24,15 +24,25 @@
     <div class="glow"></div>
     <div class="grid"></div>
     <div class="stage">
-      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
         <defs>
           <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="14" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
           <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="24" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
         </defs>
 
@@ -43,7 +53,11 @@
           <circle cx="1715" cy="950" r="4" />
           <circle cx="245" cy="900" r="4" />
         </g>
-        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
           <path d="M 1565 135 h 26 M 1578 122 v 26" />
           <path d="M 142 445 h 24 M 154 433 v 24" />
           <path d="M 1908 670 h 24 M 1920 658 v 24" />
@@ -51,11 +65,26 @@
 
         <!-- ===== the terminal: where it starts ===== -->
         <g transform="translate(660,600)">
-          <rect x="-420" y="-300" width="840" height="600" rx="24"
-            fill="rgba(9,9,11,0.9)" stroke="#fbbf24" stroke-width="5" filter="url(#bigGlow)" />
+          <rect
+            x="-420"
+            y="-300"
+            width="840"
+            height="600"
+            rx="24"
+            fill="rgba(9,9,11,0.9)"
+            stroke="#fbbf24"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
           <!-- title bar -->
-          <line x1="-420" y1="-230" x2="420" y2="-230" stroke="rgba(251,191,36,0.35)"
-            stroke-width="3.5" />
+          <line
+            x1="-420"
+            y1="-230"
+            x2="420"
+            y2="-230"
+            stroke="rgba(251,191,36,0.35)"
+            stroke-width="3.5"
+          />
           <g fill="rgba(251,191,36,0.45)">
             <circle cx="-378" cy="-265" r="9" />
             <circle cx="-344" cy="-265" r="9" />
@@ -64,87 +93,239 @@
 
           <!-- the command line: prompt chevron + typed command, glowing -->
           <g transform="translate(0,-160)">
-            <path d="M -370 -14 l 22 14 l -22 14" fill="none" stroke="#fbbf24"
-              stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"
-              filter="url(#accentGlow)" />
-            <rect x="-320" y="-9" width="180" height="18" rx="9" fill="#fbbf24"
-              filter="url(#accentGlow)" />
-            <rect x="-120" y="-9" width="90" height="18" rx="9" fill="rgba(251,191,36,0.5)" />
-            <rect x="-10" y="-9" width="120" height="18" rx="9" fill="rgba(251,191,36,0.3)" />
+            <path
+              d="M -370 -14 l 22 14 l -22 14"
+              fill="none"
+              stroke="#fbbf24"
+              stroke-width="5.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              filter="url(#accentGlow)"
+            />
+            <rect
+              x="-320"
+              y="-9"
+              width="180"
+              height="18"
+              rx="9"
+              fill="#fbbf24"
+              filter="url(#accentGlow)"
+            />
+            <rect
+              x="-120"
+              y="-9"
+              width="90"
+              height="18"
+              rx="9"
+              fill="rgba(251,191,36,0.5)"
+            />
+            <rect
+              x="-10"
+              y="-9"
+              width="120"
+              height="18"
+              rx="9"
+              fill="rgba(251,191,36,0.3)"
+            />
           </g>
 
           <!-- interactive prompt: question + selected option -->
           <g transform="translate(0,-70)">
             <circle cx="-360" cy="0" r="8" fill="rgba(251,191,36,0.6)" />
-            <rect x="-330" y="-8" width="240" height="16" rx="8" fill="rgba(255,255,255,0.18)" />
+            <rect
+              x="-330"
+              y="-8"
+              width="240"
+              height="16"
+              rx="8"
+              fill="rgba(255,255,255,0.18)"
+            />
           </g>
           <g transform="translate(0,-14)">
             <path d="M -352 -8 l 16 8 l -16 8" fill="rgba(251,191,36,0.7)" />
-            <rect x="-320" y="-8" width="160" height="16" rx="8" fill="rgba(251,191,36,0.45)" />
+            <rect
+              x="-320"
+              y="-8"
+              width="160"
+              height="16"
+              rx="8"
+              fill="rgba(251,191,36,0.45)"
+            />
           </g>
           <g transform="translate(0,42)">
-            <rect x="-320" y="-8" width="130" height="16" rx="8" fill="rgba(255,255,255,0.1)" />
+            <rect
+              x="-320"
+              y="-8"
+              width="130"
+              height="16"
+              rx="8"
+              fill="rgba(255,255,255,0.1)"
+            />
           </g>
 
           <!-- colored output rows: the polish -->
           <g transform="translate(0,120)">
-            <path d="M -362 -6 l 7 8 l 14 -16" fill="none" stroke="rgba(251,191,36,0.8)"
-              stroke-width="4" stroke-linecap="round" />
-            <rect x="-320" y="-8" width="280" height="16" rx="8" fill="rgba(255,255,255,0.14)" />
+            <path
+              d="M -362 -6 l 7 8 l 14 -16"
+              fill="none"
+              stroke="rgba(251,191,36,0.8)"
+              stroke-width="4"
+              stroke-linecap="round"
+            />
+            <rect
+              x="-320"
+              y="-8"
+              width="280"
+              height="16"
+              rx="8"
+              fill="rgba(255,255,255,0.14)"
+            />
           </g>
           <g transform="translate(0,176)">
-            <path d="M -362 -6 l 7 8 l 14 -16" fill="none" stroke="rgba(251,191,36,0.8)"
-              stroke-width="4" stroke-linecap="round" />
-            <rect x="-320" y="-8" width="220" height="16" rx="8" fill="rgba(255,255,255,0.1)" />
+            <path
+              d="M -362 -6 l 7 8 l 14 -16"
+              fill="none"
+              stroke="rgba(251,191,36,0.8)"
+              stroke-width="4"
+              stroke-linecap="round"
+            />
+            <rect
+              x="-320"
+              y="-8"
+              width="220"
+              height="16"
+              rx="8"
+              fill="rgba(255,255,255,0.1)"
+            />
           </g>
           <!-- progress bar row -->
           <g transform="translate(0,238)">
-            <rect x="-350" y="-10" width="480" height="20" rx="10"
-              fill="rgba(255,255,255,0.06)" stroke="rgba(251,191,36,0.35)" stroke-width="3" />
-            <rect x="-350" y="-10" width="330" height="20" rx="10" fill="rgba(251,191,36,0.55)" />
+            <rect
+              x="-350"
+              y="-10"
+              width="480"
+              height="20"
+              rx="10"
+              fill="rgba(255,255,255,0.06)"
+              stroke="rgba(251,191,36,0.35)"
+              stroke-width="3"
+            />
+            <rect
+              x="-350"
+              y="-10"
+              width="330"
+              height="20"
+              rx="10"
+              fill="rgba(251,191,36,0.55)"
+            />
           </g>
         </g>
 
         <!-- ===== the lift: from script to package ===== -->
-        <path d="M 1120 480 C 1240 400, 1330 360, 1430 340" fill="none"
-          stroke="#fbbf24" stroke-width="5" stroke-linecap="round" stroke-dasharray="18 14"
-          filter="url(#accentGlow)" />
+        <path
+          d="M 1120 480 C 1240 400, 1330 360, 1430 340"
+          fill="none"
+          stroke="#fbbf24"
+          stroke-width="5"
+          stroke-linecap="round"
+          stroke-dasharray="18 14"
+          filter="url(#accentGlow)"
+        />
         <path d="M 1408 322 L 1452 336 L 1416 362 Z" fill="#fbbf24" />
 
         <!-- ===== the published package: a sealed cube with a version tag ===== -->
         <g transform="translate(1600,420)">
           <!-- isometric cube -->
-          <path d="M 0 -150 L 130 -80 V 70 L 0 140 L -130 70 V -80 Z"
-            fill="rgba(9,9,11,0.88)" stroke="#fbbf24" stroke-width="5"
-            stroke-linejoin="round" filter="url(#bigGlow)" />
-          <path d="M -130 -80 L 0 -10 L 130 -80 M 0 -10 V 140" fill="none"
-            stroke="rgba(251,191,36,0.55)" stroke-width="4" stroke-linejoin="round" />
+          <path
+            d="M 0 -150 L 130 -80 V 70 L 0 140 L -130 70 V -80 Z"
+            fill="rgba(9,9,11,0.88)"
+            stroke="#fbbf24"
+            stroke-width="5"
+            stroke-linejoin="round"
+            filter="url(#bigGlow)"
+          />
+          <path
+            d="M -130 -80 L 0 -10 L 130 -80 M 0 -10 V 140"
+            fill="none"
+            stroke="rgba(251,191,36,0.55)"
+            stroke-width="4"
+            stroke-linejoin="round"
+          />
           <!-- tape seam across the top -->
-          <path d="M -65 -115 L 65 -45" stroke="rgba(251,191,36,0.35)" stroke-width="10"
-            stroke-linecap="round" />
+          <path
+            d="M -65 -115 L 65 -45"
+            stroke="rgba(251,191,36,0.35)"
+            stroke-width="10"
+            stroke-linecap="round"
+          />
           <!-- version tag hanging off the corner -->
           <g transform="translate(150,-120) rotate(18)">
-            <path d="M -20 -22 H 46 A 12 12 0 0 1 58 -10 V 10 A 12 12 0 0 1 46 22 H -20 L -44 0 Z"
-              fill="rgba(217,119,6,0.3)" stroke="#fbbf24" stroke-width="3.5"
-              stroke-linejoin="round" />
+            <path
+              d="M -20 -22 H 46 A 12 12 0 0 1 58 -10 V 10 A 12 12 0 0 1 46 22 H -20 L -44 0 Z"
+              fill="rgba(217,119,6,0.3)"
+              stroke="#fbbf24"
+              stroke-width="3.5"
+              stroke-linejoin="round"
+            />
             <circle cx="-26" cy="0" r="5" fill="#fbbf24" />
-            <rect x="-8" y="-5" width="48" height="10" rx="5" fill="rgba(251,191,36,0.6)" />
+            <rect
+              x="-8"
+              y="-5"
+              width="48"
+              height="10"
+              rx="5"
+              fill="rgba(251,191,36,0.6)"
+            />
           </g>
           <!-- registry ring beneath: where it now lives -->
-          <ellipse cx="0" cy="210" rx="170" ry="34" fill="none"
-            stroke="rgba(251,191,36,0.3)" stroke-width="3.5" stroke-dasharray="4 14" />
+          <ellipse
+            cx="0"
+            cy="210"
+            rx="170"
+            ry="34"
+            fill="none"
+            stroke="rgba(251,191,36,0.3)"
+            stroke-width="3.5"
+            stroke-dasharray="4 14"
+          />
         </g>
 
         <!-- ===== the bin link: chain from package back down to a runnable command ===== -->
-        <path d="M 1600 640 C 1600 720, 1560 780, 1480 820" fill="none"
-          stroke="rgba(251,191,36,0.4)" stroke-width="4" stroke-dasharray="3 12"
-          stroke-linecap="round" />
+        <path
+          d="M 1600 640 C 1600 720, 1560 780, 1480 820"
+          fill="none"
+          stroke="rgba(251,191,36,0.4)"
+          stroke-width="4"
+          stroke-dasharray="3 12"
+          stroke-linecap="round"
+        />
         <g transform="translate(1420,860)">
-          <rect x="-110" y="-40" width="220" height="80" rx="40"
-            fill="rgba(9,9,11,0.88)" stroke="rgba(251,191,36,0.6)" stroke-width="4" />
-          <path d="M -66 -12 l 18 12 l -18 12" fill="none" stroke="#fbbf24"
-            stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
-          <rect x="-28" y="-8" width="90" height="16" rx="8" fill="rgba(251,191,36,0.5)" />
+          <rect
+            x="-110"
+            y="-40"
+            width="220"
+            height="80"
+            rx="40"
+            fill="rgba(9,9,11,0.88)"
+            stroke="rgba(251,191,36,0.6)"
+            stroke-width="4"
+          />
+          <path
+            d="M -66 -12 l 18 12 l -18 12"
+            fill="none"
+            stroke="#fbbf24"
+            stroke-width="5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <rect
+            x="-28"
+            y="-8"
+            width="90"
+            height="16"
+            rx="8"
+            fill="rgba(251,191,36,0.5)"
+          />
         </g>
 
         <!-- install sparks around the cube: it's out in the world -->
@@ -156,7 +337,13 @@
 
         <!-- ground shadow -->
         <ellipse cx="900" cy="1000" rx="600" ry="26" fill="rgba(0,0,0,0.5)" />
-        <ellipse cx="1600" cy="960" rx="240" ry="16" fill="rgba(217,119,6,0.12)" />
+        <ellipse
+          cx="1600"
+          cy="960"
+          rx="240"
+          ry="16"
+          fill="rgba(217,119,6,0.12)"
+        />
       </svg>
     </div>
     <!--GRAIN-->

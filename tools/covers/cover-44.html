@@ -24,15 +24,25 @@
     <div class="glow"></div>
     <div class="grid"></div>
     <div class="stage">
-      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
         <defs>
           <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="14" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
           <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="24" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
         </defs>
 
@@ -43,7 +53,11 @@
           <circle cx="1730" cy="950" r="4" />
           <circle cx="210" cy="880" r="4" />
         </g>
-        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
           <path d="M 1560 150 h 26 M 1573 137 v 26" />
           <path d="M 130 560 h 24 M 142 548 v 24" />
           <path d="M 1930 700 h 24 M 1942 688 v 24" />
@@ -52,10 +66,23 @@
         <!-- ===== CUTAWAY: the container in cross-section ===== -->
         <!-- container shell with corrugated left wall -->
         <g transform="translate(1024,560)">
-          <rect x="-560" y="-320" width="1120" height="640" rx="30"
-            fill="rgba(9,9,11,0.85)" stroke="#34d399" stroke-width="5" filter="url(#bigGlow)" />
+          <rect
+            x="-560"
+            y="-320"
+            width="1120"
+            height="640"
+            rx="30"
+            fill="rgba(9,9,11,0.85)"
+            stroke="#34d399"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
           <!-- corrugation on the closed end -->
-          <g stroke="rgba(52,211,153,0.4)" stroke-width="4" stroke-linecap="round">
+          <g
+            stroke="rgba(52,211,153,0.4)"
+            stroke-width="4"
+            stroke-linecap="round"
+          >
             <path d="M -560 -240 h -26" />
             <path d="M -560 -160 h -26" />
             <path d="M -560 -80 h -26" />
@@ -67,58 +94,165 @@
 
           <!-- image layers, stacked like sediment: base → deps → app -->
           <!-- base OS layer -->
-          <rect x="-500" y="140" width="1000" height="120" rx="18"
-            fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.22)" stroke-width="3.5" />
-          <g stroke="rgba(255,255,255,0.18)" stroke-width="6" stroke-linecap="round">
+          <rect
+            x="-500"
+            y="140"
+            width="1000"
+            height="120"
+            rx="18"
+            fill="rgba(255,255,255,0.02)"
+            stroke="rgba(255,255,255,0.22)"
+            stroke-width="3.5"
+          />
+          <g
+            stroke="rgba(255,255,255,0.18)"
+            stroke-width="6"
+            stroke-linecap="round"
+          >
             <line x1="-440" y1="200" x2="-260" y2="200" />
             <line x1="-200" y1="200" x2="-80" y2="200" />
             <line x1="-20" y1="200" x2="140" y2="200" />
           </g>
           <!-- deps layer (cached, calm) -->
-          <rect x="-500" y="0" width="1000" height="120" rx="18"
-            fill="rgba(255,255,255,0.025)" stroke="rgba(255,255,255,0.28)" stroke-width="3.5" />
-          <g fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.26)" stroke-width="3.5">
+          <rect
+            x="-500"
+            y="0"
+            width="1000"
+            height="120"
+            rx="18"
+            fill="rgba(255,255,255,0.025)"
+            stroke="rgba(255,255,255,0.28)"
+            stroke-width="3.5"
+          />
+          <g
+            fill="rgba(255,255,255,0.05)"
+            stroke="rgba(255,255,255,0.26)"
+            stroke-width="3.5"
+          >
             <rect x="-440" y="28" width="130" height="64" rx="14" />
             <rect x="-270" y="28" width="130" height="64" rx="14" />
             <rect x="-100" y="28" width="130" height="64" rx="14" />
           </g>
           <!-- cache tick on the deps layer -->
-          <path d="M 400 30 l 14 14 l 28 -30" fill="none" stroke="rgba(52,211,153,0.65)"
-            stroke-width="5" stroke-linecap="round" />
+          <path
+            d="M 400 30 l 14 14 l 28 -30"
+            fill="none"
+            stroke="rgba(52,211,153,0.65)"
+            stroke-width="5"
+            stroke-linecap="round"
+          />
           <!-- app layer (yours, lit) -->
-          <rect x="-500" y="-140" width="1000" height="120" rx="18"
-            fill="rgba(13,128,106,0.14)" stroke="#34d399" stroke-width="4.5" filter="url(#accentGlow)" />
+          <rect
+            x="-500"
+            y="-140"
+            width="1000"
+            height="120"
+            rx="18"
+            fill="rgba(13,128,106,0.14)"
+            stroke="#34d399"
+            stroke-width="4.5"
+            filter="url(#accentGlow)"
+          />
           <g stroke-linecap="round">
-            <line x1="-440" y1="-92" x2="-160" y2="-92" stroke="rgba(255,255,255,0.4)" stroke-width="8" />
-            <line x1="-440" y1="-48" x2="-260" y2="-48" stroke="rgba(255,255,255,0.28)" stroke-width="8" />
-            <circle cx="420" cy="-80" r="11" fill="#34d399" filter="url(#accentGlow)" />
+            <line
+              x1="-440"
+              y1="-92"
+              x2="-160"
+              y2="-92"
+              stroke="rgba(255,255,255,0.4)"
+              stroke-width="8"
+            />
+            <line
+              x1="-440"
+              y1="-48"
+              x2="-260"
+              y2="-48"
+              stroke="rgba(255,255,255,0.28)"
+              stroke-width="8"
+            />
+            <circle
+              cx="420"
+              cy="-80"
+              r="11"
+              fill="#34d399"
+              filter="url(#accentGlow)"
+            />
           </g>
           <!-- headroom above the layers: the bit that changes, small -->
-          <line x1="-500" y1="-180" x2="500" y2="-180" stroke="rgba(255,255,255,0.14)"
-            stroke-width="3" stroke-dasharray="10 12" />
+          <line
+            x1="-500"
+            y1="-180"
+            x2="500"
+            y2="-180"
+            stroke="rgba(255,255,255,0.14)"
+            stroke-width="3"
+            stroke-dasharray="10 12"
+          />
 
           <!-- port mapping: one bright conduit out of the shell -->
-          <path d="M 560 -40 H 700" stroke="#34d399" stroke-width="5.5"
-            stroke-linecap="round" fill="none" filter="url(#accentGlow)" />
-          <circle cx="560" cy="-40" r="10" fill="#34d399" filter="url(#accentGlow)" />
+          <path
+            d="M 560 -40 H 700"
+            stroke="#34d399"
+            stroke-width="5.5"
+            stroke-linecap="round"
+            fill="none"
+            filter="url(#accentGlow)"
+          />
+          <circle
+            cx="560"
+            cy="-40"
+            r="10"
+            fill="#34d399"
+            filter="url(#accentGlow)"
+          />
           <!-- volume mount: dashed conduit into the shell lower right -->
-          <path d="M 560 160 H 690" stroke="rgba(52,211,153,0.45)" stroke-width="4.5"
-            stroke-linecap="round" stroke-dasharray="4 14" fill="none" />
+          <path
+            d="M 560 160 H 690"
+            stroke="rgba(52,211,153,0.45)"
+            stroke-width="4.5"
+            stroke-linecap="round"
+            stroke-dasharray="4 14"
+            fill="none"
+          />
         </g>
 
         <!-- the laptop it runs the same on: small dim terminal, right -->
-        <g transform="translate(1840,520)" stroke="rgba(255,255,255,0.3)" stroke-width="3.5"
-          fill="rgba(9,9,11,0.85)">
+        <g
+          transform="translate(1840,520)"
+          stroke="rgba(255,255,255,0.3)"
+          stroke-width="3.5"
+          fill="rgba(9,9,11,0.85)"
+        >
           <rect x="-90" y="-70" width="180" height="140" rx="16" />
-          <line x1="-50" y1="-26" x2="10" y2="-26" stroke="rgba(52,211,153,0.6)"
-            stroke-width="6" stroke-linecap="round" />
-          <line x1="-50" y1="14" x2="40" y2="14" stroke="rgba(255,255,255,0.22)"
-            stroke-width="6" stroke-linecap="round" />
+          <line
+            x1="-50"
+            y1="-26"
+            x2="10"
+            y2="-26"
+            stroke="rgba(52,211,153,0.6)"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
+          <line
+            x1="-50"
+            y1="14"
+            x2="40"
+            y2="14"
+            stroke="rgba(255,255,255,0.22)"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
         </g>
 
         <!-- ground shadow -->
         <ellipse cx="1024" cy="940" rx="600" ry="28" fill="rgba(0,0,0,0.5)" />
-        <ellipse cx="1024" cy="900" rx="260" ry="18" fill="rgba(13,128,106,0.12)" />
+        <ellipse
+          cx="1024"
+          cy="900"
+          rx="260"
+          ry="18"
+          fill="rgba(13,128,106,0.12)"
+        />
       </svg>
     </div>
     <!--GRAIN-->

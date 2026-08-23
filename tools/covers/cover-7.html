@@ -24,18 +24,34 @@
     <div class="glow"></div>
     <div class="grid"></div>
     <div class="stage">
-      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
         <defs>
           <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="14" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
           <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="24" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
-          <linearGradient id="railGrad" gradientUnits="userSpaceOnUse"
-            x1="0" y1="180" x2="0" y2="980">
+          <linearGradient
+            id="railGrad"
+            gradientUnits="userSpaceOnUse"
+            x1="0"
+            y1="180"
+            x2="0"
+            y2="980"
+          >
             <stop offset="0" stop-color="rgba(56,189,248,0.15)" />
             <stop offset="0.5" stop-color="#38bdf8" />
             <stop offset="1" stop-color="rgba(56,189,248,0.15)" />
@@ -49,15 +65,26 @@
           <circle cx="1740" cy="950" r="4" />
           <circle cx="220" cy="900" r="4" />
         </g>
-        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
           <path d="M 1552 136 h 26 M 1565 123 v 26" />
           <path d="M 148 452 h 24 M 160 440 v 24" />
           <path d="M 1920 668 h 24 M 1932 656 v 24" />
         </g>
 
         <!-- ===== the scroll rail ===== -->
-        <line x1="560" y1="180" x2="560" y2="980" stroke="url(#railGrad)" stroke-width="6"
-          stroke-linecap="round" />
+        <line
+          x1="560"
+          y1="180"
+          x2="560"
+          y2="980"
+          stroke="url(#railGrad)"
+          stroke-width="6"
+          stroke-linecap="round"
+        />
         <!-- trigger markers on the rail: start and end -->
         <g stroke="#38bdf8" stroke-width="4.5" stroke-linecap="round">
           <line x1="520" y1="400" x2="600" y2="400" />
@@ -68,71 +95,199 @@
           <circle cx="560" cy="760" r="9" />
         </g>
         <!-- scrub thumb between the markers -->
-        <rect x="544" y="540" width="32" height="72" rx="16"
-          fill="rgba(3,105,161,0.4)" stroke="#38bdf8" stroke-width="4" filter="url(#accentGlow)" />
+        <rect
+          x="544"
+          y="540"
+          width="32"
+          height="72"
+          rx="16"
+          fill="rgba(3,105,161,0.4)"
+          stroke="#38bdf8"
+          stroke-width="4"
+          filter="url(#accentGlow)"
+        />
 
         <!-- ===== the viewport window, pinned mid-scroll ===== -->
         <g transform="translate(1150,570)">
-          <rect x="-360" y="-280" width="720" height="560" rx="26"
-            fill="rgba(9,9,11,0.88)" stroke="#38bdf8" stroke-width="5" filter="url(#bigGlow)" />
+          <rect
+            x="-360"
+            y="-280"
+            width="720"
+            height="560"
+            rx="26"
+            fill="rgba(9,9,11,0.88)"
+            stroke="#38bdf8"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
           <!-- pin: the element stuck while content scrolls beneath -->
           <g transform="translate(-170,-90)">
-            <rect x="-110" y="-80" width="220" height="160" rx="18"
-              fill="rgba(3,105,161,0.3)" stroke="#38bdf8" stroke-width="4.5"
-              filter="url(#accentGlow)" />
+            <rect
+              x="-110"
+              y="-80"
+              width="220"
+              height="160"
+              rx="18"
+              fill="rgba(3,105,161,0.3)"
+              stroke="#38bdf8"
+              stroke-width="4.5"
+              filter="url(#accentGlow)"
+            />
             <circle cx="-48" cy="-22" r="20" fill="rgba(56,189,248,0.5)" />
-            <rect x="-12" y="-32" width="90" height="12" rx="6" fill="rgba(56,189,248,0.55)" />
-            <rect x="-12" y="-6" width="60" height="10" rx="5" fill="rgba(255,255,255,0.16)" />
+            <rect
+              x="-12"
+              y="-32"
+              width="90"
+              height="12"
+              rx="6"
+              fill="rgba(56,189,248,0.55)"
+            />
+            <rect
+              x="-12"
+              y="-6"
+              width="60"
+              height="10"
+              rx="5"
+              fill="rgba(255,255,255,0.16)"
+            />
             <!-- the pushpin -->
             <g transform="translate(88,-100) rotate(24)">
               <circle r="13" fill="#38bdf8" />
-              <line x1="0" y1="13" x2="0" y2="40" stroke="#38bdf8" stroke-width="4.5"
-                stroke-linecap="round" />
+              <line
+                x1="0"
+                y1="13"
+                x2="0"
+                y2="40"
+                stroke="#38bdf8"
+                stroke-width="4.5"
+                stroke-linecap="round"
+              />
             </g>
           </g>
           <!-- content sliding underneath: motion-streaked rows -->
           <g stroke-linecap="round">
-            <line x1="60" y1="-160" x2="290" y2="-160" stroke="rgba(255,255,255,0.16)"
-              stroke-width="10" />
-            <line x1="80" y1="-100" x2="290" y2="-100" stroke="rgba(255,255,255,0.12)"
-              stroke-width="10" />
-            <line x1="50" y1="-40" x2="290" y2="-40" stroke="rgba(255,255,255,0.09)"
-              stroke-width="10" />
+            <line
+              x1="60"
+              y1="-160"
+              x2="290"
+              y2="-160"
+              stroke="rgba(255,255,255,0.16)"
+              stroke-width="10"
+            />
+            <line
+              x1="80"
+              y1="-100"
+              x2="290"
+              y2="-100"
+              stroke="rgba(255,255,255,0.12)"
+              stroke-width="10"
+            />
+            <line
+              x1="50"
+              y1="-40"
+              x2="290"
+              y2="-40"
+              stroke="rgba(255,255,255,0.09)"
+              stroke-width="10"
+            />
           </g>
           <!-- the animated element rising along the scrub: keyframe arc -->
-          <path d="M -240 210 C -80 200, 60 140, 200 30" fill="none"
-            stroke="rgba(56,189,248,0.45)" stroke-width="4" stroke-dasharray="2 14"
-            stroke-linecap="round" />
+          <path
+            d="M -240 210 C -80 200, 60 140, 200 30"
+            fill="none"
+            stroke="rgba(56,189,248,0.45)"
+            stroke-width="4"
+            stroke-dasharray="2 14"
+            stroke-linecap="round"
+          />
           <!-- its past positions ghosted, present position lit -->
-          <circle cx="-240" cy="210" r="16" fill="none" stroke="rgba(56,189,248,0.25)"
-            stroke-width="3.5" />
-          <circle cx="-60" cy="184" r="16" fill="none" stroke="rgba(56,189,248,0.4)"
-            stroke-width="3.5" />
-          <circle cx="100" cy="112" r="16" fill="rgba(3,105,161,0.4)"
-            stroke="rgba(56,189,248,0.6)" stroke-width="3.5" />
-          <circle cx="200" cy="30" r="20" fill="#38bdf8" filter="url(#accentGlow)" />
+          <circle
+            cx="-240"
+            cy="210"
+            r="16"
+            fill="none"
+            stroke="rgba(56,189,248,0.25)"
+            stroke-width="3.5"
+          />
+          <circle
+            cx="-60"
+            cy="184"
+            r="16"
+            fill="none"
+            stroke="rgba(56,189,248,0.4)"
+            stroke-width="3.5"
+          />
+          <circle
+            cx="100"
+            cy="112"
+            r="16"
+            fill="rgba(3,105,161,0.4)"
+            stroke="rgba(56,189,248,0.6)"
+            stroke-width="3.5"
+          />
+          <circle
+            cx="200"
+            cy="30"
+            r="20"
+            fill="#38bdf8"
+            filter="url(#accentGlow)"
+          />
           <!-- progress track at the bottom of the viewport -->
-          <rect x="-300" y="248" width="600" height="10" rx="5" fill="rgba(255,255,255,0.08)" />
-          <rect x="-300" y="248" width="330" height="10" rx="5" fill="rgba(56,189,248,0.55)" />
+          <rect
+            x="-300"
+            y="248"
+            width="600"
+            height="10"
+            rx="5"
+            fill="rgba(255,255,255,0.08)"
+          />
+          <rect
+            x="-300"
+            y="248"
+            width="330"
+            height="10"
+            rx="5"
+            fill="rgba(56,189,248,0.55)"
+          />
         </g>
 
         <!-- tether: rail scrub driving the viewport -->
-        <path d="M 590 576 C 660 576, 720 574, 786 572" fill="none"
-          stroke="rgba(56,189,248,0.4)" stroke-width="4" stroke-dasharray="3 12"
-          stroke-linecap="round" />
+        <path
+          d="M 590 576 C 660 576, 720 574, 786 572"
+          fill="none"
+          stroke="rgba(56,189,248,0.4)"
+          stroke-width="4"
+          stroke-dasharray="3 12"
+          stroke-linecap="round"
+        />
 
         <!-- cleanup broom: the kill/revert on unmount, tucked at the rail base -->
         <g transform="translate(560,1010)" opacity="0.7">
-          <circle r="26" fill="rgba(9,9,11,0.85)" stroke="rgba(56,189,248,0.45)"
-            stroke-width="3.5" />
-          <path d="M -8 8 L 8 -8 M 2 -12 l 8 -2 l -2 8" fill="none"
-            stroke="rgba(56,189,248,0.6)" stroke-width="3.5" stroke-linecap="round"
-            stroke-linejoin="round" />
+          <circle
+            r="26"
+            fill="rgba(9,9,11,0.85)"
+            stroke="rgba(56,189,248,0.45)"
+            stroke-width="3.5"
+          />
+          <path
+            d="M -8 8 L 8 -8 M 2 -12 l 8 -2 l -2 8"
+            fill="none"
+            stroke="rgba(56,189,248,0.6)"
+            stroke-width="3.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
         </g>
 
         <!-- ground shadow -->
         <ellipse cx="1100" cy="1000" rx="600" ry="26" fill="rgba(0,0,0,0.5)" />
-        <ellipse cx="1150" cy="960" rx="280" ry="16" fill="rgba(3,105,161,0.12)" />
+        <ellipse
+          cx="1150"
+          cy="960"
+          rx="280"
+          ry="16"
+          fill="rgba(3,105,161,0.12)"
+        />
       </svg>
     </div>
     <!--GRAIN-->

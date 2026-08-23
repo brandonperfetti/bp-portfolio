@@ -24,18 +24,34 @@
     <div class="glow"></div>
     <div class="grid"></div>
     <div class="stage">
-      <svg class="motif" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
         <defs>
           <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="14" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
           <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="24" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
-          <linearGradient id="customGrad" gradientUnits="userSpaceOnUse"
-            x1="300" y1="0" x2="1750" y2="0">
+          <linearGradient
+            id="customGrad"
+            gradientUnits="userSpaceOnUse"
+            x1="300"
+            y1="0"
+            x2="1750"
+            y2="0"
+          >
             <stop offset="0" stop-color="#be123c" />
             <stop offset="1" stop-color="#fb7185" />
           </linearGradient>
@@ -48,7 +64,11 @@
           <circle cx="1740" cy="950" r="4" />
           <circle cx="210" cy="900" r="4" />
         </g>
-        <g stroke="rgba(255,255,255,0.16)" stroke-width="3" stroke-linecap="round">
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
           <path d="M 1560 150 h 26 M 1573 137 v 26" />
           <path d="M 130 620 h 24 M 142 608 v 24" />
           <path d="M 1930 560 h 24 M 1942 548 v 24" />
@@ -57,34 +77,82 @@
         <!-- ===== CUTAWAY: the CMS in cross-section, four generated strata ===== -->
         <g>
           <!-- stratum 1: routes -->
-          <rect x="360" y="230" width="1330" height="120" rx="20"
-            fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.3)" stroke-width="3.5" />
-          <g stroke="rgba(255,255,255,0.28)" stroke-width="7" stroke-linecap="round">
+          <rect
+            x="360"
+            y="230"
+            width="1330"
+            height="120"
+            rx="20"
+            fill="rgba(255,255,255,0.02)"
+            stroke="rgba(255,255,255,0.3)"
+            stroke-width="3.5"
+          />
+          <g
+            stroke="rgba(255,255,255,0.28)"
+            stroke-width="7"
+            stroke-linecap="round"
+          >
             <line x1="430" y1="290" x2="560" y2="290" />
             <line x1="620" y1="290" x2="700" y2="290" />
             <line x1="760" y1="290" x2="880" y2="290" />
           </g>
           <!-- stratum 2: controllers -->
-          <rect x="360" y="380" width="1330" height="120" rx="20"
-            fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.26)" stroke-width="3.5" />
-          <g fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.26)" stroke-width="3.5">
+          <rect
+            x="360"
+            y="380"
+            width="1330"
+            height="120"
+            rx="20"
+            fill="rgba(255,255,255,0.02)"
+            stroke="rgba(255,255,255,0.26)"
+            stroke-width="3.5"
+          />
+          <g
+            fill="rgba(255,255,255,0.04)"
+            stroke="rgba(255,255,255,0.26)"
+            stroke-width="3.5"
+          >
             <rect x="430" y="410" width="120" height="60" rx="14" />
             <rect x="590" y="410" width="120" height="60" rx="14" />
             <rect x="750" y="410" width="120" height="60" rx="14" />
           </g>
           <!-- stratum 3: services -->
-          <rect x="360" y="530" width="1330" height="120" rx="20"
-            fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.22)" stroke-width="3.5" />
-          <g fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.22)" stroke-width="3.5">
+          <rect
+            x="360"
+            y="530"
+            width="1330"
+            height="120"
+            rx="20"
+            fill="rgba(255,255,255,0.02)"
+            stroke="rgba(255,255,255,0.22)"
+            stroke-width="3.5"
+          />
+          <g
+            fill="rgba(255,255,255,0.04)"
+            stroke="rgba(255,255,255,0.22)"
+            stroke-width="3.5"
+          >
             <circle cx="500" cy="590" r="30" />
             <circle cx="640" cy="590" r="30" />
             <circle cx="780" cy="590" r="30" />
           </g>
           <!-- stratum 4: the data floor -->
-          <rect x="360" y="680" width="1330" height="120" rx="20"
-            fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.18)" stroke-width="3.5" />
-          <g transform="translate(520,740)" stroke="rgba(255,255,255,0.3)" stroke-width="3.5"
-            fill="rgba(9,9,11,0.85)">
+          <rect
+            x="360"
+            y="680"
+            width="1330"
+            height="120"
+            rx="20"
+            fill="rgba(255,255,255,0.02)"
+            stroke="rgba(255,255,255,0.18)"
+            stroke-width="3.5"
+          />
+          <g
+            transform="translate(520,740)"
+            stroke="rgba(255,255,255,0.3)"
+            stroke-width="3.5"
+            fill="rgba(9,9,11,0.85)"
+          >
             <ellipse cx="0" cy="-22" rx="44" ry="14" />
             <path d="M -44 -22 V 22 A 44 14 0 0 0 44 22 V -22" />
           </g>
@@ -92,21 +160,37 @@
 
         <!-- generated CRUD labelling: neat rows of dim pins on the right of each stratum -->
         <g fill="rgba(255,255,255,0.18)">
-          <circle cx="1560" cy="290" r="6" /><circle cx="1600" cy="290" r="6" /><circle cx="1640" cy="290" r="6" />
-          <circle cx="1560" cy="440" r="6" /><circle cx="1600" cy="440" r="6" /><circle cx="1640" cy="440" r="6" />
-          <circle cx="1560" cy="590" r="6" /><circle cx="1600" cy="590" r="6" /><circle cx="1640" cy="590" r="6" />
+          <circle cx="1560" cy="290" r="6" />
+          <circle cx="1600" cy="290" r="6" />
+          <circle cx="1640" cy="290" r="6" />
+          <circle cx="1560" cy="440" r="6" />
+          <circle cx="1600" cy="440" r="6" />
+          <circle cx="1640" cy="440" r="6" />
+          <circle cx="1560" cy="590" r="6" />
+          <circle cx="1600" cy="590" r="6" />
+          <circle cx="1640" cy="590" r="6" />
         </g>
 
         <!-- ===== THE CUSTOM ENDPOINT: one bright route drilled through all strata ===== -->
         <g fill="none" stroke-linecap="round">
-          <path d="M 1100 170 V 258 Q 1100 282 1124 282 H 1180 Q 1204 282 1204 306 V 408
+          <path
+            d="M 1100 170 V 258 Q 1100 282 1124 282 H 1180 Q 1204 282 1204 306 V 408
                    Q 1204 432 1228 432 H 1264 Q 1288 432 1288 456 V 558
                    Q 1288 582 1312 582 H 1330 Q 1354 582 1354 606 V 740"
-            stroke="url(#customGrad)" stroke-width="6.5" filter="url(#accentGlow)" />
+            stroke="url(#customGrad)"
+            stroke-width="6.5"
+            filter="url(#accentGlow)"
+          />
         </g>
         <!-- entry chevron -->
-        <path d="M 1084 148 L 1100 172 L 1116 148" fill="none" stroke="#fb7185"
-          stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+        <path
+          d="M 1084 148 L 1100 172 L 1116 148"
+          fill="none"
+          stroke="#fb7185"
+          stroke-width="5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
         <!-- vias at each stratum crossing -->
         <g fill="#fb7185" filter="url(#accentGlow)">
           <circle cx="1100" cy="240" r="9" />
@@ -116,19 +200,37 @@
         </g>
         <!-- custom policy shield on the controller hop -->
         <g transform="translate(1204,440)">
-          <path d="M 0 -22 l 20 8 v 16 q 0 16 -20 24 q -20 -8 -20 -24 v -16 Z"
-            fill="rgba(190,18,60,0.2)" stroke="#fb7185" stroke-width="3.5"
-            stroke-linejoin="round" />
+          <path
+            d="M 0 -22 l 20 8 v 16 q 0 16 -20 24 q -20 -8 -20 -24 v -16 Z"
+            fill="rgba(190,18,60,0.2)"
+            stroke="#fb7185"
+            stroke-width="3.5"
+            stroke-linejoin="round"
+          />
         </g>
         <!-- response payload returning along the right edge -->
-        <path d="M 1420 740 C 1560 700, 1660 560, 1700 300" fill="none"
-          stroke="rgba(251,113,133,0.35)" stroke-width="4" stroke-dasharray="22 16"
-          stroke-linecap="round" />
-        <path d="M 1686 324 L 1702 292 L 1716 326 Z" fill="rgba(251,113,133,0.35)" />
+        <path
+          d="M 1420 740 C 1560 700, 1660 560, 1700 300"
+          fill="none"
+          stroke="rgba(251,113,133,0.35)"
+          stroke-width="4"
+          stroke-dasharray="22 16"
+          stroke-linecap="round"
+        />
+        <path
+          d="M 1686 324 L 1702 292 L 1716 326 Z"
+          fill="rgba(251,113,133,0.35)"
+        />
 
         <!-- ground shadow -->
         <ellipse cx="1024" cy="900" rx="560" ry="28" fill="rgba(0,0,0,0.5)" />
-        <ellipse cx="1300" cy="860" rx="220" ry="16" fill="rgba(190,18,60,0.12)" />
+        <ellipse
+          cx="1300"
+          cy="860"
+          rx="220"
+          ry="16"
+          fill="rgba(190,18,60,0.12)"
+        />
       </svg>
     </div>
     <!--GRAIN-->
