@@ -1,65 +1,30 @@
-# State and Data Flow
+# State & data flow
 
-## Client State Patterns
+## Server (content)
 
-The codebase primarily uses local React state + URL state, not a global client store.
+Payload (Postgres) → Local API → `src/lib/cms/*Repo.ts` (unstable_cache +
+tags) → stable `Cms*` types → RSC pages. Publishing triggers hook-driven
+revalidation, so there is no client content state.
 
-### Header Search (`HeaderSearch`)
+Rules:
 
-State:
+- Pages never call `getPayload()` directly — always go through a repo module
+  so caching, access control (`overrideAccess: false`), and shape mapping
+  stay in one place.
+- Repos return `null` when a collection is empty so pages can fall back to
+  the retained v3 hard-coded content.
 
-- `isOpen`
-- `query`
-- `items`
-- `loadState` (`idle | loading | ready | error`)
-- derived `debouncedQuery`, `filteredItems`
+## Client (interaction)
 
-Behavior:
-
-- Loads index from `/api/search` on first open and caches in session storage for fast reopen.
-- Keyboard control via `Cmd/Ctrl + K` and `Escape`.
-- Dev fallback behavior is resilient to temporary index failures (`Retry` path + stale payload support server-side).
-
-### Articles Explorer (`ArticlesExplorer`)
-
-State:
-
-- `query`
-- `topic`
-- debounced `query`
-
-Behavior:
-
-- Syncs from `useSearchParams` (`q`, `topic`; legacy `category` is read for compatibility).
-- Writes back with guarded `router.replace(..., { scroll: false })`.
-- Filters against server-provided article list + search text.
-
-### Hermes (`HermesChat`)
-
-State:
-
-- `messages`
-- `input`
-- `loading`
-- typing/image loading indicators
-- copy feedback state
-- `isChatStart` (initial welcome screen vs active chat view)
-- `active textarea height` (derived from content; auto-resized client-side)
-
-Behavior:
-
-- Streams NDJSON chunks into transient typing buffer.
-- Commits final assistant message after stream completion.
-- Uses multiline textarea input:
-  - `Enter` sends
-  - `Shift+Enter` inserts newline
-- Keeps input static while message pane scrolls.
-
-## Server-Side Data Flow
-
-- `src/lib/articles.ts` is the facade used by routes/components.
-- Local mode returns empty article-safe results.
-- Notion mode sources:
-  - summaries/projections from `Portfolio CMS - Articles`
-  - canonical article body from `Source Article` page blocks
-- Search API (`/api/search`) returns compact records (`title`, `description`, `date`, `href`, `searchText`) for header modal filtering.
+- **URL is the state store** for explorers: `/articles` (`q`, `topic`),
+  `/tech` (`q`, `category`, `sort`). Pattern: local `useState` seeded from
+  `useSearchParams`, debounced, mirrored back via `router.replace` — see
+  `TechExplorer`/`ArticlesExplorer` before writing a new one.
+- **Theme:** `next-themes` (`attribute="class"`) + `ThemeWatcher` system sync
+  (`src/app/(frontend)/providers.tsx`). Components read `resolvedTheme` only
+  after mount (hydration guard).
+- **Chat:** `useChat` (Vercel AI SDK) inside `CorvusChat`; transient UI state
+  only, no persistence.
+- **Palette:** open/query state local to `CommandPalette`; index fetch cached
+  in a ref with a 5-minute TTL.
+- No global client state library — introduce one only with a documented need.

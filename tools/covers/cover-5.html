@@ -1,0 +1,420 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: rose (CMS & content platforms) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 55% 50%,
+            rgba(190, 18, 60, 0.24),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 20% 75%,
+            rgba(190, 18, 60, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <!-- userSpaceOnUse: horizontal-only path bbox is degenerate -->
+          <linearGradient
+            id="flowGrad"
+            gradientUnits="userSpaceOnUse"
+            x1="600"
+            y1="0"
+            x2="1440"
+            y2="0"
+          >
+            <stop offset="0" stop-color="#be123c" />
+            <stop offset="1" stop-color="#fb7185" />
+          </linearGradient>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="340" cy="190" r="4" />
+          <circle cx="1780" cy="170" r="4" />
+          <circle cx="1730" cy="950" r="4" />
+          <circle cx="210" cy="880" r="4" />
+        </g>
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
+          <path d="M 1500 140 h 26 M 1513 127 v 26" />
+          <path d="M 130 520 h 24 M 142 508 v 24" />
+          <path d="M 1930 700 h 24 M 1942 688 v 24" />
+        </g>
+
+        <!-- ===== SOURCE (left): block-based editor page ===== -->
+        <g transform="translate(390,560)">
+          <rect
+            x="-190"
+            y="-280"
+            width="380"
+            height="560"
+            rx="24"
+            fill="rgba(9,9,11,0.85)"
+            stroke="rgba(255,255,255,0.35)"
+            stroke-width="3.5"
+          />
+          <!-- blocks: draggable content units with handles -->
+          <g>
+            <!-- block 1 -->
+            <rect
+              x="-140"
+              y="-224"
+              width="280"
+              height="72"
+              rx="14"
+              fill="rgba(255,255,255,0.03)"
+              stroke="rgba(255,255,255,0.28)"
+              stroke-width="3"
+            />
+            <circle cx="-116" cy="-196" r="4" fill="rgba(255,255,255,0.3)" />
+            <circle cx="-116" cy="-180" r="4" fill="rgba(255,255,255,0.3)" />
+            <line
+              x1="-88"
+              y1="-188"
+              x2="100"
+              y2="-188"
+              stroke="rgba(255,255,255,0.35)"
+              stroke-width="8"
+              stroke-linecap="round"
+            />
+            <!-- block 2 -->
+            <rect
+              x="-140"
+              y="-128"
+              width="280"
+              height="72"
+              rx="14"
+              fill="rgba(255,255,255,0.03)"
+              stroke="rgba(255,255,255,0.28)"
+              stroke-width="3"
+            />
+            <circle cx="-116" cy="-100" r="4" fill="rgba(255,255,255,0.3)" />
+            <circle cx="-116" cy="-84" r="4" fill="rgba(255,255,255,0.3)" />
+            <line
+              x1="-88"
+              y1="-92"
+              x2="60"
+              y2="-92"
+              stroke="rgba(255,255,255,0.28)"
+              stroke-width="8"
+              stroke-linecap="round"
+            />
+            <!-- block 3: the one being published, lifting out -->
+            <rect
+              x="-122"
+              y="-32"
+              width="280"
+              height="72"
+              rx="14"
+              transform="rotate(-3 18 4)"
+              fill="rgba(190,18,60,0.12)"
+              stroke="#fb7185"
+              stroke-width="4"
+              filter="url(#accentGlow)"
+            />
+            <circle
+              cx="-98"
+              cy="-6"
+              r="4"
+              fill="#fb7185"
+              transform="rotate(-3 18 4)"
+            />
+            <circle
+              cx="-98"
+              cy="10"
+              r="4"
+              fill="#fb7185"
+              transform="rotate(-3 18 4)"
+            />
+            <line
+              x1="-70"
+              y1="2"
+              x2="120"
+              y2="-8"
+              stroke="rgba(251,113,133,0.7)"
+              stroke-width="8"
+              stroke-linecap="round"
+            />
+            <!-- block 4 -->
+            <rect
+              x="-140"
+              y="64"
+              width="280"
+              height="72"
+              rx="14"
+              fill="rgba(255,255,255,0.03)"
+              stroke="rgba(255,255,255,0.22)"
+              stroke-width="3"
+            />
+            <line
+              x1="-88"
+              y1="100"
+              x2="80"
+              y2="100"
+              stroke="rgba(255,255,255,0.22)"
+              stroke-width="8"
+              stroke-linecap="round"
+            />
+            <!-- block 5 -->
+            <rect
+              x="-140"
+              y="160"
+              width="280"
+              height="72"
+              rx="14"
+              fill="rgba(255,255,255,0.03)"
+              stroke="rgba(255,255,255,0.18)"
+              stroke-width="3"
+            />
+            <line
+              x1="-88"
+              y1="196"
+              x2="30"
+              y2="196"
+              stroke="rgba(255,255,255,0.18)"
+              stroke-width="8"
+              stroke-linecap="round"
+            />
+          </g>
+        </g>
+
+        <!-- ===== PIPELINE: fetch at request time, not at deploy time ===== -->
+        <path
+          d="M 600 560 H 1440"
+          stroke="url(#flowGrad)"
+          stroke-width="6"
+          fill="none"
+          stroke-linecap="round"
+        />
+        <!-- the API gate -->
+        <g transform="translate(900,560)" filter="url(#accentGlow)">
+          <rect
+            x="-46"
+            y="-64"
+            width="92"
+            height="128"
+            rx="20"
+            fill="rgba(190,18,60,0.14)"
+            stroke="#fb7185"
+            stroke-width="4.5"
+          />
+          <circle r="11" fill="#fb7185" />
+        </g>
+        <!-- the revalidate clock: content updates on its own schedule -->
+        <g transform="translate(1160,560)">
+          <circle
+            r="58"
+            fill="rgba(9,9,11,0.85)"
+            stroke="rgba(251,113,133,0.7)"
+            stroke-width="4.5"
+          />
+          <line
+            x1="0"
+            y1="0"
+            x2="0"
+            y2="-34"
+            stroke="#fb7185"
+            stroke-width="5"
+            stroke-linecap="round"
+          />
+          <line
+            x1="0"
+            y1="0"
+            x2="24"
+            y2="12"
+            stroke="#fb7185"
+            stroke-width="5"
+            stroke-linecap="round"
+          />
+          <circle r="6" fill="#fb7185" />
+          <!-- refresh arc -->
+          <path
+            d="M 74 -32 A 82 82 0 0 1 78 30"
+            fill="none"
+            stroke="rgba(251,113,133,0.45)"
+            stroke-width="4"
+            stroke-linecap="round"
+          />
+          <path
+            d="M 66 22 L 80 36 L 92 18"
+            fill="none"
+            stroke="rgba(251,113,133,0.45)"
+            stroke-width="4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </g>
+        <!-- packet between gate and clock -->
+        <circle
+          cx="1030"
+          cy="560"
+          r="8"
+          fill="#fb7185"
+          filter="url(#accentGlow)"
+        />
+
+        <!-- what is NOT in the path: the deploy loop, dashed and bypassed below -->
+        <g
+          fill="none"
+          stroke="rgba(255,255,255,0.14)"
+          stroke-width="3.5"
+          stroke-dasharray="4 16"
+          stroke-linecap="round"
+        >
+          <path d="M 640 700 C 800 850, 1240 850, 1400 700" />
+        </g>
+        <!-- crossed-out git node on the dead path -->
+        <g
+          transform="translate(1024,842)"
+          stroke="rgba(255,255,255,0.22)"
+          stroke-width="3.5"
+        >
+          <circle r="30" fill="rgba(9,9,11,0.7)" />
+          <line x1="-38" y1="-38" x2="38" y2="38" stroke-linecap="round" />
+        </g>
+
+        <!-- ===== DESTINATION (right): the live page ===== -->
+        <g transform="translate(1640,560)">
+          <rect
+            x="-200"
+            y="-280"
+            width="400"
+            height="560"
+            rx="24"
+            fill="rgba(9,9,11,0.85)"
+            stroke="#fb7185"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
+          <!-- browser chrome -->
+          <line
+            x1="-200"
+            y1="-212"
+            x2="200"
+            y2="-212"
+            stroke="rgba(251,113,133,0.5)"
+            stroke-width="3.5"
+          />
+          <circle cx="-160" cy="-246" r="8" fill="rgba(255,255,255,0.25)" />
+          <rect
+            x="-120"
+            y="-258"
+            width="240"
+            height="26"
+            rx="13"
+            fill="rgba(255,255,255,0.05)"
+            stroke="none"
+          />
+          <!-- rendered content mirroring the blocks -->
+          <g stroke-linecap="round">
+            <line
+              x1="-140"
+              y1="-150"
+              x2="90"
+              y2="-150"
+              stroke="rgba(255,255,255,0.42)"
+              stroke-width="10"
+            />
+            <line
+              x1="-140"
+              y1="-86"
+              x2="140"
+              y2="-86"
+              stroke="rgba(255,255,255,0.28)"
+              stroke-width="8"
+            />
+            <line
+              x1="-140"
+              y1="-30"
+              x2="60"
+              y2="-30"
+              stroke="rgba(255,255,255,0.28)"
+              stroke-width="8"
+            />
+            <!-- the freshly landed block -->
+            <rect
+              x="-140"
+              y="20"
+              width="280"
+              height="76"
+              rx="14"
+              fill="rgba(190,18,60,0.14)"
+              stroke="#fb7185"
+              stroke-width="4"
+            />
+            <line
+              x1="-100"
+              y1="58"
+              x2="100"
+              y2="58"
+              stroke="rgba(251,113,133,0.75)"
+              stroke-width="8"
+            />
+            <line
+              x1="-140"
+              y1="150"
+              x2="110"
+              y2="150"
+              stroke="rgba(255,255,255,0.22)"
+              stroke-width="8"
+            />
+            <line
+              x1="-140"
+              y1="206"
+              x2="40"
+              y2="206"
+              stroke="rgba(255,255,255,0.16)"
+              stroke-width="8"
+            />
+          </g>
+        </g>
+
+        <!-- ground shadows -->
+        <ellipse cx="390" cy="890" rx="230" ry="24" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1640" cy="890" rx="240" ry="24" fill="rgba(0,0,0,0.5)" />
+        <ellipse
+          cx="1030"
+          cy="760"
+          rx="200"
+          ry="16"
+          fill="rgba(190,18,60,0.12)"
+        />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

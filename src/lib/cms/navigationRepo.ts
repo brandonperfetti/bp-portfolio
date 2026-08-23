@@ -1,70 +1,36 @@
 import { unstable_cache } from 'next/cache'
+import { getPayload } from 'payload'
 
-import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
-import { getNotionRouteRegistryDataSourceId } from '@/lib/cms/notion/config'
-import { NotionConfigError, NotionHttpError } from '@/lib/cms/notion/errors'
-import { mapNavigationItem } from '@/lib/cms/notion/mapper'
-import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
-import { getCmsProvider } from '@/lib/cms/provider'
+import configPromise from '@payload-config'
 import type { CmsNavigationItem } from '@/lib/cms/types'
+import { HEADER_NAV_LINKS } from '@/lib/navigation'
 
-const DEFAULT_NAVIGATION: CmsNavigationItem[] = [
-  { href: '/about', label: 'About', order: 10, showInNav: true },
-  { href: '/articles', label: 'Articles', order: 20, showInNav: true },
-  { href: '/projects', label: 'Projects', order: 30, showInNav: true },
-  { href: '/tech', label: 'Tech', order: 40, showInNav: true },
-  { href: '/hermes', label: 'Hermes', order: 50, showInNav: true },
-  { href: '/uses', label: 'Uses', order: 60, showInNav: true },
-]
-
-const getCachedNotionNavigation = unstable_cache(
-  async (): Promise<CmsNavigationItem[]> => {
-    const pages = await queryAllDataSourcePages(
-      getNotionRouteRegistryDataSourceId(),
-      {
-        sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
-      },
-    )
-
-    const items = pages
-      .map(mapNavigationItem)
-      .filter((item): item is CmsNavigationItem => item !== null)
-      .sort((a, b) => a.order - b.order)
-
-    if (!items.length) {
-      return DEFAULT_NAVIGATION
-    }
-
-    return items
-  },
-  ['cms', 'notion', 'navigation'],
-  {
-    revalidate: CMS_REVALIDATE.navigation,
-    tags: [CMS_TAGS.navigation],
-  },
+const DEFAULT_NAVIGATION: CmsNavigationItem[] = HEADER_NAV_LINKS.map(
+  (link, index) => ({
+    href: link.href,
+    label: link.label,
+    order: index,
+    showInNav: true,
+  }),
 )
 
-export async function getCmsNavigation() {
-  if (getCmsProvider() !== 'notion') {
-    return DEFAULT_NAVIGATION
-  }
-
-  try {
-    return await getCachedNotionNavigation()
-  } catch (error) {
-    if (
-      error instanceof NotionConfigError ||
-      error instanceof NotionHttpError
-    ) {
-      console.warn(
-        '[cms:notion] navigation unavailable, using default navigation',
-        {
-          error: error.message,
-        },
-      )
-      return DEFAULT_NAVIGATION
-    }
-
-    throw error
-  }
-}
+/**
+ * Header navigation from the Payload `navigation` global (was Notion in v3),
+ * falling back to the v3 hard-coded nav so an empty CMS still renders.
+ */
+export const getCmsNavigation = unstable_cache(
+  async (): Promise<CmsNavigationItem[]> => {
+    const payload = await getPayload({ config: configPromise })
+    const nav = await payload.findGlobal({ slug: 'navigation', depth: 0 })
+    const links = nav?.headerLinks || []
+    if (!links.length) return DEFAULT_NAVIGATION
+    return links.map((link, index) => ({
+      href: link.href,
+      label: link.label,
+      order: index,
+      showInNav: true,
+    }))
+  },
+  ['navigation'],
+  { tags: ['global_navigation'] },
+)

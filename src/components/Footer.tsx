@@ -26,6 +26,10 @@ function NavLink({
   )
 }
 
+/**
+ * Default site footer using the static nav fallback — exists so layouts can
+ * drop in a footer without threading CMS navigation through props.
+ */
 export function Footer() {
   const defaultNavigationItems: Array<
     Pick<CmsNavigationItem, 'href' | 'label'>
@@ -33,6 +37,29 @@ export function Footer() {
   return <FooterWithNavigation navigationItems={defaultNavigationItems} />
 }
 
+/**
+ * Machine-readable surfaces the site publishes for agents and crawlers.
+ *
+ * @remarks Every target already exists and is discoverable by convention
+ * (robots.txt names the sitemap; `/llms.txt` sits at its well-known path;
+ * the feed is a `<link rel="alternate">`) — these anchors add link-based
+ * crawl discovery and a human-visible affordance, mirroring the pattern on
+ * agent-forward sites. Per docs/SEO.md, any new content-bearing surface
+ * must be added here alongside the sitemap/llms registrations.
+ */
+const AGENT_LINKS = [
+  { href: '/llms.txt', label: 'llms.txt' },
+  { href: '/llms-full.txt', label: 'llms-full.txt' },
+  { href: '/sitemap.xml', label: 'sitemap.xml' },
+  { href: '/feed.xml', label: 'rss.xml' },
+] as const
+
+/**
+ * Footer with caller-supplied (CMS-driven) navigation items.
+ *
+ * @remarks Renders nothing on `/corvus` — the chat surface owns its full
+ * viewport and a footer would push the composer off-screen.
+ */
 export function FooterWithNavigation({
   navigationItems,
 }: {
@@ -40,7 +67,7 @@ export function FooterWithNavigation({
 }) {
   const pathname = usePathname()
 
-  if (pathname === '/hermes') {
+  if (pathname === '/corvus') {
     return null
   }
 
@@ -57,11 +84,29 @@ export function FooterWithNavigation({
                   </NavLink>
                 ))}
               </div>
-              <p className="text-sm text-zinc-400 dark:text-zinc-500">
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
                 &copy; {new Date().getFullYear()} Brandon Perfetti. All rights
                 reserved.
               </p>
             </div>
+            <nav
+              aria-label="Machine-readable resources"
+              className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-xs text-zinc-500 sm:justify-start dark:text-zinc-400"
+            >
+              <span aria-hidden="true">Agents</span>
+              {AGENT_LINKS.map((item) => (
+                // Plain anchors on purpose: these are route handlers serving
+                // text/XML documents, not app pages — client-side Link
+                // navigation (and its prefetch) is wrong for them.
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className="rounded-md px-1 py-0.5 transition hover:text-teal-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:hover:text-teal-400 dark:focus-visible:ring-teal-400/80"
+                >
+                  {item.label}
+                </a>
+              ))}
+            </nav>
           </ContainerInner>
         </div>
       </ContainerOuter>

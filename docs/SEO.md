@@ -1,85 +1,40 @@
-# SEO and Metadata
+# SEO
 
-## Global Metadata
+## Metadata
 
-Defined in `src/app/layout.tsx`:
+- Per-page `generateMetadata` merges Payload data with defaults:
+  `buildPageMetadata` (`src/lib/cms/pageMetadata.ts`) for CMS pages, article
+  metadata from the plugin-seo `meta` group (title/description/image) with
+  excerpt fallback.
+- Canonical URL source of truth: `SiteSettings.canonicalUrl` when set, else
+  `NEXT_PUBLIC_SITE_URL` (`src/lib/seo/canonical.ts` — tested).
+- plugin-seo generation: title `{title} - Brandon Perfetti`; post URLs are
+  prefixed `/articles`.
 
-- site title template
-- description
-- canonical base
-- Open Graph defaults
-- Twitter card defaults
+## Structured data
 
-Canonical base URLs should come from CMS site settings (`canonicalUrl`) when
-available, with `NEXT_PUBLIC_SITE_URL` as the fallback.
+`src/lib/seo/jsonLd.ts` + `structuredData.ts` emit Person/Article/WebSite
+JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
+(XSS-safe). Article pages include author, dates, and canonical.
 
-## Article Metadata
+## Indexing surfaces
 
-`src/app/articles/[slug]/page.tsx` (`generateMetadata`) sets:
+- `src/app/sitemap.ts` — static routes + published articles + published
+  page-builder pages. Regenerates hourly (`revalidate = 3600`); its data
+  flows through the `posts`/`pages`-tagged caches, so content edits appear
+  on the next hourly regeneration. (The `posts-sitemap`/`pages-sitemap`
+  tags the hooks fire are aspirational — nothing subscribes to them yet.)
+- `src/app/robots.ts` — allows crawling, disallows `/admin`, `/api`.
+- `/feed.xml` — RSS via `feed` from published posts.
+- `/llms.txt` + `/llms-full.txt` — LLM discovery endpoints
+  (`src/lib/llms/helpers.ts`): site map summary, and per-article metadata +
+  summaries (deliberately NOT full bodies — full-corpus emission would leak
+  gated content; keep it that way).
 
-- per-article title/description
-  - title precedence: `SEO Title` -> article `title`
-  - description precedence: `SEO Description` -> article `description`
-  - article pages use an absolute page title to avoid inheriting the global
-    `%s - SiteName` title template
-- canonical URL
-- robots directives (`noindex` support)
-- published time
-- optional OG/Twitter image
-- keyword set derived from CMS `keywords/topics/tech`
-- JSON-LD:
-  - `Article`
-  - `BreadcrumbList`
+## Rules
 
-## Non-Article Structured Data
-
-- `src/app/page.tsx`:
-  - `WebSite` (with `SearchAction`)
-  - `Person`
-- `src/app/about/page.tsx`:
-  - `AboutPage`
-  - `Person`
-  - `BreadcrumbList`
-- `src/app/articles/page.tsx`:
-  - `CollectionPage`
-  - `BreadcrumbList`
-  - `ItemList`
-- `src/app/projects/page.tsx`:
-  - `CollectionPage`
-  - `BreadcrumbList`
-  - `ItemList`
-
-Shared structured-data helpers:
-
-- `src/lib/seo/jsonLd.ts` (`toSafeJsonLd`)
-- `src/lib/seo/structuredData.ts` (`buildPersonSchema`)
-
-## Indexing Routes
-
-- `src/app/sitemap.ts`:
-  - emits static routes
-  - appends public article routes from provider facade (`local` fallback mode or `notion` CMS)
-  - excludes `noindex` and future-dated articles
-  - sets `/articles` `lastModified` from newest public article freshness
-- `src/app/robots.ts`:
-  - robots directives
-- `src/app/feed.xml/route.ts`:
-  - RSS feed endpoint metadata
-  - excludes `noindex` and future-dated articles
-- `src/app/llms.txt/route.ts`:
-  - experimental AI-discovery endpoint
-  - includes canonical site links and recent public article URLs
-  - references `/llms-full.txt` for expanded corpus context
-  - excludes `noindex` and future-dated articles
-- `src/app/llms-full.txt/route.ts`:
-  - expanded AI-discovery corpus endpoint
-  - includes richer per-article metadata (published/updated/topics/keywords/tech)
-  - excludes `noindex` and future-dated articles
-
-## Best Practices
-
-- Keep article `description` concise and unique.
-- Keep `SEO Title` within 45-65 characters.
-- Keep `SEO Description` within 120-160 characters.
-- Ensure article `date` is valid ISO-compatible format.
-- Ensure article/social image fields are populated in the active content provider when social card richness is important.
+- Never index gated bodies: teasers only in any public payload, feeds
+  included.
+- New public routes must be added to the sitemap and, when content-bearing,
+  to llms.txt.
+- Redirects for retired URLs go through plugin-redirects, not code.

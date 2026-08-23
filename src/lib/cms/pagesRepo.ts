@@ -1,109 +1,177 @@
 import { unstable_cache } from 'next/cache'
+import { getPayload } from 'payload'
 
-import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
-import { getCmsProvider } from '@/lib/cms/provider'
-import { getNotionBlockTree } from '@/lib/cms/notion/blocks'
-import { getNotionPagesDataSourceId } from '@/lib/cms/notion/config'
-import { NotionConfigError, NotionHttpError } from '@/lib/cms/notion/errors'
-import { mapNotionPageContent } from '@/lib/cms/notion/mapper'
-import { queryAllDataSourcePages } from '@/lib/cms/notion/pagination'
+import configPromise from '@payload-config'
+import { heroSocialImageUrl } from '@/lib/cms/heroSocialImage'
+import { mediaUrl } from '@/lib/cms/mediaUrl'
 import type { CmsPageContent } from '@/lib/cms/types'
+import type { Page } from '@/payload-types'
 
 function normalizePath(path: string) {
   if (!path || path === '/') {
     return '/'
   }
-
   const withLeadingSlash = path.startsWith('/') ? path : `/${path}`
   return withLeadingSlash.replace(/\/+$/, '')
 }
 
-const getCachedNotionPages = unstable_cache(
-  async (): Promise<CmsPageContent[]> => {
-    const pages = await queryAllDataSourcePages(getNotionPagesDataSourceId(), {
-      sorts: [{ property: 'Sort Order', direction: 'ascending' }],
+/** Route path → Pages collection slug (`home` renders at `/`). */
+const pathToSlug = (path: string): string => {
+  const normalized = normalizePath(path)
+  return normalized === '/' ? 'home' : normalized.replace(/^\//, '')
+}
+
+/**
+ * Page content by route path from the Payload `pages` collection (was Notion).
+ *
+ * @param path - Route path to resolve (for example `/` or `/about`).
+ * @returns v3-shaped page content, or `null` when no published page exists —
+ * callers already treat `null` as "use hard-coded copy", which preserves the
+ * boots-with-empty-CMS behavior.
+ */
+export const getCmsPageByPath = unstable_cache(
+  async (path: string): Promise<CmsPageContent | null> => {
+    const payload = await getPayload({ config: configPromise })
+    const slug = pathToSlug(path)
+    const { docs } = await payload.find({
+      collection: 'pages',
+      draft: false,
+      limit: 1,
+      overrideAccess: false,
+      pagination: false,
+      where: { slug: { equals: slug } },
     })
+    const page = docs[0]
+    if (!page) return null
 
-    return pages.map(mapNotionPageContent).filter(Boolean) as CmsPageContent[]
-  },
-  ['cms', 'notion', 'pages'],
-  {
-    revalidate: CMS_REVALIDATE.pages,
-    tags: [CMS_TAGS.pages],
-  },
-)
-
-const getCachedPageByPath = unstable_cache(
-  async (
-    path: string,
-    includeBody: boolean,
-  ): Promise<CmsPageContent | null> => {
-    const targetPath = normalizePath(path)
-    const pages = await getCachedNotionPages()
-    const page = pages.find((candidate) => candidate.routeKey === targetPath)
-    if (!page) {
-      return null
+    const content: CmsPageContent = {
+      pageId: String(page.id),
+      routeKey: normalizePath(path),
+      slug: page.slug || slug,
+      title: page.title,
+      subtitle: page.subtitle || page.meta?.description || undefined,
+      seoTitle: page.meta?.title || undefined,
+      seoDescription: page.meta?.description || undefined,
+      // Only a `standard` hero renders an image, so only it seeds the OG
+      // fallback — shader/blank/none pages fall through to the site default
+      // rather than surfacing a hidden/stale hero image (see heroSocialImageUrl).
+      heroImage: heroSocialImageUrl(page.hero),
+      ogImage: mediaUrl(page.meta?.image),
+      ogImageMode: page.ogImageMode ?? undefined,
+      updatedAt: page.updatedAt,
+      disableSharing: page.disableSharing ?? undefined,
+      shareTargetsAdd: page.shareTargetsAdd ?? undefined,
+      shareTargetsRemove: page.shareTargetsRemove ?? undefined,
     }
 
-    if (!includeBody) {
-      return page
-    }
-
-    try {
-      const bodyBlocks = await getNotionBlockTree(page.pageId)
-      return { ...page, bodyBlocks }
-    } catch (error) {
-      console.warn('[cms:notion] page body blocks unavailable', {
-        path: targetPath,
-        pageId: page.pageId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      })
-      return page
-    }
+    return content
   },
-  ['cms', 'notion', 'page-by-path'],
-  {
-    revalidate: CMS_REVALIDATE.pages,
-    tags: [CMS_TAGS.pages],
-  },
+  ['page-by-path'],
+  { tags: ['pages'] },
 )
 
 /**
- * Retrieves CMS page content by route path when Notion is the active provider.
+ * Slugs owned by dedicated route components. The `[slug]` catch-all must
+ * never render or emit these, and the sitemap must not double-list them.
  *
- * @param path Route path to resolve (for example: `/` or `/about`).
- * @param options Optional lookup settings.
- * @param options.includeBody When true, fetches and attaches Notion body blocks.
- * @returns The mapped CMS page content, or `null` when provider is not Notion,
- * page is not found, or a recoverable Notion availability/config error occurs.
- * @throws Re-throws unexpected errors outside NotionConfigError/NotionHttpError.
+ * @remarks `home` is deliberately absent. It is a real page-builder document,
+ * rendered by the dedicated `/` route through the same {@link RenderRhythmPage}
+ * seam the catch-all uses (the #42 home flip). Its `/home` URL is a permanent
+ * redirect to `/` (`next.config.mjs`), so the catch-all never serves it; the
+ * one place that still needs `home` filtered — the sitemap/static-params slug
+ * list — excludes it explicitly in {@link getPublishedPageSlugs} below, because
+ * `/home` must not appear as a second, redirecting URL.
+ *
+ * `about` is the counter-case, and it stays: the #44 about flip put `/about`
+ * on the same {@link RenderRhythmPage} seam (rendering the `about` Pages doc),
+ * but — unlike `home` — its slug *already equals its path*. A dedicated
+ * `about/page.tsx` static segment always shadows the `[slug]` dynamic segment
+ * for `/about`, so the catch-all never serves it and no `/home`-style redirect
+ * is needed. Keeping `about` reserved is what yields exactly one canonical
+ * `/about`: it holds `about` out of {@link getPublishedPageSlugs} (no duplicate
+ * sitemap URL, no dead catch-all static param) and keeps the catch-all's guard
+ * defensively rejecting it. Removing it would gain nothing and force a second
+ * explicit exclusion below, so the decision is to leave it in place.
  */
-export async function getCmsPageByPath(
-  path: string,
-  options?: { includeBody?: boolean },
-): Promise<CmsPageContent | null> {
-  if (getCmsProvider() !== 'notion') {
-    return null
-  }
+export const RESERVED_PAGE_SLUGS = new Set([
+  'about',
+  'account',
+  'articles',
+  'corvus',
+  // 'hermes' stays reserved after the #77 rename: the deploy-level
+  // /hermes -> /corvus 308 shadows the route, so a published 'hermes' CMS
+  // doc could never render -- reserving it keeps such a doc out of the
+  // sitemap and static generation (final review 2026-08-21, G-1).
+  'hermes',
+  'projects',
+  'sign-in',
+  'sign-up',
+  'tech',
+  'thank-you',
+  'uses',
+])
 
-  const includeBody = options?.includeBody ?? false
-  try {
-    return await getCachedPageByPath(path, includeBody)
-  } catch (error) {
-    if (
-      error instanceof NotionConfigError ||
-      error instanceof NotionHttpError
-    ) {
-      console.warn(
-        '[cms:notion] page content unavailable, falling back to local content',
-        {
-          path,
-          error: error.message,
-        },
-      )
-      return null
-    }
-
-    throw error
-  }
+/**
+ * Draft-aware single-page query for the page-builder catch-all route.
+ * Draft mode (admin Live Preview) reads the newest draft with authenticated
+ * access; visitors only ever see published documents.
+ *
+ * @remarks Lives here (not in the route file) per docs/STATE.md — pages
+ * never call `getPayload()` directly (fresh-eyes review 2026-08, m5).
+ */
+export const getPageBySlugDraftAware = async (
+  slug: string,
+): Promise<Page | null> => {
+  const { draftMode } = await import('next/headers')
+  const { isEnabled: draft } = await draftMode()
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'pages',
+    draft,
+    limit: 1,
+    overrideAccess: draft,
+    pagination: false,
+    where: { slug: { equals: slug } },
+  })
+  return docs[0] ?? null
 }
+
+/**
+ * Slug served by the dedicated `/` route (redirected away from `/home`), so it
+ * is never a catch-all URL and must not surface in the slug list below.
+ */
+const HOME_PAGE_SLUG = 'home'
+
+/**
+ * Published, non-reserved page-builder slugs — the set of pages the
+ * `[slug]` catch-all serves. Feeds `generateStaticParams` and the sitemap
+ * (fresh-eyes review 2026-08, M5: builder pages were missing from the
+ * sitemap entirely).
+ *
+ * @remarks Excludes {@link HOME_PAGE_SLUG} as well as {@link RESERVED_PAGE_SLUGS}:
+ * `home` renders at `/` (not `/home`, which permanently redirects), so listing
+ * it here would emit `/home` as a second, redirecting sitemap URL and statically
+ * generate a page the redirect immediately shadows.
+ */
+export const getPublishedPageSlugs = unstable_cache(
+  async (): Promise<string[]> => {
+    const payload = await getPayload({ config: configPromise })
+    const { docs } = await payload.find({
+      collection: 'pages',
+      draft: false,
+      limit: 500,
+      overrideAccess: false,
+      pagination: false,
+      select: { slug: true },
+      where: { _status: { equals: 'published' } },
+    })
+    return docs
+      .map((doc) => doc.slug)
+      .filter(
+        (s): s is string =>
+          Boolean(s) && s !== HOME_PAGE_SLUG && !RESERVED_PAGE_SLUGS.has(s!),
+      )
+  },
+  ['published-page-slugs'],
+  { tags: ['pages'] },
+)

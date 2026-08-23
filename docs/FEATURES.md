@@ -1,67 +1,55 @@
 # Features
 
-## Content Platform
+## Articles (`/articles`, `/articles/[slug]`)
 
-- Provider-switched article system:
-  - `local`: fallback mode with empty article-safe states
-  - `notion`: projection records in `Portfolio CMS - Articles` + canonical body from related `Source Article` page blocks
-- Dynamic article route: `/articles/[slug]`
-- Article detail supports topic + tech chips, hero media, and Notion block rendering.
+- Payload Posts → `articlesRepo` → `ArticleLayout` + `ArticleBody`.
+- Explorer: debounced search (`q`), topic filter (`topic`), URL-synced, `/`
+  focuses search. Cards animate via shared motion tokens.
+- Bodies are Lexical JSON converted by `lexicalToBlocks`; code blocks render
+  through `CodeSnippet` (Prism), images through `next/image`.
+- Gated posts (`access.visibility = 'gated'`) serve teaser-only to anonymous
+  visitors — enforcement in the RSC via `canAccess`, not the client.
+- Per-article "Use with AI" menu + JSON-LD + canonical URLs.
 
-## Article Discovery
+## Corvus chat (`/corvus`)
 
-- `/articles` explorer supports:
-  - text search over title + description + taxonomy + server-provided `searchText`
-  - topic filtering with chip controls
-  - URL persistence (`q`, `topic`)
-  - chip re-click to clear selection back to `All`
-  - `/` keyboard shortcut to focus search input
-- Empty-state handling uses shared `NotFoundState` for publish-safe parity across CMS pages.
+- Streaming chat over `/api/ai/chat` (Vercel AI SDK). Server-enforced persona
+  prompt, Zod-validated payloads, Upstash rate limits + daily quota.
+- Empty submit refocuses the composer (retained v3 nicety, e2e-covered).
+- Evalite suites (`evals/`) cover persona, refusal, injection resistance.
 
-## Global Header Search
+## Command palette (⌘K / Ctrl+K)
 
-- Modal search opens via button or `Cmd/Ctrl + K`.
-- Uses debounced client filtering over a compact `/api/search` index payload.
-- Session cache keeps modal reopen fast within a tab.
-- API route includes stale payload fallback to reduce transient Notion failures.
-- Includes animated modal/results transitions with GSAP context cleanup on rerender/unmount.
+- `src/components/search/CommandPalette.tsx` (cmdk): BM25-ranked article
+  search over `/api/search` (plugin-search index, short-TTL cached),
+  navigation, theme switch, copy-link, Ask Corvus.
 
-## Hermes AI Chat
+## Tech-stack visualization (`/tech`, shared with `/uses`)
 
-- Streaming assistant responses (`gpt-4.1-mini`).
-- Markdown rendering with GFM support inside assistant bubble.
-- Copy-to-clipboard for assistant text responses.
-- Image mode via `image:` or `dali:` prompt prefix (`gpt-image-1.5`).
-- Multiline prompt input:
-  - `Enter` sends.
-  - `Shift+Enter` inserts a newline.
-- Empty submit behavior focuses the input to avoid silent no-op UX.
-- Public-route guardrails:
-  - per-IP rate limits on chat/image APIs
-  - message length + history caps
-  - max completion token cap for chat
-  - optional daily image cap and endpoint kill switches
-  - optional Turnstile verification when configured
+- `TechExplorer` + `TechCard`: category chips, proficiency chips, live GitHub
+  activity badges (owner-wide scan, 6h cache), expandable scan evidence,
+  A–Z / Most-active sort — all URL-synced (`q`, `category`, `sort`).
+- Signals: `src/lib/integrations/github/techSignals.ts` (scan, ported from
+  v3) + `src/lib/tech/githubSignals.ts` (cached index + name matching).
+  Config: `GITHUB_OWNER`, `GITHUB_TOKEN`, `GITHUB_TECH_*` knobs. Unconfigured
+  → badge-less render, never an error.
 
-## Motion System
+## Shader hero (home)
 
-- Shared motion primitives:
-  - `AnimatedHeadline` (typewriter/line variants)
-  - `ScrollReveal`
-  - `ParallaxGroup`
-  - `HoverMotionCard`
-- Applied across Home/About/Articles/Projects/Tech/Uses/Speaking and selected shared layouts.
-- Desktop sticky right-rail behavior is used on Home and About for long-scroll readability.
+- shaders.com preset behind server-rendered hero text. Presets registry
+  (`src/components/heros/presets.ts`): Northern Lights 2 (default dark),
+  Drifting Lights 8, Static Noise 4 (light mode). Reduced-motion/no-WebGPU →
+  static gradient; offscreen → canvas unmounts.
 
-## Contact + Newsletter APIs
+## Contact & newsletter
 
-- Contact form (`/api/sendgrid`) sends transactional email via SendGrid Mail API.
-- Newsletter route (`/api/mailinglist`) writes contacts to SendGrid Marketing list.
-- Home-page newsletter card is currently disabled at render level, but backend route remains available.
+- `/api/contact` POST delivers contact-form email via Resend (migrated from
+  SendGrid + renamed from `/api/sendgrid` 2026-08-10), with an explicit
+  unchecked-by-default mailing-list opt-in checkbox. Clerk webhook
+  (`/api/clerk/webhook`, svix verified) captures sign-up emails as Resend
+  contacts.
 
-## SEO + Discoverability
+## SEO surfaces
 
-- Dynamic sitemap generated from all routes + article slugs.
-- Robots route.
-- Feed metadata route (`/feed.xml`).
-- Metadata defaults configured at app layout and overridden on article pages.
+`sitemap.ts`, `robots.ts`, `feed.xml`, `llms.txt`, `llms-full.txt`, JSON-LD.
+See `docs/SEO.md`.

@@ -2,16 +2,22 @@
 
 import clsx from 'clsx'
 import { gsap } from 'gsap'
-import { useEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 
 import {
+  EASE_NONE,
+  EASE_OUT,
   LINE_WORD_DURATION,
   LINE_WORD_STAGGER,
+  TYPEWRITER_CARET_BLINK_DURATION,
   TYPEWRITER_CARET_START_BUFFER,
   TYPEWRITER_CHAR_DURATION,
   TYPEWRITER_CHAR_STAGGER,
-} from '@/lib/motion/headlineTiming'
-import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
+} from '@/lib/motion/timing'
+import {
+  getPrefersReducedMotion,
+  usePrefersReducedMotion,
+} from '@/lib/motion/usePrefersReducedMotion'
 
 type HeadlineTag = 'h1' | 'h2' | 'h3'
 
@@ -47,8 +53,17 @@ export function AnimatedHeadline({
     [words],
   )
 
-  useEffect(() => {
-    if (prefersReducedMotion || !rootRef.current) {
+  // useLayoutEffect (not useEffect) so the initial hidden state applies
+  // before the browser paints the committed DOM — with useEffect, route
+  // navigations flashed the full server-rendered heading for a frame before
+  // GSAP hid it and started the animation.
+  useLayoutEffect(() => {
+    // Sync media check mirrors ScrollReveal: the hook's state is still false
+    // on the first client pass, and reduced-motion users must never see the
+    // animation start. Reads the shared source rather than re-checking
+    // `matchMedia` inline (#26).
+    const prefersReducedMotionSync = getPrefersReducedMotion()
+    if (prefersReducedMotionSync || prefersReducedMotion || !rootRef.current) {
       return
     }
 
@@ -65,7 +80,7 @@ export function AnimatedHeadline({
             autoAlpha: 1,
             duration: TYPEWRITER_CHAR_DURATION,
             stagger: TYPEWRITER_CHAR_STAGGER,
-            ease: 'none',
+            ease: EASE_NONE,
             delay,
           },
         )
@@ -76,8 +91,8 @@ export function AnimatedHeadline({
             autoAlpha: 0,
             repeat: -1,
             yoyo: true,
-            duration: 0.82,
-            ease: 'none',
+            duration: TYPEWRITER_CARET_BLINK_DURATION,
+            ease: EASE_NONE,
             delay:
               delay +
               characterNodes.length * TYPEWRITER_CHAR_STAGGER +
@@ -100,7 +115,7 @@ export function AnimatedHeadline({
           y: 0,
           duration: LINE_WORD_DURATION,
           stagger: LINE_WORD_STAGGER,
-          ease: 'power2.out',
+          ease: EASE_OUT,
           delay,
         },
       )

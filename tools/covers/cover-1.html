@@ -1,0 +1,260 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: fuchsia (JS/TS language) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 62% 48%,
+            rgba(162, 28, 175, 0.26),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 16% 70%,
+            rgba(162, 28, 175, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="310" cy="185" r="4" />
+          <circle cx="1800" cy="210" r="4" />
+          <circle cx="1730" cy="945" r="4" />
+          <circle cx="225" cy="885" r="4" />
+        </g>
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
+          <path d="M 1550 135 h 26 M 1563 122 v 26" />
+          <path d="M 145 465 h 24 M 157 453 v 24" />
+          <path d="M 1925 645 h 24 M 1937 633 v 24" />
+        </g>
+
+        <!-- ===== LEFT: the relative-path tangle ===== -->
+        <!-- file nodes, scattered -->
+        <g
+          fill="rgba(9,9,11,0.85)"
+          stroke="rgba(255,255,255,0.28)"
+          stroke-width="3.5"
+        >
+          <g transform="translate(300,300)">
+            <path d="M -30 -38 H 12 L 30 -20 V 38 H -30 Z" />
+            <path d="M 12 -38 V -20 H 30" fill="none" />
+          </g>
+          <g transform="translate(560,250)">
+            <path d="M -30 -38 H 12 L 30 -20 V 38 H -30 Z" />
+            <path d="M 12 -38 V -20 H 30" fill="none" />
+          </g>
+          <g transform="translate(250,600)">
+            <path d="M -30 -38 H 12 L 30 -20 V 38 H -30 Z" />
+            <path d="M 12 -38 V -20 H 30" fill="none" />
+          </g>
+          <g transform="translate(540,700)">
+            <path d="M -30 -38 H 12 L 30 -20 V 38 H -30 Z" />
+            <path d="M 12 -38 V -20 H 30" fill="none" />
+          </g>
+          <g transform="translate(420,900)">
+            <path d="M -30 -38 H 12 L 30 -20 V 38 H -30 Z" />
+            <path d="M 12 -38 V -20 H 30" fill="none" />
+          </g>
+        </g>
+        <!-- the spaghetti: crooked climbing paths (../../..) crossing each other -->
+        <g
+          fill="none"
+          stroke="rgba(232,121,249,0.35)"
+          stroke-width="3.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M 330 320 L 430 430 L 300 520 L 250 560" />
+          <path d="M 560 290 L 460 420 L 560 540 L 540 660" />
+          <path d="M 280 620 L 420 700 L 360 810 L 420 860" />
+          <path d="M 330 280 L 520 380 L 430 560 L 540 670" />
+          <path d="M 570 740 L 470 800 L 520 870 L 450 900" />
+        </g>
+        <!-- dot-dot climb ticks on the worst path -->
+        <g fill="rgba(232,121,249,0.5)">
+          <circle cx="430" cy="430" r="6" />
+          <circle cx="300" cy="520" r="6" />
+          <circle cx="460" cy="420" r="6" />
+          <circle cx="420" cy="700" r="6" />
+        </g>
+        <!-- one broken link: a snapped segment -->
+        <path
+          d="M 500 480 L 540 510"
+          stroke="rgba(232,121,249,0.5)"
+          stroke-width="3.5"
+          stroke-linecap="round"
+        />
+        <path
+          d="M 560 525 L 600 555"
+          stroke="rgba(232,121,249,0.25)"
+          stroke-width="3.5"
+          stroke-linecap="round"
+        />
+
+        <!-- ===== divider: the rewrite ===== -->
+        <path
+          d="M 810 380 C 880 480, 880 680, 810 780"
+          fill="none"
+          stroke="rgba(255,255,255,0.18)"
+          stroke-width="3.5"
+          stroke-dasharray="4 16"
+          stroke-linecap="round"
+        />
+        <path
+          d="M 830 560 h 90"
+          stroke="#e879f9"
+          stroke-width="5.5"
+          stroke-linecap="round"
+          filter="url(#accentGlow)"
+        />
+        <path
+          d="M 900 542 L 932 560 L 900 578 Z"
+          fill="#e879f9"
+          filter="url(#accentGlow)"
+        />
+
+        <!-- ===== RIGHT: the alias hub ===== -->
+        <!-- hub: the @ root -->
+        <g transform="translate(1300,560)">
+          <circle
+            r="72"
+            fill="rgba(162,28,175,0.18)"
+            stroke="#e879f9"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
+          <!-- drawn @ mark: ring + inner loop tail -->
+          <circle r="26" fill="none" stroke="#e879f9" stroke-width="5" />
+          <circle r="9" fill="#e879f9" />
+          <path
+            d="M 26 0 C 26 22, 44 26, 52 12"
+            fill="none"
+            stroke="#e879f9"
+            stroke-width="5"
+            stroke-linecap="round"
+          />
+        </g>
+        <!-- clean straight spokes to tidy file nodes -->
+        <g
+          stroke="#e879f9"
+          stroke-width="4.5"
+          stroke-linecap="round"
+          opacity="0.75"
+        >
+          <line x1="1368" y1="530" x2="1600" y2="410" />
+          <line x1="1374" y1="572" x2="1610" y2="590" />
+          <line x1="1360" y1="612" x2="1590" y2="760" />
+          <line x1="1332" y1="496" x2="1480" y2="320" />
+        </g>
+        <!-- destination files: aligned column, calm -->
+        <g
+          fill="rgba(9,9,11,0.88)"
+          stroke="rgba(232,121,249,0.55)"
+          stroke-width="3.5"
+        >
+          <g transform="translate(1560,300)">
+            <path d="M -30 -38 H 12 L 30 -20 V 38 H -30 Z" />
+            <path d="M 12 -38 V -20 H 30" fill="none" />
+          </g>
+          <g transform="translate(1680,410)">
+            <path d="M -30 -38 H 12 L 30 -20 V 38 H -30 Z" />
+            <path d="M 12 -38 V -20 H 30" fill="none" />
+          </g>
+          <g transform="translate(1690,590)">
+            <path d="M -30 -38 H 12 L 30 -20 V 38 H -30 Z" />
+            <path d="M 12 -38 V -20 H 30" fill="none" />
+          </g>
+          <g transform="translate(1670,770)">
+            <path d="M -30 -38 H 12 L 30 -20 V 38 H -30 Z" />
+            <path d="M 12 -38 V -20 H 30" fill="none" />
+          </g>
+        </g>
+        <!-- config anchor under the hub: the tsconfig block that makes it real -->
+        <g transform="translate(1300,830)">
+          <rect
+            x="-90"
+            y="-40"
+            width="180"
+            height="80"
+            rx="14"
+            fill="rgba(9,9,11,0.88)"
+            stroke="rgba(232,121,249,0.5)"
+            stroke-width="3.5"
+          />
+          <line
+            x1="-58"
+            y1="-12"
+            x2="30"
+            y2="-12"
+            stroke="rgba(232,121,249,0.5)"
+            stroke-width="5"
+            stroke-linecap="round"
+          />
+          <line
+            x1="-58"
+            y1="14"
+            x2="58"
+            y2="14"
+            stroke="rgba(232,121,249,0.3)"
+            stroke-width="5"
+            stroke-linecap="round"
+          />
+        </g>
+        <path
+          d="M 1300 632 V 790"
+          stroke="rgba(232,121,249,0.35)"
+          stroke-width="3.5"
+          stroke-dasharray="3 12"
+          stroke-linecap="round"
+          fill="none"
+        />
+
+        <!-- ground shadow -->
+        <ellipse cx="1024" cy="990" rx="580" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse
+          cx="1300"
+          cy="945"
+          rx="240"
+          ry="16"
+          fill="rgba(162,28,175,0.12)"
+        />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

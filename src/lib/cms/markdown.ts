@@ -101,7 +101,7 @@ function renderBlock(block: CmsArticleBlock, depth = 0): string {
 function renderBlocks(blocks: CmsArticleBlock[], depth = 0): string {
   const output: string[] = []
 
-  for (let index = 0; index < blocks.length; ) {
+  for (let index = 0; index < blocks.length;) {
     const block = blocks[index]
 
     if (

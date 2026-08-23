@@ -1,97 +1,68 @@
-# BP Portfolio - AI Agent Instructions
+# BP Portfolio v4 — AI Agent Instructions
 
-Next.js App Router portfolio + provider-switched CMS platform (fallback local mode + Notion) with custom feature layers for search, Hermes chat, contact forms, and SEO routes.
+Next.js 16 App Router portfolio with **Payload CMS** (Postgres/Drizzle) as the
+single content source, Clerk auth + server-side gating, Corvus AI chat
+(Vercel AI SDK), and a shaders.com animated hero. Notion is a **planning
+surface only** — it is not a CMS and has no runtime integration.
 
 ## Essentials
 
-- Package manager: `npm` (lockfile is `package-lock.json`)
-- Primary commands:
-  - `npm run dev`
-  - `npm run build`
-  - `npm run lint`
-  - `npm run test`
-  - `npm run test:e2e`
-- Runtime baseline:
-  - Next.js 16
-  - React 19
-  - TypeScript 5
+- Package manager: **pnpm only** (`packageManager` pin + `only-allow`;
+  lockfile is `pnpm-lock.yaml`). Never use npm/yarn.
+- Primary commands: `pnpm dev` · `pnpm build` · `pnpm lint` · `pnpm test` ·
+  `pnpm test:e2e` · `pnpm storybook` · `pnpm payload` · `pnpm migrate`
+- Runtime baseline: Next.js 16 (Turbopack), React 19, TypeScript 5,
+  Payload 3.x (all `@payloadcms/*` packages version-locked together),
+  Tailwind v4 (CSS-first), Node 22+.
 
-## Environment Expectations
+## Invariants (do not regress)
 
-Core env vars:
+- **URLs:** `/articles/[slug]` shape and existing slugs are preserved from v3.
+- **Payload is the only CMS.** Content flows Payload → repo modules
+  (`src/lib/cms/*Repo.ts`) → RSC pages. Never reintroduce Notion runtime code.
+- **Corvus system prompt is server-enforced** (`src/lib/ai/corvus.ts`); client
+  system messages are never trusted. Rate limiting via Upstash Redis.
+- **Gating is server-side** (`src/access/canAccess.ts` + `getViewer()`); UI
+  components like `<Protect>` are conveniences, never the enforcement point.
+- **Reduced motion is honored by every animated surface** — static, functional
+  DOM when `prefers-reduced-motion` is set.
+- **Light/dark parity** is an acceptance criterion; audit both themes.
+- Generated artifacts (`src/payload-types.ts`,
+  `src/app/(payload)/admin/importMap.js`) are committed and CI-gated — run
+  `pnpm generate:types` / `pnpm generate:importmap` after schema/plugin
+  changes.
+- Dependency majors are pinned; `@payloadcms/*` + `payload` upgrade as one set.
+- The rich-text editor for Posts must keep every node type the migration
+  emits registered (lists, blockquote, upload) — removing a feature breaks
+  every migrated article (Lexical error #17).
 
-- `NEXT_PUBLIC_SITE_URL`
-- `OPENAI_API_KEY`
-- `SENDGRID_API_KEY`
+## Conventions
 
-Optional env vars:
+- Conventional commits; small, focused commits; draft PR per phase.
+- TSDoc on every exported function/component/collection (enforced by
+  `eslint-plugin-tsdoc`); document _why_, not _what_.
+- New UI starts from shadcn/ui primitives (`src/components/ui`) and gets a
+  Storybook story; serious a11y violations fail the story.
+- Tests accompany behavior changes: Vitest unit/component, Playwright e2e,
+  Evalite for Corvus behavior.
 
-- `SENDGRID_MAILING_ID` or `SENDGRID_LIST_ID`
-- `SENDGRID_DATA_RESIDENCY`
-- `CONTACT_TO_EMAIL`
-- `CONTACT_FROM_EMAIL`
-
-## Project-Specific Rules
-
-- Articles are CMS-first; local mode should gracefully render empty article states when Notion is disabled.
-- Dynamic article route is `src/app/articles/[slug]/page.tsx`; preserve this shape.
-- In Notion mode, `Source Article` page blocks are canonical article body source.
-- Canonical URL source of truth is CMS site settings (`canonicalUrl`) when
-  available; fall back to `NEXT_PUBLIC_SITE_URL`.
-- Keep Notion API pinned to `NOTION_API_VERSION=2025-09-03`.
-- Preserve query-string behavior in article explorer (`q`, `topic`) and keyboard shortcuts (`/` for focus).
-- Preserve header search UX (`Cmd/Ctrl + K`) and debounced matching over article body text.
-- Hermes chat must keep streaming behavior and markdown rendering compatibility.
-- Prefer project-local icons in `src/icons` when matching existing visual language; use Heroicons selectively where already adopted.
-- Treat Notion `Governance Hub` as the canonical index for governance/contracts/runbooks and related CMS source databases.
-- For reconciliation/drift/cleanup/integrity operations, log evidence in Notion `Operations Runs`.
-
-## Code Documentation Expectations
-
-- Add concise comments for non-obvious logic, edge-case handling, and tradeoffs.
-- Avoid narrating obvious code ("set x to y"); comments should explain intent/why.
-- Add JSDoc for exported components/hooks/utilities when contracts are non-trivial (inputs, return shape, side effects, assumptions).
-- Prefer keeping comments near complex branches and transformations so future edits are safe.
-- If behavior changes, update nearby comments/JSDoc in the same change.
-
-## Dependency Security Rules
-
-- For dependency additions, upgrades, or removals, prioritize Sonatype MCP tools first.
-- Before changing dependencies, check current package risk and recommended versions with Sonatype MCP.
-- When proposing upgrades, include security impact and compatibility risk (major vs minor/patch).
-- Keep vulnerability blocking strict; warning-only signals (e.g., scorecard/license metadata noise) should be documented and triaged separately.
-
-## Test Update Policy
-
-- If a change modifies user-visible behavior, add or update at least one automated test that covers the new behavior.
-- UI interaction/state updates should include Playwright coverage and/or a component test (`@testing-library/react` + Vitest).
-- Pure logic/data transformations should include or update Vitest unit tests.
-- Motion/accessibility changes must include keyboard-path and reduced-motion validation (automated when practical, otherwise explicit manual checklist notes).
-- Bug-fix changes should include a regression test that fails before the fix and passes after.
-- If no new test is added, document the reason in PR testing notes.
-
-## Review Suggestion Triage
-
-- Not every automated review suggestion should be applied verbatim; verify against current code and product intent first.
-- If intentionally skipping a valid suggestion due to scope/timing, leave:
-  - a short PR note explaining why, and
-  - an inline comment only when the skipped choice is non-obvious to future editors.
-- For deferred-but-valid work, add a TODO/backlog reference with enough context for follow-up.
-
-## Progressive Disclosure
+## Progressive disclosure (read the doc that matches the task)
 
 - Architecture and app map: `docs/ARCHITECTURE.md`
+- Payload CMS (collections, blocks, plugins, migrations, MCP): `docs/PAYLOAD.md`
 - Feature inventory and behavior: `docs/FEATURES.md`
 - Navigation and route responsibilities: `docs/NAVIGATION.md`
 - State and data flow: `docs/STATE.md`
 - Styling and component conventions: `docs/STYLING.md`
+- Design system (shadcn, shader hero, motion, Storybook): `docs/DESIGN.md`
+- AI (Corvus, guardrails, evals, providers): `docs/AI.md`
+- Auth, gating, and email capture (Clerk): `docs/AUTH.md`
+- Content workflow (Notion planning → Payload publishing): `docs/CONTENT_WORKFLOW.md`
+- Content voice, article types, and revision gates: `docs/CONTENT_STYLE.md`
 - SEO and indexing routes: `docs/SEO.md`
 - Dependencies and why they exist: `docs/DEPENDENCIES.md`
 - Workflow and contribution rules: `docs/WORKFLOW.md`
 - Accessibility expectations: `docs/ACCESSIBILITY.md`
-- Testing strategy / current gaps: `docs/TESTING.md`
+- Testing strategy: `docs/TESTING.md`
 - Ongoing upkeep tasks: `docs/MAINTENANCE.md`
 - Documentation standards: `docs/DOCUMENTATION.md`
-- Notion CMS setup and runbook: `docs/NOTION_CMS.md`
-- Notion runtime integration (current state): `docs/notion-integration.md`
-- Agent Notion operations playbook: `docs/agent-notion-operations.md`

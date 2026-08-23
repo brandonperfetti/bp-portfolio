@@ -1,0 +1,266 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: violet (AI & agents) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 55% 48%,
+            rgba(109, 40, 217, 0.26),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 22% 25%,
+            rgba(109, 40, 217, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <!-- userSpaceOnUse: horizontal-only paths have a zero-height bbox,
+               which makes objectBoundingBox gradients render as nothing -->
+          <linearGradient
+            id="streamGrad"
+            gradientUnits="userSpaceOnUse"
+            x1="1000"
+            y1="0"
+            x2="1560"
+            y2="0"
+          >
+            <stop offset="0" stop-color="#7c3aed" />
+            <stop offset="1" stop-color="#a78bfa" />
+          </linearGradient>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="350" cy="200" r="4" />
+          <circle cx="1790" cy="180" r="4" />
+          <circle cx="1720" cy="970" r="4" />
+          <circle cx="190" cy="840" r="4" />
+        </g>
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
+          <path d="M 1480 130 h 26 M 1493 117 v 26" />
+          <path d="M 120 500 h 24 M 132 488 v 24" />
+          <path d="M 1940 760 h 24 M 1952 748 v 24" />
+        </g>
+
+        <!-- ===== the raw prompt: a loose spark, left ===== -->
+        <g transform="translate(330,576)">
+          <circle
+            r="46"
+            fill="rgba(109,40,217,0.14)"
+            stroke="rgba(167,139,250,0.5)"
+            stroke-width="4"
+          />
+          <circle r="14" fill="#a78bfa" filter="url(#accentGlow)" />
+          <!-- unruly sparks before the SDK tames them -->
+          <g
+            stroke="rgba(167,139,250,0.45)"
+            stroke-width="4"
+            stroke-linecap="round"
+          >
+            <line x1="-86" y1="-64" x2="-58" y2="-44" />
+            <line x1="-96" y1="30" x2="-64" y2="22" />
+            <line x1="-52" y1="-104" x2="-40" y2="-74" />
+            <line x1="-30" y1="92" x2="-44" y2="66" />
+          </g>
+        </g>
+        <!-- wobbly ingress path -->
+        <path
+          d="M 380 576 C 470 500, 540 660, 640 576"
+          fill="none"
+          stroke="rgba(167,139,250,0.5)"
+          stroke-width="5"
+          stroke-linecap="round"
+        />
+
+        <!-- ===== the SDK frame: rounded gate that makes it stick ===== -->
+        <g transform="translate(820,576)">
+          <rect
+            x="-180"
+            y="-210"
+            width="360"
+            height="420"
+            rx="30"
+            fill="rgba(9,9,11,0.85)"
+            stroke="#a78bfa"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
+          <rect
+            x="-138"
+            y="-168"
+            width="276"
+            height="336"
+            rx="22"
+            fill="none"
+            stroke="rgba(167,139,250,0.3)"
+            stroke-width="3"
+          />
+          <!-- three primitives inside: hooks/patterns as sockets -->
+          <g fill="rgba(109,40,217,0.2)" stroke="#a78bfa" stroke-width="4">
+            <circle cy="-92" r="26" />
+            <circle cy="0" r="26" />
+            <circle cy="92" r="26" />
+          </g>
+          <g fill="#a78bfa">
+            <circle cy="-92" r="8" />
+            <circle cy="0" r="8" />
+            <circle cy="92" r="8" />
+          </g>
+        </g>
+
+        <!-- ===== the stream: ordered tokens flowing out ===== -->
+        <g stroke-linecap="round" fill="none">
+          <path
+            d="M 1000 484 H 1560"
+            stroke="url(#streamGrad)"
+            stroke-width="5"
+            stroke-dasharray="34 22"
+          />
+          <path
+            d="M 1000 576 H 1560"
+            stroke="url(#streamGrad)"
+            stroke-width="5"
+            stroke-dasharray="56 22"
+            opacity="0.85"
+          />
+          <path
+            d="M 1000 668 H 1560"
+            stroke="url(#streamGrad)"
+            stroke-width="5"
+            stroke-dasharray="22 22"
+            opacity="0.65"
+          />
+        </g>
+
+        <!-- ===== the chat surface: message arriving token by token ===== -->
+        <g transform="translate(1730,576)">
+          <rect
+            x="-150"
+            y="-230"
+            width="330"
+            height="460"
+            rx="26"
+            fill="rgba(9,9,11,0.85)"
+            stroke="rgba(255,255,255,0.35)"
+            stroke-width="3.5"
+          />
+          <!-- incoming assistant bubble -->
+          <rect
+            x="-110"
+            y="-180"
+            width="230"
+            height="150"
+            rx="20"
+            fill="rgba(109,40,217,0.14)"
+            stroke="rgba(167,139,250,0.6)"
+            stroke-width="4"
+          />
+          <g stroke-linecap="round">
+            <line
+              x1="-74"
+              y1="-136"
+              x2="88"
+              y2="-136"
+              stroke="rgba(255,255,255,0.4)"
+              stroke-width="8"
+            />
+            <line
+              x1="-74"
+              y1="-92"
+              x2="30"
+              y2="-92"
+              stroke="rgba(255,255,255,0.28)"
+              stroke-width="8"
+            />
+          </g>
+          <!-- caret still typing -->
+          <rect
+            x="44"
+            y="-104"
+            width="10"
+            height="26"
+            fill="#a78bfa"
+            filter="url(#accentGlow)"
+          />
+          <!-- user bubble below -->
+          <rect
+            x="-30"
+            y="30"
+            width="150"
+            height="80"
+            rx="20"
+            fill="rgba(255,255,255,0.04)"
+            stroke="rgba(255,255,255,0.3)"
+            stroke-width="3.5"
+          />
+          <line
+            x1="6"
+            y1="70"
+            x2="86"
+            y2="70"
+            stroke="rgba(255,255,255,0.3)"
+            stroke-width="8"
+            stroke-linecap="round"
+          />
+          <!-- composer -->
+          <rect
+            x="-110"
+            y="150"
+            width="230"
+            height="52"
+            rx="16"
+            fill="rgba(255,255,255,0.04)"
+            stroke="rgba(255,255,255,0.25)"
+            stroke-width="3"
+          />
+        </g>
+
+        <!-- ground shadows -->
+        <ellipse cx="820" cy="850" rx="240" ry="24" fill="rgba(0,0,0,0.5)" />
+        <ellipse cx="1730" cy="870" rx="220" ry="22" fill="rgba(0,0,0,0.5)" />
+        <ellipse
+          cx="1280"
+          cy="800"
+          rx="200"
+          ry="18"
+          fill="rgba(109,40,217,0.12)"
+        />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

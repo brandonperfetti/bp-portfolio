@@ -4,14 +4,19 @@ import { useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
-import { AppContext } from '@/app/providers'
+import { AppContext } from '@/app/(frontend)/providers'
 import { Container } from '@/components/Container'
 import { AnimatedHeadline } from '@/components/motion/AnimatedHeadline'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
+import { REVEAL_ARTICLE } from '@/lib/motion/timing'
 import { Prose } from '@/components/Prose'
 import { formatDate } from '@/lib/formatDate'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 
+/**
+ * Minimal article shape the layout needs — deliberately narrower than the
+ * CMS types so any article source (Payload post, static page) can feed it.
+ */
 export interface ArticleLayoutArticle {
   title: string
   date: string
@@ -31,6 +36,16 @@ function ArrowLeftIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
   )
 }
 
+/**
+ * Shared chrome for every `/articles/[slug]` page: back button, date,
+ * animated headline, hero image, and Prose-wrapped body — so article pages
+ * only supply content, never layout.
+ *
+ * @remarks The back button renders only when `previousPathname` exists in
+ * `AppContext`, i.e. in-app navigation — `router.back()` on a direct load
+ * would exit the site. The hero image stays hidden until load (or error,
+ * as a fallback) so the reveal never flashes a half-loaded image.
+ */
 export function ArticleLayout({
   article,
   children,
@@ -76,7 +91,7 @@ export function ArticleLayout({
                 className="mt-6 text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100"
               />
               {article.image ? (
-                <ScrollReveal y={20} duration={0.86} delay={0.1}>
+                <ScrollReveal {...REVEAL_ARTICLE}>
                   <div className="mt-8 overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800">
                     <Image
                       src={getOptimizedImageUrl(article.image, {

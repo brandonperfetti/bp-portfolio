@@ -1,0 +1,329 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: amber (Node & APIs) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 50% 54%,
+            rgba(217, 119, 6, 0.26),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 82% 24%,
+            rgba(217, 119, 6, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="318" cy="182" r="4" />
+          <circle cx="1792" cy="202" r="4" />
+          <circle cx="1728" cy="944" r="4" />
+          <circle cx="238" cy="902" r="4" />
+        </g>
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
+          <path d="M 1556 140 h 26 M 1569 127 v 26" />
+          <path d="M 146 452 h 24 M 158 440 v 24" />
+          <path d="M 1914 662 h 24 M 1926 650 v 24" />
+        </g>
+
+        <!-- ===== the reservoir: a huge file up high ===== -->
+        <g transform="translate(360,300)">
+          <rect
+            x="-170"
+            y="-140"
+            width="340"
+            height="280"
+            rx="20"
+            fill="rgba(9,9,11,0.88)"
+            stroke="#fbbf24"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
+          <path
+            d="M 60 -140 V -80 H 120"
+            fill="none"
+            stroke="rgba(251,191,36,0.5)"
+            stroke-width="4"
+          />
+          <g
+            stroke="rgba(251,191,36,0.4)"
+            stroke-width="5"
+            stroke-linecap="round"
+          >
+            <line x1="-120" y1="-70" x2="100" y2="-70" />
+            <line x1="-120" y1="-24" x2="120" y2="-24" />
+            <line x1="-120" y1="22" x2="80" y2="22" />
+            <line x1="-120" y1="68" x2="110" y2="68" />
+          </g>
+          <!-- gigabyte weight chip -->
+          <g transform="translate(-130,-180)">
+            <rect
+              x="-40"
+              y="-24"
+              width="80"
+              height="48"
+              rx="12"
+              fill="rgba(217,119,6,0.3)"
+              stroke="rgba(251,191,36,0.6)"
+              stroke-width="3.5"
+            />
+            <circle cx="-14" cy="0" r="7" fill="rgba(251,191,36,0.6)" />
+            <circle cx="14" cy="0" r="7" fill="rgba(251,191,36,0.6)" />
+          </g>
+        </g>
+
+        <!-- ===== the stream pipe: chunks flowing down and across ===== -->
+        <!-- pipe path -->
+        <path
+          d="M 460 450 C 560 560, 640 620, 780 640 H 1280"
+          fill="none"
+          stroke="rgba(251,191,36,0.3)"
+          stroke-width="26"
+          stroke-linecap="round"
+        />
+        <path
+          d="M 460 450 C 560 560, 640 620, 780 640 H 1280"
+          fill="none"
+          stroke="rgba(9,9,11,0.6)"
+          stroke-width="16"
+          stroke-linecap="round"
+        />
+        <!-- chunks inside the pipe -->
+        <g fill="#fbbf24" filter="url(#accentGlow)">
+          <rect
+            x="530"
+            y="520"
+            width="34"
+            height="16"
+            rx="8"
+            transform="rotate(38 547 528)"
+          />
+          <rect
+            x="660"
+            y="608"
+            width="34"
+            height="16"
+            rx="8"
+            transform="rotate(12 677 616)"
+          />
+          <rect x="850" y="632" width="34" height="16" rx="8" />
+          <rect x="1000" y="632" width="34" height="16" rx="8" />
+          <rect x="1150" y="632" width="34" height="16" rx="8" />
+        </g>
+
+        <!-- ===== transform valve mid-pipe ===== -->
+        <g transform="translate(930,640)">
+          <circle
+            r="58"
+            fill="rgba(9,9,11,0.9)"
+            stroke="#fbbf24"
+            stroke-width="5"
+            filter="url(#accentGlow)"
+          />
+          <path
+            d="M -20 -14 h 40 M -20 0 h 28 M -20 14 h 34"
+            stroke="#fbbf24"
+            stroke-width="4.5"
+            stroke-linecap="round"
+          />
+          <!-- valve wheel on top -->
+          <line
+            x1="0"
+            y1="-58"
+            x2="0"
+            y2="-88"
+            stroke="rgba(251,191,36,0.6)"
+            stroke-width="5"
+            stroke-linecap="round"
+          />
+          <circle
+            cy="-104"
+            r="18"
+            fill="none"
+            stroke="rgba(251,191,36,0.6)"
+            stroke-width="4.5"
+          />
+        </g>
+
+        <!-- ===== destination: small steady sink, memory gauge calm ===== -->
+        <g transform="translate(1460,640)">
+          <rect
+            x="-110"
+            y="-110"
+            width="220"
+            height="220"
+            rx="20"
+            fill="rgba(9,9,11,0.9)"
+            stroke="#fbbf24"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
+          <g
+            stroke="rgba(251,191,36,0.5)"
+            stroke-width="4.5"
+            stroke-linecap="round"
+          >
+            <line x1="-60" y1="-50" x2="60" y2="-50" />
+            <line x1="-60" y1="0" x2="44" y2="0" />
+            <line x1="-60" y1="50" x2="54" y2="50" />
+          </g>
+          <!-- calm memory gauge -->
+          <g transform="translate(0,170)">
+            <rect
+              x="-90"
+              y="-14"
+              width="180"
+              height="28"
+              rx="14"
+              fill="rgba(255,255,255,0.06)"
+              stroke="rgba(251,191,36,0.4)"
+              stroke-width="3"
+            />
+            <rect
+              x="-90"
+              y="-14"
+              width="54"
+              height="28"
+              rx="14"
+              fill="rgba(251,191,36,0.55)"
+            />
+          </g>
+        </g>
+
+        <!-- backpressure ripple: pipe politely pausing -->
+        <g
+          stroke="rgba(251,191,36,0.4)"
+          stroke-width="3.5"
+          stroke-linecap="round"
+          fill="none"
+        >
+          <path d="M 1236 600 C 1244 588, 1244 576, 1236 564" />
+          <path d="M 1258 606 C 1270 588, 1270 570, 1258 552" />
+        </g>
+
+        <!-- ===== the anti-pattern ghost: hauling the whole block at once ===== -->
+        <g opacity="0.5" transform="translate(1500,260)">
+          <!-- straining crane arm -->
+          <path
+            d="M -240 120 L -60 -60 L 120 -30"
+            fill="none"
+            stroke="rgba(255,255,255,0.3)"
+            stroke-width="5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <line
+            x1="120"
+            y1="-30"
+            x2="120"
+            y2="50"
+            stroke="rgba(255,255,255,0.3)"
+            stroke-width="4"
+            stroke-dasharray="8 8"
+          />
+          <!-- the whole-file block swinging, cracking the gauge -->
+          <rect
+            x="60"
+            y="50"
+            width="120"
+            height="120"
+            rx="14"
+            fill="rgba(255,255,255,0.05)"
+            stroke="rgba(255,255,255,0.3)"
+            stroke-width="4"
+          />
+          <line
+            x1="80"
+            y1="150"
+            x2="120"
+            y2="86"
+            stroke="rgba(255,255,255,0.3)"
+            stroke-width="3"
+            stroke-linecap="round"
+          />
+          <!-- overloaded memory gauge -->
+          <g transform="translate(120,220)">
+            <rect
+              x="-70"
+              y="-12"
+              width="140"
+              height="24"
+              rx="12"
+              fill="rgba(255,255,255,0.05)"
+              stroke="rgba(255,255,255,0.25)"
+              stroke-width="3"
+            />
+            <rect
+              x="-70"
+              y="-12"
+              width="132"
+              height="24"
+              rx="12"
+              fill="rgba(255,255,255,0.22)"
+            />
+            <path
+              d="M 78 -20 l 10 -12 M 84 2 l 14 4 M 80 18 l 10 12"
+              stroke="rgba(255,255,255,0.3)"
+              stroke-width="3"
+              stroke-linecap="round"
+            />
+          </g>
+        </g>
+
+        <!-- drip from reservoir into pipe start -->
+        <g fill="rgba(251,191,36,0.5)">
+          <circle cx="440" cy="470" r="7" />
+          <circle cx="420" cy="440" r="5" />
+        </g>
+
+        <!-- ground shadow -->
+        <ellipse cx="1000" cy="1000" rx="620" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse
+          cx="1100"
+          cy="955"
+          rx="280"
+          ry="16"
+          fill="rgba(217,119,6,0.12)"
+        />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

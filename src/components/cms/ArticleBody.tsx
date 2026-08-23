@@ -62,7 +62,7 @@ function richTextToPlain(values?: CmsRichText[]) {
 function renderBlockNodes(blocks: CmsArticleBlock[]) {
   const nodes: React.ReactNode[] = []
 
-  for (let index = 0; index < blocks.length; ) {
+  for (let index = 0; index < blocks.length;) {
     const block = blocks[index]
 
     if (
@@ -225,6 +225,17 @@ function BlockNode({ block }: { block: CmsArticleBlock }) {
   }
 }
 
+/**
+ * Renders a migrated (Notion-shaped) article block tree to Prose-styled
+ * HTML. Exists because migrated articles are stored as structured blocks,
+ * not Lexical rich text — this is their dedicated renderer.
+ *
+ * @remarks Consecutive `*_list_item` blocks are grouped into a single
+ * ul/ol (the source format emits list items as siblings, not nested
+ * lists). Unknown block types degrade to a paragraph of their rich text
+ * rather than dropping content, so a new upstream type never blanks a
+ * section.
+ */
 export function ArticleBody({ blocks }: { blocks: CmsArticleBlock[] }) {
   return <>{renderBlockNodes(blocks)}</>
 }

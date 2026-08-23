@@ -4,7 +4,11 @@ import clsx from 'clsx'
 import { gsap } from 'gsap'
 import { useEffect, useRef, useState } from 'react'
 
-import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
+import { EASE_OUT, HOVER_TIMING } from '@/lib/motion/timing'
+import {
+  getPrefersReducedMotion,
+  usePrefersReducedMotion,
+} from '@/lib/motion/usePrefersReducedMotion'
 
 /**
  * Applies hover/focus motion treatment to a card container and optional descendants.
@@ -71,9 +75,10 @@ export function HoverMotionCard({
 
   useEffect(() => {
     const root = rootRef.current
-    const prefersReducedMotionSync =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // Read the shared source, not an inline `matchMedia` re-check (#26): the
+    // hook's state is still false on the first client pass, so gate on the
+    // synchronous value here.
+    const prefersReducedMotionSync = getPrefersReducedMotion()
     if (
       !root ||
       prefersReducedMotionSync ||
@@ -93,31 +98,31 @@ export function HoverMotionCard({
       gsap.to(root, {
         y,
         scale,
-        duration: 0.36,
-        ease: 'power2.out',
+        duration: HOVER_TIMING.enter.root,
+        ease: EASE_OUT,
         overwrite: 'auto',
       })
       if (overlayNodes.length > 0) {
         gsap.to(overlayNodes, {
           autoAlpha: 1,
-          duration: 0.28,
-          ease: 'power2.out',
+          duration: HOVER_TIMING.enter.overlay,
+          ease: EASE_OUT,
           overwrite: 'auto',
         })
       }
       if (imageNodes.length > 0) {
         gsap.to(imageNodes, {
           scale: imageScale,
-          duration: 0.46,
-          ease: 'power2.out',
+          duration: HOVER_TIMING.enter.image,
+          ease: EASE_OUT,
           overwrite: 'auto',
         })
       }
       if (iconNodes.length > 0) {
         gsap.to(iconNodes, {
           x: iconShiftX,
-          duration: 0.34,
-          ease: 'power2.out',
+          duration: HOVER_TIMING.enter.icon,
+          ease: EASE_OUT,
           overwrite: 'auto',
         })
       }
@@ -127,31 +132,31 @@ export function HoverMotionCard({
       gsap.to(root, {
         y: 0,
         scale: 1,
-        duration: 0.44,
-        ease: 'power2.out',
+        duration: HOVER_TIMING.leave.root,
+        ease: EASE_OUT,
         overwrite: 'auto',
       })
       if (overlayNodes.length > 0) {
         gsap.to(overlayNodes, {
           autoAlpha: 0,
-          duration: 0.36,
-          ease: 'power2.out',
+          duration: HOVER_TIMING.leave.overlay,
+          ease: EASE_OUT,
           overwrite: 'auto',
         })
       }
       if (imageNodes.length > 0) {
         gsap.to(imageNodes, {
           scale: 1,
-          duration: 0.52,
-          ease: 'power2.out',
+          duration: HOVER_TIMING.leave.image,
+          ease: EASE_OUT,
           overwrite: 'auto',
         })
       }
       if (iconNodes.length > 0) {
         gsap.to(iconNodes, {
           x: 0,
-          duration: 0.4,
-          ease: 'power2.out',
+          duration: HOVER_TIMING.leave.icon,
+          ease: EASE_OUT,
           overwrite: 'auto',
         })
       }
@@ -177,9 +182,16 @@ export function HoverMotionCard({
       root.removeEventListener('focusin', onFocusIn)
       root.removeEventListener('focusout', onFocusOut)
       gsap.set(root, { clearProps: 'transform' })
-      gsap.set(imageNodes, { clearProps: 'transform' })
-      gsap.set(iconNodes, { clearProps: 'transform' })
-      gsap.set(overlayNodes, { clearProps: 'opacity,visibility' })
+      // Guard on a non-empty collection like runEnter/runLeave above: a card
+      // without hover images/icons/overlays yields an empty NodeList, and
+      // gsap.set(<empty NodeList>) logs "GSAP target [object NodeList] not
+      // found" on every unmount — which floods the console (and Sentry Logs
+      // via the console integration) on a grid of cards.
+      if (imageNodes.length > 0)
+        gsap.set(imageNodes, { clearProps: 'transform' })
+      if (iconNodes.length > 0) gsap.set(iconNodes, { clearProps: 'transform' })
+      if (overlayNodes.length > 0)
+        gsap.set(overlayNodes, { clearProps: 'opacity,visibility' })
     }
   }, [iconShiftX, imageScale, isHoverable, prefersReducedMotion, scale, y])
 

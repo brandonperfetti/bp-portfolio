@@ -1,0 +1,313 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: rose (CMS / content engineering) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 62% 44%,
+            rgba(190, 18, 60, 0.24),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 22% 78%,
+            rgba(190, 18, 60, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <linearGradient id="flowGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#52525b" />
+            <stop offset="0.5" stop-color="#be123c" />
+            <stop offset="1" stop-color="#fb7185" />
+          </linearGradient>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="360" cy="160" r="4" />
+          <circle cx="1820" cy="250" r="4" />
+          <circle cx="1580" cy="980" r="4" />
+          <circle cx="180" cy="820" r="4" />
+        </g>
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
+          <path d="M 1360 140 h 26 M 1373 127 v 26" />
+          <path d="M 130 340 h 24 M 142 328 v 24" />
+          <path d="M 1920 800 h 24 M 1932 788 v 24" />
+        </g>
+
+        <!-- ===== loose blocks (left): freeform notes, unaligned, dim ===== -->
+        <g
+          stroke="rgba(255,255,255,0.30)"
+          stroke-width="3.5"
+          fill="rgba(255,255,255,0.02)"
+        >
+          <g transform="translate(300,330) rotate(-7)">
+            <rect x="-90" y="-62" width="180" height="124" rx="16" />
+            <line
+              x1="-56"
+              y1="-22"
+              x2="56"
+              y2="-22"
+              stroke="rgba(255,255,255,0.24)"
+              stroke-width="6"
+              stroke-linecap="round"
+            />
+            <line
+              x1="-56"
+              y1="12"
+              x2="20"
+              y2="12"
+              stroke="rgba(255,255,255,0.14)"
+              stroke-width="6"
+              stroke-linecap="round"
+            />
+          </g>
+          <g transform="translate(520,470) rotate(5)">
+            <rect x="-78" y="-54" width="156" height="108" rx="14" />
+            <circle
+              cx="-38"
+              cy="-12"
+              r="14"
+              fill="none"
+              stroke="rgba(255,255,255,0.22)"
+              stroke-width="3.5"
+            />
+            <line
+              x1="-8"
+              y1="-12"
+              x2="48"
+              y2="-12"
+              stroke="rgba(255,255,255,0.20)"
+              stroke-width="6"
+              stroke-linecap="round"
+            />
+          </g>
+          <g transform="translate(310,620) rotate(3)">
+            <rect x="-96" y="-58" width="192" height="116" rx="16" />
+            <line
+              x1="-60"
+              y1="-16"
+              x2="60"
+              y2="-16"
+              stroke="rgba(255,255,255,0.20)"
+              stroke-width="6"
+              stroke-linecap="round"
+            />
+            <line
+              x1="-60"
+              y1="16"
+              x2="8"
+              y2="16"
+              stroke="rgba(255,255,255,0.12)"
+              stroke-width="6"
+              stroke-linecap="round"
+            />
+          </g>
+          <g transform="translate(540,750) rotate(-6)">
+            <rect x="-70" y="-48" width="140" height="96" rx="14" />
+            <line
+              x1="-38"
+              y1="-8"
+              x2="38"
+              y2="-8"
+              stroke="rgba(255,255,255,0.18)"
+              stroke-width="6"
+              stroke-linecap="round"
+            />
+          </g>
+          <g transform="translate(340,880) rotate(8)">
+            <rect
+              x="-60"
+              y="-40"
+              width="120"
+              height="80"
+              rx="12"
+              stroke="rgba(255,255,255,0.18)"
+            />
+          </g>
+        </g>
+
+        <!-- drift lines: blocks being pulled toward the prism -->
+        <g fill="none" stroke-linecap="round">
+          <path
+            d="M 400 350 C 620 380, 740 440, 870 500"
+            stroke="rgba(255,255,255,0.14)"
+            stroke-width="4"
+            stroke-dasharray="2 16"
+          />
+          <path
+            d="M 610 480 C 720 500, 790 530, 872 548"
+            stroke="rgba(255,255,255,0.18)"
+            stroke-width="4"
+            stroke-dasharray="2 16"
+          />
+          <path
+            d="M 420 640 C 620 630, 760 600, 874 590"
+            stroke="rgba(255,255,255,0.16)"
+            stroke-width="4"
+            stroke-dasharray="2 16"
+          />
+          <path
+            d="M 620 760 C 730 720, 800 670, 878 626"
+            stroke="rgba(255,255,255,0.12)"
+            stroke-width="4"
+            stroke-dasharray="2 16"
+          />
+        </g>
+
+        <!-- ===== the schema prism (center): diamond that structures the flow ===== -->
+        <g transform="translate(960,564)" filter="url(#bigGlow)">
+          <path
+            d="M 0 -128 L 96 0 L 0 128 L -96 0 Z"
+            fill="rgba(190,18,60,0.14)"
+            stroke="#fb7185"
+            stroke-width="5"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M 0 -74 L 56 0 L 0 74 L -56 0 Z"
+            fill="none"
+            stroke="rgba(251,113,133,0.4)"
+            stroke-width="3"
+          />
+          <circle r="11" fill="#fb7185" />
+        </g>
+
+        <!-- ===== structured output: schema tree (right), Manhattan wiring ===== -->
+        <!-- trunk -->
+        <path
+          d="M 1056 564 H 1180"
+          fill="none"
+          stroke="url(#flowGrad)"
+          stroke-width="6"
+          stroke-linecap="round"
+        />
+        <!-- root node -->
+        <g transform="translate(1244,564)" filter="url(#accentGlow)">
+          <rect
+            x="-64"
+            y="-46"
+            width="128"
+            height="92"
+            rx="14"
+            fill="rgba(190,18,60,0.16)"
+            stroke="#fb7185"
+            stroke-width="4.5"
+          />
+          <circle r="9" fill="#fb7185" />
+        </g>
+        <!-- branches to three children -->
+        <g
+          fill="none"
+          stroke="rgba(251,113,133,0.6)"
+          stroke-width="4.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M 1308 564 H 1380 Q 1400 564 1400 544 V 360 Q 1400 340 1420 340 H 1500"
+          />
+          <path d="M 1308 564 H 1500" />
+          <path
+            d="M 1308 564 H 1380 Q 1400 564 1400 584 V 768 Q 1400 788 1420 788 H 1500"
+          />
+        </g>
+        <g fill="#fb7185">
+          <circle cx="1400" cy="544" r="6" />
+          <circle cx="1400" cy="584" r="6" />
+        </g>
+        <!-- child nodes -->
+        <g stroke="#fb7185" stroke-width="4" fill="rgba(190,18,60,0.10)">
+          <rect x="1500" y="296" width="112" height="88" rx="13" />
+          <rect x="1500" y="520" width="112" height="88" rx="13" />
+          <rect x="1500" y="744" width="112" height="88" rx="13" />
+        </g>
+        <g
+          stroke="rgba(251,113,133,0.7)"
+          stroke-width="4"
+          stroke-linecap="round"
+        >
+          <line x1="1524" y1="330" x2="1588" y2="330" />
+          <line x1="1524" y1="354" x2="1566" y2="354" />
+          <line x1="1524" y1="554" x2="1588" y2="554" />
+          <line x1="1524" y1="578" x2="1566" y2="578" />
+          <line x1="1524" y1="778" x2="1588" y2="778" />
+          <line x1="1524" y1="802" x2="1566" y2="802" />
+        </g>
+        <!-- grandchildren: two leaves off the middle child -->
+        <g
+          fill="none"
+          stroke="rgba(251,113,133,0.45)"
+          stroke-width="4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M 1612 564 H 1680 Q 1700 564 1700 544 V 480 Q 1700 460 1720 460 H 1780"
+          />
+          <path
+            d="M 1612 564 H 1680 Q 1700 564 1700 584 V 648 Q 1700 668 1720 668 H 1780"
+          />
+        </g>
+        <g
+          stroke="rgba(251,113,133,0.8)"
+          stroke-width="3.5"
+          fill="rgba(190,18,60,0.08)"
+        >
+          <rect x="1780" y="428" width="84" height="64" rx="11" />
+          <rect x="1780" y="636" width="84" height="64" rx="11" />
+        </g>
+        <!-- packets in flight through the tree -->
+        <g fill="#fb7185" filter="url(#accentGlow)">
+          <circle cx="1120" cy="564" r="8" />
+          <circle cx="1400" cy="430" r="7" />
+          <circle cx="1444" cy="788" r="7" />
+        </g>
+
+        <!-- ground shadows -->
+        <ellipse cx="420" cy="980" rx="240" ry="24" fill="rgba(0,0,0,0.5)" />
+        <ellipse
+          cx="1560"
+          cy="920"
+          rx="220"
+          ry="20"
+          fill="rgba(190,18,60,0.12)"
+        />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

@@ -1,0 +1,567 @@
+'use client'
+
+import Image from 'next/image'
+import Link from 'next/link'
+import { useRef, useState } from 'react'
+import {
+  A11y,
+  Autoplay,
+  EffectCreative,
+  EffectFade,
+  Keyboard,
+  Pagination,
+} from 'swiper/modules'
+import { Swiper, SwiperSlide, type SwiperClass } from 'swiper/react'
+
+import 'swiper/css'
+import 'swiper/css/pagination'
+import 'swiper/css/effect-fade'
+import 'swiper/css/effect-creative'
+
+import EffectCarousel3D from '@/blocks/Carousel/effectCarousel3D'
+import '@/blocks/Carousel/effectCarousel3D.css'
+import EffectExpo from '@/blocks/Carousel/effectExpo'
+import '@/blocks/Carousel/effectExpo.css'
+import { createSpringStagger } from '@/blocks/Carousel/effectSpring'
+import '@/blocks/Carousel/effectSpring.css'
+import { carouselFullBleedClass } from '@/blocks/Carousel/fullBleed'
+import {
+  type CarouselBehaviorInput,
+  type CarouselVariant,
+  resolveCarouselBehavior,
+  SPRING_FOLLOW_FINGER,
+  SPRING_SPEED,
+} from '@/blocks/Carousel/options'
+import { getOptimizedImageUrl } from '@/lib/image-utils'
+import { getExternalLinkProps } from '@/lib/link-utils'
+import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
+import { cn } from '@/lib/utils'
+
+/** Candidate widths for the Expo `<img>` responsive `srcset` (px). */
+const EXPO_IMAGE_WIDTHS = [640, 960, 1280, 1600] as const
+
+/** The display-width hint for the Expo image (centred ~1.5-up track). */
+const EXPO_IMAGE_SIZES =
+  '(min-width: 1024px) 60vw, (min-width: 768px) 70vw, 85vw'
+
+/**
+ * Build a Cloudinary-backed `srcset` for the Expo `<img>` so the browser
+ * fetches a viewport-appropriate image instead of the multi-MB original (the
+ * biggest nav-INP win, #68). A plain `<img>` — required because `next/image`
+ * `fill` injects inline positioning that breaks the effect — can still carry
+ * `srcset`/`sizes`; only `fill` is incompatible. Non-Cloudinary sources (e.g.
+ * Storybook placeholders) can't be width-transformed, so no `srcset` is emitted
+ * and the plain `src` is used; document media is Cloudinary in production.
+ *
+ * @param src - The resolved media URL.
+ * @returns `{ src, srcSet? }` for the `<img>`.
+ */
+function expoImageSource(src: string): { src: string; srcSet?: string } {
+  const optimized = getOptimizedImageUrl(src, {
+    width: EXPO_IMAGE_WIDTHS[EXPO_IMAGE_WIDTHS.length - 1],
+  })
+  // getOptimizedImageUrl only rewrites Cloudinary URLs; if it changed the URL,
+  // width variants are available and a real srcset is worthwhile.
+  if (optimized === src) return { src }
+  return {
+    src: getOptimizedImageUrl(src, { width: 1280 }),
+    srcSet: EXPO_IMAGE_WIDTHS.map(
+      (w) => `${getOptimizedImageUrl(src, { width: w })} ${w}w`,
+    ).join(', '),
+  }
+}
+
+/** One slide, already resolved by the server Component to plain, serializable data. */
+export interface CarouselSlideData {
+  /** Stable key from the stored array row, if any. */
+  id?: string | null
+  /** Resolved media URL. */
+  src: string
+  /** Alt text (empty string decorates rather than describes). */
+  alt: string
+  width?: number | null
+  height?: number | null
+  /** Card title (the `cards` variant). */
+  title?: string | null
+  /** Card body (the `cards` variant). */
+  text?: string | null
+  /** Optional link the whole slide points to. */
+  href?: string | null
+}
+
+/**
+ * Props for the client Swiper leaf. Extends the serializable
+ * {@link CarouselBehaviorInput} the mapping layer reads, plus the resolved
+ * slides and variant. All serializable — the one thing that crosses the
+ * server→client boundary — except {@link onSwiper}, which only Storybook and
+ * tests pass to reach in and drive the live instance.
+ */
+export interface CarouselClientProps extends CarouselBehaviorInput {
+  variant: CarouselVariant
+  slides: CarouselSlideData[]
+  /**
+   * How the leaf presents itself, an opt-in purely presentational knob (B6.1):
+   *
+   * - `'inline'` (default) — today's exact DOM: `media` slides render in a
+   *   `16/9` rounded box, the nav arrows sit in a row *below* the track, and the
+   *   pagination is seated by the track's `!pb-10` bottom padding. Every
+   *   existing caller (block/testimonials/lab body) leaves this unset, so their
+   *   markup is byte-identical.
+   * - `'hero'` — the `image`/`carousel` full-screen hero: `media` slides **fill**
+   *   their slide box (`h-full`, no aspect ratio, no rounding) so a slide fills
+   *   the 100dvh hero, and the nav arrows + pagination render **overlaid at the
+   *   bottom-centre inside the swiper** rather than below it. Nothing else about
+   *   the leaf changes — the instance-ref nav, keyboard, a11y and every effect
+   *   are identical; only slide sizing and control *position* differ.
+   *
+   * Kept a leaf prop, not a stored knob on {@link CarouselBehaviorInput}: the
+   * mapping layer (`resolveCarouselBehavior`) is untouched.
+   */
+  presentation?: 'inline' | 'hero'
+  /** Test/Storybook hook to capture the Swiper instance; never passed by the server render. */
+  onSwiper?: (swiper: SwiperClass) => void
+}
+
+/** Wrap a slide in a link when it points somewhere, else a plain container. */
+function SlideLink({
+  href,
+  className,
+  children,
+}: {
+  href?: string | null
+  className?: string
+  children: React.ReactNode
+}) {
+  if (!href) return <div className={className}>{children}</div>
+  return (
+    <Link href={href} {...getExternalLinkProps(href)} className={className}>
+      {children}
+    </Link>
+  )
+}
+
+/**
+ * The Swiper leaf (CMS page builder). A client component because Swiper needs
+ * the browser; it reads the reader's reduced-motion preference reactively and
+ * feeds it, with the stored knobs, through the shared
+ * {@link resolveCarouselBehavior} mapping — so autoplay stays off unless asked
+ * and allowed, and `fade` collapses to `slide` under reduced motion.
+ *
+ * @remarks Navigation is **instance-ref**, not the deprecated
+ * `navigation={{ prevEl, nextEl }}` selector coupling: the custom arrows call
+ * `swiper.slidePrev()` / `slideNext()` on the instance captured by `onSwiper`,
+ * so there is no DOM-selector handshake to get wrong. Keyboard and A11y modules
+ * are always loaded (arrows/tab reach slides); Autoplay, EffectFade, the ported
+ * {@link EffectExpo} (parallax + scale, #62), {@link EffectCarousel3D} (#63),
+ * Swiper's native `EffectCreative` (which backs the ported Spring effect, #64 —
+ * the CMS `spring` maps to Swiper `effect: 'creative'`), and Pagination load
+ * only when the resolved behaviour asks for them, keeping the shipped Swiper
+ * surface minimal. Because `expo`/`carousel3d`/`spring` collapse to `slide`
+ * under reduced motion in the mapper, their modules and transformed DOM/stagger
+ * never mount for a reduced-motion reader.
+ *
+ * @param props - Resolved slides + variant + the serializable behaviour knobs.
+ */
+export function CarouselClient(props: CarouselClientProps) {
+  const { variant, slides, presentation = 'inline', onSwiper } = props
+  // Opt-in full-screen hero mode (B6.1). Default `'inline'` keeps every existing
+  // caller byte-identical; `'hero'` fills slides and overlays the controls.
+  const isHero = presentation === 'hero'
+  const reducedMotion = usePrefersReducedMotion()
+  const swiperRef = useRef<SwiperClass | null>(null)
+  const [ready, setReady] = useState(false)
+  // One stateful Spring stagger instance per carousel (holds `previousProgress`
+  // + the `isTouched` drag guard). Created once via a lazy `useState` initializer
+  // so its closure state survives re-renders and no new instance is allocated
+  // per render; harmless when the effect is not `spring` (its handlers are only
+  // wired then). See `effectSpring.ts`.
+  const [springStagger] = useState(() => createSpringStagger())
+
+  if (!slides.length) return null
+
+  const behavior = resolveCarouselBehavior(props, { reducedMotion })
+
+  // Key everything off the RESOLVED effect: reduced motion has already
+  // collapsed `expo` (and `fade`) to `slide` in the mapper, so under reduced
+  // motion `isExpo` is false and neither the Expo module nor its DOM/transforms
+  // mount — the media slide renders as a plain, static image instead.
+  const isExpo = behavior.effect === 'expo'
+  // Carousel-3D is the ported infinite 3D loop (#63). Like Expo it is gated on
+  // the RESOLVED effect, so a reduced-motion collapse to `slide` mounts neither
+  // its module nor its per-slide transforms — the media track renders plain.
+  const isCarousel3d = behavior.effect === 'carousel3d'
+  // Spring is the ported UI-Initiative Spring slider (#64). It is a wrapper over
+  // Swiper's NATIVE `EffectCreative`, so — unlike Expo/Carousel-3D — the leaf
+  // registers a native Swiper module and maps the CMS `spring` effect to Swiper
+  // `effect: 'creative'` (the indirection below). Gated on the RESOLVED effect,
+  // so a reduced-motion collapse to `slide` mounts neither `EffectCreative`, the
+  // creative config, the stagger handlers, nor the spring timing CSS.
+  const isSpring = behavior.effect === 'spring'
+  // CMS `effect: 'spring'` → Swiper `effect: 'creative'`; every other effect
+  // passes its CMS value straight through. Single-sourced here so the module
+  // gate, the prop, and the tests never drift.
+  const swiperEffect = isSpring ? 'creative' : behavior.effect
+
+  const modules = [Keyboard, A11y]
+  if (behavior.pagination) modules.push(Pagination)
+  if (behavior.effect === 'fade') modules.push(EffectFade)
+  if (isExpo) modules.push(EffectExpo)
+  if (isCarousel3d) modules.push(EffectCarousel3D)
+  if (isSpring) modules.push(EffectCreative)
+  if (behavior.autoplay) modules.push(Autoplay)
+
+  const renderSlide = (slide: CarouselSlideData) => {
+    // Carousel-3D transforms the `.swiper-slide` itself and fades the
+    // `.swiper-carousel-animate-opacity` wrapper by progress. A plain `<img>`
+    // (with srcset/sizes) is used for the same reason as Expo — `next/image`
+    // `fill`'s inline positioning would fight the effect. The whole media card
+    // (image + optional caption) sits inside the animate-opacity wrapper so they
+    // fade together as the slide recedes.
+    if (isCarousel3d) {
+      const img = expoImageSource(slide.src)
+      return (
+        <SlideLink
+          href={slide.href}
+          className="swiper-carousel-animate-opacity block overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- next/image fill breaks the effect's slide transform; a plain <img> keeps srcset/sizes */}
+          <img
+            className="carousel3d-image"
+            src={img.src}
+            srcSet={img.srcSet}
+            sizes={img.srcSet ? EXPO_IMAGE_SIZES : undefined}
+            alt={slide.alt}
+            loading="lazy"
+            decoding="async"
+          />
+          {slide.title || slide.text ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-zinc-950/70 to-transparent p-4 sm:p-6">
+              {slide.title ? (
+                <h3 className="text-base font-semibold text-white">
+                  {slide.title}
+                </h3>
+              ) : null}
+              {slide.text ? (
+                <p className="mt-1 line-clamp-2 text-sm text-zinc-200">
+                  {slide.text}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </SlideLink>
+      )
+    }
+    // Expo requires its own per-slide DOM (`.expo-container` > `.expo-image` +
+    // optional `.expo-content`) on the actual transformed elements. A plain
+    // `<img className="expo-image">` is used deliberately: `next/image` with
+    // `fill` injects inline `position:absolute; inset:0; width/height:100%`
+    // styles onto the `<img>`, which would override the effect's required
+    // `--expo-image-offset` width/left calc (inline beats the stylesheet) and
+    // break the parallax. The centred showcase pairs with the `media` framing.
+    if (isExpo) {
+      const img = expoImageSource(slide.src)
+      return (
+        <SlideLink href={slide.href} className="block h-full">
+          <div className="expo-container h-full w-full bg-zinc-100 dark:bg-zinc-800">
+            {/* eslint-disable-next-line @next/next/no-img-element -- see note above: next/image fill breaks the Expo positioning; a plain <img> keeps srcset/sizes */}
+            <img
+              className="expo-image"
+              src={img.src}
+              srcSet={img.srcSet}
+              sizes={img.srcSet ? EXPO_IMAGE_SIZES : undefined}
+              alt={slide.alt}
+              loading="lazy"
+              decoding="async"
+            />
+            {slide.title || slide.text ? (
+              <div className="expo-content absolute inset-x-0 bottom-0 bg-gradient-to-t from-zinc-950/70 to-transparent p-4 sm:p-6">
+                {slide.title ? (
+                  <h3 className="text-base font-semibold text-white">
+                    {slide.title}
+                  </h3>
+                ) : null}
+                {slide.text ? (
+                  <p className="mt-1 text-sm text-zinc-200">{slide.text}</p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </SlideLink>
+      )
+    }
+    if (variant === 'media') {
+      // Hero mode fills the slide box — full height, no `16/9` aspect box, no
+      // rounding — so the slide fills the 100dvh hero the leaf sits in. Inline
+      // keeps the exact `aspect-[16/9] rounded-2xl` box (byte-identical).
+      return (
+        <SlideLink href={slide.href} className="block h-full">
+          <div
+            className={
+              isHero
+                ? 'relative h-full w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800'
+                : 'relative aspect-[16/9] w-full overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800'
+            }
+          >
+            <Image
+              src={slide.src}
+              alt={slide.alt}
+              fill
+              sizes={isHero ? '100vw' : '(min-width: 768px) 60vw, 100vw'}
+              className="object-cover"
+            />
+          </div>
+        </SlideLink>
+      )
+    }
+    return (
+      <SlideLink
+        href={slide.href}
+        className="flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-700/40 dark:bg-zinc-900"
+      >
+        <div className="relative aspect-[4/3] w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+          <Image
+            src={slide.src}
+            alt={slide.alt}
+            fill
+            sizes="(min-width: 768px) 40vw, 100vw"
+            className="object-cover"
+          />
+        </div>
+        {slide.title || slide.text ? (
+          <div className="flex flex-1 flex-col gap-2 p-6">
+            {slide.title ? (
+              <h3 className="text-base font-semibold text-zinc-800 dark:text-zinc-100">
+                {slide.title}
+              </h3>
+            ) : null}
+            {slide.text ? (
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                {slide.text}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </SlideLink>
+    )
+  }
+
+  const arrowClass =
+    'flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 bg-white/90 text-zinc-700 shadow-sm transition hover:bg-white focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-200'
+
+  // Reconcile Swiper's pagination to the brand palette (#66): the active
+  // bullet takes the site's teal accent (the `ring-teal-500` the arrows use),
+  // inactive bullets the muted zinc the site uses for secondary text
+  // (`zinc-500 dark:zinc-400`), and `--swiper-theme-color` is overridden so
+  // none of Swiper's default blue (`#007aff`) leaks through. Set as Tailwind
+  // arbitrary-property classes so the `dark:` variant handles light/dark and
+  // the referenced theme tokens resolve from `tailwind.css`.
+  const paginationTokenClass = cn(
+    '[--swiper-pagination-color:var(--color-teal-500)]',
+    '[--swiper-theme-color:var(--color-teal-500)]',
+    '[--swiper-pagination-bullet-inactive-color:var(--color-zinc-500)]',
+    '[--swiper-pagination-bullet-inactive-opacity:0.6]',
+    'dark:[--swiper-pagination-bullet-inactive-color:var(--color-zinc-400)]',
+  )
+
+  return (
+    <div
+      // A horizontal Expo breaks out to the full viewport width (#68.2) so its
+      // parallax side-panels reach the screen edges instead of being cut by the
+      // reading column — the shared `Container/section.ts` idiom, resolved in the
+      // mapper (never under reduced motion). Empty string when off, so every
+      // other carousel renders inside its wrapper exactly as before.
+      className={cn(
+        'relative',
+        // Hero mode fills the 100dvh hero container it sits in; a no-op inline.
+        isHero && 'h-full',
+        carouselFullBleedClass(behavior.fullBleed),
+        paginationTokenClass,
+      )}
+      data-testid="carousel"
+    >
+      <Swiper
+        // Remount across the Pro-effect boundaries so a runtime collapse to
+        // `slide` (reduced motion turning on after a first Pro paint) starts from
+        // a clean instance: each ported effect pushes its own modifier class and
+        // writes inline transforms/opacity imperatively at init and does not
+        // reconcile them when the effect later changes, so without a fresh key
+        // the degraded track would keep that chrome. `slide`/`fade` share one key
+        // and still transition in place as before.
+        key={
+          isExpo
+            ? 'carousel-expo'
+            : isCarousel3d
+              ? 'carousel-3d'
+              : isSpring
+                ? 'carousel-spring'
+                : 'carousel-plain'
+        }
+        onSwiper={(swiper) => {
+          swiperRef.current = swiper
+          setReady(true)
+          onSwiper?.(swiper)
+        }}
+        onBeforeInit={(swiper) => {
+          // The Pro effects' params are custom (non-core) Swiper params, so they
+          // can't ride a `<Swiper>` prop without leaking as unknown DOM
+          // attributes. Each ported module installs these exact defaults via
+          // `extendParams`; assigning here keeps the resolved value the single
+          // source and lets any future CMS override flow through. Runs before
+          // `init` (where the effects read their params), so the first paint is
+          // already correct.
+          const params = swiper.params as typeof swiper.params & {
+            expoEffect?: typeof behavior.expoEffect
+            carousel3dEffect?: typeof behavior.carousel3dEffect
+          }
+          if (behavior.expoEffect) params.expoEffect = behavior.expoEffect
+          if (behavior.carousel3dEffect) {
+            params.carousel3dEffect = behavior.carousel3dEffect
+          }
+        }}
+        slidesPerView={
+          behavior.slidesPerViewAuto ? 'auto' : behavior.slidesPerViewMobile
+        }
+        direction={behavior.direction}
+        centeredSlides={behavior.centeredSlides}
+        spaceBetween={16}
+        // Carousel-3D sizes slides by CSS ('auto'), so it takes no numeric
+        // per-breakpoint override; every other effect keys its desktop count off
+        // the breakpoint.
+        breakpoints={
+          behavior.slidesPerViewAuto
+            ? undefined
+            : {
+                [behavior.desktopBreakpoint]: {
+                  slidesPerView: behavior.slidesPerView,
+                },
+              }
+        }
+        loop={behavior.loop}
+        // The infinite Carousel-3D wants a spare cloned slide either side for a
+        // seamless wrap (the Pro demo's `loopAdditionalSlides: 1`).
+        loopAdditionalSlides={isCarousel3d ? 1 : undefined}
+        effect={swiperEffect}
+        fadeEffect={
+          behavior.effect === 'fade' ? { crossFade: true } : undefined
+        }
+        // Spring rides Swiper's native Creative effect: the ±100% translate is a
+        // real Swiper param (unlike the Expo/Carousel-3D custom params installed
+        // via onBeforeInit), so it passes straight on the prop. `speed: 720` +
+        // `followFinger: false` are the Pro source's, and the stagger reads
+        // `params.speed` to size each per-slide delay, so they must be set here.
+        creativeEffect={isSpring ? behavior.springEffect : undefined}
+        speed={isSpring ? SPRING_SPEED : undefined}
+        followFinger={isSpring ? SPRING_FOLLOW_FINGER : undefined}
+        // The ported Spring stagger (effectSpring.ts): on each progress tick it
+        // staggers every slide's transitionDelay; the drag guard + delay resets
+        // ride touch/transition/resize. Wired only for spring so no other effect
+        // pays for the handlers.
+        onProgress={isSpring ? (s) => springStagger.onProgress(s) : undefined}
+        onTouchStart={
+          isSpring ? (s) => springStagger.onTouchStart(s) : undefined
+        }
+        onTouchEnd={isSpring ? (s) => springStagger.onTouchEnd(s) : undefined}
+        onTransitionEnd={
+          isSpring ? (s) => springStagger.onTransitionEnd(s) : undefined
+        }
+        onResize={isSpring ? (s) => springStagger.onResize(s) : undefined}
+        autoplay={behavior.autoplay}
+        pagination={behavior.pagination ? { clickable: true } : false}
+        keyboard={{ enabled: true }}
+        a11y={{ enabled: true }}
+        modules={modules}
+        // Expo's bounded track height (hero-scale horizontal + capped vertical)
+        // lives in `effectExpo.css`, scoped to `.swiper-expo.swiper-horizontal`
+        // / `.swiper-vertical`, so the viewport calc stays in raw CSS and the
+        // effect's setSize reads a stable height. Non-expo keeps the bottom
+        // padding that seats the pagination dots. Spring adds its own modifier
+        // class so `effectSpring.css` can scope the cubic-bezier slide timing to
+        // this track only (never leaking to another carousel or a degraded one).
+        // Hero mode fills the container (`h-full`) and drops the `!pb-10` that
+        // seats the pagination below the track — in hero mode the dots overlay
+        // the slide at its bottom edge instead. Inline is unchanged.
+        className={cn(
+          !isExpo && !isHero && '!pb-10',
+          isHero && 'h-full',
+          isSpring && 'swiper-spring',
+        )}
+      >
+        {slides.map((slide, index) => (
+          <SwiperSlide
+            key={slide.id ?? index}
+            // Expo fills a bounded track height, so its slides take full height
+            // (horizontal: 100% of the fixed Swiper height; vertical: Swiper's
+            // computed per-slide height). Hero mode likewise fills the 100dvh
+            // hero. Other variants stay auto-height.
+            className={isExpo || isHero ? 'h-full' : 'h-auto'}
+          >
+            {renderSlide(slide)}
+          </SwiperSlide>
+        ))}
+      </Swiper>
+
+      {behavior.navigation ? (
+        // Hero mode overlays the arrows at the bottom-centre *inside* the swiper
+        // (within the 100dvh, above the pagination dots), kept an auto-width
+        // centred row so a drag on the rest of the bottom band still reaches the
+        // slides. Inline keeps the `mt-4` row below the track. The exact
+        // `bottom-*` offset is dialed on staging.
+        <div
+          // Positional class first so inline stays byte-identical to the
+          // original `mt-4 flex items-center justify-center gap-3` string.
+          className={cn(
+            isHero
+              ? 'absolute bottom-8 left-1/2 z-10 -translate-x-1/2'
+              : 'mt-4',
+            'flex items-center justify-center gap-3',
+          )}
+        >
+          <button
+            type="button"
+            aria-label="Previous slide"
+            className={cn(arrowClass)}
+            disabled={!ready}
+            onClick={() => swiperRef.current?.slidePrev()}
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+            >
+              <path
+                d="M15 6l-6 6 6 6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            aria-label="Next slide"
+            className={cn(arrowClass)}
+            disabled={!ready}
+            onClick={() => swiperRef.current?.slideNext()}
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+            >
+              <path
+                d="M9 6l6 6-6 6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )
+}

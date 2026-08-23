@@ -1,0 +1,326 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: fuchsia (JS/TS language) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 50% 50%,
+            rgba(162, 28, 175, 0.26),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 84% 74%,
+            rgba(162, 28, 175, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="302" cy="192" r="4" />
+          <circle cx="1806" cy="188" r="4" />
+          <circle cx="1732" cy="952" r="4" />
+          <circle cx="228" cy="892" r="4" />
+        </g>
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
+          <path d="M 1544 146 h 26 M 1557 133 v 26" />
+          <path d="M 150 454 h 24 M 162 442 v 24" />
+          <path d="M 1920 656 h 24 M 1932 644 v 24" />
+        </g>
+
+        <!-- ===== TOP LANE: the sequential-await staircase (slow) ===== -->
+        <g opacity="0.75">
+          <path
+            d="M 220 260 h 180 v 60 h 180 v 60 h 180 v 60 h 180"
+            fill="none"
+            stroke="rgba(232,121,249,0.4)"
+            stroke-width="4.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <!-- hourglass pips at each stair: each await waits its full turn -->
+          <g fill="rgba(232,121,249,0.45)">
+            <path d="M 388 240 h 24 l -12 16 z M 388 272 h 24 l -12 -16 z" />
+            <path d="M 568 300 h 24 l -12 16 z M 568 332 h 24 l -12 -16 z" />
+            <path d="M 748 360 h 24 l -12 16 z M 748 392 h 24 l -12 -16 z" />
+          </g>
+          <!-- dragging clock at the end of the staircase -->
+          <g transform="translate(1010,440)">
+            <circle
+              r="34"
+              fill="rgba(9,9,11,0.85)"
+              stroke="rgba(232,121,249,0.5)"
+              stroke-width="3.5"
+            />
+            <path
+              d="M 0 0 V -20 M 0 0 L 14 10"
+              stroke="rgba(232,121,249,0.6)"
+              stroke-width="4"
+              stroke-linecap="round"
+              fill="none"
+            />
+          </g>
+        </g>
+
+        <!-- ===== MAIN LANE: Promise.all — parallel branches racing together ===== -->
+        <g transform="translate(0,0)">
+          <!-- fork point -->
+          <circle
+            cx="380"
+            cy="700"
+            r="16"
+            fill="#e879f9"
+            filter="url(#accentGlow)"
+          />
+          <!-- three parallel rails -->
+          <g
+            stroke="#e879f9"
+            stroke-width="5"
+            stroke-linecap="round"
+            opacity="0.85"
+          >
+            <path d="M 396 692 C 520 640, 700 620, 900 620" fill="none" />
+            <path d="M 398 700 C 540 700, 720 700, 900 700" fill="none" />
+            <path d="M 396 708 C 520 760, 700 780, 900 780" fill="none" />
+          </g>
+          <!-- riders on each rail -->
+          <g fill="#e879f9" filter="url(#accentGlow)">
+            <circle cx="700" cy="622" r="9" />
+            <circle cx="760" cy="700" r="9" />
+            <circle cx="640" cy="774" r="9" />
+          </g>
+          <!-- join gate -->
+          <g transform="translate(960,700)">
+            <rect
+              x="-40"
+              y="-110"
+              width="80"
+              height="220"
+              rx="20"
+              fill="rgba(9,9,11,0.9)"
+              stroke="#e879f9"
+              stroke-width="5"
+              filter="url(#bigGlow)"
+            />
+            <g
+              stroke="rgba(232,121,249,0.55)"
+              stroke-width="4"
+              stroke-linecap="round"
+            >
+              <line x1="-16" y1="-70" x2="16" y2="-70" />
+              <line x1="-16" y1="0" x2="16" y2="0" />
+              <line x1="-16" y1="70" x2="16" y2="70" />
+            </g>
+          </g>
+          <!-- merged output continuing -->
+          <path
+            d="M 1000 700 H 1230"
+            stroke="#e879f9"
+            stroke-width="5.5"
+            stroke-linecap="round"
+            filter="url(#accentGlow)"
+          />
+          <path d="M 1208 682 L 1244 700 L 1208 718 Z" fill="#e879f9" />
+        </g>
+
+        <!-- ===== the trap: one branch rejects — caught in a net ===== -->
+        <g transform="translate(700,930)">
+          <!-- falling rejected promise -->
+          <path
+            d="M -60 -140 C -30 -100, -10 -70, 0 -40"
+            fill="none"
+            stroke="rgba(232,121,249,0.45)"
+            stroke-width="4"
+            stroke-dasharray="4 12"
+            stroke-linecap="round"
+          />
+          <circle
+            cx="-64"
+            cy="-146"
+            r="10"
+            fill="none"
+            stroke="rgba(232,121,249,0.55)"
+            stroke-width="3.5"
+          />
+          <line
+            x1="-71"
+            y1="-153"
+            x2="-57"
+            y2="-139"
+            stroke="rgba(232,121,249,0.55)"
+            stroke-width="3.5"
+            stroke-linecap="round"
+          />
+          <!-- the catch net -->
+          <path
+            d="M -90 0 C -60 60, 60 60, 90 0"
+            fill="none"
+            stroke="#e879f9"
+            stroke-width="4.5"
+            stroke-linecap="round"
+            filter="url(#accentGlow)"
+          />
+          <g stroke="rgba(232,121,249,0.4)" stroke-width="3" fill="none">
+            <path d="M -60 12 C -40 48, 40 48, 60 12" />
+            <path d="M -45 -2 V 40 M 0 6 V 52 M 45 -2 V 40" />
+          </g>
+        </g>
+
+        <!-- ===== the cancellation: a branch cleanly cut ===== -->
+        <g transform="translate(1500,420)">
+          <path
+            d="M -170 60 C -80 20, 20 -10, 120 -20"
+            fill="none"
+            stroke="rgba(232,121,249,0.4)"
+            stroke-width="4.5"
+            stroke-linecap="round"
+          />
+          <path
+            d="M 150 -22 C 220 -24, 280 -20, 330 -8"
+            fill="none"
+            stroke="rgba(232,121,249,0.18)"
+            stroke-width="4.5"
+            stroke-linecap="round"
+            stroke-dasharray="10 14"
+          />
+          <!-- abort scissors mark: two short blades + pivot -->
+          <g transform="translate(135,-21) rotate(70)">
+            <line
+              x1="0"
+              y1="0"
+              x2="-26"
+              y2="-34"
+              stroke="#e879f9"
+              stroke-width="4.5"
+              stroke-linecap="round"
+            />
+            <line
+              x1="0"
+              y1="0"
+              x2="26"
+              y2="-34"
+              stroke="#e879f9"
+              stroke-width="4.5"
+              stroke-linecap="round"
+            />
+            <circle
+              cx="-8"
+              cy="12"
+              r="9"
+              fill="none"
+              stroke="#e879f9"
+              stroke-width="3.5"
+            />
+            <circle
+              cx="8"
+              cy="12"
+              r="9"
+              fill="none"
+              stroke="#e879f9"
+              stroke-width="3.5"
+            />
+          </g>
+          <!-- abort signal chip -->
+          <g transform="translate(80,-120)">
+            <rect
+              x="-56"
+              y="-26"
+              width="112"
+              height="52"
+              rx="26"
+              fill="rgba(9,9,11,0.9)"
+              stroke="rgba(232,121,249,0.55)"
+              stroke-width="3.5"
+            />
+            <circle cx="-24" cy="0" r="8" fill="#e879f9" />
+            <rect
+              x="-4"
+              y="-6"
+              width="44"
+              height="12"
+              rx="6"
+              fill="rgba(232,121,249,0.45)"
+            />
+          </g>
+        </g>
+
+        <!-- retry loop: small spiral by the join gate -->
+        <g transform="translate(1180,520)" opacity="0.7">
+          <path
+            d="M -30 0 A 30 30 0 1 1 -9 29"
+            fill="none"
+            stroke="rgba(232,121,249,0.5)"
+            stroke-width="4"
+            stroke-linecap="round"
+          />
+          <path d="M -16 22 L -4 34 L -20 40 Z" fill="rgba(232,121,249,0.5)" />
+        </g>
+
+        <!-- floating unawaited promise: drifting off, glowing faintly (the leak) -->
+        <g opacity="0.45" transform="translate(1700,850)">
+          <circle
+            r="16"
+            fill="none"
+            stroke="rgba(232,121,249,0.5)"
+            stroke-width="3.5"
+            stroke-dasharray="6 8"
+          />
+          <path
+            d="M 20 -12 C 50 -30, 80 -40, 110 -44"
+            fill="none"
+            stroke="rgba(232,121,249,0.3)"
+            stroke-width="3"
+            stroke-dasharray="3 10"
+            stroke-linecap="round"
+          />
+        </g>
+
+        <!-- ground shadow -->
+        <ellipse cx="1000" cy="1005" rx="620" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse
+          cx="960"
+          cy="960"
+          rx="280"
+          ry="16"
+          fill="rgba(162,28,175,0.12)"
+        />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

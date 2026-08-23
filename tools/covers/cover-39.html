@@ -1,0 +1,423 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: sky (React/Next & frontend patterns) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 48% 52%,
+            rgba(3, 105, 161, 0.3),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 82% 26%,
+            rgba(3, 105, 161, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="302" cy="192" r="4" />
+          <circle cx="1804" cy="186" r="4" />
+          <circle cx="1734" cy="950" r="4" />
+          <circle cx="232" cy="896" r="4" />
+        </g>
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
+          <path d="M 1544 140 h 26 M 1557 127 v 26" />
+          <path d="M 152 454 h 24 M 164 442 v 24" />
+          <path d="M 1914 658 h 24 M 1926 646 v 24" />
+        </g>
+
+        <!-- ===== the stage: a component under the spotlight, used like a user would ===== -->
+        <!-- stage platform -->
+        <g transform="translate(820,760)">
+          <rect
+            x="-420"
+            y="0"
+            width="840"
+            height="60"
+            rx="16"
+            fill="rgba(9,9,11,0.9)"
+            stroke="#38bdf8"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
+          <g stroke="rgba(56,189,248,0.35)" stroke-width="3.5">
+            <line x1="-380" y1="60" x2="-400" y2="120" />
+            <line x1="380" y1="60" x2="400" y2="120" />
+          </g>
+        </g>
+        <!-- spotlight cone from above -->
+        <path
+          d="M 780 130 L 560 720 L 1080 720 Z"
+          fill="rgba(56,189,248,0.1)"
+        />
+        <g transform="translate(790,120)">
+          <circle
+            r="36"
+            fill="rgba(9,9,11,0.9)"
+            stroke="#38bdf8"
+            stroke-width="4.5"
+            filter="url(#accentGlow)"
+          />
+          <circle r="12" fill="#38bdf8" />
+        </g>
+
+        <!-- the component on stage: a real form, mid-interaction -->
+        <g transform="translate(820,570)">
+          <rect
+            x="-260"
+            y="-190"
+            width="520"
+            height="380"
+            rx="22"
+            fill="rgba(9,9,11,0.9)"
+            stroke="#38bdf8"
+            stroke-width="5"
+            filter="url(#accentGlow)"
+          />
+          <rect
+            x="-210"
+            y="-140"
+            width="220"
+            height="20"
+            rx="10"
+            fill="rgba(56,189,248,0.45)"
+          />
+          <!-- labeled input being typed into -->
+          <rect
+            x="-210"
+            y="-80"
+            width="420"
+            height="66"
+            rx="12"
+            fill="rgba(255,255,255,0.05)"
+            stroke="rgba(56,189,248,0.55)"
+            stroke-width="4"
+          />
+          <rect
+            x="-180"
+            y="-58"
+            width="150"
+            height="14"
+            rx="7"
+            fill="rgba(56,189,248,0.4)"
+          />
+          <rect
+            x="-16"
+            y="-70"
+            width="7"
+            height="46"
+            rx="3"
+            fill="#38bdf8"
+            filter="url(#accentGlow)"
+          />
+          <!-- submit button being clicked -->
+          <rect
+            x="-210"
+            y="30"
+            width="240"
+            height="70"
+            rx="35"
+            fill="rgba(3,105,161,0.4)"
+            stroke="#38bdf8"
+            stroke-width="4.5"
+          />
+          <rect
+            x="-150"
+            y="56"
+            width="120"
+            height="16"
+            rx="8"
+            fill="rgba(56,189,248,0.55)"
+          />
+          <!-- pointer hand: circle + click rings at button edge -->
+          <g transform="translate(70,110)">
+            <circle r="11" fill="#38bdf8" filter="url(#accentGlow)" />
+            <circle
+              r="28"
+              fill="none"
+              stroke="rgba(56,189,248,0.45)"
+              stroke-width="3.5"
+            />
+            <circle
+              r="46"
+              fill="none"
+              stroke="rgba(56,189,248,0.22)"
+              stroke-width="3.5"
+            />
+          </g>
+          <!-- success message appearing -->
+          <g transform="translate(120,150)">
+            <rect
+              x="-90"
+              y="-24"
+              width="180"
+              height="48"
+              rx="12"
+              fill="rgba(56,189,248,0.16)"
+              stroke="rgba(56,189,248,0.5)"
+              stroke-width="3.5"
+            />
+            <path
+              d="M -60 0 l 9 10 l 18 -21"
+              fill="none"
+              stroke="#38bdf8"
+              stroke-width="4.5"
+              stroke-linecap="round"
+            />
+            <rect
+              x="-16"
+              y="-7"
+              width="84"
+              height="14"
+              rx="7"
+              fill="rgba(56,189,248,0.45)"
+            />
+          </g>
+        </g>
+
+        <!-- ===== the assertion clipboard, stage-left ===== -->
+        <g transform="translate(1560,520)">
+          <rect
+            x="-160"
+            y="-240"
+            width="320"
+            height="480"
+            rx="22"
+            fill="rgba(9,9,11,0.9)"
+            stroke="#38bdf8"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
+          <rect
+            x="-70"
+            y="-274"
+            width="140"
+            height="56"
+            rx="14"
+            fill="rgba(9,9,11,0.95)"
+            stroke="rgba(56,189,248,0.55)"
+            stroke-width="4"
+          />
+          <!-- checks: what the user can see -->
+          <g>
+            <g transform="translate(-108,-140)">
+              <path
+                d="M -12 0 l 8 10 l 17 -20"
+                fill="none"
+                stroke="#38bdf8"
+                stroke-width="4.5"
+                stroke-linecap="round"
+              />
+            </g>
+            <rect
+              x="-64"
+              y="-152"
+              width="180"
+              height="14"
+              rx="7"
+              fill="rgba(56,189,248,0.45)"
+            />
+            <g transform="translate(-108,-60)">
+              <path
+                d="M -12 0 l 8 10 l 17 -20"
+                fill="none"
+                stroke="#38bdf8"
+                stroke-width="4.5"
+                stroke-linecap="round"
+              />
+            </g>
+            <rect
+              x="-64"
+              y="-72"
+              width="150"
+              height="14"
+              rx="7"
+              fill="rgba(56,189,248,0.45)"
+            />
+            <g transform="translate(-108,20)">
+              <path
+                d="M -12 0 l 8 10 l 17 -20"
+                fill="none"
+                stroke="#38bdf8"
+                stroke-width="4.5"
+                stroke-linecap="round"
+              />
+            </g>
+            <rect
+              x="-64"
+              y="8"
+              width="168"
+              height="14"
+              rx="7"
+              fill="rgba(56,189,248,0.45)"
+            />
+          </g>
+          <!-- skipped item: implementation detail, struck through calmly -->
+          <g opacity="0.5">
+            <line
+              x1="-112"
+              y1="106"
+              x2="-92"
+              y2="106"
+              stroke="rgba(255,255,255,0.3)"
+              stroke-width="4"
+              stroke-linecap="round"
+            />
+            <rect
+              x="-64"
+              y="98"
+              width="140"
+              height="14"
+              rx="7"
+              fill="rgba(255,255,255,0.16)"
+            />
+            <line
+              x1="-70"
+              y1="105"
+              x2="82"
+              y2="105"
+              stroke="rgba(255,255,255,0.35)"
+              stroke-width="3.5"
+              stroke-linecap="round"
+            />
+          </g>
+          <!-- steady green-run bar at the bottom -->
+          <rect
+            x="-110"
+            y="170"
+            width="220"
+            height="20"
+            rx="10"
+            fill="rgba(255,255,255,0.06)"
+            stroke="rgba(56,189,248,0.4)"
+            stroke-width="3"
+          />
+          <rect
+            x="-110"
+            y="170"
+            width="190"
+            height="20"
+            rx="10"
+            fill="rgba(56,189,248,0.55)"
+          />
+        </g>
+
+        <!-- thread from stage to clipboard: observed behavior becomes the assertion -->
+        <path
+          d="M 1090 540 C 1200 500, 1300 490, 1390 500"
+          fill="none"
+          stroke="rgba(56,189,248,0.4)"
+          stroke-width="4"
+          stroke-dasharray="3 12"
+          stroke-linecap="round"
+        />
+
+        <!-- ===== the crumpled snapshot, tossed off-stage ===== -->
+        <g opacity="0.45" transform="translate(280,900) rotate(-14)">
+          <path
+            d="M -60 -44 L 10 -56 L 58 -30 L 48 24 L -12 46 L -56 14 Z"
+            fill="rgba(255,255,255,0.05)"
+            stroke="rgba(255,255,255,0.28)"
+            stroke-width="3.5"
+            stroke-linejoin="round"
+          />
+          <g
+            stroke="rgba(255,255,255,0.2)"
+            stroke-width="3"
+            stroke-linecap="round"
+          >
+            <line x1="-34" y1="-20" x2="30" y2="-28" />
+            <line x1="-36" y1="0" x2="24" y2="-6" />
+            <line x1="-30" y1="20" x2="18" y2="16" />
+          </g>
+        </g>
+        <path
+          d="M 360 850 C 420 800, 480 770, 540 750"
+          fill="none"
+          stroke="rgba(255,255,255,0.14)"
+          stroke-width="3.5"
+          stroke-dasharray="3 12"
+          stroke-linecap="round"
+        />
+
+        <!-- keyboard keycap floating by the stage: keyboard-first interactions -->
+        <g transform="translate(360,420)">
+          <rect
+            x="-52"
+            y="-38"
+            width="104"
+            height="76"
+            rx="14"
+            fill="rgba(9,9,11,0.88)"
+            stroke="rgba(56,189,248,0.55)"
+            stroke-width="4"
+          />
+          <path
+            d="M -20 0 h 40 M 6 -12 l 14 12 l -14 12 M -20 -14 v 28"
+            fill="none"
+            stroke="rgba(56,189,248,0.7)"
+            stroke-width="4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </g>
+        <path
+          d="M 420 470 C 480 510, 530 540, 580 560"
+          fill="none"
+          stroke="rgba(56,189,248,0.3)"
+          stroke-width="3.5"
+          stroke-dasharray="3 12"
+          stroke-linecap="round"
+        />
+
+        <!-- ground shadow -->
+        <ellipse cx="1000" cy="1005" rx="660" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse
+          cx="820"
+          cy="960"
+          rx="300"
+          ry="16"
+          fill="rgba(3,105,161,0.12)"
+        />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

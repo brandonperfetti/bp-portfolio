@@ -5,11 +5,26 @@ import { CheckIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline'
 import rehypePrism from '@mapbox/rehype-prism'
 import ReactMarkdown from 'react-markdown'
 
-type RehypePlugin = NonNullable<
+type RehypePlugins = NonNullable<
   React.ComponentProps<typeof ReactMarkdown>['rehypePlugins']
->[number]
+>
 
-const prismRehypePlugin = rehypePrism as unknown as RehypePlugin
+// ignoreMissing: unregistered languages render unhighlighted instead of
+// throwing "Unknown language" — migrated articles carry values (e.g.
+// `none`) outside prism's registry, and a throw here 500s the article.
+const rehypePlugins = [
+  [rehypePrism, { ignoreMissing: true }],
+] as unknown as RehypePlugins
+
+/** Languages that mean "no highlighting" — emit a bare code fence. */
+const PLAIN_LANGUAGES = new Set(['', 'none', 'plain', 'plaintext', 'text'])
+
+const fenceLanguage = (language: string) => {
+  const normalized = language.trim().toLowerCase()
+  // Only pass through safe token characters; anything else gets a bare fence.
+  if (PLAIN_LANGUAGES.has(normalized)) return ''
+  return /^[a-z0-9#+-]+$/.test(normalized) ? normalized : ''
+}
 
 async function copyText(value: string) {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
@@ -30,6 +45,15 @@ async function copyText(value: string) {
   }
 }
 
+/**
+ * Prism-highlighted code block with a copy button, fed by CMS code blocks.
+ *
+ * @remarks Language handling is deliberately defensive: rehype-prism runs
+ * with `ignoreMissing` and "plain" aliases collapse to a bare fence,
+ * because migrated articles carry language values outside prism's registry
+ * (e.g. `none`) that previously threw during render and 500'd the whole
+ * article page. Copy falls back to `execCommand` for non-secure contexts.
+ */
 export function CodeSnippet({
   language,
   code,
@@ -77,8 +101,8 @@ export function CodeSnippet({
           <ClipboardDocumentIcon className="h-4 w-4" />
         )}
       </button>
-      <ReactMarkdown rehypePlugins={[prismRehypePlugin]}>
-        {`\`\`\`${language}\n${code}\n\`\`\``}
+      <ReactMarkdown rehypePlugins={rehypePlugins}>
+        {`\`\`\`${fenceLanguage(language)}\n${code}\n\`\`\``}
       </ReactMarkdown>
     </div>
   )

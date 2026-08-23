@@ -37,6 +37,7 @@ export async function POST(request: Request) {
     CMS_TAGS.pages,
     CMS_TAGS.settings,
     CMS_TAGS.navigation,
+    CMS_TAGS.identity,
   ]
 
   const finalTags = tags.length ? tags : fallbackTags

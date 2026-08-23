@@ -1,0 +1,567 @@
+import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
+
+import { RenderBlocks } from '@/blocks/RenderBlocks'
+import type { Page } from '@/payload-types'
+
+type LayoutBlock = NonNullable<Page['layout']>[number]
+
+const richText = (text: string, heading?: string) => ({
+  root: {
+    type: 'root',
+    format: '' as const,
+    indent: 0,
+    version: 1,
+    direction: 'ltr' as const,
+    children: [
+      ...(heading
+        ? [
+            {
+              type: 'heading',
+              tag: 'h2',
+              version: 1,
+              children: [{ type: 'text', text: heading, version: 1 }],
+            },
+          ]
+        : []),
+      {
+        type: 'paragraph',
+        version: 1,
+        children: [{ type: 'text', text, version: 1 }],
+      },
+    ],
+  },
+})
+
+const DEMO_BLOCKS: LayoutBlock[] = [
+  {
+    blockType: 'content',
+    columns: [
+      {
+        id: 'c1',
+        size: 'half',
+        richText: richText(
+          'Columns stack on mobile and span a 12-column grid from lg up. Each column is rich text with an optional link.',
+          'Build pages in the admin',
+        ),
+        enableLink: false,
+      },
+      {
+        id: 'c2',
+        size: 'half',
+        richText: richText(
+          'Every block registered in RenderBlocks maps 1:1 to a block in the Payload admin picker — and to a story here.',
+          'One set, three surfaces',
+        ),
+        enableLink: false,
+      },
+    ],
+  },
+  { blockType: 'spacer', size: 'sm' },
+  {
+    blockType: 'cta',
+    richText: richText(
+      'Calls to action pair rich text with up to two links.',
+      'Like what you see?',
+    ),
+    links: [
+      {
+        id: 'l1',
+        link: {
+          type: 'custom',
+          url: 'https://brandonperfetti.com',
+          label: 'Visit the site',
+          appearance: 'default',
+        },
+      },
+      {
+        id: 'l2',
+        link: {
+          type: 'custom',
+          url: 'https://github.com/brandonperfetti',
+          label: 'GitHub',
+          appearance: 'outline',
+        },
+      },
+    ],
+  },
+  { blockType: 'spacer', size: 'md' },
+  {
+    blockType: 'featureCardGrid',
+    heading: 'What you get',
+    intro:
+      'Feature cards in the site card language — icon, eyebrow, title, copy, link.',
+    cards: [
+      {
+        id: 'f1',
+        eyebrow: 'Speed',
+        title: 'Fast by default',
+        copy: 'Static rendering with tag-based revalidation keeps pages instant.',
+        enableLink: false,
+      },
+      {
+        id: 'f2',
+        eyebrow: 'Editing',
+        title: 'Composed in the admin',
+        copy: 'Blocks map 1:1 to components — build pages without a deploy.',
+        enableLink: false,
+      },
+      {
+        id: 'f3',
+        eyebrow: 'Motion',
+        title: 'Reduced-motion safe',
+        copy: 'Every animated surface degrades to static, functional DOM.',
+        enableLink: false,
+      },
+    ],
+  },
+  { blockType: 'spacer', size: 'md' },
+  {
+    blockType: 'stats',
+    items: [
+      { id: 's1', value: '12+', label: 'Years shipping software' },
+      { id: 's2', value: '50', label: 'Technologies in the stack' },
+      { id: 's3', value: '99.9%', label: 'Uptime attitude' },
+    ],
+  },
+  {
+    blockType: 'faqList',
+    heading: 'Questions',
+    items: [
+      {
+        id: 'q1',
+        question: 'Can I build pages without deploys?',
+        answer: richText('Yes — publish in the admin and the page is live.'),
+      },
+      {
+        id: 'q2',
+        question: 'Do blocks match Storybook?',
+        answer: richText('One 1:1 set across admin, components, and stories.'),
+      },
+    ],
+  },
+  {
+    blockType: 'testimonials',
+    heading: 'Kind words',
+    items: [
+      {
+        id: 't1',
+        quote: 'Brandon turned a vague roadmap into shipped software.',
+        name: 'A Happy Stakeholder',
+        role: 'VP Product',
+      },
+      {
+        id: 't2',
+        quote: 'The rare PM who reads the code before the ticket.',
+        name: 'A Fellow Engineer',
+        role: 'Staff Engineer',
+      },
+    ],
+  },
+  {
+    blockType: 'videoEmbed',
+    url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    title: 'Demo video',
+  },
+  { blockType: 'spacer', size: 'md' },
+  {
+    blockType: 'photoStrip',
+    images: [
+      'https://picsum.photos/seed/strip-1/1000/1125',
+      'https://picsum.photos/seed/strip-2/1000/1125',
+      'https://picsum.photos/seed/strip-3/1000/1125',
+      'https://picsum.photos/seed/strip-4/1000/1125',
+      'https://picsum.photos/seed/strip-5/1000/1125',
+    ].map((url, i) => ({ id: i + 1, url, alt: '' })),
+  } as unknown as LayoutBlock,
+  { blockType: 'spacer', size: 'md' },
+  {
+    blockType: 'image',
+    media: {
+      id: 1,
+      url: 'https://picsum.photos/seed/bp-portrait/1024/1024',
+      alt: 'Brandon Perfetti',
+      width: 1024,
+      height: 1024,
+    },
+    aspect: 'square',
+    rounded: '2xl',
+    tilt: 'right',
+    hoverScale: true,
+    priority: false,
+    caption: 'The about-page portrait, now reachable from the CMS.',
+  } as unknown as LayoutBlock,
+  { blockType: 'spacer', size: 'md' },
+  {
+    blockType: 'heading',
+    text: 'A heading an editor can place anywhere',
+    level: 'h2',
+    variant: 'line',
+  } as unknown as LayoutBlock,
+  {
+    blockType: 'lead',
+    text: 'A plain lead paragraph under a headline — the about page’s subtitle treatment, not article typography.',
+    reveal: false,
+  } as unknown as LayoutBlock,
+  {
+    blockType: 'prose',
+    content: richText(
+      'Long-form body copy that renders with exactly the typography an article body gets — the block that lets a page keep its body out of the hero group.',
+    ),
+  } as unknown as LayoutBlock,
+  { blockType: 'spacer', size: 'md' },
+  {
+    blockType: 'shaderHero',
+    preset: 'northern-lights-2',
+    richText: richText(
+      'A bounded animated shader panel with text overlay. Falls back to a static gradient without WebGPU or under reduced motion.',
+      'Shader section',
+    ),
+  },
+]
+
+/**
+ * The layout block set (#23, #29, #30) as CMS data: a container whose two
+ * columns hold different block types, spaced at the homepage gutter, with a
+ * sticky rail and a linkable anchor — the whole control surface arriving the
+ * way the admin stores it. Kept out of `DEMO_BLOCKS` because several stories
+ * address that array by index.
+ */
+const CONTAINER_DEMO: LayoutBlock[] = [
+  {
+    blockType: 'container',
+    gap: 'lg',
+    verticalAlign: 'stretch',
+    section: {
+      width: 'container',
+      paddingY: 'none',
+      anchorId: 'container-demo',
+      hidden: false,
+      background: { style: 'tint', tint: 'subtle' },
+    },
+    columns: [
+      {
+        blockType: 'column',
+        id: 'col-main',
+        size: 'twoThirds',
+        content: [
+          {
+            blockType: 'cta',
+            id: 'col-main-cta',
+            richText: richText(
+              'Two thirds of the row from lg up. Below that it spans the full width and the rail drops beneath it.',
+              'Main column',
+            ),
+            links: [],
+          },
+        ],
+      },
+      {
+        blockType: 'column',
+        id: 'col-rail',
+        size: 'oneThird',
+        sticky: true,
+        content: [
+          {
+            blockType: 'stats',
+            id: 'col-rail-stats',
+            items: [
+              { id: 'r1', value: '2/3', label: 'Main share' },
+              { id: 'r2', value: '1/3', label: 'Rail share' },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+]
+
+/**
+ * CMS page-builder blocks (§ page builder): the exact components the
+ * catch-all route renders for admin-composed pages. Each entry in the admin
+ * block picker corresponds to a component dispatched by RenderBlocks and
+ * demoed here.
+ */
+const meta = {
+  title: 'PageBuilder/RenderBlocks',
+  component: RenderBlocks,
+  tags: ['autodocs'],
+  decorators: [
+    (Story) => (
+      <div className="mx-auto max-w-4xl">
+        <Story />
+      </div>
+    ),
+  ],
+} satisfies Meta<typeof RenderBlocks>
+
+export default meta
+type Story = StoryObj<typeof meta>
+
+export const AllBlocks: Story = {
+  args: { blocks: DEMO_BLOCKS },
+}
+
+export const ContentColumns: Story = {
+  args: { blocks: [DEMO_BLOCKS[0]] },
+}
+
+/** Widths that bracket the two container-query thresholds (`hostContext.ts`). */
+const HOSTED_WIDTHS = [
+  { width: 320, label: 'Narrow rail (320px)', columns: 1 },
+  { width: 470, label: 'Half column at desktop (470px)', columns: 2 },
+  { width: 900, label: 'Root content column (900px)', columns: 3 },
+]
+
+/**
+ * The F1 fix, pinned to widths instead of a window: the same block rendered
+ * in three boxes, counting its columns from the box it was given. Before
+ * this, all three read `lg:grid-cols-3` off the viewport and rendered three
+ * columns — including the 470px one, where the cards were ~150px wide.
+ *
+ * Deliberately not viewport-driven: container queries make this measurable
+ * without resizing anything, which is the whole point of the change.
+ */
+export const HostedGridFollowsItsContainer: Story = {
+  args: { blocks: [DEMO_BLOCKS[4]] },
+  render: (args) => (
+    <div className="space-y-8">
+      {HOSTED_WIDTHS.map(({ width, label }) => (
+        <div key={width} style={{ width }} data-testid={`box-${width}`}>
+          <p className="text-xs font-semibold text-zinc-500 uppercase">
+            {label}
+          </p>
+          <RenderBlocks {...args} hosted="column" />
+        </div>
+      ))}
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    for (const { width, columns } of HOSTED_WIDTHS) {
+      const box = canvasElement.querySelector(`[data-testid="box-${width}"]`)
+      const grid = box?.querySelector('ul[role="list"]')
+      const rendered = getComputedStyle(grid as Element)
+        .gridTemplateColumns.split(' ')
+        .filter(Boolean)
+
+      await expect(
+        rendered.length,
+        `a ${width}px container should render ${columns} column(s)`,
+      ).toBe(columns)
+    }
+  },
+}
+
+/**
+ * The other half of the same contract: root-hosted blocks are untouched.
+ * `hosted` defaults to `root`, so the margin and the reading measure the
+ * blocks have always shipped are still exactly what a route renders.
+ */
+export const RootHostedBlocksKeepTheirChrome: Story = {
+  args: {
+    blocks: [
+      { blockType: 'newsletterSignup', id: 'root-card' },
+      DEMO_BLOCKS[4],
+    ] as LayoutBlock[],
+  },
+  play: async ({ canvasElement }) => {
+    const [card, grid] = Array.from(canvasElement.querySelectorAll('section'))
+
+    await expect(card).toHaveClass('my-12', 'max-w-xl')
+    await expect(grid).toHaveClass('my-12')
+    await expect(getComputedStyle(card).marginTop).toBe('48px')
+  },
+}
+
+export const CallToAction: Story = {
+  args: { blocks: [DEMO_BLOCKS[2]] },
+  // Interaction: both CMSLink-rendered actions resolve their hrefs.
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('link', { name: /visit the site/i }),
+    ).toHaveAttribute('href', 'https://brandonperfetti.com')
+    await expect(canvas.getByRole('link', { name: /github/i })).toHaveAttribute(
+      'href',
+      'https://github.com/brandonperfetti',
+    )
+  },
+}
+
+/**
+ * Interaction: the FAQ accordion is a native details/summary — keyboard and
+ * pointer operable with zero JS. The play toggles an item open and closed.
+ */
+export const FaqAccordion: Story = {
+  args: {
+    blocks: [
+      DEMO_BLOCKS.find((block) => block.blockType === 'faqList') as LayoutBlock,
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const question = canvas.getByText('Can I build pages without deploys?')
+    const details = question.closest('details')
+    await expect(details).not.toBeNull()
+    await expect(details).not.toHaveAttribute('open')
+
+    await userEvent.click(question)
+    await waitFor(() => expect(details).toHaveAttribute('open'))
+    await expect(
+      canvas.getByText(/publish in the admin and the page is live/i),
+    ).toBeVisible()
+
+    await userEvent.click(question)
+    await waitFor(() => expect(details).not.toHaveAttribute('open'))
+  },
+}
+
+export const ShaderSection: Story = {
+  args: { blocks: [DEMO_BLOCKS[DEMO_BLOCKS.length - 1]] },
+}
+
+export const FeatureCards: Story = {
+  args: { blocks: [DEMO_BLOCKS[4]] },
+}
+
+/**
+ * The #33 block as CMS data, through the dispatcher: the about-page portrait
+ * treatment plus a caption. The control matrix lives in
+ * `PageBuilder/Image`; this is the registration check.
+ */
+export const ImageBlock: Story = {
+  args: {
+    blocks: [
+      DEMO_BLOCKS.find((block) => block.blockType === 'image') as LayoutBlock,
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const figure = canvasElement.querySelector('figure')
+
+    await expect(figure).toHaveClass('my-12')
+    await expect(figure?.querySelector('.rotate-3')).not.toBeNull()
+    await expect(canvas.getByText(/reachable from the CMS/).tagName).toBe(
+      'FIGCAPTION',
+    )
+  },
+}
+
+export const PhotoStripBlock: Story = {
+  args: {
+    blocks: [
+      DEMO_BLOCKS.find(
+        (block) => block.blockType === 'photoStrip',
+      ) as LayoutBlock,
+    ],
+  },
+}
+
+/**
+ * The #23 acceptance layout as an editor composes it: one container, a 2/3
+ * main column and a 1/3 rail, different block types in each.
+ */
+export const ContainerColumns: Story = {
+  args: { blocks: CONTAINER_DEMO },
+  // Interaction: the columns claim 8 + 4 tracks and both keep the mobile
+  // full-row span that makes the grid stack below `lg`.
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const main = canvas.getByText('Main column').closest('div.col-span-12')
+    await expect(main).toHaveClass('col-span-12', 'lg:col-span-8')
+    await expect(main?.parentElement).toHaveClass('grid', 'grid-cols-12')
+
+    const rail = canvas.getByText('Rail share').closest('div.col-span-12')
+    await expect(rail).toHaveClass('col-span-12', 'lg:col-span-4')
+  },
+}
+
+/**
+ * The three zero-config cards after #40: an optional heading and intro above
+ * the card, rendered identically wherever the block is hosted.
+ *
+ * @remarks `workHistoryCard` is a server block (it reads the work-history
+ * collection), so Storybook aliases it to a stub — its chrome is covered in
+ * `cardChrome.test.tsx` beside the other two. The pair shown here is the
+ * whole visual surface: `CardChromeHeader` is one component for all three.
+ */
+export const ZeroConfigCardChrome: Story = {
+  args: {
+    blocks: [
+      {
+        blockType: 'contactForm',
+        id: 'contact',
+        heading: 'Say hello',
+        intro: 'Tell me about the project. I answer every message myself.',
+      },
+      {
+        blockType: 'newsletterSignup',
+        id: 'signup',
+        heading: 'Stay in the loop',
+      },
+      // The third card is the guarantee, not a feature: a block stored before
+      // #40 has neither field and must render exactly what it always did.
+      { blockType: 'newsletterSignup', id: 'bare' },
+    ] as unknown as LayoutBlock[],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const [withBoth, headingOnly, bare] = Array.from(
+      canvasElement.querySelectorAll('section'),
+    )
+
+    await expect(
+      canvas.getByRole('heading', { name: 'Say hello' }),
+    ).toBeVisible()
+    await expect(
+      canvas.getByText(/I answer every message myself/).tagName,
+    ).toBe('P')
+
+    // Chrome sits inside the block's own section, above the card, at the same
+    // 32px gap the other heading-bearing blocks use.
+    const header = withBoth.querySelector(':scope > header') as HTMLElement
+    await expect(header.nextElementSibling).not.toBeNull()
+    await expect(getComputedStyle(header).marginBottom).toBe('32px')
+
+    // An intro is optional on its own (the card below has its own copy, so
+    // this looks at the chrome header and nothing else).
+    await expect(headingOnly.querySelector(':scope > header p')).toBeNull()
+    await expect(headingOnly.querySelector(':scope > header h2')).not.toBeNull()
+
+    // And with neither field, nothing at all — no header, no wrapper.
+    await expect(bare.querySelector(':scope > header')).toBeNull()
+    await expect(bare.children).toHaveLength(1)
+  },
+}
+
+/**
+ * The same chrome inside a column: the heading spans the width the editor
+ * picked (the card drops `max-w-xl` there), and the gap between chrome and
+ * card is unchanged — it is a margin *inside* the block, so the column's
+ * `space-y-*` never sees it.
+ */
+export const ZeroConfigCardChromeInAColumn: Story = {
+  args: {
+    blocks: [
+      {
+        blockType: 'contactForm',
+        id: 'contact',
+        heading: 'Say hello',
+        intro: 'Tell me about the project. I answer every message myself.',
+      },
+    ] as unknown as LayoutBlock[],
+    hosted: 'column',
+  },
+  play: async ({ canvasElement }) => {
+    const section = canvasElement.querySelector('section') as HTMLElement
+    const header = section.querySelector(':scope > header') as HTMLElement
+
+    await expect(section).toHaveClass('max-w-none')
+    await expect(section).not.toHaveClass('my-12')
+    await expect(getComputedStyle(header).marginBottom).toBe('32px')
+    // The heading fills the column, rather than stopping at a card measure.
+    await expect(Math.round(header.getBoundingClientRect().width)).toBe(
+      Math.round(section.getBoundingClientRect().width),
+    )
+  },
+}

@@ -1,50 +1,29 @@
-# Navigation
+# Navigation & routes
 
-## Primary Top Navigation
+Header/footer links come from the `Navigation` and `Footer` globals (Payload),
+with hard-coded fallbacks. The command palette mirrors primary nav.
 
-Shared defaults are defined in `src/lib/navigation.ts`:
+## Route table (`src/app/(frontend)/`)
 
-- `HEADER_NAV_LINKS`
-- `PRIMARY_NAV_LINKS`
+| Route                                      | Source                        | Notes                                |
+| ------------------------------------------ | ----------------------------- | ------------------------------------ |
+| `/`                                        | Page global + hard-coded hero | Shader hero + intro + highlights     |
+| `/about`                                   | Pages collection (`/about`)   | Sticky portrait rail                 |
+| `/articles`                                | Posts (published)             | Explorer with `q`/`topic` params     |
+| `/articles/[slug]`                         | Post by slug                  | **URL shape + slugs are a contract** |
+| `/projects`                                | Projects collection           |                                      |
+| `/tech`                                    | TechStack + GitHub signals    | `q`/`category`/`sort` params         |
+| `/uses`                                    | Uses collection               | Shares tech viz cards                |
+| `/corvus`                                  | —                             | AI chat surface                      |
+| `/thank-you`                               | —                             | Post-contact landing                 |
+| `/sign-in`, `/sign-up`, `/account`         | Clerk                         | Render only when Clerk enabled       |
+| `/next/preview`, `/next/exit-preview`      | —                             | Draft preview (secret-gated)         |
+| `/feed.xml`, `/llms.txt`, `/llms-full.txt` | route handlers                |                                      |
 
-Consumed by:
+## Admin & APIs
 
-- `src/components/Header.tsx`
-- `src/components/Footer.tsx`
-- `src/app/llms.txt/route.ts` (for Primary Pages output)
-
-Desktop + mobile nav include:
-
-- `/about`
-- `/articles`
-- `/projects`
-- `/tech`
-- `/hermes`
-- `/uses`
-
-## Header Utilities
-
-- Search trigger button (opens modal search).
-- Theme toggle.
-- Avatar/home link behavior varies by route and scroll position.
-
-## Footer Navigation
-
-Defaults sourced from `PRIMARY_NAV_LINKS` in `src/lib/navigation.ts`.
-
-Footer links:
-
-- About
-- Articles
-- Projects
-- Tech
-- Uses
-
-Note: Footer is intentionally hidden on `/hermes` to reduce non-chat scroll and keep focus on the conversation pane.
-
-## Route Ownership
-
-- `src/app/page.tsx`: Home
-- `src/app/articles/page.tsx`: Articles index + explorer UI
-- `src/app/hermes/page.tsx`: Hermes shell container
-- `src/components/HermesChat.tsx`: Hermes interaction logic
+- `/admin` — Payload admin (own auth).
+- `/api/[...slug]`, `/api/graphql` — Payload (generated).
+- `/api/mcp` — Payload MCP (API key).
+- `/api/ai/chat`, `/api/search`, `/api/contact`, `/api/clerk/webhook`,
+  `/api/revalidate` — custom handlers (`src/app/api/`).

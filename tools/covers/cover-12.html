@@ -1,0 +1,287 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: fuchsia (JS/TS language internals) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 45% 40%,
+            rgba(162, 28, 175, 0.26),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 78% 80%,
+            rgba(162, 28, 175, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <linearGradient
+            id="beamGrad"
+            gradientUnits="userSpaceOnUse"
+            x1="0"
+            y1="220"
+            x2="0"
+            y2="900"
+          >
+            <stop offset="0" stop-color="rgba(232,121,249,0.5)" />
+            <stop offset="1" stop-color="rgba(232,121,249,0.04)" />
+          </linearGradient>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="310" cy="190" r="4" />
+          <circle cx="1810" cy="180" r="4" />
+          <circle cx="1740" cy="950" r="4" />
+          <circle cx="210" cy="880" r="4" />
+        </g>
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
+          <path d="M 1540 140 h 26 M 1553 127 v 26" />
+          <path d="M 140 480 h 24 M 152 468 v 24" />
+          <path d="M 1930 660 h 24 M 1942 648 v 24" />
+        </g>
+
+        <!-- ===== the codebase floor: rows of code in the dark ===== -->
+        <g stroke-linecap="round">
+          <line
+            x1="260"
+            y1="620"
+            x2="620"
+            y2="620"
+            stroke="rgba(255,255,255,0.14)"
+            stroke-width="8"
+          />
+          <line
+            x1="260"
+            y1="690"
+            x2="520"
+            y2="690"
+            stroke="rgba(255,255,255,0.11)"
+            stroke-width="8"
+          />
+          <line
+            x1="260"
+            y1="760"
+            x2="580"
+            y2="760"
+            stroke="rgba(255,255,255,0.09)"
+            stroke-width="8"
+          />
+          <line
+            x1="260"
+            y1="830"
+            x2="480"
+            y2="830"
+            stroke="rgba(255,255,255,0.07)"
+            stroke-width="8"
+          />
+          <line
+            x1="1430"
+            y1="620"
+            x2="1790"
+            y2="620"
+            stroke="rgba(255,255,255,0.14)"
+            stroke-width="8"
+          />
+          <line
+            x1="1430"
+            y1="690"
+            x2="1690"
+            y2="690"
+            stroke="rgba(255,255,255,0.11)"
+            stroke-width="8"
+          />
+          <line
+            x1="1430"
+            y1="760"
+            x2="1750"
+            y2="760"
+            stroke="rgba(255,255,255,0.09)"
+            stroke-width="8"
+          />
+          <line
+            x1="1430"
+            y1="830"
+            x2="1650"
+            y2="830"
+            stroke="rgba(255,255,255,0.07)"
+            stroke-width="8"
+          />
+        </g>
+        <!-- landmines buried in the dark rows: barely-visible hollow marks -->
+        <g fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="3">
+          <circle cx="500" cy="690" r="13" />
+          <circle cx="1700" cy="760" r="13" />
+        </g>
+
+        <!-- ===== the compiler lamp: strict mode swung on ===== -->
+        <g transform="translate(1024,240)">
+          <!-- lamp head -->
+          <path
+            d="M -90 -30 L 90 -30 L 56 44 L -56 44 Z"
+            fill="rgba(9,9,11,0.9)"
+            stroke="#e879f9"
+            stroke-width="5"
+            stroke-linejoin="round"
+            filter="url(#bigGlow)"
+          />
+          <circle cy="10" r="12" fill="#e879f9" filter="url(#accentGlow)" />
+          <!-- mount stem up and out -->
+          <line
+            x1="0"
+            y1="-30"
+            x2="0"
+            y2="-110"
+            stroke="rgba(232,121,249,0.6)"
+            stroke-width="5"
+            stroke-linecap="round"
+          />
+        </g>
+        <!-- the light cone -->
+        <path
+          d="M 968 290 L 620 900 H 1428 L 1080 290 Z"
+          fill="url(#beamGrad)"
+        />
+
+        <!-- ===== inside the cone: the same rows, now legible, mines exposed ===== -->
+        <g stroke-linecap="round">
+          <line
+            x1="760"
+            y1="620"
+            x2="1140"
+            y2="620"
+            stroke="rgba(255,255,255,0.4)"
+            stroke-width="8"
+          />
+          <line
+            x1="740"
+            y1="690"
+            x2="1050"
+            y2="690"
+            stroke="rgba(255,255,255,0.34)"
+            stroke-width="8"
+          />
+          <line
+            x1="720"
+            y1="760"
+            x2="1180"
+            y2="760"
+            stroke="rgba(255,255,255,0.3)"
+            stroke-width="8"
+          />
+          <line
+            x1="700"
+            y1="830"
+            x2="1000"
+            y2="830"
+            stroke="rgba(255,255,255,0.26)"
+            stroke-width="8"
+          />
+        </g>
+        <!-- exposed mines: circled, flagged, no longer secrets -->
+        <g>
+          <circle
+            cx="1180"
+            cy="620"
+            r="16"
+            fill="rgba(162,28,175,0.25)"
+            stroke="#e879f9"
+            stroke-width="4"
+            filter="url(#accentGlow)"
+          />
+          <path
+            d="M 1180 604 v -34 h 26 l -8 10 l 8 10 h -26"
+            fill="rgba(232,121,249,0.4)"
+            stroke="#e879f9"
+            stroke-width="3"
+            stroke-linejoin="round"
+          />
+          <circle
+            cx="900"
+            cy="760"
+            r="16"
+            fill="rgba(162,28,175,0.25)"
+            stroke="#e879f9"
+            stroke-width="4"
+            filter="url(#accentGlow)"
+          />
+          <path
+            d="M 900 744 v -34 h 26 l -8 10 l 8 10 h -26"
+            fill="rgba(232,121,249,0.4)"
+            stroke="#e879f9"
+            stroke-width="3"
+            stroke-linejoin="round"
+          />
+          <!-- one already defused: filled check where a mine was -->
+          <g transform="translate(1040,690)">
+            <circle
+              r="16"
+              fill="rgba(9,9,11,0.85)"
+              stroke="rgba(232,121,249,0.6)"
+              stroke-width="4"
+            />
+            <path
+              d="M -8 0 l 6 6 l 12 -14"
+              fill="none"
+              stroke="#e879f9"
+              stroke-width="4"
+              stroke-linecap="round"
+            />
+          </g>
+        </g>
+
+        <!-- the null/undefined stragglers scurrying out of the beam edge -->
+        <g fill="rgba(232,121,249,0.35)">
+          <circle cx="1460" cy="560" r="7" />
+          <circle cx="1510" cy="588" r="5" />
+          <circle cx="580" cy="560" r="7" />
+          <circle cx="534" cy="586" r="5" />
+        </g>
+
+        <!-- ground shadow -->
+        <ellipse cx="1024" cy="950" rx="560" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse
+          cx="1024"
+          cy="905"
+          rx="260"
+          ry="16"
+          fill="rgba(162,28,175,0.12)"
+        />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

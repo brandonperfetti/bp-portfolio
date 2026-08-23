@@ -1,0 +1,322 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: sky (React/Next & frontend patterns) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 50% 46%,
+            rgba(3, 105, 161, 0.3),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 20% 78%,
+            rgba(3, 105, 161, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="314" cy="184" r="4" />
+          <circle cx="1794" cy="206" r="4" />
+          <circle cx="1742" cy="946" r="4" />
+          <circle cx="222" cy="904" r="4" />
+        </g>
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
+          <path d="M 1550 142 h 26 M 1563 129 v 26" />
+          <path d="M 146 450 h 24 M 158 438 v 24" />
+          <path d="M 1922 664 h 24 M 1934 652 v 24" />
+        </g>
+
+        <!-- ===== the component tree ===== -->
+        <!-- root -->
+        <g transform="translate(1024,240)">
+          <rect
+            x="-70"
+            y="-44"
+            width="140"
+            height="88"
+            rx="16"
+            fill="rgba(9,9,11,0.88)"
+            stroke="rgba(56,189,248,0.55)"
+            stroke-width="4"
+          />
+          <rect
+            x="-38"
+            y="-8"
+            width="76"
+            height="16"
+            rx="8"
+            fill="rgba(56,189,248,0.4)"
+          />
+        </g>
+        <!-- branches level 1 -->
+        <g
+          stroke="rgba(56,189,248,0.4)"
+          stroke-width="4"
+          stroke-linecap="round"
+          fill="none"
+        >
+          <path d="M 970 300 C 820 360, 700 400, 620 440" />
+          <path d="M 1024 300 V 440" />
+          <path d="M 1078 300 C 1228 360, 1348 400, 1428 440" />
+        </g>
+        <!-- level-1 nodes -->
+        <g>
+          <g transform="translate(560,510)">
+            <rect
+              x="-70"
+              y="-42"
+              width="140"
+              height="84"
+              rx="14"
+              fill="rgba(9,9,11,0.85)"
+              stroke="rgba(255,255,255,0.25)"
+              stroke-width="3.5"
+            />
+            <rect
+              x="-38"
+              y="-8"
+              width="76"
+              height="14"
+              rx="7"
+              fill="rgba(255,255,255,0.16)"
+            />
+          </g>
+          <g transform="translate(1024,510)">
+            <rect
+              x="-70"
+              y="-42"
+              width="140"
+              height="84"
+              rx="14"
+              fill="rgba(9,9,11,0.85)"
+              stroke="rgba(255,255,255,0.25)"
+              stroke-width="3.5"
+            />
+            <rect
+              x="-38"
+              y="-8"
+              width="76"
+              height="14"
+              rx="7"
+              fill="rgba(255,255,255,0.16)"
+            />
+          </g>
+          <!-- THE HOT NODE: expensive list under the searchlight -->
+          <g transform="translate(1488,510)">
+            <rect
+              x="-84"
+              y="-48"
+              width="168"
+              height="96"
+              rx="16"
+              fill="rgba(3,105,161,0.35)"
+              stroke="#38bdf8"
+              stroke-width="5"
+              filter="url(#bigGlow)"
+            />
+            <g fill="rgba(56,189,248,0.6)">
+              <rect x="-52" y="-22" width="104" height="10" rx="5" />
+              <rect x="-52" y="-2" width="84" height="10" rx="5" />
+              <rect x="-52" y="18" width="94" height="10" rx="5" />
+            </g>
+            <!-- flame tick: measured, actually expensive -->
+            <path
+              d="M 104 -34 C 96 -18, 108 -12, 104 2 C 118 -6, 122 -22, 112 -34 Z"
+              fill="rgba(56,189,248,0.6)"
+            />
+          </g>
+        </g>
+        <!-- branches level 2 (cheap leaves) -->
+        <g
+          stroke="rgba(255,255,255,0.18)"
+          stroke-width="3.5"
+          stroke-linecap="round"
+          fill="none"
+        >
+          <path d="M 520 552 C 470 610, 430 650, 400 680" />
+          <path d="M 600 552 C 650 610, 690 650, 720 680" />
+          <path d="M 1024 552 V 680" />
+        </g>
+        <g
+          fill="rgba(9,9,11,0.8)"
+          stroke="rgba(255,255,255,0.2)"
+          stroke-width="3"
+        >
+          <rect x="330" y="680" width="130" height="70" rx="12" />
+          <rect x="660" y="680" width="130" height="70" rx="12" />
+          <rect x="959" y="680" width="130" height="70" rx="12" />
+        </g>
+
+        <!-- ===== the searchlight beam onto the hot node ===== -->
+        <g transform="translate(1730,180)">
+          <circle
+            r="52"
+            fill="rgba(9,9,11,0.9)"
+            stroke="#38bdf8"
+            stroke-width="5"
+            filter="url(#accentGlow)"
+          />
+          <circle r="24" fill="none" stroke="#38bdf8" stroke-width="4.5" />
+          <line
+            x1="18"
+            y1="18"
+            x2="44"
+            y2="44"
+            stroke="#38bdf8"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
+        </g>
+        <path
+          d="M 1700 236 L 1560 452 L 1660 470 Z"
+          fill="rgba(56,189,248,0.14)"
+        />
+
+        <!-- ===== the drawer of memo tools, mostly closed ===== -->
+        <g transform="translate(430,900)">
+          <rect
+            x="-190"
+            y="-60"
+            width="380"
+            height="120"
+            rx="18"
+            fill="rgba(9,9,11,0.9)"
+            stroke="rgba(56,189,248,0.5)"
+            stroke-width="4"
+          />
+          <!-- drawer front slightly open -->
+          <rect
+            x="-190"
+            y="30"
+            width="380"
+            height="30"
+            rx="10"
+            fill="rgba(3,105,161,0.3)"
+            stroke="rgba(56,189,248,0.4)"
+            stroke-width="3"
+          />
+          <circle cx="0" cy="45" r="7" fill="rgba(56,189,248,0.55)" />
+          <!-- tools peeking out: wrapped-callback loop + memo diamond -->
+          <g
+            stroke="rgba(56,189,248,0.55)"
+            stroke-width="4"
+            fill="none"
+            stroke-linecap="round"
+          >
+            <path d="M -110 -6 A 26 26 0 1 1 -92 20" />
+            <path
+              d="M -98 14 L -86 24 L -102 30 Z"
+              fill="rgba(56,189,248,0.55)"
+              stroke="none"
+            />
+          </g>
+          <path
+            d="M 60 -20 L 96 8 L 60 36 L 24 8 Z"
+            fill="none"
+            stroke="rgba(56,189,248,0.55)"
+            stroke-width="4"
+            stroke-linejoin="round"
+          />
+          <!-- price tags hanging off the tools: they aren't free -->
+          <g transform="translate(140,-30) rotate(14)">
+            <path
+              d="M -16 -14 H 30 A 9 9 0 0 1 39 -5 V 5 A 9 9 0 0 1 30 14 H -16 L -32 0 Z"
+              fill="rgba(3,105,161,0.3)"
+              stroke="rgba(56,189,248,0.55)"
+              stroke-width="3"
+              stroke-linejoin="round"
+            />
+            <circle cx="-19" cy="0" r="4" fill="rgba(56,189,248,0.55)" />
+          </g>
+        </g>
+        <!-- dashed restraint line: drawer stays shut for the cheap leaves -->
+        <path
+          d="M 620 860 C 760 820, 900 790, 1010 770"
+          fill="none"
+          stroke="rgba(56,189,248,0.25)"
+          stroke-width="3.5"
+          stroke-dasharray="3 12"
+          stroke-linecap="round"
+        />
+
+        <!-- crossed-out micro-memo attempts on the cheap leaves -->
+        <g
+          stroke="rgba(255,255,255,0.3)"
+          stroke-width="3.5"
+          stroke-linecap="round"
+        >
+          <line x1="378" y1="666" x2="412" y2="700" />
+          <line x1="412" y1="666" x2="378" y2="700" />
+          <line x1="708" y1="666" x2="742" y2="700" />
+          <line x1="742" y1="666" x2="708" y2="700" />
+        </g>
+
+        <!-- profiler ruler under the hot node: receipts before tools -->
+        <g transform="translate(1488,640)">
+          <rect
+            x="-110"
+            y="-16"
+            width="220"
+            height="32"
+            rx="10"
+            fill="rgba(9,9,11,0.85)"
+            stroke="rgba(56,189,248,0.45)"
+            stroke-width="3"
+          />
+          <g fill="rgba(56,189,248,0.55)">
+            <rect x="-96" y="-6" width="60" height="12" rx="6" />
+            <rect x="-28" y="-6" width="110" height="12" rx="6" opacity="0.5" />
+          </g>
+        </g>
+
+        <!-- ground shadow -->
+        <ellipse cx="1024" cy="1000" rx="640" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse
+          cx="1488"
+          cy="955"
+          rx="240"
+          ry="16"
+          fill="rgba(3,105,161,0.12)"
+        />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

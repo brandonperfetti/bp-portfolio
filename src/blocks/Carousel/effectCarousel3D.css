@@ -1,0 +1,55 @@
+/**
+ * UI Initiative Carousel Slider
+ *
+ * Infinite 3D carousel slider
+ *
+ * https://uiinitiative.com
+ *
+ * Copyright 2024 UI Initiative
+ *
+ * Released under the UI Initiative Regular License
+ *
+ * September 12, 2024
+ *
+ * ---------------------------------------------------------------------------
+ * Port note (bp-portfolio, #63): a faithful port of the Pro `effect-carousel.css`
+ * (container + slide positioning), scoped to `.swiper-carousel3d` — the renamed
+ * container-modifier class the ported `effectCarousel3D.ts` pushes (the Pro
+ * source used `.swiper-carousel`; renamed with the effect value to keep one
+ * namespace and avoid any clash with the `carousel` block). Deviations from the
+ * Pro demo's fixed `520 × 380` slide, for the CMS context + zinc palette:
+ *   1. The slide WIDTH (which `slidesPerView: 'auto'` reads from CSS) is a
+ *      responsive `clamp()` rather than a fixed pixel width, and its height
+ *      comes from an `aspect-ratio` so the showcase scales down cleanly.
+ *   2. The slide chrome (radius / zinc background / clip) is applied with
+ *      Tailwind on the element in the leaf; only the effect-critical sizing
+ *      lives here. `will-change` promotes the per-frame-transformed slide.
+ */
+
+.swiper-carousel3d {
+  position: relative;
+  margin: 0 auto;
+  max-width: 100%;
+  overflow: hidden;
+}
+.swiper-carousel3d .swiper-slide {
+  position: relative;
+  /* `slidesPerView: 'auto'` sizes each slide from this width; the aspect ratio
+     supplies the height so the slide never collapses. */
+  width: clamp(260px, 78vw, 520px);
+  aspect-ratio: 4 / 3;
+  height: auto;
+  /* Own compositor layer for the per-frame translate/scale transforms. */
+  will-change: transform;
+}
+.swiper-carousel3d .swiper-carousel-animate-opacity {
+  position: relative;
+  display: block;
+  height: 100%;
+}
+.swiper-carousel3d .carousel3d-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

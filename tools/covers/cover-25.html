@@ -1,0 +1,288 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: violet (AI engineering) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 46% 48%,
+            rgba(124, 58, 237, 0.28),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 82% 76%,
+            rgba(124, 58, 237, 0.1),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="320" cy="180" r="4" />
+          <circle cx="1790" cy="200" r="4" />
+          <circle cx="1730" cy="950" r="4" />
+          <circle cx="230" cy="890" r="4" />
+        </g>
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
+          <path d="M 1560 130 h 26 M 1573 117 v 26" />
+          <path d="M 150 470 h 24 M 162 458 v 24" />
+          <path d="M 1910 660 h 24 M 1922 648 v 24" />
+        </g>
+
+        <!-- ===== the model core: dispatch hub ===== -->
+        <g transform="translate(880,540)">
+          <circle
+            r="120"
+            fill="rgba(124,58,237,0.16)"
+            stroke="#a78bfa"
+            stroke-width="5"
+            filter="url(#bigGlow)"
+          />
+          <!-- inner call-shape: braces of a structured call -->
+          <path
+            d="M -34 -44 C -58 -44, -58 -12, -74 0 C -58 12, -58 44, -34 44"
+            fill="none"
+            stroke="#a78bfa"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
+          <path
+            d="M 34 -44 C 58 -44, 58 -12, 74 0 C 58 12, 58 44, 34 44"
+            fill="none"
+            stroke="#a78bfa"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
+          <circle r="10" fill="#a78bfa" />
+        </g>
+
+        <!-- ===== spokes to three tools ===== -->
+        <!-- spoke: database tool (upper right) -->
+        <path
+          d="M 990 480 C 1130 420, 1240 380, 1360 350"
+          fill="none"
+          stroke="rgba(167,139,250,0.5)"
+          stroke-width="4.5"
+          stroke-linecap="round"
+        />
+        <!-- schema envelope riding the spoke -->
+        <g transform="translate(1160,416) rotate(-14)">
+          <rect
+            x="-40"
+            y="-26"
+            width="80"
+            height="52"
+            rx="10"
+            fill="rgba(9,9,11,0.88)"
+            stroke="#a78bfa"
+            stroke-width="3.5"
+            filter="url(#accentGlow)"
+          />
+          <!-- tiny drawn braces: a typed payload (no text per design rules) -->
+          <path
+            d="M -12 -12 C -20 -12, -20 -4, -25 0 C -20 4, -20 12, -12 12"
+            fill="none"
+            stroke="#a78bfa"
+            stroke-width="3.5"
+            stroke-linecap="round"
+          />
+          <path
+            d="M 12 -12 C 20 -12, 20 -4, 25 0 C 20 4, 20 12, 12 12"
+            fill="none"
+            stroke="#a78bfa"
+            stroke-width="3.5"
+            stroke-linecap="round"
+          />
+        </g>
+        <!-- db tool node -->
+        <g transform="translate(1470,330)">
+          <path
+            d="M -60 -26 A 60 20 0 0 0 60 -26 V 30 A 60 20 0 0 1 -60 30 Z"
+            fill="rgba(9,9,11,0.88)"
+            stroke="rgba(167,139,250,0.6)"
+            stroke-width="4"
+          />
+          <ellipse
+            cx="0"
+            cy="-26"
+            rx="60"
+            ry="20"
+            fill="rgba(124,58,237,0.2)"
+            stroke="rgba(167,139,250,0.6)"
+            stroke-width="4"
+          />
+        </g>
+
+        <!-- spoke: web/API tool (right) -->
+        <path
+          d="M 1000 560 C 1160 580, 1300 600, 1430 620"
+          fill="none"
+          stroke="rgba(167,139,250,0.5)"
+          stroke-width="4.5"
+          stroke-linecap="round"
+        />
+        <g transform="translate(1540,626)">
+          <circle
+            r="52"
+            fill="rgba(9,9,11,0.88)"
+            stroke="rgba(167,139,250,0.6)"
+            stroke-width="4"
+          />
+          <ellipse
+            rx="52"
+            ry="20"
+            fill="none"
+            stroke="rgba(167,139,250,0.45)"
+            stroke-width="3"
+          />
+          <path
+            d="M 0 -52 C 26 -30, 26 30, 0 52 C -26 30, -26 -30, 0 -52"
+            fill="none"
+            stroke="rgba(167,139,250,0.45)"
+            stroke-width="3"
+          />
+        </g>
+
+        <!-- spoke: calendar/action tool (lower right) -->
+        <path
+          d="M 950 650 C 1050 740, 1150 790, 1270 820"
+          fill="none"
+          stroke="rgba(167,139,250,0.5)"
+          stroke-width="4.5"
+          stroke-linecap="round"
+        />
+        <g transform="translate(1380,840)">
+          <rect
+            x="-54"
+            y="-46"
+            width="108"
+            height="92"
+            rx="14"
+            fill="rgba(9,9,11,0.88)"
+            stroke="rgba(167,139,250,0.6)"
+            stroke-width="4"
+          />
+          <line
+            x1="-54"
+            y1="-16"
+            x2="54"
+            y2="-16"
+            stroke="rgba(167,139,250,0.45)"
+            stroke-width="3.5"
+          />
+          <line
+            x1="-26"
+            y1="-46"
+            x2="-26"
+            y2="-64"
+            stroke="rgba(167,139,250,0.6)"
+            stroke-width="4"
+            stroke-linecap="round"
+          />
+          <line
+            x1="26"
+            y1="-46"
+            x2="26"
+            y2="-64"
+            stroke="rgba(167,139,250,0.6)"
+            stroke-width="4"
+            stroke-linecap="round"
+          />
+          <circle cx="-18" cy="12" r="7" fill="rgba(167,139,250,0.5)" />
+          <circle cx="18" cy="12" r="7" fill="#a78bfa" />
+        </g>
+
+        <!-- ===== validated result returning (bottom loop back to core) ===== -->
+        <path
+          d="M 1300 900 C 1050 980, 760 940, 690 760 C 660 690, 700 640, 762 616"
+          fill="none"
+          stroke="#a78bfa"
+          stroke-width="5"
+          stroke-linecap="round"
+          stroke-dasharray="18 14"
+          filter="url(#accentGlow)"
+        />
+        <!-- arrowhead into the core -->
+        <path d="M 748 640 L 772 610 L 782 646 Z" fill="#a78bfa" />
+        <!-- validation checkpoint on the return path -->
+        <g transform="translate(880,948)">
+          <path
+            d="M 0 -40 L 34 -26 V 8 C 34 30, 18 42, 0 50 C -18 42, -34 30, -34 8 V -26 Z"
+            fill="rgba(9,9,11,0.9)"
+            stroke="#a78bfa"
+            stroke-width="4"
+            filter="url(#accentGlow)"
+          />
+          <path
+            d="M -12 2 l 8 9 l 17 -20"
+            fill="none"
+            stroke="#a78bfa"
+            stroke-width="4.5"
+            stroke-linecap="round"
+          />
+        </g>
+
+        <!-- schema ticks drifting near the core (typed arguments) -->
+        <g fill="rgba(167,139,250,0.35)">
+          <circle cx="640" cy="380" r="7" />
+          <circle cx="590" cy="420" r="5" />
+          <circle cx="700" cy="330" r="5" />
+        </g>
+        <!-- retry orbit arc: one failed call looping back -->
+        <path
+          d="M 760 430 A 170 170 0 0 1 1010 440"
+          fill="none"
+          stroke="rgba(167,139,250,0.25)"
+          stroke-width="3"
+          stroke-dasharray="2 12"
+          stroke-linecap="round"
+        />
+
+        <!-- ground shadow -->
+        <ellipse cx="1050" cy="1000" rx="560" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse
+          cx="900"
+          cy="960"
+          rx="240"
+          ry="16"
+          fill="rgba(124,58,237,0.12)"
+        />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

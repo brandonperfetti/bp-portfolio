@@ -1,0 +1,107 @@
+/**
+ * UI Initiative Expo Slider
+ *
+ * Parallax & scale effects slider
+ *
+ * https://uiinitiative.com
+ *
+ * Copyright 2025 UI Initiative
+ *
+ * Released under the UI Initiative Regular License
+ *
+ * June 27, 2025
+ *
+ * ---------------------------------------------------------------------------
+ * Port note (bp-portfolio, #62): a faithful port of the Pro `effect-expo.css`.
+ * The `.swiper-expo` container-modifier hook and the `--expo-*` custom
+ * properties are unchanged, so the ported `effectExpo.ts` drives them exactly
+ * as upstream. Two documented deviations for the CMS context + zinc palette:
+ *   1. `--expo-image-border-radius` is scoped to `.swiper-expo` rather than
+ *      `:root`, so the token never leaks to unrelated surfaces (16px matches
+ *      the site's `rounded-2xl`).
+ *   2. `.expo-container` sizes from an `aspect-ratio` Tailwind class on the
+ *      element instead of the source's `height: 100%` — the block has no
+ *      fixed-height Swiper container, so the slide takes its height from the
+ *      photo's aspect ratio. Everything the effect transforms is untouched.
+ *
+ * Staging-QA follow-ups (#68):
+ *   a. Tailwind Preflight's `img { max-width: 100% }` clamps the horizontal
+ *      image's `width: calc(125%)` overscan back to 100%, killing the parallax
+ *      and exposing the container background as a gray gap — so the horizontal
+ *      image gets `max-width: none` (and the vertical image `max-height: none`
+ *      defensively). [measured: max-width:none restored 677→847px].
+ *   b. `will-change: transform` promotes the per-frame-transformed elements to
+ *      their own compositor layer, cutting nav-click paint/INP.
+ */
+
+.swiper-expo {
+  box-sizing: border-box;
+  --expo-image-border-radius: 16px;
+}
+.swiper-expo.swiper-horizontal {
+  padding-top: var(--expo-padding, 0px);
+  padding-bottom: var(--expo-padding, 0px);
+  /* Viewport offset the hero-scale height must leave free = the sticky `[slug]`
+     header bar (`h-16` = `--spacing(16)` = 4rem) PLUS the below-swiper chrome
+     rendered outside the track (pagination dots + the nav-arrow row + their
+     margins). #68 subtracted only the 4rem header, so the arrows fell off the
+     bottom [measured: swiper 748 + arrows → 814 > 812vp]; 12rem leaves room for
+     everything [measured: arrows at 723 < 763]. */
+  --expo-hero-offset: 12rem;
+  /* Hero-scale the horizontal track (#68/#68.2): fill the viewport below the
+     header, minus that chrome, capped. `svh` so mobile browser chrome can't
+     push the page past one screen; `box-sizing: border-box` keeps the effect's
+     padding inside this height, so the block never overflows the page. */
+  height: clamp(360px, calc(100svh - var(--expo-hero-offset)), 760px);
+}
+.swiper-expo.swiper-vertical {
+  padding-left: var(--expo-padding, 0px);
+  padding-right: var(--expo-padding, 0px);
+  /* Vertical needs a bounded height or Swiper collapses its slides to zero. */
+  height: clamp(420px, 70vh, 640px);
+}
+.swiper-expo .expo-container {
+  position: relative;
+  width: 100%;
+  /* CMS-context deviation: height comes from a height/`aspect-[…]` class on the
+     element (`h-full` for the hero-scale horizontal + vertical tracks), not the
+     source's `height: 100%`, since the block has no fixed-height Swiper
+     container. */
+  transform-style: preserve-3d;
+  overflow: hidden;
+  border-radius: var(--expo-image-border-radius, 16px);
+  /* Own compositor layer for the per-frame scale/rotate transforms (INP, #68). */
+  will-change: transform;
+}
+/* `.expo-content` carries only the effect's inline transform/opacity here; its
+   box (an optional caption overlay) is styled with Tailwind on the element, so
+   the source's `position: relative` is dropped to let an `absolute` overlay
+   class win. */
+.swiper-expo .expo-image {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  overflow: hidden;
+  object-fit: cover;
+  /* Own compositor layer for the per-frame parallax translate (INP, #68). */
+  will-change: transform;
+}
+
+.swiper-expo.swiper-horizontal .expo-image {
+  left: calc((var(--expo-image-offset) * 100% - 100%) / -2);
+  top: 0;
+  width: calc(var(--expo-image-offset) * 100%);
+  height: 100%;
+  /* Preflight sets `img { max-width: 100% }`, which would clamp the 125%
+     horizontal overscan back to 100% and kill the parallax (#68). */
+  max-width: none;
+}
+.swiper-expo.swiper-vertical .expo-image {
+  top: calc((var(--expo-image-offset) * 100% - 100%) / -2);
+  left: 0;
+  height: calc(var(--expo-image-offset) * 100%);
+  width: 100%;
+  /* Defensive mirror of the horizontal `max-width: none` (Preflight caps
+     max-width, not max-height, but keep the overscan axis unclamped). */
+  max-height: none;
+}

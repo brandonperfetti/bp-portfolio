@@ -1,0 +1,288 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      /* per-post accent: indigo (engineering practice & architecture) */
+      .glow {
+        background:
+          radial-gradient(
+            ellipse 1400px 900px at 52% 46%,
+            rgba(67, 56, 202, 0.3),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 1000px 700px at 22% 78%,
+            rgba(67, 56, 202, 0.12),
+            transparent 60%
+          );
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="stage">
+      <svg
+        class="motif"
+        viewBox="0 0 2048 1152"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="accentGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="14" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="24" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <linearGradient
+            id="climbGrad"
+            gradientUnits="userSpaceOnUse"
+            x1="0"
+            y1="960"
+            x2="0"
+            y2="220"
+          >
+            <stop offset="0" stop-color="#4338ca" />
+            <stop offset="1" stop-color="#818cf8" />
+          </linearGradient>
+        </defs>
+
+        <!-- constellation accents -->
+        <g fill="rgba(255,255,255,0.22)">
+          <circle cx="320" cy="170" r="4" />
+          <circle cx="1810" cy="220" r="4" />
+          <circle cx="1730" cy="970" r="4" />
+          <circle cx="220" cy="880" r="4" />
+        </g>
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3"
+          stroke-linecap="round"
+        >
+          <path d="M 1580 140 h 26 M 1593 127 v 26" />
+          <path d="M 150 520 h 24 M 162 508 v 24" />
+          <path d="M 1920 700 h 24 M 1932 688 v 24" />
+        </g>
+
+        <!-- ===== the codebase as a mountain of module blocks, dim ===== -->
+        <g stroke-width="3.5" fill="rgba(255,255,255,0.02)">
+          <!-- base row -->
+          <rect
+            x="420"
+            y="800"
+            width="230"
+            height="120"
+            rx="18"
+            stroke="rgba(255,255,255,0.22)"
+          />
+          <rect
+            x="690"
+            y="800"
+            width="230"
+            height="120"
+            rx="18"
+            stroke="rgba(255,255,255,0.28)"
+          />
+          <rect
+            x="960"
+            y="800"
+            width="230"
+            height="120"
+            rx="18"
+            stroke="rgba(255,255,255,0.22)"
+          />
+          <rect
+            x="1230"
+            y="800"
+            width="230"
+            height="120"
+            rx="18"
+            stroke="rgba(255,255,255,0.18)"
+          />
+          <rect
+            x="1500"
+            y="800"
+            width="200"
+            height="120"
+            rx="18"
+            stroke="rgba(255,255,255,0.14)"
+          />
+          <!-- mid row -->
+          <rect
+            x="560"
+            y="620"
+            width="230"
+            height="120"
+            rx="18"
+            stroke="rgba(255,255,255,0.28)"
+          />
+          <rect
+            x="850"
+            y="620"
+            width="230"
+            height="120"
+            rx="18"
+            stroke="rgba(255,255,255,0.22)"
+          />
+          <rect
+            x="1140"
+            y="620"
+            width="230"
+            height="120"
+            rx="18"
+            stroke="rgba(255,255,255,0.2)"
+          />
+          <rect
+            x="1430"
+            y="620"
+            width="200"
+            height="120"
+            rx="18"
+            stroke="rgba(255,255,255,0.14)"
+          />
+          <!-- upper row -->
+          <rect
+            x="700"
+            y="440"
+            width="230"
+            height="120"
+            rx="18"
+            stroke="rgba(255,255,255,0.26)"
+          />
+          <rect
+            x="1010"
+            y="440"
+            width="230"
+            height="120"
+            rx="18"
+            stroke="rgba(255,255,255,0.2)"
+          />
+          <rect
+            x="1320"
+            y="440"
+            width="200"
+            height="120"
+            rx="18"
+            stroke="rgba(255,255,255,0.14)"
+          />
+        </g>
+        <!-- faint bars inside a few blocks -->
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="6"
+          stroke-linecap="round"
+        >
+          <line x1="730" y1="850" x2="860" y2="850" />
+          <line x1="730" y1="884" x2="820" y2="884" />
+          <line x1="600" y1="670" x2="720" y2="670" />
+          <line x1="740" y1="490" x2="860" y2="490" />
+          <line x1="1000" y1="850" x2="1110" y2="850" />
+        </g>
+
+        <!-- ===== the summit: the mental model, small and bright ===== -->
+        <g transform="translate(1024,270)" filter="url(#bigGlow)">
+          <rect
+            x="-110"
+            y="-70"
+            width="220"
+            height="140"
+            rx="20"
+            fill="rgba(67,56,202,0.18)"
+            stroke="#818cf8"
+            stroke-width="5"
+          />
+          <!-- the model: three connected nodes, all that actually matters -->
+          <g fill="#818cf8">
+            <circle cx="-52" cy="18" r="9" />
+            <circle cx="0" cy="-22" r="9" />
+            <circle cx="52" cy="18" r="9" />
+          </g>
+          <g
+            stroke="rgba(129,140,248,0.7)"
+            stroke-width="4"
+            stroke-linecap="round"
+          >
+            <line x1="-52" y1="18" x2="0" y2="-22" />
+            <line x1="0" y1="-22" x2="52" y2="18" />
+          </g>
+        </g>
+
+        <!-- ===== the reading path: entry point up through chosen blocks ===== -->
+        <path
+          d="M 805 960 L 805 860 L 675 740 L 675 680 L 965 680 L 965 560 L 815 500
+                 L 940 340 L 1024 340"
+          fill="none"
+          stroke="url(#climbGrad)"
+          stroke-width="6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          filter="url(#accentGlow)"
+        />
+        <!-- entry marker -->
+        <g transform="translate(805,960)">
+          <circle
+            r="12"
+            fill="#4338ca"
+            stroke="#818cf8"
+            stroke-width="4"
+            filter="url(#accentGlow)"
+          />
+        </g>
+        <!-- waypoints where the path pauses to read -->
+        <g fill="#818cf8" filter="url(#accentGlow)">
+          <circle cx="675" cy="700" r="8" />
+          <circle cx="965" cy="620" r="8" />
+          <circle cx="900" cy="392" r="8" />
+        </g>
+        <!-- blocks the path deliberately skips: dashed detour marks -->
+        <g
+          stroke="rgba(255,255,255,0.16)"
+          stroke-width="3.5"
+          stroke-linecap="round"
+          fill="none"
+        >
+          <path d="M 1255 680 h 60" stroke-dasharray="3 12" />
+          <path d="M 1345 500 h 50" stroke-dasharray="3 12" />
+          <path d="M 1525 850 h 50" stroke-dasharray="3 12" />
+        </g>
+
+        <!-- breadcrumb notes: tiny flags on the visited blocks -->
+        <g stroke="#818cf8" stroke-width="3.5" stroke-linecap="round">
+          <line x1="700" y1="640" x2="700" y2="606" />
+          <path
+            d="M 700 606 h 26 l -8 10 l 8 10 h -26"
+            fill="rgba(67,56,202,0.35)"
+            stroke-linejoin="round"
+          />
+          <line x1="990" y1="640" x2="990" y2="606" />
+          <path
+            d="M 990 606 h 26 l -8 10 l 8 10 h -26"
+            fill="rgba(67,56,202,0.35)"
+            stroke-linejoin="round"
+          />
+        </g>
+
+        <!-- ground shadow -->
+        <ellipse cx="1024" cy="980" rx="560" ry="26" fill="rgba(0,0,0,0.5)" />
+        <ellipse
+          cx="1024"
+          cy="940"
+          rx="240"
+          ry="16"
+          fill="rgba(67,56,202,0.14)"
+        />
+      </svg>
+    </div>
+    <!--GRAIN-->
+  </body>
+</html>

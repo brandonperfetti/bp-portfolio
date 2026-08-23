@@ -151,7 +151,14 @@ function normalizeKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, '-')
 }
 
-function coerceTechKey(raw: string) {
+/**
+ * Canonicalizes a raw technology label into the alias-collapsed signal key
+ * used across the GitHub scan (e.g. `Next.js` → `nextjs`).
+ *
+ * @remarks Exported (v4) so the /tech visualization can match CMS tech names
+ * against collected signal keys with identical normalization.
+ */
+export function coerceTechKey(raw: string) {
   const key = normalizeKey(raw)
   const aliases: Record<string, string> = {
     ts: 'typescript',

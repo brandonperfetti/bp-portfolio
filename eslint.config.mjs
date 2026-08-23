@@ -1,6 +1,7 @@
 import { defineConfig, globalIgnores } from 'eslint/config'
 import nextVitals from 'eslint-config-next/core-web-vitals'
 import nextTs from 'eslint-config-next/typescript'
+import tsdoc from 'eslint-plugin-tsdoc'
 
 export default defineConfig([
   ...nextVitals,
@@ -13,6 +14,14 @@ export default defineConfig([
     'coverage/**',
     'node_modules/**',
     'next-env.d.ts',
+    // Payload-generated artifacts — regenerated, not hand-maintained.
+    'src/payload-types.ts',
+    'src/app/(payload)/admin/importMap.js',
+    // Storybook build output.
+    'storybook-static/**',
+    // Playwright artifacts (HTML report bundles its own minified JS).
+    'playwright-report/**',
+    'test-results/**',
   ]),
   {
     files: ['next-env.d.ts'],
@@ -22,7 +31,10 @@ export default defineConfig([
   },
   {
     files: ['**/*.{ts,tsx}'],
+    plugins: { tsdoc },
     rules: {
+      // TSDoc syntax validation on doc comments (project standard §15b).
+      'tsdoc/syntax': 'warn',
       'prefer-const': 'error',
       'no-fallthrough': 'error',
       'no-unused-vars': 'off',
@@ -37,6 +49,13 @@ export default defineConfig([
           caughtErrorsIgnorePattern: '^_',
         },
       ],
+    },
+  },
+  {
+    // Payload migrations are generated DDL; unused args come from the template.
+    files: ['src/migrations/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unused-vars': 'off',
     },
   },
 ])
