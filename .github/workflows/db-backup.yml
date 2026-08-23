@@ -30,10 +30,11 @@
 #   PGDG client install.
 # - GitHub disables cron workflows after 60 days without repo activity;
 #   the run-summary line makes silent failure visible in the Actions tab.
-# - min_bytes: staging holds real content (100KB floor). Production is empty
-#   until the merge-day promotion, so its floor starts at 1KB (catches
-#   zero-byte/failed dumps) — RAISE IT TO 100000 after the DB promotion
-#   (tracked in the master-cutover runbook, Phase F).
+# - min_bytes: staging holds real content (100KB floor). Production was empty
+#   until the merge-day promotion; post-promotion (2026-08-23) its floor is
+#   1MB, which asserts real content arrived — an empty Supabase DB still dumps
+#   ~210KB of platform-schema DDL, so a smaller floor wouldn't catch a
+#   content-less dump.
 
 name: db-backup
 
@@ -60,7 +61,7 @@ jobs:
           - target: prod
             url_secret: SUPABASE_DB_URL_PROD
             pass_secret: BACKUP_PASSPHRASE_PROD
-            min_bytes: 1000 # empty until promotion — raise to 100000 at cutover
+            min_bytes: 1000000 # post-promotion: real content present (~2.4MB dumps); 1MB floor asserts content arrived, above the ~210KB empty-schema baseline
     name: dump (${{ matrix.target }})
     steps:
       - name: Install postgresql-client-17 (matches server 17.6)
