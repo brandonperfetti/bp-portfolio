@@ -91,7 +91,7 @@ export function FooterWithNavigation({
             </div>
             <nav
               aria-label="Machine-readable resources"
-              className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-xs text-zinc-400 sm:justify-start dark:text-zinc-500"
+              className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-xs text-zinc-500 sm:justify-start dark:text-zinc-400"
             >
               <span aria-hidden="true">Agents</span>
               {AGENT_LINKS.map((item) => (
