@@ -223,3 +223,55 @@ export function isSuppressedSentryLogMessage(message: string): boolean {
     message.includes(pattern),
   )
 }
+
+/**
+ * User-Agent substrings (matched case-insensitively) identifying automated /
+ * crawler clients whose Sentry events and logs are noise, not signal (#98).
+ *
+ * @remarks
+ * A plain substring denylist, checked by {@link isFilteredUserAgent} in each
+ * runtime's `beforeSend` (errors) and the client `beforeSendLog` (logs). This
+ * only keeps bot traffic out of SENTRY (noise + ingest cost) — it never blocks
+ * bots from the site itself (that's Turnstile's / the WAF's job, deliberately
+ * out of scope).
+ * `bot` is the broad catch (googlebot, bingbot, semrushbot, applebot,
+ * yandexbot, ahrefsbot, …); the rest name crawlers/monitors/HTTP clients that
+ * don't carry `bot`. NOTE: headless scrapers that spoof a real browser UA are
+ * NOT caught here — those are handled by the message-based
+ * {@link isSuppressedSentryLogMessage} filter (e.g. the Turnstile 300031
+ * baseline), not by UA.
+ */
+export const SENTRY_FILTERED_USER_AGENTS = [
+  'bot',
+  'spider',
+  'crawler',
+  'slurp',
+  'pingdom',
+  'facebookexternalhit',
+  'headlesschrome',
+  'okhttp',
+  'python-requests',
+  'go-http-client',
+  'curl',
+  'wget',
+  'axios',
+  'node-fetch',
+] as const
+
+/**
+ * Whether a request's User-Agent belongs to a known automated/bot client whose
+ * Sentry events/logs should be dropped (#98).
+ *
+ * @param userAgent - Raw User-Agent (client: `navigator.userAgent`;
+ * server/edge: `event.request?.headers?.['user-agent']`). An empty/absent UA is
+ * NOT treated as a bot — never drop an event merely for a missing UA.
+ * @returns `true` when `userAgent` contains a
+ * {@link SENTRY_FILTERED_USER_AGENTS} token.
+ */
+export function isFilteredUserAgent(
+  userAgent: string | undefined | null,
+): boolean {
+  if (!userAgent) return false
+  const ua = userAgent.toLowerCase()
+  return SENTRY_FILTERED_USER_AGENTS.some((token) => ua.includes(token))
+}

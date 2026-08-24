@@ -5,6 +5,7 @@ import {
   getSentryEnvironment,
   getServerSentryDsn,
   getTracesSampleRate,
+  isFilteredUserAgent,
   isNoisyTransaction,
   isSuppressedSentryLogMessage,
   SENTRY_CONSOLE_LOG_LEVELS,
@@ -240,5 +241,52 @@ describe('SENTRY_IGNORE_ERRORS', () => {
     expect(matches('TypeError: Cannot read properties of undefined')).toBe(
       false,
     )
+  })
+})
+
+describe('isFilteredUserAgent', () => {
+  it('filters self-identifying crawlers and monitors (#98)', () => {
+    expect(
+      isFilteredUserAgent('Googlebot/2.1 (+http://www.google.com/bot.html)'),
+    ).toBe(true)
+    expect(
+      isFilteredUserAgent(
+        'Mozilla/5.0 (compatible; SemrushBot/7~bl; +http://www.semrush.com/bot.html)',
+      ),
+    ).toBe(true)
+    expect(isFilteredUserAgent('Pingdom.com_bot_version_1.4')).toBe(true)
+    expect(
+      isFilteredUserAgent('facebookexternalhit/1.1 (+http://www.facebook.com)'),
+    ).toBe(true)
+  })
+
+  it('filters headless browsers and raw HTTP clients', () => {
+    expect(
+      isFilteredUserAgent(
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/120.0.0.0 Safari/537.36',
+      ),
+    ).toBe(true)
+    expect(isFilteredUserAgent('curl/8.4.0')).toBe(true)
+    expect(isFilteredUserAgent('python-requests/2.31.0')).toBe(true)
+    expect(isFilteredUserAgent('okhttp/4.12.0')).toBe(true)
+  })
+
+  it('does NOT filter real desktop/mobile browser user-agents', () => {
+    expect(
+      isFilteredUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      ),
+    ).toBe(false)
+    expect(
+      isFilteredUserAgent(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      ),
+    ).toBe(false)
+  })
+
+  it('does not treat an empty or absent user-agent as a bot', () => {
+    expect(isFilteredUserAgent('')).toBe(false)
+    expect(isFilteredUserAgent(undefined)).toBe(false)
+    expect(isFilteredUserAgent(null)).toBe(false)
   })
 })

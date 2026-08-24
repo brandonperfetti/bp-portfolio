@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/nextjs'
 import {
   getClientSentryDsn,
   getSentryEnvironment,
+  isFilteredUserAgent,
   isSuppressedSentryLogMessage,
   SENTRY_CONSOLE_LOG_LEVELS,
   SENTRY_DENY_URLS,
@@ -43,9 +44,27 @@ if (dsn) {
     // only, 0 real users — by both its injected source and its error message.
     denyUrls: SENTRY_DENY_URLS,
     ignoreErrors: SENTRY_IGNORE_ERRORS,
-    // Keep known-benign, high-volume warnings out of Sentry Logs (#95, #94).
-    beforeSendLog: (log) =>
-      isSuppressedSentryLogMessage(String(log.message ?? '')) ? null : log,
+    // Drop everything from known bot/crawler user-agents (#98) — Sentry noise
+    // + ingest cost, never a real user. Bots aren't blocked from the site, only
+    // from Sentry (Turnstile/WAF own site access).
+    beforeSend: (event) =>
+      typeof navigator !== 'undefined' &&
+      isFilteredUserAgent(navigator.userAgent)
+        ? null
+        : event,
+    // Keep known-benign, high-volume warnings — and bot-UA logs — out of Sentry
+    // Logs (#95, #94, #98).
+    beforeSendLog: (log) => {
+      if (
+        typeof navigator !== 'undefined' &&
+        isFilteredUserAgent(navigator.userAgent)
+      ) {
+        return null
+      }
+      return isSuppressedSentryLogMessage(String(log.message ?? ''))
+        ? null
+        : log
+    },
     integrations: [
       Sentry.consoleLoggingIntegration({
         levels: [...SENTRY_CONSOLE_LOG_LEVELS],
