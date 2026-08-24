@@ -5,6 +5,28 @@ overrides:
   prismjs: 1.30.0
   '@types/react': 19.2.14
   '@types/react-dom': 19.2.3
+  # Security advisories (wave-1 post-launch prod-health, #4) — patch/minor
+  # bumps only, no major jumps. Version-scoped where two majors coexist so a
+  # bump can't cross a major boundary and break the consumer.
+  'undici@6': '^6.28.0' # @vercel/blob path (prod)
+  'undici@7': '^7.29.0' # payload path (prod)
+  nanoid: '^3.3.18'
+  mermaid: '^11.16.1' # streamdown (prod)
+  js-yaml: '^4.3.1'
+  'fast-uri@3': '^3.1.5'
+  'fast-uri@4': '^4.1.2'
+  # image-size: advisory (ICNS/JXL/HEIF parser DoS) has NO released fix — latest
+  # is 2.0.2; revisit when >=2.0.3 ships. Reachable via payload (prod) for media
+  # dimension detection, but only exploitable by an authenticated admin uploading
+  # a crafted ICNS/JXL/HEIF file — low practical risk. Tracked, not yet fixable.
+  ip-address: '^10.3.1'
+  dompurify: '^3.4.13'
+  postcss: '^8.5.23'
+  hono: '^4.12.34' # @payloadcms/plugin-mcp path (prod)
+  '@hono/node-server': '^1.19.15'
+  valibot: '^1.4.2' # Storybook MCP addon (dev)
+  'brace-expansion@1': '^1.1.18'
+  'brace-expansion@5': '^5.0.9'
 allowBuilds:
   '@sentry/cli': true
   autoevals: true

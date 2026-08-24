@@ -162,3 +162,158 @@ export function sentryTracesSampler(samplingContext: {
  * `Sentry.consoleLoggingIntegration(...)` call.
  */
 export const SENTRY_CONSOLE_LOG_LEVELS = ['warn', 'error'] as const
+
+/**
+ * Browser event source URLs to drop entirely (Sentry `denyUrls`, applied
+ * by the default event-filters integration).
+ *
+ * @remarks
+ * The Vercel Toolbar's live-feedback widget — served only to the
+ * authenticated project owner from `app:///_next-live/…` — throws
+ * `InvalidNodeTypeError` from its own `requestAnimationFrame` handler
+ * (#95 / BP-PORTFOLIO-4). It is toolbar noise, never a site defect, seen
+ * by 0 real users, so any event whose frames originate in the injected
+ * `_next-live` bundle is dropped. Client-only: server/edge stacks have no
+ * such frames.
+ */
+export const SENTRY_DENY_URLS: RegExp[] = [/_next-live\//]
+
+/**
+ * Browser error messages to drop (Sentry `ignoreErrors`), belt-and-
+ * suspenders alongside {@link SENTRY_DENY_URLS} for the same Vercel
+ * Toolbar feedback error (#95 / BP-PORTFOLIO-4), in case a future toolbar
+ * build reports it without a `_next-live` frame.
+ */
+export const SENTRY_IGNORE_ERRORS: Array<string | RegExp> = [
+  /Failed to execute 'selectNode' on 'Range'/,
+]
+
+/**
+ * Substrings identifying benign, high-volume log lines the console-logging
+ * integration would otherwise forward to Sentry Logs as noise (#95).
+ *
+ * @remarks
+ * - `vm.USE_MAIN_CONTEXT_DEFAULT_LOADER` — a benign Node experimental-
+ *   feature warning (`ExperimentalWarning`) emitted server-side and
+ *   forwarded to Logs; pure noise (#95).
+ * - `[Cloudflare Turnstile] Error: 300031` — Turnstile's documented
+ *   transient/retriable "generic challenge failure" baseline (a client
+ *   `console.warn`). The hostname misconfiguration is already fixed; this
+ *   residual is the expected baseline every Turnstile deployment emits,
+ *   folded in per #94. Drop this one entry to keep every Turnstile warning
+ *   visible.
+ */
+const SUPPRESSED_LOG_MESSAGE_PATTERNS = [
+  'vm.USE_MAIN_CONTEXT_DEFAULT_LOADER',
+  '[Cloudflare Turnstile] Error: 300031',
+] as const
+
+/**
+ * Whether a forwarded console log message is known-benign noise that
+ * should not reach Sentry Logs — used by each runtime's `beforeSendLog`.
+ *
+ * @param message - The log message body. Coerce non-strings before
+ * calling; an empty message is never suppressed.
+ * @returns `true` when `message` contains a
+ * {@link SUPPRESSED_LOG_MESSAGE_PATTERNS} entry.
+ */
+export function isSuppressedSentryLogMessage(message: string): boolean {
+  if (!message) return false
+  return SUPPRESSED_LOG_MESSAGE_PATTERNS.some((pattern) =>
+    message.includes(pattern),
+  )
+}
+
+/**
+ * User-Agent substrings (matched case-insensitively) identifying automated /
+ * crawler clients whose Sentry events and logs are noise, not signal (#98).
+ *
+ * @remarks
+ * A plain substring denylist, checked by {@link isFilteredUserAgent} in each
+ * runtime's `beforeSend` (errors) and the client `beforeSendLog` (logs). This
+ * only keeps bot traffic out of SENTRY (noise + ingest cost) — it never blocks
+ * bots from the site itself (that's Turnstile's / the WAF's job, deliberately
+ * out of scope).
+ * `bot` is the broad catch (googlebot, bingbot, semrushbot, applebot,
+ * yandexbot, ahrefsbot, …); the rest name crawlers/monitors/HTTP clients that
+ * don't carry `bot`. NOTE: headless scrapers that spoof a real browser UA are
+ * NOT caught here — those are handled by the message-based
+ * {@link isSuppressedSentryLogMessage} filter (e.g. the Turnstile 300031
+ * baseline), not by UA.
+ */
+export const SENTRY_FILTERED_USER_AGENTS = [
+  'bot',
+  'spider',
+  'crawler',
+  'slurp',
+  'pingdom',
+  'facebookexternalhit',
+  'headlesschrome',
+  'okhttp',
+  'python-requests',
+  'go-http-client',
+  'curl',
+  'wget',
+  'axios',
+  'node-fetch',
+] as const
+
+/**
+ * Whether a request's User-Agent belongs to a known automated/bot client whose
+ * Sentry events/logs should be dropped (#98).
+ *
+ * @param userAgent - Raw User-Agent (client: `navigator.userAgent`;
+ * server/edge: `event.request?.headers?.['user-agent']`). An empty/absent UA is
+ * NOT treated as a bot — never drop an event merely for a missing UA.
+ * @returns `true` when `userAgent` contains a
+ * {@link SENTRY_FILTERED_USER_AGENTS} token.
+ */
+export function isFilteredUserAgent(
+  userAgent: string | undefined | null,
+): boolean {
+  if (!userAgent) return false
+  const ua = userAgent.toLowerCase()
+  return SENTRY_FILTERED_USER_AGENTS.some((token) => ua.includes(token))
+}
+
+/**
+ * Minimal structural shapes so the shared Sentry hooks below stay framework-
+ * free (no `@sentry/nextjs` import) and unit-testable. The runtime configs pass
+ * the SDK's real `ErrorEvent` / `Log`, which structurally satisfy these.
+ */
+type SentryEventLike = {
+  request?: { headers?: Record<string, string | undefined> }
+}
+type SentryLogLike = { message?: unknown }
+
+/**
+ * Shared server/edge `beforeSend`: drop error events whose request User-Agent
+ * is a filtered bot/crawler (#98). Lives here — beside the other shared, tested
+ * Sentry helpers — so `sentry.server.config.ts` and `sentry.edge.config.ts`
+ * share ONE implementation instead of duplicating the body and risking drift.
+ *
+ * @typeParam E - the concrete Sentry error-event type, preserved in the return.
+ * @returns the event unchanged, or `null` to drop it.
+ */
+export function sentryDropBotEvent<E extends SentryEventLike>(
+  event: E,
+): E | null {
+  const ua =
+    event.request?.headers?.['user-agent'] ??
+    event.request?.headers?.['User-Agent']
+  return isFilteredUserAgent(typeof ua === 'string' ? ua : undefined)
+    ? null
+    : event
+}
+
+/**
+ * Shared `beforeSendLog`: drop logs whose message is known-benign noise (#95).
+ * Used by every runtime; the client additionally wraps it with a
+ * `navigator.userAgent` bot check (#98) it owns inline.
+ *
+ * @typeParam L - the concrete Sentry log type, preserved in the return.
+ * @returns the log unchanged, or `null` to drop it.
+ */
+export function sentryDropNoisyLog<L extends SentryLogLike>(log: L): L | null {
+  return isSuppressedSentryLogMessage(String(log.message ?? '')) ? null : log
+}

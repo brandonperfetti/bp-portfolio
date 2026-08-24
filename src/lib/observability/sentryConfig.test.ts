@@ -5,8 +5,14 @@ import {
   getSentryEnvironment,
   getServerSentryDsn,
   getTracesSampleRate,
+  isFilteredUserAgent,
   isNoisyTransaction,
+  isSuppressedSentryLogMessage,
+  sentryDropBotEvent,
+  sentryDropNoisyLog,
   SENTRY_CONSOLE_LOG_LEVELS,
+  SENTRY_DENY_URLS,
+  SENTRY_IGNORE_ERRORS,
   sentryTracesSampler,
 } from '@/lib/observability/sentryConfig'
 
@@ -172,5 +178,175 @@ describe('SENTRY_CONSOLE_LOG_LEVELS', () => {
     expect(SENTRY_CONSOLE_LOG_LEVELS).not.toContain('log')
     expect(SENTRY_CONSOLE_LOG_LEVELS).not.toContain('info')
     expect(SENTRY_CONSOLE_LOG_LEVELS).not.toContain('debug')
+  })
+})
+
+describe('isSuppressedSentryLogMessage', () => {
+  it('suppresses the benign Node vm experimental warning (#95)', () => {
+    expect(
+      isSuppressedSentryLogMessage(
+        '(node:4) ExperimentalWarning: vm.USE_MAIN_CONTEXT_DEFAULT_LOADER is an experimental feature',
+      ),
+    ).toBe(true)
+  })
+
+  it('suppresses the transient Turnstile 300031 baseline warning (#94)', () => {
+    expect(
+      isSuppressedSentryLogMessage('[Cloudflare Turnstile] Error: 300031.'),
+    ).toBe(true)
+  })
+
+  it('does not suppress an ordinary warn/error message that is real signal', () => {
+    expect(
+      isSuppressedSentryLogMessage('Failed to load article: 500 from CMS'),
+    ).toBe(false)
+    // A different Turnstile error code is NOT the benign baseline — keep it.
+    expect(
+      isSuppressedSentryLogMessage('[Cloudflare Turnstile] Error: 110200.'),
+    ).toBe(false)
+  })
+
+  it('never suppresses an empty message', () => {
+    expect(isSuppressedSentryLogMessage('')).toBe(false)
+  })
+})
+
+describe('SENTRY_DENY_URLS', () => {
+  it('drops events sourced in the Vercel Toolbar `_next-live` bundle (BP-4, #95)', () => {
+    const url = 'app:///_next-live/feedback/feedback.js'
+    expect(SENTRY_DENY_URLS.some((pattern) => pattern.test(url))).toBe(true)
+  })
+
+  it('leaves ordinary app bundle frames alone', () => {
+    const url = 'app:///_next/static/chunks/main-app.js'
+    expect(SENTRY_DENY_URLS.some((pattern) => pattern.test(url))).toBe(false)
+  })
+})
+
+describe('SENTRY_IGNORE_ERRORS', () => {
+  const matches = (message: string) =>
+    SENTRY_IGNORE_ERRORS.some((pattern) =>
+      typeof pattern === 'string'
+        ? message.includes(pattern)
+        : pattern.test(message),
+    )
+
+  it('matches the Vercel Toolbar InvalidNodeTypeError message (BP-4, #95)', () => {
+    expect(
+      matches(
+        "InvalidNodeTypeError: Failed to execute 'selectNode' on 'Range': the given Node has no parent.",
+      ),
+    ).toBe(true)
+  })
+
+  it('does not match unrelated errors', () => {
+    expect(matches('TypeError: Cannot read properties of undefined')).toBe(
+      false,
+    )
+  })
+})
+
+describe('isFilteredUserAgent', () => {
+  it('filters self-identifying crawlers and monitors (#98)', () => {
+    expect(
+      isFilteredUserAgent('Googlebot/2.1 (+http://www.google.com/bot.html)'),
+    ).toBe(true)
+    expect(
+      isFilteredUserAgent(
+        'Mozilla/5.0 (compatible; SemrushBot/7~bl; +http://www.semrush.com/bot.html)',
+      ),
+    ).toBe(true)
+    expect(isFilteredUserAgent('Pingdom.com_bot_version_1.4')).toBe(true)
+    expect(
+      isFilteredUserAgent('facebookexternalhit/1.1 (+http://www.facebook.com)'),
+    ).toBe(true)
+  })
+
+  it('filters headless browsers and raw HTTP clients', () => {
+    expect(
+      isFilteredUserAgent(
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/120.0.0.0 Safari/537.36',
+      ),
+    ).toBe(true)
+    expect(isFilteredUserAgent('curl/8.4.0')).toBe(true)
+    expect(isFilteredUserAgent('python-requests/2.31.0')).toBe(true)
+    expect(isFilteredUserAgent('okhttp/4.12.0')).toBe(true)
+  })
+
+  it('does NOT filter real desktop/mobile browser user-agents', () => {
+    expect(
+      isFilteredUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      ),
+    ).toBe(false)
+    expect(
+      isFilteredUserAgent(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      ),
+    ).toBe(false)
+  })
+
+  it('does not treat an empty or absent user-agent as a bot', () => {
+    expect(isFilteredUserAgent('')).toBe(false)
+    expect(isFilteredUserAgent(undefined)).toBe(false)
+    expect(isFilteredUserAgent(null)).toBe(false)
+  })
+})
+
+describe('sentryDropBotEvent (shared server/edge beforeSend)', () => {
+  it('drops an error event whose request User-Agent is a bot', () => {
+    expect(
+      sentryDropBotEvent({
+        request: { headers: { 'user-agent': 'Googlebot/2.1' } },
+      }),
+    ).toBeNull()
+  })
+
+  it('also matches the capitalized `User-Agent` header key', () => {
+    expect(
+      sentryDropBotEvent({
+        request: { headers: { 'User-Agent': 'curl/8.4.0' } },
+      }),
+    ).toBeNull()
+  })
+
+  it('returns the event unchanged for a real browser User-Agent', () => {
+    const event = {
+      request: {
+        headers: {
+          'user-agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      },
+    }
+    expect(sentryDropBotEvent(event)).toBe(event)
+  })
+
+  it('returns the event unchanged when there is no request/headers/UA', () => {
+    const event = {}
+    expect(sentryDropBotEvent(event)).toBe(event)
+  })
+})
+
+describe('sentryDropNoisyLog (shared beforeSendLog)', () => {
+  it('drops a known-benign-message log', () => {
+    expect(
+      sentryDropNoisyLog({ message: '[Cloudflare Turnstile] Error: 300031.' }),
+    ).toBeNull()
+    expect(
+      sentryDropNoisyLog({
+        message: 'ExperimentalWarning: vm.USE_MAIN_CONTEXT_DEFAULT_LOADER',
+      }),
+    ).toBeNull()
+  })
+
+  it('returns a real-signal log unchanged', () => {
+    const log = { message: 'Failed to load article: 500 from CMS' }
+    expect(sentryDropNoisyLog(log)).toBe(log)
+  })
+
+  it('returns a message-less log unchanged', () => {
+    const log = {}
+    expect(sentryDropNoisyLog(log)).toBe(log)
   })
 })

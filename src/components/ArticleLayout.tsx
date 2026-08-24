@@ -1,6 +1,6 @@
 'use client'
 
-import { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
@@ -45,6 +45,15 @@ function ArrowLeftIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
  * `AppContext`, i.e. in-app navigation — `router.back()` on a direct load
  * would exit the site. The hero image stays hidden until load (or error,
  * as a fallback) so the reveal never flashes a half-loaded image.
+ *
+ * @remarks (#92) The hero renders `priority`, which makes Next emit a
+ * `<link rel="preload">` for it — the browser can start, and finish,
+ * fetching/decoding the image before hydration attaches the `onLoad`
+ * handler. When that happens the native `load` event has already fired
+ * and won't fire again, so `onLoad` never runs and the hero would stay
+ * `opacity-0` forever. `HTMLImageElement.complete` stays readable after
+ * the fact (unlike the one-shot `load` event), so the effect below checks
+ * it on mount/src-change as a fallback for the missed event.
  */
 export function ArticleLayout({
   article,
@@ -56,10 +65,19 @@ export function ArticleLayout({
   const router = useRouter()
   const { previousPathname } = useContext(AppContext)
   const [isHeroImageLoaded, setIsHeroImageLoaded] = useState(false)
+  const heroImageRef = useRef<HTMLImageElement>(null)
 
-  // Reset image reveal choreography when navigating between article heroes.
+  // Reset image reveal choreography when navigating between article heroes,
+  // then immediately recover the case where the browser already finished
+  // loading the (possibly cached/preloaded) image before this effect ran —
+  // see the `#92` remark above `ArticleLayout` for why `onLoad` alone can't
+  // be trusted here.
   useEffect(() => {
     setIsHeroImageLoaded(false)
+
+    if (heroImageRef.current?.complete) {
+      setIsHeroImageLoaded(true)
+    }
   }, [article.image])
 
   return (
@@ -94,6 +112,7 @@ export function ArticleLayout({
                 <ScrollReveal {...REVEAL_ARTICLE}>
                   <div className="mt-8 overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800">
                     <Image
+                      ref={heroImageRef}
                       src={getOptimizedImageUrl(article.image, {
                         width: 1600,
                         height: 900,
