@@ -3,7 +3,11 @@ import * as Sentry from '@sentry/nextjs'
 import {
   getClientSentryDsn,
   getSentryEnvironment,
+  isFilteredUserAgent,
   SENTRY_CONSOLE_LOG_LEVELS,
+  SENTRY_DENY_URLS,
+  SENTRY_IGNORE_ERRORS,
+  sentryDropNoisyLog,
   sentryTracesSampler,
 } from '@/lib/observability/sentryConfig'
 
@@ -36,6 +40,29 @@ if (dsn) {
     debug: false,
     // Sentry Logs (structured logging view, separate from error/tracing).
     enableLogs: true,
+    // Drop Vercel Toolbar live-feedback noise (BP-PORTFOLIO-4, #95) — owner-
+    // only, 0 real users — by both its injected source and its error message.
+    denyUrls: SENTRY_DENY_URLS,
+    ignoreErrors: SENTRY_IGNORE_ERRORS,
+    // Drop everything from known bot/crawler user-agents (#98) — Sentry noise
+    // + ingest cost, never a real user. Bots aren't blocked from the site, only
+    // from Sentry (Turnstile/WAF own site access).
+    beforeSend: (event) =>
+      typeof navigator !== 'undefined' &&
+      isFilteredUserAgent(navigator.userAgent)
+        ? null
+        : event,
+    // Keep known-benign, high-volume warnings — and bot-UA logs — out of Sentry
+    // Logs (#95, #94, #98).
+    beforeSendLog: (log) => {
+      if (
+        typeof navigator !== 'undefined' &&
+        isFilteredUserAgent(navigator.userAgent)
+      ) {
+        return null
+      }
+      return sentryDropNoisyLog(log)
+    },
     integrations: [
       Sentry.consoleLoggingIntegration({
         levels: [...SENTRY_CONSOLE_LOG_LEVELS],

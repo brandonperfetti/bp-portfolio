@@ -86,7 +86,7 @@ jobs:
           # sanity: an empty/failed dump is worse than a loud failure
           size=$(stat -c%s db.dump)
           echo "dump size: ${size} bytes"
-          test "$size" -gt ${{ matrix.min_bytes }} || { echo "::error::dump suspiciously small (${size} bytes, floor ${{ matrix.min_bytes }})"; exit 1; }
+          test "$size" -ge ${{ matrix.min_bytes }} || { echo "::error::dump suspiciously small (${size} bytes, floor ${{ matrix.min_bytes }})"; exit 1; }
 
       - name: Encrypt dump (${{ matrix.target }})
         env:
