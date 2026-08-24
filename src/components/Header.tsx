@@ -473,7 +473,7 @@ export function Header({
                 'var(--header-inner-position)' as React.CSSProperties['position'],
             }}
           >
-            <div className="relative flex gap-3 md:gap-4">
+            <div className="relative flex gap-3 lg:gap-4">
               <div className="flex flex-1">
                 {!isHomePage && (
                   <AvatarContainer>
@@ -481,18 +481,23 @@ export function Header({
                   </AvatarContainer>
                 )}
               </div>
-              <div className="flex flex-1 justify-end md:justify-center">
+              {/* Nav collapses to the "Menu" popover below `lg` (not `md`):
+                  tablet widths don't fit the full inline nav once the signed-in
+                  account chip is present — the avatar was pushed off-screen,
+                  causing horizontal scroll (Brandon). Tablet now mirrors the
+                  mobile Menu experience. */}
+              <div className="flex flex-1 justify-end lg:justify-center">
                 <MobileNavigation
                   items={navigationItems}
-                  className="pointer-events-auto md:hidden"
+                  className="pointer-events-auto lg:hidden"
                 />
                 <DesktopNavigation
                   items={navigationItems}
-                  className="pointer-events-auto hidden md:block"
+                  className="pointer-events-auto hidden lg:block"
                 />
               </div>
-              <div className="flex justify-end md:flex-1">
-                <div className="pointer-events-auto flex items-center gap-2 md:gap-3">
+              <div className="flex justify-end lg:flex-1">
+                <div className="pointer-events-auto flex items-center gap-2 lg:gap-3">
                   <CommandPalette />
                   <ThemeToggle />
                   {showUserButton && <HeaderUserButton />}
