@@ -52,6 +52,15 @@ const article = {
   image: 'https://example.public.blob.vercel-storage.com/cover.png',
 }
 
+// jsdom implements `complete` as a read-only accessor on the prototype. Capture
+// its native descriptor once (before any test overrides it) so afterEach can
+// restore it — deleting the property would strip jsdom's accessor for every
+// later test in this file (Vitest isolates files, not tests within a file).
+const originalCompleteDescriptor = Object.getOwnPropertyDescriptor(
+  HTMLImageElement.prototype,
+  'complete',
+)
+
 /** Forces every `<img>`'s `.complete` read to return `value` for the test. */
 function stubImageComplete(value: boolean) {
   Object.defineProperty(HTMLImageElement.prototype, 'complete', {
@@ -62,7 +71,15 @@ function stubImageComplete(value: boolean) {
 
 afterEach(() => {
   cleanup()
-  Reflect.deleteProperty(HTMLImageElement.prototype, 'complete')
+  if (originalCompleteDescriptor) {
+    Object.defineProperty(
+      HTMLImageElement.prototype,
+      'complete',
+      originalCompleteDescriptor,
+    )
+  } else {
+    Reflect.deleteProperty(HTMLImageElement.prototype, 'complete')
+  }
 })
 
 describe('ArticleLayout hero image reveal', () => {
