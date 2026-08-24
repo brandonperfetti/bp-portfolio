@@ -4,10 +4,10 @@ import {
   getClientSentryDsn,
   getSentryEnvironment,
   isFilteredUserAgent,
-  isSuppressedSentryLogMessage,
   SENTRY_CONSOLE_LOG_LEVELS,
   SENTRY_DENY_URLS,
   SENTRY_IGNORE_ERRORS,
+  sentryDropNoisyLog,
   sentryTracesSampler,
 } from '@/lib/observability/sentryConfig'
 
@@ -61,9 +61,7 @@ if (dsn) {
       ) {
         return null
       }
-      return isSuppressedSentryLogMessage(String(log.message ?? ''))
-        ? null
-        : log
+      return sentryDropNoisyLog(log)
     },
     integrations: [
       Sentry.consoleLoggingIntegration({

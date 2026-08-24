@@ -275,3 +275,45 @@ export function isFilteredUserAgent(
   const ua = userAgent.toLowerCase()
   return SENTRY_FILTERED_USER_AGENTS.some((token) => ua.includes(token))
 }
+
+/**
+ * Minimal structural shapes so the shared Sentry hooks below stay framework-
+ * free (no `@sentry/nextjs` import) and unit-testable. The runtime configs pass
+ * the SDK's real `ErrorEvent` / `Log`, which structurally satisfy these.
+ */
+type SentryEventLike = {
+  request?: { headers?: Record<string, string | undefined> }
+}
+type SentryLogLike = { message?: unknown }
+
+/**
+ * Shared server/edge `beforeSend`: drop error events whose request User-Agent
+ * is a filtered bot/crawler (#98). Lives here — beside the other shared, tested
+ * Sentry helpers — so `sentry.server.config.ts` and `sentry.edge.config.ts`
+ * share ONE implementation instead of duplicating the body and risking drift.
+ *
+ * @typeParam E - the concrete Sentry error-event type, preserved in the return.
+ * @returns the event unchanged, or `null` to drop it.
+ */
+export function sentryDropBotEvent<E extends SentryEventLike>(
+  event: E,
+): E | null {
+  const ua =
+    event.request?.headers?.['user-agent'] ??
+    event.request?.headers?.['User-Agent']
+  return isFilteredUserAgent(typeof ua === 'string' ? ua : undefined)
+    ? null
+    : event
+}
+
+/**
+ * Shared `beforeSendLog`: drop logs whose message is known-benign noise (#95).
+ * Used by every runtime; the client additionally wraps it with a
+ * `navigator.userAgent` bot check (#98) it owns inline.
+ *
+ * @typeParam L - the concrete Sentry log type, preserved in the return.
+ * @returns the log unchanged, or `null` to drop it.
+ */
+export function sentryDropNoisyLog<L extends SentryLogLike>(log: L): L | null {
+  return isSuppressedSentryLogMessage(String(log.message ?? '')) ? null : log
+}

@@ -8,6 +8,8 @@ import {
   isFilteredUserAgent,
   isNoisyTransaction,
   isSuppressedSentryLogMessage,
+  sentryDropBotEvent,
+  sentryDropNoisyLog,
   SENTRY_CONSOLE_LOG_LEVELS,
   SENTRY_DENY_URLS,
   SENTRY_IGNORE_ERRORS,
@@ -288,5 +290,63 @@ describe('isFilteredUserAgent', () => {
     expect(isFilteredUserAgent('')).toBe(false)
     expect(isFilteredUserAgent(undefined)).toBe(false)
     expect(isFilteredUserAgent(null)).toBe(false)
+  })
+})
+
+describe('sentryDropBotEvent (shared server/edge beforeSend)', () => {
+  it('drops an error event whose request User-Agent is a bot', () => {
+    expect(
+      sentryDropBotEvent({
+        request: { headers: { 'user-agent': 'Googlebot/2.1' } },
+      }),
+    ).toBeNull()
+  })
+
+  it('also matches the capitalized `User-Agent` header key', () => {
+    expect(
+      sentryDropBotEvent({
+        request: { headers: { 'User-Agent': 'curl/8.4.0' } },
+      }),
+    ).toBeNull()
+  })
+
+  it('returns the event unchanged for a real browser User-Agent', () => {
+    const event = {
+      request: {
+        headers: {
+          'user-agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      },
+    }
+    expect(sentryDropBotEvent(event)).toBe(event)
+  })
+
+  it('returns the event unchanged when there is no request/headers/UA', () => {
+    const event = {}
+    expect(sentryDropBotEvent(event)).toBe(event)
+  })
+})
+
+describe('sentryDropNoisyLog (shared beforeSendLog)', () => {
+  it('drops a known-benign-message log', () => {
+    expect(
+      sentryDropNoisyLog({ message: '[Cloudflare Turnstile] Error: 300031.' }),
+    ).toBeNull()
+    expect(
+      sentryDropNoisyLog({
+        message: 'ExperimentalWarning: vm.USE_MAIN_CONTEXT_DEFAULT_LOADER',
+      }),
+    ).toBeNull()
+  })
+
+  it('returns a real-signal log unchanged', () => {
+    const log = { message: 'Failed to load article: 500 from CMS' }
+    expect(sentryDropNoisyLog(log)).toBe(log)
+  })
+
+  it('returns a message-less log unchanged', () => {
+    const log = {}
+    expect(sentryDropNoisyLog(log)).toBe(log)
   })
 })
