@@ -42,8 +42,11 @@ export default async function CorvusPage() {
           the atlas palette/fonts and the fixed-height flex frame so the chat
           fills the space and the composer stays pinned at the bottom. No
           background of its own — the chat card sits directly on the site
-          page (zinc-50 / black), so there's no darker band behind it. */}
-      <div className="corvus-surface flex h-[calc(100dvh-5.75rem)] min-h-0 flex-col overflow-hidden rounded-3xl px-3 pt-8 pb-2 sm:h-[calc(100dvh-6.25rem)] sm:px-4 sm:pt-10 sm:pb-3">
+          page (zinc-50 / black), so there's no darker band behind it. No
+          horizontal padding of its own: the surrounding Container already
+          aligns content with the rest of the site, so an extra inset here only
+          pushed the chat in past every other page's content (Brandon). */}
+      <div className="corvus-surface flex h-[calc(100dvh-5.75rem)] min-h-0 flex-col overflow-hidden rounded-3xl pt-8 pb-2 sm:h-[calc(100dvh-6.25rem)] sm:pt-10 sm:pb-3">
         <div className="min-h-0 flex-1">
           <CorvusChat title={headingText} subtitle={subtitleText} />
         </div>
