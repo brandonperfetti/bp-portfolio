@@ -26,8 +26,14 @@ test('header uses the Menu popover on tablet and the inline nav on desktop', asy
   await expect(menuButton).toBeVisible()
   await expect(inlineNavLink).toBeHidden()
 
-  // Desktop (>= lg / 1024px): inline nav shown, Menu popover hidden.
-  await page.setViewportSize({ width: 1280, height: 900 })
+  // Just below the lg handoff (1023px): still the mobile "Menu" popover — this
+  // is the assertion that would catch the breakpoint drifting to `xl`/`2xl`.
+  await page.setViewportSize({ width: 1023, height: 900 })
+  await expect(menuButton).toBeVisible()
+  await expect(inlineNavLink).toBeHidden()
+
+  // At the lg boundary (1024px): inline nav shown, Menu popover hidden.
+  await page.setViewportSize({ width: 1024, height: 900 })
   await expect(inlineNavLink).toBeVisible()
   await expect(menuButton).toBeHidden()
 })
