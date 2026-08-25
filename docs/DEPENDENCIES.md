@@ -52,24 +52,20 @@ one set, version-locked.
 
 ## Analytics & consent (#83)
 
-- `@c15t/react` — self-hostable, open-source (Apache-2.0) consent runtime:
-  `ConsentManagerProvider` + `ConsentBanner`/`ConsentDialog`/`ConsentDialogLink`,
-  themed from the site's own zinc/teal tokens. Runs in `mode: 'offline'` today
-  (client-side, localStorage-backed). The runtime components are imported from
-  `@c15t/react` rather than the `@c15t/nextjs` barrel, which pulls `next/script`
-  (via `C15tPrefetch`) into the widely-imported `providers.tsx` and breaks the
-  vitest unit resolver — offline mode needs none of that Next-only surface.
-  Pairs GA4 with the always-on cookieless Vercel Analytics — GA4 is free and
-  the c15t pattern ports across projects (the motivation in #83).
-- `@c15t/nextjs` — the Next.js integration package (Apache-2.0): C15tPrefetch,
-  server-side `fetchInitialData`, middleware, and the route-handler surface for
-  the self-hosted `@c15t/backend`. Installed for the self-host fast-follow;
-  offline mode imports its runtime from `@c15t/react` (which it re-exports).
+- `@c15t/react` — open-source (Apache-2.0) consent runtime, used **headless**:
+  `ConsentManagerProvider` + `useConsentManager()` only, in `mode: 'offline'`
+  with `noStyle: true`. The banner and dialog are bp's own components (Tailwind
+  v4 + Radix `Dialog`/`Switch`), not c15t's built-ins — no `@c15t/react/styles.css`,
+  no "Secured by c15t" badge. Geo is decided in `src/proxy.ts` (a
+  `cookieConsentRequired` cookie), not by c15t. Pairs GA4 with the always-on
+  cookieless Vercel Analytics — GA4 is free and the pattern ports across
+  projects (#83). (`@c15t/nextjs` was removed — the self-host backend it existed
+  for is not used; the geo cookie replaces it.)
 - `@c15t/scripts` — prebuilt consent-gated script integrations. Only the GA4
   `gtag` (Google Consent Mode v2) integration is used; imported via the
   `@c15t/scripts/google-tag` subpath so the rest tree-shakes away. See
-  `docs/ANALYTICS.md` for the architecture, the Consent Mode v2 cookieless-ping
-  caveat, and the self-host decision.
+  `docs/ANALYTICS.md` for the architecture and the Consent Mode v2
+  cookieless-ping caveat.
 
 ## Dev/test
 

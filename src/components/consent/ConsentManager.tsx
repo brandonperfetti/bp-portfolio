@@ -1,54 +1,81 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-// c15t prebuilt (styled) component styles — the full compiled stylesheet from
-// @c15t/ui, self-contained (no Tailwind content scanning, so no tailwind.css
-// edit). Runtime components come from @c15t/react (which @c15t/nextjs merely
-// re-exports); importing the @c15t/nextjs barrel would drag in `next/script`
-// via C15tPrefetch, which the repo's vitest unit resolver can't resolve and
-// which offline mode doesn't need. @c15t/nextjs stays installed for the
-// self-host fast-follow.
-import '@c15t/react/styles.css'
-import {
-  ConsentBanner,
-  ConsentDialog,
-  ConsentManagerProvider,
-} from '@c15t/react'
+import { ConsentManagerProvider, useConsentManager } from '@c15t/react'
 
-import { usePrefersReducedMotion } from '@/lib/motion/usePrefersReducedMotion'
+import { readConsentRequiredCookie } from '@/lib/consent/cookie'
 
+import { CookieBanner } from './CookieBanner'
+import { CookieDialog } from './CookieDialog'
 import {
   buildConsentManagerOptions,
   buildConsentScripts,
   readGaEnv,
+  shouldAutoGrantMeasurement,
 } from './consent-config'
 
 /**
- * App-wide c15t consent runtime: mounts the provider plus the banner and
- * dialog once, inside `Providers` so it reads the same next-themes context as
- * the rest of the app (light/dark parity, teal `:focus-visible` ring). Runs in
- * `mode: 'offline'` — GA4 is wired via c15t's Consent Mode v2 script loader;
- * the self-hosted backend is a separate fast-follow (#83).
+ * Reads the geo-consent cookie (client-side) and drives the opt-out-aware
+ * default: where consent is confidently NOT required, `measurement` is granted
+ * so analytics run unconsented; where required or unknown, it stays denied
+ * until the visitor chooses. Renders the custom banner + dialog. Must be inside
+ * `ConsentManagerProvider`.
+ */
+function ConsentSurface() {
+  const { hasConsented, setConsent } = useConsentManager()
+  const [consentRequired, setConsentRequired] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    setConsentRequired(readConsentRequiredCookie(document.cookie))
+  }, [])
+
+  useEffect(() => {
+    if (consentRequired === null) return
+    if (
+      shouldAutoGrantMeasurement({
+        consentRequired,
+        hasConsented: hasConsented(),
+      })
+    ) {
+      // Persisted opt-out grant (short-lived geo cookie re-resolves on
+      // navigation; an explicit later choice via the manage dialog wins).
+      setConsent('measurement', true)
+    }
+    // Runs once the cookie resolves; hasConsented/setConsent are stable store
+    // methods, intentionally not in the dep array.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [consentRequired])
+
+  return (
+    <>
+      <CookieBanner consentRequired={consentRequired} />
+      <CookieDialog />
+    </>
+  )
+}
+
+/**
+ * App-wide consent runtime, mounted once inside `Providers`. Headless c15t
+ * (`noStyle`, `mode:'offline'`, no built-in components, no `styles.css`) — the
+ * banner/dialog are bp's own components in the site's design system, and the
+ * geo decision comes from `src/proxy.ts`'s cookie, not c15t. GA4 is wired via
+ * c15t's Consent Mode v2 script loader, gated to production + a present id.
  *
  * @see docs/ANALYTICS.md for the analytics + consent architecture.
  */
 export function ConsentManager({ children }: { children: React.ReactNode }) {
-  const prefersReducedMotion = usePrefersReducedMotion()
-
   const options = useMemo(() => {
     const { measurementId, isProduction } = readGaEnv()
     return buildConsentManagerOptions({
       scripts: buildConsentScripts({ measurementId, isProduction }),
-      disableAnimation: prefersReducedMotion,
     })
-  }, [prefersReducedMotion])
+  }, [])
 
   return (
     <ConsentManagerProvider options={options}>
       {children}
-      <ConsentBanner />
-      <ConsentDialog />
+      <ConsentSurface />
     </ConsentManagerProvider>
   )
 }

@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildConsentManagerOptions,
   buildConsentScripts,
   CONSENT_CATEGORIES,
-  consentTheme,
-  offlinePolicyPacks,
+  CONSENT_STORAGE_KEY,
+  readGaEnv,
+  shouldAutoGrantMeasurement,
+  shouldShowBanner,
 } from './consent-config'
 
 describe('buildConsentScripts (GA4 gating)', () => {
@@ -34,8 +36,6 @@ describe('buildConsentScripts (GA4 gating)', () => {
     })
     expect(scripts).toHaveLength(1)
     const [script] = scripts
-    // Consent Mode v2 shape: measurement category, always-load (gtag manages
-    // its own consent internally), and the id carried into the gtag.js src.
     expect(script.category).toBe('measurement')
     expect(script.alwaysLoad).toBe(true)
     expect(script.src).toContain('G-TEST12345')
@@ -43,64 +43,122 @@ describe('buildConsentScripts (GA4 gating)', () => {
   })
 })
 
-describe('offlinePolicyPacks (geo preset triad)', () => {
-  it('is the europe-opt-in / california-opt-out / world-no-banner triad', () => {
-    const packs = offlinePolicyPacks()
-    expect(packs).toHaveLength(3)
-    const ids = packs.map((p) => p.id)
-    expect(ids).toContain('europe_opt_in')
-    expect(ids).toContain('california_opt_out')
-    expect(ids).toContain('world_no_banner')
+describe('readGaEnv (Sp-1: NEXT_PUBLIC_VERCEL_ENV, not NODE_ENV)', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('is production only when NEXT_PUBLIC_VERCEL_ENV is exactly "production"', () => {
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_GA_MEASUREMENT_ID', 'G-TEST12345')
+    const env = readGaEnv()
+    expect(env.isProduction).toBe(true)
+    expect(env.measurementId).toBe('G-TEST12345')
+    expect(buildConsentScripts(env)).toHaveLength(1)
   })
 
-  it('uses europe-opt-in as the fallback so no-geo visitors see the banner', () => {
-    // Offline mode cannot geo-detect; the fallback pack governs every visitor.
-    // europeOptIn carries match.fallback and shows the banner (opt-in), which
-    // is the conservative-compliant default. See docs/ANALYTICS.md.
-    const europe = offlinePolicyPacks().find((p) => p.id === 'europe_opt_in')
-    expect(europe?.match.fallback).toBe(true)
-    expect(europe?.ui?.mode).toBe('banner')
+  it('is NOT production on Vercel Preview (the NODE_ENV footgun)', () => {
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'preview')
+    vi.stubEnv('NEXT_PUBLIC_GA_MEASUREMENT_ID', 'G-TEST12345')
+    const env = readGaEnv()
+    expect(env.isProduction).toBe(false)
+    expect(buildConsentScripts(env)).toEqual([])
+  })
+
+  it('is NOT production when the env is unset (local/dev)', () => {
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', '')
+    vi.stubEnv('NEXT_PUBLIC_GA_MEASUREMENT_ID', 'G-TEST12345')
+    expect(readGaEnv().isProduction).toBe(false)
+  })
+
+  it('loads zero Google code when the id is empty even in production', () => {
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_GA_MEASUREMENT_ID', '')
+    expect(buildConsentScripts(readGaEnv())).toEqual([])
   })
 })
 
-describe('buildConsentManagerOptions', () => {
-  const options = buildConsentManagerOptions({
-    scripts: [],
-    disableAnimation: false,
-  })
+describe('buildConsentManagerOptions (headless)', () => {
+  const options = buildConsentManagerOptions({ scripts: [] })
 
-  it('runs in offline mode with the triad policy packs', () => {
+  it('is offline + noStyle with the storage key and no built-in theme/policy', () => {
     expect(options.mode).toBe('offline')
-    expect(options.offlinePolicy?.policyPacks).toHaveLength(3)
+    expect(options.noStyle).toBe(true)
+    expect(options.storageConfig).toEqual({ storageKey: CONSENT_STORAGE_KEY })
+    // Headless: no c15t theme object, no offlinePolicy/policyPacks.
+    expect('theme' in options).toBe(false)
+    expect('offlinePolicy' in options).toBe(false)
   })
 
-  it('offers only the necessary + measurement categories (no ads/marketing)', () => {
+  it('offers only the necessary + measurement categories', () => {
     expect(options.consentCategories).toEqual([...CONSENT_CATEGORIES])
     expect(options.consentCategories).not.toContain('marketing')
   })
 
-  it('passes the scripts and reduced-motion flag through, and themes from site tokens', () => {
-    expect(options.scripts).toEqual([])
-    expect(options.disableAnimation).toBe(false)
-    expect(options.trapFocus).toBe(true)
-    expect(options.theme).toBe(consentTheme)
+  it('passes the scripts through', () => {
+    const scripts = buildConsentScripts({
+      measurementId: 'G-X',
+      isProduction: true,
+    })
+    expect(buildConsentManagerOptions({ scripts }).scripts).toBe(scripts)
+  })
+})
+
+describe('shouldShowBanner (fail-closed, choice-aware)', () => {
+  it('shows where consent is required and no choice made', () => {
+    expect(
+      shouldShowBanner({ consentRequired: true, hasConsented: false }),
+    ).toBe(true)
   })
 
-  it('reflects the reduced-motion preference', () => {
-    const reduced = buildConsentManagerOptions({
-      scripts: [],
-      disableAnimation: true,
-    })
-    expect(reduced.disableAnimation).toBe(true)
+  it('shows where geo is unknown (fail closed)', () => {
+    expect(
+      shouldShowBanner({ consentRequired: null, hasConsented: false }),
+    ).toBe(true)
   })
 
-  it('only sets overrides when provided (app relies on the fallback)', () => {
-    expect(options.overrides).toBeUndefined()
-    const forced = buildConsentManagerOptions({
-      scripts: [],
-      disableAnimation: false,
-      overrides: { country: 'DE' },
-    })
-    expect(forced.overrides).toEqual({ country: 'DE' })
+  it('suppresses where consent is confidently not required', () => {
+    expect(
+      shouldShowBanner({ consentRequired: false, hasConsented: false }),
+    ).toBe(false)
+  })
+
+  it('suppresses once the visitor has made a choice', () => {
+    expect(
+      shouldShowBanner({ consentRequired: true, hasConsented: true }),
+    ).toBe(false)
+  })
+})
+
+describe('shouldAutoGrantMeasurement (opt-out-aware analytics)', () => {
+  it('auto-grants measurement only where not required and no prior choice', () => {
+    expect(
+      shouldAutoGrantMeasurement({
+        consentRequired: false,
+        hasConsented: false,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not auto-grant where consent is required or unknown', () => {
+    expect(
+      shouldAutoGrantMeasurement({
+        consentRequired: true,
+        hasConsented: false,
+      }),
+    ).toBe(false)
+    expect(
+      shouldAutoGrantMeasurement({
+        consentRequired: null,
+        hasConsented: false,
+      }),
+    ).toBe(false)
+  })
+
+  it('does not override an explicit prior choice', () => {
+    expect(
+      shouldAutoGrantMeasurement({
+        consentRequired: false,
+        hasConsented: true,
+      }),
+    ).toBe(false)
   })
 })
