@@ -2,11 +2,15 @@ import { getArticleBySlug } from '@/lib/articles'
 import { renderOgCard } from '@/lib/og/card'
 
 /**
- * Generated OG title-card for an article (T7). Node runtime because
- * {@link renderOgCard} reads the bundled font files from disk (`next/og` can run
- * on the edge, but font `fs` reads cannot).
+ * Generated OG title-card for an article (T7). Runs on the Node.js runtime
+ * because {@link renderOgCard} reads the bundled font files from disk (`next/og`
+ * can run on the edge, but font `fs` reads cannot).
+ *
+ * @remarks #76 Piece 1: the explicit `export const runtime = 'nodejs'` was
+ * removed — the `runtime` route-segment config is incompatible with
+ * `cacheComponents`, and Node is already the default runtime, so this is a
+ * behavior-preserving no-op removal.
  */
-export const runtime = 'nodejs'
 
 type RouteContext = { params: Promise<{ slug: string }> }
 

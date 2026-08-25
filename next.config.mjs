@@ -2,6 +2,11 @@ import { withPayload } from '@payloadcms/next/withPayload'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // #76 Piece 1: enable Cache Components (top-level flag in Next 16.3 — the
+  // experimental location is deprecated). Piece 1 only flips the flag and adds
+  // the minimum Suspense/sync-IO scaffolding for a behavior-preserving build;
+  // the `'use cache'` conversion of the CMS reader layer is Piece 2.
+  cacheComponents: true,
   images: {
     formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 60 * 60 * 24 * 7,

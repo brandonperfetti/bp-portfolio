@@ -112,39 +112,48 @@ function Role({ role }: { role: Role }) {
   )
 }
 
-const defaultResume: Array<Role> = [
-  {
-    company: 'Brytecore',
-    title: 'Senior Frontend Engineer',
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1774040299/bp-portfolio/logos/footer-brytecore-bug_xsf8iw.webp',
-    start: '2024',
-    end: {
-      label: 'Present',
-      dateTime: new Date().getFullYear().toString(),
+// #76 Piece 1: the "Present" role's machine-readable `dateTime` is the current
+// year. It was `new Date().getFullYear()` in this module-level const, which
+// evaluates at import — a synchronous-IO read that `cacheComponents` rejects
+// during prerender (and, unlike `usePathname`, sync-IO can't be deferred).
+// Built via a factory instead so the read moves into the request-time render of
+// the async `Resume` Server Component below. Behavior-preserving (same current
+// year in the attribute; the visible label stays "Present").
+function buildDefaultResume(presentDateTime: string): Array<Role> {
+  return [
+    {
+      company: 'Brytecore',
+      title: 'Senior Frontend Engineer',
+      logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1774040299/bp-portfolio/logos/footer-brytecore-bug_xsf8iw.webp',
+      start: '2024',
+      end: {
+        label: 'Present',
+        dateTime: presentDateTime,
+      },
     },
-  },
-  {
-    company: 'Lone Wolf Technologies',
-    title: 'Technical PM + Software Engineer',
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562788/bp-portfolio/images/logos/lone-wolf_hpftff_fsqe3o.png',
-    start: '2021',
-    end: '2023',
-  },
-  {
-    company: 'W+R Studios',
-    title: 'Technical PM + Senior Data Integrations Engineer',
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
-    start: '2017',
-    end: '2020',
-  },
-  {
-    company: 'W+R Studios',
-    title: 'Technical PM + Data Integrations Engineer',
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
-    start: '2013',
-    end: '2017',
-  },
-]
+    {
+      company: 'Lone Wolf Technologies',
+      title: 'Technical PM + Software Engineer',
+      logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562788/bp-portfolio/images/logos/lone-wolf_hpftff_fsqe3o.png',
+      start: '2021',
+      end: '2023',
+    },
+    {
+      company: 'W+R Studios',
+      title: 'Technical PM + Senior Data Integrations Engineer',
+      logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
+      start: '2017',
+      end: '2020',
+    },
+    {
+      company: 'W+R Studios',
+      title: 'Technical PM + Data Integrations Engineer',
+      logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
+      start: '2013',
+      end: '2017',
+    },
+  ]
+}
 
 export async function Resume() {
   const cmsResume = await getCmsWorkHistory()
@@ -160,7 +169,7 @@ export async function Resume() {
         start: entry.start,
         end: entry.end,
       }))
-    : defaultResume
+    : buildDefaultResume(new Date().getFullYear().toString())
 
   return (
     <div className="rounded-2xl border border-zinc-100 p-6 dark:border-zinc-700/40">

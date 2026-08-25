@@ -5,7 +5,12 @@ import { getPublishedPageSlugs } from '@/lib/cms/pagesRepo'
 import { isFuturePublicationDate, toValidDate } from '@/lib/date'
 import { getSiteUrl } from '@/lib/site'
 
-export const revalidate = 3600
+// #76 Piece 1: `export const revalidate = 3600` removed — route-segment cache
+// directives are incompatible with `cacheComponents`. Piece 1 is removal-only;
+// this route now renders dynamically (no route-level ISR). Unlike feed.xml /
+// llms*.txt, this handler sets no `Cache-Control` header, so it loses caching
+// until Piece 2 restores it via `'use cache'` + `cacheLife` (and adds the
+// empty-CMS `generateStaticParams` guard). Carry-forward flagged in the summary.
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = getSiteUrl()

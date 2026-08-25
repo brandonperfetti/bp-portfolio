@@ -20,7 +20,12 @@ import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import { getSiteUrl } from '@/lib/site'
 import type { CmsAuthor } from '@/lib/cms/types'
 
-export const dynamicParams = true
+// #76 Piece 1: `export const dynamicParams = true` removed — `dynamicParams` is
+// unsupported under `cacheComponents` (hard build error). Its behavior (serve
+// params not returned by `generateStaticParams` at request time) is the
+// cacheComponents default, so removal is behavior-preserving. `notFound()` in
+// the page still handles slugs that don't resolve. Piece 2 adds the empty-CMS
+// `generateStaticParams` guard + the `<Suspense>`/auth-gated-body split.
 
 type Params = {
   slug: string

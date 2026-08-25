@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -61,7 +62,22 @@ const AGENT_LINKS = [
  * @remarks Renders nothing on `/corvus` — the chat surface owns its full
  * viewport and a footer would push the composer off-screen.
  */
-export function FooterWithNavigation({
+export function FooterWithNavigation(props: {
+  navigationItems: Array<Pick<CmsNavigationItem, 'href' | 'label'>>
+}) {
+  // #76 Piece 1: `usePathname` suspends during the static-shell prerender of
+  // dynamic-param routes (`/articles/[slug]`, `/[slug]`) under cacheComponents.
+  // Isolate the read behind a Suspense boundary so those shells prerender; the
+  // footer streams in at request time with identical markup (behavior-preserving).
+  // A boundary that never suspends (static routes) is a no-op.
+  return (
+    <Suspense fallback={null}>
+      <FooterInner {...props} />
+    </Suspense>
+  )
+}
+
+function FooterInner({
   navigationItems,
 }: {
   navigationItems: Array<Pick<CmsNavigationItem, 'href' | 'label'>>

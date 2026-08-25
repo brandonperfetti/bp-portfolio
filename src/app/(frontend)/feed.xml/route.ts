@@ -4,7 +4,10 @@ import { getAllArticles } from '@/lib/articles'
 import { isFuturePublicationDate } from '@/lib/date'
 import { getSiteUrl, SITE_DESCRIPTION } from '@/lib/site'
 
-export const revalidate = 3600
+// #76 Piece 1: `export const revalidate = 3600` removed (incompatible with
+// `cacheComponents`; removal-only in Piece 1). This handler already sets
+// `Cache-Control: s-maxage=3600` on its Response (below), so CDN caching is
+// preserved; Piece 2 may restore route-level ISR via `'use cache'` + `cacheLife`.
 
 /**
  * RSS 2.0 feed rendered directly from Payload content.
