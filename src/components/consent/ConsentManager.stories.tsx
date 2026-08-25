@@ -26,7 +26,9 @@ function ConsentHarness({
     <ConsentManagerProvider
       options={buildConsentManagerOptions({ scripts: [] })}
     >
-      <div className="min-h-[60vh] p-6">
+      {/* Tall on purpose so the open-in-place (no scroll jump) play function
+          below can scroll the page first. */}
+      <div className="min-h-[200vh] p-6">
         <p className="text-sm text-zinc-600 dark:text-zinc-300">
           Demo surface. Use “Manage cookies” to open the dialog.
         </p>
@@ -91,12 +93,16 @@ export const NotRequiredSuppressed: Story = {
       canvas.queryByRole('region', { name: /cookie consent/i }),
     ).not.toBeInTheDocument()
 
+    // Fix 2 regression guard: scroll down, then opening the dialog must NOT
+    // yank the page back to the top (was scrollY 2200 → 0).
+    window.scrollTo(0, 300)
     await userEvent.click(
       await canvas.findByRole('button', { name: /manage cookies/i }),
     )
     const body = within(document.body)
     const dialog = await body.findByRole('dialog')
     expect(dialog).toBeInTheDocument()
+    expect(Math.abs(window.scrollY - 300)).toBeLessThan(5)
     // Toggle the analytics switch and save.
     const analytics = within(dialog).getByRole('switch', { name: /analytics/i })
     await userEvent.click(analytics)

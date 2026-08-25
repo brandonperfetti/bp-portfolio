@@ -36,9 +36,9 @@ export function CookieBanner({
     <div
       role="region"
       aria-label="Cookie consent"
-      className="fixed inset-x-0 bottom-0 z-50 animate-in duration-300 fade-in slide-in-from-bottom-4 motion-reduce:animate-none"
+      className="fixed inset-x-0 bottom-0 z-50 animate-in px-3 duration-300 fade-in slide-in-from-bottom-4 motion-reduce:animate-none sm:px-4"
     >
-      <div className="mx-auto mb-3 flex max-w-3xl flex-col gap-3 rounded-xl border border-zinc-200 bg-white/95 p-4 shadow-lg backdrop-blur-sm sm:mx-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-700/60 dark:bg-zinc-900/95">
+      <div className="mx-auto mb-3 flex max-w-3xl flex-col gap-3 rounded-xl border border-zinc-200 bg-white/95 p-4 shadow-lg backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between dark:border-zinc-700/60 dark:bg-zinc-900/95">
         <p className="text-sm text-zinc-700 dark:text-zinc-300">
           This site uses a cookieless analytics baseline always, and Google
           Analytics only with your consent. See{' '}

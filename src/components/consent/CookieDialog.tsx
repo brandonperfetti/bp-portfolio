@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
+
 import { useConsentManager } from '@c15t/react'
 import { Dialog, Switch } from 'radix-ui'
 
@@ -31,6 +33,21 @@ export function CookieDialog() {
 
   const close = () => setActiveUI('none')
 
+  const contentRef = useRef<HTMLDivElement>(null)
+  // The element focused when the dialog opened (the footer "Manage cookies" or
+  // banner "Customize"/"cookie details" trigger), so focus returns there on
+  // close without a scroll jump.
+  const triggerRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    triggerRef.current = document.activeElement as HTMLElement | null
+    // Focus the dialog for a11y WITHOUT scrolling — Radix's default
+    // onOpenAutoFocus focuses the top focus-guard and yanks the page to
+    // scrollY 0 (measured 2200 → 0). We prevent that below and focus here.
+    contentRef.current?.focus({ preventScroll: true })
+  }, [open])
+
   return (
     <Dialog.Root
       open={open}
@@ -38,7 +55,18 @@ export function CookieDialog() {
     >
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 animate-in bg-black/50 fade-in motion-reduce:animate-none" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 animate-in flex-col overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-xl duration-200 zoom-in-95 fade-in motion-reduce:animate-none dark:border-zinc-700/60 dark:bg-zinc-900">
+        <Dialog.Content
+          ref={contentRef}
+          tabIndex={-1}
+          // Keep the focus trap, Escape, and return-focus — only remove the
+          // scroll side effects of Radix's auto-focus.
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => {
+            e.preventDefault()
+            triggerRef.current?.focus({ preventScroll: true })
+          }}
+          className="fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 animate-in flex-col overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-xl duration-200 zoom-in-95 fade-in motion-reduce:animate-none dark:border-zinc-700/60 dark:bg-zinc-900"
+        >
           <Dialog.Title className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             Cookie preferences
           </Dialog.Title>
