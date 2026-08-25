@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+import { ManageCookiesLink } from '@/components/consent/ManageCookiesLink'
 import { ContainerInner, ContainerOuter } from '@/components/Container'
 import type { CmsNavigationItem } from '@/lib/cms/types'
 import { getExternalLinkProps } from '@/lib/link-utils'
@@ -83,6 +84,9 @@ export function FooterWithNavigation({
                     {item.label}
                   </NavLink>
                 ))}
+                {/* Persistent consent entry point (#83) — reachable even where
+                    the banner is suppressed (e.g. opt-out jurisdictions). */}
+                <ManageCookiesLink />
               </div>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
                 &copy; {new Date().getFullYear()} Brandon Perfetti. All rights

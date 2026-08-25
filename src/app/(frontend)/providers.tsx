@@ -4,6 +4,8 @@ import { createContext, useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 import { ThemeProvider, useTheme } from 'next-themes'
 
+import { ConsentManager } from '@/components/consent/ConsentManager'
+
 function usePrevious<T>(value: T) {
   const ref = useRef<T | undefined>(undefined)
 
@@ -48,7 +50,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <AppContext.Provider value={{ previousPathname }}>
       <ThemeProvider attribute="class" disableTransitionOnChange>
         <ThemeWatcher />
-        {children}
+        <ConsentManager>{children}</ConsentManager>
       </ThemeProvider>
     </AppContext.Provider>
   )
