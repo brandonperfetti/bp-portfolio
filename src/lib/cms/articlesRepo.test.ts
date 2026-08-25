@@ -13,11 +13,18 @@ import type { Post } from '@/payload-types'
 // unstable_cache + draftMode) — mocked here so the mapping, publish-safety,
 // and gating logic run against fixtures. canAccess / lexicalToBlocks /
 // flattenBlockText are real: the tests cover the actual pipeline.
+//
+// Two published-list reads exist since #76 Phase 0: getPublishedPostSummaries
+// (select-narrowed, no body) feeds the list surfaces; getPublishedPosts (full
+// body) feeds the search index. They are mocked separately.
 const getPublishedPosts = vi.fn()
+const getPublishedPostSummaries = vi.fn()
 const getPostBySlug = vi.fn()
 const getGatedPostContent = vi.fn()
 vi.mock('@/lib/content/posts', () => ({
   getPublishedPosts: (...args: unknown[]) => getPublishedPosts(...args),
+  getPublishedPostSummaries: (...args: unknown[]) =>
+    getPublishedPostSummaries(...args),
   getPostBySlug: (...args: unknown[]) => getPostBySlug(...args),
   getGatedPostContent: (...args: unknown[]) => getGatedPostContent(...args),
 }))
@@ -55,12 +62,13 @@ const makePost = (overrides: Partial<Post> = {}): Post =>
 
 beforeEach(() => {
   getPublishedPosts.mockReset()
+  getPublishedPostSummaries.mockReset()
   getPostBySlug.mockReset()
 })
 
 describe('getAllCmsArticleSummaries', () => {
   it('maps posts to the v3 summary shape with the slug preserved verbatim', async () => {
-    getPublishedPosts.mockResolvedValue([
+    getPublishedPostSummaries.mockResolvedValue([
       makePost({
         categories: [{ id: 1, title: 'Engineering' } as never],
         tags: [{ id: 2, title: 'React' } as never, 3 as never],
@@ -94,7 +102,7 @@ describe('getAllCmsArticleSummaries', () => {
   })
 
   it('falls back to createdAt and meta description when publish fields are empty', async () => {
-    getPublishedPosts.mockResolvedValue([
+    getPublishedPostSummaries.mockResolvedValue([
       makePost({
         publishedAt: null,
         excerpt: null,
@@ -108,13 +116,25 @@ describe('getAllCmsArticleSummaries', () => {
   })
 
   it('drops posts without a slug instead of emitting broken URLs', async () => {
-    getPublishedPosts.mockResolvedValue([
+    getPublishedPostSummaries.mockResolvedValue([
       makePost(),
       makePost({ id: 2, slug: null }),
     ])
 
     const summaries = await getAllCmsArticleSummaries()
     expect(summaries).toHaveLength(1)
+  })
+
+  it('reads the summary projection, not the full-body posts (#76 Phase 0)', async () => {
+    // The list surfaces must read the select-narrowed summary query so the
+    // `posts` cache entry never serializes the Lexical body. Guards against a
+    // regression that re-points the list read at the full-body fetch.
+    getPublishedPostSummaries.mockResolvedValue([makePost()])
+
+    await getAllCmsArticleSummaries()
+
+    expect(getPublishedPostSummaries).toHaveBeenCalledTimes(1)
+    expect(getPublishedPosts).not.toHaveBeenCalled()
   })
 })
 
@@ -242,7 +262,7 @@ describe('resolveArticleShareTargetIds', () => {
 
 describe('byline resolution (buildAuthor)', () => {
   it('builds a rich author from the populated authors relation', async () => {
-    getPublishedPosts.mockResolvedValue([
+    getPublishedPostSummaries.mockResolvedValue([
       makePost({
         authors: [
           {
@@ -275,7 +295,7 @@ describe('byline resolution (buildAuthor)', () => {
   })
 
   it('routes the site-owner byline to /about', async () => {
-    getPublishedPosts.mockResolvedValue([
+    getPublishedPostSummaries.mockResolvedValue([
       makePost({ authors: [{ id: 1, name: 'Brandon Perfetti' } as never] }),
     ])
 
@@ -287,7 +307,7 @@ describe('byline resolution (buildAuthor)', () => {
   })
 
   it('omits sameAs when the author has no socials', async () => {
-    getPublishedPosts.mockResolvedValue([
+    getPublishedPostSummaries.mockResolvedValue([
       makePost({ authors: [{ id: 2, name: 'No Links' } as never] }),
     ])
 
@@ -302,7 +322,7 @@ describe('byline resolution (buildAuthor)', () => {
   })
 
   it('keeps the site-owner string when no author relation is populated', async () => {
-    getPublishedPosts.mockResolvedValue([
+    getPublishedPostSummaries.mockResolvedValue([
       makePost({ authors: undefined, populatedAuthors: undefined }),
     ])
 
@@ -312,7 +332,7 @@ describe('byline resolution (buildAuthor)', () => {
   })
 
   it('uses the populatedAuthors {id,name} mirror when the relation is unpopulated', async () => {
-    getPublishedPosts.mockResolvedValue([
+    getPublishedPostSummaries.mockResolvedValue([
       makePost({
         authors: undefined,
         populatedAuthors: [{ id: '3', name: 'Mirror Only' }],
@@ -346,5 +366,77 @@ describe('getCmsSearchArticles', () => {
     const [article] = await getCmsSearchArticles()
     expect(article.searchText).toBe('A public teaser.')
     expect(article.searchText).not.toContain('full article body text.')
+  })
+
+  it('reads the full-body posts, not the summary projection (#76 Phase 0)', async () => {
+    // searchText needs the flattened Lexical body, so the search index keeps
+    // its own un-narrowed fetch. Guards the split from collapsing back.
+    getPublishedPosts.mockResolvedValue([makePost()])
+
+    await getCmsSearchArticles()
+
+    expect(getPublishedPosts).toHaveBeenCalledTimes(1)
+    expect(getPublishedPostSummaries).not.toHaveBeenCalled()
+  })
+})
+
+describe('list payload size guard (#76 Phase 0)', () => {
+  // The list surfaces (/, /articles) serialize the summary payload into the RSC
+  // stream and the `posts` cache entry. Before Phase 0, getPublishedPosts
+  // cached the full Post[] incl. Lexical `content` — measured 2,352,427 bytes,
+  // over Next's 2 MB data-cache per-item ceiling (issue #76 comment). The
+  // summary shape must stay well under 1 MB even at the 1000-post query ceiling,
+  // and must never carry the body. Fixtures carry a large `content` on purpose:
+  // proving the mapper (toSummary) drops it even when handed a full doc.
+  const BODY_SENTINEL = 'BODY_SENTINEL_SHOULD_NEVER_APPEAR_IN_LIST_PAYLOAD'
+  const bigBody = lexical(`${BODY_SENTINEL} ${'lorem ipsum '.repeat(600)}`)
+
+  const makeRealisticPost = (i: number): Post =>
+    makePost({
+      id: i,
+      slug: `article-number-${i}-a-fairly-long-descriptive-slug`,
+      title: `Article ${i}: A Reasonably Long Human-Readable Title Here`,
+      excerpt:
+        'A representative excerpt about the length these cards actually ' +
+        'render on the articles index, give or take a clause or two.',
+      content: bigBody as never,
+      publishedAt: '2026-01-05T00:00:00.000Z',
+      categories: [{ id: 1, title: 'Engineering' } as never],
+      tags: [
+        { id: 2, title: 'React' } as never,
+        { id: 3, title: 'TypeScript' } as never,
+      ],
+      heroImage: {
+        id: 4,
+        url: 'https://examplestore.public.blob.vercel-storage.com/covers/hero.jpg',
+      } as never,
+      populatedAuthors: [{ id: '1', name: 'Brandon Perfetti' }],
+      meta: {
+        title: `Article ${i} — SEO title variant`,
+        description: 'An SEO description roughly the length used in practice.',
+      },
+    })
+
+  it('keeps the serialized list payload under 1 MB at the 1000-post ceiling', async () => {
+    const posts = Array.from({ length: 1000 }, (_, i) => makeRealisticPost(i))
+    getPublishedPostSummaries.mockResolvedValue(posts)
+
+    const summaries = await getAllCmsArticleSummaries()
+    const bytes = Buffer.byteLength(JSON.stringify(summaries), 'utf8')
+
+    // Emitted so `pnpm test` reports the measured worst-case size.
+    // eslint-disable-next-line no-console
+    console.log(`[#76 Phase 0] list payload, 1000 posts: ${bytes} bytes`)
+
+    expect(summaries).toHaveLength(1000)
+    expect(bytes).toBeLessThan(1_000_000)
+  })
+
+  it('never serializes the Lexical body into the list payload', async () => {
+    getPublishedPostSummaries.mockResolvedValue([makeRealisticPost(1)])
+
+    const summaries = await getAllCmsArticleSummaries()
+
+    expect(JSON.stringify(summaries)).not.toContain(BODY_SENTINEL)
   })
 })

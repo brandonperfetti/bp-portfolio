@@ -13,7 +13,88 @@ import type { Post } from '@/payload-types'
  * bypass the cache (draft preview must always be fresh).
  */
 
-/** All published posts, newest first. Cached under the `posts` tag. */
+/**
+ * The list-card fields the article-summary mapper reads. Deliberately excludes
+ * the heavy `content` (Lexical body), `layout`, and `relatedPosts` fields, so
+ * the cached list payload cannot grow with article body size.
+ *
+ * @remarks #76 Phase 0: `getPublishedPosts` cached the full `Post[]` — measured
+ * 2,352,427 bytes, over Next's 2 MB data-cache per-item ceiling, which silently
+ * un-cached the hottest query (double DB fetch/render per request). The list
+ * surfaces (`/`, `/articles`) only need these summary fields, so they now read
+ * {@link getPublishedPostSummaries} instead. The search index keeps the
+ * full-body {@link getPublishedPosts} fetch (its `searchText` needs the
+ * flattened body). Timestamps must be listed explicitly — a `select` allowlist
+ * only auto-returns `id`.
+ */
+export const PUBLISHED_POST_SUMMARY_SELECT = {
+  title: true,
+  slug: true,
+  excerpt: true,
+  heroImage: true,
+  meta: true,
+  categories: true,
+  tags: true,
+  ogImageMode: true,
+  publishedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  authors: true,
+  populatedAuthors: true,
+} as const
+
+/** The summary-shaped projection of a published post (no Lexical body). */
+export type PublishedPostSummary = Pick<
+  Post,
+  | 'id'
+  | 'title'
+  | 'slug'
+  | 'excerpt'
+  | 'heroImage'
+  | 'meta'
+  | 'categories'
+  | 'tags'
+  | 'ogImageMode'
+  | 'publishedAt'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'authors'
+  | 'populatedAuthors'
+>
+
+/**
+ * All published posts as summary-shaped docs (no `content`), newest first.
+ * Cached under the `posts` tag. Feeds the `/` + `/articles` list surfaces.
+ */
+export const getPublishedPostSummaries = unstable_cache(
+  async (): Promise<PublishedPostSummary[]> => {
+    const payload = await getPayload({ config: configPromise })
+    const { docs } = await payload.find({
+      collection: 'posts',
+      draft: false,
+      limit: 1000,
+      overrideAccess: false,
+      select: PUBLISHED_POST_SUMMARY_SELECT,
+      sort: '-publishedAt',
+      where: { _status: { equals: 'published' } },
+    })
+    return docs as PublishedPostSummary[]
+  },
+  ['published-post-summaries'],
+  { tags: ['posts'] },
+)
+
+/**
+ * All published posts with full bodies, newest first. Cached under the `posts`
+ * tag.
+ *
+ * @remarks Retained for the search index only ({@link getCmsSearchArticles}),
+ * whose `searchText` needs the flattened Lexical body. The list surfaces read
+ * {@link getPublishedPostSummaries} instead so they no longer serialize the
+ * full Lexical `content` into the cache entry (#76 Phase 0). This full-body
+ * fetch stays on `unstable_cache` for now — the `'use cache'` conversion that
+ * escapes the 2 MB ceiling is Phase 1.
+ */
 export const getPublishedPosts = unstable_cache(
   async (): Promise<Post[]> => {
     const payload = await getPayload({ config: configPromise })

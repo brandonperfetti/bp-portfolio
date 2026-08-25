@@ -8,7 +8,9 @@ import type {
 import {
   getGatedPostContent,
   getPostBySlug,
+  getPublishedPostSummaries,
   getPublishedPosts,
+  type PublishedPostSummary,
 } from '@/lib/content/posts'
 import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
 import { canAccess } from '@/access/canAccess'
@@ -56,7 +58,7 @@ const authorHref = (author: Author): string | undefined =>
  * populated it degrades to the `{id,name}` mirror or the site-owner string,
  * keeping migrated posts' bylines byte-identical.
  */
-const buildAuthor = (post: Post): CmsAuthor | string => {
+const buildAuthor = (post: PublishedPostSummary): CmsAuthor | string => {
   const rel = post.authors?.[0]
   const author = rel && typeof rel === 'object' ? (rel as Author) : undefined
   if (!author) {
@@ -74,7 +76,16 @@ const buildAuthor = (post: Post): CmsAuthor | string => {
   }
 }
 
-const toSummary = (post: Post): CmsArticleSummary => {
+/**
+ * Map a post to the v3 summary shape.
+ *
+ * @remarks Reads only the {@link PublishedPostSummary} list fields — never the
+ * Lexical `content` — so it is safe to feed both the summary-projected list
+ * read ({@link getPublishedPostSummaries}) and the full-body posts (from
+ * {@link getPublishedPosts}, used by the search index). A full `Post` is a
+ * superset of `PublishedPostSummary`, so both callers type-check.
+ */
+const toSummary = (post: PublishedPostSummary): CmsArticleSummary => {
   const topics = termTitles(post.categories)
   const tech = termTitles(post.tags)
   return {
@@ -96,11 +107,18 @@ const toSummary = (post: Post): CmsArticleSummary => {
   }
 }
 
-/** All published articles as v3-shaped summaries, newest first. */
+/**
+ * All published articles as v3-shaped summaries, newest first.
+ *
+ * @remarks Reads the summary-projected list ({@link getPublishedPostSummaries})
+ * — a `select`-narrowed query that never serializes the Lexical `content` into
+ * the `posts` cache entry (#76 Phase 0). The search index keeps the separate
+ * full-body path.
+ */
 export async function getAllCmsArticleSummaries(): Promise<
   CmsArticleSummary[]
 > {
-  const posts = await getPublishedPosts()
+  const posts = await getPublishedPostSummaries()
   return posts.filter((p) => Boolean(p.slug)).map(toSummary)
 }
 
@@ -173,7 +191,10 @@ export function resolveArticleShareTargetIds(
  * @remarks The index is served to ANONYMOUS clients via `/api/search`, so
  * gated posts contribute only their excerpt — never the flattened body.
  * Skipping this mirror of the {@link getCmsArticleBySlug} gate leaked full
- * gated bodies through search (fresh-eyes review 2026-08, finding B1).
+ * gated bodies through search (fresh-eyes review 2026-08, finding B1). This
+ * path keeps the full-body {@link getPublishedPosts} fetch — the list surfaces'
+ * summary projection ({@link getPublishedPostSummaries}) drops `content`, which
+ * `searchText` still needs (#76 Phase 0 decision, Brandon 2026-08-24).
  */
 export async function getCmsSearchArticles(): Promise<
   Array<CmsArticleSummary & { searchText: string }>
