@@ -3,6 +3,7 @@ import { type Metadata } from 'next'
 import { Providers } from '@/app/(frontend)/providers'
 import { AuthProvider } from '@/components/auth/AuthProvider'
 import { Layout } from '@/components/Layout'
+import { getCmsConsentConfig } from '@/lib/cms/consentRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getSiteUrl } from '@/lib/site'
 import { Analytics } from '@vercel/analytics/next'
@@ -65,11 +66,16 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // CMS-driven consent copy/categories/toggles, resolved once server-side and
+  // threaded to the client consent runtime. A cached read (`'use cache'`), like
+  // getCmsSiteSettings, so it is prerender-safe under cacheComponents.
+  const consentConfig = await getCmsConsentConfig()
+
   return (
     // `overflow-x-clip` is what lets a full-bleed container section use
     // `w-screen` (100vw, which counts a classic scrollbar) without producing a
@@ -83,7 +89,7 @@ export default function RootLayout({
     >
       <body className="flex h-full bg-zinc-50 dark:bg-black">
         <AuthProvider>
-          <Providers>
+          <Providers consentConfig={consentConfig}>
             <div className="flex w-full">
               <Layout>{children}</Layout>
               <Analytics />

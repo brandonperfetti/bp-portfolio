@@ -60,3 +60,27 @@ describe('CookieBanner layout (Fix 1 — centered, not left-pinned)', () => {
     ).not.toBeInTheDocument()
   })
 })
+
+describe('CookieBanner default (empty-CMS) copy + toggles', () => {
+  // Rendered without a ConsentConfigProvider → the context default
+  // (DEFAULT_CONSENT_CONFIG) drives it, i.e. today's copy verbatim.
+  it('renders the default message + buttons, including Customize (showManageButton on)', () => {
+    renderBanner(true)
+    expect(
+      screen.getByText(/cookieless analytics baseline/i),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /cookie details/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /^accept all$/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /reject non-essential/i }),
+    ).toBeInTheDocument()
+    // showManageButton defaults on → the Customize control is present.
+    expect(
+      screen.getByRole('button', { name: /customize/i }),
+    ).toBeInTheDocument()
+  })
+})

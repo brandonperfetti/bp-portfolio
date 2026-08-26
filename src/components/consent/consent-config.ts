@@ -1,6 +1,8 @@
 import type { ConsentManagerOptions } from '@c15t/react'
 import { gtag } from '@c15t/scripts/google-tag'
 
+import type { C15tCategory } from './consent-content'
+
 /**
  * Consent categories offered in the banner/dialog.
  *
@@ -62,15 +64,28 @@ export function readGaEnv(): {
  * `cookieConsentRequired` cookie), and the banner/dialog are custom components
  * driven by `useConsentManager()`. c15t only holds consent state + runs the
  * gated GA4 script. Kept pure so the shape is unit-testable.
+ *
+ * `input.categories` is the c15t consent names to offer, derived from the
+ * CMS-enabled categories (Essential→`necessary` always; Analytics, Social,
+ * Advertising only when their CMS toggle is on). It defaults to the pre-CMS set
+ * (`necessary` + `measurement`) so existing call sites are behavior-identical.
+ *
+ * `input.disableAutomaticBlocking` is the CMS "Disable Automatic Blocking"
+ * toggle. It is a **no-op in bp's headless offline setup** — there is no c15t
+ * auto-blocking to switch off (GA4 is gated through `scripts`, not c15t's
+ * blocker), so the value is accepted for parity and intentionally does not
+ * change the produced options. Pinned by `consent-config.test.ts`.
  */
 export function buildConsentManagerOptions(input: {
   scripts: ConsentScripts
+  categories?: readonly C15tCategory[]
+  disableAutomaticBlocking?: boolean
 }): ConsentManagerOptions {
   return {
     mode: 'offline',
     // Emit no c15t CSS or built-in component chrome — we render our own UI.
     noStyle: true,
-    consentCategories: [...CONSENT_CATEGORIES],
+    consentCategories: [...(input.categories ?? CONSENT_CATEGORIES)],
     storageConfig: { storageKey: CONSENT_STORAGE_KEY },
     scripts: input.scripts,
   }
@@ -106,4 +121,77 @@ export function shouldAutoGrantMeasurement(input: {
   hasConsented: boolean
 }): boolean {
   return !input.hasConsented && input.consentRequired === false
+}
+
+/**
+ * Whether the banner must re-show after a region change (#103).
+ *
+ * @remarks
+ * The opt-out auto-grant ({@link shouldAutoGrantMeasurement}) calls
+ * `setConsent('measurement', true)`, which makes c15t's `hasConsented()` true
+ * and so suppresses the banner ({@link shouldShowBanner}). The bug: a visitor
+ * auto-granted in an opt-out region who then navigates into a consent-required
+ * region never sees the banner — an auto-grant was being treated as an explicit
+ * choice. This predicate distinguishes the two: re-prompt only when the current
+ * grant is an **auto-grant** (never an explicit save), the visitor is now in a
+ * **required** region, and they have **not** made an explicit choice. Explicit
+ * choices and stable regions are untouched (returns `false`), preserving the
+ * pre-fix behavior for every other case.
+ *
+ * Pure (inputs only) so it is unit-testable; the caller supplies the markers.
+ */
+export function shouldRepromptOnRegionChange(input: {
+  wasAutoGranted: boolean
+  consentRequired: boolean | null
+  hasExplicitChoice: boolean
+}): boolean {
+  return (
+    input.wasAutoGranted &&
+    input.consentRequired === true &&
+    !input.hasExplicitChoice
+  )
+}
+
+/**
+ * localStorage key marking that the current `measurement` grant came from the
+ * opt-out auto-grant, not an explicit visitor choice. Read on a region change
+ * to decide {@link shouldRepromptOnRegionChange}; cleared the moment the
+ * visitor makes an explicit choice.
+ */
+export const CONSENT_AUTOGRANT_MARKER_KEY = 'bp-consent-autogrant'
+
+/** Reads the auto-grant marker; `false` when absent or storage is unavailable. */
+export function readAutoGrantMarker(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(CONSENT_AUTOGRANT_MARKER_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+/** Sets or clears the auto-grant marker; a no-op where storage is unavailable. */
+export function setAutoGrantMarker(value: boolean): void {
+  if (typeof window === 'undefined') return
+  try {
+    if (value) {
+      window.localStorage.setItem(CONSENT_AUTOGRANT_MARKER_KEY, '1')
+    } else {
+      window.localStorage.removeItem(CONSENT_AUTOGRANT_MARKER_KEY)
+    }
+  } catch {
+    // Storage unavailable (private mode, quota) — the marker degrades to
+    // "no auto-grant recorded", which fails safe: the banner still shows via
+    // the normal required-region path when no grant persists.
+  }
+}
+
+/**
+ * Records that the visitor made an explicit consent choice (banner or dialog),
+ * so a later region change never mistakes it for an auto-grant. Clearing the
+ * auto-grant marker is sufficient: the presence of that marker is what
+ * distinguishes an auto-grant from an explicit save.
+ */
+export function markExplicitConsentChoice(): void {
+  setAutoGrantMarker(false)
 }

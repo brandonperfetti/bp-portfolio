@@ -119,12 +119,14 @@ export interface Config {
     navigation: Navigation;
     footer: Footer;
     identity: Identity;
+    'cookie-consent': CookieConsent;
   };
   globalsSelect: {
     'site-settings': SiteSettingsSelect<false> | SiteSettingsSelect<true>;
     navigation: NavigationSelect<false> | NavigationSelect<true>;
     footer: FooterSelect<false> | FooterSelect<true>;
     identity: IdentitySelect<false> | IdentitySelect<true>;
+    'cookie-consent': CookieConsentSelect<false> | CookieConsentSelect<true>;
   };
   locale: null;
   widgets: {
@@ -2928,6 +2930,125 @@ export interface Identity {
   createdAt?: string | null;
 }
 /**
+ * Cookie-consent banner/dialog copy, categories, and toggles. Empty fields fall back to the built-in defaults (today’s copy).
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "cookie-consent".
+ */
+export interface CookieConsent {
+  id: number;
+  /**
+   * Consent banner copy and button labels.
+   */
+  banner: {
+    /**
+     * Optional heading above the banner message. Empty → no heading (bp’s default).
+     */
+    title?: string | null;
+    message: string;
+    /**
+     * Inline “cookie details” trigger label.
+     */
+    cookieDetailsLabel?: string | null;
+    acceptAllLabel?: string | null;
+    rejectNonEssentialLabel?: string | null;
+    customizeLabel?: string | null;
+    /**
+     * Optional privacy-policy link text (shown in the dialog when a page is set). Empty → no link.
+     */
+    privacyPolicyText?: string | null;
+    /**
+     * Optional page the privacy-policy link points to. Resolved to /{slug}.
+     */
+    privacyPolicyPage?: (number | null) | Page;
+  };
+  /**
+   * Manage-cookies dialog copy and button labels.
+   */
+  dialog?: {
+    title?: string | null;
+    description?: string | null;
+    rejectLabel?: string | null;
+    saveLabel?: string | null;
+    acceptAllLabel?: string | null;
+    /**
+     * Parity/reserved — not rendered by bp’s dialog today.
+     */
+    statusTextTemplate?: string | null;
+    /**
+     * Parity/reserved — not rendered today.
+     */
+    declinedText?: string | null;
+    /**
+     * Parity/reserved — not rendered today.
+     */
+    consentedText?: string | null;
+    /**
+     * Parity/reserved — bp’s dialog closes via Escape/overlay, no Cancel button today.
+     */
+    cancelButtonLabel?: string | null;
+  };
+  /**
+   * Feature toggles (mirrors the Strapi reference).
+   */
+  features?: {
+    /**
+     * Parity/reserved NO-OP: bp’s headless offline c15t has no automatic script blocking to disable (GA4 is gated via the scripts config). Kept for parity; does not change behavior today.
+     */
+    disableAutomaticBlocking?: boolean | null;
+    /**
+     * Show the banner’s “Customize” button.
+     */
+    showManageButton?: boolean | null;
+    /**
+     * Show the persistent footer “Manage cookies” button.
+     */
+    showPersistentCookieButton?: boolean | null;
+  };
+  /**
+   * Consent categories. Essential is always on; Analytics defaults on; Social and Advertising default OFF (plumbing only, no scripts wired).
+   */
+  categories?: {
+    /**
+     * Parity/reserved — not rendered as a label today.
+     */
+    alwaysOnLabel?: string | null;
+    /**
+     * Strictly necessary — forced on, non-editable.
+     */
+    essential?: {
+      title?: string | null;
+      subtitle?: string | null;
+    };
+    analytics?: {
+      /**
+       * Offer the Analytics category.
+       */
+      enabled?: boolean | null;
+      title?: string | null;
+      subtitle?: string | null;
+    };
+    social?: {
+      /**
+       * Offer the Social category (consent-record-only; no scripts wired).
+       */
+      enabled?: boolean | null;
+      title?: string | null;
+      subtitle?: string | null;
+    };
+    advertising?: {
+      /**
+       * Offer the Advertising category (consent-record-only; no pixels wired).
+       */
+      enabled?: boolean | null;
+      title?: string | null;
+      subtitle?: string | null;
+    };
+  };
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "site-settings_select".
  */
@@ -3004,6 +3125,79 @@ export interface IdentitySelect<T extends boolean = true> {
     | {
         url?: T;
         id?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "cookie-consent_select".
+ */
+export interface CookieConsentSelect<T extends boolean = true> {
+  banner?:
+    | T
+    | {
+        title?: T;
+        message?: T;
+        cookieDetailsLabel?: T;
+        acceptAllLabel?: T;
+        rejectNonEssentialLabel?: T;
+        customizeLabel?: T;
+        privacyPolicyText?: T;
+        privacyPolicyPage?: T;
+      };
+  dialog?:
+    | T
+    | {
+        title?: T;
+        description?: T;
+        rejectLabel?: T;
+        saveLabel?: T;
+        acceptAllLabel?: T;
+        statusTextTemplate?: T;
+        declinedText?: T;
+        consentedText?: T;
+        cancelButtonLabel?: T;
+      };
+  features?:
+    | T
+    | {
+        disableAutomaticBlocking?: T;
+        showManageButton?: T;
+        showPersistentCookieButton?: T;
+      };
+  categories?:
+    | T
+    | {
+        alwaysOnLabel?: T;
+        essential?:
+          | T
+          | {
+              title?: T;
+              subtitle?: T;
+            };
+        analytics?:
+          | T
+          | {
+              enabled?: T;
+              title?: T;
+              subtitle?: T;
+            };
+        social?:
+          | T
+          | {
+              enabled?: T;
+              title?: T;
+              subtitle?: T;
+            };
+        advertising?:
+          | T
+          | {
+              enabled?: T;
+              title?: T;
+              subtitle?: T;
+            };
       };
   updatedAt?: T;
   createdAt?: T;

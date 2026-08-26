@@ -51,6 +51,12 @@ describe('CookieDialog open focus (Fix 2 — no scroll jump)', () => {
     expect(dialog).toBeInTheDocument()
     // The disclosure copy is in the dialog (resolves the review Sp-2 gap).
     expect(screen.getByText(/consent mode v2/i)).toBeInTheDocument()
+    // Default (empty-CMS) categories: Essential + Analytics render; Social and
+    // Advertising are OFF by default and must NOT render.
+    expect(screen.getByText(/strictly necessary/i)).toBeInTheDocument()
+    expect(screen.getByText(/analytics \(measurement\)/i)).toBeInTheDocument()
+    expect(screen.queryByText(/social media/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^advertising$/i)).not.toBeInTheDocument()
     // The content is the programmatically-focusable target (tabIndex -1) that
     // the open path focuses with `preventScroll`, instead of Radix's default
     // auto-focus that scrolled the page to the top guard. The actual focus

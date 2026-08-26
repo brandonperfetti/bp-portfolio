@@ -24,7 +24,17 @@ describe('CMS_TAGS vocabulary', () => {
       settings: 'global_site-settings', // src/lib/cms/siteSettingsRepo.ts
       navigation: 'global_navigation', // src/lib/cms/navigationRepo.ts
       identity: 'global_identity', // src/lib/cms/identityRepo.ts
+      consent: 'global_cookie-consent', // src/lib/cms/consentRepo.ts
     })
+  })
+
+  it('has no dead footer tag (#104): the footer global carries no cached reader', () => {
+    // src/components/Footer.tsx renders the static nav fallback and nothing
+    // reads the `footer` global via a cached reader, so no tag caches under
+    // `global_footer`. The dead `revalidateGlobal('footer')` hook was removed
+    // in src/globals/Footer.ts; if the footer is ever wired to a cached reader,
+    // add `footer: 'global_footer'` here and restore the hook.
+    expect('footer' in CMS_TAGS).toBe(false)
   })
 
   it('search cache subscribes to the tag the Posts hooks actually purge', () => {

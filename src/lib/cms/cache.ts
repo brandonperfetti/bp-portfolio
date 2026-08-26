@@ -22,4 +22,5 @@ export const CMS_TAGS = {
   settings: 'global_site-settings',
   navigation: 'global_navigation',
   identity: 'global_identity',
+  consent: 'global_cookie-consent',
 } as const

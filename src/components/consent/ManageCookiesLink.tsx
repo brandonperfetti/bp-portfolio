@@ -4,6 +4,8 @@ import { useConsentManager } from '@c15t/react'
 
 import { cn } from '@/lib/utils'
 
+import { useConsentConfig } from './consent-context'
+
 /**
  * Persistent "Manage cookies" entry point (the Brytecore `ManageCookiesLink`
  * pattern) — reopens the custom consent dialog from anywhere, including where
@@ -12,11 +14,18 @@ import { cn } from '@/lib/utils'
  * @remarks
  * A real button that drives c15t's `activeUI` state — it opens the dialog via
  * `setActiveUI`, which `CookieDialog` reads. Must render inside
- * `ConsentManagerProvider` (the footer is). The sitewide teal `:focus-visible`
- * outline applies; classes match the footer's other links.
+ * `ConsentManagerProvider` (the footer is). Self-gated on the CMS
+ * `showPersistentCookieButton` toggle (default on): when off, it renders
+ * nothing, removing the footer affordance without threading config through the
+ * footer. The sitewide teal `:focus-visible` outline applies; classes match the
+ * footer's other links.
  */
 export function ManageCookiesLink({ className }: { className?: string }) {
   const { setActiveUI } = useConsentManager()
+  const { features } = useConsentConfig()
+
+  if (!features.showPersistentCookieButton) return null
+
   return (
     <button
       type="button"

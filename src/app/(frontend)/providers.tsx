@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { ThemeProvider, useTheme } from 'next-themes'
 
 import { ConsentManager } from '@/components/consent/ConsentManager'
+import type { ConsentConfig } from '@/components/consent/consent-content'
 
 function ThemeWatcher() {
   const { resolvedTheme, setTheme } = useTheme()
@@ -66,7 +67,16 @@ function PreviousPathnameTracker({
   return null
 }
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({
+  children,
+  consentConfig,
+}: {
+  children: React.ReactNode
+  /** CMS-driven consent copy/categories/toggles, resolved server-side in the
+   * root layout and passed through to {@link ConsentManager}. Optional so
+   * consumers/tests without a CMS fall back to the built-in defaults. */
+  consentConfig?: ConsentConfig
+}) {
   const [previousPathname, setPreviousPathname] = useState<string>()
 
   return (
@@ -78,7 +88,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <Suspense fallback={null}>
           <PreviousPathnameTracker onChange={setPreviousPathname} />
         </Suspense>
-        <ConsentManager>{children}</ConsentManager>
+        <ConsentManager consentConfig={consentConfig}>
+          {children}
+        </ConsentManager>
       </ThemeProvider>
     </AppContext.Provider>
   )
