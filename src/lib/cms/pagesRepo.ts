@@ -114,28 +114,66 @@ export const RESERVED_PAGE_SLUGS = new Set([
 ])
 
 /**
- * Draft-aware single-page query for the page-builder catch-all route.
- * Draft mode (admin Live Preview) reads the newest draft with authenticated
- * access; visitors only ever see published documents.
+ * Cached published page by slug — the prerender path (#76 B2 draft-split).
+ * `'use cache'` + `cacheTag(CMS_TAGS.pages)` so `/`, `/about`, and `/[slug]`
+ * prerender static and an admin edit still purges them. Deliberately reads NO
+ * `draftMode()`: a dynamic-API read here would opt the whole page out of
+ * prerender (the B1 diagnosis's measured blocker). The draft branch is
+ * {@link getDraftPageBySlug}.
+ */
+const getPublishedPageBySlug = async (slug: string): Promise<Page | null> => {
+  'use cache'
+  cacheTag(CMS_TAGS.pages)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'pages',
+    draft: false,
+    limit: 1,
+    overrideAccess: false,
+    pagination: false,
+    where: { slug: { equals: slug } },
+  })
+  return docs[0] ?? null
+}
+
+/**
+ * Uncached draft page by slug — the admin Live Preview path only. Stays
+ * uncached (draft preview must be live) and is reached solely when Next draft
+ * mode is enabled, an inherently request-time, admin-only state (#76 B2).
+ */
+const getDraftPageBySlug = async (slug: string): Promise<Page | null> => {
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'pages',
+    draft: true,
+    limit: 1,
+    overrideAccess: true,
+    pagination: false,
+    where: { slug: { equals: slug } },
+  })
+  return docs[0] ?? null
+}
+
+/**
+ * Draft-aware single-page query for the page-builder routes (`/`, `/about`,
+ * `/[slug]`). A thin `draftMode()` selector over a split read: published
+ * visitors and the build take the cached {@link getPublishedPageBySlug} branch
+ * (→ static prerender, #76 B2); admins in Live Preview take the uncached
+ * {@link getDraftPageBySlug} branch. Behavior-preserving — the visible result
+ * for a published, signed-out visitor is unchanged.
  *
  * @remarks Lives here (not in the route file) per docs/STATE.md — pages
- * never call `getPayload()` directly (fresh-eyes review 2026-08, m5).
+ * never call `getPayload()` directly (fresh-eyes review 2026-08, m5). Reading
+ * `draftMode()` alone does not block prerender (it is statically off at build);
+ * only an uncached data read would, which is why the published branch is cached.
  */
 export const getPageBySlugDraftAware = async (
   slug: string,
 ): Promise<Page | null> => {
   const { draftMode } = await import('next/headers')
-  const { isEnabled: draft } = await draftMode()
-  const payload = await getPayload({ config: configPromise })
-  const { docs } = await payload.find({
-    collection: 'pages',
-    draft,
-    limit: 1,
-    overrideAccess: draft,
-    pagination: false,
-    where: { slug: { equals: slug } },
-  })
-  return docs[0] ?? null
+  const { isEnabled } = await draftMode()
+  return isEnabled ? getDraftPageBySlug(slug) : getPublishedPageBySlug(slug)
 }
 
 /**

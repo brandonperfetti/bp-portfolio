@@ -94,8 +94,9 @@ export const getPublishedPostSummaries = async (): Promise<
  * whose `searchText` needs the flattened Lexical body. The list surfaces read
  * {@link getPublishedPostSummaries} instead so they no longer serialize the
  * full Lexical `content` into the cache entry (#76 Phase 0). This full-body
- * fetch stays on `unstable_cache` for now — the `'use cache'` conversion that
- * escapes the 2 MB ceiling is Phase 1.
+ * fetch uses plain `'use cache'` (in-memory, no 2 MB per-item ceiling — the
+ * #76 B1 conversion) so the large search-index payload caches without the
+ * `unstable_cache` 2 MB rejection.
  */
 export const getPublishedPosts = async (): Promise<Post[]> => {
   'use cache'
@@ -131,21 +132,54 @@ export const getPublishedPostSlugs = async (): Promise<string[]> => {
 }
 
 /**
- * One post by slug. When Next draft mode is active (admin preview), reads the
- * latest draft with authenticated access; otherwise only published content.
+ * Cached published post by slug — the prerender path (#76 B2 draft-split).
+ * `'use cache'` + `cacheTag(CMS_TAGS.articles)` so the signed-out article shell
+ * prerenders static and publishes/edits purge it. Reads NO `draftMode()` (a
+ * dynamic-API read here would block prerender). The draft branch is
+ * {@link getDraftPostBySlug}.
  */
-export const getPostBySlug = async (slug: string): Promise<Post | null> => {
-  const { isEnabled: draft } = await draftMode()
+const getPublishedPostBySlug = async (slug: string): Promise<Post | null> => {
+  'use cache'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
   const { docs } = await payload.find({
     collection: 'posts',
-    draft,
+    draft: false,
     limit: 1,
-    overrideAccess: draft,
+    overrideAccess: false,
     pagination: false,
     where: { slug: { equals: slug } },
   })
   return docs[0] || null
+}
+
+/**
+ * Uncached draft post by slug — admin Live Preview only (draft preview must be
+ * live). Reached solely when Next draft mode is enabled (#76 B2).
+ */
+const getDraftPostBySlug = async (slug: string): Promise<Post | null> => {
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'posts',
+    draft: true,
+    limit: 1,
+    overrideAccess: true,
+    pagination: false,
+    where: { slug: { equals: slug } },
+  })
+  return docs[0] || null
+}
+
+/**
+ * One post by slug. A thin `draftMode()` selector over a split read: published
+ * visitors + the build take the cached {@link getPublishedPostBySlug} branch
+ * (→ static prerender, #76 B2); admins in Live Preview take the uncached
+ * {@link getDraftPostBySlug} branch. Behavior-preserving.
+ */
+export const getPostBySlug = async (slug: string): Promise<Post | null> => {
+  const { isEnabled } = await draftMode()
+  return isEnabled ? getDraftPostBySlug(slug) : getPublishedPostBySlug(slug)
 }
 
 /**

@@ -1,14 +1,16 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
+import { Suspense } from 'react'
 
 import { ArticleLayout } from '@/components/ArticleLayout'
-import { ArticleBody } from '@/components/cms/ArticleBody'
 import { ArticleMeta } from '@/components/cms/ArticleMeta'
 import { CmsPostBlocks } from '@/components/cms/CmsPostBlocks'
-import { SyncErrorState } from '@/components/cms/SyncErrorState'
+import {
+  ArticleBodyRegion,
+  AuthGatedArticleBody,
+} from '@/components/cms/GatedArticleBody'
 import { CopyPageButton } from '@/components/cms/CopyPageButton'
 import { ShareButton } from '@/components/cms/ShareButton'
-import { getViewer } from '@/lib/auth/getViewer'
 import { getAllArticles, getArticleBySlug } from '@/lib/articles'
 import { resolveArticleShareTargetIds } from '@/lib/cms/articlesRepo'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
@@ -54,8 +56,15 @@ function toAbsoluteImageUrl(siteUrl: string, image?: string) {
   return image.startsWith('http') ? image : new URL(image, siteUrl).toString()
 }
 
+/** Sentinel slug for the empty-CMS `generateStaticParams` guard (#76 B2). */
+const EMPTY_CMS_SENTINEL = '__empty-cms-guard__'
+
 export async function generateStaticParams() {
   const articles = await getAllArticles()
+  // Empty-CMS guard (mirrors /[slug]): Cache Components hard-errors on an empty
+  // `generateStaticParams`. One sentinel → `getArticleBySlug` returns null →
+  // `notFound()`, so a zero-published-posts CMS degrades to a 404, not a crash.
+  if (articles.length === 0) return [{ slug: EMPTY_CMS_SENTINEL }]
   return articles.map((article) => ({ slug: article.slug }))
 }
 
@@ -141,8 +150,14 @@ export async function generateMetadata({
 
 export default async function ArticlePage({ params }: PageProps) {
   const { slug } = await params
+  // #76 B2: prerender the signed-out published shell. `getArticleBySlug` with a
+  // signed-out viewer reads the cached published post (no `auth()` on this
+  // path), so the shell, metadata, and the published body (or the gated teaser)
+  // prerender static. The per-request member unlock is Suspense-isolated in
+  // <AuthGatedArticleBody> below, so only gated articles stream and only their
+  // body — the signed-out output is byte-identical to today's.
   const [article, settings] = await Promise.all([
-    getArticleBySlug(slug, await getViewer()),
+    getArticleBySlug(slug, { isAuthenticated: false }),
     getCmsSiteSettings(),
   ])
 
@@ -150,8 +165,10 @@ export default async function ArticlePage({ params }: PageProps) {
     notFound()
   }
 
+  // `bodyBlocks` here is the signed-out body — feeds the copy-to-markdown action
+  // (a gated article's copy reflects the teaser, matching today's signed-out
+  // behavior; the visible body still unlocks for members via the Suspense child).
   const bodyBlocks = Array.isArray(article.bodyBlocks) ? article.bodyBlocks : []
-  const hasBodyBlocks = bodyBlocks.length > 0
   const siteUrl = getSiteUrl()
   const canonicalSiteUrl = (settings.canonicalUrl || siteUrl).replace(
     /\/+$/,
@@ -308,24 +325,11 @@ export default async function ArticlePage({ params }: PageProps) {
           tech={article.tech}
         />
         {article.gated ? (
-          <div className="mt-8 rounded-2xl border border-zinc-200 p-6 text-center dark:border-zinc-700/60">
-            <p className="text-base font-medium text-zinc-800 dark:text-zinc-100">
-              This article is for members.
-            </p>
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              Sign in (it&apos;s free) to read the full piece.
-            </p>
-            <a
-              href={`/sign-in?redirect_url=/articles/${article.slug}`}
-              className="mt-4 inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600"
-            >
-              Sign in to continue
-            </a>
-          </div>
-        ) : hasBodyBlocks ? (
-          <ArticleBody blocks={bodyBlocks} />
+          <Suspense fallback={<ArticleBodyRegion article={article} />}>
+            <AuthGatedArticleBody slug={slug} fallback={article} />
+          </Suspense>
         ) : (
-          <SyncErrorState />
+          <ArticleBodyRegion article={article} />
         )}
       </ArticleLayout>
       <CmsPostBlocks slug={article.slug} />

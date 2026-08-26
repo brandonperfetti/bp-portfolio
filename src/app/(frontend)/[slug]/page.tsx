@@ -16,8 +16,17 @@ import { getSiteUrl } from '@/lib/site'
 /** Request-deduped wrapper over the repo's draft-aware page query. */
 const queryPageBySlug = cache(getPageBySlugDraftAware)
 
+/** Sentinel slug for the empty-CMS `generateStaticParams` guard (#76 B2). */
+const EMPTY_CMS_SENTINEL = '__empty-cms-guard__'
+
 export async function generateStaticParams() {
   const slugs = await getPublishedPageSlugs()
+  // Empty-CMS guard: Cache Components hard-errors when `generateStaticParams`
+  // returns []. Emit one sentinel that resolves to `notFound()` — it matches no
+  // published page, so `CmsPage`'s existing guard 404s it — so an all-hidden CMS
+  // (or a from-scratch staging reset) degrades to a clean 404 instead of crashing
+  // the build.
+  if (slugs.length === 0) return [{ slug: EMPTY_CMS_SENTINEL }]
   return slugs.map((slug) => ({ slug }))
 }
 

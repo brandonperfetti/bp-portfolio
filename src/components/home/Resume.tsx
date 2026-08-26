@@ -1,9 +1,18 @@
 import Image, { type ImageProps } from 'next/image'
 
 import { Button } from '@/components/Button'
+import { CurrentYearTime } from '@/components/home/CurrentYearTime'
 import { getCmsIdentity } from '@/lib/cms/identityRepo'
 import { getCmsWorkHistory } from '@/lib/cms/workHistoryRepo'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
+
+/**
+ * Marker `dateTime` for the empty-CMS fallback résumé's ongoing role: the real
+ * current year is rendered client-side by {@link CurrentYearTime} (#76 B2), so
+ * the server never reads `new Date()` during prerender. CMS-sourced "Present"
+ * roles carry a concrete (cached) year instead and never use this marker.
+ */
+const PRESENT_DATETIME_MARKER = '__present__'
 
 /**
  * Work-history card (home sidebar + WorkHistory CMS block). Reads the
@@ -62,6 +71,9 @@ function Role({ role }: { role: Role }) {
 
   const endLabel = typeof role.end === 'string' ? role.end : role.end.label
   const endDate = typeof role.end === 'string' ? role.end : role.end.dateTime
+  const endIsCurrent =
+    typeof role.end !== 'string' &&
+    role.end.dateTime === PRESENT_DATETIME_MARKER
 
   return (
     <li className="flex gap-4">
@@ -105,21 +117,24 @@ function Role({ role }: { role: Role }) {
         >
           <time dateTime={startDate}>{startLabel}</time>{' '}
           <span aria-hidden="true">-</span>{' '}
-          <time dateTime={endDate}>{endLabel}</time>
+          {endIsCurrent ? (
+            <CurrentYearTime />
+          ) : (
+            <time dateTime={endDate}>{endLabel}</time>
+          )}
         </dd>
       </dl>
     </li>
   )
 }
 
-// #76 Piece 1: the "Present" role's machine-readable `dateTime` is the current
-// year. It was `new Date().getFullYear()` in this module-level const, which
-// evaluates at import — a synchronous-IO read that `cacheComponents` rejects
-// during prerender (and, unlike `usePathname`, sync-IO can't be deferred).
-// Built via a factory instead so the read moves into the request-time render of
-// the async `Resume` Server Component below. Behavior-preserving (same current
-// year in the attribute; the visible label stays "Present").
-function buildDefaultResume(presentDateTime: string): Array<Role> {
+// #76 B2: the "Present" role's machine-readable `dateTime` is the current year.
+// A `new Date()` read here (server render) is rejected by `cacheComponents`
+// during prerender — measured — so the ongoing role carries a
+// {@link PRESENT_DATETIME_MARKER} and the real year is rendered client-side by
+// {@link CurrentYearTime}, keeping `Resume` server-prerenderable. Only reached
+// on an empty work-history CMS; CMS roles carry a concrete (cached) year.
+function buildDefaultResume(): Array<Role> {
   return [
     {
       company: 'Brytecore',
@@ -128,7 +143,7 @@ function buildDefaultResume(presentDateTime: string): Array<Role> {
       start: '2024',
       end: {
         label: 'Present',
-        dateTime: presentDateTime,
+        dateTime: PRESENT_DATETIME_MARKER,
       },
     },
     {
@@ -169,7 +184,7 @@ export async function Resume() {
         start: entry.start,
         end: entry.end,
       }))
-    : buildDefaultResume(new Date().getFullYear().toString())
+    : buildDefaultResume()
 
   return (
     <div className="rounded-2xl border border-zinc-100 p-6 dark:border-zinc-700/40">
