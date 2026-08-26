@@ -1,4 +1,8 @@
+import { cacheLife, cacheTag } from 'next/cache'
+
 import { flattenBlockText } from '@/lib/content/flattenBlockText'
+import { CMS_TAGS } from '@/lib/cms/cache'
+import { isFuturePublicationDate } from '@/lib/date'
 import type {
   CmsArticleDetail,
   CmsArticleSummary,
@@ -33,7 +37,31 @@ import type { Author, Post } from '@/payload-types'
 export type CmsArticleDetailResult = CmsArticleDetail & {
   /** True when the body was withheld because the viewer lacks access (§12). */
   gated?: boolean
+  /** True when the publish date is still in the future — resolved inside a
+   * `'use cache'` scope (#76 B3) so `generateMetadata` reads a flag instead of
+   * calling `Date.now()` at the metadata layer (which blocks prerender). */
+  isScheduledFuture?: boolean
   sourceType: CmsProvider
+}
+
+/**
+ * Whether an article's publish date is still in the future, resolved inside a
+ * `'use cache'` scope (#76 B3).
+ *
+ * @remarks `isFuturePublicationDate` reads `Date.now()`, which `cacheComponents`
+ * rejects during prerender. Wrapping the call here freezes it at cache
+ * generation and refreshes it on the `cmsContent` cadence (≈ the pre-migration
+ * hourly-ISR behavior) — the error's own `[cache]` remedy — so the future-dated
+ * publish gate stays load-bearing without blocking the static build. Purged with
+ * the article cache on any publish/edit.
+ * @param date - The article's publish date (ISO string).
+ * @returns True when the date is still in the future at cache-generation time.
+ */
+async function isArticleScheduledFuture(date: string): Promise<boolean> {
+  'use cache'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
+  return isFuturePublicationDate(date)
 }
 
 const termTitles = (terms: Post['categories'] | Post['tags']): string[] =>
@@ -145,12 +173,16 @@ export async function getCmsArticleBySlug(
     content = (await getGatedPostContent(post.id)) ?? content
   }
   const bodyBlocks = allowed && content ? lexicalToBlocks(content) : []
+  const summary = toSummary(post)
   return {
-    ...toSummary(post),
+    ...summary,
     bodyBlocks,
     excerpt: post.excerpt || undefined,
     searchText: allowed ? flattenBlockText(bodyBlocks) : '',
     gated: !allowed,
+    // Resolved inside a `'use cache'` scope so `generateMetadata` reads this
+    // flag rather than calling `Date.now()` at the metadata layer (#76 B3).
+    isScheduledFuture: await isArticleScheduledFuture(summary.date),
     disableSharing: post.disableSharing ?? false,
     shareTargetsAdd: post.shareTargetsAdd ?? [],
     shareTargetsRemove: post.shareTargetsRemove ?? [],

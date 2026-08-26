@@ -16,7 +16,6 @@ import { resolveArticleShareTargetIds } from '@/lib/cms/articlesRepo'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
 import { resolveArticleSocialImage } from '@/lib/cms/pageMetadata'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
-import { isFuturePublicationDate } from '@/lib/date'
 import { canonicalizeArticleUrl } from '@/lib/seo/canonical'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import { getSiteUrl } from '@/lib/site'
@@ -109,7 +108,10 @@ export async function generateMetadata({
     openGraphImage: settings.openGraphImage,
     siteUrl: canonicalBase,
   })
-  const shouldNoindex = article.noindex || isFuturePublicationDate(article.date)
+  // #76 B3: the future-dated noindex gate reads the `isScheduledFuture` flag the
+  // repo resolved inside a `'use cache'` scope — no `Date.now()` at the metadata
+  // layer, so `/articles/[slug]` metadata prerenders and the route reaches ◐ partial.
+  const shouldNoindex = article.noindex || (article.isScheduledFuture ?? false)
 
   const effectiveTitle = article.seoTitle || article.title
   const effectiveDescription = article.seoDescription || article.description

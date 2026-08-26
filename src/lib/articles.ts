@@ -1,9 +1,12 @@
+import { cacheLife, cacheTag } from 'next/cache'
+
 import {
   getAllCmsArticleSummaries,
   getCmsArticleBySlug,
   getCmsSearchArticles,
   type CmsArticleDetailResult,
 } from '@/lib/cms/articlesRepo'
+import { CMS_TAGS } from '@/lib/cms/cache'
 import { isFuturePublicationDate } from '@/lib/date'
 import type { OgImageMode } from '@/lib/og/types'
 
@@ -45,6 +48,9 @@ export interface ArticleWithSlug extends Article {
 export interface ArticleDetailWithSlug extends ArticleWithSlug {
   /** True when the body was withheld pending sign-in (§12 gating). */
   gated?: boolean
+  /** True when the publish date is still in the future (resolved in a
+   * `'use cache'` scope; drives `generateMetadata`'s noindex — #76 B3). */
+  isScheduledFuture?: boolean
   bodyBlocks: CmsArticleDetailResult['bodyBlocks']
   sourceType: CmsArticleDetailResult['sourceType']
   /** When true, this article offers no share affordance (per-post kill switch). */
@@ -92,6 +98,15 @@ export async function getArticleBySlug(
 }
 
 export async function getSearchArticles(): Promise<ArticleWithSlug[]> {
+  'use cache'
+  // #76 B3: the future-dated publish gate below reads `Date.now()`
+  // (isFuturePublicationDate), which `cacheComponents` rejects during prerender.
+  // Running the gate inside this `'use cache'` scope freezes `Date.now()` at
+  // cache generation and refreshes it on the `cmsContent` cadence — so
+  // `/articles` (and `/api/search`) prerender static while scheduled posts still
+  // stay hidden until their date, flipping on the same window content refreshes.
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
   const articles = await getCmsSearchArticles()
 
   return (

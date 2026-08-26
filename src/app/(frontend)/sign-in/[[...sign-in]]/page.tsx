@@ -4,6 +4,11 @@ import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
 
 export const metadata = { title: 'Sign in', robots: { index: false } }
 
+// #76 B3: Clerk's <SignIn> reads `usePathname()` (a client hook that blocks
+// prerender), and the route is noindex — opt out of prerender. Request-time
+// render; no SEO/static value lost.
+export const instant = false
+
 /**
  * In-app, site-themed sign-in (renders a notice until Clerk is configured).
  *

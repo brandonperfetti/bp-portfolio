@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   getAllCmsArticleSummaries,
@@ -27,6 +27,12 @@ vi.mock('@/lib/content/posts', () => ({
     getPublishedPostSummaries(...args),
   getPostBySlug: (...args: unknown[]) => getPostBySlug(...args),
   getGatedPostContent: (...args: unknown[]) => getGatedPostContent(...args),
+}))
+// #76 B3: getCmsArticleBySlug resolves `isScheduledFuture` inside a `'use cache'`
+// scope; stub the primitives so the mapping runs under jsdom.
+vi.mock('next/cache', () => ({
+  cacheTag: vi.fn(),
+  cacheLife: vi.fn(),
 }))
 
 const lexical = (text: string) => ({
@@ -438,5 +444,38 @@ describe('list payload size guard (#76 Phase 0)', () => {
     const summaries = await getAllCmsArticleSummaries()
 
     expect(JSON.stringify(summaries)).not.toContain(BODY_SENTINEL)
+  })
+})
+
+describe('getCmsArticleBySlug isScheduledFuture (#76 B3)', () => {
+  // `isScheduledFuture` is resolved inside a `'use cache'` scope from Date.now();
+  // freeze the clock so the gate is deterministic (mirrors how the cache freezes
+  // it at generation time).
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('flags a future-dated publish as scheduled', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-01T00:00:00.000Z'))
+    getPostBySlug.mockResolvedValue(
+      makePost({ publishedAt: '2026-12-01T00:00:00.000Z' }),
+    )
+
+    const article = await getCmsArticleBySlug('testing-react-without-tears')
+
+    expect(article?.isScheduledFuture).toBe(true)
+  })
+
+  it('does not flag a past-dated publish', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-01T00:00:00.000Z'))
+    getPostBySlug.mockResolvedValue(
+      makePost({ publishedAt: '2025-01-01T00:00:00.000Z' }),
+    )
+
+    const article = await getCmsArticleBySlug('testing-react-without-tears')
+
+    expect(article?.isScheduledFuture).toBe(false)
   })
 })
