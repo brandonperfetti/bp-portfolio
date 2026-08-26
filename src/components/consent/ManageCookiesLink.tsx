@@ -35,7 +35,7 @@ export function ManageCookiesLink({ className }: { className?: string }) {
         className,
       )}
     >
-      Manage cookies
+      Manage Cookies
     </button>
   )
 }
