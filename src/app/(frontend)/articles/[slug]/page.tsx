@@ -10,6 +10,7 @@ import {
   AuthGatedArticleBody,
 } from '@/components/cms/GatedArticleBody'
 import { CopyPageButton } from '@/components/cms/CopyPageButton'
+import { ArticleCopyMarkdownProvider } from '@/components/cms/ArticleCopyMarkdown'
 import { ShareButton } from '@/components/cms/ShareButton'
 import { getAllArticles, getArticleBySlug } from '@/lib/articles'
 import { resolveArticleShareTargetIds } from '@/lib/cms/articlesRepo'
@@ -283,6 +284,36 @@ export default async function ArticlePage({ params }: PageProps) {
     ],
   }
 
+  const articleActions =
+    showCopy || showShare ? (
+      <div className="flex items-center gap-2">
+        {showCopy ? (
+          <CopyPageButton
+            markdown={articleBlocksToMarkdown(bodyBlocks)}
+            label={settings.copyPageLabel}
+          />
+        ) : null}
+        {showShare ? (
+          <ShareButton
+            url={canonical}
+            title={effectiveTitle}
+            targetIds={shareTargetIds}
+          />
+        ) : null}
+      </div>
+    ) : undefined
+
+  const articleMeta = (
+    <ArticleMeta
+      author={article.author}
+      actions={articleActions}
+      readingTimeMinutes={article.readingTimeMinutes}
+      category={article.category?.title}
+      topics={article.topics}
+      tech={article.tech}
+    />
+  )
+
   return (
     <>
       <ArticleLayout
@@ -300,38 +331,23 @@ export default async function ArticlePage({ params }: PageProps) {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
         />
-        <ArticleMeta
-          author={article.author}
-          actions={
-            showCopy || showShare ? (
-              <div className="flex items-center gap-2">
-                {showCopy ? (
-                  <CopyPageButton
-                    markdown={articleBlocksToMarkdown(bodyBlocks)}
-                    label={settings.copyPageLabel}
-                  />
-                ) : null}
-                {showShare ? (
-                  <ShareButton
-                    url={canonical}
-                    title={effectiveTitle}
-                    targetIds={shareTargetIds}
-                  />
-                ) : null}
-              </div>
-            ) : undefined
-          }
-          readingTimeMinutes={article.readingTimeMinutes}
-          category={article.category?.title}
-          topics={article.topics}
-          tech={article.tech}
-        />
+        {/* #106: a gated article wraps its actions row + body in the copy-markdown
+            provider so the member-unlocked Markdown streamed by
+            <AuthGatedArticleBody> can reach the copy button in the prerendered
+            shell. auth() stays inside the <Suspense> child, so /articles/[slug]
+            still partial-prerenders (no auth() pulled up to the page level). */}
         {article.gated ? (
-          <Suspense fallback={<ArticleBodyRegion article={article} />}>
-            <AuthGatedArticleBody slug={slug} fallback={article} />
-          </Suspense>
+          <ArticleCopyMarkdownProvider>
+            {articleMeta}
+            <Suspense fallback={<ArticleBodyRegion article={article} />}>
+              <AuthGatedArticleBody slug={slug} fallback={article} />
+            </Suspense>
+          </ArticleCopyMarkdownProvider>
         ) : (
-          <ArticleBodyRegion article={article} />
+          <>
+            {articleMeta}
+            <ArticleBodyRegion article={article} />
+          </>
         )}
       </ArticleLayout>
       <CmsPostBlocks slug={article.slug} />

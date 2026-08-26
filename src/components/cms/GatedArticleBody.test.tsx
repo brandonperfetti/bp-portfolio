@@ -12,6 +12,17 @@ vi.mock('@/components/cms/ArticleBody', () => ({
 vi.mock('@/components/cms/SyncErrorState', () => ({
   SyncErrorState: () => <div data-testid="sync-error" />,
 }))
+// #106: the member-copy override is a probe here — assert it carries the
+// Markdown of the body actually rendered, and only for authenticated viewers.
+vi.mock('@/lib/cms/markdown', () => ({
+  articleBlocksToMarkdown: (blocks: unknown[]) =>
+    `md:${(blocks as unknown[]).length}`,
+}))
+vi.mock('@/components/cms/ArticleCopyMarkdown', () => ({
+  MemberMarkdownOverride: ({ markdown }: { markdown: string }) => (
+    <div data-testid="copy-override" data-md={markdown} />
+  ),
+}))
 
 const getViewer = vi.fn()
 const getArticleBySlug = vi.fn()
@@ -84,6 +95,9 @@ describe('AuthGatedArticleBody (auth isolation)', () => {
     )
     expect(screen.getByText('This article is for members.')).toBeInTheDocument()
     expect(getArticleBySlug).not.toHaveBeenCalled()
+    // #106: no member-copy override for a signed-out viewer — the shell button
+    // keeps copying its prerendered teaser prop.
+    expect(screen.queryByTestId('copy-override')).toBeNull()
   })
 
   it('refetches with the viewer and streams the unlocked body when authenticated', async () => {
@@ -102,6 +116,12 @@ describe('AuthGatedArticleBody (auth isolation)', () => {
       'data-count',
       '3',
     )
+    // #106: the copy source moves behind this Suspense child — the override
+    // carries the unlocked body's Markdown (3 blocks), matching what renders.
+    expect(screen.getByTestId('copy-override')).toHaveAttribute(
+      'data-md',
+      'md:3',
+    )
   })
 
   it('falls back to the teaser when the authenticated refetch returns null', async () => {
@@ -111,5 +131,11 @@ describe('AuthGatedArticleBody (auth isolation)', () => {
       await AuthGatedArticleBody({ slug: 'a-post', fallback: gatedFallback }),
     )
     expect(screen.getByText('This article is for members.')).toBeInTheDocument()
+    // The override reflects the teaser fallback (0 blocks) — copying the teaser,
+    // consistent with the body actually shown.
+    expect(screen.getByTestId('copy-override')).toHaveAttribute(
+      'data-md',
+      'md:0',
+    )
   })
 })

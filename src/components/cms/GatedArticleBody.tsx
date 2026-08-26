@@ -1,7 +1,9 @@
 import { ArticleBody } from '@/components/cms/ArticleBody'
+import { MemberMarkdownOverride } from '@/components/cms/ArticleCopyMarkdown'
 import { SyncErrorState } from '@/components/cms/SyncErrorState'
 import { getArticleBySlug, type ArticleDetailWithSlug } from '@/lib/articles'
 import { getViewer } from '@/lib/auth/getViewer'
+import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
 
 /**
  * The article body region: the members-only teaser when the (viewer-scoped)
@@ -53,6 +55,12 @@ export function ArticleBodyRegion({
  * anonymous case has no visible layout shift. Gating enforcement stays in the
  * data layer (`getArticleBySlug` → `canAccess`); this only decides whether to
  * refetch with the viewer.
+ *
+ * For an authenticated viewer it also renders `<MemberMarkdownOverride>` with
+ * the Markdown of the body actually rendered, publishing it to the copy button
+ * in the prerendered shell. This keeps the copy-to-markdown source behind the
+ * same auth-gated child — no `auth()` at the page level — so a signed-in member
+ * copies the unlocked body while signed-out visitors copy the teaser (#106).
  */
 export async function AuthGatedArticleBody({
   slug,
@@ -66,5 +74,14 @@ export async function AuthGatedArticleBody({
     return <ArticleBodyRegion article={fallback} />
   }
   const unlocked = await getArticleBySlug(slug, viewer)
-  return <ArticleBodyRegion article={unlocked ?? fallback} />
+  const resolved = unlocked ?? fallback
+  const resolvedBlocks = Array.isArray(resolved.bodyBlocks)
+    ? resolved.bodyBlocks
+    : []
+  return (
+    <>
+      <ArticleBodyRegion article={resolved} />
+      <MemberMarkdownOverride markdown={articleBlocksToMarkdown(resolvedBlocks)} />
+    </>
+  )
 }

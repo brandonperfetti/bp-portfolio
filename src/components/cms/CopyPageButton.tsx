@@ -3,6 +3,8 @@
 import { ClipboardDocumentIcon } from '@heroicons/react/24/outline'
 import { useEffect, useRef, useState } from 'react'
 
+import { useArticleCopyMarkdownOverride } from '@/components/cms/ArticleCopyMarkdown'
+
 async function copyText(value: string) {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(value)
@@ -34,6 +36,13 @@ async function copyText(value: string) {
  * `getCmsSiteSettings`, empty → "Copy page"); whether the button renders at all
  * is decided by the article page, not here.
  *
+ * On a gated article the `markdown` prop is the signed-out *teaser* export (it
+ * must be, so the button prerenders in the static shell). For a signed-in
+ * member the unlocked export streams in behind the body's `<Suspense>` boundary
+ * and is published through `useArticleCopyMarkdownOverride`; when present it
+ * takes precedence, so the member copies the full body (#106). Non-gated and
+ * signed-out paths have no override and copy the prop unchanged.
+ *
  * @param markdown Pre-rendered Markdown export copied to the clipboard.
  * @param label Idle button label; defaults to `'Copy page'`.
  */
@@ -46,6 +55,8 @@ export function CopyPageButton({
 }) {
   const [copied, setCopied] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const override = useArticleCopyMarkdownOverride()
+  const effectiveMarkdown = override ?? markdown
 
   useEffect(() => {
     return () => {
@@ -62,7 +73,7 @@ export function CopyPageButton({
       className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
       onClick={async () => {
         try {
-          await copyText(markdown)
+          await copyText(effectiveMarkdown)
           setCopied(true)
           if (timeoutRef.current) {
             clearTimeout(timeoutRef.current)
