@@ -14,6 +14,7 @@ import { ArticleCopyMarkdownProvider } from '@/components/cms/ArticleCopyMarkdow
 import { ShareButton } from '@/components/cms/ShareButton'
 import { getAllArticles, getArticleBySlug } from '@/lib/articles'
 import { resolveArticleShareTargetIds } from '@/lib/cms/articlesRepo'
+import { EMPTY_CMS_SENTINEL } from '@/lib/cms/emptyCmsSentinel'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
 import { resolveArticleSocialImage } from '@/lib/cms/pageMetadata'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
@@ -55,9 +56,6 @@ function toAbsoluteImageUrl(siteUrl: string, image?: string) {
   if (!image) return undefined
   return image.startsWith('http') ? image : new URL(image, siteUrl).toString()
 }
-
-/** Sentinel slug for the empty-CMS `generateStaticParams` guard (#76 B2). */
-const EMPTY_CMS_SENTINEL = '__empty-cms-guard__'
 
 export async function generateStaticParams() {
   const articles = await getAllArticles()

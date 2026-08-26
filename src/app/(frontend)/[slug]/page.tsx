@@ -4,6 +4,7 @@ import { cache } from 'react'
 
 import { ShareButton } from '@/components/cms/ShareButton'
 import { RenderRhythmPage } from '@/heros/RenderRhythmPage'
+import { EMPTY_CMS_SENTINEL } from '@/lib/cms/emptyCmsSentinel'
 import { resolvePageShareTargetIds } from '@/lib/cms/pageShareTargets'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import {
@@ -15,9 +16,6 @@ import { getSiteUrl } from '@/lib/site'
 
 /** Request-deduped wrapper over the repo's draft-aware page query. */
 const queryPageBySlug = cache(getPageBySlugDraftAware)
-
-/** Sentinel slug for the empty-CMS `generateStaticParams` guard (#76 B2). */
-const EMPTY_CMS_SENTINEL = '__empty-cms-guard__'
 
 export async function generateStaticParams() {
   const slugs = await getPublishedPageSlugs()
