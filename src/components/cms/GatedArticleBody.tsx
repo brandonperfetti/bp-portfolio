@@ -81,7 +81,9 @@ export async function AuthGatedArticleBody({
   return (
     <>
       <ArticleBodyRegion article={resolved} />
-      <MemberMarkdownOverride markdown={articleBlocksToMarkdown(resolvedBlocks)} />
+      <MemberMarkdownOverride
+        markdown={articleBlocksToMarkdown(resolvedBlocks)}
+      />
     </>
   )
 }
