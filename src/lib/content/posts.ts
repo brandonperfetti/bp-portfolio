@@ -1,8 +1,9 @@
-import { unstable_cache } from 'next/cache'
+import { cacheLife, cacheTag } from 'next/cache'
 import { draftMode } from 'next/headers'
 import { getPayload } from 'payload'
 
 import configPromise from '@payload-config'
+import { CMS_TAGS } from '@/lib/cms/cache'
 import type { Post } from '@/payload-types'
 
 /**
@@ -66,23 +67,24 @@ export type PublishedPostSummary = Pick<
  * All published posts as summary-shaped docs (no `content`), newest first.
  * Cached under the `posts` tag. Feeds the `/` + `/articles` list surfaces.
  */
-export const getPublishedPostSummaries = unstable_cache(
-  async (): Promise<PublishedPostSummary[]> => {
-    const payload = await getPayload({ config: configPromise })
-    const { docs } = await payload.find({
-      collection: 'posts',
-      draft: false,
-      limit: 1000,
-      overrideAccess: false,
-      select: PUBLISHED_POST_SUMMARY_SELECT,
-      sort: '-publishedAt',
-      where: { _status: { equals: 'published' } },
-    })
-    return docs as PublishedPostSummary[]
-  },
-  ['published-post-summaries'],
-  { tags: ['posts'] },
-)
+export const getPublishedPostSummaries = async (): Promise<
+  PublishedPostSummary[]
+> => {
+  'use cache'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'posts',
+    draft: false,
+    limit: 1000,
+    overrideAccess: false,
+    select: PUBLISHED_POST_SUMMARY_SELECT,
+    sort: '-publishedAt',
+    where: { _status: { equals: 'published' } },
+  })
+  return docs as PublishedPostSummary[]
+}
 
 /**
  * All published posts with full bodies, newest first. Cached under the `posts`
@@ -95,40 +97,38 @@ export const getPublishedPostSummaries = unstable_cache(
  * fetch stays on `unstable_cache` for now — the `'use cache'` conversion that
  * escapes the 2 MB ceiling is Phase 1.
  */
-export const getPublishedPosts = unstable_cache(
-  async (): Promise<Post[]> => {
-    const payload = await getPayload({ config: configPromise })
-    const { docs } = await payload.find({
-      collection: 'posts',
-      draft: false,
-      limit: 1000,
-      overrideAccess: false,
-      sort: '-publishedAt',
-      where: { _status: { equals: 'published' } },
-    })
-    return docs
-  },
-  ['published-posts'],
-  { tags: ['posts'] },
-)
+export const getPublishedPosts = async (): Promise<Post[]> => {
+  'use cache'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'posts',
+    draft: false,
+    limit: 1000,
+    overrideAccess: false,
+    sort: '-publishedAt',
+    where: { _status: { equals: 'published' } },
+  })
+  return docs
+}
 
 /** Published slugs for `generateStaticParams`. */
-export const getPublishedPostSlugs = unstable_cache(
-  async (): Promise<string[]> => {
-    const payload = await getPayload({ config: configPromise })
-    const { docs } = await payload.find({
-      collection: 'posts',
-      draft: false,
-      limit: 1000,
-      overrideAccess: false,
-      select: { slug: true },
-      where: { _status: { equals: 'published' } },
-    })
-    return docs.map((d) => d.slug).filter((s): s is string => Boolean(s))
-  },
-  ['published-post-slugs'],
-  { tags: ['posts'] },
-)
+export const getPublishedPostSlugs = async (): Promise<string[]> => {
+  'use cache'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'posts',
+    draft: false,
+    limit: 1000,
+    overrideAccess: false,
+    select: { slug: true },
+    where: { _status: { equals: 'published' } },
+  })
+  return docs.map((d) => d.slug).filter((s): s is string => Boolean(s))
+}
 
 /**
  * One post by slug. When Next draft mode is active (admin preview), reads the

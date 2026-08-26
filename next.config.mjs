@@ -7,6 +7,32 @@ const nextConfig = {
   // the minimum Suspense/sync-IO scaffolding for a behavior-preserving build;
   // the `'use cache'` conversion of the CMS reader layer is Piece 2.
   cacheComponents: true,
+  // #76 B1: custom `cacheLife` profiles for the CMS reader layer's `'use cache'`
+  // functions. Tag-purge (`revalidateTag` in the Payload afterChange/afterDelete
+  // hooks) is the PRIMARY freshness mechanism — an admin edit is live in seconds
+  // regardless of these timings. `revalidate` is a generous background-refresh
+  // cadence; `expire` is a BOUNDED self-heal for a missed purge (not uncapped —
+  // an uncapped ceiling would turn a dropped purge into permanent staleness).
+  // PROPOSED triplets, pending orchestrator/Brandon review (see B1 summary).
+  cacheLife: {
+    // Globals, collections, pages, and posts. One profile: under the settled
+    // shape their triplets are identical, so a single source of truth is
+    // clearer than four equal copies (split later if a surface's velocity
+    // diverges).
+    cmsContent: {
+      stale: 300, // 5m client staleness before revalidating with the server
+      revalidate: 21600, // 6h background refresh cadence
+      expire: 86400, // 1d hard self-heal ceiling for a missed tag-purge
+    },
+    // External GitHub signals: no admin hook purges the `tech-signals` tag, so
+    // the TTL is the only freshness driver. `revalidate` matches the prior
+    // `SIGNALS_REVALIDATE_SECONDS` (6h); `expire` is a small multiple.
+    techSignals: {
+      stale: 300, // 5m
+      revalidate: 21600, // 6h (was SIGNALS_REVALIDATE_SECONDS)
+      expire: 172800, // 2d
+    },
+  },
   images: {
     formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 60 * 60 * 24 * 7,

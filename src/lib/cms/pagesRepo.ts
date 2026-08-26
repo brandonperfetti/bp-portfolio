@@ -1,7 +1,8 @@
-import { unstable_cache } from 'next/cache'
+import { cacheLife, cacheTag } from 'next/cache'
 import { getPayload } from 'payload'
 
 import configPromise from '@payload-config'
+import { CMS_TAGS } from '@/lib/cms/cache'
 import { heroSocialImageUrl } from '@/lib/cms/heroSocialImage'
 import { mediaUrl } from '@/lib/cms/mediaUrl'
 import type { CmsPageContent } from '@/lib/cms/types'
@@ -29,46 +30,47 @@ const pathToSlug = (path: string): string => {
  * callers already treat `null` as "use hard-coded copy", which preserves the
  * boots-with-empty-CMS behavior.
  */
-export const getCmsPageByPath = unstable_cache(
-  async (path: string): Promise<CmsPageContent | null> => {
-    const payload = await getPayload({ config: configPromise })
-    const slug = pathToSlug(path)
-    const { docs } = await payload.find({
-      collection: 'pages',
-      draft: false,
-      limit: 1,
-      overrideAccess: false,
-      pagination: false,
-      where: { slug: { equals: slug } },
-    })
-    const page = docs[0]
-    if (!page) return null
+export const getCmsPageByPath = async (
+  path: string,
+): Promise<CmsPageContent | null> => {
+  'use cache'
+  cacheTag(CMS_TAGS.pages)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const slug = pathToSlug(path)
+  const { docs } = await payload.find({
+    collection: 'pages',
+    draft: false,
+    limit: 1,
+    overrideAccess: false,
+    pagination: false,
+    where: { slug: { equals: slug } },
+  })
+  const page = docs[0]
+  if (!page) return null
 
-    const content: CmsPageContent = {
-      pageId: String(page.id),
-      routeKey: normalizePath(path),
-      slug: page.slug || slug,
-      title: page.title,
-      subtitle: page.subtitle || page.meta?.description || undefined,
-      seoTitle: page.meta?.title || undefined,
-      seoDescription: page.meta?.description || undefined,
-      // Only a `standard` hero renders an image, so only it seeds the OG
-      // fallback — shader/blank/none pages fall through to the site default
-      // rather than surfacing a hidden/stale hero image (see heroSocialImageUrl).
-      heroImage: heroSocialImageUrl(page.hero),
-      ogImage: mediaUrl(page.meta?.image),
-      ogImageMode: page.ogImageMode ?? undefined,
-      updatedAt: page.updatedAt,
-      disableSharing: page.disableSharing ?? undefined,
-      shareTargetsAdd: page.shareTargetsAdd ?? undefined,
-      shareTargetsRemove: page.shareTargetsRemove ?? undefined,
-    }
+  const content: CmsPageContent = {
+    pageId: String(page.id),
+    routeKey: normalizePath(path),
+    slug: page.slug || slug,
+    title: page.title,
+    subtitle: page.subtitle || page.meta?.description || undefined,
+    seoTitle: page.meta?.title || undefined,
+    seoDescription: page.meta?.description || undefined,
+    // Only a `standard` hero renders an image, so only it seeds the OG
+    // fallback — shader/blank/none pages fall through to the site default
+    // rather than surfacing a hidden/stale hero image (see heroSocialImageUrl).
+    heroImage: heroSocialImageUrl(page.hero),
+    ogImage: mediaUrl(page.meta?.image),
+    ogImageMode: page.ogImageMode ?? undefined,
+    updatedAt: page.updatedAt,
+    disableSharing: page.disableSharing ?? undefined,
+    shareTargetsAdd: page.shareTargetsAdd ?? undefined,
+    shareTargetsRemove: page.shareTargetsRemove ?? undefined,
+  }
 
-    return content
-  },
-  ['page-by-path'],
-  { tags: ['pages'] },
-)
+  return content
+}
 
 /**
  * Slugs owned by dedicated route components. The `[slug]` catch-all must
@@ -153,25 +155,24 @@ const HOME_PAGE_SLUG = 'home'
  * it here would emit `/home` as a second, redirecting sitemap URL and statically
  * generate a page the redirect immediately shadows.
  */
-export const getPublishedPageSlugs = unstable_cache(
-  async (): Promise<string[]> => {
-    const payload = await getPayload({ config: configPromise })
-    const { docs } = await payload.find({
-      collection: 'pages',
-      draft: false,
-      limit: 500,
-      overrideAccess: false,
-      pagination: false,
-      select: { slug: true },
-      where: { _status: { equals: 'published' } },
-    })
-    return docs
-      .map((doc) => doc.slug)
-      .filter(
-        (s): s is string =>
-          Boolean(s) && s !== HOME_PAGE_SLUG && !RESERVED_PAGE_SLUGS.has(s!),
-      )
-  },
-  ['published-page-slugs'],
-  { tags: ['pages'] },
-)
+export const getPublishedPageSlugs = async (): Promise<string[]> => {
+  'use cache'
+  cacheTag(CMS_TAGS.pages)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'pages',
+    draft: false,
+    limit: 500,
+    overrideAccess: false,
+    pagination: false,
+    select: { slug: true },
+    where: { _status: { equals: 'published' } },
+  })
+  return docs
+    .map((doc) => doc.slug)
+    .filter(
+      (s): s is string =>
+        Boolean(s) && s !== HOME_PAGE_SLUG && !RESERVED_PAGE_SLUGS.has(s!),
+    )
+}
