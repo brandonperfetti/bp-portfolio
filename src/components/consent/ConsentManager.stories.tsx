@@ -93,11 +93,16 @@ export const NotRequiredSuppressed: Story = {
       canvas.queryByRole('region', { name: /cookie consent/i }),
     ).not.toBeInTheDocument()
 
-    // Fix 2 regression guard: scroll down, then opening the dialog must NOT
-    // yank the page back to the top (was scrollY 2200 → 0).
+    // The persistent link label is CMS-driven; with no ConsentConfigProvider
+    // the context default renders exactly "Manage Cookies".
+    expect(
+      await canvas.findByRole('button', { name: 'Manage Cookies' }),
+    ).toBeInTheDocument()
+    // Scroll-lock regression guard: scroll down, then opening the dialog must
+    // NOT yank the page back to the top (was scrollY 2200 → 0).
     window.scrollTo(0, 300)
     await userEvent.click(
-      await canvas.findByRole('button', { name: /manage cookies/i }),
+      await canvas.findByRole('button', { name: 'Manage Cookies' }),
     )
     const body = within(document.body)
     const dialog = await body.findByRole('dialog')

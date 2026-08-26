@@ -34,6 +34,9 @@ describe('DEFAULT_CONSENT_CONFIG (today’s copy + UX)', () => {
       'Reject non-essential',
     )
     expect(DEFAULT_CONSENT_CONFIG.banner.customizeLabel).toBe('Customize')
+    expect(DEFAULT_CONSENT_CONFIG.banner.manageCookiesLabel).toBe(
+      'Manage Cookies',
+    )
     expect(DEFAULT_CONSENT_CONFIG.dialog.title).toBe('Cookie preferences')
     expect(DEFAULT_CONSENT_CONFIG.dialog.saveLabel).toBe('Save choices')
     // The Consent Mode v2 disclosure (review Sp-2) lives in the analytics copy.

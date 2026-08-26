@@ -84,6 +84,14 @@ export const CookieConsent: GlobalConfig = {
           defaultValue: D.banner.customizeLabel,
         },
         {
+          name: 'manageCookiesLabel',
+          type: 'text',
+          defaultValue: D.banner.manageCookiesLabel,
+          admin: {
+            description: 'Persistent footer “Manage Cookies” button label.',
+          },
+        },
+        {
           name: 'privacyPolicyText',
           type: 'text',
           admin: {
@@ -190,7 +198,7 @@ export const CookieConsent: GlobalConfig = {
           type: 'checkbox',
           defaultValue: D.features.showPersistentCookieButton,
           admin: {
-            description: 'Show the persistent footer “Manage cookies” button.',
+            description: 'Show the persistent footer “Manage Cookies” button.',
           },
         },
       ],

@@ -33,7 +33,7 @@ approach).
   `jurisdiction.ts` (the geo table) and `cookie.ts` (the cookie name + parser).
 - **Categories:** `necessary` (always on) and `measurement` (GA4). No
   `marketing`/`experience`.
-- **Manage entry point:** a custom footer "Manage cookies" button reopens the
+- **Manage entry point:** a custom footer "Manage Cookies" button reopens the
   dialog (`setActiveUI('dialog', { force: true })`) — reachable even where the
   banner is suppressed.
 
@@ -91,7 +91,7 @@ checks:
 
 - **Geo:** on the Vercel preview, from a required region (EU / a listed US state,
   via VPN or a spoofed `x-vercel-ip-country`/`-country-region`) the banner shows;
-  from a non-required region (e.g. US-WA) it is suppressed but "Manage cookies"
+  from a non-required region (e.g. US-WA) it is suppressed but "Manage Cookies"
   still opens the dialog. Unknown geo ⇒ banner shows (fail-closed).
 - **Both themes at ~1440/768/390:** banner and dialog readable, don't obscure
   primary CTAs, dialog scrolls at 390px.

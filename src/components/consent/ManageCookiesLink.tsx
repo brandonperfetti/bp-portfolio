@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { useConsentConfig } from './consent-context'
 
 /**
- * Persistent "Manage cookies" entry point (the Brytecore `ManageCookiesLink`
+ * Persistent "Manage Cookies" entry point (the Brytecore `ManageCookiesLink`
  * pattern) — reopens the custom consent dialog from anywhere, including where
  * the banner is suppressed (jurisdictions that don't require consent).
  *
@@ -22,7 +22,7 @@ import { useConsentConfig } from './consent-context'
  */
 export function ManageCookiesLink({ className }: { className?: string }) {
   const { setActiveUI } = useConsentManager()
-  const { features } = useConsentConfig()
+  const { banner, features } = useConsentConfig()
 
   if (!features.showPersistentCookieButton) return null
 
@@ -35,7 +35,7 @@ export function ManageCookiesLink({ className }: { className?: string }) {
         className,
       )}
     >
-      Manage Cookies
+      {banner.manageCookiesLabel}
     </button>
   )
 }

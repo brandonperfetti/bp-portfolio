@@ -2954,6 +2954,10 @@ export interface CookieConsent {
     rejectNonEssentialLabel?: string | null;
     customizeLabel?: string | null;
     /**
+     * Persistent footer “Manage Cookies” button label.
+     */
+    manageCookiesLabel?: string | null;
+    /**
      * Optional privacy-policy link text (shown in the dialog when a page is set). Empty → no link.
      */
     privacyPolicyText?: string | null;
@@ -3001,7 +3005,7 @@ export interface CookieConsent {
      */
     showManageButton?: boolean | null;
     /**
-     * Show the persistent footer “Manage cookies” button.
+     * Show the persistent footer “Manage Cookies” button.
      */
     showPersistentCookieButton?: boolean | null;
   };
@@ -3144,6 +3148,7 @@ export interface CookieConsentSelect<T extends boolean = true> {
         acceptAllLabel?: T;
         rejectNonEssentialLabel?: T;
         customizeLabel?: T;
+        manageCookiesLabel?: T;
         privacyPolicyText?: T;
         privacyPolicyPage?: T;
       };

@@ -35,6 +35,7 @@ import * as migration_20260819_164717_w6b6_hero_image_carousel_types from './202
 import * as migration_20260819_184317_w6b6a_hero_banner_toggles from './20260819_184317_w6b6a_hero_banner_toggles'
 import * as migration_20260820_221032_rls_lockdown from './20260820_221032_rls_lockdown'
 import * as migration_20260826_145724_cookie_consent_global from './20260826_145724_cookie_consent_global'
+import * as migration_20260826_225102_manage_cookies_label from './20260826_225102_manage_cookies_label'
 
 export const migrations = [
   {
@@ -221,5 +222,10 @@ export const migrations = [
     up: migration_20260826_145724_cookie_consent_global.up,
     down: migration_20260826_145724_cookie_consent_global.down,
     name: '20260826_145724_cookie_consent_global',
+  },
+  {
+    up: migration_20260826_225102_manage_cookies_label.up,
+    down: migration_20260826_225102_manage_cookies_label.down,
+    name: '20260826_225102_manage_cookies_label',
   },
 ]

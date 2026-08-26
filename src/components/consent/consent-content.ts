@@ -72,6 +72,8 @@ export interface ConsentBannerCopy {
   acceptAllLabel: string
   rejectNonEssentialLabel: string
   customizeLabel: string
+  /** Persistent footer "Manage Cookies" button label. */
+  manageCookiesLabel: string
 }
 
 /** Manage-dialog copy + button labels. */
@@ -98,7 +100,7 @@ export interface ConsentFeatures {
   disableAutomaticBlocking: boolean
   /** Gates the banner's "Customize" button. */
   showManageButton: boolean
-  /** Gates the persistent footer "Manage cookies" button. */
+  /** Gates the persistent footer "Manage Cookies" button. */
   showPersistentCookieButton: boolean
 }
 
@@ -128,6 +130,7 @@ export const DEFAULT_CONSENT_CONFIG: ConsentConfig = {
     acceptAllLabel: 'Accept all',
     rejectNonEssentialLabel: 'Reject non-essential',
     customizeLabel: 'Customize',
+    manageCookiesLabel: 'Manage Cookies',
   },
   dialog: {
     title: 'Cookie preferences',

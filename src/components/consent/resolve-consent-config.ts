@@ -73,6 +73,10 @@ export function resolveConsentConfig(
         banner?.customizeLabel,
         defaults.banner.customizeLabel,
       ),
+      manageCookiesLabel: str(
+        banner?.manageCookiesLabel,
+        defaults.banner.manageCookiesLabel,
+      ),
     },
     dialog: {
       title: str(dialog?.title, defaults.dialog.title),

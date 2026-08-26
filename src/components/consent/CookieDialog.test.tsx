@@ -45,6 +45,11 @@ describe('CookieDialog open focus (Fix 2 — no scroll jump)', () => {
     const user = userEvent.setup()
     renderDialog()
 
+    // The persistent link label is CMS-driven; with no provider the context
+    // default renders exactly "Manage Cookies".
+    expect(
+      screen.getByRole('button', { name: 'Manage Cookies' }),
+    ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /manage cookies/i }))
 
     const dialog = await screen.findByRole('dialog')
