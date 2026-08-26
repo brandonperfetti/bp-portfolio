@@ -34,6 +34,18 @@ describe('requiresConsent', () => {
     expect(requiresConsent({ country: 'CA', region: null })).toBe(false)
   })
 
+  it('guards the subdivision match on country (cross-country collision)', () => {
+    // Brazil, Mato Grosso: region code "MT" collides with Montana but Brazil is
+    // not a US/CA subdivision jurisdiction, so consent is NOT required.
+    expect(requiresConsent({ country: 'BR', region: 'MT' })).toBe(false)
+    // US Montana still matches (a listed US privacy-law state).
+    expect(requiresConsent({ country: 'US', region: 'MT' })).toBe(true)
+    // Canada Québec still matches.
+    expect(requiresConsent({ country: 'CA', region: 'QC' })).toBe(true)
+    // Absent country + a US-state code keeps the fail-safe (still required).
+    expect(requiresConsent({ country: null, region: 'MT' })).toBe(true)
+  })
+
   it('fails closed (required) when geo is fully unknown/absent', () => {
     expect(requiresConsent({})).toBe(true)
     expect(requiresConsent({ country: null, region: null })).toBe(true)

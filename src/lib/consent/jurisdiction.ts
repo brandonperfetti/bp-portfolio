@@ -14,6 +14,16 @@
  * *country*. Country codes are matched only against {@link EU_EEA_UK_COUNTRIES}
  * and subdivision codes only against {@link CONSENT_REQUIRED_SUBDIVISIONS} —
  * the two are never cross-matched.
+ *
+ * FOOTGUN (cross-country subdivision collision): {@link CONSENT_REQUIRED_SUBDIVISIONS}
+ * holds bare US-state / QC codes, and those codes are not globally unique — e.g.
+ * `MT` is Montana (US) but also Mato Grosso (Brazil), `CO` is Colorado but also
+ * a country (Colombia's region codes), etc. So the subdivision set is only
+ * meaningful for a US/Canada visitor. {@link requiresConsent} therefore matches
+ * subdivisions **only when the country is US, Canada, or unknown/absent** —
+ * unknown country keeps the fail-safe (a US-looking region with no country still
+ * shows the banner), while a known non-US/CA country (e.g. `BR`) never matches a
+ * US-state code.
  */
 
 /**
@@ -108,6 +118,12 @@ export interface VisitorGeo {
  * geo unavailable), consent is treated as required so the banner shows. Country
  * and subdivision codes are matched against their own sets only (see FOOTGUN).
  *
+ * The subdivision set holds bare US-state / QC codes that are not globally
+ * unique, so it is consulted **only when the country is US, Canada, or
+ * unknown/absent** (see the cross-country FOOTGUN): a known non-US/CA country
+ * never matches a US-state code (Brazil `MT` no longer reads as Montana), while
+ * an unknown country keeps the fail-safe.
+ *
  * @returns `true` if consent is required (show the banner), else `false`.
  */
 export function requiresConsent(geo: VisitorGeo): boolean {
@@ -117,7 +133,12 @@ export function requiresConsent(geo: VisitorGeo): boolean {
   // Fully unknown geo → fail closed (required).
   if (!country && !region) return true
 
-  if (region && CONSENT_REQUIRED_SUBDIVISIONS.has(region)) return true
+  // Subdivision codes are only meaningful for a US/CA visitor (or unknown
+  // country, where the fail-safe still applies) — see the cross-country FOOTGUN.
+  const subdivisionCountry =
+    country === 'US' || country === 'CA' || country === ''
+  if (subdivisionCountry && region && CONSENT_REQUIRED_SUBDIVISIONS.has(region))
+    return true
   if (country && EU_EEA_UK_COUNTRIES.has(country)) return true
 
   return false
