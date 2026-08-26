@@ -87,7 +87,18 @@ export default async function RootLayout({
       className="h-full overflow-x-clip antialiased"
       suppressHydrationWarning
     >
-      <body className="flex h-full bg-zinc-50 dark:bg-black">
+      {/*
+        `min-h-full`, NOT `h-full` (#110): the window/documentElement is the
+        scroller and `body` overflows it. Radix Dialog's scroll-lock
+        (react-remove-scroll) injects `body[data-scroll-locked]{overflow:hidden}`
+        with no explicit height. On a fixed-height `h-full` (height:100%) body,
+        that `overflow:hidden` collapses the document's scrollable overflow and
+        the window snaps to scrollY 0 on open (and stays there on close) — the
+        consent-modal scroll-jump. `min-h-full` lets the body grow to its
+        content height, so the lock has nothing to collapse. Layout is otherwise
+        unchanged: descendant `h-full` (e.g. not-found) resolves via flex-stretch.
+      */}
+      <body className="flex min-h-full bg-zinc-50 dark:bg-black">
         <AuthProvider>
           <Providers consentConfig={consentConfig}>
             <div className="flex w-full">
