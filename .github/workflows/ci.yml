@@ -14,6 +14,14 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: every job here only reads the checked-out repo (no push,
+# release, PR comment, or deploy). Declaring read at the workflow level ignores
+# any broader repo/org default GITHUB_TOKEN grant and sets all other scopes to
+# none. actions/upload-artifact@v4 in Build · E2E uses the Actions runtime token,
+# not GITHUB_TOKEN, so it is unaffected.
+permissions:
+  contents: read
+
 env:
   NODE_VERSION: '24'
   PAYLOAD_SECRET: 'ci-not-a-real-secret'
@@ -84,7 +92,12 @@ jobs:
           if [ -n "$(git status --porcelain src/migrations/)" ]; then
             echo "::error::A Payload schema change is missing its migration. Run 'pnpm migrate:create', add the RLS follow-up for any new table (docs/PAYLOAD.md), and commit the generated migration."
             git status --porcelain src/migrations/
-            git diff -- src/migrations/
+            # Intent-to-add surfaces the new (untracked) migration in `git diff`;
+            # scope the printed diff to *.ts so the readable ALTER TABLE shows
+            # without dumping the large drizzle snapshot .json. Detection above
+            # stays broad — a .ts, .json, or index.ts change all trip the gate.
+            git add -N src/migrations/
+            git diff -- 'src/migrations/*.ts'
             exit 1
           fi
       - name: Unit tests (Vitest + coverage)
