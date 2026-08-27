@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { interactUntil } from './support/hydration'
+
 /**
  * Tech-stack visualization (wow moment #3) regressions: URL-synced filters,
  * slash shortcut, and graceful no-signal rendering. Signal badges themselves
@@ -11,11 +13,17 @@ test('tech category filter syncs to URL and back', async ({ page }) => {
   await page.goto('/tech')
 
   const chip = page.getByRole('button', { name: 'Testing', exact: true })
-  await chip.click()
-  await expect(page).toHaveURL(/category=Testing/)
+  // Retry the trigger until it lands: the chip is server-rendered but its
+  // onClick attaches on hydration, which under cacheComponents/PPR completes
+  // after load (#114 mechanism A). Retrying the click (not the assertion)
+  // waits hydration out.
+  await interactUntil(async () => {
+    await chip.click()
+    await expect(page).toHaveURL(/category=Testing/, { timeout: 2000 })
+  })
   await expect(chip).toHaveAttribute('aria-pressed', 'true')
 
-  // Toggling the active chip clears the filter.
+  // Toggling the active chip clears the filter (now hydrated, single click).
   await chip.click()
   await expect(page).not.toHaveURL(/category=/)
 })
@@ -24,8 +32,13 @@ test('tech search filters cards and slash focuses input', async ({ page }) => {
   await page.goto('/tech')
   const input = page.getByRole('searchbox', { name: 'Search technologies' })
 
-  await page.keyboard.press('/')
-  await expect(input).toBeFocused()
+  // The `/`-focus shortcut is a document keydown listener attached in a
+  // useEffect (post-hydration). Pressing `/` before that listener exists
+  // no-ops (#114 mechanism A) — retry until it takes.
+  await interactUntil(async () => {
+    await page.keyboard.press('/')
+    await expect(input).toBeFocused({ timeout: 1000 })
+  })
 
   await input.fill('typescript')
   await expect(page).toHaveURL(/q=typescript/, { timeout: 5000 })

@@ -1,5 +1,7 @@
 import { type Locator, type Page, expect, test } from '@playwright/test'
 
+import { interactUntil } from './support/hydration'
+
 // Home rail can legitimately shift more due to sticky offset transitions and
 // stacked cards entering/leaving around the rail during long-scroll sampling.
 const HOME_STICKY_RAIL_MAX_DRIFT_RATIO = 0.25
@@ -74,11 +76,17 @@ test('articles query syncs to URL', async ({ page }) => {
 
   const searchInput = page.getByPlaceholder('Search articles')
   await expect(searchInput).toBeVisible()
-  await searchInput.fill('react')
 
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get('q'))
-    .toBe('react')
+  // Typing syncs to the URL only once ArticlesExplorer's onChange handler is
+  // hydrated; under cacheComponents/PPR that lands after load (#114 mechanism
+  // A). Retry the fill until the URL reflects it (the debounced write itself
+  // is fast, ~0).
+  await interactUntil(async () => {
+    await searchInput.fill('react')
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('q'), { timeout: 2000 })
+      .toBe('react')
+  })
 })
 
 test('articles shows empty-state message when no published articles', async ({
@@ -100,12 +108,17 @@ test('command palette opens and closes via escape', async ({ page }) => {
   const openPaletteButton = page.getByRole('button', {
     name: /open command palette/i,
   })
-  await openPaletteButton.click()
-
   const paletteInput = page.getByPlaceholder(
     /search articles or type a command/i,
   )
-  await expect(paletteInput).toBeVisible()
+
+  // The palette open button is server-rendered but its onClick attaches on
+  // hydration (post-load under cacheComponents/PPR, #114 mechanism A). Retry
+  // the open until the palette actually appears.
+  await interactUntil(async () => {
+    await openPaletteButton.click()
+    await expect(paletteInput).toBeVisible({ timeout: 1000 })
+  })
 
   await page.keyboard.press('Escape')
   await expect(paletteInput).not.toBeVisible()
@@ -117,8 +130,14 @@ test('corvus empty submit focuses input', async ({ page }) => {
   const input = page.getByPlaceholder('Ask Corvus...')
   await expect(input).toBeVisible()
 
-  await page.getByRole('button', { name: /send/i }).click()
-  await expect(input).toBeFocused()
+  // With the deterministic non-consent geo (playwright.config.ts) the consent
+  // banner is absent, so it no longer overlays this bottom Send button (#114
+  // mechanism B). The submit→focus behavior still depends on the hydrated
+  // onClick, so retry until it lands (#114 mechanism A).
+  await interactUntil(async () => {
+    await page.getByRole('button', { name: /send/i }).click()
+    await expect(input).toBeFocused({ timeout: 1000 })
+  })
 })
 
 test('home desktop sticky right rail remains pinned while scrolling', async ({
