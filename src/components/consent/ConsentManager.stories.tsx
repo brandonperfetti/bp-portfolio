@@ -1,12 +1,36 @@
+import { useEffect } from 'react'
+
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
 
-import { ConsentManagerProvider } from '@c15t/react'
+import { ConsentManagerProvider, useConsentManager } from '@c15t/react'
 
 import { buildConsentManagerOptions } from './consent-config'
 import { CookieBanner } from './CookieBanner'
 import { CookieDialog } from './CookieDialog'
 import { ManageCookiesLink } from './ManageCookiesLink'
+
+/**
+ * Resets c15t consent state on mount so each story starts unconsented.
+ *
+ * @remarks c15t caches its consent store in a module-level singleton, so a
+ * prior story that recorded consent (e.g. `RequiredBanner` "accept all")
+ * leaves `hasConsented()` true for every later story — and `meta.beforeEach`'s
+ * `localStorage.clear()` does NOT reset that in-memory store. Without this,
+ * `UnknownFailClosed`'s fail-closed banner is suppressed by the carried-over
+ * consent ({@link shouldShowBanner} = `consentRequired !== false && !hasConsented`),
+ * so the assertion depends on story order. `resetConsents()` clears the record
+ * (`consentInfo: null` + deletes storage), restoring real per-story isolation.
+ */
+function ResetConsentOnMount() {
+  const { resetConsents } = useConsentManager()
+  useEffect(() => {
+    resetConsents()
+    // Run once per mount; resetConsents is a stable store method.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return null
+}
 
 /**
  * The custom (headless c15t) cookie banner + manage dialog in bp's design
@@ -26,13 +50,20 @@ function ConsentHarness({
     <ConsentManagerProvider
       options={buildConsentManagerOptions({ scripts: [] })}
     >
-      {/* Tall on purpose so the open-in-place (no scroll jump) play function
-          below can scroll the page first. */}
-      <div className="min-h-[200vh] p-6">
+      <ResetConsentOnMount />
+      {/* The trigger sits well below the fold (tall spacer above it) so the
+          scroll-preservation play function can scroll it into view first —
+          reproducing the app's "scrolled down, footer Manage-cookies in view"
+          scenario — and then assert the dialog opens WITHOUT jumping the window
+          scroll (#110). A trigger at the top would be scrolled back into view by
+          userEvent.click, moving the window itself and masking the real check. */}
+      <div className="p-6">
+        <div aria-hidden className="h-[200vh]" />
         <p className="text-sm text-zinc-600 dark:text-zinc-300">
           Demo surface. Use “Manage cookies” to open the dialog.
         </p>
         <ManageCookiesLink className="mt-3 inline-block text-sm font-medium text-zinc-800 dark:text-zinc-200" />
+        <div aria-hidden className="h-[50vh]" />
       </div>
       <CookieBanner consentRequired={consentRequired} />
       <CookieDialog />
@@ -95,19 +126,31 @@ export const NotRequiredSuppressed: Story = {
 
     // The persistent link label is CMS-driven; with no ConsentConfigProvider
     // the context default renders exactly "Manage Cookies".
+    const trigger = await canvas.findByRole('button', {
+      name: 'Manage Cookies',
+    })
+    expect(trigger).toBeInTheDocument()
+    // Scroll-lock regression guard (#110): scroll down so the trigger is in
+    // view, then opening the dialog must NOT jump the window scroll (was
+    // scrollY 2200 → 0 before the fix). Scroll the trigger into view first so
+    // userEvent.click doesn't scroll it (and the window) itself — the check is
+    // then the real one: does opening the dialog preserve the scroll position.
+    trigger.scrollIntoView({ block: 'center' })
+    const scrolled = window.scrollY
+    // Guard the guard: the page must actually be scrolled, or a "reset to 0"
+    // bug would be invisible from an already-0 position.
     expect(
-      await canvas.findByRole('button', { name: 'Manage Cookies' }),
-    ).toBeInTheDocument()
-    // Scroll-lock regression guard: scroll down, then opening the dialog must
-    // NOT yank the page back to the top (was scrollY 2200 → 0).
-    window.scrollTo(0, 300)
-    await userEvent.click(
-      await canvas.findByRole('button', { name: 'Manage Cookies' }),
-    )
+      scrolled,
+      'the page must be scrolled to exercise the #110 guard',
+    ).toBeGreaterThan(5)
+    await userEvent.click(trigger)
     const body = within(document.body)
     const dialog = await body.findByRole('dialog')
     expect(dialog).toBeInTheDocument()
-    expect(Math.abs(window.scrollY - 300)).toBeLessThan(5)
+    expect(
+      Math.abs(window.scrollY - scrolled),
+      `scroll preserved on open (was ${scrolled}, now ${window.scrollY})`,
+    ).toBeLessThan(5)
     // Toggle the analytics switch and save.
     const analytics = within(dialog).getByRole('switch', { name: /analytics/i })
     await userEvent.click(analytics)
