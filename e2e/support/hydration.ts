@@ -16,6 +16,9 @@ import { expect } from '@playwright/test'
  *
  * @param trigger - The interaction plus its own effect assertion. Must throw
  *   (e.g. via an `expect`) when the effect has not landed yet, so it is retried.
+ *   Must be *idempotent*: each retry re-fires the whole trigger — its action as
+ *   well as its assertion — so a non-idempotent action (e.g. one that
+ *   double-submits) would compound across retries instead of settling.
  * @param options - Optional `timeout` (ms) for the whole retry loop.
  */
 export async function interactUntil(
