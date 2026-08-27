@@ -45,9 +45,17 @@ export const getCmsIdentity = async (): Promise<CmsIdentity> => {
   cacheTag(CMS_TAGS.identity)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
-  const identity = await payload
-    .findGlobal({ slug: 'identity', depth: 1, overrideAccess: false })
-    .catch(() => null)
+  // A missing/empty global returns an object whose fields fall through to the
+  // constants below. Any real failure (transient Payload/DB error) must
+  // propagate rather than be caught: inside `'use cache'` a caught error would
+  // be stored — and prerendered — as "no identity" (incl. the static CV link in
+  // Resume) for the whole `cmsContent` lifetime, recoverable only by a
+  // `revalidateTag` purge. Mirrors the un-caught read in `getCmsSiteSettings`.
+  const identity = await payload.findGlobal({
+    slug: 'identity',
+    depth: 1,
+    overrideAccess: false,
+  })
   const sameAs = (identity?.sameAs ?? [])
     .map((entry) => entry.url)
     .filter((url): url is string => Boolean(url))
