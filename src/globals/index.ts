@@ -1,3 +1,4 @@
+export { CookieConsent } from './CookieConsent'
 export { Footer } from './Footer'
 export { Identity } from './Identity'
 export { Navigation } from './Navigation'

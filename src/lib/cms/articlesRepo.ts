@@ -1,4 +1,8 @@
+import { cacheLife, cacheTag } from 'next/cache'
+
 import { flattenBlockText } from '@/lib/content/flattenBlockText'
+import { CMS_TAGS } from '@/lib/cms/cache'
+import { isFuturePublicationDate } from '@/lib/date'
 import type {
   CmsArticleDetail,
   CmsArticleSummary,
@@ -8,7 +12,9 @@ import type {
 import {
   getGatedPostContent,
   getPostBySlug,
+  getPublishedPostSummaries,
   getPublishedPosts,
+  type PublishedPostSummary,
 } from '@/lib/content/posts'
 import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
 import { canAccess } from '@/access/canAccess'
@@ -31,7 +37,31 @@ import type { Author, Post } from '@/payload-types'
 export type CmsArticleDetailResult = CmsArticleDetail & {
   /** True when the body was withheld because the viewer lacks access (§12). */
   gated?: boolean
+  /** True when the publish date is still in the future — resolved inside a
+   * `'use cache'` scope (#76 B3) so `generateMetadata` reads a flag instead of
+   * calling `Date.now()` at the metadata layer (which blocks prerender). */
+  isScheduledFuture?: boolean
   sourceType: CmsProvider
+}
+
+/**
+ * Whether an article's publish date is still in the future, resolved inside a
+ * `'use cache'` scope (#76 B3).
+ *
+ * @remarks `isFuturePublicationDate` reads `Date.now()`, which `cacheComponents`
+ * rejects during prerender. Wrapping the call here freezes it at cache
+ * generation and refreshes it on the `cmsContent` cadence (≈ the pre-migration
+ * hourly-ISR behavior) — the error's own `[cache]` remedy — so the future-dated
+ * publish gate stays load-bearing without blocking the static build. Purged with
+ * the article cache on any publish/edit.
+ * @param date - The article's publish date (ISO string).
+ * @returns True when the date is still in the future at cache-generation time.
+ */
+async function isArticleScheduledFuture(date: string): Promise<boolean> {
+  'use cache'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
+  return isFuturePublicationDate(date)
 }
 
 const termTitles = (terms: Post['categories'] | Post['tags']): string[] =>
@@ -56,7 +86,7 @@ const authorHref = (author: Author): string | undefined =>
  * populated it degrades to the `{id,name}` mirror or the site-owner string,
  * keeping migrated posts' bylines byte-identical.
  */
-const buildAuthor = (post: Post): CmsAuthor | string => {
+const buildAuthor = (post: PublishedPostSummary): CmsAuthor | string => {
   const rel = post.authors?.[0]
   const author = rel && typeof rel === 'object' ? (rel as Author) : undefined
   if (!author) {
@@ -74,7 +104,16 @@ const buildAuthor = (post: Post): CmsAuthor | string => {
   }
 }
 
-const toSummary = (post: Post): CmsArticleSummary => {
+/**
+ * Map a post to the v3 summary shape.
+ *
+ * @remarks Reads only the {@link PublishedPostSummary} list fields — never the
+ * Lexical `content` — so it is safe to feed both the summary-projected list
+ * read ({@link getPublishedPostSummaries}) and the full-body posts (from
+ * {@link getPublishedPosts}, used by the search index). A full `Post` is a
+ * superset of `PublishedPostSummary`, so both callers type-check.
+ */
+const toSummary = (post: PublishedPostSummary): CmsArticleSummary => {
   const topics = termTitles(post.categories)
   const tech = termTitles(post.tags)
   return {
@@ -96,11 +135,18 @@ const toSummary = (post: Post): CmsArticleSummary => {
   }
 }
 
-/** All published articles as v3-shaped summaries, newest first. */
+/**
+ * All published articles as v3-shaped summaries, newest first.
+ *
+ * @remarks Reads the summary-projected list ({@link getPublishedPostSummaries})
+ * — a `select`-narrowed query that never serializes the Lexical `content` into
+ * the `posts` cache entry (#76 Phase 0). The search index keeps the separate
+ * full-body path.
+ */
 export async function getAllCmsArticleSummaries(): Promise<
   CmsArticleSummary[]
 > {
-  const posts = await getPublishedPosts()
+  const posts = await getPublishedPostSummaries()
   return posts.filter((p) => Boolean(p.slug)).map(toSummary)
 }
 
@@ -127,12 +173,16 @@ export async function getCmsArticleBySlug(
     content = (await getGatedPostContent(post.id)) ?? content
   }
   const bodyBlocks = allowed && content ? lexicalToBlocks(content) : []
+  const summary = toSummary(post)
   return {
-    ...toSummary(post),
+    ...summary,
     bodyBlocks,
     excerpt: post.excerpt || undefined,
     searchText: allowed ? flattenBlockText(bodyBlocks) : '',
     gated: !allowed,
+    // Resolved inside a `'use cache'` scope so `generateMetadata` reads this
+    // flag rather than calling `Date.now()` at the metadata layer (#76 B3).
+    isScheduledFuture: await isArticleScheduledFuture(summary.date),
     disableSharing: post.disableSharing ?? false,
     shareTargetsAdd: post.shareTargetsAdd ?? [],
     shareTargetsRemove: post.shareTargetsRemove ?? [],
@@ -173,7 +223,10 @@ export function resolveArticleShareTargetIds(
  * @remarks The index is served to ANONYMOUS clients via `/api/search`, so
  * gated posts contribute only their excerpt — never the flattened body.
  * Skipping this mirror of the {@link getCmsArticleBySlug} gate leaked full
- * gated bodies through search (fresh-eyes review 2026-08, finding B1).
+ * gated bodies through search (fresh-eyes review 2026-08, finding B1). This
+ * path keeps the full-body {@link getPublishedPosts} fetch — the list surfaces'
+ * summary projection ({@link getPublishedPostSummaries}) drops `content`, which
+ * `searchText` still needs (#76 Phase 0 decision, Brandon 2026-08-24).
  */
 export async function getCmsSearchArticles(): Promise<
   Array<CmsArticleSummary & { searchText: string }>

@@ -1,7 +1,8 @@
-import { unstable_cache } from 'next/cache'
+import { cacheLife, cacheTag } from 'next/cache'
 import { getPayload } from 'payload'
 
 import configPromise from '@payload-config'
+import { CMS_TAGS } from '@/lib/cms/cache'
 import type { Page, Post } from '@/payload-types'
 
 /**
@@ -12,37 +13,39 @@ import type { Page, Post } from '@/payload-types'
  * `CmsPageBlocks`/`CmsPostBlocks` (fresh-eyes review 2026-08, n2) —
  * components render, repos fetch (docs/STATE.md).
  */
-export const getPageLayoutBySlug = unstable_cache(
-  async (slug: string): Promise<Page['layout'] | null> => {
-    const payload = await getPayload({ config: configPromise })
-    const { docs } = await payload.find({
-      collection: 'pages',
-      draft: false,
-      limit: 1,
-      overrideAccess: false,
-      pagination: false,
-      where: { slug: { equals: slug } },
-    })
-    return docs[0]?.layout ?? null
-  },
-  ['page-layout'],
-  { tags: ['pages'] },
-)
+export const getPageLayoutBySlug = async (
+  slug: string,
+): Promise<Page['layout'] | null> => {
+  'use cache'
+  cacheTag(CMS_TAGS.pages)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'pages',
+    draft: false,
+    limit: 1,
+    overrideAccess: false,
+    pagination: false,
+    where: { slug: { equals: slug } },
+  })
+  return docs[0]?.layout ?? null
+}
 
 /** Post counterpart of {@link getPageLayoutBySlug}, tagged `'posts'`. */
-export const getPostLayoutBySlug = unstable_cache(
-  async (slug: string): Promise<Post['layout'] | null> => {
-    const payload = await getPayload({ config: configPromise })
-    const { docs } = await payload.find({
-      collection: 'posts',
-      draft: false,
-      limit: 1,
-      overrideAccess: false,
-      pagination: false,
-      where: { slug: { equals: slug } },
-    })
-    return docs[0]?.layout ?? null
-  },
-  ['post-layout'],
-  { tags: ['posts'] },
-)
+export const getPostLayoutBySlug = async (
+  slug: string,
+): Promise<Post['layout'] | null> => {
+  'use cache'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'posts',
+    draft: false,
+    limit: 1,
+    overrideAccess: false,
+    pagination: false,
+    where: { slug: { equals: slug } },
+  })
+  return docs[0]?.layout ?? null
+}

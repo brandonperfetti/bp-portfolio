@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The repo reads the `site-settings` global through the Payload Local API
-// wrapped in unstable_cache. Both are stubbed so the mapping (and its
-// defaults) run against fixtures: getPayload returns a fake `findGlobal`, and
-// unstable_cache passes the loader through unchanged.
+// inside a `'use cache'` scope (#76 B1). getPayload returns a fake
+// `findGlobal`; the `'use cache'` primitives are no-op stubbed so the mapping
+// (and its defaults) run against fixtures. The tag-string pin lives in
+// cacheTags.test.ts.
 const findGlobal = vi.fn()
 vi.mock('payload', () => ({
   getPayload: vi.fn(async () => ({ findGlobal })),
 }))
 vi.mock('next/cache', () => ({
-  unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
+  cacheTag: vi.fn(),
+  cacheLife: vi.fn(),
 }))
 
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'

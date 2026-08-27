@@ -1,26 +1,34 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
+import { Suspense } from 'react'
 
 import { ArticleLayout } from '@/components/ArticleLayout'
-import { ArticleBody } from '@/components/cms/ArticleBody'
 import { ArticleMeta } from '@/components/cms/ArticleMeta'
 import { CmsPostBlocks } from '@/components/cms/CmsPostBlocks'
-import { SyncErrorState } from '@/components/cms/SyncErrorState'
+import {
+  ArticleBodyRegion,
+  AuthGatedArticleBody,
+} from '@/components/cms/GatedArticleBody'
 import { CopyPageButton } from '@/components/cms/CopyPageButton'
+import { ArticleCopyMarkdownProvider } from '@/components/cms/ArticleCopyMarkdown'
 import { ShareButton } from '@/components/cms/ShareButton'
-import { getViewer } from '@/lib/auth/getViewer'
 import { getAllArticles, getArticleBySlug } from '@/lib/articles'
 import { resolveArticleShareTargetIds } from '@/lib/cms/articlesRepo'
+import { EMPTY_CMS_SENTINEL } from '@/lib/cms/emptyCmsSentinel'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
 import { resolveArticleSocialImage } from '@/lib/cms/pageMetadata'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
-import { isFuturePublicationDate } from '@/lib/date'
 import { canonicalizeArticleUrl } from '@/lib/seo/canonical'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import { getSiteUrl } from '@/lib/site'
 import type { CmsAuthor } from '@/lib/cms/types'
 
-export const dynamicParams = true
+// #76 Piece 1: `export const dynamicParams = true` removed — `dynamicParams` is
+// unsupported under `cacheComponents` (hard build error). Its behavior (serve
+// params not returned by `generateStaticParams` at request time) is the
+// cacheComponents default, so removal is behavior-preserving. `notFound()` in
+// the page still handles slugs that don't resolve. Piece 2 adds the empty-CMS
+// `generateStaticParams` guard + the `<Suspense>`/auth-gated-body split.
 
 type Params = {
   slug: string
@@ -51,6 +59,10 @@ function toAbsoluteImageUrl(siteUrl: string, image?: string) {
 
 export async function generateStaticParams() {
   const articles = await getAllArticles()
+  // Empty-CMS guard (mirrors /[slug]): Cache Components hard-errors on an empty
+  // `generateStaticParams`. One sentinel → `getArticleBySlug` returns null →
+  // `notFound()`, so a zero-published-posts CMS degrades to a 404, not a crash.
+  if (articles.length === 0) return [{ slug: EMPTY_CMS_SENTINEL }]
   return articles.map((article) => ({ slug: article.slug }))
 }
 
@@ -95,7 +107,10 @@ export async function generateMetadata({
     openGraphImage: settings.openGraphImage,
     siteUrl: canonicalBase,
   })
-  const shouldNoindex = article.noindex || isFuturePublicationDate(article.date)
+  // #76 B3: the future-dated noindex gate reads the `isScheduledFuture` flag the
+  // repo resolved inside a `'use cache'` scope — no `Date.now()` at the metadata
+  // layer, so `/articles/[slug]` metadata prerenders and the route reaches ◐ partial.
+  const shouldNoindex = article.noindex || (article.isScheduledFuture ?? false)
 
   const effectiveTitle = article.seoTitle || article.title
   const effectiveDescription = article.seoDescription || article.description
@@ -136,8 +151,14 @@ export async function generateMetadata({
 
 export default async function ArticlePage({ params }: PageProps) {
   const { slug } = await params
+  // #76 B2: prerender the signed-out published shell. `getArticleBySlug` with a
+  // signed-out viewer reads the cached published post (no `auth()` on this
+  // path), so the shell, metadata, and the published body (or the gated teaser)
+  // prerender static. The per-request member unlock is Suspense-isolated in
+  // <AuthGatedArticleBody> below, so only gated articles stream and only their
+  // body — the signed-out output is byte-identical to today's.
   const [article, settings] = await Promise.all([
-    getArticleBySlug(slug, await getViewer()),
+    getArticleBySlug(slug, { isAuthenticated: false }),
     getCmsSiteSettings(),
   ])
 
@@ -145,8 +166,10 @@ export default async function ArticlePage({ params }: PageProps) {
     notFound()
   }
 
+  // `bodyBlocks` here is the signed-out body — feeds the copy-to-markdown action
+  // (a gated article's copy reflects the teaser, matching today's signed-out
+  // behavior; the visible body still unlocks for members via the Suspense child).
   const bodyBlocks = Array.isArray(article.bodyBlocks) ? article.bodyBlocks : []
-  const hasBodyBlocks = bodyBlocks.length > 0
   const siteUrl = getSiteUrl()
   const canonicalSiteUrl = (settings.canonicalUrl || siteUrl).replace(
     /\/+$/,
@@ -259,6 +282,36 @@ export default async function ArticlePage({ params }: PageProps) {
     ],
   }
 
+  const articleActions =
+    showCopy || showShare ? (
+      <div className="flex items-center gap-2">
+        {showCopy ? (
+          <CopyPageButton
+            markdown={articleBlocksToMarkdown(bodyBlocks)}
+            label={settings.copyPageLabel}
+          />
+        ) : null}
+        {showShare ? (
+          <ShareButton
+            url={canonical}
+            title={effectiveTitle}
+            targetIds={shareTargetIds}
+          />
+        ) : null}
+      </div>
+    ) : undefined
+
+  const articleMeta = (
+    <ArticleMeta
+      author={article.author}
+      actions={articleActions}
+      readingTimeMinutes={article.readingTimeMinutes}
+      category={article.category?.title}
+      topics={article.topics}
+      tech={article.tech}
+    />
+  )
+
   return (
     <>
       <ArticleLayout
@@ -276,51 +329,23 @@ export default async function ArticlePage({ params }: PageProps) {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
         />
-        <ArticleMeta
-          author={article.author}
-          actions={
-            showCopy || showShare ? (
-              <div className="flex items-center gap-2">
-                {showCopy ? (
-                  <CopyPageButton
-                    markdown={articleBlocksToMarkdown(bodyBlocks)}
-                    label={settings.copyPageLabel}
-                  />
-                ) : null}
-                {showShare ? (
-                  <ShareButton
-                    url={canonical}
-                    title={effectiveTitle}
-                    targetIds={shareTargetIds}
-                  />
-                ) : null}
-              </div>
-            ) : undefined
-          }
-          readingTimeMinutes={article.readingTimeMinutes}
-          category={article.category?.title}
-          topics={article.topics}
-          tech={article.tech}
-        />
+        {/* #106: a gated article wraps its actions row + body in the copy-markdown
+            provider so the member-unlocked Markdown streamed by
+            <AuthGatedArticleBody> can reach the copy button in the prerendered
+            shell. auth() stays inside the <Suspense> child, so /articles/[slug]
+            still partial-prerenders (no auth() pulled up to the page level). */}
         {article.gated ? (
-          <div className="mt-8 rounded-2xl border border-zinc-200 p-6 text-center dark:border-zinc-700/60">
-            <p className="text-base font-medium text-zinc-800 dark:text-zinc-100">
-              This article is for members.
-            </p>
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              Sign in (it&apos;s free) to read the full piece.
-            </p>
-            <a
-              href={`/sign-in?redirect_url=/articles/${article.slug}`}
-              className="mt-4 inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600"
-            >
-              Sign in to continue
-            </a>
-          </div>
-        ) : hasBodyBlocks ? (
-          <ArticleBody blocks={bodyBlocks} />
+          <ArticleCopyMarkdownProvider>
+            {articleMeta}
+            <Suspense fallback={<ArticleBodyRegion article={article} />}>
+              <AuthGatedArticleBody slug={slug} fallback={article} />
+            </Suspense>
+          </ArticleCopyMarkdownProvider>
         ) : (
-          <SyncErrorState />
+          <>
+            {articleMeta}
+            <ArticleBodyRegion article={article} />
+          </>
         )}
       </ArticleLayout>
       <CmsPostBlocks slug={article.slug} />

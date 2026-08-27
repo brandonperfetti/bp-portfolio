@@ -1,5 +1,13 @@
 import { render } from '@testing-library/react'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 
 import {
   LIGHT_MODE_SHADER_PRESET,
@@ -125,5 +133,103 @@ describe('activeShaderPreset', () => {
   it('keeps the configured preset in dark mode and before the theme resolves', () => {
     expect(activeShaderPreset('synthesis-14', 'dark')).toBe('synthesis-14')
     expect(activeShaderPreset('synthesis-14', undefined)).toBe('synthesis-14')
+  })
+})
+describe('ShaderHero idle enable (#105 Lever C)', () => {
+  // The enable flip is scheduled off the first-interaction path via an idle
+  // callback. These tests drive that scheduling directly; the reduced-motion
+  // case proves only the *timing* moved — the gate that decides *whether* the
+  // shader enables is untouched.
+  let savedMatchMedia: typeof window.matchMedia
+
+  const setReducedMotion = (reduce: boolean) => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (query: string) => ({
+        matches: query.includes('reduced-motion') ? reduce : false,
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }),
+    })
+  }
+
+  beforeEach(() => {
+    savedMatchMedia = window.matchMedia
+  })
+
+  afterEach(() => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: savedMatchMedia,
+    })
+    delete (navigator as { gpu?: unknown }).gpu
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it('schedules the enable via requestIdleCallback and cancels it on unmount', () => {
+    setReducedMotion(false)
+    const requestIdleCallback = vi.fn().mockReturnValue(7)
+    const cancelIdleCallback = vi.fn()
+    vi.stubGlobal('requestIdleCallback', requestIdleCallback)
+    vi.stubGlobal('cancelIdleCallback', cancelIdleCallback)
+
+    const { unmount } = render(<ShaderHero />)
+
+    expect(requestIdleCallback).toHaveBeenCalledTimes(1)
+    expect(requestIdleCallback).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ timeout: 2000 }),
+    )
+
+    unmount()
+    expect(cancelIdleCallback).toHaveBeenCalledWith(7)
+  })
+
+  it('falls back to a cleared setTimeout where requestIdleCallback is absent', () => {
+    setReducedMotion(false)
+    vi.stubGlobal('requestIdleCallback', undefined)
+    vi.stubGlobal('cancelIdleCallback', undefined)
+    vi.useFakeTimers()
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
+
+    const { unmount } = render(<ShaderHero />)
+    unmount()
+
+    expect(clearTimeoutSpy).toHaveBeenCalled()
+  })
+
+  it('keeps the shader disabled under reduced motion even after the idle callback fires', () => {
+    setReducedMotion(true)
+    // GPU present so the reduced-motion gate is the only thing left holding the
+    // canvas back; the enable flip fires synchronously through the stub.
+    Object.defineProperty(navigator, 'gpu', { configurable: true, value: {} })
+    vi.stubGlobal('requestIdleCallback', (cb: IdleRequestCallback) => {
+      cb({ didTimeout: false, timeRemaining: () => 0 } as IdleDeadline)
+      return 1
+    })
+
+    const { container } = render(<ShaderHero />)
+
+    // The animated-canvas wrapper only mounts when `enabled` is true.
+    expect(container.querySelector('[class*="animate-"]')).toBeNull()
+  })
+
+  it('enables the shader once the idle callback fires when motion and GPU allow', () => {
+    setReducedMotion(false)
+    Object.defineProperty(navigator, 'gpu', { configurable: true, value: {} })
+    vi.stubGlobal('requestIdleCallback', (cb: IdleRequestCallback) => {
+      cb({ didTimeout: false, timeRemaining: () => 0 } as IdleDeadline)
+      return 1
+    })
+
+    const { container } = render(<ShaderHero />)
+
+    expect(container.querySelector('[class*="animate-"]')).not.toBeNull()
   })
 })

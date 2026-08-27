@@ -14,6 +14,14 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: every job here only reads the checked-out repo (no push,
+# release, PR comment, or deploy). Declaring read at the workflow level ignores
+# any broader repo/org default GITHUB_TOKEN grant and sets all other scopes to
+# none. actions/upload-artifact@v4 in Build · E2E uses the Actions runtime token,
+# not GITHUB_TOKEN, so it is unaffected.
+permissions:
+  contents: read
+
 env:
   NODE_VERSION: '24'
   PAYLOAD_SECRET: 'ci-not-a-real-secret'
@@ -60,6 +68,36 @@ jobs:
           if ! git diff --quiet -- "src/app/(payload)/admin/importMap.js"; then
             echo "::error::admin importMap is stale. Run 'pnpm generate:importmap' and commit."
             git diff -- "src/app/(payload)/admin/importMap.js"
+            exit 1
+          fi
+      # A Payload collection/global/field change with no committed migration
+      # slips through deploy-time `pnpm migrate` (nothing to apply) yet drifts
+      # a deployed environment, where vercel.json's build-time migrate then has
+      # nothing to reconcile. Regenerate non-interactively and fail if a
+      # migration appears, mirroring the two staleness gates above.
+      # `migrate:create` runs with disableDBConnect — it diffs the Payload
+      # config against the latest committed snapshot and never connects to a
+      # DB, so it lives in this DB-less quality job (which runs on every push,
+      # not just PRs/trunk); config load tolerates a missing DATABASE_URI.
+      # `--skip-empty` exits 0 without writing a file when the schema is in
+      # sync, and is used WITHOUT `--force-accept-warning`, which defeats
+      # --skip-empty and always writes an empty stub. `< /dev/null` EOF-closes
+      # stdin so a future Payload version that adds a prompt can't hang CI
+      # (inert today — the only prompt is already guarded by --skip-empty).
+      # New migration files are untracked, so `git status --porcelain` (not
+      # `git diff`) is the drift probe.
+      - name: Verify Payload schema changes have a committed migration
+        run: |
+          pnpm payload migrate:create --skip-empty < /dev/null
+          if [ -n "$(git status --porcelain src/migrations/)" ]; then
+            echo "::error::A Payload schema change is missing its migration. Run 'pnpm migrate:create', add the RLS follow-up for any new table (docs/PAYLOAD.md), and commit the generated migration."
+            git status --porcelain src/migrations/
+            # Intent-to-add surfaces the new (untracked) migration in `git diff`;
+            # scope the printed diff to *.ts so the readable ALTER TABLE shows
+            # without dumping the large drizzle snapshot .json. Detection above
+            # stays broad — a .ts, .json, or index.ts change all trip the gate.
+            git add -N src/migrations/
+            git diff -- 'src/migrations/*.ts'
             exit 1
           fi
       - name: Unit tests (Vitest + coverage)

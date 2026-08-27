@@ -1,7 +1,8 @@
-import { unstable_cache } from 'next/cache'
+import { cacheLife, cacheTag } from 'next/cache'
 import { getPayload } from 'payload'
 
 import configPromise from '@payload-config'
+import { CMS_TAGS } from '@/lib/cms/cache'
 import { mediaUrl } from '@/lib/cms/mediaUrl'
 import type { CmsEntityItem } from '@/lib/cms/types'
 
@@ -22,32 +23,31 @@ const CATEGORY_LABELS: Record<string, string> = {
  *
  * @returns `null` when empty so pages fall back to hard-coded v3 content.
  */
-export const getCmsTech = unstable_cache(
-  async (): Promise<CmsEntityItem[] | null> => {
-    const payload = await getPayload({ config: configPromise })
-    const { docs } = await payload.find({
-      collection: 'tech-stack',
-      depth: 1,
-      limit: 500,
-      overrideAccess: false,
-      sort: 'sortOrder',
-    })
-    if (!docs.length) return null
-    return docs.map((t, index) => ({
-      slug: String(t.id),
-      name: t.name,
-      description: t.notes || '',
-      logo: mediaUrl(t.logo),
-      link: t.url ? { href: t.url, label: t.name } : undefined,
-      category: t.category
-        ? CATEGORY_LABELS[t.category] || t.category
-        : undefined,
-      proficiency: t.proficiency || undefined,
-      githubRepo: t.githubRepo || undefined,
-      order: index,
-      updatedAt: t.updatedAt,
-    }))
-  },
-  ['tech-stack'],
-  { tags: ['tech-stack'] },
-)
+export const getCmsTech = async (): Promise<CmsEntityItem[] | null> => {
+  'use cache'
+  cacheTag(CMS_TAGS.tech)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'tech-stack',
+    depth: 1,
+    limit: 500,
+    overrideAccess: false,
+    sort: 'sortOrder',
+  })
+  if (!docs.length) return null
+  return docs.map((t, index) => ({
+    slug: String(t.id),
+    name: t.name,
+    description: t.notes || '',
+    logo: mediaUrl(t.logo),
+    link: t.url ? { href: t.url, label: t.name } : undefined,
+    category: t.category
+      ? CATEGORY_LABELS[t.category] || t.category
+      : undefined,
+    proficiency: t.proficiency || undefined,
+    githubRepo: t.githubRepo || undefined,
+    order: index,
+    updatedAt: t.updatedAt,
+  }))
+}

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
+import {
+  ArticleCopyMarkdownProvider,
+  MemberMarkdownOverride,
+} from '@/components/cms/ArticleCopyMarkdown'
 import { CopyPageButton } from '@/components/cms/CopyPageButton'
 
 const MARKDOWN = '# Title\n\nBody paragraph.'
@@ -55,5 +59,35 @@ describe('CopyPageButton', () => {
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(MARKDOWN))
     expect(await screen.findByText('Copied')).toBeInTheDocument()
+  })
+})
+
+describe('CopyPageButton — gated member override (#106)', () => {
+  const UNLOCKED = '# Unlocked\n\nMembers-only body.'
+
+  it('copies the streamed member-unlocked markdown when an override is present', async () => {
+    render(
+      <ArticleCopyMarkdownProvider>
+        <CopyPageButton markdown={MARKDOWN} />
+        <MemberMarkdownOverride markdown={UNLOCKED} />
+      </ArticleCopyMarkdownProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /copy page/i }))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(UNLOCKED))
+    expect(writeText).not.toHaveBeenCalledWith(MARKDOWN)
+  })
+
+  it('copies the prerendered teaser prop while no override has streamed in (signed-out gated)', async () => {
+    render(
+      <ArticleCopyMarkdownProvider>
+        <CopyPageButton markdown={MARKDOWN} />
+      </ArticleCopyMarkdownProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /copy page/i }))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(MARKDOWN))
   })
 })

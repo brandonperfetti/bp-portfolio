@@ -8,7 +8,9 @@ import { PRIMARY_NAV_LINKS } from '@/lib/navigation'
 import { getSiteUrl } from '@/lib/site'
 
 const MAX_ARTICLES = 50
-export const revalidate = 3600
+// #76 Piece 1: `export const revalidate = 3600` removed (incompatible with
+// `cacheComponents`; removal-only). The Response sets `Cache-Control:
+// s-maxage=3600` below, so CDN caching is preserved; Piece 2 may restore ISR.
 
 export async function GET() {
   const siteUrl = getSiteUrl()

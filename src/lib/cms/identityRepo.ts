@@ -1,7 +1,8 @@
-import { unstable_cache } from 'next/cache'
+import { cacheLife, cacheTag } from 'next/cache'
 import { getPayload } from 'payload'
 
 import configPromise from '@payload-config'
+import { CMS_TAGS } from '@/lib/cms/cache'
 import { mediaUrl } from '@/lib/cms/mediaUrl'
 import {
   PERSON_IMAGE_URL,
@@ -39,24 +40,31 @@ export interface CmsIdentity {
  * @remarks Cache tag `global_identity` matches `revalidateGlobal('identity')`
  * on the global's afterChange hook, so admin edits go live without a deploy.
  */
-export const getCmsIdentity = unstable_cache(
-  async (): Promise<CmsIdentity> => {
-    const payload = await getPayload({ config: configPromise })
-    const identity = await payload
-      .findGlobal({ slug: 'identity', depth: 1, overrideAccess: false })
-      .catch(() => null)
-    const sameAs = (identity?.sameAs ?? [])
-      .map((entry) => entry.url)
-      .filter((url): url is string => Boolean(url))
-    return {
-      name: identity?.name || SITE_OWNER_NAME,
-      jobTitle: identity?.jobTitle || SITE_OWNER_JOB_TITLE,
-      email: identity?.email?.trim() || undefined,
-      image: mediaUrl(identity?.image) || PERSON_IMAGE_URL,
-      sameAs: sameAs.length ? sameAs : SITE_OWNER_SOCIAL_LINKS,
-      resumeUrl: mediaUrl(identity?.resume),
-    }
-  },
-  ['identity'],
-  { tags: ['global_identity'] },
-)
+export const getCmsIdentity = async (): Promise<CmsIdentity> => {
+  'use cache'
+  cacheTag(CMS_TAGS.identity)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  // A missing/empty global returns an object whose fields fall through to the
+  // constants below. Any real failure (transient Payload/DB error) must
+  // propagate rather than be caught: inside `'use cache'` a caught error would
+  // be stored — and prerendered — as "no identity" (incl. the static CV link in
+  // Resume) for the whole `cmsContent` lifetime, recoverable only by a
+  // `revalidateTag` purge. Mirrors the un-caught read in `getCmsSiteSettings`.
+  const identity = await payload.findGlobal({
+    slug: 'identity',
+    depth: 1,
+    overrideAccess: false,
+  })
+  const sameAs = (identity?.sameAs ?? [])
+    .map((entry) => entry.url)
+    .filter((url): url is string => Boolean(url))
+  return {
+    name: identity?.name || SITE_OWNER_NAME,
+    jobTitle: identity?.jobTitle || SITE_OWNER_JOB_TITLE,
+    email: identity?.email?.trim() || undefined,
+    image: mediaUrl(identity?.image) || PERSON_IMAGE_URL,
+    sameAs: sameAs.length ? sameAs : SITE_OWNER_SOCIAL_LINKS,
+    resumeUrl: mediaUrl(identity?.resume),
+  }
+}

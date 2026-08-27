@@ -21,7 +21,13 @@ import {
   WorkHistory,
 } from './collections'
 import { defaultLexical } from './fields/defaultLexical'
-import { Footer, Identity, Navigation, SiteSettings } from './globals'
+import {
+  CookieConsent,
+  Footer,
+  Identity,
+  Navigation,
+  SiteSettings,
+} from './globals'
 import { buildMediaBlobUrl } from './lib/storage/mediaBlobUrl'
 import { plugins } from './plugins'
 
@@ -116,7 +122,7 @@ export default buildConfig({
     push: process.env.PAYLOAD_DB_PUSH === 'true',
   }),
   sharp,
-  globals: [SiteSettings, Navigation, Footer, Identity],
+  globals: [SiteSettings, Navigation, Footer, Identity, CookieConsent],
   plugins: [
     ...plugins,
     vercelBlobStorage({

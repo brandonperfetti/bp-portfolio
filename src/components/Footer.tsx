@@ -1,8 +1,10 @@
 'use client'
 
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+import { ManageCookiesLink } from '@/components/consent/ManageCookiesLink'
 import { ContainerInner, ContainerOuter } from '@/components/Container'
 import type { CmsNavigationItem } from '@/lib/cms/types'
 import { getExternalLinkProps } from '@/lib/link-utils'
@@ -60,7 +62,22 @@ const AGENT_LINKS = [
  * @remarks Renders nothing on `/corvus` — the chat surface owns its full
  * viewport and a footer would push the composer off-screen.
  */
-export function FooterWithNavigation({
+export function FooterWithNavigation(props: {
+  navigationItems: Array<Pick<CmsNavigationItem, 'href' | 'label'>>
+}) {
+  // #76 Piece 1: `usePathname` suspends during the static-shell prerender of
+  // dynamic-param routes (`/articles/[slug]`, `/[slug]`) under cacheComponents.
+  // Isolate the read behind a Suspense boundary so those shells prerender; the
+  // footer streams in at request time with identical markup (behavior-preserving).
+  // A boundary that never suspends (static routes) is a no-op.
+  return (
+    <Suspense fallback={null}>
+      <FooterInner {...props} />
+    </Suspense>
+  )
+}
+
+function FooterInner({
   navigationItems,
 }: {
   navigationItems: Array<Pick<CmsNavigationItem, 'href' | 'label'>>
@@ -83,6 +100,9 @@ export function FooterWithNavigation({
                     {item.label}
                   </NavLink>
                 ))}
+                {/* Persistent consent entry point (#83) — reachable even where
+                    the banner is suppressed (e.g. opt-out jurisdictions). */}
+                <ManageCookiesLink />
               </div>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
                 &copy; {new Date().getFullYear()} Brandon Perfetti. All rights

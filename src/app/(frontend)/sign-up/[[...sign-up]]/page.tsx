@@ -4,6 +4,11 @@ import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
 
 export const metadata = { title: 'Sign up', robots: { index: false } }
 
+// #76 B3: Clerk's <SignUp> reads `usePathname()` (a client hook that blocks
+// prerender), and the route is noindex — opt out of prerender. Request-time
+// render; no SEO/static value lost.
+export const instant = false
+
 /**
  * In-app, site-themed sign-up (email capture entry point; consent handled
  * by Clerk legal/consent settings). The email-code verification step is

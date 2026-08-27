@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The repo reads through the Payload Local API wrapped in unstable_cache.
-// Both are stubbed so the mapping runs against fixtures: getPayload returns a
-// fake `find`, and unstable_cache passes the loader through unchanged.
+// The repo reads through the Payload Local API inside a `'use cache'` scope
+// (#76 B1). getPayload returns a fake `find`; the `'use cache'` primitives are
+// no-op stubbed so the mapping runs against fixtures. The tag-string pin lives
+// in cacheTags.test.ts.
 const find = vi.fn()
 vi.mock('payload', () => ({
   getPayload: vi.fn(async () => ({ find })),
 }))
 vi.mock('next/cache', () => ({
-  unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
+  cacheTag: vi.fn(),
+  cacheLife: vi.fn(),
 }))
 
 import {

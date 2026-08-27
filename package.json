@@ -36,6 +36,8 @@
     "@ai-sdk/anthropic": "3.0.100",
     "@ai-sdk/openai": "3.0.87",
     "@ai-sdk/react": "3.0.236",
+    "@c15t/react": "^2.2.1",
+    "@c15t/scripts": "^2.2.0",
     "@clerk/nextjs": "^7.5.22",
     "@headlessui/react": "^2.2.6",
     "@heroicons/react": "^2.2.0",

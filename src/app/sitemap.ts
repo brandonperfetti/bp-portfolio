@@ -1,29 +1,74 @@
+import { cacheLife, cacheTag } from 'next/cache'
 import { type MetadataRoute } from 'next'
 
 import { getAllArticles } from '@/lib/articles'
+import { CMS_TAGS } from '@/lib/cms/cache'
 import { getPublishedPageSlugs } from '@/lib/cms/pagesRepo'
 import { isFuturePublicationDate, toValidDate } from '@/lib/date'
 import { getSiteUrl } from '@/lib/site'
 
-export const revalidate = 3600
+/**
+ * Sitemap data prepared inside a `'use cache'` scope (#76 B3, restores the
+ * caching Piece 1 removed with `revalidate = 3600`).
+ *
+ * @remarks The future-dated publish gate reads `Date.now()`
+ * (`isFuturePublicationDate`), which `cacheComponents` rejects during prerender;
+ * running it here freezes `Date.now()` at cache generation and refreshes it on
+ * the `cmsContent` cadence, so `/sitemap.xml` prerenders static and stays fresh
+ * via the `posts`/`pages` cache tags. Returns only serializable primitives
+ * (slugs + epoch-ms) — the `Date` objects the sitemap shape needs are rebuilt
+ * from those fixed timestamps in {@link sitemap} (never `Date.now()`), which is
+ * prerender-safe.
+ */
+async function getSitemapData(): Promise<{
+  articles: Array<{ slug: string; lastModifiedMs: number | null }>
+  newestArticleMs: number | null
+  pageSlugs: string[]
+}> {
+  'use cache'
+  cacheTag(CMS_TAGS.articles, CMS_TAGS.pages)
+  cacheLife('cmsContent')
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const siteUrl = getSiteUrl()
-  const articles = await getAllArticles()
-  const publicArticles = articles.filter(
+  const [allArticles, pageSlugs] = await Promise.all([
+    getAllArticles(),
+    getPublishedPageSlugs(),
+  ])
+
+  const publicArticles = allArticles.filter(
     (article) => !article.noindex && !isFuturePublicationDate(article.date),
   )
 
-  const newestArticleTimestamp = publicArticles.reduce<number | null>(
-    (latest, article) => {
-      const freshness =
-        toValidDate(article.updatedAt) || toValidDate(article.date)
-      if (!freshness) return latest
-      const time = freshness.getTime()
-      return latest === null || time > latest ? time : latest
-    },
-    null,
-  )
+  const articles = publicArticles.map((article) => {
+    const freshness =
+      toValidDate(article.updatedAt) || toValidDate(article.date)
+    return { slug: article.slug, lastModifiedMs: freshness?.getTime() ?? null }
+  })
+
+  const newestArticleMs = articles.reduce<number | null>((latest, article) => {
+    if (article.lastModifiedMs === null) return latest
+    return latest === null || article.lastModifiedMs > latest
+      ? article.lastModifiedMs
+      : latest
+  }, null)
+
+  return { articles, newestArticleMs, pageSlugs }
+}
+
+/**
+ * The `/sitemap.xml` route: assembles the static, article, and page-builder
+ * URLs from the cached {@link getSitemapData} payload.
+ *
+ * @remarks
+ * Kept outside the `'use cache'` scope so it stays a cheap pure reshape: it
+ * rebuilds the `Date` objects the `MetadataRoute.Sitemap` shape requires from
+ * the fixed epoch-ms timestamps {@link getSitemapData} returns — never
+ * `Date.now()`, which `cacheComponents` rejects during prerender — so
+ * `lastModified` reflects real content freshness while the route prerenders
+ * static.
+ */
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const siteUrl = getSiteUrl()
+  const { articles, newestArticleMs, pageSlugs } = await getSitemapData()
 
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: siteUrl, changeFrequency: 'weekly', priority: 1 },
@@ -35,9 +80,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     {
       url: `${siteUrl}/articles`,
       lastModified:
-        newestArticleTimestamp === null
-          ? undefined
-          : new Date(newestArticleTimestamp),
+        newestArticleMs === null ? undefined : new Date(newestArticleMs),
       changeFrequency: 'daily',
       priority: 0.9,
     },
@@ -63,18 +106,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ]
 
-  const articleRoutes: MetadataRoute.Sitemap = publicArticles.map(
-    (article) => ({
-      url: `${siteUrl}/articles/${article.slug}`,
-      lastModified: toValidDate(article.updatedAt) || toValidDate(article.date),
-      changeFrequency: 'monthly',
-      priority: 0.7,
-    }),
-  )
+  const articleRoutes: MetadataRoute.Sitemap = articles.map((article) => ({
+    url: `${siteUrl}/articles/${article.slug}`,
+    lastModified:
+      article.lastModifiedMs === null
+        ? undefined
+        : new Date(article.lastModifiedMs),
+    changeFrequency: 'monthly',
+    priority: 0.7,
+  }))
 
   // Published page-builder pages served by the [slug] catch-all (M5 —
   // these were previously missing from the sitemap entirely).
-  const pageSlugs = await getPublishedPageSlugs()
   const pageRoutes: MetadataRoute.Sitemap = pageSlugs.map((slug) => ({
     url: `${siteUrl}/${slug}`,
     changeFrequency: 'monthly',
