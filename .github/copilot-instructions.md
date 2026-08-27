@@ -31,6 +31,13 @@ surface only** — it is not a CMS and has no runtime integration.
   `src/app/(payload)/admin/importMap.js`) are committed and CI-gated — run
   `pnpm generate:types` / `pnpm generate:importmap` after schema/plugin
   changes.
+- **A Payload schema change requires a committed migration in the same
+  change.** Any change to a collection, global, or field must include a
+  migration created with `pnpm migrate:create` (CI regenerates it and fails the
+  PR if one is missing). For a new table, add the RLS follow-up
+  (`ALTER TABLE "<table>" ENABLE ROW LEVEL SECURITY;` for the table and any
+  paired `_v` / `_rels` table) in that **same** migration — `docs/PAYLOAD.md`.
+  Call the migration out explicitly in the change summary.
 - Dependency majors are pinned; `@payloadcms/*` + `payload` upgrade as one set.
 - The rich-text editor for Posts must keep every node type the migration
   emits registered (lists, blockquote, upload) — removing a feature breaks
