@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { usePathname } from 'next/navigation'
 
 import { ConsentManagerProvider, useConsentManager } from '@c15t/react'
 
@@ -39,13 +40,40 @@ import { CookieDialog } from './CookieDialog'
  * banner re-shows — instead of an opt-out auto-grant silently suppressing the
  * banner forever. Explicit choices and stable regions are untouched.
  */
+/**
+ * Suspense-isolated leaf that re-reads the geo-consent cookie on every client
+ * navigation and reports the resolved tri-state up to {@link ConsentSurface}.
+ *
+ * @remarks
+ * `src/proxy.ts` rewrites the `cookieConsentRequired` cookie on each matched
+ * request, so a visitor can cross a consent jurisdiction mid-session through
+ * client-side navigation alone — no remount, no full reload. Reading the cookie
+ * only on mount would freeze `consentRequired` at its first value, leaving an
+ * opt-out auto-grant (GA4 enabled, banner hidden) live after the visitor enters
+ * a consent-required region, and never firing the #103 region-change reprompt.
+ * Keying the read on `usePathname` re-resolves it on each navigation. Because
+ * `usePathname` suspends during the static-shell prerender under
+ * `cacheComponents`, it lives behind its own `Suspense` boundary — like
+ * {@link PreviousPathnameTracker} — so the surrounding consent tree stays
+ * static and never forces the app dynamic.
+ */
+function ConsentGeoCookieSignal({
+  onResolved,
+}: {
+  onResolved: (consentRequired: boolean | null) => void
+}) {
+  const pathname = usePathname()
+
+  useEffect(() => {
+    onResolved(readConsentRequiredCookie(document.cookie))
+  }, [pathname, onResolved])
+
+  return null
+}
+
 function ConsentSurface() {
   const { hasConsented, setConsent } = useConsentManager()
   const [consentRequired, setConsentRequired] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    setConsentRequired(readConsentRequiredCookie(document.cookie))
-  }, [])
 
   useEffect(() => {
     if (consentRequired === null) return
@@ -88,6 +116,12 @@ function ConsentSurface() {
 
   return (
     <>
+      {/* Re-reads the geo cookie on each client navigation (Suspense-isolated,
+          so the static shell stays static); drives the region-change reprompt
+          above. */}
+      <Suspense fallback={null}>
+        <ConsentGeoCookieSignal onResolved={setConsentRequired} />
+      </Suspense>
       <CookieBanner consentRequired={consentRequired} />
       <CookieDialog />
     </>
