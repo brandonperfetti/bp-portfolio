@@ -26,6 +26,15 @@ import type { Post } from '../../../payload-types'
  * within their 300 s TTLs instead; the sitemap refreshes on its hourly
  * revalidate (the `posts-sitemap` tag purge is aspirational — nothing
  * caches under it, per docs/SEO.md).
+ *
+ * `revalidateTag(tag, { expire: 0 })`, not `'max'` (#118): under
+ * cacheComponents (`'use cache'` readers, #76) `'max'` is
+ * stale-while-revalidate with a one-year stale window, so a publish/edit
+ * keeps serving old content until a background refresh happens to land AND
+ * re-caches that stale render into the CDN in the meantime. `{ expire: 0 }`
+ * is the documented read-your-writes profile outside Server Actions: the
+ * first post-edit regeneration blocks for fresh data instead of
+ * serve-stale-then-refresh.
  */
 export const revalidatePost: CollectionAfterChangeHook<Post> = ({
   doc,
@@ -41,8 +50,8 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
       revalidatePath(path)
       revalidatePath('/articles')
       revalidatePath('/api/search')
-      revalidateTag('posts-sitemap', 'max')
-      revalidateTag('posts', 'max')
+      revalidateTag('posts-sitemap', { expire: 0 })
+      revalidateTag('posts', { expire: 0 })
     }
 
     // If the post was previously published, we need to revalidate the old path
@@ -54,8 +63,8 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
       revalidatePath(oldPath)
       revalidatePath('/articles')
       revalidatePath('/api/search')
-      revalidateTag('posts-sitemap', 'max')
-      revalidateTag('posts', 'max')
+      revalidateTag('posts-sitemap', { expire: 0 })
+      revalidateTag('posts', { expire: 0 })
     }
   }
   return doc
@@ -66,7 +75,9 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
  * article's path plus the same 'posts'/'posts-sitemap' tags. The detail
  * page 404s immediately; list surfaces and search converge within their
  * TTLs and the sitemap on its hourly revalidate (same measured semantics
- * as {@link revalidatePost} — docs/MAINTENANCE.md → Watchpoints).
+ * as {@link revalidatePost} — docs/MAINTENANCE.md → Watchpoints). Same
+ * `{ expire: 0 }` read-your-writes reasoning as {@link revalidatePost}
+ * (#118).
  */
 export const revalidateDelete: CollectionAfterDeleteHook<Post> = ({
   doc,
@@ -78,8 +89,8 @@ export const revalidateDelete: CollectionAfterDeleteHook<Post> = ({
     revalidatePath(path)
     revalidatePath('/articles')
     revalidatePath('/api/search')
-    revalidateTag('posts-sitemap', 'max')
-    revalidateTag('posts', 'max')
+    revalidateTag('posts-sitemap', { expire: 0 })
+    revalidateTag('posts', { expire: 0 })
   }
 
   return doc

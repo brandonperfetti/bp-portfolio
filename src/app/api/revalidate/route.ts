@@ -14,6 +14,20 @@ function parseTags(tags: unknown): string[] {
   )
 }
 
+/**
+ * Manual revalidation endpoint (secret-gated) for forcing CMS tags/paths
+ * live outside the Payload hooks — e.g. an MCP-driven edit or a hook that
+ * failed to fire.
+ *
+ * @remarks `revalidateTag(tag, { expire: 0 })`, not `'max'` (#118): under
+ * cacheComponents (`'use cache'` readers, #76) `'max'` is
+ * stale-while-revalidate with a one-year stale window, so a manual
+ * revalidation call would keep serving old content until a background
+ * refresh happened to land AND re-cache that stale render into the CDN in
+ * the meantime. `{ expire: 0 }` is the documented read-your-writes profile
+ * outside Server Actions: the first post-call regeneration blocks for fresh
+ * data instead of serve-stale-then-refresh.
+ */
 export async function POST(request: Request) {
   const secret = process.env.CMS_REVALIDATE_SECRET
   const body = await request.json().catch(() => ({}))
@@ -43,7 +57,7 @@ export async function POST(request: Request) {
   const finalTags = tags.length ? tags : fallbackTags
 
   for (const tag of finalTags) {
-    revalidateTag(tag, 'max')
+    revalidateTag(tag, { expire: 0 })
   }
 
   for (const path of paths) {

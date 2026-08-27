@@ -7,6 +7,25 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 
 import type { Page } from '../../../payload-types'
 
+/**
+ * afterChange hook that keeps published pages live without a redeploy:
+ * pairs `revalidatePath` on the page's route with purges of the
+ * 'pages'/'pages-sitemap' data-cache tags.
+ *
+ * @remarks The data layer (getCmsPageByPath / getPageLayout / CmsPageBlocks)
+ * caches under the 'pages' tag — `revalidatePath` alone regenerates the
+ * route against STALE data, so admin edits never surfaced without a
+ * redeploy.
+ *
+ * `revalidateTag(tag, { expire: 0 })`, not `'max'` (#118): under
+ * cacheComponents (`'use cache'` readers, #76) `'max'` is
+ * stale-while-revalidate with a one-year stale window, so an edit keeps
+ * serving old content until a background refresh happens to land AND
+ * re-caches that stale render into the CDN in the meantime. `{ expire: 0 }`
+ * is the documented read-your-writes profile outside Server Actions: the
+ * first post-edit regeneration blocks for fresh data instead of
+ * serve-stale-then-refresh.
+ */
 export const revalidatePage: CollectionAfterChangeHook<Page> = ({
   doc,
   previousDoc,
@@ -23,8 +42,8 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
       // caches under the 'pages' tag — revalidatePath alone regenerates the
       // route against STALE data, so admin edits never surfaced without a
       // redeploy.
-      revalidateTag('pages', 'max')
-      revalidateTag('pages-sitemap', 'max')
+      revalidateTag('pages', { expire: 0 })
+      revalidateTag('pages-sitemap', { expire: 0 })
     }
 
     // If the page was previously published, we need to revalidate the old path
@@ -34,13 +53,17 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
       payload.logger.info(`Revalidating old page at path: ${oldPath}`)
 
       revalidatePath(oldPath)
-      revalidateTag('pages', 'max')
-      revalidateTag('pages-sitemap', 'max')
+      revalidateTag('pages', { expire: 0 })
+      revalidateTag('pages-sitemap', { expire: 0 })
     }
   }
   return doc
 }
 
+/**
+ * afterDelete companion to {@link revalidatePage}. Same `{ expire: 0 }`
+ * read-your-writes reasoning as {@link revalidatePage} (#118).
+ */
 export const revalidateDelete: CollectionAfterDeleteHook<Page> = ({
   doc,
   req: { context },
@@ -48,8 +71,8 @@ export const revalidateDelete: CollectionAfterDeleteHook<Page> = ({
   if (!context.disableRevalidate) {
     const path = doc?.slug === 'home' ? '/' : `/${doc?.slug}`
     revalidatePath(path)
-    revalidateTag('pages', 'max')
-    revalidateTag('pages-sitemap', 'max')
+    revalidateTag('pages', { expire: 0 })
+    revalidateTag('pages-sitemap', { expire: 0 })
   }
 
   return doc
