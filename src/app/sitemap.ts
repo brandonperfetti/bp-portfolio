@@ -54,6 +54,18 @@ async function getSitemapData(): Promise<{
   return { articles, newestArticleMs, pageSlugs }
 }
 
+/**
+ * The `/sitemap.xml` route: assembles the static, article, and page-builder
+ * URLs from the cached {@link getSitemapData} payload.
+ *
+ * @remarks
+ * Kept outside the `'use cache'` scope so it stays a cheap pure reshape: it
+ * rebuilds the `Date` objects the `MetadataRoute.Sitemap` shape requires from
+ * the fixed epoch-ms timestamps {@link getSitemapData} returns — never
+ * `Date.now()`, which `cacheComponents` rejects during prerender — so
+ * `lastModified` reflects real content freshness while the route prerenders
+ * static.
+ */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = getSiteUrl()
   const { articles, newestArticleMs, pageSlugs } = await getSitemapData()

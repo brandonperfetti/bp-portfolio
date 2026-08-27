@@ -66,6 +66,18 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
+/**
+ * Root `(frontend)` layout: the `<html>`/`<body>` shell plus the auth, consent,
+ * and theme providers every page renders inside.
+ *
+ * @remarks
+ * The CMS-driven consent config is resolved here, server-side, before the
+ * client consent runtime mounts, because the runtime is a client component that
+ * must have its copy/categories/toggles at first paint — a client-side fetch
+ * would flash the default banner and can't run inside the prerendered shell.
+ * The read is a cached `'use cache'` call (like `getCmsSiteSettings`), so the
+ * layout still prerenders static under `cacheComponents`.
+ */
 export default async function RootLayout({
   children,
 }: {

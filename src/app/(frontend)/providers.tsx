@@ -67,6 +67,18 @@ function PreviousPathnameTracker({
   return null
 }
 
+/**
+ * Client provider shell for the `(frontend)` tree: theme, the previous-pathname
+ * tracker, and the consent runtime.
+ *
+ * @remarks
+ * Owns the {@link PreviousPathnameTracker} Suspense boundary and the
+ * {@link AppContext} that holds `previousPathname` in state, so the whole app
+ * (`children`) sits outside that boundary and never remounts on navigation
+ * (#76 Piece 1). {@link ConsentManager} is mounted here, under the theme
+ * provider, so the consent UI inherits the resolved theme; the server-resolved
+ * `consentConfig` is threaded straight through to it.
+ */
 export function Providers({
   children,
   consentConfig,
