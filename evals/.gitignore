@@ -1,0 +1,6 @@
+# Evalite runs with this directory as its cwd (see `evalite.config.ts`), and
+# both evalite and Vitest write their caches under `<cwd>/node_modules`:
+# `node_modules/.evalite/cache.sqlite` (evalite's run storage) and
+# `node_modules/.vite` (Vitest's transform cache). The repo-root .gitignore
+# only ignores the rooted `/node_modules`, so this nested one needs its own.
+node_modules/

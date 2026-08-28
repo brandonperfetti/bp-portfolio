@@ -28,8 +28,8 @@
     "seed:e2e": "payload run scripts/seed-e2e.ts",
     "generate:types": "payload generate:types",
     "generate:importmap": "payload generate:importmap",
-    "eval": "evalite watch",
-    "eval:ci": "evalite run --threshold 80"
+    "eval": "cd evals && evalite watch",
+    "eval:ci": "cd evals && evalite run --threshold 80"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {
