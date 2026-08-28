@@ -1,5 +1,6 @@
 import { ArticleBody } from '@/components/cms/ArticleBody'
 import { MemberMarkdownOverride } from '@/components/cms/ArticleCopyMarkdown'
+import { MembersTeaser } from '@/components/cms/MembersTeaser'
 import { SyncErrorState } from '@/components/cms/SyncErrorState'
 import { getArticleBySlug, type ArticleDetailWithSlug } from '@/lib/articles'
 import { getViewer } from '@/lib/auth/getViewer'
@@ -19,24 +20,10 @@ export function ArticleBodyRegion({
   article: ArticleDetailWithSlug
 }) {
   const bodyBlocks = Array.isArray(article.bodyBlocks) ? article.bodyBlocks : []
-  if (article.gated) {
-    return (
-      <div className="mt-8 rounded-2xl border border-zinc-200 p-6 text-center dark:border-zinc-700/60">
-        <p className="text-base font-medium text-zinc-800 dark:text-zinc-100">
-          This article is for members.
-        </p>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Sign in (it&apos;s free) to read the full piece.
-        </p>
-        <a
-          href={`/sign-in?redirect_url=/articles/${article.slug}`}
-          className="mt-4 inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600"
-        >
-          Sign in to continue
-        </a>
-      </div>
-    )
-  }
+  // #113: the teaser (and its Button-primitive CTA) is its own presentational
+  // leaf so it can carry a Storybook story — this module's request-time
+  // `AuthGatedArticleBody` imports make it unbundlable for the browser.
+  if (article.gated) return <MembersTeaser slug={article.slug} />
   return bodyBlocks.length > 0 ? (
     <ArticleBody blocks={bodyBlocks} />
   ) : (

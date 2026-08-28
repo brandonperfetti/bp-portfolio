@@ -58,9 +58,20 @@ describe('ArticleBodyRegion', () => {
   it('renders the members teaser (with a sign-in link) when gated', () => {
     render(<ArticleBodyRegion article={article({ gated: true })} />)
     expect(screen.getByText('This article is for members.')).toBeInTheDocument()
-    expect(
-      screen.getByRole('link', { name: /sign in to continue/i }),
-    ).toHaveAttribute('href', '/sign-in?redirect_url=/articles/a-post')
+    const cta = screen.getByRole('link', { name: /sign in to continue/i })
+    expect(cta).toHaveAttribute(
+      'href',
+      '/sign-in?redirect_url=/articles/a-post',
+    )
+    // #113: the CTA is the shadcn Button primitive via `asChild`, so it keeps
+    // anchor semantics (an <a>, still a `link` role) while carrying the
+    // primitive's data-slot and the teal variant instead of hand-written
+    // classes. The exact teal/rounded-xl rendering is pinned in the Storybook
+    // story (computed styles need a real browser).
+    expect(cta.tagName).toBe('A')
+    expect(cta).toHaveAttribute('data-slot', 'button')
+    expect(cta).toHaveAttribute('data-variant', 'teal')
+    expect(cta.className).toContain('rounded-xl')
     expect(screen.queryByTestId('article-body')).toBeNull()
   })
 

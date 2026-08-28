@@ -19,6 +19,12 @@ const buttonVariants = cva(
         ghost:
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         link: 'text-primary underline-offset-4 hover:underline',
+        // The site's own teal CTA fill (#113) — zinc/teal palette, identical in
+        // light and dark (white text on teal-700, teal-600 on hover), matching
+        // the `--corvus-accent-solid` tokens and the pre-port gated-article
+        // teaser. Added rather than re-applying the same hand-written classes at
+        // each call site; no existing variant is touched.
+        teal: 'bg-teal-700 text-white hover:bg-teal-600',
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
