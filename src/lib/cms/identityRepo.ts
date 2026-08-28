@@ -39,9 +39,12 @@ export interface CmsIdentity {
  *
  * @remarks Cache tag `global_identity` matches `revalidateGlobal('identity')`
  * on the global's afterChange hook, so admin edits go live without a deploy.
+ *
+ * `'use cache: remote'` so a `global_identity` tag purge reaches every
+ * serverless instance, not only the one that ran the hook (#118).
  */
 export const getCmsIdentity = async (): Promise<CmsIdentity> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.identity)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })

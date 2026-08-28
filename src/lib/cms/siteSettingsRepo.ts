@@ -26,9 +26,12 @@ const DEFAULT_SITE_SETTINGS: CmsSiteSettings = {
  *
  * @remarks Falls back to hard defaults so the site renders with an empty CMS
  * (the Phase 0 "boots with only a database" invariant).
+ *
+ * `'use cache: remote'` so a `global_site-settings` tag purge reaches every
+ * serverless instance, not only the one that ran the hook (#118).
  */
 export const getCmsSiteSettings = async (): Promise<CmsSiteSettings> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.settings)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })

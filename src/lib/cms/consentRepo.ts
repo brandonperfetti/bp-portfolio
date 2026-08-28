@@ -25,9 +25,12 @@ import type { CookieConsent } from '@/payload-types'
  * environment — falls back to the full defaults rather than throwing, keeping the
  * site behavior-preserving until the migration lands. `depth: 1` resolves the
  * optional privacy-policy page relation.
+ *
+ * `'use cache: remote'` so a `global_cookie-consent` tag purge reaches every
+ * serverless instance, not only the one that ran the hook (#118).
  */
 export const getCmsConsentConfig = async (): Promise<ConsentConfig> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.consent)
   cacheLife('cmsContent')
 

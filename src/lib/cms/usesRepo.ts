@@ -18,10 +18,12 @@ const CATEGORY_LABELS: Record<string, string> = {
  * Uses entries from the Payload `uses` collection (was Notion in v3),
  * grouped into the v3 `CmsUseSection[]` shape by category.
  *
+ * @remarks `'use cache: remote'` so a `uses` tag purge reaches every
+ * serverless instance, not only the one that ran the hook (#118).
  * @returns `null` when empty so /uses falls back to hard-coded v3 content.
  */
 export const getCmsUses = async (): Promise<CmsUseSection[] | null> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.uses)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })

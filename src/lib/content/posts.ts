@@ -66,11 +66,16 @@ export type PublishedPostSummary = Pick<
 /**
  * All published posts as summary-shaped docs (no `content`), newest first.
  * Cached under the `posts` tag. Feeds the `/` + `/articles` list surfaces.
+ *
+ * @remarks `'use cache: remote'` so a `posts` tag purge reaches every
+ * serverless instance, not only the one that ran the hook (#118). Measured
+ * 43,381 bytes at the current corpus, 838,561 at the 1000-post query ceiling —
+ * both under the 2 MB Runtime Cache item limit.
  */
 export const getPublishedPostSummaries = async (): Promise<
   PublishedPostSummary[]
 > => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.articles)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
@@ -97,6 +102,17 @@ export const getPublishedPostSummaries = async (): Promise<
  * fetch uses plain `'use cache'` (in-memory, no 2 MB per-item ceiling — the
  * #76 B1 conversion) so the large search-index payload caches without the
  * `unstable_cache` 2 MB rejection.
+ *
+ * The documented exception to #118's `'use cache: remote'` move: at 2,358,733
+ * measured bytes over the 52-post corpus it is above Vercel's 2 MB Runtime
+ * Cache item ceiling, so `:remote` would silently reject the write and re-query
+ * Postgres on every read — the exact failure #76 Phase 0 removed. It therefore
+ * stays on the per-process in-memory tier and keeps that tier's known defect:
+ * a `posts` purge only reaches the instance that issued it, so the search index
+ * converges on the `cmsContent` cadence rather than on the edit. Search is the
+ * least freshness-critical surface; shrinking this read (a `{slug, content}`
+ * projection or a precomputed `searchText` column) is what would remove the
+ * exception.
  */
 export const getPublishedPosts = async (): Promise<Post[]> => {
   'use cache'
@@ -114,9 +130,14 @@ export const getPublishedPosts = async (): Promise<Post[]> => {
   return docs
 }
 
-/** Published slugs for `generateStaticParams`. */
+/**
+ * Published slugs for `generateStaticParams`.
+ *
+ * @remarks `'use cache: remote'` so a `posts` tag purge reaches every
+ * serverless instance, not only the one that ran the hook (#118).
+ */
 export const getPublishedPostSlugs = async (): Promise<string[]> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.articles)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
@@ -133,13 +154,18 @@ export const getPublishedPostSlugs = async (): Promise<string[]> => {
 
 /**
  * Cached published post by slug — the prerender path (#76 B2 draft-split).
- * `'use cache'` + `cacheTag(CMS_TAGS.articles)` so the signed-out article shell
- * prerenders static and publishes/edits purge it. Reads NO `draftMode()` (a
- * dynamic-API read here would block prerender). The draft branch is
- * {@link getDraftPostBySlug}.
+ * `'use cache: remote'` + `cacheTag(CMS_TAGS.articles)` so the signed-out
+ * article shell prerenders static and publishes/edits purge it. Reads NO
+ * `draftMode()` (a dynamic-API read here would block prerender). The draft
+ * branch is {@link getDraftPostBySlug}.
+ *
+ * @remarks `:remote` so a `posts` tag purge reaches every serverless instance,
+ * not only the one that ran the hook (#118) — this per-slug entry is the one
+ * the detail-page staleness incident landed on. Measured 45,356 bytes for one
+ * post, far under the 2 MB Runtime Cache item limit.
  */
 const getPublishedPostBySlug = async (slug: string): Promise<Post | null> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.articles)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })

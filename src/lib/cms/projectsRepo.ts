@@ -10,11 +10,13 @@ import type { CmsEntityItem } from '@/lib/cms/types'
  * Projects from the Payload `projects` collection (was Notion in v3),
  * mapped to the v3 `CmsEntityItem` shape the /projects page renders.
  *
+ * @remarks `'use cache: remote'` so a `projects` tag purge reaches every
+ * serverless instance, not only the one that ran the hook (#118).
  * @returns `null` when the collection is empty so the page falls back to its
  * hard-coded v3 project list until content is populated.
  */
 export const getCmsProjects = async (): Promise<CmsEntityItem[] | null> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.projects)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })

@@ -54,11 +54,14 @@ export type CmsArticleDetailResult = CmsArticleDetail & {
  * hourly-ISR behavior) — the error's own `[cache]` remedy — so the future-dated
  * publish gate stays load-bearing without blocking the static build. Purged with
  * the article cache on any publish/edit.
+ *
+ * `'use cache: remote'` so a `posts` tag purge reaches every serverless
+ * instance, not only the one that ran the hook (#118).
  * @param date - The article's publish date (ISO string).
  * @returns True when the date is still in the future at cache-generation time.
  */
 async function isArticleScheduledFuture(date: string): Promise<boolean> {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.articles)
   cacheLife('cmsContent')
   return isFuturePublicationDate(date)

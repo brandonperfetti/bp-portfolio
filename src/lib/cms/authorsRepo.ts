@@ -63,9 +63,12 @@ const toProfile = (author: Author, index: number): CmsAuthorProfile => {
  * @remarks The live article byline does NOT flow through here — it is resolved
  * from the populated `authors` relation in {@link articlesRepo} (the rendering
  * path). This repo backs author-directory / API surfaces and future consumers.
+ *
+ * `'use cache: remote'` so a `authors` tag purge reaches every serverless
+ * instance, not only the one that ran the hook (#118).
  */
 export const getCmsAuthors = async (): Promise<CmsAuthorProfile[]> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.authors)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
