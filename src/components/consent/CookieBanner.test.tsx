@@ -1,9 +1,17 @@
+import { useEffect } from 'react'
+
 import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { ConsentManagerProvider } from '@c15t/react'
+import { ConsentManagerProvider, useConsentManager } from '@c15t/react'
 
 import { buildConsentManagerOptions } from './consent-config'
+import {
+  CONSENT_TRIGGER_ATTR,
+  clearConsentTrigger,
+  takeConsentTrigger,
+} from './consent-focus'
 import { CookieBanner } from './CookieBanner'
 
 // jsdom has no matchMedia; c15t's color-scheme hook needs it (mirrors the
@@ -25,13 +33,35 @@ beforeAll(() => {
   })
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  clearConsentTrigger()
+})
+
+/**
+ * Resets c15t's module-level singleton on mount. Without this, a test that
+ * opens the dialog (or records consent) leaves `activeUI`/`hasConsented` set
+ * for every later test in the file — the same singleton-leak lesson the
+ * Storybook harness learned in #111, where `localStorage.clear()` alone was not
+ * enough.
+ */
+function ResetConsentOnMount() {
+  const { resetConsents, setActiveUI } = useConsentManager()
+  useEffect(() => {
+    resetConsents()
+    setActiveUI('none')
+    // Run once per mount; both are stable store methods.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return null
+}
 
 function renderBanner(consentRequired: boolean | null) {
   return render(
     <ConsentManagerProvider
       options={buildConsentManagerOptions({ scripts: [] })}
     >
+      <ResetConsentOnMount />
       <CookieBanner consentRequired={consentRequired} />
     </ConsentManagerProvider>,
   )
@@ -83,4 +113,39 @@ describe('CookieBanner default (empty-CMS) copy + toggles', () => {
       screen.getByRole('button', { name: /customize/i }),
     ).toBeInTheDocument()
   })
+})
+
+describe('CookieBanner dialog triggers (#112 — return-focus capture)', () => {
+  it('labels both banner triggers so a remounted one can be re-found', () => {
+    renderBanner(true)
+    expect(screen.getByRole('button', { name: /customize/i })).toHaveAttribute(
+      CONSENT_TRIGGER_ATTR,
+      'banner-customize',
+    )
+    expect(
+      screen.getByRole('button', { name: /cookie details/i }),
+    ).toHaveAttribute(CONSENT_TRIGGER_ATTR, 'banner-cookie-details')
+  })
+
+  it.each([
+    ['customize', /customize/i, 'banner-customize'],
+    ['cookie details', /cookie details/i, 'banner-cookie-details'],
+  ] as const)(
+    'records the "%s" trigger synchronously, before the banner unmounts',
+    async (_label, name, id) => {
+      const user = userEvent.setup()
+      renderBanner(true)
+      const trigger = screen.getByRole('button', { name })
+
+      await user.click(trigger)
+
+      // The capture is what CookieDialog consumes on open. Without it the
+      // dialog would read `document.activeElement` — already `<body>`, because
+      // this banner un-renders itself the moment activeUI becomes 'dialog'.
+      expect(takeConsentTrigger()).toEqual({ id, element: trigger })
+      expect(
+        screen.queryByRole('region', { name: /cookie consent/i }),
+      ).not.toBeInTheDocument()
+    },
+  )
 })

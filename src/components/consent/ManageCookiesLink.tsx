@@ -5,6 +5,7 @@ import { useConsentManager } from '@c15t/react'
 import { cn } from '@/lib/utils'
 
 import { useConsentConfig } from './consent-context'
+import { CONSENT_TRIGGER_ATTR, captureConsentTrigger } from './consent-focus'
 
 /**
  * Persistent "Manage Cookies" entry point (the Brytecore `ManageCookiesLink`
@@ -29,7 +30,15 @@ export function ManageCookiesLink({ className }: { className?: string }) {
   return (
     <button
       type="button"
-      onClick={() => setActiveUI('dialog', { force: true })}
+      // #112: this trigger stays mounted while the dialog is open, so it is
+      // both the natural return target for its own flow and the fallback for a
+      // banner trigger that never comes back (an explicit choice made inside
+      // the dialog dismisses the banner for good).
+      {...{ [CONSENT_TRIGGER_ATTR]: 'footer-manage' }}
+      onClick={(event) => {
+        captureConsentTrigger('footer-manage', event.currentTarget)
+        setActiveUI('dialog', { force: true })
+      }}
       className={cn(
         'rounded-md px-1 py-0.5 transition hover:text-teal-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:hover:text-teal-400 dark:focus-visible:ring-teal-400/80',
         className,

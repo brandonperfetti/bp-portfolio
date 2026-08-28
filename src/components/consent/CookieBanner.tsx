@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 
 import { shouldShowBanner, markExplicitConsentChoice } from './consent-config'
 import { useConsentConfig } from './consent-context'
+import { CONSENT_TRIGGER_ATTR, captureConsentTrigger } from './consent-focus'
 
 /**
  * Custom cookie-consent banner in bp's own design system (zinc/teal, Tailwind
@@ -35,6 +36,16 @@ export function CookieBanner({
     shouldShowBanner({ consentRequired, hasConsented: hasConsented() }) &&
     activeUI !== 'dialog'
 
+  // #112: record the opener synchronously, before React unmounts this banner —
+  // by the time `CookieDialog`'s open effect runs, `document.activeElement` has
+  // already fallen back to `<body>`.
+  const openDialogFrom =
+    (id: 'banner-customize' | 'banner-cookie-details') =>
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      captureConsentTrigger(id, event.currentTarget)
+      setActiveUI('dialog', { force: true })
+    }
+
   if (!visible) return null
 
   const accept = () => {
@@ -63,7 +74,8 @@ export function CookieBanner({
             {banner.message} See{' '}
             <button
               type="button"
-              onClick={() => setActiveUI('dialog', { force: true })}
+              {...{ [CONSENT_TRIGGER_ATTR]: 'banner-cookie-details' }}
+              onClick={openDialogFrom('banner-cookie-details')}
               className="font-medium text-teal-700 underline underline-offset-2 hover:text-teal-600 dark:text-teal-400 dark:hover:text-teal-300"
             >
               {banner.cookieDetailsLabel}
@@ -82,7 +94,8 @@ export function CookieBanner({
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => setActiveUI('dialog', { force: true })}
+              {...{ [CONSENT_TRIGGER_ATTR]: 'banner-customize' }}
+              onClick={openDialogFrom('banner-customize')}
             >
               {banner.customizeLabel}
             </Button>

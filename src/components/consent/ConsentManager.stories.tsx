@@ -172,3 +172,37 @@ export const UnknownFailClosed: Story = {
     ).toBeInTheDocument()
   },
 }
+
+/**
+ * #112: opening the dialog from a **banner** trigger and closing it must return
+ * focus to that trigger, not to `<body>`. The banner hides itself while the
+ * dialog is open, so the button that comes back is a *new node* — the reason
+ * `document.activeElement` alone could never restore it.
+ *
+ * @remarks Escape-to-close and the focus trap (0f7bd362) stay intact — this
+ * story exercises both on the way to the assertion.
+ */
+export const BannerTriggerReturnsFocus: Story = {
+  args: { consentRequired: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByRole('region', { name: /cookie consent/i })
+
+    await userEvent.click(
+      await canvas.findByRole('button', { name: /customize/i }),
+    )
+    const body = within(document.body)
+    const dialog = await body.findByRole('dialog')
+
+    // The originating trigger is gone while the dialog is open — the reason
+    // `document.activeElement` alone can no longer name a return target.
+    expect(canvas.queryByRole('button', { name: /customize/i })).toBeNull()
+
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(dialog).not.toBeInTheDocument())
+
+    const remounted = await canvas.findByRole('button', { name: /customize/i })
+    await waitFor(() => expect(document.activeElement).toBe(remounted))
+    expect(document.activeElement).not.toBe(document.body)
+  },
+}
