@@ -168,6 +168,29 @@ jobs:
           echo "Second 'pnpm migrate' executed no migrations - ledger is clean."
       - name: Seed e2e content
         run: pnpm seed:e2e
+      # Issue #82, eval tier 2. The site-fact evals in the Evalite job below
+      # ask whether Corvus USES what it is handed; this step asks whether what
+      # it is handed is correct and permitted, and the two need opposite
+      # environments. This one needs a real Postgres with pgvector and the
+      # migration applied, which only this job has.
+      #
+      # It runs the eval root's Vitest tests: the pgvector integration tier
+      # (real migrated schema, real HNSW index, real chunker, real
+      # embeddingsStore SQL, and the real afterChange/afterDelete hooks invoked
+      # as Payload invokes them) plus the pure scorer unit tests, which the
+      # repo's `unit` project does not collect because its include globs cover
+      # src/ and scripts/ only. `--root evals` picks up the eval root's Vitest
+      # config; `*.eval.ts` is not matched by Vitest's default include, so no
+      # eval runs here and nothing needs a provider key.
+      #
+      # The embedder is STUBBED to a deterministic vector and `embedQuery` is
+      # mocked to throw, so this spends no provider dollars and a path that
+      # started embedding at query time fails the build instead of billing for
+      # it. No provider key is set on this job, deliberately. Every row written
+      # uses a doc_id >= 900000 and is deleted in afterAll, so the Playwright
+      # steps below see the database they would have seen anyway.
+      - name: Corvus retrieval integration (pgvector, stubbed embedder)
+        run: pnpm exec vitest run --root evals
       - name: Install Playwright browser (Chromium)
         run: pnpm exec playwright install --with-deps chromium
       - name: Build
@@ -226,3 +249,18 @@ jobs:
       - name: Run evals
         if: steps.gate.outputs.run == 'true'
         run: pnpm eval:ci
+      # Issue #82, decision D4(b): the site-fact block needs its OWN threshold,
+      # and evalite cannot express one. `--threshold` is a single global
+      # average over every score in the run (evalite 0.19.0,
+      # reporter/EvaliteRunner.js) with no per-eval or per-file form — so with
+      # one invocation a weak site-fact block hides behind strong persona
+      # scores. `evalite run <path>` filters to one file, which is how the
+      # block gets a gate of its own. The path is relative to the eval root,
+      # because the script cds there first.
+      #
+      # This re-runs the site-fact evals, so it costs a second pass over that
+      # file's cases. That is the price of a per-block gate; keeping the block
+      # small is what keeps the price small.
+      - name: Run site-fact evals at their own threshold
+        if: steps.gate.outputs.run == 'true'
+        run: pnpm eval:facts
