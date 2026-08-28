@@ -1,12 +1,11 @@
 import { type Metadata } from 'next'
+import { Suspense } from 'react'
 import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
 
 import { NotFoundState } from '@/components/cms/NotFoundState'
 import { ShareButton } from '@/components/cms/ShareButton'
-import { ScrollReveal } from '@/components/motion/ScrollReveal'
-import { Section } from '@/components/Section'
 import { SimpleLayout } from '@/components/SimpleLayout'
-import { TechCard } from '@/components/tech/TechCard'
+import { UsesSections } from '@/components/uses/UsesSections'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { resolvePageShareTargetIds } from '@/lib/cms/pageShareTargets'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
@@ -18,6 +17,19 @@ import { getSiteUrl } from '@/lib/site'
 const defaultUsesMeta: Metadata = {
   title: 'Uses',
   description: 'Software, hardware, and tools I use to plan, build, and ship.',
+}
+
+/**
+ * Static placeholder while the `?page`-aware uses list hydrates.
+ *
+ * @returns The prerendered fallback for the `UsesSections` Suspense boundary.
+ */
+function UsesSectionsFallback() {
+  return (
+    <div className="text-sm text-zinc-500 dark:text-zinc-400">
+      Loading uses...
+    </div>
+  )
 }
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -133,22 +145,13 @@ export default async function Uses() {
       >
         <div className="space-y-20">
           {sections.length ? (
-            sections.map((section) => (
-              <Section key={section.title} title={section.title}>
-                <ScrollReveal targets="li">
-                  <ul
-                    role="list"
-                    className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2"
-                  >
-                    {section.items.map((item) => (
-                      // Uses entries are logo-less by design — no monogram
-                      // circle (Brandon's call; tech cards keep theirs).
-                      <TechCard key={item.slug} item={item} monogram={false} />
-                    ))}
-                  </ul>
-                </ScrollReveal>
-              </Section>
-            ))
+            // `UsesSections` is the sole client boundary here: it reads the
+            // shared `?page` param (#88) with `useSearchParams`, so it renders
+            // under `<Suspense>` and this route stays statically rendered — no
+            // server-side `searchParams` read is introduced.
+            <Suspense fallback={<UsesSectionsFallback />}>
+              <UsesSections sections={sections} />
+            </Suspense>
           ) : (
             <NotFoundState
               title="Uses list coming soon"

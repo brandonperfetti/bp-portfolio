@@ -31,6 +31,41 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
   summaries (deliberately NOT full bodies — full-corpus emission would leak
   gated content; keep it that way).
 
+## Paginated list views (`?page=N`)
+
+`/articles`, `/projects`, `/tech` and `/uses` share one URL contract (#88):
+`?page=N`, absent meaning page 1, composing with each surface's filter params
+(see `docs/NAVIGATION.md` for the contract itself). It is implemented as
+**client-side windowing over the already-fetched set** (option (b), decided
+2026-08-28): the route still fetches the whole publish-safe collection and
+renders one page of it in the browser. No data-fetch, cache-key or
+rendering-profile change — the routes stay `○ Static` and serve one HTML
+document for every `?page=N`. The server-side end state (per-param server
+rendering, paged repo reads, per-page canonicals) is tracked as **#121** and is
+deliberately not foreclosed here.
+
+The calls that follow from option (b):
+
+- **Canonical stays the bare URL for every paginated view.** Per-page
+  self-referencing canonicals would advertise distinct documents the static
+  route does not actually serve. `page=1` is never written into the URL (the
+  control drops the param), so the first page has exactly one address. Per-page
+  canonicals arrive with server rendering in #121.
+- **Paginated list URLs stay out of the sitemap.** `src/app/sitemap.ts`
+  continues to list detail routes, which already cover every piece of content;
+  discovery never depends on crawling page 2. `rel="prev"`/`rel="next"` are
+  emitted on the Previous/Next controls — dead as a Google signal, harmless and
+  honest as markup.
+- **ItemList JSON-LD stays capped at the first 50 items overall** — the
+  `301a8f3` behavior, unchanged. #88 called either choice defensible; under
+  option (b) a per-page ItemList would be wrong for every page but the first,
+  because the same document is served for every `?page=N`. The choice is
+  restated in a comment in `src/app/(frontend)/articles/page.tsx`.
+- **Page-2+ content requires client JS.** Accepted for now, and the main reason
+  #121 exists; mitigated because paginated URLs are non-canonical and unlisted,
+  and every article stays independently reachable through its detail route, the
+  feed and `llms.txt`.
+
 ## Rules
 
 - Never index gated bodies: teasers only in any public payload, feeds

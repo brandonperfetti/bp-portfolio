@@ -57,6 +57,14 @@ vi.mock('@/components/motion/ScrollReveal', () => ({
     <>{children}</>
   ),
 }))
+// `UsesSections` — the `?page` client boundary extracted from this route for
+// #88 — is rendered for real so this test still asserts the sections the page
+// emits. It reads the App Router hooks, which jsdom has no provider for.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/uses',
+  useSearchParams: () => new URLSearchParams(''),
+}))
 vi.mock('@/components/SimpleLayout', () => ({
   SimpleLayout: ({
     actions,
