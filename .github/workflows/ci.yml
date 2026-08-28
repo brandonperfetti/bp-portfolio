@@ -148,6 +148,24 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Run Payload migrations
         run: pnpm migrate
+      # Issue #82 acceptance criterion: migrations must be safely re-runnable.
+      # Payload's ledger (`payload_migrations`) is what makes a second run a
+      # no-op — `migrate()` skips any migration already recorded there and logs
+      # `Migrating: <name>` only for ones it actually executes
+      # (payload/dist/database/migrations/migrate.js). So "clean no-op" is
+      # exactly: exit 0, and zero `Migrating:` lines. A non-zero exit means some
+      # migration is not re-runnable; a `Migrating:` line means the first run
+      # failed to record it as applied and the DDL got executed twice.
+      - name: Assert migrations are idempotent (re-run is a clean no-op)
+        run: |
+          set -euo pipefail
+          log="${RUNNER_TEMP}/migrate-rerun.log"
+          pnpm migrate 2>&1 | tee "$log"
+          if grep -q 'Migrating:' "$log"; then
+            echo "::error::A second 'pnpm migrate' re-executed a migration; the first run did not record it as applied."
+            exit 1
+          fi
+          echo "Second 'pnpm migrate' executed no migrations - ledger is clean."
       - name: Seed e2e content
         run: pnpm seed:e2e
       - name: Install Playwright browser (Chromium)
