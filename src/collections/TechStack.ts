@@ -6,6 +6,10 @@ import {
   revalidateCollectionTag,
   revalidateCollectionTagDelete,
 } from '@/hooks/revalidateCollection'
+import {
+  deleteCorvusEmbeddings,
+  refreshCorvusEmbeddings,
+} from '@/hooks/corvusEmbeddings'
 
 /**
  * Technologies powering the interactive /tech + /uses visualization.
@@ -106,8 +110,14 @@ export const TechStack: CollectionConfig = {
     },
   ],
   hooks: {
-    afterChange: [revalidateCollectionTag('tech-stack', ['/tech'])],
-    afterDelete: [revalidateCollectionTagDelete('tech-stack', ['/tech'])],
+    afterChange: [
+      revalidateCollectionTag('tech-stack', ['/tech']),
+      refreshCorvusEmbeddings('tech-stack'),
+    ],
+    afterDelete: [
+      revalidateCollectionTagDelete('tech-stack', ['/tech']),
+      deleteCorvusEmbeddings('tech-stack'),
+    ],
   },
   defaultSort: 'sortOrder',
 }
