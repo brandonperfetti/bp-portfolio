@@ -143,6 +143,21 @@ describe('Carousel block config', () => {
     expect(image.required).toBe(true)
   })
 
+  /**
+   * #68.3: the Expo effect renders its photo through a plain `<img>` (next/image
+   * `fill` breaks the effect's positioning), so an oversized original is decoded
+   * on every slide change. The mitigation is half code (the Cloudinary `srcset`
+   * in `CarouselClient.tsx`) and half editor guidance — this pins the guidance to
+   * the slides field, where the upload happens, so it can't be dropped silently.
+   */
+  it('tells editors to keep slide images reasonably sized, for Expo', () => {
+    const slides = named(Carousel.fields, 'slides') as ArrayField
+    const description = slides.admin?.description
+    expect(typeof description).toBe('string')
+    expect(description as string).toMatch(/reasonably.sized/i)
+    expect(description as string).toMatch(/expo/i)
+  })
+
   it('defaults autoplay OFF and navigation/pagination ON', () => {
     const fields = behaviourFields()
     const autoplay = fields.find(
