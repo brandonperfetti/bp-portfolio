@@ -30,7 +30,8 @@
     "generate:importmap": "payload generate:importmap",
     "eval": "cd evals && evalite watch",
     "eval:ci": "cd evals && evalite run --threshold 80",
-    "eval:facts": "cd evals && evalite run site-facts.eval.ts --threshold 75"
+    "eval:facts": "cd evals && evalite run site-facts.eval.ts --threshold 75",
+    "eval:matrix": "cd evals && CORVUS_EVAL_MATRIX=1 evalite run matrix.eval.ts --threshold 0 --outputPath ./corvus-matrix.json"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {

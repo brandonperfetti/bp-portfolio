@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 import { createVitest } from 'vitest/node'
@@ -39,13 +39,33 @@ const REPO_ROOT = process.cwd()
  */
 const EVALITE_INCLUDE = ['**/*.eval.?(m)ts']
 
-/** Eval files that must stay collectable; new blocks are added here. */
+/**
+ * Eval files that must stay collectable; new blocks are added here.
+ *
+ * @remarks `matrix.eval.ts` (#82 Batch 5) belongs on this list even though it
+ * registers ZERO evals unless `CORVUS_EVAL_MATRIX=1`, and that is worth
+ * spelling out because it reads like a contradiction. Collection and
+ * registration are different steps: `globTestSpecifications()` matches file
+ * paths WITHOUT importing them, so no module body runs, no `if` is evaluated,
+ * and the assertion below cannot depend on that env var — it asserts the file
+ * is discoverable, not that it registers anything. Leaving it off the list
+ * would drop the one guard the matrix needs: rename or move the file and
+ * `pnpm eval:matrix` silently runs nothing at all.
+ *
+ * What the flag does change is asserted from the script line instead, below. A
+ * test that ran the matrix to check would spend provider dollars, which is the
+ * one thing this file refuses to do.
+ */
 const REQUIRED_EVAL_FILES = [
+  'matrix.eval.ts',
   'persona.eval.ts',
   'safety.eval.ts',
   'scope.eval.ts',
   'site-facts.eval.ts',
 ]
+
+/** The env var `matrix.eval.ts` gates its registrations behind. */
+const MATRIX_FLAG = 'CORVUS_EVAL_MATRIX'
 
 type PackageJson = { scripts?: Record<string, string> }
 
@@ -92,6 +112,48 @@ describe('eval harness wiring', () => {
       EVAL_ROOT_REL,
     )
     expect(existsSync(EVAL_ROOT)).toBe(true)
+  })
+
+  it('keeps the model matrix opt-in, ungated, and out of the tree', () => {
+    // `eval:matrix` is the only script that may set the flag. If a gate script
+    // ever sets it, every variant's scores fold into that run's single global
+    // average and `--threshold 80` stops meaning "is Corvus good enough".
+    const matrix = packageJson.scripts?.['eval:matrix'] ?? ''
+    const parsed =
+      /^cd\s+(\S+)\s*&&\s*CORVUS_EVAL_MATRIX=1\s+evalite\s+run\s+(\S+)/.exec(
+        matrix.trim(),
+      )
+
+    expect(
+      parsed,
+      '`eval:matrix` must cd into the eval root and set CORVUS_EVAL_MATRIX=1',
+    ).not.toBeNull()
+    expect(parsed?.[1]).toBe(EVAL_ROOT_REL)
+    expect(
+      existsSync(join(EVAL_ROOT, parsed?.[2] ?? '')),
+      'the matrix script must name an eval file that exists',
+    ).toBe(true)
+
+    // Threshold 0 reports without gating; the JSON is what gets posted to #82.
+    expect(matrix).toMatch(/--threshold\s+0(\s|$)/)
+    const outputPath = /--outputPath\s+(\S+)/.exec(matrix)?.[1]
+    expect(outputPath, '`eval:matrix` must write its results as JSON').toMatch(
+      /\.json$/,
+    )
+
+    // One manual run's numbers are not tree content; they rot into a stale
+    // claim about two models the moment either one moves.
+    expect(
+      readFileSync(join(EVAL_ROOT, '.gitignore'), 'utf8'),
+      'the matrix output must be gitignored',
+    ).toContain(basename(outputPath as string))
+
+    for (const gate of ['eval', 'eval:ci', 'eval:facts']) {
+      expect(
+        packageJson.scripts?.[gate] ?? '',
+        `${gate} must not enable the matrix`,
+      ).not.toContain(MATRIX_FLAG)
+    }
   })
 
   it('keeps evalite.config.ts inside the eval root', () => {

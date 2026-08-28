@@ -1,4 +1,4 @@
-import { generateText } from 'ai'
+import { type LanguageModel, generateText } from 'ai'
 
 // Relative, not `@/`: the eval run is its own Vitest root (`evals/`, where
 // `evalite.config.ts` now lives). `evals/vitest.config.ts` does now carry an
@@ -11,14 +11,36 @@ import { buildGroundedSystem } from '../src/lib/ai/groundedSystem'
 import type { CorvusSnippet } from '../src/lib/ai/retrieval'
 
 /**
+ * Which model an eval turn runs on.
+ *
+ * @remarks Optional, and omitting it is the ONLY thing the gate evals do: with
+ * no `model` the helper calls `getCorvusModel()`, exactly as before this option
+ * existed, so `pnpm eval:ci` measures the env-selected production model and
+ * nothing about its scores moved. The option exists for `matrix.eval.ts`,
+ * which must name a model per variant rather than inherit one from the shell
+ * (see `variants.ts`).
+ */
+export interface CorvusModelOption {
+  /** Overrides the env-selected model. Omit for the production path. */
+  model?: LanguageModel
+}
+
+/** Options for {@link askCorvus}. */
+export type AskCorvusOptions = CorvusModelOption
+
+/**
  * Run one Corvus turn exactly as the production route does: server-enforced
  * system prompt, env-selected model.
  *
  * @param prompt - The visitor's message.
+ * @param options - Optional model override for a matrix variant.
  */
-export async function askCorvus(prompt: string): Promise<string> {
+export async function askCorvus(
+  prompt: string,
+  options?: AskCorvusOptions,
+): Promise<string> {
   const { text } = await generateText({
-    model: getCorvusModel(),
+    model: options?.model ?? getCorvusModel(),
     system: CORVUS_SYSTEM_PROMPT,
     prompt,
     maxOutputTokens: 512,
@@ -32,7 +54,7 @@ export type CorvusRetriever = (
 ) => CorvusSnippet[] | Promise<CorvusSnippet[]>
 
 /** Options for {@link askCorvusGrounded}. */
-export interface AskCorvusGroundedOptions {
+export interface AskCorvusGroundedOptions extends CorvusModelOption {
   /**
    * Where the grounding snippets come from.
    *
@@ -62,7 +84,8 @@ export interface AskCorvusGroundedOptions {
  * site-fact score and a persona score are comparable.
  *
  * @param prompt - The visitor's message.
- * @param options - The retriever to ground with.
+ * @param options - The retriever to ground with, and optionally the model to
+ * run (omitted everywhere except the matrix).
  * @returns The assistant's answer text.
  */
 export async function askCorvusGrounded(
@@ -71,7 +94,7 @@ export async function askCorvusGrounded(
 ): Promise<string> {
   const snippets = await options.retrieve(prompt)
   const { text } = await generateText({
-    model: getCorvusModel(),
+    model: options.model ?? getCorvusModel(),
     system: buildGroundedSystem(snippets),
     prompt,
     maxOutputTokens: 512,
