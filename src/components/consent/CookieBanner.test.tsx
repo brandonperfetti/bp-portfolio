@@ -12,6 +12,7 @@ import {
   clearConsentTrigger,
   takeConsentTrigger,
 } from './consent-focus'
+import { CONSENT_INSET_PROPERTY, releaseConsentInset } from './consent-inset'
 import { CookieBanner } from './CookieBanner'
 
 // jsdom has no matchMedia; c15t's color-scheme hook needs it (mirrors the
@@ -36,6 +37,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup()
   clearConsentTrigger()
+  releaseConsentInset()
 })
 
 /**
@@ -148,4 +150,27 @@ describe('CookieBanner dialog triggers (#112 — return-focus capture)', () => {
       ).not.toBeInTheDocument()
     },
   )
+})
+
+describe('CookieBanner shell inset (#115 — reserve space while shown)', () => {
+  it('reserves bottom space while consent is required and undecided', () => {
+    renderBanner(true)
+    // jsdom has no layout, so the measured height is 0 — the *reservation*
+    // (and its release below) is what is observable here; the real measurement
+    // and the resulting no-overlap are covered by the story + e2e spec.
+    expect(
+      document.documentElement.style.getPropertyValue(CONSENT_INSET_PROPERTY),
+    ).toBe('0px')
+    expect(document.body.style.paddingBottom).toBe(
+      `var(${CONSENT_INSET_PROPERTY})`,
+    )
+  })
+
+  it('reserves nothing where consent is confidently not required', () => {
+    renderBanner(false)
+    expect(
+      document.documentElement.style.getPropertyValue(CONSENT_INSET_PROPERTY),
+    ).toBe('')
+    expect(document.body.style.paddingBottom).toBe('')
+  })
 })

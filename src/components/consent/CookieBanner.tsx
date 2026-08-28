@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+
 import { useConsentManager } from '@c15t/react'
 
 import { Button } from '@/components/ui/button'
@@ -7,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { shouldShowBanner, markExplicitConsentChoice } from './consent-config'
 import { useConsentConfig } from './consent-context'
 import { CONSENT_TRIGGER_ATTR, captureConsentTrigger } from './consent-focus'
+import { useConsentBannerInset } from './consent-inset'
 
 /**
  * Custom cookie-consent banner in bp's own design system (zinc/teal, Tailwind
@@ -32,9 +35,21 @@ export function CookieBanner({
     useConsentManager()
   const { banner, features } = useConsentConfig()
 
-  const visible =
-    shouldShowBanner({ consentRequired, hasConsented: hasConsented() }) &&
-    activeUI !== 'dialog'
+  // Consent required and still undecided — the condition the #115 shell inset
+  // tracks. Deliberately NOT the same as `visible`: the banner un-renders while
+  // the dialog is open, but opening the dialog is not a *choice*, so the
+  // reserved space must survive it (releasing it there would shrink the
+  // document mid-open and re-introduce the #110 scroll jump).
+  const consentUndecided = shouldShowBanner({
+    consentRequired,
+    hasConsented: hasConsented(),
+  })
+  const visible = consentUndecided && activeUI !== 'dialog'
+
+  // State-backed ref callback (not `useRef`): the effect must re-run when the
+  // banner unmounts for the dialog and again when it comes back.
+  const [bannerEl, setBannerEl] = useState<HTMLElement | null>(null)
+  useConsentBannerInset(consentUndecided, bannerEl)
 
   // #112: record the opener synchronously, before React unmounts this banner —
   // by the time `CookieDialog`'s open effect runs, `document.activeElement` has
@@ -59,6 +74,7 @@ export function CookieBanner({
 
   return (
     <div
+      ref={setBannerEl}
       role="region"
       aria-label="Cookie consent"
       className="fixed inset-x-0 bottom-0 z-50 animate-in px-3 duration-300 fade-in slide-in-from-bottom-4 motion-reduce:animate-none sm:px-4"
