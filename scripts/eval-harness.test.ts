@@ -40,7 +40,12 @@ const REPO_ROOT = process.cwd()
 const EVALITE_INCLUDE = ['**/*.eval.?(m)ts']
 
 /** Eval files that must stay collectable; new blocks are added here. */
-const REQUIRED_EVAL_FILES = ['persona.eval.ts', 'safety.eval.ts']
+const REQUIRED_EVAL_FILES = [
+  'persona.eval.ts',
+  'safety.eval.ts',
+  'scope.eval.ts',
+  'site-facts.eval.ts',
+]
 
 type PackageJson = { scripts?: Record<string, string> }
 

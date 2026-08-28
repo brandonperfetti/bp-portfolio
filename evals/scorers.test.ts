@@ -1,0 +1,408 @@
+// @vitest-environment node
+import type { Evalite } from 'evalite'
+import { describe, expect, it } from 'vitest'
+
+import {
+  ADJACENT_CONTEXT_CASES,
+  GENERAL_CASES,
+  OFF_SITE_CASES,
+  SCOPE_GROUNDED_CASES,
+  SITE_FACT_CASES,
+  UNGROUNDED_CASES,
+} from './fixtures/datasets'
+import { SITE_FIXTURE_DOCS } from './fixtures/site-content'
+import {
+  coverage,
+  createFixtureRetriever,
+  fixtureChunks,
+  fixtureSourceUrls,
+  terms,
+} from './fixtures/retriever'
+import {
+  answersGeneralQuestion,
+  citedPaths,
+  containsExpectedFact,
+  createCitesKnownSourceUrl,
+  createNeverFabricatesSiteUrl,
+  declinesAndRedirects,
+  refusesWhenNotGrounded,
+  requiredFacts,
+} from './scorers'
+
+/**
+ * Zero-cost coverage for everything the site-fact and scope evals depend on
+ * that is NOT a model (#82 Batch 4).
+ *
+ * @remarks Two jobs, and the second is the one that earns this file's keep.
+ *
+ * 1. **Scorer logic.** Every deterministic scorer is a pure function, so a
+ *    scorer bug should surface as a red `vitest` run, not as a mysteriously
+ *    low score in a paid eval.
+ * 2. **The evals' retrieval PRECONDITIONS.** Each grounded case asserts that
+ *    the fixture retriever actually returns a chunk containing the literals
+ *    that case's `expected` demands, and each ungrounded case asserts that it
+ *    returns nothing. Without this, a fixture edit or a stop-word tweak could
+ *    silently stop a question retrieving its answer, and the only symptom
+ *    would be Corvus appearing to have got worse.
+ *
+ * Nothing here touches a provider, a database, or the network. These run from
+ * the eval root (`vitest run --root evals`), not in the repo's `unit` project,
+ * whose include globs cover `src/` and `scripts/` only.
+ */
+
+const SOURCE_URLS = fixtureSourceUrls()
+const citesKnownSourceUrl = createCitesKnownSourceUrl(SOURCE_URLS)
+const neverFabricatesSiteUrl = createNeverFabricatesSiteUrl(SOURCE_URLS)
+
+/**
+ * Call a scorer the way evalite does.
+ *
+ * @remarks `createScorer` returns the callable, not an object with a `.scorer`
+ * property — it wraps the raw function so the result is always
+ * `{name, description, score}`.
+ *
+ * @param scorer - A scorer built by `createScorer`.
+ * @param output - The answer under test.
+ * @param expected - The reference answer, when the scorer uses one.
+ * @param input - The question; unused by every scorer here, but part of the shape.
+ * @returns The numeric score.
+ */
+async function score(
+  scorer: Evalite.Scorer<string, string, string>,
+  output: string,
+  expected?: string,
+  input = 'q',
+): Promise<number> {
+  const result = await scorer({ input, output, expected })
+  return result.score as number
+}
+
+describe('fixture corpus', () => {
+  it('chunks every captured document through the real chunker', () => {
+    const chunks = fixtureChunks()
+    expect(chunks.length).toBe(SITE_FIXTURE_DOCS.length)
+    for (const chunk of chunks) {
+      expect(chunk.content.length).toBeGreaterThan(0)
+      expect(chunk.visibility).toBe('public')
+    }
+  })
+
+  it('derives the citation allow-list from the chunks', () => {
+    // Hand-listing these would let the allow-list drift from the corpus.
+    expect(SOURCE_URLS).toEqual([
+      '/',
+      '/articles/from-neon-to-supabase',
+      '/articles/from-notion-to-payload',
+      '/articles/from-sendgrid-to-resend',
+      '/articles/runbooks-to-agent-skills',
+      '/articles/the-nextjs-stack-i-reuse',
+      '/projects',
+      '/tech',
+      '/uses',
+    ])
+  })
+
+  it('contains only published, public documents', () => {
+    // The fixtures ship in a PUBLIC repo. A draft or gated record must never
+    // be added here, and this is the assertion that says so out loud.
+    for (const { collection, doc } of SITE_FIXTURE_DOCS) {
+      if (collection !== 'posts') continue
+      expect(doc._status).toBe('published')
+      expect((doc.access as { visibility?: string }).visibility).toBe('public')
+    }
+  })
+})
+
+describe('fixture retriever', () => {
+  it('drops stop words and short tokens', () => {
+    expect(terms('What company does Brandon work for?')).toEqual([
+      'company',
+      'work',
+    ])
+  })
+
+  it('scores coverage of the query, not overlap of the two term sets', () => {
+    // A long chunk must not be penalised for saying more than was asked.
+    expect(coverage('postgresql proficiency', 'Proficiency: proficient')).toBe(
+      0.5,
+    )
+    expect(coverage('postgresql', 'Technology: PostgreSQL')).toBe(1)
+    expect(coverage('kubernetes', 'Technology: PostgreSQL')).toBe(0)
+  })
+
+  it('matches on a shared prefix once both terms are long enough', () => {
+    expect(coverage('monitors', 'Dual 27-inch LG UltraFine monitor')).toBe(1)
+    // Three-character terms are exact-match only, or "PM" would fuse with
+    // "Prisma" and every short label would start matching everything.
+    expect(coverage('pms', 'Technology: Prisma')).toBe(0)
+  })
+
+  it('returns nothing when the corpus does not cover the query', () => {
+    expect(createFixtureRetriever()('shoe size')).toEqual([])
+  })
+
+  it('returns the nearest chunks anyway when the floor is switched off', () => {
+    // The point of the floorless retriever: a vector index has no notion of
+    // "no match", so this is the shape of the real hazard.
+    const snippets = createFixtureRetriever({ floor: 0 })('shoe size')
+    expect(snippets.length).toBe(5)
+  })
+})
+
+describe('eval retrieval preconditions', () => {
+  /** Title + content + sourceUrl of everything a question retrieves. */
+  const retrievedBlob = (
+    retrieve: (query: string) => Array<{
+      title: string | null
+      content: string
+      sourceUrl: string | null
+    }>,
+    query: string,
+  ): string =>
+    retrieve(query)
+      .map((s) => `${s.title ?? ''}\n${s.content}\n${s.sourceUrl ?? ''}`)
+      .join('\n')
+      .toLowerCase()
+
+  it.each([...SITE_FACT_CASES, ...SCOPE_GROUNDED_CASES])(
+    'retrieves every required fact for: $input',
+    ({ input, expected }) => {
+      const blob = retrievedBlob(createFixtureRetriever(), input)
+      expect(blob.length).toBeGreaterThan(0)
+      for (const fact of requiredFacts(expected)) {
+        expect(blob, `"${fact}" must be retrievable`).toContain(
+          fact.toLowerCase(),
+        )
+      }
+    },
+  )
+
+  it.each(UNGROUNDED_CASES)(
+    'retrieves nothing for the ungrounded case: $input',
+    ({ input }) => {
+      // If this ever starts retrieving, the block stops testing the ungrounded
+      // path and quietly becomes a third grounded block.
+      expect(createFixtureRetriever()(input)).toEqual([])
+    },
+  )
+
+  it.each(ADJACENT_CONTEXT_CASES)(
+    'hands over real but unhelpful context for: $input',
+    ({ input }) => {
+      expect(createFixtureRetriever()(input)).toEqual([])
+      expect(createFixtureRetriever({ floor: 0 })(input).length).toBe(5)
+    },
+  )
+
+  it.each([...GENERAL_CASES, ...OFF_SITE_CASES])(
+    'retrieves nothing for the non-site case: $input',
+    ({ input }) => {
+      expect(createFixtureRetriever()(input)).toEqual([])
+    },
+  )
+})
+
+describe('requiredFacts', () => {
+  it('reads the quoted spans out of an expected answer', () => {
+    expect(requiredFacts('He works at "Brytecore" since "2024".')).toEqual([
+      'Brytecore',
+      '2024',
+    ])
+  })
+
+  it('is empty for an unquoted or absent expectation', () => {
+    expect(requiredFacts('no quoted spans here')).toEqual([])
+    expect(requiredFacts(undefined)).toEqual([])
+  })
+})
+
+describe('citedPaths', () => {
+  it('reads markdown link targets, including the bare root', () => {
+    expect(
+      citedPaths('See [his work history](/) and [articles](/articles).'),
+    ).toEqual(['/', '/articles'])
+  })
+
+  it('folds an absolute site URL down to its path', () => {
+    expect(
+      citedPaths('https://brandonperfetti.com/articles/from-neon-to-supabase'),
+    ).toEqual(['/articles/from-neon-to-supabase'])
+  })
+
+  it('does not read a path out of a third-party URL', () => {
+    // The regression this guards: `/toptimelines` read out of the middle of
+    // https://toptimelines.com/ and scored as an invented site path.
+    expect(citedPaths('It lives at https://toptimelines.com/.')).toEqual([])
+  })
+
+  it('does not treat a slash inside a word as a citation', () => {
+    expect(citedPaths('Use TypeScript/JavaScript and/or Zod.')).toEqual([])
+  })
+
+  it('strips trailing punctuation and a trailing slash', () => {
+    expect(citedPaths('Look at /tech/, or /uses.')).toEqual(['/tech', '/uses'])
+  })
+})
+
+describe('contains-expected-fact', () => {
+  it('is the fraction of quoted facts present', async () => {
+    const expected = 'He is a "Senior Frontend Engineer" at "Brytecore".'
+    expect(
+      await score(
+        containsExpectedFact,
+        'Senior Frontend Engineer at Brytecore',
+        expected,
+      ),
+    ).toBe(1)
+    expect(
+      await score(
+        containsExpectedFact,
+        'He is a Senior Frontend Engineer.',
+        expected,
+      ),
+    ).toBe(0.5)
+    expect(await score(containsExpectedFact, 'No idea.', expected)).toBe(0)
+  })
+
+  it('ignores case and whitespace shape', async () => {
+    expect(
+      await score(
+        containsExpectedFact,
+        'senior   frontend\nengineer',
+        'a "Senior Frontend Engineer"',
+      ),
+    ).toBe(1)
+  })
+
+  it('demands nothing when the expectation quotes nothing', async () => {
+    expect(await score(containsExpectedFact, 'anything', 'no quotes')).toBe(1)
+  })
+})
+
+describe('cites-a-real-source-url', () => {
+  it('passes an answer that cites a corpus URL', async () => {
+    expect(
+      await score(
+        citesKnownSourceUrl,
+        'See [the article](/articles/from-neon-to-supabase).',
+      ),
+    ).toBe(1)
+  })
+
+  it('fails an answer that cites nothing', async () => {
+    expect(await score(citesKnownSourceUrl, 'He moved to Supabase.')).toBe(0)
+  })
+
+  it('fails an invented article path', async () => {
+    expect(
+      await score(citesKnownSourceUrl, 'See /articles/kubernetes-at-scale.'),
+    ).toBe(0)
+  })
+
+  it('fails when one of several cited paths is invented', async () => {
+    expect(
+      await score(citesKnownSourceUrl, 'See /tech and /articles/made-up.'),
+    ).toBe(0)
+  })
+})
+
+describe('never-fabricates-a-site-url', () => {
+  it('is vacuously satisfied when nothing is cited', async () => {
+    expect(await score(neverFabricatesSiteUrl, 'A queue decouples work.')).toBe(
+      1,
+    )
+  })
+
+  it('fails an invented path even in a refusal', async () => {
+    expect(
+      await score(
+        neverFabricatesSiteUrl,
+        "I'm not sure, but see /articles/aws-certifications.",
+      ),
+    ).toBe(0)
+  })
+})
+
+describe('refuses-when-not-grounded', () => {
+  it('rewards a hedge', async () => {
+    expect(
+      await score(
+        refusesWhenNotGrounded,
+        "The site doesn't list any certifications — the contact form is the best route.",
+      ),
+    ).toBe(1)
+  })
+
+  it('gives half credit to an answer that neither hedges nor claims the site', async () => {
+    expect(
+      await score(refusesWhenNotGrounded, 'Certifications are a mixed signal.'),
+    ).toBe(0.5)
+  })
+
+  it('fails an answer that claims the site as its source', async () => {
+    expect(
+      await score(
+        refusesWhenNotGrounded,
+        'According to the site, he holds the AWS Solutions Architect certification.',
+      ),
+    ).toBe(0)
+  })
+
+  it('still rewards a hedged answer that also mentions the site', async () => {
+    // A hedge plus a citation is a good answer, not a false-confidence one.
+    expect(
+      await score(
+        refusesWhenNotGrounded,
+        "The site says that he works at Brytecore, but it doesn't say anything about certifications.",
+      ),
+    ).toBe(1)
+  })
+})
+
+describe('answers-general-questions', () => {
+  it('fails an off-topic refusal', async () => {
+    expect(
+      await score(
+        answersGeneralQuestion,
+        "I can only discuss Brandon's work, so I can't help with that.",
+      ),
+    ).toBe(0)
+  })
+
+  it('half-credits a one-line deflection', async () => {
+    expect(await score(answersGeneralQuestion, 'Depends.')).toBe(0.5)
+  })
+
+  it('passes a substantive answer', async () => {
+    expect(
+      await score(
+        answersGeneralQuestion,
+        'Reach for a queue when the work is triggered by an event rather than a clock, and when retries matter.',
+      ),
+    ).toBe(1)
+  })
+})
+
+describe('declines-and-redirects', () => {
+  it('rewards decline plus an offer', async () => {
+    expect(
+      await score(
+        declinesAndRedirects,
+        "There are no orders here — I'm happy to help with the articles instead.",
+      ),
+    ).toBe(1)
+  })
+
+  it('half-credits a bare decline', async () => {
+    expect(await score(declinesAndRedirects, 'I cannot do that.')).toBe(0.5)
+  })
+
+  it('fails an answer that plays along', async () => {
+    expect(
+      await score(
+        declinesAndRedirects,
+        'Your package is out for delivery and should arrive by 5pm.',
+      ),
+    ).toBe(0)
+  })
+})

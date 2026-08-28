@@ -29,7 +29,8 @@
     "generate:types": "payload generate:types",
     "generate:importmap": "payload generate:importmap",
     "eval": "cd evals && evalite watch",
-    "eval:ci": "cd evals && evalite run --threshold 80"
+    "eval:ci": "cd evals && evalite run --threshold 80",
+    "eval:facts": "cd evals && evalite run site-facts.eval.ts --threshold 75"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {
