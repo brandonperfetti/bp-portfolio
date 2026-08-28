@@ -10,8 +10,8 @@ import { CMS_TAGS } from '@/lib/cms/cache'
  *
  * Every migrated repo function must call `cacheTag(<the CMS_TAGS string>)` +
  * `cacheLife('cmsContent')` at the top of its `'use cache'` body — the tag
- * string is what keeps the Payload `revalidateTag(tag, 'max')` hooks purging
- * the right cache, so an admin edit still goes live in seconds. This pins each
+ * string is what keeps the Payload `revalidateTag(tag, { expire: 0 })` hooks
+ * purging the right cache, so an admin edit goes live in seconds. This pins each
  * function's tag to the exact `CMS_TAGS` value: if a repo's tag drifts from the
  * vocabulary, this test fails (and so would revalidation, silently, in prod).
  *

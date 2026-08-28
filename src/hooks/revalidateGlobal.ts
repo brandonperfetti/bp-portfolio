@@ -19,9 +19,15 @@ import { revalidatePath, revalidateTag } from 'next/cache'
  * stale-while-revalidate with a one-year stale window, so a save keeps
  * serving old content until a background refresh happens to land AND
  * re-caches that stale render into the CDN in the meantime. `{ expire: 0 }`
- * is the documented read-your-writes profile outside Server Actions: the
- * first post-edit regeneration blocks for fresh data instead of
- * serve-stale-then-refresh.
+ * expires the entry outright instead, so the next read blocks for fresh data.
+ *
+ * That is a purge PROFILE, not a purge REACH — an earlier revision of this
+ * comment called it "the documented read-your-writes profile outside Server
+ * Actions", which overstates it. Read-your-writes needs work-store state only
+ * a Server Action's own request chain carries; a global save is a Route
+ * Handler request and the visitor's later GET is unrelated. What makes the
+ * purge reach the instance serving that GET is the globals repos living on the
+ * shared Runtime Cache — `'use cache: remote'`, #118 — not this argument.
  *
  * @param slug - The global slug; pages fetch globals with `global_<slug>` tags.
  */
