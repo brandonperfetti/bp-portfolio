@@ -317,6 +317,85 @@ export async function down({ db }: MigrateDownArgs): Promise<void> {
       ),
     ).toEqual([])
   })
+
+  /**
+   * Commented DDL is not DDL.
+   *
+   * A migration is TypeScript wrapping SQL, so an `ENABLE ROW LEVEL SECURITY`
+   * can be commented out in either syntax — `//` in the TypeScript, `--`
+   * inside the `sql` literal. Scanning raw source counted both as enforcement
+   * and let a real `CREATE TABLE` through a gate that nothing satisfies: green
+   * report, RLS-less table in production. Both spellings must fail closed, and
+   * the mirror case (a commented CREATE inventing an obligation) must not go
+   * red on a table that is never created.
+   */
+  describe('commented-out DDL', () => {
+    it('does NOT accept a TypeScript-commented ENABLE as enforcement', () => {
+      const commentedEnable = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+  // await db.execute(sql\`ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY;\`)
+}`
+      expect(checkMigrationSource(post, commentedEnable)).toEqual(['widgets'])
+    })
+
+    it('does NOT accept a SQL-commented ENABLE as enforcement', () => {
+      const commentedEnable = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`
+    CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);
+    -- ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY;
+  \`)
+}`
+      expect(checkMigrationSource(post, commentedEnable)).toEqual(['widgets'])
+    })
+
+    it('does NOT accept a block-commented ENABLE as enforcement', () => {
+      const commentedEnable = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+  /* await db.execute(sql\`ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY;\`) */
+}`
+      expect(checkMigrationSource(post, commentedEnable)).toEqual(['widgets'])
+    })
+
+    it('does NOT accept an ENABLE that only appears in a doc comment', () => {
+      const documentedOnly = `
+/**
+ * Follow-up: ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY; is handled by
+ * the lockdown migration.
+ */
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+}`
+      expect(checkMigrationSource(post, documentedOnly)).toEqual(['widgets'])
+    })
+
+    it('does NOT invent an obligation from a commented CREATE TABLE', () => {
+      const commentedCreate = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  // await db.execute(sql\`CREATE TABLE "shelved" ("id" serial PRIMARY KEY NOT NULL);\`)
+  await db.execute(sql\`
+    -- CREATE TABLE "also_shelved" ("id" serial PRIMARY KEY NOT NULL);
+    ALTER TABLE "pages" ADD COLUMN "x" varchar;
+  \`)
+}`
+      expect(checkMigrationSource(post, commentedCreate)).toEqual([])
+    })
+
+    it('still passes a real CREATE + ENABLE that sits beside commented DDL', () => {
+      const realAndCommented = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  // Superseded: CREATE TABLE "old_widgets" … ENABLE ROW LEVEL SECURITY;
+  await db.execute(sql\`
+    CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);
+    -- the follow-up below is the real one
+    ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY;
+  \`)
+}`
+      expect(checkMigrationSource(post, realAndCommented)).toEqual([])
+    })
+  })
 })
 
 describe('checkMigrations', () => {

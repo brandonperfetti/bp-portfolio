@@ -72,11 +72,21 @@
  * failure this script was written to catch. See {@link
  * splitMigrationDirections}.
  *
+ * Only executable text is scanned. A comment is not a statement, and reading
+ * one as if it were fails in both directions: a commented-out `ENABLE ROW
+ * LEVEL SECURITY` discharged a real `CREATE TABLE` (green gate, unprotected
+ * table — the same class as the cross-direction hole above), and a
+ * commented-out `CREATE TABLE` invented an obligation nothing could satisfy.
+ * Both spellings are stripped before either parse. See {@link
+ * checkMigrationSource} and `scripts/lib/sql-comments.mjs`.
+ *
  * @module
  */
 
 import { readFileSync, readdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
+
+import { stripComments } from './lib/sql-comments.mjs'
 
 /** Directory holding the committed Payload migrations. */
 export const MIGRATIONS_DIR = 'src/migrations'
@@ -227,6 +237,13 @@ export function isGrandfathered(file) {
  * failure is "this migration ships this table unprotected", and one
  * `::error::` per table per file is what the operator needs to act on.
  *
+ * Comments are stripped ONCE here, before the split, and everything
+ * downstream therefore sees executable text only. This is the single place
+ * that happens: {@link parseCreatedTables} and {@link parseRlsEnabledTables}
+ * stay honest raw matchers over whatever they are handed, which is what their
+ * own unit tests exercise, so the stripping cannot be half-applied to one side
+ * of the comparison and not the other.
+ *
  * @param file - Path used in the reported message.
  * @param source - Migration source text.
  * @returns The tables created without an `ENABLE ROW LEVEL SECURITY` in the
@@ -236,7 +253,7 @@ export function isGrandfathered(file) {
 export function checkMigrationSource(file, source) {
   if (isGrandfathered(file)) return []
   const offenders = []
-  for (const { body } of splitMigrationDirections(source)) {
+  for (const { body } of splitMigrationDirections(stripComments(source))) {
     const enabled = new Set(parseRlsEnabledTables(body))
     for (const table of parseCreatedTables(body)) {
       if (!enabled.has(table) && !offenders.includes(table)) {
