@@ -3,6 +3,7 @@ import { type Metadata } from 'next'
 import { Providers } from '@/app/(frontend)/providers'
 import { AuthProvider } from '@/components/auth/AuthProvider'
 import { Layout } from '@/components/Layout'
+import { getCmsConsentConfig } from '@/lib/cms/consentRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getSiteUrl } from '@/lib/site'
 import { Analytics } from '@vercel/analytics/next'
@@ -65,11 +66,28 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-export default function RootLayout({
+/**
+ * Root `(frontend)` layout: the `<html>`/`<body>` shell plus the auth, consent,
+ * and theme providers every page renders inside.
+ *
+ * @remarks
+ * The CMS-driven consent config is resolved here, server-side, before the
+ * client consent runtime mounts, because the runtime is a client component that
+ * must have its copy/categories/toggles at first paint — a client-side fetch
+ * would flash the default banner and can't run inside the prerendered shell.
+ * The read is a cached `'use cache'` call (like `getCmsSiteSettings`), so the
+ * layout still prerenders static under `cacheComponents`.
+ */
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // CMS-driven consent copy/categories/toggles, resolved once server-side and
+  // threaded to the client consent runtime. A cached read (`'use cache'`), like
+  // getCmsSiteSettings, so it is prerender-safe under cacheComponents.
+  const consentConfig = await getCmsConsentConfig()
+
   return (
     // `overflow-x-clip` is what lets a full-bleed container section use
     // `w-screen` (100vw, which counts a classic scrollbar) without producing a
@@ -81,9 +99,20 @@ export default function RootLayout({
       className="h-full overflow-x-clip antialiased"
       suppressHydrationWarning
     >
-      <body className="flex h-full bg-zinc-50 dark:bg-black">
+      {/*
+        `min-h-full`, NOT `h-full` (#110): the window/documentElement is the
+        scroller and `body` overflows it. Radix Dialog's scroll-lock
+        (react-remove-scroll) injects `body[data-scroll-locked]{overflow:hidden}`
+        with no explicit height. On a fixed-height `h-full` (height:100%) body,
+        that `overflow:hidden` collapses the document's scrollable overflow and
+        the window snaps to scrollY 0 on open (and stays there on close) — the
+        consent-modal scroll-jump. `min-h-full` lets the body grow to its
+        content height, so the lock has nothing to collapse. Layout is otherwise
+        unchanged: descendant `h-full` (e.g. not-found) resolves via flex-stretch.
+      */}
+      <body className="flex min-h-full bg-zinc-50 dark:bg-black">
         <AuthProvider>
-          <Providers>
+          <Providers consentConfig={consentConfig}>
             <div className="flex w-full">
               <Layout>{children}</Layout>
               <Analytics />

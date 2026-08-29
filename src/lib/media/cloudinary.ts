@@ -44,8 +44,9 @@ function buildSignature(
 /**
  * Uploads a base64 PNG payload to the configured Cloudinary covers folder.
  *
- * @param options.base64Png Raw PNG base64 payload (without data URI prefix).
- * @param options.publicId Cloudinary public ID path segment to assign.
+ * @param options - Upload inputs: `base64Png`, the raw PNG base64 payload
+ * (without data URI prefix), and `publicId`, the Cloudinary public ID path
+ * segment to assign.
  * @returns Uploaded asset URL (`secure_url`).
  *
  * Side effects:
@@ -126,8 +127,9 @@ export async function uploadBase64PngToCloudinary(options: {
 /**
  * Uploads a remote image URL to Cloudinary tech logos folder.
  *
- * @param options.imageUrl Public HTTP(S) image URL to ingest into Cloudinary.
- * @param options.publicId Cloudinary public ID path segment to assign.
+ * @param options - Upload inputs: `imageUrl`, the public HTTP(S) image URL to
+ * ingest into Cloudinary, and `publicId`, the Cloudinary public ID path
+ * segment to assign.
  * @returns Uploaded asset URL (`secure_url`).
  *
  * Side effects:

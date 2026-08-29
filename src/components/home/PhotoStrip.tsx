@@ -14,9 +14,9 @@ import { getOptimizedImageUrl } from '@/lib/image-utils'
  * works, though ~5 fills the strip best. Honors reduced motion via the GSAP
  * wrappers (ScrollReveal/ParallaxGroup render static DOM when set).
  *
- * @param images Resolved image URLs (Cloudinary URLs get f_auto/q_auto
+ * @param images - Resolved image URLs (Cloudinary URLs get f_auto/q_auto
  * transforms; other hosts pass through untouched).
- * @param priority Mark the first photo as LCP-priority (home hero slot only).
+ * @param priority - Mark the first photo as LCP-priority (home hero slot only).
  */
 export function PhotoStrip({
   images,

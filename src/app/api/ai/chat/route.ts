@@ -1,7 +1,12 @@
 import { convertToModelMessages, streamText, validateUIMessages } from 'ai'
 import * as z from 'zod'
 
-import { getCorvusModel, CORVUS_SYSTEM_PROMPT } from '@/lib/ai/corvus'
+import { getCorvusModel } from '@/lib/ai/corvus'
+import { buildGroundedSystem } from '@/lib/ai/groundedSystem'
+import {
+  extractRetrievalQuery,
+  retrieveCorvusContext,
+} from '@/lib/ai/retrieval'
 import { getViewer } from '@/lib/auth/getViewer'
 import {
   getAnonFreeMessageLimit,
@@ -200,9 +205,30 @@ export async function POST(req: Request) {
     await incrementAnonFreeMessageCount(ip)
   }
 
+  // Retrieval grounding (#82), inserted here and nowhere else: after every
+  // rejection path and after the free-message spend, immediately before
+  // streaming. One awaited vector round-trip, so it lands on
+  // time-to-first-token rather than inside the stream, inside maxDuration.
+  //
+  // Dark by construction. `retrieveCorvusContext` can never reject — kill
+  // switch, provider outage, empty table, or a query that simply misses all
+  // return [] — and `buildGroundedSystem([])` returns CORVUS_SYSTEM_PROMPT
+  // BYTE-IDENTICAL, so the worst case of this whole feature is exactly the
+  // behavior that shipped before it. `CORVUS_DISABLE_RETRIEVAL=true` is the
+  // one-flag revert, short-circuiting before the embed call.
+  //
+  // `viewer.isAuthenticated` (not the userId-bearing `authedViewer` the
+  // limiter keys on) is the gating input, because that is the exact argument
+  // `canAccess` takes: a signed-in visitor may be grounded on gated bodies,
+  // an anonymous one may not, and the filter is enforced in SQL.
+  const snippets = await retrieveCorvusContext({
+    query: extractRetrievalQuery(windowed),
+    isAuthenticated: viewer.isAuthenticated,
+  })
+
   const result = streamText({
     model: getCorvusModel(),
-    system: CORVUS_SYSTEM_PROMPT,
+    system: buildGroundedSystem(snippets),
     messages: await convertToModelMessages(windowed),
     maxOutputTokens: limits.maxCompletionTokens,
   })

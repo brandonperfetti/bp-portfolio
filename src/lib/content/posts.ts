@@ -1,8 +1,9 @@
-import { unstable_cache } from 'next/cache'
+import { cacheLife, cacheTag } from 'next/cache'
 import { draftMode } from 'next/headers'
 import { getPayload } from 'payload'
 
 import configPromise from '@payload-config'
+import { CMS_TAGS } from '@/lib/cms/cache'
 import type { Post } from '@/payload-types'
 
 /**
@@ -13,58 +14,198 @@ import type { Post } from '@/payload-types'
  * bypass the cache (draft preview must always be fresh).
  */
 
-/** All published posts, newest first. Cached under the `posts` tag. */
-export const getPublishedPosts = unstable_cache(
-  async (): Promise<Post[]> => {
-    const payload = await getPayload({ config: configPromise })
-    const { docs } = await payload.find({
-      collection: 'posts',
-      draft: false,
-      limit: 1000,
-      overrideAccess: false,
-      sort: '-publishedAt',
-      where: { _status: { equals: 'published' } },
-    })
-    return docs
-  },
-  ['published-posts'],
-  { tags: ['posts'] },
-)
+/**
+ * The list-card fields the article-summary mapper reads. Deliberately excludes
+ * the heavy `content` (Lexical body), `layout`, and `relatedPosts` fields, so
+ * the cached list payload cannot grow with article body size.
+ *
+ * @remarks #76 Phase 0: `getPublishedPosts` cached the full `Post[]` — measured
+ * 2,352,427 bytes, over Next's 2 MB data-cache per-item ceiling, which silently
+ * un-cached the hottest query (double DB fetch/render per request). The list
+ * surfaces (`/`, `/articles`) only need these summary fields, so they now read
+ * {@link getPublishedPostSummaries} instead. The search index keeps the
+ * full-body {@link getPublishedPosts} fetch (its `searchText` needs the
+ * flattened body). Timestamps must be listed explicitly — a `select` allowlist
+ * only auto-returns `id`.
+ */
+export const PUBLISHED_POST_SUMMARY_SELECT = {
+  title: true,
+  slug: true,
+  excerpt: true,
+  heroImage: true,
+  meta: true,
+  categories: true,
+  tags: true,
+  ogImageMode: true,
+  publishedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  authors: true,
+  populatedAuthors: true,
+} as const
 
-/** Published slugs for `generateStaticParams`. */
-export const getPublishedPostSlugs = unstable_cache(
-  async (): Promise<string[]> => {
-    const payload = await getPayload({ config: configPromise })
-    const { docs } = await payload.find({
-      collection: 'posts',
-      draft: false,
-      limit: 1000,
-      overrideAccess: false,
-      select: { slug: true },
-      where: { _status: { equals: 'published' } },
-    })
-    return docs.map((d) => d.slug).filter((s): s is string => Boolean(s))
-  },
-  ['published-post-slugs'],
-  { tags: ['posts'] },
-)
+/** The summary-shaped projection of a published post (no Lexical body). */
+export type PublishedPostSummary = Pick<
+  Post,
+  | 'id'
+  | 'title'
+  | 'slug'
+  | 'excerpt'
+  | 'heroImage'
+  | 'meta'
+  | 'categories'
+  | 'tags'
+  | 'ogImageMode'
+  | 'publishedAt'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'authors'
+  | 'populatedAuthors'
+>
 
 /**
- * One post by slug. When Next draft mode is active (admin preview), reads the
- * latest draft with authenticated access; otherwise only published content.
+ * All published posts as summary-shaped docs (no `content`), newest first.
+ * Cached under the `posts` tag. Feeds the `/` + `/articles` list surfaces.
+ *
+ * @remarks `'use cache: remote'` so a `posts` tag purge reaches every
+ * serverless instance, not only the one that ran the hook (#118). Measured
+ * 43,381 bytes at the current corpus, 838,561 at the 1000-post query ceiling —
+ * both under the 2 MB Runtime Cache item limit.
  */
-export const getPostBySlug = async (slug: string): Promise<Post | null> => {
-  const { isEnabled: draft } = await draftMode()
+export const getPublishedPostSummaries = async (): Promise<
+  PublishedPostSummary[]
+> => {
+  'use cache: remote'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
   const { docs } = await payload.find({
     collection: 'posts',
-    draft,
+    draft: false,
+    limit: 1000,
+    overrideAccess: false,
+    select: PUBLISHED_POST_SUMMARY_SELECT,
+    sort: '-publishedAt',
+    where: { _status: { equals: 'published' } },
+  })
+  return docs as PublishedPostSummary[]
+}
+
+/**
+ * All published posts with full bodies, newest first. Cached under the `posts`
+ * tag.
+ *
+ * @remarks Retained for the search index only ({@link getCmsSearchArticles}),
+ * whose `searchText` needs the flattened Lexical body. The list surfaces read
+ * {@link getPublishedPostSummaries} instead so they no longer serialize the
+ * full Lexical `content` into the cache entry (#76 Phase 0). This full-body
+ * fetch uses plain `'use cache'` (in-memory, no 2 MB per-item ceiling — the
+ * #76 B1 conversion) so the large search-index payload caches without the
+ * `unstable_cache` 2 MB rejection.
+ *
+ * The documented exception to #118's `'use cache: remote'` move: at 2,358,733
+ * measured bytes over the 52-post corpus it is above Vercel's 2 MB Runtime
+ * Cache item ceiling, so `:remote` would silently reject the write and re-query
+ * Postgres on every read — the exact failure #76 Phase 0 removed. It therefore
+ * stays on the per-process in-memory tier and keeps that tier's known defect:
+ * a `posts` purge only reaches the instance that issued it, so the search index
+ * converges on the `cmsContent` cadence rather than on the edit. Search is the
+ * least freshness-critical surface; shrinking this read (a `{slug, content}`
+ * projection or a precomputed `searchText` column) is what would remove the
+ * exception.
+ */
+export const getPublishedPosts = async (): Promise<Post[]> => {
+  'use cache'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'posts',
+    draft: false,
+    limit: 1000,
+    overrideAccess: false,
+    sort: '-publishedAt',
+    where: { _status: { equals: 'published' } },
+  })
+  return docs
+}
+
+/**
+ * Published slugs for `generateStaticParams`.
+ *
+ * @remarks `'use cache: remote'` so a `posts` tag purge reaches every
+ * serverless instance, not only the one that ran the hook (#118).
+ */
+export const getPublishedPostSlugs = async (): Promise<string[]> => {
+  'use cache: remote'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'posts',
+    draft: false,
+    limit: 1000,
+    overrideAccess: false,
+    select: { slug: true },
+    where: { _status: { equals: 'published' } },
+  })
+  return docs.map((d) => d.slug).filter((s): s is string => Boolean(s))
+}
+
+/**
+ * Cached published post by slug — the prerender path (#76 B2 draft-split).
+ * `'use cache: remote'` + `cacheTag(CMS_TAGS.articles)` so the signed-out
+ * article shell prerenders static and publishes/edits purge it. Reads NO
+ * `draftMode()` (a dynamic-API read here would block prerender). The draft
+ * branch is {@link getDraftPostBySlug}.
+ *
+ * @remarks `:remote` so a `posts` tag purge reaches every serverless instance,
+ * not only the one that ran the hook (#118) — this per-slug entry is the one
+ * the detail-page staleness incident landed on. Measured 45,356 bytes for one
+ * post, far under the 2 MB Runtime Cache item limit.
+ */
+const getPublishedPostBySlug = async (slug: string): Promise<Post | null> => {
+  'use cache: remote'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'posts',
+    draft: false,
     limit: 1,
-    overrideAccess: draft,
+    overrideAccess: false,
     pagination: false,
     where: { slug: { equals: slug } },
   })
   return docs[0] || null
+}
+
+/**
+ * Uncached draft post by slug — admin Live Preview only (draft preview must be
+ * live). Reached solely when Next draft mode is enabled (#76 B2).
+ */
+const getDraftPostBySlug = async (slug: string): Promise<Post | null> => {
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'posts',
+    draft: true,
+    limit: 1,
+    overrideAccess: true,
+    pagination: false,
+    where: { slug: { equals: slug } },
+  })
+  return docs[0] || null
+}
+
+/**
+ * One post by slug. A thin `draftMode()` selector over a split read: published
+ * visitors + the build take the cached {@link getPublishedPostBySlug} branch
+ * (→ static prerender, #76 B2); admins in Live Preview take the uncached
+ * {@link getDraftPostBySlug} branch. Behavior-preserving.
+ */
+export const getPostBySlug = async (slug: string): Promise<Post | null> => {
+  const { isEnabled } = await draftMode()
+  return isEnabled ? getDraftPostBySlug(slug) : getPublishedPostBySlug(slug)
 }
 
 /**

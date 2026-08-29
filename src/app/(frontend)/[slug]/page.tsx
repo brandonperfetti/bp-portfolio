@@ -4,6 +4,7 @@ import { cache } from 'react'
 
 import { ShareButton } from '@/components/cms/ShareButton'
 import { RenderRhythmPage } from '@/heros/RenderRhythmPage'
+import { EMPTY_CMS_SENTINEL } from '@/lib/cms/emptyCmsSentinel'
 import { resolvePageShareTargetIds } from '@/lib/cms/pageShareTargets'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import {
@@ -18,6 +19,12 @@ const queryPageBySlug = cache(getPageBySlugDraftAware)
 
 export async function generateStaticParams() {
   const slugs = await getPublishedPageSlugs()
+  // Empty-CMS guard: Cache Components hard-errors when `generateStaticParams`
+  // returns []. Emit one sentinel that resolves to `notFound()` — it matches no
+  // published page, so `CmsPage`'s existing guard 404s it — so an all-hidden CMS
+  // (or a from-scratch staging reset) degrades to a clean 404 instead of crashing
+  // the build.
+  if (slugs.length === 0) return [{ slug: EMPTY_CMS_SENTINEL }]
   return slugs.map((slug) => ({ slug }))
 }
 

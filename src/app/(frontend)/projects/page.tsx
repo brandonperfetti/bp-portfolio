@@ -1,4 +1,5 @@
 import { type Metadata } from 'next'
+import { Suspense } from 'react'
 import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
 
 import { EntityGrid } from '@/components/cms/EntityGrid'
@@ -17,6 +18,19 @@ const defaultProjectsMeta: Metadata = {
   title: 'Projects',
   description:
     'Selected products, platforms, and client builds I have shipped or led.',
+}
+
+/**
+ * Static placeholder while the `?page`-aware project grid hydrates.
+ *
+ * @returns The prerendered fallback for the `EntityGrid` Suspense boundary.
+ */
+function EntityGridFallback() {
+  return (
+    <div className="text-sm text-zinc-500 dark:text-zinc-400">
+      Loading projects...
+    </div>
+  )
 }
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -128,7 +142,12 @@ export default async function Projects() {
         }
       >
         {items.length ? (
-          <EntityGrid items={items} />
+          // `EntityGrid` reads the shared `?page` param (#88) with
+          // `useSearchParams`, so it renders under `<Suspense>` and this route
+          // stays statically rendered — no server-side `searchParams` read.
+          <Suspense fallback={<EntityGridFallback />}>
+            <EntityGrid items={items} label="Projects pagination" />
+          </Suspense>
         ) : (
           <NotFoundState
             title="Projects coming soon"

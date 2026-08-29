@@ -202,10 +202,23 @@ export const SENTRY_IGNORE_ERRORS: Array<string | RegExp> = [
  *   residual is the expected baseline every Turnstile deployment emits,
  *   folded in per #94. Drop this one entry to keep every Turnstile warning
  *   visible.
+ * - `./.next/server/pages/_next/image.js` — the Vercel image optimizer's
+ *   cold-start `MODULE_NOT_FOUND` burst (#99, split from #92). Right after
+ *   each production deploy the optimizer function is not yet warm and throws
+ *   `Cannot find module './.next/server/pages/_next/image.js'` for the first
+ *   requests, measured only for tech-stack logo assets and never for article
+ *   covers; it self-resolves within seconds as the function warms, and no user
+ *   sees a broken image. Accepted as transient rather than papered over with a
+ *   post-deploy warmup hook — standing infrastructure for a cosmetic log line
+ *   — per #99's option 3. The pattern is the exact **module path**, not
+ *   `MODULE_NOT_FOUND` and not `Cannot find module`: a real missing module
+ *   anywhere else in the app must still reach Logs, and this is the one path
+ *   that is a warmup artifact by construction.
  */
 const SUPPRESSED_LOG_MESSAGE_PATTERNS = [
   'vm.USE_MAIN_CONTEXT_DEFAULT_LOADER',
   '[Cloudflare Turnstile] Error: 300031',
+  './.next/server/pages/_next/image.js',
 ] as const
 
 /**

@@ -1,7 +1,8 @@
-import { unstable_cache } from 'next/cache'
+import { cacheLife, cacheTag } from 'next/cache'
 import { getPayload } from 'payload'
 
 import configPromise from '@payload-config'
+import { CMS_TAGS } from '@/lib/cms/cache'
 import type { CmsAuthor, CmsAuthorProfile } from '@/lib/cms/types'
 import { mediaUrl } from '@/lib/cms/mediaUrl'
 import type { Author } from '@/payload-types'
@@ -62,23 +63,25 @@ const toProfile = (author: Author, index: number): CmsAuthorProfile => {
  * @remarks The live article byline does NOT flow through here — it is resolved
  * from the populated `authors` relation in {@link articlesRepo} (the rendering
  * path). This repo backs author-directory / API surfaces and future consumers.
+ *
+ * `'use cache: remote'` so a `authors` tag purge reaches every serverless
+ * instance, not only the one that ran the hook (#118).
  */
-export const getCmsAuthors = unstable_cache(
-  async (): Promise<CmsAuthorProfile[]> => {
-    const payload = await getPayload({ config: configPromise })
-    const { docs } = await payload.find({
-      collection: 'authors',
-      depth: 1,
-      limit: 200,
-      overrideAccess: false,
-      sort: 'name',
-    })
-    if (!docs.length) return [DEFAULT_CMS_AUTHOR]
-    return docs.map(toProfile)
-  },
-  ['authors'],
-  { tags: ['authors'] },
-)
+export const getCmsAuthors = async (): Promise<CmsAuthorProfile[]> => {
+  'use cache: remote'
+  cacheTag(CMS_TAGS.authors)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'authors',
+    depth: 1,
+    limit: 200,
+    overrideAccess: false,
+    sort: 'name',
+  })
+  if (!docs.length) return [DEFAULT_CMS_AUTHOR]
+  return docs.map(toProfile)
+}
 
 /** The site's default (primary) author. */
 export async function getCmsDefaultAuthor(): Promise<CmsAuthor> {

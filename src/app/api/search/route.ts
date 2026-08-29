@@ -1,8 +1,8 @@
-import { unstable_cache } from 'next/cache'
+import { cacheLife, cacheTag } from 'next/cache'
 import { NextResponse } from 'next/server'
 
 import { getSearchArticles } from '@/lib/articles'
-import { CMS_REVALIDATE, CMS_TAGS } from '@/lib/cms/cache'
+import { CMS_TAGS } from '@/lib/cms/cache'
 
 type SearchPayloadItem = {
   title: string
@@ -26,14 +26,16 @@ async function buildSearchPayload(): Promise<SearchPayloadItem[]> {
   }))
 }
 
-const getPersistedSearchPayload = unstable_cache(
-  async () => buildSearchPayload(),
-  ['api', 'search', 'stale-fallback'],
-  {
-    revalidate: CMS_REVALIDATE.search,
-    tags: [CMS_TAGS.articles],
-  },
-)
+// Plain `'use cache'` (in-memory, no 2 MB per-item ceiling) — the search index
+// serializes the full flattened article bodies, which blew past the
+// `unstable_cache`/Data-Cache 2 MB limit (#76). Purged by `cacheTag('posts')`,
+// the same tag the Posts hooks already revalidate on publish/delete.
+async function getPersistedSearchPayload(): Promise<SearchPayloadItem[]> {
+  'use cache'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
+  return buildSearchPayload()
+}
 
 export async function GET() {
   try {

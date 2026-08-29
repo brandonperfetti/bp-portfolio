@@ -35,6 +35,14 @@ The active codebase for [brandonperfetti.com](https://brandonperfetti.com):
 - **Corvus AI assistant** at `/corvus` — streaming chat with a server-enforced
   persona, anonymous free messages before a Clerk sign-in gate, Upstash-backed
   rate limits, and Web Speech voice dictation as progressive enhancement.
+  Site-specific questions are answered from a pgvector retrieval index over
+  published content, with citations back to the pages they came from — and the
+  whole behavior is gated by live CI evals.
+- **Consent-gated analytics** — GA4 loads only after explicit consent where
+  consent is required (Consent Mode v2; jurisdiction detected at the Vercel
+  edge, fail-closed), alongside an always-on cookieless Vercel Analytics
+  baseline. Banner and dialog copy are CMS-editable via the CookieConsent
+  global.
 - **Server-side auth & gating** — Clerk end-user auth with content gating
   enforced in server code (`src/access/canAccess.ts`), never in UI components.
 - **Instant publishing** — collection hooks pair `revalidateTag` with
@@ -51,7 +59,8 @@ The active codebase for [brandonperfetti.com](https://brandonperfetti.com):
 - [Next.js 16](https://nextjs.org/) (App Router, Turbopack) · [React 19](https://react.dev/) · [TypeScript 5](https://www.typescriptlang.org/)
 - [Payload CMS 3](https://payloadcms.com/) — the single content source (Postgres via Drizzle/node-postgres; Supabase in staging/prod, default-deny RLS)
 - [Tailwind CSS v4](https://tailwindcss.com/) (CSS-first) + [shadcn/ui](https://ui.shadcn.com/) · [GSAP](https://gsap.com/) motion · [Swiper](https://swiperjs.com/) carousels · [shaders.com](https://shaders.com) hero
-- [Clerk](https://clerk.com/) end-user auth + server-side content gating · [Vercel AI SDK](https://sdk.vercel.ai/) (OpenAI `gpt-5-mini`; Anthropic optional) for Corvus
+- [Clerk](https://clerk.com/) end-user auth + server-side content gating · [Vercel AI SDK](https://sdk.vercel.ai/) (OpenAI `gpt-5-mini`; Anthropic optional) for Corvus, grounded by [pgvector](https://github.com/pgvector/pgvector) retrieval (`text-embedding-3-small`)
+- [c15t](https://c15t.com/) headless consent management + GA4 (Consent Mode v2) · [Vercel Analytics](https://vercel.com/analytics) cookieless baseline
 - [Upstash Redis](https://upstash.com/) rate limiting + chat quotas · [Resend](https://resend.com/) email · [Sentry](https://sentry.io/) monitoring · [Vercel Blob](https://vercel.com/storage/blob) media
 - [Vitest](https://vitest.dev/) unit/component · [Storybook 10](https://storybook.js.org/) with interaction + a11y tests · [Playwright](https://playwright.dev/) e2e · [Evalite](https://evalite.dev/) AI evals
 - **pnpm only** (`only-allow` + `packageManager` pin) · Node 24 (`.nvmrc`; engines `>=22 <25`)
@@ -96,7 +105,10 @@ repo. Staging and production never share values.
 `pnpm typecheck` · `pnpm lint` · `pnpm format` / `format:check` — static gates.
 `pnpm test` (unit) · `pnpm test:storybook` (browser-mode interaction + a11y) ·
 `pnpm test:e2e` (Playwright, runs under reduced motion) · `pnpm eval` /
-`pnpm eval:ci` (Corvus behavior against a threshold).
+`pnpm eval:ci` / `pnpm eval:facts` (Corvus behavior against gating thresholds).
+`pnpm corvus:backfill` — populate/repair the Corvus retrieval index (one run
+per environment after the pgvector migration; hooks keep it current after
+that).
 `pnpm migrate` / `migrate:create` — Payload migrations (committed, the schema
 source of truth; dev push is opt-in via `PAYLOAD_DB_PUSH`).
 `pnpm generate:types` / `generate:importmap` — regenerate the committed Payload
@@ -120,7 +132,12 @@ messages are never trusted with it. Anonymous visitors get a few free messages
 (Upstash-backed, per-IP) before a Clerk sign-in gate; signed-in users get
 higher ceilings keyed by user id. Voice dictation ships as progressive
 enhancement via the Web Speech API (Chrome/Edge/Safari; graceful notes
-elsewhere). Behavior is eval-gated in CI (`pnpm eval:ci`).
+elsewhere). Site-specific questions are **grounded**: a pgvector index over
+published content (refreshed by collection hooks; `pnpm corvus:backfill` for
+population and repair) feeds retrieval, and answers cite the pages they came
+from — or decline when the corpus lacks the answer. Behavior is eval-gated in
+CI (`pnpm eval:ci` + `pnpm eval:facts`, thresholds that fail the build; empty
+model outputs score zero by design). Full design in `docs/AI.md`.
 
 ## Testing
 
@@ -155,10 +172,11 @@ encrypted `pg_dump` backups via GitHub Actions.
 `AGENTS.md` / `CLAUDE.md` symlink to `.github/copilot-instructions.md` — the thin
 top layer (invariants + index) for AI agents and humans alike. Depth lives in
 `docs/`: `ARCHITECTURE`, `PAYLOAD` (collections/blocks/migrations/MCP), `FEATURES`,
-`NAVIGATION`, `STATE`, `STYLING`, `DESIGN`, `AI` (Corvus/guardrails/evals), `AUTH`,
-`CONTENT_WORKFLOW` + `CONTENT_STYLE`, `SEO`, `DEPENDENCIES`, `WORKFLOW`,
-`ACCESSIBILITY`, `TESTING`, `MAINTENANCE` (upkeep + watchpoints + the production
-promotion checklist), and `DOCUMENTATION` (these standards).
+`NAVIGATION`, `STATE`, `STYLING`, `DESIGN`, `AI` (Corvus/guardrails/retrieval/evals),
+`ANALYTICS` (consent + GA4), `AUTH`, `CONTENT_WORKFLOW` + `CONTENT_STYLE`, `SEO`,
+`DEPENDENCIES`, `WORKFLOW`, `ACCESSIBILITY`, `TESTING`, `MAINTENANCE` (upkeep +
+watchpoints + the production promotion checklist), and `DOCUMENTATION` (these
+standards).
 
 ## Troubleshooting
 
@@ -170,5 +188,6 @@ promotion checklist), and `DOCUMENTATION` (these standards).
   `allowBuilds` entry in `pnpm-workspace.yaml`.
 - **Lexical error #17 on an article** — an editor feature for a migrated node
   type was removed; see `docs/PAYLOAD.md`.
-- More in `docs/MAINTENANCE.md` (incl. the >2MB list-cache watchpoint and the
-  cacheComponents migration that retires it).
+- More in `docs/MAINTENANCE.md` (upkeep, watchpoints, and the production
+  promotion checklist — the old >2MB list-cache watchpoint was retired by the
+  cacheComponents migration).

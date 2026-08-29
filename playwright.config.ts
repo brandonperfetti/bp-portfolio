@@ -12,6 +12,18 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:3000',
     trace: 'on-first-retry',
+    // Deterministic consent geo (#114 mechanism B). The suite runs without a
+    // Vercel edge, so `src/proxy.ts` sees no `x-vercel-ip-*` headers and
+    // fail-closes `cookieConsentRequired` to true — the fixed-bottom consent
+    // banner then overlays bottom-of-page controls (e.g. the Corvus Send
+    // button) and 30s-timeouts the click. Supplying a non-consent geo (AU: not
+    // EU/EEA/UK, not a US/CA privacy subdivision — immune to future
+    // CONSENT_REQUIRED_SUBDIVISIONS edits) resolves consent to NOT-required so
+    // the banner is absent by default — exercising the real product geo path,
+    // NOT weakening the fail-closed default (that governs *absent* geo, which
+    // production never has). The consent-scroll-lock spec overrides this with a
+    // consent-required geo so it keeps testing the banner-present path.
+    extraHTTPHeaders: { 'x-vercel-ip-country': 'AU' },
     // Drive the suite in the app's first-class reduced-motion path: every
     // animated surface (ScrollReveal, AnimatedHeadline, …) renders static,
     // fully-visible DOM under `prefers-reduced-motion`. Without this the

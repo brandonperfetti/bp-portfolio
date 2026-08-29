@@ -1,9 +1,12 @@
+import { cacheLife, cacheTag } from 'next/cache'
+
 import {
   getAllCmsArticleSummaries,
   getCmsArticleBySlug,
   getCmsSearchArticles,
   type CmsArticleDetailResult,
 } from '@/lib/cms/articlesRepo'
+import { CMS_TAGS } from '@/lib/cms/cache'
 import { isFuturePublicationDate } from '@/lib/date'
 import type { OgImageMode } from '@/lib/og/types'
 
@@ -45,6 +48,9 @@ export interface ArticleWithSlug extends Article {
 export interface ArticleDetailWithSlug extends ArticleWithSlug {
   /** True when the body was withheld pending sign-in (§12 gating). */
   gated?: boolean
+  /** True when the publish date is still in the future (resolved in a
+   * `'use cache'` scope; drives `generateMetadata`'s noindex — #76 B3). */
+  isScheduledFuture?: boolean
   bodyBlocks: CmsArticleDetailResult['bodyBlocks']
   sourceType: CmsArticleDetailResult['sourceType']
   /** When true, this article offers no share affordance (per-post kill switch). */
@@ -91,7 +97,30 @@ export async function getArticleBySlug(
   return article
 }
 
+/**
+ * The search index: every published article plus its flattened body text.
+ *
+ * @remarks Deliberately stays on plain `'use cache'` (per-process, in-memory)
+ * while the small CMS reads moved to `'use cache: remote'` for #118. It wraps
+ * the full-body `getPublishedPosts` read, and its own payload measures
+ * 1,742,179 bytes over the 52-post corpus — inside Vercel's 2 MB Runtime Cache
+ * item ceiling today, but with under 15% headroom and growing one article at a
+ * time, so `:remote` would start silently rejecting writes mid-corpus. The
+ * consequence is the in-memory tier's known defect: a `posts` purge reaches
+ * only the instance that issued it, so search results converge on the
+ * `cmsContent` cadence rather than on the edit. Shrinking this read is what
+ * would let it join the remote tier (see `lib/content/posts.ts`).
+ */
 export async function getSearchArticles(): Promise<ArticleWithSlug[]> {
+  'use cache'
+  // #76 B3: the future-dated publish gate below reads `Date.now()`
+  // (isFuturePublicationDate), which `cacheComponents` rejects during prerender.
+  // Running the gate inside this `'use cache'` scope freezes `Date.now()` at
+  // cache generation and refreshes it on the `cmsContent` cadence — so
+  // `/articles` (and `/api/search`) prerender static while scheduled posts still
+  // stay hidden until their date, flipping on the same window content refreshes.
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
   const articles = await getCmsSearchArticles()
 
   return (

@@ -1,9 +1,18 @@
 import Image, { type ImageProps } from 'next/image'
 
 import { Button } from '@/components/Button'
+import { CurrentYearTime } from '@/components/home/CurrentYearTime'
 import { getCmsIdentity } from '@/lib/cms/identityRepo'
 import { getCmsWorkHistory } from '@/lib/cms/workHistoryRepo'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
+
+/**
+ * Marker `dateTime` for the empty-CMS fallback résumé's ongoing role: the real
+ * current year is rendered client-side by {@link CurrentYearTime} (#76 B2), so
+ * the server never reads `new Date()` during prerender. CMS-sourced "Present"
+ * roles carry a concrete (cached) year instead and never use this marker.
+ */
+const PRESENT_DATETIME_MARKER = '__present__'
 
 /**
  * Work-history card (home sidebar + WorkHistory CMS block). Reads the
@@ -62,6 +71,9 @@ function Role({ role }: { role: Role }) {
 
   const endLabel = typeof role.end === 'string' ? role.end : role.end.label
   const endDate = typeof role.end === 'string' ? role.end : role.end.dateTime
+  const endIsCurrent =
+    typeof role.end !== 'string' &&
+    role.end.dateTime === PRESENT_DATETIME_MARKER
 
   return (
     <li className="flex gap-4">
@@ -105,46 +117,58 @@ function Role({ role }: { role: Role }) {
         >
           <time dateTime={startDate}>{startLabel}</time>{' '}
           <span aria-hidden="true">-</span>{' '}
-          <time dateTime={endDate}>{endLabel}</time>
+          {endIsCurrent ? (
+            <CurrentYearTime />
+          ) : (
+            <time dateTime={endDate}>{endLabel}</time>
+          )}
         </dd>
       </dl>
     </li>
   )
 }
 
-const defaultResume: Array<Role> = [
-  {
-    company: 'Brytecore',
-    title: 'Senior Frontend Engineer',
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1774040299/bp-portfolio/logos/footer-brytecore-bug_xsf8iw.webp',
-    start: '2024',
-    end: {
-      label: 'Present',
-      dateTime: new Date().getFullYear().toString(),
+// #76 B2: the "Present" role's machine-readable `dateTime` is the current year.
+// A `new Date()` read here (server render) is rejected by `cacheComponents`
+// during prerender — measured — so the ongoing role carries a
+// {@link PRESENT_DATETIME_MARKER} and the real year is rendered client-side by
+// {@link CurrentYearTime}, keeping `Resume` server-prerenderable. Only reached
+// on an empty work-history CMS; CMS roles carry a concrete (cached) year.
+function buildDefaultResume(): Array<Role> {
+  return [
+    {
+      company: 'Brytecore',
+      title: 'Senior Frontend Engineer',
+      logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1774040299/bp-portfolio/logos/footer-brytecore-bug_xsf8iw.webp',
+      start: '2024',
+      end: {
+        label: 'Present',
+        dateTime: PRESENT_DATETIME_MARKER,
+      },
     },
-  },
-  {
-    company: 'Lone Wolf Technologies',
-    title: 'Technical PM + Software Engineer',
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562788/bp-portfolio/images/logos/lone-wolf_hpftff_fsqe3o.png',
-    start: '2021',
-    end: '2023',
-  },
-  {
-    company: 'W+R Studios',
-    title: 'Technical PM + Senior Data Integrations Engineer',
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
-    start: '2017',
-    end: '2020',
-  },
-  {
-    company: 'W+R Studios',
-    title: 'Technical PM + Data Integrations Engineer',
-    logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
-    start: '2013',
-    end: '2017',
-  },
-]
+    {
+      company: 'Lone Wolf Technologies',
+      title: 'Technical PM + Software Engineer',
+      logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1713562788/bp-portfolio/images/logos/lone-wolf_hpftff_fsqe3o.png',
+      start: '2021',
+      end: '2023',
+    },
+    {
+      company: 'W+R Studios',
+      title: 'Technical PM + Senior Data Integrations Engineer',
+      logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
+      start: '2017',
+      end: '2020',
+    },
+    {
+      company: 'W+R Studios',
+      title: 'Technical PM + Data Integrations Engineer',
+      logo: 'https://res.cloudinary.com/dgwdyrmsn/image/upload/v1684011516/wr-studios_ibqcpy.svg',
+      start: '2013',
+      end: '2017',
+    },
+  ]
+}
 
 export async function Resume() {
   const cmsResume = await getCmsWorkHistory()
@@ -160,7 +184,7 @@ export async function Resume() {
         start: entry.start,
         end: entry.end,
       }))
-    : defaultResume
+    : buildDefaultResume()
 
   return (
     <div className="rounded-2xl border border-zinc-100 p-6 dark:border-zinc-700/40">

@@ -69,6 +69,101 @@ vi.mock('@/lib/security/limiter', () => ({
   checkChatLimits: (...args: unknown[]) => checkChatLimitsMock(...args),
 }))
 
+/**
+ * Retrieval grounding (#82) — added for the grounding cases at the bottom of
+ * this file; the 13 gate cases above are untouched and must stay green.
+ *
+ * Only the two LEAVES are stubbed: the embedding provider (so no key and no
+ * dollars) and Payload's database handle. `retrieval.ts`, its SQL builder, its
+ * visibility filter, the similarity floor, and `buildGroundedSystem` all run
+ * FOR REAL through the route. That is deliberate: mocking
+ * `retrieveCorvusContext` wholesale would make the gated-content test assert
+ * only that a mock returned what it was told to.
+ */
+const embedQueryMock = vi.fn()
+vi.mock('@/lib/ai/embeddings', () => ({
+  EMBEDDING_TIMEOUT_MS: 10_000,
+  embedQuery: (...args: unknown[]) => embedQueryMock(...args),
+  toVectorLiteral: (v: number[]) => `[${v.join(',')}]`,
+}))
+
+/** Rows the fake table holds for the current test. */
+let tableRows: Array<Record<string, unknown>> = []
+
+/**
+ * A fake Postgres that ENFORCES the query's own predicates.
+ *
+ * @remarks It compiles the drizzle fragment the route actually built, reads
+ * the boolean bound to the `::boolean` placeholder, and filters its fixture
+ * rows the way Postgres would. So if the route ever stopped passing the
+ * viewer's auth state, or the WHERE clause lost its `visibility` disjunction,
+ * the gated row would reach the system prompt and the test below would fail —
+ * which is the whole point of not stubbing the retrieval module.
+ */
+/**
+ * Compile a drizzle fragment to `{ text, params }`.
+ *
+ * @remarks Literal segments arrive as `StringChunk` (whose `value` is a string
+ * array); everything else is an embedded value destined to become a bound
+ * parameter. Walking the chunks is how these tests see what the route bound
+ * without a database.
+ */
+const compileFragment = (fragment: unknown) => {
+  const chunks = (fragment as { queryChunks: unknown[] }).queryChunks
+  const params: unknown[] = []
+  let text = ''
+  for (const chunk of chunks) {
+    const value = (chunk as { value?: unknown } | null)?.value
+    if (Array.isArray(value)) text += (value as string[]).join('')
+    else {
+      params.push(chunk)
+      text += `$${params.length}`
+    }
+  }
+  return { text, params }
+}
+
+/**
+ * The boolean bound to the query's `::boolean` placeholder — the gating input.
+ *
+ * @remarks Shared by the fake Postgres below and by the tests that assert on
+ * it, deliberately: an assertion that re-derived the value its own way could
+ * agree with itself while disagreeing with what the fake actually filters on.
+ *
+ * @param fragment - The drizzle fragment the route built.
+ * @returns The bound value, or `undefined` when the placeholder is absent.
+ */
+const boundAuthFlag = (fragment: unknown): unknown => {
+  const { text, params } = compileFragment(fragment)
+  const authIndex = /\$(\d+)::boolean/.exec(text)
+  return authIndex ? params[Number(authIndex[1]) - 1] : undefined
+}
+
+const executeMock = vi.fn(async (fragment: unknown) => {
+  const { text } = compileFragment(fragment)
+  const isAuthenticated = boundAuthFlag(fragment)
+  const filtersVisibility = text.includes(`"visibility" = 'public'`)
+  const filtersSchedule = text.includes(`"published_at" <= now()`)
+
+  const rows = tableRows.filter((row) => {
+    if (filtersVisibility && isAuthenticated !== true) {
+      if (row.visibility !== 'public') return false
+    }
+    if (filtersSchedule && typeof row.published_at === 'string') {
+      if (new Date(row.published_at).getTime() > Date.now()) return false
+    }
+    return true
+  })
+
+  return { rows }
+})
+
+vi.mock('payload', () => ({
+  getPayload: vi.fn(async () => ({
+    db: { drizzle: { execute: (query: unknown) => executeMock(query) } },
+  })),
+}))
+
 import { POST } from '@/app/api/ai/chat/route'
 
 const ANON_IP = '203.0.113.42'
@@ -301,5 +396,264 @@ describe('POST /api/ai/chat — existing guards still run, in order, ahead of th
 
     expect(res.status).toBe(403)
     expect(getViewerMock).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Retrieval grounding (#82) — additive; nothing above this line changed.
+ *
+ * A second `beforeEach` (Vitest runs registered hooks in order) leaves the
+ * table EMPTY by default, so every gate case above still streams with the
+ * untouched system prompt and its assertions keep meaning what they meant.
+ */
+beforeEach(() => {
+  tableRows = []
+  embedQueryMock.mockResolvedValue([0.1, 0.2, 0.3])
+})
+
+/** The system prompt the route actually handed `streamText`. */
+const systemPassedToStreamText = () =>
+  (streamTextMock.mock.calls[0]?.[0] as { system: string } | undefined)?.system
+
+const publicRow = {
+  collection: 'posts',
+  title: 'Public Article',
+  content: 'PUBLIC_BODY_TEXT about shipping.',
+  source_url: '/articles/public-article',
+  visibility: 'public',
+  published_at: '2026-01-01T00:00:00.000Z',
+  score: 0.91,
+}
+
+const gatedRow = {
+  collection: 'posts',
+  title: 'Gated Article',
+  content: 'GATED_BODY_TEXT that anonymous visitors must never receive.',
+  source_url: '/articles/gated-article',
+  visibility: 'gated',
+  published_at: '2026-01-01T00:00:00.000Z',
+  score: 0.99,
+}
+
+describe('POST /api/ai/chat — a gated chunk NEVER reaches an anonymous visitor', () => {
+  it('grounds an anonymous turn on the public chunk only, omitting the gated one', async () => {
+    // The gated row scores HIGHER, so nothing but the visibility filter keeps
+    // it out. `canAccess` calls itself "THE single authoritative check ...
+    // before including gated bodies in any payload sent to the client", and a
+    // grounded chat answer is exactly such a payload.
+    tableRows = [gatedRow, publicRow]
+    getViewerMock.mockResolvedValue({ isAuthenticated: false, userId: null })
+
+    const res = await POST(makeRequest(validBody))
+
+    expect(res.status).toBe(200)
+    const system = systemPassedToStreamText()!
+    expect(system).not.toContain('GATED_BODY_TEXT')
+    expect(system).not.toContain('/articles/gated-article')
+    expect(system).toContain('PUBLIC_BODY_TEXT')
+  })
+
+  it('returns the untouched prompt when the ONLY match is gated', async () => {
+    tableRows = [gatedRow]
+    getViewerMock.mockResolvedValue({ isAuthenticated: false, userId: null })
+
+    await POST(makeRequest(validBody))
+
+    expect(systemPassedToStreamText()).toBe('You are Corvus.')
+  })
+
+  it('binds isAuthenticated=false for an anonymous turn', async () => {
+    tableRows = [publicRow]
+    getViewerMock.mockResolvedValue({ isAuthenticated: false, userId: null })
+
+    await POST(makeRequest(validBody))
+
+    // The call count alone passes just as happily when the route binds TRUE,
+    // which would collapse the visibility disjunction and hand anonymous
+    // visitors every gated chunk. Read the value actually bound to the
+    // `::boolean` placeholder — the same reader the fake Postgres filters on.
+    expect(executeMock).toHaveBeenCalledTimes(1)
+    expect(boundAuthFlag(executeMock.mock.calls[0][0])).toBe(false)
+  })
+
+  it('binds isAuthenticated=true for a signed-in turn', async () => {
+    tableRows = [publicRow]
+    getViewerMock.mockResolvedValue({
+      isAuthenticated: true,
+      userId: 'user_abc123',
+    })
+
+    await POST(makeRequest(validBody))
+
+    expect(boundAuthFlag(executeMock.mock.calls[0][0])).toBe(true)
+  })
+
+  it('a signed-in visitor MAY be grounded on a gated chunk', async () => {
+    tableRows = [gatedRow]
+    getViewerMock.mockResolvedValue({
+      isAuthenticated: true,
+      userId: 'user_abc123',
+    })
+
+    await POST(makeRequest(validBody))
+
+    expect(systemPassedToStreamText()).toContain('GATED_BODY_TEXT')
+  })
+
+  it('a crafted body claiming authentication cannot unlock a gated chunk', async () => {
+    // The gating input is `getViewer()`'s server-resolved state, which takes
+    // no arguments — the same property the gate cases above pin.
+    tableRows = [gatedRow]
+    getViewerMock.mockResolvedValue({ isAuthenticated: false, userId: null })
+
+    await POST(
+      makeRequest({
+        ...validBody,
+        isAuthenticated: true,
+        userId: 'fake-admin',
+      }),
+    )
+
+    expect(systemPassedToStreamText()).not.toContain('GATED_BODY_TEXT')
+  })
+
+  it('excludes a scheduled-future post even from a signed-in visitor', async () => {
+    tableRows = [
+      {
+        ...publicRow,
+        content: 'FUTURE_BODY_TEXT',
+        published_at: new Date(Date.now() + 86_400_000).toISOString(),
+      },
+    ]
+    getViewerMock.mockResolvedValue({ isAuthenticated: true, userId: 'u' })
+
+    await POST(makeRequest(validBody))
+
+    expect(systemPassedToStreamText()).not.toContain('FUTURE_BODY_TEXT')
+  })
+})
+
+describe('POST /api/ai/chat — retrieval degrades to the untouched prompt', () => {
+  it('an EMPTY table still streams, with the system prompt byte-identical', async () => {
+    tableRows = []
+
+    const res = await POST(makeRequest(validBody))
+
+    expect(res.status).toBe(200)
+    expect(streamTextMock).toHaveBeenCalledTimes(1)
+    expect(systemPassedToStreamText()).toBe('You are Corvus.')
+  })
+
+  it('a provider failure still streams, ungrounded', async () => {
+    embedQueryMock.mockRejectedValue(new Error('embedding provider down'))
+
+    const res = await POST(makeRequest(validBody))
+
+    expect(res.status).toBe(200)
+    expect(streamTextMock).toHaveBeenCalledTimes(1)
+    expect(systemPassedToStreamText()).toBe('You are Corvus.')
+  })
+
+  it('a DATABASE failure still streams, ungrounded', async () => {
+    executeMock.mockRejectedValueOnce(
+      new Error('relation "corvus_embeddings" does not exist'),
+    )
+
+    const res = await POST(makeRequest(validBody))
+
+    expect(res.status).toBe(200)
+    expect(systemPassedToStreamText()).toBe('You are Corvus.')
+  })
+
+  it('a query that MISSES (every row below the floor) streams ungrounded', async () => {
+    tableRows = [{ ...publicRow, score: 0.04 }]
+
+    await POST(makeRequest(validBody))
+
+    expect(systemPassedToStreamText()).toBe('You are Corvus.')
+  })
+
+  it('leaves the response shape and status untouched in every failure mode', async () => {
+    embedQueryMock.mockRejectedValue(new Error('down'))
+
+    const res = await POST(makeRequest(validBody))
+
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('stream')
+  })
+})
+
+describe('POST /api/ai/chat — CORVUS_DISABLE_RETRIEVAL kill switch', () => {
+  it('short-circuits BEFORE the embedding call and the database round-trip', async () => {
+    vi.stubEnv('CORVUS_DISABLE_RETRIEVAL', 'true')
+    tableRows = [publicRow]
+
+    const res = await POST(makeRequest(validBody))
+
+    expect(res.status).toBe(200)
+    expect(embedQueryMock).not.toHaveBeenCalled()
+    expect(executeMock).not.toHaveBeenCalled()
+    expect(systemPassedToStreamText()).toBe('You are Corvus.')
+  })
+
+  it('anything other than the exact string "true" leaves retrieval ON', async () => {
+    vi.stubEnv('CORVUS_DISABLE_RETRIEVAL', 'false')
+    tableRows = [publicRow]
+
+    await POST(makeRequest(validBody))
+
+    expect(systemPassedToStreamText()).toContain('PUBLIC_BODY_TEXT')
+  })
+})
+
+describe('POST /api/ai/chat — retrieval runs only after every gate passes', () => {
+  it('a rate-limited request never triggers retrieval', async () => {
+    checkChatLimitsMock.mockResolvedValue({
+      allowed: false,
+      remaining: 0,
+      resetAt: Date.now() + 1000,
+      limit: 10,
+    })
+
+    const res = await POST(makeRequest(validBody))
+
+    expect(res.status).toBe(429)
+    expect(embedQueryMock).not.toHaveBeenCalled()
+  })
+
+  it('a sign-in-gated anonymous request never triggers retrieval', async () => {
+    peekAnonFreeMessageCountMock.mockResolvedValue(3)
+
+    const res = await POST(makeRequest(validBody))
+
+    expect(res.status).toBe(401)
+    expect(embedQueryMock).not.toHaveBeenCalled()
+  })
+
+  it('CORVUS_DISABLE_CHAT still short-circuits ahead of retrieval', async () => {
+    vi.stubEnv('CORVUS_DISABLE_CHAT', 'true')
+
+    const res = await POST(makeRequest(validBody))
+
+    expect(res.status).toBe(503)
+    expect(embedQueryMock).not.toHaveBeenCalled()
+  })
+
+  it('embeds only the LATEST user turn, not the whole window', async () => {
+    tableRows = []
+
+    await POST(
+      makeRequest({
+        messages: [
+          { role: 'user', parts: [{ type: 'text', text: 'first question' }] },
+          { role: 'user', parts: [{ type: 'text', text: 'latest question' }] },
+        ],
+      }),
+    )
+
+    expect(embedQueryMock).toHaveBeenCalledWith(
+      'latest question',
+      expect.objectContaining({ abortSignal: expect.any(AbortSignal) }),
+    )
   })
 })

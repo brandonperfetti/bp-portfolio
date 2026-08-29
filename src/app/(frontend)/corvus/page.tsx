@@ -1,4 +1,5 @@
 import { type Metadata } from 'next'
+import { Suspense } from 'react'
 import { CmsPageBlocks } from '@/components/cms/CmsPageBlocks'
 
 import { Container } from '@/components/Container'
@@ -26,6 +27,20 @@ export async function generateMetadata(): Promise<Metadata> {
   })
 }
 
+/**
+ * Placeholder matching CorvusChat's fixed-height frame while the client chat
+ * streams in (#76 B3 Suspense isolation). Motion is gated on `motion-safe` to
+ * honor `prefers-reduced-motion`.
+ */
+function CorvusChatSkeleton() {
+  return (
+    <div
+      className="h-full w-full rounded-3xl border border-zinc-200/60 bg-zinc-100/40 motion-safe:animate-pulse dark:border-zinc-700/40 dark:bg-zinc-800/30"
+      aria-hidden="true"
+    />
+  )
+}
+
 export default async function CorvusPage() {
   const page = await getCmsPageByPath('/corvus')
   const headingText = page?.title || 'Corvus'
@@ -48,7 +63,13 @@ export default async function CorvusPage() {
           pushed the chat in past every other page's content (Brandon). */}
       <div className="corvus-surface flex h-[calc(100dvh-5.75rem)] min-h-0 flex-col overflow-hidden rounded-3xl pt-8 pb-2 sm:h-[calc(100dvh-6.25rem)] sm:pt-10 sm:pb-3">
         <div className="min-h-0 flex-1">
-          <CorvusChat title={headingText} subtitle={subtitleText} />
+          {/* #76 B3: CorvusChat's `useChat` reads Math.random() (a client
+              unstable value) which blocks prerender. Suspense-isolate it so the
+              indexed page shell (title/subtitle + CmsPageBlocks) prerenders and
+              the chat streams — the route reaches ◐ partial. */}
+          <Suspense fallback={<CorvusChatSkeleton />}>
+            <CorvusChat title={headingText} subtitle={subtitleText} />
+          </Suspense>
         </div>
       </div>
       <CmsPageBlocks slug="corvus" />

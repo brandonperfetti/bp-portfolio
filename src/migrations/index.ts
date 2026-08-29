@@ -34,6 +34,9 @@ import * as migration_20260819_154529_w6b5_carousel_spring_effect from './202608
 import * as migration_20260819_164717_w6b6_hero_image_carousel_types from './20260819_164717_w6b6_hero_image_carousel_types'
 import * as migration_20260819_184317_w6b6a_hero_banner_toggles from './20260819_184317_w6b6a_hero_banner_toggles'
 import * as migration_20260820_221032_rls_lockdown from './20260820_221032_rls_lockdown'
+import * as migration_20260826_145724_cookie_consent_global from './20260826_145724_cookie_consent_global'
+import * as migration_20260826_225102_manage_cookies_label from './20260826_225102_manage_cookies_label'
+import * as migration_20260828_155359_corvus_embeddings from './20260828_155359_corvus_embeddings'
 
 export const migrations = [
   {
@@ -215,5 +218,20 @@ export const migrations = [
     up: migration_20260820_221032_rls_lockdown.up,
     down: migration_20260820_221032_rls_lockdown.down,
     name: '20260820_221032_rls_lockdown',
+  },
+  {
+    up: migration_20260826_145724_cookie_consent_global.up,
+    down: migration_20260826_145724_cookie_consent_global.down,
+    name: '20260826_145724_cookie_consent_global',
+  },
+  {
+    up: migration_20260826_225102_manage_cookies_label.up,
+    down: migration_20260826_225102_manage_cookies_label.down,
+    name: '20260826_225102_manage_cookies_label',
+  },
+  {
+    up: migration_20260828_155359_corvus_embeddings.up,
+    down: migration_20260828_155359_corvus_embeddings.down,
+    name: '20260828_155359_corvus_embeddings',
   },
 ]

@@ -145,6 +145,11 @@ unrenderable editor).
   reference; DRY_RUN/ONLY_SLUG knobs. Note: `payload run` kills floating
   promises at module-eval end — scripts must top-level `await`.
 - `scripts/set-admin-password.ts` — Local API admin bootstrap/password reset.
+- `scripts/backfill-corvus-embeddings.ts` (`pnpm corvus:backfill`) — populates
+  and repairs the `corvus_embeddings` pgvector index the content hooks keep
+  fresh. Not a Payload collection, deliberately; see `docs/AI.md`
+  §"Retrieval grounding" for the table, the `access.visibility` filter that
+  keeps gated bodies out of anonymous chat answers, and when to re-run it.
 
 ### New-table RLS convention (#72)
 
@@ -163,6 +168,15 @@ table and any paired `_v` / `_rels` table Payload generates:
 ```ts
 await db.execute(sql`ALTER TABLE "new_table" ENABLE ROW LEVEL SECURITY;`)
 ```
+
+CI enforces this (#117): `scripts/check-migrations-rls.mjs` runs in the
+`quality` job and fails the build when a migration created **after** the
+`20260820_221032_rls_lockdown` backfill has a `CREATE TABLE "x"` with no
+`ALTER TABLE "x" ENABLE ROW LEVEL SECURITY` in the same file — companions
+included, because Payload emits `_v` / `_rels` as their own `CREATE TABLE`
+statements. Migrations at or before that backfill are grandfathered: it enabled
+RLS through a dynamic `pg_tables` loop, so no table name appears as literal
+text for a matcher to find. The script's header documents that audit.
 
 `ALTER DEFAULT PRIVILEGES` already handles the grant side for new tables, but
 it does **not** touch RLS state — that still needs the explicit `ENABLE` per

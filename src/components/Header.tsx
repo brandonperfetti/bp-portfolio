@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -292,10 +292,7 @@ function Avatar({
  * every scroll frame would jank; the DOM stays untouched and only
  * `documentElement` style properties move.
  */
-export function Header({
-  navigationItems = DEFAULT_NAV_ITEMS,
-  showUserButton = false,
-}: {
+export function Header(props: {
   navigationItems?: NavigationItem[]
   /**
    * Whether to mount the signed-in account chip. Threaded from the server
@@ -303,6 +300,26 @@ export function Header({
    * AuthProvider omits in keys-off environments — when false, the header
    * renders byte-identical to the pre-auth design.
    */
+  showUserButton?: boolean
+}) {
+  // #76 Piece 1: HeaderInner reads `usePathname` (isHomePage + the active-nav
+  // highlight in NavItem), which suspends during the static-shell prerender of
+  // dynamic-param routes (`/articles/[slug]`, `/[slug]`) under cacheComponents.
+  // Isolate it behind a single Suspense boundary so those shells prerender; the
+  // header streams in at request time with identical markup (behavior-preserving).
+  // A boundary that never suspends (static routes) is a no-op.
+  return (
+    <Suspense fallback={null}>
+      <HeaderInner {...props} />
+    </Suspense>
+  )
+}
+
+function HeaderInner({
+  navigationItems = DEFAULT_NAV_ITEMS,
+  showUserButton = false,
+}: {
+  navigationItems?: NavigationItem[]
   showUserButton?: boolean
 }) {
   const isHomePage = usePathname() === '/'

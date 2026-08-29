@@ -75,6 +75,14 @@ export default async function ArticlesIndex() {
     ],
   }
   const hasArticles = articles.length > 0
+  // #88 decision, recorded here per the issue's "either is defensible, document
+  // the choice": under option (b) — client windowing, no server-side `page`
+  // read — this ItemList stays capped at the first 50 articles *overall* (the
+  // `301a8f3` behavior) rather than mirroring the rendered page. The route is
+  // statically rendered and serves one HTML document for every `?page=N`, so a
+  // per-page ItemList would be wrong for every page but the first. Per-page
+  // structured data belongs with per-page server rendering — see #121 and
+  // `docs/SEO.md`.
   const itemListSchema = hasArticles
     ? {
         '@context': 'https://schema.org',

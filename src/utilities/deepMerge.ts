@@ -3,8 +3,8 @@
 
 /**
  * Simple object check.
- * @param item
- * @returns {boolean}
+ * @param item - Value to test.
+ * @returns `true` for a non-array object, `false` otherwise.
  */
 export function isObject(item: unknown): item is object {
   return typeof item === 'object' && !Array.isArray(item)
@@ -12,8 +12,8 @@ export function isObject(item: unknown): item is object {
 
 /**
  * Deep merge two objects.
- * @param target
- * @param ...sources
+ * @param target - Base object; copied, never mutated.
+ * @param source - Object whose values win, merged recursively into `target`.
  */
 export default function deepMerge<T, R>(target: T, source: R): T {
   const output = { ...target }

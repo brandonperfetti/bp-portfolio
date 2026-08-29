@@ -95,9 +95,41 @@ export function ShaderHero({
   const containerRef = useRef<HTMLDivElement>(null)
   const [gpuOk, setGpuOk] = useState(false)
   const [onscreen, setOnscreen] = useState(true)
-  const [mounted, setMounted] = useState(false)
+  const [idleReady, setIdleReady] = useState(false)
 
-  useEffect(() => setMounted(true), [])
+  // Lever C (#105): defer the enable flip to browser idle time so the
+  // ssr:false ShaderBackground chunk (2.1MB decoded / 474KB gzip, the biggest
+  // on /) downloads and evaluates off the first-interaction path instead of
+  // ~1 tick after hydration, where it overlapped the first click. Timing only:
+  // every enable condition below — the reduced-motion gate included — is
+  // unchanged, so this never changes *whether* the shader enables.
+  useEffect(() => {
+    let idleHandle: number | undefined
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+    const enable = () => setIdleReady(true)
+
+    if (typeof window.requestIdleCallback === 'function') {
+      // {timeout} caps the wait so the shader still enables promptly on a
+      // busy main thread that never reports idle.
+      idleHandle = window.requestIdleCallback(enable, { timeout: 2000 })
+    } else {
+      // Safari < 17 and older engines lack requestIdleCallback; a short
+      // timeout still moves the flip past the immediate post-mount tick.
+      timeoutHandle = setTimeout(enable, 200)
+    }
+
+    return () => {
+      if (
+        idleHandle !== undefined &&
+        typeof window.cancelIdleCallback === 'function'
+      ) {
+        window.cancelIdleCallback(idleHandle)
+      }
+      if (timeoutHandle !== undefined) {
+        clearTimeout(timeoutHandle)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const hasGpu =
@@ -118,7 +150,7 @@ export function ShaderHero({
     return () => observer.disconnect()
   }, [])
 
-  const enabled = !reducedMotion && gpuOk && onscreen && mounted
+  const enabled = !reducedMotion && gpuOk && onscreen && idleReady
   // Light mode gets the §23 light preset; dark mode uses the configured one.
   const activePreset = activeShaderPreset(preset, resolvedTheme)
 

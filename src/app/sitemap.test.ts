@@ -17,6 +17,13 @@ vi.mock('@/lib/site', () => ({
   getSiteUrl: mocks.getSiteUrl,
 }))
 
+// #76 B3: sitemap prepares its data inside a `'use cache'` scope; stub the
+// primitives so the route runs under jsdom.
+vi.mock('next/cache', () => ({
+  cacheTag: vi.fn(),
+  cacheLife: vi.fn(),
+}))
+
 import sitemap from './sitemap'
 
 describe('sitemap', () => {

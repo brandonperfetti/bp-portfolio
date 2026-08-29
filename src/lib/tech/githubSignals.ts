@@ -1,4 +1,4 @@
-import { unstable_cache } from 'next/cache'
+import { cacheLife, cacheTag } from 'next/cache'
 import { draftMode } from 'next/headers'
 
 import {
@@ -30,7 +30,10 @@ export type TechSignalsIndex = {
   byKey: Record<string, TechSignalSummary>
 }
 
-const SIGNALS_REVALIDATE_SECONDS = 6 * 60 * 60
+// The tech-signals cache cadence (a 6h TTL) now lives in the `techSignals`
+// cacheLife profile in next.config.mjs (#76 B1). No admin hook purges the
+// `tech-signals` tag — the GitHub scan is external — so the TTL is the only
+// freshness driver, exactly as before.
 
 /**
  * Wall-clock cap on one owner-wide scan.
@@ -98,8 +101,11 @@ function isTechScanConfigured(): boolean {
   )
 }
 
-const getCachedTechSignalsIndex = unstable_cache(
+const getCachedTechSignalsIndex =
   async (): Promise<TechSignalsIndex | null> => {
+    'use cache'
+    cacheTag('tech-signals')
+    cacheLife('techSignals')
     try {
       const result = await withTimeout(
         collectGithubTechSignals(),
@@ -132,10 +138,7 @@ const getCachedTechSignalsIndex = unstable_cache(
       // Rate limits / network failures must never break /tech rendering.
       return null
     }
-  },
-  ['github-tech-signals'],
-  { revalidate: SIGNALS_REVALIDATE_SECONDS, tags: ['tech-signals'] },
-)
+  }
 
 /**
  * Request-scoped entry point for the cached scan.
@@ -212,8 +215,8 @@ function lookupCandidate(
  * explicit aliases (including scoped-package prefixes like
  * `@testing-library/`), then the `githubRepo` short name.
  *
- * @param index Cached scan output (or `null` when unconfigured).
- * @param item CMS tech row (name and optional `owner/name` repo hint).
+ * @param index - Cached scan output (or `null` when unconfigured).
+ * @param item - CMS tech row (name and optional `owner/name` repo hint).
  * @returns Matching summary, or `null` when the scan has no evidence.
  */
 export function matchTechSignal(

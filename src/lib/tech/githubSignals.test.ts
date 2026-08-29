@@ -11,34 +11,24 @@ import {
 } from './githubSignals'
 
 /**
- * `unstable_cache` is replaced with a recording pass-through: the registry
- * captures the callback and its options so the tests can assert *where* a
- * value is produced (inside the cache scope = cached for 6h) as well as what
- * it is. Real cache storage isn't exercised — that's Next's job.
+ * `'use cache'` (#76 B1) replaced the `unstable_cache` wrapper: the scan fn now
+ * calls `cacheTag`/`cacheLife` at the top of its own body. These recorders let
+ * the tests assert *where* a value is produced (each `cacheTag` call = one entry
+ * into the cache scope) and *how* it is tagged/profiled. Real cache storage
+ * isn't exercised — that's Next's job. The 6h revalidate now lives in the
+ * `techSignals` cacheLife profile in next.config.mjs, not here.
  */
-const { cacheRegistry } = vi.hoisted(() => ({
-  cacheRegistry: {
-    entries: [] as Array<{
-      keys: string[]
-      options: { revalidate?: number; tags?: string[] }
-      run: () => Promise<unknown>
-      invocations: number
-    }>,
-  },
+const { cacheScope } = vi.hoisted(() => ({
+  cacheScope: { entries: 0, tags: [] as string[], profiles: [] as unknown[] },
 }))
 
 vi.mock('next/cache', () => ({
-  unstable_cache: (
-    fn: () => Promise<unknown>,
-    keys: string[],
-    options: { revalidate?: number; tags?: string[] },
-  ) => {
-    const entry = { keys, options, run: fn, invocations: 0 }
-    cacheRegistry.entries.push(entry)
-    return async () => {
-      entry.invocations += 1
-      return fn()
-    }
+  cacheTag: (...tags: string[]) => {
+    cacheScope.entries += 1
+    cacheScope.tags.push(...tags)
+  },
+  cacheLife: (profile: unknown) => {
+    cacheScope.profiles.push(profile)
   },
 }))
 
@@ -184,9 +174,9 @@ describe('getTechSignalsIndex', () => {
   beforeEach(() => {
     draftModeState.isEnabled = false
     collectMock.mockReset()
-    for (const entry of cacheRegistry.entries) {
-      entry.invocations = 0
-    }
+    cacheScope.entries = 0
+    cacheScope.tags = []
+    cacheScope.profiles = []
     vi.stubEnv('GITHUB_OWNER', 'brandonperfetti')
     vi.stubEnv('GITHUB_TOKEN', 'token')
   })
@@ -196,13 +186,16 @@ describe('getTechSignalsIndex', () => {
     vi.useRealTimers()
   })
 
-  it('registers the scan under a 6h revalidate and the tech-signals tag', () => {
-    expect(cacheRegistry.entries).toHaveLength(1)
-    expect(cacheRegistry.entries[0].keys).toEqual(['github-tech-signals'])
-    expect(cacheRegistry.entries[0].options).toMatchObject({
-      revalidate: 6 * 60 * 60,
-      tags: ['tech-signals'],
-    })
+  it('caches the scan under the tech-signals tag and techSignals profile', async () => {
+    collectMock.mockResolvedValue(scanResult())
+
+    await getTechSignalsIndex()
+
+    // The scan fn enters its `'use cache'` scope tagged `tech-signals` (no admin
+    // hook purges it — the TTL is the only freshness driver) under the
+    // `techSignals` cacheLife profile, whose 6h revalidate lives in next.config.
+    expect(cacheScope.tags).toContain('tech-signals')
+    expect(cacheScope.profiles).toContain('techSignals')
   })
 
   it('skips the scan entirely in draft mode', async () => {
@@ -213,7 +206,7 @@ describe('getTechSignalsIndex', () => {
 
     await expect(getTechSignalsIndex()).resolves.toBeNull()
     expect(collectMock).not.toHaveBeenCalled()
-    expect(cacheRegistry.entries[0].invocations).toBe(0)
+    expect(cacheScope.entries).toBe(0)
   })
 
   it('returns the normalized index outside draft mode', async () => {
@@ -222,7 +215,7 @@ describe('getTechSignalsIndex', () => {
     const index = await getTechSignalsIndex()
 
     expect(collectMock).toHaveBeenCalledTimes(1)
-    expect(cacheRegistry.entries[0].invocations).toBe(1)
+    expect(cacheScope.entries).toBe(1)
     expect(index?.scannedRepos).toBe(12)
     expect(index?.byKey.nextjs).toMatchObject({
       repoCount: 2,
@@ -240,8 +233,8 @@ describe('getTechSignalsIndex', () => {
     expect(collectMock).not.toHaveBeenCalled()
     // The unconfigured short-circuit lives in the request-scoped wrapper,
     // *before* the cache scope, so a tokenless deployment (CI's production
-    // build) renders /tech from fallback without even entering unstable_cache.
-    expect(cacheRegistry.entries[0].invocations).toBe(0)
+    // build) renders /tech from fallback without even entering the cache scope.
+    expect(cacheScope.entries).toBe(0)
   })
 
   it('does not enter the cache scope when GITHUB_OWNER is missing', async () => {
@@ -249,7 +242,7 @@ describe('getTechSignalsIndex', () => {
 
     await expect(getTechSignalsIndex()).resolves.toBeNull()
     expect(collectMock).not.toHaveBeenCalled()
-    expect(cacheRegistry.entries[0].invocations).toBe(0)
+    expect(cacheScope.entries).toBe(0)
   })
 
   it('degrades to null when the scan rejects', async () => {
@@ -263,10 +256,10 @@ describe('getTechSignalsIndex', () => {
     // A scan that never settles (wedged/rate-limited GitHub).
     collectMock.mockReturnValue(new Promise(() => {}))
 
-    // Invoke the callback that was handed to unstable_cache: resolving to null
-    // *inside* the cache scope is what makes the timeout cacheable for 6h
-    // instead of charging every visitor the full cap.
-    const pending = cacheRegistry.entries[0].run()
+    // Enter the cache scope via the public wrapper (config gate passes in
+    // beforeEach): resolving to null *inside* the scope is what makes the
+    // timeout cacheable for 6h instead of charging every visitor the full cap.
+    const pending = getTechSignalsIndex()
     await vi.advanceTimersByTimeAsync(30_000)
 
     await expect(pending).resolves.toBeNull()
@@ -291,7 +284,7 @@ describe('getTechSignalsIndex', () => {
       }),
     )
 
-    const pending = cacheRegistry.entries[0].run()
+    const pending = getTechSignalsIndex()
     await vi.advanceTimersByTimeAsync(30_000)
     await expect(pending).resolves.toBeNull()
 

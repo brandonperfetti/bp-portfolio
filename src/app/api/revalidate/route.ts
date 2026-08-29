@@ -14,6 +14,31 @@ function parseTags(tags: unknown): string[] {
   )
 }
 
+/**
+ * Manual revalidation endpoint (secret-gated) for forcing CMS tags/paths
+ * live outside the Payload hooks — e.g. an MCP-driven edit or a hook that
+ * failed to fire.
+ *
+ * @remarks `revalidateTag(tag, { expire: 0 })`, not `'max'` (#118): under
+ * cacheComponents (`'use cache'` readers, #76) `'max'` is
+ * stale-while-revalidate with a one-year stale window, so a manual
+ * revalidation call would keep serving old content until a background
+ * refresh happened to land AND re-cache that stale render into the CDN in
+ * the meantime. `{ expire: 0 }` expires the entry outright instead, so the
+ * next read blocks for fresh data.
+ *
+ * That is a purge PROFILE, not a purge REACH — an earlier revision of this
+ * comment called it "the documented read-your-writes profile outside Server
+ * Actions", which overstates it. Read-your-writes needs work-store state only
+ * a Server Action's own request chain carries, and this is a Route Handler.
+ * What makes the purge reach whichever instance serves the next visitor is the
+ * reader layer living on the shared Runtime Cache (`'use cache: remote'`,
+ * #118). One consequence worth knowing when using this endpoint as a manual
+ * escape hatch: before that conversion, a single call only ever purged the one
+ * instance it happened to land on, which is why repeating the call used to
+ * sometimes help. It no longer needs to for the converted reads; the search
+ * index, still on the in-memory tier by size, is the remaining exception.
+ */
 export async function POST(request: Request) {
   const secret = process.env.CMS_REVALIDATE_SECRET
   const body = await request.json().catch(() => ({}))
@@ -43,7 +68,7 @@ export async function POST(request: Request) {
   const finalTags = tags.length ? tags : fallbackTags
 
   for (const tag of finalTags) {
-    revalidateTag(tag, 'max')
+    revalidateTag(tag, { expire: 0 })
   }
 
   for (const path of paths) {

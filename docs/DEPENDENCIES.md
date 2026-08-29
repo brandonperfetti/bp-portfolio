@@ -50,6 +50,23 @@ one set, version-locked.
   capture (`/api/clerk/webhook`).
 - `@vercel/analytics`, `@vercel/speed-insights` — telemetry.
 
+## Analytics & consent (#83)
+
+- `@c15t/react` — open-source (Apache-2.0) consent runtime, used **headless**:
+  `ConsentManagerProvider` + `useConsentManager()` only, in `mode: 'offline'`
+  with `noStyle: true`. The banner and dialog are bp's own components (Tailwind
+  v4 + Radix `Dialog`/`Switch`), not c15t's built-ins — no `@c15t/react/styles.css`,
+  no "Secured by c15t" badge. Geo is decided in `src/proxy.ts` (a
+  `cookieConsentRequired` cookie), not by c15t. Pairs GA4 with the always-on
+  cookieless Vercel Analytics — GA4 is free and the pattern ports across
+  projects (#83). (`@c15t/nextjs` was removed — the self-host backend it existed
+  for is not used; the geo cookie replaces it.)
+- `@c15t/scripts` — prebuilt consent-gated script integrations. Only the GA4
+  `gtag` (Google Consent Mode v2) integration is used; imported via the
+  `@c15t/scripts/google-tag` subpath so the rest tree-shakes away. See
+  `docs/ANALYTICS.md` for the architecture and the Consent Mode v2
+  cookieless-ping caveat.
+
 ## Dev/test
 
 - `vitest` + Testing Library + `jsdom`; `@playwright/test`; Storybook 10
@@ -70,3 +87,38 @@ one set, version-locked.
   forwarding `console.warn` / `console.error` (not `log`/`info`/`debug`).
   Session replay, cron monitoring, and alerting rules are intentionally not
   wired — defaults first (#73).
+
+## Supply-chain policy (#91)
+
+`.github/workflows/dependency-review.yml` runs
+`actions/dependency-review-action` on PRs into **both** `develop` and `master`.
+It diffs the PR's base against its head, so on an incremental PR it sees only
+the dependencies that PR actually adds.
+
+- **Threshold:** `fail-on-severity: high`, on the default `runtime` scope. A
+  newly-introduced high-severity runtime dependency is red; moderates and
+  dev-only paths are reported, not blocking. Dev-only is doing real work here —
+  it is what keeps the `evalite`-path advisories in #100 out of the failure
+  path without an allowlist entry that would also hide a future real one.
+- **Licenses:** no allow/deny list. An allow-list over a tree this size fails
+  on the first unlabelled transitive, and `deny-licenses` is deprecated
+  upstream. License policy stays an open decision in #91 rather than a default
+  invented in a workflow file.
+- **Trunk→trunk (`develop` → `master`): warn-only, i.e. informational.** Such a
+  PR diffs all of `develop` against `master`, so every dependency reads as
+  newly-added and the action re-evaluates the whole tree — which is why the
+  cutover PR #90 merged with this check red on 1 error + 11 warnings. It is not
+  hypothetical under the threshold above either: `image-size@2.0.2` carries two
+  high-severity advisories in the runtime scope with **no published fix**
+  (#100), so a whole-tree evaluation is red on that alone while introducing
+  nothing. `warn-only: true` overrides `fail-on-severity` and completes
+  successfully, so a `develop → master` merge is never again a mystery red
+  check. Revisit when `image-size >= 2.0.3` ships.
+- **Not required/blocking.** Branch protection is a separate decision (#91,
+  out of scope) — tune first, require later.
+
+Residual advisories that cannot be fixed today are tracked in #100, not here:
+each is dev-only, non-exploitable in this usage, or has no published fix, and
+none should be force-overridden. `pnpm audit` / `pnpm audit --prod` is the
+check; the wave-1 remediation (36 of 44 advisories) lives in the scoped
+`pnpm-workspace.yaml` overrides.

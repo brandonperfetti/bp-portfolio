@@ -49,7 +49,19 @@ export const Carousel: Block = {
       type: 'array',
       minRows: 1,
       labels: { singular: 'Slide', plural: 'Slides' },
-      admin: { initCollapsed: true },
+      admin: {
+        initCollapsed: true,
+        // Editor-facing half of #68.3. The Expo effect renders its photo
+        // through a plain `<img>` (next/image `fill` breaks the effect's
+        // `--expo-image-offset` positioning), so a multi-MB original is
+        // decoded on every slide change — the nav-INP long task staging QA
+        // measured. Cloudinary media gets a width-transformed `srcset`
+        // automatically (see `expoImageSource` in `CarouselClient.tsx`), but
+        // anything else is served at its original size, so the guidance is
+        // worth surfacing where the upload actually happens.
+        description:
+          'Use reasonably-sized images, especially for the Expo effect: Expo shows each photo at full bleed and cannot use Next.js image optimization, so a multi-megabyte original is re-decoded on every slide change and shows up as sluggish arrows. Around 1600px wide is plenty.',
+      },
       fields: [
         { name: 'image', type: 'upload', relationTo: 'media', required: true },
         { name: 'title', type: 'text' },

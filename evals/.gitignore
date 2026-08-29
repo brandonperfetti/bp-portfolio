@@ -1,0 +1,19 @@
+# Evalite runs with this directory as its cwd (see `evalite.config.ts`), and
+# both evalite and Vitest write their caches under `<cwd>/node_modules`:
+# `node_modules/.evalite/cache.sqlite` (evalite's run storage) and
+# `node_modules/.vite` (Vitest's transform cache). The repo-root .gitignore
+# only ignores the rooted `/node_modules`, so this nested one needs its own.
+node_modules/
+
+# `pnpm eval:ci` writes its run to `evals/corvus-eval-run.json` so
+# `scripts/report-eval-failures.mjs` can print the failing rows after a red
+# gate (#122) — evalite 0.19.0 prints its detailed table only for a
+# single-file run, and `eval:ci` runs five. It is a per-run artefact, not tree
+# content.
+corvus-eval-run.json
+
+# `pnpm eval:matrix` writes its run to `evals/corvus-matrix.json`
+# (`--outputPath`, resolved against evalite's cwd). That file is a snapshot of
+# one manual, keyed run — the numbers belong in the #82 comment, not in the
+# tree, where they would rot into a stale claim about two models.
+corvus-matrix.json
