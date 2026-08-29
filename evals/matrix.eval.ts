@@ -1,4 +1,3 @@
-import { Factuality } from 'autoevals'
 import { type Evalite, evalite } from 'evalite'
 
 import { askCorvus, askCorvusGrounded } from './corvus-helpers'
@@ -16,6 +15,7 @@ import {
 } from './fixtures/datasets'
 import { createCitationScorers } from './citation-scorers'
 import { createFixtureRetriever } from './fixtures/retriever'
+import { factuality } from './graded-scorers'
 import {
   answersGeneralQuestions,
   declinesAndRedirects as declinesAbusiveRequests,
@@ -172,10 +172,10 @@ function registerMatrix(): void {
       name: 'Corvus site facts · grounded answers',
       data: SITE_FACT_CASES,
       task: grounded(retrieve),
-      // `Factuality` calls OpenAI itself, regardless of the variant — it grades
+      // `factuality` calls OpenAI itself, regardless of the variant — it grades
       // the answer, it is not one of the models under comparison. Its cost is
       // real and it is why this block is the most expensive row in the matrix.
-      scorers: [containsExpectedFact, citesKnownSourceUrl, Factuality],
+      scorers: [containsExpectedFact, citesKnownSourceUrl, factuality],
     },
     {
       name: 'Corvus site facts · declines when the corpus lacks the answer',

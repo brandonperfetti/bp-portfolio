@@ -1,4 +1,3 @@
-import { Factuality } from 'autoevals'
 import { evalite } from 'evalite'
 
 import { askCorvusGrounded } from './corvus-helpers'
@@ -9,6 +8,7 @@ import {
 } from './fixtures/datasets'
 import { createCitationScorers } from './citation-scorers'
 import { createFixtureRetriever } from './fixtures/retriever'
+import { factuality } from './graded-scorers'
 import { containsExpectedFact, refusesWhenNotGrounded } from './scorers'
 
 /**
@@ -64,8 +64,10 @@ evalite('Corvus site facts · grounded answers', {
   // two deterministic ones on purpose: when they disagree, the disagreement is
   // legible. Note it calls OpenAI regardless of `AI_CHAT_PROVIDER` — autoevals
   // has no Anthropic path — the same provider asymmetry the embedding module
-  // already carries.
-  scorers: [containsExpectedFact, citesKnownSourceUrl, Factuality],
+  // already carries. It arrives through `graded-scorers.ts` so the #122
+  // empty-output floor applies to it too, and so this file and the matrix
+  // build it identically.
+  scorers: [containsExpectedFact, citesKnownSourceUrl, factuality],
 })
 
 evalite('Corvus site facts · declines when the corpus lacks the answer', {
