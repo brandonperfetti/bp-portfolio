@@ -23,7 +23,17 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: '24'
+  # Pinned to a full patch version, not a floating '24'. Node 24.19.0 added
+  # cleanup hooks to node::ObjectWrap (nodejs/node#63642), which makes native
+  # addons using the NAN-style ObjectWrap pattern — better-sqlite3, which
+  # evalite uses for its results DB — abort at process exit with
+  # "Assertion failed: (env) != nullptr" in RemoveEnvironmentCleanupHook
+  # (exit 134), NONDETERMINISTICALLY and after the evals have already passed.
+  # 24.20.0's changelog documents no fix. 24.18.0 predates the change and is
+  # known good. Unpin (or bump) deliberately once upstream resolves it, and
+  # verify by re-running the Evalite job a few times — the crash is racy, so
+  # one green run proves nothing.
+  NODE_VERSION: '24.18.0'
   PAYLOAD_SECRET: 'ci-not-a-real-secret'
   NEXT_PUBLIC_SITE_URL: 'http://localhost:3000'
   NEXT_PUBLIC_SITE_NAME: 'BP Portfolio (CI)'
