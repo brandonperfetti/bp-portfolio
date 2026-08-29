@@ -240,8 +240,8 @@ so a disagreement is legible.
 | Command            | What it does                                     |
 | ------------------ | ------------------------------------------------ |
 | `pnpm eval`        | watch mode                                       |
-| `pnpm eval:ci`     | the gate — global `--threshold 80`               |
-| `pnpm eval:facts`  | the site-fact block on its own, `--threshold 75` |
+| `pnpm eval:ci`     | the gate — global `--threshold 75`               |
+| `pnpm eval:facts`  | the site-fact block on its own, `--threshold 70` |
 | `pnpm eval:matrix` | opt-in model comparison, gates nothing           |
 
 **Two threshold invocations, because evalite has one.** `--threshold` is a
