@@ -79,6 +79,24 @@ describe.each([
     (prompt: string) => askCorvusGrounded(prompt, { retrieve }),
   ],
 ])('%s', (_name, ask) => {
+  it('gives the model production’s completion budget', async () => {
+    // #122 ROOT CAUSE. This was 512 while production passes
+    // `limits.maxCompletionTokens` — 1024 by default (guardrails.ts,
+    // .env.example). gpt-5-mini is a reasoning model and its hidden reasoning
+    // tokens come out of this same allowance, so 512 systematically produced
+    // turns that finished on `length` with no text: PR #126's first keyed run
+    // had 15+ rows finish on `length`, and every retry hit the same wall
+    // because a fixed budget is not a transient fault. Undersize this again
+    // and the gate goes back to manufacturing empty rows and scoring them 0.
+    respondWith(turn('A real answer about Brandon.'))
+
+    await ask('who is brandon?')
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({ maxOutputTokens: 1024 }),
+    )
+  })
+
   it('asks for the same answer every time it asks', async () => {
     // #122, determinism. The gate is a threshold on one global average, and
     // the same tree scored 79/80/78 locally against ~74.x twice in CI — a

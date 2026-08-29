@@ -296,6 +296,52 @@ describe('eval harness wiring', () => {
     ).toContain(basename(outputPath as string))
   })
 
+  it('runs eval turns on production’s completion budget', () => {
+    // #122 ROOT CAUSE, and the guard that stops it recurring. The harness ran
+    // at 512 output tokens while production passes 1024, and gpt-5-mini is a
+    // reasoning model whose hidden reasoning tokens come out of that same
+    // allowance — so the gate systematically produced turns that finished on
+    // `length` with no visible text, which the empty-output floor then
+    // (correctly) scored 0. PR #126's first keyed run: 15+ rows finishing on
+    // `length`, safety at 44%, global 72% against the 75 floor.
+    //
+    // `corvus-helpers.ts` mirrors the number as a literal rather than calling
+    // `resolveGuardrailLimits()`, because that reads process.env and would
+    // make the gate's budget depend on the shell. A mirror needs a drift
+    // guard, so this asserts it against BOTH sources of production's default.
+    const harness = readFileSync(join(EVAL_ROOT, 'corvus-helpers.ts'), 'utf8')
+    const evalBudget = Number(
+      /EVAL_MAX_OUTPUT_TOKENS\s*=\s*(\d+)/.exec(harness)?.[1],
+    )
+
+    const guardrails = readFileSync(
+      join(REPO_ROOT, 'src/lib/security/guardrails.ts'),
+      'utf8',
+    )
+    const productionDefault = Number(
+      /maxCompletionTokens:\s*toPositiveInt\(\s*[\s\S]*?,\s*(\d+),\s*\d+,?\s*\)/.exec(
+        guardrails,
+      )?.[1],
+    )
+
+    const envExample = Number(
+      /^AI_MAX_COMPLETION_TOKENS=(\d+)$/m.exec(
+        readFileSync(join(REPO_ROOT, '.env.example'), 'utf8'),
+      )?.[1],
+    )
+
+    expect(productionDefault, 'guardrails.ts default must be readable').toBe(
+      1024,
+    )
+    expect(envExample, '.env.example must agree with it').toBe(
+      productionDefault,
+    )
+    expect(
+      evalBudget,
+      'the eval budget must mirror production, or the gate scores Corvus under a tighter budget than a visitor gets',
+    ).toBe(productionDefault)
+  })
+
   it('keeps evalite.config.ts inside the eval root', () => {
     // evalite loads config from `path.join(cwd, 'evalite.config.{ts,mts,js,mjs}')`
     // only (evalite/dist/config.js) — a root-level copy would be ignored, and

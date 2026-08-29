@@ -38,11 +38,42 @@ export type AskCorvusOptions = CorvusModelOption
 /**
  * The completion budget every eval turn runs under.
  *
- * @remarks Shared by the grounded and ungrounded helpers so a site-fact score
- * and a persona score stay comparable. It is also the thing a `length` finish
- * reason is a report about: see {@link classifyTurn}.
+ * @remarks MIRRORS PRODUCTION, and the mirror is the whole point. The chat
+ * route hands `streamText` `limits.maxCompletionTokens`
+ * (`src/app/api/ai/chat/route.ts`), which resolves to **1024** by default:
+ * `toPositiveInt(env, 1024, 8000)` in `src/lib/security/guardrails.ts`, reading
+ * `CORVUS_MAX_COMPLETION_TOKENS` then `AI_MAX_COMPLETION_TOKENS`, the latter
+ * being the knob deploys actually set (`AI_MAX_COMPLETION_TOKENS=1024` in
+ * `.env.example`). An eval that scores Corvus under a tighter budget than a
+ * visitor gets is not measuring Corvus.
+ *
+ * It was 512, and that one number is the root cause of the #122 gate
+ * flakiness. `gpt-5-mini` — the default model (`src/lib/ai/corvus.ts`) — is a
+ * REASONING model, and on the Responses API the hidden reasoning tokens are
+ * drawn from the same `maxOutputTokens` allowance as the visible answer. At
+ * 512 the reasoning pass could eat the entire budget, so the turn finished
+ * `finishReason === 'length'` with NO text at all. PR #126's first keyed run
+ * showed it plainly: 15+ rows finishing on `length`, every "empty" among them
+ * carrying `finishReason=length`, and both attempts hitting the same wall —
+ * because a fixed budget is not a transient fault, and a retry cannot outrun
+ * one.
+ *
+ * So the empty rows were never Corvus dropping responses. The harness was
+ * strangling them, and then — before this batch — paying them 75% for it.
+ * Raising the budget removes the cause; the retry and the empty-output floor
+ * stay exactly as they are, because they are what made this visible and
+ * honestly scored, and they still catch the genuinely transient case.
+ *
+ * A mirrored literal, deliberately, rather than importing
+ * `resolveGuardrailLimits()`: that function reads `process.env`, which would
+ * make the gate's token budget depend on the shell it runs in — reintroducing
+ * exactly the run-to-run variance #122 exists to remove. The import itself
+ * would be safe (`guardrails.ts` has no imports and no module-scope timers),
+ * so this is a choice about gate stability, not a workaround.
+ * `scripts/eval-harness.test.ts` pins the mirror against both sources, so
+ * drift fails the build instead of quietly manufacturing empty rows again.
  */
-const EVAL_MAX_OUTPUT_TOKENS = 512
+const EVAL_MAX_OUTPUT_TOKENS = 1024
 
 /**
  * The sampling temperature every eval turn runs under (#122).
