@@ -235,7 +235,21 @@ jobs:
       || github.ref == 'refs/heads/develop'
       || github.ref == 'refs/heads/master'
       || startsWith(github.ref, 'refs/heads/rebuild/')
-    continue-on-error: true # TODO(brandon): remove once eval thresholds are trusted
+    # `continue-on-error: true` used to live here. It came off in #82's final
+    # batch, per decision D5(b): drop it only once a baseline exists, so the
+    # first gating run is not also the first honest one. It hid two problems at
+    # once: the job could not fail, and it was not even loading the eval files
+    # (the root `vitest.config.ts` `projects` shadowed evalite's include).
+    # `scripts/eval-harness.test.ts` now guards that chain from the quality job.
+    #
+    # What gates now: `pnpm eval:ci` at a global 80% average, and
+    # `pnpm eval:facts` at a scoped 75% over the site-fact block. Both are
+    # evalite's single-global-average threshold applied to different file sets
+    # — see the D4(b) note on the second step.
+    #
+    # A red eval job is a REAL failure of a behavioural contract, not a flake:
+    # persona, safety rails, scope, and site-fact grounding. Fix Corvus or move
+    # the number deliberately; do not put this line back.
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
