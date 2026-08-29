@@ -79,6 +79,24 @@ describe.each([
     (prompt: string) => askCorvusGrounded(prompt, { retrieve }),
   ],
 ])('%s', (_name, ask) => {
+  it('asks for the same answer every time it asks', async () => {
+    // #122, determinism. The gate is a threshold on one global average, and
+    // the same tree scored 79/80/78 locally against ~74.x twice in CI — a
+    // spread that straddles the 75 floor with no change to Corvus. Sampling
+    // is the part of that the harness can actually hold still.
+    //
+    // EVALS ONLY, and this assertion is also what says so: production passes
+    // no temperature (`src/app/api/ai/chat/route.ts`), so if this constant
+    // ever leaked into the shipped path it would have to come through here.
+    respondWith(turn('A real answer about Brandon.'))
+
+    await ask('who is brandon?')
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({ temperature: 0 }),
+    )
+  })
+
   it('does not retry a healthy turn', async () => {
     respondWith(turn('A real answer about Brandon.'))
 

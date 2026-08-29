@@ -45,6 +45,29 @@ export type AskCorvusOptions = CorvusModelOption
 const EVAL_MAX_OUTPUT_TOKENS = 512
 
 /**
+ * The sampling temperature every eval turn runs under (#122).
+ *
+ * @remarks EVALS ONLY. Production sets no temperature at all — neither
+ * `src/lib/ai/corvus.ts` nor the `streamText` call in
+ * `src/app/api/ai/chat/route.ts` passes one, so a visitor's chat keeps the
+ * provider default and nothing about the shipped assistant moves. This
+ * constant is applied in {@link runCorvusTurn}, which only eval files reach.
+ *
+ * The gate is a threshold on a single global average, and the same tree
+ * scored 79/80/78 across three local runs while two CI runs on a doc-only
+ * diff landed at ~74.x — a spread wide enough to straddle the 75 floor
+ * without a line of Corvus changing. Sampling is one of the two mechanisms
+ * behind that (the other, partial credit for empty rows, is
+ * `empty-output.ts`), and it is the one with a knob. Greedy decoding does not
+ * make a run reproducible — providers batch nondeterministically and this
+ * repo cannot pin a seed across two SDKs — but it removes the harness's own
+ * contribution to the spread rather than leaving it unasked.
+ *
+ * Not applied to the `autoevals` grader: see the note in `graded-scorers.ts`.
+ */
+const EVAL_TEMPERATURE = 0
+
+/**
  * Finish reasons that mean the model stopped because it was done.
  *
  * @remarks Everything else is abnormal, and the list is written as an
@@ -158,6 +181,10 @@ export function formatTurnDefect(report: TurnDefectReport): string {
  * first attempt throws `AI_LoadAPIKeyError` and that stays the single, clear
  * thing `pnpm eval:ci` reports.
  *
+ * Every attempt runs at {@link EVAL_TEMPERATURE}, which is the one place the
+ * evals diverge from production's generation settings and the reason that
+ * divergence is safe: nothing outside `evals/` calls this function.
+ *
  * @param options - The model, system prompt and visitor prompt for the turn.
  * @returns The answer text of the last attempt made.
  */
@@ -175,6 +202,7 @@ async function runCorvusTurn(options: {
       system: options.system,
       prompt: options.prompt,
       maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS,
+      temperature: EVAL_TEMPERATURE,
     })
     text = result.text
 
