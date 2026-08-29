@@ -164,6 +164,15 @@ table and any paired `_v` / `_rels` table Payload generates:
 await db.execute(sql`ALTER TABLE "new_table" ENABLE ROW LEVEL SECURITY;`)
 ```
 
+CI enforces this (#117): `scripts/check-migrations-rls.mjs` runs in the
+`quality` job and fails the build when a migration created **after** the
+`20260820_221032_rls_lockdown` backfill has a `CREATE TABLE "x"` with no
+`ALTER TABLE "x" ENABLE ROW LEVEL SECURITY` in the same file — companions
+included, because Payload emits `_v` / `_rels` as their own `CREATE TABLE`
+statements. Migrations at or before that backfill are grandfathered: it enabled
+RLS through a dynamic `pg_tables` loop, so no table name appears as literal
+text for a matcher to find. The script's header documents that audit.
+
 `ALTER DEFAULT PRIVILEGES` already handles the grant side for new tables, but
 it does **not** touch RLS state — that still needs the explicit `ENABLE` per
 table. For a bulk sweep, reuse the `pg_tables` loop in

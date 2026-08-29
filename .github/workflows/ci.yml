@@ -100,6 +100,21 @@ jobs:
             git diff -- 'src/migrations/*.ts'
             exit 1
           fi
+      # The gate above enforces that a schema change HAS a migration; it says
+      # nothing about that migration's contents, so a new table could ship
+      # without the RLS follow-up docs/PAYLOAD.md mandates and CI would stay
+      # green (#117). This one reads the committed migration sources and fails
+      # when a `CREATE TABLE "x"` has no `ALTER TABLE "x" ENABLE ROW LEVEL
+      # SECURITY` in the same file — companions included, since Payload emits
+      # `_v`/`_rels` as their own CREATE TABLE statements. Migrations at or
+      # before the #72 backfill are grandfathered (that migration enabled RLS
+      # through a dynamic `pg_tables` loop, so the names are not in the text);
+      # the script's header documents the audit behind that boundary. Plain
+      # `node` — no transpile, no extra dependency — and it reads files only,
+      # so it belongs in this DB-less job beside the gate it complements. The
+      # #116 gate above is untouched.
+      - name: Verify new-table migrations enable Row Level Security
+        run: node scripts/check-migrations-rls.mjs
       - name: Unit tests (Vitest + coverage)
         run: pnpm test:coverage
 
