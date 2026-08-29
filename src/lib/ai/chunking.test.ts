@@ -293,6 +293,57 @@ describe('chunkFlatRecord', () => {
     expect(chunk.sourceUrl).toBe('/projects')
   })
 
+  /**
+   * `projects.year` is `type: 'number'`, and the label helper rendered only
+   * strings — so the year was silently absent from every embedded project
+   * chunk and "when was that project built" had no grounding at all, with the
+   * value sitting right there on the document. Note the test ABOVE already
+   * passed `year: 2026` and simply never asserted on it, which is exactly how
+   * the gap survived review.
+   */
+  it('embeds a NUMERIC field — the year reaches the chunk text', () => {
+    const [chunk] = chunkFlatRecord('projects', {
+      id: 9,
+      title: 'Portfolio',
+      year: 2026,
+    })
+
+    expect(chunk.content).toContain('Year: 2026')
+  })
+
+  it('embeds a zero year rather than treating it as an empty value', () => {
+    const [chunk] = chunkFlatRecord('projects', {
+      id: 9,
+      title: 'Portfolio',
+      year: 0,
+    })
+
+    expect(chunk.content).toContain('Year: 0')
+  })
+
+  it('drops a non-finite number rather than embedding "NaN"', () => {
+    const [chunk] = chunkFlatRecord('projects', {
+      id: 9,
+      title: 'Portfolio',
+      year: Number.NaN,
+    })
+
+    expect(chunk.content).not.toContain('Year:')
+    expect(chunk.content).not.toContain('NaN')
+  })
+
+  it('still drops booleans — a labelled `true` is worse text than no line', () => {
+    // Deliberate: no call site labels a boolean today, and the decision to
+    // word one belongs at the call site, not silently inside `label()`.
+    const [chunk] = chunkFlatRecord('projects', {
+      id: 9,
+      title: 'Portfolio',
+      year: true as unknown as number,
+    })
+
+    expect(chunk.content).not.toContain('Year:')
+  })
+
   it('tolerates unpopulated relationships (bare ids) without inventing text', () => {
     const [chunk] = chunkFlatRecord('projects', {
       id: 9,

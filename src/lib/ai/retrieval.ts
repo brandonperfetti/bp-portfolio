@@ -46,6 +46,61 @@ export const RETRIEVAL_OVERFETCH_FACTOR = 4
 export const CORVUS_SIMILARITY_FLOOR = 0.35
 
 /**
+ * Wall-clock ceiling for the vector query, in milliseconds.
+ *
+ * @remarks The embedding call above it is already bounded by
+ * {@link EMBEDDING_TIMEOUT_MS}; this bounds the half that was not. Retrieval
+ * is awaited BEFORE `streamText`, so an unbounded query does not merely make
+ * retrieval slow — it delays time-to-first-token for the whole answer, up to
+ * the route's `maxDuration = 60`. 5s is generous for an HNSW lookup over this
+ * corpus and keeps the pre-token worst case at roughly 15s (10s embed + 5s
+ * query) instead of a minute.
+ */
+export const RETRIEVAL_QUERY_TIMEOUT_MS = 5_000
+
+/**
+ * Reject after `ms` if `work` has not settled.
+ *
+ * @remarks A `Promise.race`, NOT a server-side `SET LOCAL statement_timeout`,
+ * and the difference is worth recording. `SET LOCAL` only survives inside a
+ * transaction, so applying it here would mean opening one on Payload's own
+ * pooled connection purely to bound a single read — an extra round trip plus a
+ * transaction on the hot path, on a Supavisor-pooled connection where the
+ * session-level alternative would leak the setting to whatever runs next.
+ *
+ * The honest cost of the race is that it bounds the WAIT, not the query: the
+ * statement keeps running in Postgres until it finishes on its own. That is
+ * the right trade here because the harm being prevented is a stalled
+ * time-to-first-token, not database load — and a timeout lands in
+ * {@link retrieveCorvusContext}'s existing catch, which degrades to an
+ * ungrounded answer exactly as a provider outage already does.
+ *
+ * @param work - The promise to bound.
+ * @param ms - Milliseconds to wait.
+ * @param message - Error message used when the bound is hit.
+ * @returns `work`'s value, or a rejection once `ms` elapses.
+ */
+export async function withTimeout<T>(
+  work: Promise<T>,
+  ms: number,
+  message: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms)
+      }),
+    ])
+  } finally {
+    // Always clear it: a pending timer keeps the serverless function's event
+    // loop alive after the answer has already streamed.
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
+/**
  * Is retrieval switched off?
  *
  * @remarks Follows the repo's established "empty var ⇒ zero code" kill-switch
@@ -237,6 +292,13 @@ export interface RetrieveCorvusContextArgs {
  * rethrow, or a rejected promise escaping to the route, would turn a retrieval
  * hiccup into a failed chat response. The failure is logged, not surfaced.
  *
+ * BOTH round trips are bounded, which is what keeps "degrade gracefully" a
+ * time guarantee and not just an error-handling one: the embedding call by
+ * {@link EMBEDDING_TIMEOUT_MS} and the vector query by
+ * {@link RETRIEVAL_QUERY_TIMEOUT_MS}. A slow query therefore costs a bounded
+ * delay and an ungrounded answer, rather than holding time-to-first-token
+ * hostage until the route's `maxDuration`.
+ *
  * @param args - Query, viewer auth state, optional top-k override.
  * @returns Snippets above the similarity floor; `[]` on any failure.
  */
@@ -255,12 +317,16 @@ export async function retrieveCorvusContext(
     })
 
     const payload = await getPayload({ config: configPromise })
-    const result = await payload.db.drizzle.execute(
-      buildRetrievalQuery(
-        toVectorLiteral(embedding),
-        args.isAuthenticated,
-        topK * RETRIEVAL_OVERFETCH_FACTOR,
+    const result = await withTimeout(
+      payload.db.drizzle.execute(
+        buildRetrievalQuery(
+          toVectorLiteral(embedding),
+          args.isAuthenticated,
+          topK * RETRIEVAL_OVERFETCH_FACTOR,
+        ),
       ),
+      RETRIEVAL_QUERY_TIMEOUT_MS,
+      `[corvus] retrieval query exceeded ${RETRIEVAL_QUERY_TIMEOUT_MS}ms`,
     )
 
     return applySimilarityFloor(toRows(result), topK)

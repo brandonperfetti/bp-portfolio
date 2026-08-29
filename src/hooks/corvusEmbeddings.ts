@@ -70,7 +70,11 @@ function drizzleOf(payload: unknown): CorvusEmbeddingsDb | null {
  *   hooks beside this one do. The e2e seed and any bulk import set it, so a
  *   seed run spends no provider dollars and takes no provider latency.
  * - **Drafts, unpublished docs, and autosave ticks are skipped.** Without
- *   this, a 100ms autosave interval would embed on every keystroke batch.
+ *   this, a 100ms autosave interval would embed on every keystroke batch. The
+ *   autosave guard runs BEFORE the unpublish branch: an autosave on a
+ *   published document presents exactly the published → draft shape that
+ *   branch deletes on, so checking it second deleted a live document's
+ *   embeddings on an ordinary keystroke.
  * - **Unchanged content is skipped before the provider is called**, by
  *   `content_hash` comparison inside `syncDocumentEmbeddings`. The common save
  *   is one indexed SELECT and nothing else. The one thing that skip must NOT
@@ -113,6 +117,16 @@ export const refreshCorvusEmbeddings = (
       const docId = Number(current?.id)
       if (!Number.isFinite(docId)) return doc
 
+      // FIRST — before the unpublish branch, not after it. Payload autosave
+      // writes a DRAFT version of a still-PUBLISHED document and fires
+      // `afterChange` with `doc._status: 'draft'` against a
+      // `previousDoc._status: 'published'`, which is byte-identical to a real
+      // unpublish. With this guard second, every autosave tick on a published
+      // post ran the delete branch below and wiped the live document's
+      // embeddings while the published version was still serving them. The
+      // ordering is the fix, so it is load-bearing: do not move this back.
+      if (isAutosaveRequest(req)) return doc
+
       // Unpublish (published → draft), detected exactly as revalidatePost
       // detects it. Delete first and return: an unpublished doc is not
       // embeddable, so falling through would only re-derive the same delete.
@@ -123,8 +137,6 @@ export const refreshCorvusEmbeddings = (
         )
         return doc
       }
-
-      if (isAutosaveRequest(req)) return doc
 
       const result = await syncDocumentEmbeddings({
         db,

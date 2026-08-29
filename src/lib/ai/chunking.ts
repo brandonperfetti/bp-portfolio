@@ -132,8 +132,32 @@ type SourceDoc = Record<string, unknown>
 const str = (value: unknown): string =>
   typeof value === 'string' ? value.trim() : ''
 
+/**
+ * Render one `"Field: value"` line, or `null` when there is no value.
+ *
+ * @remarks Coerces finite numbers because `str()` returns `''` for anything
+ * non-string, and several labelled fields are numeric — `projects.year` is
+ * `type: 'number'`, so `Year: 2026` never reached the embedded text and
+ * "when was that project built" had no grounding even though the data was
+ * right there. `NaN` and `Infinity` are deliberately still dropped: they are
+ * corrupt data, not facts worth embedding.
+ *
+ * Booleans are deliberately NOT coerced. No call site labels a boolean today
+ * (`work-history.current` is the only boolean any chunker reads, and it picks
+ * the word `'Present'` rather than emitting `true`), and a bare
+ * `"Featured: true"` is worse grounding text than a purpose-written phrase.
+ * A boolean field that earns a place in a chunk should get real wording at
+ * its call site, which is a decision this helper should not silently make.
+ *
+ * @param name - Field label.
+ * @param value - Raw field value.
+ * @returns The rendered line, or `null` when the value is empty.
+ */
 const label = (name: string, value: unknown): string | null => {
-  const text = str(value)
+  const text =
+    typeof value === 'number' && Number.isFinite(value)
+      ? String(value)
+      : str(value)
   return text ? `${name}: ${text}` : null
 }
 

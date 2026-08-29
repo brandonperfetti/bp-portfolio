@@ -23,6 +23,7 @@ import {
   deleteDocumentEmbeddings,
   hasMetadataDrift,
   isContentUnchanged,
+  isMetadataTightening,
   readStoredChunks,
   syncDocumentEmbeddings,
   toEpoch,
@@ -269,6 +270,73 @@ describe('hasMetadataDrift', () => {
 
   it('reports drift when a chunk index is missing from the index', () => {
     expect(hasMetadataDrift(chunks, new Map())).toBe(true)
+  })
+})
+
+/**
+ * The DIRECTION of a drift, which is what decides whether it is safe to write
+ * before the provider call. Tightening early is always safe; widening early
+ * would publish a stale body under new, more permissive gating.
+ */
+describe('isMetadataTightening', () => {
+  const post = {
+    id: 5,
+    title: 'A',
+    slug: 'a',
+    _status: 'published',
+    publishedAt: '2026-01-01T00:00:00.000Z',
+    content: { root: { children: [] } },
+  }
+  const publicChunk = chunkDocument('posts', post)[0]
+  const gatedChunk = chunkDocument('posts', {
+    ...post,
+    access: { visibility: 'gated' },
+  })[0]
+  const row = (
+    over: Partial<{ visibility: string; publishedAt: number | null }>,
+  ) => ({
+    contentHash: publicChunk.contentHash,
+    visibility: over.visibility ?? 'public',
+    publishedAt:
+      over.publishedAt !== undefined
+        ? over.publishedAt
+        : toEpoch(publicChunk.publishedAt),
+  })
+
+  it('is TRUE for public → gated', () => {
+    expect(isMetadataTightening(gatedChunk, row({}))).toBe(true)
+  })
+
+  it('is FALSE for gated → public', () => {
+    expect(
+      isMetadataTightening(publicChunk, row({ visibility: 'gated' })),
+    ).toBe(false)
+  })
+
+  it('is TRUE when publishedAt moves later — a re-date that hides the post', () => {
+    const redated = chunkDocument('posts', {
+      ...post,
+      publishedAt: '2027-06-01T00:00:00.000Z',
+    })[0]
+    expect(isMetadataTightening(redated, row({}))).toBe(true)
+  })
+
+  it('is FALSE when publishedAt moves earlier', () => {
+    const earlier = chunkDocument('posts', {
+      ...post,
+      publishedAt: '2025-01-01T00:00:00.000Z',
+    })[0]
+    expect(isMetadataTightening(earlier, row({}))).toBe(false)
+  })
+
+  it('is TRUE when a schedule appears where the row had none', () => {
+    expect(isMetadataTightening(publicChunk, row({ publishedAt: null }))).toBe(
+      true,
+    )
+  })
+
+  it('is FALSE when nothing changed', () => {
+    expect(isMetadataTightening(publicChunk, row({}))).toBe(false)
   })
 })
 
@@ -590,6 +658,111 @@ describe('syncDocumentEmbeddings', () => {
     await expect(
       syncDocumentEmbeddings({ db, collection: 'projects', doc: project }),
     ).rejects.toThrow('provider down')
+  })
+
+  /**
+   * Fail-closed across the provider call.
+   *
+   * The metadata-drift branch above only fires when the BODY is unchanged. A
+   * single save that gates an article AND edits its text falls past it into
+   * the embed — and the hook swallows whatever the embed throws. Before this
+   * guard, that combination left the old rows intact, still stamped
+   * `visibility = 'public'`, so a now-gated article stayed retrievable by
+   * anonymous turns indefinitely. The restrictive write has to land BEFORE the
+   * call that can fail.
+   */
+  it('writes the GATING before embedding when a save both gates and edits', async () => {
+    const gatedAndEdited = {
+      ...gatablePost,
+      access: { visibility: 'gated' },
+      content: {
+        root: {
+          children: [
+            {
+              type: 'paragraph',
+              children: [{ type: 'text', text: 'a rewritten body' }],
+            },
+          ],
+        },
+      },
+    }
+    const { db, sql } = fakeDb([indexHolding(gatablePost)])
+    embedChunksMock.mockRejectedValue(new Error('provider down'))
+
+    await expect(
+      syncDocumentEmbeddings({ db, collection: 'posts', doc: gatedAndEdited }),
+    ).rejects.toThrow('provider down')
+
+    // The last statement before the failed embed must be the UPDATE that
+    // stamps the new, restrictive visibility onto the existing rows.
+    const last = sql().at(-1)!
+    expect(last.text).toContain('UPDATE "corvus_embeddings"')
+    expect(last.params).toContain('gated')
+    // And it must not have deleted anything: availability is preserved.
+    expect(sql().some((s) => s.text.includes('DELETE'))).toBe(false)
+  })
+
+  it('does NOT widen gating early — a gated → public edit that fails keeps the rows gated', async () => {
+    const startsGated = { ...gatablePost, access: { visibility: 'gated' } }
+    const nowPublicAndEdited = {
+      ...gatablePost,
+      access: { visibility: 'public' },
+      content: {
+        root: {
+          children: [
+            {
+              type: 'paragraph',
+              children: [{ type: 'text', text: 'a rewritten body' }],
+            },
+          ],
+        },
+      },
+    }
+    const { db, sql } = fakeDb([indexHolding(startsGated)])
+    embedChunksMock.mockRejectedValue(new Error('provider down'))
+
+    await expect(
+      syncDocumentEmbeddings({
+        db,
+        collection: 'posts',
+        doc: nowPublicAndEdited,
+      }),
+    ).rejects.toThrow('provider down')
+
+    // Publishing the OLD body under the NEW, more permissive gating is the one
+    // thing the early write must never do.
+    expect(
+      sql().some((s) => s.text.includes('UPDATE "corvus_embeddings"')),
+    ).toBe(false)
+  })
+
+  it('leaves an ordinary public → public content edit untouched on failure', async () => {
+    const justEdited = {
+      ...gatablePost,
+      content: {
+        root: {
+          children: [
+            {
+              type: 'paragraph',
+              children: [{ type: 'text', text: 'a rewritten body' }],
+            },
+          ],
+        },
+      },
+    }
+    const { db, sql } = fakeDb([indexHolding(gatablePost)])
+    embedChunksMock.mockRejectedValue(new Error('provider down'))
+
+    await expect(
+      syncDocumentEmbeddings({ db, collection: 'posts', doc: justEdited }),
+    ).rejects.toThrow('provider down')
+
+    // No tightening, so no pre-write and — critically — no delete: the rows
+    // keep serving the stale body, which is the availability call #82 made.
+    expect(
+      sql().some((s) => s.text.includes('UPDATE "corvus_embeddings"')),
+    ).toBe(false)
+    expect(sql().some((s) => s.text.includes('DELETE'))).toBe(false)
   })
 
   it('refuses a document with no numeric id', async () => {

@@ -31,6 +31,7 @@ import {
   CORVUS_SIMILARITY_FLOOR,
   DEFAULT_RETRIEVAL_TOP_K,
   RETRIEVAL_OVERFETCH_FACTOR,
+  RETRIEVAL_QUERY_TIMEOUT_MS,
   applySimilarityFloor,
   buildRetrievalQuery,
   extractRetrievalQuery,
@@ -38,6 +39,7 @@ import {
   isRetrievalDisabled,
   retrieveCorvusContext,
   toRows,
+  withTimeout,
 } from '@/lib/ai/retrieval'
 
 /**
@@ -235,6 +237,48 @@ describe('configuration', () => {
   })
 })
 
+describe('withTimeout', () => {
+  it('passes a value through when the work settles in time', async () => {
+    await expect(
+      withTimeout(Promise.resolve('ok'), 1_000, 'late'),
+    ).resolves.toBe('ok')
+  })
+
+  it('passes the original rejection through, not the timeout message', async () => {
+    await expect(
+      withTimeout(Promise.reject(new Error('real failure')), 1_000, 'late'),
+    ).rejects.toThrow('real failure')
+  })
+
+  it('rejects with the given message once the bound elapses', async () => {
+    vi.useFakeTimers()
+    try {
+      // Attach the rejection handler BEFORE advancing the clock: the timer
+      // fires inside `advanceTimersByTimeAsync`, and a promise that rejects
+      // with nothing listening yet is reported as an unhandled rejection.
+      const assertion = expect(
+        withTimeout(new Promise(() => {}), 500, 'too slow'),
+      ).rejects.toThrow('too slow')
+      await vi.advanceTimersByTimeAsync(501)
+      await assertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('clears its timer on the success path so the event loop can drain', async () => {
+    vi.useFakeTimers()
+    try {
+      const clear = vi.spyOn(globalThis, 'clearTimeout')
+      await withTimeout(Promise.resolve('ok'), 1_000, 'late')
+      expect(clear).toHaveBeenCalled()
+      clear.mockRestore()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('extractRetrievalQuery', () => {
   const user = (text: string) => ({
     role: 'user',
@@ -355,6 +399,40 @@ describe('retrieveCorvusContext — never rejects', () => {
     await expect(
       retrieveCorvusContext({ query: 'q', isAuthenticated: false }),
     ).resolves.toEqual([])
+  })
+
+  /**
+   * Retrieval is awaited BEFORE `streamText`, so an unbounded vector query
+   * does not just make retrieval slow — it holds time-to-first-token for the
+   * whole answer up to the route's `maxDuration = 60`. The embedding call was
+   * already bounded; this pins the other half, and pins that hitting the
+   * bound degrades to an ungrounded answer rather than failing the turn.
+   */
+  it('gives up on a HANGING query and degrades to ungrounded', async () => {
+    vi.useFakeTimers()
+    try {
+      embedQueryMock.mockResolvedValue([0.1])
+      // Never settles: exactly the case an abort signal cannot reach, because
+      // drizzle's `execute` takes none.
+      executeMock.mockReturnValue(new Promise(() => {}))
+
+      const assertion = expect(
+        retrieveCorvusContext({ query: 'q', isAuthenticated: false }),
+      ).resolves.toEqual([])
+      await vi.advanceTimersByTimeAsync(RETRIEVAL_QUERY_TIMEOUT_MS + 1)
+      await assertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does NOT time out a query that answers inside the bound', async () => {
+    embedQueryMock.mockResolvedValue([0.1])
+    executeMock.mockResolvedValue({ rows: [row({ score: 0.9 })] })
+
+    await expect(
+      retrieveCorvusContext({ query: 'q', isAuthenticated: false }),
+    ).resolves.toHaveLength(1)
   })
 
   it('returns [] for an EMPTY table', async () => {

@@ -184,6 +184,45 @@ export function hasMetadataDrift(
 }
 
 /**
+ * Would this chunk's metadata make an already-stored row reach FEWER viewers?
+ *
+ * @remarks {@link hasMetadataDrift} asks whether the copies disagree;
+ * this asks whether they disagree in the direction that must not wait.
+ * Retrieval admits a row when the viewer is authenticated OR its `visibility`
+ * is `public`, AND its `published_at` is either unset or already past — see
+ * `buildRetrievalQuery`. So a row reaches strictly fewer people when either
+ * axis tightens:
+ *
+ * - `visibility` leaves `'public'` — the public → gated flip.
+ * - `published_at` moves later, or is set where there was none — a re-date
+ *   that hides a post behind its own schedule.
+ *
+ * The direction matters because it decides what is safe to write BEFORE the
+ * provider call in {@link syncDocumentEmbeddings}. Tightening early is always
+ * safe: the worst case is rows carrying current gating over a stale body.
+ * WIDENING early is not — it would publish the old, pre-edit body under the
+ * new, more permissive gating if the re-embed then failed. So only this
+ * direction is written ahead of time; widening waits for the content that
+ * justifies it to land.
+ *
+ * @param chunk - A freshly computed chunk.
+ * @param row - The stored metadata for that chunk index.
+ * @returns `true` when the fresh metadata is more restrictive than the row's.
+ */
+export function isMetadataTightening(
+  chunk: CorvusChunk,
+  row: StoredChunkMeta,
+): boolean {
+  const visibilityTightens =
+    row.visibility === 'public' && chunk.visibility !== 'public'
+  const nextPublishedAt = toEpoch(chunk.publishedAt)
+  const scheduleTightens =
+    nextPublishedAt !== null &&
+    (row.publishedAt === null || nextPublishedAt > row.publishedAt)
+  return visibilityTightens || scheduleTightens
+}
+
+/**
  * Correct a document's stored gating and schedule without re-embedding.
  *
  * @remarks Every chunk of a document shares its parent's `visibility` and
@@ -328,13 +367,21 @@ export interface SyncDocumentArgs {
  *    ones retrieval filters on, so leaving them stale after a public → gated
  *    flip keeps a now-gated article's full text reachable by anonymous chat
  *    turns. See {@link hasMetadataDrift}.
- * 4. Only then is the batch embedded, bounded by an abort signal.
- * 5. Trailing rows are deleted last, once the new rows are safely written.
+ * 4. If the body changed AND the metadata TIGHTENED, the restrictive values
+ *    are written before the provider is called. Step 3 only covers an
+ *    unchanged body; a save that gates an article and edits it in the same
+ *    action falls past it into the embed, and an embed that throws leaves the
+ *    old `visibility = 'public'` rows retrievable by anonymous turns. See
+ *    {@link isMetadataTightening} for why only this direction is written
+ *    early.
+ * 5. Only then is the batch embedded, bounded by an abort signal.
+ * 6. Trailing rows are deleted last, once the new rows are safely written.
  *
  * This function may throw — a provider outage, a dimension mismatch, a
  * database error. The HOOK is what must never throw; keeping that decision at
  * the call site means the backfill script can fail loudly and be re-run, which
- * is exactly what a repair tool should do.
+ * is exactly what a repair tool should do. Step 4 is what makes that swallowed
+ * failure safe rather than merely quiet.
  *
  * @param args - Database handle, collection, document, optional abort signal.
  * @returns A {@link SyncResult} describing what changed.
@@ -385,6 +432,31 @@ export async function syncDocumentEmbeddings(
       metadataUpdated: chunks.length,
       skipped: false,
     }
+  }
+
+  // FAIL CLOSED across the provider call. The body changed AND the gating or
+  // schedule tightened (a public → gated flip that also edited the text), so
+  // the branch above did not run and the rows below are about to be rewritten
+  // by a call that can throw. `embedChunks` rejecting here leaves the OLD rows
+  // in place — and the hook deliberately swallows that error — so without this
+  // write the now-gated article's full text stays `visibility = 'public'` and
+  // anonymous retrieval keeps serving it until an unrelated save or a manual
+  // backfill happens to rewrite the rows. Writing the restrictive metadata
+  // first makes the worst case "stale body, correct gating" instead of "fresh
+  // gating nowhere". Nothing is deleted, so a non-restrictive change — the
+  // ordinary public → public content edit — still keeps its rows on failure.
+  const tightening = chunks.some((chunk) => {
+    const row = stored.get(chunk.chunkIndex)
+    return row ? isMetadataTightening(chunk, row) : false
+  })
+  if (tightening) {
+    await updateDocumentMetadata(
+      db,
+      collection,
+      docId,
+      chunks[0].visibility,
+      chunks[0].publishedAt,
+    )
   }
 
   const model = getEmbeddingModelId()

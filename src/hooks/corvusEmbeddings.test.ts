@@ -297,6 +297,46 @@ describe('6. afterDelete AND published → draft delete the rows', () => {
     )
   })
 
+  /**
+   * The ordering regression. Payload autosave writes a DRAFT version of a
+   * still-published document, so `afterChange` sees exactly the shape the
+   * unpublish branch deletes on: `previousDoc._status: 'published'` against
+   * `doc._status: 'draft'`. The `query.autosave` flag is the ONLY thing that
+   * tells the two apart, so the guard reading it has to run FIRST. With the
+   * guard second, every autosave tick on a published post deleted that post's
+   * live embeddings while the published version was still serving.
+   */
+  it('an AUTOSAVE presenting as published → draft keeps the embeddings', async () => {
+    deleteDocumentEmbeddingsMock.mockResolvedValue(undefined)
+    const { args } = changeArgs({
+      doc: { id: 7, _status: 'draft' },
+      previousDoc: { id: 7, _status: 'published' },
+      query: { autosave: true },
+    })
+
+    await refreshCorvusEmbeddings('posts')(args)
+
+    expect(deleteDocumentEmbeddingsMock).not.toHaveBeenCalled()
+    expect(syncDocumentEmbeddingsMock).not.toHaveBeenCalled()
+  })
+
+  it('a REAL unpublish — same transition, no autosave flag — still deletes', async () => {
+    deleteDocumentEmbeddingsMock.mockResolvedValue(undefined)
+    const { args } = changeArgs({
+      doc: { id: 7, _status: 'draft' },
+      previousDoc: { id: 7, _status: 'published' },
+      query: {},
+    })
+
+    await refreshCorvusEmbeddings('posts')(args)
+
+    expect(deleteDocumentEmbeddingsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'posts',
+      7,
+    )
+  })
+
   it('a publish (draft → published) refreshes rather than deletes', async () => {
     syncDocumentEmbeddingsMock.mockResolvedValue({
       written: 2,
