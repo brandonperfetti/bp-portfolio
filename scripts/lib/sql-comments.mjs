@@ -168,14 +168,37 @@ function stripSqlDataInLiteral(literal) {
 }
 
 /**
+ * Blank a quoted TypeScript string's content, keeping its delimiters.
+ *
+ * @remarks The delimiters stay for a reason: the result must not be able to
+ * read as something else. Replacing the token whole would leave a run of
+ * spaces where a name used to be, and `ALTER TABLE   ENABLE ROW LEVEL
+ * SECURITY` invites the identifier alternative to latch onto whatever word
+ * follows. An empty `''` or `""` pair cannot satisfy `"([^"]+)"` and cannot
+ * start a bare identifier, so the blanked string is inert by construction.
+ *
+ * Keeping them also makes idempotence obvious: the result is still exactly one
+ * string token, so a second pass blanks an already-blank body and changes
+ * nothing. Length is preserved for the same reason — the character offsets a
+ * reader compares against the original stay put.
+ *
+ * @param token - A complete quoted string token, delimiters included.
+ * @returns The token with its body replaced by spaces.
+ */
+function blankStringBody(token) {
+  const quote = token[0]
+  return quote + ' '.repeat(Math.max(token.length - 2, 0)) + quote
+}
+
+/**
  * Migration source with comments AND SQL string data blanked.
  *
  * @remarks The view used to decide that RLS **is enforced** — and only that.
  * {@link stripComments} answers "what does this migration say"; this answers
  * the strictly narrower "what will this migration EXECUTE", by additionally
- * blanking the two places SQL keeps text that is data rather than a statement:
+ * blanking every place text can sit without being a statement:
  *
- * - **String literals.** `COMMENT ON TABLE "widgets" IS 'run ALTER TABLE
+ * - **SQL string literals.** `COMMENT ON TABLE "widgets" IS 'run ALTER TABLE
  *   "widgets" ENABLE ROW LEVEL SECURITY later'` is a note to a human. Matching
  *   it discharged a real `CREATE TABLE` and the gate went green over a table
  *   with no RLS.
@@ -183,9 +206,22 @@ function stripSqlDataInLiteral(literal) {
  *   is a string to the outer parser, and what it executes may be conditional,
  *   built by `format()`, or — as in `IF false THEN … END IF` — never run at
  *   all.
+ * - **TypeScript string literals**, in either quote. `const note = 'ALTER
+ *   TABLE "widgets" ENABLE ROW LEVEL SECURITY'` is a variable holding prose;
+ *   it executes nothing, and it was crediting a real obligation. Only the body
+ *   is blanked — see {@link blankStringBody} for why the quotes stay.
  *
- * Quoted identifiers survive, because `"name"` is what the parse regexes
- * match on; blanking those would blank the answer along with the question.
+ * Quoted identifiers INSIDE the SQL survive, because `"name"` is what the
+ * parse regexes match on; blanking those would blank the answer along with the
+ * question. A double-quoted TYPESCRIPT string is a different thing in a
+ * different place, and is blanked like any other string.
+ *
+ * The residual worth naming: an `ENABLE` that really is executed from a
+ * TypeScript string — `db.execute(sql.raw(stmt))` — is no longer credited, so
+ * such a migration goes red. That is the correct direction (see below), the
+ * committed corpus does not do it (every DDL there is written literally in a
+ * `sql` template), and the fix for one that did is to write the statement
+ * literally, which is what the convention asks for anyway.
  *
  * ## Why this is not used for the CREATE scan
  *
@@ -196,8 +232,10 @@ function stripSqlDataInLiteral(literal) {
  * executable — hence this view. A `CREATE TABLE` is the OBLIGATION itself, and
  * obligations are counted from {@link stripComments} instead, where string
  * data still counts. A table created by `EXECUTE 'CREATE TABLE …'` inside a
- * `DO` block is a REAL table; blanking data for that scan too would hide it,
- * and hide its missing RLS with it.
+ * `DO` block — or by `sql.raw(someString)` — is a REAL table; blanking data
+ * for that scan too would hide it, and hide its missing RLS with it. This is
+ * why {@link stripComments} keeps string literals in BOTH languages and only
+ * this view blanks them.
  *
  * Line the error directions up and the choice makes itself. Over-counting an
  * obligation, or under-counting a credit, costs a RED on a table that is fine
@@ -222,6 +260,9 @@ export function stripSqlData(source) {
   return source.replace(TS_TOKENS, (token) => {
     if (isComment(token)) return ' '
     if (token.startsWith('`')) return stripSqlDataInLiteral(token)
-    return token
+    // Every remaining token is a quoted TypeScript string — TS_TOKENS matches
+    // nothing else. There is no fallthrough that returns text unexamined,
+    // which is exactly how the previous version let these through.
+    return blankStringBody(token)
   })
 }

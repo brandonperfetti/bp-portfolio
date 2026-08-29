@@ -309,15 +309,80 @@ describe('stripSqlData', () => {
       expect(stripped).not.toContain('pg_roles')
     })
 
-    it('leaves TypeScript outside the template literals alone', () => {
-      const source = "const slug = 'posts'\nlet n = 3\nn--\n"
+    /**
+     * TypeScript code that contains no string literal at all is returned
+     * byte-for-byte. This is the identity half of the contract, kept separate
+     * from the string case below now that the two differ.
+     */
+    it('leaves TypeScript with no string literals alone', () => {
+      const source = 'let n = 3\nn--\nconst after = n\n'
 
       expect(stripSqlData(source)).toBe(source)
     })
   })
 
+  /**
+   * A plain TypeScript string is data too.
+   *
+   * `const note = 'ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY'` executes
+   * nothing, but the credit scan read the text straight out of it. The narrow
+   * view therefore blanks TS string CONTENT as well — keeping the delimiters,
+   * so the token boundaries the scan relies on stay exactly where they were.
+   */
+  describe('blanks TypeScript string data', () => {
+    it('blanks a single-quoted string, keeping its quotes', () => {
+      const source =
+        'const note = \'ALTER TABLE "w" ENABLE ROW LEVEL SECURITY\''
+
+      const stripped = stripSqlData(source)
+
+      expect(stripped).not.toContain('ENABLE ROW LEVEL SECURITY')
+      expect(stripped).toMatch(/^const note = ' +'$/)
+    })
+
+    it('blanks a double-quoted string, keeping its quotes', () => {
+      const source = 'const note = "ALTER TABLE x ENABLE ROW LEVEL SECURITY"'
+
+      const stripped = stripSqlData(source)
+
+      expect(stripped).not.toContain('ENABLE ROW LEVEL SECURITY')
+      expect(stripped).toMatch(/^const note = " +"$/)
+    })
+
+    /**
+     * Delimiters are kept rather than blanking the token whole so the result
+     * can never read as a bare identifier: `ALTER TABLE '' ENABLE …` cannot
+     * satisfy the parse regex, where a run of spaces might let it latch onto
+     * the following word.
+     */
+    it('leaves an empty pair that no identifier pattern can match', () => {
+      const source = "const empty = ''"
+
+      expect(stripSqlData(source)).toBe(source)
+    })
+
+    it('blanks the collection-slug string a migration might carry', () => {
+      const source = "const slug = 'posts'"
+
+      expect(stripSqlData(source)).toBe("const slug = '     '")
+    })
+
+    /**
+     * The wide view is deliberately unchanged: it answers "what does this
+     * migration say", and obligations are read from it. A TS string still
+     * counts there, which is what keeps a `CREATE TABLE` in one from going
+     * silently unobligated.
+     */
+    it('is the only view that does this — stripComments keeps TS strings', () => {
+      const source = 'const note = \'CREATE TABLE "ghost" ()\''
+
+      expect(stripComments(source)).toBe(source)
+    })
+  })
+
   it('is idempotent', () => {
     const source = [
+      'const note = \'ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY\'',
       'await db.execute(sql`',
       '  COMMENT ON TABLE "widgets" IS \'ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY\';',
       '  DO $$ EXECUTE \'CREATE TABLE "x" ()\'; END $$;',

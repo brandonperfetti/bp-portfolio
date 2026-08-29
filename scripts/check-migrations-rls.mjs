@@ -82,19 +82,24 @@
  *
  * ## Credits and obligations are scanned differently, on purpose
  *
- * Comments were only half of "text that never executes". SQL keeps the other
- * half in string literals and dollar-quoted bodies, and an `ENABLE ROW LEVEL
- * SECURITY` inside a `COMMENT ON … IS '…'` or an unexecuted `DO $$ … $$`
- * branch was discharging real obligations — the same false green, one layer
- * down.
+ * Comments were only the first layer of "text that never executes", and this
+ * gate has now been wrong about that layer four times in a row: an `ENABLE` in
+ * `down`, a commented-out `ENABLE`, an `ENABLE` in SQL string data (a
+ * `COMMENT ON … IS '…'` or an unexecuted `DO $$ … $$` branch), and an `ENABLE`
+ * in a plain TypeScript string (`const note = 'ALTER TABLE … ENABLE …'`). Each
+ * discharged a real obligation and turned the gate green over a table with no
+ * RLS. The lesson the fourth one finally paid for: a credit must be matched in
+ * a view that contains ONLY statements, never in one that merely had the
+ * known-bad shapes removed.
  *
  * So the two scans read two different views of the same source. An `ENABLE` is
- * a CREDIT and is read from `stripSqlData`, where data is blanked and only
- * statements survive. A `CREATE TABLE` is an OBLIGATION and is read from
- * `stripComments`, where string data still counts — because
- * `EXECUTE 'CREATE TABLE …'` inside a `DO` block creates a real table, and
- * blanking data for that scan too would hide the table and its missing RLS
- * together.
+ * a CREDIT and is read from `stripSqlData`, where every form of literal text —
+ * comments, SQL strings, dollar-quoted bodies, TypeScript strings — is blanked
+ * and only statements survive. A `CREATE TABLE` is an OBLIGATION and is read
+ * from `stripComments`, where string data still counts, because
+ * `EXECUTE 'CREATE TABLE …'` inside a `DO` block or a `sql.raw(stmt)` creates a
+ * real table, and blanking data for that scan too would hide the table and its
+ * missing RLS together.
  *
  * The rule behind the asymmetry: every way this gate can be wrong must end in
  * RED. Over-counting an obligation or under-counting a credit flags a table

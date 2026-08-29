@@ -506,6 +506,69 @@ export async function up({ db }: MigrateUpArgs): Promise<void> {
       ])
     })
   })
+
+  /**
+   * TypeScript string data is not a statement either.
+   *
+   * The fourth layer of one class: TS comments, then SQL comments, then SQL
+   * string data, now a plain TypeScript string. A `const` holding the text
+   * `ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY` executes nothing — it is
+   * a variable holding prose — but the credit scan saw that text and
+   * discharged a real `CREATE TABLE`.
+   *
+   * The narrow view blanks these; the wide view does not, so the same
+   * credit/obligation asymmetry holds one layer up.
+   */
+  describe('TypeScript string data', () => {
+    it('does NOT accept an ENABLE in a single-quoted TypeScript string', () => {
+      const enableInTsString = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  const note = 'ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY'
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+}`
+      expect(checkMigrationSource(post, enableInTsString)).toEqual(['widgets'])
+    })
+
+    /**
+     * The bare-identifier spelling, deliberately: escaping the inner quotes
+     * (`\\"widgets\\"`) makes the captured name `widgets\\` and the credit
+     * misses by accident rather than by rule. `ALTER TABLE widgets ENABLE …`
+     * is a form the parser genuinely accepts, so this reproduces the defect
+     * instead of being saved by a backslash.
+     */
+    it('does NOT accept an ENABLE in a double-quoted TypeScript string', () => {
+      const enableInTsString = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  const note = "ALTER TABLE widgets ENABLE ROW LEVEL SECURITY"
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+}`
+      expect(checkMigrationSource(post, enableInTsString)).toEqual(['widgets'])
+    })
+
+    it('still accepts the real statement beside a TypeScript string', () => {
+      const realBesideTsString = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  const note = 'the follow-up below is the real one'
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+  await db.execute(sql\`ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY;\`)
+}`
+      expect(checkMigrationSource(post, realBesideTsString)).toEqual([])
+    })
+
+    /**
+     * The asymmetry, one layer up. Same reasoning as the SQL-data case: an
+     * obligation is safer over-counted than missed, so the wide view still
+     * sees this CREATE and the gate goes loudly red rather than quietly green.
+     */
+    it('DOES still obligate on a CREATE in a TypeScript string, by design', () => {
+      const createInTsString = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  const planned = 'CREATE TABLE "dynamic" ("id" serial PRIMARY KEY NOT NULL)'
+  await db.execute(sql.raw(planned))
+}`
+      expect(checkMigrationSource(post, createInTsString)).toEqual(['dynamic'])
+    })
+  })
 })
 
 describe('checkMigrations', () => {
