@@ -145,6 +145,11 @@ unrenderable editor).
   reference; DRY_RUN/ONLY_SLUG knobs. Note: `payload run` kills floating
   promises at module-eval end — scripts must top-level `await`.
 - `scripts/set-admin-password.ts` — Local API admin bootstrap/password reset.
+- `scripts/backfill-corvus-embeddings.ts` (`pnpm corvus:backfill`) — populates
+  and repairs the `corvus_embeddings` pgvector index the content hooks keep
+  fresh. Not a Payload collection, deliberately; see `docs/AI.md`
+  §"Retrieval grounding" for the table, the `access.visibility` filter that
+  keeps gated bodies out of anonymous chat answers, and when to re-run it.
 
 ### New-table RLS convention (#72)
 

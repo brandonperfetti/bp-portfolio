@@ -26,6 +26,7 @@
     "migrate": "payload migrate",
     "migrate:create": "payload migrate:create",
     "seed:e2e": "payload run scripts/seed-e2e.ts",
+    "corvus:backfill": "payload run scripts/backfill-corvus-embeddings.ts",
     "generate:types": "payload generate:types",
     "generate:importmap": "payload generate:importmap",
     "eval": "cd evals && evalite watch",
