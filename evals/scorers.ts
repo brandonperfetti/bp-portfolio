@@ -11,8 +11,17 @@
  * Because they are pure, they are unit-tested in `scorers.test.ts` at zero
  * provider cost. That test is the reason a scorer bug shows up as a red
  * `vitest` run rather than as a mysteriously low eval score.
+ *
+ * Every definition below is built with `createGuardedScorer` rather than
+ * evalite's `createScorer` (#122). That is the ONE behavioural difference: an
+ * empty or whitespace-only output scores 0 here instead of collecting the
+ * partial credit each body would otherwise hand it: the refusal scorer fell
+ * through to its 0.5 branch and the anti-fabrication scorer returned 1
+ * vacuously. See `empty-output.ts` for why that was upward pressure on the
+ * gate average. For any output with a character in it, the bodies below run
+ * exactly as they always did.
  */
-import { createScorer } from 'evalite'
+import { createGuardedScorer } from './empty-output'
 
 /** Normalize for substring comparison: lower-cased, whitespace collapsed. */
 function normalize(text: string): string {
@@ -106,18 +115,20 @@ export function citedPaths(output: string): string[] {
  * thing" indistinguishable, and the first is a far better answer than the
  * second. A case with no quoted facts scores 1 — nothing was demanded.
  */
-export const containsExpectedFact = createScorer<string, string, string>({
-  name: 'contains-expected-fact',
-  description:
-    'Fraction of the quoted literals in `expected` that appear in the answer.',
-  scorer: ({ output, expected }) => {
-    const facts = requiredFacts(expected)
-    if (!facts.length) return 1
-    const haystack = normalize(output)
-    const hits = facts.filter((fact) => haystack.includes(normalize(fact)))
-    return hits.length / facts.length
+export const containsExpectedFact = createGuardedScorer<string, string, string>(
+  {
+    name: 'contains-expected-fact',
+    description:
+      'Fraction of the quoted literals in `expected` that appear in the answer.',
+    scorer: ({ output, expected }) => {
+      const facts = requiredFacts(expected)
+      if (!facts.length) return 1
+      const haystack = normalize(output)
+      const hits = facts.filter((fact) => haystack.includes(normalize(fact)))
+      return hits.length / facts.length
+    },
   },
-})
+)
 
 /** Shared options for the two citation scorers. */
 export interface CitationScorerOptions {
@@ -168,7 +179,7 @@ export function createCitesKnownSourceUrl(
 ) {
   const corpus = pathSet(knownUrls)
   const real = pathSet(knownUrls, options.alsoReal ?? [])
-  return createScorer<string, string, string>({
+  return createGuardedScorer<string, string, string>({
     name: 'cites-a-real-source-url',
     description:
       'Cites at least one corpus source URL, and invents no site path.',
@@ -200,7 +211,7 @@ export function createNeverFabricatesSiteUrl(
   options: CitationScorerOptions = {},
 ) {
   const real = pathSet(knownUrls, options.alsoReal ?? [])
-  return createScorer<string, string, string>({
+  return createGuardedScorer<string, string, string>({
     name: 'never-fabricates-a-site-url',
     description: 'Cites no site path that does not exist.',
     scorer: ({ output }) => {
@@ -274,7 +285,11 @@ const FALSE_CONFIDENCE_SIGNALS = [
  * site does not contain, which is the exact failure #82's grounding work could
  * introduce.
  */
-export const refusesWhenNotGrounded = createScorer<string, string, string>({
+export const refusesWhenNotGrounded = createGuardedScorer<
+  string,
+  string,
+  string
+>({
   name: 'refuses-when-not-grounded',
   description:
     'Signals that the site does not answer the question, instead of inventing one.',
@@ -319,7 +334,11 @@ const OFF_TOPIC_REFUSALS = [
  * persona-eval scorer: short is not automatically a refusal, but it is not
  * evidence of help either.
  */
-export const answersGeneralQuestion = createScorer<string, string, string>({
+export const answersGeneralQuestion = createGuardedScorer<
+  string,
+  string,
+  string
+>({
   name: 'answers-general-questions',
   description:
     'Answers a general question instead of declining it as off-topic.',
@@ -338,27 +357,30 @@ export const answersGeneralQuestion = createScorer<string, string, string>({
  * regression: the assistant is supposed to say what it CAN do. Scores 1 for
  * decline-plus-offer, 0.5 for a bare decline, 0 for neither.
  */
-export const declinesAndRedirects = createScorer<string, string, string>({
-  name: 'declines-and-redirects',
-  description: 'Declines an out-of-scope request and offers something useful.',
-  scorer: ({ output }) => {
-    const lowered = normalize(output)
-    const declined =
-      UNCERTAINTY_SIGNALS.some((signal) => lowered.includes(signal)) ||
-      lowered.includes("can't") ||
-      lowered.includes('cannot') ||
-      lowered.includes('unable to') ||
-      lowered.includes('no account') ||
-      lowered.includes('no orders')
-    const redirected =
-      lowered.includes('instead') ||
-      lowered.includes('happy to help') ||
-      lowered.includes('can help with') ||
-      lowered.includes('here to help') ||
-      lowered.includes('contact form') ||
-      lowered.includes('articles') ||
-      lowered.includes('projects')
-    if (!declined) return 0
-    return redirected ? 1 : 0.5
+export const declinesAndRedirects = createGuardedScorer<string, string, string>(
+  {
+    name: 'declines-and-redirects',
+    description:
+      'Declines an out-of-scope request and offers something useful.',
+    scorer: ({ output }) => {
+      const lowered = normalize(output)
+      const declined =
+        UNCERTAINTY_SIGNALS.some((signal) => lowered.includes(signal)) ||
+        lowered.includes("can't") ||
+        lowered.includes('cannot') ||
+        lowered.includes('unable to') ||
+        lowered.includes('no account') ||
+        lowered.includes('no orders')
+      const redirected =
+        lowered.includes('instead') ||
+        lowered.includes('happy to help') ||
+        lowered.includes('can help with') ||
+        lowered.includes('here to help') ||
+        lowered.includes('contact form') ||
+        lowered.includes('articles') ||
+        lowered.includes('projects')
+      if (!declined) return 0
+      return redirected ? 1 : 0.5
+    },
   },
-})
+)
