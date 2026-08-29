@@ -352,6 +352,15 @@ export interface ListPaginationProps {
  *   (`<a>` with no `href`) or lies about its role; omitting the control is the
  *   pattern used by accessible design systems and keeps the story's
  *   `a11y: { test: 'error' }` gate clean.
+ * - **A boundary step hands focus to the current-page link.** Omitting the
+ *   control is right, but it has a cost that has to be paid back: a keyboard
+ *   user who activates "Next" on the second-to-last page destroys the very
+ *   element they were focused on, and focus falls to `document.body` — so the
+ *   next Tab restarts from the top of the document (WCAG 2.4.3). The flag is
+ *   set ONLY on the two steps that remove their own control, so ordinary
+ *   page-number navigation keeps native focus behavior untouched. The
+ *   current-page link is the target because it is the one control guaranteed
+ *   to exist on every page, and it already carries `aria-current="page"`.
  * - This component is deliberately router-free: it takes `buildHref` and
  *   `onNavigate` rather than reaching for `next/navigation`. That keeps it
  *   renderable from a plain Storybook story and reusable unchanged by the
@@ -365,6 +374,19 @@ export function ListPagination({
   label,
   className,
 }: ListPaginationProps): React.ReactElement | null {
+  // Both hooks run before the `totalPages <= 1` early return: hooks may not be
+  // conditional, and this component legitimately renders nothing.
+  const currentPageRef = React.useRef<HTMLAnchorElement>(null)
+  const restoreFocusRef = React.useRef(false)
+
+  React.useEffect(() => {
+    if (!restoreFocusRef.current) {
+      return
+    }
+    restoreFocusRef.current = false
+    currentPageRef.current?.focus()
+  }, [page])
+
   if (totalPages <= 1) {
     return null
   }
@@ -395,7 +417,12 @@ export function ListPagination({
           <PaginationItem>
             <PaginationPrevious
               href={buildHref(page - 1)}
-              onClick={navigateOnPlainClick(page - 1)}
+              onClick={(event) => {
+                // Only the step that lands ON page 1, because that is the
+                // render in which this control stops existing.
+                restoreFocusRef.current = page - 1 === 1
+                navigateOnPlainClick(page - 1)(event)
+              }}
             />
           </PaginationItem>
         ) : null}
@@ -407,6 +434,7 @@ export function ListPagination({
           ) : (
             <PaginationItem key={slot}>
               <PaginationLink
+                ref={slot === page ? currentPageRef : undefined}
                 href={buildHref(slot)}
                 isActive={slot === page}
                 aria-label={`Go to page ${slot}`}
@@ -421,7 +449,12 @@ export function ListPagination({
           <PaginationItem>
             <PaginationNext
               href={buildHref(page + 1)}
-              onClick={navigateOnPlainClick(page + 1)}
+              onClick={(event) => {
+                // Mirror of Previous: only the step that lands on the LAST
+                // page removes this control.
+                restoreFocusRef.current = page + 1 === totalPages
+                navigateOnPlainClick(page + 1)(event)
+              }}
             />
           </PaginationItem>
         ) : null}

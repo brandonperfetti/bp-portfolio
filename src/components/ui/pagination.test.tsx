@@ -1,5 +1,6 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import * as React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -259,6 +260,89 @@ describe('ListPagination', () => {
     await user.keyboard('{/Meta}')
 
     expect(onNavigate).not.toHaveBeenCalled()
+  })
+
+  /**
+   * Focus survival across a boundary step (WCAG 2.4.3).
+   *
+   * "Previous" is omitted on page 1 and "Next" on the last page, so activating
+   * either at the boundary destroys the element that currently holds focus.
+   * Without a restore, focus falls to `document.body` and the next Tab starts
+   * over from the top of the document. These cases need a CONTROLLED wrapper —
+   * the component is router-free and only re-renders when its owner passes a
+   * new `page`, which is exactly what happens in the real surfaces.
+   */
+  describe('focus after a boundary step', () => {
+    function Controlled({
+      start,
+      totalPages,
+    }: {
+      start: number
+      totalPages: number
+    }) {
+      const [page, setPage] = React.useState(start)
+      return (
+        <ListPagination
+          page={page}
+          totalPages={totalPages}
+          buildHref={buildHref}
+          onNavigate={setPage}
+          label="Articles pagination"
+        />
+      )
+    }
+
+    it('moves focus to the current-page link when Next removes itself', async () => {
+      const user = userEvent.setup()
+      render(<Controlled start={4} totalPages={5} />)
+
+      await user.click(screen.getByRole('link', { name: /next/i }))
+
+      // Next is gone; focus must not have fallen to <body>.
+      expect(screen.queryByRole('link', { name: /next/i })).toBeNull()
+      expect(document.activeElement).toBe(
+        screen.getByRole('link', { name: 'Go to page 5' }),
+      )
+    })
+
+    it('moves focus to the current-page link when Previous removes itself', async () => {
+      const user = userEvent.setup()
+      render(<Controlled start={2} totalPages={5} />)
+
+      await user.click(screen.getByRole('link', { name: /previous/i }))
+
+      expect(screen.queryByRole('link', { name: /previous/i })).toBeNull()
+      expect(document.activeElement).toBe(
+        screen.getByRole('link', { name: 'Go to page 1' }),
+      )
+    })
+
+    it('does NOT steal focus on a non-boundary step', async () => {
+      const user = userEvent.setup()
+      render(<Controlled start={2} totalPages={5} />)
+
+      // 2 → 3 keeps both controls, so native focus behavior must be left
+      // alone: the clicked Next link itself stays focused.
+      await user.click(screen.getByRole('link', { name: /next/i }))
+
+      expect(document.activeElement).not.toBe(
+        screen.getByRole('link', { name: 'Go to page 3' }),
+      )
+      expect(screen.getByRole('link', { name: /next/i })).toBeInTheDocument()
+    })
+
+    it('does NOT steal focus when a plain page number is clicked', async () => {
+      const user = userEvent.setup()
+      render(<Controlled start={2} totalPages={5} />)
+
+      await user.click(screen.getByRole('link', { name: 'Go to page 5' }))
+
+      // Landing on the last page removes Next, but the user did not activate
+      // Next — the flag must stay false and focus stay where the click put it.
+      expect(document.activeElement).toBe(
+        screen.getByRole('link', { name: 'Go to page 5' }),
+      )
+    })
   })
 
   it('renders gap markers with a screen-reader label for long ranges', () => {
