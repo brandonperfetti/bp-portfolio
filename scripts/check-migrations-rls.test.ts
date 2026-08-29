@@ -569,6 +569,87 @@ export async function up({ db }: MigrateUpArgs): Promise<void> {
       expect(checkMigrationSource(post, createInTsString)).toEqual(['dynamic'])
     })
   })
+
+  /**
+   * A backtick is not a promise to execute.
+   *
+   * The fifth layer of the class, and the one that shows why the earlier
+   * fixes kept losing: every template literal was routed to the SQL path on
+   * the strength of its delimiter alone. A backtick-quoted
+   * `ALTER TABLE widgets ENABLE ROW LEVEL SECURITY` assigned to a variable is
+   * prose — the same data as the quoted string fixed one round earlier,
+   * wearing a different quote.
+   *
+   * Only an `sql`-tagged literal reaches the database, so the credit view now
+   * ALLOWLISTS that tag rather than blocklisting the shapes it has been
+   * burned by.
+   */
+  describe('untagged template literals', () => {
+    it('does NOT accept an ENABLE in an untagged template literal', () => {
+      const enableInUntagged = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  const note = \`ALTER TABLE widgets ENABLE ROW LEVEL SECURITY\`
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+}`
+      expect(checkMigrationSource(post, enableInUntagged)).toEqual(['widgets'])
+    })
+
+    it('does NOT accept an ENABLE in a template tagged with something else', () => {
+      const enableInOtherTag = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  const note = html\`ALTER TABLE widgets ENABLE ROW LEVEL SECURITY\`
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+}`
+      expect(checkMigrationSource(post, enableInOtherTag)).toEqual(['widgets'])
+    })
+
+    it('does NOT let an identifier ENDING in sql pass as the tag', () => {
+      const enableInLookalike = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  const note = mysql\`ALTER TABLE widgets ENABLE ROW LEVEL SECURITY\`
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+}`
+      expect(checkMigrationSource(post, enableInLookalike)).toEqual(['widgets'])
+    })
+
+    it('still accepts a real sql-tagged ENABLE', () => {
+      const realTagged = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+  await db.execute(sql\`ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY;\`)
+}`
+      expect(checkMigrationSource(post, realTagged)).toEqual([])
+    })
+
+    /**
+     * The wrapped spelling the committed corvus_embeddings migration uses,
+     * where prettier puts the tag on its own line inside `db.execute(`.
+     */
+    it('still accepts an sql tag separated from its backtick by a newline', () => {
+      const wrappedTag = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+  await db.execute(
+    sql\`ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY;\`,
+  )
+}`
+      expect(checkMigrationSource(post, wrappedTag)).toEqual([])
+    })
+
+    /**
+     * The established polarity, held one more layer up: obligations come from
+     * the wide view, so a CREATE in an untagged template is still counted and
+     * the gate goes loudly red rather than quietly green.
+     */
+    it('DOES still obligate on a CREATE in an untagged template, by design', () => {
+      const createInUntagged = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  const planned = \`CREATE TABLE "dynamic" ("id" serial PRIMARY KEY NOT NULL)\`
+  await db.execute(sql.raw(planned))
+}`
+      expect(checkMigrationSource(post, createInUntagged)).toEqual(['dynamic'])
+    })
+  })
 })
 
 describe('checkMigrations', () => {

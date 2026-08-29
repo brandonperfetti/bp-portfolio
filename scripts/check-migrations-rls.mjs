@@ -83,23 +83,29 @@
  * ## Credits and obligations are scanned differently, on purpose
  *
  * Comments were only the first layer of "text that never executes", and this
- * gate has now been wrong about that layer four times in a row: an `ENABLE` in
- * `down`, a commented-out `ENABLE`, an `ENABLE` in SQL string data (a
- * `COMMENT ON … IS '…'` or an unexecuted `DO $$ … $$` branch), and an `ENABLE`
- * in a plain TypeScript string (`const note = 'ALTER TABLE … ENABLE …'`). Each
- * discharged a real obligation and turned the gate green over a table with no
- * RLS. The lesson the fourth one finally paid for: a credit must be matched in
- * a view that contains ONLY statements, never in one that merely had the
- * known-bad shapes removed.
+ * gate has now been wrong about that layer five times running: an `ENABLE` in
+ * `down`; a commented-out `ENABLE`; an `ENABLE` in SQL string data (a
+ * `COMMENT ON … IS '…'` or an unexecuted `DO $$ … $$` branch); an `ENABLE` in a
+ * plain TypeScript string; and an `ENABLE` in an untagged template literal.
+ * Each discharged a real obligation and turned the gate green over a table
+ * with no RLS.
+ *
+ * Four of those fixes were subtractive — remove the shape that just burned us
+ * from a view that still contains everything else — and subtraction cannot
+ * terminate, because the shape nobody has thought of yet is in the set by
+ * default. The fifth changed the polarity instead: template literals are now
+ * ALLOWLISTED, with only an `sql`-tagged one kept as SQL. An allowlist that is
+ * too narrow withholds a credit and goes RED, which a human clears; a
+ * blocklist with a gap goes GREEN over an unprotected table.
  *
  * So the two scans read two different views of the same source. An `ENABLE` is
  * a CREDIT and is read from `stripSqlData`, where every form of literal text —
- * comments, SQL strings, dollar-quoted bodies, TypeScript strings — is blanked
- * and only statements survive. A `CREATE TABLE` is an OBLIGATION and is read
- * from `stripComments`, where string data still counts, because
- * `EXECUTE 'CREATE TABLE …'` inside a `DO` block or a `sql.raw(stmt)` creates a
- * real table, and blanking data for that scan too would hide the table and its
- * missing RLS together.
+ * comments, SQL strings, dollar-quoted bodies, TypeScript strings, untagged
+ * templates — is blanked and only executable statements survive. A
+ * `CREATE TABLE` is an OBLIGATION and is read from `stripComments`, where
+ * string data still counts, because `EXECUTE 'CREATE TABLE …'` inside a `DO`
+ * block or a `sql.raw(stmt)` creates a real table, and blanking data for that
+ * scan too would hide the table and its missing RLS together.
  *
  * The rule behind the asymmetry: every way this gate can be wrong must end in
  * RED. Over-counting an obligation or under-counting a credit flags a table

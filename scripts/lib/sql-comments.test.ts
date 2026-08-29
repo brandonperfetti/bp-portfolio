@@ -380,9 +380,82 @@ describe('stripSqlData', () => {
     })
   })
 
+  /**
+   * Only an `sql`-tagged template can reach the database, so only that tag is
+   * treated as SQL. Everything else wearing backticks is data — the same
+   * polarity as the rest of this view: allowlist what executes rather than
+   * blocklist the shapes that have already caused trouble.
+   */
+  describe('template literals are SQL only when tagged', () => {
+    it('keeps an sql-tagged template as SQL', () => {
+      const source =
+        'await db.execute(sql`ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY;`)'
+
+      expect(stripSqlData(source)).toBe(source)
+    })
+
+    it('keeps an sql tag separated from its backtick by whitespace', () => {
+      const source =
+        'await db.execute(\n  sql`ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY;`,\n)'
+
+      expect(stripSqlData(source)).toBe(source)
+    })
+
+    it('blanks an untagged template, keeping its backticks', () => {
+      const source =
+        'const note = `ALTER TABLE widgets ENABLE ROW LEVEL SECURITY`'
+
+      const stripped = stripSqlData(source)
+
+      expect(stripped).not.toContain('ENABLE ROW LEVEL SECURITY')
+      expect(stripped).toMatch(/^const note = ` +`$/)
+    })
+
+    it('blanks a template tagged with anything else', () => {
+      const source =
+        'const note = html`ALTER TABLE widgets ENABLE ROW LEVEL SECURITY`'
+
+      expect(stripSqlData(source)).not.toContain('ENABLE ROW LEVEL SECURITY')
+    })
+
+    /**
+     * `mysql` ends in `sql`, so the tag test has to look at the identifier
+     * boundary rather than the last three characters.
+     */
+    it('does not mistake an identifier ENDING in sql for the tag', () => {
+      const source =
+        'const note = mysql`ALTER TABLE widgets ENABLE ROW LEVEL SECURITY`'
+
+      expect(stripSqlData(source)).not.toContain('ENABLE ROW LEVEL SECURITY')
+    })
+
+    /**
+     * A member-expression tag is data until proven otherwise. The corpus
+     * imports `sql` and uses it bare; anything else fails toward red, which a
+     * human clears by using the bare tag.
+     */
+    it('treats a member-expression tag as untagged', () => {
+      const source =
+        'const note = db.sql`ALTER TABLE widgets ENABLE ROW LEVEL SECURITY`'
+
+      expect(stripSqlData(source)).not.toContain('ENABLE ROW LEVEL SECURITY')
+    })
+
+    it('blanks an interpolation inside an untagged template', () => {
+      const source =
+        'const note = `ALTER TABLE ${name} ENABLE ROW LEVEL SECURITY`'
+
+      const stripped = stripSqlData(source)
+
+      expect(stripped).not.toContain('ENABLE ROW LEVEL SECURITY')
+      expect(stripped).not.toContain('${name}')
+    })
+  })
+
   it('is idempotent', () => {
     const source = [
       'const note = \'ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY\'',
+      'const also = `ALTER TABLE widgets ENABLE ROW LEVEL SECURITY`',
       'await db.execute(sql`',
       '  COMMENT ON TABLE "widgets" IS \'ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY\';',
       '  DO $$ EXECUTE \'CREATE TABLE "x" ()\'; END $$;',

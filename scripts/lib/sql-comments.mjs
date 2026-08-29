@@ -191,6 +191,26 @@ function blankStringBody(token) {
 }
 
 /**
+ * A bare `sql` tag sitting immediately before a template literal.
+ *
+ * @remarks The tag is not part of the token `TS_TOKENS` produces — that starts
+ * at the backtick — so it has to be read from the source preceding the match.
+ *
+ * `(?:^|[^A-Za-z0-9_$.])` is the identifier boundary, and it does two jobs.
+ * Excluding identifier characters stops `mysql` and `notsql` from passing as
+ * the tag. Excluding `.` additionally treats a member expression such as
+ * `db.sql` as untagged: the corpus imports `sql` from
+ * `@payloadcms/db-postgres` and uses it bare, so anything fancier is data
+ * until someone proves otherwise — and "proving otherwise" costs one red run,
+ * not a silent hole.
+ *
+ * `\s*$` allows the whitespace prettier inserts when it breaks
+ * `db.execute(sql`…`)` across lines, which the committed
+ * `20260828_155359_corvus_embeddings.ts` does.
+ */
+const SQL_TAGGED_TEMPLATE = /(?:^|[^A-Za-z0-9_$.])sql\s*$/
+
+/**
  * Migration source with comments AND SQL string data blanked.
  *
  * @remarks The view used to decide that RLS **is enforced** — and only that.
@@ -210,18 +230,43 @@ function blankStringBody(token) {
  *   TABLE "widgets" ENABLE ROW LEVEL SECURITY'` is a variable holding prose;
  *   it executes nothing, and it was crediting a real obligation. Only the body
  *   is blanked — see {@link blankStringBody} for why the quotes stay.
+ * - **Untagged template literals**, and templates carrying any tag other than
+ *   `sql`. A backtick is not a promise to execute: the same prose in a
+ *   different quote.
  *
  * Quoted identifiers INSIDE the SQL survive, because `"name"` is what the
  * parse regexes match on; blanking those would blank the answer along with the
  * question. A double-quoted TYPESCRIPT string is a different thing in a
  * different place, and is blanked like any other string.
  *
- * The residual worth naming: an `ENABLE` that really is executed from a
- * TypeScript string — `db.execute(sql.raw(stmt))` — is no longer credited, so
- * such a migration goes red. That is the correct direction (see below), the
- * committed corpus does not do it (every DDL there is written literally in a
- * `sql` template), and the fix for one that did is to write the statement
- * literally, which is what the convention asks for anyway.
+ * ## Allowlist, not blocklist
+ *
+ * This view has been wrong five times, and always the same way: it started
+ * from "all text" and subtracted the shapes that had already burned it —
+ * comments, then SQL strings, then dollar-quoted bodies, then TypeScript
+ * strings. Subtraction cannot terminate, because the next shape nobody has
+ * thought of is still in the set by default.
+ *
+ * Template literals are handled the other way round. Only an `sql`-tagged one
+ * can reach the database, so ONLY that is kept as SQL and everything else
+ * wearing backticks is blanked. The polarity is what matters: an allowlist
+ * that is too narrow withholds a credit and goes RED, which a human sees and
+ * clears; a blocklist with a gap discharges an obligation and goes GREEN over
+ * an unprotected table. For a credit view, only one of those is survivable.
+ *
+ * Two residuals, both landing on the red side and neither reachable from the
+ * committed corpus (every DDL there is a literal `sql` template, with no
+ * interpolation and no `sql.raw` — measured):
+ *
+ * - An `ENABLE` genuinely executed from a string or an untagged template —
+ *   `db.execute(sql.raw(stmt))` — is not credited, so that migration goes red.
+ *   The fix is to write the statement as a literal `sql` template, which the
+ *   convention asks for anyway.
+ * - `TS_TOKENS` ends a template at the first unescaped backtick, so a template
+ *   NESTED inside an `${…}` interpolation desynchronises it: the outer
+ *   literal's tail is then seen as a separate, untagged token and blanked.
+ *   Stated rather than glossed — the result is a withheld credit, i.e. red,
+ *   and a real parser is the only complete answer if that day comes.
  *
  * ## Why this is not used for the CREATE scan
  *
@@ -257,12 +302,18 @@ function blankStringBody(token) {
  * identifiers preserved.
  */
 export function stripSqlData(source) {
-  return source.replace(TS_TOKENS, (token) => {
+  return source.replace(TS_TOKENS, (token, offset, whole) => {
     if (isComment(token)) return ' '
-    if (token.startsWith('`')) return stripSqlDataInLiteral(token)
+    if (token.startsWith('`')) {
+      // The tag sits BEFORE the token, so it has to be read from the source
+      // preceding this match. Untagged, or tagged with anything else, is data.
+      return SQL_TAGGED_TEMPLATE.test(whole.slice(0, offset))
+        ? stripSqlDataInLiteral(token)
+        : blankStringBody(token)
+    }
     // Every remaining token is a quoted TypeScript string — TS_TOKENS matches
     // nothing else. There is no fallthrough that returns text unexamined,
-    // which is exactly how the previous version let these through.
+    // which is exactly how the previous versions let these through.
     return blankStringBody(token)
   })
 }
