@@ -18,13 +18,13 @@ import {
  * - `data-hover-overlay`: overlay node that fades in/out on hover.
  * - `data-hover-icon`: icon node that shifts horizontally on hover.
  *
- * @param children Card contents.
- * @param className Optional wrapper className.
- * @param as Polymorphic wrapper tag (`div` | `li` | `article`).
- * @param y Vertical lift amount on hover.
- * @param scale Root scale amount on hover.
- * @param imageScale Descendant image scale amount on hover.
- * @param iconShiftX Horizontal icon shift amount on hover.
+ * @param children - Card contents.
+ * @param className - Optional wrapper className.
+ * @param as - Polymorphic wrapper tag (`div` | `li` | `article`).
+ * @param y - Vertical lift amount on hover.
+ * @param scale - Root scale amount on hover.
+ * @param imageScale - Descendant image scale amount on hover.
+ * @param iconShiftX - Horizontal icon shift amount on hover.
  */
 export function HoverMotionCard({
   children,

@@ -48,7 +48,7 @@ function getAuthor(article: ArticleWithSlug) {
 /**
  * Builds a deduplicated taxonomy list by combining `topics` and `tech`.
  *
- * @param article Article source record.
+ * @param article - Article source record.
  * @returns Trimmed taxonomy values with duplicates removed. Missing arrays are treated as empty.
  */
 function getArticleTaxonomyValues(article: ArticleWithSlug) {
@@ -62,8 +62,8 @@ function getArticleTaxonomyValues(article: ArticleWithSlug) {
 /**
  * Evaluates whether an article matches the normalized search query.
  *
- * @param article Article source record.
- * @param normalizedQuery Lowercased query string.
+ * @param article - Article source record.
+ * @param normalizedQuery - Lowercased query string.
  * @returns `true` when query is empty, otherwise case-insensitive substring
  * checks across title, description, topics, tech, and `searchText`.
  */

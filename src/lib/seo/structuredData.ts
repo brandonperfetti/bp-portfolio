@@ -33,8 +33,8 @@ export function buildWebsiteSchema(
  * Shared Person JSON-LD for Brandon Perfetti.
  * Keeps identity metadata consistent across pages that embed person schema.
  *
- * @param siteUrl Canonical site origin.
- * @param identity CMS identity (from `getCmsIdentity`); when omitted the
+ * @param siteUrl - Canonical site origin.
+ * @param identity - CMS identity (from `getCmsIdentity`); when omitted the
  * hard-coded v3 constants apply, keeping the builder pure and testable.
  */
 export function buildPersonSchema(

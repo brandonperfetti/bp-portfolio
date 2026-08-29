@@ -7,8 +7,8 @@ import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
  * (`lexicalToBlocks` → `ArticleBody` → `Prose`), so block-builder content
  * matches article styling exactly.
  *
- * @param content Lexical editor state from any richText field.
- * @param className Optional wrapper classes for the Prose container.
+ * @param content - Lexical editor state from any richText field.
+ * @param className - Optional wrapper classes for the Prose container.
  */
 export function RichTextContent({
   content,

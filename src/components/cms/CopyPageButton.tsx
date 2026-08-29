@@ -43,8 +43,8 @@ async function copyText(value: string) {
  * takes precedence, so the member copies the full body (#106). Non-gated and
  * signed-out paths have no override and copy the prop unchanged.
  *
- * @param markdown Pre-rendered Markdown export copied to the clipboard.
- * @param label Idle button label; defaults to `'Copy page'`.
+ * @param markdown - Pre-rendered Markdown export copied to the clipboard.
+ * @param label - Idle button label; defaults to `'Copy page'`.
  */
 export function CopyPageButton({
   markdown,

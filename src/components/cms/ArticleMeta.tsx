@@ -17,13 +17,13 @@ function isSiteOwnerAuthor(name: string) {
 /**
  * Renders article metadata chips and author/actions row when metadata exists.
  *
- * @param author Author identity, either a string label or object with optional
+ * @param author - Author identity, either a string label or object with optional
  * `name`, `role`, `href`, `image` (avatar URL), and `sameAs` (social links).
- * @param actions Optional right-aligned action slot.
- * @param readingTimeMinutes Optional reading-time value.
- * @param category Optional fallback category when topic chips are absent.
- * @param topics Optional topics list (deduped + trimmed, max 3).
- * @param tech Optional tech list (deduped + trimmed, max 3, excluding topic duplicates).
+ * @param actions - Optional right-aligned action slot.
+ * @param readingTimeMinutes - Optional reading-time value.
+ * @param category - Optional fallback category when topic chips are absent.
+ * @param topics - Optional topics list (deduped + trimmed, max 3).
+ * @param tech - Optional tech list (deduped + trimmed, max 3, excluding topic duplicates).
  * @returns Rendered metadata block, or `null` when no metadata is present.
  * @remarks If `author.href` is present it is preferred. Otherwise, site-owner
  * author names route to `/about`; external links use `getExternalLinkProps`.

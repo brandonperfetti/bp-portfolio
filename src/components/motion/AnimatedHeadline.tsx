@@ -24,12 +24,12 @@ type HeadlineTag = 'h1' | 'h2' | 'h3'
 /**
  * Animated heading renderer for page and section titles.
  *
- * @param text Heading text content.
- * @param as Heading tag variant (`h1`/`h2`/`h3`). Defaults to `h1`.
- * @param className Optional heading className.
- * @param variant Animation variant: `typewriter` for character-by-character reveal,
+ * @param text - Heading text content.
+ * @param as - Heading tag variant (`h1`/`h2`/`h3`). Defaults to `h1`.
+ * @param className - Optional heading className.
+ * @param variant - Animation variant: `typewriter` for character-by-character reveal,
  * `line` for staggered word reveal. Defaults to `line`.
- * @param delay Base animation delay in seconds. Defaults to `0.1`.
+ * @param delay - Base animation delay in seconds. Defaults to `0.1`.
  */
 export function AnimatedHeadline({
   text,
