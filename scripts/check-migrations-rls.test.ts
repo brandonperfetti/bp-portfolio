@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs'
+
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -13,6 +15,7 @@ import {
   listMigrationFiles,
   parseCreatedTables,
   parseRlsEnabledTables,
+  splitMigrationDirections,
 } from './check-migrations-rls.mjs'
 
 /**
@@ -137,6 +140,67 @@ describe('parseRlsEnabledTables', () => {
   })
 })
 
+describe('splitMigrationDirections', () => {
+  it('splits the shape the whole corpus uses, imports belonging to neither', () => {
+    const source = `
+import { sql } from '@payloadcms/db-postgres'
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  UP_MARKER
+}
+export async function down({ db }: MigrateDownArgs): Promise<void> {
+  DOWN_MARKER
+}`
+    const parts = splitMigrationDirections(source)
+
+    expect(parts.map((p) => p.direction)).toEqual(['up', 'down'])
+    expect(parts[0].body).toContain('UP_MARKER')
+    expect(parts[0].body).not.toContain('DOWN_MARKER')
+    expect(parts[1].body).toContain('DOWN_MARKER')
+    expect(parts[1].body).not.toContain('UP_MARKER')
+    expect(parts[0].body).not.toContain('@payloadcms/db-postgres')
+  })
+
+  it('handles `down` declared before `up`', () => {
+    const source = `
+export async function down({ db }: MigrateDownArgs): Promise<void> { DOWN_MARKER }
+export async function up({ db }: MigrateUpArgs): Promise<void> { UP_MARKER }`
+    const parts = splitMigrationDirections(source)
+
+    expect(parts.map((p) => p.direction)).toEqual(['down', 'up'])
+    expect(parts[0].body).not.toContain('UP_MARKER')
+  })
+
+  /**
+   * Bare DDL with no function wrapper must still be CHECKED, not skipped —
+   * an unparseable source that returns nothing would be a silent hole in the
+   * gate rather than a loud failure.
+   */
+  it('treats an unwrapped source as a single `up` body', () => {
+    const parts = splitMigrationDirections('CREATE TABLE "a" (id int);')
+
+    expect(parts).toHaveLength(1)
+    expect(parts[0].direction).toBe('up')
+    expect(parts[0].body).toContain('CREATE TABLE "a"')
+  })
+
+  it('matches the non-async spelling too', () => {
+    const parts = splitMigrationDirections(
+      'export function up() { A }\nexport function down() { B }',
+    )
+    expect(parts.map((p) => p.direction)).toEqual(['up', 'down'])
+  })
+
+  it('splits every migration in the committed corpus into exactly up and down', () => {
+    // The uniformity the textual split relies on, asserted rather than
+    // assumed: if a future migration is shaped differently, this fails here
+    // instead of quietly mis-attributing its statements.
+    for (const file of listMigrationFiles(MIGRATIONS_DIR)) {
+      const parts = splitMigrationDirections(readFileSync(file, 'utf8'))
+      expect(parts.map((p) => p.direction).sort()).toEqual(['down', 'up'])
+    }
+  })
+})
+
 describe('isGrandfathered', () => {
   it('covers the #72 backfill migration and everything before it', () => {
     expect(isGrandfathered(`src/migrations/${RLS_BACKFILL_MIGRATION}.ts`)).toBe(
@@ -198,6 +262,51 @@ export async function down({ db }: MigrateDownArgs): Promise<void> {
   await db.execute(sql\`CREATE TABLE "legacy" ("id" serial PRIMARY KEY NOT NULL);\`)
 }`
     expect(checkMigrationSource(post, recreatesInDown)).toEqual(['legacy'])
+  })
+
+  /**
+   * The cross-direction hole. Deployment runs `up` and never `down`, so an
+   * `ENABLE ROW LEVEL SECURITY` sitting in `down` protects nothing that
+   * actually ships. Matching a whole file's CREATEs against a whole file's
+   * ENABLEs made this migration pass green while the deployed `widgets` table
+   * had no RLS at all — the exact failure the gate exists to catch.
+   */
+  it('does NOT let an ENABLE in `down` satisfy a CREATE in `up`', () => {
+    const enableInWrongDirection = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+}
+export async function down({ db }: MigrateDownArgs): Promise<void> {
+  await db.execute(sql\`ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY;\`)
+  await db.execute(sql\`DROP TABLE "widgets" CASCADE;\`)
+}`
+    expect(checkMigrationSource(post, enableInWrongDirection)).toEqual([
+      'widgets',
+    ])
+  })
+
+  it('is green when each direction enables RLS on what it creates', () => {
+    const bothDirections = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+  await db.execute(sql\`ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY;\`)
+}
+export async function down({ db }: MigrateDownArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "legacy" ("id" serial PRIMARY KEY NOT NULL);\`)
+  await db.execute(sql\`ALTER TABLE "legacy" ENABLE ROW LEVEL SECURITY;\`)
+}`
+    expect(checkMigrationSource(post, bothDirections)).toEqual([])
+  })
+
+  it('reports a table missing RLS in BOTH directions exactly once', () => {
+    const missingBothWays = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+}
+export async function down({ db }: MigrateDownArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+}`
+    expect(checkMigrationSource(post, missingBothWays)).toEqual(['widgets'])
   })
 
   it('exempts a grandfathered migration from the same source', () => {

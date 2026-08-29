@@ -59,10 +59,18 @@
  *
  * ## Scope
  *
- * Both halves of a migration are scanned, `up` and `down`. A `down` that
- * recreates a table it dropped needs RLS on the recreated table for the same
- * reason `up` does; no migration in the corpus does this today, so the rule
- * costs nothing and closes the case before it appears.
+ * Both halves of a migration are scanned, `up` and `down`, and each is
+ * checked against ITSELF. A `down` that recreates a table it dropped needs
+ * RLS on the recreated table for the same reason `up` does; no migration in
+ * the corpus does this today, so the rule costs nothing and closes the case
+ * before it appears.
+ *
+ * The same-direction requirement is the load-bearing half of that sentence.
+ * Scanning the file as one blob let an `ENABLE ROW LEVEL SECURITY` in `down`
+ * satisfy a `CREATE TABLE` in `up`. Deployment runs `up` only, so the gate
+ * would report green while the deployed table had no RLS — the precise
+ * failure this script was written to catch. See {@link
+ * splitMigrationDirections}.
  *
  * @module
  */
@@ -139,6 +147,41 @@ function matchTableNames(pattern, source) {
 }
 
 /**
+ * Split a migration's source into its `up` and `down` bodies.
+ *
+ * @remarks Textual, which is sufficient here because the corpus is uniform:
+ * every committed migration declares exactly one `export async function up`
+ * and one `export async function down` (measured across all 39 at
+ * `3d55362`). Text from a marker to the next marker — or to end-of-file for
+ * the last one — is that direction's body; anything before the first marker
+ * is imports and belongs to neither.
+ *
+ * A source with no marker at all is returned as a single `up` body rather
+ * than skipped. Bare DDL with no function wrapper must still be checked;
+ * treating it as unparseable would be a silent hole in the gate.
+ *
+ * @param source - Migration source text.
+ * @returns One `{ direction, body }` per direction found, in file order.
+ */
+export function splitMigrationDirections(source) {
+  const markers = []
+  const pattern = /export\s+(?:async\s+)?function\s+(up|down)\b/g
+  for (const match of source.matchAll(pattern)) {
+    markers.push({ direction: match[1], index: match.index })
+  }
+  if (markers.length === 0) return [{ direction: 'up', body: source }]
+
+  markers.sort((a, b) => a.index - b.index)
+  return markers.map((marker, position) => ({
+    direction: marker.direction,
+    body: source.slice(
+      marker.index,
+      position + 1 < markers.length ? markers[position + 1].index : undefined,
+    ),
+  }))
+}
+
+/**
  * Tables a migration creates.
  *
  * @param source - Migration source text.
@@ -172,15 +215,36 @@ export function isGrandfathered(file) {
 /**
  * Check one migration's source against the new-table RLS rule.
  *
+ * @remarks Each direction is checked against ITSELF. Matching a whole file's
+ * `CREATE TABLE`s against a whole file's `ENABLE ROW LEVEL SECURITY`s let an
+ * `ENABLE` in `down` discharge a `CREATE` in `up` — and deployment runs `up`
+ * only, so the gate could pass green while the deployed table shipped with no
+ * RLS at all. That is the exact failure this gate exists to prevent, so the
+ * two halves are now parsed and required independently: a table created in
+ * `up` needs its `ENABLE` in `up`, and one recreated in `down` needs its own.
+ *
+ * A table missing RLS in both directions is reported once, not twice — the
+ * failure is "this migration ships this table unprotected", and one
+ * `::error::` per table per file is what the operator needs to act on.
+ *
  * @param file - Path used in the reported message.
  * @param source - Migration source text.
- * @returns The tables created without a same-file `ENABLE ROW LEVEL
- * SECURITY`, in first-seen order. Empty for a grandfathered migration.
+ * @returns The tables created without an `ENABLE ROW LEVEL SECURITY` in the
+ * SAME direction, deduplicated, in first-seen order. Empty for a
+ * grandfathered migration.
  */
 export function checkMigrationSource(file, source) {
   if (isGrandfathered(file)) return []
-  const enabled = new Set(parseRlsEnabledTables(source))
-  return parseCreatedTables(source).filter((table) => !enabled.has(table))
+  const offenders = []
+  for (const { body } of splitMigrationDirections(source)) {
+    const enabled = new Set(parseRlsEnabledTables(body))
+    for (const table of parseCreatedTables(body)) {
+      if (!enabled.has(table) && !offenders.includes(table)) {
+        offenders.push(table)
+      }
+    }
+  }
+  return offenders
 }
 
 /**

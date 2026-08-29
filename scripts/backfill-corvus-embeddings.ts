@@ -11,6 +11,7 @@ import {
   syncDocumentEmbeddings,
 } from '../src/lib/ai/embeddingsStore'
 import { getEmbeddingModelId } from '../src/lib/ai/embeddings'
+import { canDropOrphans } from './lib/orphan-guard.mjs'
 
 /**
  * Populate and repair `corvus_embeddings` from the live content (#82).
@@ -31,7 +32,11 @@ import { getEmbeddingModelId } from '../src/lib/ai/embeddings'
  * `--drop-orphans` additionally removes rows whose source document no longer
  * exists or is no longer eligible. It is off by default because it is the only
  * destructive mode here, and a partial content read should never be allowed to
- * silently empty the index.
+ * silently empty the index — a rule {@link canDropOrphans} now enforces rather
+ * than this comment merely asserting it. The deletion runs only when the ids
+ * walked match the `totalDocs` the final page reported, so pagination drift
+ * under concurrent writes and a zero-document read both skip it loudly
+ * instead of dropping rows.
  *
  * Every document is passed through the SAME `syncDocumentEmbeddings` the hooks
  * use, so the backfill and the incremental path can never disagree about what
@@ -73,6 +78,9 @@ async function run(): Promise<void> {
     const seenIds: number[] = []
     let page = 1
     let hasNextPage = true
+    // What the LAST page Payload returned claimed the collection holds. The
+    // orphan drop is gated on this agreeing with what we actually walked.
+    let reportedTotal: number | null = null
 
     while (hasNextPage) {
       const result = await payload.find({
@@ -114,16 +122,32 @@ async function run(): Promise<void> {
         }
       }
 
+      reportedTotal = Number(result.totalDocs)
       hasNextPage = Boolean(result.hasNextPage)
       page += 1
     }
 
     if (dropOrphans) {
-      const removed = await deleteOrphans(db, collection, seenIds)
-      totals.deleted += removed
-      payload.logger.info(
-        `[backfill:corvus] ${collection}: dropped ${removed} orphaned row(s)`,
-      )
+      // The docblock's promise — "a partial content read should never be
+      // allowed to silently empty the index" — enforced rather than merely
+      // stated. See `scripts/lib/orphan-guard.mjs` for the three refusals and
+      // why an empty read is one of them.
+      const { drop, reason } = canDropOrphans(seenIds.length, reportedTotal)
+
+      if (!drop) {
+        payload.logger.warn(
+          `[backfill:corvus] ${collection}: saw ${seenIds.length} of ` +
+            `${reportedTotal ?? 'unknown'} doc(s) (${reason}); SKIPPING ` +
+            `orphan deletion — a partial read must never empty the index. ` +
+            `Re-run when the collection reads completely.`,
+        )
+      } else {
+        const removed = await deleteOrphans(db, collection, seenIds)
+        totals.deleted += removed
+        payload.logger.info(
+          `[backfill:corvus] ${collection}: dropped ${removed} orphaned row(s)`,
+        )
+      }
     }
   }
 
