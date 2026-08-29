@@ -80,13 +80,35 @@
  * Both spellings are stripped before either parse. See {@link
  * checkMigrationSource} and `scripts/lib/sql-comments.mjs`.
  *
+ * ## Credits and obligations are scanned differently, on purpose
+ *
+ * Comments were only half of "text that never executes". SQL keeps the other
+ * half in string literals and dollar-quoted bodies, and an `ENABLE ROW LEVEL
+ * SECURITY` inside a `COMMENT ON … IS '…'` or an unexecuted `DO $$ … $$`
+ * branch was discharging real obligations — the same false green, one layer
+ * down.
+ *
+ * So the two scans read two different views of the same source. An `ENABLE` is
+ * a CREDIT and is read from `stripSqlData`, where data is blanked and only
+ * statements survive. A `CREATE TABLE` is an OBLIGATION and is read from
+ * `stripComments`, where string data still counts — because
+ * `EXECUTE 'CREATE TABLE …'` inside a `DO` block creates a real table, and
+ * blanking data for that scan too would hide the table and its missing RLS
+ * together.
+ *
+ * The rule behind the asymmetry: every way this gate can be wrong must end in
+ * RED. Over-counting an obligation or under-counting a credit flags a table
+ * that is fine — loud, and a human clears it. The opposite errors ship a table
+ * with no RLS under a green check, which is the one outcome the gate exists to
+ * prevent. See {@link checkMigrationSource}.
+ *
  * @module
  */
 
 import { readFileSync, readdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
 
-import { stripComments } from './lib/sql-comments.mjs'
+import { stripComments, stripSqlData } from './lib/sql-comments.mjs'
 
 /** Directory holding the committed Payload migrations. */
 export const MIGRATIONS_DIR = 'src/migrations'
@@ -237,12 +259,18 @@ export function isGrandfathered(file) {
  * failure is "this migration ships this table unprotected", and one
  * `::error::` per table per file is what the operator needs to act on.
  *
- * Comments are stripped ONCE here, before the split, and everything
- * downstream therefore sees executable text only. This is the single place
- * that happens: {@link parseCreatedTables} and {@link parseRlsEnabledTables}
- * stay honest raw matchers over whatever they are handed, which is what their
- * own unit tests exercise, so the stripping cannot be half-applied to one side
- * of the comparison and not the other.
+ * Comments are stripped ONCE here, before the split, so every direction body
+ * downstream is already free of them. The `ENABLE` scan then narrows its body
+ * further with `stripSqlData`, which also blanks SQL string literals and
+ * dollar-quoted bodies: a credit must come from a statement that will actually
+ * execute. The `CREATE` scan deliberately does NOT narrow, because an
+ * obligation is safer over-counted than missed — the module docblock works
+ * through why every error direction must end in red.
+ *
+ * Both views are derived here, in one place. {@link parseCreatedTables} and
+ * {@link parseRlsEnabledTables} stay honest raw matchers over whatever they are
+ * handed, which is what their own unit tests exercise, so no caller can end up
+ * comparing differently-processed text by accident.
  *
  * @param file - Path used in the reported message.
  * @param source - Migration source text.
@@ -254,7 +282,8 @@ export function checkMigrationSource(file, source) {
   if (isGrandfathered(file)) return []
   const offenders = []
   for (const { body } of splitMigrationDirections(stripComments(source))) {
-    const enabled = new Set(parseRlsEnabledTables(body))
+    // Credits from the narrow view, obligations from the wide one.
+    const enabled = new Set(parseRlsEnabledTables(stripSqlData(body)))
     for (const table of parseCreatedTables(body)) {
       if (!enabled.has(table) && !offenders.includes(table)) {
         offenders.push(table)

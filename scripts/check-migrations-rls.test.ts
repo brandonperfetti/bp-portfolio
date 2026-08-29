@@ -396,6 +396,116 @@ export async function up({ db }: MigrateUpArgs): Promise<void> {
       expect(checkMigrationSource(post, realAndCommented)).toEqual([])
     })
   })
+
+  /**
+   * String DATA is not a statement either.
+   *
+   * Stripping comments left the other half of "text that never executes":
+   * an `ALTER TABLE … ENABLE ROW LEVEL SECURITY` sitting inside a SQL string
+   * literal or a dollar-quoted body is prose or an unexecuted branch, and the
+   * gate counted it as enforcement. Same false-green as the commented case,
+   * one layer down.
+   *
+   * The two scans are deliberately NOT symmetric about this — see the
+   * `parseCreatedTables` case at the end, and the module docblock.
+   */
+  describe('SQL string data', () => {
+    it('does NOT accept an ENABLE inside a COMMENT ON string literal', () => {
+      const enableInComment = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+  await db.execute(sql\`COMMENT ON TABLE "widgets" IS 'remember to ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY';\`)
+}`
+      expect(checkMigrationSource(post, enableInComment)).toEqual(['widgets'])
+    })
+
+    it('does NOT accept an ENABLE inside a dollar-quoted body', () => {
+      const enableInDollarBody = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+  await db.execute(sql\`
+    DO $$
+    BEGIN
+      IF false THEN
+        EXECUTE 'ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY';
+      END IF;
+    END $$;
+  \`)
+}`
+      expect(checkMigrationSource(post, enableInDollarBody)).toEqual([
+        'widgets',
+      ])
+    })
+
+    it('does NOT accept an ENABLE inside a TAGGED dollar-quoted body', () => {
+      const taggedBody = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+  await db.execute(sql\`
+    DO $rls$
+    BEGIN
+      EXECUTE 'ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY';
+    END $rls$;
+  \`)
+}`
+      expect(checkMigrationSource(post, taggedBody)).toEqual(['widgets'])
+    })
+
+    it('still accepts the real statement beside a dollar-quoted body', () => {
+      // The shape the committed corvus_embeddings migration actually uses: a
+      // literal ENABLE, plus a DO block doing unrelated REVOKE work.
+      const realBesideDollarBody = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "widgets" ("id" serial PRIMARY KEY NOT NULL);\`)
+  await db.execute(sql\`ALTER TABLE "widgets" ENABLE ROW LEVEL SECURITY;\`)
+  await db.execute(sql\`
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        EXECUTE 'REVOKE ALL ON TABLE public.widgets FROM anon';
+      END IF;
+    END $$;
+  \`)
+}`
+      expect(checkMigrationSource(post, realBesideDollarBody)).toEqual([])
+    })
+
+    it('leaves a real quoted-identifier statement untouched', () => {
+      const quotedIdentifiers = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`CREATE TABLE "odd-name" ("id" serial PRIMARY KEY NOT NULL);\`)
+  await db.execute(sql\`ALTER TABLE "odd-name" ENABLE ROW LEVEL SECURITY;\`)
+}`
+      expect(checkMigrationSource(post, quotedIdentifiers)).toEqual([])
+    })
+
+    /**
+     * The deliberate asymmetry, pinned so it cannot be "tidied" into symmetry
+     * without someone reading why.
+     *
+     * An ENABLE is a CREDIT and must be provably executable, so string data
+     * cannot supply one. A CREATE is an OBLIGATION, and obligations are
+     * over-counted on purpose: a table created by `EXECUTE 'CREATE TABLE …'`
+     * inside a DO block is a REAL table, and blanking string data for this
+     * scan too would make it — and its missing RLS — invisible. Over-counting
+     * costs a loud red on a table that is never created; under-counting costs
+     * a silent green on a table shipped without RLS.
+     */
+    it('DOES still obligate on a CREATE inside string data, by design', () => {
+      const createInsideString = `
+export async function up({ db }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql\`
+    DO $$
+    BEGIN
+      EXECUTE 'CREATE TABLE "dynamic" ("id" serial PRIMARY KEY NOT NULL)';
+    END $$;
+  \`)
+}`
+      expect(checkMigrationSource(post, createInsideString)).toEqual([
+        'dynamic',
+      ])
+    })
+  })
 })
 
 describe('checkMigrations', () => {

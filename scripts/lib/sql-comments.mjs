@@ -83,6 +83,30 @@ const TS_TOKENS =
  */
 const SQL_TOKENS = /'[^'\n]*'|"[^"\n]*"|--[^\n]*|\/\*[\s\S]*?\*\//g
 
+/**
+ * SQL *data* tokens: quoted identifiers, dollar-quoted bodies, and strings.
+ *
+ * @remarks Order again. The double-quoted identifier is listed first because
+ * it is the one form that must SURVIVE — the parse regexes match on `"name"`
+ * — and the two data forms follow. There is no ambiguity between them at a
+ * given position (`"` , `$` and `'` each start only one alternative), so the
+ * order beyond that is for reading, not for correctness.
+ *
+ * The dollar-quote alternative carries a backreference so `$tag$ … $tag$`
+ * closes on its own tag and `$$ … $$` closes on the bare form: a
+ * non-participating group backreferences the empty string, which makes
+ * `\$\1\$` read as `$$` in that case. The lazy body stops at the first
+ * matching close.
+ *
+ * The single-quoted form deliberately spans newlines, unlike its counterpart
+ * in {@link SQL_TOKENS}. A multi-line `COMMENT ON … IS '…'` is exactly the
+ * shape this needs to blank, and the cost of the looser match is bounded in
+ * the safe direction: an odd apostrophe count blanks MORE than intended, which
+ * can only withhold an ENABLE and turn the gate red.
+ */
+const SQL_DATA_TOKENS =
+  /"[^"\n]*"|\$([A-Za-z_][A-Za-z0-9_]*)?\$[\s\S]*?\$\1\$|'[^']*'/g
+
 /** Does this token open a comment in either syntax? */
 function isComment(token) {
   return (
@@ -117,6 +141,87 @@ export function stripComments(source) {
   return source.replace(TS_TOKENS, (token) => {
     if (isComment(token)) return ' '
     if (token.startsWith('`')) return stripSqlComments(token)
+    return token
+  })
+}
+
+/**
+ * Blank the SQL comments AND data inside one template literal.
+ *
+ * @remarks Comments go first, and the order is not incidental. Blanking them
+ * up front means the data scan never meets a stray apostrophe inside `-- don't
+ * do this`, which would otherwise open a string literal and blank everything
+ * up to the next quote. Running the passes the other way round would make the
+ * result depend on the prose in the comments.
+ *
+ * This composition is also what makes {@link stripSqlData} correct on its own,
+ * rather than only when a caller remembers to run {@link stripComments} first.
+ *
+ * @param literal - The template literal token, backticks and all.
+ * @returns The same token with comment, string-literal and dollar-quoted
+ * content replaced by a space, and quoted identifiers left intact.
+ */
+function stripSqlDataInLiteral(literal) {
+  return stripSqlComments(literal).replace(SQL_DATA_TOKENS, (token) =>
+    token.startsWith('"') ? token : ' ',
+  )
+}
+
+/**
+ * Migration source with comments AND SQL string data blanked.
+ *
+ * @remarks The view used to decide that RLS **is enforced** — and only that.
+ * {@link stripComments} answers "what does this migration say"; this answers
+ * the strictly narrower "what will this migration EXECUTE", by additionally
+ * blanking the two places SQL keeps text that is data rather than a statement:
+ *
+ * - **String literals.** `COMMENT ON TABLE "widgets" IS 'run ALTER TABLE
+ *   "widgets" ENABLE ROW LEVEL SECURITY later'` is a note to a human. Matching
+ *   it discharged a real `CREATE TABLE` and the gate went green over a table
+ *   with no RLS.
+ * - **Dollar-quoted bodies** (`$$ … $$`, `$tag$ … $tag$`). A `DO` block's body
+ *   is a string to the outer parser, and what it executes may be conditional,
+ *   built by `format()`, or — as in `IF false THEN … END IF` — never run at
+ *   all.
+ *
+ * Quoted identifiers survive, because `"name"` is what the parse regexes
+ * match on; blanking those would blank the answer along with the question.
+ *
+ * ## Why this is not used for the CREATE scan
+ *
+ * The two scans are deliberately asymmetric, and the asymmetry is the whole
+ * design rather than an oversight to tidy up.
+ *
+ * An `ENABLE` is a CREDIT against an obligation, so it must be provably
+ * executable — hence this view. A `CREATE TABLE` is the OBLIGATION itself, and
+ * obligations are counted from {@link stripComments} instead, where string
+ * data still counts. A table created by `EXECUTE 'CREATE TABLE …'` inside a
+ * `DO` block is a REAL table; blanking data for that scan too would hide it,
+ * and hide its missing RLS with it.
+ *
+ * Line the error directions up and the choice makes itself. Over-counting an
+ * obligation, or under-counting a credit, costs a RED on a table that is fine
+ * — loud, and a human clears it. Under-counting an obligation, or
+ * over-counting a credit, costs a GREEN on a table shipped without RLS, which
+ * is the single outcome this gate exists to prevent. Both of this module's
+ * views therefore fail toward red.
+ *
+ * The residual, stated plainly: a table both CREATEd and RLS-enabled entirely
+ * inside a dollar-quoted body goes red, because the credit is invisible while
+ * the obligation is not. That is correct behavior for a gate that cannot read
+ * dynamic SQL — the same reason the #72 backfill's `pg_tables` loop needs
+ * grandfathering rather than parsing — and the fix for such a migration is to
+ * add a literal `ENABLE`, which is what the convention asks for anyway.
+ *
+ * @param source - Raw migration source (TypeScript containing `sql` template
+ * literals).
+ * @returns The same source with comments and SQL data blanked, quoted
+ * identifiers preserved.
+ */
+export function stripSqlData(source) {
+  return source.replace(TS_TOKENS, (token) => {
+    if (isComment(token)) return ' '
+    if (token.startsWith('`')) return stripSqlDataInLiteral(token)
     return token
   })
 }
