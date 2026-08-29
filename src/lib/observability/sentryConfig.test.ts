@@ -196,6 +196,14 @@ describe('isSuppressedSentryLogMessage', () => {
     ).toBe(true)
   })
 
+  it('suppresses the post-deploy image-optimizer cold-start burst (#99)', () => {
+    expect(
+      isSuppressedSentryLogMessage(
+        "Error: Cannot find module './.next/server/pages/_next/image.js'",
+      ),
+    ).toBe(true)
+  })
+
   it('does not suppress an ordinary warn/error message that is real signal', () => {
     expect(
       isSuppressedSentryLogMessage('Failed to load article: 500 from CMS'),
@@ -203,6 +211,33 @@ describe('isSuppressedSentryLogMessage', () => {
     // A different Turnstile error code is NOT the benign baseline — keep it.
     expect(
       isSuppressedSentryLogMessage('[Cloudflare Turnstile] Error: 110200.'),
+    ).toBe(false)
+  })
+
+  /**
+   * The #99 entry is deliberately the optimizer's exact module path, not
+   * `MODULE_NOT_FOUND` and not `Cannot find module`. A broad match there would
+   * silence every genuine missing-module crash in the app — the loudest signal
+   * this project has that a deploy shipped broken — so these are the cases
+   * that would regress if someone widened the pattern.
+   */
+  it('still surfaces other missing-module errors after the #99 entry', () => {
+    expect(
+      isSuppressedSentryLogMessage(
+        "Error: Cannot find module '@/lib/observability/sentryConfig'",
+      ),
+    ).toBe(false)
+    expect(
+      isSuppressedSentryLogMessage(
+        'Error [ERR_MODULE_NOT_FOUND]: Cannot find package "payload"',
+      ),
+    ).toBe(false)
+    // A different Next server chunk failing to resolve is a real deploy
+    // problem, not the image optimizer warming up.
+    expect(
+      isSuppressedSentryLogMessage(
+        "Cannot find module './.next/server/pages/_document.js'",
+      ),
     ).toBe(false)
   })
 
