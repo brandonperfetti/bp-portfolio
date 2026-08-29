@@ -38,6 +38,19 @@ surface only** — it is not a CMS and has no runtime integration.
   (`ALTER TABLE "<table>" ENABLE ROW LEVEL SECURITY;` for the table and any
   paired `_v` / `_rels` table) in that **same** migration — `docs/PAYLOAD.md`.
   Call the migration out explicitly in the change summary.
+- **Cache revalidation is read-your-writes:** the revalidation hooks call
+  `revalidateTag(tag, { expire: 0 })` — never `'max'`, which under
+  cacheComponents is stale-while-revalidate with a one-year stale window and
+  silently breaks the admin-edits-live-in-seconds invariant (#118).
+- **The Corvus eval gates are live in CI** (`pnpm eval:ci` and
+  `pnpm eval:facts`, thresholds that fail the build). Fix the behavior or the
+  harness — never lower a floor to get green. Empty/whitespace model outputs
+  score 0 by design (`evals/empty-output.ts`); eval turns run at production's
+  completion-token budget (drift-guarded by test).
+- **Embeddings are their own provider axis** (`AI_EMBEDDING_PROVIDER`,
+  OpenAI-only): switching the chat provider must never touch the pgvector
+  index, and the vector width (1536) is baked into DDL — a model with a
+  different width needs a migration, not an env change.
 - Dependency majors are pinned; `@payloadcms/*` + `payload` upgrade as one set.
 - The rich-text editor for Posts must keep every node type the migration
   emits registered (lists, blockquote, upload) — removing a feature breaks
@@ -62,7 +75,8 @@ surface only** — it is not a CMS and has no runtime integration.
 - State and data flow: `docs/STATE.md`
 - Styling and component conventions: `docs/STYLING.md`
 - Design system (shadcn, shader hero, motion, Storybook): `docs/DESIGN.md`
-- AI (Corvus, guardrails, evals, providers): `docs/AI.md`
+- AI (Corvus, guardrails, retrieval grounding, evals, providers): `docs/AI.md`
+- Analytics and consent (c15t, GA4 Consent Mode v2, geo-gating): `docs/ANALYTICS.md`
 - Auth, gating, and email capture (Clerk): `docs/AUTH.md`
 - Content workflow (Notion planning → Payload publishing): `docs/CONTENT_WORKFLOW.md`
 - Content voice, article types, and revision gates: `docs/CONTENT_STYLE.md`
