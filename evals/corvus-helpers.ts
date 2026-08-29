@@ -10,6 +10,13 @@ import { getCorvusModel, CORVUS_SYSTEM_PROMPT } from '../src/lib/ai/corvus'
 import { buildGroundedSystem } from '../src/lib/ai/groundedSystem'
 import type { CorvusSnippet } from '../src/lib/ai/retrieval'
 
+// Side-effect import, and the one place it can live: every eval file pulls in
+// this module, so pinning OPENAI_BASE_URL here covers `eval:ci`, `eval:facts`,
+// `eval:matrix`, watch mode and any ad-hoc `evalite run` alike. Without it the
+// autoevals `Factuality` grader sends the OpenAI key to Braintrust's gateway
+// and 401s on every graded case. See `openai-base-url.ts` for the receipts.
+import './openai-base-url'
+
 /**
  * Which model an eval turn runs on.
  *

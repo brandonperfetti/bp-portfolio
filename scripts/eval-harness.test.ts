@@ -67,6 +67,12 @@ const REQUIRED_EVAL_FILES = [
 /** The env var `matrix.eval.ts` gates its registrations behind. */
 const MATRIX_FLAG = 'CORVUS_EVAL_MATRIX'
 
+/** The module every eval file must reach, and the hop it reaches it through. */
+const HELPERS_MODULE = './corvus-helpers'
+
+/** Pins `OPENAI_BASE_URL` so the autoevals grader talks to OpenAI, not a gateway. */
+const BASE_URL_MODULE = './openai-base-url'
+
 type PackageJson = { scripts?: Record<string, string> }
 
 const packageJson = JSON.parse(
@@ -295,6 +301,30 @@ describe('eval harness wiring', () => {
     expect(readFileSync(configPath as string, 'utf8')).not.toMatch(
       /\bprojects\s*:/,
     )
+  })
+
+  it('routes every eval file through the OpenAI base-URL pin', () => {
+    // The failure this guards is expensive and mute. With OPENAI_BASE_URL
+    // unset, autoevals resolves its grader client against
+    // https://gateway.braintrust.dev and sends OPENAI_API_KEY as the bearer,
+    // so every Factuality-graded case 401s while the task-model calls beside
+    // it succeed — a run that reads as "the model got worse". The pin lives in
+    // a module on every eval's import graph rather than in a script prefix, so
+    // watch mode and ad-hoc runs are covered too; these two assertions are the
+    // two links in that chain.
+    expect(
+      importSpecifiers(
+        readFileSync(join(EVAL_ROOT, 'corvus-helpers.ts'), 'utf8'),
+      ),
+      'corvus-helpers must pull in the base-URL pin',
+    ).toContain(BASE_URL_MODULE)
+
+    for (const file of REQUIRED_EVAL_FILES) {
+      expect(
+        importSpecifiers(readFileSync(join(EVAL_ROOT, file), 'utf8')),
+        `${file} must reach the pin through ${HELPERS_MODULE}`,
+      ).toContain(HELPERS_MODULE)
+    }
   })
 
   it('imports product code by relative path, never through the @/ alias', () => {
