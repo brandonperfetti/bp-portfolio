@@ -6,13 +6,11 @@ import {
   OFF_SITE_CASES,
   SCOPE_GROUNDED_CASES,
 } from './fixtures/datasets'
-import { createFixtureRetriever, fixtureSourceUrls } from './fixtures/retriever'
-import { SITE_CHROME_URLS } from './fixtures/site-routes'
+import { createCitationScorers } from './citation-scorers'
+import { createFixtureRetriever } from './fixtures/retriever'
 import {
   answersGeneralQuestion,
   containsExpectedFact,
-  createCitesKnownSourceUrl,
-  createNeverFabricatesSiteUrl,
   declinesAndRedirects,
 } from './scorers'
 
@@ -48,16 +46,7 @@ import {
  * and ungrounded variants of `declines-and-redirects` and
  * `answers-general-questions` measure different things.
  */
-const SOURCE_URLS = fixtureSourceUrls()
-const CITATION_OPTIONS = { alsoReal: SITE_CHROME_URLS }
-const citesKnownSourceUrl = createCitesKnownSourceUrl(
-  SOURCE_URLS,
-  CITATION_OPTIONS,
-)
-const neverFabricatesSiteUrl = createNeverFabricatesSiteUrl(
-  SOURCE_URLS,
-  CITATION_OPTIONS,
-)
+const { citesKnownSourceUrl, neverFabricatesSiteUrl } = createCitationScorers()
 
 const retrieve = createFixtureRetriever()
 

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 /**
  * Argument-shape pin for #118: `revalidateTag` must be called with the
- * read-your-writes profile `{ expire: 0 }`, not `'max'`, on every branch
+ * immediate-expiration profile `{ expire: 0 }`, not `'max'`, on every branch
  * (publish, unpublish, delete). Under cacheComponents `'max'` is
  * stale-while-revalidate with a one-year stale window, so a regression back
  * to `'max'` (or to no second arg) silently reintroduces the ~10-20 minute
@@ -80,7 +80,7 @@ describe('revalidatePage (afterChange)', () => {
 })
 
 describe('revalidateDelete (afterDelete)', () => {
-  it('purges pages/pages-sitemap with the read-your-writes expire:0 profile', () => {
+  it('purges pages/pages-sitemap with the immediate-expiration expire:0 profile', () => {
     mocks.revalidateTag.mockClear()
     mocks.revalidatePath.mockClear()
 

@@ -100,7 +100,15 @@ let tableRows: Array<Record<string, unknown>> = []
  * the gated row would reach the system prompt and the test below would fail —
  * which is the whole point of not stubbing the retrieval module.
  */
-const executeMock = vi.fn(async (fragment: unknown) => {
+/**
+ * Compile a drizzle fragment to `{ text, params }`.
+ *
+ * @remarks Literal segments arrive as `StringChunk` (whose `value` is a string
+ * array); everything else is an embedded value destined to become a bound
+ * parameter. Walking the chunks is how these tests see what the route bound
+ * without a database.
+ */
+const compileFragment = (fragment: unknown) => {
   const chunks = (fragment as { queryChunks: unknown[] }).queryChunks
   const params: unknown[] = []
   let text = ''
@@ -112,11 +120,28 @@ const executeMock = vi.fn(async (fragment: unknown) => {
       text += `$${params.length}`
     }
   }
+  return { text, params }
+}
 
+/**
+ * The boolean bound to the query's `::boolean` placeholder — the gating input.
+ *
+ * @remarks Shared by the fake Postgres below and by the tests that assert on
+ * it, deliberately: an assertion that re-derived the value its own way could
+ * agree with itself while disagreeing with what the fake actually filters on.
+ *
+ * @param fragment - The drizzle fragment the route built.
+ * @returns The bound value, or `undefined` when the placeholder is absent.
+ */
+const boundAuthFlag = (fragment: unknown): unknown => {
+  const { text, params } = compileFragment(fragment)
   const authIndex = /\$(\d+)::boolean/.exec(text)
-  const isAuthenticated = authIndex
-    ? params[Number(authIndex[1]) - 1]
-    : undefined
+  return authIndex ? params[Number(authIndex[1]) - 1] : undefined
+}
+
+const executeMock = vi.fn(async (fragment: unknown) => {
+  const { text } = compileFragment(fragment)
+  const isAuthenticated = boundAuthFlag(fragment)
   const filtersVisibility = text.includes(`"visibility" = 'public'`)
   const filtersSchedule = text.includes(`"published_at" <= now()`)
 
@@ -443,7 +468,24 @@ describe('POST /api/ai/chat — a gated chunk NEVER reaches an anonymous visitor
 
     await POST(makeRequest(validBody))
 
+    // The call count alone passes just as happily when the route binds TRUE,
+    // which would collapse the visibility disjunction and hand anonymous
+    // visitors every gated chunk. Read the value actually bound to the
+    // `::boolean` placeholder — the same reader the fake Postgres filters on.
     expect(executeMock).toHaveBeenCalledTimes(1)
+    expect(boundAuthFlag(executeMock.mock.calls[0][0])).toBe(false)
+  })
+
+  it('binds isAuthenticated=true for a signed-in turn', async () => {
+    tableRows = [publicRow]
+    getViewerMock.mockResolvedValue({
+      isAuthenticated: true,
+      userId: 'user_abc123',
+    })
+
+    await POST(makeRequest(validBody))
+
+    expect(boundAuthFlag(executeMock.mock.calls[0][0])).toBe(true)
   })
 
   it('a signed-in visitor MAY be grounded on a gated chunk', async () => {

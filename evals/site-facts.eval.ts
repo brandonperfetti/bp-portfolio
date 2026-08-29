@@ -7,14 +7,9 @@ import {
   SITE_FACT_CASES,
   UNGROUNDED_CASES,
 } from './fixtures/datasets'
-import { createFixtureRetriever, fixtureSourceUrls } from './fixtures/retriever'
-import { SITE_CHROME_URLS } from './fixtures/site-routes'
-import {
-  containsExpectedFact,
-  createCitesKnownSourceUrl,
-  createNeverFabricatesSiteUrl,
-  refusesWhenNotGrounded,
-} from './scorers'
+import { createCitationScorers } from './citation-scorers'
+import { createFixtureRetriever } from './fixtures/retriever'
+import { containsExpectedFact, refusesWhenNotGrounded } from './scorers'
 
 /**
  * Site-fact accuracy for grounded Corvus turns (#82, eval tier 1).
@@ -47,16 +42,7 @@ import {
  * per-block form — so without a second scoped invocation a weak site-fact
  * block could hide behind strong persona scores (#82 decision D4(b)).
  */
-const SOURCE_URLS = fixtureSourceUrls()
-const CITATION_OPTIONS = { alsoReal: SITE_CHROME_URLS }
-const citesKnownSourceUrl = createCitesKnownSourceUrl(
-  SOURCE_URLS,
-  CITATION_OPTIONS,
-)
-const neverFabricatesSiteUrl = createNeverFabricatesSiteUrl(
-  SOURCE_URLS,
-  CITATION_OPTIONS,
-)
+const { citesKnownSourceUrl, neverFabricatesSiteUrl } = createCitationScorers()
 
 /** Production floor and top-k: the corpus answers, or it returns nothing. */
 const retrieve = createFixtureRetriever()

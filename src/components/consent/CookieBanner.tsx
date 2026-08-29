@@ -25,6 +25,28 @@ import { useConsentBannerInset } from './consent-inset'
  * ({@link markExplicitConsentChoice}). Enter animation via `tw-animate-css`,
  * disabled under `prefers-reduced-motion`. Buttons are real `<button>`s so the
  * sitewide teal `:focus-visible` outline applies.
+ *
+ * Two behaviors here read as mistakes and are load-bearing:
+ *
+ * **The layout inset tracks `consentUndecided`, not `visible`.** This banner
+ * un-renders while the dialog is open, but opening the dialog is not a
+ * *choice*, so the reserved space has to outlive the banner that caused it.
+ * Releasing the inset when the dialog replaces the banner would shrink the
+ * document mid-interaction and reintroduce exactly the #110 scroll jump the
+ * guard suite pins. The reservation is released on accept, reject or save —
+ * never on the banner merely going away (#115; `consent-inset.ts` carries why
+ * the inset is owned here rather than by the app-shell layout).
+ *
+ * **The dialog's opener is captured synchronously in the click handler.**
+ * {@link CookieDialog} cannot discover it from `document.activeElement`: this
+ * banner hides itself the moment `activeUI` becomes `'dialog'`, so by the time
+ * the dialog's open effect runs the trigger is already unmounted and
+ * `activeElement` has fallen back to `<body>`. Radix's own restoration is
+ * `preventDefault`ed by the #110 no-scroll open path, so focus would simply
+ * stay on `<body>` after close — a WCAG 2.4.3 break for keyboard and AT users.
+ * Recording the trigger *id* as well as the node is what lets focus return to
+ * the REPLACEMENT button once the banner remounts, since the original node is
+ * gone by then (#112; `consent-focus.ts` carries the fallback order).
  */
 export function CookieBanner({
   consentRequired,

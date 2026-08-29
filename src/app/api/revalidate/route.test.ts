@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * Argument-shape pin for #118: `revalidateTag` must be called with the
- * read-your-writes profile `{ expire: 0 }`, not `'max'`, for every tag this
+ * immediate-expiration profile `{ expire: 0 }`, not `'max'`, for every tag this
  * route revalidates (explicit or fallback). Under cacheComponents `'max'`
  * is stale-while-revalidate with a one-year stale window, so a regression
  * back to `'max'` (or to no second arg) silently reintroduces the ~10-20
@@ -48,7 +48,7 @@ describe('POST /api/revalidate', () => {
     expect(mocks.revalidateTag).not.toHaveBeenCalled()
   })
 
-  it('purges each explicit tag with the read-your-writes expire:0 profile', async () => {
+  it('purges each explicit tag with the immediate-expiration expire:0 profile', async () => {
     const res = await POST(
       makeRequest({ secret: SECRET, tags: ['posts', 'pages'] }),
     )

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { generateText } from 'ai'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { askCorvus, askCorvusGrounded } from './corvus-helpers'
 import { CORVUS_SYSTEM_PROMPT } from '../src/lib/ai/corvus'
@@ -27,6 +27,14 @@ vi.mock('ai', async (importOriginal) => ({
 }))
 
 const generateTextMock = vi.mocked(generateText)
+
+// Runs on the FAILURE path too. As five trailing statements, the cleanup
+// was skipped whenever an assertion above it threw, leaking a stubbed
+// AI_CHAT_MODEL into the tests that followed and making this file's
+// results depend on its own execution order.
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
 
 /** The model id the helper actually passed on the most recent call. */
 function lastModelId(): string {
@@ -73,7 +81,6 @@ describe('eval helper model plumbing', () => {
     expect(generateTextMock.mock.calls.at(-1)?.[0].system).toBe(
       CORVUS_SYSTEM_PROMPT,
     )
-    vi.unstubAllEnvs()
   })
 
   it('still honours AI_CHAT_MODEL on the default path', async () => {
@@ -83,7 +90,6 @@ describe('eval helper model plumbing', () => {
     await askCorvus('who are you?')
 
     expect(lastModelId()).toBe('gpt-5.4-mini')
-    vi.unstubAllEnvs()
   })
 
   it('runs the variant model when one is passed, ungrounded', async () => {
@@ -96,7 +102,6 @@ describe('eval helper model plumbing', () => {
     })
 
     expect(lastModelId()).toBe('gpt-5.6-luna')
-    vi.unstubAllEnvs()
   })
 
   it('runs the variant model when one is passed, grounded', async () => {
@@ -108,7 +113,6 @@ describe('eval helper model plumbing', () => {
     })
 
     expect(lastModelId()).toBe('gpt-5.6-luna')
-    vi.unstubAllEnvs()
   })
 
   it('leaves the grounded default path env-selected', async () => {
@@ -123,6 +127,5 @@ describe('eval helper model plumbing', () => {
     expect(generateTextMock.mock.calls.at(-1)?.[0].system).toBe(
       CORVUS_SYSTEM_PROMPT,
     )
-    vi.unstubAllEnvs()
   })
 })

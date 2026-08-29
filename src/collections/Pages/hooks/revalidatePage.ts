@@ -22,9 +22,14 @@ import type { Page } from '../../../payload-types'
  * stale-while-revalidate with a one-year stale window, so an edit keeps
  * serving old content until a background refresh happens to land AND
  * re-caches that stale render into the CDN in the meantime. `{ expire: 0 }`
- * is the documented read-your-writes profile outside Server Actions: the
- * first post-edit regeneration blocks for fresh data instead of
- * serve-stale-then-refresh.
+ * expires the entry outright instead, so the first post-edit regeneration
+ * blocks for fresh data rather than serve-stale-then-refresh.
+ *
+ * That is an EXPIRATION profile, not read-your-writes. `updateTag` is the
+ * read-your-writes API and it is Server-Action-only; this hook runs in a
+ * Route Handler, where `revalidateTag(tag, { expire: 0 })` is the documented
+ * way to expire immediately (Next 16.3.0 docs, `revalidateTag` /
+ * `updateTag`).
  */
 export const revalidatePage: CollectionAfterChangeHook<Page> = ({
   doc,
@@ -62,7 +67,7 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
 
 /**
  * afterDelete companion to {@link revalidatePage}. Same `{ expire: 0 }`
- * read-your-writes reasoning as {@link revalidatePage} (#118).
+ * immediate-expiration reasoning as {@link revalidatePage} (#118).
  */
 export const revalidateDelete: CollectionAfterDeleteHook<Page> = ({
   doc,

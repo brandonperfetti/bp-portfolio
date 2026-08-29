@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 /**
  * Argument-shape pin for #118: `revalidateTag` must be called with the
- * read-your-writes profile `{ expire: 0 }`, not `'max'`. Under
+ * immediate-expiration profile `{ expire: 0 }`, not `'max'`. Under
  * cacheComponents `'max'` is stale-while-revalidate with a one-year stale
  * window, so a regression back to `'max'` (or to no second arg) silently
  * reintroduces the ~10-20 minute stale-admin-edit bug — this test fails
@@ -32,7 +32,7 @@ const run = (context: Record<string, unknown> = {}) =>
   } as never)
 
 describe('revalidateGlobal', () => {
-  it('purges the global tag with the read-your-writes expire:0 profile', () => {
+  it('purges the global tag with the immediate-expiration expire:0 profile', () => {
     run()
 
     expect(mocks.revalidateTag).toHaveBeenCalledWith('global_site-settings', {

@@ -230,7 +230,7 @@ describe('eval harness wiring', () => {
   it('keeps the model matrix opt-in, ungated, and out of the tree', () => {
     // `eval:matrix` is the only script that may set the flag. If a gate script
     // ever sets it, every variant's scores fold into that run's single global
-    // average and `--threshold 80` stops meaning "is Corvus good enough".
+    // average and `--threshold 75` stops meaning "is Corvus good enough".
     const matrix = packageJson.scripts?.['eval:matrix'] ?? ''
     const parsed =
       /^cd\s+(\S+)\s*&&\s*CORVUS_EVAL_MATRIX=1\s+evalite\s+run\s+(\S+)/.exec(

@@ -29,9 +29,14 @@ import { revalidatePath, revalidateTag } from 'next/cache'
  * stale-while-revalidate with a one-year stale window, so a save keeps
  * serving old content until a background refresh happens to land AND
  * re-caches that stale render into the CDN in the meantime. `{ expire: 0 }`
- * is the documented read-your-writes profile outside Server Actions: the
- * first post-edit regeneration blocks for fresh data instead of
- * serve-stale-then-refresh.
+ * expires the entry outright instead, so the first post-edit regeneration
+ * blocks for fresh data rather than serve-stale-then-refresh.
+ *
+ * That is an EXPIRATION profile, not read-your-writes. `updateTag` is the
+ * read-your-writes API and it is Server-Action-only; this hook runs in a
+ * Route Handler, where `revalidateTag(tag, { expire: 0 })` is the documented
+ * way to expire immediately (Next 16.3.0 docs, `revalidateTag` /
+ * `updateTag`).
  *
  * @param tag - The cache tag the collection's repo caches under.
  * @param paths - Route paths whose prerenders render this collection.
@@ -57,7 +62,7 @@ export const revalidateCollectionTag = (
 /**
  * afterDelete companion to {@link revalidateCollectionTag}.
  *
- * @remarks Same `{ expire: 0 }` read-your-writes reasoning as
+ * @remarks Same `{ expire: 0 }` immediate-expiration reasoning as
  * {@link revalidateCollectionTag} — a delete must stop serving the removed
  * doc's data as fast as a save surfaces new data (#118).
  */

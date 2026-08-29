@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 /**
  * Argument-shape pin for #118: `revalidateTag` must be called with the
- * read-your-writes profile `{ expire: 0 }`, not `'max'`, in BOTH the
+ * immediate-expiration profile `{ expire: 0 }`, not `'max'`, in BOTH the
  * afterChange and afterDelete hooks this module builds. Under
  * cacheComponents `'max'` is stale-while-revalidate with a one-year stale
  * window, so a regression back to `'max'` (or to no second arg) silently

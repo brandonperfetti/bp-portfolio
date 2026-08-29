@@ -313,7 +313,7 @@ matrix, and ad-hoc runs. An explicitly set value still wins.
 passes `--threshold 0` so it reports without gating.
 
 It is opt-in for two reasons and both matter. Every variant's scores would fold
-into the same global average, so the 80% gate would stop meaning "is Corvus
+into the same global average, so the 75% gate would stop meaning "is Corvus
 good enough" and start meaning "is the average of two models good enough". And
 a run is 30 cases × 2 variants × 3 trials = 180 model turns plus the grader
 calls, doubling provider spend on every PR against an explicit in-repo cost

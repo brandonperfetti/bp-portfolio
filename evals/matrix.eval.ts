@@ -14,8 +14,8 @@ import {
   SITE_FACT_CASES,
   UNGROUNDED_CASES,
 } from './fixtures/datasets'
-import { createFixtureRetriever, fixtureSourceUrls } from './fixtures/retriever'
-import { SITE_CHROME_URLS } from './fixtures/site-routes'
+import { createCitationScorers } from './citation-scorers'
+import { createFixtureRetriever } from './fixtures/retriever'
 import {
   answersGeneralQuestions,
   declinesAndRedirects as declinesAbusiveRequests,
@@ -26,8 +26,6 @@ import {
 import {
   answersGeneralQuestion,
   containsExpectedFact,
-  createCitesKnownSourceUrl,
-  createNeverFabricatesSiteUrl,
   declinesAndRedirects,
   refusesWhenNotGrounded,
 } from './scorers'
@@ -61,7 +59,7 @@ import {
  * 1. **The threshold would stop meaning anything.** evalite's `--threshold` is
  *    one global average over every score in the run (0.19.0,
  *    `reporter/EvaliteRunner.js`); there is no per-eval or per-file form. Fold
- *    a second model's scores into `eval:ci` and its 80% gate stops asking "is
+ *    a second model's scores into `eval:ci` and its 75% gate stops asking "is
  *    Corvus good enough" and starts asking "is the average of two models good
  *    enough" — a question no one wants answered, and one a strong incumbent can
  *    pass while carrying a weak candidate.
@@ -110,16 +108,10 @@ interface MatrixBlock {
  * unregistered path costs the gate nothing but a module import.
  */
 function registerMatrix(): void {
-  const sourceUrls = fixtureSourceUrls()
-  const citationOptions = { alsoReal: SITE_CHROME_URLS }
-  const citesKnownSourceUrl = createCitesKnownSourceUrl(
-    sourceUrls,
-    citationOptions,
-  )
-  const neverFabricatesSiteUrl = createNeverFabricatesSiteUrl(
-    sourceUrls,
-    citationOptions,
-  )
+  // The SAME construction the two gate files use, so a matrix run and the
+  // gate score citations identically — the whole point of comparing them.
+  const { citesKnownSourceUrl, neverFabricatesSiteUrl } =
+    createCitationScorers()
 
   // The same two retrievers the gate files build: production floor and top-k,
   // plus the floorless one the adjacent-context block needs.
