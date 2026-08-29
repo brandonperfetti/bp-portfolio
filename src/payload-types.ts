@@ -559,6 +559,9 @@ export interface CarouselBlock {
    * Cards render an image with a title and text; Media renders the image edge-to-edge. Both obey every behaviour knob below.
    */
   variant: 'cards' | 'media';
+  /**
+   * Use reasonably-sized images, especially for the Expo effect: Expo shows each photo at full bleed and cannot use Next.js image optimization, so a multi-megabyte original is re-decoded on every slide change and shows up as sluggish arrows. Around 1600px wide is plenty.
+   */
   slides?:
     | {
         image: number | Media;
