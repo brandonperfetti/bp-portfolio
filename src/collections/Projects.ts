@@ -7,6 +7,10 @@ import {
   revalidateCollectionTag,
   revalidateCollectionTagDelete,
 } from '@/hooks/revalidateCollection'
+import {
+  deleteCorvusEmbeddings,
+  refreshCorvusEmbeddings,
+} from '@/hooks/corvusEmbeddings'
 
 /** Portfolio projects shown on /projects. */
 export const Projects: CollectionConfig = {
@@ -82,8 +86,14 @@ export const Projects: CollectionConfig = {
     ...slugField(),
   ],
   hooks: {
-    afterChange: [revalidateCollectionTag('projects', ['/projects'])],
-    afterDelete: [revalidateCollectionTagDelete('projects', ['/projects'])],
+    afterChange: [
+      revalidateCollectionTag('projects', ['/projects']),
+      refreshCorvusEmbeddings('projects'),
+    ],
+    afterDelete: [
+      revalidateCollectionTagDelete('projects', ['/projects']),
+      deleteCorvusEmbeddings('projects'),
+    ],
   },
   defaultSort: 'sortOrder',
 }

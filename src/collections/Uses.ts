@@ -6,6 +6,10 @@ import {
   revalidateCollectionTag,
   revalidateCollectionTagDelete,
 } from '@/hooks/revalidateCollection'
+import {
+  deleteCorvusEmbeddings,
+  refreshCorvusEmbeddings,
+} from '@/hooks/corvusEmbeddings'
 
 /** Gear/software entries for /uses, grouped by category. */
 export const Uses: CollectionConfig = {
@@ -65,8 +69,14 @@ export const Uses: CollectionConfig = {
     },
   ],
   hooks: {
-    afterChange: [revalidateCollectionTag('uses', ['/uses'])],
-    afterDelete: [revalidateCollectionTagDelete('uses', ['/uses'])],
+    afterChange: [
+      revalidateCollectionTag('uses', ['/uses']),
+      refreshCorvusEmbeddings('uses'),
+    ],
+    afterDelete: [
+      revalidateCollectionTagDelete('uses', ['/uses']),
+      deleteCorvusEmbeddings('uses'),
+    ],
   },
   defaultSort: 'sortOrder',
 }

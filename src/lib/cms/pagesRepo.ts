@@ -25,6 +25,8 @@ const pathToSlug = (path: string): string => {
 /**
  * Page content by route path from the Payload `pages` collection (was Notion).
  *
+ * @remarks `'use cache: remote'` so a `pages` tag purge reaches every
+ * serverless instance, not only the one that ran the hook (#118).
  * @param path - Route path to resolve (for example `/` or `/about`).
  * @returns v3-shaped page content, or `null` when no published page exists —
  * callers already treat `null` as "use hard-coded copy", which preserves the
@@ -33,7 +35,7 @@ const pathToSlug = (path: string): string => {
 export const getCmsPageByPath = async (
   path: string,
 ): Promise<CmsPageContent | null> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.pages)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
@@ -120,9 +122,12 @@ export const RESERVED_PAGE_SLUGS = new Set([
  * `draftMode()`: a dynamic-API read here would opt the whole page out of
  * prerender (the B1 diagnosis's measured blocker). The draft branch is
  * {@link getDraftPageBySlug}.
+ *
+ * @remarks `'use cache: remote'` so a `pages` tag purge reaches every
+ * serverless instance, not only the one that ran the hook (#118).
  */
 const getPublishedPageBySlug = async (slug: string): Promise<Page | null> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.pages)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
@@ -192,9 +197,12 @@ const HOME_PAGE_SLUG = 'home'
  * `home` renders at `/` (not `/home`, which permanently redirects), so listing
  * it here would emit `/home` as a second, redirecting sitemap URL and statically
  * generate a page the redirect immediately shadows.
+ *
+ * `'use cache: remote'` so a `pages` tag purge reaches every serverless
+ * instance, not only the one that ran the hook (#118).
  */
 export const getPublishedPageSlugs = async (): Promise<string[]> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.pages)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })

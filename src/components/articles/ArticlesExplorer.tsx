@@ -12,8 +12,25 @@ import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
+import {
+  ListPagination,
+  PAGE_PARAM,
+  buildPageQueryString,
+  getPageCount,
+  getPageItems,
+  parsePageParam,
+} from '@/components/ui/pagination'
 
 const PRIMARY_FILTER_CHIPS_LIMIT = 12
+
+/**
+ * Articles per page (#88, decided at build: 12).
+ *
+ * @remarks Three rows of the `lg:grid-cols-3` card grid. At the measured
+ * 52-post corpus this is five pages; the set is still fetched whole and only
+ * *rendered* a page at a time (option (b) — see `docs/SEO.md` and #121).
+ */
+const ARTICLES_PAGE_SIZE = 12
 
 function getAuthor(article: ArticleWithSlug) {
   if (typeof article.author === 'string') {
@@ -81,6 +98,15 @@ function articleMatchesQuery(
  * legacy `?category` links are honored on read. The local input is not
  * overwritten from the URL while focused, so the debounce loop can't clobber
  * in-flight typing. `/` focuses search unless a typing target is active.
+ *
+ * @remarks Pagination (#88) is `?page=N` over the same param bag, absent
+ * meaning page 1. It is *client windowing*: the whole publish-safe set still
+ * arrives as a prop and only a {@link ARTICLES_PAGE_SIZE}-item window is
+ * rendered, so `/articles` stays a fully static route with no server-side
+ * `searchParams` read. The page lives only in the URL (no local state), which
+ * is what makes refresh, share and the back button all restore position.
+ * Changing `q` or `topic` drops `page` inside the same `updateUrl` guard that
+ * mirrors the filters, so a filter change always lands on page 1.
  */
 export function ArticlesExplorer({
   articles,
@@ -258,6 +284,21 @@ export function ArticlesExplorer({
       const currentQueryString = searchParams.toString()
       const params = new URLSearchParams(searchParams.toString())
 
+      // #88: any filter change resets to page 1 by dropping the param. This
+      // lives inside the existing mirror (rather than a second effect) so the
+      // skip-when-no-URL-change guard below still decides whether anything is
+      // written at all — a re-render that changes neither filter nor page
+      // stays a no-op.
+      const currentQueryParam = searchParams.get('q') ?? ''
+      const currentTopicParam =
+        searchParams.get('topic') ?? searchParams.get('category') ?? 'All'
+      const filtersChanged =
+        currentQueryParam !== nextQuery.trim() ||
+        currentTopicParam !== nextTopic
+      if (filtersChanged) {
+        params.delete(PAGE_PARAM)
+      }
+
       if (nextQuery.trim()) {
         params.set('q', nextQuery.trim())
       } else {
@@ -305,6 +346,44 @@ export function ArticlesExplorer({
   useEffect(() => {
     updateUrl(debouncedQuery, topic)
   }, [topic, debouncedQuery, updateUrl])
+
+  const totalPages = getPageCount(filtered.length, ARTICLES_PAGE_SIZE)
+  // Derived, never written back: an out-of-range or junk `?page` renders page 1
+  // without the app rewriting the URL someone shared.
+  const currentPage = parsePageParam(searchParams.get(PAGE_PARAM), totalPages)
+  const visibleArticles = useMemo(
+    () => getPageItems(filtered, currentPage, ARTICLES_PAGE_SIZE),
+    [filtered, currentPage],
+  )
+
+  const buildPageHref = useCallback(
+    (nextPage: number) => {
+      const queryString = buildPageQueryString(
+        searchParams.toString(),
+        nextPage,
+      )
+      return queryString ? `${pathname}?${queryString}` : pathname
+    },
+    [pathname, searchParams],
+  )
+
+  const goToPage = useCallback(
+    (nextPage: number) => {
+      const currentQueryString = searchParams.toString()
+      const queryString = buildPageQueryString(currentQueryString, nextPage)
+      if (queryString === currentQueryString) {
+        return
+      }
+      // `push`, not `replace`: a page change is an explicit navigation, and the
+      // history entry is what makes the back button return to where the reader
+      // was (#88 AC). The debounced filter mirror above deliberately keeps
+      // using `replace` so typing never floods history.
+      router.push(queryString ? `${pathname}?${queryString}` : pathname, {
+        scroll: false,
+      })
+    },
+    [pathname, router, searchParams],
+  )
 
   return (
     <div>
@@ -385,11 +464,11 @@ export function ArticlesExplorer({
       <ScrollReveal
         className="mx-auto mt-10 max-w-2xl lg:mx-0 lg:max-w-none"
         targets="article"
-        immediate={queryText.length > 0 || topic !== 'All'}
-        revealKey={`${queryText}|${topic}`}
+        immediate={queryText.length > 0 || topic !== 'All' || currentPage > 1}
+        revealKey={`${queryText}|${topic}|${currentPage}`}
       >
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-          {filtered.map((article) => {
+          {visibleArticles.map((article) => {
             const author = getAuthor(article)
             const topicValues = (article.topics ?? [])
               .map((item) => item.trim())
@@ -501,6 +580,15 @@ export function ArticlesExplorer({
           })}
         </div>
       </ScrollReveal>
+
+      <ListPagination
+        className="mt-10"
+        page={currentPage}
+        totalPages={totalPages}
+        buildHref={buildPageHref}
+        onNavigate={goToPage}
+        label="Articles pagination"
+      />
 
       {filtered.length === 0 && (
         <p className="mt-8 mb-12 text-sm text-zinc-500">

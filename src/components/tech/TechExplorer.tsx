@@ -12,6 +12,14 @@ import {
 
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { TechCard } from '@/components/tech/TechCard'
+import {
+  ListPagination,
+  PAGE_PARAM,
+  buildPageQueryString,
+  getPageCount,
+  getPageItems,
+  parsePageParam,
+} from '@/components/ui/pagination'
 import type { CmsEntityItem } from '@/lib/cms/types'
 import type { TechSignalSummary } from '@/lib/tech/githubSignals'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
@@ -68,6 +76,17 @@ function resolveCategory(item: CmsEntityItem) {
 type SortMode = 'name' | 'active'
 
 /**
+ * Tech entries per page (#88).
+ *
+ * @remarks Sized above the current tech-stack corpus on purpose: the shared
+ * `total > pageSize` threshold makes `/tech` an automatic no-op today (the
+ * control renders nothing, the grid is unchanged) while inheriting the URL
+ * contract the moment the collection outgrows a single screen. Sixteen rows of
+ * the `lg:grid-cols-3` card grid.
+ */
+const TECH_PAGE_SIZE = 48
+
+/**
  * Interactive tech-stack visualization (wow moment #3): debounced search,
  * category filter chips, A–Z / most-active sorting, and live GitHub activity
  * badges with expandable evidence — all URL-synced.
@@ -75,6 +94,11 @@ type SortMode = 'name' | 'active'
  * Syncs `q`/`category`/`sort` state to URL params and supports `/` keyboard
  * focus shortcut for quick filtering. Motion (scroll reveal, hover lift,
  * expand) degrades to a static grid under `prefers-reduced-motion`.
+ *
+ * Adopts the shared `?page=N` contract (#88) over the same params: client
+ * windowing at {@link TECH_PAGE_SIZE}, which is above the current corpus, so
+ * the control renders nothing and the grid is unchanged until the collection
+ * actually grows. Any filter or sort change drops `page`.
  *
  * @param items CMS tech rows to render.
  * @param signals Slug-keyed live GitHub signal summaries (may be empty when
@@ -175,6 +199,16 @@ export function TechExplorer({
       const currentQueryString = searchParams.toString()
       const params = new URLSearchParams(currentQueryString)
 
+      // #88: any filter/sort change resets to page 1 by dropping the param,
+      // inside the same skip-when-no-URL-change guard used for the filters.
+      const filtersChanged =
+        (searchParams.get('q') ?? '') !== nextQuery.trim() ||
+        (searchParams.get('category') ?? 'All') !== nextCategory ||
+        (searchParams.get('sort') === 'active' ? 'active' : 'name') !== nextSort
+      if (filtersChanged) {
+        params.delete(PAGE_PARAM)
+      }
+
       if (nextQuery.trim()) {
         params.set('q', nextQuery.trim())
       } else {
@@ -238,6 +272,38 @@ export function TechExplorer({
     return matches
   }, [normalizedItems, debouncedQuery, category, sort, signals])
   const normalizedQueryText = debouncedQuery.trim()
+
+  const totalPages = getPageCount(filteredItems.length, TECH_PAGE_SIZE)
+  const currentPage = parsePageParam(searchParams.get(PAGE_PARAM), totalPages)
+  const visibleItems = useMemo(
+    () => getPageItems(filteredItems, currentPage, TECH_PAGE_SIZE),
+    [filteredItems, currentPage],
+  )
+
+  const buildPageHref = useCallback(
+    (nextPage: number) => {
+      const queryString = buildPageQueryString(
+        searchParams.toString(),
+        nextPage,
+      )
+      return queryString ? `${pathname}?${queryString}` : pathname
+    },
+    [pathname, searchParams],
+  )
+
+  const goToPage = useCallback(
+    (nextPage: number) => {
+      const currentQueryString = searchParams.toString()
+      const queryString = buildPageQueryString(currentQueryString, nextPage)
+      if (queryString === currentQueryString) {
+        return
+      }
+      router.push(queryString ? `${pathname}?${queryString}` : pathname, {
+        scroll: false,
+      })
+    },
+    [pathname, router, searchParams],
+  )
 
   return (
     <div className="space-y-8">
@@ -331,14 +397,18 @@ export function TechExplorer({
 
       <ScrollReveal
         targets="li"
-        immediate={normalizedQueryText.length > 0 || category !== 'All'}
-        revealKey={`${normalizedQueryText}|${category}`}
+        immediate={
+          normalizedQueryText.length > 0 ||
+          category !== 'All' ||
+          currentPage > 1
+        }
+        revealKey={`${normalizedQueryText}|${category}|${currentPage}`}
       >
         <ul
           role="list"
           className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2 lg:grid-cols-3"
         >
-          {filteredItems.map((tech, index) => (
+          {visibleItems.map((tech, index) => (
             <TechCard
               key={
                 tech.slug ||
@@ -351,6 +421,14 @@ export function TechExplorer({
           ))}
         </ul>
       </ScrollReveal>
+
+      <ListPagination
+        page={currentPage}
+        totalPages={totalPages}
+        buildHref={buildPageHref}
+        onNavigate={goToPage}
+        label="Tech pagination"
+      />
 
       {filteredItems.length === 0 && (
         <p className="text-sm text-zinc-500">

@@ -21,10 +21,12 @@ const CATEGORY_LABELS: Record<string, string> = {
  * Tech stack from the Payload `tech-stack` collection (was Notion in v3),
  * mapped to the v3 `CmsEntityItem` shape shared by /tech and /uses.
  *
+ * @remarks `'use cache: remote'` so a `tech-stack` tag purge reaches every
+ * serverless instance, not only the one that ran the hook (#118).
  * @returns `null` when empty so pages fall back to hard-coded v3 content.
  */
 export const getCmsTech = async (): Promise<CmsEntityItem[] | null> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.tech)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })

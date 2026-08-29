@@ -1,16 +1,19 @@
 # Dependency Review Action
 #
-# This Action will scan dependency manifest files that change as part of a Pull Request,
-# surfacing known-vulnerable versions of the packages declared or updated in the PR.
-# Once installed, if the workflow run is marked as required, PRs introducing known-vulnerable
-# packages will be blocked from merging.
+# Scans the dependency manifests a PR changes and flags known-vulnerable
+# versions being introduced. It diffs the PR's base against its head, so on a
+# normal incremental PR it evaluates only the handful of packages that PR
+# actually adds — not the whole tree.
 #
 # Source repository: https://github.com/actions/dependency-review-action
 # Public documentation: https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/about-dependency-review#dependency-review-enforcement
 name: 'Dependency review'
 on:
+  # Incremental work lands on `develop`, so that is where this check has to run
+  # to be a gate at all — it previously ran only on PRs into `master`, i.e.
+  # only on the trunk→trunk merge where it is least meaningful (#91).
   pull_request:
-    branches: ['master']
+    branches: [develop, master]
 
 # If using a dependency submission action in this workflow this permission will need to be set to:
 #
@@ -31,9 +34,47 @@ jobs:
         uses: actions/checkout@v4
       - name: 'Dependency Review'
         uses: actions/dependency-review-action@v4
-        # Commonly enabled options, see https://github.com/actions/dependency-review-action#configuration-options for all available options.
+        # Policy (#91). Every option below is a documented action input; see
+        # https://github.com/actions/dependency-review-action#configuration-options
+        # (verified against `action.yml` + `src/schemas.ts` at tag v4.9.0).
+        #
+        # `fail-on-severity: high` — the action's default is `low`, which on
+        # this tree means a transitive moderate nobody can act on turns the
+        # check red and teaches everyone to ignore it. `high` is the level at
+        # which a newly-introduced dependency is worth stopping a PR for;
+        # moderates still appear in the summary as information.
+        #
+        # `fail-on-scopes` is deliberately left at its default (`runtime`).
+        # That is what keeps the residual dev-only advisories in #100 —
+        # `@fastify/static` and `file-type`, both reachable only through the
+        # `evalite` devDependency and never shipped — out of the failure path
+        # without an allowlist entry that would also hide a future real one.
+        #
+        # No `allow-licenses` / `deny-licenses`. An allow-list over a tree this
+        # size fails on the first unlabelled transitive and becomes a
+        # rubber-stamp exercise; `deny-licenses` is deprecated upstream
+        # (actions/dependency-review-action#938). License policy is a real
+        # decision, not a default to invent here — left open in #91.
+        #
+        # Trunk→trunk (`develop` → `master`): warn-only. Such a PR diffs the
+        # whole of `develop` against `master`, so every dependency reads as
+        # newly-added and the check re-evaluates the entire tree — which is
+        # exactly how #90 merged with this red. That is not hypothetical under
+        # the policy above either: `image-size@2.0.2` carries two HIGH
+        # advisories in the runtime scope with no published fix (#100), so a
+        # whole-tree evaluation is red on that alone, forever, while
+        # introducing nothing. `warn-only: true` logs findings and completes
+        # successfully (it overrides `fail-on-severity`), keeping the master
+        # merge informational — the issue's third option — while PRs into
+        # `develop`, where dependencies are actually introduced, stay
+        # enforcing. Revisit if `image-size >= 2.0.3` ever ships.
+        #
+        # `comment-summary-in-pr` follows the same split: on `develop` a green
+        # PR should say nothing (the 2.5 MB whole-tree comment on #90 is what
+        # made this check noise), so comment only `on-failure`; on the
+        # informational `master` run the comment IS the deliverable, so
+        # `always`.
         with:
-          comment-summary-in-pr: always
-        #   fail-on-severity: moderate
-        #   deny-licenses: GPL-1.0-or-later, LGPL-2.0-or-later
-        #   retry-on-snapshot-warnings: true
+          fail-on-severity: high
+          warn-only: ${{ github.base_ref == 'master' }}
+          comment-summary-in-pr: ${{ github.base_ref == 'master' && 'always' || 'on-failure' }}

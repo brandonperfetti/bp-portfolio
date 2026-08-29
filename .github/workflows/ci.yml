@@ -23,7 +23,17 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: '24'
+  # Pinned to a full patch version, not a floating '24', so a Node patch
+  # release cannot change CI behavior underneath a push. The pin was first
+  # added on a WRONG diagnosis: the Evalite job's nondeterministic exit-134
+  # ("Assertion failed: (env) != nullptr" in RemoveEnvironmentCleanupHook,
+  # better-sqlite3 on the native stack, firing AFTER the evals had passed)
+  # was blamed on Node 24.19's ObjectWrap change — but the crash reproduced
+  # on this pinned 24.18.0, falsifying that. The real fix is the
+  # better-sqlite3 v13 override in pnpm-workspace.yaml (N-API port; 13.0.2
+  # "fixed process aborting from terminating worker threads"). The pin stays
+  # for determinism only; bump it deliberately.
+  NODE_VERSION: '24.18.0'
   PAYLOAD_SECRET: 'ci-not-a-real-secret'
   NEXT_PUBLIC_SITE_URL: 'http://localhost:3000'
   NEXT_PUBLIC_SITE_NAME: 'BP Portfolio (CI)'
@@ -100,6 +110,21 @@ jobs:
             git diff -- 'src/migrations/*.ts'
             exit 1
           fi
+      # The gate above enforces that a schema change HAS a migration; it says
+      # nothing about that migration's contents, so a new table could ship
+      # without the RLS follow-up docs/PAYLOAD.md mandates and CI would stay
+      # green (#117). This one reads the committed migration sources and fails
+      # when a `CREATE TABLE "x"` has no `ALTER TABLE "x" ENABLE ROW LEVEL
+      # SECURITY` in the same file — companions included, since Payload emits
+      # `_v`/`_rels` as their own CREATE TABLE statements. Migrations at or
+      # before the #72 backfill are grandfathered (that migration enabled RLS
+      # through a dynamic `pg_tables` loop, so the names are not in the text);
+      # the script's header documents the audit behind that boundary. Plain
+      # `node` — no transpile, no extra dependency — and it reads files only,
+      # so it belongs in this DB-less job beside the gate it complements. The
+      # #116 gate above is untouched.
+      - name: Verify new-table migrations enable Row Level Security
+        run: node scripts/check-migrations-rls.mjs
       - name: Unit tests (Vitest + coverage)
         run: pnpm test:coverage
 
@@ -148,8 +173,49 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Run Payload migrations
         run: pnpm migrate
+      # Issue #82 acceptance criterion: migrations must be safely re-runnable.
+      # Payload's ledger (`payload_migrations`) is what makes a second run a
+      # no-op — `migrate()` skips any migration already recorded there and logs
+      # `Migrating: <name>` only for ones it actually executes
+      # (payload/dist/database/migrations/migrate.js). So "clean no-op" is
+      # exactly: exit 0, and zero `Migrating:` lines. A non-zero exit means some
+      # migration is not re-runnable; a `Migrating:` line means the first run
+      # failed to record it as applied and the DDL got executed twice.
+      - name: Assert migrations are idempotent (re-run is a clean no-op)
+        run: |
+          set -euo pipefail
+          log="${RUNNER_TEMP}/migrate-rerun.log"
+          pnpm migrate 2>&1 | tee "$log"
+          if grep -q 'Migrating:' "$log"; then
+            echo "::error::A second 'pnpm migrate' re-executed a migration; the first run did not record it as applied."
+            exit 1
+          fi
+          echo "Second 'pnpm migrate' executed no migrations - ledger is clean."
       - name: Seed e2e content
         run: pnpm seed:e2e
+      # Issue #82, eval tier 2. The site-fact evals in the Evalite job below
+      # ask whether Corvus USES what it is handed; this step asks whether what
+      # it is handed is correct and permitted, and the two need opposite
+      # environments. This one needs a real Postgres with pgvector and the
+      # migration applied, which only this job has.
+      #
+      # It runs the eval root's Vitest tests: the pgvector integration tier
+      # (real migrated schema, real HNSW index, real chunker, real
+      # embeddingsStore SQL, and the real afterChange/afterDelete hooks invoked
+      # as Payload invokes them) plus the pure scorer unit tests, which the
+      # repo's `unit` project does not collect because its include globs cover
+      # src/ and scripts/ only. `--root evals` picks up the eval root's Vitest
+      # config; `*.eval.ts` is not matched by Vitest's default include, so no
+      # eval runs here and nothing needs a provider key.
+      #
+      # The embedder is STUBBED to a deterministic vector and `embedQuery` is
+      # mocked to throw, so this spends no provider dollars and a path that
+      # started embedding at query time fails the build instead of billing for
+      # it. No provider key is set on this job, deliberately. Every row written
+      # uses a doc_id >= 900000 and is deleted in afterAll, so the Playwright
+      # steps below see the database they would have seen anyway.
+      - name: Corvus retrieval integration (pgvector, stubbed embedder)
+        run: pnpm exec vitest run --root evals
       - name: Install Playwright browser (Chromium)
         run: pnpm exec playwright install --with-deps chromium
       - name: Build
@@ -179,7 +245,25 @@ jobs:
       || github.ref == 'refs/heads/develop'
       || github.ref == 'refs/heads/master'
       || startsWith(github.ref, 'refs/heads/rebuild/')
-    continue-on-error: true # TODO(brandon): remove once eval thresholds are trusted
+    # `continue-on-error: true` used to live here. It came off in #82's final
+    # batch, per decision D5(b): drop it only once a baseline exists, so the
+    # first gating run is not also the first honest one. It hid two problems at
+    # once: the job could not fail, and it was not even loading the eval files
+    # (the root `vitest.config.ts` `projects` shadowed evalite's include).
+    # `scripts/eval-harness.test.ts` now guards that chain from the quality job.
+    #
+    # What gates now: `pnpm eval:ci` at a global 75% average, and
+    # `pnpm eval:facts` at a scoped 70% over the site-fact block. Both are
+    # evalite's single-global-average threshold applied to different file sets
+    # — see the D4(b) note on the second step. The numbers are FLOORS set just
+    # under the measured 2026-08-29 keyed baseline (global 78%; site-facts 75%
+    # with zero margin), so the gate catches regressions from day one instead
+    # of opening red. Raising them as scores improve is a deliberate, ticketed
+    # ratchet, not a config tweak.
+    #
+    # A red eval job is a REAL failure of a behavioural contract, not a flake:
+    # persona, safety rails, scope, and site-fact grounding. Fix Corvus or move
+    # the number deliberately; do not put this line back.
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -208,3 +292,18 @@ jobs:
       - name: Run evals
         if: steps.gate.outputs.run == 'true'
         run: pnpm eval:ci
+      # Issue #82, decision D4(b): the site-fact block needs its OWN threshold,
+      # and evalite cannot express one. `--threshold` is a single global
+      # average over every score in the run (evalite 0.19.0,
+      # reporter/EvaliteRunner.js) with no per-eval or per-file form — so with
+      # one invocation a weak site-fact block hides behind strong persona
+      # scores. `evalite run <path>` filters to one file, which is how the
+      # block gets a gate of its own. The path is relative to the eval root,
+      # because the script cds there first.
+      #
+      # This re-runs the site-fact evals, so it costs a second pass over that
+      # file's cases. That is the price of a per-block gate; keeping the block
+      # small is what keeps the price small.
+      - name: Run site-fact evals at their own threshold
+        if: steps.gate.outputs.run == 'true'
+        run: pnpm eval:facts

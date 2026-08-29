@@ -12,11 +12,14 @@ import type { Page, Post } from '@/payload-types'
  * @remarks Repo-layer home for the fetchers that previously lived inside
  * `CmsPageBlocks`/`CmsPostBlocks` (fresh-eyes review 2026-08, n2) —
  * components render, repos fetch (docs/STATE.md).
+ *
+ * `'use cache: remote'` so a `pages` tag purge reaches every serverless
+ * instance, not only the one that ran the hook (#118).
  */
 export const getPageLayoutBySlug = async (
   slug: string,
 ): Promise<Page['layout'] | null> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.pages)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
@@ -31,11 +34,16 @@ export const getPageLayoutBySlug = async (
   return docs[0]?.layout ?? null
 }
 
-/** Post counterpart of {@link getPageLayoutBySlug}, tagged `'posts'`. */
+/**
+ * Post counterpart of {@link getPageLayoutBySlug}, tagged `'posts'`.
+ *
+ * @remarks `'use cache: remote'` so a `posts` tag purge reaches every
+ * serverless instance, not only the one that ran the hook (#118).
+ */
 export const getPostLayoutBySlug = async (
   slug: string,
 ): Promise<Post['layout'] | null> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.articles)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })

@@ -12,13 +12,15 @@ const toYearLabel = (iso: string) => new Date(iso).getUTCFullYear().toString()
  * Work history for the home-page résumé, from the Payload `work-history`
  * collection (seeded from the Notion planning DB; edited in admin since).
  *
+ * @remarks `'use cache: remote'` so a `work-history` tag purge reaches every
+ * serverless instance, not only the one that ran the hook (#118).
  * @returns `null` when the collection is empty so the home page falls back
  * to its built-in list. Current roles render an evergreen "Present" end.
  */
 export const getCmsWorkHistory = async (): Promise<
   CmsWorkHistoryItem[] | null
 > => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.workHistory)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })

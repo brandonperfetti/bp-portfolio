@@ -9,6 +9,11 @@ import { Button } from '@/components/ui/button'
 
 import { markExplicitConsentChoice } from './consent-config'
 import { useConsentConfig } from './consent-context'
+import {
+  type ConsentTriggerCapture,
+  restoreConsentTriggerFocus,
+  takeConsentTrigger,
+} from './consent-focus'
 
 /**
  * Custom "Manage cookies" dialog in bp's design system — headless c15t driven
@@ -42,13 +47,19 @@ export function CookieDialog() {
   const close = () => setActiveUI('none')
 
   const contentRef = useRef<HTMLDivElement>(null)
-  // The element focused when the dialog opened (the footer "Manage cookies" or
-  // banner "Customize"/"cookie details" trigger), so focus returns there on
-  // close without a scroll jump.
+  // #112: the trigger recorded synchronously in its own click handler. This is
+  // the authoritative return target — `document.activeElement` (below) is
+  // already `<body>` for the banner flows, because `CookieBanner` un-renders
+  // itself the moment `activeUI` becomes 'dialog', taking the "Customize" /
+  // "cookie details" button with it before this effect ever runs.
+  const captureRef = useRef<ConsentTriggerCapture | null>(null)
+  // Fallback for an open that did not come through a known trigger: the element
+  // focused when the dialog opened, so focus returns there without a scroll jump.
   const triggerRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (!open) return
+    captureRef.current = takeConsentTrigger()
     triggerRef.current = document.activeElement as HTMLElement | null
     // Focus the dialog for a11y WITHOUT scrolling — Radix's default
     // onOpenAutoFocus focuses the top focus-guard and yanks the page to
@@ -71,6 +82,17 @@ export function CookieDialog() {
           onOpenAutoFocus={(e) => e.preventDefault()}
           onCloseAutoFocus={(e) => {
             e.preventDefault()
+            // #112: restore to the *recorded* trigger — re-finding a banner
+            // button that remounted as a new node, or falling back to the
+            // persistent footer entry point — instead of leaving focus on
+            // `<body>`. Only when the dialog was opened by something other than
+            // a known trigger do we fall back to the old activeElement capture.
+            const capture = captureRef.current
+            captureRef.current = null
+            if (capture) {
+              restoreConsentTriggerFocus(capture)
+              return
+            }
             triggerRef.current?.focus({ preventScroll: true })
           }}
           className="fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 animate-in flex-col overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-xl duration-200 zoom-in-95 fade-in motion-reduce:animate-none dark:border-zinc-700/60 dark:bg-zinc-900"

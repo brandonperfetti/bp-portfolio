@@ -6,6 +6,10 @@ import {
   revalidateCollectionTag,
   revalidateCollectionTagDelete,
 } from '@/hooks/revalidateCollection'
+import {
+  deleteCorvusEmbeddings,
+  refreshCorvusEmbeddings,
+} from '@/hooks/corvusEmbeddings'
 
 /**
  * Résumé entries for the home-page Work block.
@@ -88,8 +92,14 @@ export const WorkHistory: CollectionConfig = {
     },
   ],
   hooks: {
-    afterChange: [revalidateCollectionTag('work-history', ['/'])],
-    afterDelete: [revalidateCollectionTagDelete('work-history', ['/'])],
+    afterChange: [
+      revalidateCollectionTag('work-history', ['/']),
+      refreshCorvusEmbeddings('work-history'),
+    ],
+    afterDelete: [
+      revalidateCollectionTagDelete('work-history', ['/']),
+      deleteCorvusEmbeddings('work-history'),
+    ],
   },
   defaultSort: 'sortOrder',
 }

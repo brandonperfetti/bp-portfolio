@@ -20,7 +20,9 @@
   `useRouter` throws), the project's alias array stubs the server blocks
   before `@/` resolves (mirrors `.storybook/main.ts` viteFinal), and
   sandboxes pin the browser via `PLAYWRIGHT_EXECUTABLE_PATH`.
-- **Evals** — Evalite for Corvus (see `docs/AI.md`).
+- **Evals** — Evalite for Corvus, run from the `evals/` root and **gating** as
+  of #82; `evals/*.test.ts` run in `e2e` via `vitest run --root evals`, not in
+  `pnpm test` (see `docs/AI.md` §Evals).
 
 ## CI (`.github/workflows/ci.yml`)
 

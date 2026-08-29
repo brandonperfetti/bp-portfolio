@@ -1,11 +1,15 @@
 'use client'
 
+import { useState } from 'react'
+
 import { useConsentManager } from '@c15t/react'
 
 import { Button } from '@/components/ui/button'
 
 import { shouldShowBanner, markExplicitConsentChoice } from './consent-config'
 import { useConsentConfig } from './consent-context'
+import { CONSENT_TRIGGER_ATTR, captureConsentTrigger } from './consent-focus'
+import { useConsentBannerInset } from './consent-inset'
 
 /**
  * Custom cookie-consent banner in bp's own design system (zinc/teal, Tailwind
@@ -21,6 +25,28 @@ import { useConsentConfig } from './consent-context'
  * ({@link markExplicitConsentChoice}). Enter animation via `tw-animate-css`,
  * disabled under `prefers-reduced-motion`. Buttons are real `<button>`s so the
  * sitewide teal `:focus-visible` outline applies.
+ *
+ * Two behaviors here read as mistakes and are load-bearing:
+ *
+ * **The layout inset tracks `consentUndecided`, not `visible`.** This banner
+ * un-renders while the dialog is open, but opening the dialog is not a
+ * *choice*, so the reserved space has to outlive the banner that caused it.
+ * Releasing the inset when the dialog replaces the banner would shrink the
+ * document mid-interaction and reintroduce exactly the #110 scroll jump the
+ * guard suite pins. The reservation is released on accept, reject or save —
+ * never on the banner merely going away (#115; `consent-inset.ts` carries why
+ * the inset is owned here rather than by the app-shell layout).
+ *
+ * **The dialog's opener is captured synchronously in the click handler.**
+ * {@link CookieDialog} cannot discover it from `document.activeElement`: this
+ * banner hides itself the moment `activeUI` becomes `'dialog'`, so by the time
+ * the dialog's open effect runs the trigger is already unmounted and
+ * `activeElement` has fallen back to `<body>`. Radix's own restoration is
+ * `preventDefault`ed by the #110 no-scroll open path, so focus would simply
+ * stay on `<body>` after close — a WCAG 2.4.3 break for keyboard and AT users.
+ * Recording the trigger *id* as well as the node is what lets focus return to
+ * the REPLACEMENT button once the banner remounts, since the original node is
+ * gone by then (#112; `consent-focus.ts` carries the fallback order).
  */
 export function CookieBanner({
   consentRequired,
@@ -31,9 +57,31 @@ export function CookieBanner({
     useConsentManager()
   const { banner, features } = useConsentConfig()
 
-  const visible =
-    shouldShowBanner({ consentRequired, hasConsented: hasConsented() }) &&
-    activeUI !== 'dialog'
+  // Consent required and still undecided — the condition the #115 shell inset
+  // tracks. Deliberately NOT the same as `visible`: the banner un-renders while
+  // the dialog is open, but opening the dialog is not a *choice*, so the
+  // reserved space must survive it (releasing it there would shrink the
+  // document mid-open and re-introduce the #110 scroll jump).
+  const consentUndecided = shouldShowBanner({
+    consentRequired,
+    hasConsented: hasConsented(),
+  })
+  const visible = consentUndecided && activeUI !== 'dialog'
+
+  // State-backed ref callback (not `useRef`): the effect must re-run when the
+  // banner unmounts for the dialog and again when it comes back.
+  const [bannerEl, setBannerEl] = useState<HTMLElement | null>(null)
+  useConsentBannerInset(consentUndecided, bannerEl)
+
+  // #112: record the opener synchronously, before React unmounts this banner —
+  // by the time `CookieDialog`'s open effect runs, `document.activeElement` has
+  // already fallen back to `<body>`.
+  const openDialogFrom =
+    (id: 'banner-customize' | 'banner-cookie-details') =>
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      captureConsentTrigger(id, event.currentTarget)
+      setActiveUI('dialog', { force: true })
+    }
 
   if (!visible) return null
 
@@ -48,6 +96,7 @@ export function CookieBanner({
 
   return (
     <div
+      ref={setBannerEl}
       role="region"
       aria-label="Cookie consent"
       className="fixed inset-x-0 bottom-0 z-50 animate-in px-3 duration-300 fade-in slide-in-from-bottom-4 motion-reduce:animate-none sm:px-4"
@@ -63,7 +112,8 @@ export function CookieBanner({
             {banner.message} See{' '}
             <button
               type="button"
-              onClick={() => setActiveUI('dialog', { force: true })}
+              {...{ [CONSENT_TRIGGER_ATTR]: 'banner-cookie-details' }}
+              onClick={openDialogFrom('banner-cookie-details')}
               className="font-medium text-teal-700 underline underline-offset-2 hover:text-teal-600 dark:text-teal-400 dark:hover:text-teal-300"
             >
               {banner.cookieDetailsLabel}
@@ -82,7 +132,8 @@ export function CookieBanner({
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => setActiveUI('dialog', { force: true })}
+              {...{ [CONSENT_TRIGGER_ATTR]: 'banner-customize' }}
+              onClick={openDialogFrom('banner-customize')}
             >
               {banner.customizeLabel}
             </Button>

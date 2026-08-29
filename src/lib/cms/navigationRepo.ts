@@ -18,9 +18,13 @@ const DEFAULT_NAVIGATION: CmsNavigationItem[] = HEADER_NAV_LINKS.map(
 /**
  * Header navigation from the Payload `navigation` global (was Notion in v3),
  * falling back to the v3 hard-coded nav so an empty CMS still renders.
+ *
+ * @remarks `'use cache: remote'` so a `global_navigation` tag purge reaches
+ * every serverless instance, not only the one that ran the hook
+ * (#118).
  */
 export const getCmsNavigation = async (): Promise<CmsNavigationItem[]> => {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.navigation)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
