@@ -290,8 +290,26 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: pnpm install --frozen-lockfile
       - name: Run evals
+        id: eval_ci
         if: steps.gate.outputs.run == 'true'
         run: pnpm eval:ci
+      # Issue #122. A red gate used to print one number and nothing else:
+      # evalite 0.19.0 renders its per-row table only under
+      # `modules.length === 1 && !hideTable` (evalite/dist/reporter.js), and
+      # `eval:ci` runs five eval files — so the table is never reached.
+      # Nothing here sets `--hideTable`; there is no flag to flip. What evalite
+      # does support is `--outputPath`, written BEFORE the threshold's
+      # `process.exit`, so a failing run still leaves the full run as JSON.
+      # This prints the failing rows out of it — file, eval, score, per-scorer
+      # breakdown, and the prompt — so a red gate can be diagnosed from the log
+      # instead of by re-running the evals locally with a key.
+      #
+      # Only on failure, so a green run stays quiet. The reporter always exits
+      # 0: the step above has already failed the job, and a reporter that could
+      # go red on its own would just be a second, less informative failure.
+      - name: Report failing eval rows
+        if: ${{ !cancelled() && steps.eval_ci.outcome == 'failure' }}
+        run: node scripts/report-eval-failures.mjs evals/corvus-eval-run.json
       # Issue #82, decision D4(b): the site-fact block needs its OWN threshold,
       # and evalite cannot express one. `--threshold` is a single global
       # average over every score in the run (evalite 0.19.0,

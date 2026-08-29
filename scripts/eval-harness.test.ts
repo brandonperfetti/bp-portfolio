@@ -269,6 +269,33 @@ describe('eval harness wiring', () => {
     }
   })
 
+  it('writes the gate run as JSON, gitignored, for the failure report', () => {
+    // #122. Evalite 0.19.0 renders its per-row table only under
+    // `modules.length === 1 && !hideTable` (evalite/dist/reporter.js), and
+    // `eval:ci` runs five files — so a red gate printed one average and
+    // nothing else. `--outputPath` is the mechanism evalite does offer, and
+    // `scripts/report-eval-failures.mjs` reads exactly this file. Drop the
+    // flag and CI's failure report silently degrades to "no run JSON found".
+    const outputPath = /--outputPath\s+(\S+)/.exec(
+      packageJson.scripts?.['eval:ci'] ?? '',
+    )?.[1]
+
+    expect(
+      outputPath,
+      '`eval:ci` must pass --outputPath for the failure report',
+    ).toBeDefined()
+    expect(outputPath, 'the failure report reads a JSON run document').toMatch(
+      /\.json$/,
+    )
+
+    // Same reasoning as the matrix output: one run's numbers are not tree
+    // content, and this one is written on every CI eval run.
+    expect(
+      readFileSync(join(EVAL_ROOT, '.gitignore'), 'utf8'),
+      'the gate run JSON must be gitignored',
+    ).toContain(basename(outputPath as string))
+  })
+
   it('keeps evalite.config.ts inside the eval root', () => {
     // evalite loads config from `path.join(cwd, 'evalite.config.{ts,mts,js,mjs}')`
     // only (evalite/dist/config.js) — a root-level copy would be ignored, and

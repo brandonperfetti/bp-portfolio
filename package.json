@@ -30,7 +30,7 @@
     "generate:types": "payload generate:types",
     "generate:importmap": "payload generate:importmap",
     "eval": "cd evals && evalite watch",
-    "eval:ci": "cd evals && evalite run --threshold 75",
+    "eval:ci": "cd evals && evalite run --threshold 75 --outputPath ./corvus-eval-run.json",
     "eval:facts": "cd evals && evalite run site-facts.eval.ts --threshold 70",
     "eval:matrix": "cd evals && CORVUS_EVAL_MATRIX=1 evalite run matrix.eval.ts --threshold 0 --outputPath ./corvus-matrix.json"
   },
