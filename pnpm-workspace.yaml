@@ -27,10 +27,22 @@ overrides:
   valibot: '^1.4.2' # Storybook MCP addon (dev)
   'brace-expansion@1': '^1.1.18'
   'brace-expansion@5': '^5.0.9'
+  # better-sqlite3: evalite's results DB. v11 uses the NAN-style ObjectWrap
+  # pattern, which aborts node at worker-thread teardown ("Assertion failed:
+  # (env) != nullptr" in RemoveEnvironmentCleanupHook, exit 134) — measured
+  # twice on PR #123's Evalite CI job, AFTER the evals had already passed, on
+  # both Node 24.20 and pinned 24.18. v13 migrated to N-API (13.0.0) and
+  # explicitly "fixed process aborting from terminating worker threads"
+  # (13.0.2). Major jump, but the consumer surface is evalite's internal DB
+  # only — nothing in src/ imports it.
+  better-sqlite3: '^13.0.3'
 allowBuilds:
   '@sentry/cli': true
   autoevals: true
-  better-sqlite3: true
+  # better-sqlite3: v13 ships per-platform prebuilds inside the npm package
+  # (gypfile: false) — nothing needs building, so its build script stays
+  # disallowed. v11 needed this true.
+  better-sqlite3: false
   bufferutil: true
   esbuild: true
   sharp: true

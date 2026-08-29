@@ -23,16 +23,16 @@ permissions:
   contents: read
 
 env:
-  # Pinned to a full patch version, not a floating '24'. Node 24.19.0 added
-  # cleanup hooks to node::ObjectWrap (nodejs/node#63642), which makes native
-  # addons using the NAN-style ObjectWrap pattern — better-sqlite3, which
-  # evalite uses for its results DB — abort at process exit with
-  # "Assertion failed: (env) != nullptr" in RemoveEnvironmentCleanupHook
-  # (exit 134), NONDETERMINISTICALLY and after the evals have already passed.
-  # 24.20.0's changelog documents no fix. 24.18.0 predates the change and is
-  # known good. Unpin (or bump) deliberately once upstream resolves it, and
-  # verify by re-running the Evalite job a few times — the crash is racy, so
-  # one green run proves nothing.
+  # Pinned to a full patch version, not a floating '24', so a Node patch
+  # release cannot change CI behavior underneath a push. The pin was first
+  # added on a WRONG diagnosis: the Evalite job's nondeterministic exit-134
+  # ("Assertion failed: (env) != nullptr" in RemoveEnvironmentCleanupHook,
+  # better-sqlite3 on the native stack, firing AFTER the evals had passed)
+  # was blamed on Node 24.19's ObjectWrap change — but the crash reproduced
+  # on this pinned 24.18.0, falsifying that. The real fix is the
+  # better-sqlite3 v13 override in pnpm-workspace.yaml (N-API port; 13.0.2
+  # "fixed process aborting from terminating worker threads"). The pin stays
+  # for determinism only; bump it deliberately.
   NODE_VERSION: '24.18.0'
   PAYLOAD_SECRET: 'ci-not-a-real-secret'
   NEXT_PUBLIC_SITE_URL: 'http://localhost:3000'
