@@ -431,7 +431,6 @@ describe('list payload size guard (#76 Phase 0)', () => {
     const bytes = Buffer.byteLength(JSON.stringify(summaries), 'utf8')
 
     // Emitted so `pnpm test` reports the measured worst-case size.
-    // eslint-disable-next-line no-console
     console.log(`[#76 Phase 0] list payload, 1000 posts: ${bytes} bytes`)
 
     expect(summaries).toHaveLength(1000)

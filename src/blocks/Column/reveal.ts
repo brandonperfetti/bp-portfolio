@@ -4,12 +4,17 @@
  * `Column/sticky.ts` established.
  *
  * @remarks This reproduces the homepage rail's entrance choreography. Home
- * wraps its sticky rail in `ScrollReveal targets="[data-reveal-item]" y={20}
- * stagger={0.16}` and marks each rail card (`Messenger`, `Resume`) with
- * `data-reveal-item`, so the cards reveal one after another as the rail comes
- * into view. `reveal.test.ts` reads those exact params back out of the
- * homepage source, the way `sticky.test.ts` guards the sticky offset, so a
- * change on either side fails loudly.
+ * wraps its sticky rail in:
+ *
+ * ```tsx
+ * <ScrollReveal targets="[data-reveal-item]" y={20} stagger={0.16}>
+ * ```
+ *
+ * and marks each rail card (`Messenger`, `Resume`) with `data-reveal-item`,
+ * so the cards reveal one after another as the rail comes into view.
+ * `reveal.test.ts` reads those exact params back out of the homepage source,
+ * the way `sticky.test.ts` guards the sticky offset, so a change on either
+ * side fails loudly.
  *
  * Exposed as a fixed capability (a checkbox), not free parameter controls:
  * the numbers are the homepage's, not an editor's to dial. `y` and `stagger`

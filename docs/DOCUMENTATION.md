@@ -6,8 +6,10 @@
   collection/field/hook, and non-obvious utility carries a TSDoc comment:
   intent first, then params/returns where non-trivial, `@remarks` for
   gotchas and rationale.
-- `eslint-plugin-tsdoc` validates syntax in CI (warnings today — keep them
-  at zero-error and trend warnings down).
+- `eslint-plugin-tsdoc` validates syntax in CI. The rule stays severity
+  `warn` so `eslint --fix` at commit time doesn't block a work-in-progress
+  doc comment, but `pnpm lint` runs `--max-warnings=0` — so any tsdoc
+  warning fails pre-push and CI. Fix the comment; don't suppress it.
 - Document **why**, not what: tradeoffs, invariants, failure modes,
   cross-file contracts (e.g. "repoCount reads as at-least-N").
 

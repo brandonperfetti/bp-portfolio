@@ -100,8 +100,8 @@ const TECH_PAGE_SIZE = 48
  * the control renders nothing and the grid is unchanged until the collection
  * actually grows. Any filter or sort change drops `page`.
  *
- * @param items CMS tech rows to render.
- * @param signals Slug-keyed live GitHub signal summaries (may be empty when
+ * @param items - CMS tech rows to render.
+ * @param signals - Slug-keyed live GitHub signal summaries (may be empty when
  * the scan is unconfigured — badges and the sort toggle hide themselves).
  * @returns Rendered tech explorer UI.
  */

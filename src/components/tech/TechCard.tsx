@@ -61,9 +61,9 @@ function SignalMeter({ intensity }: { intensity: number }) {
  * a `motion-safe` CSS grid transition so reduced-motion users get an instant
  * toggle.
  *
- * @param item CMS entity row (tech or uses).
- * @param signal Live GitHub signal summary for this item, when available.
- * @param monogram Show the first-letter fallback circle when the item has
+ * @param item - CMS entity row (tech or uses).
+ * @param signal - Live GitHub signal summary for this item, when available.
+ * @param monogram - Show the first-letter fallback circle when the item has
  * no logo. `/tech` keeps it (visual anchor per card); `/uses` passes
  * `false` because its entries are logo-less by design and the circles
  * read as missing images.

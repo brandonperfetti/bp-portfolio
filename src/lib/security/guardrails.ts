@@ -24,7 +24,7 @@ let injectedGuardrailStores: GuardrailStores | null = null
 /**
  * Injects or clears custom guardrail stores for rate/daily counters.
  *
- * @param store Custom stores to use globally, or `null` to clear and fall back
+ * @param store - Custom stores to use globally, or `null` to clear and fall back
  * to lazily created in-memory stores.
  *
  * Side effects:
@@ -184,7 +184,7 @@ function pruneGuardrailBuckets(nowMs = Date.now()) {
  * `x-real-ip`, fall back to the rightmost XFF entry, and never read the
  * leftmost.
  *
- * @param request Incoming HTTP request.
+ * @param request - Incoming HTTP request.
  * @returns Platform-trusted client IP, or `'unknown'` when unavailable.
  */
 export function getRequestClientIp(request: Request) {
@@ -218,7 +218,7 @@ export function getRequestClientIp(request: Request) {
  * request on staging. Browsers set `Origin` themselves, so a cross-site
  * page still can't forge a match — this stays a CSRF guard, not less.
  *
- * @param request Incoming HTTP request.
+ * @param request - Incoming HTTP request.
  * @returns `true` when source is allowed; otherwise `false`.
  */
 export function isAllowedRequestSource(request: Request) {
@@ -263,7 +263,7 @@ export function isAllowedRequestSource(request: Request) {
 /**
  * Applies fixed-window per-key rate limiting.
  *
- * @param options Rate-limit inputs (`key`, `limit`, `windowMs`, optional `now` override).
+ * @param options - Rate-limit inputs (`key`, `limit`, `windowMs`, optional `now` override).
  * @returns Allow/remaining/reset metadata for caller response handling.
  *
  * Side effects:
@@ -317,7 +317,7 @@ export function applyRateLimit(options: {
 /**
  * Applies per-day quota counting for a given key.
  *
- * @param options Daily quota inputs (`key`, `limit`, optional `now` override).
+ * @param options - Daily quota inputs (`key`, `limit`, optional `now` override).
  * @returns Allow/remaining metadata; `limit <= 0` is treated as unlimited.
  *
  * Side effects:
@@ -411,7 +411,7 @@ export function getSecurityLimits() {
 /**
  * Verifies a Cloudflare Turnstile token when configured.
  *
- * @param options Verification inputs (`token`, optional `ip`).
+ * @param options - Verification inputs (`token`, optional `ip`).
  * @returns `{ required: false, ok: true }` when Turnstile is disabled,
  * otherwise `{ required: true, ok }` based on verification result.
  *

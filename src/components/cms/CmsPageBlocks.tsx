@@ -9,8 +9,8 @@ import { getPageLayoutBySlug } from '@/lib/cms/layoutsRepo'
  * @remarks Spacer-only layouts (the seed default) are treated as empty so
  * routes don't grow stray whitespace before any real blocks are added.
  *
- * @param slug Pages collection slug for this route (`home` for `/`).
- * @param exclude Block types the route consumes in a dedicated slot instead
+ * @param slug - Pages collection slug for this route (`home` for `/`).
+ * @param exclude - Block types the route consumes in a dedicated slot instead
  * (home renders its `photoStrip` block under the hero, not down here).
  */
 export async function CmsPageBlocks({

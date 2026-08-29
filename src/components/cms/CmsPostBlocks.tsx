@@ -11,7 +11,7 @@ import { getPostLayoutBySlug } from '@/lib/cms/layoutsRepo'
  * full sections. These are layout furniture, not gated body content, so they
  * render for gated posts too — the article body itself stays server-gated.
  *
- * @param slug Post slug (the article page's own slug).
+ * @param slug - Post slug (the article page's own slug).
  */
 export async function CmsPostBlocks({ slug }: { slug: string }) {
   const layout = await getPostLayoutBySlug(slug)

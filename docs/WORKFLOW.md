@@ -24,8 +24,11 @@
 ## Local hooks
 
 - Husky pre-commit: lint-staged (prettier + eslint on staged files).
-- Pre-push: typecheck + unit tests. Stale `.next` types can false-fail the
-  push — remove `.next` and retry before suspecting real breakage.
+- Pre-push: format check + lint + typecheck + unit tests. `pnpm lint` is
+  `eslint . --max-warnings=0`, so a single ESLint or tsdoc warning fails the
+  push and CI alike — one gate, defined in one place (`package.json`). Stale
+  `.next` types can false-fail the push — remove `.next` and retry before
+  suspecting real breakage.
 
 ## Generated files
 

@@ -3,8 +3,11 @@
  * "Forgot password?" flow only logs to the server console).
  *
  * Usage (against whatever DATABASE_URL/.env points at):
- *   ADMIN_EMAIL=<email> ADMIN_PASSWORD='new-password' \
- *     pnpm payload run scripts/set-admin-password.ts
+ *
+ * ```sh
+ * ADMIN_EMAIL=<email> ADMIN_PASSWORD='new-password' \
+ *   pnpm payload run scripts/set-admin-password.ts
+ * ```
  */
 import config from '@payload-config'
 import { getPayload } from 'payload'

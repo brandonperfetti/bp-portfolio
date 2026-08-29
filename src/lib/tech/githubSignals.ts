@@ -215,8 +215,8 @@ function lookupCandidate(
  * explicit aliases (including scoped-package prefixes like
  * `@testing-library/`), then the `githubRepo` short name.
  *
- * @param index Cached scan output (or `null` when unconfigured).
- * @param item CMS tech row (name and optional `owner/name` repo hint).
+ * @param index - Cached scan output (or `null` when unconfigured).
+ * @param item - CMS tech row (name and optional `owner/name` repo hint).
  * @returns Matching summary, or `null` when the scan has no evidence.
  */
 export function matchTechSignal(
