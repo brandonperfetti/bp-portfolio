@@ -269,6 +269,91 @@ describe('eval harness wiring', () => {
     }
   })
 
+  it('writes the gate run as JSON, gitignored, for the failure report', () => {
+    // #122. Evalite 0.19.0 renders its per-row table only under
+    // `modules.length === 1 && !hideTable` (evalite/dist/reporter.js), and
+    // `eval:ci` runs five files — so a red gate printed one average and
+    // nothing else. `--outputPath` is the mechanism evalite does offer, and
+    // `scripts/report-eval-failures.mjs` reads exactly this file. Drop the
+    // flag and CI's failure report silently degrades to "no run JSON found".
+    const outputPath = /--outputPath\s+(\S+)/.exec(
+      packageJson.scripts?.['eval:ci'] ?? '',
+    )?.[1]
+
+    expect(
+      outputPath,
+      '`eval:ci` must pass --outputPath for the failure report',
+    ).toBeDefined()
+    expect(outputPath, 'the failure report reads a JSON run document').toMatch(
+      /\.json$/,
+    )
+
+    // Same reasoning as the matrix output: one run's numbers are not tree
+    // content, and this one is written on every CI eval run.
+    expect(
+      readFileSync(join(EVAL_ROOT, '.gitignore'), 'utf8'),
+      'the gate run JSON must be gitignored',
+    ).toContain(basename(outputPath as string))
+  })
+
+  it('runs eval turns on production’s completion budget', () => {
+    // #122 ROOT CAUSE, and the guard that stops it recurring. The harness ran
+    // at 512 output tokens while production passes 1024, and gpt-5-mini is a
+    // reasoning model whose hidden reasoning tokens come out of that same
+    // allowance — so the gate systematically produced turns that finished on
+    // `length` with no visible text, which the empty-output floor then
+    // (correctly) scored 0. PR #126's first keyed run: 15+ rows finishing on
+    // `length`, safety at 44%, global 72% against the 75 floor.
+    //
+    // `corvus-helpers.ts` mirrors the number as a literal rather than calling
+    // `resolveGuardrailLimits()`, because that reads process.env and would
+    // make the gate's budget depend on the shell. A mirror needs a drift
+    // guard, so this asserts it against BOTH sources of production's default.
+    const harness = readFileSync(join(EVAL_ROOT, 'corvus-helpers.ts'), 'utf8')
+    const evalBudget = Number(
+      /EVAL_MAX_OUTPUT_TOKENS\s*=\s*(\d+)/.exec(harness)?.[1],
+    )
+
+    const guardrails = readFileSync(
+      join(REPO_ROOT, 'src/lib/security/guardrails.ts'),
+      'utf8',
+    )
+    const productionDefault = Number(
+      /maxCompletionTokens:\s*toPositiveInt\(\s*[\s\S]*?,\s*(\d+),\s*\d+,?\s*\)/.exec(
+        guardrails,
+      )?.[1],
+    )
+
+    const envExample = Number(
+      /^AI_MAX_COMPLETION_TOKENS=(\d+)$/m.exec(
+        readFileSync(join(REPO_ROOT, '.env.example'), 'utf8'),
+      )?.[1],
+    )
+
+    expect(productionDefault, 'guardrails.ts default must be readable').toBe(
+      1024,
+    )
+    expect(envExample, '.env.example must agree with it').toBe(
+      productionDefault,
+    )
+    expect(
+      evalBudget,
+      'the eval budget must mirror production, or the gate scores Corvus under a tighter budget than a visitor gets',
+    ).toBe(productionDefault)
+  })
+
+  it('passes no temperature, which the gate’s model would discard', () => {
+    // Removed on this branch after PR #126 logged
+    // `AI SDK Warning (openai.responses / gpt-5-mini): The feature
+    // "temperature" is not supported` on every call. @ai-sdk/openai@3.0.87
+    // sets `baseArgs.temperature = void 0` for a reasoning model on the
+    // Responses path, so the value never reached OpenAI — it was log noise
+    // pretending to be a determinism fix. Pinned so it is not reinstated.
+    expect(
+      readFileSync(join(EVAL_ROOT, 'corvus-helpers.ts'), 'utf8'),
+    ).not.toMatch(/^\s*temperature:/m)
+  })
+
   it('keeps evalite.config.ts inside the eval root', () => {
     // evalite loads config from `path.join(cwd, 'evalite.config.{ts,mts,js,mjs}')`
     // only (evalite/dist/config.js) — a root-level copy would be ignored, and
