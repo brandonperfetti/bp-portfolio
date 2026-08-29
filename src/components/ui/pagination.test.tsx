@@ -276,16 +276,23 @@ describe('ListPagination', () => {
     function Controlled({
       start,
       totalPages,
+      href = buildHref,
     }: {
       start: number
       totalPages: number
+      /**
+       * Overridable so the modified-click case can use hash hrefs: jsdom
+       * implements hash navigation, so an un-prevented modified click does not
+       * trip its "Not implemented: navigation" virtual-console error.
+       */
+      href?: (page: number) => string
     }) {
       const [page, setPage] = React.useState(start)
       return (
         <ListPagination
           page={page}
           totalPages={totalPages}
-          buildHref={buildHref}
+          buildHref={href}
           onNavigate={setPage}
           label="Articles pagination"
         />
@@ -342,6 +349,67 @@ describe('ListPagination', () => {
       expect(document.activeElement).toBe(
         screen.getByRole('link', { name: 'Go to page 5' }),
       )
+    })
+
+    /**
+     * The restore flag must not outlive the click that armed it.
+     *
+     * A modified boundary click is handed to the browser: `onNavigate` is
+     * never called, `page` never changes, and the effect that consumes the
+     * flag never runs. Arming the flag before deciding whether the click is
+     * ours therefore leaves it set indefinitely, and the NEXT change of `page`
+     * — from wherever — spends it by yanking focus into the pagination widget.
+     *
+     * The owner drives `page` here (a router, a filter control, the Back
+     * button), which is the case that makes the leak observable and is also
+     * the worst of them: focus is stolen from an element that has nothing to
+     * do with pagination. A later click on a Prev/Next control cannot show it,
+     * because those handlers reassign the flag on the way through; a later
+     * click on a page NUMBER cannot show it either, because the restore
+     * target is then the very link the click already focused.
+     */
+    it('does NOT steal focus when the owner changes the page after a modified boundary click', async () => {
+      function WithExternalControl() {
+        const [page, setPage] = React.useState(4)
+        return (
+          <>
+            <button type="button" onClick={() => setPage((p) => p - 1)}>
+              Elsewhere
+            </button>
+            <ListPagination
+              page={page}
+              totalPages={5}
+              buildHref={(target) => `#page-${target}`}
+              onNavigate={setPage}
+              label="Articles pagination"
+            />
+          </>
+        )
+      }
+
+      const user = userEvent.setup()
+      render(<WithExternalControl />)
+
+      // A boundary control (4 → 5 removes Next), but meta-clicked: the browser
+      // keeps the click and the component must stay entirely out of it.
+      await user.keyboard('{Meta>}')
+      await user.click(screen.getByRole('link', { name: /next/i }))
+      await user.keyboard('{/Meta}')
+
+      // Nothing navigated.
+      expect(
+        screen.getByRole('link', { name: 'Go to page 4' }),
+      ).toHaveAttribute('aria-current', 'page')
+
+      // Now the page changes from outside the widget, with focus on the
+      // control that caused it.
+      const elsewhere = screen.getByRole('button', { name: 'Elsewhere' })
+      await user.click(elsewhere)
+
+      expect(
+        screen.getByRole('link', { name: 'Go to page 3' }),
+      ).toHaveAttribute('aria-current', 'page')
+      expect(document.activeElement).toBe(elsewhere)
     })
   })
 

@@ -357,8 +357,11 @@ export interface ListPaginationProps {
  *   user who activates "Next" on the second-to-last page destroys the very
  *   element they were focused on, and focus falls to `document.body` — so the
  *   next Tab restarts from the top of the document (WCAG 2.4.3). The flag is
- *   set ONLY on the two steps that remove their own control, so ordinary
- *   page-number navigation keeps native focus behavior untouched. The
+ *   set ONLY on the two steps that remove their own control, and only for a
+ *   click this component actually handles ({@link isPlainClick}), so ordinary
+ *   page-number navigation keeps native focus behavior untouched and a
+ *   modified click — which navigates nothing and so never reaches the effect
+ *   that clears the flag — cannot leave it armed for a later page change. The
  *   current-page link is the target because it is the one control guaranteed
  *   to exist on every page, and it already carries `aria-current="page"`.
  * - This component is deliberately router-free: it takes `buildHref` and
@@ -366,6 +369,34 @@ export interface ListPaginationProps {
  *   renderable from a plain Storybook story and reusable unchanged by the
  *   server-side end state in #121, where `onNavigate` simply falls away.
  */
+/**
+ * Is this a click the component may take over from the browser?
+ *
+ * @remarks The single definition of "plain click", shared by the navigation
+ * handler and the focus-restore arming. They were separate conditions once,
+ * and the two promptly disagreed: the arming ran unconditionally, so a
+ * modified boundary click set a flag that the navigation it never performed
+ * could not clear, and the next change of `page` spent it on stolen focus.
+ * One predicate, two call sites, no way to drift.
+ *
+ * A modified or non-primary click is left alone so the `href` keeps its native
+ * "open in a new tab" behavior; an already-prevented one belongs to whoever
+ * prevented it.
+ *
+ * @param event - The click being handled.
+ * @returns `true` for an unmodified, primary, not-yet-prevented click.
+ */
+function isPlainClick(event: React.MouseEvent<HTMLAnchorElement>): boolean {
+  return (
+    !event.defaultPrevented &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    !event.altKey &&
+    event.button === 0
+  )
+}
+
 export function ListPagination({
   page,
   totalPages,
@@ -394,21 +425,32 @@ export function ListPagination({
   const slots = getPageWindow(page, totalPages)
   const navigateOnPlainClick =
     (target: number) => (event: React.MouseEvent<HTMLAnchorElement>) => {
-      // Leave modified clicks to the browser so the href keeps its native
-      // "open in a new tab" behavior.
-      if (
-        event.defaultPrevented ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey ||
-        event.button !== 0
-      ) {
+      if (!isPlainClick(event)) {
         return
       }
       event.preventDefault()
       onNavigate(target)
     }
+
+  /**
+   * Arm the focus restore for a click that is actually going to navigate.
+   *
+   * @remarks Must be called BEFORE {@link navigateOnPlainClick}, which calls
+   * `preventDefault` and so would make `isPlainClick` read false afterwards.
+   *
+   * @param event - The click being handled.
+   * @param removesItsOwnControl - Whether the step this control performs is
+   * the one that unmounts it.
+   */
+  const armFocusRestore = (
+    event: React.MouseEvent<HTMLAnchorElement>,
+    removesItsOwnControl: boolean,
+  ) => {
+    if (!isPlainClick(event)) {
+      return
+    }
+    restoreFocusRef.current = removesItsOwnControl
+  }
 
   return (
     <Pagination aria-label={label} className={className}>
@@ -420,7 +462,7 @@ export function ListPagination({
               onClick={(event) => {
                 // Only the step that lands ON page 1, because that is the
                 // render in which this control stops existing.
-                restoreFocusRef.current = page - 1 === 1
+                armFocusRestore(event, page - 1 === 1)
                 navigateOnPlainClick(page - 1)(event)
               }}
             />
@@ -452,7 +494,7 @@ export function ListPagination({
               onClick={(event) => {
                 // Mirror of Previous: only the step that lands on the LAST
                 // page removes this control.
-                restoreFocusRef.current = page + 1 === totalPages
+                armFocusRestore(event, page + 1 === totalPages)
                 navigateOnPlainClick(page + 1)(event)
               }}
             />
