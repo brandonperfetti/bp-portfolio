@@ -94,14 +94,121 @@ function evalRootSources(): string[] {
     .map((entry) => join(EVAL_ROOT, entry.name))
 }
 
-/** Bare module specifiers of every static/dynamic import in a source file. */
+/**
+ * String, template and comment tokens, matched in that precedence order.
+ *
+ * @remarks Order is the whole trick. Scanning left to right with strings
+ * listed FIRST means `'https://api.openai.com/v1'` is consumed as a string
+ * before its `//` can be read as a comment, and a `//` comment containing an
+ * apostrophe is consumed before that apostrophe can open a string. Each string
+ * alternative is newline-bounded (except the template literal), so an
+ * unbalanced quote inside a comment or a regex character class — say the `"`
+ * and `'` in `/[^\s)>\]"']/` — matches nothing and the scan simply moves on.
+ */
+const SOURCE_TOKENS =
+  /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g
+
+/**
+ * Source with every comment blanked out and every literal left alone.
+ *
+ * @remarks Not a parser, and it does not need to be: the only consumer is
+ * {@link importSpecifiers}, whose question is "does an import specifier appear
+ * in CODE". Without this step the answer was "or in a comment" —
+ * `importSpecifiers` regex-scans raw text, so a commented-out import statement,
+ * or even a bare quote directly after the word from inside an English
+ * sentence, counted as a real import and could fail the alias check on a
+ * specifier nobody had written. That is not hypothetical: #82 Batch 4 hit it
+ * with a quoted phrase in a doc comment and had to reword the prose to get the
+ * guard green.
+ *
+ * The cost of being wrong is bounded in the safe direction. A construct this
+ * misreads (a regex literal that genuinely contains `//`) can only blank out
+ * text, and blanking a non-import line changes nothing the caller asks about.
+ *
+ * @param source - Raw TypeScript source.
+ * @returns The same source with comment text replaced by a space.
+ */
+function stripComments(source: string): string {
+  return source.replace(SOURCE_TOKENS, (token) =>
+    token.startsWith('/*') || token.startsWith('//') ? ' ' : token,
+  )
+}
+
+/**
+ * Bare module specifiers of every static/dynamic import in a source file.
+ *
+ * @param source - Raw TypeScript source; comments are stripped first.
+ * @returns Every specifier, in source order, duplicates included.
+ */
 function importSpecifiers(source: string): string[] {
   const found: string[] = []
   const pattern = /(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g
   let match: RegExpExecArray | null
-  while ((match = pattern.exec(source)) !== null) found.push(match[1])
+  const code = stripComments(source)
+  while ((match = pattern.exec(code)) !== null) found.push(match[1])
   return found
 }
+
+describe('import scanning', () => {
+  it('reads a real import', () => {
+    expect(importSpecifiers("import { a } from './real'\n")).toEqual(['./real'])
+    expect(importSpecifiers("const m = await import('./dyn')\n")).toEqual([
+      './dyn',
+    ])
+  })
+
+  it('ignores an import that is commented out', () => {
+    const source = [
+      "// import { old } from '@/lib/gone'",
+      "/* import { older } from '@/lib/older' */",
+      '/**',
+      " * Historical note: this used to import from '@/lib/ancient'.",
+      ' */',
+      "import { current } from './current'",
+    ].join('\n')
+
+    expect(importSpecifiers(source)).toEqual(['./current'])
+  })
+
+  it('ignores the bare sequence that broke Batch 4', () => {
+    // A doc comment that merely quotes something after the word "from" is
+    // prose, not an import. The old scanner disagreed and failed the build on
+    // a specifier of `x`.
+    const source = ['/** Take the value from "x" and keep it. */', ''].join(
+      '\n',
+    )
+
+    expect(importSpecifiers(source)).toEqual([])
+  })
+
+  it('keeps a string literal that contains comment punctuation', () => {
+    const source = [
+      "export const url = 'https://api.openai.com/v1'",
+      "import { a } from './after-the-url'",
+    ].join('\n')
+
+    expect(stripComments(source)).toContain('https://api.openai.com/v1')
+    expect(importSpecifiers(source)).toEqual(['./after-the-url'])
+  })
+
+  it('does not let an apostrophe in a comment swallow the next line', () => {
+    const source = [
+      "// the visitor's question",
+      "import { b } from './still-seen'",
+    ].join('\n')
+
+    expect(importSpecifiers(source)).toEqual(['./still-seen'])
+  })
+
+  it('leaves a quote-heavy regex literal alone', () => {
+    const source = [
+      'const urls = /https?:\\/\\/[^\\s)>\\]"\']+/gi',
+      "import { c } from './after-the-regex'",
+    ].join('\n')
+
+    expect(importSpecifiers(source)).toEqual(['./after-the-regex'])
+  })
+})
 
 describe('eval harness wiring', () => {
   it('runs evalite from a dedicated eval root, in both eval scripts', () => {

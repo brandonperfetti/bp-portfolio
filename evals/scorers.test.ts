@@ -11,6 +11,7 @@ import {
   UNGROUNDED_CASES,
 } from './fixtures/datasets'
 import { SITE_FIXTURE_DOCS } from './fixtures/site-content'
+import { SITE_CHROME_URLS } from './fixtures/site-routes'
 import {
   coverage,
   createFixtureRetriever,
@@ -53,6 +54,23 @@ import {
 const SOURCE_URLS = fixtureSourceUrls()
 const citesKnownSourceUrl = createCitesKnownSourceUrl(SOURCE_URLS)
 const neverFabricatesSiteUrl = createNeverFabricatesSiteUrl(SOURCE_URLS)
+
+/**
+ * The scorers as the eval files actually build them (#82 Batch 6).
+ *
+ * @remarks The pair above is deliberately kept corpus-only: it pins the
+ * behaviour the eval files had before this batch, so the two describe blocks
+ * below read as a before/after of one decision rather than as a rewrite.
+ */
+const CITATION_OPTIONS = { alsoReal: SITE_CHROME_URLS }
+const citesKnownSourceUrlOnSite = createCitesKnownSourceUrl(
+  SOURCE_URLS,
+  CITATION_OPTIONS,
+)
+const neverFabricatesSiteUrlOnSite = createNeverFabricatesSiteUrl(
+  SOURCE_URLS,
+  CITATION_OPTIONS,
+)
 
 /**
  * Call a scorer the way evalite does.
@@ -302,6 +320,62 @@ describe('cites-a-real-source-url', () => {
   it('fails when one of several cited paths is invented', async () => {
     expect(
       await score(citesKnownSourceUrl, 'See /tech and /articles/made-up.'),
+    ).toBe(0)
+  })
+})
+
+describe('cites-a-real-source-url · real site routes (#82 Batch 6)', () => {
+  it('lists only paths the site actually routes', () => {
+    // Derived from HEADER_NAV_LINKS, so this fails if the nav loses a page.
+    expect(SITE_CHROME_URLS).toContain('/about')
+    expect(SITE_CHROME_URLS).toContain('/articles')
+    // The persona prompt says "point to the contact form", but the form is a
+    // page-builder block, not a route. Citing /contact stays a fabrication.
+    expect(SITE_CHROME_URLS).not.toContain('/contact')
+  })
+
+  it('no longer fails a correct citation for also linking the index page', async () => {
+    const answer =
+      'That is [the Supabase migration piece](/articles/from-neon-to-supabase); the rest are on [Articles](/articles).'
+
+    // The regression this batch fixes: one real page with no chunk behind it
+    // dragged an otherwise perfect answer to zero.
+    expect(await score(citesKnownSourceUrl, answer)).toBe(0)
+    expect(await score(citesKnownSourceUrlOnSite, answer)).toBe(1)
+  })
+
+  it('still fails an answer whose only citation is site chrome', async () => {
+    // Stricter than the old scorer in this direction: /about is real, but it
+    // is not a source for the fact the answer just stated.
+    expect(
+      await score(
+        citesKnownSourceUrlOnSite,
+        'He is a Senior Frontend Engineer — see [About](/about).',
+      ),
+    ).toBe(0)
+  })
+
+  it('still fails an invented article path alongside a real one', async () => {
+    expect(
+      await score(
+        citesKnownSourceUrlOnSite,
+        'See /tech and /articles/kubernetes-at-scale.',
+      ),
+    ).toBe(0)
+  })
+
+  it('accepts chrome in a refusal without weakening the fabrication check', async () => {
+    expect(
+      await score(
+        neverFabricatesSiteUrlOnSite,
+        "The site doesn't say, but /about has the background.",
+      ),
+    ).toBe(1)
+    expect(
+      await score(
+        neverFabricatesSiteUrlOnSite,
+        "The site doesn't say, but /certifications has the background.",
+      ),
     ).toBe(0)
   })
 })

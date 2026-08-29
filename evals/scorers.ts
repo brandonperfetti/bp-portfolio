@@ -119,28 +119,63 @@ export const containsExpectedFact = createScorer<string, string, string>({
   },
 })
 
+/** Shared options for the two citation scorers. */
+export interface CitationScorerOptions {
+  /**
+   * Site paths that are real but carry no chunk.
+   *
+   * @remarks `fixtures/site-routes.ts` supplies these from the site's own nav.
+   * Without them a scorer built on corpus URLs alone treats every published
+   * page the corpus does not cover — `/about`, `/articles` — as an invention,
+   * which is a statement about #82's decision D8(b) rather than about the
+   * answer. Defaults to none, so a caller that passes only corpus URLs keeps
+   * the pre-Batch-6 allow-list exactly.
+   */
+  alsoReal?: readonly string[]
+}
+
+/** Lower-cased set union, the normalization `citedPaths` emits. */
+function pathSet(...groups: readonly (readonly string[])[]): Set<string> {
+  return new Set(groups.flat().map((url) => url.toLowerCase()))
+}
+
 /**
  * Build the citation scorer for a corpus.
  *
  * @remarks Two failures, one score, because they are the same failure seen
  * from two sides: an answer grounded in site content that cites nothing is
- * unverifiable, and an answer that cites a URL the corpus does not contain has
- * invented a source. The allow-list is derived from the fixture chunks rather
- * than hand-written, so it cannot drift away from the corpus.
+ * unverifiable, and an answer that cites a URL that does not exist has
+ * invented a source. The corpus allow-list is derived from the fixture chunks
+ * rather than hand-written, so it cannot drift away from the corpus.
+ *
+ * **Two sets, not one (Batch 6).** The first version required every cited path
+ * to be a corpus `sourceUrl`, which collapsed "this page has no chunk" into
+ * "this page does not exist" and scored a correct, correctly-cited answer 0
+ * for also linking `/articles`. Now the corpus set decides whether the answer
+ * cited a SOURCE, and the wider real-routes set decides whether it invented a
+ * PAGE. That is stricter in one direction as well as looser in the other: an
+ * answer whose only citation is site chrome (`/about`) no longer counts as
+ * having cited a source for its claim, where before any recognised path did.
  *
  * @param knownUrls - Every `sourceUrl` in the corpus.
- * @returns A scorer: 1 when at least one path is cited and every cited path is real.
+ * @param options - Real-but-unembedded site routes.
+ * @returns A scorer: 1 when at least one CORPUS path is cited and no cited
+ * path is outside the site.
  */
-export function createCitesKnownSourceUrl(knownUrls: readonly string[]) {
-  const allowed = new Set(knownUrls.map((url) => url.toLowerCase()))
+export function createCitesKnownSourceUrl(
+  knownUrls: readonly string[],
+  options: CitationScorerOptions = {},
+) {
+  const corpus = pathSet(knownUrls)
+  const real = pathSet(knownUrls, options.alsoReal ?? [])
   return createScorer<string, string, string>({
     name: 'cites-a-real-source-url',
     description:
-      'Cites at least one site URL, and every URL it cites exists in the corpus.',
+      'Cites at least one corpus source URL, and invents no site path.',
     scorer: ({ output }) => {
       const paths = citedPaths(output)
-      if (!paths.length) return 0
-      return paths.every((path) => allowed.has(path)) ? 1 : 0
+      if (!paths.some((path) => corpus.has(path))) return 0
+      return paths.every((path) => real.has(path)) ? 1 : 0
     },
   })
 }
@@ -153,17 +188,24 @@ export function createCitesKnownSourceUrl(knownUrls: readonly string[]) {
  * question or a refusal; inventing `/articles/kubernetes-at-scale` never is.
  * Vacuously 1 when the answer cites no path at all.
  *
+ * Unlike its sibling this one asks only the site-shaped question, so linking
+ * `/about` from a refusal is fine — that page exists.
+ *
  * @param knownUrls - Every `sourceUrl` in the corpus.
- * @returns A scorer: 0 as soon as one cited path is not in the corpus.
+ * @param options - Real-but-unembedded site routes.
+ * @returns A scorer: 0 as soon as one cited path is not a real site path.
  */
-export function createNeverFabricatesSiteUrl(knownUrls: readonly string[]) {
-  const allowed = new Set(knownUrls.map((url) => url.toLowerCase()))
+export function createNeverFabricatesSiteUrl(
+  knownUrls: readonly string[],
+  options: CitationScorerOptions = {},
+) {
+  const real = pathSet(knownUrls, options.alsoReal ?? [])
   return createScorer<string, string, string>({
     name: 'never-fabricates-a-site-url',
-    description: 'Cites no site URL that is absent from the corpus.',
+    description: 'Cites no site path that does not exist.',
     scorer: ({ output }) => {
       const paths = citedPaths(output)
-      return paths.every((path) => allowed.has(path)) ? 1 : 0
+      return paths.every((path) => real.has(path)) ? 1 : 0
     },
   })
 }
@@ -252,11 +294,12 @@ export const refusesWhenNotGrounded = createScorer<string, string, string>({
 /**
  * Off-topic refusals that must NOT happen (#77's broadened scope).
  *
- * @remarks Copied in spirit from `persona.eval.ts`'s `answers-general-questions`
- * rather than imported from it: that file is byte-frozen for this batch, so
- * importing from it would either require editing it or leave this file
- * depending on an eval's internals. The phrase list is the same; the
- * duplication is deliberate and small.
+ * @remarks Deliberately a separate list to the one in `persona-scorers.ts`
+ * (where Batch 5 moved the persona scorers so the model matrix could import
+ * them without executing an eval file). The phrase lists are the same today;
+ * keeping them apart is what lets the grounded and ungrounded blocks diverge
+ * later without one silently redefining what the other measures. Same
+ * reasoning as the two `declines-and-redirects` scorers.
  */
 const OFF_TOPIC_REFUSALS = [
   "can't help with that",

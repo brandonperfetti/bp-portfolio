@@ -15,6 +15,7 @@ import {
   UNGROUNDED_CASES,
 } from './fixtures/datasets'
 import { createFixtureRetriever, fixtureSourceUrls } from './fixtures/retriever'
+import { SITE_CHROME_URLS } from './fixtures/site-routes'
 import {
   answersGeneralQuestions,
   declinesAndRedirects as declinesAbusiveRequests,
@@ -110,8 +111,15 @@ interface MatrixBlock {
  */
 function registerMatrix(): void {
   const sourceUrls = fixtureSourceUrls()
-  const citesKnownSourceUrl = createCitesKnownSourceUrl(sourceUrls)
-  const neverFabricatesSiteUrl = createNeverFabricatesSiteUrl(sourceUrls)
+  const citationOptions = { alsoReal: SITE_CHROME_URLS }
+  const citesKnownSourceUrl = createCitesKnownSourceUrl(
+    sourceUrls,
+    citationOptions,
+  )
+  const neverFabricatesSiteUrl = createNeverFabricatesSiteUrl(
+    sourceUrls,
+    citationOptions,
+  )
 
   // The same two retrievers the gate files build: production floor and top-k,
   // plus the floorless one the adjacent-context block needs.

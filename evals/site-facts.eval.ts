@@ -8,6 +8,7 @@ import {
   UNGROUNDED_CASES,
 } from './fixtures/datasets'
 import { createFixtureRetriever, fixtureSourceUrls } from './fixtures/retriever'
+import { SITE_CHROME_URLS } from './fixtures/site-routes'
 import {
   containsExpectedFact,
   createCitesKnownSourceUrl,
@@ -23,11 +24,6 @@ import {
  * the answer says where it came from. Three blocks, because there are three
  * distinct ways to get that wrong, and one score that mixed them would tell
  * you nothing:
- *
- * (Prose note, and a real constraint: `scripts/eval-harness.test.ts` scans
- * this directory for import specifiers with a regex that does not know
- * comments from code, so the word "from" must never be followed directly by a
- * quote character anywhere in this file — including inside a doc comment.)
  *
  * 1. **Grounded answers** — the corpus contains the answer. Must state it and
  *    cite it.
@@ -52,8 +48,15 @@ import {
  * block could hide behind strong persona scores (#82 decision D4(b)).
  */
 const SOURCE_URLS = fixtureSourceUrls()
-const citesKnownSourceUrl = createCitesKnownSourceUrl(SOURCE_URLS)
-const neverFabricatesSiteUrl = createNeverFabricatesSiteUrl(SOURCE_URLS)
+const CITATION_OPTIONS = { alsoReal: SITE_CHROME_URLS }
+const citesKnownSourceUrl = createCitesKnownSourceUrl(
+  SOURCE_URLS,
+  CITATION_OPTIONS,
+)
+const neverFabricatesSiteUrl = createNeverFabricatesSiteUrl(
+  SOURCE_URLS,
+  CITATION_OPTIONS,
+)
 
 /** Production floor and top-k: the corpus answers, or it returns nothing. */
 const retrieve = createFixtureRetriever()

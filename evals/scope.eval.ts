@@ -7,6 +7,7 @@ import {
   SCOPE_GROUNDED_CASES,
 } from './fixtures/datasets'
 import { createFixtureRetriever, fixtureSourceUrls } from './fixtures/retriever'
+import { SITE_CHROME_URLS } from './fixtures/site-routes'
 import {
   answersGeneralQuestion,
   containsExpectedFact,
@@ -35,13 +36,28 @@ import {
  * 3. **Off-site** — a request this site is not the place for must be declined
  *    AND redirected, never answered as though the surface existed.
  *
- * `persona.eval.ts` and `safety.eval.ts` are byte-identical to their pre-#82
- * state; nothing here edits them, and the overlapping scorer logic is
- * re-stated in `scorers.ts` rather than imported out of an eval file.
+ * One correction to what this comment used to say, because the old wording
+ * outlived the thing it described. `persona.eval.ts` and `safety.eval.ts` are
+ * NO LONGER byte-identical to their pre-#82 state: Batch 5 moved their cases
+ * into `fixtures/datasets.ts` and their scorers into `persona-scorers.ts` so
+ * the model matrix could reuse both without executing an eval file, which
+ * registers blocks. What IS unchanged — and is the property the Batch 1
+ * baseline needs — is the set, order and names of the blocks those two files
+ * register. The overlapping scorer logic still lives in `scorers.ts` rather
+ * than being imported out of `persona-scorers.ts`, on purpose: the grounded
+ * and ungrounded variants of `declines-and-redirects` and
+ * `answers-general-questions` measure different things.
  */
 const SOURCE_URLS = fixtureSourceUrls()
-const citesKnownSourceUrl = createCitesKnownSourceUrl(SOURCE_URLS)
-const neverFabricatesSiteUrl = createNeverFabricatesSiteUrl(SOURCE_URLS)
+const CITATION_OPTIONS = { alsoReal: SITE_CHROME_URLS }
+const citesKnownSourceUrl = createCitesKnownSourceUrl(
+  SOURCE_URLS,
+  CITATION_OPTIONS,
+)
+const neverFabricatesSiteUrl = createNeverFabricatesSiteUrl(
+  SOURCE_URLS,
+  CITATION_OPTIONS,
+)
 
 const retrieve = createFixtureRetriever()
 
