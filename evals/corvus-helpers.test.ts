@@ -97,21 +97,18 @@ describe.each([
     )
   })
 
-  it('asks for the same answer every time it asks', async () => {
-    // #122, determinism. The gate is a threshold on one global average, and
-    // the same tree scored 79/80/78 locally against ~74.x twice in CI — a
-    // spread that straddles the 75 floor with no change to Corvus. Sampling
-    // is the part of that the harness can actually hold still.
-    //
-    // EVALS ONLY, and this assertion is also what says so: production passes
-    // no temperature (`src/app/api/ai/chat/route.ts`), so if this constant
-    // ever leaked into the shipped path it would have to come through here.
+  it('sets no temperature, which this model family would discard anyway', async () => {
+    // Not an omission. @ai-sdk/openai@3.0.87 deletes the parameter before the
+    // request for a reasoning model on the Responses path
+    // (`baseArgs.temperature = void 0`) and warns on every call, so passing
+    // it bought nothing but log noise. Pinned so it is not "restored" later
+    // as a determinism fix that cannot work.
     respondWith(turn('A real answer about Brandon.'))
 
     await ask('who is brandon?')
 
-    expect(generateTextMock).toHaveBeenCalledWith(
-      expect.objectContaining({ temperature: 0 }),
+    expect(generateTextMock.mock.calls[0]?.[0]).not.toHaveProperty(
+      'temperature',
     )
   })
 

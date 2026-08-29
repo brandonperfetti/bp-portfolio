@@ -342,6 +342,18 @@ describe('eval harness wiring', () => {
     ).toBe(productionDefault)
   })
 
+  it('passes no temperature, which the gate’s model would discard', () => {
+    // Removed on this branch after PR #126 logged
+    // `AI SDK Warning (openai.responses / gpt-5-mini): The feature
+    // "temperature" is not supported` on every call. @ai-sdk/openai@3.0.87
+    // sets `baseArgs.temperature = void 0` for a reasoning model on the
+    // Responses path, so the value never reached OpenAI — it was log noise
+    // pretending to be a determinism fix. Pinned so it is not reinstated.
+    expect(
+      readFileSync(join(EVAL_ROOT, 'corvus-helpers.ts'), 'utf8'),
+    ).not.toMatch(/^\s*temperature:/m)
+  })
+
   it('keeps evalite.config.ts inside the eval root', () => {
     // evalite loads config from `path.join(cwd, 'evalite.config.{ts,mts,js,mjs}')`
     // only (evalite/dist/config.js) — a root-level copy would be ignored, and

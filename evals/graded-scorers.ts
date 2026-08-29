@@ -27,8 +27,9 @@ import { guardEmptyOutput } from './empty-output'
  * `Factuality` and threads through `LLMClassifierFromTemplate` into
  * `extraArgs.temperature` (`jsdist/index.mjs`), and being optional it is
  * omitted, so the grader runs at the provider default rather than greedily.
- * That is a second source of run-to-run spread on top of the subject model's,
- * which `corvus-helpers.ts` now pins to 0.
+ * That makes it the **only** sampling lever this repo has left: the subject
+ * model cannot be pinned at all, because `@ai-sdk/openai` discards
+ * `temperature` for the reasoning model the gate runs (see `corvus-helpers.ts`).
  *
  * It is NOT set here, because unlike the subject-model temperature it would
  * move recorded scores for real answers: `Factuality` is the graded scorer
