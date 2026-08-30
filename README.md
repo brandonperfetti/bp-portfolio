@@ -84,9 +84,12 @@ local Postgres on the same image CI uses, and `pnpm db:local:refresh` restores
 the newest nightly encrypted backup into it:
 
 ```bash
-docker compose up -d --wait db   # pgvector/pgvector:pg16 on 127.0.0.1:5432
-pnpm db:local:refresh            # newest PRODUCTION backup (--source staging for staging)
+docker compose up -d --wait db          # pgvector/pgvector:pg16 on 127.0.0.1:5432
+pnpm db:local:refresh                   # newest PRODUCTION backup
+pnpm db:local:refresh --source staging  # staging instead
 ```
+
+Flags go straight on the command — no `--` separator needed.
 
 Prerequisites, the `.env.local` swap, and the port-conflict path are in
 `docs/MAINTENANCE.md` § Local database from backups. The restored database

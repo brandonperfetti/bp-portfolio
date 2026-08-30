@@ -47,16 +47,21 @@ const EXIT = {
   noPassphrase: 5,
   pgClient: 6,
   noDatabase: 7,
+  artifact: 8,
 } as const
 
 /**
- * Tools the dry-run path shells out to, resolved from the real PATH.
+ * Tools the script shells out to, resolved from the real PATH.
  * `bash` and `env` are here because the stub shims below carry a
  * `#!/usr/bin/env bash` shebang and must resolve on this PATH too.
  */
-const REQUIRED_TOOLS = ['bash', 'env', 'dirname', 'cat', 'grep', 'tail']
-/** Resolved when present, so non-dry-run code paths would still work. */
-const OPTIONAL_TOOLS = [
+const REQUIRED_TOOLS = [
+  'bash',
+  'env',
+  'dirname',
+  'cat',
+  'grep',
+  'tail',
   'head',
   'sort',
   'find',
@@ -65,9 +70,10 @@ const OPTIONAL_TOOLS = [
   'mktemp',
   'chmod',
   'rm',
-  'shred',
   'basename',
 ]
+/** `shred` is GNU-only; the script guards on it, so the farm may omit it. */
+const OPTIONAL_TOOLS = ['shred']
 
 let sandbox = ''
 /** PATH entry holding symlinks to real coreutils and nothing else. */
@@ -251,6 +257,54 @@ describe('--dry-run plan', () => {
   })
 })
 
+describe("pnpm's `--` separator", () => {
+  // pnpm forwards `--` to the script verbatim where npm strips it, so
+  // `pnpm db:local:refresh -- --dry-run` arrives as a literal first argument.
+  // It used to be rejected as an unknown argument (exit 2) — and the script's
+  // own usage text recommended exactly that invocation.
+  const passphrases = { BACKUP_PASSPHRASE_PROD: 'x' }
+
+  it('dry-runs with the separator, as `pnpm db:local:refresh -- --dry-run` sends it', () => {
+    const result = run(['--', '--dry-run'], { env: passphrases })
+    expect(result.status).toBe(0)
+    expect(result.output).toContain(
+      'Dry run: nothing downloaded, nothing dropped, nothing restored.',
+    )
+  })
+
+  it('dry-runs without the separator, the recommended form', () => {
+    const result = run(['--dry-run'], { env: passphrases })
+    expect(result.status).toBe(0)
+    expect(result.output).toContain(
+      'Dry run: nothing downloaded, nothing dropped, nothing restored.',
+    )
+  })
+
+  it('still parses the flags that follow the separator', () => {
+    const result = run(['--', '--source', 'staging', '--dry-run'], {
+      env: { BACKUP_PASSPHRASE: 'x' },
+    })
+    expect(result.status).toBe(0)
+    expect(result.output).toContain("--pattern 'db-staging-*.dump.enc'")
+  })
+
+  it('treats a lone `--` exactly like no arguments at all', () => {
+    // Both proceed past the preflights and stop at the same place: the stub
+    // `gh run list` reports no successful run, so neither touches a database.
+    const withSeparator = run(['--'], { env: passphrases })
+    const withNothing = run([], { env: passphrases })
+    expect(withSeparator.status).toBe(EXIT.artifact)
+    expect(withSeparator.status).toBe(withNothing.status)
+    expect(withSeparator.stderr).toBe(withNothing.stderr)
+  })
+
+  it('recommends the plain form in its own usage text', () => {
+    const help = run(['--help'], { withoutStubs: true })
+    expect(help.stdout).toContain('pnpm db:local:refresh [options]')
+    expect(help.stdout).not.toContain('pnpm db:local:refresh -- [options]')
+  })
+})
+
 describe('argument validation', () => {
   it('rejects an unknown source', () => {
     const result = happyRun(['--source', 'dev'])
@@ -385,6 +439,17 @@ describe('drift guards against the sources of truth', () => {
     expect(workflow).toContain('- target: staging')
     expect(workflow).toContain('- target: prod')
     expect(script).toContain("printf 'db-%s-*.dump.enc'")
+  })
+
+  it('names the ignored-error classes a real production restore produced', () => {
+    // Measured on the 2026-08-30 prod restore: 4 ignored errors, all of them
+    // `SET transaction_timeout` (a pg17 setting the pg16 container rejects) or
+    // the Supabase-only `supabase_vault` extension and its `vault.secrets`
+    // COPY. Naming them is what stops the next reader treating a non-zero
+    // pg_restore as a failed restore.
+    expect(script).toContain('transaction_timeout')
+    expect(script).toContain('supabase_vault')
+    expect(script).toContain('vault.secrets')
   })
 
   it('runs the local container on the same image as the CI postgres service', () => {

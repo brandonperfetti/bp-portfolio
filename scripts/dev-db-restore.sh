@@ -85,7 +85,7 @@ usage() {
 Restore the newest nightly encrypted backup into the local Docker Postgres.
 
 Usage: bash scripts/dev-db-restore.sh [options]
-   or: pnpm db:local:refresh -- [options]
+   or: pnpm db:local:refresh [options]        # a leading `--` is also accepted
 
 Options:
   --source prod|staging  Which backup target to restore (default: prod).
@@ -108,6 +108,13 @@ EOF
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --)
+        # The conventional end-of-options separator. pnpm forwards it to the
+        # script verbatim (npm strips it), so `pnpm db:local:refresh --
+        # --dry-run` arrives here as a literal `--`. This script takes no
+        # positional arguments, so skipping it makes both invocations work.
+        shift
+        ;;
       --source)
         [[ $# -ge 2 ]] || die "$EX_USAGE" '--source requires a value (prod or staging)'
         SOURCE="$2"
@@ -428,11 +435,17 @@ restore_dump() {
 
   if [[ $status -ne 0 ]]; then
     note ''
-    note "pg_restore exited ${status} with ignored errors. Some are EXPECTED here:"
+    note "pg_restore exited ${status} with ignored errors. Some are EXPECTED here"
+    note '— the two a real production restore produces come first:'
+    note '  - SET transaction_timeout: a server setting that exists on the'
+    note '    Postgres 17 the dump came from but not on this Postgres 16 container'
+    note '  - the supabase_vault extension and the vault.secrets COPY that'
+    note '    follows it: Supabase-image-only, absent from the pgvector image'
     note '  - roles anon / authenticated / supabase_admin do not exist locally'
-    note '  - Supabase-only extensions and schemas have no counterpart in the'
-    note '    pgvector image (the #72 RLS migration guards its role references)'
+    note '    (the #72 RLS migration guards its role references)'
     note '  - DROP ... IF EXISTS notices against the freshly created database'
+    note 'For reference, the 2026-08-30 production restore reported 4 ignored'
+    note 'errors, all of the first two kinds, and was completely correct.'
     note 'The row counts below are the real check.'
   fi
 }

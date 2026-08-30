@@ -124,11 +124,15 @@ restores the newest nightly encrypted backup into a local Docker Postgres, so
 **Refreshing**
 
 ```bash
-pnpm db:local:refresh                          # newest PRODUCTION backup (default)
-pnpm db:local:refresh -- --source staging      # staging instead
-pnpm db:local:refresh -- --dry-run             # run every preflight, print the plan, touch nothing
-pnpm db:local:refresh -- --port 5433           # alternate port (see below)
+pnpm db:local:refresh                       # newest PRODUCTION backup (default)
+pnpm db:local:refresh --source staging      # staging instead
+pnpm db:local:refresh --dry-run             # every preflight, print the plan, touch nothing
+pnpm db:local:refresh --port 5433           # alternate port (see below)
 ```
+
+Pass the flags directly, with no `--` separator. pnpm forwards a `--` to the
+script verbatim (npm strips it), so the separator is not needed here; the
+script tolerates it either way.
 
 The script (`scripts/dev-db-restore.sh`) finds the newest **successful**
 `db-backup.yml` run, downloads that target's artifact
@@ -140,11 +144,19 @@ counts. Then: `pnpm migrate` (expect nothing to run) and `pnpm dev`.
 
 **Things worth knowing**
 
-- **`pg_restore` exiting non-zero is normal here.** The dump carries Supabase
-  roles (`anon`, `authenticated`, `supabase_admin`) and platform objects that
-  do not exist in the pgvector image, so some statements are skipped. The row
-  counts printed afterwards are the real check — the script fails loudly if a
-  core table is missing or empty.
+- **`pg_restore` exiting non-zero is normal here.** The 2026-08-30 production
+  restore reported **4 ignored errors** and was completely correct. What
+  actually shows up, in order of likelihood:
+  - `SET transaction_timeout` — a server setting on the Postgres 17 the dump
+    came from that the Postgres 16 container does not know.
+  - The `supabase_vault` extension and the `vault.secrets` COPY that follows
+    it — Supabase-image-only, with no counterpart in the pgvector image.
+  - Supabase roles (`anon`, `authenticated`, `supabase_admin`) that do not
+    exist locally, for any statement that names one.
+
+  The row counts printed afterwards are the real check — the script fails
+  loudly if a core table is missing or empty.
+
 - **The plaintext dump never lands in the repo.** It is written to a private
   temp directory outside the working tree and removed on every exit path,
   including Ctrl-C. This deviates from the original plan's `.tmp-backup/`
