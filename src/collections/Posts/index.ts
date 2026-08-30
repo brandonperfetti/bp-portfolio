@@ -33,6 +33,7 @@ import { Banner } from '@/blocks/Banner/config'
 import { Code } from '@/blocks/Code/config'
 import { MediaBlock } from '@/blocks/MediaBlock/config'
 import { generatePreviewPath } from '@/utilities/generatePreviewPath'
+import { createSlugRedirect } from '@/hooks/createSlugRedirect'
 import { populateAuthors } from './hooks/populateAuthors'
 import {
   deleteCorvusEmbeddings,
@@ -360,7 +361,11 @@ export const Posts: CollectionConfig = {
     ...slugField(),
   ],
   hooks: {
-    afterChange: [revalidatePost, refreshCorvusEmbeddings('posts')],
+    afterChange: [
+      revalidatePost,
+      createSlugRedirect,
+      refreshCorvusEmbeddings('posts'),
+    ],
     afterRead: [populateAuthors],
     afterDelete: [revalidateDelete, deleteCorvusEmbeddings('posts')],
   },
