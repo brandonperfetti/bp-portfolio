@@ -222,6 +222,75 @@ export function createNeverFabricatesSiteUrl(
 }
 
 /**
+ * Absolute URLs in an answer that do not belong to this site.
+ *
+ * @remarks The mirror image of {@link citedPaths}'s second pass, which folds
+ * `brandonperfetti.com` URLs down to paths and throws every other absolute URL
+ * away. Throwing them away is right for the two path scorers — a vendor
+ * homepage is not a fabricated SITE path — but it is exactly what made the
+ * wave-3 defect invisible to them: an answer whose only address was
+ * `https://www.postgresql.org/` scored 0 on `cites-a-real-source-url`
+ * indistinguishably from an answer that cited nothing at all. This function
+ * recovers the difference.
+ *
+ * Trailing sentence punctuation is stripped so `...postgresql.org/.` and
+ * `...postgresql.org/` are one URL. A markdown link's target is matched by the
+ * same pass, because the URL pattern does not care what surrounds it.
+ *
+ * @param output - The assistant's answer.
+ * @returns Distinct non-site absolute URLs, in first-seen order.
+ */
+export function externalUrls(output: string): string[] {
+  const found = new Set<string>()
+  for (const match of output.matchAll(/https?:\/\/[^\s)>\]"']+/gi)) {
+    const url = match[0].replace(/[.,;:!?]+$/, '')
+    if (!/^https?:\/\/(?:www\.)?brandonperfetti\.com(\/|$)/i.test(url)) {
+      found.add(url)
+    }
+  }
+  return [...found]
+}
+
+/**
+ * Build the site-over-vendor sourcing scorer for a corpus.
+ *
+ * @remarks The instrument for the second wave-4 defect. Asked about a
+ * technology the site documents, Corvus cited the technology's OWN homepage —
+ * `postgresql.org`, `vitest.dev` — which is a true address and a wrong source:
+ * the question was what THIS site says, and the site's answer lives at
+ * `/tech`. `chunkFlatRecord` puts that vendor URL inside the passage as a
+ * labelled `URL:` field, which is why the model could reach for it at all
+ * (`src/lib/ai/groundedSystem.ts` carries the full mechanism).
+ *
+ * Three outcomes, and the middle one is what makes the score readable next to
+ * `cites-a-real-source-url`:
+ *
+ * - **1** — a corpus path is cited. Mentioning the vendor's address ALONGSIDE
+ *   it is fine and often helpful; the site was still credited.
+ * - **0** — no corpus path, but a third-party URL is present. The vendor
+ *   address stood in for the citation. This is the defect.
+ * - **0.5** — no corpus path and no URL at all. A bad answer, already scored 0
+ *   by `cites-a-real-source-url`, but a DIFFERENT bad answer: nothing was
+ *   substituted. Collapsing it to 0 here would make this scorer a duplicate of
+ *   its sibling instead of an explanation of it.
+ *
+ * @param knownUrls - Every `sourceUrl` in the corpus.
+ * @returns A scorer measuring whether the site's own page carried the claim.
+ */
+export function createCitesSiteSourceNotVendor(knownUrls: readonly string[]) {
+  const corpus = pathSet(knownUrls)
+  return createGuardedScorer<string, string, string>({
+    name: 'cites-the-site-page-not-a-vendor-url',
+    description:
+      "Sources a claim about this site with the site's own page, never a third-party homepage.",
+    scorer: ({ output }) => {
+      if (citedPaths(output).some((path) => corpus.has(path))) return 1
+      return externalUrls(output).length ? 0 : 0.5
+    },
+  })
+}
+
+/**
  * Phrases that signal "the site does not say".
  *
  * @remarks Drawn from how `CORVUS_SYSTEM_PROMPT` actually tells Corvus to

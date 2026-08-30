@@ -4,6 +4,7 @@ import { askCorvusGrounded } from './corvus-helpers'
 import {
   ADJACENT_CONTEXT_CASES,
   SITE_FACT_CASES,
+  TECH_SOURCING_CASES,
   UNGROUNDED_CASES,
 } from './fixtures/datasets'
 import { createCitationScorers } from './citation-scorers'
@@ -37,12 +38,27 @@ import { containsExpectedFact, refusesWhenNotGrounded } from './scorers'
  * the `e2e` job with a stubbed embedder, so the query path is verified where
  * the database is and the answer path is verified where the model is.
  *
+ * Wave 4 adds a fourth block for a fourth way to get it wrong: **sourcing**.
+ * The corpus DOES contain the answer and Corvus states it correctly, but
+ * credits the technology's own homepage instead of the site's page. Block 1
+ * cannot see that failure — an answer citing only `postgresql.org` scores 0
+ * there indistinguishably from an answer citing nothing — so it gets a block
+ * and a scorer of its own.
+ *
  * Threshold: this file is ALSO run on its own by `pnpm eval:facts`, because
  * evalite's `--threshold` is one global average over the whole run with no
  * per-block form — so without a second scoped invocation a weak site-fact
- * block could hide behind strong persona scores (#82 decision D4(b)).
+ * block could hide behind strong persona scores (#82 decision D4(b)). Note
+ * that the new block widens both averages it feeds: it adds six scores to
+ * `eval:facts`' pool and to `eval:ci`'s global one. That is the loosening
+ * `docs/AI.md` already warns about; if it becomes real the ratchet is to raise
+ * the floor, not to shrink the block.
  */
-const { citesKnownSourceUrl, neverFabricatesSiteUrl } = createCitationScorers()
+const {
+  citesKnownSourceUrl,
+  neverFabricatesSiteUrl,
+  citesSiteSourceNotVendor,
+} = createCitationScorers()
 
 /** Production floor and top-k: the corpus answers, or it returns nothing. */
 const retrieve = createFixtureRetriever()
@@ -80,4 +96,18 @@ evalite('Corvus site facts · will not invent from adjacent context', {
   data: async () => ADJACENT_CONTEXT_CASES,
   task: (input) => askCorvusGrounded(input, { retrieve: retrieveWithoutFloor }),
   scorers: [refusesWhenNotGrounded, neverFabricatesSiteUrl],
+})
+
+evalite("Corvus site facts · cites the site's page for a technology", {
+  data: async () => TECH_SOURCING_CASES,
+  task: (input) => askCorvusGrounded(input, { retrieve }),
+  // Three scorers, and the pair is the point: `containsExpectedFact` says the
+  // FACT was right, `citesSiteSourceNotVendor` says the SOURCE was. Wave 3's
+  // failure scored well on the first and badly on the second, and one number
+  // could not have told them apart.
+  scorers: [
+    containsExpectedFact,
+    citesKnownSourceUrl,
+    citesSiteSourceNotVendor,
+  ],
 })

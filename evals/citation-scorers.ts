@@ -2,6 +2,7 @@ import { fixtureSourceUrls } from './fixtures/retriever'
 import { SITE_CHROME_URLS } from './fixtures/site-routes'
 import {
   createCitesKnownSourceUrl,
+  createCitesSiteSourceNotVendor,
   createNeverFabricatesSiteUrl,
 } from './scorers'
 
@@ -27,7 +28,14 @@ import {
  * `never-fabricates-a-site-url`), so registration identity and every recorded
  * score keep their meaning across this refactor.
  *
- * @returns The two citation scorers, built from the fixture corpus plus the
+ * Wave 4 adds a THIRD scorer to the same factory, and adds only that: the two
+ * originals keep their names, their construction and their inputs, so every
+ * block that already ran keeps measuring exactly what it measured. The new one
+ * (`cites-the-site-page-not-a-vendor-url`) is used by one new block and by
+ * nothing that existed before — see `evals/scorers.ts` for why it needs to be
+ * its own signal rather than a stricter `cites-a-real-source-url`.
+ *
+ * @returns The three citation scorers, built from the fixture corpus plus the
  * site's chrome routes.
  */
 export function createCitationScorers() {
@@ -39,5 +47,6 @@ export function createCitationScorers() {
       sourceUrls,
       citationOptions,
     ),
+    citesSiteSourceNotVendor: createCitesSiteSourceNotVendor(sourceUrls),
   }
 }

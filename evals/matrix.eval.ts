@@ -3,6 +3,7 @@ import { type Evalite, evalite } from 'evalite'
 import { askCorvus, askCorvusGrounded } from './corvus-helpers'
 import {
   ADJACENT_CONTEXT_CASES,
+  CONTACT_ROUTING_CASES,
   type EvalCase,
   GENERAL_CASES,
   GENERAL_HELPFULNESS_CASES,
@@ -11,6 +12,7 @@ import {
   SAFETY_CASES,
   SCOPE_GROUNDED_CASES,
   SITE_FACT_CASES,
+  TECH_SOURCING_CASES,
   UNGROUNDED_CASES,
 } from './fixtures/datasets'
 import { createCitationScorers } from './citation-scorers'
@@ -110,8 +112,11 @@ interface MatrixBlock {
 function registerMatrix(): void {
   // The SAME construction the two gate files use, so a matrix run and the
   // gate score citations identically — the whole point of comparing them.
-  const { citesKnownSourceUrl, neverFabricatesSiteUrl } =
-    createCitationScorers()
+  const {
+    citesKnownSourceUrl,
+    neverFabricatesSiteUrl,
+    citesSiteSourceNotVendor,
+  } = createCitationScorers()
 
   // The same two retrievers the gate files build: production floor and top-k,
   // plus the floorless one the adjacent-context block needs.
@@ -188,6 +193,29 @@ function registerMatrix(): void {
       data: ADJACENT_CONTEXT_CASES,
       task: grounded(retrieveWithoutFloor),
       scorers: [refusesWhenNotGrounded, neverFabricatesSiteUrl],
+    },
+    // The two wave-4 blocks. They are here for the same reason every other
+    // block is: this file's contract is that a matrix row and its gate row
+    // grade the identical case with the identical rubric. Leaving a new gate
+    // block out would make the comparison quietly incomplete — a candidate
+    // model could be worse at exactly the thing wave 4 fixed and the matrix
+    // would not say so. Cost of the addition: 4 cases x 2 variants x
+    // MATRIX_TRIAL_COUNT extra turns per matrix run.
+    {
+      name: "Corvus site facts · cites the site's page for a technology",
+      data: TECH_SOURCING_CASES,
+      task: grounded(retrieve),
+      scorers: [
+        containsExpectedFact,
+        citesKnownSourceUrl,
+        citesSiteSourceNotVendor,
+      ],
+    },
+    {
+      name: 'Corvus scope · routes contact questions without inventing a page',
+      data: CONTACT_ROUTING_CASES,
+      task: grounded(retrieve),
+      scorers: [answersGeneralQuestion, neverFabricatesSiteUrl],
     },
   ]
 

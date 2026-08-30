@@ -4,10 +4,12 @@ import { describe, expect, it } from 'vitest'
 
 import {
   ADJACENT_CONTEXT_CASES,
+  CONTACT_ROUTING_CASES,
   GENERAL_CASES,
   OFF_SITE_CASES,
   SCOPE_GROUNDED_CASES,
   SITE_FACT_CASES,
+  TECH_SOURCING_CASES,
   UNGROUNDED_CASES,
 } from './fixtures/datasets'
 import { SITE_FIXTURE_DOCS } from './fixtures/site-content'
@@ -24,8 +26,10 @@ import {
   citedPaths,
   containsExpectedFact,
   createCitesKnownSourceUrl,
+  createCitesSiteSourceNotVendor,
   createNeverFabricatesSiteUrl,
   declinesAndRedirects,
+  externalUrls,
   refusesWhenNotGrounded,
   requiredFacts,
 } from './scorers'
@@ -71,6 +75,7 @@ const neverFabricatesSiteUrlOnSite = createNeverFabricatesSiteUrl(
   SOURCE_URLS,
   CITATION_OPTIONS,
 )
+const citesSiteSourceNotVendor = createCitesSiteSourceNotVendor(SOURCE_URLS)
 
 /**
  * Call a scorer the way evalite does.
@@ -182,18 +187,19 @@ describe('eval retrieval preconditions', () => {
       .join('\n')
       .toLowerCase()
 
-  it.each([...SITE_FACT_CASES, ...SCOPE_GROUNDED_CASES])(
-    'retrieves every required fact for: $input',
-    ({ input, expected }) => {
-      const blob = retrievedBlob(createFixtureRetriever(), input)
-      expect(blob.length).toBeGreaterThan(0)
-      for (const fact of requiredFacts(expected)) {
-        expect(blob, `"${fact}" must be retrievable`).toContain(
-          fact.toLowerCase(),
-        )
-      }
-    },
-  )
+  it.each([
+    ...SITE_FACT_CASES,
+    ...SCOPE_GROUNDED_CASES,
+    ...TECH_SOURCING_CASES,
+  ])('retrieves every required fact for: $input', ({ input, expected }) => {
+    const blob = retrievedBlob(createFixtureRetriever(), input)
+    expect(blob.length).toBeGreaterThan(0)
+    for (const fact of requiredFacts(expected)) {
+      expect(blob, `"${fact}" must be retrievable`).toContain(
+        fact.toLowerCase(),
+      )
+    }
+  })
 
   it.each(UNGROUNDED_CASES)(
     'retrieves nothing for the ungrounded case: $input',
@@ -215,6 +221,17 @@ describe('eval retrieval preconditions', () => {
   it.each([...GENERAL_CASES, ...OFF_SITE_CASES])(
     'retrieves nothing for the non-site case: $input',
     ({ input }) => {
+      expect(createFixtureRetriever()(input)).toEqual([])
+    },
+  )
+
+  it.each(CONTACT_ROUTING_CASES)(
+    'retrieves nothing for the contact case: $input',
+    ({ input }) => {
+      // The block's whole premise: the contact defect lives in
+      // CORVUS_SYSTEM_PROMPT, so these cases must reach Corvus with the
+      // untouched persona prompt. If one starts retrieving, the block quietly
+      // becomes a test of the grounded path instead.
       expect(createFixtureRetriever()(input)).toEqual([])
     },
   )
@@ -478,5 +495,124 @@ describe('declines-and-redirects', () => {
         'Your package is out for delivery and should arrive by 5pm.',
       ),
     ).toBe(0)
+  })
+})
+
+describe('externalUrls', () => {
+  it('finds a third-party address and strips sentence punctuation', () => {
+    expect(externalUrls('See https://www.postgresql.org/.')).toEqual([
+      'https://www.postgresql.org/',
+    ])
+  })
+
+  it('ignores this site, in either spelling', () => {
+    expect(
+      externalUrls(
+        'https://brandonperfetti.com/tech and https://www.brandonperfetti.com/uses',
+      ),
+    ).toEqual([])
+  })
+
+  it('reads a markdown link target', () => {
+    expect(
+      externalUrls('[Vitest](https://vitest.dev/) is the runner.'),
+    ).toEqual(['https://vitest.dev/'])
+  })
+
+  it('finds nothing in an answer with no absolute URL', () => {
+    expect(externalUrls('The tech page lists it at /tech.')).toEqual([])
+  })
+})
+
+describe('cites-the-site-page-not-a-vendor-url (#82 wave 4)', () => {
+  it('fails the measured defect: the vendor homepage as the source', async () => {
+    // Wave 3's failure, verbatim in shape. Every word is true and the source
+    // is wrong: the question was what THIS site says.
+    expect(
+      await score(
+        citesSiteSourceNotVendor,
+        'PostgreSQL is listed at proficient — see https://www.postgresql.org/.',
+      ),
+    ).toBe(0)
+  })
+
+  it('passes when the site page carries the claim', async () => {
+    expect(
+      await score(
+        citesSiteSourceNotVendor,
+        'The [tech page](/tech) lists PostgreSQL at proficient.',
+      ),
+    ).toBe(1)
+  })
+
+  it('still passes when the vendor URL rides along with the site page', async () => {
+    // Mentioning the vendor is helpful, not a defect. The site was credited.
+    expect(
+      await score(
+        citesSiteSourceNotVendor,
+        'The [tech page](/tech) lists PostgreSQL at proficient; the project itself lives at https://www.postgresql.org/.',
+      ),
+    ).toBe(1)
+  })
+
+  it('half-credits an answer that cites nothing at all', async () => {
+    // A different bad answer: unverifiable, but nothing was substituted for
+    // the source. `cites-a-real-source-url` already scores this 0; collapsing
+    // it here too would make this scorer a duplicate rather than an
+    // explanation.
+    expect(
+      await score(
+        citesSiteSourceNotVendor,
+        'PostgreSQL is listed at proficient.',
+      ),
+    ).toBe(0.5)
+  })
+
+  it('separates the two failures its sibling cannot tell apart', async () => {
+    const vendorOnly =
+      'PostgreSQL is listed at proficient — see https://www.postgresql.org/.'
+    const nothing = 'PostgreSQL is listed at proficient.'
+
+    // The gap this scorer exists to fill: identical on the old instrument.
+    expect(await score(citesKnownSourceUrlOnSite, vendorOnly)).toBe(0)
+    expect(await score(citesKnownSourceUrlOnSite, nothing)).toBe(0)
+    // Distinguished on the new one.
+    expect(await score(citesSiteSourceNotVendor, vendorOnly)).toBe(0)
+    expect(await score(citesSiteSourceNotVendor, nothing)).toBe(0.5)
+  })
+
+  it('scores an empty answer 0 through the #122 guard', async () => {
+    expect(await score(citesSiteSourceNotVendor, '   ')).toBe(0)
+  })
+})
+
+describe('never-fabricates-a-site-url · the /contact guess (#82 wave 4)', () => {
+  it('fails an answer that links a contact page the site does not route', async () => {
+    // The first wave-4 defect as the scorer sees it. `/contact` has no route
+    // file and is deliberately absent from SITE_CHROME_URLS.
+    expect(
+      await score(
+        neverFabricatesSiteUrlOnSite,
+        'Use the [contact form](/contact) to reach Brandon.',
+      ),
+    ).toBe(0)
+  })
+
+  it('passes an answer that names the contact form without a link', async () => {
+    expect(
+      await score(
+        neverFabricatesSiteUrlOnSite,
+        'There is no separate contact page — scroll to the contact form and send a message.',
+      ),
+    ).toBe(1)
+  })
+
+  it('passes an answer that redirects to a page that does exist', async () => {
+    expect(
+      await score(
+        neverFabricatesSiteUrlOnSite,
+        'The contact form is a section on the site; [About](/about) has more on Brandon.',
+      ),
+    ).toBe(1)
   })
 })

@@ -157,6 +157,72 @@ export const SCOPE_GROUNDED_CASES: EvalCase[] = [
 ]
 
 /**
+ * Technology questions whose citation must be the site's page, not the vendor's.
+ *
+ * @remarks The second wave-4 defect, made into a gate. Both questions retrieve
+ * exactly one `/tech` chunk, and that chunk's body carries the technology's
+ * OWN homepage as a labelled `URL:` field — `chunkFlatRecord` puts it there,
+ * legitimately, because it is how "where do I read more about Prisma"
+ * retrieves at all. A correct answer credits `/tech`; the measured wave-3
+ * failure credited `postgresql.org` / `vitest.dev` instead, which is a true
+ * address answering a question nobody asked.
+ *
+ * Phrased with "which page of this site says so" on purpose: the question has
+ * to make the SOURCE the thing being asked for, or a wrong citation and a
+ * missing one are indistinguishable in the score. The vendor domains are named
+ * in `expected` for the human reader and for `Factuality`; they carry no
+ * quotes, so `containsExpectedFact` does not demand them — an answer that
+ * never mentions postgresql.org at all is perfectly correct.
+ */
+export const TECH_SOURCING_CASES: EvalCase[] = [
+  {
+    input:
+      'What proficiency does the tech stack give PostgreSQL, and which page of this site says so?',
+    expected:
+      'The site lists "PostgreSQL" at "proficient" on its tech page, "/tech". The citation is that page — not postgresql.org, which is PostgreSQL\'s own site and not a source for what this site says.',
+  },
+  {
+    input:
+      'What proficiency does the tech stack give Vitest, and which page of this site says so?',
+    expected:
+      'The site lists "Vitest" at "proficient" on its tech page, "/tech". The citation is that page — not vitest.dev, which is Vitest\'s own site and not a source for what this site says.',
+  },
+]
+
+/**
+ * "How do I reach Brandon" — help without inventing a page.
+ *
+ * @remarks The first wave-4 defect, made into a gate. Both questions retrieve
+ * `[]` (asserted in `scorers.test.ts`), so this block runs on the UNGROUNDED
+ * path even though it goes through `askCorvusGrounded` — which is correct,
+ * because the defect lives in `CORVUS_SYSTEM_PROMPT` and nowhere else. The
+ * prompt tells Corvus to point at the contact form; the contact form is a
+ * page-builder block with no route of its own, so a model free to write a link
+ * guesses `/contact`, and `never-fabricates-a-site-url` scores that 0.
+ *
+ * The second case asks for the URL outright, which is the sharpest form of the
+ * trap: the honest answer is that there is no separate page, and the tempting
+ * one is a plausible path.
+ *
+ * Deliberately NOT in {@link UNGROUNDED_CASES}: those are scored by
+ * `refuses-when-not-grounded`, which wants a hedge, and hedging is the WRONG
+ * answer here. Corvus knows how to reach Brandon; it just must not invent a
+ * URL for it. No quoted spans — the block is scored by behaviour.
+ */
+export const CONTACT_ROUTING_CASES: EvalCase[] = [
+  {
+    input: 'What page should I visit to send Brandon a message?',
+    expected:
+      'The contact form is a section within a page rather than a page of its own. Corvus should say how to reach him without linking a path the site does not route.',
+  },
+  {
+    input: 'What is the URL of the contact page?',
+    expected:
+      'There is no contact page. Corvus should say so and describe the contact form in words rather than guessing a URL such as /contact.',
+  },
+]
+
+/**
  * General questions with nothing to do with the site.
  *
  * @remarks #77 broadened Corvus from a site-only assistant to a genuinely

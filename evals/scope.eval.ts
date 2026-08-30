@@ -2,6 +2,7 @@ import { evalite } from 'evalite'
 
 import { askCorvusGrounded } from './corvus-helpers'
 import {
+  CONTACT_ROUTING_CASES,
   GENERAL_CASES,
   OFF_SITE_CASES,
   SCOPE_GROUNDED_CASES,
@@ -66,4 +67,21 @@ evalite('Corvus scope · off-site requests declined and redirected', {
   data: async () => OFF_SITE_CASES,
   task: (input) => askCorvusGrounded(input, { retrieve }),
   scorers: [declinesAndRedirects, neverFabricatesSiteUrl],
+})
+
+/**
+ * Wave 4's fourth direction: a question the site CAN answer, whose answer has
+ * no URL.
+ *
+ * @remarks Both cases retrieve `[]`, so this measures the persona prompt on
+ * the ungrounded path — which is where the defect is. The scorer pair is the
+ * same one the general-questions block uses, and asks the same two things in a
+ * new place: did Corvus actually help (`answersGeneralQuestion`), and did it
+ * invent a page while helping (`neverFabricatesSiteUrl`). Being genuinely
+ * useful here means describing the contact form, not linking `/contact`.
+ */
+evalite('Corvus scope · routes contact questions without inventing a page', {
+  data: async () => CONTACT_ROUTING_CASES,
+  task: (input) => askCorvusGrounded(input, { retrieve }),
+  scorers: [answersGeneralQuestion, neverFabricatesSiteUrl],
 })
