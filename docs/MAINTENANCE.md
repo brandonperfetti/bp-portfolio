@@ -52,16 +52,22 @@
 - **Database backups (nightly, encrypted)**: Supabase free tier has NO
   automated backups, and the DB is the canonical copy of all content —
   `.github/workflows/db-backup.yml` runs a nightly `pg_dump` (session
-  pooler, pg17 client) at 09:17 UTC, encrypts with AES-256
-  (`BACKUP_PASSPHRASE` secret), and uploads a 14-day-retention Actions
-  artifact. Repo is PUBLIC, so the plaintext dump must never be uploaded
-  — encryption is load-bearing, not optional. Secrets: `SUPABASE_DB_URL`
-  (session-mode string, copied whole) + `BACKUP_PASSPHRASE` (also kept in
-  the password manager — losing it makes every backup unreadable).
-  Restore commands are in the workflow header. Watch for GitHub's
+  pooler, pg17 client) at 09:17 UTC, encrypts with AES-256, and uploads a
+  14-day-retention Actions artifact. Repo is PUBLIC, so the plaintext dump
+  must never be uploaded — encryption is load-bearing, not optional.
+  TWO targets on one schedule (a `fail-fast: false` matrix, so one
+  target's failure never cancels the other's backup): **staging**
+  (`SUPABASE_DB_URL` + `BACKUP_PASSPHRASE`, artifact
+  `db-staging-YYYY-MM-DD.dump.enc`) and **production**
+  (`SUPABASE_DB_URL_PROD` + `BACKUP_PASSPHRASE_PROD`, artifact
+  `db-prod-YYYY-MM-DD.dump.enc`). The two passphrases are deliberately
+  different values; both are kept in the password manager — losing one
+  makes that target's backups unreadable. The nightly connection doubles
+  as the free-tier keep-alive for both projects. Restore commands are in
+  the workflow header; for a local restore use `pnpm db:local:refresh`
+  (see § Local database from backups). Watch for GitHub's
   60-days-of-repo-inactivity cron disable; re-enable from the Actions
-  tab if it trips. Revisit at promotion: production project should get
-  this same workflow (new secrets) or Pro-plan backups.
+  tab if it trips.
 - **Email deliverability (Resend domain auth)**: brandonperfetti.com is
   verified in Resend (us-east-1 — co-located with the iad1 functions,
   same logic as Upstash) via DNS records at Hover: an MX + SPF TXT on the
@@ -87,6 +93,77 @@
   `next build` requires TS7 to be the workspace `typescript` dep — no
   clean dual-version path. Revisit when typescript-eslint ships TS7
   support, then it's a one-line bump.
+
+## Local database from backups (#85)
+
+Local dev against an empty schema hides most content bugs. `pnpm db:local:refresh`
+restores the newest nightly encrypted backup into a local Docker Postgres, so
+`/articles`, the block-built pages, and the admin all run on real data.
+
+**One-time setup**
+
+1. Docker Desktop running, then `docker compose up -d --wait db`.
+   `docker-compose.yml` (repo root) runs `pgvector/pgvector:pg16` — deliberately
+   the same image as the CI e2e job's Postgres service — on 5432, database
+   `bp_portfolio_dev`, user/password `postgres`/`postgres`, data in the named
+   volume `bp_portfolio_pgdata`.
+2. `gh auth login` — the backups are private Actions artifacts.
+3. Postgres client tools **>= 17** on PATH (`brew install postgresql@17`). The
+   backup workflow dumps with a pg17 client, and an older `pg_restore` cannot
+   read the dump. The server being 16 while the client is 17 is fine and
+   intended; the script refuses to run with an older client.
+4. Put the passphrase in `.env.local` (git-ignored, never committed):
+   `BACKUP_PASSPHRASE_PROD` for production backups (the default source) or
+   `BACKUP_PASSPHRASE` for staging. Values live in the password manager; only
+   the NAMES appear anywhere in this repo.
+5. Point the app at the container:
+   `DATABASE_URI=postgres://postgres:postgres@127.0.0.1:5432/bp_portfolio_dev`
+   in `.env.local`. Swap back to the remote by editing that one string. Never
+   set a container URL in any Vercel scope.
+
+**Refreshing**
+
+```bash
+pnpm db:local:refresh                          # newest PRODUCTION backup (default)
+pnpm db:local:refresh -- --source staging      # staging instead
+pnpm db:local:refresh -- --dry-run             # run every preflight, print the plan, touch nothing
+pnpm db:local:refresh -- --port 5433           # alternate port (see below)
+```
+
+The script (`scripts/dev-db-restore.sh`) finds the newest **successful**
+`db-backup.yml` run, downloads that target's artifact
+(`db-prod-*.dump.enc` / `db-staging-*.dump.enc`), decrypts it with the
+workflow header's exact `openssl` invocation, drops and recreates
+`bp_portfolio_dev`, restores with `--clean --if-exists --no-owner
+--no-privileges`, and prints `pages` / `posts` / `payload_migrations` row
+counts. Then: `pnpm migrate` (expect nothing to run) and `pnpm dev`.
+
+**Things worth knowing**
+
+- **`pg_restore` exiting non-zero is normal here.** The dump carries Supabase
+  roles (`anon`, `authenticated`, `supabase_admin`) and platform objects that
+  do not exist in the pgvector image, so some statements are skipped. The row
+  counts printed afterwards are the real check — the script fails loudly if a
+  core table is missing or empty.
+- **The plaintext dump never lands in the repo.** It is written to a private
+  temp directory outside the working tree and removed on every exit path,
+  including Ctrl-C. This deviates from the original plan's `.tmp-backup/`
+  location on purpose: the repo is public and the dump contains drafts, gated
+  content, contact emails, and the users table.
+- **Port conflicts.** If a system Postgres already owns 5432, change the
+  published port in `docker-compose.yml` to `5433:5432`, pass `--port 5433`,
+  and update `DATABASE_URI`. Do not assume the remap took — a system cluster
+  listening on 5433 has silently shadowed the container before. Confirm with
+  `docker compose ps` and `psql -h 127.0.0.1 -p <port> -U postgres -l`.
+- **Artifacts expire after 14 days**, and because the workflow's matrix runs
+  both targets with `fail-fast: false`, a run where _either_ target failed is
+  reported as failed and skipped by the "newest successful run" lookup. If the
+  restore says it found no successful run, dispatch `db-backup.yml` by hand.
+- **Restored data is real.** It holds live content and the users table. Never
+  commit it, never attach it to an issue, never upload it anywhere.
+- Preflight failures are pinned by `scripts/dev-db-restore.test.ts` (stubbed
+  PATH, no network, no Docker); the real download/decrypt/restore is not
+  covered by any test and is verified by running the command above.
 
 ## Watchpoints
 
