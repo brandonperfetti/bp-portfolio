@@ -8,6 +8,7 @@ vi.mock('next/cache', () => ({
   revalidatePath: mocks.revalidatePath,
 }))
 
+import { capturePublishedSlug } from '@/hooks/capturePublishedSlug'
 import { createSlugRedirect } from '@/hooks/createSlugRedirect'
 
 /**
@@ -16,59 +17,105 @@ import { createSlugRedirect } from '@/hooks/createSlugRedirect'
  * The freeze hook makes a rename deliberate; this hook makes it safe. These
  * tests pin exactly when a row is written — and, just as important, when one is
  * NOT (drafts, first publish, self-redirect, non-slug-routed collections).
+ *
+ * They drive the hook through the SAME `req.context` that `capturePublishedSlug`
+ * populates rather than hand-feeding a `previousDoc`, because the whole defect
+ * this file guards against (addendum 1) was that `previousDoc` is the autosaved
+ * draft, not the published document.
  */
 
 type FindResult = { docs: Array<{ id: number }> }
 
-const makeReq = (existing: FindResult = { docs: [] }) => {
-  const find = vi.fn(async () => existing)
+const makeHarness = (existing: FindResult = { docs: [] }) => {
+  const findRedirects = vi.fn(async () => existing)
   const create = vi.fn(async () => ({ id: 1 }))
   const update = vi.fn(async () => ({ id: 1 }))
   const logger = { error: vi.fn(), info: vi.fn() }
   return {
     create,
-    find,
+    findRedirects,
     logger,
-    req: { payload: { create, find, logger, update } } as never,
     update,
+    /** `payload.find` routed by collection: redirects vs the published-row probe. */
+    makeReq: (publishedSlug: null | string) => {
+      const find = vi.fn(async ({ collection }: { collection: string }) =>
+        collection === 'redirects'
+          ? await findRedirects()
+          : {
+              docs: publishedSlug === null ? [] : [{ slug: publishedSlug }],
+            },
+      )
+      return { payload: { create, find, logger, update } } as never
+    },
   }
 }
 
-const call = (
-  args: Record<string, unknown>,
-  existing: FindResult = { docs: [] },
-) => {
-  const harness = makeReq(existing)
-  return {
-    ...harness,
-    result: createSlugRedirect({
-      collection: { slug: 'posts' },
-      context: {},
-      operation: 'update',
-      req: harness.req,
-      ...args,
-    } as never),
-  }
-}
+/**
+ * Run the real publish sequence: `capturePublishedSlug` (beforeChange) then
+ * `createSlugRedirect` (afterChange), sharing one `req.context`.
+ */
+const publish = async ({
+  collectionSlug = 'posts',
+  context = {} as Record<string, unknown>,
+  data,
+  doc,
+  existing = { docs: [] } as FindResult,
+  originalDoc,
+  publishedSlug,
+}: {
+  collectionSlug?: string
+  context?: Record<string, unknown>
+  data: Record<string, unknown>
+  doc: Record<string, unknown>
+  existing?: FindResult
+  originalDoc: Record<string, unknown> | undefined
+  publishedSlug: null | string
+}) => {
+  const harness = makeHarness(existing)
+  const req = harness.makeReq(publishedSlug)
+  const collection = { slug: collectionSlug }
 
-const published = (slug: string, id = 55) => ({
-  id,
-  _status: 'published',
-  slug,
-})
+  await capturePublishedSlug({
+    collection,
+    context,
+    data,
+    operation: 'update',
+    originalDoc,
+    req,
+  } as never)
+
+  await createSlugRedirect({
+    collection,
+    context,
+    doc,
+    operation: 'update',
+    req,
+  } as never)
+
+  return harness
+}
 
 describe('createSlugRedirect', () => {
   beforeEach(() => {
     mocks.revalidatePath.mockClear()
   })
 
-  it('creates one redirect from the old article path to the document', async () => {
-    const { result, create, update } = call({
-      doc: published('new-slug'),
-      previousDoc: published('old-slug'),
+  /**
+   * THE regression (addendum 1). Both Posts and Pages run
+   * `autosave.interval: 100`, so by the time the editor clicks Publish the
+   * autosaved draft already holds the NEW slug and reports `_status: 'draft'`.
+   * A hook reading `previousDoc` sees `from === to` (or bails on the status
+   * guard) and writes nothing. This is red against that implementation.
+   */
+  it('creates the redirect on the admin rename path, after an autosave', async () => {
+    const { create, update } = await publish({
+      data: { _status: 'published', slug: 'new-slug', slugLock: false },
+      doc: { id: 55, _status: 'published', slug: 'new-slug' },
+      // What Payload actually hands the hooks: the autosaved draft.
+      originalDoc: { id: 55, _status: 'draft', slug: 'new-slug' },
+      publishedSlug: 'old-slug',
     })
 
-    await result
     expect(create).toHaveBeenCalledTimes(1)
     expect(update).not.toHaveBeenCalled()
     expect(create).toHaveBeenCalledWith(
@@ -83,29 +130,76 @@ describe('createSlugRedirect', () => {
         },
       }),
     )
-  })
-
-  it('purges the old path so it stops serving its prerendered shell', async () => {
-    // revalidatePost only purges the old path on UNPUBLISH, so without this the
-    // renamed article's old URL would never reach the redirect branch.
-    const { result } = call({
-      doc: published('new-slug'),
-      previousDoc: published('old-slug'),
-    })
-
-    await result
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/articles/old-slug')
   })
 
-  it('updates the existing row instead of stacking a second one', async () => {
-    const { result, create, update } = call(
-      { doc: published('c'), previousDoc: published('b') },
-      { docs: [{ id: 9 }] },
-    )
+  it('still works for a one-shot REST/MCP publish with no intervening draft', async () => {
+    const { create } = await publish({
+      data: { _status: 'published', slug: 'new-slug', slugLock: false },
+      doc: { id: 55, _status: 'published', slug: 'new-slug' },
+      originalDoc: { id: 55, _status: 'published', slug: 'old-slug' },
+      publishedSlug: 'old-slug',
+    })
 
-    await result
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ from: '/articles/old-slug' }),
+      }),
+    )
+  })
+
+  it('writes nothing on a first publish — no published row exists', async () => {
+    // Asserted on the ABSENCE OF A PUBLISHED ROW, not on previousDoc._status:
+    // a first publish and a renamed autosaved draft are indistinguishable
+    // through previousDoc.
+    const { create, update } = await publish({
+      data: { _status: 'published', slug: 'hello' },
+      doc: { id: 56, _status: 'published', slug: 'hello' },
+      originalDoc: { id: 56, _status: 'draft', slug: 'hello' },
+      publishedSlug: null,
+    })
+
     expect(create).not.toHaveBeenCalled()
-    expect(update).toHaveBeenCalledTimes(1)
+    expect(update).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('writes nothing for a draft save, and does not probe for a published row', async () => {
+    const harness = await publish({
+      data: { _status: 'draft', slug: 'renamed-in-draft' },
+      doc: { id: 55, _status: 'draft', slug: 'renamed-in-draft' },
+      originalDoc: { id: 55, _status: 'draft', slug: 'renamed-in-draf' },
+      publishedSlug: 'live',
+    })
+
+    expect(harness.create).not.toHaveBeenCalled()
+    expect(harness.findRedirects).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('writes nothing when the slug did not change', async () => {
+    const { create, findRedirects } = await publish({
+      data: { _status: 'published', slug: 'same' },
+      doc: { id: 55, _status: 'published', slug: 'same' },
+      originalDoc: { id: 55, _status: 'published', slug: 'same' },
+      publishedSlug: 'same',
+    })
+
+    expect(findRedirects).not.toHaveBeenCalled()
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('updates the existing row instead of stacking a second one', async () => {
+    const { create, update } = await publish({
+      data: { _status: 'published', slug: 'c' },
+      doc: { id: 55, _status: 'published', slug: 'c' },
+      existing: { docs: [{ id: 9 }] },
+      originalDoc: { id: 55, _status: 'draft', slug: 'c' },
+      publishedSlug: 'b',
+    })
+
+    expect(create).not.toHaveBeenCalled()
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         collection: 'redirects',
@@ -116,13 +210,14 @@ describe('createSlugRedirect', () => {
   })
 
   it('uses the bare path for pages', async () => {
-    const { result, create } = call({
-      collection: { slug: 'pages' },
-      doc: published('now', 7),
-      previousDoc: published('before', 7),
+    const { create } = await publish({
+      collectionSlug: 'pages',
+      data: { _status: 'published', slug: 'now' },
+      doc: { id: 7, _status: 'published', slug: 'now' },
+      originalDoc: { id: 7, _status: 'draft', slug: 'now' },
+      publishedSlug: 'before',
     })
 
-    await result
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: {
@@ -136,87 +231,83 @@ describe('createSlugRedirect', () => {
     )
   })
 
-  it('writes nothing on a first publish', async () => {
-    const { result, create, update } = call({
-      doc: published('hello'),
-      previousDoc: { id: 55, _status: 'draft', slug: 'draft-title' },
+  it('ignores collections whose slug is not a public URL', async () => {
+    const { create } = await publish({
+      collectionSlug: 'categories',
+      data: { _status: 'published', slug: 'design-systems' },
+      doc: { id: 3, _status: 'published', slug: 'design-systems' },
+      originalDoc: { id: 3, _status: 'published', slug: 'design' },
+      publishedSlug: 'design',
     })
 
-    await result
-    expect(create).not.toHaveBeenCalled()
-    expect(update).not.toHaveBeenCalled()
-  })
-
-  it('writes nothing for a draft save', async () => {
-    const { result, create } = call({
-      doc: { id: 55, _status: 'draft', slug: 'new' },
-      previousDoc: published('old'),
-    })
-
-    await result
-    expect(create).not.toHaveBeenCalled()
-  })
-
-  it('writes nothing when the slug did not change', async () => {
-    const { result, create, find } = call({
-      doc: published('same'),
-      previousDoc: published('same'),
-    })
-
-    await result
-    expect(find).not.toHaveBeenCalled()
     expect(create).not.toHaveBeenCalled()
   })
 
   it('writes nothing on create', async () => {
-    const { result, create } = call({
-      doc: published('brand-new'),
+    const harness = makeHarness()
+    const req = harness.makeReq(null)
+
+    await createSlugRedirect({
+      collection: { slug: 'posts' },
+      context: {},
+      doc: { id: 55, _status: 'published', slug: 'brand-new' },
       operation: 'create',
-      previousDoc: undefined,
+      req,
+    } as never)
+
+    expect(harness.create).not.toHaveBeenCalled()
+  })
+
+  it('honours context.disableSlugRedirect', async () => {
+    const { create } = await publish({
+      context: { disableSlugRedirect: true },
+      data: { _status: 'published', slug: 'new' },
+      doc: { id: 55, _status: 'published', slug: 'new' },
+      originalDoc: { id: 55, _status: 'published', slug: 'old' },
+      publishedSlug: 'old',
     })
 
-    await result
     expect(create).not.toHaveBeenCalled()
   })
 
-  it('ignores collections whose slug is not a public URL', async () => {
-    const { result, create } = call({
-      collection: { slug: 'categories' },
-      doc: published('design-systems', 3),
-      previousDoc: published('design', 3),
+  it('honours context.disableRevalidate for the path purge only', async () => {
+    const { create } = await publish({
+      context: { disableRevalidate: true },
+      data: { _status: 'published', slug: 'new' },
+      doc: { id: 55, _status: 'published', slug: 'new' },
+      originalDoc: { id: 55, _status: 'published', slug: 'old' },
+      publishedSlug: 'old',
     })
 
-    await result
-    expect(create).not.toHaveBeenCalled()
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
   it('never fails the editor’s publish when the redirect write throws', async () => {
-    const harness = makeReq()
-    harness.find.mockRejectedValueOnce(new Error('db down') as never)
-    const doc = published('new')
+    const harness = makeHarness()
+    const req = harness.makeReq('old')
+    harness.findRedirects.mockRejectedValueOnce(new Error('db down') as never)
+    const context: Record<string, unknown> = {}
+    const doc = { id: 55, _status: 'published', slug: 'new' }
+
+    await capturePublishedSlug({
+      collection: { slug: 'posts' },
+      context,
+      data: { _status: 'published', slug: 'new' },
+      operation: 'update',
+      originalDoc: { id: 55, _status: 'published', slug: 'old' },
+      req,
+    } as never)
 
     await expect(
       createSlugRedirect({
         collection: { slug: 'posts' },
-        context: {},
+        context,
         doc,
         operation: 'update',
-        previousDoc: published('old'),
-        req: harness.req,
+        req,
       } as never),
     ).resolves.toBe(doc)
     expect(harness.logger.error).toHaveBeenCalled()
-  })
-
-  it('honours context.disableRevalidate for the path purge only', async () => {
-    const { result, create } = call({
-      context: { disableRevalidate: true },
-      doc: published('new'),
-      previousDoc: published('old'),
-    })
-
-    await result
-    expect(create).toHaveBeenCalledTimes(1)
-    expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 })

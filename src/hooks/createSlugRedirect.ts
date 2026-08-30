@@ -6,17 +6,28 @@ import {
   isSlugRoutedCollection,
   publicPathForSlug,
 } from '@/fields/slug/slugPaths'
+import { readPreviousPublishedSlug } from '@/hooks/capturePublishedSlug'
 
 /**
  * `afterChange` hook that keeps a renamed published URL reachable: when a
  * published Post or Page changes slug, the old path gets a `redirects` row
  * pointing at the document.
  *
- * @remarks **When it fires.** Only on an `update` where the document is
- * published *and was already published before the change*, and where the
- * public path actually moved. A draft save, a first publish, and an unchanged
- * slug all return without writing — there is no old public URL to preserve in
- * any of those cases.
+ * @remarks **When it fires.** Only on an `update` that lands the document in a
+ * published state, where a *previously published* slug exists and differs from
+ * the new one. A draft save, a first publish, and an unchanged slug all return
+ * without writing — there is no old public URL to preserve in any of those
+ * cases.
+ *
+ * **The old slug comes from {@link capturePublishedSlug}, not `previousDoc`.**
+ * With autosave enabled (both Posts and Pages run a 100ms interval) Payload's
+ * `previousDoc` is the latest *version* — the autosaved draft — so on the real
+ * admin rename path it already carries the NEW slug and reports
+ * `_status: 'draft'`. Reading it here made this hook silently never fire for
+ * the main editorial flow. The `beforeChange` companion reads the main table
+ * row instead, which a draft save never touches, and stashes the true
+ * pre-write published slug on `req.context`. `previousDoc` is deliberately not
+ * used at all.
  *
  * **Why the redirect targets the document, not a path.** `to.type: 'reference'`
  * makes the row resolve through the document's *current* slug at read time
@@ -50,7 +61,6 @@ export const createSlugRedirect: CollectionAfterChangeHook = async ({
   context,
   doc,
   operation,
-  previousDoc,
   req,
 }) => {
   if (operation !== 'update') return doc
@@ -59,12 +69,17 @@ export const createSlugRedirect: CollectionAfterChangeHook = async ({
   const collectionSlug = collection?.slug
   if (!collectionSlug || !isSlugRoutedCollection(collectionSlug)) return doc
 
-  // Both sides must be published: a first publish has no old public URL, and a
-  // draft save has not moved one.
+  // The write must land the document published, and a published version must
+  // have existed beforehand — no captured slug means a first publish.
   if (doc?._status !== 'published') return doc
-  if (previousDoc?._status !== 'published') return doc
+  const previousSlug = readPreviousPublishedSlug(
+    context,
+    collectionSlug,
+    doc.id,
+  )
+  if (!previousSlug) return doc
 
-  const from = publicPathForSlug(collectionSlug, previousDoc?.slug)
+  const from = publicPathForSlug(collectionSlug, previousSlug)
   const to = publicPathForSlug(collectionSlug, doc?.slug)
   if (!from || !to || from === to) return doc
 

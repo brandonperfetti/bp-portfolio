@@ -14,6 +14,7 @@ import { authenticatedOrPublished } from '@/access/authenticatedOrPublished'
 import { pageBuilderBlocks } from '@/blocks/library'
 import { SHARE_TARGET_OPTIONS } from '@/globals/SiteSettings'
 import { hero } from '@/heros/config'
+import { capturePublishedSlug } from '@/hooks/capturePublishedSlug'
 import { createSlugRedirect } from '@/hooks/createSlugRedirect'
 import { populatePublishedAt } from '@/hooks/populatePublishedAt'
 import { generatePreviewPath } from '@/utilities/generatePreviewPath'
@@ -193,7 +194,7 @@ export const Pages: CollectionConfig = {
   ],
   hooks: {
     afterChange: [revalidatePage, createSlugRedirect],
-    beforeChange: [populatePublishedAt],
+    beforeChange: [populatePublishedAt, capturePublishedSlug],
     afterDelete: [revalidateDelete],
   },
   versions: {

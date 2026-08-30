@@ -95,6 +95,16 @@ straight to `/articles/c` — chains cannot form. `src/lib/cms/redirectsRepo.ts`
 is the cached reader; `/articles/[slug]` and `/[slug]` consult it on their
 not-found branch only, so a live document always wins over a stale row.
 
+**The old slug comes from the main table, never from `previousDoc`.** Posts and
+Pages both run `autosave.interval: 100`, and Payload resolves the hook's
+`originalDoc`/`previousDoc` from `getLatestCollectionVersion` — after any
+autosave that is the DRAFT, which on a rename already holds the _new_ slug and
+reports `_status: 'draft'`. A `beforeChange` hook
+(`src/hooks/capturePublishedSlug.ts`) therefore reads the published main-table
+row — which a draft save never touches — and stashes it on `req.context` for
+`createSlugRedirect`. Anything added here that needs "the value the site is
+currently serving" must do the same; `previousDoc` is not it.
+
 Scope: only **Posts** and **Pages** are slug-routed (`slugPaths.ts`).
 Categories, Tags, Projects and Authors carry a slug with no public URL behind
 it and keep the plain derive-from-title behaviour.
