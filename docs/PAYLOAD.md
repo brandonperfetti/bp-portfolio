@@ -54,15 +54,65 @@ fields fall back to the `src/lib/identity.ts` constants and the static
 
 ## Slugs
 
-Classic pattern in `src/fields/slug/`: text field + `slugLock` checkbox +
-`formatSlug` hook + admin component. Migrated slugs are locked — unlock in
-admin to change (URL contract: never rename published article slugs).
+Pattern in `src/fields/slug/`: text field + `slugLock` checkbox + `formatSlug`
+hook + `enforceSlugFreeze` hook + admin component.
+
+**`slugLock: true` means "I do not hand-edit this slug"**, and that resolves
+differently either side of first publish (#120):
+
+- **Before first publish** the slug is derived from the title on every edit.
+  Convenient, and safe — no public URL exists yet.
+- **Once published** the slug is frozen at its published value. Editing the
+  title can no longer move the URL.
+
+Correction (this sentence used to read "Migrated slugs are locked — unlock in
+admin to change"): under the old semantics the stored `slugLock: true` was
+exactly what made a title edit rename a live URL, which is the bug #120
+measured. The lock now means what it says. Every migrated and seeded document
+already stores `slugLock: true`, so all of them are frozen by rule — no data
+migration, no schema change.
+
+**For editors — renaming a published URL deliberately:**
+
+1. Open the doc, click **Unlock** beside the Slug field. The sentence under the
+   input always states what will happen on save.
+2. Type the new slug (a published doc never auto-fills it — a rename is typed,
+   never inferred from a title).
+3. Save/publish. A `redirects` row is created automatically, so the old URL
+   keeps working; visitors and search engines get a permanent redirect to the
+   new one.
+
+**Enforcement is server-side.** `enforceSlugFreeze` (a `beforeValidate` field
+hook) reverts a frozen slug regardless of caller — admin form, REST `PATCH`, or
+MCP. A write that intends a rename must send `slugLock: false` in the same
+payload; omitting it is not consent. The admin component mirrors the rule (it
+stops re-deriving once `hasPublishedDoc`) purely so the editor is never shown a
+value the server is about to revert.
+
+**Redirects point at the document, not at a path** (`to.type: 'reference'`), so
+renaming `a → b → c` leaves both `/articles/a` and `/articles/b` resolving
+straight to `/articles/c` — chains cannot form. `src/lib/cms/redirectsRepo.ts`
+is the cached reader; `/articles/[slug]` and `/[slug]` consult it on their
+not-found branch only, so a live document always wins over a stale row.
+
+Scope: only **Posts** and **Pages** are slug-routed (`slugPaths.ts`).
+Categories, Tags, Projects and Authors carry a slug with no public URL behind
+it and keep the plain derive-from-title behaviour.
+
+Known limits: the `redirects` collection carries no per-row permanence flag
+(the plugin only adds one when `redirectTypes` is configured), so every served
+redirect is a permanent one — right for a rename, worth revisiting if temporary
+redirects are ever needed. The reader reads at most 500 rows.
 
 ## Plugins (`src/plugins/index.ts`)
 
 - `plugin-seo` — meta title/description/image + previews; `generateTitle` is
   `{title} - Brandon Perfetti`; posts URL-prefix `/articles`.
-- `plugin-redirects` — editorial redirects, revalidated on change.
+- `plugin-redirects` — editorial redirects **plus** the rows
+  `createSlugRedirect` writes when a published Post/Page is deliberately
+  renamed; revalidated on change and served by `src/lib/cms/redirectsRepo.ts`
+  (#120). Before that, nothing in `src/` read the collection, so a redirect row
+  was inert.
 - `plugin-search` — synced search index over posts feeding `/api/search`.
 - `plugin-mcp` — Payload MCP endpoint at `/api/mcp` (API-key auth) so agents
   can operate the CMS. Collections opt in with `{ enabled: true }` objects.
@@ -85,9 +135,14 @@ cannot infer are the invariants below; encode those, not the mechanics.
   MediaBlock — an unknown or dropped node crashes every migrated article with
   minified Lexical #17. Prefer editing bodies in `/admin`; use `updatePosts`
   on `content` only with a known-valid tree.
-- **Locked slugs.** Migrated/published slugs are locked (URL contract). Never
-  change a published `slug` via MCP — add a plugin-redirects entry instead. A
-  bulk `where` update must not touch `slug`.
+- **Locked slugs.** A published document's slug is frozen server-side (#120):
+  `enforceSlugFreeze` reverts it, so an `updatePosts` that changes `title` — or
+  that sends a new `slug` without `slugLock` — leaves the URL byte-identical.
+  That is the safe default, not an error you will see. To rename deliberately,
+  send `slugLock: false` alongside the new `slug` in the same write; the old
+  path then redirects automatically and needs no hand-written redirect row.
+  Prefer not renaming at all: the v3 slugs are the ones carrying external
+  links. A bulk `where` update must never touch `slug` or `slugLock`.
 - **Writes are live.** There is no dry-run; create/update/delete hit a real
   DB immediately. `find` (with a narrow `select`) to confirm state before any
   write.
