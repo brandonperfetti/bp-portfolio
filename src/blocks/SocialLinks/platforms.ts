@@ -1,10 +1,14 @@
 import {
+  BlueskyIcon,
+  FacebookIcon,
   GitHubIcon,
   InstagramIcon,
   LinkIcon,
   LinkedInIcon,
   MailIcon,
+  ThreadsIcon,
   XIcon,
+  YouTubeIcon,
 } from '@/icons'
 
 /**
@@ -15,9 +19,23 @@ import {
  * from Identity arrives with no icon field to read. Deriving from the host
  * keeps both sources — Identity and custom — on one code path, and `link` is
  * the honest fallback for a URL this list doesn't know.
+ *
+ * Growing the set is additive by construction: a host that used to fall to
+ * `link` starts drawing its own glyph, and nothing that already resolved
+ * changes. Mastodon and TikTok are deliberately still `link` — Mastodon has
+ * no single host to match, and TikTok is not a platform this site is on.
  */
 export type SocialPlatform =
-  'x' | 'github' | 'linkedin' | 'instagram' | 'email' | 'link'
+  | 'x'
+  | 'github'
+  | 'linkedin'
+  | 'instagram'
+  | 'facebook'
+  | 'youtube'
+  | 'bluesky'
+  | 'threads'
+  | 'email'
+  | 'link'
 
 /**
  * A social link after resolution: the plain, serializable shape the
@@ -42,6 +60,10 @@ export const SOCIAL_PLATFORM_ICONS: Record<
   github: GitHubIcon,
   linkedin: LinkedInIcon,
   instagram: InstagramIcon,
+  facebook: FacebookIcon,
+  youtube: YouTubeIcon,
+  bluesky: BlueskyIcon,
+  threads: ThreadsIcon,
   email: MailIcon,
   link: LinkIcon,
 }
@@ -55,15 +77,35 @@ const PLATFORM_NAMES: Record<
   github: 'GitHub',
   linkedin: 'LinkedIn',
   instagram: 'Instagram',
+  facebook: 'Facebook',
+  youtube: 'YouTube',
+  bluesky: 'Bluesky',
+  threads: 'Threads',
 }
 
-/** Registrable domain → platform, matched against the URL host. */
+/**
+ * Registrable domain → platform, matched against the URL host.
+ *
+ * @remarks Every pattern is anchored at both ends — `(^|\.)` before, `$`
+ * after — so it matches the domain itself or a subdomain of it and nothing
+ * else. That anchoring is what keeps a lookalike host like `notfacebook.com`
+ * or `youtube.com.evil.test` on the generic `link` glyph instead of lending
+ * it a brand's mark, which is the one failure mode here that would actually
+ * mislead a reader.
+ */
 const HOST_PLATFORMS: Array<[RegExp, SocialPlatform]> = [
   [/(^|\.)x\.com$/, 'x'],
   [/(^|\.)twitter\.com$/, 'x'],
   [/(^|\.)github\.com$/, 'github'],
   [/(^|\.)linkedin\.com$/, 'linkedin'],
   [/(^|\.)instagram\.com$/, 'instagram'],
+  [/(^|\.)facebook\.com$/, 'facebook'],
+  [/(^|\.)fb\.com$/, 'facebook'],
+  [/(^|\.)youtube\.com$/, 'youtube'],
+  [/(^|\.)youtu\.be$/, 'youtube'],
+  [/(^|\.)bsky\.app$/, 'bluesky'],
+  [/(^|\.)threads\.net$/, 'threads'],
+  [/(^|\.)threads\.com$/, 'threads'],
 ]
 
 /**
@@ -72,9 +114,11 @@ const HOST_PLATFORMS: Array<[RegExp, SocialPlatform]> = [
  * @param href - A URL or `mailto:` address, as stored.
  * @returns The matching platform, or `link` when the host is unknown or the
  * value doesn't parse as a URL at all.
- * @remarks `twitter.com` maps to `x` on purpose — the Identity global may
- * still hold an old-style profile URL, and an editor shouldn't have to
- * rewrite it to get the right glyph.
+ * @remarks Renamed and second-home domains map to the platform that owns
+ * them, on purpose — the Identity global may still hold an old-style profile
+ * URL and an editor shouldn't have to rewrite it to get the right glyph. So
+ * `twitter.com` reads as `x`, `fb.com` as `facebook`, `youtu.be` as
+ * `youtube`, and both `threads.net` and `threads.com` as `threads`.
  */
 export function resolveSocialPlatform(href: string): SocialPlatform {
   const value = href.trim()

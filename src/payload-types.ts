@@ -1064,7 +1064,7 @@ export interface SocialLinksBlock {
    */
   source: 'identity' | 'custom';
   /**
-   * The icon is derived from the URL (X, GitHub, LinkedIn, Instagram, email — anything else gets a generic link glyph).
+   * The icon is derived from the URL (X, GitHub, LinkedIn, Instagram, Facebook, YouTube, Bluesky, Threads, email — anything else gets a generic link glyph).
    */
   links?:
     | {
