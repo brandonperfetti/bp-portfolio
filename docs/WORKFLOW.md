@@ -13,13 +13,14 @@
 
 ## Branching & releases
 
-- `master` — v3 production. Frozen until v4 launch sign-off.
-- `rebuild/v4` — active v4 branch; auto-deploys the Vercel `staging`
-  environment. Work lands here in small conventional commits
-  (`feat(scope): …`, `fix(scope): …`) with a draft PR and phase status
-  comments.
-- After merge, `develop` becomes the integration branch and staging retargets
-  to it (planned).
+- GitFlow since the v4 cutover: `master` → production
+  ([brandonperfetti.com](https://brandonperfetti.com)); `develop` →
+  integration; the active QA branch serves
+  [staging.brandonperfetti.com](https://staging.brandonperfetti.com).
+- One branch per wave off `develop`, small conventional commits
+  (`feat(scope): …`, `fix(scope): …`) with `Refs #n`, one PR into `develop`
+  (CodeRabbit + full CI), staging QA, then a develop→master release PR
+  worked to review-clean before merge.
 
 ## Local hooks
 
