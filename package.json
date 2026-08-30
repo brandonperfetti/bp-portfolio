@@ -25,6 +25,7 @@
     "payload": "payload",
     "migrate": "payload migrate",
     "migrate:create": "payload migrate:create",
+    "db:local:refresh": "bash scripts/dev-db-restore.sh",
     "seed:e2e": "payload run scripts/seed-e2e.ts",
     "corvus:backfill": "payload run scripts/backfill-corvus-embeddings.ts",
     "generate:types": "payload generate:types",
