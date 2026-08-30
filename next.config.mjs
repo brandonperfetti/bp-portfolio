@@ -2,6 +2,17 @@ import { withPayload } from '@payloadcms/next/withPayload'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // #119: allow the dev server to serve its internal `/_next` and `/__nextjs`
+  // endpoints to requests originating from `127.0.0.1`. Next blocks
+  // cross-origin dev requests by default and its built-in allowlist is only
+  // `localhost` / `**.localhost` (next/dist/server/lib/router-utils/
+  // block-cross-site-dev.js), so a browser pointed at 127.0.0.1 gets 403s on
+  // dev-only assets even though it is the same machine. `playwright.config.ts`
+  // uses `baseURL: 'http://127.0.0.1:3000'`, which is exactly that case.
+  // Entries are HOSTNAMES, not origins — no scheme, no port (the block check
+  // compares `parseUrl(origin).hostname`). Dev-only: this key has no effect on
+  // `next build` / `next start`, so it cannot loosen anything in production.
+  allowedDevOrigins: ['127.0.0.1'],
   // #76 Piece 1: enable Cache Components (top-level flag in Next 16.3 — the
   // experimental location is deprecated). Piece 1 only flips the flag and adds
   // the minimum Suspense/sync-IO scaffolding for a behavior-preserving build;
