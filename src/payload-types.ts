@@ -346,6 +346,9 @@ export interface Page {
    */
   ogImageMode?: ('auto' | 'bespoke' | 'generated') | null;
   publishedAt?: string | null;
+  /**
+   * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
+   */
   slug?: string | null;
   slugLock?: boolean | null;
   updatedAt: string;
@@ -455,6 +458,9 @@ export interface Post {
      */
     requiredFeature?: string | null;
   };
+  /**
+   * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
+   */
   slug?: string | null;
   slugLock?: boolean | null;
   updatedAt: string;
@@ -1264,6 +1270,9 @@ export interface ShaderHeroBlock {
 export interface Category {
   id: number;
   title: string;
+  /**
+   * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
+   */
   slug?: string | null;
   slugLock?: boolean | null;
   updatedAt: string;
@@ -1276,6 +1285,9 @@ export interface Category {
 export interface Tag {
   id: number;
   title: string;
+  /**
+   * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
+   */
   slug?: string | null;
   slugLock?: boolean | null;
   updatedAt: string;
@@ -1304,6 +1316,9 @@ export interface Author {
         id?: string | null;
       }[]
     | null;
+  /**
+   * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
+   */
   slug?: string | null;
   slugLock?: boolean | null;
   updatedAt: string;
@@ -1333,6 +1348,9 @@ export interface Project {
    * Lower numbers sort first on /projects.
    */
   sortOrder?: number | null;
+  /**
+   * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
+   */
   slug?: string | null;
   slugLock?: boolean | null;
   updatedAt: string;
