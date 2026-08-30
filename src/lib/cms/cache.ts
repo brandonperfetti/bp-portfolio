@@ -19,6 +19,7 @@ export const CMS_TAGS = {
   uses: 'uses',
   workHistory: 'work-history',
   pages: 'pages',
+  redirects: 'redirects',
   settings: 'global_site-settings',
   navigation: 'global_navigation',
   identity: 'global_identity',

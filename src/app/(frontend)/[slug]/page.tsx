@@ -1,11 +1,12 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import { cache } from 'react'
 
 import { ShareButton } from '@/components/cms/ShareButton'
 import { RenderRhythmPage } from '@/heros/RenderRhythmPage'
 import { EMPTY_CMS_SENTINEL } from '@/lib/cms/emptyCmsSentinel'
 import { resolvePageShareTargetIds } from '@/lib/cms/pageShareTargets'
+import { getRedirectForPath } from '@/lib/cms/redirectsRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import {
   RESERVED_PAGE_SLUGS,
@@ -62,6 +63,12 @@ export default async function CmsPage({
 
   const page = await queryPageBySlug(slug)
   if (!page) {
+    // #120: same three lines as /articles/[slug] — a renamed published page
+    // serves a redirect from its old path instead of a 404. Deliberately NOT
+    // applied to the RESERVED_PAGE_SLUGS branch above: those paths are owned by
+    // dedicated routes, so a redirect row must never shadow one.
+    const destination = await getRedirectForPath(`/${slug}`)
+    if (destination) permanentRedirect(destination)
     notFound()
   }
 
