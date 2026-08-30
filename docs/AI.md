@@ -60,6 +60,21 @@ bulk-content or homework-cheating infrastructure. The anon free-message gate
 (#74) and rate limits bound the cost of that openness. Per-viewer persona
 tiering and signed-in memory is a future extension (#81), not this prompt.
 
+**The prompt names only real destinations (#82 wave 4).** It used to say
+"point to the contact form", naming a destination with no address: there is no
+`/contact` route under `src/app/(frontend)/` — the form is a page-builder block
+(`src/blocks/ContactForm/`) an editor drops into a page — so a model told to
+point at it and free to write a link guesses `/contact`, which
+`never-fabricates-a-site-url` correctly scores 0. No stable anchor id exists to
+link instead (`ContactFormComponent` renders a bare `<section>`), so the fix
+removes the reason to guess rather than supplying a URL: a `Never invent a
+link` rule that says where site URLs legitimately come from (the `Source:`
+label on retrieved passages) and tells Corvus to name the contact form in
+words. `src/lib/ai/corvus.test.ts` pins that the prompt names no path outside
+`HEADER_NAV_LINKS` — the same source `evals/fixtures/site-routes.ts` derives
+the scorer's real-route set from, so the prompt and the scorer cannot disagree
+about which pages exist.
+
 ## Retrieval grounding (#82)
 
 Site-specific answers are grounded in the site's own published content, pulled
@@ -156,6 +171,45 @@ rows a failed hook left stale, and re-embeds everything after an
 different `model` as absent. The hash skip makes a re-run over an already
 current index nearly free, so running it is never the wrong call.
 
+### Citing the site, not the vendor (#82 wave 4)
+
+Each retrieved passage renders as a numbered heading, a `Source:` line
+carrying the chunk's own site URL, then the chunk body. The `Source:` line is
+the fix for a measured wave-3 miss: asked about a technology the site
+documents, Corvus cited the technology's OWN homepage — postgresql.org,
+vitest.dev — instead of `/tech`.
+
+The cause is legible once the rendered passage is read end to end.
+`chunkFlatRecord` renders a tech-stack row as labelled fields, one of which is
+the vendor's homepage, while the site's own URL used to be a bare parenthetical
+on the heading:
+
+```text
+[1] PostgreSQL (/tech)
+Technology: PostgreSQL
+Category: data
+Proficiency: proficient
+URL: https://www.postgresql.org/
+```
+
+Two URLs, and the only one wearing a label was the vendor's. Told to "link the
+source URL", a model reaching for the thing named `URL` picks postgresql.org.
+That also explains why the miss was shape-dependent rather than deterministic
+(staging, 2026-08-29, cited the site correctly for an article): a Post chunk
+carries no `URL:` line in its body, so there was nothing for the site URL to
+lose to.
+
+So the site URL gets a label of equal standing, and the instruction names that
+label — `Those Source: paths are the ONLY site URLs you may cite` — plus one
+sentence saying a third-party address inside a passage is a fact Corvus may
+mention and never the source for a claim about this site.
+
+**Deliberately not fixed in `chunking.ts`.** The vendor URL is legitimately
+part of the embedded text (it is how "where do I read more about Prisma"
+retrieves at all), and changing chunk render output would force a full re-embed
+backfill for a defect that lives in prompt assembly. `chunking.ts` and the
+stored chunk shape are untouched.
+
 ### Degrading to ungrounded
 
 `buildGroundedSystem([])` returns `CORVUS_SYSTEM_PROMPT` **by identity, byte
@@ -222,12 +276,20 @@ Two known gaps in that snapshot:
   resistance, system prompt never revealed.
 - `evals/scope.eval.ts` — the same scope question asked of the GROUNDED path:
   site questions answered from context, general questions still answered,
-  off-site requests declined **and** redirected.
-- `evals/site-facts.eval.ts` — site-fact accuracy in three shapes: grounded
+  off-site requests declined **and** redirected, and (wave 4) contact
+  questions answered without inventing a page — those cases retrieve `[]`, so
+  that block measures the persona prompt rather than the grounded path.
+- `evals/site-facts.eval.ts` — site-fact accuracy in four shapes: grounded
   answers (state it and cite it), ungrounded (retrieval returns `[]`, so
-  decline), and adjacent context (five real but irrelevant passages — the
+  decline), adjacent context (five real but irrelevant passages — the
   confabulation trap grounding introduces, where everything in the window is
-  true so a made-up answer reads as well-sourced).
+  true so a made-up answer reads as well-sourced), and (wave 4) **sourcing** —
+  the corpus answers the question and Corvus states it correctly, but credits
+  the technology's own homepage instead of the site's page.
+  `cites-a-real-source-url` cannot see that failure (an answer citing only
+  postgresql.org scores 0 there indistinguishably from an answer citing
+  nothing), so `cites-the-site-page-not-a-vendor-url` runs beside it, reserving
+  its middle 0.5 for "cited nothing at all".
 - `evals/matrix.eval.ts` — opt-in, see below.
 
 Scorers are mostly deterministic and unit-tested at zero provider cost in
@@ -257,6 +319,12 @@ not the number of cases, so the site-fact file — three scorers on its largest
 block — carries the most weight of any file. Adding a strong block can
 therefore **loosen** the effective gate on the persona and safety rails. If
 that becomes real, the ratchet is to raise `eval:ci`, not to shrink the block.
+
+Wave 4 does exactly that, knowingly: the sourcing block adds six scores to
+`eval:facts`' pool and to `eval:ci`'s global one (two cases x three scorers),
+and the contact block adds four to `eval:ci`. Both gate a real defect, so the
+weight is earned — but the first keyed run after them should be read as a new
+baseline, not compared line-for-line with the wave-3 average.
 
 ### Why the harness broke, so nobody rebuilds it
 
