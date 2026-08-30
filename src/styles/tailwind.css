@@ -215,12 +215,49 @@
   --corvus-ink: #fafafa; /* zinc-50 */
   --corvus-muted: #a1a1aa; /* zinc-400 */
   /* Accent: text/icon reads teal-400 in dark like the nav's active link;
-   * fills use teal-700 → teal-600 hover, identical to the primary Button. */
+   * fills use teal-700 → teal-800 hover, identical to the primary Button.
+   *
+   * The hover DARKENS, and that direction is the accessibility call rather
+   * than a taste one — the same correction `src/components/ui/button.tsx` and
+   * `src/components/Button.tsx` took. It used to be teal-600, which puts
+   * --corvus-accent-ink (#fff) at 3.74:1 on the fill: under the 4.5:1 WCAG
+   * 1.4.3 AA floor for the CTA's 14px label, in BOTH themes, since neither
+   * --corvus-accent-solid nor its hover is redefined in the light block below.
+   * teal-800 is 7.58:1. Ratios computed from these literal hex values, which
+   * are Tailwind v3's — see the note on the palette drift below.
+   *
+   * Known residual, stated rather than glossed. Against the DARK gate panel
+   * (--corvus-panel, white 4% over the black page ≈ #0a0a0a) the hover fill's
+   * own edge goes 5.29:1 → 2.61:1, under the 3:1 WCAG 1.4.11 non-text floor.
+   * That is a real cost and it buys a bigger one: a label users have to READ
+   * at 3.74:1 is the worse failure, and 1.4.3 is the primary requirement. No
+   * teal step resolves both here — dark needs the fill's luminance in
+   * [0.109, 0.183] to clear the label and the edge at once, and the only ramp
+   * step inside that window is teal-700, which is the RESTING fill, so it
+   * would mean no visible hover at all. The squeeze comes from the near-black
+   * surface, not from this token; a lighter dark CTA treatment, or a hover
+   * that adds an outline instead of moving the fill, is the fix, and that is a
+   * design decision rather than an accessibility sweep. The resting state is
+   * unaffected and still clears the edge at 3.62:1.
+   *
+   * --corvus-accent-hover is currently referenced by NOTHING (measured: no
+   * `var(--corvus-accent-hover)` anywhere in the repo), so it is left exactly
+   * as it is — an unrendered value cannot fail a contrast check. Worth knowing
+   * before wiring it up: its LIGHT value (#0d9488) would measure 3.41:1 as
+   * text on --corvus-panel, i.e. it would land under AA the moment it is used
+   * for a label.
+   *
+   * Palette drift, noted once for the whole block: these are Tailwind v3
+   * hexes, while the utility classes the components use resolve v4's OKLCH
+   * tokens (v4 teal-700 is #00786f, teal-800 #005f5a). The pairs differ by
+   * well under a perceptible step and by <0.05 in every ratio here, so this
+   * stays in the file's own v3 vocabulary rather than mixing one v4 value in.
+   * Reconciling the block is its own change. */
   --corvus-accent: #2dd4bf; /* teal-400 — text/icon */
-  --corvus-accent-hover: #5eead4; /* teal-300 */
+  --corvus-accent-hover: #5eead4; /* teal-300 — currently unreferenced */
   --corvus-accent-ink: #ffffff; /* text on a teal fill */
   --corvus-accent-solid: #0f766e; /* teal-700 — filled CTA (Button primary) */
-  --corvus-accent-solid-hover: #0d9488; /* teal-600 */
+  --corvus-accent-solid-hover: #115e59; /* teal-800 — 7.58:1 with the ink */
   --corvus-border: rgb(255 255 255 / 10%); /* shadcn --border (dark) */
   --corvus-status: #10b981; /* emerald-500 online dot */
 
@@ -247,9 +284,13 @@
 :root:not(.dark) .corvus-surface {
   /* Light-theme override — zinc neutrals on the site's zinc-50 page, teal-700
    * text/icon accent (the nav's light active-link color). --corvus-accent-ink
-   * (#fff), --corvus-accent-solid (teal-700), and --corvus-status are NOT
-   * redefined, so they inherit the dark values above — teal fills and their
-   * white text are identical in both themes, matching the primary Button. */
+   * (#fff), --corvus-accent-solid (teal-700), --corvus-accent-solid-hover
+   * (teal-800) and --corvus-status are NOT redefined, so they inherit the dark
+   * values above — teal fills and their white text are identical in both
+   * themes, matching the primary Button. The inherited hover is the better
+   * value on this side of the theme: on the light gate panel it clears both
+   * floors comfortably (label 7.58:1, fill edge 6.90:1), where the old
+   * teal-600 cleared neither with room (3.74:1 and 3.41:1). */
   --corvus-ground: #fafafa;
   --corvus-panel: #f4f4f5; /* zinc-100 — subtle raised surface only */
   --corvus-ink: #18181b; /* zinc-900 */

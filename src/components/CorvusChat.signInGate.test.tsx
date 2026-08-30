@@ -104,9 +104,12 @@ describe('CorvusChat — real useChat/DefaultChatTransport pipeline', () => {
     // Scope, stated so this pin is not mistaken for more than it is: on
     // /corvus the class is overridden by `.corvus-surface
     // [data-slot='sign-in-gate-cta']:hover`, which reads
-    // `--corvus-accent-solid-hover` in src/styles/tailwind.css — still teal-600
-    // there, and out of this change's scope. This asserts the component's own
-    // behaviour, which is what Storybook and every non-surface host get.
+    // `--corvus-accent-solid-hover` in src/styles/tailwind.css. That token has
+    // been raised to teal-800 as well, so the surface and the component agree
+    // — but it is a different artifact with a different guard
+    // (`src/styles/corvus-accent-contrast.test.ts`, which recomputes the
+    // ratio). This case asserts only the component's own behaviour, which is
+    // what Storybook and every non-surface host get.
     vi.stubGlobal(
       'fetch',
       vi.fn(

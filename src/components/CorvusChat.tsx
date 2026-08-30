@@ -425,12 +425,13 @@ export default function CorvusChat({
                   // Button and on ui/button.tsx's `teal` variant: white on
                   // teal-600 is 3.67:1, under the 4.5:1 AA floor for this text
                   // size, while teal-800 is 7.54:1 (Tailwind 4.3.3 OKLCH
-                  // tokens). NOTE: on /corvus this class is overridden by
+                  // tokens). On /corvus this class is overridden by
                   // `.corvus-surface [data-slot='sign-in-gate-cta']:hover`,
                   // which reads --corvus-accent-solid-hover in
-                  // src/styles/tailwind.css — that token is still teal-600 and
-                  // needs the same raise. This fixes the component's own
-                  // behaviour (Storybook, and anywhere outside the surface).
+                  // src/styles/tailwind.css — raised to teal-800 there too, so
+                  // the two agree. Both are pinned:
+                  // `CorvusChat.signInGate.test.tsx` for this class,
+                  // `src/styles/corvus-accent-contrast.test.ts` for the token.
                   className="mt-3 inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none"
                 >
                   Sign in to continue
