@@ -26,26 +26,42 @@ import { createSlugRedirect } from '@/hooks/createSlugRedirect'
 
 type FindResult = { docs: Array<{ id: number }> }
 
+/**
+ * Harness whose nested Local API calls swap `req.context` the way Payload's
+ * `createLocalReq` does (`req.context = getRequestContext(req, context)`, a new
+ * shallow-spread object). Without that swap this suite cannot see the addendum-2
+ * defect at all — a plain `vi.fn()` kept the hook's `context` argument live and
+ * a broken implementation passed.
+ */
 const makeHarness = (existing: FindResult = { docs: [] }) => {
   const findRedirects = vi.fn(async () => existing)
   const create = vi.fn(async () => ({ id: 1 }))
   const update = vi.fn(async () => ({ id: 1 }))
   const logger = { error: vi.fn(), info: vi.fn() }
+  const req: {
+    context: Record<string, unknown>
+    payload: Record<string, unknown>
+  } = { context: {}, payload: { create, logger, update } }
+
   return {
     create,
     findRedirects,
     logger,
+    rawReq: req,
     update,
     /** `payload.find` routed by collection: redirects vs the published-row probe. */
     makeReq: (publishedSlug: null | string) => {
-      const find = vi.fn(async ({ collection }: { collection: string }) =>
-        collection === 'redirects'
-          ? await findRedirects()
-          : {
-              docs: publishedSlug === null ? [] : [{ slug: publishedSlug }],
-            },
+      req.payload.find = vi.fn(
+        async ({ collection }: { collection: string }) => {
+          req.context = { ...req.context }
+          return collection === 'redirects'
+            ? await findRedirects()
+            : {
+                docs: publishedSlug === null ? [] : [{ slug: publishedSlug }],
+              }
+        },
       )
-      return { payload: { create, find, logger, update } } as never
+      return req as never
     },
   }
 }
@@ -73,11 +89,15 @@ const publish = async ({
 }) => {
   const harness = makeHarness(existing)
   const req = harness.makeReq(publishedSlug)
+  Object.assign(harness.rawReq.context, context)
   const collection = { slug: collectionSlug }
 
+  // Each hook receives `req.context` AS IT IS AT CALL TIME, exactly as Payload
+  // passes it — so the swap performed by a nested find detaches the first
+  // hook's argument, which is the whole point.
   await capturePublishedSlug({
     collection,
-    context,
+    context: harness.rawReq.context,
     data,
     operation: 'update',
     originalDoc,
@@ -86,7 +106,7 @@ const publish = async ({
 
   await createSlugRedirect({
     collection,
-    context,
+    context: harness.rawReq.context,
     doc,
     operation: 'update',
     req,

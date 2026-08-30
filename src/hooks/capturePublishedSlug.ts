@@ -12,7 +12,9 @@ const contextKey = (collectionSlug: string, id: unknown): string =>
  * Read the slug a document was published under *before* the write currently in
  * flight, as captured by {@link capturePublishedSlug}.
  *
- * @param context - The hook's `context` (= `req.context`).
+ * @param context - Prefer `req.context`; the `context` hook argument is
+ * equivalent only where no nested Local API call has run since it was handed
+ * over (see {@link capturePublishedSlug} for why).
  * @param collectionSlug - Payload collection slug.
  * @param id - The document id.
  * @returns The previous published slug, or `undefined` when the document had no
@@ -58,6 +60,19 @@ export const readPreviousPublishedSlug = (
  * **Keyed per document** because a bulk `payload.update({ where })` runs many
  * documents through one shared `req.context`; an unkeyed value would leak one
  * document's old slug onto another's redirect.
+ *
+ * **The handoff is written to `req.context`, never to the `context` argument.**
+ * `createLocalReq` reassigns `req.context = getRequestContext(req, context)`
+ * (`utilities/createLocalReq.js:86`), and `getRequestContext` returns a NEW
+ * shallow-spread object whenever the existing context is non-empty. So every
+ * nested Local API call that forwards `req` — including this hook's own
+ * `payload.find({ req })` — swaps `req.context` for a fresh object and leaves
+ * the `context` argument this hook was handed pointing at a detached one.
+ * Writing there is silently discarded; writing to the current `req.context`
+ * after the awaits survives, because each later spread copies the key forward.
+ * Measured against a real Postgres — it is exactly why the first cut of this
+ * hook worked for a one-shot rename (fast path, no nested call) and did
+ * nothing on the admin path (fallback branch, nested `find`).
  *
  * **Cost.** Explicit draft saves return immediately, so admin autosave pays
  * nothing. When `originalDoc` is itself the published row (a one-shot publish
@@ -118,7 +133,11 @@ export const capturePublishedSlug: CollectionBeforeChangeHook = async ({
   // No published version => a first publish => nothing to redirect from.
   if (!publishedSlug) return data
 
-  const store = (context[CONTEXT_KEY] ??= {}) as Record<string, string>
+  // MUST be `req.context`, re-dereferenced here, AFTER every await above — see
+  // the note on nested Local API calls in this hook's docblock. `context` may
+  // already be detached at this point.
+  const target = (req.context ?? context) as Record<string, unknown>
+  const store = (target[CONTEXT_KEY] ??= {}) as Record<string, string>
   store[contextKey(collectionSlug, id)] = publishedSlug
 
   return data

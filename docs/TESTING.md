@@ -20,6 +20,14 @@
   `useRouter` throws), the project's alias array stubs the server blocks
   before `@/` resolves (mirrors `.storybook/main.ts` viteFinal), and
   sandboxes pin the browser via `PLAYWRIGHT_EXECUTABLE_PATH`.
+- **Payload pipeline integration** — `evals/*.test.ts` also hosts tests that
+  need a REAL Payload on a REAL Postgres (the `e2e` job's `pgvector/pgvector:pg16`
+  service plus `pnpm migrate`); run by `pnpm exec vitest run --root evals`.
+  `slug-redirect-integration.test.ts` is the reference: it drives the actual
+  update/versions/drafts pipeline. **Mock `payload.find` at your peril** — #120
+  shipped a broken hook twice because the mocked unit tier could not reproduce
+  Payload's `req.context` swap on nested Local API calls. Anything that depends
+  on hook plumbing rather than its own branching belongs here.
 - **Evals** — Evalite for Corvus, run from the `evals/` root and **gating** as
   of #82; `evals/*.test.ts` run in `e2e` via `vitest run --root evals`, not in
   `pnpm test` (see `docs/AI.md` §Evals).

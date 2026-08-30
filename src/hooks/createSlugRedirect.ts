@@ -72,8 +72,11 @@ export const createSlugRedirect: CollectionAfterChangeHook = async ({
   // The write must land the document published, and a published version must
   // have existed beforehand — no captured slug means a first publish.
   if (doc?._status !== 'published') return doc
+  // `req.context` first: it is the object `capturePublishedSlug` wrote to, and
+  // the only one guaranteed current after a nested Local API call swapped it.
+  // Read before this hook makes its own `find`, which swaps it again.
   const previousSlug = readPreviousPublishedSlug(
-    context,
+    req.context ?? context,
     collectionSlug,
     doc.id,
   )

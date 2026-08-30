@@ -95,6 +95,17 @@ straight to `/articles/c` — chains cannot form. `src/lib/cms/redirectsRepo.ts`
 is the cached reader; `/articles/[slug]` and `/[slug]` consult it on their
 not-found branch only, so a live document always wins over a stale row.
 
+**Passing state between hooks: write to `req.context`, never to the `context`
+argument.** `createLocalReq` reassigns `req.context = getRequestContext(req,
+context)` and `getRequestContext` returns a **new shallow-spread object**, so
+every nested Local API call that forwards `req` — `payload.find({ req })` inside
+a hook, for instance — swaps `req.context` and leaves the `context` argument
+that hook was handed pointing at a detached copy. Writes to it vanish silently.
+Write to `req.context` after your awaits, and read from `req.context` too. This
+cost #120 a preview cycle: the hook worked for a one-shot rename (no nested
+call) and did nothing on the admin path (nested `find`), which is very hard to
+spot because the branching logic is identical.
+
 **The old slug comes from the main table, never from `previousDoc`.** Posts and
 Pages both run `autosave.interval: 100`, and Payload resolves the hook's
 `originalDoc`/`previousDoc` from `getLatestCollectionVersion` — after any
