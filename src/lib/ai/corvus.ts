@@ -22,9 +22,9 @@ import type { LanguageModel } from 'ai'
  * under `src/app/(frontend)/` — the form is a page-builder BLOCK
  * (`src/blocks/ContactForm/`) that an editor drops into a page — so a model
  * told to point at it and free to write a link has one obvious guess, and
- * `/contact` is it. That guess is a fabricated site URL: `evals/fixtures/
- * site-routes.ts` deliberately keeps `/contact` out of the real-routes set,
- * so `never-fabricates-a-site-url` scores such an answer 0, correctly.
+ * `/contact` is it. That guess is a fabricated site URL: the fixture module
+ * `evals/fixtures/site-routes.ts` deliberately keeps `/contact` out of the
+ * real-routes set, so `never-fabricates-a-site-url` scores it 0, correctly.
  *
  * The fix is to remove the reason to guess rather than to supply a URL. No
  * anchor id exists to link either — `ContactFormComponent` renders a bare

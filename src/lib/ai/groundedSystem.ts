@@ -43,8 +43,8 @@ export const SNIPPET_SOURCE_LABEL = 'Source:'
  *
  * ## Why the source URL is a labelled line (#82 wave 4)
  *
- * It used to be a bare parenthetical on the heading — `[1] PostgreSQL
- * (/tech)` — and that lost a competition it should never have been in.
+ * It used to be a bare parenthetical on the heading, as in the first line of
+ * the block below, and that lost a competition it should never have been in.
  * `chunkFlatRecord` renders a tech-stack record as labelled fields, one of
  * which is the vendor's own homepage, so the passage Corvus actually read was:
  *
