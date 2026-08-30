@@ -141,6 +141,17 @@ describe('default labels', () => {
       'example.com',
     )
   })
+
+  /**
+   * Both admin sources can hold a value that is not a URL at all, and the
+   * label is the only thing a `labeledList` row has to show. Echoing the raw
+   * value back is what makes a typo legible to the editor who typed it —
+   * better than an empty row or a thrown `TypeError` from `new URL`.
+   */
+  it('echoes a value that does not parse as a URL rather than throwing', () => {
+    expect(defaultSocialLabel('not a url', 'link')).toBe('not a url')
+    expect(defaultSocialLabel('', 'link')).toBe('')
+  })
 })
 
 describe('resolveSocialLink', () => {
