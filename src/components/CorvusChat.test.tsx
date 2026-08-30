@@ -212,6 +212,26 @@ describe('CorvusChat', () => {
     expect(await screen.findByText('Copied')).toBeInTheDocument()
   })
 
+  it('keeps the copy button’s light-theme hover above the AA floor', () => {
+    // #82 / PR #123 carry. "Copy" is 12px text, so the 4.5:1 floor applies:
+    // teal-600 on the light page is 3.67:1 (fail), teal-700 is 5.36:1. Dark
+    // was already fine — teal-400 on zinc-900 is 9.50:1 — and is pinned here
+    // only so a future sweep does not "harmonize" it downward. Ratios computed
+    // from the OKLCH tokens Tailwind 4.3.3 resolves.
+    //
+    // On /corvus this class is overridden by `.corvus-surface
+    // [data-slot='message-copy-button']:hover` (--corvus-accent, already
+    // teal-700 in light); this pins the component's own behaviour.
+    chatState.messages = [assistantMessage('m1', 'Hello from Corvus')]
+    render(<CorvusChat />)
+
+    const className = screen.getByRole('button', { name: /copy/i }).className
+
+    expect(className).not.toContain('hover:text-teal-600')
+    expect(className).toContain('hover:text-teal-700')
+    expect(className).toContain('dark:hover:text-teal-400')
+  })
+
   it('focuses the composer when / is pressed outside a field', () => {
     render(<CorvusChat />)
 
