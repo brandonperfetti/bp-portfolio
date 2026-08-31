@@ -254,6 +254,11 @@ statements. Migrations at or before that backfill are grandfathered: it enabled
 RLS through a dynamic `pg_tables` loop, so no table name appears as literal
 text for a matcher to find. The script's header documents that audit.
 
+Function grants are revoke-by-default too, as of the
+`20260831_005000_issue_87_function_acls` migration (#87): `anon`/`authenticated`
+get no `EXECUTE` on functions created in `public`, so a deliberate RPC needs an
+explicit `GRANT EXECUTE` on that function in its own migration.
+
 `ALTER DEFAULT PRIVILEGES` already handles the grant side for new tables, but
 it does **not** touch RLS state — that still needs the explicit `ENABLE` per
 table. For a bulk sweep, reuse the `pg_tables` loop in
