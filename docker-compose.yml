@@ -21,9 +21,16 @@
 # `.github/workflows/db-backup.yml` dumps with). Newer client, older server is
 # the supported direction; the restore script enforces the client floor.
 #
-# Port: 5432 is published by default. If a system Postgres already owns 5432,
-# change the published (left) side to 5433 and pass `--port 5433` to the
-# restore script, then update `DATABASE_URI` in `.env.local` to match. Do NOT
+# Port: 5432 is published on 127.0.0.1 only. The loopback bind is deliberate:
+# Docker's default is to publish on every interface, which would put a
+# container guarded by the well-known `postgres` password — holding a restored
+# copy of REAL production content — one firewall lapse away from the local
+# network. Nothing legitimate connects from off-machine; keep the `127.0.0.1:`
+# prefix if you change the port.
+#
+# If a system Postgres already owns 5432, change the published (middle) part
+# to 5433 and pass `--port 5433` to the restore script, then update
+# `DATABASE_URI` in `.env.local` to match. Do NOT
 # assume the remap worked — a system cluster listening on 5433 has silently
 # shadowed this container before. Confirm who actually answers:
 #
@@ -38,8 +45,8 @@ services:
     container_name: bp-portfolio-db
     restart: unless-stopped
     ports:
-      # host:container — change the HOST side (left) only.
-      - '5432:5432'
+      # bind-address:host:container — change the HOST (middle) part only.
+      - '127.0.0.1:5432:5432'
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

@@ -163,8 +163,10 @@ counts. Then: `pnpm migrate` (expect nothing to run) and `pnpm dev`.
   location on purpose: the repo is public and the dump contains drafts, gated
   content, contact emails, and the users table.
 - **Port conflicts.** If a system Postgres already owns 5432, change the
-  published port in `docker-compose.yml` to `5433:5432`, pass `--port 5433`,
-  and update `DATABASE_URI`. Do not assume the remap took — a system cluster
+  published port in `docker-compose.yml` to `127.0.0.1:5433:5432` (keep the
+  loopback prefix — the container holds real content behind the well-known
+  `postgres` password, so it must never listen beyond the machine), pass
+  `--port 5433`, and update `DATABASE_URI`. Do not assume the remap took — a system cluster
   listening on 5433 has silently shadowed the container before. Confirm with
   `docker compose ps` and `psql -h 127.0.0.1 -p <port> -U postgres -l`.
 - **Artifacts expire after 14 days**, and because the workflow's matrix runs
