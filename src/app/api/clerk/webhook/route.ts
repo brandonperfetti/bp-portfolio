@@ -4,6 +4,12 @@ import { Webhook } from 'svix'
 
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
 import { captureContact } from '@/lib/email/captureContact'
+import {
+  forgetResendContact,
+  recallResendContact,
+  rememberResendContact,
+  type ResendContactMirrorLookup,
+} from '@/lib/email/resendContactMirror'
 
 /**
  * Clerk → Resend contact sync (§12 email capture; replaces v3
@@ -28,26 +34,40 @@ import { captureContact } from '@/lib/email/captureContact'
  * against the pinned `resend@6.18.1` dist), so an id-addressed update
  * *cannot* change a contact's email. And `user.deleted` carries only
  * `id`, `object` and `deleted` — no email to look one up by. So the mapping
- * has to be stored on the Clerk side, before it is needed.
+ * has to be stored somewhere, before it is needed.
  *
- * Hence: at `user.created` the Resend contact id is written to the Clerk
- * user's `external_id` (Backend API), and every later event resolves the
- * contact from that id instead of guessing by email.
+ * **Two stores, because one of them cannot serve the delete.** At
+ * `user.created` the Resend contact id is written to the Clerk user's
+ * `external_id` (Backend API) *and* mirrored into Upstash Redis keyed by the
+ * Clerk user id (`@/lib/email/resendContactMirror`). The first cut of #86
+ * stored only `external_id` and then read it back off the `user.deleted`
+ * payload — which never contains it, because the payload is
+ * `{ deleted, id, object }` and the Clerk user it hung on is already gone. So
+ * every real delete delivery no-oped and the contact survived: the exact gap
+ * #86 exists to close. The mirror survives the user and is keyed by the one
+ * field the delete payload does carry, so it is the delete path's source of
+ * truth; `external_id` stays the mapping for the *live* user (dashboard
+ * visible, and what the backfill and `user.updated` read).
  *
- * - `user.created` — capture, then map. The mapping write is best-effort and
- *   is skipped when `external_id` is already set, so a Clerk redelivery never
- *   rewrites it. A failed write never fails the ack.
- * - `user.deleted` — REMOVE the contact by id. Deliberately not a Resend
- *   suppression: a suppression blocks *all* mail to that address including
- *   transactional (password resets), so it is the wrong tool for "this
- *   account is gone". Audience removal is the reversible, marketing-scoped
- *   action. See `docs/AUTH.md`.
+ * - `user.created` — capture, then map. The `external_id` write is skipped
+ *   when one is already set, so a Clerk redelivery never rewrites it; the
+ *   mirror is written on BOTH paths, so a redelivery or a user mapped by the
+ *   backfill before the mirror existed converges instead of staying
+ *   half-mapped. Every mapping write is best-effort and never fails the ack.
+ * - `user.deleted` — resolve the contact from the mirror by `data.id`, then
+ *   REMOVE it and drop the mirror key. Deliberately not a Resend suppression:
+ *   a suppression blocks *all* mail to that address including transactional
+ *   (password resets), so it is the wrong tool for "this account is gone".
+ *   Audience removal is the reversible, marketing-scoped action. See
+ *   `docs/AUTH.md`.
  * - `user.updated` — when the primary email changed, create the new contact
  *   and then remove the old one (in that order: the SDK cannot rename), and
- *   write the NEW contact id back to `external_id`.
+ *   write the NEW contact id back to `external_id` and to the mirror.
  *
- * All three no-op cleanly with a distinct log line when `external_id` is
- * absent — pre-mapping users, dashboard test deliveries, retries.
+ * Every path no-ops cleanly with a distinct log line when the mapping cannot
+ * be resolved — pre-mapping users, dashboard test deliveries, retries, and a
+ * Redis that is unset (local dev) or unreachable. A non-2xx is never the
+ * answer: Clerk redelivers every one of them.
  *
  * Primary email is always resolved via `primary_email_address_id`, never
  * `email_addresses[0]`: they coincide at sign-up but diverge on exactly the
@@ -206,12 +226,17 @@ async function contactIdByEmail(
  * @param resend - The Resend client.
  * @param contactId - The Resend contact id.
  * @param context - Log context describing why the contact is being removed.
+ * @returns `true` when Resend confirmed the removal.
+ *
+ * @remarks The boolean is what lets `user.deleted` keep the mirror key on a
+ * failed removal: the Clerk user is gone by then, so that key is the only
+ * remaining record of which contact to retry against.
  */
 async function removeContact(
   resend: Resend,
   contactId: string,
   context: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const { error } = await resend.contacts.remove(contactId)
     if (error) {
@@ -221,18 +246,20 @@ async function removeContact(
         name: error.name,
         message: error.message.slice(0, 300),
       })
-      return
+      return false
     }
     console.info('[clerk-webhook] removed Resend contact', {
       context,
       contactId,
     })
+    return true
   } catch (error) {
     console.error('[clerk-webhook] Resend contact removal threw', {
       context,
       contactId,
       message: reason(error),
     })
+    return false
   }
 }
 
@@ -278,8 +305,14 @@ async function writeExternalId(
  *
  * @remarks The `captureContact` call shape is unchanged from #74 — capture
  * still owns segment assignment, duplicate-swallowing and the no-key warning.
- * Only the mapping write is new, and it is skipped when `external_id` is
- * already set so a redelivery cannot rewrite an established link.
+ *
+ * The `external_id` write is skipped when one is already set, so a redelivery
+ * cannot rewrite an established link. **The mirror write is not skipped**: it
+ * is the reconcile path. An already-set `external_id` is exactly the state of
+ * every user the backfill mapped before the mirror existed, and of any user
+ * whose mirror write failed on a previous delivery — for them the contact id
+ * is right there in the payload, so redelivering `user.created` (or any Clerk
+ * dashboard resend) is enough to converge, with no second Clerk write.
  */
 async function handleUserCreated(data: ClerkUserData): Promise<void> {
   const email = primaryEmail(data)
@@ -295,10 +328,13 @@ async function handleUserCreated(data: ClerkUserData): Promise<void> {
   const userId = str(data, 'id')
   if (!userId) return
 
-  if (str(data, 'external_id')) {
+  const mappedContactId = str(data, 'external_id')
+  if (mappedContactId) {
     console.info('[clerk-webhook] external_id already set; mapping skipped', {
       userId,
+      contactId: mappedContactId,
     })
+    await mirrorContact(userId, mappedContactId, 'user.created:reconcile')
     return
   }
 
@@ -309,6 +345,42 @@ async function handleUserCreated(data: ClerkUserData): Promise<void> {
   if (!contactId) return
 
   await writeExternalId(userId, contactId)
+  await mirrorContact(userId, contactId, 'user.created')
+}
+
+/**
+ * Mirror a contact id into Redis and log the outcome.
+ *
+ * @param userId - The Clerk user id.
+ * @param contactId - The Resend contact id now mapped to that user.
+ * @param context - The event that produced the mapping, for the log line.
+ *
+ * @remarks Never throws and never affects the response. A user with an
+ * `external_id` but no mirror is still fully functional today — only their
+ * eventual `user.deleted` degrades to the logged no-op — and the next
+ * `user.created` redelivery reconciles them, so a failure here is recoverable
+ * noise rather than a reason to make Clerk retry.
+ */
+async function mirrorContact(
+  userId: string,
+  contactId: string,
+  context: string,
+): Promise<void> {
+  const mirror = await rememberResendContact(userId, contactId)
+  if (mirror === 'ok') {
+    console.info('[clerk-webhook] mirrored Resend contact id', {
+      context,
+      userId,
+      contactId,
+    })
+    return
+  }
+  console.warn('[clerk-webhook] contact mirror not written', {
+    context,
+    userId,
+    contactId,
+    mirror,
+  })
 }
 
 /**
@@ -317,16 +389,39 @@ async function handleUserCreated(data: ClerkUserData): Promise<void> {
  * @param data - The `user.deleted` payload.
  *
  * @remarks Deletion is the decided action, not suppression — a Resend
- * suppression blocks transactional mail too. There is no email in this
- * payload to fall back to, so an unmapped user is a clean no-op: the contact
- * survives and is reconcilable out of band.
+ * suppression blocks transactional mail too.
+ *
+ * **Resolution order: mirror first, payload second.** The measured payload is
+ * `{ deleted, id, object }`, so the payload read alone is a guaranteed miss —
+ * reading `external_id` here was the whole defect, and the pre-fix unit test
+ * only passed because it fabricated that field onto the delete event. The
+ * mirror is keyed by `data.id`, the one field that is actually present. The
+ * `external_id` read is kept *after* it as a documented fallback: it costs a
+ * property access, it is harmless if Clerk ever enriches this payload, and it
+ * keeps the handler correct for a hand-crafted redelivery that carries one.
+ *
+ * The mirror key is dropped only after the removal succeeds — see
+ * {@link forgetResendContact} for why deleting it eagerly would be worse than
+ * leaving a stray key.
+ *
+ * Every unresolvable case is a 2xx no-op with its own log line, and the three
+ * are deliberately distinguishable: a `miss` is an unmapped user (pre-mapping
+ * signup, dashboard test delivery), while `unavailable`/`error` mean the
+ * mirror itself is degraded and contacts are silently accumulating. A non-2xx
+ * would only buy a Clerk retry loop against a mapping that will not appear.
  */
 async function handleUserDeleted(data: ClerkUserData): Promise<void> {
-  const contactId = str(data, 'external_id')
+  const userId = str(data, 'id')
+
+  const mirrored: ResendContactMirrorLookup = userId
+    ? await recallResendContact(userId)
+    : { status: 'miss' }
+
+  const contactId = mirrored.contactId ?? str(data, 'external_id')
   if (!contactId) {
     console.info(
-      '[clerk-webhook] user.deleted carried no external_id; nothing to remove',
-      { userId: str(data, 'id') },
+      '[clerk-webhook] user.deleted resolved no Resend contact; nothing to remove',
+      { userId, mirror: mirrored.status },
     )
     return
   }
@@ -334,7 +429,10 @@ async function handleUserDeleted(data: ClerkUserData): Promise<void> {
   const resend = resendClient()
   if (!resend) return
 
-  await removeContact(resend, contactId, 'user.deleted')
+  const removed = await removeContact(resend, contactId, 'user.deleted')
+  if (removed && userId && mirrored.status === 'hit') {
+    await forgetResendContact(userId)
+  }
 }
 
 /**
@@ -346,7 +444,15 @@ async function handleUserDeleted(data: ClerkUserData): Promise<void> {
  * is create-new-then-remove-old, in that order. Ordering is the whole safety
  * argument: if the create fails, the old contact is still there and the
  * mapping still points at it, so the run is a no-op rather than a data loss.
- * The new id is then written back to `external_id`.
+ * The new id is then written back to `external_id` AND to the mirror — a
+ * mirror left pointing at the removed contact would make the later
+ * `user.deleted` try to delete something that no longer exists while the live
+ * contact survived, which is #86's failure one step downstream.
+ *
+ * The mapping is still read from the payload here, not from the mirror:
+ * unlike `user.deleted`, `user.updated` carries the full live user object, so
+ * `external_id` is present and is the authoritative value the backfill and the
+ * Clerk dashboard also show.
  *
  * Idempotent under redelivery: the second delivery reads the already-updated
  * contact, sees the emails match, and no-ops before touching anything.
@@ -419,5 +525,8 @@ async function handleUserUpdated(data: ClerkUserData): Promise<void> {
     await removeContact(resend, contactId, 'user.updated')
   }
 
-  if (userId) await writeExternalId(userId, newContactId)
+  if (userId) {
+    await writeExternalId(userId, newContactId)
+    await mirrorContact(userId, newContactId, 'user.updated')
+  }
 }

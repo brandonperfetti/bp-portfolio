@@ -30,9 +30,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * - `user.updated` re-creates and re-maps on an email change (was pinned as
  *   2xx-ignore).
  *
+ * ### The mapping the delete path actually resolves through
+ *
+ * The first cut of #86 stored the mapping only on the Clerk user's
+ * `external_id` and read it back off the `user.deleted` payload — which never
+ * carries it. The suite passed anyway, because its delete test *fabricated*
+ * `external_id` onto the delete event. That is the shape of a test proving
+ * nothing: it asserted the handler could read a field Clerk does not send.
+ *
+ * So the `user.deleted` group now builds every case from the measured payload
+ * `{ deleted, id, object }` and resolves through the Upstash mirror
+ * (`@/lib/email/resendContactMirror`), with the payload `external_id` read
+ * kept only as an explicitly-labelled fallback case.
+ *
  * Everything outbound is stubbed (`svix`, `captureContact`, `resend`,
- * `@clerk/nextjs/server`) — this suite makes zero network calls and needs no
- * Clerk or Resend credentials.
+ * `@clerk/nextjs/server`, `@upstash/redis`) — this suite makes zero network
+ * calls and needs no Clerk, Resend or Upstash credentials.
  */
 
 const {
@@ -44,16 +57,33 @@ const {
   resendCtor,
   updateUserMock,
   clerkClientMock,
-} = vi.hoisted(() => ({
-  verifyMock: vi.fn(),
-  webhookCtor: vi.fn(),
-  captureContactMock: vi.fn(),
-  contactsGet: vi.fn(),
-  contactsRemove: vi.fn(),
-  resendCtor: vi.fn(),
-  updateUserMock: vi.fn(),
-  clerkClientMock: vi.fn(),
-}))
+  redisGet,
+  redisSet,
+  redisDel,
+  redisFromEnv,
+} = vi.hoisted(() => {
+  const redisGet = vi.fn()
+  const redisSet = vi.fn()
+  const redisDel = vi.fn()
+  return {
+    verifyMock: vi.fn(),
+    webhookCtor: vi.fn(),
+    captureContactMock: vi.fn(),
+    contactsGet: vi.fn(),
+    contactsRemove: vi.fn(),
+    resendCtor: vi.fn(),
+    updateUserMock: vi.fn(),
+    clerkClientMock: vi.fn(),
+    redisGet,
+    redisSet,
+    redisDel,
+    redisFromEnv: vi.fn(() => ({
+      get: redisGet,
+      set: redisSet,
+      del: redisDel,
+    })),
+  }
+})
 
 vi.mock('svix', () => ({
   Webhook: class {
@@ -81,7 +111,10 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: clerkClientMock,
 }))
 
+vi.mock('@upstash/redis', () => ({ Redis: { fromEnv: redisFromEnv } }))
+
 import { POST } from '@/app/api/clerk/webhook/route'
+import { __resetResendContactMirrorForTests } from '@/lib/email/resendContactMirror'
 
 const SIGNING_SECRET = 'whsec_test_not_a_real_secret'
 const RESEND_KEY = 're_test_not_a_real_key'
@@ -123,10 +156,18 @@ beforeEach(() => {
   vi.stubEnv('CLERK_SECRET_KEY', 'sk_test')
   vi.stubEnv('CLERK_WEBHOOK_SIGNING_SECRET', SIGNING_SECRET)
   vi.stubEnv('RESEND_API_KEY', RESEND_KEY)
+  // Upstash configured by default, as in staging/production: the mirror is
+  // the delete path's store, so "not configured" is a deliberate case (see the
+  // local-dev test) rather than the baseline.
+  vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io')
+  vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'test-token')
   captureContactMock.mockResolvedValue(undefined)
   contactsRemove.mockResolvedValue({ data: { deleted: true }, error: null })
   clerkClientMock.mockResolvedValue({ users: { updateUser: updateUserMock } })
   updateUserMock.mockResolvedValue({})
+  redisGet.mockResolvedValue(null)
+  redisSet.mockResolvedValue('OK')
+  redisDel.mockResolvedValue(1)
   vi.spyOn(console, 'info').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -143,6 +184,13 @@ afterEach(() => {
   resendCtor.mockReset()
   updateUserMock.mockReset()
   clerkClientMock.mockReset()
+  redisGet.mockReset()
+  redisSet.mockReset()
+  redisDel.mockReset()
+  redisFromEnv.mockClear()
+  // The mirror caches its Upstash client in module scope, so a case that ran
+  // with Upstash unset must not leave the next one holding a stale null/client.
+  __resetResendContactMirrorForTests()
 })
 
 describe('POST /api/clerk/webhook — configuration gates', () => {
@@ -322,7 +370,22 @@ describe('POST /api/clerk/webhook — user.created', () => {
     })
   })
 
-  it('skips the mapping when external_id is already set (redelivery-safe)', async () => {
+  it('mirrors the contact id into Redis, keyed by the Clerk user id', async () => {
+    // The mirror — not external_id — is what `user.deleted` resolves through,
+    // because the delete payload carries neither an email nor an external_id.
+    const event = userEvent('user.created')
+    verifyMock.mockReturnValue(event)
+    contactsGet.mockResolvedValue(contact('con_1', 'ada@example.test'))
+
+    await POST(makeRequest(event))
+
+    expect(redisSet).toHaveBeenCalledWith(
+      'clerk:resend-contact:user_1',
+      'con_1',
+    )
+  })
+
+  it('skips the external_id write when one is already set (redelivery-safe)', async () => {
     const event = userEvent('user.created', {
       id: 'user_1',
       email_addresses: [{ email_address: 'ada@example.test' }],
@@ -335,6 +398,55 @@ describe('POST /api/clerk/webhook — user.created', () => {
     expect(captureContactMock).toHaveBeenCalledTimes(1)
     expect(contactsGet).not.toHaveBeenCalled()
     expect(updateUserMock).not.toHaveBeenCalled()
+  })
+
+  it('still mirrors on the already-mapped skip path (reconcile)', async () => {
+    // This is the convergence path for every user the backfill mapped before
+    // the mirror existed, and for any user whose mirror write failed earlier:
+    // the contact id is right there in the payload, so a redelivery repairs
+    // them with no second Clerk write. Skipping the mirror here would leave
+    // them permanently undeletable.
+    const event = userEvent('user.created', {
+      id: 'user_1',
+      email_addresses: [{ email_address: 'ada@example.test' }],
+      external_id: 'con_existing',
+    })
+    verifyMock.mockReturnValue(event)
+
+    await POST(makeRequest(event))
+
+    expect(redisSet).toHaveBeenCalledWith(
+      'clerk:resend-contact:user_1',
+      'con_existing',
+    )
+  })
+
+  it('still 200s when the mirror write fails (mirroring never fails the ack)', async () => {
+    const event = userEvent('user.created')
+    verifyMock.mockReturnValue(event)
+    contactsGet.mockResolvedValue(contact('con_1', 'ada@example.test'))
+    redisSet.mockRejectedValue(new Error('upstash down'))
+
+    const res = await POST(makeRequest(event))
+
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({ received: true })
+  })
+
+  it('still 200s and still maps when Redis is not configured (local dev)', async () => {
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', '')
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
+    const event = userEvent('user.created')
+    verifyMock.mockReturnValue(event)
+    contactsGet.mockResolvedValue(contact('con_1', 'ada@example.test'))
+
+    const res = await POST(makeRequest(event))
+
+    expect(res.status).toBe(200)
+    expect(redisSet).not.toHaveBeenCalled()
+    expect(updateUserMock).toHaveBeenCalledWith('user_1', {
+      externalId: 'con_1',
+    })
   })
 
   it('still 200s when the external_id write fails (mapping never fails the ack)', async () => {
@@ -439,47 +551,127 @@ describe('POST /api/clerk/webhook — user.created', () => {
 })
 
 describe('POST /api/clerk/webhook — user.deleted', () => {
-  it('removes the mapped Resend contact by id (#86 flip)', async () => {
-    // FLIPPED by #86. Wave 3 pinned "2xx-ignores user.deleted without touching
-    // Resend (gap #86 must close)". Removal, not suppression: a Resend
-    // suppression blocks transactional mail to the address too.
-    const event = {
-      type: 'user.deleted',
-      data: { id: 'user_1', deleted: true, external_id: 'con_1' },
-    }
+  /**
+   * The REAL `user.deleted` payload. Clerk sends exactly these three fields —
+   * measured, and recorded in the route docblock and `docs/AUTH.md`. Every
+   * test below builds from this, because using anything richer is how the
+   * pre-fix suite passed against a handler that could never work: it
+   * fabricated an `external_id` onto the delete event, so it proved only that
+   * the handler could read a field Clerk does not send.
+   */
+  const deleteEvent = (data: Record<string, unknown> = {}) => ({
+    type: 'user.deleted',
+    data: { deleted: true, id: 'user_1', object: 'user', ...data },
+  })
+
+  it('removes the contact resolved from the Redis mirror (#86 delete fix)', async () => {
+    // THE defect. `user.deleted` carries no email and no external_id, so the
+    // Clerk-side mapping cannot serve it and every real delivery no-oped while
+    // the contact survived. The mirror is keyed by `data.id`, the one field
+    // that is actually present.
+    const event = deleteEvent()
     verifyMock.mockReturnValue(event)
+    redisGet.mockResolvedValue('con_1')
 
     const res = await POST(makeRequest(event))
 
     expect(res.status).toBe(200)
     await expect(res.json()).resolves.toEqual({ received: true })
+    expect(redisGet).toHaveBeenCalledWith('clerk:resend-contact:user_1')
     expect(contactsRemove).toHaveBeenCalledWith('con_1')
   })
 
-  it('2xx no-ops when the payload carries no external_id', async () => {
-    // The measured `user.deleted` payload is `{ deleted, id, object }` — an
-    // unmapped user (pre-mapping signup, dashboard test delivery) has nothing
-    // to act on and no email to fall back to. The contact survives and is
-    // reconcilable out of band; a non-2xx here would just be a retry loop.
-    const event = {
-      type: 'user.deleted',
-      data: { id: 'user_1', deleted: true, object: 'user' },
-    }
+  it('drops the mirror key after a successful removal', async () => {
+    const event = deleteEvent()
     verifyMock.mockReturnValue(event)
+    redisGet.mockResolvedValue('con_1')
+
+    await POST(makeRequest(event))
+
+    expect(redisDel).toHaveBeenCalledWith('clerk:resend-contact:user_1')
+  })
+
+  it('2xx no-ops when the mirror holds no mapping for this user', async () => {
+    // An unmapped user: a pre-mapping signup, or a Clerk dashboard test
+    // delivery for a user id that never existed. Nothing to act on and no
+    // email to fall back to — the contact survives and is reconcilable out of
+    // band. A non-2xx here would just be a Clerk retry loop.
+    const event = deleteEvent()
+    verifyMock.mockReturnValue(event)
+    redisGet.mockResolvedValue(null)
 
     const res = await POST(makeRequest(event))
 
     expect(res.status).toBe(200)
     expect(contactsRemove).not.toHaveBeenCalled()
     expect(resendCtor).not.toHaveBeenCalled()
+    expect(redisDel).not.toHaveBeenCalled()
   })
 
-  it('still 200s when the removal fails', async () => {
-    const event = {
-      type: 'user.deleted',
-      data: { id: 'user_1', deleted: true, external_id: 'con_1' },
-    }
+  it('2xx no-ops when Redis is not configured at all (local dev)', async () => {
+    // Degrades to exactly the pre-#86 behavior — a log line and a no-op —
+    // rather than failing the ack. The route must never depend on Upstash
+    // being reachable to return 200.
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', '')
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
+    const event = deleteEvent()
     verifyMock.mockReturnValue(event)
+
+    const res = await POST(makeRequest(event))
+
+    expect(res.status).toBe(200)
+    expect(redisGet).not.toHaveBeenCalled()
+    expect(contactsRemove).not.toHaveBeenCalled()
+    expect(resendCtor).not.toHaveBeenCalled()
+  })
+
+  it('2xx no-ops when the mirror read throws', async () => {
+    const event = deleteEvent()
+    verifyMock.mockReturnValue(event)
+    redisGet.mockRejectedValue(new Error('upstash down'))
+
+    const res = await POST(makeRequest(event))
+
+    expect(res.status).toBe(200)
+    expect(contactsRemove).not.toHaveBeenCalled()
+  })
+
+  it('falls back to a payload external_id when one is somehow present', async () => {
+    // Documented fallback, not the primary path: Clerk does not send this
+    // field on `user.deleted` today. It is kept so the handler stays correct
+    // for a hand-crafted redelivery, and if Clerk ever enriches the payload.
+    const event = deleteEvent({ external_id: 'con_payload' })
+    verifyMock.mockReturnValue(event)
+    redisGet.mockResolvedValue(null)
+
+    const res = await POST(makeRequest(event))
+
+    expect(res.status).toBe(200)
+    expect(contactsRemove).toHaveBeenCalledWith('con_payload')
+    // Nothing was resolved FROM the mirror, so there is no mirror key to drop.
+    expect(redisDel).not.toHaveBeenCalled()
+  })
+
+  it('prefers the mirror over a payload external_id', async () => {
+    // The mirror is the delete path's source of truth. A stale external_id on
+    // a hand-crafted payload must not win over the value `user.updated` last
+    // wrote.
+    const event = deleteEvent({ external_id: 'con_stale' })
+    verifyMock.mockReturnValue(event)
+    redisGet.mockResolvedValue('con_current')
+
+    await POST(makeRequest(event))
+
+    expect(contactsRemove).toHaveBeenCalledWith('con_current')
+  })
+
+  it('keeps the mirror key when the removal fails', async () => {
+    // The Clerk user is already gone, so this key is the ONLY remaining record
+    // of which contact to retry against. Deleting it here would strand the
+    // contact permanently.
+    const event = deleteEvent()
+    verifyMock.mockReturnValue(event)
+    redisGet.mockResolvedValue('con_1')
     contactsRemove.mockResolvedValue({
       data: null,
       error: { name: 'not_found', message: 'Contact not found' },
@@ -488,19 +680,31 @@ describe('POST /api/clerk/webhook — user.deleted', () => {
     const res = await POST(makeRequest(event))
 
     expect(res.status).toBe(200)
+    expect(redisDel).not.toHaveBeenCalled()
   })
 
-  it('still 200s when the removal throws', async () => {
-    const event = {
-      type: 'user.deleted',
-      data: { id: 'user_1', deleted: true, external_id: 'con_1' },
-    }
+  it('still 200s when the removal throws, and keeps the mirror key', async () => {
+    const event = deleteEvent()
     verifyMock.mockReturnValue(event)
+    redisGet.mockResolvedValue('con_1')
     contactsRemove.mockRejectedValue(new Error('network down'))
 
     const res = await POST(makeRequest(event))
 
     expect(res.status).toBe(200)
+    expect(redisDel).not.toHaveBeenCalled()
+  })
+
+  it('still 200s when the mirror delete itself fails', async () => {
+    const event = deleteEvent()
+    verifyMock.mockReturnValue(event)
+    redisGet.mockResolvedValue('con_1')
+    redisDel.mockRejectedValue(new Error('upstash down'))
+
+    const res = await POST(makeRequest(event))
+
+    expect(res.status).toBe(200)
+    expect(contactsRemove).toHaveBeenCalledWith('con_1')
   })
 })
 
@@ -546,6 +750,34 @@ describe('POST /api/clerk/webhook — user.updated', () => {
     expect(updateUserMock).toHaveBeenCalledWith('user_1', {
       externalId: 'con_new',
     })
+  })
+
+  it('refreshes the mirror to the NEW contact id', async () => {
+    // A mirror left pointing at the removed contact would make the eventual
+    // `user.deleted` delete something that no longer exists while the live
+    // contact survived — #86's failure, one step downstream.
+    const event = updatedEvent()
+    verifyMock.mockReturnValue(event)
+    contactsGet
+      .mockResolvedValueOnce(contact('con_old', 'old@example.test'))
+      .mockResolvedValueOnce(contact('con_new', 'ada.new@example.test'))
+
+    await POST(makeRequest(event))
+
+    expect(redisSet).toHaveBeenCalledWith(
+      'clerk:resend-contact:user_1',
+      'con_new',
+    )
+  })
+
+  it('leaves the mirror alone when the primary email is unchanged', async () => {
+    const event = updatedEvent()
+    verifyMock.mockReturnValue(event)
+    contactsGet.mockResolvedValue(contact('con_old', 'ada.new@example.test'))
+
+    await POST(makeRequest(event))
+
+    expect(redisSet).not.toHaveBeenCalled()
   })
 
   it('creates before removing, so a failed create leaves the old contact intact', async () => {

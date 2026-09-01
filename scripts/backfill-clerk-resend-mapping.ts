@@ -1,17 +1,37 @@
 import { createClerkClient } from '@clerk/nextjs/server'
 import { Resend } from 'resend'
 
-import { formatPlan, planBackfill } from './lib/clerk-resend-mapping.mjs'
+import { rememberResendContact } from '../src/lib/email/resendContactMirror'
+import {
+  formatPlan,
+  mirrorTargets,
+  planBackfill,
+} from './lib/clerk-resend-mapping.mjs'
 
 /**
  * One-shot backfill of the Clerk↔Resend contact mapping (#86).
  *
- * The webhook now writes the Resend contact id to `external_id` at
- * `user.created`, and `user.deleted` / `user.updated` resolve the contact
- * through it. Every user who signed up *before* that shipped has no
- * `external_id`, and `user.deleted` carries no email address — so without this
- * script their contacts can never be cleaned up. This gives them the link
- * retroactively by matching primary email to an existing Resend contact.
+ * The webhook writes the Resend contact id to `external_id` at `user.created`
+ * and mirrors it into Upstash Redis keyed by the Clerk user id. Every user who
+ * signed up *before* that shipped has neither, and `user.deleted` carries no
+ * email address — so without this script their contacts can never be cleaned
+ * up. This gives them the link retroactively by matching primary email to an
+ * existing Resend contact.
+ *
+ * ## Both stores, not just `external_id`
+ *
+ * `--apply` writes `external_id` for newly-matched users AND the Redis mirror
+ * for every user with a known contact id — including users who were *already*
+ * mapped. That asymmetry is deliberate and is the point of a second run: the
+ * mirror shipped after `external_id` did, so an already-mapped user has the
+ * Clerk-side link and no mirror, and the mirror is the store `user.deleted`
+ * actually resolves through (`docs/AUTH.md`). Mirroring them is safe where
+ * rewriting their `external_id` would not be — it only restates a link Clerk
+ * already asserts. See `mirrorTargets` in
+ * `scripts/lib/clerk-resend-mapping.mjs`.
+ *
+ * With Upstash unset the run still performs every `external_id` write and
+ * reports the skipped mirror writes, rather than half-applying and exiting.
  *
  * Run it once, after the webhook change is deployed and before subscribing the
  * production endpoint to `user.deleted` / `user.updated` (`docs/AUTH.md`).
@@ -31,7 +51,8 @@ import { formatPlan, planBackfill } from './lib/clerk-resend-mapping.mjs'
  *   payload run scripts/backfill-clerk-resend-mapping.ts
  *   payload run scripts/backfill-clerk-resend-mapping.ts --apply
  *
- * Requires `CLERK_SECRET_KEY` and `RESEND_API_KEY`.
+ * Requires `CLERK_SECRET_KEY` and `RESEND_API_KEY`; `UPSTASH_REDIS_REST_URL` /
+ * `UPSTASH_REDIS_REST_TOKEN` are needed for the mirror half.
  */
 
 const apply = process.argv.includes('--apply')
@@ -159,6 +180,28 @@ async function run(): Promise<void> {
   console.log(
     `[backfill:clerk-resend] wrote ${written} mapping(s), ${failed} failure(s)`,
   )
+
+  // The mirror pass runs even when an external_id write failed above: the two
+  // stores are independent, and a user who kept their old (correct) external_id
+  // still benefits from having a mirror. Failures are counted, not thrown.
+  let mirrored = 0
+  let mirrorSkipped = 0
+  for (const target of mirrorTargets(plan)) {
+    const status = await rememberResendContact(target.userId, target.contactId)
+    if (status === 'ok') mirrored += 1
+    else mirrorSkipped += 1
+  }
+
+  console.log(
+    `[backfill:clerk-resend] mirrored ${mirrored} contact id(s), ${mirrorSkipped} not written`,
+  )
+  if (mirrorSkipped > 0) {
+    console.warn(
+      '[backfill:clerk-resend] some mirror keys were not written — user.deleted ' +
+        'will no-op for those users. Check UPSTASH_REDIS_REST_URL/TOKEN and re-run.',
+    )
+  }
+
   if (failed > 0) throw new Error(`${failed} mapping write(s) failed`)
 }
 

@@ -55,9 +55,21 @@ export function normalizeEmail(value) {
  *
  * @remarks Resolves `primaryEmailAddressId` and falls back to the first
  * address only when that id is absent or dangling — the same rule the webhook
- * applies to the snake_case webhook payload. Note the casing difference is
- * real: the Backend SDK deserializes to camelCase resources, while the webhook
- * receives raw snake_case JSON.
+ * applies to the snake_case webhook payload.
+ *
+ * **Why this stays a near-duplicate of `primaryEmail` in the webhook route.**
+ * A 2026-09 standards review flagged the pair. The shared part is four lines
+ * ("the marked address, else the first"); everything around it differs. The
+ * casing difference is real — the Backend SDK deserializes to camelCase
+ * resources while the webhook receives raw snake_case JSON — and so is the
+ * normalization: this function casefolds for *matching*, whereas the route
+ * must hand Resend the address exactly as Clerk spelled it. The remaining
+ * obstacle is the module boundary: this file is `.mjs` so it stays runnable
+ * and testable under plain node (same reason as `scripts/lib/orphan-guard.mjs`),
+ * and a shared helper would have to live in `src/` as TypeScript — which
+ * either breaks that property or inverts the dependency and makes `src/`
+ * import from `scripts/`. Four lines is not worth either, so the duplication
+ * is deliberate and recorded here rather than silently tolerated.
  */
 export function primaryEmailOf(user) {
   const addresses = Array.isArray(user?.emailAddresses)
@@ -202,6 +214,36 @@ export function planBackfill(users, contacts) {
 }
 
 /**
+ * The `(userId, contactId)` pairs whose Redis mirror the backfill should write.
+ *
+ * @param plan - The result of {@link planBackfill}.
+ * @returns One entry per user with a known contact id, in plan order.
+ *
+ * @remarks **Deliberately wider than the `map` set.** `already-mapped` users
+ * are included, and they are the whole reason this function exists: the mirror
+ * shipped after `external_id` did, so every user the webhook or an earlier
+ * backfill run already mapped has an `external_id` and *no mirror* — and the
+ * mirror is what `user.deleted` resolves through. Restricting the mirror write
+ * to newly-mapped users would leave exactly the pre-existing population
+ * undeletable, which is the population this backfill exists to repair.
+ *
+ * Writing the mirror is safe where writing `external_id` would not be: it is
+ * a copy of a link that already exists, keyed by user id, so it can only ever
+ * restate what Clerk already says. The refusals in {@link planBackfill} still
+ * do all the deciding — a status that produced no contact id produces no
+ * mirror write here either.
+ */
+export function mirrorTargets(plan) {
+  const targets = []
+  for (const entry of plan?.entries ?? []) {
+    if (entry.status !== 'map' && entry.status !== 'already-mapped') continue
+    if (!entry.userId || !entry.contactId) continue
+    targets.push({ userId: entry.userId, contactId: entry.contactId })
+  }
+  return targets
+}
+
+/**
  * Render a plan as human-readable lines.
  *
  * @param plan - The result of {@link planBackfill}.
@@ -225,7 +267,13 @@ export function formatPlan(plan, options = {}) {
         )
         break
       case 'already-mapped':
-        lines.push(`SKIP    ${who} already mapped to ${entry.contactId}`)
+        // The external_id is left alone, but the mirror is still (re)written —
+        // see `mirrorTargets`. Saying so keeps the dry run honest about the
+        // one write this status does produce.
+        lines.push(
+          `SKIP    ${who} already mapped to ${entry.contactId}` +
+            `${apply ? ' (mirror written)' : ' (mirror would be written)'}`,
+        )
         break
       case 'no-primary-email':
         lines.push(`SKIP    ${who} no primary email address`)
@@ -251,12 +299,13 @@ export function formatPlan(plan, options = {}) {
   lines.push(
     `${s.total} users · ${s.map} to map · ${s['already-mapped']} already mapped · ` +
       `${s['no-match']} unmatched · ${s['no-primary-email']} without email · ` +
-      `${s.ambiguous} ambiguous · ${s.conflict} conflicting`,
+      `${s.ambiguous} ambiguous · ${s.conflict} conflicting · ` +
+      `${mirrorTargets(plan).length} mirror key(s)`,
   )
   lines.push(
     apply
-      ? 'Applying: writing external_id for the mapped users above.'
-      : 'Dry run: nothing was written. Re-run with --apply to write these.',
+      ? 'Applying: writing external_id for the mapped users above, plus a Redis mirror key for every user with a known contact id.'
+      : 'Dry run: nothing was written — no external_id, no mirror keys. Re-run with --apply to write these.',
   )
 
   return lines

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatPlan,
   indexContactsByEmail,
+  mirrorTargets,
   normalizeEmail,
   planBackfill,
   primaryEmailOf,
@@ -292,6 +293,70 @@ describe('planBackfill', () => {
   it('returns an empty plan for empty input', () => {
     expect(planBackfill([], []).summary.total).toBe(0)
     expect(planBackfill(undefined, undefined).entries).toEqual([])
+  })
+})
+
+describe('mirrorTargets', () => {
+  it('includes newly-mapped users', () => {
+    const plan = planBackfill(
+      [simpleUser('user_1', 'ada@example.test')],
+      [{ id: 'con_1', email: 'ada@example.test' }],
+    )
+
+    expect(mirrorTargets(plan)).toEqual([
+      { userId: 'user_1', contactId: 'con_1' },
+    ])
+  })
+
+  it('ALSO includes already-mapped users — the reason it exists', () => {
+    // The mirror shipped after external_id did, so an already-mapped user has
+    // the Clerk-side link and no mirror — and the mirror is what user.deleted
+    // resolves through. Restricting this to `map` entries would leave exactly
+    // the pre-existing population undeletable.
+    const plan = planBackfill(
+      [simpleUser('user_2', 'mapped@example.test', { externalId: 'con_9' })],
+      [],
+    )
+
+    expect(plan.entries[0]?.status).toBe('already-mapped')
+    expect(mirrorTargets(plan)).toEqual([
+      { userId: 'user_2', contactId: 'con_9' },
+    ])
+  })
+
+  it('never mirrors a status that refused to name a contact', () => {
+    // planBackfill's refusals do all the deciding; this function must not
+    // reintroduce a guess for no-match, ambiguous, conflict or no-email users.
+    const plan = planBackfill(
+      [
+        simpleUser('user_nomatch', 'nobody@example.test'),
+        user('user_noemail', []),
+        simpleUser('user_ambiguous', 'dupe@example.test'),
+        simpleUser('user_claimed', 'shared@example.test', {
+          externalId: 'con_shared',
+        }),
+        simpleUser('user_conflict', 'shared@example.test'),
+      ],
+      [
+        { id: 'con_a', email: 'dupe@example.test' },
+        { id: 'con_b', email: 'dupe@example.test' },
+        { id: 'con_shared', email: 'shared@example.test' },
+      ],
+    )
+
+    expect(plan.summary['no-match']).toBe(1)
+    expect(plan.summary['no-primary-email']).toBe(1)
+    expect(plan.summary.ambiguous).toBe(1)
+    expect(plan.summary.conflict).toBe(1)
+    // Only the already-mapped user names a contact, so only it is mirrored.
+    expect(mirrorTargets(plan)).toEqual([
+      { userId: 'user_claimed', contactId: 'con_shared' },
+    ])
+  })
+
+  it('tolerates an empty or absent plan', () => {
+    expect(mirrorTargets(planBackfill([], []))).toEqual([])
+    expect(mirrorTargets(undefined)).toEqual([])
   })
 })
 
