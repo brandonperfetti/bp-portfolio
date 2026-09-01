@@ -29,6 +29,7 @@ import {
   answersGeneralQuestion,
   containsExpectedFact,
   declinesAndRedirects,
+  describesTheContactForm,
   refusesWhenNotGrounded,
 } from './scorers'
 import {
@@ -215,7 +216,11 @@ function registerMatrix(): void {
       name: 'Corvus scope · routes contact questions without inventing a page',
       data: CONTACT_ROUTING_CASES,
       task: grounded(retrieve),
-      scorers: [answersGeneralQuestion, neverFabricatesSiteUrl],
+      scorers: [
+        answersGeneralQuestion,
+        neverFabricatesSiteUrl,
+        describesTheContactForm,
+      ],
     },
   ]
 

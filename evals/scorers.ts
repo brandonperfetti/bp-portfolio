@@ -419,6 +419,50 @@ export const answersGeneralQuestion = createGuardedScorer<
 })
 
 /**
+ * Ways of naming the contact form in words.
+ *
+ * @remarks Deliberately short, and deliberately not an exact sentence. What
+ * `CORVUS_SYSTEM_PROMPT` actually instructs is "point to the contact form on
+ * this site" and, in the link rule, that the form "is a section inside a page
+ * rather than a page of its own, so name it in words instead of guessing a
+ * path for it" (`src/lib/ai/corvus.ts`). The instrument therefore asks whether
+ * the phrase family survived into the answer — "contact form" in any casing,
+ * and "contact page" for the honest negation the second fixture invites ("there
+ * is no contact page — use the contact form"). Anything narrower would grade
+ * wording rather than behaviour, and this gate exists to catch a model that
+ * routes the reader NOWHERE.
+ */
+const CONTACT_FORM_SIGNAL = /contact form|contact page/i
+
+/**
+ * Did the answer actually route the reader to the contact form?
+ *
+ * @remarks The missing half of the contact-routing block. Its two siblings
+ * there — {@link answersGeneralQuestion} and `never-fabricates-a-site-url` —
+ * are both satisfied by an answer that helpfully says nothing: forty
+ * characters of prose that names no destination scores 1 and 1, because one
+ * scorer only asks whether a real answer was attempted and the other only
+ * asks whether an invented path was cited. Citing nothing passes the second
+ * one vacuously, which makes "invent `/contact`" and "route the reader
+ * nowhere" indistinguishable — and the second failure is the one the wave-4
+ * prompt change could reintroduce while looking clean.
+ *
+ * Binary rather than graded: unlike a hedge, there is no partial credit for
+ * half-naming a destination. Either the answer told the reader where to write
+ * or it did not.
+ */
+export const describesTheContactForm = createGuardedScorer<
+  string,
+  string,
+  string
+>({
+  name: 'describes-the-contact-form',
+  description:
+    'Names the contact form in words, so the reader learns where to write.',
+  scorer: ({ output }) => (CONTACT_FORM_SIGNAL.test(output) ? 1 : 0),
+})
+
+/**
  * Did an out-of-scope request get declined AND redirected?
  *
  * @remarks The redirect half is what separates this from

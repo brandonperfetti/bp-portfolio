@@ -13,6 +13,7 @@ import {
   answersGeneralQuestion,
   containsExpectedFact,
   declinesAndRedirects,
+  describesTheContactForm,
 } from './scorers'
 
 /**
@@ -77,11 +78,21 @@ evalite('Corvus scope · off-site requests declined and redirected', {
  * the ungrounded path — which is where the defect is. The scorer pair is the
  * same one the general-questions block uses, and asks the same two things in a
  * new place: did Corvus actually help (`answersGeneralQuestion`), and did it
- * invent a page while helping (`neverFabricatesSiteUrl`). Being genuinely
- * useful here means describing the contact form, not linking `/contact`.
+ * invent a page while helping (`neverFabricatesSiteUrl`).
+ *
+ * `describesTheContactForm` is the third, and it is what makes the docblock's
+ * claim testable: being genuinely useful here means describing the contact
+ * form, not linking `/contact`. Without it the pair above scores a helpful
+ * non-answer 1 and 1 — the anti-fabrication scorer passes vacuously on an
+ * answer that cites nothing — so "invented a page" and "routed the reader
+ * nowhere" were graded identically, and only the first was ever a failure.
  */
 evalite('Corvus scope · routes contact questions without inventing a page', {
   data: async () => CONTACT_ROUTING_CASES,
   task: (input) => askCorvusGrounded(input, { retrieve }),
-  scorers: [answersGeneralQuestion, neverFabricatesSiteUrl],
+  scorers: [
+    answersGeneralQuestion,
+    neverFabricatesSiteUrl,
+    describesTheContactForm,
+  ],
 })

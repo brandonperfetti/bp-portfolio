@@ -29,6 +29,7 @@ import {
   createCitesSiteSourceNotVendor,
   createNeverFabricatesSiteUrl,
   declinesAndRedirects,
+  describesTheContactForm,
   externalUrls,
   refusesWhenNotGrounded,
   requiredFacts,
@@ -495,6 +496,53 @@ describe('declines-and-redirects', () => {
         'Your package is out for delivery and should arrive by 5pm.',
       ),
     ).toBe(0)
+  })
+})
+
+describe('describes-the-contact-form (#82 wave 4)', () => {
+  const helpfulButRouteless =
+    'Brandon is easy to reach and generally replies quickly, so just send a note whenever something looks worth talking about.'
+
+  it('fails a helpful answer that names no destination', async () => {
+    // The gap this scorer fills. Long enough to score 1 on
+    // `answers-general-questions`, and citing nothing at all, so
+    // `never-fabricates-a-site-url` passes it vacuously — yet the reader is
+    // told nothing about where to write.
+    expect(await score(describesTheContactForm, helpfulButRouteless)).toBe(0)
+    expect(await score(answersGeneralQuestion, helpfulButRouteless)).toBe(1)
+    expect(await score(neverFabricatesSiteUrlOnSite, helpfulButRouteless)).toBe(
+      1,
+    )
+  })
+
+  it('passes an answer that describes the contact form', async () => {
+    expect(
+      await score(
+        describesTheContactForm,
+        'Scroll to the contact form near the bottom of the page and send him a message there.',
+      ),
+    ).toBe(1)
+  })
+
+  it('passes the honest negation the second fixture invites', async () => {
+    // "What is the URL of the contact page?" has no URL for an answer. Saying
+    // so and naming the form is the behaviour the prompt asks for.
+    expect(
+      await score(
+        describesTheContactForm,
+        'There is no separate contact page — the contact form is a section inside a page.',
+      ),
+    ).toBe(1)
+  })
+
+  it('does not care how the phrase is cased', async () => {
+    expect(
+      await score(describesTheContactForm, 'Use the Contact Form on the site.'),
+    ).toBe(1)
+  })
+
+  it('scores an empty answer 0 through the #122 guard', async () => {
+    expect(await score(describesTheContactForm, '   ')).toBe(0)
   })
 })
 
