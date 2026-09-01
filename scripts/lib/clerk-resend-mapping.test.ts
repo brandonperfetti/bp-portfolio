@@ -3,11 +3,12 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   formatPlan,
   indexContactsByEmail,
+  listAllResendContacts,
   mirrorTargets,
   normalizeEmail,
   planBackfill,
@@ -447,15 +448,12 @@ describe('formatPlan', () => {
 
 describe('audience read scope', () => {
   /**
-   * A source guard, because this one property cannot be reached any other way.
-   *
-   * @remarks `scripts/backfill-clerk-resend-mapping.ts` ends in a top-level
-   * `await run()` and a `process.exit`, so importing it to exercise
-   * `listAllResendContacts` would run the whole backfill. The pure rules it
-   * calls into live in the `.mjs` module every other test here imports; the
-   * `contacts.list` call does not, and it is the one that decides WHICH
-   * contacts the rules ever see. Matching text is the same trade
-   * `scripts/corvus-backfill-workflow.test.ts` makes for the workflow file.
+   * Data-flow proof, not a source grep: `listAllResendContacts` takes the
+   * client as a parameter precisely so these tests can hand it a mock and
+   * assert what actually reaches `contacts.list` — including that the
+   * `segmentId` is the one `RESEND_CONTACT_SEGMENT_ID` held, not a similarly
+   * spelled variable that would keep a text match green while the read went
+   * account-wide.
    *
    * What is actually at stake: `captureContact` creates this app's contacts
    * inside `RESEND_CONTACT_SEGMENT_ID`. An account-wide list can match a Clerk
@@ -463,43 +461,89 @@ describe('audience read scope', () => {
    * `external_id` and the Redis mirror — which `user.deleted` later resolves
    * through and DELETES.
    */
-  const script = readFileSync(
-    path.join(repoRoot, 'scripts/backfill-clerk-resend-mapping.ts'),
-    'utf8',
-  )
-  // Anchored on the closing brace at the CALL's own indentation, so the
-  // conditional spreads inside the object literal do not end the match early.
-  const listCall = /resend\.contacts\.list\(\{\n([\s\S]*?)\n {4}\}\)/.exec(
-    script,
-  )?.[1]
-
-  it('filters the list by the segment captureContact writes under', () => {
-    expect(listCall, 'the script must still call contacts.list').toBeDefined()
-    expect(script).toContain('process.env.RESEND_CONTACT_SEGMENT_ID')
-    expect(listCall).toContain('...(segmentId ? { segmentId } : {})')
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
-  it('stays account-wide when no segment is configured', () => {
+  const page = (
+    contacts: Array<{ email: string; id: string }>,
+    hasMore: boolean,
+  ) => ({
+    data: { data: contacts, has_more: hasMore },
+    error: null,
+  })
+
+  const clientReturning = (...pages: Array<ReturnType<typeof page>>) => {
+    const list = vi.fn()
+    for (const p of pages) list.mockResolvedValueOnce(p)
+    return { client: { contacts: { list } }, list }
+  }
+
+  it('passes the env segment to contacts.list, and pages under it', async () => {
+    vi.stubEnv('RESEND_CONTACT_SEGMENT_ID', 'seg_test_1')
+    const { client, list } = clientReturning(
+      page([{ email: 'a@example.com', id: 'con_1' }], true),
+      page([{ email: 'b@example.com', id: 'con_2' }], false),
+    )
+
+    const contacts = await listAllResendContacts(client)
+
+    expect(contacts).toEqual([
+      { email: 'a@example.com', id: 'con_1' },
+      { email: 'b@example.com', id: 'con_2' },
+    ])
+    expect(list).toHaveBeenNthCalledWith(1, {
+      limit: 100,
+      segmentId: 'seg_test_1',
+    })
+    // The cursor rides along WITH the segment — a second page that dropped
+    // the filter would silently widen the read mid-walk.
+    expect(list).toHaveBeenNthCalledWith(2, {
+      after: 'con_1',
+      limit: 100,
+      segmentId: 'seg_test_1',
+    })
+  })
+
+  it('stays account-wide when no segment is configured', async () => {
     // Optional on purpose, mirroring captureContact: with the env unset the
     // app creates UNSEGMENTED contacts, so there is no segment to filter by
     // and the account-wide read is the only correct behavior. A hard
     // requirement here would break the unsegmented deployment outright.
-    expect(listCall).not.toMatch(/segmentId:\s*process\.env/)
-    expect(listCall).toContain('segmentId ?')
+    vi.stubEnv('RESEND_CONTACT_SEGMENT_ID', '')
+    const { client, list } = clientReturning(
+      page([{ email: 'a@example.com', id: 'con_1' }], false),
+    )
+
+    await listAllResendContacts(client)
+
+    expect(list).toHaveBeenCalledWith({ limit: 100 })
+    expect(list.mock.calls[0]?.[0]).not.toHaveProperty('segmentId')
   })
 
-  it('keeps the cursor pagination the segment filter rides along with', () => {
-    expect(listCall).toContain('...(after ? { after } : {})')
-    expect(script).toContain('data?.has_more')
+  it('surfaces a list error instead of returning a partial audience', async () => {
+    vi.stubEnv('RESEND_CONTACT_SEGMENT_ID', '')
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce({ data: null, error: { message: 'boom' } })
+
+    await expect(listAllResendContacts({ contacts: { list } })).rejects.toThrow(
+      'Resend contacts.list failed: boom',
+    )
   })
 
   it('names the same env captureContact does', () => {
     // The drift this guards: renaming the env in one file and not the other
     // silently returns the backfill to an account-wide read.
+    const lib = readFileSync(
+      path.join(repoRoot, 'scripts/lib/clerk-resend-mapping.mjs'),
+      'utf8',
+    )
     const capture = readFileSync(
       path.join(repoRoot, 'src/lib/email/captureContact.ts'),
       'utf8',
     )
+    expect(lib).toContain('process.env.RESEND_CONTACT_SEGMENT_ID')
     expect(capture).toContain('process.env.RESEND_CONTACT_SEGMENT_ID')
   })
 })
