@@ -77,6 +77,79 @@ describe('resolveRedirect', () => {
       ),
     ).toBeNull()
   })
+
+  it('serves a custom destination with its query intact', () => {
+    // The reason normalisation moved off the destination. An editor pointing a
+    // retired page at a campaign link means the query; stripping it hands the
+    // reader a URL that works and does not do what the row was written for.
+    expect(
+      resolveRedirect(
+        [{ from: '/old-offer', to: '/signup?campaign=launch' }],
+        '/old-offer',
+      ),
+    ).toBe('/signup?campaign=launch')
+  })
+
+  it('keeps a fragment on a custom destination', () => {
+    expect(
+      resolveRedirect([{ from: '/faq', to: '/about#contact' }], '/faq'),
+    ).toBe('/about#contact')
+  })
+
+  it('serves an absolute destination unchanged', () => {
+    // Normalising this produced `/https://example.com/moved` — a path nothing
+    // on this site serves, from a row that read perfectly in the admin.
+    expect(
+      resolveRedirect(
+        [{ from: '/moved', to: 'https://example.com/moved' }],
+        '/moved',
+      ),
+    ).toBe('https://example.com/moved')
+  })
+
+  it('does not mistake an absolute destination for a self-redirect', () => {
+    // Same stem as the request, different site. Under the old normalisation
+    // the check compared two mangled paths; the rule only ever applied to
+    // destinations that stay here.
+    expect(
+      resolveRedirect(
+        [{ from: '/articles/a', to: 'https://example.com/articles/a' }],
+        '/articles/a',
+      ),
+    ).toBe('https://example.com/articles/a')
+    expect(
+      resolveRedirect(
+        [{ from: '/articles/a', to: '//cdn.example.com/articles/a' }],
+        '/articles/a',
+      ),
+    ).toBe('//cdn.example.com/articles/a')
+  })
+
+  it('still refuses a self-redirect that only differs by a query', () => {
+    // The loop check compares stems on purpose: this destination re-enters the
+    // same not-found branch, query and all.
+    expect(
+      resolveRedirect(
+        [{ from: '/articles/a', to: '/articles/a?utm=1' }],
+        '/articles/a',
+      ),
+    ).toBeNull()
+  })
+
+  it('returns null for an empty destination instead of sending to /', () => {
+    expect(resolveRedirect([{ from: '/x', to: '   ' }], '/x')).toBeNull()
+  })
+
+  it('matches a trailing-slash request against a query-bearing row', () => {
+    // Both halves at once: `from` is still normalised for MATCHING, while the
+    // destination is served exactly as configured.
+    expect(
+      resolveRedirect(
+        [{ from: '/old-offer/', to: '/signup?campaign=launch' }],
+        '/old-offer',
+      ),
+    ).toBe('/signup?campaign=launch')
+  })
 })
 
 describe('getCmsRedirects', () => {
@@ -150,6 +223,35 @@ describe('getCmsRedirects', () => {
     await expect(getCmsRedirects()).resolves.toEqual([
       { from: '/legacy', to: '/articles/x' },
     ])
+  })
+
+  it('flattens a custom row to the editor’s URL verbatim', async () => {
+    // The flattening never touched the URL; the corruption was downstream in
+    // `resolveRedirect`. Pinned here so the two halves stay separable.
+    stubFind({
+      redirects: [
+        {
+          from: '/old-offer',
+          to: { type: 'custom', url: '/signup?campaign=launch' },
+        },
+        {
+          from: '/moved',
+          to: { type: 'custom', url: 'https://example.com/moved' },
+        },
+      ],
+    })
+
+    const redirects = await getCmsRedirects()
+    expect(redirects).toEqual([
+      { from: '/old-offer', to: '/signup?campaign=launch' },
+      { from: '/moved', to: 'https://example.com/moved' },
+    ])
+    expect(resolveRedirect(redirects, '/old-offer')).toBe(
+      '/signup?campaign=launch',
+    )
+    expect(resolveRedirect(redirects, '/moved')).toBe(
+      'https://example.com/moved',
+    )
   })
 
   it('drops a row whose referenced document was deleted', async () => {

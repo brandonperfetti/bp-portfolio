@@ -40,17 +40,49 @@ export const normalizeRedirectPath = (path: string): string => {
 }
 
 /**
+ * Does this destination address somewhere other than a path on this site?
+ *
+ * @param destination - A stored `to` value.
+ *
+ * @remarks Any URI scheme (`https:`, `mailto:`) plus the protocol-relative
+ * `//host/path` form, which the browser resolves against the current scheme
+ * and is therefore just as external. The point of asking is the self-redirect
+ * rule below: an absolute URL leaves this site, so it can never be the loop
+ * that rule exists to break — and normalising it would turn
+ * `https://example.com/x` into the nonsense path `/https://example.com/x`.
+ */
+const isAbsoluteDestination = (destination: string): boolean =>
+  /^[a-z][a-z0-9+.\-]*:/i.test(destination) || destination.startsWith('//')
+
+/**
  * Pure lookup over an already-loaded redirect list.
  *
  * @param redirects - Flattened rows from {@link getCmsRedirects}.
  * @param path - The requested path.
- * @returns The destination path, or `null` when nothing matches.
+ * @returns The destination as configured, or `null` when nothing matches.
  *
  * @remarks Kept separate from the cached read so the matching rules
  * (normalisation, self-redirect rejection) are unit-testable without a Payload
  * or Next cache scope. A row whose destination equals its own source is
  * dropped rather than served: it would be an infinite redirect, and it is the
  * shape a rename-back-to-the-original leaves behind.
+ *
+ * **Normalisation is for comparing, never for serving.** This used to return
+ * `normalizeRedirectPath(redirect.to)`, which is right for the two *questions*
+ * asked here — does this row's `from` match the request, and does its
+ * destination point back at the request — and wrong for the *answer*, because
+ * that function's job is to strip a path down to a comparable stem. Applied to
+ * an editor's destination it silently rewrote it: `/signup?campaign=launch`
+ * lost the query the campaign link existed for, and
+ * `https://example.com/moved` came back as the path
+ * `/https://example.com/moved`, a URL nothing serves. Reference rows never
+ * showed it because {@link getCmsRedirects} builds those from a slug and they
+ * are already canonical; only a hand-written custom row could carry a query,
+ * a fragment, or a host. So the destination is now returned as configured
+ * (trimmed), and the normalised form is used only to answer the two questions.
+ *
+ * Both callers hand the result to `permanentRedirect`, which accepts absolute
+ * URLs and query-bearing paths as-is.
  */
 export const resolveRedirect = (
   redirects: CmsRedirect[],
@@ -59,8 +91,17 @@ export const resolveRedirect = (
   const target = normalizeRedirectPath(path)
   for (const redirect of redirects) {
     if (normalizeRedirectPath(redirect.from) !== target) continue
-    const destination = normalizeRedirectPath(redirect.to)
-    return destination === target ? null : destination
+    const destination = redirect.to.trim()
+    // Nothing to serve. `getCmsRedirects` never emits this — both row types
+    // require a non-empty destination — but this function is exported and a
+    // caller with its own list should get "no redirect" rather than the `/`
+    // that normalising an empty string would have produced.
+    if (!destination) return null
+    // An absolute URL leaves the site, so the loop check does not apply to it.
+    if (isAbsoluteDestination(destination)) return destination
+    // Compare stems, not spellings: `/articles/a?x=1` still points back at
+    // `/articles/a`, and serving it would re-enter this same not-found branch.
+    return normalizeRedirectPath(destination) === target ? null : destination
   }
   return null
 }
