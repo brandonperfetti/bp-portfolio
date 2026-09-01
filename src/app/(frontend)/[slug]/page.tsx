@@ -13,6 +13,7 @@ import {
   getPageBySlugDraftAware,
   getPublishedPageSlugs,
 } from '@/lib/cms/pagesRepo'
+import { publicPathForSlug } from '@/fields/slug/slugPaths'
 import { getSiteUrl } from '@/lib/site'
 
 /** Request-deduped wrapper over the repo's draft-aware page query. */
@@ -67,7 +68,12 @@ export default async function CmsPage({
     // serves a redirect from its old path instead of a 404. Deliberately NOT
     // applied to the RESERVED_PAGE_SLUGS branch above: those paths are owned by
     // dedicated routes, so a redirect row must never shadow one.
-    const destination = await getRedirectForPath(`/${slug}`)
+    //
+    // `publicPathForSlug` builds the lookup path, so this reader and
+    // `createSlugRedirect` (the writer) share one definition of what a page's
+    // public path is — see the matching note in /articles/[slug].
+    const from = publicPathForSlug('pages', slug)
+    const destination = from ? await getRedirectForPath(from) : null
     if (destination) permanentRedirect(destination)
     notFound()
   }

@@ -1,5 +1,6 @@
 import type { CollectionBeforeChangeHook, RequestContext } from 'payload'
 
+import { findPublishedSlug } from '@/fields/slug/findPublishedSlug'
 import { isSlugRoutedCollection } from '@/fields/slug/slugPaths'
 
 /** `req.context` key holding the pre-write published slug, keyed per document. */
@@ -19,14 +20,21 @@ const contextKey = (collectionSlug: string, id: unknown): string =>
  * @param id - The document id.
  * @returns The previous published slug, or `undefined` when the document had no
  * published version (a first publish) or the capture hook did not run.
+ *
+ * @remarks The stash is typed `unknown` and narrowed at runtime, not asserted.
+ * It previously carried `as Record<string, string> | undefined | unknown`,
+ * which is an inert union — every member absorbs into `unknown`, so the
+ * annotation read like a contract while asserting nothing, and the two
+ * runtime guards below were doing all the real work. `req.context` is a shared
+ * bag any hook in the request may have written to, so guarding is the correct
+ * posture; the fix is to say `unknown` honestly rather than dress it up.
  */
 export const readPreviousPublishedSlug = (
   context: RequestContext | undefined,
   collectionSlug: string,
   id: unknown,
 ): string | undefined => {
-  const store = context?.[CONTEXT_KEY] as
-    Record<string, string> | undefined | unknown
+  const store: unknown = context?.[CONTEXT_KEY]
   if (!store || typeof store !== 'object') return undefined
   const value = (store as Record<string, unknown>)[
     contextKey(collectionSlug, id)
@@ -114,20 +122,8 @@ export const capturePublishedSlug: CollectionBeforeChangeHook = async ({
     // No draft exists, so `originalDoc` IS the published row.
     publishedSlug = originalDoc.slug
   } else {
-    const { docs } = await req.payload.find({
-      collection: collectionSlug,
-      depth: 0,
-      limit: 1,
-      overrideAccess: true,
-      pagination: false,
-      req,
-      select: { slug: true },
-      where: {
-        and: [{ id: { equals: id } }, { _status: { equals: 'published' } }],
-      },
-    })
-    const slug = (docs[0] as undefined | { slug?: unknown })?.slug
-    if (typeof slug === 'string' && slug.length > 0) publishedSlug = slug
+    publishedSlug =
+      (await findPublishedSlug(req, collectionSlug, id)) ?? undefined
   }
 
   // No published version => a first publish => nothing to redirect from.

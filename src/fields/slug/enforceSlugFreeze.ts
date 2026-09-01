@@ -1,37 +1,7 @@
-import type { FieldHook, PayloadRequest } from 'payload'
+import type { FieldHook } from 'payload'
 
-import { isSlugRoutedCollection, type SlugRoutedCollection } from './slugPaths'
-
-/**
- * Ask the database which slug the *published* version of this document is
- * currently serving.
- *
- * @remarks This is the authoritative answer to "does a public URL exist for
- * this document, and what is it?". For a drafts-enabled collection Payload
- * writes the main table row on publish and keeps unpublished edits in the
- * `_v` versions table, so a row matching `_status: 'published'` is exactly the
- * live URL. Returns `null` when the document has never been published.
- */
-const findPublishedSlug = async (
-  req: PayloadRequest,
-  collectionSlug: SlugRoutedCollection,
-  id: number | string,
-): Promise<null | string> => {
-  const { docs } = await req.payload.find({
-    collection: collectionSlug,
-    depth: 0,
-    limit: 1,
-    overrideAccess: true,
-    pagination: false,
-    req,
-    select: { slug: true },
-    where: {
-      and: [{ id: { equals: id } }, { _status: { equals: 'published' } }],
-    },
-  })
-  const slug = (docs[0] as undefined | { slug?: unknown })?.slug
-  return typeof slug === 'string' && slug.length > 0 ? slug : null
-}
+import { findPublishedSlug } from './findPublishedSlug'
+import { isSlugRoutedCollection } from './slugPaths'
 
 /**
  * `beforeValidate` field hook that freezes a published document's slug: once a
