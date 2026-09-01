@@ -1,5 +1,4 @@
 import { clerkClient } from '@clerk/nextjs/server'
-import { Resend } from 'resend'
 import { Webhook } from 'svix'
 
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
@@ -10,6 +9,13 @@ import {
   rememberResendContact,
   type ResendContactMirrorLookup,
 } from '@/lib/email/resendContactMirror'
+import {
+  findContactEmailById,
+  findContactIdByEmail,
+  getResendClient,
+  removeContact,
+} from '@/lib/email/resendContacts'
+import { boundedErrorMessage } from '@/lib/observability/boundedErrorMessage'
 
 /**
  * Clerk → Resend contact sync (§12 email capture; replaces v3
@@ -73,6 +79,15 @@ import {
  * `email_addresses[0]`: they coincide at sign-up but diverge on exactly the
  * multi-address accounts `user.updated` exists to follow.
  *
+ * ## What lives here, and what does not
+ *
+ * This module owns the two jobs that are actually about being an HTTP
+ * endpoint — svix verification and event routing — plus the per-event policy
+ * that decides which mapping to trust. The Resend I/O it performs lives in
+ * `@/lib/email/resendContacts`, and the mirror in
+ * `@/lib/email/resendContactMirror`; both are usable, and testable, without
+ * constructing a signed webhook delivery.
+ *
  * @remarks Consent: the sign-up flow presents Clerk's legal/marketing consent;
  * TODO(brandon): if you enable a granular marketing opt-in field in Clerk,
  * read it from `public_metadata` here and skip non-consenting users.
@@ -121,8 +136,24 @@ export async function POST(req: Request) {
 /** A Clerk `user.*` payload, read defensively — webhooks are untyped JSON. */
 type ClerkUserData = Record<string, unknown>
 
-/** Read a string field, treating `null`/`''`/non-strings as absent. */
-function str(data: ClerkUserData, key: string): string | undefined {
+/**
+ * Read a string field, treating `null`, `''` and non-strings as absent.
+ *
+ * @param data - The `user.*` event payload.
+ * @param key - The snake_case field to read.
+ * @returns The value when it is a non-empty string, else `undefined`.
+ *
+ * @remarks Named for what it guarantees, not for its return type — it was
+ * `str()`, which said nothing about the two coercions that are the entire
+ * point. Clerk sends `null` for an unset name and can send `''`; both must
+ * read as absent so `captureContact` receives `undefined` rather than
+ * threading an empty string into a Resend contact, and so an empty
+ * `external_id` is never mistaken for a mapping.
+ */
+function nonEmptyStringField(
+  data: ClerkUserData,
+  key: string,
+): string | undefined {
   const value = data[key]
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
@@ -138,12 +169,23 @@ function str(data: ClerkUserData, key: string): string | undefined {
  * fallback is what the route did unconditionally before #86; keeping it as a
  * fallback preserves sign-up behavior (a new user has exactly one address)
  * while making multi-address accounts correct.
+ *
+ * **Near-duplicate of `primaryEmailOf` in
+ * `scripts/lib/clerk-resend-mapping.mjs`, deliberately.** The shared part is
+ * four lines; around it the two differ in field casing (raw snake_case webhook
+ * JSON here, camelCase Backend SDK resources there) and in normalization (that
+ * one casefolds for matching; this one must hand Resend the address exactly as
+ * Clerk spelled it). Sharing them would mean either putting the helper in
+ * `src/` and making a `.mjs` script lib import TypeScript — losing the
+ * plain-node runnability that is why it is `.mjs` — or making `src/` import
+ * from `scripts/`. Neither is worth four lines; see that module for the
+ * matching half of this note.
  */
 function primaryEmail(data: ClerkUserData): string | undefined {
   const emails =
     (data.email_addresses as
       Array<{ id?: string; email_address?: string }> | undefined) ?? []
-  const primaryId = str(data, 'primary_email_address_id')
+  const primaryId = nonEmptyStringField(data, 'primary_email_address_id')
   const primary = primaryId
     ? emails.find((entry) => entry?.id === primaryId)
     : undefined
@@ -155,111 +197,8 @@ function primaryEmail(data: ClerkUserData): string | undefined {
 /** The name parts, threaded as `undefined` (never `null`) for absent values. */
 function nameParts(data: ClerkUserData) {
   return {
-    firstName: str(data, 'first_name'),
-    lastName: str(data, 'last_name'),
-  }
-}
-
-/**
- * A Resend client, or `null` when the API key is absent.
- *
- * @returns The client, or `null` after logging the skip.
- *
- * @remarks Mirrors `captureContact`'s no-key behavior so a keys-off
- * environment degrades to a warning instead of a 500 — the webhook must ack
- * regardless, since Clerk redelivers every non-2xx.
- */
-function resendClient(): Resend | null {
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) {
-    console.warn(
-      '[clerk-webhook] RESEND_API_KEY missing; skipping contact sync',
-    )
-    return null
-  }
-  return new Resend(apiKey)
-}
-
-/** Truncate an unknown error to a bounded log string. */
-function reason(error: unknown): string {
-  return error instanceof Error ? error.message.slice(0, 300) : 'unknown'
-}
-
-/**
- * Look up a Resend contact id by email address.
- *
- * @param resend - The Resend client.
- * @param email - The contact's email address.
- * @returns The contact id, or `undefined` when it cannot be resolved.
- *
- * @remarks This extra round trip exists because `captureContact` returns
- * `void` — it is the shared capture path for the contact form too, and
- * widening its contract is out of this change's scope. The create response
- * does carry the new id, so if that helper ever returns it, this lookup
- * becomes dead code on the create paths.
- */
-async function contactIdByEmail(
-  resend: Resend,
-  email: string,
-): Promise<string | undefined> {
-  try {
-    const { data, error } = await resend.contacts.get({ email })
-    if (error || !data) {
-      console.error('[clerk-webhook] Resend contact lookup failed', {
-        name: error?.name,
-        message: error?.message?.slice(0, 300),
-      })
-      return undefined
-    }
-    return data.id
-  } catch (error) {
-    console.error('[clerk-webhook] Resend contact lookup threw', {
-      message: reason(error),
-    })
-    return undefined
-  }
-}
-
-/**
- * Remove a Resend contact by id (audience removal, never a suppression).
- *
- * @param resend - The Resend client.
- * @param contactId - The Resend contact id.
- * @param context - Log context describing why the contact is being removed.
- * @returns `true` when Resend confirmed the removal.
- *
- * @remarks The boolean is what lets `user.deleted` keep the mirror key on a
- * failed removal: the Clerk user is gone by then, so that key is the only
- * remaining record of which contact to retry against.
- */
-async function removeContact(
-  resend: Resend,
-  contactId: string,
-  context: string,
-): Promise<boolean> {
-  try {
-    const { error } = await resend.contacts.remove(contactId)
-    if (error) {
-      console.error('[clerk-webhook] Resend contact removal failed', {
-        context,
-        contactId,
-        name: error.name,
-        message: error.message.slice(0, 300),
-      })
-      return false
-    }
-    console.info('[clerk-webhook] removed Resend contact', {
-      context,
-      contactId,
-    })
-    return true
-  } catch (error) {
-    console.error('[clerk-webhook] Resend contact removal threw', {
-      context,
-      contactId,
-      message: reason(error),
-    })
-    return false
+    firstName: nonEmptyStringField(data, 'first_name'),
+    lastName: nonEmptyStringField(data, 'last_name'),
   }
 }
 
@@ -292,7 +231,7 @@ async function writeExternalId(
       {
         userId,
         contactId,
-        message: reason(error),
+        message: boundedErrorMessage(error),
       },
     )
   }
@@ -325,10 +264,10 @@ async function handleUserCreated(data: ClerkUserData): Promise<void> {
   // duplicate-contact error on webhook redelivery is expected noise.
   await captureContact({ email, firstName, lastName })
 
-  const userId = str(data, 'id')
+  const userId = nonEmptyStringField(data, 'id')
   if (!userId) return
 
-  const mappedContactId = str(data, 'external_id')
+  const mappedContactId = nonEmptyStringField(data, 'external_id')
   if (mappedContactId) {
     console.info('[clerk-webhook] external_id already set; mapping skipped', {
       userId,
@@ -338,10 +277,10 @@ async function handleUserCreated(data: ClerkUserData): Promise<void> {
     return
   }
 
-  const resend = resendClient()
+  const resend = getResendClient('user.created')
   if (!resend) return
 
-  const contactId = await contactIdByEmail(resend, email)
+  const contactId = await findContactIdByEmail(resend, email)
   if (!contactId) return
 
   await writeExternalId(userId, contactId)
@@ -411,13 +350,14 @@ async function mirrorContact(
  * would only buy a Clerk retry loop against a mapping that will not appear.
  */
 async function handleUserDeleted(data: ClerkUserData): Promise<void> {
-  const userId = str(data, 'id')
+  const userId = nonEmptyStringField(data, 'id')
 
   const mirrored: ResendContactMirrorLookup = userId
     ? await recallResendContact(userId)
     : { status: 'miss' }
 
-  const contactId = mirrored.contactId ?? str(data, 'external_id')
+  const contactId =
+    mirrored.contactId ?? nonEmptyStringField(data, 'external_id')
   if (!contactId) {
     console.info(
       '[clerk-webhook] user.deleted resolved no Resend contact; nothing to remove',
@@ -426,7 +366,7 @@ async function handleUserDeleted(data: ClerkUserData): Promise<void> {
     return
   }
 
-  const resend = resendClient()
+  const resend = getResendClient('user.deleted')
   if (!resend) return
 
   const removed = await removeContact(resend, contactId, 'user.deleted')
@@ -458,8 +398,8 @@ async function handleUserDeleted(data: ClerkUserData): Promise<void> {
  * contact, sees the emails match, and no-ops before touching anything.
  */
 async function handleUserUpdated(data: ClerkUserData): Promise<void> {
-  const userId = str(data, 'id')
-  const contactId = str(data, 'external_id')
+  const userId = nonEmptyStringField(data, 'id')
+  const contactId = nonEmptyStringField(data, 'external_id')
   if (!contactId) {
     console.info(
       '[clerk-webhook] user.updated carried no external_id; nothing to sync',
@@ -476,32 +416,13 @@ async function handleUserUpdated(data: ClerkUserData): Promise<void> {
     return
   }
 
-  const resend = resendClient()
+  const resend = getResendClient('user.updated')
   if (!resend) return
 
-  let currentEmail: string | undefined
-  try {
-    const { data: contact, error } = await resend.contacts.get(contactId)
-    if (error || !contact) {
-      console.error('[clerk-webhook] mapped Resend contact unreadable', {
-        userId,
-        contactId,
-        name: error?.name,
-        message: error?.message?.slice(0, 300),
-      })
-      return
-    }
-    currentEmail = contact.email
-  } catch (error) {
-    console.error('[clerk-webhook] mapped Resend contact read threw', {
-      userId,
-      contactId,
-      message: reason(error),
-    })
-    return
-  }
+  const currentEmail = await findContactEmailById(resend, contactId)
+  if (!currentEmail) return
 
-  if (currentEmail?.toLowerCase() === email.toLowerCase()) {
+  if (currentEmail.toLowerCase() === email.toLowerCase()) {
     console.info('[clerk-webhook] primary email unchanged; no contact sync', {
       userId,
       contactId,
@@ -512,7 +433,7 @@ async function handleUserUpdated(data: ClerkUserData): Promise<void> {
   const { firstName, lastName } = nameParts(data)
   await captureContact({ email, firstName, lastName })
 
-  const newContactId = await contactIdByEmail(resend, email)
+  const newContactId = await findContactIdByEmail(resend, email)
   if (!newContactId) {
     console.error(
       '[clerk-webhook] new contact unresolvable; old contact left intact',
