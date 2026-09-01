@@ -76,6 +76,22 @@ describe('slugFieldDescription', () => {
   it('never claims a draft is locked to a published URL', () => {
     expect(slugFieldDescription(false, false)).not.toMatch(/published URL/)
   })
+
+  it('does not promise a pre-publish unlocked slug a lock it never gets', () => {
+    // `enforceSlugFreeze` returns early on `lock === false`, so an unlocked
+    // slug is never frozen — not at first publish, not after. The old sentence
+    // said it locked at publish, which is the one thing this state does not
+    // do, and the editor would only find out by renaming and watching the URL
+    // move. Asserted as an absence plus the replacement claim, so restoring
+    // the old copy fails here rather than passing on a substring.
+    const description = slugFieldDescription(false, false)
+    expect(description).not.toMatch(/locks? to this URL/i)
+    expect(description).toMatch(/stays editable/)
+    // Consistent with the post-publish unlocked sentence, which already says
+    // the old URL redirects.
+    expect(description).toMatch(/redirect/)
+    expect(slugFieldDescription(true, false)).toMatch(/redirect/)
+  })
 })
 
 describe('SlugComponent', () => {

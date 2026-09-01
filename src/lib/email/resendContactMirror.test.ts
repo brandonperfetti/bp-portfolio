@@ -228,6 +228,15 @@ describe('resendContactMirror — env is read per call, not at import', () => {
     // their suites into vi.resetModules() + a dynamic re-import. A webhook
     // route imported at test-module load cannot do that, so this module reads
     // env inside the lazy init instead. This test pins that difference.
+    //
+    // Blank the two vars first, the way the "Upstash absent" suite does. The
+    // first assertion is that Upstash is NOT configured yet, and without these
+    // it is really an assertion about the machine running the test: a
+    // developer (or a CI job) whose environment carries real Upstash values
+    // fails here on an unchanged tree.
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', '')
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
+
     await expect(recallResendContact('user_1')).resolves.toEqual({
       status: 'unavailable',
     })

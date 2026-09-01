@@ -26,6 +26,12 @@ type SlugComponentProps = {
  * is what let an editor read "locked" as "frozen" when it meant "tracks the
  * title" (#120).
  *
+ * The two unlocked sentences both say the slug stays editable, because it
+ * does: `enforceSlugFreeze` returns early on `lock === false`, so an unlocked
+ * slug is never frozen — not at first publish, not afterwards. The pre-publish
+ * one used to promise a lock at publish that never happens, which is the
+ * opposite of what the editor would then observe.
+ *
  * @param hasPublishedDoc - Whether a published version of this document exists.
  * @param locked - Current `slugLock` value.
  */
@@ -40,7 +46,7 @@ export const slugFieldDescription = (
   }
   return locked
     ? 'Generated from the title. It locks to this URL when the document is first published.'
-    : 'Set by hand. It locks to this URL when the document is first published.'
+    : 'Set by hand. It stays editable after publish — a later rename moves the URL and redirects the old one here.'
 }
 
 /**
