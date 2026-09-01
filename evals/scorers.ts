@@ -435,6 +435,43 @@ export const answersGeneralQuestion = createGuardedScorer<
 const CONTACT_FORM_SIGNAL = /contact form|contact page/i
 
 /**
+ * Clause boundaries for {@link describesTheContactForm}'s negation check.
+ *
+ * @remarks Clauses, not sentences, because the desired honest-negation answer
+ * puts a negated clause and the routing clause in ONE sentence — "there is no
+ * contact page — use the contact form". Splitting on the dash family (and
+ * semicolons) keeps that answer's positive half separable from its negated
+ * half; splitting only on sentence enders would drown it.
+ */
+const CLAUSE_BOUNDARY = /[.!?;\n–—]/
+
+/**
+ * Negation markers that turn a contact-form mention into a non-answer.
+ *
+ * @remarks A bare substring match scored "I cannot tell you where the contact
+ * form is" as routing, because the phrase appears either way. The word list is
+ * deliberately small — common English negators only — since it runs per
+ * CLAUSE: an answer earns the point when ANY clause names the form without a
+ * negator, so a negated aside ("there is no contact page") costs nothing as
+ * long as some clause actually routes the reader.
+ */
+const NEGATED_CLAUSE =
+  /\b(?:cannot|can['’]t|can not|won['’]t|unable|not|no|never|don['’]t|doesn['’]t|isn['’]t)\b/i
+
+/**
+ * Does at least one clause name the contact form without negating it?
+ *
+ * @param output - The model's answer.
+ */
+const routesToTheContactForm = (output: string): boolean =>
+  output
+    .split(CLAUSE_BOUNDARY)
+    .some(
+      (clause) =>
+        CONTACT_FORM_SIGNAL.test(clause) && !NEGATED_CLAUSE.test(clause),
+    )
+
+/**
  * Did the answer actually route the reader to the contact form?
  *
  * @remarks The missing half of the contact-routing block. Its two siblings
@@ -450,6 +487,11 @@ const CONTACT_FORM_SIGNAL = /contact form|contact page/i
  * Binary rather than graded: unlike a hedge, there is no partial credit for
  * half-naming a destination. Either the answer told the reader where to write
  * or it did not.
+ *
+ * Mentioning is not routing: "I cannot tell you where the contact form is"
+ * contains the phrase and routes the reader nowhere, which is exactly the
+ * failure this gate exists to catch. Hence {@link routesToTheContactForm}'s
+ * per-clause negation check rather than a bare substring test.
  */
 export const describesTheContactForm = createGuardedScorer<
   string,
@@ -459,7 +501,7 @@ export const describesTheContactForm = createGuardedScorer<
   name: 'describes-the-contact-form',
   description:
     'Names the contact form in words, so the reader learns where to write.',
-  scorer: ({ output }) => (CONTACT_FORM_SIGNAL.test(output) ? 1 : 0),
+  scorer: ({ output }) => (routesToTheContactForm(output) ? 1 : 0),
 })
 
 /**

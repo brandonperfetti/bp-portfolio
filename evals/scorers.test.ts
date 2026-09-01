@@ -541,6 +541,37 @@ describe('describes-the-contact-form (#82 wave 4)', () => {
     ).toBe(1)
   })
 
+  it('fails a negative mention that routes the reader nowhere', async () => {
+    // Mentioning is not routing. A bare substring test scored this 1 because
+    // the phrase appears; the reader still has no destination.
+    expect(
+      await score(
+        describesTheContactForm,
+        'I cannot tell you where the contact form is.',
+      ),
+    ).toBe(0)
+  })
+
+  it('fails a denial phrased across one clause', async () => {
+    expect(
+      await score(
+        describesTheContactForm,
+        "There isn't a contact form on this site.",
+      ),
+    ).toBe(0)
+  })
+
+  it('still passes when a negated aside precedes the routing clause', async () => {
+    // The clause-level check must not overcorrect: an answer that opens with a
+    // negation and then routes is the desired honest shape, not a failure.
+    expect(
+      await score(
+        describesTheContactForm,
+        "He doesn't publish an email address. Use the contact form to reach him.",
+      ),
+    ).toBe(1)
+  })
+
   it('scores an empty answer 0 through the #122 guard', async () => {
     expect(await score(describesTheContactForm, '   ')).toBe(0)
   })
