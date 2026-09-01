@@ -22,6 +22,14 @@
 #                           the chat provider is set to. Same secret the
 #                           Evalite job in ci.yml uses.
 #
+# Secrets are declared on the two STEPS that use them, never on the job. A
+# job-level `env:` is in scope for every step, and one of those steps is
+# `pnpm install --frozen-lockfile` — which executes third-party build scripts:
+# `pnpm-workspace.yaml` allows @sentry/cli, esbuild, sharp and unrs-resolver to
+# run theirs. Those scripts would inherit the production connection string and
+# the OpenAI key for no reason at all. Scoping the env down costs two duplicated
+# blocks and removes an entire class of supply-chain exposure from the install.
+#
 # Not passed, and each omission is a decision:
 # - `--drop-orphans` is the script's one destructive mode and stays OFF. A
 #   scheduled job that can empty the retrieval index on a bad read is a worse
@@ -86,11 +94,6 @@ jobs:
     # corpus, and deliberately finite: a hung provider call must not hold the
     # concurrency group for six hours and block next week's run.
     timeout-minutes: 45
-    env:
-      DATABASE_URI: ${{ secrets.SUPABASE_DB_URL_PROD }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      # See the header: signs auth tokens this script never mints.
-      PAYLOAD_SECRET: 'ci-not-a-real-secret'
     steps:
       - uses: actions/checkout@v4
       - name: Enable Corepack (pnpm)
@@ -108,6 +111,9 @@ jobs:
       # in, and an unset OPENAI_API_KEY as a per-document embed failure that
       # the script dutifully retries across the whole corpus.
       - name: Check required secrets are present
+        env:
+          DATABASE_URI: ${{ secrets.SUPABASE_DB_URL_PROD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
           test -n "$DATABASE_URI" || { echo "::error::SUPABASE_DB_URL_PROD secret is not set"; exit 1; }
@@ -122,6 +128,11 @@ jobs:
       # than tee's.
       - name: Run corvus:backfill (production)
         id: backfill
+        env:
+          DATABASE_URI: ${{ secrets.SUPABASE_DB_URL_PROD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # See the header: signs auth tokens this script never mints.
+          PAYLOAD_SECRET: 'ci-not-a-real-secret'
         run: |
           set -euo pipefail
           log="${RUNNER_TEMP}/corvus-backfill.log"

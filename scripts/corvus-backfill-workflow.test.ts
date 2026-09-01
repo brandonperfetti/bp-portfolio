@@ -28,6 +28,51 @@ const workflowPath = path.join(
 )
 const workflow = readFileSync(workflowPath, 'utf8')
 
+/** The three env entries whose blast radius this file is guarding. */
+const PRODUCTION_ENV = {
+  database: 'DATABASE_URI: ${{ secrets.SUPABASE_DB_URL_PROD }}',
+  openai: 'OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}',
+  payloadSecret: 'PAYLOAD_SECRET:',
+} as const
+
+/**
+ * The job split into the scope every step shares and the steps themselves.
+ *
+ * @remarks Split on the step list-item indent (six spaces, one `- `), so the
+ * head of the split is everything from `jobs:` down to the first step — which
+ * is precisely the region a job-level `env:` would live in. Text splitting
+ * rather than a YAML parse for the reason the file docblock gives.
+ *
+ * @returns The pre-steps job scope and one entry per step, each labelled by
+ * its first line so a failure names the step it is about.
+ */
+function splitJob(): {
+  jobScope: string
+  steps: { body: string; label: string }[]
+} {
+  const job = workflow.slice(workflow.indexOf('\njobs:'))
+  const [jobScope, ...bodies] = job.split(/^ {6}- /m)
+  return {
+    jobScope,
+    steps: bodies.map((body) => ({
+      body,
+      label: body.split('\n')[0].trim(),
+    })),
+  }
+}
+
+/**
+ * The steps that carry a given env entry.
+ *
+ * @param entry - A literal from {@link PRODUCTION_ENV}.
+ * @returns The label of every step whose own `env:` block declares it.
+ */
+function stepsCarrying(entry: string): string[] {
+  return splitJob()
+    .steps.filter((step) => step.body.includes(entry))
+    .map((step) => step.label)
+}
+
 describe('corvus-backfill workflow', () => {
   it('runs on a weekly cron and on demand', () => {
     // Weekly, not daily: a repair pass over an already-current index is nearly
@@ -88,6 +133,35 @@ describe('corvus-backfill workflow', () => {
       'utf8',
     )
     expect(ci).toContain('OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}')
+  })
+
+  it('keeps the production secrets out of the job-wide env', () => {
+    // The whole point of the per-step blocks. A job-level `env:` is in scope
+    // for EVERY step, and one of them is `pnpm install --frozen-lockfile`,
+    // which executes the build scripts `pnpm-workspace.yaml` allows
+    // (@sentry/cli, esbuild, sharp, unrs-resolver). Under a job-level env
+    // those scripts run holding the production connection string and the
+    // OpenAI key. Nothing in the install needs either.
+    const { jobScope } = splitJob()
+    expect(jobScope).not.toContain(PRODUCTION_ENV.database)
+    expect(jobScope).not.toContain(PRODUCTION_ENV.openai)
+    expect(jobScope).not.toContain(PRODUCTION_ENV.payloadSecret)
+    // Guard the mechanism as well as the three names: any job-level `env:`
+    // here would put a future entry back in scope for the install.
+    expect(jobScope).not.toMatch(/^ {4}env:$/m)
+  })
+
+  it('declares each secret on exactly the steps that use it', () => {
+    // Exactly, in both directions. Too few and the step breaks; too many and
+    // the scoping above is decorative.
+    const checkStep = 'name: Check required secrets are present'
+    const runStep = 'name: Run corvus:backfill (production)'
+
+    expect(stepsCarrying(PRODUCTION_ENV.database)).toEqual([checkStep, runStep])
+    expect(stepsCarrying(PRODUCTION_ENV.openai)).toEqual([checkStep, runStep])
+    // Only the run step mints a Payload context; the check step is two `test
+    // -n` calls and needs nothing else.
+    expect(stepsCarrying(PRODUCTION_ENV.payloadSecret)).toEqual([runStep])
   })
 
   it('fails on a missing secret by name, before touching production', () => {
