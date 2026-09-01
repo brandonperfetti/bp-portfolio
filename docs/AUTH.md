@@ -159,6 +159,19 @@ second run useful after the mirror shipped. Needs `CLERK_SECRET_KEY` and
 for the mirror half (without them the run still does every `external_id` write
 and reports the skipped mirror writes).
 
+**The read is scoped to the app's own segment.** When
+`RESEND_CONTACT_SEGMENT_ID` is set — the same env `captureContact` creates
+contacts under — the backfill passes it to `contacts.list`, so the candidate
+pool is only contacts this app created. An account-wide read could otherwise
+match a Clerk user to a contact from an import or another product sharing the
+Resend account, and that match does not stay a reporting mistake: it is written
+to `external_id` and the mirror, and `user.deleted` resolves through the mirror
+and **deletes** what it finds. With the env unset the app creates unsegmented
+contacts, so there is no segment to filter by and the read stays account-wide —
+the same optionality `captureContact` has. The `user.updated` and `user.deleted`
+lookups need no equivalent: they address one contact directly by id or address
+via `contacts.get`, never a list.
+
 ### Operational order (Brandon, Clerk dashboard)
 
 The production endpoint must be subscribed to `user.deleted` / `user.updated`

@@ -52,7 +52,10 @@ import {
  *   payload run scripts/backfill-clerk-resend-mapping.ts --apply
  *
  * Requires `CLERK_SECRET_KEY` and `RESEND_API_KEY`; `UPSTASH_REDIS_REST_URL` /
- * `UPSTASH_REDIS_REST_TOKEN` are needed for the mirror half.
+ * `UPSTASH_REDIS_REST_TOKEN` are needed for the mirror half. Set
+ * `RESEND_CONTACT_SEGMENT_ID` to whatever `captureContact` writes under, so
+ * the read matches only contacts this app owns — see
+ * {@link listAllResendContacts}.
  */
 
 const apply = process.argv.includes('--apply')
@@ -101,16 +104,31 @@ async function listAllClerkUsers(
  * rate-limited API, and would also lose the duplicate-address detection that
  * makes the match safe — a single-address lookup cannot see that a second
  * contact shares it.
+ *
+ * **Scoped to `RESEND_CONTACT_SEGMENT_ID` when it is set.** `captureContact`
+ * creates every contact this app owns with `segments: [{ id }]` under that
+ * env, so an account-wide list can match a Clerk user to a contact the app
+ * never created — an imported list, another product sharing the Resend
+ * account. That match is not merely wrong: it is written into `external_id`
+ * and the Redis mirror, and `user.deleted` later resolves through the mirror
+ * and DELETES whatever it finds. Scoping the read is what keeps the blast
+ * radius of a bad match inside this app's own segment.
+ *
+ * Optional for the same reason the segment itself is: with the env unset,
+ * `captureContact` creates unsegmented contacts and there is no segment to
+ * filter by, so the account-wide read is the correct — and only — behavior.
  */
 async function listAllResendContacts(
   resend: Resend,
 ): Promise<Array<{ id: string; email: string }>> {
   const contacts: Array<{ id: string; email: string }> = []
+  const segmentId = process.env.RESEND_CONTACT_SEGMENT_ID
   let after: string | undefined
 
   for (;;) {
     const { data, error } = await resend.contacts.list({
       limit: RESEND_PAGE_SIZE,
+      ...(segmentId ? { segmentId } : {}),
       ...(after ? { after } : {}),
     })
     if (error) {

@@ -1,4 +1,8 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -23,7 +27,16 @@ import {
  * somebody else's contact.
  *
  * Pure functions over fixtures: no Clerk, no Resend, no network.
+ *
+ * The last describe block is the exception, and says why in its own docblock:
+ * the script's I/O half cannot be imported, so one property of it is guarded
+ * as text instead.
  */
+
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../..',
+)
 
 /** A Clerk Backend API `User` resource (camelCase, unlike the webhook JSON). */
 const user = (
@@ -429,5 +442,64 @@ describe('formatPlan', () => {
     const lines = formatPlan(planBackfill([user('user_4', [])], []))
 
     expect(lines[0]).toContain('no primary email address')
+  })
+})
+
+describe('audience read scope', () => {
+  /**
+   * A source guard, because this one property cannot be reached any other way.
+   *
+   * @remarks `scripts/backfill-clerk-resend-mapping.ts` ends in a top-level
+   * `await run()` and a `process.exit`, so importing it to exercise
+   * `listAllResendContacts` would run the whole backfill. The pure rules it
+   * calls into live in the `.mjs` module every other test here imports; the
+   * `contacts.list` call does not, and it is the one that decides WHICH
+   * contacts the rules ever see. Matching text is the same trade
+   * `scripts/corvus-backfill-workflow.test.ts` makes for the workflow file.
+   *
+   * What is actually at stake: `captureContact` creates this app's contacts
+   * inside `RESEND_CONTACT_SEGMENT_ID`. An account-wide list can match a Clerk
+   * user to a contact the app never created, and that match is written into
+   * `external_id` and the Redis mirror — which `user.deleted` later resolves
+   * through and DELETES.
+   */
+  const script = readFileSync(
+    path.join(repoRoot, 'scripts/backfill-clerk-resend-mapping.ts'),
+    'utf8',
+  )
+  // Anchored on the closing brace at the CALL's own indentation, so the
+  // conditional spreads inside the object literal do not end the match early.
+  const listCall = /resend\.contacts\.list\(\{\n([\s\S]*?)\n {4}\}\)/.exec(
+    script,
+  )?.[1]
+
+  it('filters the list by the segment captureContact writes under', () => {
+    expect(listCall, 'the script must still call contacts.list').toBeDefined()
+    expect(script).toContain('process.env.RESEND_CONTACT_SEGMENT_ID')
+    expect(listCall).toContain('...(segmentId ? { segmentId } : {})')
+  })
+
+  it('stays account-wide when no segment is configured', () => {
+    // Optional on purpose, mirroring captureContact: with the env unset the
+    // app creates UNSEGMENTED contacts, so there is no segment to filter by
+    // and the account-wide read is the only correct behavior. A hard
+    // requirement here would break the unsegmented deployment outright.
+    expect(listCall).not.toMatch(/segmentId:\s*process\.env/)
+    expect(listCall).toContain('segmentId ?')
+  })
+
+  it('keeps the cursor pagination the segment filter rides along with', () => {
+    expect(listCall).toContain('...(after ? { after } : {})')
+    expect(script).toContain('data?.has_more')
+  })
+
+  it('names the same env captureContact does', () => {
+    // The drift this guards: renaming the env in one file and not the other
+    // silently returns the backfill to an account-wide read.
+    const capture = readFileSync(
+      path.join(repoRoot, 'src/lib/email/captureContact.ts'),
+      'utf8',
+    )
+    expect(capture).toContain('process.env.RESEND_CONTACT_SEGMENT_ID')
   })
 })
