@@ -25,6 +25,10 @@
  */
 import { type CorvusChunk, chunkDocument } from '../../src/lib/ai/chunking'
 import {
+  type GithubRepoSource,
+  chunkGithubRepo,
+} from '../../src/lib/ai/githubRepos'
+import {
   CORVUS_SIMILARITY_FLOOR,
   type CorvusSnippet,
   DEFAULT_RETRIEVAL_TOP_K,
@@ -214,6 +218,26 @@ export function fixtureChunks(
 }
 
 /**
+ * Every chunk the REAL repo chunker produces for a set of repo fixtures (#147).
+ *
+ * @remarks Separate from {@link fixtureChunks} rather than folded into it, and
+ * that separation is what keeps #147 from moving anybody else's numbers. The
+ * site corpus is the input to `fixtureSourceUrls()`, which is the allow-list
+ * three existing scorers are built from; widening it — even with values those
+ * scorers structurally ignore — would make every pre-existing eval block's
+ * inputs different from the ones its recorded scores were measured against.
+ * The repo corpus is therefore additive and opt-in: a caller asks for it.
+ *
+ * @param repos - Repository fixtures.
+ * @returns Their chunks, through `chunkGithubRepo`.
+ */
+export function repoFixtureChunks(
+  repos: GithubRepoSource[] = [],
+): CorvusChunk[] {
+  return repos.flatMap((repo) => chunkGithubRepo(repo))
+}
+
+/**
  * Every site-relative URL the fixture corpus can legitimately be cited by.
  *
  * @remarks This is the allow-list the `cites-a-real-source-url` scorer checks
@@ -255,12 +279,27 @@ export interface FixtureRetrieverOptions {
    * invents an answer out of adjacent context.
    */
   floor?: number
+  /**
+   * GitHub repository fixtures to index ALONGSIDE the site corpus (#147).
+   *
+   * @remarks Defaults to none, so every call site that existed before #147
+   * builds byte-identically the corpus it always did — which is what keeps the
+   * recorded scores of the pre-existing blocks comparable across this change.
+   *
+   * The blocks that DO pass repos need both corpora in one retriever, and not
+   * for convenience: the site-stack-versus-tech-list pair is a disambiguation,
+   * and a disambiguation with only one candidate in the context window is not
+   * a test of anything. Passing `/tech` and the `bp-portfolio` repository
+   * document together is what gives the model a real chance to cite the wrong
+   * one.
+   */
+  repos?: GithubRepoSource[]
 }
 
 /**
  * Build a retriever over a fixture corpus.
  *
- * @param options - Corpus, top-k and floor overrides.
+ * @param options - Corpus, repo corpus, top-k and floor overrides.
  * @returns A synchronous retriever returning `[]` when nothing clears the floor.
  */
 export function createFixtureRetriever(
@@ -270,8 +309,9 @@ export function createFixtureRetriever(
     docs = SITE_FIXTURE_DOCS,
     topK = DEFAULT_RETRIEVAL_TOP_K,
     floor = CORVUS_SIMILARITY_FLOOR,
+    repos = [],
   } = options
-  const chunks = fixtureChunks(docs)
+  const chunks = [...fixtureChunks(docs), ...repoFixtureChunks(repos)]
 
   return (query: string): CorvusSnippet[] => {
     // Shaped as raw rows, then reduced by the production floor+top-k logic —

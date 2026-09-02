@@ -7,11 +7,16 @@ import {
   CONTACT_ROUTING_CASES,
   GENERAL_CASES,
   OFF_SITE_CASES,
+  REPO_GROUNDED_CASES,
+  REPO_UNKNOWN_CASES,
   SCOPE_GROUNDED_CASES,
   SITE_FACT_CASES,
+  SITE_STACK_CASES,
+  TECH_LIST_CASES,
   TECH_SOURCING_CASES,
   UNGROUNDED_CASES,
 } from './fixtures/datasets'
+import { GITHUB_REPO_FIXTURES, fixtureRepoUrls } from './fixtures/github-repos'
 import { SITE_FIXTURE_DOCS } from './fixtures/site-content'
 import { SITE_CHROME_URLS } from './fixtures/site-routes'
 import {
@@ -24,9 +29,14 @@ import {
 import {
   answersGeneralQuestion,
   citedPaths,
+  citedRepoUrls,
   containsExpectedFact,
   createCitesKnownSourceUrl,
+  createCitesRepoNotTechList,
+  createCitesRepoSourceUrl,
   createCitesSiteSourceNotVendor,
+  createCitesTechListNotRepo,
+  createNeverFabricatesRepoUrl,
   createNeverFabricatesSiteUrl,
   declinesAndRedirects,
   describesTheContactForm,
@@ -729,4 +739,247 @@ describe('never-fabricates-a-site-url · the /contact guess (#82 wave 4)', () =>
       ),
     ).toBe(1)
   })
+})
+
+/**
+ * Zero-cost coverage for the repo-grounding additions (#147).
+ *
+ * @remarks Same two jobs as the blocks above, applied to the four new scorers
+ * and the four new datasets. The preconditions matter more here than usual: the
+ * site-stack pair is a DISAMBIGUATION, so its whole premise is that both
+ * candidates are in the context window. If the repo document ever stopped
+ * retrieving for "what does this site run on", the block would quietly become a
+ * test of whether Corvus can read `/tech` — which it can — and would go green
+ * while measuring the opposite of what it was written for.
+ */
+
+const REPO_URLS = fixtureRepoUrls()
+const retrieveWithRepos = createFixtureRetriever({
+  repos: GITHUB_REPO_FIXTURES,
+})
+
+describe('repo fixture corpus (#147)', () => {
+  it('derives the repository allow-list from the fixtures', () => {
+    expect(REPO_URLS).toEqual([
+      'https://github.com/brandonperfetti/bp-portfolio',
+      'https://github.com/brandonperfetti/macos-portfolio',
+      'https://github.com/brandonperfetti/top-timelines',
+    ])
+  })
+
+  it('contains only public, non-fork repositories', () => {
+    // These fixtures ship in a PUBLIC repo and stand in for what the sync
+    // indexes. A private or forked one must never be added here.
+    for (const repo of GITHUB_REPO_FIXTURES) {
+      expect(repo.isPrivate).toBe(false)
+      expect(repo.isFork).toBe(false)
+    }
+  })
+
+  it('leaves the SITE allow-list exactly as it was', () => {
+    // The blast-radius guarantee: `fixtureSourceUrls()` still derives from the
+    // site corpus alone, so the three pre-existing citation scorers are built
+    // from the same inputs their recorded scores were measured against.
+    expect(fixtureSourceUrls()).toEqual(SOURCE_URLS)
+    expect(fixtureSourceUrls().some((url) => url.includes('github'))).toBe(
+      false,
+    )
+  })
+})
+
+describe('citedRepoUrls', () => {
+  it('reads a repository URL out of prose and out of a markdown link', () => {
+    expect(
+      citedRepoUrls(
+        'See https://github.com/brandonperfetti/bp-portfolio here.',
+      ),
+    ).toEqual(['https://github.com/brandonperfetti/bp-portfolio'])
+    expect(
+      citedRepoUrls(
+        '[the repo](https://github.com/brandonperfetti/macos-portfolio)',
+      ),
+    ).toEqual(['https://github.com/brandonperfetti/macos-portfolio'])
+  })
+
+  it('folds a trailing slash, trailing punctuation and www into one citation', () => {
+    expect(
+      citedRepoUrls(
+        'a https://github.com/o/r/ b https://github.com/o/r. c https://www.github.com/o/r',
+      ),
+    ).toEqual(['https://github.com/o/r'])
+  })
+
+  it('does not read a repository out of a deeper GitHub path', () => {
+    // A link to a file inside a repo is not a citation OF the repo, and
+    // treating it as one would let a fabricated deep link score as a real
+    // citation.
+    expect(
+      citedRepoUrls(
+        'https://github.com/brandonperfetti/bp-portfolio/blob/main/x.ts',
+      ),
+    ).toEqual(['https://github.com/brandonperfetti/bp-portfolio'])
+    expect(citedRepoUrls('https://github.com/brandonperfetti')).toEqual([])
+  })
+
+  it('ignores a non-GitHub URL entirely', () => {
+    expect(citedRepoUrls('https://gitlab.com/o/r and /tech')).toEqual([])
+  })
+})
+
+describe('cites-the-repo-source-url', () => {
+  const scorer = createCitesRepoSourceUrl(REPO_URLS)
+
+  it('passes an answer citing a corpus repository', async () => {
+    expect(
+      await score(
+        scorer,
+        'It uses React and GSAP — https://github.com/brandonperfetti/macos-portfolio',
+      ),
+    ).toBe(1)
+  })
+
+  it('fails an answer that cites nothing', async () => {
+    expect(await score(scorer, 'It uses React, TypeScript and GSAP.')).toBe(0)
+  })
+
+  it('fails an invented repository', async () => {
+    expect(
+      await score(scorer, 'See https://github.com/brandonperfetti/not-a-repo'),
+    ).toBe(0)
+  })
+
+  it('fails when an invented repo rides along with a real one', async () => {
+    expect(
+      await score(
+        scorer,
+        'https://github.com/brandonperfetti/macos-portfolio and https://github.com/brandonperfetti/made-up',
+      ),
+    ).toBe(0)
+  })
+})
+
+describe('never-fabricates-a-repo-url', () => {
+  const scorer = createNeverFabricatesRepoUrl(REPO_URLS)
+
+  it('is vacuously satisfied when no repository is named', async () => {
+    expect(
+      await score(scorer, "I couldn't find a repository by that name."),
+    ).toBe(1)
+  })
+
+  it('fails an invented repository even inside a refusal', async () => {
+    expect(
+      await score(
+        scorer,
+        "I'm not sure, but try https://github.com/brandonperfetti/kubernetes-operator",
+      ),
+    ).toBe(0)
+  })
+})
+
+describe('cites-the-repo-not-the-tech-list', () => {
+  const scorer = createCitesRepoNotTechList(REPO_URLS)
+
+  it('passes the repository citation', async () => {
+    expect(
+      await score(
+        scorer,
+        'Next.js 16 and Payload — see https://github.com/brandonperfetti/bp-portfolio',
+      ),
+    ).toBe(1)
+  })
+
+  it('fails the measured defect: citing /tech for what this site runs on', async () => {
+    // The exact wave-5 observation. `cites-a-real-source-url` scores this 1,
+    // which is why this scorer has to exist.
+    expect(
+      await score(
+        scorer,
+        'The stack includes Remix and TanStack — see [/tech](/tech).',
+      ),
+    ).toBe(0)
+  })
+
+  it('fails an answer that hedges by citing both', async () => {
+    expect(
+      await score(
+        scorer,
+        'See [/tech](/tech) and https://github.com/brandonperfetti/bp-portfolio',
+      ),
+    ).toBe(0)
+  })
+
+  it('gives half credit when nothing at all is cited', async () => {
+    expect(await score(scorer, 'It runs on Next.js and Payload.')).toBe(0.5)
+  })
+})
+
+describe('cites-the-tech-list-not-the-repo', () => {
+  const scorer = createCitesTechListNotRepo(REPO_URLS)
+
+  it('passes the /tech citation', async () => {
+    expect(
+      await score(scorer, 'PostgreSQL and Vitest — see [/tech](/tech).'),
+    ).toBe(1)
+  })
+
+  it('fails the over-correction toward the repository', async () => {
+    // The reason this scorer exists: a prompt change that always prefers the
+    // repo would fix its sibling's case and break this one, silently.
+    expect(
+      await score(
+        scorer,
+        'See https://github.com/brandonperfetti/bp-portfolio for his stack.',
+      ),
+    ).toBe(0)
+  })
+
+  it('gives half credit when nothing at all is cited', async () => {
+    expect(await score(scorer, 'He works with PostgreSQL and Vitest.')).toBe(
+      0.5,
+    )
+  })
+})
+
+describe('repo eval retrieval preconditions (#147)', () => {
+  const blob = (query: string): string =>
+    retrieveWithRepos(query)
+      .map((s) => `${s.title ?? ''}\n${s.content}\n${s.sourceUrl ?? ''}`)
+      .join('\n')
+      .toLowerCase()
+
+  it.each([...REPO_GROUNDED_CASES, ...SITE_STACK_CASES, ...TECH_LIST_CASES])(
+    'retrieves every required fact for: $input',
+    ({ input, expected }) => {
+      const retrieved = blob(input)
+      expect(retrieved.length).toBeGreaterThan(0)
+      for (const fact of requiredFacts(expected)) {
+        expect(retrieved, `"${fact}" must be retrievable`).toContain(
+          fact.toLowerCase(),
+        )
+      }
+    },
+  )
+
+  it.each(SITE_STACK_CASES)(
+    'puts the bp-portfolio repository in reach for: $input',
+    ({ input }) => {
+      // The disambiguation's premise. If this stops holding, the block is no
+      // longer measuring a choice.
+      expect(blob(input)).toContain('github.com/brandonperfetti/bp-portfolio')
+    },
+  )
+
+  it.each(TECH_LIST_CASES)('puts /tech in reach for: $input', ({ input }) => {
+    expect(blob(input)).toContain('/tech')
+  })
+
+  it.each(REPO_UNKNOWN_CASES)(
+    'retrieves nothing for the unknown-repo case: $input',
+    ({ input }) => {
+      // If one of these starts retrieving, the block stops testing the
+      // decline path and quietly becomes a third grounded block.
+      expect(retrieveWithRepos(input)).toEqual([])
+    },
+  )
 })

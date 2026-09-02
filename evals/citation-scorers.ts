@@ -1,8 +1,13 @@
+import { fixtureRepoUrls } from './fixtures/github-repos'
 import { fixtureSourceUrls } from './fixtures/retriever'
 import { SITE_CHROME_URLS } from './fixtures/site-routes'
 import {
   createCitesKnownSourceUrl,
+  createCitesRepoNotTechList,
+  createCitesRepoSourceUrl,
   createCitesSiteSourceNotVendor,
+  createCitesTechListNotRepo,
+  createNeverFabricatesRepoUrl,
   createNeverFabricatesSiteUrl,
 } from './scorers'
 
@@ -35,11 +40,21 @@ import {
  * nothing that existed before — see `evals/scorers.ts` for why it needs to be
  * its own signal rather than a stricter `cites-a-real-source-url`.
  *
- * @returns The three citation scorers, built from the fixture corpus plus the
- * site's chrome routes.
+ * Wave 5 adds four MORE to the same factory (#147), and again adds only that.
+ * The three originals keep their names, their construction and their inputs —
+ * in particular `fixtureSourceUrls()` is still called with no argument, so it
+ * still derives from the SITE corpus alone and every block that already ran
+ * keeps measuring exactly what it measured. The four new ones are built from
+ * the repository corpus, are used by four new blocks, and are used by nothing
+ * that existed before. See `evals/scorers.ts` for why a repository citation
+ * needs its own reader rather than a widened `citedPaths`.
+ *
+ * @returns The seven citation scorers, built from the fixture corpus, the
+ * repository corpus, and the site's chrome routes.
  */
 export function createCitationScorers() {
   const sourceUrls = fixtureSourceUrls()
+  const repoUrls = fixtureRepoUrls()
   const citationOptions = { alsoReal: SITE_CHROME_URLS }
   return {
     citesKnownSourceUrl: createCitesKnownSourceUrl(sourceUrls, citationOptions),
@@ -48,5 +63,9 @@ export function createCitationScorers() {
       citationOptions,
     ),
     citesSiteSourceNotVendor: createCitesSiteSourceNotVendor(sourceUrls),
+    citesRepoSourceUrl: createCitesRepoSourceUrl(repoUrls),
+    neverFabricatesRepoUrl: createNeverFabricatesRepoUrl(repoUrls),
+    citesRepoNotTechList: createCitesRepoNotTechList(repoUrls),
+    citesTechListNotRepo: createCitesTechListNotRepo(repoUrls),
   }
 }
