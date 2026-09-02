@@ -189,6 +189,9 @@ importers:
       '@axe-core/playwright':
         specifier: ^4.12.1
         version: 4.12.1(playwright-core@1.61.1)
+      '@clerk/backend':
+        specifier: ^3.12.0
+        version: 3.12.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@playwright/test':
         specifier: ^1.58.2
         version: 1.61.1
