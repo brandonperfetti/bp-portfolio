@@ -28,6 +28,36 @@ export const CORVUS_EMBEDDED_COLLECTIONS = [
 export type CorvusCollectionSlug = (typeof CORVUS_EMBEDDED_COLLECTIONS)[number]
 
 /**
+ * The non-CMS collection holding one document per public GitHub repo (#147).
+ *
+ * @remarks Deliberately NOT a member of {@link CORVUS_EMBEDDED_COLLECTIONS}.
+ * That constant is documented as "the single source of truth for which
+ * collections carry a refresh hook", and this collection has no Payload
+ * document and therefore no hook to carry — it is written by a scheduled
+ * script (`scripts/sync-github-repos.ts`), which is the whole point of #147:
+ * repo facts enter the index at sync time, never at answer time. Adding it to
+ * that list would wire a hook onto a collection Payload knows nothing about.
+ *
+ * `corvus_embeddings.collection` is a plain `text` column (#82 decision D3c
+ * anticipated exactly this), so nothing about a new collection needs a
+ * migration.
+ */
+export const CORVUS_GITHUB_REPOS_COLLECTION = 'github-repos'
+
+/**
+ * Every value that may appear in `corvus_embeddings.collection`.
+ *
+ * @remarks Wider than {@link CorvusCollectionSlug} on purpose. The CMS-facing
+ * functions in this module — `chunkDocument`, `isEmbeddable`, and the hook
+ * wiring that calls them — keep the narrow type, because handing them a
+ * `github-repos` "document" is meaningless. What has to widen is the shape of
+ * a ROW: `CorvusChunk` describes what gets written, and `github-repos` rows are
+ * written by `src/lib/ai/githubReposSync.ts` through the same store primitives.
+ */
+export type CorvusChunkCollection =
+  CorvusCollectionSlug | typeof CORVUS_GITHUB_REPOS_COLLECTION
+
+/**
  * One row destined for `corvus_embeddings`, minus the vector itself.
  *
  * @remarks Field names mirror the migration's columns
@@ -38,7 +68,7 @@ export type CorvusCollectionSlug = (typeof CORVUS_EMBEDDED_COLLECTIONS)[number]
  * mandatory, not an optimization.
  */
 export interface CorvusChunk {
-  collection: CorvusCollectionSlug
+  collection: CorvusChunkCollection
   docId: number
   chunkIndex: number
   title: string | null
@@ -104,12 +134,34 @@ export function hashChunkContent(content: string): string {
  * renders these as markdown links in its grounded answers — the chat surface
  * already renders markdown, which is why citations need no client change.
  *
+ * ## The one absolute URL (#147)
+ *
+ * `github-repos` is the exception, and it is an exception by nature rather
+ * than by convenience: a repo's canonical address is on github.com, and this
+ * site has no page that documents an individual repository. So the citation
+ * this collection produces is `https://github.com/<owner>/<repo>` — the only
+ * `sourceUrl` in the index that is not site-relative.
+ *
+ * Three downstream consequences, all deliberate and all already handled:
+ *
+ * - `buildGroundedSystem` renders it under the same `Source:` label, so it is
+ *   a citation Corvus is permitted to write. Its extra `github-repos`
+ *   paragraph is what stops the model reading the existing "the site's own
+ *   page is the citation" sentence as a ban on citing the repo.
+ * - `isInternalCorvusLink` (#144) answers `false` for it, so a visitor
+ *   clicking it gets streamdown's external-link confirmation. That is correct:
+ *   the link really does leave the site.
+ * - The eval scorers' `citedPaths` ignores non-site absolute URLs entirely, so
+ *   a repo citation is invisible to `cites-a-real-source-url` and needs its
+ *   own scorer rather than a widened one. See `evals/scorers.ts`.
+ *
  * @param collection - Collection slug.
  * @param slug - The document's slug, for collections that have per-doc routes.
- * @returns A site-relative URL, or `null` when none applies.
+ * For `github-repos` this is the repo's `owner/name` full name.
+ * @returns A URL for the chunk to cite, or `null` when none applies.
  */
 export function sourceUrlFor(
-  collection: CorvusCollectionSlug,
+  collection: CorvusChunkCollection,
   slug?: string | null,
 ): string | null {
   switch (collection) {
@@ -123,6 +175,15 @@ export function sourceUrlFor(
       return '/tech'
     case 'work-history':
       return '/'
+    case CORVUS_GITHUB_REPOS_COLLECTION: {
+      const fullName = typeof slug === 'string' ? slug.trim() : ''
+      // `owner/name`, both segments present. A half-formed value would
+      // otherwise produce `https://github.com/brandonperfetti` — a real page
+      // that is not this repo, which is a worse citation than none at all.
+      return /^[\w.-]+\/[\w.-]+$/.test(fullName)
+        ? `https://github.com/${fullName}`
+        : null
+    }
   }
 }
 
