@@ -214,9 +214,9 @@ path always sends an explicit `dimensions` provider option, which lets
 `-3-large` be swapped in later at 1536 with no migration at all.
 
 Embedded collections: `posts`, `projects`, `uses`, `tech-stack`,
-`work-history`. Pages are **not** embedded (decision D8(b)) — mostly layout
-chrome, and retrieval noise for little factual value. Adding them later needs
-no schema change.
+`work-history`, plus the non-CMS `github-repos` (#147, below). Pages are **not**
+embedded (decision D8(b)) — mostly layout chrome, and retrieval noise for little
+factual value. Adding them later needs no schema change.
 
 ### What an anonymous visitor can retrieve
 
@@ -273,6 +273,135 @@ rows a failed hook left stale, and re-embeds everything after an
 `AI_EMBEDDING_MODEL` change — `readStoredHashes` treats a row written by a
 different `model` as absent. The hash skip makes a re-run over an already
 current index nearly free, so running it is never the wrong call.
+
+### Public GitHub repos as a collection (#147)
+
+`collection: 'github-repos'` is the first non-CMS collection in the index: one
+document per **public** `brandonperfetti` repository, holding its name,
+description, topics, language breakdown, homepage and root README. It exists
+because repo knowledge was the corpus's thinnest area and the repos are already
+the source of truth — hand-feeding repo facts into the CMS would have recreated
+the freshness liability wave 3 spent a wave burning down.
+
+| Aspect         | Value                                                               |
+| -------------- | ------------------------------------------------------------------- |
+| `collection`   | `github-repos`                                                      |
+| `doc_id`       | GitHub's numeric repository id — stable across a rename             |
+| `source_url`   | `https://github.com/<owner>/<repo>` — the index's ONLY absolute URL |
+| `visibility`   | always `public`; a private repo is refused, never stored as gated   |
+| `published_at` | the repo's `pushed_at`, falling back to `created_at`, else `NULL`   |
+| `title`        | `owner/name`                                                        |
+
+`published_at` is `pushed_at` for two reasons: it is always in the past, so it
+can never accidentally embargo a repo through retrieval's
+`published_at <= now()` predicate the way a future-dated post is embargoed; and
+"last pushed" is what a repository's recency actually means. `NULL` is the
+honest fallback when both timestamps are unusable — it means "not a scheduled
+thing" and stays retrievable — rather than fabricating `now()`.
+
+**No migration.** `corvus_embeddings.collection` is a plain `text` column
+(decision D3c anticipated non-CMS collections), so this needed none. Note the
+one real constraint: `doc_id` is `integer`, and GitHub repository ids sit around
+1.0e9 against an `int4` ceiling of 2,147,483,647. `assertIndexableRepo` refuses
+an out-of-range id with a named error rather than letting Postgres reject it
+mid-run; widening that column when GitHub crosses the ceiling is a migration.
+
+#### Cadence and trigger
+
+`.github/workflows/corvus-github-sync.yml` — `workflow_dispatch` plus a weekly
+cron at **12:23 UTC on Sunday**, deliberately clear of `corvus-backfill.yml`'s
+11:07 slot because both hold a long-lived session-mode connection to the same
+production database. It runs `payload run scripts/sync-github-repos.ts`.
+
+**Never a live tool call from the chat route.** Reading a README at answer time
+would add per-turn latency, rate-limit exposure and a live prompt-injection
+surface — README text entering the prompt unreviewed, from a source the site
+does not control. Indexing at sync time keeps every passage inspectable in
+`corvus_embeddings` before a visitor can be answered from it. Staleness is
+bounded by the cadence, which is the trade #147 chose explicitly.
+
+Secrets the workflow needs (names only — this repo is public):
+`SUPABASE_DB_URL_PROD` and `OPENAI_API_KEY`, both already used by
+`corvus-backfill.yml`, plus the OPTIONAL `CORVUS_GITHUB_SYNC_TOKEN`. The step
+reads `secrets.CORVUS_GITHUB_SYNC_TOKEN || secrets.GITHUB_TOKEN`, so the
+workflow's own automatic token runs it by default; set the PAT (fine-grained,
+Public Repositories read) only if a run reports 403/404 on repositories that are
+public. Whether the automatic token suffices is **unmeasured** — the lane that
+wrote this had no egress to api.github.com — and the first dispatch settles it.
+
+#### Never-leak
+
+A repository made private or deleted must stop being retrievable, and three
+mechanisms carry that:
+
+1. **The endpoint.** Listing is `/users/{owner}/repos`, which has no spelling
+   that returns a private repository, rather than `/user/repos?visibility=public`
+   — a superset filtered by a parameter a typo can turn off.
+2. **The guard.** `assertIndexableRepo` refuses a `private: true` repo at
+   NORMALIZATION time, so no path that can produce a chunk bypasses it.
+3. **The sweep.** `sync-github-repos.ts` prunes by DEFAULT — the inverse of the
+   backfill's opt-in `--drop-orphans`, because a stale CMS row is merely stale
+   while a stale repo row is a private repository still being served to
+   anonymous visitors. `canSweepGithubRepos` refuses an incomplete listing, an
+   empty listing, and a run in which nothing was accounted for, so a bad read
+   cannot empty the index. `--no-prune` exists for an operator at a terminal and
+   the workflow test pins that the schedule never passes it.
+
+`evals/github-repos-pgvector.test.ts` proves the bar as an outcome rather than
+as a call: after the sweep, an anonymous AND an authenticated retrieval over
+real pgvector both fail to return the removed repository.
+
+Forks are **excluded** — a fork's README is somebody else's project text, and
+indexing it under "Brandon's repositories" is a grounding defect rather than
+coverage. Archived repos ARE indexed and marked archived in the document, so an
+answer need not present a dormant experiment as current work. This is the one
+deliberate narrowing of #147's "every public repo".
+
+Re-syncing is a no-op: the `content_hash` skip applies unchanged, and the
+rendered document deliberately excludes `pushed_at` from the hashed text — that
+timestamp changes on every push, so folding it in would re-embed every active
+repo every week for nothing. A moved `pushed_at` alone takes the metadata-repair
+path: one `UPDATE`, zero provider calls.
+
+#### The site-stack vs tech-I-use disambiguation
+
+`/tech` lists the technologies Brandon **works with**. The `bp-portfolio`
+repository document describes what **this site** is built on. Before #147 only
+the first was indexed, so the corpus could not tell them apart:
+`[measured, 2026-09-02, preview of feat/sections-grounding-correctness at
+7f35583]` "What technologies does this site run on?" was answered with "Remix,
+TanStack, Fly.io, Netlify, DigitalOcean" and cited `/tech` — a real citation and
+the wrong list.
+
+`buildGroundedSystem` therefore appends `REPO_DISAMBIGUATION_RULE`, which draws
+the distinction and grants permission to cite a repository's github.com
+`Source:` line (the neighbouring "a third-party address is never the source for
+a claim about this site" sentence would otherwise read as a ban on the one
+citation a repo passage has). The rule is appended **only when a `github-repos`
+passage was retrieved**: a turn with no repository in context gets a
+byte-identical prompt to the pre-#147 one, so no pre-existing eval block's score
+can move because of this change.
+
+Four eval cases gate it, and the last two are a pair on purpose — a prompt that
+always preferred the repository would fix one and silently break the other:
+
+| Case                                     | Correct citation                     |
+| ---------------------------------------- | ------------------------------------ |
+| a known repo's stack (`macos-portfolio`) | that repo's GitHub URL               |
+| a repository that does not exist         | none — decline                       |
+| "what does **this site** run on"         | the `bp-portfolio` repo, NOT `/tech` |
+| "what technologies does Brandon **use**" | `/tech`, NOT a repository            |
+
+They need scorers of their own rather than widened ones: `citedPaths` throws
+away every non-site absolute URL (deliberately — leaving `https://toptimelines.com/`
+in place would let it read `/toptimelines` out of the middle and call it a
+fabricated path), so a repository citation is structurally invisible to
+`cites-a-real-source-url`.
+
+Fixtures live in `evals/fixtures/github-repos.ts` and are **reconstructions, not
+a capture** — its header records exactly which repository facts came from this
+repo's own `CLAUDE.md`/`docs/` and which from the captured `/api/projects`
+record. No live GitHub call is made by any eval.
 
 ### Citing the site, not the vendor (#82 wave 4)
 
@@ -392,7 +521,12 @@ Two known gaps in that snapshot:
   `cites-a-real-source-url` cannot see that failure (an answer citing only
   postgresql.org scores 0 there indistinguishably from an answer citing
   nothing), so `cites-the-site-page-not-a-vendor-url` runs beside it, reserving
-  its middle 0.5 for "cited nothing at all".
+  its middle 0.5 for "cited nothing at all". Wave 5 (#147) adds four more
+  shapes to the same file: a known public repository (answer from its README,
+  cite its GitHub URL), a repository that does not exist (decline, invent no
+  URL), and the site-stack/tech-I-use PAIR described above. Those four run
+  against a retriever holding the site corpus AND the repo corpus, because a
+  disambiguation with one candidate in the window measures nothing.
 - `evals/matrix.eval.ts` — opt-in, see below.
 
 Scorers are mostly deterministic and unit-tested at zero provider cost in
@@ -402,12 +536,18 @@ so a disagreement is legible.
 
 ### Running them
 
-| Command            | What it does                                     |
-| ------------------ | ------------------------------------------------ |
-| `pnpm eval`        | watch mode                                       |
-| `pnpm eval:ci`     | the gate — global `--threshold 75`               |
-| `pnpm eval:facts`  | the site-fact block on its own, `--threshold 70` |
-| `pnpm eval:matrix` | opt-in model comparison, gates nothing           |
+| Command        | What it does                       |
+| -------------- | ---------------------------------- |
+| `pnpm eval`    | watch mode                         |
+| `pnpm eval:ci` | the gate — global `--threshold 75` |
+
+Registration counts move when a block is added, and the thresholds are averages
+over the whole pool, so it is worth recording: `pnpm eval:ci` collected **34**
+evals before #147 and **41** after `[measured, keyless, 2026-09-02]`, across the
+same five files. That is the loosening this doc has always warned about; the
+response is #122's ratchet against a fresh keyed run, never a shrunken block.
+| `pnpm eval:facts` | the site-fact block on its own, `--threshold 70` |
+| `pnpm eval:matrix` | opt-in model comparison, gates nothing |
 
 **Two threshold invocations, because evalite has one.** `--threshold` is a
 single global average over every score in the run, with no per-eval or

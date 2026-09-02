@@ -16,6 +16,20 @@
 - **GitHub tech-signal token**: fine-grained PAT (Contents: read) expires on
   the schedule chosen at creation — rotate in Vercel env
   (`GITHUB_TOKEN`). Scan knobs: `GITHUB_TECH_*` in `.env.example`.
+- **Corvus GitHub repo sync (weekly, #147)**:
+  `.github/workflows/corvus-github-sync.yml` indexes every public
+  `brandonperfetti` repo into `corvus_embeddings` under `collection:
+'github-repos'` at 12:23 UTC on Sunday, and PRUNES repositories that have
+  gone private or been deleted — not pruning is the failure mode on this
+  collection, so a run that skips the sweep logs a warning worth reading.
+  Secrets: `SUPABASE_DB_URL_PROD` + `OPENAI_API_KEY` (both already exist for
+  `corvus-backfill.yml`), plus the OPTIONAL `CORVUS_GITHUB_SYNC_TOKEN` — a
+  fine-grained PAT with Public Repositories read, set ONLY if a run reports
+  403/404 on public repos; the workflow falls back to its own automatic
+  `GITHUB_TOKEN` otherwise. Distinct from the tech-signal PAT above: different
+  job, different lifecycle. Run by hand with
+  `payload run scripts/sync-github-repos.ts` (add `-- --dry-run` to see what a
+  run would index without writing). Details in `docs/AI.md`.
 - **Supabase/Blob**: staging DB is Supabase project `bp-portfolio`
   (`wgzvcjhaltevthnxnack`, us-east-1, Sans Faux org — co-located with the
   iad1 functions; migrated from Neon 2026-08-10); production gets its own
