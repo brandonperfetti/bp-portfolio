@@ -226,6 +226,24 @@ describe('corvus-backfill workflow', () => {
     expect(workflow).toContain('pnpm install --frozen-lockfile')
   })
 
+  it('checks out without persisting the GITHUB_TOKEN on disk', () => {
+    // PINNED, not merely tolerated. Nothing in this job uses git after the
+    // checkout, so the default `persist-credentials: true` only leaves the
+    // token in `.git/config` for the rest of the run — readable by the very
+    // next step, `pnpm install`, whose third-party build scripts run arbitrary
+    // code. Step-scoping the DB and provider secrets (asserted above) is
+    // pointless if a token sits in a file beside them.
+    const checkout = splitJob().steps.find((step) =>
+      step.body.includes('actions/checkout@'),
+    )
+
+    expect(checkout, 'the job must still check the repo out').toBeDefined()
+    expect(
+      checkout?.body,
+      'actions/checkout must set persist-credentials: false',
+    ).toMatch(/persist-credentials:\s*false/)
+  })
+
   it('bounds the run so a hung call cannot hold the concurrency group', () => {
     const minutes = Number(/timeout-minutes:\s*(\d+)/.exec(workflow)?.[1])
     expect(minutes).toBeGreaterThan(0)

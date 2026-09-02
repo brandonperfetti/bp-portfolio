@@ -95,7 +95,17 @@ jobs:
     # concurrency group for six hours and block next week's run.
     timeout-minutes: 45
     steps:
+      # `persist-credentials: false` because nothing here uses git after the
+      # checkout — no push, no tag, no second fetch — so the only thing the
+      # default does is leave the GITHUB_TOKEN sitting in `.git/config` for the
+      # rest of the job. The very next step runs `pnpm install`, whose
+      # third-party build scripts execute arbitrary code in this workspace; the
+      # reason the DB and provider secrets are step-scoped below is to keep
+      # them out of that step's reach, and a token readable from a file on disk
+      # walks straight around it.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Enable Corepack (pnpm)
         run: corepack enable
       - uses: actions/setup-node@v4
