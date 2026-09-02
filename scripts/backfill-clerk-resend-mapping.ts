@@ -1,4 +1,10 @@
-import { createClerkClient } from '@clerk/nextjs/server'
+// `@clerk/backend`, NOT `@clerk/nextjs/server`. The re-export is the same
+// function, but the Next package's ESM dist uses extensionless relative
+// imports (`server/clerkClient.js` → `../app-router/server/utils`), which
+// bundlers resolve and plain Node ESM — what `payload run` executes under —
+// refuses with ERR_MODULE_NOT_FOUND. This script never runs inside Next, so
+// it depends on the package that actually defines the client.
+import { createClerkClient } from '@clerk/backend'
 import { Resend } from 'resend'
 
 import { rememberResendContact } from '../src/lib/email/resendContactMirror'
