@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { useConsentManager } from '@c15t/react'
 
@@ -47,6 +47,28 @@ import { useConsentBannerInset } from './consent-inset'
  * Recording the trigger *id* as well as the node is what lets focus return to
  * the REPLACEMENT button once the banner remounts, since the original node is
  * gone by then (#112; `consent-focus.ts` carries the fallback order).
+ *
+ * **Nothing is rendered until after mount.** c15t's consent state is
+ * browser-only and arrives *during the first client render*, not after it:
+ * `createConsentManagerStore` calls `getStoredConsent()` synchronously at
+ * store creation, and `ConsentManagerProvider` creates that store during
+ * render (`useMemo`) and publishes it with a plain
+ * `useState(() => store.getState())`. So for a returning visitor with a
+ * persisted `bp-consent` choice, `hasConsented()` is already `true` on the
+ * hydration render while the server — which can read neither localStorage nor
+ * the cookie — rendered the banner. React discarded the whole SSR tree and
+ * re-rendered `/articles` client-side (#140 / BP-PORTFOLIO-B).
+ *
+ * The `mounted` gate is the fix rather than `useSyncExternalStore`: c15t 2.2.1
+ * exposes **no `getServerSnapshot` seam** — the provider does not use
+ * `useSyncExternalStore` at all, so subscribing that way here would still read
+ * the already-localStorage-seeded context state and mismatch identically.
+ * Gating on mount makes the server render and the hydration render agree by
+ * construction (both `null`), and the banner appears on the commit right
+ * after. Consent *semantics* are untouched: `consentUndecided` — and with it
+ * the #115 shell inset, the #83 fail-closed default, the #103 auto-grant and
+ * the #115 region reprompt — are computed exactly as before; only the moment
+ * the banner is first painted moves, by one commit.
  */
 export function CookieBanner({
   consentRequired,
@@ -66,7 +88,14 @@ export function CookieBanner({
     consentRequired,
     hasConsented: hasConsented(),
   })
-  const visible = consentUndecided && activeUI !== 'dialog'
+  // #140: false on the server AND on the hydration render, so the two agree by
+  // construction; true from the first post-hydration commit onwards. Kept out
+  // of `consentUndecided` on purpose — the inset's lifetime and every consent
+  // predicate must stay exactly what they were.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  const visible = mounted && consentUndecided && activeUI !== 'dialog'
 
   // State-backed ref callback (not `useRef`): the effect must re-run when the
   // banner unmounts for the dialog and again when it comes back.
