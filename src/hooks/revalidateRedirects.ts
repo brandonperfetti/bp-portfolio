@@ -2,9 +2,19 @@ import type { CollectionAfterChangeHook } from 'payload'
 
 import { revalidateTag } from 'next/cache'
 
+import { CMS_TAGS } from '@/lib/cms/cache'
+
 /**
- * afterChange hook that purges the 'redirects' data-cache tag whenever a
+ * afterChange hook that purges the redirects data-cache tag whenever a
  * redirect is saved.
+ *
+ * @remarks The tag comes from `CMS_TAGS` (#133), not from a literal: the
+ * reader this purge has to reach — `getCmsRedirects` in
+ * `src/lib/cms/redirectsRepo.ts` — subscribes via `cacheTag(CMS_TAGS.redirects)`,
+ * so sharing the constant is what makes a rename of the tag move both sides at
+ * once. A literal here would survive such a rename unchanged and leave the
+ * purge aimed at a tag nothing caches under (the orphaned-purge pattern of
+ * #104); `cacheTags.test.ts` pins the pair.
  *
  * @remarks `revalidateTag(tag, { expire: 0 })`, not `'max'` (#118): under
  * cacheComponents (`'use cache'` readers, #76) `'max'` is
@@ -24,7 +34,7 @@ export const revalidateRedirects: CollectionAfterChangeHook = ({
 }) => {
   payload.logger.info(`Revalidating redirects`)
 
-  revalidateTag('redirects', { expire: 0 })
+  revalidateTag(CMS_TAGS.redirects, { expire: 0 })
 
   return doc
 }

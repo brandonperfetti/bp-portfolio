@@ -24,7 +24,11 @@ import { CMS_TAGS } from '@/lib/cms/cache'
  * verified by source read).
  */
 const { rec } = vi.hoisted(() => ({
-  rec: { tags: [] as string[], profiles: [] as unknown[] },
+  rec: {
+    tags: [] as string[],
+    profiles: [] as unknown[],
+    purged: [] as string[],
+  },
 }))
 
 vi.mock('next/cache', () => ({
@@ -33,6 +37,12 @@ vi.mock('next/cache', () => ({
   },
   cacheLife: (profile: unknown) => {
     rec.profiles.push(profile)
+  },
+  // The write side of the same vocabulary: the revalidation hooks purge with
+  // `revalidateTag`. Recording it here is what lets a test compare a purge
+  // against the tag its reader actually subscribed to (#133).
+  revalidateTag: (tag: string) => {
+    rec.purged.push(tag)
   },
 }))
 
@@ -46,6 +56,7 @@ vi.mock('payload', () => ({
   })),
 }))
 
+import { revalidateRedirects } from '@/hooks/revalidateRedirects'
 import { getCmsAuthors } from '@/lib/cms/authorsRepo'
 import { getCmsConsentConfig } from '@/lib/cms/consentRepo'
 import { getCmsIdentity } from '@/lib/cms/identityRepo'
@@ -147,6 +158,67 @@ describe('CMS repo cacheTag / cacheLife wiring', () => {
   }
 })
 
+// Vitest runs with the repo root as its working directory (vitest.config.ts).
+// Declared here because both source-scanning blocks below read from it.
+const REPO_ROOT = process.cwd()
+
+/**
+ * Purge ↔ reader pairing for redirects (#133).
+ *
+ * The block above pins the READ side: `getCmsRedirects` caches under
+ * `CMS_TAGS.redirects`. A tag only does work when the WRITE side names the same
+ * string, so these two tests pin the pair itself:
+ *
+ * 1. a runtime comparison — whatever `revalidateRedirects` purges must be
+ *    exactly what `getCmsRedirects` subscribed to in the same run. A hook that
+ *    purges some other string fails here rather than in production, where the
+ *    only symptom is an edited redirect resolving to its old destination until
+ *    the `cmsContent` TTL lapses;
+ * 2. a source pin — the hook must take that string FROM `CMS_TAGS`, not from a
+ *    literal that happens to match today. This is the drift the issue is
+ *    about: a literal in the hook survives a rename of `CMS_TAGS.redirects`
+ *    unchanged, leaving the purge aimed at a tag nothing caches under (the
+ *    #104 orphaned-purge pattern), and test 1 cannot see it because both sides
+ *    still read `'redirects'`.
+ *
+ * The `{ expire: 0 }` profile is deliberately NOT asserted here — that is
+ * #118's invariant and `src/hooks/revalidateRedirects.test.ts` owns it.
+ */
+describe('redirects purge ↔ reader tag pairing (#133)', () => {
+  it('purges exactly the tag getCmsRedirects caches under', async () => {
+    rec.tags = []
+    rec.purged = []
+
+    await getCmsRedirects().catch(() => {})
+    const readerTags = [...rec.tags]
+
+    revalidateRedirects({
+      doc: { id: '1' },
+      req: { payload: { logger: { info: vi.fn() } } },
+    } as never)
+
+    expect(readerTags).toEqual([CMS_TAGS.redirects])
+    expect(rec.purged).toEqual(readerTags)
+  })
+
+  it('takes that tag from CMS_TAGS rather than a matching literal', () => {
+    // Code lines only — the file's TSDoc quotes `revalidateTag(tag, …)` in
+    // prose and a naive whole-file scan would pin the comment instead.
+    const firstArguments = readFileSync(
+      join(REPO_ROOT, 'src/hooks/revalidateRedirects.ts'),
+      'utf8',
+    )
+      .split('\n')
+      .filter((line) => !/^\s*(?:\*|\/\/|\/\*)/.test(line))
+      .flatMap((line) => {
+        const call = /\brevalidateTag\(\s*([^,)]+)/.exec(line)
+        return call ? [call[1].trim()] : []
+      })
+
+    expect(firstArguments).toEqual(['CMS_TAGS.redirects'])
+  })
+})
+
 /**
  * Directive-kind invariant (#118).
  *
@@ -173,8 +245,6 @@ describe('CMS repo cacheTag / cacheLife wiring', () => {
  * (`getPublishedPostBySlug`, `getPublishedPageBySlug`, `isArticleScheduledFuture`)
  * are module-private and unreachable from a test import.
  */
-// Vitest runs with the repo root as its working directory (vitest.config.ts).
-const REPO_ROOT = process.cwd()
 const SRC_ROOT = join(REPO_ROOT, 'src')
 
 /** `'use cache'` / `'use cache: remote'` on a line of its own — never in prose. */
