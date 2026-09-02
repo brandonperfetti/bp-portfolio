@@ -1,16 +1,23 @@
 import type { TextStreamPart, ToolSet } from 'ai'
 
 /**
- * No visitor ever gets a blank turn (#138).
+ * What Corvus says instead of nothing — the #138 fail-safe reply.
  *
- * @remarks `getCorvusModel()` returns `openai(modelId)`, and in
- * `@ai-sdk/openai` 3.0.87 the bare provider call is the **Responses** API
- * (`OpenAIProvider`'s call signature takes an `OpenAIResponsesModelId` —
+ * @remarks One sentence, in voice, no apology spiral, and actionable: the
+ * visitor's next move ("narrower") is the one that actually changes the
+ * outcome, because the failure is a token budget rather than a bad question.
+ * Exported so tests and docs pin the same string.
+ *
+ * ## Why this module exists
+ *
+ * `getCorvusModel()` returns `openai(modelId)`, and in `@ai-sdk/openai`
+ * 3.0.87 the bare provider call is the **Responses** API (`OpenAIProvider`'s
+ * call signature takes an `OpenAIResponsesModelId` —
  * `node_modules/@ai-sdk/openai/dist/index.d.ts`, verified 2026-09-02). On
  * that API a reasoning model's hidden reasoning tokens are billed as output
  * tokens and drawn from the same `maxOutputTokens` allowance as the visible
  * answer. The default model is `gpt-5-mini` and the allowance is 1024
- * (`resolveGuardrailLimits`), so a turn that needs to think — the measured
+ * (`resolveGuardrailLimits`), so a turn that needs to think — the observed
  * case is a safety refusal — can spend the whole budget reasoning and finish
  * `length` with nothing rendered. The visitor sees an empty bubble.
  *
@@ -58,15 +65,6 @@ import type { TextStreamPart, ToolSet } from 'ai'
  * and `evals/empty-output.ts`'s zero-for-empty floor keeps seeing the raw
  * model behaviour it exists to catch.
  */
-
-/**
- * What Corvus says instead of nothing.
- *
- * @remarks One sentence, in voice, no apology spiral, and actionable: the
- * visitor's next move ("narrower") is the one that actually changes the
- * outcome, because the failure is a token budget rather than a bad question.
- * Exported so tests and docs pin the same string.
- */
 export const CORVUS_EMPTY_REPLY_FAILSAFE =
   "That one outran my budget before I got a word out — ask me again with a narrower scope and I'll get you an answer."
 
@@ -78,8 +76,14 @@ export interface EmptyReplyFailsafeOptions {
   /**
    * Where the structured finish line goes.
    *
-   * @remarks Defaults to `console.info`. Injectable so tests assert the line
-   * without capturing global console output.
+   * @remarks Defaults to `console.warn`, NOT `console.info`. Sentry Logs
+   * forwards only `warn`/`error` (`SENTRY_CONSOLE_LOG_LEVELS` in
+   * `src/lib/observability/sentryConfig.ts`; `docs/DEPENDENCIES.md`
+   * §Observability), so an `info` line would never reach the aggregation
+   * surface — and reaching it is the entire point of this line. `warn` is the
+   * right level on its merits too: an abnormal-but-recoverable event, the
+   * same usage as `src/lib/articleUtils.ts`. Injectable so tests assert the
+   * line without capturing global console output.
    */
   log?: (message: string) => void
 }
@@ -102,7 +106,7 @@ export interface EmptyReplyFailsafeOptions {
 export function createEmptyReplyFailsafe<TOOLS extends ToolSet = ToolSet>(
   options: EmptyReplyFailsafeOptions = {},
 ): () => TransformStream<TextStreamPart<TOOLS>, TextStreamPart<TOOLS>> {
-  const log = options.log ?? ((message: string) => console.info(message))
+  const log = options.log ?? ((message: string) => console.warn(message))
 
   return () => {
     let textLength = 0

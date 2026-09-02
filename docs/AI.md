@@ -3,7 +3,9 @@
 ## Surface
 
 `/corvus` renders `CorvusChat` (Vercel AI SDK `useChat`) streaming from
-`POST /api/ai/chat`. Markdown rendering via streamdown/react-markdown.
+`POST /api/ai/chat`. Markdown rendering via streamdown/react-markdown —
+including its link-safety guard, which is configured rather than accepted by
+default (see "Links in a reply" below).
 
 ## Server enforcement (`src/lib/ai/corvus.ts` + route)
 
@@ -48,6 +50,47 @@
   degrades to `null` when blocked so the server stays the decider).
 - Responses degrade with friendly copy when limited/disabled — keep that UX.
 
+## Links in a reply (#144)
+
+streamdown `^2.5.0` defaults to `linkSafety = { enabled: true }`, which guards
+**every** link with a confirmation modal whose copy is hard-coded external
+framing ("Open external link?" / "You're about to visit an external
+website."). Uncontested, that means the `/tech` citation grounding exists to
+produce warns the visitor they are leaving the site — to go to the site.
+
+`CorvusChat.tsx` therefore passes an explicit
+`linkSafety={{ enabled: true, onLinkCheck }}`. It stays **enabled**: Corvus is
+a broad assistant that legitimately names off-site URLs, and those keep their
+confirmation. `onLinkCheck` is the seam that tells the two apart — streamdown
+awaits it per click and, on `true`, skips the modal. Once only genuinely
+off-site links reach it, the default copy is accurate, so no `renderModal`
+override ships.
+
+**Internal** (`src/lib/ai/linkSafety.ts`) = path-relative (`/…`, `#…`, `?…`),
+**or** an `http(s)` URL whose host is the currently-served host
+(`window.location.host`, which is what makes preview and staging deploys
+correct without naming them) or passes the shared `isInternalHost()` in
+`src/lib/link-utils.ts` — `getSiteUrl()`'s host plus the local/e2e hosts. That
+helper is the ONE definition of "this site"; the site chrome's
+`isExternalHref` reads the same one, so the two cannot drift.
+
+Everything else is external, including every non-`http(s)` scheme. That is a
+deliberate divergence from `isExternalHref`, which counts `mailto:`/`tel:` as
+internal because its question is only "does this need `target=_blank`?" — the
+guard's question is "may this skip a safety prompt?", and the answer for a
+scheme that hands off to another application is no.
+
+**Measured, jsdom + the streamdown dist (2026-09-02):** an approved link is
+opened by streamdown with `window.open(href, '_blank', 'noreferrer')` — a
+**new tab, not a Next router push**. Two things follow. It is not a regression
+(streamdown's un-guarded branch renders `<a target="_blank">` too, so new-tab
+is its baseline for every link in both branches), and it means links in a
+reply render as `<button>`, not inspectable anchors — a consequence of
+`linkSafety` being enabled at all. Changing either would mean overriding
+`components.a`, and streamdown does not export its internal link component, so
+the override would have to reimplement the guard and modal wholesale. Tracked
+separately; not attempted here.
+
 ## The completion budget, and why a turn can come back empty (#138)
 
 `getCorvusModel()` returns `openai(modelId)`, and in `@ai-sdk/openai` 3.0.87
@@ -61,9 +104,13 @@ hidden reasoning tokens are billed as output tokens and drawn from the _same_
 `scripts/eval-harness.test.ts`.
 
 So a turn that needs to think can spend the entire budget reasoning and finish
-`length` having emitted nothing. Measured on the safety-refusal case (keyed
-`eval:ci`, 2026-08-30): `finishReason=length`, no visible text, on both
-attempts. A retry cannot outrun it — a fixed budget is not a transient fault.
+`length` having emitted nothing. **One observation** of this, on the
+safety-refusal case in a keyed `eval:ci` run (2026-08-30): `finishReason=length`
+with no visible text, on both of that case's two attempts. That is a single
+two-attempt data point, not a rate — it shows the failure is reproducible and
+not a transient fault a retry can outrun, but **the frequency and the
+underlying reasoning-token distribution are still unmeasured**, which is
+exactly what the open decision below turns on.
 
 **The fail-safe (shipped).** `src/lib/ai/emptyReplyFailsafe.ts` is a
 `streamText` `experimental_transform` wired in `src/app/api/ai/chat/route.ts`.

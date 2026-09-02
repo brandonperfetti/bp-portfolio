@@ -57,12 +57,15 @@ describe('isInternalCorvusLink', () => {
     expect(isInternalCorvusLink('https://example-site.test/tech')).toBe(true)
   })
 
-  it.each(['http://localhost:3000/tech', 'http://127.0.0.1/tech'])(
-    'treats the dev host %s as internal',
-    (href) => {
-      expect(isInternalCorvusLink(href)).toBe(true)
-    },
-  )
+  it.each([
+    'http://localhost:3000/tech',
+    'http://127.0.0.1/tech',
+    // The Playwright `use.baseURL` origin (docs/TESTING.md); inherited from
+    // the shared host set in `link-utils.ts`.
+    'http://127.0.0.1:3000/tech',
+  ])('treats the dev/e2e host %s as internal', (href) => {
+    expect(isInternalCorvusLink(href)).toBe(true)
+  })
 
   it('treats the host currently being served as internal', () => {
     // The measured #144 report came from a staging deploy; naming staging

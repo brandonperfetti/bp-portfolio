@@ -186,6 +186,38 @@ describe('createEmptyReplyFailsafe', () => {
       )
     })
 
+    it('defaults to console.warn, the level Sentry Logs forwards', async () => {
+      // `SENTRY_CONSOLE_LOG_LEVELS` is ['warn','error'] — an `info` line
+      // would never reach the aggregation surface, which is the whole point
+      // of logging this. Pins the DEFAULT logger, not the injected one.
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+
+      try {
+        const transform = createEmptyReplyFailsafe()()
+        const reader = new ReadableStream<Part>({
+          start(controller) {
+            controller.enqueue(finishStep('length'))
+            controller.close()
+          },
+        })
+          .pipeThrough(transform)
+          .getReader()
+        for (;;) {
+          const { done } = await reader.read()
+          if (done) break
+        }
+
+        expect(warn).toHaveBeenCalledWith(
+          '[corvus] finishReason=length textLength=0 failsafe=true',
+        )
+        expect(info).not.toHaveBeenCalled()
+      } finally {
+        warn.mockRestore()
+        info.mockRestore()
+      }
+    })
+
     it('stays quiet on a healthy turn', async () => {
       const log = vi.fn()
       await runTransform([textDelta('done'), finishStep('stop')], log)
