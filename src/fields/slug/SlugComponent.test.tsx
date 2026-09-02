@@ -30,8 +30,26 @@ vi.mock('@payloadcms/ui', () => ({
     </button>
   ),
   FieldLabel: ({ label }: { label: string }) => <span>{label}</span>,
-  TextInput: ({ readOnly, value }: { readOnly?: boolean; value?: string }) => (
-    <input readOnly={readOnly} value={value ?? ''} onChange={() => {}} />
+  // `htmlAttributes` is spread onto the `<input>`, and spread LAST, because
+  // that is what the pinned `@payloadcms/ui@3.86.0` dist does
+  // (`dist/fields/Text/Input.js`: `...(htmlAttributes ?? {})` after every
+  // built-in attribute). A mock that dropped it would let the a11y assertion
+  // below pass against a component that never wired anything up.
+  TextInput: ({
+    htmlAttributes,
+    readOnly,
+    value,
+  }: {
+    htmlAttributes?: Record<string, string>
+    readOnly?: boolean
+    value?: string
+  }) => (
+    <input
+      readOnly={readOnly}
+      value={value ?? ''}
+      onChange={() => {}}
+      {...(htmlAttributes ?? {})}
+    />
   ),
   useDocumentInfo: () => ({ hasPublishedDoc: mocks.hasPublishedDoc.value }),
   useField: () => ({ setValue: mocks.setValue, value: mocks.value.current }),
@@ -144,5 +162,35 @@ describe('SlugComponent', () => {
     renderSlug()
 
     expect(screen.getByText(/Locked to the published URL/)).toBeInTheDocument()
+  })
+
+  it('associates the description with the input for a screen reader', () => {
+    // `TextInput` wires no `aria-describedby` of its own (measured against the
+    // pinned dist), and this component renders its own `<p>` rather than using
+    // the `description` prop — so without the explicit association the
+    // four-state sentence is visible and silent. Assert the pointer AND its
+    // target, since a dangling id reads as no description at all.
+    mocks.hasPublishedDoc.value = true
+
+    renderSlug()
+
+    const describedBy = screen
+      .getByRole('textbox')
+      .getAttribute('aria-describedby')
+
+    expect(describedBy).toBeTruthy()
+    expect(document.getElementById(describedBy as string)).toHaveTextContent(
+      /Locked to the published URL/,
+    )
+  })
+
+  it('scopes the description id to the field path', () => {
+    // Two slug fields in one form must not collide on the id.
+    renderSlug()
+
+    expect(screen.getByRole('textbox')).toHaveAttribute(
+      'aria-describedby',
+      'field-slug-description',
+    )
   })
 })

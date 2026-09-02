@@ -50,6 +50,40 @@ export const slugFieldDescription = (
 }
 
 /**
+ * The `htmlAttributes` bag that points the slug input at its description.
+ *
+ * @param descriptionId - The `id` of the paragraph describing the field.
+ * @returns Props to spread onto `TextInput`'s underlying `<input>`.
+ *
+ * @remarks Exists because `@payloadcms/ui`'s `TextInput` does NOT associate a
+ * description with its input. Measured against the pinned
+ * `@payloadcms/ui@3.86.0` dist: `dist/fields/Text/Input.js` renders the
+ * `<input>` with `data-rtl`, `disabled`, `id`, `name`, `onChange`, `onKeyDown`,
+ * `placeholder`, `ref`, `type` and `value`, then spreads
+ * `...(htmlAttributes ?? {})` — and emits no `aria-describedby` anywhere. Its
+ * `description` prop is forwarded only to `FieldDescription`, whose
+ * `dist/fields/FieldDescription/index.js` renders a bare `<div>` with a class
+ * and no `id`, so there is nothing to point at even when that prop is used.
+ * (The only `aria-describedby` in the package's client bundle belongs to
+ * `react-select`'s live region.) This component sidesteps `description`
+ * entirely and renders its own `<p>`, so without this the four-state sentence
+ * that `slugFieldDescription` computes — the whole point of #120 — is visible
+ * to sighted editors and silent to a screen reader on the input.
+ *
+ * The cast is the honest part. `htmlAttributes` is TYPED as
+ * `{ autoComplete?: … }` only, but is SPREAD wholesale onto the `<input>` at
+ * runtime, and last, so it can carry any attribute; the declared type is
+ * narrower than the implementation. Casting here confines that one mismatch
+ * to a documented helper instead of scattering it at the call site.
+ */
+const describedByDescription = (
+  descriptionId: string,
+): React.ComponentProps<typeof TextInput>['htmlAttributes'] =>
+  ({ 'aria-describedby': descriptionId }) as React.ComponentProps<
+    typeof TextInput
+  >['htmlAttributes']
+
+/**
  * Admin slug input with a lock toggle.
  *
  * @remarks `slugLock` means "I do not hand-edit this slug" (see
@@ -123,6 +157,10 @@ export const SlugComponent: React.FC<SlugComponentProps> = ({
 
   const locked = Boolean(checkboxValue)
   const readOnly = readOnlyFromProps || locked
+  // Derived from the field path, not `useId`, so it matches the id scheme
+  // `TextInput` already uses for the input itself (`field-${path}` with dots
+  // flattened) and stays unique when two slug fields share a form.
+  const descriptionId = `field-${(path || field.name).replace(/\./g, '__')}-description`
 
   return (
     <div className="field-type slug-field-component">
@@ -139,9 +177,10 @@ export const SlugComponent: React.FC<SlugComponentProps> = ({
         onChange={setValue}
         path={path || field.name}
         readOnly={Boolean(readOnly)}
+        htmlAttributes={describedByDescription(descriptionId)}
       />
 
-      <p className="slug-field-description">
+      <p className="slug-field-description" id={descriptionId}>
         {slugFieldDescription(Boolean(hasPublishedDoc), locked)}
       </p>
     </div>
