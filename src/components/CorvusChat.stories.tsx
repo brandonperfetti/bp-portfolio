@@ -121,3 +121,97 @@ export const SignInRequired: Story = {
     }
   },
 }
+
+/**
+ * Reaches the sign-in gate, then hovers its CTA — the shared body of the two
+ * `#139` hover stories.
+ *
+ * @param canvasElement - The story root, from the play context.
+ * @returns The hovered CTA link, ready to assert computed styles on.
+ */
+async function hoverSignInGateCta(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement)
+  const input = canvas.getByPlaceholderText('Ask Corvus...')
+  await userEvent.type(input, 'One more question?')
+  await userEvent.click(canvas.getByRole('button', { name: /send/i }))
+
+  const cta = await canvas.findByRole('link', { name: /sign in to continue/i })
+  await userEvent.hover(cta)
+  return cta as HTMLAnchorElement
+}
+
+/** Stubs the chat route's real `sign_in_required` 401 for the gate stories. */
+function stubSignInRequired() {
+  const originalFetch = window.fetch
+  window.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        error:
+          "You've used your free Corvus messages — sign in to keep chatting.",
+        code: 'sign_in_required',
+      }),
+      { status: 401 },
+    )) as typeof window.fetch
+  return () => {
+    window.fetch = originalFetch
+  }
+}
+
+/**
+ * #139, dark: inside `.corvus-surface` the gate CTA's hover keeps its resting
+ * teal-700 fill and gains a teal-300 ring instead. No teal fill step can hold
+ * the white label at 4.5:1 AND the button's own edge at 3:1 against the
+ * near-black gate panel at the same time; the ring measures 3.70:1 against the
+ * fill and 13.38:1 against the panel, so both of its edges clear 1.4.11.
+ */
+export const SignInGateHoverDark: Story = {
+  globals: { theme: 'dark' },
+  decorators: [
+    (Story) => (
+      <div className="corvus-surface rounded-3xl p-4">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const restoreFetch = stubSignInRequired()
+    try {
+      const cta = await hoverSignInGateCta(canvasElement)
+      const style = getComputedStyle(cta)
+      // The ring is present…
+      await expect(style.boxShadow).toMatch(/rgb\(94,\s*234,\s*212\)/)
+      // …and the fill did NOT step to teal-800 (#115e59).
+      await expect(style.backgroundColor).toBe('rgb(15, 118, 110)')
+    } finally {
+      restoreFetch()
+    }
+  },
+}
+
+/**
+ * #139, light: unchanged. The gate CTA still hovers to the darker teal-800
+ * fill, which on the light gate panel clears both floors (label 7.58:1, fill
+ * edge 6.90:1) — the residual only ever existed against the dark panel.
+ */
+export const SignInGateHoverLight: Story = {
+  globals: { theme: 'light' },
+  decorators: [
+    (Story) => (
+      <div className="corvus-surface rounded-3xl p-4">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const restoreFetch = stubSignInRequired()
+    try {
+      const cta = await hoverSignInGateCta(canvasElement)
+      const style = getComputedStyle(cta)
+      // teal-800 fill step, and no hover ring.
+      await expect(style.backgroundColor).toBe('rgb(17, 94, 89)')
+      await expect(style.boxShadow).not.toMatch(/rgb\(94,\s*234,\s*212\)/)
+    } finally {
+      restoreFetch()
+    }
+  },
+}
