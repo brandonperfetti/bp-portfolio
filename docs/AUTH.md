@@ -141,9 +141,12 @@ including users who are _already_ mapped, who by definition have an
 `external_id` would not be: it only restates a link Clerk already asserts.
 
 ```bash
-payload run scripts/backfill-clerk-resend-mapping.ts           # dry run
-payload run scripts/backfill-clerk-resend-mapping.ts --apply   # write
+payload run scripts/backfill-clerk-resend-mapping.ts              # dry run
+payload run scripts/backfill-clerk-resend-mapping.ts -- --apply   # write
 ```
+
+The `--` in the second form is load-bearing — a bare `--apply` never reaches the
+script; the script's docblock explains why.
 
 **Dry run by default** — it prints a per-user plan and writes nothing without
 `--apply`. It has no destructive mode: it never deletes a contact, never clears

@@ -77,7 +77,15 @@ import { canDropOrphans, orphanDeleteBounds } from './lib/orphan-guard.mjs'
  *
  * Usage:
  *   payload run scripts/backfill-corvus-embeddings.ts
- *   payload run scripts/backfill-corvus-embeddings.ts --drop-orphans
+ *   payload run scripts/backfill-corvus-embeddings.ts -- --drop-orphans
+ *   pnpm corvus:backfill -- --drop-orphans
+ *
+ * The `--` is load-bearing. `payload run` parses its own argv with minimist and
+ * rebuilds the script's `process.argv` from the POSITIONAL arguments only, so a
+ * bare `--drop-orphans` is consumed as an option to `payload` and never reaches
+ * the `process.argv.includes('--drop-orphans')` check below — the run would
+ * quietly skip the destructive sweep the operator asked for. (Through the pnpm
+ * script the single `--` is enough: pnpm forwards it verbatim to `payload run`.)
  */
 const dropOrphans = process.argv.includes('--drop-orphans')
 
