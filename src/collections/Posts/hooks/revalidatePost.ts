@@ -34,6 +34,46 @@ import type { Post } from '../../../payload-types'
  * the `posts-sitemap` tag purge is aspirational, nothing caches under it, per
  * docs/SEO.md.
  *
+ * **Which transitions purge which path (#132), and why the rename purge is
+ * NOT here.** #132 asked whether the published→published rename purge should
+ * move into this hook from `createSlugRedirect`. It stays there. The rule that
+ * settles it is one of ownership: **the hook that WRITES a redirect row owns
+ * purging that row's `from`; this hook owns the document's own paths.** Three
+ * reasons, in order of weight:
+ *
+ * 1. *Two path vocabularies, and they disagree.* This hook hand-builds
+ *    `/articles/${slug}`; `revalidatePage` maps `home` to `/`.
+ *    `createSlugRedirect` builds `from` with `publicPathForSlug`, which calls
+ *    the home page `/home`. The purge exists solely to make the old URL fall
+ *    through to the not-found branch that reads the row — so it must be spelled
+ *    in the same vocabulary as the row's `from`. Moving it here would put the
+ *    purge on the far side of that disagreement from the row it exposes, which
+ *    is the reader/writer drift `/articles/[slug]`'s own TSDoc warns about.
+ * 2. *It is a consequence of the write, not of the transition.* The old path is
+ *    worth purging only because a redirect now exists to serve it. It belongs
+ *    inside the same `try`, after the row landed — not on a branch that fires
+ *    whether or not the write succeeded.
+ * 3. *Blast radius.* Consolidating would make this hook read
+ *    `capturePublishedSlug`'s `req.context` stash and adopt
+ *    `publicPathForSlug`, touching the publish, unpublish and sitemap branches
+ *    for no behavioural gain.
+ *
+ * The transitions this hook actually purges are pinned as a matrix in
+ * `revalidatePost.test.ts`. In summary: a publish purges the document's current
+ * path; an unpublish purges `previousDoc`'s path; a published→published rename
+ * purges only the NEW path here, and `createSlugRedirect` purges the old one.
+ *
+ * **Known gap on the unpublish branch, measured 2026-09-02.** `previousDoc` is
+ * the latest *version*, and Posts autosaves every 100ms, so after any autosave
+ * it is the DRAFT — `_status: 'draft'`. Unpublishing a document that has a
+ * pending autosaved draft therefore fails the
+ * `previousDoc._status === 'published'` test and purges NOTHING, leaving the
+ * live URL serving its prerendered shell. `capturePublishedSlug` cannot cover
+ * it either: unpublish sends `_status: 'draft'`, which is that hook's
+ * early-return. Closing it needs a way to tell an unpublish from an autosave
+ * draft save that this tree does not have, so it is pinned as a failing-shape
+ * test rather than papered over; filed separately.
+ *
  * `revalidateTag(tag, { expire: 0 })`, not `'max'` (#118): under
  * cacheComponents (`'use cache'` readers, #76) `'max'` is
  * stale-while-revalidate with a one-year stale window, so a publish/edit

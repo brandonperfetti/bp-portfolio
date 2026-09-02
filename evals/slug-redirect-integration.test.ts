@@ -414,7 +414,10 @@ describe.skipIf(!connectionString)(
         task: 'schedulePublish',
         input: {
           type: 'publish',
-          doc: { relationTo: 'posts', value: String(id) },
+          // The admin schedule UI stores this as a string and the handler
+          // coerces it back (`job.js`, #10481); the queue's own input type
+          // wants the real id type, so pass it as-is.
+          doc: { relationTo: 'posts' as const, value: id },
         },
         waitUntil: new Date(Date.now() - 60_000),
       })

@@ -17,6 +17,25 @@ import type { Page } from '../../../payload-types'
  * route against STALE data, so admin edits never surfaced without a
  * redeploy.
  *
+ * **Which transitions purge which path (#132).** Same decision and same
+ * ownership rule as `revalidatePost`
+ * (`src/collections/Posts/hooks/revalidatePost.ts`) — the hook that writes a
+ * redirect row owns purging that row's `from`, this hook owns the page's own
+ * paths — and the matrix is pinned in
+ * `revalidatePage.test.ts`. A publish purges the page's current path; an
+ * unpublish purges `previousDoc`'s path; a published→published rename purges
+ * only the NEW path here, with `createSlugRedirect` purging the old one.
+ *
+ * Pages makes the vocabulary argument concrete: this hook serves `home` at
+ * `/`, while `publicPathForSlug('pages', 'home')` — what `createSlugRedirect`
+ * writes rows from — yields `/home`. A purge spelled in the wrong one of those
+ * two never uncovers the row it was meant to uncover.
+ *
+ * The autosave gap on the unpublish branch is identical to the Posts one and
+ * documented there: Pages autosaves at the same 100ms interval, so unpublishing
+ * with a pending draft leaves `previousDoc._status === 'draft'` and purges
+ * nothing. Measured 2026-09-02, pinned by test, filed separately.
+ *
  * `revalidateTag(tag, { expire: 0 })`, not `'max'` (#118): under
  * cacheComponents (`'use cache'` readers, #76) `'max'` is
  * stale-while-revalidate with a one-year stale window, so an edit keeps
