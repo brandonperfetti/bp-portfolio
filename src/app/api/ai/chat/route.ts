@@ -2,6 +2,7 @@ import { convertToModelMessages, streamText, validateUIMessages } from 'ai'
 import * as z from 'zod'
 
 import { getCorvusModel } from '@/lib/ai/corvus'
+import { createEmptyReplyFailsafe } from '@/lib/ai/emptyReplyFailsafe'
 import { buildGroundedSystem } from '@/lib/ai/groundedSystem'
 import {
   extractRetrievalQuery,
@@ -226,11 +227,21 @@ export async function POST(req: Request) {
     isAuthenticated: viewer.isAuthenticated,
   })
 
+  // Empty-reply fail-safe (#138), applied here and nowhere else. On the
+  // Responses API the model's hidden reasoning is billed against the same
+  // `maxOutputTokens` allowance as the visible answer, so a turn that needs
+  // to think can spend the whole budget reasoning and finish `length` with
+  // nothing rendered — a blank bubble. The transform watches the stream for
+  // exactly that (finished on `length`, no visible text) and injects one
+  // canned sentence in Corvus's voice, and logs every non-`stop` finish so
+  // the production frequency of both symptoms stops being a guess. It
+  // changes no budget and touches no other turn.
   const result = streamText({
     model: getCorvusModel(),
     system: buildGroundedSystem(snippets),
     messages: await convertToModelMessages(windowed),
     maxOutputTokens: limits.maxCompletionTokens,
+    experimental_transform: createEmptyReplyFailsafe(),
   })
 
   return result.toUIMessageStreamResponse()

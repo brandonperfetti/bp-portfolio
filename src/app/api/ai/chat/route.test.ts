@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { CORVUS_EMPTY_REPLY_FAILSAFE } from '@/lib/ai/emptyReplyFailsafe'
+
 /**
  * Server-enforced Corvus auth soft-gate (#74, folds #18). Every dependency
  * is mocked so these tests pin the route's ORCHESTRATION — gate order,
@@ -655,5 +657,98 @@ describe('POST /api/ai/chat — retrieval runs only after every gate passes', ()
       'latest question',
       expect.objectContaining({ abortSignal: expect.any(AbortSignal) }),
     )
+  })
+})
+
+/**
+ * Empty-reply fail-safe (#138).
+ *
+ * @remarks These pin the ROUTE's half of the fix — that the transform is
+ * actually handed to `streamText`, and that the thing handed over behaves.
+ * `ai` is mocked wholesale in this file, so the transform is pulled back out
+ * of the recorded call and driven directly; the same module is proven against
+ * a real `streamText` and a real `toUIMessageStreamResponse` body in
+ * `src/lib/ai/emptyReplyFailsafe.test.ts`.
+ */
+describe('POST /api/ai/chat — empty-reply fail-safe (#138)', () => {
+  /** The `experimental_transform` the route handed `streamText`. */
+  const recordedTransform = () => {
+    const call = streamTextMock.mock.calls[0]?.[0] as
+      { experimental_transform?: () => TransformStream } | undefined
+    return call?.experimental_transform
+  }
+
+  /** Drive a turn's stream parts through the route's own transform. */
+  const runRouteTransform = async (parts: unknown[]) => {
+    const factory = recordedTransform()
+    if (!factory) throw new Error('route passed no experimental_transform')
+
+    const out: Array<Record<string, unknown>> = []
+    const reader = new ReadableStream({
+      start(controller) {
+        for (const part of parts) controller.enqueue(part)
+        controller.close()
+      },
+    })
+      .pipeThrough(factory())
+      .getReader()
+
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      out.push(value as Record<string, unknown>)
+    }
+    return out
+  }
+
+  const finishStep = (finishReason: string) => ({
+    type: 'finish-step',
+    finishReason,
+    rawFinishReason: finishReason,
+    usage: {},
+    response: {},
+  })
+
+  it('hands streamText a transform alongside the completion budget', async () => {
+    await POST(makeRequest(validBody))
+
+    expect(recordedTransform()).toBeTypeOf('function')
+    // The budget itself is untouched by this batch.
+    expect(streamTextMock.mock.calls[0]?.[0]).toMatchObject({
+      maxOutputTokens: 1024,
+    })
+  })
+
+  it('turns an empty length-terminated completion into a visible reply', async () => {
+    await POST(makeRequest(validBody))
+
+    // The measured #138 case: a text block opens, hidden reasoning eats the
+    // budget, nothing is emitted, the turn finishes on `length`.
+    const out = await runRouteTransform([
+      { type: 'text-start', id: 'm0' },
+      { type: 'text-end', id: 'm0' },
+      finishStep('length'),
+    ])
+
+    const text = out
+      .filter((part) => part.type === 'text-delta')
+      .map((part) => part.text as string)
+      .join('')
+
+    expect(text).toBe(CORVUS_EMPTY_REPLY_FAILSAFE)
+    expect(text.trim().length).toBeGreaterThan(0)
+  })
+
+  it('leaves a normal completion untouched', async () => {
+    await POST(makeRequest(validBody))
+
+    const parts = [
+      { type: 'text-start', id: 'm0' },
+      { type: 'text-delta', id: 'm0', text: 'Brandon is a Technical PM.' },
+      { type: 'text-end', id: 'm0' },
+      finishStep('stop'),
+    ]
+
+    expect(await runRouteTransform(parts)).toEqual(parts)
   })
 })

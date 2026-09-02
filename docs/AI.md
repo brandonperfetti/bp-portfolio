@@ -48,6 +48,62 @@
   degrades to `null` when blocked so the server stays the decider).
 - Responses degrade with friendly copy when limited/disabled — keep that UX.
 
+## The completion budget, and why a turn can come back empty (#138)
+
+`getCorvusModel()` returns `openai(modelId)`, and in `@ai-sdk/openai` 3.0.87
+the bare provider call is the **Responses** API (`OpenAIProvider`'s call
+signature takes an `OpenAIResponsesModelId`). On that API a reasoning model's
+hidden reasoning tokens are billed as output tokens and drawn from the _same_
+`maxOutputTokens` allowance as the visible answer. The default model is
+`gpt-5-mini`; the allowance is **1024**
+(`resolveGuardrailLimits`, `AI_MAX_COMPLETION_TOKENS`, cap 8000), mirrored by
+`EVAL_MAX_OUTPUT_TOKENS` in `evals/corvus-helpers.ts` and drift-guarded by
+`scripts/eval-harness.test.ts`.
+
+So a turn that needs to think can spend the entire budget reasoning and finish
+`length` having emitted nothing. Measured on the safety-refusal case (keyed
+`eval:ci`, 2026-08-30): `finishReason=length`, no visible text, on both
+attempts. A retry cannot outrun it — a fixed budget is not a transient fault.
+
+**The fail-safe (shipped).** `src/lib/ai/emptyReplyFailsafe.ts` is a
+`streamText` `experimental_transform` wired in `src/app/api/ai/chat/route.ts`.
+When a step finishes `length` having streamed no non-whitespace text, it
+injects one canned sentence in Corvus's voice
+(`CORVUS_EMPTY_REPLY_FAILSAFE`) as its own text block, immediately before the
+`finish-step` chunk. A visitor can never receive a blank turn, at any budget.
+
+A **truncated** (non-empty) `length` finish is deliberately left alone: a
+mid-sentence answer is still readable, and any marker would be noise on every
+long reply and wrong once the budget decision lands. Instead every non-`stop`
+finish logs `[corvus] finishReason=… textLength=… failsafe=…`, so the
+production frequency of both symptoms — recorded on #138 as unknown — becomes
+a number.
+
+The evals do **not** run through this: `evals/corvus-helpers.ts` calls
+`generateText` directly rather than the route, so no recorded score moves and
+`evals/empty-output.ts`'s zero-for-empty floor keeps seeing raw model
+behaviour.
+
+**Still open (Brandon's call, #138).** The fail-safe stops the blank bubble;
+it does not stop the truncation. Two candidates, neither implemented:
+
+1. **Raise the budget.** OpenAI's reasoning guide recommends reserving _at
+   least 25,000_ tokens for reasoning plus output on these models; 1024 is
+   two orders of magnitude under that. Raising it means moving
+   `AI_MAX_COMPLETION_TOKENS`, the `EVAL_MAX_OUTPUT_TOKENS` mirror, and the
+   drift guard together, and it raises the per-turn cost ceiling.
+2. **Cap reasoning effort.** `@ai-sdk/openai` accepts
+   `providerOptions.openai.reasoningEffort` on the Responses path, typed
+   loosely as `string`; the documented ladder is
+   `none | minimal | low | medium | high | xhigh | max`, but support is
+   model-dependent and whether `gpt-5-mini` accepts the low end is
+   **unverified here**. Cheaper than (1) and it attacks the cause rather than
+   the allowance, but an unsupported value is an API-level rejection on every
+   turn.
+
+Whichever lands, the acceptance test is a keyed run showing the safety-refusal
+case returning visible text at the chosen budget.
+
 ## Persona scope
 
 Corvus's scope is **broad by design** (#77 follow-up): a genuinely useful
