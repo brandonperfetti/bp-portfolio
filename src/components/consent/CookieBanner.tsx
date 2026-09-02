@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { useConsentManager } from '@c15t/react'
+
+import { useMounted } from '@/lib/useMounted'
 
 import { Button } from '@/components/ui/button'
 
@@ -89,11 +91,9 @@ export function CookieBanner({
     hasConsented: hasConsented(),
   })
   // #140: false on the server AND on the hydration render, so the two agree by
-  // construction; true from the first post-hydration commit onwards. Kept out
-  // of `consentUndecided` on purpose — the inset's lifetime and every consent
-  // predicate must stay exactly what they were.
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
+  // construction. Kept out of `consentUndecided` on purpose — the inset's
+  // lifetime and every consent predicate must stay exactly what they were.
+  const mounted = useMounted()
 
   const visible = mounted && consentUndecided && activeUI !== 'dialog'
 

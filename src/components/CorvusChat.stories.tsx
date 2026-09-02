@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import type { Decorator, Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
 
 import CorvusChat from '@/components/CorvusChat'
@@ -24,6 +24,86 @@ const meta = {
 
 export default meta
 type Story = StoryObj<typeof meta>
+
+/** Stubs the chat route's real `sign_in_required` 401 for the gate stories.
+ *
+ * @returns A restore closure that puts the original `window.fetch` back; call
+ * it in a `finally` so one story's stub can never leak into the next.
+ */
+function stubSignInRequired() {
+  const originalFetch = window.fetch
+  window.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        error:
+          "You've used your free Corvus messages — sign in to keep chatting.",
+        code: 'sign_in_required',
+      }),
+      { status: 401 },
+    )) as typeof window.fetch
+  return () => {
+    window.fetch = originalFetch
+  }
+}
+
+/**
+ * Drives the chat to the sign-in gate and returns its CTA.
+ *
+ * @param canvasElement - The story root, from the play context.
+ * @returns The gate's sign-in link, mounted and ready to interact with.
+ */
+async function reachSignInGate(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement)
+  const input = canvas.getByPlaceholderText('Ask Corvus...')
+  await userEvent.type(input, 'One more question?')
+  await userEvent.click(canvas.getByRole('button', { name: /send/i }))
+
+  const cta = await canvas.findByRole('link', { name: /sign in to continue/i })
+  return cta as HTMLAnchorElement
+}
+
+/**
+ * Reaches the sign-in gate, then hovers its CTA — the shared body of the
+ * `#139` hover stories.
+ *
+ * @param canvasElement - The story root, from the play context.
+ * @returns The hovered CTA link, ready to assert computed styles on.
+ */
+async function hoverSignInGateCta(canvasElement: HTMLElement) {
+  const cta = await reachSignInGate(canvasElement)
+  await userEvent.hover(cta)
+  return cta
+}
+
+/**
+ * Tabs until the CTA holds focus, so the browser sets `:focus-visible` — a
+ * programmatic `.focus()` does not, and `:focus-visible` is the discriminator
+ * the dark hover rule keys on.
+ *
+ * @param cta - The gate's sign-in link.
+ */
+async function tabToSignInGateCta(cta: HTMLAnchorElement) {
+  for (let i = 0; i < 20 && document.activeElement !== cta; i += 1) {
+    await userEvent.tab()
+  }
+  await expect(cta).toHaveFocus()
+}
+
+/** The dark hover ring, `--corvus-accent-ring-hover` (teal-300) as rendered. */
+const RING_RGB = 'rgb(94, 234, 212)'
+/** `--corvus-accent` (teal-400), the focus outline colour on the dark surface. */
+const FOCUS_RGB = 'rgb(45, 212, 191)'
+/** `--corvus-accent-solid` (teal-700), the resting fill dark hover keeps. */
+const RESTING_FILL_RGB = 'rgb(15, 118, 110)'
+/** `--corvus-accent-solid-hover` (teal-800), the light theme's hover fill. */
+const LIGHT_HOVER_FILL_RGB = 'rgb(17, 94, 89)'
+
+/** Wraps a story in the `.corvus-surface` scope the gate CSS keys on. */
+const withCorvusSurface: Decorator = (Story) => (
+  <div className="corvus-surface rounded-3xl p-4">
+    <Story />
+  </div>
+)
 
 export const Idle: Story = {}
 
@@ -89,26 +169,10 @@ export const RateLimited: Story = {
  */
 export const SignInRequired: Story = {
   play: async ({ canvasElement }) => {
-    const originalFetch = window.fetch
-    window.fetch = (async () =>
-      new Response(
-        JSON.stringify({
-          error:
-            "You've used your free Corvus messages — sign in to keep chatting.",
-          code: 'sign_in_required',
-        }),
-        { status: 401 },
-      )) as typeof window.fetch
-
+    const restoreFetch = stubSignInRequired()
     try {
       const canvas = within(canvasElement)
-      const input = canvas.getByPlaceholderText('Ask Corvus...')
-      await userEvent.type(input, 'One more question?')
-      await userEvent.click(canvas.getByRole('button', { name: /send/i }))
-
-      const signInLink = await canvas.findByRole('link', {
-        name: /sign in to continue/i,
-      })
+      const signInLink = await reachSignInGate(canvasElement)
       await expect(signInLink).toHaveAttribute(
         'href',
         expect.stringContaining('/sign-in?redirect_url='),
@@ -117,44 +181,9 @@ export const SignInRequired: Story = {
       await expect(canvas.getByRole('button', { name: /send/i })).toBeDisabled()
       await expect(canvas.getByLabelText('Message Corvus')).toBeDisabled()
     } finally {
-      window.fetch = originalFetch
+      restoreFetch()
     }
   },
-}
-
-/**
- * Reaches the sign-in gate, then hovers its CTA — the shared body of the two
- * `#139` hover stories.
- *
- * @param canvasElement - The story root, from the play context.
- * @returns The hovered CTA link, ready to assert computed styles on.
- */
-async function hoverSignInGateCta(canvasElement: HTMLElement) {
-  const canvas = within(canvasElement)
-  const input = canvas.getByPlaceholderText('Ask Corvus...')
-  await userEvent.type(input, 'One more question?')
-  await userEvent.click(canvas.getByRole('button', { name: /send/i }))
-
-  const cta = await canvas.findByRole('link', { name: /sign in to continue/i })
-  await userEvent.hover(cta)
-  return cta as HTMLAnchorElement
-}
-
-/** Stubs the chat route's real `sign_in_required` 401 for the gate stories. */
-function stubSignInRequired() {
-  const originalFetch = window.fetch
-  window.fetch = (async () =>
-    new Response(
-      JSON.stringify({
-        error:
-          "You've used your free Corvus messages — sign in to keep chatting.",
-        code: 'sign_in_required',
-      }),
-      { status: 401 },
-    )) as typeof window.fetch
-  return () => {
-    window.fetch = originalFetch
-  }
 }
 
 /**
@@ -166,22 +195,49 @@ function stubSignInRequired() {
  */
 export const SignInGateHoverDark: Story = {
   globals: { theme: 'dark' },
-  decorators: [
-    (Story) => (
-      <div className="corvus-surface rounded-3xl p-4">
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withCorvusSurface],
   play: async ({ canvasElement }) => {
     const restoreFetch = stubSignInRequired()
     try {
       const cta = await hoverSignInGateCta(canvasElement)
       const style = getComputedStyle(cta)
       // The ring is present…
-      await expect(style.boxShadow).toMatch(/rgb\(94,\s*234,\s*212\)/)
-      // …and the fill did NOT step to teal-800 (#115e59).
-      await expect(style.backgroundColor).toBe('rgb(15, 118, 110)')
+      await expect(style.boxShadow).toContain(RING_RGB)
+      // …and the fill did NOT step to teal-800.
+      await expect(style.backgroundColor).toBe(RESTING_FILL_RGB)
+    } finally {
+      restoreFetch()
+    }
+  },
+}
+
+/**
+ * #139, dark, keyboard path: the rule's discriminator is
+ * `:hover:not(:focus-visible)`, so the one state worth pinning is
+ * focused **and** hovered at once — a keyboard user whose pointer happens to
+ * rest on the control. Exactly one indicator must show, and it must be the
+ * focus outline: a hover ring drawn over the focus ring is how a focus
+ * indicator quietly goes missing (WCAG 2.4.7).
+ */
+export const SignInGateHoverDarkKeyboardFocus: Story = {
+  globals: { theme: 'dark' },
+  decorators: [withCorvusSurface],
+  play: async ({ canvasElement }) => {
+    const restoreFetch = stubSignInRequired()
+    try {
+      const cta = await reachSignInGate(canvasElement)
+      await tabToSignInGateCta(cta)
+      await userEvent.hover(cta)
+
+      const style = getComputedStyle(cta)
+      // The focus outline is what is showing…
+      await expect(style.outlineColor).toBe(FOCUS_RGB)
+      await expect(style.outlineStyle).toBe('solid')
+      await expect(parseFloat(style.outlineWidth)).toBeGreaterThan(0)
+      // …and the hover ring is suppressed, so there is exactly one indicator.
+      await expect(style.boxShadow).not.toContain(RING_RGB)
+      // The fill still does not step, focused or not.
+      await expect(style.backgroundColor).toBe(RESTING_FILL_RGB)
     } finally {
       restoreFetch()
     }
@@ -195,21 +251,15 @@ export const SignInGateHoverDark: Story = {
  */
 export const SignInGateHoverLight: Story = {
   globals: { theme: 'light' },
-  decorators: [
-    (Story) => (
-      <div className="corvus-surface rounded-3xl p-4">
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withCorvusSurface],
   play: async ({ canvasElement }) => {
     const restoreFetch = stubSignInRequired()
     try {
       const cta = await hoverSignInGateCta(canvasElement)
       const style = getComputedStyle(cta)
       // teal-800 fill step, and no hover ring.
-      await expect(style.backgroundColor).toBe('rgb(17, 94, 89)')
-      await expect(style.boxShadow).not.toMatch(/rgb\(94,\s*234,\s*212\)/)
+      await expect(style.backgroundColor).toBe(LIGHT_HOVER_FILL_RGB)
+      await expect(style.boxShadow).not.toContain(RING_RGB)
     } finally {
       restoreFetch()
     }

@@ -95,6 +95,40 @@ describe('CookieBanner layout (Fix 1 — centered, not left-pinned)', () => {
   })
 })
 
+/**
+ * #140's acceptance criterion — "banner behaviour unchanged across all consent
+ * states" — pinned as the full 2x2 rather than the three cases the other
+ * describes happen to cover between them. The gate added for the hydration fix
+ * must move the *timing* of the first paint and nothing else.
+ */
+describe('CookieBanner visibility across the four consent states (#140)', () => {
+  const banner = () => screen.queryByRole('region', { name: /cookie consent/i })
+
+  it('required + undecided → shows', () => {
+    renderBanner(true)
+    expect(banner()).toBeInTheDocument()
+  })
+
+  it('unknown (null) + undecided → shows, fail-closed', () => {
+    // #83: an unresolved region is treated as "consent required", never as
+    // "not required". The gate must not turn fail-closed into fail-open.
+    renderBanner(null)
+    expect(banner()).toBeInTheDocument()
+  })
+
+  it('required + decided → hidden', async () => {
+    const user = userEvent.setup()
+    renderBanner(true)
+    await user.click(screen.getByRole('button', { name: /^accept all$/i }))
+    expect(banner()).not.toBeInTheDocument()
+  })
+
+  it('not required (false) + undecided → hidden', () => {
+    renderBanner(false)
+    expect(banner()).not.toBeInTheDocument()
+  })
+})
+
 describe('CookieBanner default (empty-CMS) copy + toggles', () => {
   // Rendered without a ConsentConfigProvider → the context default
   // (DEFAULT_CONSENT_CONFIG) drives it, i.e. today's copy verbatim.

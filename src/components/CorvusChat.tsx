@@ -18,6 +18,7 @@ import { getCorvusGreeting } from '@/lib/corvus/greeting'
 import { useSpeechInput } from '@/lib/corvus/useSpeechInput'
 import { reportSpeechRecognitionError } from '@/lib/observability/clientTelemetry'
 import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
+import { useMounted } from '@/lib/useMounted'
 import { RavenMark } from '@/components/corvus/RavenMark'
 import {
   Conversation,
@@ -132,17 +133,15 @@ export default function CorvusChat({
   // it's been cleared (the "voice message doesn't clear on send" bug).
   const dictatingRef = useRef(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [mounted, setMounted] = useState(false)
+  const mounted = useMounted()
   const [firstName, setFirstName] = useState<string | null>(null)
 
   // The empty-state greeting is time-of-day (and optionally name) flavored —
   // both are only knowable client-side, so the first paint renders a
   // neutral greeting and the real one fills in after mount. This must never
   // run during SSR: the server has no visitor-local clock, so rendering a
-  // guess there would either flash the wrong greeting or mismatch hydration.
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  // guess there would either flash the wrong greeting or mismatch hydration
+  // (`useMounted` carries that contract).
   const greeting = mounted
     ? getCorvusGreeting(new Date().getHours(), firstName)
     : 'Welcome.'

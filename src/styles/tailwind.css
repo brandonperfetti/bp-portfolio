@@ -501,6 +501,12 @@
  * edge at 3:1 against the near-black panel without landing on the resting
  * fill, so the dark hover keeps the resting fill and adds a ring instead.
  *
+ * `:root.dark` is the deliberate mirror of the light override's own
+ * `:root:not(.dark) .corvus-surface` a few blocks up — same anchor, same
+ * specificity, so the two theme rules read as a pair. The sheet's
+ * `@custom-variant dark` governs `dark:` UTILITY classes in markup; it is not
+ * the idiom for hand-written rules like these.
+ *
  * A box-shadow ring rather than an `outline`: `outline` is the sitewide
  * focus-visible indicator, and the `:focus-visible` rule below re-colors it.
  * `:not(:focus-visible)` then keeps exactly ONE indicator on screen at a

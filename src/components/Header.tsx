@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -20,6 +20,7 @@ import type { CmsNavigationItem } from '@/lib/cms/types'
 import { PERSON_IMAGE_URL } from '@/lib/identity'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { HEADER_NAV_LINKS } from '@/lib/navigation'
+import { useMounted } from '@/lib/useMounted'
 
 const avatarImage = PERSON_IMAGE_URL
 
@@ -204,11 +205,7 @@ function DesktopNavigation({
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
   const otherTheme = resolvedTheme === 'dark' ? 'light' : 'dark'
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  const mounted = useMounted()
 
   return (
     <button
