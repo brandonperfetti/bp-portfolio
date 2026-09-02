@@ -23,13 +23,31 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  *
  * What is real here: Postgres, the migrated schema, the whole Payload update
  * operation, the versions/drafts machinery, `enforceSlugFreeze`,
- * `capturePublishedSlug`, `createSlugRedirect`, and the `redirects` collection.
- * What is stubbed: `next/cache` only. `revalidatePath`/`revalidateTag` throw
- * `Invariant: static generation store missing` outside a Next request scope,
- * which is a harness fact, not a product one — in production these hooks run
- * inside a route handler. Stubbing them also lets the test ASSERT the old
- * path is purged, which is load-bearing (`revalidatePost` never purges it on a
- * published-to-published rename).
+ * `capturePublishedSlug`, `createSlugRedirect`, the `schedulePublish` job, and
+ * the `redirects` collection.
+ *
+ * **Why `next/cache` is still stubbed after #135.** #135 asked whether this
+ * stub could go once `revalidateRedirects` stopped throwing out of a Next
+ * request scope. It cannot, for two reasons that have nothing to do with that
+ * hook:
+ *
+ * 1. `revalidatePost` and `revalidatePage` call `revalidatePath` behind the
+ *    `context.disableRevalidate` flag and nothing else, and they run BEFORE
+ *    `createSlugRedirect` in each collection's `afterChange` array. So a
+ *    publish issued without that flag and without a Next scope throws in the
+ *    FIRST hook and rolls back the post itself — long before any redirect hook
+ *    is reached. That is a wider condition than #135 (which names only
+ *    `revalidateRedirects`) and is deliberately left alone here.
+ * 2. Stubbing also lets the test ASSERT the old path is purged, which is
+ *    load-bearing: `revalidatePost` never purges it on a published-to-published
+ *    rename (#132), `createSlugRedirect` does.
+ *
+ * What #135 did buy is proved directly below by
+ * "keeps the redirect row when the redirects revalidation throws": the stub is
+ * driven to throw exactly the invariant a missing Next scope raises, and the
+ * row survives Payload's real transaction instead of being rolled back with
+ * it. A caller that writes a `redirects` row directly therefore needs no stub
+ * at all.
  *
  * Runs in the `e2e` job, the only one with `pgvector/pgvector:pg16` and a real
  * `pnpm migrate`. Rows are cleaned up in `afterAll` so the job's later
@@ -311,6 +329,113 @@ describe.skipIf(!connectionString)(
       })
       expect(rows.totalDocs).toBe(0)
     }, 120_000)
+
+    it('keeps the redirect row when the redirects revalidation throws (#135)', async () => {
+      // The exact failure #135 names, reproduced on the real pipeline: outside
+      // a Next request scope `revalidateTag` raises this invariant. Because
+      // `revalidateRedirects` is an `afterChange` INSIDE the operation's
+      // transaction, an escaping throw reaches Payload's `killTransaction` and
+      // the row written moments earlier disappears. The unit test pins that
+      // the hook swallows it; only this tier can show that the row actually
+      // survives the transaction.
+      //
+      // Scoped to the redirects hook alone: `revalidatePath` (the post's own
+      // hooks) stays a plain spy, so the post update itself is unaffected.
+      const id = await createPublished(`${MARKER}-throw-old`)
+      revalidateTag.mockImplementation(() => {
+        throw new Error('Invariant: static generation store missing')
+      })
+
+      try {
+        await payload.update({
+          collection: 'posts',
+          id,
+          draft: true,
+          overrideAccess: true,
+          context: { disableRevalidate: true },
+          data: {
+            slug: `${MARKER}-throw-new`,
+            slugLock: false,
+            _status: 'draft',
+          },
+        })
+        await payload.update({
+          collection: 'posts',
+          id,
+          draft: false,
+          overrideAccess: true,
+          context: { disableRevalidate: true },
+          data: {
+            slug: `${MARKER}-throw-new`,
+            slugLock: false,
+            _status: 'published',
+          },
+        })
+      } finally {
+        revalidateTag.mockReset()
+      }
+
+      const rows = await redirectsFor(`/articles/${MARKER}-throw-old`)
+      expect(rows.totalDocs).toBe(1)
+      expect(rows.docs[0].to).toMatchObject({
+        type: 'reference',
+        reference: { relationTo: 'posts', value: id },
+      })
+    }, 120_000)
+
+    it('creates the redirect for a SCHEDULED publish of a renamed post (#135)', async () => {
+      // AC 3. The scheduled path is not a variation on the admin one: the
+      // `schedulePublish` task handler
+      // (`payload/dist/versions/schedule/job.js`) issues
+      // `payload.update({ data: { _status: 'published' }, depth: 0 })` — the
+      // data payload carries NO slug, and the request carries no
+      // `disableRevalidate`. So the new slug can only come from the pending
+      // draft version and the old one can only come from `capturePublishedSlug`
+      // reaching the main table. Anything that reads `previousDoc` instead
+      // fails here.
+      const id = await createPublished(`${MARKER}-sched-old`)
+
+      await payload.update({
+        collection: 'posts',
+        id,
+        draft: true,
+        overrideAccess: true,
+        context: { disableRevalidate: true },
+        data: {
+          slug: `${MARKER}-sched-new`,
+          slugLock: false,
+          _status: 'draft',
+        },
+      })
+
+      // Queue the real task, due in the past, then drain the queue — the same
+      // entry point the cron endpoint uses.
+      await payload.jobs.queue({
+        task: 'schedulePublish',
+        input: {
+          type: 'publish',
+          doc: { relationTo: 'posts', value: String(id) },
+        },
+        waitUntil: new Date(Date.now() - 60_000),
+      })
+      await payload.jobs.run()
+
+      const live = await payload.findByID({
+        collection: 'posts',
+        id,
+        depth: 0,
+        overrideAccess: true,
+      })
+      expect(live._status).toBe('published')
+      expect(live.slug).toBe(`${MARKER}-sched-new`)
+
+      const rows = await redirectsFor(`/articles/${MARKER}-sched-old`)
+      expect(rows.totalDocs).toBe(1)
+      expect(rows.docs[0].to).toMatchObject({
+        type: 'reference',
+        reference: { relationTo: 'posts', value: id },
+      })
+    }, 180_000)
 
     it('does not stack a second row when the same path is renamed again', async () => {
       const id = await createPublished(`${MARKER}-a`)
