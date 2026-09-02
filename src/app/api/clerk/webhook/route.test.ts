@@ -868,6 +868,30 @@ describe('POST /api/clerk/webhook — user.updated', () => {
     expect(captureContactMock).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['a string', 'garbage'],
+    ['an object', { primary: 'ada@example.test' }],
+  ])(
+    '2xx no-ops when a signed payload carries %s for email_addresses',
+    async (_label, malformed) => {
+      // `?? []` defended only `null`/`undefined`, so this shape reached
+      // `.find` and threw a TypeError. The POST try/catch wraps signature
+      // verification ONLY, so the throw escaped as a 500 — contradicting the
+      // route's "every unresolvable case is a 2xx no-op" contract and, worse,
+      // asking Clerk to retry a permanently-malformed payload forever.
+      const event = updatedEvent({ email_addresses: malformed })
+      verifyMock.mockReturnValue(event)
+
+      // A rejected promise fails this line, which is the regression: the
+      // assertion is as much that POST does not throw as that it 200s.
+      const res = await POST(makeRequest(event))
+
+      expect(res.status).toBe(200)
+      await expect(res.json()).resolves.toEqual({ received: true })
+      expect(captureContactMock).not.toHaveBeenCalled()
+    },
+  )
+
   it('skips the removal when the new contact resolves to the same id', async () => {
     // Resend returns the existing contact when an address is re-created. If
     // that is somehow the mapped id, removing it would delete the contact the

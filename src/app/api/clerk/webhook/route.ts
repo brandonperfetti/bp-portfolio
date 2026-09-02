@@ -180,11 +180,29 @@ function nonEmptyStringField(
  * plain-node runnability that is why it is `.mjs` — or making `src/` import
  * from `scripts/`. Neither is worth four lines; see that module for the
  * matching half of this note.
+ *
+ * **`Array.isArray`, not `?? []`.** The cast is a compile-time claim about
+ * untyped webhook JSON, and `?? []` only makes good on it for `null` and
+ * `undefined`. A signed payload carrying `email_addresses: 'garbage'` — or an
+ * object — reached `.find` and threw a `TypeError` that escaped the route: the
+ * POST `try`/`catch` wraps signature verification only, so the throw surfaced
+ * as a 500. That contradicts this route's contract that every unresolvable
+ * case is a 2xx no-op, and it is the worst possible answer to a permanently
+ * malformed payload, because Clerk redelivers every non-2xx and would retry
+ * this one forever. A non-array now reads as "no addresses" and the event
+ * no-ops down its existing logged path.
+ *
+ * The guard is deliberately local rather than a blanket `try`/`catch` around
+ * the handler dispatch. Uncaught TRANSIENT failures — Redis unreachable,
+ * Resend down — SHOULD stay non-2xx precisely so Clerk retries them;
+ * swallowing those into a 200 would turn a recoverable blip into silent data
+ * loss. Only the permanently-malformed shape belongs in a 2xx.
  */
 function primaryEmail(data: ClerkUserData): string | undefined {
-  const emails =
-    (data.email_addresses as
-      Array<{ id?: string; email_address?: string }> | undefined) ?? []
+  const raw = data.email_addresses
+  const emails = Array.isArray(raw)
+    ? (raw as Array<{ id?: string; email_address?: string }>)
+    : []
   const primaryId = nonEmptyStringField(data, 'primary_email_address_id')
   const primary = primaryId
     ? emails.find((entry) => entry?.id === primaryId)
