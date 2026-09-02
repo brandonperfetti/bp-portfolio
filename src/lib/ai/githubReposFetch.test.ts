@@ -96,7 +96,7 @@ describe('fetchPublicRepoListing', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     return fetchPublicRepoListing('brandonperfetti', 'tok').then(() => {
-      const url = String(fetchMock.mock.calls[0][0])
+      const [url] = fetchMock.mock.calls[0] as unknown as [string]
       expect(url).toContain('/users/brandonperfetti/repos')
       expect(url).not.toContain('/user/repos')
     })
