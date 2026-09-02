@@ -347,6 +347,14 @@ export interface Page {
   ogImageMode?: ('auto' | 'bespoke' | 'generated') | null;
   publishedAt?: string | null;
   /**
+   * Place this page under another one. The URL becomes the parent’s path plus this page’s slug — at most 3 levels deep. Leave empty for a top-level page.
+   */
+  parent?: (number | null) | Page;
+  /**
+   * Computed from the parent chain and this page’s slug. The `[...segments]` route resolves on it.
+   */
+  path?: string | null;
+  /**
    * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
    */
   slug?: string | null;
@@ -2011,6 +2019,8 @@ export interface PagesSelect<T extends boolean = true> {
   shareTargetsRemove?: T;
   ogImageMode?: T;
   publishedAt?: T;
+  parent?: T;
+  path?: T;
   slug?: T;
   slugLock?: T;
   updatedAt?: T;
