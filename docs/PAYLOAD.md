@@ -235,6 +235,25 @@ Run both after any schema/field/plugin change; CI diffs them and fails on
 staleness. A stale importMap manifests as missing admin UI (empty SEO tab,
 unrenderable editor).
 
+**`scripts/check-importmap.mjs` — the non-emptiness gate (#131).** Staleness is
+not the only way an importMap goes wrong: `pnpm generate:importmap` can write an
+**empty** map and exit 0 when component resolution fails, and staleness cannot
+see that — an empty map regenerated as empty is not stale, so CI stays green
+while every custom field component in the admin disappears at once. The gate
+runs in the `quality` job between the regenerate and the diff, so it judges the
+freshly generated content rather than what happens to be committed, and it
+fails when either
+
+- the map carries fewer than `MINIMUM_IMPORT_MAP_ENTRIES` entries (31 today), or
+- a component this repo declares — any `'@/module#Export'` string in a non-test
+  `src/` source, e.g. the slug field's — is missing from the map.
+
+The expected components are derived from the config sources rather than frozen
+in a list, so adding or removing one needs no second edit. When the gate fires,
+the fix is always to re-run the generator; if the map still comes back short,
+that is the resolution failure #131 tracks and the result must not be committed.
+Run it locally with `node scripts/check-importmap.mjs`.
+
 ## Migrations
 
 - `pnpm migrate:create` after schema changes → commit the migration.

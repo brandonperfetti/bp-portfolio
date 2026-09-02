@@ -71,10 +71,18 @@ jobs:
             git diff -- src/payload-types.ts
             exit 1
           fi
+      # The non-emptiness gate runs BETWEEN the regenerate and the diff on
+      # purpose (#131). `pnpm generate:importmap` can write an empty map and
+      # exit 0, and staleness cannot see that — an empty map regenerated as
+      # empty is not stale, so the diff below stays green while the admin
+      # editor is blank for every collection at once. Checking here means the
+      # gate judges the FRESHLY GENERATED content, which is what a deploy would
+      # actually use, rather than whatever is committed.
       - name: Verify generated admin importMap is committed
         run: |
           pnpm generate:importmap
           pnpm exec prettier --write "src/app/(payload)/admin/importMap.js"
+          node scripts/check-importmap.mjs
           if ! git diff --quiet -- "src/app/(payload)/admin/importMap.js"; then
             echo "::error::admin importMap is stale. Run 'pnpm generate:importmap' and commit."
             git diff -- "src/app/(payload)/admin/importMap.js"
