@@ -25,6 +25,28 @@ const CUSTOM_LINKS = [
 ].filter((link): link is ResolvedSocialLink => link !== null)
 
 /**
+ * One link per platform the resolver knows, in union order, plus a host it
+ * deliberately doesn't — so the glyph set is reviewable in one frame and a
+ * mark that renders wrong in either theme has somewhere to show up.
+ *
+ * Built by resolving real URLs rather than hand-writing `platform` keys: that
+ * way the story fails if a host stops resolving, instead of quietly drawing
+ * the right icon from a fixture the resolver never agreed with.
+ */
+const EVERY_PLATFORM_LINKS = [
+  resolveSocialLink('https://x.com/brandonperfetti'),
+  resolveSocialLink('https://github.com/brandonperfetti'),
+  resolveSocialLink('https://www.linkedin.com/in/brandonperfetti/'),
+  resolveSocialLink('https://instagram.com/brandonperfetti'),
+  resolveSocialLink('https://facebook.com/brandonperfetti'),
+  resolveSocialLink('https://youtube.com/@brandonperfetti'),
+  resolveSocialLink('https://bsky.app/profile/brandonperfetti.com'),
+  resolveSocialLink('https://threads.net/@brandonperfetti'),
+  resolveSocialLink('info@brandonperfetti.com'),
+  resolveSocialLink('https://brandonperfetti.com/uses'),
+].filter((link): link is ResolvedSocialLink => link !== null)
+
+/**
  * Social links (#32), presentational. Two treatments the site already
  * ships — Home's icon row and About's labeled list — over two sources, so
  * the variant × source matrix is four stories plus the About divider case.
@@ -177,6 +199,62 @@ export const LabeledListWithoutEmail: Story = {
     await expect(items).toHaveLength(IDENTITY_LINKS.length)
     await expect(canvasElement.querySelector('.border-t')).toBeNull()
     await expect(canvasElement.querySelector('a[href^="mailto:"]')).toBeNull()
+  },
+}
+
+/**
+ * Every platform the resolver can name (#46), as the home row draws them:
+ * X, GitHub, LinkedIn, Instagram, Facebook, YouTube, Bluesky, Threads, then
+ * email and the generic link glyph for a host the list doesn't know.
+ */
+export const EveryPlatformIconRow: Story = {
+  args: { variant: 'iconRow', links: EVERY_PLATFORM_LINKS },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+
+    await expect(canvas.getAllByRole('link')).toHaveLength(10)
+
+    // Each of the four added in #46 resolved from its host, carries the
+    // "Follow on …" wording, and draws a glyph — the icon row has no visible
+    // text, so the accessible name is the only handle on it.
+    for (const name of [
+      'Follow on Facebook',
+      'Follow on YouTube',
+      'Follow on Bluesky',
+      'Follow on Threads',
+    ]) {
+      const link = canvas.getByRole('link', { name })
+      await expect(link).toBeInTheDocument()
+      await expect(link).toHaveAttribute('target', '_blank')
+      // The glyph is decorative; the link's name does the announcing.
+      const svg = link.querySelector('svg')
+      await expect(svg).not.toBeNull()
+      await expect(svg).toHaveAttribute('aria-hidden', 'true')
+    }
+
+    // The lookalike guard, visible: an unknown host keeps the generic glyph
+    // rather than borrowing a brand's mark.
+    await expect(
+      canvas.getByRole('link', { name: 'brandonperfetti.com' }),
+    ).toBeInTheDocument()
+  },
+}
+
+/** The same full set in About's treatment, where each row has visible text. */
+export const EveryPlatformLabeledList: Story = {
+  args: { variant: 'labeledList', links: EVERY_PLATFORM_LINKS },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const items = canvas.getAllByRole('listitem')
+
+    await expect(items).toHaveLength(10)
+    await expect(
+      canvas.getByRole('link', { name: /Follow on Bluesky/ }),
+    ).toHaveAttribute('href', 'https://bsky.app/profile/brandonperfetti.com')
+    // A bare address became a mailto row, and a mailto is not off-site.
+    await expect(
+      canvas.getByRole('link', { name: 'info@brandonperfetti.com' }),
+    ).not.toHaveAttribute('target')
   },
 }
 

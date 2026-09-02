@@ -9,4 +9,13 @@
     margin: 0;
     padding-bottom: 0.3125rem;
   }
+
+  // The state sentence under the input (#120): the lock button alone could not
+  // say whether "locked" meant "tracks the title" or "frozen at this URL".
+  .slug-field-description {
+    margin: 0.25rem 0 0;
+    color: var(--theme-elevation-500);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
 }

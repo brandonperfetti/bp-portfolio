@@ -65,7 +65,7 @@ export const SocialLinks: Block = {
       admin: {
         condition: (_, siblingData) => siblingData?.source === 'custom',
         description:
-          'The icon is derived from the URL (X, GitHub, LinkedIn, Instagram, email — anything else gets a generic link glyph).',
+          'The icon is derived from the URL (X, GitHub, LinkedIn, Instagram, Facebook, YouTube, Bluesky, Threads, email — anything else gets a generic link glyph).',
       },
       fields: [
         {

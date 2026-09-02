@@ -48,13 +48,16 @@
  *
  * ## Why this is a module and not a copy
  *
- * `scripts/eval-harness.test.ts` already owns a TypeScript-only tokenizer of
- * the same shape, and the precedence trick below is lifted from it. This is a
- * second consumer with a strictly larger job (it must also reach inside the
- * literals that one preserves), so it lives in `scripts/lib/` next to
- * `orphan-guard` and `page-diff` rather than being pasted a second time.
- * Folding the eval harness onto this module is the obvious follow-up and was
- * deliberately not done here: that file is outside this change's scope.
+ * The precedence trick below was lifted from a TypeScript-only tokenizer
+ * `scripts/eval-harness.test.ts` used to own privately. This is a second
+ * consumer with a strictly larger job (it must also reach inside the literals
+ * that one preserves), so it lives in `scripts/lib/` next to `orphan-guard`
+ * and `page-diff` rather than being pasted a second time. The fold this
+ * module's header once listed as an obvious follow-up has since happened:
+ * {@link stripTsComments} is that tokenizer, exported, and the eval harness
+ * imports it instead of keeping a copy. There is now exactly one `TS_TOKENS`
+ * in the repo, and a guard in `scripts/eval-harness.test.ts` fails if a second
+ * one reappears there.
  *
  * @module
  */
@@ -128,10 +131,38 @@ function stripSqlComments(literal) {
 }
 
 /**
+ * TypeScript source with every comment blanked and every literal left alone.
+ *
+ * @remarks The TypeScript half of {@link stripComments}, on its own, for
+ * callers whose source carries no SQL. `scripts/eval-harness.test.ts` is the
+ * one that needs it: its question is "does an import specifier appear in
+ * CODE", and running the SQL pass over an eval file would additionally blank
+ * `--` runs inside template literals — harmless, since blanking can only
+ * REMOVE a specifier and never invent one, but it would be answering a
+ * question nobody asked. Splitting the pass is cheaper than explaining that.
+ *
+ * Both exports walk the same {@link TS_TOKENS}, so the precedence reasoning
+ * documented there is stated once and cannot drift between two copies, which
+ * is the whole reason this function is exported rather than inlined twice.
+ *
+ * Comment text is replaced by a single space rather than deleted, so two
+ * identifiers never fuse across a stripped comment.
+ *
+ * @param source - Raw TypeScript source.
+ * @returns The same source with comment text replaced by a space.
+ */
+export function stripTsComments(source) {
+  return source.replace(TS_TOKENS, (token) => (isComment(token) ? ' ' : token))
+}
+
+/**
  * Migration source with every comment blanked and every statement left alone.
  *
- * @remarks Comment text is replaced by a single space rather than deleted, so
- * two identifiers never fuse across a stripped comment.
+ * @remarks {@link stripTsComments} plus a second pass INSIDE each template
+ * literal, because a migration's payload is SQL and `--` is a comment there.
+ *
+ * Comment text is replaced by a single space rather than deleted, so two
+ * identifiers never fuse across a stripped comment.
  *
  * @param source - Raw migration source (TypeScript containing `sql` template
  * literals).

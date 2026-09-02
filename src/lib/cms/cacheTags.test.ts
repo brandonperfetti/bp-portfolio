@@ -53,6 +53,7 @@ import { getPageLayoutBySlug, getPostLayoutBySlug } from '@/lib/cms/layoutsRepo'
 import { getCmsNavigation } from '@/lib/cms/navigationRepo'
 import { getCmsPageByPath, getPublishedPageSlugs } from '@/lib/cms/pagesRepo'
 import { getCmsProjects } from '@/lib/cms/projectsRepo'
+import { getCmsRedirects } from '@/lib/cms/redirectsRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { getCmsTech } from '@/lib/cms/techRepo'
 import { getCmsUses } from '@/lib/cms/usesRepo'
@@ -80,6 +81,7 @@ const cases: Array<{
     call: getCmsNavigation,
   },
   { name: 'getCmsProjects', tag: CMS_TAGS.projects, call: getCmsProjects },
+  { name: 'getCmsRedirects', tag: CMS_TAGS.redirects, call: getCmsRedirects },
   { name: 'getCmsTech', tag: CMS_TAGS.tech, call: getCmsTech },
   { name: 'getCmsUses', tag: CMS_TAGS.uses, call: getCmsUses },
   {
@@ -234,6 +236,7 @@ const EXPECTED_DIRECTIVE_KINDS: Record<string, DirectiveKind> = {
   'src/lib/cms/pagesRepo.ts#getPublishedPageBySlug': 'remote',
   'src/lib/cms/pagesRepo.ts#getPublishedPageSlugs': 'remote',
   'src/lib/cms/projectsRepo.ts#getCmsProjects': 'remote',
+  'src/lib/cms/redirectsRepo.ts#getCmsRedirects': 'remote',
   'src/lib/cms/siteSettingsRepo.ts#getCmsSiteSettings': 'remote',
   'src/lib/cms/techRepo.ts#getCmsTech': 'remote',
   'src/lib/cms/usesRepo.ts#getCmsUses': 'remote',
