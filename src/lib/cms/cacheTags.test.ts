@@ -62,7 +62,7 @@ import { getCmsConsentConfig } from '@/lib/cms/consentRepo'
 import { getCmsIdentity } from '@/lib/cms/identityRepo'
 import { getPageLayoutBySlug, getPostLayoutBySlug } from '@/lib/cms/layoutsRepo'
 import { getCmsNavigation } from '@/lib/cms/navigationRepo'
-import { getCmsPageByPath, getPublishedPageSlugs } from '@/lib/cms/pagesRepo'
+import { getCmsPageByPath, getPublishedPagePaths } from '@/lib/cms/pagesRepo'
 import { getCmsProjects } from '@/lib/cms/projectsRepo'
 import { getCmsRedirects } from '@/lib/cms/redirectsRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
@@ -107,9 +107,9 @@ const cases: Array<{
     call: () => getCmsPageByPath('/x'),
   },
   {
-    name: 'getPublishedPageSlugs',
+    name: 'getPublishedPagePaths',
     tag: CMS_TAGS.pages,
-    call: getPublishedPageSlugs,
+    call: getPublishedPagePaths,
   },
   {
     name: 'getPageLayoutBySlug',
@@ -303,8 +303,8 @@ const EXPECTED_DIRECTIVE_KINDS: Record<string, DirectiveKind> = {
   'src/lib/cms/layoutsRepo.ts#getPostLayoutBySlug': 'remote',
   'src/lib/cms/navigationRepo.ts#getCmsNavigation': 'remote',
   'src/lib/cms/pagesRepo.ts#getCmsPageByPath': 'remote',
-  'src/lib/cms/pagesRepo.ts#getPublishedPageBySlug': 'remote',
-  'src/lib/cms/pagesRepo.ts#getPublishedPageSlugs': 'remote',
+  'src/lib/cms/pagesRepo.ts#getPublishedPageByPath': 'remote',
+  'src/lib/cms/pagesRepo.ts#getPublishedPagePaths': 'remote',
   'src/lib/cms/projectsRepo.ts#getCmsProjects': 'remote',
   'src/lib/cms/redirectsRepo.ts#getCmsRedirects': 'remote',
   'src/lib/cms/siteSettingsRepo.ts#getCmsSiteSettings': 'remote',
