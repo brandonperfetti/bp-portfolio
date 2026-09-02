@@ -104,33 +104,72 @@ describe('getSentryEnvironment', () => {
     expect(getSentryEnvironment()).toBe('staging')
   })
 
-  it('falls back to VERCEL_ENV when neither env var is set', () => {
+  it('falls back to VERCEL_ENV (server-shaped preview deploy) when neither env var is set', () => {
     vi.stubEnv('NEXT_PUBLIC_SENTRY_ENVIRONMENT', '')
     vi.stubEnv('SENTRY_ENVIRONMENT', '')
     vi.stubEnv('VERCEL_ENV', 'preview')
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'preview')
     vi.stubEnv('NODE_ENV', 'production')
     expect(getSentryEnvironment()).toBe('preview')
   })
 
-  it('falls back to NODE_ENV, then a hardcoded default', () => {
+  it('#134: on a browser-shaped preview env (no VERCEL_ENV, NODE_ENV=production), NEXT_PUBLIC_VERCEL_ENV tags it preview — not production', () => {
+    // The exact shape of the browser bundle on a Vercel Preview deploy:
+    // NEXT_PUBLIC_SENTRY_ENVIRONMENT is configured for Production and
+    // Staging only, the server-only vars inline as undefined, and NODE_ENV
+    // is baked to 'production' on every built deploy. Before #134 this
+    // resolved to 'production' and preview browser errors landed in the
+    // production feed.
     vi.stubEnv('NEXT_PUBLIC_SENTRY_ENVIRONMENT', '')
     vi.stubEnv('SENTRY_ENVIRONMENT', '')
     vi.stubEnv('VERCEL_ENV', '')
-    vi.stubEnv('NODE_ENV', 'test')
-    expect(getSentryEnvironment()).toBe('test')
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'preview')
+    vi.stubEnv('NODE_ENV', 'production')
+    expect(getSentryEnvironment()).toBe('preview')
   })
 
-  it('regression guard: on a client-bundle-shaped env (only NEXT_PUBLIC_* survives), the public var — not NODE_ENV — wins', () => {
-    // Simulates the browser bundle: SENTRY_ENVIRONMENT/VERCEL_ENV are
-    // inlined as undefined client-side (never NEXT_PUBLIC_-prefixed), and
-    // NODE_ENV is baked to 'production' on every built deploy — without
-    // preferring the public var first, staging/preview client events
-    // would silently get tagged 'production'.
+  it('#134: NODE_ENV is not an environment name — with no deployment signal it resolves to development, never the build mode', () => {
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('VERCEL_ENV', '')
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', '')
+    vi.stubEnv('NODE_ENV', 'test')
+    expect(getSentryEnvironment()).toBe('development')
+
+    // …and a built deploy with no deployment signal must not inherit
+    // NODE_ENV=production either.
+    vi.stubEnv('NODE_ENV', 'production')
+    expect(getSentryEnvironment()).toBe('development')
+  })
+
+  it('regression guard: on a client-bundle-shaped env (only NEXT_PUBLIC_* survives), the explicit override still wins over NEXT_PUBLIC_VERCEL_ENV', () => {
     vi.stubEnv('NEXT_PUBLIC_SENTRY_ENVIRONMENT', 'staging')
     vi.stubEnv('SENTRY_ENVIRONMENT', '')
     vi.stubEnv('VERCEL_ENV', '')
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'preview')
     vi.stubEnv('NODE_ENV', 'production')
     expect(getSentryEnvironment()).toBe('staging')
+  })
+
+  it('#134: reads NEXT_PUBLIC_* via literal static member access so Next can inline it into the browser bundle', async () => {
+    // process.env[name] / destructuring are NOT inlined by Next — a
+    // computed read would silently be undefined client-side, which is the
+    // whole failure mode this fix closes. Guard the access SHAPE, not just
+    // the behaviour.
+    const { readFile } = await import('node:fs/promises')
+    const { resolve } = await import('node:path')
+    const source = await readFile(
+      resolve(process.cwd(), 'src/lib/observability/sentryConfig.ts'),
+      'utf8',
+    )
+    // Comments are stripped first: the TSDoc deliberately *names* the
+    // non-inlinable `process.env[name]` shape as the thing to avoid.
+    const code = source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '')
+    expect(code).toContain('process.env.NEXT_PUBLIC_VERCEL_ENV')
+    expect(code).not.toMatch(/process\.env\[/)
+    expect(code).not.toMatch(/process\.env\.NODE_ENV/)
   })
 })
 

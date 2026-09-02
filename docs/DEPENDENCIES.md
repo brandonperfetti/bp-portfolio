@@ -86,7 +86,12 @@ one set, version-locked.
   just skips the upload. Sentry Logs is enabled on server/client/edge,
   forwarding `console.warn` / `console.error` (not `log`/`info`/`debug`).
   Session replay, cron monitoring, and alerting rules are intentionally not
-  wired — defaults first (#73).
+  wired — defaults first (#73). The `environment` tag resolves
+  `NEXT_PUBLIC_SENTRY_ENVIRONMENT` → `SENTRY_ENVIRONMENT` → `VERCEL_ENV` →
+  `NEXT_PUBLIC_VERCEL_ENV` → `'development'`; `NODE_ENV` is deliberately not in
+  that chain (build mode ≠ deployment target), and the browser bundle only ever
+  sees the two `NEXT_PUBLIC_*` entries — which is why preview client events used
+  to be tagged `production` (#134).
 
 ## Supply-chain policy (#91)
 
