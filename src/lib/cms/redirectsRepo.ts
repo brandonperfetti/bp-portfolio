@@ -48,19 +48,21 @@ export type CmsRedirectTarget = {
 }
 
 /**
- * Is a stored permanence code a permanent redirect?
+ * Is a permanence code a permanent redirect?
  *
- * @param type - The row's `type`, which is `null` on every row written before
- * #130 added the field and on any row an import left unset.
+ * @param type - A normalised code from a {@link CmsRedirect}.
  *
- * @remarks Permanent is the default and the fallback in one: an unset, unknown
- * or unreadable code answers `true`. That is the pre-#130 behaviour of this
- * whole module (`permanentRedirect`, unconditionally), so the field's arrival
- * changes nothing for a row that does not use it — and the failure direction is
- * the conservative one, since a rename redirect is exactly the case that should
- * be permanent.
+ * @remarks Deliberately narrow. An earlier cut took `unknown` so it could also
+ * absorb the `null` a pre-#130 row carries — but that made two fallbacks for
+ * one question: {@link getCmsRedirects} already normalises the raw column
+ * before building a `CmsRedirect`, so this function never actually saw an
+ * unset value, and the wider signature was exercised only by its own tests. The
+ * fallback belongs at the boundary where the raw value arrives, and it lives
+ * there alone now. Runtime behaviour is unchanged either way — `!== '302'`
+ * answers `true` for anything else regardless of what the signature admits.
  */
-export const isPermanentRedirect = (type: unknown): boolean => type !== '302'
+export const isPermanentRedirect = (type: CmsRedirectType): boolean =>
+  type !== '302'
 
 /**
  * Upper bound on rows read per lookup. Redirects here are editorial plus one
@@ -241,8 +243,15 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
   for (const doc of docs) {
     const from = (doc as { from?: unknown }).from
     if (typeof from !== 'string' || from.length === 0) continue
-    // Narrowed the same way every other field on these rows is: the select is
-    // typed loosely and a row written before #130 has no value here at all.
+    // THE permanence fallback, and the only one — see `isPermanentRedirect`.
+    // This is where the raw column arrives, so this is where "anything that is
+    // not '302' is permanent" belongs: a row written before #130 added the
+    // field carries no value at all, and one an import left unset carries
+    // whatever the import wrote. Answering permanent is the pre-#130 behaviour
+    // of this whole module (`permanentRedirect`, unconditionally), so the
+    // field's arrival changes nothing for a row that does not use it — and it
+    // is the conservative direction, since a rename redirect is exactly the
+    // case that must stay permanent.
     const type: CmsRedirectType =
       (doc as { type?: unknown }).type === '302' ? '302' : '301'
     const to = (doc as { to?: unknown }).to as

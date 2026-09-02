@@ -34,7 +34,8 @@ import type { Page } from '../../../payload-types'
  * The autosave gap on the unpublish branch is identical to the Posts one and
  * documented there: Pages autosaves at the same 100ms interval, so unpublishing
  * with a pending draft leaves `previousDoc._status === 'draft'` and purges
- * nothing. Measured 2026-09-02, pinned by test, filed separately.
+ * nothing. Measured 2026-09-02, pinned by test, tracked in a follow-up to
+ * #132.
  *
  * `revalidateTag(tag, { expire: 0 })`, not `'max'` (#118): under
  * cacheComponents (`'use cache'` readers, #76) `'max'` is

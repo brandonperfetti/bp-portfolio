@@ -120,6 +120,30 @@ Scope: only **Posts** and **Pages** are slug-routed (`slugPaths.ts`).
 Categories, Tags, Projects and Authors carry a slug with no public URL behind
 it and keep the plain derive-from-title behaviour.
 
+**Who purges which path (#132).** Two hooks call `revalidatePath` on a rename
+and the split between them is a cross-file contract, so it is stated here
+rather than only in each hook's TSDoc:
+
+> **Whoever writes a redirect row purges that row's `from`. The revalidation
+> hooks purge the document's own paths.**
+
+Concretely: `revalidatePost`/`revalidatePage` purge the document's current path
+on publish and `previousDoc`'s path on unpublish; a published→published rename
+purges only the NEW path there, and `createSlugRedirect` purges the old one —
+inside the same `try` that wrote the row, from the same `from` string. The
+reason is that there are **two path vocabularies** in this tree and they
+disagree: the revalidation hooks hand-build `/articles/${slug}` and map `home`
+to `/`, while `publicPathForSlug` — what redirect rows are built from — calls
+the home page `/home`. A purge only uncovers the row it is meant to uncover if
+it is spelled the same way as that row's `from`, so the purge stays with the
+writer. The transition matrices in `revalidatePost.test.ts` and
+`revalidatePage.test.ts` pin every case.
+
+Known gap on the unpublish branch: unpublishing a document that has a pending
+autosaved rename purges nothing, because `previousDoc` is the draft and the
+served slug is absent from every `afterChange` argument. Measured 2026-09-02,
+pinned by a `KNOWN GAP` test in both matrices, tracked in a follow-up to #132.
+
 **Permanent vs temporary redirects (#130).** The plugin is configured with
 `redirectTypes: ['301', '302']`, which is what makes it emit a permanence
 field at all — without that option it emits none and every redirect served as
@@ -244,15 +268,32 @@ runs in the `quality` job between the regenerate and the diff, so it judges the
 freshly generated content rather than what happens to be committed, and it
 fails when either
 
-- the map carries fewer than `MINIMUM_IMPORT_MAP_ENTRIES` entries (31 today), or
+- the map carries fewer than `MINIMUM_IMPORT_MAP_ENTRIES` entries — the floor is
+  **25**, and the map carries **31** today — or
 - a component this repo declares — any `'@/module#Export'` string in a non-test
   `src/` source, e.g. the slug field's — is missing from the map.
 
 The expected components are derived from the config sources rather than frozen
-in a list, so adding or removing one needs no second edit. When the gate fires,
-the fix is always to re-run the generator; if the map still comes back short,
-that is the resolution failure #131 tracks and the result must not be committed.
-Run it locally with `node scripts/check-importmap.mjs`.
+in a list, so adding or removing one needs no second edit — but that scan is a
+regex over single-quoted `@/`-rooted literals, not a parser, so a path spelled
+any other way silently drops out of it. The entry floor is the backstop for
+whatever the scan under-counts; neither check is complete alone. When the gate
+fires, the fix is always to re-run the generator; if the map still comes back
+short, that is the resolution failure #131 tracks and the result must not be
+committed. Run it locally with `node scripts/check-importmap.mjs`.
+
+**Diagnosis status: the empty-map failure is real but undiagnosed.** The
+precondition that triggers it is not known. As of 2026-09-02 three independent
+containers have each run `pnpm generate:importmap` on this tree and **failed to
+reproduce** it: every one regenerated the map byte-identically to the committed
+copy after `prettier --write` (97 lines, 7742 bytes, 31 entries, exit 0). The
+issue's own inference — a workspace or `@payload-config` resolution difference
+— is therefore neither confirmed nor refuted, and nobody should treat it as
+settled. That non-reproduction is the argument for the shape of the gate rather
+than against it: because we cannot yet detect the cause, the gate catches the
+**outcome**, on freshly generated content, in the job that runs on every push.
+If it ever fires in CI, the annotation names #131 and says not to commit the
+result — that run is the next real datapoint anyone will get.
 
 ## Migrations
 

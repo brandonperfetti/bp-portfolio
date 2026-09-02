@@ -27,11 +27,24 @@
  *    `'@/fields/slug/SlugComponent#SlugComponent'` — written in the collection
  *    or field config, and the generator's whole job is to turn each of those
  *    into a map key. So the expected keys are *derived from the config
- *    sources*, not frozen in a list here: adding a component adds an
- *    obligation automatically, and removing one removes it, with no second
- *    place to remember to edit. A frozen list would rot into either a
+ *    sources*, not frozen in a list here: adding a component in the usual
+ *    spelling adds an obligation with no second place to remember to edit,
+ *    and removing one removes it. A frozen list would rot into either a
  *    permanent false failure or a check that stopped covering the newest
  *    components — the two ways this kind of gate normally dies.
+ *
+ *    **What the scan can and cannot see.** It is a regex over source text, and
+ *    it matches exactly one shape: a **single-quoted** string literal starting
+ *    `@/` and containing `#`. That is how every component in this repo is
+ *    declared today, and it is the spelling `check 1` is worth having. It is
+ *    not a parser, so it misses a path spelled any other way — double quotes,
+ *    a template literal, a constant assembled at runtime, an alias other than
+ *    `@/`, a path built by string concatenation. Each of those silently drops
+ *    an obligation, which is an under-count, which is the dangerous direction.
+ *    Check 2 is the backstop for exactly that: whatever the scan fails to
+ *    notice, the entry floor still refuses a map that came back short. Neither
+ *    check is complete on its own and this one is not safe by construction —
+ *    they are two coarse questions whose failure modes do not overlap.
  * 2. **The map must carry at least {@link MINIMUM_IMPORT_MAP_ENTRIES}
  *    entries.** Most of the map is not this repo's code at all — it is
  *    `@payloadcms/richtext-lexical`'s client and RSC entries, which check 1
@@ -56,6 +69,11 @@
  * unresolved component through, which is the outcome the gate exists to
  * prevent. Same asymmetry, and the same reasoning, as
  * `scripts/check-migrations-rls.mjs`.
+ *
+ * That asymmetry governs where a false result can land, not whether one can:
+ * the shapes listed under check 1 above are under-counts the scan cannot see
+ * at all, and no amount of leniency elsewhere finds them. The entry floor is
+ * what keeps those from being silent.
  *
  * @module
  */

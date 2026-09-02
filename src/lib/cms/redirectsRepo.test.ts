@@ -187,14 +187,16 @@ describe('redirect permanence (#130)', () => {
     mocks.find.mockReset()
   })
 
+  // Two cases, because the function now takes two. The unset/legacy fallback
+  // is not tested here on purpose: it lives at the boundary in
+  // `getCmsRedirects`, and it is exercised through that function by "treats a
+  // row stored with no type as permanent" below — the path a real row takes.
+  // Testing it here as well would have meant widening this signature to
+  // `unknown` for the test's benefit alone.
   it.each([
     ['301', true],
     ['302', false],
-    [null, true],
-    [undefined, true],
-    ['', true],
-    ['307', true],
-  ])('isPermanentRedirect(%o) === %s', (type, expected) => {
+  ] as const)('isPermanentRedirect(%o) === %s', (type, expected) => {
     expect(isPermanentRedirect(type)).toBe(expected)
   })
 

@@ -72,7 +72,7 @@ import type { Post } from '../../../payload-types'
  * it either: unpublish sends `_status: 'draft'`, which is that hook's
  * early-return. Closing it needs a way to tell an unpublish from an autosave
  * draft save that this tree does not have, so it is pinned as a failing-shape
- * test rather than papered over; filed separately.
+ * test rather than papered over; tracked in a follow-up to #132.
  *
  * `revalidateTag(tag, { expire: 0 })`, not `'max'` (#118): under
  * cacheComponents (`'use cache'` readers, #76) `'max'` is

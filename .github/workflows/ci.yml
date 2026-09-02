@@ -78,7 +78,7 @@ jobs:
       # editor is blank for every collection at once. Checking here means the
       # gate judges the FRESHLY GENERATED content, which is what a deploy would
       # actually use, rather than whatever is committed.
-      - name: Verify generated admin importMap is committed
+      - name: Verify admin importMap is committed and non-empty
         run: |
           pnpm generate:importmap
           pnpm exec prettier --write "src/app/(payload)/admin/importMap.js"

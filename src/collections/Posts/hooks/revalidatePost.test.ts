@@ -162,8 +162,8 @@ describe('revalidatePost old-path purge matrix (#132)', () => {
     // in ANY afterChange argument on this path, so closing it means teaching
     // `capturePublishedSlug` to fire on unpublish — which needs a way to tell
     // an unpublish from an autosave draft save that this tree does not have,
-    // and getting it wrong puts a database read on every 100ms autosave. Filed
-    // separately; change this expectation when that lands.
+    // and getting it wrong puts a database read on every 100ms autosave.
+    // Tracked in a follow-up to #132; change this expectation when that lands.
     revalidatePost(
       changeArgs(
         { slug: 'b', _status: 'draft' },

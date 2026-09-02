@@ -35,8 +35,13 @@
 ## CI (`.github/workflows/ci.yml`)
 
 Quality job: lint (ESLint + tsdoc) → prettier check → typecheck → generated
-payload-types staleness gate → generated importMap staleness gate → unit
-tests + coverage → Storybook build. E2E job: pgvector/pg16 service,
+payload-types staleness gate → generated importMap staleness **and
+plausibility** gate (`scripts/check-importmap.mjs`, #131 — staleness alone
+cannot see an empty map, because empty regenerated as empty is not stale; it
+runs between the regenerate and the diff so it judges freshly generated
+content) → committed-migration gate (#116) → new-table RLS gate
+(`scripts/check-migrations-rls.mjs`, #117) → unit tests + coverage → Storybook
+build. E2E job: pgvector/pg16 service,
 migrations, production build, Playwright e2e, then Storybook interaction
 tests (reuses the job's installed Chromium). Evalite job runs when a
 provider key secret is present.
