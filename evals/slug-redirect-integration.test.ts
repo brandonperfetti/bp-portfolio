@@ -208,7 +208,13 @@ describe.skipIf(!connectionString)(
         context: { disableRevalidate: true },
         data: {
           title: 'A completely different title',
-          slug: 'a-completely-different-title',
+          // MARKER-prefixed like every other slug this file writes: the
+          // attempt is supposed to be REFUSED, but a freeze regression is
+          // exactly what this test exists to catch, and on that day the row
+          // lands. Cleanup deletes by `slug like %MARKER%`, so an unprefixed
+          // attempt slug would leak the post into the shared e2e database and
+          // outlive the run.
+          slug: `${MARKER}-a-completely-different-title`,
           slugLock: true,
           _status: 'published',
         },
@@ -233,7 +239,10 @@ describe.skipIf(!connectionString)(
       // database — the one addendum 2 asked to be verified on real infra.
       const id = await createPublished(`${MARKER}-dfreeze`)
 
-      for (const attempt of ['hijack-one', 'hijack-two']) {
+      // MARKER-prefixed for the same reason as the freeze test above: these
+      // slugs only survive the run if the freeze has regressed, and that is
+      // the day cleanup has to be able to find them.
+      for (const attempt of [`${MARKER}-hijack-one`, `${MARKER}-hijack-two`]) {
         await payload.update({
           collection: 'posts',
           id,
@@ -250,7 +259,11 @@ describe.skipIf(!connectionString)(
         draft: false,
         overrideAccess: true,
         context: { disableRevalidate: true },
-        data: { slug: 'hijack-two', slugLock: true, _status: 'published' },
+        data: {
+          slug: `${MARKER}-hijack-two`,
+          slugLock: true,
+          _status: 'published',
+        },
       })
 
       const live = await payload.findByID({
