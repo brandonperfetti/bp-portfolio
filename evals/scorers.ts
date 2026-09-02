@@ -222,6 +222,87 @@ export function createNeverFabricatesSiteUrl(
 }
 
 /**
+ * Absolute URLs in an answer that do not belong to this site.
+ *
+ * @remarks The mirror image of {@link citedPaths}'s second pass, which folds
+ * `brandonperfetti.com` URLs down to paths and throws every other absolute URL
+ * away. Throwing them away is right for the two path scorers — a vendor
+ * homepage is not a fabricated SITE path — but it is exactly what made the
+ * wave-3 defect invisible to them: an answer whose only address was
+ * `https://www.postgresql.org/` scored 0 on `cites-a-real-source-url`
+ * indistinguishably from an answer that cited nothing at all. This function
+ * recovers the difference.
+ *
+ * Trailing sentence punctuation is stripped so `...postgresql.org/.` and
+ * `...postgresql.org/` are one URL. A markdown link's target is matched by the
+ * same pass, because the URL pattern does not care what surrounds it.
+ *
+ * @param output - The assistant's answer.
+ * @returns Distinct non-site absolute URLs, in first-seen order.
+ */
+export function externalUrls(output: string): string[] {
+  const found = new Set<string>()
+  for (const match of output.matchAll(/https?:\/\/[^\s)>\]"']+/gi)) {
+    const url = match[0].replace(/[.,;:!?]+$/, '')
+    if (!/^https?:\/\/(?:www\.)?brandonperfetti\.com(\/|$)/i.test(url)) {
+      found.add(url)
+    }
+  }
+  return [...found]
+}
+
+/**
+ * Build the site-over-vendor sourcing scorer for a corpus.
+ *
+ * @remarks The instrument for the second wave-4 defect. Asked about a
+ * technology the site documents, Corvus cited the technology's OWN homepage —
+ * `postgresql.org`, `vitest.dev` — which is a true address and a wrong source:
+ * the question was what THIS site says, and the site's answer lives at
+ * `/tech`. `chunkFlatRecord` puts that vendor URL inside the passage as a
+ * labelled `URL:` field, which is why the model could reach for it at all
+ * (`src/lib/ai/groundedSystem.ts` carries the full mechanism).
+ *
+ * Three outcomes, and the middle one is what makes the score readable next to
+ * `cites-a-real-source-url`:
+ *
+ * - **0** — ANY third-party URL is present, whether or not a corpus path rides
+ *   along with it. This is the defect, and the mixed shape is the reason the
+ *   test is ordered this way rather than checking the corpus path first: an
+ *   answer citing `/tech` AND `https://www.postgresql.org/` used to score 1,
+ *   so the one failure this scorer's NAME promises to catch — a site citation
+ *   masking a vendor URL — was the one it could not see.
+ * - **1** — a corpus path is cited and no third-party URL appears. The site
+ *   carried the claim, and nothing else was offered as a source.
+ * - **0.5** — no corpus path and no URL at all. A bad answer, already scored 0
+ *   by `cites-a-real-source-url`, but a DIFFERENT bad answer: nothing was
+ *   substituted. Collapsing it to 0 here would make this scorer a duplicate of
+ *   its sibling instead of an explanation of it.
+ *
+ * Why a vendor URL is fatal even next to a good citation: the A-1 link rule
+ * makes a snippet's `Source:` path the ONLY URL Corvus may emit, so a
+ * third-party address in the answer is out-of-contract regardless of what
+ * else is cited. This does NOT punish factual vendor mentions *in words* —
+ * "PostgreSQL", or even a bare "postgresql.org" — because
+ * {@link externalUrls} matches `https?://…` only and so never sees them. Naming
+ * a technology stays free; publishing its address does not.
+ *
+ * @param knownUrls - Every `sourceUrl` in the corpus.
+ * @returns A scorer measuring whether the site's own page carried the claim.
+ */
+export function createCitesSiteSourceNotVendor(knownUrls: readonly string[]) {
+  const corpus = pathSet(knownUrls)
+  return createGuardedScorer<string, string, string>({
+    name: 'cites-the-site-page-not-a-vendor-url',
+    description:
+      "Sources a claim about this site with the site's own page, never a third-party homepage.",
+    scorer: ({ output }) => {
+      if (externalUrls(output).length) return 0
+      return citedPaths(output).some((path) => corpus.has(path)) ? 1 : 0.5
+    },
+  })
+}
+
+/**
  * Phrases that signal "the site does not say".
  *
  * @remarks Drawn from how `CORVUS_SYSTEM_PROMPT` actually tells Corvus to
@@ -347,6 +428,101 @@ export const answersGeneralQuestion = createGuardedScorer<
     if (OFF_TOPIC_REFUSALS.some((phrase) => lowered.includes(phrase))) return 0
     return output.trim().length >= 40 ? 1 : 0.5
   },
+})
+
+/**
+ * Ways of naming the contact form in words.
+ *
+ * @remarks Deliberately short, and deliberately not an exact sentence. What
+ * `CORVUS_SYSTEM_PROMPT` actually instructs is "point to the contact form on
+ * this site" and, in the link rule, that the form "is a section inside a page
+ * rather than a page of its own, so name it in words instead of guessing a
+ * path for it" (`src/lib/ai/corvus.ts`). The instrument therefore asks whether
+ * the phrase family survived into the answer — "contact form" in any casing,
+ * and "contact page" for the honest negation the second fixture invites ("there
+ * is no contact page — use the contact form"). Anything narrower would grade
+ * wording rather than behaviour, and this gate exists to catch a model that
+ * routes the reader NOWHERE.
+ */
+const CONTACT_FORM_SIGNAL = /contact form|contact page/i
+
+/**
+ * Clause boundaries for {@link describesTheContactForm}'s negation check.
+ *
+ * @remarks Clauses, not sentences, because the desired honest-negation answer
+ * puts a negated clause and the routing clause in ONE sentence — "there is no
+ * contact page — use the contact form". Splitting on the dash family (and
+ * semicolons) keeps that answer's positive half separable from its negated
+ * half; splitting only on sentence enders would drown it.
+ *
+ * The comma is in the set for the same reason the dash is, and its absence was
+ * a false NEGATIVE on the exact answer this gate wants: "There is no separate
+ * contact page, use the contact form." is one clause without it, contains
+ * "no", and scored 0 — a comma-coordinated honest negation punished purely for
+ * its punctuation. Splitting more finely can only ever help a good answer
+ * here, because the scorer asks whether ANY clause routes without negating:
+ * a finer split gives the routing half its own clause, and a negated aside
+ * that lands in a clause of its own still costs nothing.
+ */
+const CLAUSE_BOUNDARY = /[.!?;,\n–—]/
+
+/**
+ * Negation markers that turn a contact-form mention into a non-answer.
+ *
+ * @remarks A bare substring match scored "I cannot tell you where the contact
+ * form is" as routing, because the phrase appears either way. The word list is
+ * deliberately small — common English negators only — since it runs per
+ * CLAUSE: an answer earns the point when ANY clause names the form without a
+ * negator, so a negated aside ("there is no contact page") costs nothing as
+ * long as some clause actually routes the reader.
+ */
+const NEGATED_CLAUSE =
+  /\b(?:cannot|can['’]t|can not|won['’]t|unable|not|no|never|don['’]t|doesn['’]t|isn['’]t)\b/i
+
+/**
+ * Does at least one clause name the contact form without negating it?
+ *
+ * @param output - The model's answer.
+ */
+const routesToTheContactForm = (output: string): boolean =>
+  output
+    .split(CLAUSE_BOUNDARY)
+    .some(
+      (clause) =>
+        CONTACT_FORM_SIGNAL.test(clause) && !NEGATED_CLAUSE.test(clause),
+    )
+
+/**
+ * Did the answer actually route the reader to the contact form?
+ *
+ * @remarks The missing half of the contact-routing block. Its two siblings
+ * there — {@link answersGeneralQuestion} and `never-fabricates-a-site-url` —
+ * are both satisfied by an answer that helpfully says nothing: forty
+ * characters of prose that names no destination scores 1 and 1, because one
+ * scorer only asks whether a real answer was attempted and the other only
+ * asks whether an invented path was cited. Citing nothing passes the second
+ * one vacuously, which makes "invent `/contact`" and "route the reader
+ * nowhere" indistinguishable — and the second failure is the one the wave-4
+ * prompt change could reintroduce while looking clean.
+ *
+ * Binary rather than graded: unlike a hedge, there is no partial credit for
+ * half-naming a destination. Either the answer told the reader where to write
+ * or it did not.
+ *
+ * Mentioning is not routing: "I cannot tell you where the contact form is"
+ * contains the phrase and routes the reader nowhere, which is exactly the
+ * failure this gate exists to catch. Hence {@link routesToTheContactForm}'s
+ * per-clause negation check rather than a bare substring test.
+ */
+export const describesTheContactForm = createGuardedScorer<
+  string,
+  string,
+  string
+>({
+  name: 'describes-the-contact-form',
+  description:
+    'Names the contact form in words, so the reader learns where to write.',
+  scorer: ({ output }) => (routesToTheContactForm(output) ? 1 : 0),
 })
 
 /**

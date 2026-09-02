@@ -94,6 +94,51 @@ describe('CorvusChat — real useChat/DefaultChatTransport pipeline', () => {
     expect(screen.getByRole('button', { name: /send/i })).toBeDisabled()
   })
 
+  it('keeps the sign-in CTA hover above the WCAG AA floor', async () => {
+    // #82 / PR #123 carry. The CTA's hover fill went teal-700 → teal-600, i.e.
+    // LIGHTER, which drops white-on-teal from 5.36:1 to 3.67:1 — under the
+    // 4.5:1 AA floor for its 14px text — for as long as a pointer rests on it.
+    // teal-800 is 7.54:1 (ratios computed from the OKLCH tokens Tailwind 4.3.3
+    // resolves, not from hex approximations).
+    //
+    // Scope, stated so this pin is not mistaken for more than it is: on
+    // /corvus the class is overridden by `.corvus-surface
+    // [data-slot='sign-in-gate-cta']:hover`, which reads
+    // `--corvus-accent-solid-hover` in src/styles/tailwind.css. That token has
+    // been raised to teal-800 as well, so the surface and the component agree
+    // — but it is a different artifact with a different guard
+    // (`src/styles/corvus-accent-contrast.test.ts`, which recomputes the
+    // ratio). This case asserts only the component's own behaviour, which is
+    // what Storybook and every non-surface host get.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error: "You've used your free Corvus messages.",
+              code: 'sign_in_required',
+            }),
+            { status: 401, headers: { 'content-type': 'application/json' } },
+          ),
+      ),
+    )
+
+    const user = userEvent.setup()
+    render(<CorvusChat />)
+
+    await user.type(screen.getByLabelText('Message Corvus'), 'One more?')
+    await user.keyboard('{Enter}')
+
+    const className = (
+      await screen.findByRole('link', { name: /sign in to continue/i })
+    ).className
+
+    expect(className).not.toContain('hover:bg-teal-600')
+    expect(className).toContain('hover:bg-teal-800')
+    expect(className).toContain('bg-teal-700')
+  })
+
   it('still shows the generic error (not the sign-in prompt) for an unrelated 401', async () => {
     // Guards against over-matching: a 401 that ISN'T this specific gate
     // shape (e.g. some other auth failure) must fall through to the

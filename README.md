@@ -79,6 +79,22 @@ pnpm dev                     # http://localhost:3000 · admin at /admin
 The app boots with only a database — everything else stays inert until its keys
 exist (see below).
 
+Need a database, or real content to work against? `docker-compose.yml` starts a
+local Postgres on the same image CI uses, and `pnpm db:local:refresh` restores
+the newest nightly encrypted backup into it:
+
+```bash
+docker compose up -d --wait db          # pgvector/pgvector:pg16 on 127.0.0.1:5432
+pnpm db:local:refresh                   # newest PRODUCTION backup
+pnpm db:local:refresh --source staging  # staging instead
+```
+
+Flags go straight on the command — no `--` separator needed.
+
+Prerequisites, the `.env.local` swap, and the port-conflict path are in
+`docs/MAINTENANCE.md` § Local database from backups. The restored database
+holds real content and the users table — keep it local.
+
 ## Environment variables
 
 [`.env.example`](.env.example) is the annotated source of truth — every variable
@@ -111,6 +127,8 @@ per environment after the pgvector migration; hooks keep it current after
 that).
 `pnpm migrate` / `migrate:create` — Payload migrations (committed, the schema
 source of truth; dev push is opt-in via `PAYLOAD_DB_PUSH`).
+`pnpm db:local:refresh` — restore the newest nightly encrypted backup into the
+local Docker Postgres (`--dry-run` checks the setup without touching anything).
 `pnpm generate:types` / `generate:importmap` — regenerate the committed Payload
 artifacts after any schema/plugin change (CI fails on drift).
 `pnpm storybook` — component workbench. `pnpm payload` — Payload CLI.
@@ -149,7 +167,9 @@ Four layers, each with its own command and CI gate:
   checks per story (serious violations fail the story).
 - **End-to-end** (Playwright) — `pnpm test:e2e`; boots the built app against a
   real Postgres, runs under reduced motion, and includes an axe WCAG-AA sweep
-  of key routes in both themes.
+  of key routes in both themes. Locally, run it the way CI does
+  (`pnpm seed:e2e` → `pnpm build` → `CI=1 pnpm test:e2e`) — dev-mode runs are
+  flaky by construction; see `docs/TESTING.md`.
 - **AI evals** (Evalite) — `pnpm eval:ci`; scores Corvus behavior against a
   threshold so persona regressions fail CI.
 
@@ -164,8 +184,8 @@ GitFlow: `master` → production ([brandonperfetti.com](https://brandonperfetti.
 [staging.brandonperfetti.com](https://staging.brandonperfetti.com). Vercel
 builds with corepack-pinned pnpm; migrations run on deploy (`pnpm migrate &&
 pnpm build` — the committed chain is idempotent and tracked in
-`payload_migrations`, so re-runs no-op). The staging database gets nightly
-encrypted `pg_dump` backups via GitHub Actions.
+`payload_migrations`, so re-runs no-op). The staging and production databases
+each get nightly encrypted `pg_dump` backups via GitHub Actions.
 
 ## Documentation map
 

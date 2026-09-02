@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 
-import { stripComments, stripSqlData } from './sql-comments.mjs'
+import {
+  stripComments,
+  stripSqlData,
+  stripTsComments,
+} from './sql-comments.mjs'
 
 /**
  * The tokenizer behind the RLS gate's "commented SQL is not enforcement" rule.
@@ -171,6 +175,85 @@ describe('stripComments', () => {
     const once = stripComments(source)
 
     expect(stripComments(once)).toBe(once)
+  })
+})
+
+/**
+ * The TypeScript-only half, exported for `scripts/eval-harness.test.ts`.
+ *
+ * That file owned this tokenizer first; `stripComments` grew out of it and the
+ * two lived as copies until the fold. These cases are the harness's questions
+ * asked of the shared export, so a change made for the RLS gate cannot quietly
+ * break the import scanner sitting on the other side of the module.
+ *
+ * The one behavioural difference from `stripComments` is the point of the
+ * split: SQL `--` runs inside a template literal survive here, because in a
+ * TypeScript file a template literal is a string and `--` in it is text.
+ */
+describe('stripTsComments', () => {
+  it('blanks a commented-out import in either comment syntax', () => {
+    // The eval harness's live question. A commented import that survives the
+    // strip is read as real by the alias/resolution guards, which then fail
+    // the build on a specifier nobody wrote.
+    const source = [
+      "// import { old } from '@/lib/gone'",
+      "/* import { older } from '@/lib/older' */",
+      '/**',
+      " * Historical note: this used to import from '@/lib/ancient'.",
+      ' */',
+      "import { current } from './current'",
+    ].join('\n')
+
+    const code = stripTsComments(source)
+
+    expect(code).not.toContain('@/lib/gone')
+    expect(code).not.toContain('@/lib/older')
+    expect(code).not.toContain('@/lib/ancient')
+    expect(code).toContain("import { current } from './current'")
+  })
+
+  it('keeps a string whose content looks like a comment', () => {
+    // Precedence: the string alternative is matched before `//` can open a
+    // comment, which is what stops a URL from eating the rest of its line.
+    const source = "export const url = 'https://api.openai.com/v1'"
+
+    expect(stripTsComments(source)).toBe(source)
+  })
+
+  it('does not let an apostrophe in a comment swallow the next line', () => {
+    const source = ["// the visitor's question", "const kept = 'yes'"].join(
+      '\n',
+    )
+
+    expect(stripTsComments(source)).toContain("const kept = 'yes'")
+  })
+
+  it('leaves SQL comment syntax inside a template literal alone', () => {
+    // The whole reason this is a separate export. `stripComments` reaches
+    // inside template literals and blanks `--` runs there, because a
+    // migration's literals hold SQL. In a plain TypeScript file they hold
+    // text, and blanking it would answer a question the caller did not ask.
+    const source = 'const note = `a -- b`'
+
+    expect(stripTsComments(source)).toBe(source)
+    expect(stripComments(source)).not.toContain('-- b')
+  })
+
+  it('agrees with stripComments on every source that has no template literal', () => {
+    // The shared-walk invariant, stated as a test: the SQL pass is the ONLY
+    // difference, so wherever a template literal is absent the two exports
+    // must be indistinguishable. Break the shared TS_TOKENS walk and this is
+    // the case that notices.
+    const sources = [
+      '// gone\nconst kept = 1',
+      "/* gone */ const kept = '--'",
+      "const url = 'https://x.test' // trailing",
+      'const re = /https?:\\/\\/[^\\s)>\\]"\']+/gi',
+    ]
+
+    for (const source of sources) {
+      expect(stripTsComments(source)).toBe(stripComments(source))
+    }
   })
 })
 

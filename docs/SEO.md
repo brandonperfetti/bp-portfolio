@@ -61,10 +61,21 @@ The calls that follow from option (b):
   option (b) a per-page ItemList would be wrong for every page but the first,
   because the same document is served for every `?page=N`. The choice is
   restated in a comment in `src/app/(frontend)/articles/page.tsx`.
-- **Page-2+ content requires client JS.** Accepted for now, and the main reason
-  #121 exists; mitigated because paginated URLs are non-canonical and unlisted,
-  and every article stays independently reachable through its detail route, the
-  feed and `llms.txt`.
+- **List content requires client JS on _every_ page, page 1 included.** This
+  bullet used to read "Page-2+", which understated the cost by a whole page.
+  All four surfaces render their list from a client component that reads
+  `useSearchParams()` under `<Suspense>` — `ArticlesExplorer`, `EntityGrid`
+  (projects), `TechExplorer`, `UsesSections` — and that read makes Next bail
+  out of prerendering the boundary, so the static HTML ships the fallback
+  ("Loading articles…" and its siblings) rather than any cards at all. A
+  crawler that never runs JS sees zero list items on `/articles`, not "the
+  first 12". Option (b) did not introduce that; it inherited it from the
+  `?page=N` read, which is exactly why the cost cannot be scoped to page 2 and
+  up. Accepted for now, and the main reason #121 exists; mitigated because
+  paginated URLs are non-canonical and unlisted, because the server-rendered
+  ItemList JSON-LD still carries the first 50 articles' titles and canonical
+  URLs in the HTML, and because every article stays independently reachable
+  through its detail route, the feed and `llms.txt`.
 
 ## Rules
 

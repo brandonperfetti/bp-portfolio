@@ -25,6 +25,7 @@
     "payload": "payload",
     "migrate": "payload migrate",
     "migrate:create": "payload migrate:create",
+    "db:local:refresh": "bash scripts/dev-db-restore.sh",
     "seed:e2e": "payload run scripts/seed-e2e.ts",
     "corvus:backfill": "payload run scripts/backfill-corvus-embeddings.ts",
     "generate:types": "payload generate:types",
@@ -121,7 +122,7 @@
     "typescript": "^5.9.3",
     "vitest": "^4.0.17"
   },
-  "packageManager": "pnpm@11.21.0",
+  "packageManager": "pnpm@11.24.0",
   "engines": {
     "node": ">=22 <25"
   }

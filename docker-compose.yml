@@ -1,0 +1,66 @@
+# Local development Postgres for bp-portfolio (#85).
+#
+# This is a DEV CONVENIENCE ONLY — nothing here is ever deployed. It exists so
+# `scripts/dev-db-restore.sh` has somewhere to restore a nightly backup into,
+# and so local work runs against real content instead of an empty schema.
+#
+#   docker compose up -d --wait db     # start (waits for the healthcheck)
+#   pnpm db:local:refresh              # restore the newest prod backup into it
+#   docker compose down                # stop (keeps the named volume)
+#   docker compose down -v             # stop AND delete the data volume
+#
+# Image: `pgvector/pgvector:pg16` is deliberately the SAME image the CI e2e job
+# runs its Postgres service on (`.github/workflows/ci.yml`, `services.postgres.
+# image`), so a migration that applies locally is the migration CI applies. The
+# pgvector extension is required — the Corvus retrieval index (#82) is a real
+# column in the committed migration chain, so a plain `postgres:16` image fails
+# `pnpm migrate` outright.
+#
+# Note the version split that is intentional: the SERVER here is 16 (matching
+# CI), while `pg_restore` on your PATH must be >= 17 (matching the pg17 client
+# `.github/workflows/db-backup.yml` dumps with). Newer client, older server is
+# the supported direction; the restore script enforces the client floor.
+#
+# Port: 5432 is published on 127.0.0.1 only. The loopback bind is deliberate:
+# Docker's default is to publish on every interface, which would put a
+# container guarded by the well-known `postgres` password — holding a restored
+# copy of REAL production content — one firewall lapse away from the local
+# network. Nothing legitimate connects from off-machine; keep the `127.0.0.1:`
+# prefix if you change the port.
+#
+# If a system Postgres already owns 5432, change the published (middle) part
+# to 5433 and pass `--port 5433` to the restore script, then update
+# `DATABASE_URI` in `.env.local` to match. Do NOT
+# assume the remap worked — a system cluster listening on 5433 has silently
+# shadowed this container before. Confirm who actually answers:
+#
+#   docker compose ps
+#   psql -h 127.0.0.1 -p <port> -U postgres -l
+#
+# See `docs/MAINTENANCE.md` § Local database from backups.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: bp-portfolio-db
+    restart: unless-stopped
+    ports:
+      # bind-address:host:container — change the HOST (middle) part only.
+      - '127.0.0.1:5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bp_portfolio_dev
+    volumes:
+      - bp_portfolio_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `-d` matters: without it pg_isready probes the `postgres` database and
+      # reports ready before the entrypoint has finished creating ours.
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d bp_portfolio_dev']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+volumes:
+  bp_portfolio_pgdata:

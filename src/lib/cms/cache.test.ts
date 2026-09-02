@@ -21,6 +21,7 @@ describe('CMS_TAGS vocabulary', () => {
       uses: 'uses', // src/lib/cms/usesRepo.ts
       workHistory: 'work-history', // src/lib/cms/workHistoryRepo.ts
       pages: 'pages', // src/lib/cms/pagesRepo.ts, CmsPageBlocks
+      redirects: 'redirects', // src/lib/cms/redirectsRepo.ts
       settings: 'global_site-settings', // src/lib/cms/siteSettingsRepo.ts
       navigation: 'global_navigation', // src/lib/cms/navigationRepo.ts
       identity: 'global_identity', // src/lib/cms/identityRepo.ts
@@ -35,6 +36,15 @@ describe('CMS_TAGS vocabulary', () => {
     // in src/globals/Footer.ts; if the footer is ever wired to a cached reader,
     // add `footer: 'global_footer'` here and restore the hook.
     expect('footer' in CMS_TAGS).toBe(false)
+  })
+
+  it('redirects reader subscribes to the tag revalidateRedirects purges', () => {
+    // src/hooks/revalidateRedirects.ts purges the literal 'redirects'; the
+    // #120 reader (src/lib/cms/redirectsRepo.ts) caches under
+    // CMS_TAGS.redirects. Equal strings are what makes an auto-created or
+    // hand-edited redirect resolve on the next request instead of after the
+    // cmsContent TTL.
+    expect(CMS_TAGS.redirects).toBe('redirects')
   })
 
   it('search cache subscribes to the tag the Posts hooks actually purge', () => {

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import { Suspense } from 'react'
 
 import { ArticleLayout } from '@/components/ArticleLayout'
@@ -12,11 +12,13 @@ import {
 import { CopyPageButton } from '@/components/cms/CopyPageButton'
 import { ArticleCopyMarkdownProvider } from '@/components/cms/ArticleCopyMarkdown'
 import { ShareButton } from '@/components/cms/ShareButton'
+import { publicPathForSlug } from '@/fields/slug/slugPaths'
 import { getAllArticles, getArticleBySlug } from '@/lib/articles'
 import { resolveArticleShareTargetIds } from '@/lib/cms/articlesRepo'
 import { EMPTY_CMS_SENTINEL } from '@/lib/cms/emptyCmsSentinel'
 import { articleBlocksToMarkdown } from '@/lib/cms/markdown'
 import { resolveArticleSocialImage } from '@/lib/cms/pageMetadata'
+import { getRedirectForPath } from '@/lib/cms/redirectsRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { canonicalizeArticleUrl } from '@/lib/seo/canonical'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
@@ -163,6 +165,19 @@ export default async function ArticlePage({ params }: PageProps) {
   ])
 
   if (!article) {
+    // #120: a slug that no longer resolves may be a renamed article. The lookup
+    // lives INSIDE this already-dynamic not-found branch on purpose — every
+    // slug from `generateStaticParams` resolves and never reaches here, so the
+    // route's partial-prerender profile is unchanged.
+    //
+    // The path comes from `publicPathForSlug`, the same function
+    // `createSlugRedirect` used to WRITE the redirect row's `from`. Hand-building
+    // `/articles/${slug}` here meant the reader and the writer each owned a copy
+    // of the prefix, so moving the route would silently stop matching rows the
+    // hook is still writing.
+    const from = publicPathForSlug('posts', slug)
+    const destination = from ? await getRedirectForPath(from) : null
+    if (destination) permanentRedirect(destination)
     notFound()
   }
 

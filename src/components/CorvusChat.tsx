@@ -374,7 +374,15 @@ export default function CorvusChat({
                       type="button"
                       data-slot="message-copy-button"
                       onClick={() => void copyMessage(message.id, text)}
-                      className="inline-flex items-center gap-1 rounded px-1 text-xs text-zinc-500 hover:text-teal-600 dark:text-zinc-400 dark:hover:text-teal-400"
+                      // Same AA call as the CTA below, one step over: this is
+                      // 12px TEXT ("Copy"), so the 4.5:1 floor applies, and
+                      // teal-600 on the light page is 3.67:1 — a fail. teal-700
+                      // is 5.36:1. Dark is already fine (teal-400 on zinc-900
+                      // is 9.50:1) and is left alone. Overridden on /corvus by
+                      // `.corvus-surface [data-slot='message-copy-button']
+                      // :hover` (--corvus-accent, already teal-700 in light),
+                      // so this fixes the component outside that surface.
+                      className="inline-flex items-center gap-1 rounded px-1 text-xs text-zinc-500 hover:text-teal-700 dark:text-zinc-400 dark:hover:text-teal-400"
                     >
                       <CopyIcon className="h-3.5 w-3.5" />
                       {copiedId === message.id ? 'Copied' : 'Copy'}
@@ -413,7 +421,18 @@ export default function CorvusChat({
                 <a
                   data-slot="sign-in-gate-cta"
                   href={`/sign-in?redirect_url=${encodeURIComponent(signInRedirectUrl)}`}
-                  className="mt-3 inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none"
+                  // Hover darkens, for the reason spelled out on the primary
+                  // Button and on ui/button.tsx's `teal` variant: white on
+                  // teal-600 is 3.67:1, under the 4.5:1 AA floor for this text
+                  // size, while teal-800 is 7.54:1 (Tailwind 4.3.3 OKLCH
+                  // tokens). On /corvus this class is overridden by
+                  // `.corvus-surface [data-slot='sign-in-gate-cta']:hover`,
+                  // which reads --corvus-accent-solid-hover in
+                  // src/styles/tailwind.css — raised to teal-800 there too, so
+                  // the two agree. Both are pinned:
+                  // `CorvusChat.signInGate.test.tsx` for this class,
+                  // `src/styles/corvus-accent-contrast.test.ts` for the token.
+                  className="mt-3 inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none"
                 >
                   Sign in to continue
                 </a>

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   SOCIAL_PLATFORM_ICONS,
+  type SocialPlatform,
   defaultSocialLabel,
   resolveSocialLink,
   resolveSocialPlatform,
@@ -24,8 +25,43 @@ describe('social platform resolution', () => {
     ['https://instagram.com/brandonperfetti', 'instagram'],
     ['mailto:info@brandonperfetti.com', 'email'],
     ['https://brandonperfetti.com', 'link'],
+    // #46 — the four platforms added in wave 4.
+    ['https://facebook.com/brandonperfetti', 'facebook'],
+    ['https://www.facebook.com/brandonperfetti', 'facebook'],
+    ['https://m.facebook.com/brandonperfetti', 'facebook'],
+    ['https://fb.com/brandonperfetti', 'facebook'],
+    ['https://youtube.com/@brandonperfetti', 'youtube'],
+    ['https://www.youtube.com/@brandonperfetti', 'youtube'],
+    ['https://music.youtube.com/channel/abc', 'youtube'],
+    ['https://youtu.be/dQw4w9WgXcQ', 'youtube'],
+    ['https://bsky.app/profile/brandonperfetti.com', 'bluesky'],
+    ['https://www.bsky.app/profile/brandonperfetti.com', 'bluesky'],
+    ['https://threads.net/@brandonperfetti', 'threads'],
+    ['https://www.threads.net/@brandonperfetti', 'threads'],
+    ['https://threads.com/@brandonperfetti', 'threads'],
   ] as const)('reads %s as %s', (href, platform) => {
     expect(resolveSocialPlatform(href)).toBe(platform)
+  })
+
+  /**
+   * The one failure mode that would actually mislead a reader: lending a
+   * brand's mark to a host that merely contains its name. Each of these
+   * embeds a platform domain as a substring without being that domain.
+   */
+  it.each([
+    'https://notfacebook.com/brandonperfetti',
+    'https://facebook.com.evil.test/brandonperfetti',
+    'https://myfb.com/brandonperfetti',
+    'https://notyoutube.com/@brandonperfetti',
+    'https://youtube.com.phish.test/@brandonperfetti',
+    'https://fakeyoutu.be/abc',
+    'https://notbsky.app/profile/x',
+    'https://bsky.app.evil.test/profile/x',
+    'https://notthreads.net/@brandonperfetti',
+    'https://threads.net.evil.test/@brandonperfetti',
+    'https://threadsxcom.example/@brandonperfetti',
+  ])('keeps the lookalike %s on the generic link glyph', (href) => {
+    expect(resolveSocialPlatform(href)).toBe('link')
   })
 
   it('falls back to the generic link glyph for junk rather than throwing', () => {
@@ -36,6 +72,32 @@ describe('social platform resolution', () => {
   it('has an icon for every platform it can resolve', () => {
     for (const platform of Object.keys(SOCIAL_PLATFORM_ICONS)) {
       expect(SOCIAL_PLATFORM_ICONS[platform as 'x']).toBeTypeOf('function')
+    }
+  })
+
+  /**
+   * Typed as a total `Record`, so adding a member to `SocialPlatform`
+   * without listing it here is a typecheck failure rather than a glyph that
+   * silently comes up `undefined` at runtime — the resolver and the icon map
+   * are only useful if they stay the same size.
+   */
+  it('draws an icon and a label for every member of the union', () => {
+    const ALL_PLATFORMS: Record<SocialPlatform, true> = {
+      x: true,
+      github: true,
+      linkedin: true,
+      instagram: true,
+      facebook: true,
+      youtube: true,
+      bluesky: true,
+      threads: true,
+      email: true,
+      link: true,
+    }
+
+    for (const platform of Object.keys(ALL_PLATFORMS) as SocialPlatform[]) {
+      expect(SOCIAL_PLATFORM_ICONS[platform]).toBeTypeOf('function')
+      expect(defaultSocialLabel('https://example.com/a', platform)).toBeTruthy()
     }
   })
 })
@@ -52,6 +114,22 @@ describe('default labels', () => {
     )
   })
 
+  it('extends the same wording to the #46 platforms, brand casing intact', () => {
+    expect(defaultSocialLabel('https://facebook.com/b', 'facebook')).toBe(
+      'Follow on Facebook',
+    )
+    // "YouTube", not "Youtube" — the capital T is part of the name.
+    expect(defaultSocialLabel('https://youtube.com/@b', 'youtube')).toBe(
+      'Follow on YouTube',
+    )
+    expect(defaultSocialLabel('https://bsky.app/profile/b', 'bluesky')).toBe(
+      'Follow on Bluesky',
+    )
+    expect(defaultSocialLabel('https://threads.net/@b', 'threads')).toBe(
+      'Follow on Threads',
+    )
+  })
+
   it('shows an email address bare, the way About renders its mail row', () => {
     expect(defaultSocialLabel('mailto:info@brandonperfetti.com', 'email')).toBe(
       'info@brandonperfetti.com',
@@ -62,6 +140,17 @@ describe('default labels', () => {
     expect(defaultSocialLabel('https://www.example.com/x', 'link')).toBe(
       'example.com',
     )
+  })
+
+  /**
+   * Both admin sources can hold a value that is not a URL at all, and the
+   * label is the only thing a `labeledList` row has to show. Echoing the raw
+   * value back is what makes a typo legible to the editor who typed it —
+   * better than an empty row or a thrown `TypeError` from `new URL`.
+   */
+  it('echoes a value that does not parse as a URL rather than throwing', () => {
+    expect(defaultSocialLabel('not a url', 'link')).toBe('not a url')
+    expect(defaultSocialLabel('', 'link')).toBe('')
   })
 })
 

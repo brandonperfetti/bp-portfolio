@@ -39,7 +39,20 @@ import {
 import { routeRhythmProfile } from '@/heros/routeRhythm'
 import type { Media, Page } from '@/payload-types'
 
-const mediaUrl = (m: unknown): Media | null =>
+/**
+ * Narrows a hero's `media` relationship to the Media doc it holds when it is
+ * populated, and `null` when it is still a bare id or absent.
+ *
+ * @param m - The relationship as Payload hands it over: a populated doc, an
+ * id, or nothing.
+ * @returns The Media doc, or `null` when there is nothing to render from.
+ * @remarks Named `asMedia` rather than `mediaUrl` (#59): it returns the
+ * document, not a URL, and the repo already exports a genuine
+ * `mediaUrl` from `@/lib/cms/mediaUrl` that does return a string. Two
+ * different functions under one name in one codebase is a trap for whoever
+ * reads this next.
+ */
+const asMedia = (m: unknown): Media | null =>
   m && typeof m === 'object' ? (m as Media) : null
 
 /**
@@ -261,7 +274,7 @@ export function HeroView({
   // page selects it until an edit does, so every existing page is unaffected.
   if (type === 'blank') return null
 
-  const media = mediaUrl(hero?.media)
+  const media = asMedia(hero?.media)
   const preset = (hero?.shaderPreset ??
     DEFAULT_SHADER_PRESET) as ShaderPresetKey
 

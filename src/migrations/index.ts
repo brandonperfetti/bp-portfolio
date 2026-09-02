@@ -37,6 +37,7 @@ import * as migration_20260820_221032_rls_lockdown from './20260820_221032_rls_l
 import * as migration_20260826_145724_cookie_consent_global from './20260826_145724_cookie_consent_global'
 import * as migration_20260826_225102_manage_cookies_label from './20260826_225102_manage_cookies_label'
 import * as migration_20260828_155359_corvus_embeddings from './20260828_155359_corvus_embeddings'
+import * as migration_20260831_005000_issue_87_function_acls from './20260831_005000_issue_87_function_acls'
 
 export const migrations = [
   {
@@ -233,5 +234,10 @@ export const migrations = [
     up: migration_20260828_155359_corvus_embeddings.up,
     down: migration_20260828_155359_corvus_embeddings.down,
     name: '20260828_155359_corvus_embeddings',
+  },
+  {
+    up: migration_20260831_005000_issue_87_function_acls.up,
+    down: migration_20260831_005000_issue_87_function_acls.down,
+    name: '20260831_005000_issue_87_function_acls',
   },
 ]

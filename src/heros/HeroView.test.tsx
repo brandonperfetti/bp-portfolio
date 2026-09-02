@@ -261,6 +261,36 @@ describe('HeroView — type image (full-screen, B6.1)', () => {
   const header = (container: HTMLElement) =>
     container.querySelector('header') as HTMLElement
 
+  /**
+   * Payload hands a relationship over as a bare id at depth 0 and only as a
+   * document once populated, so an image hero read shallowly has a number
+   * where its media should be. The rendered fallback is the bare content
+   * stack rather than an `img` with an `undefined` src.
+   *
+   * The check that actually decides this is `!media?.url` in the `image`
+   * branch, not the `asMedia` narrowing above it — `asMedia` returning the id
+   * unchanged would land in the same place. Pinning the branch by its
+   * behaviour rather than its helper is the point: this is the case the
+   * suite had no coverage for at all (noticed while renaming `asMedia`, #59).
+   */
+  it('falls back to the content stack when the media relationship is an unpopulated id', () => {
+    const { container } = render(
+      <HeroView
+        page={page({ type: 'image', media: 3 } as Partial<
+          NonNullable<Page['hero']>
+        >)}
+      />,
+    )
+
+    expect(container.querySelector('img')).toBeNull()
+    // The `none` look: the text still renders, without the banner frame.
+    expect(headline()).toBeVisible()
+    expect(header(container)).not.toHaveAttribute(
+      'class',
+      HERO_MEDIA_FULLSCREEN_FRAME_CLASS,
+    )
+  })
+
   it('renders a 100dvh full-screen banner pulled behind the header', () => {
     const { container } = render(<HeroView page={imagePage()} />)
 

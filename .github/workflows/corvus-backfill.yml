@@ -1,0 +1,180 @@
+# Weekly repair pass over the Corvus retrieval index, against PRODUCTION.
+#
+# Why a schedule exists at all: the refresh hooks that keep `corvus_embeddings`
+# current are deliberately fail-open — they never throw, because a provider
+# outage must not fail a content save (`src/lib/ai/embeddingsStore.ts`). The
+# price of that choice is that a failed refresh leaves a STALE row behind and
+# says nothing. Nothing else in the system notices. This job is the sweep that
+# does, and `content_hash` skipping makes a run over an already-current index
+# nearly free, so running it weekly is never the wrong call.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions) — both
+# already exist for other workflows; this adds no new secret:
+#   SUPABASE_DB_URL_PROD  — PRODUCTION session-mode pooler string (port 5432),
+#                           the same one db-backup.yml dumps from. Session mode
+#                           is the right one HERE too, and not by accident: the
+#                           app uses the transaction-mode pooler (6543) because
+#                           serverless wants transient connections, while this
+#                           is one long-lived batch process. Payload reads it as
+#                           DATABASE_URI.
+#   OPENAI_API_KEY        — embeddings are an OpenAI-only provider axis
+#                           (AI_EMBEDDING_PROVIDER), independent of whatever
+#                           the chat provider is set to. Same secret the
+#                           Evalite job in ci.yml uses.
+#
+# Secrets are declared on the two STEPS that use them, never on the job. A
+# job-level `env:` is in scope for every step, and one of those steps is
+# `pnpm install --frozen-lockfile` — which executes third-party build scripts:
+# `pnpm-workspace.yaml` allows @sentry/cli, esbuild, sharp and unrs-resolver to
+# run theirs. Those scripts would inherit the production connection string and
+# the OpenAI key for no reason at all. Scoping the env down costs two duplicated
+# blocks and removes an entire class of supply-chain exposure from the install.
+#
+# Not passed, and each omission is a decision:
+# - `--drop-orphans` is the script's one destructive mode and stays OFF. A
+#   scheduled job that can empty the retrieval index on a bad read is a worse
+#   trade than a few stale rows; run it by hand when a deletion sweep is
+#   actually wanted.
+# - PAYLOAD_SECRET is a fixed non-secret below rather than a repo secret. It
+#   signs Payload auth TOKENS, and this script mints none — it goes through the
+#   Local API with `overrideAccess: true`. No collection in `src/` sets
+#   `useAPIKey`, so nothing in the corpus is encrypted with it either, and a
+#   value that does not match production's decrypts nothing and breaks nothing.
+#   ci.yml uses a dummy for the same reason.
+#
+# Notes:
+# - GitHub disables cron workflows after 60 days without repo activity; the
+#   run-summary line below is what makes a silent stall visible in the Actions
+#   tab, the same convention db-backup.yml uses.
+# - This repo is public. The step summary prints the script's own counts line
+#   and nothing else — no connection string, no document content.
+
+name: corvus-backfill
+
+on:
+  schedule:
+    # Sunday 11:07 UTC (~04:07 PT). Three anchors pick this slot: it is well
+    # clear of db-backup.yml's 09:17 UTC daily window (15-minute timeout, so
+    # closed by ~09:32) since both hit the same production database; it is the
+    # low point of the site's own traffic, and this run holds a session-mode
+    # connection for its whole duration; and the minute is deliberately not :00,
+    # where GitHub's scheduler queues everyone's hourly crons and delays are
+    # worst.
+    - cron: '7 11 * * 0'
+  workflow_dispatch:
+
+# Least privilege: this job reads the checked-out repo and talks to Postgres
+# and OpenAI. It never pushes, comments, releases or deploys, so declaring read
+# at the workflow level ignores any broader repo/org default GITHUB_TOKEN grant
+# and sets every other scope to none — the same posture as ci.yml.
+permissions:
+  contents: read
+
+# Runs must never overlap. Two concurrent passes would race on the same
+# `corvus_embeddings` rows for the same documents, and a slow week (a large
+# re-embed after an AI_EMBEDDING_MODEL change) could still be running when the
+# next Sunday's cron fires. `cancel-in-progress: false` is the load-bearing
+# half: killing a half-finished repair leaves the index in exactly the mixed
+# state this job exists to clear, so a second run WAITS instead.
+concurrency:
+  group: corvus-backfill
+  cancel-in-progress: false
+
+env:
+  # Pinned to a full patch version for the same reason ci.yml pins it: a Node
+  # patch release must not change behaviour underneath a scheduled run. Keep in
+  # step with ci.yml's NODE_VERSION when that moves.
+  NODE_VERSION: '24.18.0'
+
+jobs:
+  backfill:
+    name: Repair Corvus embeddings (production)
+    runs-on: ubuntu-latest
+    # Generous, because a cold index (or a model change) re-embeds the whole
+    # corpus, and deliberately finite: a hung provider call must not hold the
+    # concurrency group for six hours and block next week's run.
+    timeout-minutes: 45
+    steps:
+      # `persist-credentials: false` because nothing here uses git after the
+      # checkout — no push, no tag, no second fetch — so the only thing the
+      # default does is leave the GITHUB_TOKEN sitting in `.git/config` for the
+      # rest of the job. The very next step runs `pnpm install`, whose
+      # third-party build scripts execute arbitrary code in this workspace; the
+      # reason the DB and provider secrets are step-scoped below is to keep
+      # them out of that step's reach, and a token readable from a file on disk
+      # walks straight around it.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Fail on a missing secret with the secret's NAME, before spending a
+      # provider dollar or opening a production connection. Without this, an
+      # unset DATABASE_URI surfaces as a Payload config error several minutes
+      # in, and an unset OPENAI_API_KEY as a per-document embed failure that
+      # the script dutifully retries across the whole corpus.
+      - name: Check required secrets are present
+        env:
+          DATABASE_URI: ${{ secrets.SUPABASE_DB_URL_PROD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$DATABASE_URI" || { echo "::error::SUPABASE_DB_URL_PROD secret is not set"; exit 1; }
+          test -n "$OPENAI_API_KEY" || { echo "::error::OPENAI_API_KEY secret is not set"; exit 1; }
+
+      # The script logs one counts line — `[backfill:corvus] done: written=…
+      # metadataUpdated=… skippedDocs=… deleted=… failed=…` — and exits
+      # non-zero if any document failed to embed. Tee it so the next step can
+      # lift that line into the run summary whether this passes or fails; a
+      # scheduled job nobody watches is only as useful as what it leaves behind
+      # in the Actions tab. `PIPESTATUS` keeps the script's exit code rather
+      # than tee's.
+      - name: Run corvus:backfill (production)
+        id: backfill
+        env:
+          DATABASE_URI: ${{ secrets.SUPABASE_DB_URL_PROD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # See the header: signs auth tokens this script never mints.
+          PAYLOAD_SECRET: 'ci-not-a-real-secret'
+        run: |
+          set -euo pipefail
+          log="${RUNNER_TEMP}/corvus-backfill.log"
+          set +e
+          pnpm corvus:backfill 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "log=${log}" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Report the run in the job summary
+        if: ${{ !cancelled() }}
+        env:
+          LOG_FILE: ${{ steps.backfill.outputs.log }}
+          OUTCOME: ${{ steps.backfill.outcome }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Corvus embeddings backfill (production)"
+            echo
+            echo "Outcome: **${OUTCOME}**"
+            echo
+            if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
+              counts=$(grep -o '\[backfill:corvus\] done:[^"\\]*' "$LOG_FILE" | tail -1 || true)
+              if [ -n "$counts" ]; then
+                echo '```'
+                echo "$counts"
+                echo '```'
+              else
+                echo "No counts line was logged — the run did not reach the end of the sweep."
+              fi
+            else
+              echo "No log was captured; the run failed before the backfill step."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -13,13 +13,14 @@
 
 ## Branching & releases
 
-- `master` — v3 production. Frozen until v4 launch sign-off.
-- `rebuild/v4` — active v4 branch; auto-deploys the Vercel `staging`
-  environment. Work lands here in small conventional commits
-  (`feat(scope): …`, `fix(scope): …`) with a draft PR and phase status
-  comments.
-- After merge, `develop` becomes the integration branch and staging retargets
-  to it (planned).
+- GitFlow since the v4 cutover: `master` → production
+  ([brandonperfetti.com](https://brandonperfetti.com)); `develop` →
+  integration; the active QA branch serves
+  [staging.brandonperfetti.com](https://staging.brandonperfetti.com).
+- One branch per wave off `develop`, small conventional commits
+  (`feat(scope): …`, `fix(scope): …`) with `Refs #n`, one PR into `develop`
+  (CodeRabbit + full CI), staging QA, then a develop→master release PR
+  worked to review-clean before merge.
 
 ## Local hooks
 
@@ -29,6 +30,15 @@
   push and CI alike — one gate, defined in one place (`package.json`). Stale
   `.next` types can false-fail the push — remove `.next` and retry before
   suspecting real breakage.
+
+## AI eval gate
+
+- Branches touching the Corvus eval harness or eval-adjacent config
+  (`evals/**`, guardrails, eval scripts/workflow) get **one keyed local
+  `pnpm eval:ci` run before push** (Brandon runs it) — CI's first keyed run
+  must not be the first observation of eval behavior. The floors themselves
+  are invariants (see `CLAUDE.md`): fix the behavior or the harness, never
+  lower a floor to get green.
 
 ## Generated files
 
@@ -40,6 +50,15 @@ files are prettier-ignored — never hand-format them.
 
 - CodeRabbit reviews PRs; triage suggestions against product intent — apply,
   or note why skipped (inline comment only when non-obvious).
+- **Oversized release PRs:** when CodeRabbit declines a PR for size (>150
+  files), first force a review with `@coderabbitai review`; if it still
+  declines, the review gate is satisfied only by every constituent commit
+  having already passed a worked-to-clean CodeRabbit round on its own PR —
+  cumulative coverage, not a waiver (ratified at the waves-2+3 release,
+  PR #127).
+- **Re-running a failed PR check replays the original merge snapshot** — it
+  does not pick up new base-branch state. To test against the updated base,
+  update the branch (merge the base in) and let checks run fresh.
 - GitGuardian: the CI `PAYLOAD_SECRET: "ci-not-a-real-secret"` literal is an
   intentional dummy — dismiss as false positive.
 
