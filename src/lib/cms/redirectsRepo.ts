@@ -9,11 +9,58 @@ import {
 } from '@/fields/slug/slugPaths'
 import { CMS_TAGS } from '@/lib/cms/cache'
 
-/** A redirect flattened to two paths — what the routes actually need. */
+/**
+ * The permanence codes the redirects collection offers (#130).
+ *
+ * @remarks Mirrors `redirectTypes` in `src/plugins/index.ts`. The plugin itself
+ * can emit 301/302/303/307/308; this union is deliberately the two that are
+ * configured, so a code the admin form cannot produce cannot reach the routes
+ * as a valid value either.
+ */
+export type CmsRedirectType = '301' | '302'
+
+/**
+ * A redirect flattened to two paths plus its permanence — what the routes
+ * actually need.
+ *
+ * @remarks `type` is carried as the stored code rather than pre-collapsed to a
+ * boolean so the cached row stays a faithful record of what the editor chose;
+ * {@link resolveRedirect} is where it becomes the yes/no question a route can
+ * act on.
+ */
 export type CmsRedirect = {
   from: string
   to: string
+  type: CmsRedirectType
 }
+
+/**
+ * A matched redirect: where to send the request, and whether the move is
+ * permanent.
+ *
+ * @remarks Two fields rather than a bare string because the destination alone
+ * cannot answer which Next API to call. `permanent` maps to `permanentRedirect`
+ * (308) and its absence to `redirect` (307).
+ */
+export type CmsRedirectTarget = {
+  destination: string
+  permanent: boolean
+}
+
+/**
+ * Is a stored permanence code a permanent redirect?
+ *
+ * @param type - The row's `type`, which is `null` on every row written before
+ * #130 added the field and on any row an import left unset.
+ *
+ * @remarks Permanent is the default and the fallback in one: an unset, unknown
+ * or unreadable code answers `true`. That is the pre-#130 behaviour of this
+ * whole module (`permanentRedirect`, unconditionally), so the field's arrival
+ * changes nothing for a row that does not use it — and the failure direction is
+ * the conservative one, since a rename redirect is exactly the case that should
+ * be permanent.
+ */
+export const isPermanentRedirect = (type: unknown): boolean => type !== '302'
 
 /**
  * Upper bound on rows read per lookup. Redirects here are editorial plus one
@@ -59,7 +106,8 @@ const isAbsoluteDestination = (destination: string): boolean =>
  *
  * @param redirects - Flattened rows from {@link getCmsRedirects}.
  * @param path - The requested path.
- * @returns The destination as configured, or `null` when nothing matches.
+ * @returns The destination as configured plus its permanence, or `null` when
+ * nothing matches.
  *
  * @remarks Kept separate from the cached read so the matching rules
  * (normalisation, self-redirect rejection) are unit-testable without a Payload
@@ -81,27 +129,30 @@ const isAbsoluteDestination = (destination: string): boolean =>
  * a fragment, or a host. So the destination is now returned as configured
  * (trimmed), and the normalised form is used only to answer the two questions.
  *
- * Both callers hand the result to `permanentRedirect`, which accepts absolute
- * URLs and query-bearing paths as-is.
+ * Both callers hand the destination to `permanentRedirect` or `redirect`, both
+ * of which accept absolute URLs and query-bearing paths as-is.
  */
 export const resolveRedirect = (
   redirects: CmsRedirect[],
   path: string,
-): null | string => {
+): CmsRedirectTarget | null => {
   const target = normalizeRedirectPath(path)
   for (const redirect of redirects) {
     if (normalizeRedirectPath(redirect.from) !== target) continue
     const destination = redirect.to.trim()
+    const permanent = isPermanentRedirect(redirect.type)
     // Nothing to serve. `getCmsRedirects` never emits this — both row types
     // require a non-empty destination — but this function is exported and a
     // caller with its own list should get "no redirect" rather than the `/`
     // that normalising an empty string would have produced.
     if (!destination) return null
     // An absolute URL leaves the site, so the loop check does not apply to it.
-    if (isAbsoluteDestination(destination)) return destination
+    if (isAbsoluteDestination(destination)) return { destination, permanent }
     // Compare stems, not spellings: `/articles/a?x=1` still points back at
     // `/articles/a`, and serving it would re-enter this same not-found branch.
-    return normalizeRedirectPath(destination) === target ? null : destination
+    return normalizeRedirectPath(destination) === target
+      ? null
+      : { destination, permanent }
   }
   return null
 }
@@ -162,7 +213,7 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
     limit: REDIRECT_LIMIT,
     overrideAccess: false,
     pagination: false,
-    select: { from: true, to: true },
+    select: { from: true, to: true, type: true },
   })
 
   const idsByCollection = collectReferenceIds(docs)
@@ -190,6 +241,10 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
   for (const doc of docs) {
     const from = (doc as { from?: unknown }).from
     if (typeof from !== 'string' || from.length === 0) continue
+    // Narrowed the same way every other field on these rows is: the select is
+    // typed loosely and a row written before #130 has no value here at all.
+    const type: CmsRedirectType =
+      (doc as { type?: unknown }).type === '302' ? '302' : '301'
     const to = (doc as { to?: unknown }).to as
       | undefined
       | {
@@ -200,7 +255,7 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
 
     if (to?.type === 'custom') {
       if (typeof to.url === 'string' && to.url.length > 0) {
-        redirects.push({ from, to: to.url })
+        redirects.push({ from, to: to.url, type })
       }
       continue
     }
@@ -211,7 +266,7 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
       continue
     const slug = slugById.get(`${relationTo}:${value}`)
     const destination = publicPathForSlug(relationTo, slug)
-    if (destination) redirects.push({ from, to: destination })
+    if (destination) redirects.push({ from, to: destination, type })
   }
 
   return redirects
@@ -228,4 +283,5 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
  */
 export const getRedirectForPath = async (
   path: string,
-): Promise<null | string> => resolveRedirect(await getCmsRedirects(), path)
+): Promise<CmsRedirectTarget | null> =>
+  resolveRedirect(await getCmsRedirects(), path)

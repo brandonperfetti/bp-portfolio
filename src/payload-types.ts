@@ -1477,6 +1477,10 @@ export interface Redirect {
         } | null);
     url?: string | null;
   };
+  /**
+   * Permanent (301) tells browsers and search engines the move is forever and is cached indefinitely. Temporary (302) is for campaigns and short-lived moves.
+   */
+  type: '301' | '302';
   updatedAt: string;
   createdAt: string;
 }
@@ -2657,6 +2661,7 @@ export interface RedirectsSelect<T extends boolean = true> {
         reference?: T;
         url?: T;
       };
+  type?: T;
   updatedAt?: T;
   createdAt?: T;
 }

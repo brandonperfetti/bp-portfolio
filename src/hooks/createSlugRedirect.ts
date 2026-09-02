@@ -107,6 +107,12 @@ export const createSlugRedirect: CollectionAfterChangeHook = async ({
       type: 'reference' as const,
       reference: { relationTo: collectionSlug, value: doc.id },
     },
+    // #130 added a permanence field to the collection. A rename is by
+    // definition a permanent move, so this hook states 301 rather than relying
+    // on the field's `defaultValue`: an `update` of an existing row does not
+    // re-apply a default, so a row an editor had flipped to temporary would
+    // otherwise stay temporary after a later rename repointed it.
+    type: '301' as const,
   }
 
   try {

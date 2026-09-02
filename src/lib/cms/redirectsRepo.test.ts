@@ -14,8 +14,11 @@ vi.mock('payload', () => ({
 }))
 
 import {
+  type CmsRedirect,
+  type CmsRedirectType,
   getCmsRedirects,
   getRedirectForPath,
+  isPermanentRedirect,
   normalizeRedirectPath,
   resolveRedirect,
 } from '@/lib/cms/redirectsRepo'
@@ -38,9 +41,33 @@ const stubFind = (byCollection: Record<string, unknown[]>) => {
   )
 }
 
-const referenceRow = (from: string, relationTo: string, value: number) => ({
+const referenceRow = (
+  from: string,
+  relationTo: string,
+  value: number,
+  type: CmsRedirectType = '301',
+) => ({
   from,
   to: { type: 'reference', reference: { relationTo, value } },
+  type,
+})
+
+/**
+ * A flattened row for the pure-lookup tests.
+ *
+ * @remarks Defaults to `'301'` so every pre-#130 case below reads exactly as it
+ * did, and the permanence tests are the ones that have to say something.
+ */
+const row = (
+  from: string,
+  to: string,
+  type: CmsRedirectType = '301',
+): CmsRedirect => ({ from, to, type })
+
+/** The shape a permanent match resolves to — `permanentRedirect`, 308. */
+const permanentlyTo = (destination: string) => ({
+  destination,
+  permanent: true,
 })
 
 describe('normalizeRedirectPath', () => {
@@ -57,10 +84,12 @@ describe('normalizeRedirectPath', () => {
 })
 
 describe('resolveRedirect', () => {
-  const rows = [{ from: '/articles/old', to: '/articles/new' }]
+  const rows = [row('/articles/old', '/articles/new')]
 
   it('matches regardless of trailing slash', () => {
-    expect(resolveRedirect(rows, '/articles/old/')).toBe('/articles/new')
+    expect(resolveRedirect(rows, '/articles/old/')).toEqual(
+      permanentlyTo('/articles/new'),
+    )
   })
 
   it('returns null when nothing matches', () => {
@@ -71,10 +100,7 @@ describe('resolveRedirect', () => {
     // The shape a rename-back-to-the-original leaves behind; serving it would
     // be an infinite redirect.
     expect(
-      resolveRedirect(
-        [{ from: '/articles/a', to: '/articles/a' }],
-        '/articles/a',
-      ),
+      resolveRedirect([row('/articles/a', '/articles/a')], '/articles/a'),
     ).toBeNull()
   })
 
@@ -84,27 +110,24 @@ describe('resolveRedirect', () => {
     // reader a URL that works and does not do what the row was written for.
     expect(
       resolveRedirect(
-        [{ from: '/old-offer', to: '/signup?campaign=launch' }],
+        [row('/old-offer', '/signup?campaign=launch')],
         '/old-offer',
       ),
-    ).toBe('/signup?campaign=launch')
+    ).toEqual(permanentlyTo('/signup?campaign=launch'))
   })
 
   it('keeps a fragment on a custom destination', () => {
-    expect(
-      resolveRedirect([{ from: '/faq', to: '/about#contact' }], '/faq'),
-    ).toBe('/about#contact')
+    expect(resolveRedirect([row('/faq', '/about#contact')], '/faq')).toEqual(
+      permanentlyTo('/about#contact'),
+    )
   })
 
   it('serves an absolute destination unchanged', () => {
     // Normalising this produced `/https://example.com/moved` — a path nothing
     // on this site serves, from a row that read perfectly in the admin.
     expect(
-      resolveRedirect(
-        [{ from: '/moved', to: 'https://example.com/moved' }],
-        '/moved',
-      ),
-    ).toBe('https://example.com/moved')
+      resolveRedirect([row('/moved', 'https://example.com/moved')], '/moved'),
+    ).toEqual(permanentlyTo('https://example.com/moved'))
   })
 
   it('does not mistake an absolute destination for a self-redirect', () => {
@@ -113,31 +136,28 @@ describe('resolveRedirect', () => {
     // destinations that stay here.
     expect(
       resolveRedirect(
-        [{ from: '/articles/a', to: 'https://example.com/articles/a' }],
+        [row('/articles/a', 'https://example.com/articles/a')],
         '/articles/a',
       ),
-    ).toBe('https://example.com/articles/a')
+    ).toEqual(permanentlyTo('https://example.com/articles/a'))
     expect(
       resolveRedirect(
-        [{ from: '/articles/a', to: '//cdn.example.com/articles/a' }],
+        [row('/articles/a', '//cdn.example.com/articles/a')],
         '/articles/a',
       ),
-    ).toBe('//cdn.example.com/articles/a')
+    ).toEqual(permanentlyTo('//cdn.example.com/articles/a'))
   })
 
   it('still refuses a self-redirect that only differs by a query', () => {
     // The loop check compares stems on purpose: this destination re-enters the
     // same not-found branch, query and all.
     expect(
-      resolveRedirect(
-        [{ from: '/articles/a', to: '/articles/a?utm=1' }],
-        '/articles/a',
-      ),
+      resolveRedirect([row('/articles/a', '/articles/a?utm=1')], '/articles/a'),
     ).toBeNull()
   })
 
   it('returns null for an empty destination instead of sending to /', () => {
-    expect(resolveRedirect([{ from: '/x', to: '   ' }], '/x')).toBeNull()
+    expect(resolveRedirect([row('/x', '   ')], '/x')).toBeNull()
   })
 
   it('matches a trailing-slash request against a query-bearing row', () => {
@@ -145,10 +165,102 @@ describe('resolveRedirect', () => {
     // destination is served exactly as configured.
     expect(
       resolveRedirect(
-        [{ from: '/old-offer/', to: '/signup?campaign=launch' }],
+        [row('/old-offer/', '/signup?campaign=launch')],
         '/old-offer',
       ),
-    ).toBe('/signup?campaign=launch')
+    ).toEqual(permanentlyTo('/signup?campaign=launch'))
+  })
+})
+
+/**
+ * Permanence (#130).
+ *
+ * Before this, every match was handed to `permanentRedirect` — a 308, cached
+ * by browsers and search engines effectively forever, which is right for a
+ * rename and wrong for a campaign page. The reader now answers the question the
+ * routes need to choose an API, and the whole risk of the change lives in the
+ * fallback: a row written before the field existed carries no value, and it
+ * must keep resolving exactly as it did.
+ */
+describe('redirect permanence (#130)', () => {
+  beforeEach(() => {
+    mocks.find.mockReset()
+  })
+
+  it.each([
+    ['301', true],
+    ['302', false],
+    [null, true],
+    [undefined, true],
+    ['', true],
+    ['307', true],
+  ])('isPermanentRedirect(%o) === %s', (type, expected) => {
+    expect(isPermanentRedirect(type)).toBe(expected)
+  })
+
+  it('resolves a 302 row as a temporary redirect', () => {
+    expect(
+      resolveRedirect([row('/promo', '/signup', '302')], '/promo'),
+    ).toEqual({ destination: '/signup', permanent: false })
+  })
+
+  it('resolves a 301 row as a permanent redirect', () => {
+    expect(
+      resolveRedirect([row('/promo', '/signup', '301')], '/promo'),
+    ).toEqual(permanentlyTo('/signup'))
+  })
+
+  it('carries permanence onto an absolute destination too', () => {
+    // The absolute-URL branch returns early, so it needs its own pin: it was
+    // the one exit that could have been left answering the old unconditional
+    // permanent.
+    expect(
+      resolveRedirect(
+        [row('/moved', 'https://example.com/moved', '302')],
+        '/moved',
+      ),
+    ).toEqual({ destination: 'https://example.com/moved', permanent: false })
+  })
+
+  it('treats a row stored with no type as permanent', async () => {
+    // The pre-#130 rows. The migration backfills them with a `DEFAULT '301'`,
+    // so this is belt and braces — but the reader is also what an import or a
+    // hand-written INSERT would go through, and a NULL there must not silently
+    // become a 307.
+    stubFind({
+      redirects: [{ from: '/legacy', to: { type: 'custom', url: '/x' } }],
+    })
+
+    const redirects = await getCmsRedirects()
+    expect(redirects).toEqual([{ from: '/legacy', to: '/x', type: '301' }])
+    expect(resolveRedirect(redirects, '/legacy')).toEqual(permanentlyTo('/x'))
+  })
+
+  it('flattens a stored 302 through the reference join', async () => {
+    stubFind({
+      redirects: [referenceRow('/articles/old', 'posts', 55, '302')],
+      posts: [{ id: 55, slug: 'new' }],
+    })
+
+    await expect(getRedirectForPath('/articles/old')).resolves.toEqual({
+      destination: '/articles/new',
+      permanent: false,
+    })
+  })
+
+  it('asks Payload for the type column', async () => {
+    // The flattening cannot report a permanence it never selected — a missing
+    // `type: true` here would make every row read as the fallback and quietly
+    // undo the feature.
+    stubFind({ redirects: [] })
+    await getCmsRedirects()
+
+    expect(mocks.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'redirects',
+        select: expect.objectContaining({ type: true }),
+      }),
+    )
   })
 })
 
@@ -164,7 +276,7 @@ describe('getCmsRedirects', () => {
     })
 
     await expect(getCmsRedirects()).resolves.toEqual([
-      { from: '/articles/old', to: '/articles/current' },
+      { from: '/articles/old', to: '/articles/current', type: '301' },
     ])
   })
 
@@ -181,10 +293,12 @@ describe('getCmsRedirects', () => {
 
     const redirects = await getCmsRedirects()
     expect(redirects).toEqual([
-      { from: '/articles/a', to: '/articles/c' },
-      { from: '/articles/b', to: '/articles/c' },
+      { from: '/articles/a', to: '/articles/c', type: '301' },
+      { from: '/articles/b', to: '/articles/c', type: '301' },
     ])
-    expect(resolveRedirect(redirects, '/articles/a')).toBe('/articles/c')
+    expect(resolveRedirect(redirects, '/articles/a')).toEqual(
+      permanentlyTo('/articles/c'),
+    )
   })
 
   it('reads references at depth 0 and joins them in one query per collection', async () => {
@@ -202,9 +316,9 @@ describe('getCmsRedirects', () => {
     })
 
     await expect(getCmsRedirects()).resolves.toEqual([
-      { from: '/articles/a', to: '/articles/one' },
-      { from: '/articles/b', to: '/articles/two' },
-      { from: '/old-page', to: '/new-page' },
+      { from: '/articles/a', to: '/articles/one', type: '301' },
+      { from: '/articles/b', to: '/articles/two', type: '301' },
+      { from: '/old-page', to: '/new-page', type: '301' },
     ])
     // redirects + posts + pages, and nothing populated at depth > 0.
     expect(mocks.find).toHaveBeenCalledTimes(3)
@@ -216,12 +330,16 @@ describe('getCmsRedirects', () => {
   it('serves hand-written custom rows too', async () => {
     stubFind({
       redirects: [
-        { from: '/legacy', to: { type: 'custom', url: '/articles/x' } },
+        {
+          from: '/legacy',
+          to: { type: 'custom', url: '/articles/x' },
+          type: '301',
+        },
       ],
     })
 
     await expect(getCmsRedirects()).resolves.toEqual([
-      { from: '/legacy', to: '/articles/x' },
+      { from: '/legacy', to: '/articles/x', type: '301' },
     ])
   })
 
@@ -233,24 +351,26 @@ describe('getCmsRedirects', () => {
         {
           from: '/old-offer',
           to: { type: 'custom', url: '/signup?campaign=launch' },
+          type: '301',
         },
         {
           from: '/moved',
           to: { type: 'custom', url: 'https://example.com/moved' },
+          type: '301',
         },
       ],
     })
 
     const redirects = await getCmsRedirects()
     expect(redirects).toEqual([
-      { from: '/old-offer', to: '/signup?campaign=launch' },
-      { from: '/moved', to: 'https://example.com/moved' },
+      { from: '/old-offer', to: '/signup?campaign=launch', type: '301' },
+      { from: '/moved', to: 'https://example.com/moved', type: '301' },
     ])
-    expect(resolveRedirect(redirects, '/old-offer')).toBe(
-      '/signup?campaign=launch',
+    expect(resolveRedirect(redirects, '/old-offer')).toEqual(
+      permanentlyTo('/signup?campaign=launch'),
     )
-    expect(resolveRedirect(redirects, '/moved')).toBe(
-      'https://example.com/moved',
+    expect(resolveRedirect(redirects, '/moved')).toEqual(
+      permanentlyTo('https://example.com/moved'),
     )
   })
 
@@ -288,8 +408,8 @@ describe('getRedirectForPath', () => {
       posts: [{ id: 55, slug: 'new' }],
     })
 
-    await expect(getRedirectForPath('/articles/old')).resolves.toBe(
-      '/articles/new',
+    await expect(getRedirectForPath('/articles/old')).resolves.toEqual(
+      permanentlyTo('/articles/new'),
     )
   })
 

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { notFound, permanentRedirect } from 'next/navigation'
+import { notFound, permanentRedirect, redirect } from 'next/navigation'
 import { Suspense } from 'react'
 
 import { ArticleLayout } from '@/components/ArticleLayout'
@@ -176,8 +176,12 @@ export default async function ArticlePage({ params }: PageProps) {
     // of the prefix, so moving the route would silently stop matching rows the
     // hook is still writing.
     const from = publicPathForSlug('posts', slug)
-    const destination = from ? await getRedirectForPath(from) : null
-    if (destination) permanentRedirect(destination)
+    const match = from ? await getRedirectForPath(from) : null
+    // #130: the row's permanence decides the API. `permanentRedirect` emits
+    // 308 and `redirect` 307; a row with no stored type answers permanent, so
+    // every pre-#130 row keeps the behaviour it had.
+    if (match?.permanent) permanentRedirect(match.destination)
+    if (match) redirect(match.destination)
     notFound()
   }
 

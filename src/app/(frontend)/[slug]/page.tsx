@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { notFound, permanentRedirect } from 'next/navigation'
+import { notFound, permanentRedirect, redirect } from 'next/navigation'
 import { cache } from 'react'
 
 import { ShareButton } from '@/components/cms/ShareButton'
@@ -73,8 +73,12 @@ export default async function CmsPage({
     // `createSlugRedirect` (the writer) share one definition of what a page's
     // public path is — see the matching note in /articles/[slug].
     const from = publicPathForSlug('pages', slug)
-    const destination = from ? await getRedirectForPath(from) : null
-    if (destination) permanentRedirect(destination)
+    const match = from ? await getRedirectForPath(from) : null
+    // #130: the row's permanence decides the API. `permanentRedirect` emits
+    // 308 and `redirect` 307; a row with no stored type answers permanent, so
+    // every pre-#130 row keeps the behaviour it had.
+    if (match?.permanent) permanentRedirect(match.destination)
+    if (match) redirect(match.destination)
     notFound()
   }
 

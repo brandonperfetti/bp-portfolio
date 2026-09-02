@@ -34,6 +34,30 @@ const generateURL: GenerateURL<Post | Page> = ({ doc, collectionSlug }) => {
 export const plugins: Plugin[] = [
   redirectsPlugin({
     collections: ['pages', 'posts'],
+    // #130. Without `redirectTypes` the plugin emits no permanence field at
+    // all (`plugin-redirects/dist/index.js`: the select field is appended only
+    // `...pluginConfig?.redirectTypes ? [redirectSelectField] : []`), so every
+    // row served as a 308 and a campaign or a temporarily-moved page could not
+    // be expressed. The plugin offers 301/302/303/307/308; only two are
+    // configured, because the reader collapses them to permanent-or-not and
+    // offering five codes that resolve to two behaviours is a way to make an
+    // editor pick wrong. `redirectsRepo.ts` maps 301 to `permanentRedirect`
+    // (308) and 302 to `redirect` (307) — Next's App Router APIs emit the
+    // modern method-preserving codes, which is the intended behaviour in both
+    // cases.
+    redirectTypes: ['301', '302'],
+    // The plugin builds this field `required: true` with NO default, which
+    // would make every existing row invalid on its next save and force a pick
+    // on every new one. The default is permanent: that is the right answer for
+    // the rename rows `createSlugRedirect` writes (the overwhelming majority)
+    // and the safe answer for a hand-written one.
+    redirectTypeFieldOverride: {
+      admin: {
+        description:
+          'Permanent (301) tells browsers and search engines the move is forever and is cached indefinitely. Temporary (302) is for campaigns and short-lived moves.',
+      },
+      defaultValue: '301',
+    },
     overrides: {
       // @ts-expect-error - valid override; mapped fields don't resolve to the same type
       fields: ({ defaultFields }) => {

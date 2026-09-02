@@ -120,10 +120,32 @@ Scope: only **Posts** and **Pages** are slug-routed (`slugPaths.ts`).
 Categories, Tags, Projects and Authors carry a slug with no public URL behind
 it and keep the plain derive-from-title behaviour.
 
-Known limits: the `redirects` collection carries no per-row permanence flag
-(the plugin only adds one when `redirectTypes` is configured), so every served
-redirect is a permanent one — right for a rename, worth revisiting if temporary
-redirects are ever needed. The reader reads at most 500 rows.
+**Permanent vs temporary redirects (#130).** The plugin is configured with
+`redirectTypes: ['301', '302']`, which is what makes it emit a permanence
+field at all — without that option it emits none and every redirect served as
+a 308. The admin form offers **301 – Permanent** (the default) and
+**302 – Temporary**; `src/lib/cms/redirectsRepo.ts` flattens the stored code
+and the two not-found branches call `permanentRedirect` (308) or `redirect`
+(307) accordingly. Only two of the plugin's five codes are offered because the
+reader collapses them to permanent-or-not, and five options that produce two
+behaviours is a way to make an editor pick wrong.
+
+Anything not `'302'` reads as permanent — an unset, legacy or unrecognised
+value included. That is deliberately the pre-#130 behaviour, so a row written
+before the field existed is unchanged, and the conservative direction for a
+rename. The rename rows `createSlugRedirect` writes state `'301'` explicitly
+rather than relying on the field default, because updating an existing row does
+not re-apply a default and a row an editor had flipped to temporary would
+otherwise stay temporary.
+
+The migration is `20260902_205311_redirect_permanence`. It adds an enum type and
+a `NOT NULL DEFAULT '301'` column to the **existing** `redirects` table, so the
+new-table RLS rule below does not apply and no `ENABLE ROW LEVEL SECURITY`
+statement belongs in it — `redirects` was swept by the #72 backfill and its RLS
+is already on. `scripts/check-migrations-rls.mjs` agrees: the migration creates
+no table, so it carries no obligation.
+
+Known limits: the reader reads at most 500 rows.
 
 ## Plugins (`src/plugins/index.ts`)
 
@@ -133,7 +155,8 @@ redirects are ever needed. The reader reads at most 500 rows.
   `createSlugRedirect` writes when a published Post/Page is deliberately
   renamed; revalidated on change and served by `src/lib/cms/redirectsRepo.ts`
   (#120). Before that, nothing in `src/` read the collection, so a redirect row
-  was inert.
+  was inert. `redirectTypes: ['301', '302']` + a `defaultValue: '301'` override
+  give each row a permanence the routes act on (#130).
 - `plugin-search` — synced search index over posts feeding `/api/search`.
 - `plugin-mcp` — Payload MCP endpoint at `/api/mcp` (API-key auth) so agents
   can operate the CMS. Collections opt in with `{ enabled: true }` objects.

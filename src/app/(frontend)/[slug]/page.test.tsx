@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ROUTE_RHYTHM_PROFILES } from '@/heros/routeRhythm'
 import type { Page } from '@/payload-types'
@@ -36,9 +36,22 @@ vi.mock('@/lib/cms/siteSettingsRepo', () => ({
   getCmsSiteSettings: vi.fn(async () => ({})),
 }))
 vi.mock('@/lib/site', () => ({ getSiteUrl: () => 'https://example.com' }))
+// #130: the not-found branch chooses between the two redirect APIs, so both
+// have to be observable. They are stubbed as throwing sentinels because that
+// is what they really do — each one terminates the render.
+const getRedirectForPath = vi.fn()
+vi.mock('@/lib/cms/redirectsRepo', () => ({
+  getRedirectForPath: (path: string) => getRedirectForPath(path),
+}))
 vi.mock('next/navigation', () => ({
   notFound: () => {
     throw new Error('notFound')
+  },
+  permanentRedirect: (destination: string) => {
+    throw new Error(`permanentRedirect:${destination}`)
+  },
+  redirect: (destination: string) => {
+    throw new Error(`redirect:${destination}`)
   },
 }))
 
@@ -126,5 +139,53 @@ describe('[slug] route rhythm — home parity', () => {
 
     expect(outer.querySelector('[data-testid="render-hero"]')).not.toBeNull()
     expect(outer.querySelector('[data-testid="render-blocks"]')).not.toBeNull()
+  })
+})
+
+/**
+ * Redirect permanence on the not-found branch (#130).
+ *
+ * Until #130 the collection had no permanence field and this branch called
+ * `permanentRedirect` unconditionally, so a temporary move was served as a 308
+ * and cached in browsers and search indexes effectively forever. The reader now
+ * answers `permanent`, and these pin that the route acts on the answer instead
+ * of ignoring it — including that a row with no stored type still gets the old
+ * behaviour.
+ */
+describe('[slug] redirect permanence (#130)', () => {
+  beforeEach(() => {
+    getRedirectForPath.mockReset()
+  })
+
+  const renderMissing = async () => {
+    getPageBySlugDraftAware.mockResolvedValue(null)
+    return CmsPage({ params: Promise.resolve({ slug: 'gone' }) })
+  }
+
+  it('serves a permanent row through permanentRedirect (308)', async () => {
+    getRedirectForPath.mockResolvedValue({
+      destination: '/moved-here',
+      permanent: true,
+    })
+
+    await expect(renderMissing()).rejects.toThrow(
+      'permanentRedirect:/moved-here',
+    )
+    expect(getRedirectForPath).toHaveBeenCalledWith('/gone')
+  })
+
+  it('serves a temporary row through redirect (307)', async () => {
+    getRedirectForPath.mockResolvedValue({
+      destination: '/promo',
+      permanent: false,
+    })
+
+    await expect(renderMissing()).rejects.toThrow('redirect:/promo')
+  })
+
+  it('404s when no row matches', async () => {
+    getRedirectForPath.mockResolvedValue(null)
+
+    await expect(renderMissing()).rejects.toThrow('notFound')
   })
 })
