@@ -238,10 +238,17 @@ describe('corvus-backfill workflow', () => {
     )
 
     expect(checkout, 'the job must still check the repo out').toBeDefined()
+    // Property lines only: the step's own comment quotes the literal
+    // "persist-credentials: false" in prose, so a body-wide match would stay
+    // green with the comment intact and the actual `with:` entry deleted.
+    const propertyLines = (checkout?.body ?? '')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith('#'))
     expect(
-      checkout?.body,
-      'actions/checkout must set persist-credentials: false',
-    ).toMatch(/persist-credentials:\s*false/)
+      propertyLines,
+      'actions/checkout must set persist-credentials: false as a YAML property',
+    ).toContain('persist-credentials: false')
   })
 
   it('bounds the run so a hung call cannot hold the concurrency group', () => {

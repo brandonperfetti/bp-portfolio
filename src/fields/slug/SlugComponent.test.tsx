@@ -71,7 +71,9 @@ const slugProps = {
   path: 'slug',
 } as unknown as React.ComponentProps<typeof SlugComponent>
 
-const renderSlug = () => render(<SlugComponent {...slugProps} />)
+const renderSlug = (
+  overrides: Partial<React.ComponentProps<typeof SlugComponent>> = {},
+) => render(<SlugComponent {...slugProps} {...overrides} />)
 
 describe('slugFieldDescription', () => {
   it('tells a published editor that the title will not move the URL', () => {
@@ -185,12 +187,19 @@ describe('SlugComponent', () => {
   })
 
   it('scopes the description id to the field path', () => {
-    // Two slug fields in one form must not collide on the id.
-    renderSlug()
+    // Two slug fields in one form must not collide on the id, so the id has
+    // to FOLLOW the path — a hardcoded 'field-slug-description' would pass a
+    // default-path render and still collide. A nested path also exercises the
+    // dot-to-underscore fold, because a dot inside an id is legal HTML but a
+    // trap for any querySelector('#…') that meets it unescaped.
+    renderSlug({
+      path: 'meta.slug',
+    } as Partial<React.ComponentProps<typeof SlugComponent>>)
 
-    expect(screen.getByRole('textbox')).toHaveAttribute(
-      'aria-describedby',
-      'field-slug-description',
-    )
+    const describedBy = screen
+      .getByRole('textbox')
+      .getAttribute('aria-describedby')
+    expect(describedBy).toBe('field-meta__slug-description')
+    expect(document.getElementById('field-meta__slug-description')).toBeTruthy()
   })
 })
