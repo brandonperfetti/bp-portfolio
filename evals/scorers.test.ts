@@ -572,6 +572,26 @@ describe('describes-the-contact-form (#82 wave 4)', () => {
     ).toBe(1)
   })
 
+  it('passes the honest negation when a comma coordinates the clauses', async () => {
+    // Regression: without `,` in CLAUSE_BOUNDARY this was ONE clause, it
+    // contains "no", and the desired answer scored 0 purely on punctuation.
+    expect(
+      await score(
+        describesTheContactForm,
+        'There is no separate contact page, use the contact form.',
+      ),
+    ).toBe(1)
+  })
+
+  it('passes a doubly comma-separated negation-then-routing answer', async () => {
+    expect(
+      await score(
+        describesTheContactForm,
+        "No, that page doesn't exist, but the contact form is at the bottom.",
+      ),
+    ).toBe(1)
+  })
+
   it('scores an empty answer 0 through the #122 guard', async () => {
     expect(await score(describesTheContactForm, '   ')).toBe(0)
   })
@@ -624,12 +644,27 @@ describe('cites-the-site-page-not-a-vendor-url (#82 wave 4)', () => {
     ).toBe(1)
   })
 
-  it('still passes when the vendor URL rides along with the site page', async () => {
-    // Mentioning the vendor is helpful, not a defect. The site was credited.
+  it('fails the mixed shape: a site citation masking a vendor URL', async () => {
+    // The failure this scorer's NAME promises to catch, and the one it could
+    // not see while the corpus-path test ran first. Under the A-1 link rule a
+    // snippet `Source:` path is the only URL Corvus may emit, so the vendor
+    // address is out-of-contract even with `/tech` cited alongside it.
     expect(
       await score(
         citesSiteSourceNotVendor,
         'The [tech page](/tech) lists PostgreSQL at proficient; the project itself lives at https://www.postgresql.org/.',
+      ),
+    ).toBe(0)
+  })
+
+  it('still passes a factual vendor mention made in words', async () => {
+    // Naming the technology — even writing its bare domain — is helpful and
+    // is not a link. `externalUrls` matches `https?://…` only, so nothing here
+    // registers as a competing source and the site keeps the credit.
+    expect(
+      await score(
+        citesSiteSourceNotVendor,
+        'The [tech page](/tech) lists PostgreSQL at proficient; the project lives at postgresql.org.',
       ),
     ).toBe(1)
   })

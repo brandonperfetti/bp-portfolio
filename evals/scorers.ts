@@ -265,14 +265,26 @@ export function externalUrls(output: string): string[] {
  * Three outcomes, and the middle one is what makes the score readable next to
  * `cites-a-real-source-url`:
  *
- * - **1** — a corpus path is cited. Mentioning the vendor's address ALONGSIDE
- *   it is fine and often helpful; the site was still credited.
- * - **0** — no corpus path, but a third-party URL is present. The vendor
- *   address stood in for the citation. This is the defect.
+ * - **0** — ANY third-party URL is present, whether or not a corpus path rides
+ *   along with it. This is the defect, and the mixed shape is the reason the
+ *   test is ordered this way rather than checking the corpus path first: an
+ *   answer citing `/tech` AND `https://www.postgresql.org/` used to score 1,
+ *   so the one failure this scorer's NAME promises to catch — a site citation
+ *   masking a vendor URL — was the one it could not see.
+ * - **1** — a corpus path is cited and no third-party URL appears. The site
+ *   carried the claim, and nothing else was offered as a source.
  * - **0.5** — no corpus path and no URL at all. A bad answer, already scored 0
  *   by `cites-a-real-source-url`, but a DIFFERENT bad answer: nothing was
  *   substituted. Collapsing it to 0 here would make this scorer a duplicate of
  *   its sibling instead of an explanation of it.
+ *
+ * Why a vendor URL is fatal even next to a good citation: the A-1 link rule
+ * makes a snippet's `Source:` path the ONLY URL Corvus may emit, so a
+ * third-party address in the answer is out-of-contract regardless of what
+ * else is cited. This does NOT punish factual vendor mentions *in words* —
+ * "PostgreSQL", or even a bare "postgresql.org" — because
+ * {@link externalUrls} matches `https?://…` only and so never sees them. Naming
+ * a technology stays free; publishing its address does not.
  *
  * @param knownUrls - Every `sourceUrl` in the corpus.
  * @returns A scorer measuring whether the site's own page carried the claim.
@@ -284,8 +296,8 @@ export function createCitesSiteSourceNotVendor(knownUrls: readonly string[]) {
     description:
       "Sources a claim about this site with the site's own page, never a third-party homepage.",
     scorer: ({ output }) => {
-      if (citedPaths(output).some((path) => corpus.has(path))) return 1
-      return externalUrls(output).length ? 0 : 0.5
+      if (externalUrls(output).length) return 0
+      return citedPaths(output).some((path) => corpus.has(path)) ? 1 : 0.5
     },
   })
 }
@@ -442,8 +454,17 @@ const CONTACT_FORM_SIGNAL = /contact form|contact page/i
  * contact page — use the contact form". Splitting on the dash family (and
  * semicolons) keeps that answer's positive half separable from its negated
  * half; splitting only on sentence enders would drown it.
+ *
+ * The comma is in the set for the same reason the dash is, and its absence was
+ * a false NEGATIVE on the exact answer this gate wants: "There is no separate
+ * contact page, use the contact form." is one clause without it, contains
+ * "no", and scored 0 — a comma-coordinated honest negation punished purely for
+ * its punctuation. Splitting more finely can only ever help a good answer
+ * here, because the scorer asks whether ANY clause routes without negating:
+ * a finer split gives the routing half its own clause, and a negated aside
+ * that lands in a clause of its own still costs nothing.
  */
-const CLAUSE_BOUNDARY = /[.!?;\n–—]/
+const CLAUSE_BOUNDARY = /[.!?;,\n–—]/
 
 /**
  * Negation markers that turn a contact-form mention into a non-answer.
