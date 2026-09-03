@@ -15,13 +15,9 @@ import type { Page } from '@/payload-types'
 const getPageByPathDraftAware = vi.fn()
 const reservedPagePaths = new Set<string>()
 
-const getAncestorPages = vi.fn(
-  async () =>
-    [] as Array<{
-      path: string
-      title: string
-    }>,
-)
+const getAncestorPages = vi.fn<
+  (path: string) => Promise<Array<{ path: string; title: string }>>
+>(async () => [])
 
 vi.mock('@/lib/cms/pagesRepo', () => ({
   getAncestorPages: (path: string) => getAncestorPages(path),

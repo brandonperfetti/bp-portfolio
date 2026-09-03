@@ -5,6 +5,10 @@ Payload is the single source of truth for site content. Admin at `/admin`
 
 ## Collections
 
+- **Pages** — layout-builder pages served by the `/[...segments]` catch-all,
+  resolved on a computed, unique, indexed `path`. See "Slugs and paths" below
+  and `docs/NAVIGATION.md` for the hierarchy, the root-page contract and the
+  reserved-first-segment rule.
 - **Posts** — articles (`/articles/[slug]`). Drafts + versions + autosave
   (100ms) + scheduled publish. Tabs: Content (excerpt, heroImage, Lexical
   content), Meta (relatedPosts, categories, tags), SEO (plugin-seo fields).
@@ -52,10 +56,32 @@ feeds `buildPersonSchema` and the Resume card's Download CV button; empty
 fields fall back to the `src/lib/identity.ts` constants and the static
 `/assets` PDF).
 
-## Slugs
+## Slugs and paths
 
 Pattern in `src/fields/slug/`: text field + `slugLock` checkbox + `formatSlug`
 hook + `enforceSlugFreeze` hook + admin component.
+
+**`publicPathFor(collectionSlug, doc)` in `src/fields/slug/slugPaths.ts` is the
+single owner of "what is this document's public URL."** Sitemap, canonical,
+JSON-LD, RSS, `llms.txt`, `/api/search`, `CMSLink`, the SEO plugin's
+`generateURL`, the admin preview builder, the redirect writer/reader and the
+revalidation hooks all resolve through it. Never hand-build a public URL; if a
+surface needs one, call this. `publicPathForSlug(collection, slug)` is a thin
+wrapper for callers holding only a slug — correct for a top-level page and for
+every post, and necessarily wrong for a placed page. The admin slug sidebar
+shows the resolved full public path ("Served at /work/brytecore") so an editor
+can see what their edit will move (#120's lesson, #148's fix).
+
+**Pages carry a hierarchy** (#148): `parent` (self-referencing, `hasMany:
+false`, optional, top-level) and `path` (text, `index: true`, `unique: true`,
+admin-read-only, computed in `beforeChange`). The root page is designated by the
+reserved `home` slug (`ROOT_PAGE_SLUG`), it serves `/`, and its children omit
+its segment. Depth is capped at 3 segments. `beforeValidate` rejects cycles,
+over-deep paths, code-owned first segments, and both same- and cross-collection
+path collisions. Posts have no `parent`/`path` yet — placement is #153, and
+until it lands every post keeps `/articles/[slug]` byte-for-byte. The routing
+half, the two reservation rules and the no-cascade limit are in
+`docs/NAVIGATION.md`.
 
 **`slugLock: true` means "I do not hand-edit this slug"**, and that resolves
 differently either side of first publish (#120):
@@ -92,8 +118,8 @@ value the server is about to revert.
 **Redirects point at the document, not at a path** (`to.type: 'reference'`), so
 renaming `a → b → c` leaves both `/articles/a` and `/articles/b` resolving
 straight to `/articles/c` — chains cannot form. `src/lib/cms/redirectsRepo.ts`
-is the cached reader; `/articles/[slug]` and `/[slug]` consult it on their
-not-found branch only, so a live document always wins over a stale row.
+is the cached reader; `/articles/[slug]` and `/[...segments]` consult it on
+their not-found branch only, so a live document always wins over a stale row.
 
 **Passing state between hooks: write to `req.context`, never to the `context`
 argument.** `createLocalReq` reassigns `req.context = getRequestContext(req,
