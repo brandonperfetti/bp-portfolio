@@ -19,6 +19,7 @@ import { createSlugRedirect } from '@/hooks/createSlugRedirect'
 import { populatePublishedAt } from '@/hooks/populatePublishedAt'
 import { generatePreviewPath } from '@/utilities/generatePreviewPath'
 import { computePagePath, validatePageHierarchy } from './hooks/pageHierarchy'
+import { refuseNestedSlugRename } from './hooks/refuseNestedSlugRename'
 import { revalidateDelete, revalidatePage } from './hooks/revalidatePage'
 
 /**
@@ -230,7 +231,11 @@ export const Pages: CollectionConfig = {
     // `computePagePath` ever stores a path — the guard runs in `beforeValidate`,
     // the computation in `beforeChange`, so the stored `path` is always one the
     // guard has already accepted.
-    beforeValidate: [validatePageHierarchy],
+    // `refuseNestedSlugRename` is a stop-gap that #150 deletes — it refuses a
+    // slug rename on a nested, published page, whose redirect row would
+    // otherwise be written with a top-level `from` and leave the old nested URL
+    // 404ing. Its own file and its own TSDoc carry the argument both ways.
+    beforeValidate: [validatePageHierarchy, refuseNestedSlugRename],
     beforeChange: [populatePublishedAt, capturePublishedSlug, computePagePath],
     afterDelete: [revalidateDelete],
   },

@@ -68,6 +68,21 @@ segments, and both same- and cross-collection path collisions. Its TSDoc is the
 contract, and each rejection carries a message written for the editor who sees
 it.
 
+**Renaming a nested page's slug is refused until #150.** The hole is the same
+one the Posts side has, arriving through the same door: `createSlugRedirect`
+builds a row's `from` from the _slug_, and a slug can only ever spell a
+top-level path. Rename `/work/brytecore` to `/work/bcore` and the row written is
+`from: /brytecore → /bcore` — two URLs that never existed — while
+`/work/brytecore`, the URL that actually moved, gets no row and **404s**. So
+`refuseNestedSlugRename` (`src/collections/Pages/hooks/`) rejects a slug rename
+on a published page **that has a parent**, and tells the editor to clear the
+parent, rename at the top level, and set the parent again. A **top-level** page's
+rename is untouched — there `path === slug`, so #120 spells the row correctly
+and keeps working byte for byte. It is a stop-gap in its own file, #150 deletes
+it, and its TSDoc carries the argument both ways. Re-parenting is not refused,
+for the same reason un-placing an article is not: that is an editor deliberately
+moving a document, not losing a URL as a side effect of changing something else.
+
 **Known limit.** Moving a parent does **not** cascade to its descendants — pages
 or placed posts alike: their stored paths stay stale until they are themselves
 saved. Deliberate — the cascade needs the redirect fan-out that extends #120,
