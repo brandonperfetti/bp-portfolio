@@ -72,27 +72,43 @@ export function getTracesSampleRate(): number {
  * Checks `NEXT_PUBLIC_SENTRY_ENVIRONMENT` first, deliberately — the
  * `NEXT_PUBLIC_` prefix is what gets it inlined into the browser bundle at
  * build time, and it's equally readable server/edge-side at runtime, so
- * it's the one var that tags all three runtimes consistently. Without it,
- * `instrumentation-client.ts`'s `Sentry.init` would fall through past the
- * server-only `SENTRY_ENVIRONMENT`/`VERCEL_ENV` (both `undefined` in the
- * browser bundle) straight to `NODE_ENV`, which is `'production'` on
- * every built deploy — silently mis-tagging staging/preview client events
- * as production. `SENTRY_ENVIRONMENT` remains as a server-only override
- * (e.g. to diverge server tagging from the client without touching the
- * public var); `VERCEL_ENV`/`NODE_ENV` remain as the last-resort fallback
- * for server/edge when neither is set.
+ * it's the one var that tags all three runtimes consistently.
+ * `SENTRY_ENVIRONMENT` remains as a server-only override (e.g. to diverge
+ * server tagging from the client without touching the public var).
+ *
+ * `NEXT_PUBLIC_VERCEL_ENV` is the browser's only deployment-target signal
+ * and is why this chain exists in this order (#134): `VERCEL_ENV` is
+ * server-only, so on a Preview deploy whose dashboard config sets
+ * `NEXT_PUBLIC_SENTRY_ENVIRONMENT` for Production/Staging **only**, the
+ * client bundle used to fall through every server-side var straight to
+ * `NODE_ENV` — `'production'` on every built deploy, Preview included —
+ * and tagged preview browser errors `environment=production`, polluting
+ * the production feed and paging production alerts.
+ *
+ * `NODE_ENV` is deliberately NOT in this chain: it names a **build mode**
+ * (`production` | `development` | `test`), not a deployment target, and
+ * conflating the two is exactly the #134 defect. When nothing identifies a
+ * deployment, the honest answer is `'development'` — a local/CI run, which
+ * is also the only situation where nothing is set.
+ *
+ * Access shape matters: Next inlines `process.env.NEXT_PUBLIC_*` into the
+ * browser bundle only for **static member access** written literally
+ * (`process.env.NEXT_PUBLIC_VERCEL_ENV`). Computed access
+ * (`process.env[name]`), destructuring, or spreading `process.env` is NOT
+ * inlined and would read back `undefined` client-side — keep every
+ * `NEXT_PUBLIC_*` read below written out literally.
  *
  * @returns `NEXT_PUBLIC_SENTRY_ENVIRONMENT` if set, else
  * `SENTRY_ENVIRONMENT`, else Vercel's own env name (`VERCEL_ENV`:
- * `production` | `preview` | `development`), else `NODE_ENV`, else
- * `'development'`.
+ * `production` | `preview` | `development`), else its browser-readable
+ * twin `NEXT_PUBLIC_VERCEL_ENV`, else `'development'`.
  */
 export function getSentryEnvironment(): string {
   return (
     process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT ||
     process.env.SENTRY_ENVIRONMENT ||
     process.env.VERCEL_ENV ||
-    process.env.NODE_ENV ||
+    process.env.NEXT_PUBLIC_VERCEL_ENV ||
     'development'
   )
 }

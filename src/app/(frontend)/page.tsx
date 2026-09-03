@@ -10,9 +10,17 @@ import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import { buildPersonSchema, buildWebsiteSchema } from '@/lib/seo/structuredData'
 import { getSiteUrl } from '@/lib/site'
+import { ROOT_PAGE_SLUG } from '@/fields/slug/slugPaths'
 
-/** Pages collection slug that renders at `/`. */
-const HOME_SLUG = 'home'
+/**
+ * Pages collection slug that renders at `/`.
+ *
+ * @remarks Re-exported from `slugPaths.ts` rather than spelled again here:
+ * that module is the single owner of the root-page designation, so this route
+ * cannot drift from the `publicPathFor` mapping the rest of the site uses
+ * (#148).
+ */
+const HOME_SLUG = ROOT_PAGE_SLUG
 
 const defaultHomeMeta = {
   title: 'Home',

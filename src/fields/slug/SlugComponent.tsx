@@ -13,12 +13,55 @@ import {
   useForm,
 } from '@payloadcms/ui'
 
+import { publicPathFor } from './slugPaths'
+
 import './index.scss'
 
 type SlugComponentProps = {
   fieldToUse: string
   checkboxFieldPath: string
 } & TextFieldClientProps
+
+/**
+ * The full public path this document will be served at, for the read-only line
+ * under the slug input (#148).
+ *
+ * @param collectionSlug - The collection being edited.
+ * @param storedPath - The document's stored `path`, when it has one — every
+ *   page, and a post that has been placed under one (#153).
+ * @param slug - The slug currently in the form.
+ * @returns The public path, or `null` when there is nothing useful to show.
+ *
+ * @remarks An editor who cannot see `/work/brytecore` cannot reason about
+ * whether their edit moves a URL, which is the whole lesson of #120 — so this
+ * shows the *resolved* path, not the bare slug.
+ *
+ * The ancestor prefix is taken from the stored `path` (everything before its
+ * last segment) rather than resolved from the `parent` field, because the
+ * parent's own path lives on the server and this is a client component. The
+ * consequence is precise and worth stating: a slug edit is reflected live, and
+ * a **parent change is reflected after save**. Every other case — a new
+ * top-level page, a rename in place, a placed page being re-slugged — is exact.
+ */
+export const resolvedPublicPath = (
+  collectionSlug: string | undefined,
+  storedPath: unknown,
+  slug: string | undefined,
+): string | null => {
+  if (!collectionSlug || !slug) return null
+  // No stored path means the document is unplaced, and the two collections
+  // differ on what that means: a top-level PAGE is served at `/<slug>`, an
+  // unplaced POST at `/articles/<slug>` (#153). Synthesising `path: slug` here
+  // would answer `/hello` for every article on the site, so the slug-only case
+  // is handed to `publicPathFor` as a slug-only doc and the collection decides.
+  if (typeof storedPath !== 'string' || !storedPath)
+    return publicPathFor(collectionSlug, { slug })
+  const prefix = storedPath.split('/').slice(0, -1).join('/')
+  return publicPathFor(collectionSlug, {
+    path: prefix ? `${prefix}/${slug}` : slug,
+    slug,
+  })
+}
 
 /**
  * The sentence shown under the slug input. Four states, each describing what
@@ -114,7 +157,9 @@ export const SlugComponent: React.FC<SlugComponentProps> = ({
   const { value, setValue } = useField<string>({ path: path || field.name })
 
   const { dispatchFields } = useForm()
-  const { hasPublishedDoc } = useDocumentInfo()
+  const { collectionSlug, hasPublishedDoc } = useDocumentInfo()
+
+  const storedPath = useFormFields(([fields]) => fields.path?.value)
 
   const checkboxValue = useFormFields(([fields]) => {
     return fields[checkboxFieldPath]?.value as string
@@ -161,6 +206,7 @@ export const SlugComponent: React.FC<SlugComponentProps> = ({
   // `TextInput` already uses for the input itself (`field-${path}` with dots
   // flattened) and stays unique when two slug fields share a form.
   const descriptionId = `field-${(path || field.name).replace(/\./g, '__')}-description`
+  const publicPath = resolvedPublicPath(collectionSlug, storedPath, value)
 
   return (
     <div className="field-type slug-field-component">
@@ -181,6 +227,11 @@ export const SlugComponent: React.FC<SlugComponentProps> = ({
       />
 
       <p className="slug-field-description" id={descriptionId}>
+        {publicPath ? (
+          <>
+            Served at <code>{publicPath}</code>.{' '}
+          </>
+        ) : null}
         {slugFieldDescription(Boolean(hasPublishedDoc), locked)}
       </p>
     </div>

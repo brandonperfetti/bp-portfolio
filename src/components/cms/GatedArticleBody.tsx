@@ -23,7 +23,10 @@ export function ArticleBodyRegion({
   // #113: the teaser (and its Button-primitive CTA) is its own presentational
   // leaf so it can carry a Storybook story — this module's request-time
   // `AuthGatedArticleBody` imports make it unbundlable for the browser.
-  if (article.gated) return <MembersTeaser slug={article.slug} />
+  // `path` too (#153): a placed article's post-sign-in return URL must be its
+  // placed path, or the reader is bounced to `/articles/<slug>` and 308ed.
+  if (article.gated)
+    return <MembersTeaser slug={article.slug} path={article.path} />
   return bodyBlocks.length > 0 ? (
     <ArticleBody blocks={bodyBlocks} />
   ) : (

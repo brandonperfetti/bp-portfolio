@@ -8,9 +8,23 @@ import {
   revalidateCollectionTagDelete,
 } from '@/hooks/revalidateCollection'
 
-/** Article categories (topic chips on /articles). */
+/**
+ * Article topics (the topic chips on /articles).
+ *
+ * @remarks **Labelled "Topic"/"Topics" in the admin; the slug stays
+ * `categories` (#149).** The public surface has said "topics" for a long time
+ * — the chips, the `?topic=` filter, `topics: string[]` on the read models —
+ * and the admin was the last place still saying "Categories". `labels` closes
+ * that gap for free: it is presentation only, so no table rename, no
+ * reindex, and no churn on the `categories` MCP tool names agents call. See
+ * `docs/PAYLOAD.md` §Collections for the full rationale.
+ */
 export const Categories: CollectionConfig = {
   slug: 'categories',
+  labels: {
+    singular: 'Topic',
+    plural: 'Topics',
+  },
   access: {
     create: authenticated,
     delete: authenticated,

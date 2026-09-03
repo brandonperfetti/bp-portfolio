@@ -5,6 +5,7 @@ import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { type BlockHostContext, blockRhythmClass } from '@/blocks/hostContext'
 import { formatDate } from '@/lib/formatDate'
+import { publicPathFor } from '@/fields/slug/slugPaths'
 import { cn } from '@/lib/utils'
 
 /** The two article-list treatments that exist on the site today. */
@@ -33,6 +34,14 @@ export const STACKED_REVEAL_PARAMS = {
  */
 export interface ArticleCardItem {
   slug: string
+  /**
+   * A placed article's stored path (#153); absent for `/articles/<slug>`.
+   *
+   * The card resolves its href through `publicPathFor`, which needs the path to
+   * answer `/work/brytecore` — without it every card on the site links a placed
+   * article at the archive URL, which then 308s.
+   */
+  path?: string
   title: string
   date: string
   description: string
@@ -172,7 +181,7 @@ function ArticleCard({ article }: { article: ArticleCardItem }) {
           className="absolute -inset-x-4 -inset-y-6 z-0 scale-95 bg-zinc-50 opacity-0 transition sm:-inset-x-6 sm:rounded-2xl dark:bg-zinc-800/50"
         />
         <Link
-          href={`/articles/${article.slug}`}
+          href={publicPathFor('posts', article) ?? '#'}
           aria-label={`Read article: ${article.title}`}
           className="absolute -inset-x-4 -inset-y-6 z-20 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 sm:-inset-x-6 sm:rounded-2xl dark:focus-visible:ring-teal-400/70"
         />

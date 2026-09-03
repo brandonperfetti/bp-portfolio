@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { type ArticleWithSlug } from '@/lib/articles'
+import { publicPathFor } from '@/fields/slug/slugPaths'
 import { dedupeArticlesBySlug } from '@/lib/articleUtils'
 import { formatDate } from '@/lib/formatDate'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
@@ -510,7 +511,7 @@ export function ArticlesExplorer({
                     className="absolute inset-0 z-0 rounded-2xl bg-zinc-50 opacity-0 transition dark:bg-zinc-800/40"
                   />
                   <Link
-                    href={`/articles/${article.slug}`}
+                    href={publicPathFor('posts', article) ?? '#'}
                     aria-label={`Read article: ${article.title}`}
                     className="absolute inset-0 z-20 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70"
                   />

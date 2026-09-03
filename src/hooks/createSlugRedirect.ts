@@ -43,14 +43,29 @@ import { readPreviousPublishedSlug } from '@/hooks/capturePublishedSlug'
  * "old path already redirected somewhere else" case: it is repointed, not
  * duplicated.
  *
- * **Why it also revalidates the old path.** `revalidatePost` purges the old
- * path only on the *unpublish* transition
+ * **Why it also revalidates the old path, and why that stays here (#132).**
+ * `revalidatePost` purges the old path only on the *unpublish* transition
  * (`previousDoc._status === 'published' && doc._status !== 'published'`), so a
  * published→published rename leaves `/articles/<old>` serving its prerendered
  * shell and the new redirect would never be consulted. Purging it here is what
  * makes the old URL fall through to the not-found branch that reads the
  * redirect. Honours `context.disableRevalidate` like the other hooks; the row
  * itself is still written.
+ *
+ * #132 asked whether that purge should move into the revalidation hooks
+ * instead. It should not, and the decisive reason is visible one line above:
+ * the purge takes `from` — the exact string just written as the row's `from`,
+ * built by `publicPathForSlug`. The revalidation hooks speak a different path
+ * vocabulary (they hand-build `/articles/${slug}`, and `revalidatePage` maps
+ * `home` to `/` where `publicPathForSlug` says `/home`), so a purge issued from
+ * there could uncover a path no row was ever written for. Keeping writer and
+ * purge in one expression makes them incapable of disagreeing. It also keeps
+ * the purge conditional on the write having succeeded — it sits inside this
+ * same `try`, after the row lands — rather than on a transition that fires
+ * either way. The ownership rule, stated once for both sides: **whoever writes
+ * a redirect row purges that row's `from`; the revalidation hooks purge the
+ * document's own paths.** The transition matrix is pinned in
+ * `revalidatePost.test.ts` and `revalidatePage.test.ts`.
  *
  * A failure here must never fail the editor's publish, so the write is wrapped
  * and logged. The `redirects` cache tag is purged for free: creating the row
@@ -92,6 +107,12 @@ export const createSlugRedirect: CollectionAfterChangeHook = async ({
       type: 'reference' as const,
       reference: { relationTo: collectionSlug, value: doc.id },
     },
+    // #130 added a permanence field to the collection. A rename is by
+    // definition a permanent move, so this hook states 301 rather than relying
+    // on the field's `defaultValue`: an `update` of an existing row does not
+    // re-apply a default, so a row an editor had flipped to temporary would
+    // otherwise stay temporary after a later rename repointed it.
+    type: '301' as const,
   }
 
   try {

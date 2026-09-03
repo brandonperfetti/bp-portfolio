@@ -36,6 +36,18 @@ export interface CmsCategory {
 
 export interface CmsArticleSummary {
   slug: string
+  /**
+   * The stored, root-relative path of a **placed** article (#153) — `undefined`
+   * for the unplaced default, which is served at `/articles/<slug>`.
+   *
+   * Carried on the summary rather than resolved per consumer because every
+   * article-URL surface on the site (cards, RSS, llms.txt, `/api/search`, the
+   * sitemap, the `ItemList` JSON-LD) receives only a summary, and each one
+   * resolves its href through `publicPathFor`. Without this field they would
+   * all resolve a placed article to `/articles/<slug>` and emit a URL that
+   * immediately 308s.
+   */
+  path?: string
   title: string
   description: string
   seoTitle?: string
@@ -162,6 +174,13 @@ export interface CmsPageContent {
   pageId: string
   routeKey: string
   slug: string
+  /**
+   * The page's computed hierarchy path, without a leading slash (`about`,
+   * `work/brytecore`). Present for every migrated row; `undefined` only for a
+   * projection built before the #148 backfill, where `slug` is the same string.
+   * Read it through `publicPathFor`, never directly.
+   */
+  path?: string
   title: string
   subtitle?: string
   seoTitle?: string

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { CORVUS_SYSTEM_PROMPT } from '@/lib/ai/corvus'
 import {
   GROUNDED_CONTEXT_HEADER,
+  REPO_DISAMBIGUATION_RULE,
   SNIPPET_SOURCE_LABEL,
   buildGroundedSystem,
 } from '@/lib/ai/groundedSystem'
@@ -160,5 +161,55 @@ describe('buildGroundedSystem — citing the site, not the vendor', () => {
     expect(buildGroundedSystem([techSnippet])).toContain(
       'https://www.postgresql.org/',
     )
+  })
+})
+
+describe('site-stack vs tech-I-use disambiguation (#147)', () => {
+  const repoSnippet = snippet({
+    collection: 'github-repos',
+    title: 'brandonperfetti/bp-portfolio',
+    content:
+      'Repository: brandonperfetti/bp-portfolio\nThis site is built with Next.js 16 and Payload CMS.',
+    sourceUrl: 'https://github.com/brandonperfetti/bp-portfolio',
+  })
+
+  it('adds the rule when a repository passage is present', () => {
+    const result = buildGroundedSystem([repoSnippet])
+    expect(result).toContain(REPO_DISAMBIGUATION_RULE)
+    // The two halves the measured defect needs, named explicitly so a reword
+    // that dropped either one fails here rather than in a keyed eval run.
+    expect(result).toContain('what does this site run on')
+    expect(result).toContain('what technologies does Brandon use')
+  })
+
+  it('grants permission to cite the repository github.com Source line', () => {
+    // Without this, the neighbouring "a third-party address is never the
+    // source for a claim about this site" sentence reads as a ban on the one
+    // citation a repo passage has.
+    const result = buildGroundedSystem([repoSnippet])
+    expect(result).toContain(
+      `${SNIPPET_SOURCE_LABEL} line is a github.com address`,
+    )
+    expect(result).toContain("IS that passage's source")
+  })
+
+  it('omits the rule entirely when no repository was retrieved', () => {
+    // The blast-radius decision. A turn that retrieves no repository must get
+    // the prompt it got before #147, byte for byte, so no pre-existing eval
+    // block's score can move because of this change.
+    const withoutRepo = buildGroundedSystem([snippet()])
+    expect(withoutRepo).not.toContain(REPO_DISAMBIGUATION_RULE)
+    expect(withoutRepo).not.toContain('github.com')
+  })
+
+  it('renders the repository URL under the passage Source label', () => {
+    expect(buildGroundedSystem([repoSnippet])).toContain(
+      `${SNIPPET_SOURCE_LABEL} https://github.com/brandonperfetti/bp-portfolio`,
+    )
+  })
+
+  it('still returns the untouched persona prompt for no snippets at all', () => {
+    expect(buildGroundedSystem([])).toBe(CORVUS_SYSTEM_PROMPT)
+    expect(buildGroundedSystem([])).not.toContain(REPO_DISAMBIGUATION_RULE)
   })
 })

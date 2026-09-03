@@ -1,4 +1,4 @@
-import { setTimeout as sleep } from 'node:timers/promises'
+import { fetchGithubJson } from './request'
 
 type GithubRepo = {
   name: string
@@ -54,20 +54,6 @@ type ResolveConfigResult =
       allowlist: Set<string>
       denylist: Set<string>
     }
-
-const REQUEST_TIMEOUT_MS = 30_000
-const MAX_RETRIES = 3
-const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504])
-
-class GithubHttpError extends Error {
-  status: number
-
-  constructor(message: string, status: number) {
-    super(message)
-    this.name = 'GithubHttpError'
-    this.status = status
-  }
-}
 
 function parseBoolean(value: string | undefined, fallback: boolean) {
   if (!value) {
@@ -278,62 +264,6 @@ function expandDependencySignalKeys(depName: string): string[] {
   }
 
   return Array.from(keys)
-}
-
-async function fetchGithubJson<T>(url: string, token: string): Promise<T> {
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-
-    try {
-      const response = await fetch(url, {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          Authorization: `Bearer ${token}`,
-          'X-GitHub-Api-Version': '2022-11-28',
-          'User-Agent': 'bp-portfolio-tech-curation',
-        },
-        signal: controller.signal,
-        cache: 'no-store',
-      })
-
-      if (!response.ok) {
-        if (attempt < MAX_RETRIES && RETRYABLE_STATUSES.has(response.status)) {
-          await sleep((attempt + 1) * 500)
-          continue
-        }
-        const body = await response.text().catch(() => '')
-        throw new GithubHttpError(
-          `GitHub request failed (${response.status}) for ${url}: ${body.slice(0, 400)}`,
-          response.status,
-        )
-      }
-
-      return (await response.json()) as T
-    } catch (error) {
-      const status = error instanceof GithubHttpError ? error.status : undefined
-      if (status !== undefined && !RETRYABLE_STATUSES.has(status)) {
-        throw error
-      }
-
-      const retryableNetworkError =
-        error instanceof Error &&
-        (error.name === 'AbortError' || error.name === 'TypeError')
-
-      if (attempt < MAX_RETRIES && retryableNetworkError) {
-        await sleep((attempt + 1) * 500)
-        continue
-      }
-      throw error
-    } finally {
-      clearTimeout(timeoutId)
-    }
-  }
-
-  // Unreachable in normal flow: the retry loop either returns a parsed response
-  // or throws after MAX_RETRIES with REQUEST_TIMEOUT_MS + backoff handling.
-  // This is kept as a defensive terminal path for TypeScript control-flow.
-  throw new Error(`GitHub request failed for ${url}`)
 }
 
 async function listRepos(config: Extract<ResolveConfigResult, { ok: true }>) {

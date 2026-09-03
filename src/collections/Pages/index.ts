@@ -18,6 +18,7 @@ import { capturePublishedSlug } from '@/hooks/capturePublishedSlug'
 import { createSlugRedirect } from '@/hooks/createSlugRedirect'
 import { populatePublishedAt } from '@/hooks/populatePublishedAt'
 import { generatePreviewPath } from '@/utilities/generatePreviewPath'
+import { computePagePath, validatePageHierarchy } from './hooks/pageHierarchy'
 import { revalidateDelete, revalidatePage } from './hooks/revalidatePage'
 
 /**
@@ -41,16 +42,18 @@ export const Pages: CollectionConfig = {
   admin: {
     defaultColumns: ['title', 'slug', 'updatedAt'],
     livePreview: {
+      // The whole document, not just its slug: a placed page previews at
+      // `/work/brytecore`, which a slug alone cannot name (#148).
       url: ({ data, req }) =>
         generatePreviewPath({
-          slug: data?.slug,
+          doc: data,
           collection: 'pages',
           req,
         }),
     },
     preview: (data, { req }) =>
       generatePreviewPath({
-        slug: data?.slug as string,
+        doc: data,
         collection: 'pages',
         req,
       }),
@@ -190,11 +193,45 @@ export const Pages: CollectionConfig = {
         position: 'sidebar',
       },
     },
+    // Hierarchy (#148). Both fields sit at the TOP LEVEL of the document, not
+    // inside a group/tab — `parent` because that is where a relationship has to
+    // live for the ancestor walk to read it with a flat `select`, and `path`
+    // because it carries a unique index and a Postgres index cannot span a
+    // nested table. `position: 'sidebar'` is presentation only; these are
+    // top-level fields either way.
+    {
+      name: 'parent',
+      type: 'relationship',
+      relationTo: 'pages',
+      hasMany: false,
+      admin: {
+        position: 'sidebar',
+        description:
+          'Place this page under another one. The URL becomes the parent’s path plus this page’s slug — at most 3 levels deep. Leave empty for a top-level page.',
+      },
+    },
+    {
+      name: 'path',
+      type: 'text',
+      index: true,
+      unique: true,
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+        description:
+          'Computed from the parent chain and this page’s slug. The `[...segments]` route resolves on it.',
+      },
+    },
     ...slugField(),
   ],
   hooks: {
     afterChange: [revalidatePage, createSlugRedirect],
-    beforeChange: [populatePublishedAt, capturePublishedSlug],
+    // `validatePageHierarchy` rejects an unservable placement before
+    // `computePagePath` ever stores a path — the guard runs in `beforeValidate`,
+    // the computation in `beforeChange`, so the stored `path` is always one the
+    // guard has already accepted.
+    beforeValidate: [validatePageHierarchy],
+    beforeChange: [populatePublishedAt, capturePublishedSlug, computePagePath],
     afterDelete: [revalidateDelete],
   },
   versions: {

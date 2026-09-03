@@ -1,5 +1,7 @@
 import type { CookieConsent } from '@/payload-types'
 
+import { publicPathFor } from '@/fields/slug/slugPaths'
+
 import {
   type ConsentCategoryKey,
   type ConsentConfig,
@@ -34,10 +36,12 @@ export function resolveConsentConfig(
   const features = global?.features
   const cats = global?.categories
 
+  // Through the one path seam, so a privacy policy placed under a parent page
+  // links to its real URL instead of a `/`+slug guess that would 404 (#148).
   const ppPage = banner?.privacyPolicyPage
   const privacyPolicyHref =
-    ppPage && typeof ppPage === 'object' && 'slug' in ppPage && ppPage.slug
-      ? `/${ppPage.slug}`
+    ppPage && typeof ppPage === 'object'
+      ? (publicPathFor('pages', ppPage) ?? undefined)
       : undefined
 
   const categoryCopy = (

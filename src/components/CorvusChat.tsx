@@ -13,10 +13,12 @@ import {
   createCorvusChatFetch,
   SIGN_IN_REQUIRED_CODE,
 } from '@/lib/ai/corvusChatFetch'
+import { createCorvusLinkCheck } from '@/lib/ai/linkSafety'
 import { getCorvusGreeting } from '@/lib/corvus/greeting'
 import { useSpeechInput } from '@/lib/corvus/useSpeechInput'
 import { reportSpeechRecognitionError } from '@/lib/observability/clientTelemetry'
 import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
+import { useMounted } from '@/lib/useMounted'
 import { RavenMark } from '@/components/corvus/RavenMark'
 import {
   Conversation,
@@ -131,17 +133,15 @@ export default function CorvusChat({
   // it's been cleared (the "voice message doesn't clear on send" bug).
   const dictatingRef = useRef(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [mounted, setMounted] = useState(false)
+  const mounted = useMounted()
   const [firstName, setFirstName] = useState<string | null>(null)
 
   // The empty-state greeting is time-of-day (and optionally name) flavored —
   // both are only knowable client-side, so the first paint renders a
   // neutral greeting and the real one fills in after mount. This must never
   // run during SSR: the server has no visitor-local clock, so rendering a
-  // guess there would either flash the wrong greeting or mismatch hydration.
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  // guess there would either flash the wrong greeting or mismatch hydration
+  // (`useMounted` carries that contract).
   const greeting = mounted
     ? getCorvusGreeting(new Date().getHours(), firstName)
     : 'Welcome.'
@@ -155,6 +155,37 @@ export default function CorvusChat({
     [],
   )
   const { messages, sendMessage, status, error } = useChat({ transport })
+
+  // #144. streamdown's `linkSafety` defaults to `{ enabled: true }`, which
+  // guards EVERY link with a modal whose copy hard-codes external framing
+  // ("You're about to visit an external website") — so the `/tech` citation
+  // that grounding (#82) exists to produce warned visitors that they were
+  // leaving the site to go to the site.
+  //
+  // Kept enabled, not disabled: Corvus is a broad assistant and legitimately
+  // names off-site URLs, which should keep the confirmation. `onLinkCheck`
+  // is the seam that tells the two apart — streamdown awaits it per click
+  // and, on `true`, navigates without the modal
+  // (`node_modules/streamdown/dist/chunk-BO2N2NFS.js`, verified 2026-09-02).
+  // Once only genuinely off-site links reach it, the default modal copy is
+  // accurate, so no `renderModal` override is needed.
+  //
+  // Memoised on the host: `Streamdown` is `memo`ised and compares
+  // `linkSafety` by identity, so a fresh object each render would defeat it.
+  // `window.location.host` is read here rather than inside the predicate to
+  // keep `linkSafety.ts` pure; it is undefined during SSR, which changes no
+  // markup (the guard renders the same element either way) and is corrected
+  // on the client before any click can happen.
+  const linkSafety = useMemo(
+    () => ({
+      enabled: true,
+      onLinkCheck: createCorvusLinkCheck({
+        currentHost:
+          typeof window === 'undefined' ? undefined : window.location.host,
+      }),
+    }),
+    [],
+  )
 
   // Chat's Turnstile flow is wired but armed separately from the contact
   // form (rollout decision 2026-08-10): tokens are only acquired when
@@ -363,7 +394,7 @@ export default function CorvusChat({
                   <MessageContent from={from}>
                     {isAssistant ? (
                       <div className="corvus-markdown max-w-none">
-                        <Streamdown>{text}</Streamdown>
+                        <Streamdown linkSafety={linkSafety}>{text}</Streamdown>
                       </div>
                     ) : (
                       <span className="whitespace-pre-wrap">{text}</span>

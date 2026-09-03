@@ -347,6 +347,14 @@ export interface Page {
   ogImageMode?: ('auto' | 'bespoke' | 'generated') | null;
   publishedAt?: string | null;
   /**
+   * Place this page under another one. The URL becomes the parent’s path plus this page’s slug — at most 3 levels deep. Leave empty for a top-level page.
+   */
+  parent?: (number | null) | Page;
+  /**
+   * Computed from the parent chain and this page’s slug. The `[...segments]` route resolves on it.
+   */
+  path?: string | null;
+  /**
    * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
    */
   slug?: string | null;
@@ -458,6 +466,14 @@ export interface Post {
      */
     requiredFeature?: string | null;
   };
+  /**
+   * Optional. Place this article under a section page — the URL becomes that page’s path plus this article’s slug. Leave empty to keep it at /articles.
+   */
+  parent?: (number | null) | Page;
+  /**
+   * Computed from the parent page and this article’s slug. Empty for an unplaced article, which is served at /articles.
+   */
+  path?: string | null;
   /**
    * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
    */
@@ -1477,6 +1493,10 @@ export interface Redirect {
         } | null);
     url?: string | null;
   };
+  /**
+   * Permanent (301) tells browsers and search engines the move is forever and is cached indefinitely. Temporary (302) is for campaigns and short-lived moves.
+   */
+  type: '301' | '302';
   updatedAt: string;
   createdAt: string;
 }
@@ -2007,6 +2027,8 @@ export interface PagesSelect<T extends boolean = true> {
   shareTargetsRemove?: T;
   ogImageMode?: T;
   publishedAt?: T;
+  parent?: T;
+  path?: T;
   slug?: T;
   slugLock?: T;
   updatedAt?: T;
@@ -2487,6 +2509,8 @@ export interface PostsSelect<T extends boolean = true> {
         requiredPlan?: T;
         requiredFeature?: T;
       };
+  parent?: T;
+  path?: T;
   slug?: T;
   slugLock?: T;
   updatedAt?: T;
@@ -2657,6 +2681,7 @@ export interface RedirectsSelect<T extends boolean = true> {
         reference?: T;
         url?: T;
       };
+  type?: T;
   updatedAt?: T;
   createdAt?: T;
 }

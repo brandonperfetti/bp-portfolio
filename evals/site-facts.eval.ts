@@ -3,11 +3,16 @@ import { evalite } from 'evalite'
 import { askCorvusGrounded } from './corvus-helpers'
 import {
   ADJACENT_CONTEXT_CASES,
+  REPO_GROUNDED_CASES,
+  REPO_UNKNOWN_CASES,
   SITE_FACT_CASES,
+  SITE_STACK_CASES,
+  TECH_LIST_CASES,
   TECH_SOURCING_CASES,
   UNGROUNDED_CASES,
 } from './fixtures/datasets'
 import { createCitationScorers } from './citation-scorers'
+import { GITHUB_REPO_FIXTURES } from './fixtures/github-repos'
 import { createFixtureRetriever } from './fixtures/retriever'
 import { factuality } from './graded-scorers'
 import { containsExpectedFact, refusesWhenNotGrounded } from './scorers'
@@ -58,6 +63,10 @@ const {
   citesKnownSourceUrl,
   neverFabricatesSiteUrl,
   citesSiteSourceNotVendor,
+  citesRepoSourceUrl,
+  neverFabricatesRepoUrl,
+  citesRepoNotTechList,
+  citesTechListNotRepo,
 } = createCitationScorers()
 
 /** Production floor and top-k: the corpus answers, or it returns nothing. */
@@ -72,6 +81,23 @@ const retrieve = createFixtureRetriever()
  * this retriever removes it deliberately.
  */
 const retrieveWithoutFloor = createFixtureRetriever({ floor: 0 })
+
+/**
+ * Site corpus AND repository corpus, at the production floor (#147).
+ *
+ * @remarks The four wave-5 blocks all use this one, and the reason is the same
+ * for each: three of them are disambiguations, and a disambiguation whose
+ * context window holds only one candidate is not a test. `/tech` and the
+ * `bp-portfolio` repository document have to be able to compete for the same
+ * question before "cite the one the question asks about" means anything.
+ *
+ * The site-only `retrieve` above is untouched, so the four blocks that existed
+ * before this batch retrieve exactly the corpus their recorded scores were
+ * measured against.
+ */
+const retrieveWithRepos = createFixtureRetriever({
+  repos: GITHUB_REPO_FIXTURES,
+})
 
 evalite('Corvus site facts · grounded answers', {
   data: async () => SITE_FACT_CASES,
@@ -110,4 +136,43 @@ evalite("Corvus site facts · cites the site's page for a technology", {
     citesKnownSourceUrl,
     citesSiteSourceNotVendor,
   ],
+})
+
+/**
+ * Wave 5 (#147): four blocks for the repo-grounded corpus.
+ *
+ * @remarks Registration count moves from 4 blocks to 8 in this file, and the
+ * global `eval:ci` count from 34 to 41 — recorded here because the thresholds
+ * are averages over a pool and adding to the pool moves them. That is the
+ * loosening `docs/AI.md` warns about, and the response is #122's ratchet
+ * against a fresh keyed run, never a shrunken block.
+ */
+evalite('Corvus site facts · a known public repository', {
+  data: async () => REPO_GROUNDED_CASES,
+  task: (input) => askCorvusGrounded(input, { retrieve: retrieveWithRepos }),
+  // The pair again: `containsExpectedFact` says the stack was right,
+  // `citesRepoSourceUrl` says the repository was named as its source. #147's
+  // measured baseline scored well on the first and 0 on the second, because
+  // there was nothing in the corpus to cite.
+  scorers: [containsExpectedFact, citesRepoSourceUrl, factuality],
+})
+
+evalite('Corvus site facts · declines a repository that does not exist', {
+  data: async () => REPO_UNKNOWN_CASES,
+  task: (input) => askCorvusGrounded(input, { retrieve: retrieveWithRepos }),
+  scorers: [refusesWhenNotGrounded, neverFabricatesRepoUrl],
+})
+
+evalite('Corvus site facts · what THIS SITE runs on', {
+  data: async () => SITE_STACK_CASES,
+  task: (input) => askCorvusGrounded(input, { retrieve: retrieveWithRepos }),
+  scorers: [containsExpectedFact, citesRepoNotTechList],
+})
+
+evalite('Corvus site facts · what technologies Brandon works with', {
+  data: async () => TECH_LIST_CASES,
+  task: (input) => askCorvusGrounded(input, { retrieve: retrieveWithRepos }),
+  // The mirror image, and it is here so a prompt change that over-corrects
+  // toward the repository fails a gate instead of passing one.
+  scorers: [containsExpectedFact, citesTechListNotRepo],
 })

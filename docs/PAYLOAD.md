@@ -5,6 +5,10 @@ Payload is the single source of truth for site content. Admin at `/admin`
 
 ## Collections
 
+- **Pages** — layout-builder pages served by the `/[...segments]` catch-all,
+  resolved on a computed, unique, indexed `path`. See "Slugs and paths" below
+  and `docs/NAVIGATION.md` for the hierarchy, the root-page contract and the
+  reserved-first-segment rule.
 - **Posts** — articles (`/articles/[slug]`). Drafts + versions + autosave
   (100ms) + scheduled publish. Tabs: Content (excerpt, heroImage, Lexical
   content), Meta (relatedPosts, categories, tags), SEO (plugin-seo fields).
@@ -44,6 +48,19 @@ Payload is the single source of truth for site content. Admin at `/admin`
   **Uses** (category-grouped tools), **Categories**, **Tags**, **Media**
   (Blob-backed), **Users** (admin operators).
 
+**Categories is labelled "Topics" in the admin — the slug stays `categories`
+(#149).** The public surface has said "topics" for a long time: the chips on
+`/articles`, the `?topic=` query param, `topics: string[]` on the read models.
+Only the admin still said "Categories", and `labels: { singular: 'Topic',
+plural: 'Topics' }` on the collection (plus `label: 'Topics'` on the Posts
+relationship field) closes that gap with a presentation-only change. An actual
+collection rename would cost a table migration with data-loss risk, a search
+reindex, and renamed `categories` MCP tools that every agent calling them would
+break on — and it would change no public string, because none of them say
+"categories" today. So the standing rule is: **`categories` is the slug and the
+field name; "Topic(s)" is what a human reads.** Code says `post.categories`;
+admin, UI and prose say topics.
+
 ## Globals
 
 `SiteSettings` (canonical URL, metadata defaults), `Navigation`, `Footer`,
@@ -52,10 +69,50 @@ feeds `buildPersonSchema` and the Resume card's Download CV button; empty
 fields fall back to the `src/lib/identity.ts` constants and the static
 `/assets` PDF).
 
-## Slugs
+## Slugs and paths
 
 Pattern in `src/fields/slug/`: text field + `slugLock` checkbox + `formatSlug`
 hook + `enforceSlugFreeze` hook + admin component.
+
+**`publicPathFor(collectionSlug, doc)` in `src/fields/slug/slugPaths.ts` is the
+single owner of "what is this document's public URL."** Sitemap, canonical,
+JSON-LD, RSS, `llms.txt`, `/api/search`, `CMSLink`, the SEO plugin's
+`generateURL`, the admin preview builder, the redirect writer/reader and the
+revalidation hooks all resolve through it. Never hand-build a public URL; if a
+surface needs one, call this. `publicPathForSlug(collection, slug)` is a thin
+wrapper for callers holding only a slug — correct for a top-level page and for
+an unplaced post, and necessarily wrong for a placed document of either kind.
+The admin slug sidebar shows the resolved full public path ("Served at
+/work/brytecore") so an editor can see what their edit will move (#120's
+lesson, #148's fix).
+
+**Pages carry a hierarchy** (#148): `parent` (self-referencing, optional,
+top-level) and a computed, unique, indexed `path`. The root page is designated
+by the reserved `home` slug (`ROOT_PAGE_SLUG`) and serves `/`.
+
+**Posts carry an optional placement** (#153): the same two top-level fields,
+`parent` (→ pages, single-valued, filtered to published non-root pages) and a
+computed, unique, indexed `path`. Placement is **opt-in and defaults to unset**,
+and that default is the whole design — M2 writes no backfill, so `path` is NULL
+for every post that exists and `publicPathFor` answers `/articles/<slug>`
+byte-for-byte. A post only leaves the archive when an editor picks a parent, and
+`publicPathFor` then answers `/<path>`. Changing a published post's `parent`
+needs **no slug unlock** (Brandon, D5) — it is a deliberate, visible act with an
+obvious URL consequence, unlike the silent title-driven re-slug
+`enforceSlugFreeze` exists for — and a placed post stays in `/articles`, the
+feed and search, with every link pointing at the placed path (D6).
+
+The rules Pages and Posts share — the depth cap, the code-owned first segments,
+the parent-path composition and the cross-collection collision guard — live once
+in `src/fields/slug/documentPath.ts`, because a page and a placed post compete
+for the same URL namespace and a second copy of any of them is a second chance
+for both to claim `/work/brytecore`.
+
+The contract lives in the code: field shapes and hook order in
+`src/collections/Pages/index.ts` and `src/collections/Posts/index.ts`, what a
+save rejects and why in `validatePageHierarchy`'s and `validatePostPlacement`'s
+TSDoc, and the root-designation reasoning on `ROOT_PAGE_SLUG`.
+`docs/NAVIGATION.md` covers the routing half.
 
 **`slugLock: true` means "I do not hand-edit this slug"**, and that resolves
 differently either side of first publish (#120):
@@ -92,8 +149,8 @@ value the server is about to revert.
 **Redirects point at the document, not at a path** (`to.type: 'reference'`), so
 renaming `a → b → c` leaves both `/articles/a` and `/articles/b` resolving
 straight to `/articles/c` — chains cannot form. `src/lib/cms/redirectsRepo.ts`
-is the cached reader; `/articles/[slug]` and `/[slug]` consult it on their
-not-found branch only, so a live document always wins over a stale row.
+is the cached reader; `/articles/[slug]` and `/[...segments]` consult it on
+their not-found branch only, so a live document always wins over a stale row.
 
 **Passing state between hooks: write to `req.context`, never to the `context`
 argument.** `createLocalReq` reassigns `req.context = getRequestContext(req,
@@ -120,10 +177,62 @@ Scope: only **Posts** and **Pages** are slug-routed (`slugPaths.ts`).
 Categories, Tags, Projects and Authors carry a slug with no public URL behind
 it and keep the plain derive-from-title behaviour.
 
-Known limits: the `redirects` collection carries no per-row permanence flag
-(the plugin only adds one when `redirectTypes` is configured), so every served
-redirect is a permanent one — right for a rename, worth revisiting if temporary
-redirects are ever needed. The reader reads at most 500 rows.
+**Who purges which path (#132).** Two hooks call `revalidatePath` on a rename
+and the split between them is a cross-file contract, so it is stated here
+rather than only in each hook's TSDoc:
+
+> **Whoever writes a redirect row purges that row's `from`. The revalidation
+> hooks purge the document's own paths.**
+
+Concretely: `revalidatePost`/`revalidatePage` purge the document's current path
+on publish and `previousDoc`'s path on unpublish; a published→published rename
+purges only the NEW path there, and `createSlugRedirect` purges the old one —
+inside the same `try` that wrote the row, from the same `from` string.
+
+The original reason was that there were **two path vocabularies** that
+disagreed about the home page — the revalidation hooks mapped it to `/` while
+`publicPathForSlug` called it `/home` — so a purge could be spelled differently
+from the row it was meant to uncover. **#148 closed that**: `publicPathFor` is
+now the single owner of every public path and `revalidatePage` resolves through
+it, so both sides spell the root identically. The ownership split above stays,
+for the reason that outlives the conflict: the purge is conditional on the write
+having succeeded (it sits inside the same `try`, after the row lands) rather
+than on a transition that fires either way. The transition matrices in
+`revalidatePost.test.ts` and `revalidatePage.test.ts` pin every case, and they
+are unchanged across #148 — which is the evidence that routing the hook through
+the seam moved no behaviour.
+
+Known gap on the unpublish branch: unpublishing a document that has a pending
+autosaved rename purges nothing, because `previousDoc` is the draft and the
+served slug is absent from every `afterChange` argument. Measured 2026-09-02,
+pinned by a `KNOWN GAP` test in both matrices, tracked in a follow-up to #132.
+
+**Permanent vs temporary redirects (#130).** The plugin is configured with
+`redirectTypes: ['301', '302']`, which is what makes it emit a permanence
+field at all — without that option it emits none and every redirect served as
+a 308. The admin form offers **301 – Permanent** (the default) and
+**302 – Temporary**; `src/lib/cms/redirectsRepo.ts` flattens the stored code
+and the two not-found branches call `permanentRedirect` (308) or `redirect`
+(307) accordingly. Only two of the plugin's five codes are offered because the
+reader collapses them to permanent-or-not, and five options that produce two
+behaviours is a way to make an editor pick wrong.
+
+Anything not `'302'` reads as permanent — an unset, legacy or unrecognised
+value included. That is deliberately the pre-#130 behaviour, so a row written
+before the field existed is unchanged, and the conservative direction for a
+rename. The rename rows `createSlugRedirect` writes state `'301'` explicitly
+rather than relying on the field default, because updating an existing row does
+not re-apply a default and a row an editor had flipped to temporary would
+otherwise stay temporary.
+
+The migration is `20260902_205311_redirect_permanence`. It adds an enum type and
+a `NOT NULL DEFAULT '301'` column to the **existing** `redirects` table, so the
+new-table RLS rule below does not apply and no `ENABLE ROW LEVEL SECURITY`
+statement belongs in it — `redirects` was swept by the #72 backfill and its RLS
+is already on. `scripts/check-migrations-rls.mjs` agrees: the migration creates
+no table, so it carries no obligation.
+
+Known limits: the reader reads at most 500 rows.
 
 ## Plugins (`src/plugins/index.ts`)
 
@@ -133,7 +242,8 @@ redirects are ever needed. The reader reads at most 500 rows.
   `createSlugRedirect` writes when a published Post/Page is deliberately
   renamed; revalidated on change and served by `src/lib/cms/redirectsRepo.ts`
   (#120). Before that, nothing in `src/` read the collection, so a redirect row
-  was inert.
+  was inert. `redirectTypes: ['301', '302']` + a `defaultValue: '301'` override
+  give each row a permanence the routes act on (#130).
 - `plugin-search` — synced search index over posts feeding `/api/search`.
 - `plugin-mcp` — Payload MCP endpoint at `/api/mcp` (API-key auth) so agents
   can operate the CMS. Collections opt in with `{ enabled: true }` objects.
@@ -211,6 +321,42 @@ contract) in `src/collections/*`.
 Run both after any schema/field/plugin change; CI diffs them and fails on
 staleness. A stale importMap manifests as missing admin UI (empty SEO tab,
 unrenderable editor).
+
+**`scripts/check-importmap.mjs` — the non-emptiness gate (#131).** Staleness is
+not the only way an importMap goes wrong: `pnpm generate:importmap` can write an
+**empty** map and exit 0 when component resolution fails, and staleness cannot
+see that — an empty map regenerated as empty is not stale, so CI stays green
+while every custom field component in the admin disappears at once. The gate
+runs in the `quality` job between the regenerate and the diff, so it judges the
+freshly generated content rather than what happens to be committed, and it
+fails when either
+
+- the map carries fewer than `MINIMUM_IMPORT_MAP_ENTRIES` entries — the floor is
+  **25**, and the map carries **31** today — or
+- a component this repo declares — any `'@/module#Export'` string in a non-test
+  `src/` source, e.g. the slug field's — is missing from the map.
+
+The expected components are derived from the config sources rather than frozen
+in a list, so adding or removing one needs no second edit — but that scan is a
+regex over single-quoted `@/`-rooted literals, not a parser, so a path spelled
+any other way silently drops out of it. The entry floor is the backstop for
+whatever the scan under-counts; neither check is complete alone. When the gate
+fires, the fix is always to re-run the generator; if the map still comes back
+short, that is the resolution failure #131 tracks and the result must not be
+committed. Run it locally with `node scripts/check-importmap.mjs`.
+
+**Diagnosis status: the empty-map failure is real but undiagnosed.** The
+precondition that triggers it is not known. As of 2026-09-02 three independent
+containers have each run `pnpm generate:importmap` on this tree and **failed to
+reproduce** it: every one regenerated the map byte-identically to the committed
+copy after `prettier --write` (97 lines, 7742 bytes, 31 entries, exit 0). The
+issue's own inference — a workspace or `@payload-config` resolution difference
+— is therefore neither confirmed nor refuted, and nobody should treat it as
+settled. That non-reproduction is the argument for the shape of the gate rather
+than against it: because we cannot yet detect the cause, the gate catches the
+**outcome**, on freshly generated content, in the job that runs on every push.
+If it ever fires in CI, the annotation names #131 and says not to commit the
+result — that run is the next real datapoint anyone will get.
 
 ## Migrations
 

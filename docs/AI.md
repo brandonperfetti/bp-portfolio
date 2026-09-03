@@ -3,7 +3,9 @@
 ## Surface
 
 `/corvus` renders `CorvusChat` (Vercel AI SDK `useChat`) streaming from
-`POST /api/ai/chat`. Markdown rendering via streamdown/react-markdown.
+`POST /api/ai/chat`. Markdown rendering via streamdown/react-markdown —
+including its link-safety guard, which is configured rather than accepted by
+default (see "Links in a reply" below).
 
 ## Server enforcement (`src/lib/ai/corvus.ts` + route)
 
@@ -48,6 +50,107 @@
   degrades to `null` when blocked so the server stays the decider).
 - Responses degrade with friendly copy when limited/disabled — keep that UX.
 
+## Links in a reply (#144)
+
+streamdown `^2.5.0` defaults to `linkSafety = { enabled: true }`, which guards
+**every** link with a confirmation modal whose copy is hard-coded external
+framing ("Open external link?" / "You're about to visit an external
+website."). Uncontested, that means the `/tech` citation grounding exists to
+produce warns the visitor they are leaving the site — to go to the site.
+
+`CorvusChat.tsx` therefore passes an explicit
+`linkSafety={{ enabled: true, onLinkCheck }}`. It stays **enabled**: Corvus is
+a broad assistant that legitimately names off-site URLs, and those keep their
+confirmation. `onLinkCheck` is the seam that tells the two apart — streamdown
+awaits it per click and, on `true`, skips the modal. Once only genuinely
+off-site links reach it, the default copy is accurate, so no `renderModal`
+override ships.
+
+**Internal** (`src/lib/ai/linkSafety.ts`) = path-relative (`/…`, `#…`, `?…`),
+**or** an `http(s)` URL whose host is the currently-served host
+(`window.location.host`, which is what makes preview and staging deploys
+correct without naming them) or passes the shared `isInternalHost()` in
+`src/lib/link-utils.ts` — `getSiteUrl()`'s host plus the local/e2e hosts. That
+helper is the ONE definition of "this site"; the site chrome's
+`isExternalHref` reads the same one, so the two cannot drift.
+
+Everything else is external, including every non-`http(s)` scheme. That is a
+deliberate divergence from `isExternalHref`, which counts `mailto:`/`tel:` as
+internal because its question is only "does this need `target=_blank`?" — the
+guard's question is "may this skip a safety prompt?", and the answer for a
+scheme that hands off to another application is no.
+
+**Measured, jsdom + the streamdown dist (2026-09-02):** an approved link is
+opened by streamdown with `window.open(href, '_blank', 'noreferrer')` — a
+**new tab, not a Next router push**. Two things follow. It is not a regression
+(streamdown's un-guarded branch renders `<a target="_blank">` too, so new-tab
+is its baseline for every link in both branches), and it means links in a
+reply render as `<button>`, not inspectable anchors — a consequence of
+`linkSafety` being enabled at all. Changing either would mean overriding
+`components.a`, and streamdown does not export its internal link component, so
+the override would have to reimplement the guard and modal wholesale. Tracked
+separately; not attempted here.
+
+## The completion budget, and why a turn can come back empty (#138)
+
+`getCorvusModel()` returns `openai(modelId)`, and in `@ai-sdk/openai` 3.0.87
+the bare provider call is the **Responses** API (`OpenAIProvider`'s call
+signature takes an `OpenAIResponsesModelId`). On that API a reasoning model's
+hidden reasoning tokens are billed as output tokens and drawn from the _same_
+`maxOutputTokens` allowance as the visible answer. The default model is
+`gpt-5-mini`; the allowance is **1024**
+(`resolveGuardrailLimits`, `AI_MAX_COMPLETION_TOKENS`, cap 8000), mirrored by
+`EVAL_MAX_OUTPUT_TOKENS` in `evals/corvus-helpers.ts` and drift-guarded by
+`scripts/eval-harness.test.ts`.
+
+So a turn that needs to think can spend the entire budget reasoning and finish
+`length` having emitted nothing. **One observation** of this, on the
+safety-refusal case in a keyed `eval:ci` run (2026-08-30): `finishReason=length`
+with no visible text, on both of that case's two attempts. That is a single
+two-attempt data point, not a rate — it shows the failure is reproducible and
+not a transient fault a retry can outrun, but **the frequency and the
+underlying reasoning-token distribution are still unmeasured**, which is
+exactly what the open decision below turns on.
+
+**The fail-safe (shipped).** `src/lib/ai/emptyReplyFailsafe.ts` is a
+`streamText` `experimental_transform` wired in `src/app/api/ai/chat/route.ts`.
+When a step finishes `length` having streamed no non-whitespace text, it
+injects one canned sentence in Corvus's voice
+(`CORVUS_EMPTY_REPLY_FAILSAFE`) as its own text block, immediately before the
+`finish-step` chunk. A visitor can never receive a blank turn, at any budget.
+
+A **truncated** (non-empty) `length` finish is deliberately left alone: a
+mid-sentence answer is still readable, and any marker would be noise on every
+long reply and wrong once the budget decision lands. Instead every non-`stop`
+finish logs `[corvus] finishReason=… textLength=… failsafe=…`, so the
+production frequency of both symptoms — recorded on #138 as unknown — becomes
+a number.
+
+The evals do **not** run through this: `evals/corvus-helpers.ts` calls
+`generateText` directly rather than the route, so no recorded score moves and
+`evals/empty-output.ts`'s zero-for-empty floor keeps seeing raw model
+behaviour.
+
+**Still open (Brandon's call, #138).** The fail-safe stops the blank bubble;
+it does not stop the truncation. Two candidates, neither implemented:
+
+1. **Raise the budget.** OpenAI's reasoning guide recommends reserving _at
+   least 25,000_ tokens for reasoning plus output on these models; 1024 is
+   two orders of magnitude under that. Raising it means moving
+   `AI_MAX_COMPLETION_TOKENS`, the `EVAL_MAX_OUTPUT_TOKENS` mirror, and the
+   drift guard together, and it raises the per-turn cost ceiling.
+2. **Cap reasoning effort.** `@ai-sdk/openai` accepts
+   `providerOptions.openai.reasoningEffort` on the Responses path, typed
+   loosely as `string`; the documented ladder is
+   `none | minimal | low | medium | high | xhigh | max`, but support is
+   model-dependent and whether `gpt-5-mini` accepts the low end is
+   **unverified here**. Cheaper than (1) and it attacks the cause rather than
+   the allowance, but an unsupported value is an API-level rejection on every
+   turn.
+
+Whichever lands, the acceptance test is a keyed run showing the safety-refusal
+case returning visible text at the chosen budget.
+
 ## Persona scope
 
 Corvus's scope is **broad by design** (#77 follow-up): a genuinely useful
@@ -89,15 +192,15 @@ Deliberately **not** a Payload collection — it is a derived, rebuildable index
 written by hooks and a backfill script, so it never appears in a generated
 schema snapshot and CI's migration-drift gate stays quiet.
 
-| Column                                | Why it is there                                                                                               |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `embedding vector(1536)`              | `text-embedding-3-small`'s native width (decision D6(a))                                                      |
-| `content`, `content_hash`             | the chunk and the sha256 that makes refresh cheap                                                             |
-| `collection`, `doc_id`, `chunk_index` | `UNIQUE` together — the upsert key the hooks target                                                           |
-| `title`, `source_url`                 | what a citation is rendered from                                                                              |
-| `visibility`                          | a copy of Posts' `access.visibility`, so retrieval can filter without joining back into Payload               |
-| `published_at`                        | so scheduled-future posts can be excluded                                                                     |
-| `model`                               | which embedding model wrote the row, so a model change is detectable instead of silently mixing vector spaces |
+| Column                                | Why it is there                                                                                                                                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `embedding vector(1536)`              | `text-embedding-3-small`'s native width (decision D6(a))                                                                                                                                         |
+| `content`, `content_hash`             | the chunk and the sha256 that makes refresh cheap                                                                                                                                                |
+| `collection`, `doc_id`, `chunk_index` | `UNIQUE` together — the upsert key the hooks target                                                                                                                                              |
+| `title`, `source_url`                 | what a citation is rendered from — `sourceUrlFor` resolves a post through `publicPathFor`, so a **placed** post (#153) is cited at its section path and every unplaced one at `/articles/<slug>` |
+| `visibility`                          | a copy of Posts' `access.visibility`, so retrieval can filter without joining back into Payload                                                                                                  |
+| `published_at`                        | so scheduled-future posts can be excluded                                                                                                                                                        |
+| `model`                               | which embedding model wrote the row, so a model change is detectable instead of silently mixing vector spaces                                                                                    |
 
 Index: **HNSW** with `vector_cosine_ops`, plus a btree on `(collection, doc_id)`
 for the hooks' per-document path. HNSW rather than IVFFlat because the migration
@@ -111,9 +214,9 @@ path always sends an explicit `dimensions` provider option, which lets
 `-3-large` be swapped in later at 1536 with no migration at all.
 
 Embedded collections: `posts`, `projects`, `uses`, `tech-stack`,
-`work-history`. Pages are **not** embedded (decision D8(b)) — mostly layout
-chrome, and retrieval noise for little factual value. Adding them later needs
-no schema change.
+`work-history`, plus the non-CMS `github-repos` (#147, below). Pages are **not**
+embedded (decision D8(b)) — mostly layout chrome, and retrieval noise for little
+factual value. Adding them later needs no schema change.
 
 ### What an anonymous visitor can retrieve
 
@@ -170,6 +273,138 @@ rows a failed hook left stale, and re-embeds everything after an
 `AI_EMBEDDING_MODEL` change — `readStoredHashes` treats a row written by a
 different `model` as absent. The hash skip makes a re-run over an already
 current index nearly free, so running it is never the wrong call.
+
+### Public GitHub repos as a collection (#147)
+
+`collection: 'github-repos'` is the first non-CMS collection in the index: one
+document per **public** `brandonperfetti` repository, holding its name,
+description, topics, language breakdown, homepage and root README. It exists
+because repo knowledge was the corpus's thinnest area and the repos are already
+the source of truth — hand-feeding repo facts into the CMS would have recreated
+the freshness liability wave 3 spent a wave burning down.
+
+| Aspect         | Value                                                               |
+| -------------- | ------------------------------------------------------------------- |
+| `collection`   | `github-repos`                                                      |
+| `doc_id`       | GitHub's numeric repository id — stable across a rename             |
+| `source_url`   | `https://github.com/<owner>/<repo>` — the index's ONLY absolute URL |
+| `visibility`   | always `public`; a private repo is refused, never stored as gated   |
+| `published_at` | the repo's `pushed_at`, falling back to `created_at`, else `NULL`   |
+| `title`        | `owner/name`                                                        |
+
+`published_at` is `pushed_at` for two reasons: it is always in the past, so it
+can never accidentally embargo a repo through retrieval's
+`published_at <= now()` predicate the way a future-dated post is embargoed; and
+"last pushed" is what a repository's recency actually means. `NULL` is the
+honest fallback when both timestamps are unusable — it means "not a scheduled
+thing" and stays retrievable — rather than fabricating `now()`.
+
+**No migration.** `corvus_embeddings.collection` is a plain `text` column
+(decision D3c anticipated non-CMS collections), so this needed none. Note the
+one real constraint: `doc_id` is `integer`, and GitHub repository ids sit around
+1.0e9 against an `int4` ceiling of 2,147,483,647. `assertIndexableRepo` refuses
+an out-of-range id with a named error rather than letting Postgres reject it
+mid-run; widening that column when GitHub crosses the ceiling is a migration.
+
+#### Cadence and trigger
+
+`.github/workflows/corvus-github-sync.yml` — `workflow_dispatch` plus a weekly
+cron at **12:23 UTC on Sunday**, deliberately clear of `corvus-backfill.yml`'s
+11:07 slot because both hold a long-lived session-mode connection to the same
+production database. It runs `pnpm corvus:sync-github`, the same package-script
+shape `corvus-backfill.yml` uses for `pnpm corvus:backfill` — the script is the
+one place the entry point is spelled, so the workflow, these docs and an operator
+at a terminal cannot drift apart on it.
+
+**Never a live tool call from the chat route.** Reading a README at answer time
+would add per-turn latency, rate-limit exposure and a live prompt-injection
+surface — README text entering the prompt unreviewed, from a source the site
+does not control. Indexing at sync time keeps every passage inspectable in
+`corvus_embeddings` before a visitor can be answered from it. Staleness is
+bounded by the cadence, which is the trade #147 chose explicitly.
+
+Secrets the workflow needs (names only — this repo is public):
+`SUPABASE_DB_URL_PROD` and `OPENAI_API_KEY`, both already used by
+`corvus-backfill.yml`, plus the OPTIONAL `CORVUS_GITHUB_SYNC_TOKEN`. The step
+reads `secrets.CORVUS_GITHUB_SYNC_TOKEN || secrets.GITHUB_TOKEN`, so the
+workflow's own automatic token runs it by default; set the PAT (fine-grained,
+Public Repositories read) only if a run reports 403/404 on repositories that are
+public. Whether the automatic token suffices is **unmeasured** — the lane that
+wrote this had no egress to api.github.com — and the first dispatch settles it.
+
+#### Never-leak
+
+A repository made private or deleted must stop being retrievable, and three
+mechanisms carry that:
+
+1. **The endpoint.** Listing is `/users/{owner}/repos`, which has no spelling
+   that returns a private repository, rather than `/user/repos?visibility=public`
+   — a superset filtered by a parameter a typo can turn off.
+2. **The guard.** `assertIndexableRepo` refuses a `private: true` repo at
+   NORMALIZATION time, so no path that can produce a chunk bypasses it.
+3. **The sweep.** `sync-github-repos.ts` prunes by DEFAULT — the inverse of the
+   backfill's opt-in `--drop-orphans`, because a stale CMS row is merely stale
+   while a stale repo row is a private repository still being served to
+   anonymous visitors. `canSweepGithubRepos` refuses an incomplete listing, an
+   empty listing, and a run in which nothing was accounted for, so a bad read
+   cannot empty the index. `--no-prune` exists for an operator at a terminal and
+   the workflow test pins that the schedule never passes it.
+
+`evals/github-repos-pgvector.test.ts` proves the bar as an outcome rather than
+as a call: after the sweep, an anonymous AND an authenticated retrieval over
+real pgvector both fail to return the removed repository.
+
+Forks are **excluded** — a fork's README is somebody else's project text, and
+indexing it under "Brandon's repositories" is a grounding defect rather than
+coverage. Archived repos ARE indexed and marked archived in the document, so an
+answer need not present a dormant experiment as current work. This is the one
+deliberate narrowing of #147's "every public repo".
+
+Re-syncing is a no-op: the `content_hash` skip applies unchanged, and the
+rendered document deliberately excludes `pushed_at` from the hashed text — that
+timestamp changes on every push, so folding it in would re-embed every active
+repo every week for nothing. A moved `pushed_at` alone takes the metadata-repair
+path: one `UPDATE`, zero provider calls.
+
+#### The site-stack vs tech-I-use disambiguation
+
+`/tech` lists the technologies Brandon **works with**. The `bp-portfolio`
+repository document describes what **this site** is built on. Before #147 only
+the first was indexed, so the corpus could not tell them apart:
+`[measured, 2026-09-02, preview of feat/sections-grounding-correctness at
+7f35583]` "What technologies does this site run on?" was answered with "Remix,
+TanStack, Fly.io, Netlify, DigitalOcean" and cited `/tech` — a real citation and
+the wrong list.
+
+`buildGroundedSystem` therefore appends `REPO_DISAMBIGUATION_RULE`, which draws
+the distinction and grants permission to cite a repository's github.com
+`Source:` line (the neighbouring "a third-party address is never the source for
+a claim about this site" sentence would otherwise read as a ban on the one
+citation a repo passage has). The rule is appended **only when a `github-repos`
+passage was retrieved**: a turn with no repository in context gets a
+byte-identical prompt to the pre-#147 one, so no pre-existing eval block's score
+can move because of this change.
+
+Four eval cases gate it, and the last two are a pair on purpose — a prompt that
+always preferred the repository would fix one and silently break the other:
+
+| Case                                     | Correct citation                     |
+| ---------------------------------------- | ------------------------------------ |
+| a known repo's stack (`macos-portfolio`) | that repo's GitHub URL               |
+| a repository that does not exist         | none — decline                       |
+| "what does **this site** run on"         | the `bp-portfolio` repo, NOT `/tech` |
+| "what technologies does Brandon **use**" | `/tech`, NOT a repository            |
+
+They need scorers of their own rather than widened ones: `citedPaths` throws
+away every non-site absolute URL (deliberately — leaving `https://toptimelines.com/`
+in place would let it read `/toptimelines` out of the middle and call it a
+fabricated path), so a repository citation is structurally invisible to
+`cites-a-real-source-url`.
+
+Fixtures live in `evals/fixtures/github-repos.ts` and are **reconstructions, not
+a capture** — its header records exactly which repository facts came from this
+repo's own `CLAUDE.md`/`docs/` and which from the captured `/api/projects`
+record. No live GitHub call is made by any eval.
 
 ### Citing the site, not the vendor (#82 wave 4)
 
@@ -289,7 +524,12 @@ Two known gaps in that snapshot:
   `cites-a-real-source-url` cannot see that failure (an answer citing only
   postgresql.org scores 0 there indistinguishably from an answer citing
   nothing), so `cites-the-site-page-not-a-vendor-url` runs beside it, reserving
-  its middle 0.5 for "cited nothing at all".
+  its middle 0.5 for "cited nothing at all". Wave 5 (#147) adds four more
+  shapes to the same file: a known public repository (answer from its README,
+  cite its GitHub URL), a repository that does not exist (decline, invent no
+  URL), and the site-stack/tech-I-use PAIR described above. Those four run
+  against a retriever holding the site corpus AND the repo corpus, because a
+  disambiguation with one candidate in the window measures nothing.
 - `evals/matrix.eval.ts` — opt-in, see below.
 
 Scorers are mostly deterministic and unit-tested at zero provider cost in
@@ -305,6 +545,12 @@ so a disagreement is legible.
 | `pnpm eval:ci`     | the gate — global `--threshold 75`               |
 | `pnpm eval:facts`  | the site-fact block on its own, `--threshold 70` |
 | `pnpm eval:matrix` | opt-in model comparison, gates nothing           |
+
+Registration counts move when a block is added, and the thresholds are averages
+over the whole pool, so it is worth recording: `pnpm eval:ci` collected **34**
+evals before #147 and **41** after `[measured, keyless, 2026-09-02]`, across the
+same five files. That is the loosening this doc has always warned about; the
+response is #122's ratchet against a fresh keyed run, never a shrunken block.
 
 **Two threshold invocations, because evalite has one.** `--threshold` is a
 single global average over every score in the run, with no per-eval or

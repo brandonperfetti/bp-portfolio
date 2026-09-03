@@ -16,10 +16,15 @@ const getPageBySlugDraftAware = vi.fn()
 const getCmsPageByPath = vi.fn()
 
 vi.mock('@/lib/cms/pagesRepo', () => ({
-  RESERVED_PAGE_SLUGS: new Set<string>(),
+  getAncestorPages: vi.fn(async () => []),
   getPageBySlugDraftAware: (slug: string) => getPageBySlugDraftAware(slug),
+  // The catch-all reads by path; `/` and this parity check address the root
+  // page, whose path IS its slug, so both mocks answer from one fixture (#148).
+  getPageByPathDraftAware: (path: string) => getPageBySlugDraftAware(path),
   getCmsPageByPath: (path: string) => getCmsPageByPath(path),
-  getPublishedPageSlugs: vi.fn(async () => []),
+  getPublishedPagePaths: vi.fn(async () => []),
+  isReservedPagePath: () => false,
+  pathSegments: (path: string) => path.split('/').filter(Boolean),
 }))
 
 // Probes: the hero and blocks own their pixels elsewhere.
@@ -63,7 +68,7 @@ vi.mock('next/navigation', () => ({
 }))
 
 import Home, { generateMetadata } from '@/app/(frontend)/page'
-import CmsPage from '@/app/(frontend)/[slug]/page'
+import CmsPage from '@/app/(frontend)/[...segments]/page'
 
 const homeDoc = (hero: Partial<NonNullable<Page['hero']>> = {}) =>
   ({
@@ -153,8 +158,8 @@ describe('home route — SEO artifacts preserved', () => {
   })
 })
 
-describe('home route — same structure as the [slug] builder route', () => {
-  it('renders an identical hero+blocks subtree to /[slug] for the same doc', async () => {
+describe('home route — same structure as the [...segments] builder route', () => {
+  it('renders an identical hero+blocks subtree to /[...segments] for the same doc', async () => {
     const doc = homeDoc({ rhythm: 'homeParity' })
 
     getPageBySlugDraftAware.mockResolvedValue(doc)
@@ -163,7 +168,7 @@ describe('home route — same structure as the [slug] builder route', () => {
 
     getPageBySlugDraftAware.mockResolvedValue(doc)
     const slug = render(
-      await CmsPage({ params: Promise.resolve({ slug: 'home' }) }),
+      await CmsPage({ params: Promise.resolve({ segments: ['home'] }) }),
     )
     const slugIsolate = slug.container.querySelector('.isolate') as HTMLElement
 

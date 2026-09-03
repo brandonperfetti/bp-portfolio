@@ -31,6 +31,11 @@ import type { Post } from '@/payload-types'
 export const PUBLISHED_POST_SUMMARY_SELECT = {
   title: true,
   slug: true,
+  // `path` is what tells a summary consumer that this post has been placed
+  // under a section page (#153). Without it every card, feed item, sitemap
+  // entry and search hit would resolve a placed post through `publicPathFor`
+  // with no path in hand and link at `/articles/<slug>`, which then 308s.
+  path: true,
   excerpt: true,
   heroImage: true,
   meta: true,
@@ -50,6 +55,7 @@ export type PublishedPostSummary = Pick<
   | 'id'
   | 'title'
   | 'slug'
+  | 'path'
   | 'excerpt'
   | 'heroImage'
   | 'meta'
@@ -153,6 +159,38 @@ export const getPublishedPostSlugs = async (): Promise<string[]> => {
 }
 
 /**
+ * Published **placed** post paths — the posts the `[...segments]` catch-all
+ * serves (#153).
+ *
+ * @remarks Only placed posts appear: an unplaced post has `path: null` and is
+ * served by `/articles/[slug]`, so listing it here would make the catch-all
+ * prerender a second URL for it. The count is therefore zero on a corpus where
+ * nothing has been placed — which is every corpus the day M2 lands — and the
+ * catch-all's static profile is unchanged until an editor places something.
+ *
+ * `'use cache: remote'` so a `posts` tag purge reaches every serverless
+ * instance, not only the one that ran the hook (#118).
+ */
+export const getPublishedPostPaths = async (): Promise<string[]> => {
+  'use cache: remote'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'posts',
+    draft: false,
+    limit: 1000,
+    overrideAccess: false,
+    select: { path: true },
+    where: {
+      _status: { equals: 'published' },
+      path: { exists: true },
+    },
+  })
+  return docs.map((d) => d.path).filter((p): p is string => Boolean(p))
+}
+
+/**
  * Cached published post by slug — the prerender path (#76 B2 draft-split).
  * `'use cache: remote'` + `cacheTag(CMS_TAGS.articles)` so the signed-out
  * article shell prerenders static and publishes/edits purge it. Reads NO
@@ -176,6 +214,48 @@ const getPublishedPostBySlug = async (slug: string): Promise<Post | null> => {
     overrideAccess: false,
     pagination: false,
     where: { slug: { equals: slug } },
+  })
+  return docs[0] || null
+}
+
+/**
+ * Cached published post by its placed `path` — the catch-all's resolution read
+ * (#153).
+ *
+ * @remarks One indexed equality read on the unique `path` column, the same
+ * shape `getPublishedPageByPath` uses, so a placed post costs the catch-all
+ * exactly what a page costs it. An unplaced post has `path: null` and can never
+ * match — which is what keeps `/articles/<slug>` the only URL for the rest of
+ * the corpus.
+ */
+const getPublishedPostByPath = async (path: string): Promise<Post | null> => {
+  'use cache: remote'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'posts',
+    draft: false,
+    limit: 1,
+    overrideAccess: false,
+    pagination: false,
+    where: { path: { equals: path } },
+  })
+  return docs[0] || null
+}
+
+/**
+ * Uncached draft post by its placed `path` — admin Live Preview only.
+ */
+const getDraftPostByPath = async (path: string): Promise<Post | null> => {
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'posts',
+    draft: true,
+    limit: 1,
+    overrideAccess: true,
+    pagination: false,
+    where: { path: { equals: path } },
   })
   return docs[0] || null
 }
@@ -206,6 +286,15 @@ const getDraftPostBySlug = async (slug: string): Promise<Post | null> => {
 export const getPostBySlug = async (slug: string): Promise<Post | null> => {
   const { isEnabled } = await draftMode()
   return isEnabled ? getDraftPostBySlug(slug) : getPublishedPostBySlug(slug)
+}
+
+/**
+ * One **placed** post by its path, draft-aware. The catch-all's reader (#153),
+ * mirroring {@link getPostBySlug}'s published/draft split exactly.
+ */
+export const getPostByPath = async (path: string): Promise<Post | null> => {
+  const { isEnabled } = await draftMode()
+  return isEnabled ? getDraftPostByPath(path) : getPublishedPostByPath(path)
 }
 
 /**

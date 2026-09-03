@@ -6,6 +6,7 @@ import {
 } from '@/lib/llms/helpers'
 import { PRIMARY_NAV_LINKS } from '@/lib/navigation'
 import { getSiteUrl } from '@/lib/site'
+import { publicPathFor } from '@/fields/slug/slugPaths'
 
 const MAX_ARTICLES = 50
 // #76 Piece 1: `export const revalidate = 3600` removed (incompatible with
@@ -56,7 +57,8 @@ export async function GET() {
       : publicArticles.map((article) => {
           const title = sanitizeInlineMarkdown(article.title)
           const description = sanitizeInlineMarkdown(article.description)
-          return `- [${title}](${canonicalSiteUrl}/articles/${article.slug}) - ${description}`
+          const url = `${canonicalSiteUrl}${publicPathFor('posts', article)}`
+          return `- [${title}](${url}) - ${description}`
         })),
     '',
     `Generated from live CMS data at ${canonicalSiteUrl}.`,

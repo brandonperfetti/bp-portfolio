@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * Argument-shape pin for #118: `revalidateTag` must be called with the
@@ -76,6 +76,137 @@ describe('revalidatePage (afterChange)', () => {
 
     expect(mocks.revalidateTag).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Old-path purge transition matrix (#132) — the Pages half of the matrix in
+ * `src/collections/Posts/hooks/revalidatePost.test.ts`. Same decision, same
+ * `previousDoc`-is-the-autosaved-draft caveat (Pages autosaves at the same
+ * 100ms interval), and one extra thing to pin that Posts does not have: the
+ * root page's `/` mapping.
+ *
+ * That mapping used to be a hand-built root-slug comparison here while
+ * `publicPathForSlug('pages', 'home')` — the function `createSlugRedirect`
+ * builds its rows from — yielded `/home`; the two vocabularies genuinely
+ * disagreed. #148 closed that by making `publicPathFor` the single owner, and
+ * both sides now call it. The matrix below is UNCHANGED — the same five
+ * transitions purge the same five paths — which is the proof that routing the
+ * hook through the seam moved no behaviour. What is newly pinned is that a
+ * PLACED page purges its full nested path, which no `/`+slug template could
+ * produce.
+ *
+ * The #132 ownership split is untouched: whoever writes a redirect row purges
+ * that row's `from`; this hook purges the document's own paths.
+ */
+describe('revalidatePage old-path purge matrix (#132)', () => {
+  beforeEach(() => {
+    mocks.revalidateTag.mockClear()
+    mocks.revalidatePath.mockClear()
+  })
+
+  const purgedPaths = () => mocks.revalidatePath.mock.calls.map(([p]) => p)
+
+  it('first publish purges the new path and no old path', () => {
+    revalidatePage(
+      changeArgs({ slug: 'a', _status: 'published' }, { _status: 'draft' }),
+    )
+
+    expect(purgedPaths()).toEqual(['/a'])
+  })
+
+  it('a published edit that does not rename purges its one path', () => {
+    revalidatePage(
+      changeArgs(
+        { slug: 'a', _status: 'published' },
+        { slug: 'a', _status: 'published' },
+      ),
+    )
+
+    expect(purgedPaths()).toEqual(['/a'])
+  })
+
+  it('a published-to-published rename purges ONLY the new path here', () => {
+    revalidatePage(
+      changeArgs(
+        { slug: 'b', _status: 'published' },
+        { slug: 'b', _status: 'draft' },
+      ),
+    )
+
+    expect(purgedPaths()).toEqual(['/b'])
+  })
+
+  it('unpublish with no pending draft purges the path it was serving', () => {
+    revalidatePage(
+      changeArgs(
+        { slug: 'a', _status: 'draft' },
+        { slug: 'a', _status: 'published' },
+      ),
+    )
+
+    expect(purgedPaths()).toEqual(['/a'])
+  })
+
+  it('KNOWN GAP: unpublish after an autosaved rename purges nothing (#132)', () => {
+    // Identical to the Posts gap and for identical reasons — see the comment
+    // there. Pinned, not fixed.
+    revalidatePage(
+      changeArgs(
+        { slug: 'b', _status: 'draft' },
+        { slug: 'b', _status: 'draft' },
+      ),
+    )
+
+    expect(purgedPaths()).toEqual([])
+  })
+
+  it('maps the home page to / on both the current- and old-path branches', () => {
+    // The root contract, stated as a test. Both this hook and
+    // `publicPathForSlug` now answer `/`, so a purge issued here uncovers the
+    // row `createSlugRedirect` wrote — which is what the disagreement used to
+    // prevent (#132 → #148).
+    revalidatePage(
+      changeArgs({ slug: 'home', _status: 'published' }, { _status: 'draft' }),
+    )
+    expect(purgedPaths()).toEqual(['/'])
+
+    mocks.revalidatePath.mockClear()
+    revalidatePage(
+      changeArgs(
+        { slug: 'home', _status: 'draft' },
+        { slug: 'home', _status: 'published' },
+      ),
+    )
+    expect(purgedPaths()).toEqual(['/'])
+  })
+
+  it('purges a PLACED page at its full nested path (#148)', () => {
+    revalidatePage(
+      changeArgs(
+        { slug: 'brytecore', path: 'work/brytecore', _status: 'published' },
+        { _status: 'draft' },
+      ),
+    )
+
+    expect(purgedPaths()).toEqual(['/work/brytecore'])
+  })
+
+  it('purges the OLD nested path on unpublish', () => {
+    revalidatePage(
+      changeArgs(
+        { slug: 'brytecore', path: 'work/brytecore', _status: 'draft' },
+        { slug: 'brytecore', path: 'work/brytecore', _status: 'published' },
+      ),
+    )
+
+    expect(purgedPaths()).toEqual(['/work/brytecore'])
+  })
+
+  it('purges nothing rather than "/undefined" when a doc carries no slug or path', () => {
+    revalidatePage(changeArgs({ _status: 'published' }, { _status: 'draft' }))
+
+    expect(purgedPaths()).toEqual([])
   })
 })
 
