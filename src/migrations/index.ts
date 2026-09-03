@@ -40,6 +40,7 @@ import * as migration_20260828_155359_corvus_embeddings from './20260828_155359_
 import * as migration_20260831_005000_issue_87_function_acls from './20260831_005000_issue_87_function_acls'
 import * as migration_20260902_205311_redirect_permanence from './20260902_205311_redirect_permanence'
 import * as migration_20260902_233433_pages_hierarchy from './20260902_233433_pages_hierarchy'
+import * as migration_20260903_163051_posts_placement from './20260903_163051_posts_placement'
 
 export const migrations = [
   {
@@ -251,5 +252,10 @@ export const migrations = [
     up: migration_20260902_233433_pages_hierarchy.up,
     down: migration_20260902_233433_pages_hierarchy.down,
     name: '20260902_233433_pages_hierarchy',
+  },
+  {
+    up: migration_20260903_163051_posts_placement.up,
+    down: migration_20260903_163051_posts_placement.down,
+    name: '20260903_163051_posts_placement',
   },
 ]
