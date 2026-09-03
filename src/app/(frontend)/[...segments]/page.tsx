@@ -17,10 +17,26 @@ import {
   pathSegments,
 } from '@/lib/cms/pagesRepo'
 import { publicPathFor } from '@/fields/slug/slugPaths'
+import { getArticleByPath } from '@/lib/articles'
+import { getPublishedPostPaths } from '@/lib/content/posts'
 import { getSiteUrl } from '@/lib/site'
 
 /** Request-deduped wrapper over the repo's draft-aware page query. */
 const queryPageByPath = cache(getPageByPathDraftAware)
+
+/**
+ * Request-deduped wrapper over the placed-article query (#153).
+ *
+ * @remarks Deduped for the same reason the page query is: `generateMetadata`
+ * and the component both resolve the same path in one request, and without
+ * `cache` a placed article costs two reads per render instead of one. The
+ * signed-out viewer is pinned here exactly as `/articles/[slug]` pins it — the
+ * per-request member unlock is Suspense-isolated inside `ArticleView`, so the
+ * shell this route prerenders stays the signed-out one.
+ */
+const queryPostByPath = cache((path: string) =>
+  getArticleByPath(path, { isAuthenticated: false }),
+)
 
 /**
  * The stored path a request's segments address, and the request path itself.
@@ -52,15 +68,24 @@ const addressOf = (segments: string[] | undefined) => {
  * staging reset must still yield one param, which resolves to `notFound()`.
  */
 export async function generateStaticParams() {
-  const paths = await getPublishedPagePaths()
+  const [pagePaths, postPaths] = await Promise.all([
+    getPublishedPagePaths(),
+    // Placed articles are served here too (#153), so they must prerender here
+    // too — otherwise placing an article silently converts it from a static
+    // page into a dynamically-rendered one. The list is empty until an editor
+    // places something, so this route's static profile is unchanged on the day
+    // M2 lands and grows only by deliberate acts.
+    getPublishedPostPaths(),
+  ])
+  const paths = [...pagePaths, ...postPaths]
   // Empty-CMS guard: Cache Components hard-errors when `generateStaticParams`
   // returns []. Emit one sentinel that resolves to `notFound()` — it matches no
   // published page, so `CmsPage`'s existing guard 404s it — so an all-hidden CMS
   // (or a from-scratch staging reset) degrades to a clean 404 instead of crashing
   // the build.
   if (paths.length === 0) return [{ segments: [EMPTY_CMS_SENTINEL] }]
-  // One entry per published page, exactly as many as the slug version emitted:
-  // the static profile changes in the shape of the param, not in kind.
+  // One entry per published page plus one per placed article: the static
+  // profile changes in the shape of the param, not in kind.
   return paths.map((path) => ({ segments: pathSegments(path) }))
 }
 
@@ -85,7 +110,17 @@ export async function generateMetadata({
   const { segments } = await params
   const { path } = addressOf(segments)
   const page = await queryPageByPath(path)
-  if (!page) return {}
+  if (!page) {
+    // A placed article (#153) resolves at this path instead. Its metadata is
+    // the article's own — same canonical, same OG card — emitted by the same
+    // builder `/articles/[slug]` uses, so the two routes cannot describe one
+    // document differently.
+    const article = await queryPostByPath(path)
+    if (!article) return {}
+    const { buildArticleMetadata } =
+      await import('@/app/(frontend)/articles/[slug]/ArticleView')
+    return buildArticleMetadata(article, await getCmsSiteSettings())
+  }
   const settings = await getCmsSiteSettings()
   const base = (settings?.canonicalUrl || getSiteUrl()).replace(/\/+$/, '')
   // The canonical is built from the document, not from the request: a request
@@ -128,6 +163,37 @@ export default async function CmsPage({
 
   const page = await queryPageByPath(path)
   if (!page) {
+    // Placed articles resolve here (#153), by the same one indexed equality
+    // read on a unique `path` column that pages use — the catch-all consults
+    // Posts rather than the article route being reached some other way.
+    //
+    // **Why the catch-all, and not a rewrite or a second route.** A placed
+    // article's URL is `/work/brytecore`, which is structurally a page path:
+    // any other mechanism (a `next.config.mjs` rewrite, a `[...]` route nested
+    // under each section) would need to know the set of section prefixes at
+    // build time, which is editorial data that lives in the database. The
+    // catch-all already owns "resolve an arbitrary path against the CMS", so
+    // extending it to a second collection is one more read on a route that was
+    // going to 404 anyway. Pages win a tie by being asked first; a path can
+    // never legitimately be both, because `assertNoCrossCollectionCollision`
+    // rejects the second document to claim it.
+    const article = await queryPostByPath(path)
+    if (article) {
+      // Imported lazily, and not for bundle size: `ArticleView` pulls in the
+      // whole article render tree (layout, motion, gsap). A static import would
+      // put that graph on the module path of every page request this route
+      // serves — the common case, which needs none of it.
+      const { ArticleView, articleAncestors } =
+        await import('@/app/(frontend)/articles/[slug]/ArticleView')
+      return (
+        <ArticleView
+          article={article}
+          settings={await getCmsSiteSettings()}
+          ancestors={await articleAncestors(article)}
+        />
+      )
+    }
+
     // #120: same three lines as /articles/[slug] — a renamed published page
     // serves a redirect from its old path instead of a 404. Deliberately NOT
     // applied to the RESERVED_PAGE_SLUGS branch above: those paths are owned by

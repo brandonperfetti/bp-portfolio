@@ -478,3 +478,26 @@ describe('getCmsArticleBySlug isScheduledFuture (#76 B3)', () => {
     expect(article?.isScheduledFuture).toBe(false)
   })
 })
+
+/**
+ * Placement on the summary shape (#153). Every article-URL surface on the site
+ * receives a summary and resolves its href through `publicPathFor`, so `path`
+ * has to survive the mapper or all of them silently link at `/articles/<slug>`.
+ */
+describe('placement on the article summary (#153)', () => {
+  it('carries a placed article’s path onto the summary', async () => {
+    getPublishedPostSummaries.mockResolvedValue([
+      makePost({ slug: 'brytecore', path: 'work/brytecore' }),
+    ])
+    const [summary] = await getAllCmsArticleSummaries()
+    expect(summary.path).toBe('work/brytecore')
+  })
+
+  it('leaves an unplaced article’s path undefined, never an empty string', async () => {
+    getPublishedPostSummaries.mockResolvedValue([
+      makePost({ slug: 'plain', path: null }),
+    ])
+    const [summary] = await getAllCmsArticleSummaries()
+    expect(summary.path).toBeUndefined()
+  })
+})

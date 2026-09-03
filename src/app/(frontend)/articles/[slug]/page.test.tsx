@@ -11,6 +11,13 @@ vi.mock('@/lib/articles', () => ({
   getAllArticles: vi.fn(async () => []),
   getArticleBySlug: (...args: unknown[]) => getArticleBySlug(...args),
 }))
+// #153: a placed article's breadcrumb trail walks its ancestor pages.
+const getAncestorPages = vi.fn(async (_path: string) => [
+  { path: 'work', title: 'Work' },
+])
+vi.mock('@/lib/cms/pagesRepo', () => ({
+  getAncestorPages: (path: string) => getAncestorPages(path),
+}))
 vi.mock('@/lib/auth/getViewer', () => ({ getViewer: () => getViewer() }))
 vi.mock('@/components/cms/ArticleBody', () => ({
   ArticleBody: ({ blocks }: { blocks: unknown[] }) => (
@@ -159,5 +166,48 @@ describe('articles/[slug] redirect permanence (#130)', () => {
     getRedirectForPath.mockResolvedValue(null)
 
     await expect(renderMissing()).rejects.toThrow('notFound')
+  })
+})
+
+/**
+ * Placed-article redirect (#153).
+ *
+ * `/articles/<slug>` is this route's only possible URL. When the article's own
+ * `publicPathFor` disagrees — because an editor placed it under a section page —
+ * the route must 308 to the placed path rather than serve a second copy of the
+ * article at the archive URL.
+ */
+describe('ArticlePage · placed articles (#153)', () => {
+  beforeEach(() => {
+    getArticleBySlug.mockReset()
+    getViewer.mockReset()
+    getAncestorPages.mockClear()
+  })
+
+  it('permanently redirects a placed article to its placed path', async () => {
+    getArticleBySlug.mockResolvedValue(
+      article({ slug: 'a-post', path: 'work/a-post' }),
+    )
+    await expect(renderPage()).rejects.toThrow('permanentRedirect:/work/a-post')
+  })
+
+  it('does not redirect an unplaced article — every existing URL is untouched', async () => {
+    getArticleBySlug.mockResolvedValue(article({ slug: 'a-post' }))
+    await expect(renderPage()).resolves.toBeDefined()
+  })
+
+  it('emits the archive breadcrumb trail for an unplaced article', async () => {
+    getArticleBySlug.mockResolvedValue(
+      article({ slug: 'a-post', bodyBlocks: [{}] }),
+    )
+    const { container } = await renderPage()
+    const scripts = Array.from(
+      container.querySelectorAll('script[type="application/ld+json"]'),
+    ).map((node) => node.innerHTML)
+    const breadcrumb = scripts.find((json) => json.includes('BreadcrumbList'))
+    expect(breadcrumb).toContain('"Articles"')
+    expect(breadcrumb).toContain('https://example.com/articles')
+    // An unplaced article never pays for an ancestor read.
+    expect(getAncestorPages).not.toHaveBeenCalled()
   })
 })

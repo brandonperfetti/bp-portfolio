@@ -321,7 +321,9 @@ const EXPECTED_DIRECTIVE_KINDS: Record<string, DirectiveKind> = {
   'src/lib/cms/techRepo.ts#getCmsTech': 'remote',
   'src/lib/cms/usesRepo.ts#getCmsUses': 'remote',
   'src/lib/cms/workHistoryRepo.ts#getCmsWorkHistory': 'remote',
+  'src/lib/content/posts.ts#getPublishedPostByPath': 'remote',
   'src/lib/content/posts.ts#getPublishedPostBySlug': 'remote',
+  'src/lib/content/posts.ts#getPublishedPostPaths': 'remote',
   'src/lib/content/posts.ts#getPublishedPostSlugs': 'remote',
   'src/lib/content/posts.ts#getPublishedPostSummaries': 'remote',
 

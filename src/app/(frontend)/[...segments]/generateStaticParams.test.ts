@@ -4,12 +4,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // returns []. The guard must emit ≥1 param (a notFound sentinel) on an empty
 // published-path set, and map paths to segment arrays otherwise (#148).
 const getPublishedPagePaths = vi.fn()
+// #153: the route also prerenders every PLACED article's path.
+const getPublishedPostPaths = vi.fn(async (): Promise<string[]> => [])
 vi.mock('@/lib/cms/pagesRepo', () => ({
   getPageByPathDraftAware: vi.fn(),
   getPublishedPagePaths: () => getPublishedPagePaths(),
   isReservedPagePath: () => false,
   pathSegments: (path: string) => path.split('/').filter(Boolean),
 }))
+vi.mock('@/lib/content/posts', () => ({
+  getPublishedPostPaths: () => getPublishedPostPaths(),
+}))
+vi.mock('@/lib/articles', () => ({ getArticleByPath: vi.fn() }))
 vi.mock('@/lib/cms/siteSettingsRepo', () => ({
   getCmsSiteSettings: vi.fn(async () => ({})),
 }))
@@ -28,6 +34,8 @@ import { generateStaticParams } from '@/app/(frontend)/[...segments]/page'
 
 beforeEach(() => {
   getPublishedPagePaths.mockReset()
+  getPublishedPostPaths.mockReset()
+  getPublishedPostPaths.mockResolvedValue([])
 })
 
 describe('/[...segments] generateStaticParams empty-CMS guard (#76 B2)', () => {
@@ -68,5 +76,32 @@ describe('/[...segments] generateStaticParams empty-CMS guard (#76 B2)', () => {
       'work/brytecore',
     ])
     expect(await generateStaticParams()).toHaveLength(3)
+  })
+})
+
+describe('/[...segments] generateStaticParams · placed articles (#153)', () => {
+  it('emits a placed article’s path alongside the page paths', async () => {
+    getPublishedPagePaths.mockResolvedValue(['work'])
+    getPublishedPostPaths.mockResolvedValue(['work/brytecore'])
+    const params = await generateStaticParams()
+    expect(params).toEqual([
+      { segments: ['work'] },
+      { segments: ['work', 'brytecore'] },
+    ])
+  })
+
+  it('emits nothing extra when nothing has been placed — the static profile is unchanged until an editor places something', async () => {
+    getPublishedPagePaths.mockResolvedValue(['work', 'colophon'])
+    getPublishedPostPaths.mockResolvedValue([])
+    const params = await generateStaticParams()
+    expect(params).toEqual([{ segments: ['work'] }, { segments: ['colophon'] }])
+  })
+
+  it('still emits the empty-CMS sentinel when neither pages nor placed articles exist', async () => {
+    getPublishedPagePaths.mockResolvedValue([])
+    getPublishedPostPaths.mockResolvedValue([])
+    const params = await generateStaticParams()
+    expect(params).toHaveLength(1)
+    expect(params[0].segments).toHaveLength(1)
   })
 })

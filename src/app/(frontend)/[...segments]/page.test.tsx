@@ -28,6 +28,28 @@ vi.mock('@/lib/cms/pagesRepo', () => ({
   pathSegments: (path: string) => path.split('/').filter(Boolean),
 }))
 
+// #153: the catch-all also resolves PLACED articles by path. Mocked here so
+// the page-path suite stays a page-path suite; the placed-article branch has
+// its own describe block at the bottom of this file.
+const getArticleByPath = vi.fn(async (_path: string) => null as unknown)
+vi.mock('@/lib/articles', () => ({
+  getArticleByPath: (path: string) => getArticleByPath(path),
+}))
+vi.mock('@/lib/content/posts', () => ({
+  getPublishedPostPaths: vi.fn(async () => []),
+}))
+vi.mock('@/app/(frontend)/articles/[slug]/ArticleView', () => ({
+  ArticleView: ({ article }: { article: { title: string; path?: string } }) => (
+    <div
+      data-testid="article-view"
+      data-title={article.title}
+      data-path={article.path}
+    />
+  ),
+  articleAncestors: vi.fn(async () => []),
+  buildArticleMetadata: () => ({ title: 'article' }),
+}))
+
 // The hero and blocks each own their pixels elsewhere; here they are probes
 // that report where the route placed them.
 vi.mock('@/heros/RenderHero', () => ({
@@ -307,5 +329,73 @@ describe('[...segments] hierarchy resolution', () => {
 
     expect(getPageByPathDraftAware).toHaveBeenCalledWith('tech/ai')
     expect(screen.getByTestId('render-hero')).toBeInTheDocument()
+  })
+})
+
+/**
+ * Placed-article resolution (#153).
+ *
+ * The catch-all consults Posts by path when no page matches, so a placed
+ * article renders at `/work/brytecore` — its real URL — rather than falling
+ * through to the redirect lookup and 404ing. Pages are asked first; the save-
+ * time cross-collection guard is what makes that tie-break safe.
+ */
+describe('CmsPage · placed articles (#153)', () => {
+  beforeEach(() => {
+    getPageByPathDraftAware.mockReset()
+    getArticleByPath.mockReset()
+    getRedirectForPath.mockReset()
+    getRedirectForPath.mockResolvedValue(null)
+    reservedPagePaths.clear()
+  })
+
+  it('renders a placed article when no page serves the path', async () => {
+    getPageByPathDraftAware.mockResolvedValue(null)
+    getArticleByPath.mockResolvedValue({
+      slug: 'brytecore',
+      path: 'work/brytecore',
+      title: 'Brytecore',
+    })
+
+    render(
+      await CmsPage({
+        params: Promise.resolve({ segments: ['work', 'brytecore'] }),
+      }),
+    )
+
+    expect(getArticleByPath).toHaveBeenCalledWith('work/brytecore')
+    const view = screen.getByTestId('article-view')
+    expect(view).toHaveAttribute('data-title', 'Brytecore')
+    expect(view).toHaveAttribute('data-path', 'work/brytecore')
+  })
+
+  it('never consults posts when a page serves the path — pages win the tie', async () => {
+    await renderRoute({ ...page(), slug: 'work', path: 'work' } as Page, [
+      'work',
+    ])
+    expect(getArticleByPath).not.toHaveBeenCalled()
+  })
+
+  it('falls through to the #120 redirect lookup when neither serves the path', async () => {
+    getPageByPathDraftAware.mockResolvedValue(null)
+    getArticleByPath.mockResolvedValue(null)
+    getRedirectForPath.mockResolvedValue({
+      destination: '/work',
+      permanent: true,
+    })
+
+    await expect(
+      CmsPage({ params: Promise.resolve({ segments: ['work', 'gone'] }) }),
+    ).rejects.toThrow('permanentRedirect:/work')
+  })
+
+  it('404s when neither a page, a placed article, nor a redirect answers', async () => {
+    getPageByPathDraftAware.mockResolvedValue(null)
+    getArticleByPath.mockResolvedValue(null)
+    getRedirectForPath.mockResolvedValue(null)
+
+    await expect(
+      CmsPage({ params: Promise.resolve({ segments: ['work', 'gone'] }) }),
+    ).rejects.toThrow('notFound')
   })
 })
