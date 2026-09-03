@@ -19,7 +19,10 @@
   `nextjs.appDirectory: true` (next/navigation mocks need it or
   `useRouter` throws), the project's alias array stubs the server blocks
   before `@/` resolves (mirrors `.storybook/main.ts` viteFinal), and
-  sandboxes pin the browser via `PLAYWRIGHT_EXECUTABLE_PATH`.
+  sandboxes pin the browser via `PLAYWRIGHT_EXECUTABLE_PATH`
+  (`PLAYWRIGHT_EXECUTABLE_PATH=/path/to/chromium pnpm test:storybook`, plus an
+  optional story path to narrow the run — never run `playwright install` in a
+  sandbox).
 - **Payload pipeline integration** — `evals/*.test.ts` also hosts tests that
   need a REAL Payload on a REAL Postgres (the `e2e` job's `pgvector/pgvector:pg16`
   service plus `pnpm migrate`); run by `pnpm exec vitest run --root evals`.
@@ -31,6 +34,43 @@
 - **Evals** — Evalite for Corvus, run from the `evals/` root and **gating** as
   of #82; `evals/*.test.ts` run in `e2e` via `vitest run --root evals`, not in
   `pnpm test` (see `docs/AI.md` §Evals).
+
+### Asserting CSS state (`:hover`, `:focus-visible`) in a play function
+
+`userEvent` from `storybook/test` dispatches **synthetic** pointer events. They
+drive React handlers correctly, but they never move the browser's own pointer,
+so the element does not enter CSS `:hover` and a `…:hover { }` rule never
+matches — a story that reads `getComputedStyle()` after `userEvent.hover()`
+silently measures the resting style. Only `vitest/browser`'s `userEvent` has a
+real (Playwright) pointer, and it exists **only under `pnpm test:storybook`**:
+`vitest/browser` resolves to a module that throws at import outside the runner,
+so it must be loaded lazily and never imported statically — a static import
+kills the whole story module in `pnpm storybook` and, because rolldown
+tree-shakes the throw and folds the export to `null`, ships `null.hover(…)`
+into the built canvas while `pnpm build-storybook` stays green. **That gate
+cannot see this class of breakage**; grep the built chunk, or import the story
+module in a running canvas, to check. Gate the lazy import on
+`typeof import.meta.env.VITEST_STORYBOOK !== 'undefined'` — a build-time flag
+simple enough for rolldown to fold, so the canvas drops the import entirely.
+**Do not gate on `import.meta.env.VITEST`: it is undefined in browser mode**
+(Vitest sets `process.env.VITEST` in Node only), and it silently skipped every
+CSS-state assertion while the suite still reported 7/7. Separately, decide
+"are we in the runner _now_?" with `globalThis.__vitest_browser_runner__`.
+Then **fail closed**: if the runner marker is present but no real pointer was
+obtained, throw — a story must never report green under the runner without
+having engaged `:hover`. The `console.warn`-and-skip path is for the canvas
+only, and assertions that need no pointer (focus outline, resting fill) stay on
+both paths. `CorvusChat.stories.tsx` is the reference — see the `@remarks` on
+its `getRealUserEvent()`. **When you rely on a skip path, grep the run output
+for the skip string and expect zero hits**; a green run alone does not prove
+the assertions ran. Two
+corollaries: assert transitioned properties through `waitFor` rather than a
+single sample (a `transition: box-shadow 150ms` reads its start value on the
+frame the pointer lands), and never let a negative assertion be the only one in
+a hover story — prove the state engaged first. Note also that `tab()` from
+`storybook/test` is synthetic: whether it lands as `:focus-visible` rides on
+Chromium's last-interaction heuristic (a real pointer _press_ resets it; a
+hover does not), so assert `matches(':focus-visible')` rather than assuming it.
 
 ## CI (`.github/workflows/ci.yml`)
 
