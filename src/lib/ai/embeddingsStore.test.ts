@@ -117,6 +117,51 @@ describe('readStoredChunks', () => {
     )
   })
 
+  it('also reads the cited source_url (#153)', async () => {
+    const { db, sql } = fakeDb([
+      {
+        rows: [
+          {
+            chunk_index: 0,
+            content_hash: 'aaa',
+            visibility: 'public',
+            published_at: null,
+            source_url: '/articles/a',
+            model: 'text-embedding-3-small',
+          },
+        ],
+      },
+    ])
+
+    const stored = await readStoredChunks(db, 'posts', 7)
+    expect(stored.get(0)?.sourceUrl).toBe('/articles/a')
+    // Without it in the SELECT the drift check could only ever see `null`.
+    expect(sql()[0].text).toContain('"source_url"')
+  })
+
+  it('reads a NULL source_url as null, not the string "null"', async () => {
+    // `String(row.source_url)` would produce `'null'`, which never equals a
+    // fresh `null` — permanent drift on every chunker that emits no URL.
+    const { db } = fakeDb([
+      {
+        rows: [
+          {
+            chunk_index: 0,
+            content_hash: 'aaa',
+            visibility: 'public',
+            published_at: null,
+            source_url: null,
+            model: 'text-embedding-3-small',
+          },
+        ],
+      },
+    ])
+
+    expect(
+      (await readStoredChunks(db, 'posts', 7)).get(0)?.sourceUrl,
+    ).toBeNull()
+  })
+
   it('treats a row written by a DIFFERENT model as absent, forcing a re-embed', async () => {
     // Otherwise a model swap would leave two vector spaces mixed in one index
     // and degrade retrieval silently instead of failing.
@@ -150,7 +195,11 @@ describe('readStoredChunks', () => {
 /** Build a stored-row map matching the given chunks exactly. */
 const storedFrom = (
   chunks: ReturnType<typeof chunkDocument>,
-  over: Partial<{ visibility: string; publishedAt: number | null }> = {},
+  over: Partial<{
+    visibility: string
+    publishedAt: number | null
+    sourceUrl: string | null
+  }> = {},
 ) =>
   new Map(
     chunks.map((c) => [
@@ -162,6 +211,7 @@ const storedFrom = (
           over.publishedAt !== undefined
             ? over.publishedAt
             : toEpoch(c.publishedAt),
+        sourceUrl: over.sourceUrl !== undefined ? over.sourceUrl : c.sourceUrl,
       },
     ]),
   )
@@ -192,7 +242,15 @@ describe('isContentUnchanged', () => {
 
   it('is false when a hash differs', () => {
     const stored = new Map([
-      [0, { contentHash: 'stale', visibility: 'public', publishedAt: null }],
+      [
+        0,
+        {
+          contentHash: 'stale',
+          visibility: 'public',
+          publishedAt: null,
+          sourceUrl: '/projects',
+        },
+      ],
     ])
     expect(isContentUnchanged(chunks, stored)).toBe(false)
   })
@@ -203,6 +261,7 @@ describe('isContentUnchanged', () => {
       contentHash: 'orphan',
       visibility: 'public',
       publishedAt: null,
+      sourceUrl: '/projects',
     })
     expect(isContentUnchanged(chunks, stored)).toBe(false)
   })
@@ -268,6 +327,32 @@ describe('hasMetadataDrift', () => {
     expect(hasMetadataDrift(chunks, stored)).toBe(false)
   })
 
+  it('DETECTS a PLACEMENT — the source_url moved, the body did not (#153)', () => {
+    // The bug this closes. Placing an article sets `path` and changes nothing
+    // else, so the hashes are byte-identical and `isContentUnchanged`
+    // short-circuits before the provider is ever called. If the drift check
+    // does not watch `source_url`, the rows keep citing `/articles/a` forever
+    // while the article is served at `/work/a`.
+    const placed = chunkDocument('posts', { ...post, path: 'work/a' })
+    expect(placed[0].contentHash).toBe(chunks[0].contentHash)
+    expect(placed[0].sourceUrl).toBe('/work/a')
+    expect(chunks[0].sourceUrl).toBe('/articles/a')
+    expect(hasMetadataDrift(placed, storedFrom(chunks))).toBe(true)
+  })
+
+  it('DETECTS an UN-placement, which is the same move in reverse', () => {
+    const placed = chunkDocument('posts', { ...post, path: 'work/a' })
+    expect(hasMetadataDrift(chunks, storedFrom(placed))).toBe(true)
+  })
+
+  it('does NOT report drift when a chunker emits no URL at both ends', () => {
+    // `github-repos` with a half-formed full name is the real case: `null` on
+    // both sides must compare equal, or every sync rewrites every row.
+    const noUrl = storedFrom(chunks, { sourceUrl: null })
+    const nulled = chunks.map((c) => ({ ...c, sourceUrl: null }))
+    expect(hasMetadataDrift(nulled, noUrl)).toBe(false)
+  })
+
   it('reports drift when a chunk index is missing from the index', () => {
     expect(hasMetadataDrift(chunks, new Map())).toBe(true)
   })
@@ -301,6 +386,10 @@ describe('isMetadataTightening', () => {
       over.publishedAt !== undefined
         ? over.publishedAt
         : toEpoch(publicChunk.publishedAt),
+    // Present so the row is a real `StoredChunkMeta`, and deliberately equal
+    // to the chunk's: `source_url` is NOT an axis of tightening, because
+    // retrieval does not filter on it.
+    sourceUrl: publicChunk.sourceUrl,
   })
 
   it('is TRUE for public → gated', () => {
@@ -338,10 +427,18 @@ describe('isMetadataTightening', () => {
   it('is FALSE when nothing changed', () => {
     expect(isMetadataTightening(publicChunk, row({}))).toBe(false)
   })
+
+  it('is FALSE for a source_url move — a placement reaches no one new', () => {
+    // `hasMetadataDrift` sees this; tightening deliberately does not, so a
+    // placement is never raced ahead of the provider call.
+    const placed = chunkDocument('posts', { ...post, path: 'work/a' })[0]
+    expect(placed.sourceUrl).not.toBe(publicChunk.sourceUrl)
+    expect(isMetadataTightening(placed, row({}))).toBe(false)
+  })
 })
 
 describe('updateDocumentMetadata', () => {
-  it('updates only the two filter columns, for every row of the doc', async () => {
+  it('updates only the denormalized copies, for every row of the doc', async () => {
     const { db, sql } = fakeDb()
 
     await updateDocumentMetadata(
@@ -350,16 +447,33 @@ describe('updateDocumentMetadata', () => {
       7,
       'gated',
       '2026-01-01T00:00:00.000Z',
+      '/work/a',
     )
 
     const { text, params } = sql()[0]
     expect(text).toContain('UPDATE "corvus_embeddings"')
     expect(text).toContain('SET "visibility" = $1')
     expect(text).toContain('"published_at" = $2::timestamptz')
-    expect(text).toContain('"collection" = $3 AND "doc_id" = $4')
+    expect(text).toContain('"source_url" = $3')
+    expect(text).toContain('"collection" = $4 AND "doc_id" = $5')
     // The vector is NOT touched — this path costs zero provider dollars.
     expect(text).not.toContain('"embedding"')
-    expect(params).toEqual(['gated', '2026-01-01T00:00:00.000Z', 'posts', 7])
+    // And neither is the content hash: a URL is not content, so rewriting it
+    // would invalidate vectors that are already correct.
+    expect(text).not.toContain('"content_hash"')
+    expect(params).toEqual([
+      'gated',
+      '2026-01-01T00:00:00.000Z',
+      '/work/a',
+      'posts',
+      7,
+    ])
+  })
+
+  it('writes a NULL source_url rather than dropping the column', async () => {
+    const { db, sql } = fakeDb()
+    await updateDocumentMetadata(db, 'github-repos', 3, 'public', null, null)
+    expect(sql()[0].params).toEqual(['public', null, null, 'github-repos', 3])
   })
 })
 
@@ -451,6 +565,7 @@ describe('syncDocumentEmbeddings', () => {
       content_hash: c.contentHash,
       visibility: c.visibility,
       published_at: c.publishedAt === null ? null : new Date(c.publishedAt),
+      source_url: c.sourceUrl,
       model: 'text-embedding-3-small',
     })),
   })
@@ -478,9 +593,60 @@ describe('syncDocumentEmbeddings', () => {
     expect(update.params).toEqual([
       'gated',
       '2026-01-01T00:00:00.000Z',
+      '/articles/secret-sauce',
       'posts',
       5,
     ])
+  })
+
+  it('a PLACEMENT with IDENTICAL content rewrites source_url, with ZERO embed calls (#153)', async () => {
+    // Placing an article changes `parent` and nothing else, so every hash
+    // matches and `isContentUnchanged` short-circuits. Before this fix the
+    // stored rows kept citing `/articles/gatable` — a URL that only still
+    // resolves because the article route 308s it to the placed path.
+    const placed = { ...gatablePost, path: 'work/secret-sauce' }
+    const { db, sql } = fakeDb([indexHolding(gatablePost)])
+
+    const result = await syncDocumentEmbeddings({
+      db,
+      collection: 'posts',
+      doc: placed,
+    })
+
+    expect(embedChunksMock).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      written: 0,
+      deleted: 0,
+      metadataUpdated: chunkDocument('posts', placed).length,
+      skipped: false,
+    })
+
+    const update = sql()[1]
+    expect(update.text).toContain('"source_url" = $3')
+    // The content hash is untouched: a URL is not a content change.
+    expect(update.text).not.toContain('"content_hash"')
+    expect(update.params).toEqual([
+      'public',
+      '2026-01-01T00:00:00.000Z',
+      '/work/secret-sauce',
+      'posts',
+      5,
+    ])
+  })
+
+  it('UN-placing rewrites source_url back to the archive URL', async () => {
+    const placed = { ...gatablePost, path: 'work/secret-sauce' }
+    const { db, sql } = fakeDb([indexHolding(placed)])
+
+    const result = await syncDocumentEmbeddings({
+      db,
+      collection: 'posts',
+      doc: gatablePost,
+    })
+
+    expect(embedChunksMock).not.toHaveBeenCalled()
+    expect(result.metadataUpdated).toBeGreaterThan(0)
+    expect(sql()[1].params[2]).toBe('/articles/secret-sauce')
   })
 
   it('gated → public is symmetric', async () => {
@@ -539,6 +705,7 @@ describe('syncDocumentEmbeddings', () => {
             content_hash: chunk.contentHash,
             visibility: chunk.visibility,
             published_at: null,
+            source_url: chunk.sourceUrl,
             model: 'text-embedding-3-small',
           },
         ],
@@ -573,7 +740,7 @@ describe('syncDocumentEmbeddings', () => {
       (db.execute as ReturnType<typeof vi.fn>).mock.calls[0][0],
     )
     expect(first.text).toContain(
-      'SELECT "chunk_index", "content_hash", "visibility", "published_at", "model"',
+      'SELECT "chunk_index", "content_hash", "visibility", "published_at", "source_url", "model"',
     )
     expect(embedChunksMock).toHaveBeenCalledTimes(1)
   })
@@ -801,6 +968,7 @@ describe('syncDocumentEmbeddings', () => {
             content_hash: chunk.contentHash,
             visibility: chunk.visibility,
             published_at: null,
+            source_url: chunk.sourceUrl,
             model: 'text-embedding-3-small',
           },
         ],

@@ -182,9 +182,14 @@ export function sourceUrlFor(
     case 'posts':
       // Through the one path seam (#153): a PLACED post is cited at its section
       // URL, an unplaced one at `/articles/<slug>` exactly as before. Chunks
-      // carry `sourceUrl` at write time, so a placement change must re-embed —
-      // which it does, because `refreshCorvusEmbeddings('posts')` is already an
-      // `afterChange` hook on the collection.
+      // carry `sourceUrl` at write time, so a placement change has to reach the
+      // stored rows — and it does NOT do so by re-embedding. A placement moves
+      // `parent` and nothing else, so every chunk hash still matches and
+      // `isContentUnchanged` short-circuits before the provider is ever called.
+      // The refresh instead lands through `hasMetadataDrift`, which watches
+      // `source_url` alongside `visibility` and `published_at` and repairs it
+      // with a metadata-only UPDATE — no vectors, no tokens, no touched content
+      // hash. See `src/lib/ai/embeddingsStore.ts`.
       return publicPathFor('posts', doc)
     case 'projects':
       return '/projects'

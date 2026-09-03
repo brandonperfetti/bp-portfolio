@@ -161,6 +161,7 @@ describe('syncGithubRepoEmbeddings · re-sync with nothing changed', () => {
         content_hash: chunk.contentHash,
         visibility: chunk.visibility,
         published_at: chunk.publishedAt,
+        source_url: chunk.sourceUrl,
         model: 'text-embedding-3-small',
       })),
     )
@@ -209,6 +210,7 @@ describe('syncGithubRepoEmbeddings · re-sync with nothing changed', () => {
         content_hash: chunk.contentHash,
         visibility: chunk.visibility,
         published_at: chunk.publishedAt,
+        source_url: chunk.sourceUrl,
         model: 'text-embedding-3-small',
       })),
     )

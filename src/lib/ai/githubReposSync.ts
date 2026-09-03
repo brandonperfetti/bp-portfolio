@@ -103,6 +103,7 @@ export async function syncGithubRepoEmbeddings(args: {
       repo.id,
       chunks[0].visibility,
       chunks[0].publishedAt,
+      chunks[0].sourceUrl,
     )
     return {
       written: 0,
