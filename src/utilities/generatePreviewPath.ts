@@ -11,10 +11,13 @@ import type { SlugRoutedCollection } from '@/fields/slug/slugPaths'
  * that supplies **neither** is a type error instead of a silent `null` preview
  * URL the admin would render as a dead button.
  *
- * - `doc` is the form to prefer: it is the only one that can name a nested URL.
- * - `slug` is for a caller that holds no document. Posts use it, and will keep
- *   agreeing with `doc` until post placement lands (#153) — a post has no
- *   `path`, so both forms produce `/articles/<slug>`.
+ * - `doc` is the form to prefer, and since #153 it is what **every production
+ *   caller passes** — Pages and Posts both hand over the whole document. It is
+ *   the only form that can name a nested URL, for either collection.
+ * - `slug` is the arm for a caller that holds no document, and it is kept for
+ *   that reason. It is necessarily wrong for a placed document of either kind:
+ *   a slug alone cannot spell `/work/brytecore`, and for a post it can only
+ *   ever produce `/articles/<slug>`.
  */
 type PreviewTarget =
   { doc: PathableDoc; slug?: never } | { slug: unknown; doc?: never }
@@ -39,8 +42,13 @@ type Props = PreviewTarget & {
  * produces for the live URL, so previewing a placed page opens
  * `/work/brytecore` rather than the `/brytecore` that never existed (#148).
  *
- * Posts render at `/articles/[slug]` (v3 URL surface, preserved). The
- * `/next/preview` route handler is added with the frontend port (Phase 2).
+ * An **unplaced** post renders at `/articles/[slug]` — the v3 URL surface,
+ * preserved, and still the state of the whole corpus. A **placed** one renders
+ * at its placed path through the same catch-all pages use (#153), and previews
+ * there: a slug-only preview would resolve to the archive URL and reach the
+ * placed path only by riding the article route's 308, having fetched a URL that
+ * is not the document's. The `/next/preview` route handler is added with the
+ * frontend port (Phase 2).
  */
 export const generatePreviewPath = ({ collection, doc, slug }: Props) => {
   const path = publicPathFor(collection, doc ?? { slug })
