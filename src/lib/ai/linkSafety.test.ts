@@ -95,6 +95,21 @@ describe('isInternalCorvusLink', () => {
   })
 
   it.each([
+    ['/\\evil.test/phish', 'slash-backslash'],
+    ['/\\\\evil.test/phish', 'slash and two backslashes'],
+    ['\\\\evil.test/phish', 'two leading backslashes'],
+  ])('does not let %s pass as a relative path (%s)', (href) => {
+    // WHATWG treats `\` as a path separator for special schemes, so these
+    // resolve to `https://evil.test/phish` against this site's origin — a
+    // protocol-relative URL wearing a disguise `startsWith('//')` cannot see.
+    expect(
+      new URL(href, 'https://brandonperfetti.com/corvus').host,
+      'the disguise is real, not hypothetical',
+    ).toBe('evil.test')
+    expect(isInternalCorvusLink(href)).toBe(false)
+  })
+
+  it.each([
     ['mailto:brandon@example-site.test', 'mail'],
     ['tel:+15550100', 'telephone'],
     ['javascript:alert(1)', 'script'],

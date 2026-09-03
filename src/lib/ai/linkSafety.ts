@@ -62,8 +62,18 @@ export interface InternalCorvusLinkOptions {
  * removes the warning this guard exists for.
  *
  * Note `//host/path` is NOT treated as relative even though it starts with
- * `/`: it is a protocol-relative URL to another origin, and the
- * `startsWith('//')` check is what stops the `/` prefix waving it through.
+ * `/`: it is a protocol-relative URL to another origin, and the leading-slash
+ * check is what stops the `/` prefix waving it through.
+ *
+ * That check has to read a **backslash** as a second slash. WHATWG URL
+ * parsing treats `\` as a path separator for special schemes, so
+ * `new URL('/\\evil.example/x', 'https://brandonperfetti.com/corvus').href` is
+ * `https://evil.example/x` `[measured, node 22]` — `/\evil.example/x` is
+ * protocol-relative in every browser, wearing a disguise a `startsWith('//')`
+ * test cannot see. A leading `/` followed by `/` **or** `\` is therefore
+ * rejected. A bare leading `\` (`\\evil.example`) needs no special case: it
+ * matches none of {@link RELATIVE_PREFIXES}, so `new URL` throws on it and the
+ * catch already answers `false` — pinned by test so it stays that way.
  *
  * @param href - The link target streamdown is about to open.
  * @param options - See {@link InternalCorvusLinkOptions}.
@@ -82,8 +92,9 @@ export function isInternalCorvusLink(
     return false
   }
 
-  // Protocol-relative: another origin wearing a leading slash.
-  if (value.startsWith('//')) {
+  // Protocol-relative: another origin wearing a leading slash. `\` counts as
+  // the second slash — WHATWG resolves `/\evil.example/x` to `//evil.example/x`.
+  if (/^\/[/\\]/.test(value)) {
     return false
   }
 
