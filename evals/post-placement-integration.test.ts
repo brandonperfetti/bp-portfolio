@@ -101,6 +101,25 @@ describe.skipIf(!connectionString)(
     let publicPathFor: typeof import('../src/fields/slug/slugPaths').publicPathFor
     let section: { id: number | string; path?: string | null }
 
+    /**
+     * The `/articles` archive page THIS run created, or null.
+     *
+     * @remarks The one row this file writes that cannot carry {@link MARKER}:
+     * the archive-rejection case needs the real reserved slug `articles`, and
+     * `articles` is in `RESERVED_PAGE_SLUGS` (a serve/emit exclusion) rather
+     * than `CODE_OWNED_FIRST_SEGMENTS`, so creating it SUCCEEDS on a database
+     * that has no `/articles` page yet. The `like %MARKER%` sweep then walked
+     * straight past it and it survived `afterAll` — measured on a fresh
+     * migrated database, where a second run of this file inherited it.
+     *
+     * Deleting `slug equals 'articles'` unconditionally would be worse than
+     * the leak: on a shared or seeded database the `.catch` fallback finds a
+     * REAL archive page that the corpus owns, and `afterAll` would destroy
+     * site content. So the id is captured only on the branch that created it,
+     * and only that id is deleted.
+     */
+    let createdArchiveId: number | string | null = null
+
     const cleanup = async () => {
       if (!payload) return
       await payload.delete({
@@ -113,6 +132,18 @@ describe.skipIf(!connectionString)(
         where: { slug: { like: `%${MARKER}%` } },
         overrideAccess: true,
       })
+      if (createdArchiveId !== null) {
+        // `where`, not `id`: the by-id delete throws NotFound if the row is
+        // already gone, which would turn a re-run or a partially-cleaned
+        // database into an afterAll failure. Same no-throw shape as the two
+        // sweeps above.
+        await payload.delete({
+          collection: 'pages',
+          where: { id: { equals: createdArchiveId } },
+          overrideAccess: true,
+        })
+        createdArchiveId = null
+      }
     }
 
     const mkPage = async (slug: string, parent?: number | string) =>
@@ -288,7 +319,11 @@ describe.skipIf(!connectionString)(
 
     it('rejects a placement inside the /articles archive', async () => {
       const archive = await mkPage('articles')
-        .then((p) => p)
+        .then((page) => {
+          // Ours, so `cleanup` may remove it. The fallback below is NOT ours.
+          createdArchiveId = page.id
+          return page
+        })
         .catch(async () => {
           const { docs } = await payload.find({
             collection: 'pages',
@@ -298,7 +333,14 @@ describe.skipIf(!connectionString)(
           })
           return docs[0]
         })
-      if (!archive) return
+      // Neither branch produced a page: `create` failed for a reason other
+      // than the row already existing. Returning here would pass vacuously
+      // and hide the real rejection this case is the only assertion of.
+      if (!archive) {
+        throw new Error(
+          'no /articles archive page: creating it failed and none exists to fall back on',
+        )
+      }
       await expect(mkPost(`${MARKER}-inarchive`, archive.id)).rejects.toThrow(
         /inside the article archive/,
       )
