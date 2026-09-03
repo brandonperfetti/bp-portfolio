@@ -34,6 +34,14 @@ export const STACKED_REVEAL_PARAMS = {
  */
 export interface ArticleCardItem {
   slug: string
+  /**
+   * A placed article's stored path (#153); absent for `/articles/<slug>`.
+   *
+   * The card resolves its href through `publicPathFor`, which needs the path to
+   * answer `/work/brytecore` — without it every card on the site links a placed
+   * article at the archive URL, which then 308s.
+   */
+  path?: string
   title: string
   date: string
   description: string

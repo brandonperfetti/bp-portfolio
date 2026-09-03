@@ -24,6 +24,8 @@ export async function ArticlesArchiveComponent(
     <ArticlesArchiveView
       articles={articles.map((article) => ({
         slug: article.slug,
+        // Placement (#153) — the card's href is built from it.
+        path: article.path,
         title: article.title,
         date: article.date,
         description: article.description,

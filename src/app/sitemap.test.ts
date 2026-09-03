@@ -161,3 +161,32 @@ describe('sitemap page-builder URLs (#148)', () => {
     expect(urls).toContain('https://example.com')
   })
 })
+
+/**
+ * Placed articles (#153): the sitemap lists an article's placed path, exactly
+ * once. Listing both `/articles/<slug>` and the placed path would be the
+ * duplicate-content failure the ticket exists to prevent, and listing only the
+ * archive path would advertise a URL that 308s.
+ */
+describe('sitemap · placed articles (#153)', () => {
+  it('lists a placed article at its section URL and never at /articles', async () => {
+    mocks.getSiteUrl.mockReturnValue('https://example.com')
+    mocks.getPublishedPagePaths.mockResolvedValue([])
+    mocks.getAllArticles.mockResolvedValue([
+      {
+        slug: 'brytecore',
+        path: 'work/brytecore',
+        date: '2025-01-10',
+        noindex: false,
+      },
+      { slug: 'plain', date: '2025-01-10', noindex: false },
+    ])
+
+    const urls = (await sitemap()).map((entry) => entry.url)
+
+    expect(urls).toContain('https://example.com/work/brytecore')
+    expect(urls).toContain('https://example.com/articles/plain')
+    expect(urls).not.toContain('https://example.com/articles/brytecore')
+    expect(urls.filter((u) => u.includes('brytecore'))).toHaveLength(1)
+  })
+})

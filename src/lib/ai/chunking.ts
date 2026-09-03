@@ -1,3 +1,5 @@
+import { publicPathFor } from '@/fields/slug/slugPaths'
+
 import { createHash } from 'node:crypto'
 
 import { flattenBlockText } from '@/lib/content/flattenBlockText'
@@ -158,15 +160,24 @@ export function hashChunkContent(content: string): string {
  * @param collection - Collection slug.
  * @param slug - The document's slug, for collections that have per-doc routes.
  * For `github-repos` this is the repo's `owner/name` full name.
+ * @param path - A placed post's stored path (#153). Absent for every unplaced
+ * post, which is what keeps its citation at `/articles/<slug>`. Ignored by
+ * every other collection — none of them is slug-routed, so none can be placed.
  * @returns A URL for the chunk to cite, or `null` when none applies.
  */
 export function sourceUrlFor(
   collection: CorvusChunkCollection,
   slug?: string | null,
+  path?: string | null,
 ): string | null {
   switch (collection) {
     case 'posts':
-      return slug ? `/articles/${slug}` : null
+      // Through the one path seam (#153): a PLACED post is cited at its section
+      // URL, an unplaced one at `/articles/<slug>` exactly as before. Chunks
+      // carry `sourceUrl` at write time, so a placement change must re-embed —
+      // which it does, because `refreshCorvusEmbeddings('posts')` is already an
+      // `afterChange` hook on the collection.
+      return publicPathFor('posts', { path, slug })
     case 'projects':
       return '/projects'
     case 'uses':
@@ -340,7 +351,11 @@ export function chunkPost(doc: SourceDoc): CorvusChunk[] {
 
   const visibility = visibilityOf(doc)
   const publishedAt = str(doc.publishedAt) || null
-  const sourceUrl = sourceUrlFor('posts', str(doc.slug) || null)
+  const sourceUrl = sourceUrlFor(
+    'posts',
+    str(doc.slug) || null,
+    str(doc.path) || null,
+  )
 
   return bodies.map((body, index) => {
     const content = prefix && body ? `${prefix}\n\n${body}` : prefix || body

@@ -204,3 +204,71 @@ describe('revalidateDelete (afterDelete)', () => {
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * Placement moves (#153): placing or un-placing an article changes its URL
+ * without changing its slug, so `createSlugRedirect` never fires and no
+ * redirect row exists to own the vacated path. This hook therefore purges it —
+ * narrowly, on the slug-unchanged condition, so the #132 rename split above is
+ * untouched.
+ */
+describe('revalidatePost · placement moves (#153)', () => {
+  beforeEach(() => {
+    mocks.revalidatePath.mockClear()
+  })
+
+  const run = ({
+    doc,
+    previousDoc,
+  }: {
+    doc: Record<string, unknown>
+    previousDoc: Record<string, unknown>
+  }) => {
+    revalidatePost(changeArgs(doc, previousDoc))
+    return { paths: mocks.revalidatePath.mock.calls.map(([p]) => p) }
+  }
+
+  it('purges both the new placed path and the path the article vacated', () => {
+    const { paths } = run({
+      doc: { _status: 'published', slug: 'a', path: 'work/a' },
+      previousDoc: { _status: 'published', slug: 'a', path: null },
+    })
+    expect(paths).toContain('/work/a')
+    expect(paths).toContain('/articles/a')
+  })
+
+  it('purges the archive path an un-placed article returns to, and the section path it left', () => {
+    const { paths } = run({
+      doc: { _status: 'published', slug: 'a', path: null },
+      previousDoc: { _status: 'published', slug: 'a', path: 'work/a' },
+    })
+    expect(paths).toContain('/articles/a')
+    expect(paths).toContain('/work/a')
+  })
+
+  it('leaves the #132 rename split alone — a slug rename still purges only the NEW path here', () => {
+    const { paths } = run({
+      doc: { _status: 'published', slug: 'b', path: null },
+      previousDoc: { _status: 'published', slug: 'a', path: null },
+    })
+    expect(paths).toContain('/articles/b')
+    expect(paths).not.toContain('/articles/a')
+  })
+
+  it('purges a placed article at its section path, never at /articles', () => {
+    const { paths } = run({
+      doc: { _status: 'published', slug: 'a', path: 'work/a' },
+      previousDoc: { _status: 'published', slug: 'a', path: 'work/a' },
+    })
+    expect(paths).toContain('/work/a')
+    expect(paths).not.toContain('/articles/a')
+  })
+
+  it('unpublishing a placed article purges its section path', () => {
+    const { paths } = run({
+      doc: { _status: 'draft', slug: 'a', path: 'work/a' },
+      previousDoc: { _status: 'published', slug: 'a', path: 'work/a' },
+    })
+    expect(paths).toContain('/work/a')
+  })
+})

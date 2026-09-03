@@ -22,7 +22,12 @@ import { getSiteUrl } from '@/lib/site'
  * prerender-safe.
  */
 async function getSitemapData(): Promise<{
-  articles: Array<{ slug: string; lastModifiedMs: number | null }>
+  articles: Array<{
+    slug: string
+    /** A placed article's stored path (#153); absent for `/articles/<slug>`. */
+    path?: string
+    lastModifiedMs: number | null
+  }>
   newestArticleMs: number | null
   pagePaths: string[]
 }> {
@@ -42,7 +47,14 @@ async function getSitemapData(): Promise<{
   const articles = publicArticles.map((article) => {
     const freshness =
       toValidDate(article.updatedAt) || toValidDate(article.date)
-    return { slug: article.slug, lastModifiedMs: freshness?.getTime() ?? null }
+    return {
+      slug: article.slug,
+      // Carried through this deliberately-narrow projection because the URL is
+      // built from it below: without `path`, a placed article would be listed
+      // at `/articles/<slug>`, a URL that 308s (#153).
+      path: article.path,
+      lastModifiedMs: freshness?.getTime() ?? null,
+    }
   })
 
   const newestArticleMs = articles.reduce<number | null>((latest, article) => {
