@@ -582,13 +582,31 @@ export const declinesAndRedirects = createGuardedScorer<string, string, string>(
  * are one citation. Only `owner/name` depth is matched: a link to a file or a
  * line inside a repo is not a citation OF the repo.
  *
+ * That depth limit is enforced by the lookahead after `owner/name`, not by the
+ * character class: without it the regex simply stopped at `owner/name` and
+ * `.../bp-portfolio/blob/main/x.ts` was TRUNCATED to the repo root and counted,
+ * which is the opposite of what this paragraph promises. A `/` may follow only
+ * at the very end or before a prose/markdown delimiter — whitespace, a closing
+ * `)`, `]`, `}` or `>`, a quote, sentence punctuation, a `*` emphasis marker,
+ * or a `#` fragment; a `/` followed by another path character means the URL
+ * addresses something inside the repo, and the whole match is discarded rather
+ * than shortened. `#` and `*` are on the delimiter side deliberately:
+ * `.../o/r#readme` is an anchor ON the repo page and `**.../o/r**` is the same
+ * URL wearing markdown bold, so both still cite the root. That matters because
+ * {@link createCitesRepoSourceUrl} checks the cited URL against a corpus of
+ * repo roots — truncation would let a fabricated deep link land on a real root
+ * and score as a genuine citation. The corpus itself is repo-root only by
+ * construction: `sourceUrlFor` in `src/lib/ai/chunking.ts` emits exactly
+ * `https://github.com/<owner>/<repo>` for the `github-repos` collection, so the
+ * scorer and the grounded prompt agree on what a repo citation looks like.
+ *
  * @param output - The assistant's answer.
  * @returns Distinct repository URLs, in first-seen order.
  */
 export function citedRepoUrls(output: string): string[] {
   const found = new Set<string>()
   for (const match of output.matchAll(
-    /https?:\/\/(?:www\.)?github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+/gi,
+    /https?:\/\/(?:www\.)?github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\/?(?=$|[\s)\]}>"'.,;:!?#*])/gi,
   )) {
     const url = match[0]
       .replace(/[.,;:!?)\]]+$/, '')
@@ -648,6 +666,15 @@ export function createCitesRepoSourceUrl(repoUrls: readonly string[]) {
  * the scorer for #147's "asked about a nonexistent repo, it declines rather
  * than inventing". Vacuously 1 when the answer names no repository at all,
  * because a refusal that cites nothing is a correct refusal.
+ *
+ * "Names no repository" is {@link citedRepoUrls}' definition, so a link
+ * *inside* an invented repo — `github.com/x/made-up/blob/main/y.ts` — is
+ * vacuously 1 here rather than 0. That is the deliberate side of the depth
+ * rule: the alternative was truncating deep links to a root, which made the
+ * far worse mistake in the other direction and let a fabricated deep link
+ * score 1 on {@link createCitesRepoSourceUrl}. The prompt asks Corvus to cite
+ * the `Source:` line it was given, and that line is always a repo root, so a
+ * deep link is off-contract in the first place.
  *
  * @param repoUrls - Every repository URL in the fixture corpus.
  * @returns A scorer: 0 as soon as one cited repository is not in the corpus.

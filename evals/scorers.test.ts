@@ -812,13 +812,51 @@ describe('citedRepoUrls', () => {
   it('does not read a repository out of a deeper GitHub path', () => {
     // A link to a file inside a repo is not a citation OF the repo, and
     // treating it as one would let a fabricated deep link score as a real
-    // citation.
+    // citation: the deep URL would be truncated to a root that IS in the
+    // corpus, so `cites-the-repo-source-url` would award 1 for a link it
+    // never checked.
     expect(
       citedRepoUrls(
         'https://github.com/brandonperfetti/bp-portfolio/blob/main/x.ts',
       ),
-    ).toEqual(['https://github.com/brandonperfetti/bp-portfolio'])
+    ).toEqual([])
+    expect(
+      citedRepoUrls(
+        'see [the file](https://github.com/brandonperfetti/bp-portfolio/tree/main)',
+      ),
+    ).toEqual([])
     expect(citedRepoUrls('https://github.com/brandonperfetti')).toEqual([])
+  })
+
+  it('still reads the root through a fragment, emphasis or a brace', () => {
+    // A `#` anchor is a position ON the repo page, and `**` is markdown bold
+    // around the same URL — neither addresses anything INSIDE the repo, so the
+    // depth rule must not swallow them.
+    expect(citedRepoUrls('https://github.com/o/r#readme')).toEqual([
+      'https://github.com/o/r',
+    ])
+    expect(citedRepoUrls('**https://github.com/o/r**')).toEqual([
+      'https://github.com/o/r',
+    ])
+    expect(citedRepoUrls('{https://github.com/o/r}')).toEqual([
+      'https://github.com/o/r',
+    ])
+    expect(citedRepoUrls('https://github.com/o/r/#readme')).toEqual([
+      'https://github.com/o/r',
+    ])
+    // And the deep link is still discarded even wearing a fragment.
+    expect(citedRepoUrls('https://github.com/o/r/blob/main/x.ts#L4')).toEqual(
+      [],
+    )
+  })
+
+  it('still reads the root when a deeper link rides alongside it', () => {
+    // The depth rule discards the deep URL, not the sentence around it.
+    expect(
+      citedRepoUrls(
+        'https://github.com/brandonperfetti/bp-portfolio/blob/main/x.ts, from https://github.com/brandonperfetti/bp-portfolio.',
+      ),
+    ).toEqual(['https://github.com/brandonperfetti/bp-portfolio'])
   })
 
   it('ignores a non-GitHub URL entirely', () => {
@@ -840,6 +878,18 @@ describe('cites-the-repo-source-url', () => {
 
   it('fails an answer that cites nothing', async () => {
     expect(await score(scorer, 'It uses React, TypeScript and GSAP.')).toBe(0)
+  })
+
+  it('fails an answer whose only GitHub link points inside a repo', async () => {
+    // The regression this depth rule exists for: the deep link used to be
+    // truncated to `.../bp-portfolio`, which IS in the corpus, so a link the
+    // scorer never validated scored 1.
+    expect(
+      await score(
+        scorer,
+        'It is documented in https://github.com/brandonperfetti/bp-portfolio/blob/main/README.md',
+      ),
+    ).toBe(0)
   })
 
   it('fails an invented repository', async () => {
