@@ -8,7 +8,9 @@ import { EMPTY_CMS_SENTINEL } from '@/lib/cms/emptyCmsSentinel'
 import { resolvePageShareTargetIds } from '@/lib/cms/pageShareTargets'
 import { getRedirectForPath } from '@/lib/cms/redirectsRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
+import { toSafeJsonLd } from '@/lib/seo/jsonLd'
 import {
+  getAncestorPages,
   getPageByPathDraftAware,
   getPublishedPagePaths,
   isReservedPagePath,
@@ -129,6 +131,31 @@ export default async function CmsPage({
   const pageTitle = page.meta?.title || page.title
   const shareTargetIds = resolvePageShareTargetIds(page, settings.shareTargets)
 
+  // Breadcrumb JSON-LD (#148). Only a placed page has ancestors, so a
+  // top-level page emits Home → itself exactly as the flat route always
+  // implied, and a nested one emits the real chain — derived from `path` in one
+  // indexed read, never stored twice.
+  const ancestors = await getAncestorPages(page.path ?? '')
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: base },
+      ...ancestors.map((ancestor, index) => ({
+        '@type': 'ListItem',
+        position: index + 2,
+        name: ancestor.title,
+        item: `${base}${publicPathFor('pages', { path: ancestor.path })}`,
+      })),
+      {
+        '@type': 'ListItem',
+        position: ancestors.length + 2,
+        name: page.title,
+        item: pageUrl,
+      },
+    ],
+  }
+
   // Hero + blocks, spaced by the page's route rhythm, in the one Container that
   // owns the full-bleed stacking context. Rendered through the shared
   // `RenderRhythmPage` seam so `/` (the home flip, #42) and this catch-all can
@@ -136,17 +163,23 @@ export default async function CmsPage({
   // orchestrator dials pixel parity. `[...segments]/page.test.tsx` pins the
   // emitted DOM for both `standard` and `homeParity`.
   return (
-    <RenderRhythmPage
-      page={page}
-      actions={
-        shareTargetIds.length > 0 ? (
-          <ShareButton
-            url={pageUrl}
-            title={pageTitle}
-            targetIds={shareTargetIds}
-          />
-        ) : undefined
-      }
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSafeJsonLd(breadcrumbSchema) }}
+      />
+      <RenderRhythmPage
+        page={page}
+        actions={
+          shareTargetIds.length > 0 ? (
+            <ShareButton
+              url={pageUrl}
+              title={pageTitle}
+              targetIds={shareTargetIds}
+            />
+          ) : undefined
+        }
+      />
+    </>
   )
 }

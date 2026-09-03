@@ -294,3 +294,57 @@ export const getPublishedPagePaths = async (): Promise<string[]> => {
         !isReservedPagePath(pathSegments(p!)),
     )
 }
+
+/**
+ * Titles and paths for every ancestor of a page path, root-first.
+ *
+ * @param path - A stored page path, e.g. `work/brytecore`.
+ * @returns One entry per existing ancestor, ordered shallowest-first. A
+ *   top-level path returns `[]`.
+ *
+ * @remarks **One read, not N.** The ancestor set of `a/b/c` is the prefix set
+ * `['a', 'a/b']`, so a single `where: { path: { in: [...] } }` produces every
+ * ancestor's title at once — which is exactly why the design stores a `path`
+ * instead of the plugin's breadcrumb array: given a path, breadcrumbs are
+ * derivable and never need storing twice.
+ *
+ * Missing ancestors are simply absent from the result rather than an error: a
+ * page can outlive a deleted parent (the FK is `ON DELETE set null`), and a
+ * partial breadcrumb trail is better SEO than none.
+ *
+ * `'use cache: remote'` so a `pages` tag purge reaches every serverless
+ * instance, not only the one that ran the hook (#118).
+ */
+export const getAncestorPages = async (
+  path: string,
+): Promise<Array<{ path: string; title: string }>> => {
+  'use cache: remote'
+  cacheTag(CMS_TAGS.pages)
+  cacheLife('cmsContent')
+
+  const segments = pathSegments(path)
+  const ancestorPaths = segments
+    .slice(0, -1)
+    .map((_, index) => segments.slice(0, index + 1).join('/'))
+  if (ancestorPaths.length === 0) return []
+
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'pages',
+    draft: false,
+    limit: ancestorPaths.length,
+    overrideAccess: false,
+    pagination: false,
+    select: { path: true, title: true },
+    where: { path: { in: ancestorPaths } },
+  })
+
+  const byPath = new Map(
+    docs
+      .filter((doc): doc is typeof doc & { path: string } => Boolean(doc.path))
+      .map((doc) => [doc.path, doc.title]),
+  )
+  return ancestorPaths
+    .filter((ancestor) => byPath.has(ancestor))
+    .map((ancestor) => ({ path: ancestor, title: byPath.get(ancestor)! }))
+}

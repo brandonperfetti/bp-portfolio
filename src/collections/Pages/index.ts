@@ -42,16 +42,18 @@ export const Pages: CollectionConfig = {
   admin: {
     defaultColumns: ['title', 'slug', 'updatedAt'],
     livePreview: {
+      // The whole document, not just its slug: a placed page previews at
+      // `/work/brytecore`, which a slug alone cannot name (#148).
       url: ({ data, req }) =>
         generatePreviewPath({
-          slug: data?.slug,
+          doc: data,
           collection: 'pages',
           req,
         }),
     },
     preview: (data, { req }) =>
       generatePreviewPath({
-        slug: data?.slug as string,
+        doc: data,
         collection: 'pages',
         req,
       }),

@@ -15,7 +15,16 @@ import type { Page } from '@/payload-types'
 const getPageByPathDraftAware = vi.fn()
 const reservedPagePaths = new Set<string>()
 
+const getAncestorPages = vi.fn(
+  async () =>
+    [] as Array<{
+      path: string
+      title: string
+    }>,
+)
+
 vi.mock('@/lib/cms/pagesRepo', () => ({
+  getAncestorPages: (path: string) => getAncestorPages(path),
   getPageByPathDraftAware: (path: string) => getPageByPathDraftAware(path),
   getPublishedPagePaths: vi.fn(async () => []),
   isReservedPagePath: (segments: string[]) =>
@@ -216,6 +225,8 @@ describe('[...segments] redirect permanence (#130)', () => {
 describe('[...segments] hierarchy resolution', () => {
   beforeEach(() => {
     getPageByPathDraftAware.mockReset()
+    getAncestorPages.mockReset()
+    getAncestorPages.mockResolvedValue([])
     reservedPagePaths.clear()
   })
 
@@ -236,6 +247,58 @@ describe('[...segments] hierarchy resolution', () => {
       CmsPage({ params: Promise.resolve({ segments: ['tech'] }) }),
     ).rejects.toThrow('notFound')
     expect(getPageByPathDraftAware).not.toHaveBeenCalled()
+  })
+
+  it('emits a BreadcrumbList reflecting the real ancestor chain', async () => {
+    getAncestorPages.mockResolvedValue([{ path: 'work', title: 'Work' }])
+
+    const { container } = await renderRoute(
+      {
+        ...page(),
+        title: 'Brytecore',
+        slug: 'brytecore',
+        path: 'work/brytecore',
+      } as Page,
+      ['work', 'brytecore'],
+    )
+
+    const jsonLd = container.querySelector(
+      'script[type="application/ld+json"]',
+    )?.innerHTML
+    expect(jsonLd).toBeTruthy()
+    const schema = JSON.parse(jsonLd as string)
+    expect(schema['@type']).toBe('BreadcrumbList')
+    expect(
+      schema.itemListElement.map((entry: { name: string; item: string }) => [
+        entry.name,
+        entry.item,
+      ]),
+    ).toEqual([
+      ['Home', 'https://example.com'],
+      ['Work', 'https://example.com/work'],
+      ['Brytecore', 'https://example.com/work/brytecore'],
+    ])
+    expect(getAncestorPages).toHaveBeenCalledWith('work/brytecore')
+  })
+
+  it('emits Home → itself for a top-level page', async () => {
+    getAncestorPages.mockResolvedValue([])
+
+    const { container } = await renderRoute(
+      {
+        ...page(),
+        title: 'Consulting',
+        slug: 'consulting',
+        path: 'consulting',
+      } as Page,
+      ['consulting'],
+    )
+
+    const schema = JSON.parse(
+      container.querySelector('script[type="application/ld+json"]')
+        ?.innerHTML as string,
+    )
+    expect(schema.itemListElement).toHaveLength(2)
   })
 
   it('resolves /tech/ai even though tech is reserved (Brandon, D1)', async () => {

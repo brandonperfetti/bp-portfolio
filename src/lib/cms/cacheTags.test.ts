@@ -62,7 +62,11 @@ import { getCmsConsentConfig } from '@/lib/cms/consentRepo'
 import { getCmsIdentity } from '@/lib/cms/identityRepo'
 import { getPageLayoutBySlug, getPostLayoutBySlug } from '@/lib/cms/layoutsRepo'
 import { getCmsNavigation } from '@/lib/cms/navigationRepo'
-import { getCmsPageByPath, getPublishedPagePaths } from '@/lib/cms/pagesRepo'
+import {
+  getAncestorPages,
+  getCmsPageByPath,
+  getPublishedPagePaths,
+} from '@/lib/cms/pagesRepo'
 import { getCmsProjects } from '@/lib/cms/projectsRepo'
 import { getCmsRedirects } from '@/lib/cms/redirectsRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
@@ -110,6 +114,11 @@ const cases: Array<{
     name: 'getPublishedPagePaths',
     tag: CMS_TAGS.pages,
     call: getPublishedPagePaths,
+  },
+  {
+    name: 'getAncestorPages',
+    tag: CMS_TAGS.pages,
+    call: () => getAncestorPages('a/b'),
   },
   {
     name: 'getPageLayoutBySlug',
@@ -302,6 +311,7 @@ const EXPECTED_DIRECTIVE_KINDS: Record<string, DirectiveKind> = {
   'src/lib/cms/layoutsRepo.ts#getPageLayoutBySlug': 'remote',
   'src/lib/cms/layoutsRepo.ts#getPostLayoutBySlug': 'remote',
   'src/lib/cms/navigationRepo.ts#getCmsNavigation': 'remote',
+  'src/lib/cms/pagesRepo.ts#getAncestorPages': 'remote',
   'src/lib/cms/pagesRepo.ts#getCmsPageByPath': 'remote',
   'src/lib/cms/pagesRepo.ts#getPublishedPageByPath': 'remote',
   'src/lib/cms/pagesRepo.ts#getPublishedPagePaths': 'remote',

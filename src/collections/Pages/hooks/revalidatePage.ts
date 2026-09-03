@@ -5,6 +5,7 @@ import type {
 
 import { revalidatePath, revalidateTag } from 'next/cache'
 
+import { publicPathFor } from '@/fields/slug/slugPaths'
 import type { Page } from '../../../payload-types'
 
 /**
@@ -26,10 +27,21 @@ import type { Page } from '../../../payload-types'
  * unpublish purges `previousDoc`'s path; a published→published rename purges
  * only the NEW path here, with `createSlugRedirect` purging the old one.
  *
- * Pages makes the vocabulary argument concrete: this hook serves `home` at
- * `/`, while `publicPathForSlug('pages', 'home')` — what `createSlugRedirect`
- * writes rows from — yields `/home`. A purge spelled in the wrong one of those
- * two never uncovers the row it was meant to uncover.
+ * **The vocabulary conflict is closed (#132 → #148).** Pages used to make the
+ * argument concrete in the worst way: this hook hand-built the root's `/` in three
+ * places by comparing the slug to the root slug, while
+ * `publicPathForSlug('pages', <root slug>)` yielded `/home`, so a purge
+ * spelled in the wrong one of those two never uncovered the row it was meant to
+ * uncover. Both sides now go through `publicPathFor`, which owns the root
+ * mapping outright, so the two vocabularies are the same vocabulary and the
+ * three hand-built root comparisons are gone.
+ *
+ * The ownership split #132 decided is unchanged and still the reason this hook
+ * does not purge a rename's old path: whoever writes a redirect row purges that
+ * row's `from`; this hook purges the document's own paths. What changed is only
+ * that both now spell those paths identically. Placement makes that mandatory
+ * rather than merely tidy — a placed page's path is `/work/brytecore`, which no
+ * `/`+slug template can produce.
  *
  * The autosave gap on the unpublish branch is identical to the Posts one and
  * documented there: Pages autosaves at the same 100ms interval, so unpublishing
@@ -58,11 +70,12 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
 }) => {
   if (!context.disableRevalidate) {
     if (doc._status === 'published') {
-      const path = doc.slug === 'home' ? '/' : `/${doc.slug}`
+      const path = publicPathFor('pages', doc)
 
-      payload.logger.info(`Revalidating page at path: ${path}`)
-
-      revalidatePath(path)
+      if (path) {
+        payload.logger.info(`Revalidating page at path: ${path}`)
+        revalidatePath(path)
+      }
       // The data layer (getCmsPageByPath / getPageLayout / CmsPageBlocks)
       // caches under the 'pages' tag — revalidatePath alone regenerates the
       // route against STALE data, so admin edits never surfaced without a
@@ -73,11 +86,12 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
 
     // If the page was previously published, we need to revalidate the old path
     if (previousDoc?._status === 'published' && doc._status !== 'published') {
-      const oldPath = previousDoc.slug === 'home' ? '/' : `/${previousDoc.slug}`
+      const oldPath = publicPathFor('pages', previousDoc)
 
-      payload.logger.info(`Revalidating old page at path: ${oldPath}`)
-
-      revalidatePath(oldPath)
+      if (oldPath) {
+        payload.logger.info(`Revalidating old page at path: ${oldPath}`)
+        revalidatePath(oldPath)
+      }
       revalidateTag('pages', { expire: 0 })
       revalidateTag('pages-sitemap', { expire: 0 })
     }
@@ -94,8 +108,8 @@ export const revalidateDelete: CollectionAfterDeleteHook<Page> = ({
   req: { context },
 }) => {
   if (!context.disableRevalidate) {
-    const path = doc?.slug === 'home' ? '/' : `/${doc?.slug}`
-    revalidatePath(path)
+    const path = publicPathFor('pages', doc ?? {})
+    if (path) revalidatePath(path)
     revalidateTag('pages', { expire: 0 })
     revalidateTag('pages-sitemap', { expire: 0 })
   }

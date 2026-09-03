@@ -16,6 +16,7 @@ const getPageBySlugDraftAware = vi.fn()
 const getCmsPageByPath = vi.fn()
 
 vi.mock('@/lib/cms/pagesRepo', () => ({
+  getAncestorPages: vi.fn(async () => []),
   getPageBySlugDraftAware: (slug: string) => getPageBySlugDraftAware(slug),
   // The catch-all reads by path; `/` and this parity check address the root
   // page, whose path IS its slug, so both mocks answer from one fixture (#148).

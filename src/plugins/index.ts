@@ -5,6 +5,7 @@ import { seoPlugin } from '@payloadcms/plugin-seo'
 import { GenerateTitle, GenerateURL } from '@payloadcms/plugin-seo/types'
 import { Plugin } from 'payload'
 
+import { publicPathFor } from '@/fields/slug/slugPaths'
 import { revalidateRedirects } from '@/hooks/revalidateRedirects'
 import { Page, Post } from '@/payload-types'
 import { beforeSyncWithSearch } from '@/search/beforeSync'
@@ -15,12 +16,19 @@ const generateTitle: GenerateTitle<Post | Page> = ({ doc }) => {
   return doc?.title ? `${doc.title} - Brandon Perfetti` : 'Brandon Perfetti'
 }
 
+/**
+ * The absolute URL the SEO plugin shows in its preview and writes into
+ * generated metadata.
+ *
+ * @remarks Delegates to `publicPathFor` rather than repeating the prefix
+ * ternary, so the plugin's preview and the URL the site actually serves cannot
+ * disagree — including for a placed page (`/work/brytecore`) and for the root
+ * page, which this used to advertise as `/home` (#148).
+ */
 const generateURL: GenerateURL<Post | Page> = ({ doc, collectionSlug }) => {
   const url = getServerSideURL()
-  if (!doc?.slug) return url
-  return collectionSlug === 'posts'
-    ? `${url}/articles/${doc.slug}`
-    : `${url}/${doc.slug}`
+  const path = publicPathFor(collectionSlug ?? '', doc ?? {})
+  return path ? `${url}${path === '/' ? '' : path}` : url
 }
 
 /**

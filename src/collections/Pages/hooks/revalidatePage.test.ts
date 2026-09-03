@@ -83,11 +83,21 @@ describe('revalidatePage (afterChange)', () => {
  * Old-path purge transition matrix (#132) — the Pages half of the matrix in
  * `src/collections/Posts/hooks/revalidatePost.test.ts`. Same decision, same
  * `previousDoc`-is-the-autosaved-draft caveat (Pages autosaves at the same
- * 100ms interval), and one extra thing to pin that Posts does not have: this
- * hook maps `home` to `/`, while `publicPathForSlug('pages', 'home')` — the
- * function `createSlugRedirect` builds its rows from — yields `/home`. The two
- * path vocabularies genuinely disagree, which is the concrete reason the purge
- * stays with the writer instead of moving here.
+ * 100ms interval), and one extra thing to pin that Posts does not have: the
+ * root page's `/` mapping.
+ *
+ * That mapping used to be a hand-built root-slug comparison here while
+ * `publicPathForSlug('pages', 'home')` — the function `createSlugRedirect`
+ * builds its rows from — yielded `/home`; the two vocabularies genuinely
+ * disagreed. #148 closed that by making `publicPathFor` the single owner, and
+ * both sides now call it. The matrix below is UNCHANGED — the same five
+ * transitions purge the same five paths — which is the proof that routing the
+ * hook through the seam moved no behaviour. What is newly pinned is that a
+ * PLACED page purges its full nested path, which no `/`+slug template could
+ * produce.
+ *
+ * The #132 ownership split is untouched: whoever writes a redirect row purges
+ * that row's `from`; this hook purges the document's own paths.
  */
 describe('revalidatePage old-path purge matrix (#132)', () => {
   beforeEach(() => {
@@ -152,9 +162,10 @@ describe('revalidatePage old-path purge matrix (#132)', () => {
   })
 
   it('maps the home page to / on both the current- and old-path branches', () => {
-    // The vocabulary split above, stated as a test: this hook serves `home` at
-    // `/`, `publicPathForSlug` calls it `/home`. Whoever purges must use the
-    // vocabulary of whoever wrote the thing being exposed.
+    // The root contract, stated as a test. Both this hook and
+    // `publicPathForSlug` now answer `/`, so a purge issued here uncovers the
+    // row `createSlugRedirect` wrote — which is what the disagreement used to
+    // prevent (#132 → #148).
     revalidatePage(
       changeArgs({ slug: 'home', _status: 'published' }, { _status: 'draft' }),
     )
@@ -168,6 +179,34 @@ describe('revalidatePage old-path purge matrix (#132)', () => {
       ),
     )
     expect(purgedPaths()).toEqual(['/'])
+  })
+
+  it('purges a PLACED page at its full nested path (#148)', () => {
+    revalidatePage(
+      changeArgs(
+        { slug: 'brytecore', path: 'work/brytecore', _status: 'published' },
+        { _status: 'draft' },
+      ),
+    )
+
+    expect(purgedPaths()).toEqual(['/work/brytecore'])
+  })
+
+  it('purges the OLD nested path on unpublish', () => {
+    revalidatePage(
+      changeArgs(
+        { slug: 'brytecore', path: 'work/brytecore', _status: 'draft' },
+        { slug: 'brytecore', path: 'work/brytecore', _status: 'published' },
+      ),
+    )
+
+    expect(purgedPaths()).toEqual(['/work/brytecore'])
+  })
+
+  it('purges nothing rather than "/undefined" when a doc carries no slug or path', () => {
+    revalidatePage(changeArgs({ _status: 'published' }, { _status: 'draft' }))
+
+    expect(purgedPaths()).toEqual([])
   })
 })
 

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
+import { publicPathFor } from '@/fields/slug/slugPaths'
 import { getExternalLinkProps } from '@/lib/link-utils'
 import type { Page, Post } from '@/payload-types'
 
@@ -19,14 +20,22 @@ type LinkShape = {
 /**
  * Resolves a Payload link group (internal reference or custom URL) into an
  * href. Internal posts render under `/articles` (v3 URL contract).
+ *
+ * @remarks Resolves through `publicPathFor`, which is load-bearing under
+ * hierarchy: every CMS-authored link to a placed page would otherwise point at
+ * `/`+slug and 404, and a link to the root page would point at `/home` rather
+ * than `/` (#148).
+ *
+ * The reference must be **populated** for a nested link to resolve — an
+ * unpopulated `value` is a bare id with no slug and still yields `'#'`, exactly
+ * as before.
  */
 export function resolveCmsHref(link: LinkShape | null | undefined): string {
   if (!link) return '#'
   if (link.type === 'reference' && link.reference) {
     const { relationTo, value } = link.reference
-    const slug = typeof value === 'object' ? value.slug : null
-    if (!slug) return '#'
-    return relationTo === 'posts' ? `/articles/${slug}` : `/${slug}`
+    if (typeof value !== 'object' || value === null) return '#'
+    return publicPathFor(relationTo, value) ?? '#'
   }
   return link.url || '#'
 }
