@@ -52,7 +52,7 @@ outrun. The full reasoning lives on `ROOT_PAGE_SLUG`'s TSDoc.
 dedicated route already owns is never served, sitemapped, or statically
 generated, though a Pages document there is legitimate and is in fact where
 `/about`, `/tech` and friends get their copy. `CODE_OWNED_FIRST_SEGMENTS`
-(`src/collections/Pages/hooks/pageHierarchy.ts`) is the _save-time_ rejection,
+(`src/fields/slug/documentPath.ts`) is the _save-time_ rejection,
 for first segments nothing can ever render under. Each set's TSDoc holds the
 membership and the reasoning; do not restate them here.
 
