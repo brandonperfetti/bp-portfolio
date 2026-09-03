@@ -48,6 +48,19 @@ Payload is the single source of truth for site content. Admin at `/admin`
   **Uses** (category-grouped tools), **Categories**, **Tags**, **Media**
   (Blob-backed), **Users** (admin operators).
 
+**Categories is labelled "Topics" in the admin — the slug stays `categories`
+(#149).** The public surface has said "topics" for a long time: the chips on
+`/articles`, the `?topic=` query param, `topics: string[]` on the read models.
+Only the admin still said "Categories", and `labels: { singular: 'Topic',
+plural: 'Topics' }` on the collection (plus `label: 'Topics'` on the Posts
+relationship field) closes that gap with a presentation-only change. An actual
+collection rename would cost a table migration with data-loss risk, a search
+reindex, and renamed `categories` MCP tools that every agent calling them would
+break on — and it would change no public string, because none of them say
+"categories" today. So the standing rule is: **`categories` is the slug and the
+field name; "Topic(s)" is what a human reads.** Code says `post.categories`;
+admin, UI and prose say topics.
+
 ## Globals
 
 `SiteSettings` (canonical URL, metadata defaults), `Navigation`, `Footer`,

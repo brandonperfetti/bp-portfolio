@@ -188,6 +188,12 @@ export const Posts: CollectionConfig = {
             {
               name: 'categories',
               type: 'relationship',
+              // Admin label only — the field name and the `categories` slug
+              // are unchanged (#149). Deliberately NO `admin.description`:
+              // Payload emits a field description into `payload-types.ts` as a
+              // TSDoc comment, and #149 is a zero-schema, zero-type change.
+              // The caption is not worth a diff on a generated file.
+              label: 'Topics',
               admin: {
                 position: 'sidebar',
               },
