@@ -242,6 +242,62 @@ describe.skipIf(!connectionString)(
     })
 
     it('recomputes a leaf’s own path when it is renamed', async () => {
+      // A DRAFT leaf, deliberately. `refuseNestedSlugRename` refuses this
+      // rename once the page is published, because #120's redirect writer
+      // would spell the row `/leaf → /leaf-renamed` and leave the real URL
+      // `…/-child/-leaf` with nothing pointing at it (#150). A never-published
+      // page has no live URL to strand, so the guard stays silent and the
+      // recomputation this test is actually about is still exercised end to
+      // end.
+      const { docs } = await payload.find({
+        collection: 'pages',
+        overrideAccess: true,
+        pagination: false,
+        where: { slug: { equals: `${MARKER}-child` } },
+      })
+      const child = docs[0]
+
+      const leaf = await payload.create({
+        collection: 'pages',
+        overrideAccess: true,
+        data: {
+          title: `${MARKER}-leaf`,
+          layout,
+          _status: 'draft',
+          slug: `${MARKER}-leaf`,
+          parent: child.id,
+        } as never,
+      })
+
+      const renamed = await payload.update({
+        collection: 'pages',
+        id: leaf.id,
+        overrideAccess: true,
+        draft: true,
+        data: { slug: `${MARKER}-leaf-renamed`, slugLock: false },
+      })
+
+      expect(renamed.path).toBe(
+        `${MARKER}-root/${MARKER}-child/${MARKER}-leaf-renamed`,
+      )
+
+      const reread = await payload.findByID({
+        collection: 'pages',
+        draft: true,
+        id: leaf.id,
+        overrideAccess: true,
+      })
+      expect(reread.path).toBe(
+        `${MARKER}-root/${MARKER}-child/${MARKER}-leaf-renamed`,
+      )
+    })
+
+    it('REFUSES to rename a nested, PUBLISHED page until #150', async () => {
+      // The other half of the case above, through the real Payload write path
+      // rather than a hook fixture: the redirect row that would be written
+      // describes `/-grand`, a URL this page has never had, and the URL that
+      // actually moved gets nothing. The unlock is supplied, so this is the
+      // guard speaking and not `enforceSlugFreeze`.
       const { docs } = await payload.find({
         collection: 'pages',
         overrideAccess: true,
@@ -249,28 +305,37 @@ describe.skipIf(!connectionString)(
         where: { slug: { equals: `${MARKER}-grand` } },
       })
       const grandchild = docs[0]
+      expect(grandchild._status).toBe('published')
 
-      // A published rename needs the explicit unlock (#120); the freeze is not
-      // consent by omission.
-      const renamed = await payload.update({
-        collection: 'pages',
-        id: grandchild.id,
-        overrideAccess: true,
-        data: { slug: `${MARKER}-grand-renamed`, slugLock: false },
-      })
+      await expect(
+        payload.update({
+          collection: 'pages',
+          id: grandchild.id,
+          overrideAccess: true,
+          data: { slug: `${MARKER}-grand-renamed`, slugLock: false },
+        }),
+      ).rejects.toThrow(/#150/)
 
-      expect(renamed.path).toBe(
-        `${MARKER}-root/${MARKER}-child/${MARKER}-grand-renamed`,
-      )
-
+      // And the stored row did not move.
       const reread = await payload.findByID({
         collection: 'pages',
         id: grandchild.id,
         overrideAccess: true,
       })
-      expect(reread.path).toBe(
-        `${MARKER}-root/${MARKER}-child/${MARKER}-grand-renamed`,
-      )
+      expect(reread.path).toBe(`${MARKER}-root/${MARKER}-child/${MARKER}-grand`)
+    })
+
+    it('still allows a TOP-LEVEL published rename — #120 unchanged', async () => {
+      const top = await mkPage(`${MARKER}-top`)
+      expect(top.path).toBe(`${MARKER}-top`)
+
+      const renamed = await payload.update({
+        collection: 'pages',
+        id: top.id,
+        overrideAccess: true,
+        data: { slug: `${MARKER}-top-renamed`, slugLock: false },
+      })
+      expect(renamed.path).toBe(`${MARKER}-top-renamed`)
     })
 
     it('keeps the stored placement when a PATCH sends only a title', async () => {
