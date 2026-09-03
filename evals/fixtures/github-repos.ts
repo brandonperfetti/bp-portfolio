@@ -37,8 +37,6 @@
  * technologies that are NOT on `/tech` (Payload, Clerk, Vercel) alongside one
  * that is (PostgreSQL). A fixture where the two lists did not overlap would
  * make the disambiguation trivially easy and measure nothing.
- *
- * @module
  */
 import type { GithubRepoSource } from '../../src/lib/ai/githubRepos'
 

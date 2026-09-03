@@ -392,8 +392,8 @@ export const REPO_UNKNOWN_CASES: EvalCase[] = [
  * "What does THIS SITE run on?" — the repository, never the /tech list (#147).
  *
  * @remarks The defect #147 was filed for, made into a gate.
- * `[measured, 2026-09-02, preview of feat/sections-grounding-correctness at
- * 7f35583, signed in]`: asked "What technologies does this site run on?",
+ * Measured 2026-09-02 on a preview of `feat/sections-grounding-correctness` at
+ * `7f35583`, signed in: asked "What technologies does this site run on?",
  * Corvus answered "Remix, TanStack, Fly.io, Netlify, DigitalOcean" and cited
  * `/tech`. The citation was real — so `cites-a-real-source-url` scored it 1 —
  * and the answer was the tech-Brandon-works-with list rather than the stack
@@ -435,8 +435,8 @@ export const SITE_STACK_CASES: EvalCase[] = [
  *
  * Same both-corpora retriever, same competition, opposite correct answer. The
  * question names PostgreSQL deliberately: it is the one term BOTH corpora
- * share (`/tech` lists it; the `bp-portfolio` README says the site stores
- * content in Supabase Postgres), which is what puts the repository document in
+ * share — the tech page lists it, and the `bp-portfolio` README says the site
+ * stores content in Supabase Postgres — which is what puts the repository document in
  * the context window so the model has something wrong to reach for. The quoted
  * literals are values captured from `/api/tech-stack` on 2026-08-28 via
  * `fixtures/site-content.ts`; the retrieval precondition is pinned in

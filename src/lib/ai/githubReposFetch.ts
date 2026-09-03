@@ -37,8 +37,6 @@ import type { GithubRepoSource } from '@/lib/ai/githubRepos'
  * about — so they are indexed, and `repoHeader` marks them archived so an
  * answer can say so. #147's acceptance criterion says "every public repo"; this
  * is the one deliberate narrowing, recorded here and in `docs/AI.md`.
- *
- * @module
  */
 
 /** The `User-Agent` this caller sends, distinct from the tech-signal scan's. */

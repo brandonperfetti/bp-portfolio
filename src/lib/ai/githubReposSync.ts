@@ -33,11 +33,11 @@ import { type GithubRepoSource, chunkGithubRepo } from '@/lib/ai/githubRepos'
  * ## Why this is not just `syncDocumentEmbeddings`
  *
  * That function is the single write path for CMS documents, and its first two
- * steps are `isEmbeddable(collection, doc)` and `chunkDocument(collection,
- * doc)` — both of which take a Payload document and a CMS collection slug. A
- * repository is neither. Widening those two to understand a `GithubRepoSource`
- * would put GitHub's data model inside the module that decides whether a POST
- * is published, for the benefit of one caller.
+ * steps are an `isEmbeddable` check and a `chunkDocument` call — both of which
+ * take a Payload document and a CMS collection slug. A repository is neither.
+ * Widening those two to understand a `GithubRepoSource` would put GitHub's data
+ * model inside the module that decides whether a POST is published, for the
+ * benefit of one caller.
  *
  * So the ORCHESTRATION is duplicated (about twenty lines) and the STATEMENTS
  * are shared, which is the right side of that trade: the duplicated part is a
@@ -48,8 +48,6 @@ import { type GithubRepoSource, chunkGithubRepo } from '@/lib/ai/githubRepos'
  * The ordering is copied deliberately and for the reasons
  * `syncDocumentEmbeddings` gives: hashes are read and compared BEFORE the
  * provider is called, so a re-sync over an unchanged repo spends nothing.
- *
- * @module
  */
 
 /**

@@ -25,8 +25,6 @@ import {
  * is. Reusing the constants rather than copying them means a future retune of
  * `TARGET_CHUNK_TOKENS` moves both corpora together instead of quietly
  * splitting the index into two chunk sizes.
- *
- * @module
  */
 
 /** The metadata + README of one repository, already fetched. */

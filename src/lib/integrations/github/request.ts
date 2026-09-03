@@ -19,8 +19,6 @@ import { setTimeout as sleep } from 'node:timers/promises'
  * No `@octokit`. The whole surface either module needs is three GETs with a
  * bearer token; `fetch` covers it, and a dependency would be a permanent cost
  * for a one-time convenience.
- *
- * @module
  */
 
 /** Wall-clock ceiling for a single GitHub request, in milliseconds. */
