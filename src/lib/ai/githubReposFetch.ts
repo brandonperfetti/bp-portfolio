@@ -37,6 +37,29 @@ import type { GithubRepoSource } from '@/lib/ai/githubRepos'
  * about — so they are indexed, and `repoHeader` marks them archived so an
  * answer can say so. #147's acceptance criterion says "every public repo"; this
  * is the one deliberate narrowing, recorded here and in `docs/AI.md`.
+ *
+ * ## Why this lives in `src/lib/ai/` and not `src/lib/integrations/github/`
+ *
+ * It looks like integration code and is mostly not. The genuinely reusable
+ * piece — an authenticated, timed-out, retrying JSON GET with one retry policy
+ * — was already extracted to `integrations/github/request.ts`, which both this
+ * module and the `/tech` tech-signal scan import. That was the cut worth
+ * making, and it is made.
+ *
+ * What remains here is #147 POLICY wearing a fetch's clothes. The listing
+ * endpoint is chosen because `/users/{owner}/repos` cannot return a private
+ * repo; `shouldIndexRepo` encodes the fork exclusion and the private refusal;
+ * `repoDenylist` and `resolveRepoSyncConfig` read Corvus's own env names; and
+ * `hydrateRepo` exists to produce a `GithubRepoSource`, which is the CHUNKER's
+ * input shape, not GitHub's.
+ *
+ * So moving this file would not tidy the layering, it would invert it: the
+ * integration layer would import `GithubRepoSource` from `src/lib/ai/` and
+ * would hold Corvus's never-leak policy, leaving `src/lib/ai/` with no say in
+ * which repositories its own index is allowed to contain. The dependency runs
+ * ai → integrations today, one direction, and that is the property worth
+ * keeping. Read this module as an ADAPTER over `request.ts`, not as a second
+ * GitHub client.
  */
 
 /** The `User-Agent` this caller sends, distinct from the tech-signal scan's. */
@@ -277,10 +300,15 @@ export async function hydrateRepo(
   token: string,
 ): Promise<GithubRepoSource> {
   const fullName = entry.full_name ?? entry.name ?? ''
-  const [readme, languages] = [
-    await fetchRepoReadme(fullName, token),
-    await fetchRepoLanguages(entry.languages_url, token),
-  ]
+
+  // Two statements, not a destructured pair and not `Promise.all`. The array
+  // form read as if these were concurrent while awaiting each in turn, which
+  // is exactly the shape a later reader "fixes" into real concurrency without
+  // noticing that sequential is the intent: a scheduled weekly job has all the
+  // time it needs, and burst-parallel requests are how a token discovers
+  // GitHub's secondary rate limits.
+  const readme = await fetchRepoReadme(fullName, token)
+  const languages = await fetchRepoLanguages(entry.languages_url, token)
 
   return {
     id: entry.id as number,

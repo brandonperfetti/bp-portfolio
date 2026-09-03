@@ -54,14 +54,17 @@ import {
  * would delete a live repo's rows over a transient rate limit.
  *
  * Usage:
- *   payload run scripts/sync-github-repos.ts
- *   payload run scripts/sync-github-repos.ts -- --no-prune
+ *   pnpm corvus:sync-github
+ *   pnpm corvus:sync-github -- --no-prune
+ *   pnpm corvus:sync-github -- --dry-run
  *   payload run scripts/sync-github-repos.ts -- --dry-run
  *
  * The `--` is load-bearing, for the reason the backfill's docblock records:
  * `payload run` parses its own argv with minimist and rebuilds the script's
  * `process.argv` from the POSITIONAL arguments only, so a bare `--no-prune` is
  * consumed as an option to `payload` and never reaches the check below.
+ * (Through the pnpm script the single `--` is enough: pnpm forwards it verbatim
+ * to `payload run`.)
  *
  * Environment (names only — this repo is public):
  *   GITHUB_TOKEN              read-only; public-repo reads need it for the

@@ -28,8 +28,8 @@
   403/404 on public repos; the workflow falls back to its own automatic
   `GITHUB_TOKEN` otherwise. Distinct from the tech-signal PAT above: different
   job, different lifecycle. Run by hand with
-  `payload run scripts/sync-github-repos.ts` (add `-- --dry-run` to see what a
-  run would index without writing). Details in `docs/AI.md`.
+  `pnpm corvus:sync-github` (add `-- --dry-run` to see what a run would index
+  without writing). Details in `docs/AI.md`.
 - **Supabase/Blob**: staging DB is Supabase project `bp-portfolio`
   (`wgzvcjhaltevthnxnack`, us-east-1, Sans Faux org — co-located with the
   iad1 functions; migrated from Neon 2026-08-10); production gets its own

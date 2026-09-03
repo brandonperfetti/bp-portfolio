@@ -165,19 +165,47 @@ describe('corvus-github-sync workflow', () => {
     // a repository made private or deleted retrievable by anonymous chat turns
     // until somebody runs the script again without it. The scheduled
     // invocation must carry no flag at all: the safe behaviour is the default.
+    //
+    // Scoped to the INVOCATION line rather than the whole file, the way
+    // corvus-backfill-workflow.test.ts scopes its own: the header names both
+    // flags in order to explain why they are absent, and those sentences are
+    // worth more than the convenience of a file-wide match.
     const invocations = workflow
       .split('\n')
-      .filter((line) => line.includes('scripts/sync-github-repos.ts'))
+      .filter(
+        (line) =>
+          line.includes('pnpm corvus:sync-github') &&
+          !line.trimStart().startsWith('#'),
+      )
 
     expect(invocations, 'the workflow must run the sync').toHaveLength(1)
     expect(invocations[0]).not.toContain('--no-prune')
     expect(invocations[0]).not.toContain('--dry-run')
   })
 
-  it('runs a script that exists', () => {
+  it('names a package script that exists and points at the sync', () => {
+    // Both ends of the indirection. The workflow naming a script that does not
+    // exist fails at dispatch; the script pointing somewhere else fails
+    // silently, by syncing the wrong thing. corvus-backfill-workflow.test.ts
+    // pins the same pair for `corvus:backfill`.
+    const packageJson = JSON.parse(
+      readFileSync(path.join(repoRoot, 'package.json'), 'utf8'),
+    ) as { scripts?: Record<string, string> }
+    const script = packageJson.scripts?.['corvus:sync-github']
+
+    expect(script, 'the workflow must name a script that exists').toBeDefined()
+    expect(script).toContain('scripts/sync-github-repos.ts')
     expect(() =>
       readFileSync(path.join(repoRoot, 'scripts/sync-github-repos.ts'), 'utf8'),
     ).not.toThrow()
+  })
+
+  it('does not pin an owner the code already defaults to', () => {
+    // Duplicating `DEFAULT_GITHUB_OWNER` here would be a second place to change
+    // it, and the kind that goes stale silently because both copies look right
+    // in isolation. The header explains the omission; this stops it drifting
+    // back in unnoticed.
+    expect(workflow).not.toMatch(/^ +CORVUS_GITHUB_OWNER:/m)
   })
 
   it('leaves the outcome in the job summary whether it passes or fails', () => {

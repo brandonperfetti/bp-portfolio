@@ -8,6 +8,18 @@
 # `corvus_embeddings` before a visitor can ever be answered from it. #147 says
 # this plainly and it is the load-bearing reason this file exists.
 #
+# The job runs `pnpm corvus:sync-github`, the same shape corvus-backfill.yml uses
+# for `pnpm corvus:backfill`: the package script is the one place the entry point
+# is spelled, so the workflow, the docs and an operator at a terminal cannot
+# drift apart on it.
+#
+# CORVUS_GITHUB_OWNER is deliberately NOT set below. `DEFAULT_GITHUB_OWNER` in
+# `src/lib/ai/githubReposFetch.ts` already resolves to `brandonperfetti`, and
+# pinning the same value here would be a second place to change it — the kind of
+# duplicate that goes stale silently because both copies look right in isolation.
+# Set it here only if this workflow ever needs to sync an account the code's
+# default does not name.
+#
 # Why the sweep matters more here than in corvus-backfill.yml: a repository made
 # private or deleted must stop being retrievable. `sync-github-repos.ts` prunes
 # by DEFAULT for that reason (the backfill's `--drop-orphans` is opt-in for the
@@ -147,7 +159,6 @@ jobs:
           # Optional PAT first, the workflow's own automatic token otherwise.
           # See the header for why this is a fallback rather than a requirement.
           GITHUB_TOKEN: ${{ secrets.CORVUS_GITHUB_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
-          CORVUS_GITHUB_OWNER: brandonperfetti
           # Signs Payload auth tokens this script never mints — it goes through
           # the Local API with no user context. corvus-backfill.yml and ci.yml
           # use a dummy for the same reason.
@@ -156,7 +167,7 @@ jobs:
           set -euo pipefail
           log="${RUNNER_TEMP}/corvus-github-sync.log"
           set +e
-          pnpm exec payload run scripts/sync-github-repos.ts 2>&1 | tee "$log"
+          pnpm corvus:sync-github 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
           set -e
           echo "log=${log}" >> "$GITHUB_OUTPUT"

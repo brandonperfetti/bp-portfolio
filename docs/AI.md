@@ -311,7 +311,10 @@ mid-run; widening that column when GitHub crosses the ceiling is a migration.
 `.github/workflows/corvus-github-sync.yml` — `workflow_dispatch` plus a weekly
 cron at **12:23 UTC on Sunday**, deliberately clear of `corvus-backfill.yml`'s
 11:07 slot because both hold a long-lived session-mode connection to the same
-production database. It runs `payload run scripts/sync-github-repos.ts`.
+production database. It runs `pnpm corvus:sync-github`, the same package-script
+shape `corvus-backfill.yml` uses for `pnpm corvus:backfill` — the script is the
+one place the entry point is spelled, so the workflow, these docs and an operator
+at a terminal cannot drift apart on it.
 
 **Never a live tool call from the chat route.** Reading a README at answer time
 would add per-turn latency, rate-limit exposure and a live prompt-injection
@@ -536,18 +539,18 @@ so a disagreement is legible.
 
 ### Running them
 
-| Command        | What it does                       |
-| -------------- | ---------------------------------- |
-| `pnpm eval`    | watch mode                         |
-| `pnpm eval:ci` | the gate — global `--threshold 75` |
+| Command            | What it does                                     |
+| ------------------ | ------------------------------------------------ |
+| `pnpm eval`        | watch mode                                       |
+| `pnpm eval:ci`     | the gate — global `--threshold 75`               |
+| `pnpm eval:facts`  | the site-fact block on its own, `--threshold 70` |
+| `pnpm eval:matrix` | opt-in model comparison, gates nothing           |
 
 Registration counts move when a block is added, and the thresholds are averages
 over the whole pool, so it is worth recording: `pnpm eval:ci` collected **34**
 evals before #147 and **41** after `[measured, keyless, 2026-09-02]`, across the
 same five files. That is the loosening this doc has always warned about; the
 response is #122's ratchet against a fresh keyed run, never a shrunken block.
-| `pnpm eval:facts` | the site-fact block on its own, `--threshold 70` |
-| `pnpm eval:matrix` | opt-in model comparison, gates nothing |
 
 **Two threshold invocations, because evalite has one.** `--threshold` is a
 single global average over every score in the run, with no per-eval or
