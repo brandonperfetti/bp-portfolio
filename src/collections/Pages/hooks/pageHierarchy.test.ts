@@ -3,11 +3,10 @@ import type { PayloadRequest } from 'payload'
 
 import {
   CODE_OWNED_FIRST_SEGMENTS,
-  PAGE_PATH_MAX_DEPTH,
-  computePagePath,
+  PATH_MAX_DEPTH,
   parentIdOf,
-  validatePageHierarchy,
-} from './pageHierarchy'
+} from '@/fields/slug/documentPath'
+import { computePagePath, validatePageHierarchy } from './pageHierarchy'
 
 /**
  * A page row as the hooks read it back through `findByID` / `find`.
@@ -204,9 +203,7 @@ describe('validatePageHierarchy', () => {
     })
     await expect(
       validatePageHierarchy(args({ slug: 'deeper', parent: 5 })),
-    ).rejects.toThrow(
-      new RegExp(`at most ${PAGE_PATH_MAX_DEPTH} levels deep`, 'i'),
-    )
+    ).rejects.toThrow(new RegExp(`at most ${PATH_MAX_DEPTH} levels deep`, 'i'))
   })
 
   it('rejects a code-owned first segment', async () => {

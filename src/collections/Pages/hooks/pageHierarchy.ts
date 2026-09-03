@@ -6,59 +6,15 @@ import type {
 } from 'payload'
 
 import {
-  CODE_OWNED_FIRST_SEGMENTS,
   MAX_ANCESTOR_WALK,
-  PATH_MAX_DEPTH,
   assertNoCrossCollectionCollision,
+  assertPathFreeInCollection,
   assertPathShapeServable,
-  parentIdOf,
+  placementOf,
   readPageHierarchyRow,
   resolveChildPath,
 } from '@/fields/slug/documentPath'
-import { publicPathFor } from '@/fields/slug/slugPaths'
 import type { Page } from '@/payload-types'
-
-/**
- * Maximum number of segments a page path may carry — `/a/b/c` (Brandon, D3 on
- * #148).
- *
- * @remarks Re-exported from `@/fields/slug/documentPath`, which owns it now
- * that Posts compose paths the same way (#153). One cap, one namespace.
- */
-export const PAGE_PATH_MAX_DEPTH = PATH_MAX_DEPTH
-
-export { CODE_OWNED_FIRST_SEGMENTS, parentIdOf }
-
-/**
- * The path a page will be stored at: its ancestors' segments plus its own slug.
- *
- * @param req - The in-flight Payload request.
- * @param slug - The page's own slug.
- * @param parentId - Proposed parent id, or `null`.
- * @returns The root-relative path, with no leading or trailing slash.
- */
-export const resolvePagePath = resolveChildPath
-
-/**
- * The `slug` and `parent` a write will land, merging the incoming partial over
- * the stored document — a PATCH that sends only `title` must still compute the
- * same path the document already has.
- *
- * @param data - Incoming write payload.
- * @param originalDoc - The stored document, when this is an update.
- */
-const placementOf = (
-  data: Partial<Page> | undefined,
-  originalDoc: Partial<Page> | undefined,
-): { slug: string | null; parentId: number | string | null } => {
-  const rawSlug = data?.slug ?? originalDoc?.slug
-  return {
-    parentId: parentIdOf(
-      data && 'parent' in data ? data.parent : originalDoc?.parent,
-    ),
-    slug: typeof rawSlug === 'string' && rawSlug ? rawSlug : null,
-  }
-}
 
 /**
  * Reject a `parent` that would make the tree cyclic.
@@ -68,7 +24,7 @@ const placementOf = (
  * @param parentId - Proposed parent id.
  *
  * @remarks Walks up from the proposed parent rather than down from the
- * document, so the cost is the ancestor depth (≤ {@link PAGE_PATH_MAX_DEPTH} in
+ * document, so the cost is the ancestor depth (≤ `PATH_MAX_DEPTH` in
  * a healthy tree) and never the subtree size. The walk is bounded independently
  * at {@link MAX_ANCESTOR_WALK} so a chain already corrupted in the database
  * cannot hang a save — and hitting that bound **rejects**. A guard that ran out
@@ -117,10 +73,12 @@ const assertAcyclic = async (
  * @param docId - The document being written, or `null` on create.
  * @param path - The computed root-relative path.
  *
- * @remarks Shape (malformed segments, depth, code-owned first segment) is the
- * pure half and lives in `assertPathShapeServable`; the two collision reads are
- * here and in `assertNoCrossCollectionCollision`, which #153 made symmetric —
- * a placed post now carries a `path` of its own, so this check has to see one.
+ * @remarks Three rules, all shared with Posts and none of them spelled here:
+ * shape (malformed segments, depth, code-owned first segment) in
+ * `assertPathShapeServable`, the same-collection read in
+ * `assertPathFreeInCollection`, and the cross-collection read in
+ * `assertNoCrossCollectionCollision` — which #153 made symmetric, since a
+ * placed post now carries a `path` of its own for this check to see.
  */
 const assertPathServable = async (
   req: PayloadRequest,
@@ -128,31 +86,8 @@ const assertPathServable = async (
   path: string,
 ): Promise<void> => {
   assertPathShapeServable(path)
-
-  const publicPath = publicPathFor('pages', { path })
-
-  // Same-collection collision. The unique index on `path` is the real
-  // enforcement; this read exists to answer with a sentence an editor can act
-  // on instead of a Postgres constraint name.
-  const { docs: pageClashes } = await req.payload.find({
-    collection: 'pages',
-    depth: 0,
-    limit: 1,
-    overrideAccess: true,
-    pagination: false,
-    req,
-    select: { slug: true },
-    where: { path: { equals: path } },
-  })
-  const pageClash = pageClashes[0]
-  if (pageClash && String(pageClash.id) !== String(docId)) {
-    throw new APIError(
-      `Another page already serves ${publicPath}. Change this page’s slug or its parent.`,
-      400,
-    )
-  }
-
-  await assertNoCrossCollectionCollision(req, 'pages', docId, path)
+  await assertPathFreeInCollection(req, 'pages', docId, path)
+  await assertNoCrossCollectionCollision(req, 'pages', path)
 }
 
 /**
@@ -161,9 +96,11 @@ const assertPathServable = async (
  *
  * Rejects, each with a message written for the editor who sees it: a page made
  * its own parent, a parent inside the page's own subtree, a path deeper than
- * {@link PAGE_PATH_MAX_DEPTH}, a first segment owned by code
- * ({@link CODE_OWNED_FIRST_SEGMENTS}), a path another page already serves, and
- * a path that collides with a Post's `/articles/…` URL.
+ * `PATH_MAX_DEPTH`, a first segment owned by code
+ * (`CODE_OWNED_FIRST_SEGMENTS`), a path another page already serves, and a path
+ * that collides with a Post's URL — placed or in the `/articles` namespace.
+ * All four of those rules live in `@/fields/slug/documentPath`, shared with
+ * Posts (#153), because a page and a placed post compete for one namespace.
  *
  * @remarks Runs before `beforeChange`, so {@link computePagePath} only ever
  * stores a path this hook has already accepted. It deliberately recomputes the
@@ -180,7 +117,7 @@ export const validatePageHierarchy: CollectionBeforeValidateHook<
 
   const docId = originalDoc?.id ?? data?.id ?? null
   await assertAcyclic(req, docId, parentId)
-  const path = await resolvePagePath(req, slug, parentId)
+  const path = await resolveChildPath(req, slug, parentId)
   await assertPathServable(req, docId, path)
 
   return data
@@ -211,5 +148,5 @@ export const computePagePath: CollectionBeforeChangeHook<Page> = async ({
 }) => {
   const { parentId, slug } = placementOf(data, originalDoc)
   if (!slug) return data
-  return { ...data, path: await resolvePagePath(req, slug, parentId) }
+  return { ...data, path: await resolveChildPath(req, slug, parentId) }
 }

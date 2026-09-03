@@ -26,7 +26,7 @@ import { MigrateUpArgs, MigrateDownArgs, sql } from '@payloadcms/db-postgres'
  * versions table is already Payload's own version→document pointer, the same
  * collision M1 hit on `_pages_v`.
  */
-export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
+export async function up({ db }: MigrateUpArgs): Promise<void> {
   await db.execute(sql`
    ALTER TABLE "posts" ADD COLUMN "parent_id" integer;
   ALTER TABLE "posts" ADD COLUMN "path" varchar;
@@ -47,9 +47,9 @@ export async function down({
 }: MigrateDownArgs): Promise<void> {
   await db.execute(sql`
    ALTER TABLE "posts" DROP CONSTRAINT "posts_parent_id_pages_id_fk";
-  
+
   ALTER TABLE "_posts_v" DROP CONSTRAINT "_posts_v_version_parent_id_pages_id_fk";
-  
+
   DROP INDEX "posts_parent_idx";
   DROP INDEX "posts_path_idx";
   DROP INDEX "_posts_v_version_version_parent_idx";

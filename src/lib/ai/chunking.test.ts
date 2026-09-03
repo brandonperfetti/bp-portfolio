@@ -66,15 +66,19 @@ describe('sourceUrlFor', () => {
   })
 
   it('cites a PLACED post at its section path (#153)', () => {
-    expect(sourceUrlFor('posts', 'my-article', 'work/my-article')).toBe(
-      '/work/my-article',
-    )
+    expect(
+      sourceUrlFor('posts', { slug: 'my-article', path: 'work/my-article' }),
+    ).toBe('/work/my-article')
   })
 
-  it('cites an unplaced post at /articles even when a null path is passed', () => {
-    expect(sourceUrlFor('posts', 'my-article', null)).toBe(
+  it('cites an unplaced post at /articles whether it is handed a doc or a slug', () => {
+    expect(sourceUrlFor('posts', { slug: 'my-article', path: null })).toBe(
       '/articles/my-article',
     )
+    expect(sourceUrlFor('posts', { slug: 'my-article' })).toBe(
+      '/articles/my-article',
+    )
+    expect(sourceUrlFor('posts', 'my-article')).toBe('/articles/my-article')
   })
 
   it('returns null for a post with no slug rather than a broken link', () => {

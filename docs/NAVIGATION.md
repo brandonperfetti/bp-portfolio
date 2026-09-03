@@ -101,12 +101,23 @@ mismatch. It is deliberately not a redirect row: placing an article changes its
 self-heals if a row is ever deleted. `generateStaticParams` keeps emitting
 placed slugs so that redirect prerenders as a static 308.
 
-**Un-placing.** Clearing `parent` sets `path` back to NULL, so the article is
-served at `/articles/<slug>` again and the check stops firing. The section URL
-it vacated then has no document behind it: the catch-all finds no page and no
-post there, consults the #120 redirect table, finds nothing, and **404s**. That
-residue — a live URL that becomes a 404 rather than a redirect — is the same
-class as the page-move gap above and belongs to #150/#155, not to placement.
+**Two ways a section URL becomes a hard 404 today, both #150's ground.**
+
+- **Un-placing.** Clearing `parent` sets `path` back to NULL, so the article is
+  served at `/articles/<slug>` again and the check stops firing. The section URL
+  it vacated has no document behind it: the catch-all finds no page and no post
+  there, consults the #120 redirect table, finds nothing, and **404s**.
+- **Renaming a placed article's slug.** `createSlugRedirect` builds a row's
+  `from` from the _slug_, so renaming `/work/old` to `/work/new` writes
+  `from: /articles/old → /articles/new` — a pair of archive URLs, for a document
+  that lives under `/work`. The URL that actually moved, `/work/old`, gets no
+  row and **becomes a hard 404**. **Until #150 lands, renaming a placed post's
+  slug breaks its old section URL.**
+
+Neither is a stale shell; both are 404s, and neither is something placement can
+close on its own — the fix in both cases is #150's path-aware capture and
+redirect writer (`capturePublishedPath` / `createPathRedirect`), which spells a
+row's `from` with `publicPathFor` instead of a slug.
 
 **Breadcrumbs.** A placed article's `BreadcrumbList` is its real ancestor chain
 (Home → Work → Brytecore → title), derived from `path` in one indexed read. An

@@ -43,6 +43,14 @@ import type { CmsAuthor } from '@/lib/cms/types'
  * forever.
  */
 
+/**
+ * The de-duplicated keyword set an article advertises: its explicit keywords,
+ * its topics and its tech, in that order.
+ *
+ * @remarks Private to this module and shared by the metadata builder and the
+ * `Article` JSON-LD, so the two can never advertise different keywords for one
+ * document.
+ */
 function getArticleKeywords(article: {
   keywords?: string[]
   topics?: string[]
@@ -57,6 +65,12 @@ function getArticleKeywords(article: {
   )
 }
 
+/**
+ * Resolve a possibly-relative image reference against the canonical origin.
+ *
+ * @remarks Private. JSON-LD and the publisher logo both need absolute URLs,
+ * while the CMS stores some of them site-relative.
+ */
 function toAbsoluteImageUrl(siteUrl: string, image?: string) {
   if (!image) return undefined
   return image.startsWith('http') ? image : new URL(image, siteUrl).toString()
@@ -76,6 +90,21 @@ export async function articleAncestors(
   return article.path ? getAncestorPages(article.path) : []
 }
 
+/**
+ * Next `Metadata` for one article — title, description, canonical, robots, and
+ * the OG/Twitter cards.
+ *
+ * @param article - The resolved article, placed or not.
+ * @param settings - Site settings, for the canonical origin, the site name and
+ *   the generated-OG toggle.
+ * @returns The route's `Metadata`.
+ *
+ * @remarks Built from the DOCUMENT rather than the request, so both routes that
+ * can reach an article describe it identically: the canonical is
+ * `publicPathFor`'s answer, which for a placed article is its section URL and
+ * never the `/articles/<slug>` that 308s to it (#153). Keeping this a plain
+ * function rather than a `generateMetadata` lets the catch-all reuse it as-is.
+ */
 export function buildArticleMetadata(
   article: ArticleDetailWithSlug,
   settings: CmsSiteSettings,
@@ -144,6 +173,22 @@ export function buildArticleMetadata(
   }
 }
 
+/**
+ * The article page's body: layout, JSON-LD, the actions row, and the
+ * gated-or-published body region.
+ *
+ * @param article - The resolved article, already gated for a signed-out viewer.
+ * @param settings - Site settings, for the canonical origin, share targets and
+ *   the copy-page toggle.
+ * @param ancestors - The placed article's ancestor pages, for the breadcrumb
+ *   trail; `[]` for an unplaced article, which keeps the archive trail.
+ * @returns The rendered article.
+ *
+ * @remarks Synchronous on purpose (see the module note): an async component
+ * cannot be composed into a route's return value and rendered by anything but
+ * the RSC runtime, which is why the one await it needs — the ancestor read —
+ * is hoisted into {@link articleAncestors} and passed in.
+ */
 export function ArticleView({
   article,
   settings,

@@ -1,7 +1,6 @@
-import { publicPathFor } from '@/fields/slug/slugPaths'
-
 import { createHash } from 'node:crypto'
 
+import { publicPathFor, type PathableDoc } from '@/fields/slug/slugPaths'
 import { flattenBlockText } from '@/lib/content/flattenBlockText'
 import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
 
@@ -157,19 +156,28 @@ export function hashChunkContent(content: string): string {
  *   a repo citation is invisible to `cites-a-real-source-url` and needs its
  *   own scorer rather than a widened one. See `evals/scorers.ts`.
  *
+ * ## What the second argument is (#153)
+ *
+ * A **document**, for `posts` — because a placed post's citation is its section
+ * URL and a slug alone cannot name `/work/brytecore`. That is the same
+ * narrowing `canonicalizeArticleUrl` took in this change, and the two seams
+ * agree on purpose: a bare slug for a post is now a lie the type system can see.
+ * A bare string is still accepted and read as a slug, because `github-repos`
+ * genuinely has no document here — its identity is the `owner/name` string the
+ * GitHub sync holds — and the four flat collections pass nothing at all.
+ *
  * @param collection - Collection slug.
- * @param slug - The document's slug, for collections that have per-doc routes.
- * For `github-repos` this is the repo's `owner/name` full name.
- * @param path - A placed post's stored path (#153). Absent for every unplaced
- * post, which is what keeps its citation at `/articles/<slug>`. Ignored by
- * every other collection — none of them is slug-routed, so none can be placed.
+ * @param ref - For `posts`, the document (or any projection carrying `slug` and,
+ * when placed, `path`); a bare slug string is accepted and read as unplaced. For
+ * `github-repos`, the repo's `owner/name` full name. Unused by the four flat
+ * collections, which have no per-document route.
  * @returns A URL for the chunk to cite, or `null` when none applies.
  */
 export function sourceUrlFor(
   collection: CorvusChunkCollection,
-  slug?: string | null,
-  path?: string | null,
+  ref?: string | PathableDoc | null,
 ): string | null {
+  const doc: PathableDoc = typeof ref === 'string' ? { slug: ref } : (ref ?? {})
   switch (collection) {
     case 'posts':
       // Through the one path seam (#153): a PLACED post is cited at its section
@@ -177,7 +185,7 @@ export function sourceUrlFor(
       // carry `sourceUrl` at write time, so a placement change must re-embed —
       // which it does, because `refreshCorvusEmbeddings('posts')` is already an
       // `afterChange` hook on the collection.
-      return publicPathFor('posts', { path, slug })
+      return publicPathFor('posts', doc)
     case 'projects':
       return '/projects'
     case 'uses':
@@ -187,7 +195,7 @@ export function sourceUrlFor(
     case 'work-history':
       return '/'
     case CORVUS_GITHUB_REPOS_COLLECTION: {
-      const fullName = typeof slug === 'string' ? slug.trim() : ''
+      const fullName = typeof ref === 'string' ? ref.trim() : ''
       // `owner/name`, both segments present. A half-formed value would
       // otherwise produce `https://github.com/brandonperfetti` — a real page
       // that is not this repo, which is a worse citation than none at all.
@@ -351,11 +359,8 @@ export function chunkPost(doc: SourceDoc): CorvusChunk[] {
 
   const visibility = visibilityOf(doc)
   const publishedAt = str(doc.publishedAt) || null
-  const sourceUrl = sourceUrlFor(
-    'posts',
-    str(doc.slug) || null,
-    str(doc.path) || null,
-  )
+  // The document, not its slug: a placed post cites its section URL (#153).
+  const sourceUrl = sourceUrlFor('posts', doc)
 
   return bodies.map((body, index) => {
     const content = prefix && body ? `${prefix}\n\n${body}` : prefix || body

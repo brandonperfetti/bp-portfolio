@@ -2,13 +2,13 @@ import { APIError } from 'payload'
 import type {
   CollectionBeforeChangeHook,
   CollectionBeforeValidateHook,
-  PayloadRequest,
 } from 'payload'
 
 import {
   assertNoCrossCollectionCollision,
+  assertPathFreeInCollection,
   assertPathShapeServable,
-  parentIdOf,
+  placementOf,
   postSlugCollidingWith,
   resolveChildPath,
 } from '@/fields/slug/documentPath'
@@ -37,32 +37,6 @@ import type { Post } from '@/payload-types'
  */
 
 /**
- * The `slug` and `parent` a write will land, merging the incoming partial over
- * the stored document.
- *
- * @param data - Incoming write payload.
- * @param originalDoc - The stored document, when this is an update.
- *
- * @remarks A PATCH that sends only `title` must still compute the path the
- * document already has, so an absent key falls back to the stored value. The
- * `'parent' in data` test is what distinguishes "not sent" from "sent as null"
- * — the second is an editor **un-placing** the post, and it must clear the
- * path rather than silently keep the old one.
- */
-const placementOf = (
-  data: Partial<Post> | undefined,
-  originalDoc: Partial<Post> | undefined,
-): { slug: string | null; parentId: number | string | null } => {
-  const rawSlug = data?.slug ?? originalDoc?.slug
-  return {
-    parentId: parentIdOf(
-      data && 'parent' in data ? data.parent : originalDoc?.parent,
-    ),
-    slug: typeof rawSlug === 'string' && rawSlug ? rawSlug : null,
-  }
-}
-
-/**
  * Reject a placement that would put a post back inside the `/articles`
  * namespace it was placed out of.
  *
@@ -80,43 +54,6 @@ const assertNotInArticlesNamespace = (path: string): void => {
   if (postSlugCollidingWith(path)) {
     throw new APIError(
       `${publicPathFor('pages', { path })} is inside the article archive, which every unplaced article already shares. Pick a section page outside /articles as the parent.`,
-      400,
-    )
-  }
-}
-
-/**
- * Reject a computed post path that another post already serves.
- *
- * @param req - The in-flight Payload request.
- * @param docId - The document being written, or `null` on create.
- * @param path - The computed root-relative path.
- *
- * @remarks The unique index on `posts.path` is the real enforcement; this read
- * exists so the editor gets a sentence they can act on instead of a Postgres
- * constraint name. NULL paths never collide — Postgres unique indexes admit
- * unlimited NULLs, which is exactly why "unplaced" can be the default for the
- * whole corpus.
- */
-const assertPostPathFree = async (
-  req: PayloadRequest,
-  docId: number | string | null,
-  path: string,
-): Promise<void> => {
-  const { docs } = await req.payload.find({
-    collection: 'posts',
-    depth: 0,
-    limit: 1,
-    overrideAccess: true,
-    pagination: false,
-    req,
-    select: { slug: true },
-    where: { path: { equals: path } },
-  })
-  const clash = docs[0]
-  if (clash && String(clash.id) !== String(docId)) {
-    throw new APIError(
-      `Another article already serves ${publicPathFor('pages', { path })}. Change this article’s slug or its parent page.`,
       400,
     )
   }
@@ -156,8 +93,8 @@ export const validatePostPlacement: CollectionBeforeValidateHook<
   const path = await resolveChildPath(req, slug, parentId)
   assertPathShapeServable(path)
   assertNotInArticlesNamespace(path)
-  await assertPostPathFree(req, docId, path)
-  await assertNoCrossCollectionCollision(req, 'posts', docId, path)
+  await assertPathFreeInCollection(req, 'posts', docId, path)
+  await assertNoCrossCollectionCollision(req, 'posts', path)
 
   return data
 }

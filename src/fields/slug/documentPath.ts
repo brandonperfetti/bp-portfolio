@@ -187,6 +187,44 @@ export const resolveChildPath = async (
 }
 
 /**
+ * The `slug` and `parent` a write will land, merging the incoming partial over
+ * the stored document.
+ *
+ * @param data - Incoming write payload.
+ * @param originalDoc - The stored document, when this is an update.
+ * @returns The slug the write will land (or `null` when a create has not yet
+ *   derived one) and the parent page id (or `null` when unparented).
+ *
+ * @remarks Two merge rules, and both are load-bearing. A PATCH that sends only
+ * `title` must compute the path the document already has, so an absent key
+ * falls back to the stored value. And the `'parent' in data` test distinguishes
+ * "not sent" from "sent as null" — the second is an editor deliberately
+ * un-parenting, which must clear the path rather than silently keep the old
+ * one.
+ *
+ * Shared by Pages and Posts because the merge is a statement about Payload's
+ * write payloads, not about either collection.
+ */
+export const placementOf = (
+  data: PlaceableDoc | undefined,
+  originalDoc: PlaceableDoc | undefined,
+): { slug: string | null; parentId: number | string | null } => {
+  const rawSlug = data?.slug ?? originalDoc?.slug
+  return {
+    parentId: parentIdOf(
+      data && 'parent' in data ? data.parent : originalDoc?.parent,
+    ),
+    slug: typeof rawSlug === 'string' && rawSlug ? rawSlug : null,
+  }
+}
+
+/** The two fields {@link placementOf} reads off a write payload or a document. */
+export type PlaceableDoc = {
+  slug?: unknown
+  parent?: unknown
+}
+
+/**
  * Reject a composed path whose *shape* the site could never serve — malformed
  * segments, too deep, or under a first segment code owns.
  *
@@ -222,13 +260,68 @@ export const assertPathShapeServable = (path: string): void => {
 }
 
 /**
+ * The editor-facing nouns each slug-routed collection is described by, so one
+ * shared rejection can speak the language of the collection it fired on.
+ */
+const COLLECTION_NOUNS = {
+  pages: { one: 'page', possessive: 'page’s', sibling: 'parent' },
+  posts: { one: 'article', possessive: 'article’s', sibling: 'parent page' },
+} as const
+
+/**
+ * Reject a composed path that another document in the *same* collection
+ * already serves.
+ *
+ * @param req - The in-flight Payload request.
+ * @param collection - The collection being written.
+ * @param docId - The document being written, or `null` on create — excluded
+ *   from the match, so re-saving a placed document is not a collision with
+ *   itself.
+ * @param path - The computed root-relative path.
+ *
+ * @remarks The unique index on `path` is the real enforcement; this read exists
+ * so the editor gets a sentence they can act on instead of a Postgres
+ * constraint name. NULL paths never collide — Postgres unique indexes admit
+ * unlimited NULLs, which is exactly why "unplaced" can be the state of the
+ * whole Posts corpus (#153).
+ */
+export const assertPathFreeInCollection = async (
+  req: PayloadRequest,
+  collection: 'pages' | 'posts',
+  docId: number | string | null,
+  path: string,
+): Promise<void> => {
+  const { docs } = await req.payload.find({
+    collection,
+    depth: 0,
+    limit: 1,
+    overrideAccess: true,
+    pagination: false,
+    req,
+    select: { slug: true },
+    where: { path: { equals: path } },
+  })
+  const clash = docs[0]
+  if (!clash || String(clash.id) === String(docId)) return
+  const noun = COLLECTION_NOUNS[collection]
+  throw new APIError(
+    `Another ${noun.one} already serves ${publicPathFor('pages', { path })}. Change this ${noun.possessive} slug or its ${noun.sibling}.`,
+    400,
+  )
+}
+
+/**
  * Reject a composed path that a document in the *other* slug-routed collection
  * already serves.
  *
  * @param req - The in-flight Payload request.
  * @param collection - The collection being written.
- * @param docId - The document being written, or `null` on create.
  * @param path - The computed root-relative path.
+ *
+ * @remarks Takes no document id, deliberately: the read looks in the *other*
+ * collection, where the document being written cannot appear, so there is
+ * nothing to exclude. {@link assertPathFreeInCollection} is the same-collection
+ * check and is the one that needs an id.
  *
  * @remarks **Pages and Posts are separate tables, so no unique index can span
  * them.** A page at `work/brytecore` and a post placed at `work/brytecore` are
@@ -251,7 +344,6 @@ export const assertPathShapeServable = (path: string): void => {
 export const assertNoCrossCollectionCollision = async (
   req: PayloadRequest,
   collection: 'pages' | 'posts',
-  docId: number | string | null,
   path: string,
 ): Promise<void> => {
   const other = collection === 'pages' ? 'posts' : 'pages'
