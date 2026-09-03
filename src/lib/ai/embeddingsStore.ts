@@ -33,23 +33,35 @@ export interface SyncResult {
   /** Rows deleted — stale trailing chunks, or the whole doc when ineligible. */
   deleted: number
   /**
-   * Rows whose `visibility` / `published_at` were corrected WITHOUT re-embedding.
+   * Rows whose `visibility` / `published_at` / `source_url` were corrected
+   * WITHOUT re-embedding.
    *
-   * @remarks Non-zero means the document's body was untouched but its gating or
-   * schedule changed — see {@link syncDocumentEmbeddings} for why that is its
-   * own path and not a skip.
+   * @remarks Non-zero means the document's body was untouched but its gating,
+   * schedule or public URL changed — see {@link syncDocumentEmbeddings} for why
+   * that is its own path and not a skip.
    */
   metadataUpdated: number
   /** True when content AND retrieval-filter metadata already matched: no writes at all. */
   skipped: boolean
 }
 
-/** The per-row state retrieval filters on, as currently stored. */
+/**
+ * The per-row state that is a DENORMALIZED copy of the source document, as
+ * currently stored.
+ *
+ * @remarks `visibility` and `publishedAt` are what retrieval *filters* on;
+ * `sourceUrl` is what a citation *points at*. All three are copies, all three
+ * can go stale without the body changing, and all three are therefore
+ * {@link hasMetadataDrift}'s business — see that function for why the third one
+ * joined the first two (#153).
+ */
 export interface StoredChunkMeta {
   contentHash: string
   visibility: string
   /** Epoch milliseconds, or `null` for a row with no schedule. */
   publishedAt: number | null
+  /** The cited public URL, or `null` for a row that carries none. */
+  sourceUrl: string | null
 }
 
 const rowsOf = (result: unknown): Array<Record<string, unknown>> => {
@@ -77,18 +89,20 @@ export function toEpoch(value: unknown): number | null {
 }
 
 /**
- * The stored content hash AND retrieval-filter metadata, per chunk index.
+ * The stored content hash AND every denormalized copy of the source document,
+ * per chunk index.
  *
- * @remarks `visibility` and `published_at` are read alongside `content_hash`
- * because they are DENORMALIZED copies of the source document's gating and
- * schedule. A copy can go stale, and these two going stale is a security
- * problem rather than a freshness one — so the refresh path has to be able to
- * see them, not just the hash.
+ * @remarks `visibility`, `published_at` and `source_url` are read alongside
+ * `content_hash` because all three are COPIES of the source document — its
+ * gating, its schedule and its public URL. A copy can go stale, and none of the
+ * three going stale changes a single byte of the body, so the refresh path has
+ * to be able to see them; the hash alone cannot.
  *
  * @param db - Payload's drizzle instance.
  * @param collection - Collection slug.
  * @param docId - Document id.
- * @returns Map of `chunk_index` to its stored hash, visibility and schedule.
+ * @returns Map of `chunk_index` to its stored hash, visibility, schedule and
+ *   cited URL.
  */
 export async function readStoredChunks(
   db: CorvusEmbeddingsDb,
@@ -96,7 +110,8 @@ export async function readStoredChunks(
   docId: number,
 ): Promise<Map<number, StoredChunkMeta>> {
   const result = await db.execute(sql`
-    SELECT "chunk_index", "content_hash", "visibility", "published_at", "model"
+    SELECT "chunk_index", "content_hash", "visibility", "published_at",
+           "source_url", "model"
     FROM "corvus_embeddings"
     WHERE "collection" = ${collection} AND "doc_id" = ${docId}
   `)
@@ -112,6 +127,11 @@ export async function readStoredChunks(
       contentHash: String(row.content_hash),
       visibility: String(row.visibility),
       publishedAt: toEpoch(row.published_at),
+      // NOT `String(row.source_url)`: the column is nullable, and stringifying
+      // a NULL would produce the literal `'null'`, which never equals a fresh
+      // `null` and would report permanent drift on every chunker that emits no
+      // URL.
+      sourceUrl: typeof row.source_url === 'string' ? row.source_url : null,
     })
   }
   return stored
@@ -147,7 +167,8 @@ export function isContentUnchanged(
 }
 
 /**
- * Has the document's gating or schedule drifted from what the rows carry?
+ * Has the document's gating, schedule or public URL drifted from what the rows
+ * carry?
  *
  * @remarks This closes a gated-content bypass, and it is worth being explicit
  * about the mechanism because the SQL filter looks correct on its own.
@@ -162,8 +183,21 @@ export function isContentUnchanged(
  * `published_at` has the same shape: re-dating a published post into the future
  * hides it on the site but leaves retrieval serving it under the old timestamp.
  *
+ * `source_url` is the third column with that shape, and it arrived with post
+ * placement (#153). Placing a published article changes its `parent`, not its
+ * body — so every chunk hash matches, `isContentUnchanged` short-circuits, and
+ * the rows keep citing `/articles/<slug>` while the article now lives at
+ * `/work/<slug>`. That is not a security bug; the archive URL still 308s to the
+ * placed one, so a reader following the citation arrives. It is a *correctness*
+ * one: Corvus cites a URL the site no longer says is the article's, and the
+ * eventual removal of that 308 turns every stale citation into a 404. Un-placing
+ * has the same shape in reverse.
+ *
  * So metadata drift is its own path: detected here, repaired by
- * {@link updateDocumentMetadata} with a plain UPDATE and NO provider call.
+ * {@link updateDocumentMetadata} with a plain UPDATE and NO provider call. A URL
+ * is not content — re-embedding for one would spend provider tokens to
+ * reproduce vectors that are already correct — which is precisely why it
+ * belongs on this side of the check rather than folded into the content hash.
  *
  * @param chunks - Freshly computed chunks.
  * @param stored - Map from {@link readStoredChunks}.
@@ -178,7 +212,8 @@ export function hasMetadataDrift(
     if (!row) return true
     return (
       row.visibility !== chunk.visibility ||
-      row.publishedAt !== toEpoch(chunk.publishedAt)
+      row.publishedAt !== toEpoch(chunk.publishedAt) ||
+      row.sourceUrl !== chunk.sourceUrl
     )
   })
 }
@@ -196,6 +231,20 @@ export function hasMetadataDrift(
  * - `visibility` leaves `'public'` — the public → gated flip.
  * - `published_at` moves later, or is set where there was none — a re-date
  *   that hides a post behind its own schedule.
+ *
+ * `source_url` is deliberately NOT an axis here even though
+ * {@link hasMetadataDrift} watches it. Retrieval does not filter on it, so no
+ * value of it reaches fewer or more viewers; a stale one is a wrong citation on
+ * a row that was going to be returned either way. There is nothing to fail
+ * closed about, so it is **never itself a reason to write early**.
+ *
+ * That is a narrower claim than "it never rides an early write", and the
+ * difference is real: when this function fires for one of the two reasons above,
+ * {@link updateDocumentMetadata} writes all three columns, so the new
+ * `source_url` does land ahead of `embedChunks`. That is harmless — it is the
+ * current URL either way, and if the embed then throws, the rows carry correct
+ * gating and a correct citation over a stale body, which is exactly the
+ * trade-off this branch already accepts.
  *
  * The direction matters because it decides what is safe to write BEFORE the
  * provider call in {@link syncDocumentEmbeddings}. Tightening early is always
@@ -223,19 +272,24 @@ export function isMetadataTightening(
 }
 
 /**
- * Correct a document's stored gating and schedule without re-embedding.
+ * Correct a document's stored gating, schedule and cited URL without
+ * re-embedding.
  *
- * @remarks Every chunk of a document shares its parent's `visibility` and
- * `published_at`, so this is one UPDATE over the whole document rather than a
- * per-row write. No vector is touched, so this costs zero provider dollars —
- * which is the point: a public → gated flip must take effect immediately, and
- * making it expensive would be an argument for not doing it.
+ * @remarks Every chunk of a document shares its parent's `visibility`,
+ * `published_at` and `source_url`, so this is one UPDATE over the whole document
+ * rather than a per-row write. **No vector is touched, and the content hash is
+ * deliberately left alone** — none of these three columns is content, so
+ * rewriting the hash would invalidate correct vectors and force a re-embed the
+ * next time anything looked. That is the point: a public → gated flip must take
+ * effect immediately and a placement must correct its citations, and making
+ * either expensive would be an argument for not doing it.
  *
  * @param db - Payload's drizzle instance.
  * @param collection - Collection slug.
  * @param docId - Document id.
  * @param visibility - The document's current visibility.
  * @param publishedAt - The document's current publication timestamp, or `null`.
+ * @param sourceUrl - The document's current public URL, or `null`.
  */
 export async function updateDocumentMetadata(
   db: CorvusEmbeddingsDb,
@@ -243,11 +297,13 @@ export async function updateDocumentMetadata(
   docId: number,
   visibility: string,
   publishedAt: string | null,
+  sourceUrl: string | null,
 ): Promise<void> {
   await db.execute(sql`
     UPDATE "corvus_embeddings"
     SET "visibility" = ${visibility},
         "published_at" = ${publishedAt}::timestamptz,
+        "source_url" = ${sourceUrl},
         "updated_at" = now()
     WHERE "collection" = ${collection} AND "doc_id" = ${docId}
   `)
@@ -361,12 +417,15 @@ export interface SyncDocumentArgs {
  *    retrieval rather than merely stop updating it.
  * 2. Stored hashes are read and compared BEFORE the provider is called, so the
  *    common no-op save costs one cheap indexed SELECT and zero tokens.
- * 3. If the body is unchanged but `visibility` or `published_at` drifted, the
- *    rows are corrected with a plain UPDATE and STILL no provider call. This
- *    branch is a security fix, not an optimization: those two columns are the
- *    ones retrieval filters on, so leaving them stale after a public → gated
- *    flip keeps a now-gated article's full text reachable by anonymous chat
- *    turns. See {@link hasMetadataDrift}.
+ * 3. If the body is unchanged but `visibility`, `published_at` or `source_url`
+ *    drifted, the rows are corrected with a plain UPDATE and STILL no provider
+ *    call. This branch is a security fix on its first two columns, not an
+ *    optimization: those are the ones retrieval filters on, so leaving them
+ *    stale after a public → gated flip keeps a now-gated article's full text
+ *    reachable by anonymous chat turns. The third is a correctness fix: placing
+ *    an article moves its public URL without touching a byte of its body, so
+ *    without this the rows keep citing `/articles/<slug>` forever. See
+ *    {@link hasMetadataDrift}.
  * 4. If the body changed AND the metadata TIGHTENED, the restrictive values
  *    are written before the provider is called. Step 3 only covers an
  *    unchanged body; a save that gates an article and edits it in the same
@@ -414,7 +473,9 @@ export async function syncDocumentEmbeddings(
     // The body is identical, so nothing here may call the provider. But the
     // gating/schedule columns retrieval filters on are per-row copies, and a
     // stale copy of `visibility` is a gated-content bypass — so correct them
-    // with a plain UPDATE before returning.
+    // with a plain UPDATE before returning. `source_url` rides the same UPDATE:
+    // a placement change (#153) rewrites the article's public URL and nothing
+    // else, so this is the only branch that ever sees it move.
     if (!hasMetadataDrift(chunks, stored)) {
       return { written: 0, deleted: 0, metadataUpdated: 0, skipped: true }
     }
@@ -425,6 +486,7 @@ export async function syncDocumentEmbeddings(
       docId,
       chunks[0].visibility,
       chunks[0].publishedAt,
+      chunks[0].sourceUrl,
     )
     return {
       written: 0,
@@ -456,6 +518,7 @@ export async function syncDocumentEmbeddings(
       docId,
       chunks[0].visibility,
       chunks[0].publishedAt,
+      chunks[0].sourceUrl,
     )
   }
 

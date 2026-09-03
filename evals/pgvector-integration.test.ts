@@ -480,6 +480,70 @@ describe.skipIf(!connectionString)(
       ).toBe(true)
     })
 
+    it('PLACING an article rewrites source_url with zero provider calls (#153)', async () => {
+      // Runs on the rows the gating case above left behind: gated, with the
+      // edited excerpt. So the ONLY thing that moves here is the placement,
+      // which is the whole point — a placement changes `parent` and not a byte
+      // of the body, so `isContentUnchanged` short-circuits and the fix has to
+      // land through the metadata path or not at all.
+      const stored0 = {
+        ...SYNTHETIC_PUBLIC,
+        excerpt: 'SYNTHETIC_EDITED_BODY, rewritten after the first save.',
+        access: { visibility: 'gated' },
+      }
+      const before = await readStoredChunks(
+        db,
+        'posts',
+        Number(SYNTHETIC_PUBLIC.id),
+      )
+      expect(
+        [...before.values()].every(
+          (row) => row.sourceUrl === '/articles/synthetic-public-fixture',
+        ),
+      ).toBe(true)
+
+      embedChunksStub.mockClear()
+      const placed = { ...stored0, path: 'work/synthetic-public-fixture' }
+      await runAfterChange('posts', placed, stored0)
+      expect(
+        embedChunksStub,
+        'a URL is not a content change: placing must cost zero provider dollars',
+      ).not.toHaveBeenCalled()
+
+      const after = await readStoredChunks(
+        db,
+        'posts',
+        Number(SYNTHETIC_PUBLIC.id),
+      )
+      expect(after.size).toBe(before.size)
+      expect(
+        [...after.values()].every(
+          (row) => row.sourceUrl === '/work/synthetic-public-fixture',
+        ),
+        'every chunk of the document must be re-pointed, not just the first',
+      ).toBe(true)
+      // The content hashes are untouched, which is what proves the vectors
+      // still describe these rows and no re-embed is owed on the next save.
+      for (const [index, row] of after) {
+        expect(row.contentHash).toBe(before.get(index)?.contentHash)
+      }
+
+      // And un-placing puts it back, still without a provider call.
+      embedChunksStub.mockClear()
+      await runAfterChange('posts', stored0, placed)
+      expect(embedChunksStub).not.toHaveBeenCalled()
+      const restored = await readStoredChunks(
+        db,
+        'posts',
+        Number(SYNTHETIC_PUBLIC.id),
+      )
+      expect(
+        [...restored.values()].every(
+          (row) => row.sourceUrl === '/articles/synthetic-public-fixture',
+        ),
+      ).toBe(true)
+    })
+
     it('unpublishing deletes the rows', async () => {
       const published = {
         ...SYNTHETIC_GATED,
