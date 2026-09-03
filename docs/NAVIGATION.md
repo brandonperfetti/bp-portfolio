@@ -68,11 +68,49 @@ segments, and both same- and cross-collection path collisions. Its TSDoc is the
 contract, and each rejection carries a message written for the editor who sees
 it.
 
-**Known limit.** Moving a parent does **not** cascade to its descendants: their
-stored paths stay stale until they are themselves saved. Deliberate — the
-cascade needs the redirect fan-out that extends #120, and landing one without
-the other would move a subtree of live URLs with nothing preserving the old ones
-(#150).
+**Known limit.** Moving a parent does **not** cascade to its descendants — pages
+or placed posts alike: their stored paths stay stale until they are themselves
+saved. Deliberate — the cascade needs the redirect fan-out that extends #120,
+and landing one without the other would move a subtree of live URLs with nothing
+preserving the old ones (#150).
+
+## Post placement — an article's two possible URLs (#153)
+
+An article has exactly one public URL, and which one depends on a single field.
+With no `parent` it is served at `/articles/<slug>`, byte-for-byte the v3 shape,
+by `src/app/(frontend)/articles/[slug]`. With a `parent` page it is served at
+`/<path>` by the same `[...segments]` catch-all that serves pages, and
+`/articles/<slug>` **permanently redirects** there.
+
+**How the catch-all resolves one.** Pages are asked first, by the indexed
+equality read on `pages.path`; when none answers, Posts are asked the same way
+on `posts.path`. Both can never answer, because the save-time cross-collection
+guard rejects the second document to claim a path. The article render is shared
+— `ArticleView` in the article route — so the two URLs cannot emit different
+JSON-LD, gating or share targets for one document.
+
+**Why the catch-all rather than a rewrite.** A placed article's URL is
+structurally a page path; anything else (a `next.config.mjs` rewrite, a route
+nested per section) would need the set of section prefixes at build time, and
+that is editorial data living in the database.
+
+**The redirect is a check, not a row.** `/articles/[slug]` compares
+`publicPathFor(article)` against the only path it can serve and 308s on a
+mismatch. It is deliberately not a redirect row: placing an article changes its
+`parent`, not its slug, so the #120 machinery writes nothing — and the check
+self-heals if a row is ever deleted. `generateStaticParams` keeps emitting
+placed slugs so that redirect prerenders as a static 308.
+
+**Un-placing.** Clearing `parent` sets `path` back to NULL, so the article is
+served at `/articles/<slug>` again and the check stops firing. The section URL
+it vacated then has no document behind it: the catch-all finds no page and no
+post there, consults the #120 redirect table, finds nothing, and **404s**. That
+residue — a live URL that becomes a 404 rather than a redirect — is the same
+class as the page-move gap above and belongs to #150/#155, not to placement.
+
+**Breadcrumbs.** A placed article's `BreadcrumbList` is its real ancestor chain
+(Home → Work → Brytecore → title), derived from `path` in one indexed read. An
+unplaced one keeps the archive trail it has always emitted.
 
 ## List pagination — the `?page` contract (#88)
 

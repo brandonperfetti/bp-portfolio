@@ -192,15 +192,15 @@ Deliberately **not** a Payload collection — it is a derived, rebuildable index
 written by hooks and a backfill script, so it never appears in a generated
 schema snapshot and CI's migration-drift gate stays quiet.
 
-| Column                                | Why it is there                                                                                               |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `embedding vector(1536)`              | `text-embedding-3-small`'s native width (decision D6(a))                                                      |
-| `content`, `content_hash`             | the chunk and the sha256 that makes refresh cheap                                                             |
-| `collection`, `doc_id`, `chunk_index` | `UNIQUE` together — the upsert key the hooks target                                                           |
-| `title`, `source_url`                 | what a citation is rendered from                                                                              |
-| `visibility`                          | a copy of Posts' `access.visibility`, so retrieval can filter without joining back into Payload               |
-| `published_at`                        | so scheduled-future posts can be excluded                                                                     |
-| `model`                               | which embedding model wrote the row, so a model change is detectable instead of silently mixing vector spaces |
+| Column                                | Why it is there                                                                                                                                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `embedding vector(1536)`              | `text-embedding-3-small`'s native width (decision D6(a))                                                                                                                                         |
+| `content`, `content_hash`             | the chunk and the sha256 that makes refresh cheap                                                                                                                                                |
+| `collection`, `doc_id`, `chunk_index` | `UNIQUE` together — the upsert key the hooks target                                                                                                                                              |
+| `title`, `source_url`                 | what a citation is rendered from — `sourceUrlFor` resolves a post through `publicPathFor`, so a **placed** post (#153) is cited at its section path and every unplaced one at `/articles/<slug>` |
+| `visibility`                          | a copy of Posts' `access.visibility`, so retrieval can filter without joining back into Payload                                                                                                  |
+| `published_at`                        | so scheduled-future posts can be excluded                                                                                                                                                        |
+| `model`                               | which embedding model wrote the row, so a model change is detectable instead of silently mixing vector spaces                                                                                    |
 
 Index: **HNSW** with `vector_cosine_ops`, plus a btree on `(collection, doc_id)`
 for the hooks' per-document path. HNSW rather than IVFFlat because the migration

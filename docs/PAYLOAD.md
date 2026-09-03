@@ -81,20 +81,37 @@ JSON-LD, RSS, `llms.txt`, `/api/search`, `CMSLink`, the SEO plugin's
 revalidation hooks all resolve through it. Never hand-build a public URL; if a
 surface needs one, call this. `publicPathForSlug(collection, slug)` is a thin
 wrapper for callers holding only a slug — correct for a top-level page and for
-every post, and necessarily wrong for a placed page. The admin slug sidebar
+an unplaced post, and necessarily wrong for a placed document of either kind. The admin slug sidebar
 shows the resolved full public path ("Served at /work/brytecore") so an editor
 can see what their edit will move (#120's lesson, #148's fix).
 
 **Pages carry a hierarchy** (#148): `parent` (self-referencing, optional,
 top-level) and a computed, unique, indexed `path`. The root page is designated
-by the reserved `home` slug (`ROOT_PAGE_SLUG`) and serves `/`. Posts have no
-`parent`/`path` yet — placement is #153, and until it lands every post keeps
-`/articles/[slug]` byte-for-byte.
+by the reserved `home` slug (`ROOT_PAGE_SLUG`) and serves `/`.
+
+**Posts carry an optional placement** (#153): the same two top-level fields,
+`parent` (→ pages, single-valued, filtered to published non-root pages) and a
+computed, unique, indexed `path`. Placement is **opt-in and defaults to unset**,
+and that default is the whole design — M2 writes no backfill, so `path` is NULL
+for every post that exists and `publicPathFor` answers `/articles/<slug>`
+byte-for-byte. A post only leaves the archive when an editor picks a parent, and
+`publicPathFor` then answers `/<path>`. Changing a published post's `parent`
+needs **no slug unlock** (Brandon, D5) — it is a deliberate, visible act with an
+obvious URL consequence, unlike the silent title-driven re-slug `enforceSlugFreeze`
+exists for — and a placed post stays in `/articles`, the feed and search, with
+every link pointing at the placed path (D6).
+
+The rules Pages and Posts share — the depth cap, the code-owned first segments,
+the parent-path composition and the cross-collection collision guard — live once
+in `src/fields/slug/documentPath.ts`, because a page and a placed post compete
+for the same URL namespace and a second copy of any of them is a second chance
+for both to claim `/work/brytecore`.
 
 The contract lives in the code: field shapes and hook order in
-`src/collections/Pages/index.ts`, what a save rejects and why in
-`validatePageHierarchy`'s TSDoc, and the root-designation reasoning on
-`ROOT_PAGE_SLUG`. `docs/NAVIGATION.md` covers the routing half.
+`src/collections/Pages/index.ts` and `src/collections/Posts/index.ts`, what a
+save rejects and why in `validatePageHierarchy`'s and `validatePostPlacement`'s
+TSDoc, and the root-designation reasoning on `ROOT_PAGE_SLUG`.
+`docs/NAVIGATION.md` covers the routing half.
 
 **`slugLock: true` means "I do not hand-edit this slug"**, and that resolves
 differently either side of first publish (#120):
