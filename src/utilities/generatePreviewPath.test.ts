@@ -64,6 +64,35 @@ describe('generatePreviewPath', () => {
     ).toBe('/articles/hello-world')
   })
 
+  it('previews a PLACED post at its placed path (#153)', () => {
+    // The Posts mirror of the `/brytecore` bug above: a placed article's URL
+    // is a section path, and previewing it at `/articles/<slug>` only lands
+    // by riding the article route's 308.
+    expect(
+      previewedPath(
+        generatePreviewPath({
+          collection: 'posts',
+          doc: { slug: 'brytecore-launch', path: 'work/brytecore-launch' },
+          req,
+        }),
+      ),
+    ).toBe('/work/brytecore-launch')
+  })
+
+  it('previews an UNPLACED post under /articles when handed the whole doc', () => {
+    // `path: null` is the state of every article that exists today, and the
+    // doc-shaped call must agree with the slug-only one on it.
+    expect(
+      previewedPath(
+        generatePreviewPath({
+          collection: 'posts',
+          doc: { slug: 'hello-world', path: null },
+          req,
+        }),
+      ),
+    ).toBe('/articles/hello-world')
+  })
+
   it('encodes each segment without encoding the separators', () => {
     expect(
       previewedPath(

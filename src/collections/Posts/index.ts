@@ -79,16 +79,23 @@ export const Posts: CollectionConfig = {
   admin: {
     defaultColumns: ['title', 'slug', 'updatedAt'],
     livePreview: {
+      // The whole document, not just its slug: a PLACED article previews at
+      // `/work/brytecore`, which a slug alone cannot name (#153). A slug-only
+      // call resolves to `/articles/<slug>`, and the article route then 308s
+      // the previewer to the placed path — so the preview worked, but only by
+      // riding a redirect, and the draft it wanted was never what it fetched.
+      // Pages already passed the doc; this is Posts catching up now that a
+      // post can carry a `path`.
       url: ({ data, req }) =>
         generatePreviewPath({
-          slug: data?.slug,
+          doc: data,
           collection: 'posts',
           req,
         }),
     },
     preview: (data, { req }) =>
       generatePreviewPath({
-        slug: data?.slug as string,
+        doc: data,
         collection: 'posts',
         req,
       }),
