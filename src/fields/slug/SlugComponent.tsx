@@ -27,7 +27,8 @@ type SlugComponentProps = {
  * under the slug input (#148).
  *
  * @param collectionSlug - The collection being edited.
- * @param storedPath - The document's stored `path`, when it has one (Pages).
+ * @param storedPath - The document's stored `path`, when it has one — every
+ *   page, and a post that has been placed under one (#153).
  * @param slug - The slug currently in the form.
  * @returns The public path, or `null` when there is nothing useful to show.
  *
@@ -48,10 +49,14 @@ export const resolvedPublicPath = (
   slug: string | undefined,
 ): string | null => {
   if (!collectionSlug || !slug) return null
-  const prefix =
-    typeof storedPath === 'string' && storedPath
-      ? storedPath.split('/').slice(0, -1).join('/')
-      : ''
+  // No stored path means the document is unplaced, and the two collections
+  // differ on what that means: a top-level PAGE is served at `/<slug>`, an
+  // unplaced POST at `/articles/<slug>` (#153). Synthesising `path: slug` here
+  // would answer `/hello` for every article on the site, so the slug-only case
+  // is handed to `publicPathFor` as a slug-only doc and the collection decides.
+  if (typeof storedPath !== 'string' || !storedPath)
+    return publicPathFor(collectionSlug, { slug })
+  const prefix = storedPath.split('/').slice(0, -1).join('/')
   return publicPathFor(collectionSlug, {
     path: prefix ? `${prefix}/${slug}` : slug,
     slug,

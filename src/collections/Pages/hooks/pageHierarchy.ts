@@ -6,163 +6,28 @@ import type {
 } from 'payload'
 
 import {
-  ROOT_PAGE_SLUG,
-  SLUG_ROUTED_COLLECTIONS,
-  publicPathFor,
-} from '@/fields/slug/slugPaths'
+  CODE_OWNED_FIRST_SEGMENTS,
+  MAX_ANCESTOR_WALK,
+  PATH_MAX_DEPTH,
+  assertNoCrossCollectionCollision,
+  assertPathShapeServable,
+  parentIdOf,
+  readPageHierarchyRow,
+  resolveChildPath,
+} from '@/fields/slug/documentPath'
+import { publicPathFor } from '@/fields/slug/slugPaths'
 import type { Page } from '@/payload-types'
 
 /**
  * Maximum number of segments a page path may carry — `/a/b/c` (Brandon, D3 on
  * #148).
  *
- * @remarks A cap, not a technical limit: the catch-all resolves any depth in
- * one indexed read. Three segments is the depth past which a URL stops being
- * navigable and a breadcrumb stops fitting, and holding the line here is what
- * keeps `generateStaticParams`' param arrays a predictable shape.
+ * @remarks Re-exported from `@/fields/slug/documentPath`, which owns it now
+ * that Posts compose paths the same way (#153). One cap, one namespace.
  */
-export const PAGE_PATH_MAX_DEPTH = 3
+export const PAGE_PATH_MAX_DEPTH = PATH_MAX_DEPTH
 
-/**
- * First path segments owned by code, which a Pages document may therefore never
- * occupy at any depth beneath them.
- *
- * @remarks **This is a different set from `RESERVED_PAGE_SLUGS`, and the
- * difference is load-bearing (#148 premise clarification).**
- *
- * `RESERVED_PAGE_SLUGS` (`src/lib/cms/pagesRepo.ts`) lists slugs whose *root*
- * path is rendered by a dedicated Next route — `about`, `tech`, `projects`,
- * `uses`, `corvus`, `articles`. A Pages document is not merely allowed to exist
- * at those paths, it is how they get their copy: `/about`, `/tech`, `/uses`,
- * `/projects`, `/corvus` and `/articles` each read a Pages doc through
- * `getCmsPageByPath`. Reserving them at *validation*
- * would make the live `about` and `articles` documents unsaveable. What
- * `RESERVED_PAGE_SLUGS` actually buys is an *emit* exclusion — those paths must
- * not be produced by the catch-all, `generateStaticParams`, or the sitemap,
- * because a dedicated route already serves them — and under hierarchy that
- * exclusion narrows to the **first segment**, which is what lets `/tech/ai`
- * resolve while `/tech` stays the dedicated route (Brandon, D1).
- *
- * The set below is the genuinely hard reservation: paths under Next's own
- * route tree and the metadata routes. Nothing behind these can ever render a
- * Pages document, and unlike the dedicated routes there is no doc-behind-the-
- * route pattern that would make one useful. Saving a page there is always a
- * silent mistake, so it is rejected at validation instead.
- *
- * `api`, `admin` and `next` are matched as **first segments** because Next owns
- * their whole subtree (`/api/*`, `/admin/*`, `/next/*`); the file-shaped
- * entries can only ever be exact single-segment paths anyway.
- */
-export const CODE_OWNED_FIRST_SEGMENTS = new Set([
-  'admin',
-  'api',
-  'feed.xml',
-  'llms-full.txt',
-  'llms.txt',
-  'manifest.webmanifest',
-  'next',
-  'robots.txt',
-  'sitemap.xml',
-])
-
-/**
- * How far the cycle guard will walk before it refuses to keep looking.
- *
- * @remarks Far beyond {@link PAGE_PATH_MAX_DEPTH}, so a healthy tree never
- * approaches it. Reaching it means the stored parent chain is longer than any
- * legal one — which is itself evidence the data is malformed — so the write is
- * rejected rather than accepted on the strength of a search that gave up.
- */
-const MAX_ANCESTOR_WALK = 32
-
-/**
- * The id inside a Payload relationship value, which arrives as a bare id from
- * the API and as a populated document from a `depth > 0` read.
- *
- * @param value - Raw `parent` value from `data`, `originalDoc`, or a doc.
- * @returns The related document's id, or `null` when unset.
- */
-export const parentIdOf = (value: unknown): number | string | null => {
-  if (value === null || value === undefined || value === '') return null
-  if (typeof value === 'number' || typeof value === 'string') return value
-  if (typeof value === 'object' && 'id' in value) {
-    const { id } = value as { id?: unknown }
-    return typeof id === 'number' || typeof id === 'string' ? id : null
-  }
-  return null
-}
-
-/** A page reduced to what the hierarchy needs: its identity and its placement. */
-type HierarchyRow = {
-  id: number | string
-  slug: string | null
-  path: string | null
-  parent: number | string | null
-}
-
-/**
- * Read one page's hierarchy row on the caller's transaction.
- *
- * @param req - The in-flight Payload request, so the read joins the same
- *   transaction the write is happening in.
- * @param id - Page id to read.
- * @returns The row, or `null` when the id does not resolve.
- */
-const readHierarchyRow = async (
-  req: PayloadRequest,
-  id: number | string,
-): Promise<HierarchyRow | null> => {
-  const doc = (await req.payload
-    .findByID({
-      collection: 'pages',
-      depth: 0,
-      disableErrors: true,
-      id,
-      overrideAccess: true,
-      req,
-      select: { parent: true, path: true, slug: true },
-    })
-    .catch(() => null)) as Partial<Page> | null
-
-  if (!doc) return null
-  return {
-    id,
-    parent: parentIdOf(doc.parent),
-    path: typeof doc.path === 'string' ? doc.path : null,
-    slug: typeof doc.slug === 'string' ? doc.slug : null,
-  }
-}
-
-/**
- * The path prefix a parent contributes to its children, without a trailing
- * slash.
- *
- * @param req - The in-flight Payload request.
- * @param parentId - Proposed parent id, or `null` for a top-level page.
- * @returns `''` for a top-level page **and for a child of the site root**, else
- *   the parent's own path.
- *
- * @remarks The root contributes no segment, which is the storage half of the
- * root-page contract: the root serves `/`, so its children serve `/<child>`,
- * not `/home/<child>`. `publicPathFor` owns the read half. Falling back to the
- * parent's `slug` covers a parent row written before M1's backfill.
- */
-const parentPathPrefix = async (
-  req: PayloadRequest,
-  parentId: number | string | null,
-): Promise<string> => {
-  if (parentId === null) return ''
-  const parent = await readHierarchyRow(req, parentId)
-  if (!parent) {
-    throw new APIError(
-      'Parent page not found. Pick an existing page as the parent, or clear the field to place this page at the top level.',
-      400,
-    )
-  }
-  const parentPath = parent.path ?? parent.slug
-  if (!parentPath || parentPath === ROOT_PAGE_SLUG) return ''
-  return parentPath
-}
+export { CODE_OWNED_FIRST_SEGMENTS, parentIdOf }
 
 /**
  * The path a page will be stored at: its ancestors' segments plus its own slug.
@@ -172,14 +37,7 @@ const parentPathPrefix = async (
  * @param parentId - Proposed parent id, or `null`.
  * @returns The root-relative path, with no leading or trailing slash.
  */
-export const resolvePagePath = async (
-  req: PayloadRequest,
-  slug: string,
-  parentId: number | string | null,
-): Promise<string> => {
-  const prefix = await parentPathPrefix(req, parentId)
-  return prefix ? `${prefix}/${slug}` : slug
-}
+export const resolvePagePath = resolveChildPath
 
 /**
  * The `slug` and `parent` a write will land, merging the incoming partial over
@@ -241,7 +99,7 @@ const assertAcyclic = async (
       )
     }
     seen.add(key)
-    const row: HierarchyRow | null = await readHierarchyRow(req, cursor)
+    const row = await readPageHierarchyRow(req, cursor)
     cursor = row?.parent ?? null
   }
 
@@ -252,61 +110,24 @@ const assertAcyclic = async (
 }
 
 /**
- * The Post slug that would be served at the same URL as this page path, if any.
- *
- * @param path - A stored page path, e.g. `articles/hello-world`.
- * @returns The colliding post's slug, or `null` when no post URL can occupy
- *   this path.
- *
- * @remarks Derived from `SLUG_ROUTED_COLLECTIONS`' own prefix and compared
- * segment-wise, rather than by string-slicing a `publicPathFor` result. The
- * difference matters if the posts prefix ever changes: this follows the map,
- * where a hard-coded `'/articles/'.length` slice would quietly recover the
- * wrong slug and stop detecting real collisions.
- */
-const postSlugCollidingWith = (path: string): string | null => {
-  const prefix = SLUG_ROUTED_COLLECTIONS.posts.replace(/^\//, '')
-  const segments = path.split('/')
-  // A post URL is exactly the prefix plus one slug segment.
-  if (segments.length !== 2 || segments[0] !== prefix) return null
-  return segments[1] || null
-}
-
-/**
  * Reject a computed path that cannot be served, or that would shadow or be
  * shadowed by something already at that URL.
  *
  * @param req - The in-flight Payload request.
  * @param docId - The document being written, or `null` on create.
  * @param path - The computed root-relative path.
+ *
+ * @remarks Shape (malformed segments, depth, code-owned first segment) is the
+ * pure half and lives in `assertPathShapeServable`; the two collision reads are
+ * here and in `assertNoCrossCollectionCollision`, which #153 made symmetric —
+ * a placed post now carries a `path` of its own, so this check has to see one.
  */
 const assertPathServable = async (
   req: PayloadRequest,
   docId: number | string | null,
   path: string,
 ): Promise<void> => {
-  const segments = path.split('/')
-
-  if (segments.some((segment) => segment.length === 0)) {
-    throw new APIError(
-      `“${path}” is not a valid page path: every segment needs a slug.`,
-      400,
-    )
-  }
-
-  if (segments.length > PAGE_PATH_MAX_DEPTH) {
-    throw new APIError(
-      `Page paths go at most ${PAGE_PATH_MAX_DEPTH} levels deep, and “/${path}” is ${segments.length}. Move this page to a shallower parent.`,
-      400,
-    )
-  }
-
-  if (CODE_OWNED_FIRST_SEGMENTS.has(segments[0])) {
-    throw new APIError(
-      `“/${segments[0]}” is owned by the application, so a page saved under it could never be served. Pick a different first segment.`,
-      400,
-    )
-  }
+  assertPathShapeServable(path)
 
   const publicPath = publicPathFor('pages', { path })
 
@@ -331,30 +152,7 @@ const assertPathServable = async (
     )
   }
 
-  // Cross-collection collision. Pages and Posts are separate tables, so no
-  // unique index can span them — a page at `articles/<x>` and the post served
-  // at `/articles/<x>` are both legal to their own table and only one can win.
-  // Posts are read-only to this hook: nothing here changes their schema (#153
-  // owns post placement).
-  const postSlug = postSlugCollidingWith(path)
-  if (postSlug) {
-    const { docs: postClashes } = await req.payload.find({
-      collection: 'posts',
-      depth: 0,
-      limit: 1,
-      overrideAccess: true,
-      pagination: false,
-      req,
-      select: { slug: true },
-      where: { slug: { equals: postSlug } },
-    })
-    if (postClashes.length > 0) {
-      throw new APIError(
-        `${publicPath} is already the article “${postSlug}”. Two documents cannot share one URL.`,
-        400,
-      )
-    }
-  }
+  await assertNoCrossCollectionCollision(req, 'pages', docId, path)
 }
 
 /**

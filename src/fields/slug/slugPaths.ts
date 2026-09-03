@@ -77,7 +77,13 @@ export const ROOT_PAGE_SLUG = 'home'
 export type PathableDoc = {
   /** The document's own slug. */
   slug?: unknown
-  /** Pages: the computed, stored, root-relative path (no leading slash). */
+  /**
+   * The computed, stored, root-relative path (no leading slash).
+   *
+   * Pages always carry one. Posts carry one **only when placed** under a
+   * parent page (#153) — an unplaced post's `path` is NULL, which is what
+   * keeps every existing article at `/articles/<slug>` byte for byte.
+   */
   path?: unknown
 }
 
@@ -101,13 +107,23 @@ export type PathableDoc = {
  * | `pages`, resolved path is {@link ROOT_PAGE_SLUG} | `/` |
  * | `pages`, `path` set | `/` + `path` |
  * | `pages`, no `path` (pre-migration row, or a slug-only caller) | `/` + `slug` |
- * | `posts` | `/articles/` + `slug` — the preserved v3 URL shape |
+ * | `posts`, no `path` (unplaced — the default, and every migrated post) | `/articles/` + `slug` — the preserved v3 URL shape |
+ * | `posts`, `path` set (placed under a page, #153) | `/` + `path` |
  * | a collection outside {@link SLUG_ROUTED_COLLECTIONS} | `null` |
  * | missing/empty `slug` **and** missing/empty `path` | `null` |
  *
  * Falling back from `path` to `slug` is what makes this safe to deploy ahead of
  * M1's backfill and safe to call with a slug-only projection: before hierarchy,
  * every page's path *is* its slug, so both branches agree.
+ *
+ * **The fallback is deliberately asymmetric.** Pages fall back from `path` to
+ * `slug`; Posts do not. M1 backfilled every page's `path` to its `slug`, so for
+ * a page the two spellings agree and the fallback only ever covers a row read
+ * before that backfill. M2 writes **no** post backfill (#153): `path` is NULL
+ * for an unplaced post and set only by a deliberate placement, so "has a path"
+ * is precisely "has been placed". Giving Posts the same fallback would read
+ * every unplaced article's slug as a top-level path and move the whole v3 URL
+ * surface in one line.
  */
 export const publicPathFor = (
   collectionSlug: string,
@@ -117,11 +133,18 @@ export const publicPathFor = (
 
   const slug = typeof doc?.slug === 'string' && doc.slug ? doc.slug : null
 
+  const path = typeof doc?.path === 'string' && doc.path ? doc.path : null
+
   if (collectionSlug === 'posts') {
+    // A placed post is served at its own path, exactly like a page (#153). An
+    // unplaced post has no `path` at all — NOT a path equal to its slug — which
+    // is why this branch reads `path` rather than falling back through it: the
+    // fallback would silently move every unplaced article from
+    // `/articles/hello` to `/hello`.
+    if (path) return `/${path}`
     return slug ? `${SLUG_ROUTED_COLLECTIONS.posts}/${slug}` : null
   }
 
-  const path = typeof doc?.path === 'string' && doc.path ? doc.path : null
   const resolved = path ?? slug
   if (!resolved) return null
   return resolved === ROOT_PAGE_SLUG ? '/' : `/${resolved}`

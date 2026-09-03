@@ -77,12 +77,37 @@ describe('publicPathFor', () => {
       )
     })
 
-    it('ignores a path on a post: placement is not in scope (#153)', () => {
-      // Posts have no `parent`/`path` today. If one ever arrives on the object
-      // it must not silently move a v3 URL.
+    it('serves a PLACED post at its own path (#153)', () => {
+      // Premise change, deliberate: #148 pinned "a path on a post is ignored"
+      // because placement did not exist yet. #153 is what makes it exist, and a
+      // placed post's `path` is now the whole point — it is set only by an
+      // editor picking a parent page.
       expect(
         publicPathFor('posts', { slug: 'hello-world', path: 'work/hello' }),
-      ).toBe('/articles/hello-world')
+      ).toBe('/work/hello')
+    })
+
+    it('does NOT fall back from path to slug for a post, unlike a page', () => {
+      // The asymmetry that keeps the v3 URL surface still. A page with no
+      // stored path degrades to `/<slug>`; a post with no stored path is
+      // unplaced and must stay at `/articles/<slug>`. Reading the fallback the
+      // other way would move every article on the site in one line.
+      expect(publicPathFor('posts', { slug: 'hello-world' })).toBe(
+        '/articles/hello-world',
+      )
+      expect(publicPathFor('posts', { slug: 'hello-world', path: null })).toBe(
+        '/articles/hello-world',
+      )
+      expect(publicPathFor('posts', { slug: 'hello-world', path: '' })).toBe(
+        '/articles/hello-world',
+      )
+      expect(publicPathFor('pages', { slug: 'hello-world' })).toBe(
+        '/hello-world',
+      )
+    })
+
+    it('resolves a placed post with no slug from its path alone', () => {
+      expect(publicPathFor('posts', { path: 'work/hello' })).toBe('/work/hello')
     })
 
     it('does not treat a post slugged "home" as the site root', () => {

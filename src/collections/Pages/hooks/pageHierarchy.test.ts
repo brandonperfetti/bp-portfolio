@@ -38,8 +38,15 @@ const req = () =>
         where: Record<string, { equals: unknown }>
       }) => {
         if (collection === 'posts') {
-          const slug = where.slug?.equals
-          return { docs: postSlugs.includes(String(slug)) ? [{ slug }] : [] }
+          // #153: posts are queried two ways now — by slug (the unplaced
+          // `/articles/<slug>` namespace) and by path (a placed article).
+          if (where.slug?.equals !== undefined) {
+            const slug = where.slug.equals
+            return { docs: postSlugs.includes(String(slug)) ? [{ slug }] : [] }
+          }
+          const path = where.path?.equals
+          const hit = placedPostPaths.find((p) => p.path === path)
+          return { docs: hit ? [hit] : [] }
         }
         const path = where.path?.equals
         return { docs: rows.filter((r) => r.path === path) }
@@ -52,6 +59,8 @@ const req = () =>
   }) as unknown as PayloadRequest
 
 let postSlugs: string[] = []
+/** Placed articles (#153), which now compete for the same path namespace. */
+let placedPostPaths: Array<{ slug: string; path: string }> = []
 
 /** Hook args shaped like Payload's, with only the fields the hooks read. */
 const args = (
@@ -68,6 +77,7 @@ const args = (
   }) as never
 
 beforeEach(() => {
+  placedPostPaths = []
   postSlugs = []
   rows = [
     { id: 1, slug: 'home', path: 'home', parent: null },
@@ -286,5 +296,22 @@ describe('validatePageHierarchy', () => {
     await expect(
       validatePageHierarchy(args({ title: 'Untitled' })),
     ).resolves.toBeTruthy()
+  })
+})
+
+describe('validatePageHierarchy · placed articles (#153)', () => {
+  it('rejects a page whose path a PLACED article already serves', async () => {
+    placedPostPaths = [{ slug: 'launch', path: 'work/launch' }]
+    await expect(
+      validatePageHierarchy(args({ slug: 'launch', parent: 2 })),
+    ).rejects.toThrow(/already the article “launch”/)
+  })
+
+  it('still rejects a page colliding with an UNPLACED article’s /articles URL', async () => {
+    postSlugs = ['hello-world']
+    rows.push({ id: 5, slug: 'articles', path: 'articles', parent: null })
+    await expect(
+      validatePageHierarchy(args({ slug: 'hello-world', parent: 5 })),
+    ).rejects.toThrow(/already the article “hello-world”/)
   })
 })

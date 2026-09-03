@@ -467,6 +467,14 @@ export interface Post {
     requiredFeature?: string | null;
   };
   /**
+   * Optional. Place this article under a section page — the URL becomes that page’s path plus this article’s slug. Leave empty to keep it at /articles.
+   */
+  parent?: (number | null) | Page;
+  /**
+   * Computed from the parent page and this article’s slug. Empty for an unplaced article, which is served at /articles.
+   */
+  path?: string | null;
+  /**
    * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
    */
   slug?: string | null;
@@ -2501,6 +2509,8 @@ export interface PostsSelect<T extends boolean = true> {
         requiredPlan?: T;
         requiredFeature?: T;
       };
+  parent?: T;
+  path?: T;
   slug?: T;
   slugLock?: T;
   updatedAt?: T;

@@ -41,6 +41,8 @@ import {
   refreshCorvusEmbeddings,
 } from '@/hooks/corvusEmbeddings'
 import { revalidateDelete, revalidatePost } from './hooks/revalidatePost'
+import { computePostPath, validatePostPlacement } from './hooks/postPlacement'
+import { ROOT_PAGE_SLUG } from '@/fields/slug/slugPaths'
 
 /**
  * Articles (v3 `/articles/[slug]` URL surface, slugs preserved on migration).
@@ -61,6 +63,11 @@ export const Posts: CollectionConfig = {
   defaultPopulate: {
     title: true,
     slug: true,
+    // `path` travels with every populated post read (#153) — without it a
+    // `CMSLink` or a `relatedPosts` card resolves a placed post through
+    // `publicPathFor` with no path in hand and silently links at
+    // `/articles/<slug>`, which then 308s.
+    path: true,
     categories: true,
     access: true,
     meta: {
@@ -365,13 +372,55 @@ export const Posts: CollectionConfig = {
       ],
     },
     accessGroup,
+    // Placement (#153). Both fields sit at the TOP LEVEL of the document, not
+    // inside a tab — `parent` because that is where a relationship has to live
+    // for a flat `select` to read it, and `path` because it carries a unique
+    // index and a Postgres index cannot span a nested table. Mirrors the Pages
+    // hierarchy fields exactly (#148); `position: 'sidebar'` is presentation
+    // only.
+    {
+      name: 'parent',
+      type: 'relationship',
+      relationTo: 'pages',
+      hasMany: false,
+      // Published pages only, and never the site root: the root serves `/`, so
+      // a post placed under it would take `/<slug>` — the top-level page
+      // namespace — rather than a section URL. An unpublished parent would
+      // compose a path that resolves to nothing until the parent ships.
+      filterOptions: () => ({
+        _status: { equals: 'published' },
+        slug: { not_equals: ROOT_PAGE_SLUG },
+      }),
+      admin: {
+        position: 'sidebar',
+        description:
+          'Optional. Place this article under a section page — the URL becomes that page’s path plus this article’s slug. Leave empty to keep it at /articles.',
+      },
+    },
+    {
+      name: 'path',
+      type: 'text',
+      index: true,
+      unique: true,
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+        description:
+          'Computed from the parent page and this article’s slug. Empty for an unplaced article, which is served at /articles.',
+      },
+    },
     ...slugField(),
   ],
   hooks: {
+    // `validatePostPlacement` rejects an unservable placement before
+    // `computePostPath` ever stores a path — the guard runs in
+    // `beforeValidate`, the computation in `beforeChange`, so the stored `path`
+    // is always one the guard has already accepted (#153).
+    beforeValidate: [validatePostPlacement],
     // `capturePublishedSlug` must run before the write: it reads the main-table
     // row, which is the only place the currently-served slug survives an
     // autosaved draft (see createSlugRedirect).
-    beforeChange: [capturePublishedSlug],
+    beforeChange: [capturePublishedSlug, computePostPath],
     afterChange: [
       revalidatePost,
       createSlugRedirect,

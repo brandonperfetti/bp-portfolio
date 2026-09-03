@@ -143,9 +143,29 @@ describe('resolvedPublicPath', () => {
     expect(resolvedPublicPath('pages', 'home', 'home')).toBe('/')
   })
 
-  it('shows a post under /articles', () => {
+  it('shows an unplaced post under /articles', () => {
     expect(resolvedPublicPath('posts', undefined, 'hello-world')).toBe(
       '/articles/hello-world',
+    )
+    // Null and empty stored paths are the same state — unplaced — and must not
+    // be synthesised into `path: slug`, which would read as `/hello-world`.
+    expect(resolvedPublicPath('posts', null, 'hello-world')).toBe(
+      '/articles/hello-world',
+    )
+    expect(resolvedPublicPath('posts', '', 'hello-world')).toBe(
+      '/articles/hello-world',
+    )
+  })
+
+  it('shows a PLACED post at its section path (#153)', () => {
+    expect(resolvedPublicPath('posts', 'work/brytecore', 'brytecore')).toBe(
+      '/work/brytecore',
+    )
+  })
+
+  it('keeps the section prefix when a placed post is re-slugged', () => {
+    expect(resolvedPublicPath('posts', 'work/brytecore', 'brytecore-inc')).toBe(
+      '/work/brytecore-inc',
     )
   })
 
