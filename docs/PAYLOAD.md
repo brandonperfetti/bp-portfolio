@@ -9,7 +9,9 @@ Payload is the single source of truth for site content. Admin at `/admin`
   resolved on a computed, unique, indexed `path`. See "Slugs and paths" below
   and `docs/NAVIGATION.md` for the hierarchy, the root-page contract and the
   reserved-first-segment rule.
-- **Posts** — articles (`/articles/[slug]`). Drafts + versions + autosave
+- **Posts** — articles (`/articles/[slug]`, and `/<path>` through the
+  `/[...segments]` catch-all once an article is _placed_ under a parent page —
+  see `docs/NAVIGATION.md`, #153). Drafts + versions + autosave
   (100ms) + scheduled publish. Tabs: Content (excerpt, heroImage, Lexical
   content), Meta (relatedPosts, categories, tags), SEO (plugin-seo fields).
   `access` group carries the gating model (`visibility`, dormant
@@ -27,10 +29,16 @@ Payload is the single source of truth for site content. Admin at `/admin`
   in `src/blocks/library.ts` (`pageBuilderBlocks`) — one alphabetical list
   registered by every layout-capable surface (Pages + Posts), keeping the
   admin picker, `RenderBlocks`, and Storybook a 1:1 set. **Page builder:**
-  any published page whose slug isn't owned by a dedicated route renders at
-  `/[slug]` via `RenderHero` + `RenderBlocks` — compose new pages entirely
-  in admin, no code or deploy. Reserved slugs live in
-  `src/app/(frontend)/[slug]/page.tsx`. **Hybrid routes:** five code-owned
+  any published page whose path isn't owned by a dedicated route renders at
+  `/[...segments]` via `RenderHero` + `RenderBlocks`, resolved on the computed,
+  unique, indexed `path` — compose new pages entirely in admin, no code or
+  deploy, at any depth up to `PATH_MAX_DEPTH`. Two reservation sets guard that,
+  and they are deliberately different (#148): `RESERVED_PAGE_SLUGS`
+  (`src/lib/cms/pagesRepo.ts`) is the _emit/serve_ exclusion for one-segment
+  paths a dedicated route already owns, and `CODE_OWNED_FIRST_SEGMENTS`
+  (`src/fields/slug/documentPath.ts`) is the _save-time_ rejection for first
+  segments nothing can ever render under. Each set's TSDoc holds the membership
+  and the reasoning. **Hybrid routes:** five code-owned
   content routes — `/articles`, `/tech`, `/projects`, `/corvus`, `/uses` —
   also render their Pages doc's layout via `<CmsPageBlocks slug="…" />`
   (spacer-only layouts are treated as empty), so admin-composed sections can
@@ -39,7 +47,7 @@ Payload is the single source of truth for site content. Admin at `/admin`
   and so are not in this set.)
   **Home (`/`):** since #42 the home route renders its Pages doc through the
   shared page-builder seam `src/heros/RenderRhythmPage.tsx` — the same
-  draft-aware renderer the `/[slug]` catch-all uses — so `photoStrip` is now a
+  draft-aware renderer the `/[...segments]` catch-all uses — so `photoStrip` is a
   normal layout block rendered inline by `RenderBlocks`, editable in admin like
   any other. The old hybrid mechanism (`photoStripImagesFromLayout` in
   `pagesRepo`, `<CmsPageBlocks slug="home" exclude={['photoStrip']} />`) is
