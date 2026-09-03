@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 
+import { publicPathFor } from '@/fields/slug/slugPaths'
 import type { CmsPageContent, CmsSiteSettings } from '@/lib/cms/types'
 import { shouldUseGeneratedOg } from '@/lib/og/resolveOgImage'
 import type { OgImageMode } from '@/lib/og/types'
@@ -26,8 +27,15 @@ function normalizeBase(siteUrl: string) {
 /**
  * Social/OG image for a page-builder page. When the page resolves to a generated
  * card (T7 — see {@link shouldUseGeneratedOg}) this returns the
- * `/api/og/page/[slug]` URL; otherwise it's the page's own OG/hero image, then
- * the site default, then the hardcoded last resort.
+ * `/api/og/page/[...segments]` URL; otherwise it's the page's own OG/hero image,
+ * then the site default, then the hardcoded last resort.
+ *
+ * @remarks The card URL is keyed by the page's **path**, taken from
+ * `publicPathFor` — under per-parent slug uniqueness a bare slug is ambiguous
+ * (`/work/about` and `/tech/about` are different pages with the same slug), so a
+ * slug-keyed card would be served the wrong page's title (#148). The root page
+ * maps to `/`, which carries no segment, so it addresses its card by the root
+ * slug — the one case where the path and the route parameter differ.
  */
 export function resolvePageSocialImage(
   page: CmsPageContent | null,
@@ -46,7 +54,10 @@ export function resolvePageSocialImage(
       hasOwnImage: Boolean(ownImage),
     })
   ) {
-    return `${normalizeBase(siteUrl)}/api/og/page/${page.slug}`
+    const publicPath = publicPathFor('pages', page)
+    const cardKey =
+      publicPath && publicPath !== '/' ? publicPath : `/${page.slug}`
+    return `${normalizeBase(siteUrl)}/api/og/page${cardKey}`
   }
 
   return (

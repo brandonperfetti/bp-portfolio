@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { publicPathFor } from '@/fields/slug/slugPaths'
 
 /**
  * The members-only teaser shown in place of a gated article's body, with the
@@ -31,7 +32,9 @@ export function MembersTeaser({ slug }: { slug: string }) {
         Sign in (it&apos;s free) to read the full piece.
       </p>
       <Button asChild variant="teal" className="mt-4 rounded-xl">
-        <a href={`/sign-in?redirect_url=/articles/${slug}`}>
+        <a
+          href={`/sign-in?redirect_url=${publicPathFor('posts', { slug }) ?? '/articles'}`}
+        >
           Sign in to continue
         </a>
       </Button>

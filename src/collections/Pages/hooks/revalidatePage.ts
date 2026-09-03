@@ -63,6 +63,23 @@ import type { Page } from '../../../payload-types'
  * way to expire immediately (Next 16.3.0 docs, `revalidateTag` /
  * `updateTag`).
  */
+/**
+ * Expire both page data-cache tags with the immediate-expiration profile.
+ *
+ * @remarks Named because all three branches below need the identical pair and a
+ * branch that purged only one would be a silent staleness bug, not a visible
+ * one: the route would regenerate against a fresh `pages` read and a stale
+ * `pages-sitemap` one, or the reverse.
+ *
+ * `{ expire: 0 }`, never `'max'` (#118) — under cacheComponents `'max'` is
+ * stale-while-revalidate with a one-year window, so an edit keeps serving old
+ * content until a background refresh happens to land.
+ */
+const purgePageTags = () => {
+  revalidateTag('pages', { expire: 0 })
+  revalidateTag('pages-sitemap', { expire: 0 })
+}
+
 export const revalidatePage: CollectionAfterChangeHook<Page> = ({
   doc,
   previousDoc,
@@ -80,8 +97,7 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
       // caches under the 'pages' tag — revalidatePath alone regenerates the
       // route against STALE data, so admin edits never surfaced without a
       // redeploy.
-      revalidateTag('pages', { expire: 0 })
-      revalidateTag('pages-sitemap', { expire: 0 })
+      purgePageTags()
     }
 
     // If the page was previously published, we need to revalidate the old path
@@ -92,8 +108,7 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
         payload.logger.info(`Revalidating old page at path: ${oldPath}`)
         revalidatePath(oldPath)
       }
-      revalidateTag('pages', { expire: 0 })
-      revalidateTag('pages-sitemap', { expire: 0 })
+      purgePageTags()
     }
   }
   return doc
@@ -110,8 +125,7 @@ export const revalidateDelete: CollectionAfterDeleteHook<Page> = ({
   if (!context.disableRevalidate) {
     const path = publicPathFor('pages', doc ?? {})
     if (path) revalidatePath(path)
-    revalidateTag('pages', { expire: 0 })
-    revalidateTag('pages-sitemap', { expire: 0 })
+    purgePageTags()
   }
 
   return doc

@@ -5,7 +5,11 @@ import type {
   PayloadRequest,
 } from 'payload'
 
-import { ROOT_PAGE_SLUG, publicPathFor } from '@/fields/slug/slugPaths'
+import {
+  ROOT_PAGE_SLUG,
+  SLUG_ROUTED_COLLECTIONS,
+  publicPathFor,
+} from '@/fields/slug/slugPaths'
 import type { Page } from '@/payload-types'
 
 /**
@@ -31,7 +35,7 @@ export const PAGE_PATH_MAX_DEPTH = 3
  * `uses`, `corvus`, `articles`. A Pages document is not merely allowed to exist
  * at those paths, it is how they get their copy: `/about`, `/tech`, `/uses`,
  * `/projects`, `/corvus` and `/articles` each read a Pages doc through
- * `getCmsPageByPath` `[measured, c973b54]`. Reserving them at *validation*
+ * `getCmsPageByPath`. Reserving them at *validation*
  * would make the live `about` and `articles` documents unsaveable. What
  * `RESERVED_PAGE_SLUGS` actually buys is an *emit* exclusion — those paths must
  * not be produced by the catch-all, `generateStaticParams`, or the sitemap,
@@ -61,7 +65,14 @@ export const CODE_OWNED_FIRST_SEGMENTS = new Set([
   'sitemap.xml',
 ])
 
-/** How far the cycle guard will walk before declaring the chain broken. */
+/**
+ * How far the cycle guard will walk before it refuses to keep looking.
+ *
+ * @remarks Far beyond {@link PAGE_PATH_MAX_DEPTH}, so a healthy tree never
+ * approaches it. Reaching it means the stored parent chain is longer than any
+ * legal one — which is itself evidence the data is malformed — so the write is
+ * rejected rather than accepted on the strength of a search that gave up.
+ */
 const MAX_ANCESTOR_WALK = 32
 
 /**
@@ -202,7 +213,9 @@ const placementOf = (
  * document, so the cost is the ancestor depth (≤ {@link PAGE_PATH_MAX_DEPTH} in
  * a healthy tree) and never the subtree size. The walk is bounded independently
  * at {@link MAX_ANCESTOR_WALK} so a chain already corrupted in the database
- * cannot hang a save.
+ * cannot hang a save — and hitting that bound **rejects**. A guard that ran out
+ * of budget has not proved the write is safe, and silently accepting on an
+ * exhausted search is how a cycle guard comes to certify a cycle.
  */
 const assertAcyclic = async (
   req: PayloadRequest,
@@ -218,7 +231,8 @@ const assertAcyclic = async (
   const seen = new Set<string>([String(docId)])
   let cursor: number | string | null = parentId
 
-  for (let step = 0; step < MAX_ANCESTOR_WALK && cursor !== null; step += 1) {
+  for (let step = 0; step < MAX_ANCESTOR_WALK; step += 1) {
+    if (cursor === null) return
     const key = String(cursor)
     if (seen.has(key)) {
       throw new APIError(
@@ -230,6 +244,32 @@ const assertAcyclic = async (
     const row: HierarchyRow | null = await readHierarchyRow(req, cursor)
     cursor = row?.parent ?? null
   }
+
+  throw new APIError(
+    `That parent sits under more than ${MAX_ANCESTOR_WALK} ancestors, which no valid page tree has. The parent chain is broken — fix it before reparenting this page.`,
+    400,
+  )
+}
+
+/**
+ * The Post slug that would be served at the same URL as this page path, if any.
+ *
+ * @param path - A stored page path, e.g. `articles/hello-world`.
+ * @returns The colliding post's slug, or `null` when no post URL can occupy
+ *   this path.
+ *
+ * @remarks Derived from `SLUG_ROUTED_COLLECTIONS`' own prefix and compared
+ * segment-wise, rather than by string-slicing a `publicPathFor` result. The
+ * difference matters if the posts prefix ever changes: this follows the map,
+ * where a hard-coded `'/articles/'.length` slice would quietly recover the
+ * wrong slug and stop detecting real collisions.
+ */
+const postSlugCollidingWith = (path: string): string | null => {
+  const prefix = SLUG_ROUTED_COLLECTIONS.posts.replace(/^\//, '')
+  const segments = path.split('/')
+  // A post URL is exactly the prefix plus one slug segment.
+  if (segments.length !== 2 || segments[0] !== prefix) return null
+  return segments[1] || null
 }
 
 /**
@@ -296,26 +336,23 @@ const assertPathServable = async (
   // at `/articles/<x>` are both legal to their own table and only one can win.
   // Posts are read-only to this hook: nothing here changes their schema (#153
   // owns post placement).
-  const articlePrefix = '/articles/'
-  if (publicPath?.startsWith(articlePrefix)) {
-    const postSlug = publicPath.slice(articlePrefix.length)
-    if (postSlug && !postSlug.includes('/')) {
-      const { docs: postClashes } = await req.payload.find({
-        collection: 'posts',
-        depth: 0,
-        limit: 1,
-        overrideAccess: true,
-        pagination: false,
-        req,
-        select: { slug: true },
-        where: { slug: { equals: postSlug } },
-      })
-      if (postClashes.length > 0) {
-        throw new APIError(
-          `${publicPath} is already the article “${postSlug}”. Two documents cannot share one URL.`,
-          400,
-        )
-      }
+  const postSlug = postSlugCollidingWith(path)
+  if (postSlug) {
+    const { docs: postClashes } = await req.payload.find({
+      collection: 'posts',
+      depth: 0,
+      limit: 1,
+      overrideAccess: true,
+      pagination: false,
+      req,
+      select: { slug: true },
+      where: { slug: { equals: postSlug } },
+    })
+    if (postClashes.length > 0) {
+      throw new APIError(
+        `${publicPath} is already the article “${postSlug}”. Two documents cannot share one URL.`,
+        400,
+      )
     }
   }
 }

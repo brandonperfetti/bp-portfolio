@@ -33,10 +33,24 @@ const queryPageByPath = cache(getPageByPathDraftAware)
  * Deriving both here keeps them incapable of disagreeing.
  */
 const addressOf = (segments: string[] | undefined) => {
-  const parts = (segments ?? []).filter(Boolean)
-  return { parts, path: parts.join('/'), requestPath: `/${parts.join('/')}` }
+  const parts = pathSegments((segments ?? []).join('/'))
+  const path = parts.join('/')
+  return { parts, path, requestPath: `/${path}` }
 }
 
+/**
+ * The catch-all's prerender set: one entry per published, non-reserved,
+ * non-root page, each as its path split into segments.
+ *
+ * @returns Route params for every page the catch-all serves, or a single
+ *   sentinel entry when the CMS is empty.
+ *
+ * @remarks The count matches the flat `[slug]` route's exactly — the static
+ * profile changes in the shape of the param, not in kind. The empty-CMS guard
+ * is load-bearing and not an optimisation: Cache Components hard-errors when
+ * `generateStaticParams` returns `[]`, so an all-hidden CMS or a from-scratch
+ * staging reset must still yield one param, which resolves to `notFound()`.
+ */
 export async function generateStaticParams() {
   const paths = await getPublishedPagePaths()
   // Empty-CMS guard: Cache Components hard-errors when `generateStaticParams`
@@ -50,6 +64,19 @@ export async function generateStaticParams() {
   return paths.map((path) => ({ segments: pathSegments(path) }))
 }
 
+/**
+ * Title, description and canonical for a page-builder page.
+ *
+ * @param params - The catch-all's route params.
+ * @returns Next `Metadata`, or `{}` when no published page serves the path —
+ *   the not-found branch in {@link CmsPage} owns the redirect/404 decision, and
+ *   emitting metadata for a page that will 404 would be worse than emitting
+ *   none.
+ *
+ * @remarks The canonical is built from the resolved DOCUMENT, not from the
+ * request, so a page reached by some other spelling still canonicalises to the
+ * single URL `publicPathFor` names.
+ */
 export async function generateMetadata({
   params,
 }: {

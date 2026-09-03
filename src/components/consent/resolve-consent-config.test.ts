@@ -89,7 +89,7 @@ describe('resolveConsentConfig (CMS merge over defaults)', () => {
     expect(enabledC15tCategories(resolved)).toEqual(['necessary'])
   })
 
-  it('resolves the privacy-policy page relation to /{slug}', () => {
+  it('resolves the privacy-policy page relation to its public path', () => {
     const resolved = resolveConsentConfig(
       global({
         banner: {
@@ -102,7 +102,37 @@ describe('resolveConsentConfig (CMS merge over defaults)', () => {
     expect(resolved.dialog.privacyPolicyHref).toBe('/privacy')
   })
 
+  it('resolves a PLACED privacy-policy page to its full nested path (#148)', () => {
+    // A `/`+slug guess would 404 for a policy page filed under a parent.
+    const resolved = resolveConsentConfig(
+      global({
+        banner: {
+          privacyPolicyText: 'Privacy Policy',
+          privacyPolicyPage: {
+            slug: 'privacy',
+            path: 'legal/privacy',
+          },
+        } as unknown as CookieConsent['banner'],
+      }),
+    )
+    expect(resolved.dialog.privacyPolicyHref).toBe('/legal/privacy')
+  })
+
   it('leaves the privacy href undefined when no page is set', () => {
     expect(resolveConsentConfig(null).dialog.privacyPolicyHref).toBeUndefined()
+  })
+
+  it('leaves the privacy href undefined for an unpopulated relation', () => {
+    // A depth-0 read leaves the relation a bare id with no slug to resolve;
+    // `publicPathFor` returns null and the link is simply not offered.
+    const resolved = resolveConsentConfig(
+      global({
+        banner: {
+          privacyPolicyText: 'Privacy Policy',
+          privacyPolicyPage: 42,
+        } as unknown as CookieConsent['banner'],
+      }),
+    )
+    expect(resolved.dialog.privacyPolicyHref).toBeUndefined()
   })
 })

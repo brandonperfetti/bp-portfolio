@@ -162,6 +162,13 @@ export interface CmsPageContent {
   pageId: string
   routeKey: string
   slug: string
+  /**
+   * The page's computed hierarchy path, without a leading slash (`about`,
+   * `work/brytecore`). Present for every migrated row; `undefined` only for a
+   * projection built before the #148 backfill, where `slug` is the same string.
+   * Read it through `publicPathFor`, never directly.
+   */
+  path?: string
   title: string
   subtitle?: string
   seoTitle?: string

@@ -248,6 +248,34 @@ describe('validatePageHierarchy', () => {
     ).resolves.toBeTruthy()
   })
 
+  it('rejects rather than accepts when the ancestor walk is exhausted', async () => {
+    // A parent chain longer than any legal tree means the stored data is
+    // malformed. A guard that ran out of budget has not proved the write safe,
+    // so it must refuse — silently accepting on an exhausted search is how a
+    // cycle guard comes to certify a cycle.
+    rows = [{ id: 1, slug: 'p0', path: 'p0', parent: null }]
+    for (let i = 1; i <= 40; i += 1) {
+      rows.push({ id: i + 1, slug: `p${i}`, path: `p${i}`, parent: i })
+    }
+    await expect(
+      validatePageHierarchy(
+        args({ slug: 'x', parent: 41 }, { id: 999, slug: 'x' }),
+      ),
+    ).rejects.toThrow(/parent chain is broken/i)
+  })
+
+  it('accepts a chain comfortably inside the walk bound', async () => {
+    rows = [
+      { id: 1, slug: 'a', path: 'a', parent: null },
+      { id: 2, slug: 'b', path: 'b', parent: 1 },
+    ]
+    await expect(
+      validatePageHierarchy(
+        args({ slug: 'c', parent: 2 }, { id: 3, slug: 'c' }),
+      ),
+    ).resolves.toBeTruthy()
+  })
+
   it('rejects a parent id that does not resolve', async () => {
     await expect(
       validatePageHierarchy(args({ slug: 'orphan', parent: 999 })),

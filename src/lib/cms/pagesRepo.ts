@@ -74,6 +74,9 @@ export const getCmsPageByPath = async (
     pageId: String(page.id),
     routeKey: normalizePath(path),
     slug: page.slug || pagePath,
+    // Carried so URL builders (the generated-OG card) can address a placed page
+    // at its real path rather than guessing from the slug (#148).
+    path: page.path || undefined,
     title: page.title,
     subtitle: page.subtitle || page.meta?.description || undefined,
     seoTitle: page.meta?.title || undefined,

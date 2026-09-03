@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveArticleSocialImage } from './pageMetadata'
+import {
+  resolveArticleSocialImage,
+  resolvePageSocialImage,
+} from './pageMetadata'
 
 import type { OgImageMode } from '@/lib/og/types'
 import { DEFAULT_SOCIAL_IMAGE } from '@/lib/site'
@@ -84,5 +87,57 @@ describe('resolveArticleSocialImage', () => {
         }),
       ),
     ).toBe(GEN)
+  })
+})
+
+/**
+ * The generated-OG card URL under hierarchy (#148). `/api/og/page` is a
+ * `[...segments]` catch-all keyed by the page's PATH: under per-parent slug
+ * uniqueness a bare slug is ambiguous, so a slug-keyed card would be served
+ * some other page's title.
+ */
+describe('resolvePageSocialImage — generated-card URL is path-keyed (#148)', () => {
+  const generated = {
+    pageId: '1',
+    routeKey: '/x',
+    title: 'X',
+    ogImageMode: 'generated' as const,
+  }
+  const settings = {
+    canonicalUrl: 'https://example.com',
+    generatedOgEnabled: true,
+  } as unknown as Parameters<typeof resolvePageSocialImage>[1]
+
+  it('keys a top-level page by its path', () => {
+    expect(
+      resolvePageSocialImage(
+        { ...generated, slug: 'colophon', path: 'colophon' },
+        settings,
+      ),
+    ).toBe('https://example.com/api/og/page/colophon')
+  })
+
+  it('keys a PLACED page by its full nested path', () => {
+    expect(
+      resolvePageSocialImage(
+        { ...generated, slug: 'brytecore', path: 'work/brytecore' },
+        settings,
+      ),
+    ).toBe('https://example.com/api/og/page/work/brytecore')
+  })
+
+  it('keys the root page by the root slug, since / carries no segment', () => {
+    expect(
+      resolvePageSocialImage(
+        { ...generated, slug: 'home', path: 'home' },
+        settings,
+      ),
+    ).toBe('https://example.com/api/og/page/home')
+  })
+
+  it('falls back to the slug for a projection with no path', () => {
+    expect(
+      resolvePageSocialImage({ ...generated, slug: 'colophon' }, settings),
+    ).toBe('https://example.com/api/og/page/colophon')
   })
 })

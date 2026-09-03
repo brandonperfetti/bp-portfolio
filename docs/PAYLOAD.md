@@ -72,16 +72,16 @@ every post, and necessarily wrong for a placed page. The admin slug sidebar
 shows the resolved full public path ("Served at /work/brytecore") so an editor
 can see what their edit will move (#120's lesson, #148's fix).
 
-**Pages carry a hierarchy** (#148): `parent` (self-referencing, `hasMany:
-false`, optional, top-level) and `path` (text, `index: true`, `unique: true`,
-admin-read-only, computed in `beforeChange`). The root page is designated by the
-reserved `home` slug (`ROOT_PAGE_SLUG`), it serves `/`, and its children omit
-its segment. Depth is capped at 3 segments. `beforeValidate` rejects cycles,
-over-deep paths, code-owned first segments, and both same- and cross-collection
-path collisions. Posts have no `parent`/`path` yet — placement is #153, and
-until it lands every post keeps `/articles/[slug]` byte-for-byte. The routing
-half, the two reservation rules and the no-cascade limit are in
-`docs/NAVIGATION.md`.
+**Pages carry a hierarchy** (#148): `parent` (self-referencing, optional,
+top-level) and a computed, unique, indexed `path`. The root page is designated
+by the reserved `home` slug (`ROOT_PAGE_SLUG`) and serves `/`. Posts have no
+`parent`/`path` yet — placement is #153, and until it lands every post keeps
+`/articles/[slug]` byte-for-byte.
+
+The contract lives in the code: field shapes and hook order in
+`src/collections/Pages/index.ts`, what a save rejects and why in
+`validatePageHierarchy`'s TSDoc, and the root-designation reasoning on
+`ROOT_PAGE_SLUG`. `docs/NAVIGATION.md` covers the routing half.
 
 **`slugLock: true` means "I do not hand-edit this slug"**, and that resolves
 differently either side of first publish (#120):
@@ -156,14 +156,20 @@ rather than only in each hook's TSDoc:
 Concretely: `revalidatePost`/`revalidatePage` purge the document's current path
 on publish and `previousDoc`'s path on unpublish; a published→published rename
 purges only the NEW path there, and `createSlugRedirect` purges the old one —
-inside the same `try` that wrote the row, from the same `from` string. The
-reason is that there are **two path vocabularies** in this tree and they
-disagree: the revalidation hooks hand-build `/articles/${slug}` and map `home`
-to `/`, while `publicPathForSlug` — what redirect rows are built from — calls
-the home page `/home`. A purge only uncovers the row it is meant to uncover if
-it is spelled the same way as that row's `from`, so the purge stays with the
-writer. The transition matrices in `revalidatePost.test.ts` and
-`revalidatePage.test.ts` pin every case.
+inside the same `try` that wrote the row, from the same `from` string.
+
+The original reason was that there were **two path vocabularies** that
+disagreed about the home page — the revalidation hooks mapped it to `/` while
+`publicPathForSlug` called it `/home` — so a purge could be spelled differently
+from the row it was meant to uncover. **#148 closed that**: `publicPathFor` is
+now the single owner of every public path and `revalidatePage` resolves through
+it, so both sides spell the root identically. The ownership split above stays,
+for the reason that outlives the conflict: the purge is conditional on the write
+having succeeded (it sits inside the same `try`, after the row lands) rather
+than on a transition that fires either way. The transition matrices in
+`revalidatePost.test.ts` and `revalidatePage.test.ts` pin every case, and they
+are unchanged across #148 — which is the evidence that routing the hook through
+the seam moved no behaviour.
 
 Known gap on the unpublish branch: unpublishing a document that has a pending
 autosaved rename purges nothing, because `previousDoc` is the draft and the

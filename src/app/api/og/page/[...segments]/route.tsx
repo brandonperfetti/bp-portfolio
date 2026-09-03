@@ -1,4 +1,4 @@
-import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
+import { getCmsPageByPath, pathSegments } from '@/lib/cms/pagesRepo'
 import { renderOgCard } from '@/lib/og/card'
 
 /**
@@ -29,15 +29,14 @@ type RouteContext = { params: Promise<{ segments?: string[] }> }
  * one-segment URL therefore keeps working byte-for-byte, which is what makes
  * this safe while the emitter still sends a slug.
  *
- * **Known follow-up, out of this change's fence:** `src/lib/cms/pageMetadata.ts`
- * still builds this URL from `page.slug`, so a *nested* page's OG card is not
- * yet requested at its full path. This route is ready for it; the emitter needs
- * one line (`page.path ?? page.slug`) and `CmsPageContent` needs to carry
- * `path`. An unknown or unpublished path 404s rather than emitting a blank card.
+ * The emitter agrees: `resolvePageSocialImage` builds this URL from the page's
+ * public path via `publicPathFor`, so a nested page's card is requested at
+ * `/api/og/page/work/brytecore`. An unknown or unpublished path 404s rather than
+ * emitting a blank card.
  */
 export async function GET(_request: Request, { params }: RouteContext) {
   const { segments } = await params
-  const parts = (segments ?? []).filter(Boolean)
+  const parts = pathSegments((segments ?? []).join('/'))
   if (parts.length === 0) {
     return new Response('Not found', { status: 404 })
   }

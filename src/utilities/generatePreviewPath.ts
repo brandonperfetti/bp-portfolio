@@ -4,19 +4,23 @@ import { publicPathFor } from '@/fields/slug/slugPaths'
 import type { PathableDoc } from '@/fields/slug/slugPaths'
 import type { SlugRoutedCollection } from '@/fields/slug/slugPaths'
 
-type Props = {
+/**
+ * How the caller identifies the document being previewed.
+ *
+ * @remarks A discriminated union rather than two optional fields, so a call
+ * that supplies **neither** is a type error instead of a silent `null` preview
+ * URL the admin would render as a dead button.
+ *
+ * - `doc` is the form to prefer: it is the only one that can name a nested URL.
+ * - `slug` is for a caller that holds no document. Posts use it, and will keep
+ *   agreeing with `doc` until post placement lands (#153) — a post has no
+ *   `path`, so both forms produce `/articles/<slug>`.
+ */
+type PreviewTarget =
+  { doc: PathableDoc; slug?: never } | { slug: unknown; doc?: never }
+
+type Props = PreviewTarget & {
   collection: SlugRoutedCollection
-  /**
-   * The document being previewed — `slug`, plus `path` for a placed page.
-   * Prefer this; it is the only form that can preview a nested URL.
-   */
-  doc?: PathableDoc
-  /**
-   * Slug-only form, for a caller that holds no document. Posts still use it:
-   * a post has no `path` until placement lands (#153), so the two forms agree
-   * for every post today.
-   */
-  slug?: unknown
   req: PayloadRequest
 }
 

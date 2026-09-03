@@ -91,4 +91,18 @@ describe('generatePreviewPath', () => {
       null,
     )
   })
+
+  it('makes a call that names neither a doc nor a slug a TYPE error', () => {
+    // The discriminated union is the point: supplying neither used to compile
+    // and hand the admin a null preview URL, which renders as a dead button.
+    // @ts-expect-error - PreviewTarget requires exactly one of doc | slug
+    generatePreviewPath({ collection: 'pages', req })
+    // @ts-expect-error - and never both
+    generatePreviewPath({
+      collection: 'pages',
+      doc: { slug: 'a' },
+      slug: 'b',
+      req,
+    })
+  })
 })
