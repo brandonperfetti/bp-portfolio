@@ -42,6 +42,7 @@ import {
 } from '@/hooks/corvusEmbeddings'
 import { revalidateDelete, revalidatePost } from './hooks/revalidatePost'
 import { computePostPath, validatePostPlacement } from './hooks/postPlacement'
+import { refusePlacedSlugRename } from './hooks/refusePlacedSlugRename'
 import { ROOT_PAGE_SLUG } from '@/fields/slug/slugPaths'
 
 /**
@@ -416,7 +417,11 @@ export const Posts: CollectionConfig = {
     // `computePostPath` ever stores a path — the guard runs in
     // `beforeValidate`, the computation in `beforeChange`, so the stored `path`
     // is always one the guard has already accepted (#153).
-    beforeValidate: [validatePostPlacement],
+    // `refusePlacedSlugRename` is a stop-gap that #150 deletes — it refuses a
+    // slug rename on a placed, published article, whose redirect row would
+    // otherwise be written with an `/articles` `from` and leave the section URL
+    // 404ing. Its own file and its own TSDoc carry the argument both ways.
+    beforeValidate: [validatePostPlacement, refusePlacedSlugRename],
     // `capturePublishedSlug` must run before the write: it reads the main-table
     // row, which is the only place the currently-served slug survives an
     // autosaved draft (see createSlugRedirect).

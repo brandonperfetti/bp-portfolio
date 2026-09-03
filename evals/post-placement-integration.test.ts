@@ -318,20 +318,83 @@ describe.skipIf(!connectionString)(
       )
     })
 
-    it('re-slugging a placed post recomputes its path under the same parent', async () => {
+    it('refuses to re-slug a placed, PUBLISHED post until #150 (the stop-gap)', async () => {
+      // The row `createSlugRedirect` would write here has an `/articles` `from`,
+      // so `/work2/<old>` would become a hard 404. `refusePlacedSlugRename`
+      // turns that silent break into a refusal the editor can act on. Drop that
+      // commit and this case becomes "recomputes its path under the same
+      // parent", which is what the hooks alone do.
       const { docs } = await payload.find({
         collection: 'posts',
         overrideAccess: true,
         pagination: false,
         where: { slug: { equals: `${MARKER}-dup` } },
       })
+      await expect(
+        payload.update({
+          collection: 'posts',
+          id: docs[0].id,
+          overrideAccess: true,
+          data: { slug: `${MARKER}-dup2`, slugLock: false } as never,
+        }),
+      ).rejects.toThrow(/#150/)
+    })
+
+    it('re-slugging an UNPLACED post is untouched — the #120 path still works', async () => {
+      const { docs } = await payload.find({
+        collection: 'posts',
+        overrideAccess: true,
+        pagination: false,
+        where: { slug: { equals: `${MARKER}-plain-3` } },
+      })
       const updated = await payload.update({
+        collection: 'posts',
+        id: docs[0].id,
+        overrideAccess: true,
+        data: { slug: `${MARKER}-plain-3b`, slugLock: false } as never,
+      })
+      expect(updated.slug).toBe(`${MARKER}-plain-3b`)
+      expect(updated.path ?? null).toBeNull()
+    })
+
+    it('un-placing then re-slugging is the documented two-step, and it works', async () => {
+      const { docs } = await payload.find({
+        collection: 'posts',
+        overrideAccess: true,
+        pagination: false,
+        where: { slug: { equals: `${MARKER}-dup` } },
+      })
+      const unplaced = await payload.update({
+        collection: 'posts',
+        id: docs[0].id,
+        overrideAccess: true,
+        data: { parent: null } as never,
+      })
+      expect(unplaced.path ?? null).toBeNull()
+
+      const renamed = await payload.update({
         collection: 'posts',
         id: docs[0].id,
         overrideAccess: true,
         data: { slug: `${MARKER}-dup2`, slugLock: false } as never,
       })
-      expect(updated.path).toBe(`${MARKER}-work2/${MARKER}-dup2`)
+      expect(renamed.slug).toBe(`${MARKER}-dup2`)
+
+      const { docs: sections } = await payload.find({
+        collection: 'pages',
+        overrideAccess: true,
+        pagination: false,
+        where: { slug: { equals: `${MARKER}-work2` } },
+      })
+      const replaced = await payload.update({
+        collection: 'posts',
+        id: docs[0].id,
+        overrideAccess: true,
+        data: { parent: sections[0].id } as never,
+      })
+      // The two-step lands the article at its new section URL, which is what
+      // makes the refusal a redirection of effort rather than a dead end.
+      expect(replaced.path).toBe(`${MARKER}-work2/${MARKER}-dup2`)
     })
 
     it('AC — every pre-existing post URL is byte-identical after M2', async () => {

@@ -119,6 +119,14 @@ close on its own — the fix in both cases is #150's path-aware capture and
 redirect writer (`capturePublishedPath` / `createPathRedirect`), which spells a
 row's `from` with `publicPathFor` instead of a slug.
 
+Until then the **rename** half is refused rather than allowed to break silently:
+`refusePlacedSlugRename` (`src/collections/Posts/hooks/`) rejects a slug rename
+on a placed, published article and tells the editor to unplace, rename, and
+place again. It is a stop-gap in its own file, and #150 deletes it; its TSDoc
+carries the argument both ways. The **un-placing** half is not refused, because
+that is an editor deliberately saying "this no longer lives here" rather than
+losing a URL as a side effect of changing something else.
+
 **Breadcrumbs.** A placed article's `BreadcrumbList` is its real ancestor chain
 (Home → Work → Brytecore → title), derived from `path` in one indexed read. An
 unplaced one keeps the archive trail it has always emitted.
