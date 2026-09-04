@@ -485,7 +485,7 @@ timestamp changes on every push, so folding it in would re-embed every active
 repo every week for nothing. A moved `pushed_at` alone takes the metadata-repair
 path: one `UPDATE`, zero provider calls.
 
-#### The site-stack vs tech-I-use disambiguation
+#### Three subjects: you, this site, Brandon (#147, #167)
 
 `/tech` lists the technologies Brandon **works with**. The `bp-portfolio`
 repository document describes what **this site** is built on. Before #147 only
@@ -495,17 +495,116 @@ the first was indexed, so the corpus could not tell them apart:
 TanStack, Fly.io, Netlify, DigitalOcean" and cited `/tech` — a real citation and
 the wrong list.
 
-`buildGroundedSystem` therefore appends `REPO_DISAMBIGUATION_RULE`, which draws
-the distinction and grants permission to cite a repository's github.com
-`Source:` line (the neighbouring "a third-party address is never the source for
-a claim about this site" sentence would otherwise read as a ban on the one
-citation a repo passage has). The rule is appended **only when a `github-repos`
-passage was retrieved**: a turn with no repository in context gets a
-byte-identical prompt to the pre-#147 one, so no pre-existing eval block's score
-can move because of this change.
+#167 then measured the two ways that two-subject rule was still too narrow, on
+production 2026-09-04:
 
-Four eval cases gate it, and the last two are a pair on purpose — a prompt that
-always preferred the repository would fix one and silently break the other:
+- **"What tech do you use?"** answered with Brandon's toolkit (Node.js, Vercel,
+  Supabase, Vite, TanStack). The question was addressed to **Corvus** — and
+  worse than a misread, there was no about-Corvus grounding anywhere in the
+  corpus, so even a correct reading of "you" had nothing to cite.
+- **"What tech was this site built on?"** answered Remix, TanStack, Netlify and
+  Fly.io — #147's own failure, back, because the rule named the phrasing "run
+  on" and the visitor said "built on".
+
+`buildGroundedSystem` therefore appends `SUBJECT_DISAMBIGUATION_RULE`, one rule
+covering all three subjects. Rewritten rather than joined by a second
+paragraph: two paragraphs both explaining how to pick a subject is how a model
+gets to pick whichever it read last.
+
+| Asked about    | Answer from                                   | Never from                              |
+| -------------- | --------------------------------------------- | --------------------------------------- |
+| **you/Corvus** | the About Corvus passage, cite `/corvus`      | Brandon's technology list               |
+| **this site**  | the `bp-portfolio` repo, then a stack article | a project entry, or the technology list |
+| **Brandon**    | `/tech`                                       | a repository                            |
+
+Every entry in the "never" column is a measured wrong answer, not a
+precaution — including `projects`: `[measured, 2026-09-04]` "What powers this
+site?" and "What is under the hood on this site?" retrieve the
+`Brandon Perfetti's Portfolio` **project** entry tied with the repository
+passage and listed ahead of it. Retrieval cannot separate them at this corpus
+size; the rule is the only thing that can.
+
+The site-subject phrasings are enumerated in the rule — run on / built on /
+built with / made with / powered by / under the hood — because #167's second
+failure was purely a phrasing miss, and a rule that says "questions like this
+one" with a single example generalises at the model's discretion.
+
+It also grants permission to cite a repository's github.com `Source:` line, the
+sentence retained verbatim from #147 (the neighbouring "a third-party address is
+never the source for a claim about this site" would otherwise read as a ban on
+the one citation a repo passage has).
+
+The rule is appended on **either** of two triggers: a `github-repos` or About
+Corvus passage is in context, **or** the question itself is site-shaped
+(`questionSubject === 'site'`, stamped onto the passages by `markSiteSubject`
+in `retrieval.ts`, which is where the query is known — `buildGroundedSystem`
+never sees it).
+
+The second trigger is not belt-and-braces. Gating on passages alone left
+**#167's own filed failure uncovered**: "what tech was this site built on?"
+when no repository lands in the top-k got no rule, and the passages that do
+come back in that case are the project entry and the tech list — the two
+sources the rule forbids. A rule that only fires once the right passage has
+been retrieved fires when it is least needed. A turn that is about none of the
+three subjects and retrieved no passage belonging to any still gets the prompt
+it got before, so no unrelated eval block's score can move.
+
+##### The About Corvus passage (`src/lib/ai/aboutCorvus.ts`)
+
+Code-owned: never embedded, never synced, no row in `corvus_embeddings`, no
+Payload document. Brandon chose that (design (i), 2026-09-04) over an embedded
+document under a new collection value, which would have needed a backfill
+script, a sync story, and a re-embed every time this file changed.
+
+A measured fact settles it beyond the operational cost: `[measured,
+2026-09-04]` **"What are you made with?" and "What is under the hood here?"
+retrieve nothing at all** above the production similarity floor. An embedded
+about-Corvus document would have had to win a similarity contest it was
+demonstrably losing. A code-owned one does not compete — it is offered when the
+addressee is Corvus, by `withAboutCorvusSnippet` in `retrieval.ts`.
+
+It arrives as an ordinary `CorvusSnippet` (collection `about-corvus`, source
+`/corvus`, first in the list) rather than as a second argument to
+`buildGroundedSystem`, so it renders with the same numbered heading and
+`Source:` label as every other passage and the citation rules already cover it
+with no exception written for it.
+
+Three properties worth knowing:
+
+- **It survives an outage.** It is offered on every non-kill-switch return
+  path, the `catch` included. So "what are you built with?" is answered
+  correctly even when the embedding provider is down — the one subject where an
+  ungrounded turn has no excuse, since the answer was never in the database.
+- **The kill switch still wins.** `CORVUS_DISABLE_RETRIEVAL` returns `[]`, and
+  `buildGroundedSystem([])` is still `CORVUS_SYSTEM_PROMPT` byte for byte.
+- **It cannot silently go stale.** `ABOUT_CORVUS_STACK_ITEMS` lists every
+  technology the passage claims, and `aboutCorvus.test.ts` asserts each one
+  appears BOTH in the passage and in this file. Add a technology to the passage
+  and the test fails until this document names it too. The provider is
+  described as env-selected (`AI_CHAT_PROVIDER`) rather than pinned, so an env
+  change cannot make the passage wrong.
+
+Addressee detection (`isAboutCorvusQuestion`) is a regex, and conservative in
+the direction that costs least: a false positive adds one inert passage, a
+false negative is the measured defect itself. Second-person address alone is
+not enough — "what do you think of Postgres?" is addressed to Corvus and is not
+about Corvus — so a match needs an addressee **and** a self-referential topic,
+unless the visitor names Corvus outright. The topic vocabulary is **stack and
+capability nouns only**: an earlier draft carrying the bare verbs `do`, `know`
+and `work` matched both "what do you think of Postgres?" and "do you know who
+won the game?" `[measured, 2026-09-04]` — the very examples this paragraph
+gives as exclusions — so verbs now earn their place only inside a phrase that
+can mean nothing else (`what can you do`, `run on`, `under the hood`). Both
+counter-examples are pinned as negative tests. The known miss is a follow-up turn
+("and what about you?"), which carries no topic word; retrieval embeds only the
+latest user message, so that limitation belongs to the module rather than to
+the rule.
+
+##### Eval coverage
+
+`site-facts.eval.ts` carries the four #147 cases, and the last two are a pair
+on purpose — a prompt that always preferred the repository would fix one and
+silently break the other:
 
 | Case                                     | Correct citation                     |
 | ---------------------------------------- | ------------------------------------ |
@@ -519,6 +618,17 @@ away every non-site absolute URL (deliberately — leaving `https://toptimelines
 in place would let it read `/toptimelines` out of the middle and call it a
 fabricated path), so a repository citation is structurally invisible to
 `cites-a-real-source-url`.
+
+`evals/corvus-subjects.eval.ts` adds three blocks for #165 and #167 — what
+Brandon uses, what "you" means, and the site subject across five phrasings —
+kept in their own file so a routing regression cannot be averaged away by
+strong grounding scores in `eval:facts`. Two scorers are local to it:
+`leads-with-daily-drivers` (positional, because #165's failure named real
+technologies in the wrong order) and `never-names-the-fabricated-stack`
+(binary, and scoped to the exact five names the production answers invented,
+so it stays a regression test rather than a vocabulary filter). Every question
+in that file was checked against the fixture retriever before it was written
+down.
 
 Fixtures live in `evals/fixtures/github-repos.ts` and are **reconstructions, not
 a capture** — its header records exactly which repository facts came from this
@@ -623,8 +733,20 @@ stored chunk shape are untouched.
 `buildGroundedSystem([])` returns `CORVUS_SYSTEM_PROMPT` **by identity, byte
 for byte** — nothing appended, trimmed or re-joined. That is asserted by unit
 test, and it is what makes "degrades gracefully" a fact rather than an
-intention, because every retrieval failure path returns `[]`: a provider
-outage, an empty table, a query that clears nothing.
+intention: a provider outage, an empty table or a query that clears nothing all
+land on it.
+
+**One passage is the exception, and only for one kind of question (#167).** On
+a turn addressed to Corvus, `retrieveCorvusContext` returns the code-owned
+About Corvus passage on every failure path including the `catch` — see
+"The About Corvus passage" above. So the honest statement is: every retrieval
+failure path returns `[]` **except a Corvus-addressed turn, which returns that
+single passage**. That is deliberate and is the whole point of the passage
+being code-owned rather than embedded — it is the one subject whose answer was
+never in the database, so losing it to a database or provider outage would be a
+failure with no excuse. Every other question still degrades to the untouched
+persona prompt, and `CORVUS_DISABLE_RETRIEVAL` still returns `[]`
+unconditionally.
 
 A query that "misses" is a real path, not a theoretical one.
 `applySimilarityFloor` over-fetches 4× and discards everything under

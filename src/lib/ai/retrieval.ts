@@ -2,6 +2,7 @@ import { sql } from '@payloadcms/db-postgres'
 import { getPayload } from 'payload'
 import configPromise from '@payload-config'
 
+import { withAboutCorvusSnippet } from '@/lib/ai/aboutCorvus'
 import {
   EMBEDDING_TIMEOUT_MS,
   embedQuery,
@@ -16,6 +17,23 @@ export interface CorvusSnippet {
   sourceUrl: string | null
   /** Cosine similarity in [-1, 1]; 1 is identical. */
   score: number
+  /**
+   * The subject the visitor's question is about, when retrieval could tell.
+   *
+   * @remarks Routing metadata, not content — nothing renders it into the
+   * prompt. It exists because the two halves of subject routing are split
+   * across a boundary they cannot see over: `retrieveCorvusContext` knows the
+   * QUESTION and `buildGroundedSystem` knows the PASSAGES, and
+   * `src/app/api/ai/chat/route.ts` calls the second with only the first's
+   * output. Carrying a one-word classification on the passages is how the
+   * question's shape reaches the prompt builder without changing that call.
+   *
+   * Only `'site'` is set, and only because that subject cannot be inferred
+   * from the passages at all: the whole #167 failure is a "what was this site
+   * built on?" turn where NO repository came back and the rule stayed silent.
+   * The Corvus subject needs no marker — its passage is its own signal.
+   */
+  questionSubject?: 'site'
 }
 
 /** Default number of snippets handed to the model (`CORVUS_RETRIEVAL_TOP_K`). */
@@ -267,6 +285,80 @@ export function extractRetrievalQuery(messages: unknown[]): string {
   return ''
 }
 
+/**
+ * Something that names THIS site rather than a project, a repo, or Brandon.
+ *
+ * @remarks A referent is required, and it is what keeps the classifier honest:
+ * "what was TopTimelines built with?" is a project question and must not be
+ * marked, however stack-shaped its phrasing. `here` is in the set for "what is
+ * under the hood here?", which names the site by standing in it.
+ */
+const SITE_REFERENT_PATTERN =
+  /\b(this site|this website|the site|this page|your site|brandonperfetti\.com|here)\b/i
+
+/**
+ * Asking what something is BUILT ON, in any of the phrasings #167 measured.
+ *
+ * @remarks The widened set the prompt rule already spells out — run on / built
+ * on / built with / made with / powered by / under the hood — plus the plain
+ * "tech"/"stack" nouns. #167's second production failure was purely a phrasing
+ * miss ("built on" where #147 had written "run on"), so the two places that
+ * enumerate these phrasings are this constant and
+ * `SUBJECT_DISAMBIGUATION_RULE`, and `groundedSystem.test.ts` asserts the rule
+ * still names every one of them.
+ */
+const SITE_STACK_PHRASE_PATTERN =
+  /\b(runs? on|running on|built on|built with|build with|made with|powered by|powers|under the hood|stack|tech|technolog\w*)\b/i
+
+/**
+ * Is this question about what THIS SITE is built on?
+ *
+ * @remarks Both halves are required. A referent with no stack phrase ("what is
+ * this site about?") is not a stack question, and a stack phrase with no
+ * referent ("what technologies does Brandon use?") is the #147 mirror case
+ * that must keep answering from `/tech`.
+ *
+ * @param query - The visitor's latest message.
+ * @returns True when the site's own stack is the subject.
+ */
+export function isSiteSubjectQuestion(
+  query: string | null | undefined,
+): boolean {
+  if (typeof query !== 'string') return false
+  return (
+    SITE_REFERENT_PATTERN.test(query) && SITE_STACK_PHRASE_PATTERN.test(query)
+  )
+}
+
+/**
+ * Stamp `questionSubject: 'site'` on passages for a site-stack question.
+ *
+ * @remarks The fix for the gap the orchestrator measured: the subject rule was
+ * gated on a repository or About-Corvus passage being present, so the exact
+ * turn #167 filed — "what tech was this site built on?" with no repository in
+ * the top-k — got no rule at all. That is also the case this repo's own docs
+ * record as worst, since the `Brandon Perfetti's Portfolio` PROJECT entry can
+ * outrank the repository passage. Gating on the QUESTION as well as on the
+ * passages means the rule fires exactly when the visitor could be misanswered,
+ * rather than only when the right passage happened to be retrieved.
+ *
+ * Pure, and testable with no provider key or database.
+ *
+ * @param query - The visitor's latest message.
+ * @param snippets - The passages to stamp.
+ * @returns The same passages, marked when the subject is this site.
+ */
+export function markSiteSubject(
+  query: string | null | undefined,
+  snippets: readonly CorvusSnippet[],
+): CorvusSnippet[] {
+  if (!isSiteSubjectQuestion(query)) return [...snippets]
+  return snippets.map((snippet) => ({
+    ...snippet,
+    questionSubject: 'site' as const,
+  }))
+}
+
 /** Arguments for {@link retrieveCorvusContext}. */
 export interface RetrieveCorvusContextArgs {
   /** The visitor's latest message. */
@@ -299,16 +391,39 @@ export interface RetrieveCorvusContextArgs {
  * delay and an ungrounded answer, rather than holding time-to-first-token
  * hostage until the route's `maxDuration`.
  *
+ * ## The one passage that is not retrieved (#167)
+ *
+ * A question addressed to Corvus about Corvus is answered from a code-owned
+ * passage (`aboutCorvus.ts`), offered here rather than looked up. Three
+ * consequences worth stating, because each is a decision:
+ *
+ * - It is offered on the way OUT, wrapping every non-kill-switch return
+ *   including the `catch`. So "what are you built with?" is answered
+ *   correctly even when the embedding provider is down and the vector query
+ *   never ran — which is the one subject where an ungrounded turn has no
+ *   excuse, since the answer was never in the database to begin with.
+ * - The kill switch still returns `[]`. `CORVUS_DISABLE_RETRIEVAL` is
+ *   documented as "a true one-flag revert to the pre-#82 chat path", and a
+ *   flag that left one passage behind would not be that.
+ * - An empty query still returns `[]`. There is no question to be addressed
+ *   to anyone.
+ *
+ * The empty-array contract survives intact: a turn that retrieves nothing and
+ * is not about Corvus still returns `[]`, and `buildGroundedSystem([])` is
+ * still `CORVUS_SYSTEM_PROMPT` byte for byte.
+ *
  * @param args - Query, viewer auth state, optional top-k override.
- * @returns Snippets above the similarity floor; `[]` on any failure.
+ * @returns Snippets above the similarity floor, with the about-Corvus passage
+ * first when the question is addressed to Corvus; `[]` on any failure.
  */
 export async function retrieveCorvusContext(
   args: RetrieveCorvusContextArgs,
 ): Promise<CorvusSnippet[]> {
+  const query = args.query?.trim()
+
   try {
     if (isRetrievalDisabled()) return []
 
-    const query = args.query?.trim()
     if (!query) return []
 
     const topK = args.topK ?? getRetrievalTopK()
@@ -329,9 +444,12 @@ export async function retrieveCorvusContext(
       `[corvus] retrieval query exceeded ${RETRIEVAL_QUERY_TIMEOUT_MS}ms`,
     )
 
-    return applySimilarityFloor(toRows(result), topK)
+    return markSiteSubject(
+      query,
+      withAboutCorvusSnippet(query, applySimilarityFloor(toRows(result), topK)),
+    )
   } catch (error) {
     console.error('[corvus] retrieval failed; answering ungrounded:', error)
-    return []
+    return markSiteSubject(query, withAboutCorvusSnippet(query, []))
   }
 }

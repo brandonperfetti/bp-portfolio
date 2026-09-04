@@ -6,6 +6,8 @@ import { createGuardedScorer } from './empty-output'
 import { GITHUB_REPO_FIXTURES } from './fixtures/github-repos'
 import { createFixtureRetriever } from './fixtures/retriever'
 import { containsExpectedFact } from './scorers'
+import { withAboutCorvusSnippet } from '../src/lib/ai/aboutCorvus'
+import { markSiteSubject } from '../src/lib/ai/retrieval'
 
 /**
  * Who is "you", and whose stack is being asked about (#165, #167).
@@ -38,7 +40,8 @@ import { containsExpectedFact } from './scorers'
  *    "built on" never reached it.
  */
 
-const { citesTechListNotRepo } = createCitationScorers()
+const { citesKnownSourceUrl, citesRepoNotTechList, citesTechListNotRepo } =
+  createCitationScorers()
 
 /**
  * Both corpora, at the production floor.
@@ -48,7 +51,26 @@ const { citesTechListNotRepo } = createCitationScorers()
  * `/tech` and the `bp-portfolio` repository document have to be able to
  * compete for every question here.
  */
-const retrieve = createFixtureRetriever({ repos: GITHUB_REPO_FIXTURES })
+const fixtureRetrieve = createFixtureRetriever({ repos: GITHUB_REPO_FIXTURES })
+
+/**
+ * The fixture corpus, plus the about-Corvus passage on Corvus-addressed turns.
+ *
+ * @remarks Composed from the PRODUCTION `withAboutCorvusSnippet`, not a copy
+ * of its rule. That passage is code-owned rather than embedded (#167 design
+ * (i)), so it does not live in the fixture corpus and cannot be retrieved from
+ * it — but it is genuinely in the context window in production, and a block
+ * measuring "does Corvus answer about itself" against a context that lacks it
+ * would be measuring something else. Wrapping the real function also means the
+ * addressee rule cannot drift between the eval and the route.
+ *
+ * `markSiteSubject` is composed for the same reason and matters most for the
+ * site block: it is what makes the subject rule fire on a site-shaped question
+ * whose top-k contains no repository, which is the turn #167 was filed about.
+ * Both wrappers are the production functions, in production order.
+ */
+const retrieve = (query: string) =>
+  markSiteSubject(query, withAboutCorvusSnippet(query, fixtureRetrieve(query)))
 
 /**
  * Every question below was checked against {@link retrieve} before it was
@@ -152,4 +174,149 @@ evalite('Corvus subjects · what BRANDON uses, daily drivers first', {
   // `leadsWithDailyDrivers` says they were where a ranking would put them.
   // #165's measured failure scored well on the first and badly on the second.
   scorers: [containsExpectedFact, leadsWithDailyDrivers, citesTechListNotRepo],
+})
+
+/**
+ * Stacks Corvus has been measured inventing for this site.
+ *
+ * @remarks Not a general "wrong technology" list — these five are what the
+ * production answers actually said. `[measured, 2026-09-02, #147]` Remix,
+ * TanStack, Fly.io, Netlify and DigitalOcean; `[measured, 2026-09-04, #167]`
+ * Remix, TanStack, Netlify and Fly.io again, for "built on". Naming the
+ * specific fabrications keeps the scorer a regression test rather than a
+ * vocabulary filter that would flag an answer legitimately discussing Remix.
+ */
+const FABRICATED_SITE_STACK = [
+  'Remix',
+  'Netlify',
+  'Fly.io',
+  'DigitalOcean',
+  'TanStack',
+]
+
+/**
+ * Did the answer avoid the stack this site has been measured inventing?
+ *
+ * @remarks Binary, unlike the other scorers here, and deliberately: naming any
+ * one of these as part of this site's stack is the whole defect, and a
+ * fractional score would report "only one fabrication" as partial credit.
+ *
+ * It reads the answer's OWN words for the site's stack, so it is scoped to the
+ * blocks that ask about this site. On a Brandon-subject or general question
+ * these names are legitimate and this scorer is not applied.
+ */
+const neverNamesTheFabricatedStack = createGuardedScorer<
+  string,
+  string,
+  string
+>({
+  name: 'never-names-the-fabricated-stack',
+  description:
+    "0 when the answer names any technology from #147/#167's measured wrong stack for this site.",
+  scorer: ({ output }) => {
+    const haystack = output.toLowerCase()
+    return FABRICATED_SITE_STACK.some((name) =>
+      haystack.includes(name.toLowerCase()),
+    )
+      ? 0
+      : 1
+  },
+})
+
+/**
+ * #167 — "you" means Corvus.
+ *
+ * @remarks The measured failure, verbatim as the first case: "What tech do you
+ * use?" on production 2026-09-04 answered with Brandon's toolkit (Node.js,
+ * Vercel, Supabase, Vite, TanStack).
+ *
+ * The adversarial half is in the retrieval, not the wording. Measured
+ * 2026-09-04: "What tech do you use?" pulls Brandon's TypeScript, React,
+ * Next.js and Tailwind chunks into the same context window at the same score
+ * as the About Corvus passage, and "What are you built with?" pulls in both
+ * repository documents. So the wrong answer is right there to be given, which
+ * is what makes the block a test of the routing rule rather than of the
+ * corpus.
+ */
+evalite('Corvus subjects · "you" means CORVUS', {
+  data: async () => [
+    {
+      input: 'What tech do you use?',
+      expected:
+        'I run on the "Vercel AI SDK" with retrieval over this site\'s content — passages embedded and stored in "pgvector" — and I render replies with "streamdown". More is on my page at "/corvus". That is my own stack, not the list of technologies Brandon works with.',
+    },
+    {
+      input: 'What are you built with?',
+      expected:
+        'Corvus is built on the "Vercel AI SDK", with "pgvector" retrieval over this site\'s pages and Brandon\'s public repositories, and "streamdown" for rendering — see "/corvus".',
+    },
+    {
+      input: 'What are you made with?',
+      expected:
+        'I am the assistant on this site: the "Vercel AI SDK" for the chat, "pgvector" for retrieval, "streamdown" for rendering. See "/corvus".',
+    },
+    {
+      input: 'What model do you run on, and what can you answer?',
+      expected:
+        'My chat model is env-selected — "gpt-5-mini" by default — and I answer questions about Brandon and about how this site is built, always with a link to the source. See "/corvus".',
+    },
+  ],
+  task: (input) => askCorvusGrounded(input, { retrieve }),
+  // `citesKnownSourceUrl` matters here beyond citation hygiene: `/corvus` is a
+  // real route, so an answer that cited `/tech` instead would be citing a real
+  // page for a claim it does not support — the #147 failure shape, one subject
+  // over.
+  scorers: [containsExpectedFact, citesKnownSourceUrl],
+})
+
+/**
+ * #167 — "this site" survives being asked about in six different ways.
+ *
+ * @remarks One case per phrasing, because #167's second measured failure was
+ * purely a phrasing miss: the #147 rule named "run on", the visitor said
+ * "built on", and the answer came back Remix, TanStack, Netlify, Fly.io.
+ *
+ * The last two cases are the sharpest. `[measured, 2026-09-04]` "What powers
+ * this site?" and "What is under the hood on this site?" retrieve the
+ * `Brandon Perfetti's Portfolio` PROJECT entry tied with the repository
+ * passage and listed AHEAD of it — so the wrong source is not merely present,
+ * it is first. Retrieval cannot separate them at this corpus size; the prompt
+ * rule is the only thing that can.
+ */
+evalite('Corvus subjects · what THIS SITE is built on, however you ask', {
+  data: async () => [
+    {
+      input: 'What tech was this site built on?',
+      expected:
+        'This site is built with "Next.js" and "Payload" CMS on "Supabase" Postgres, per the brandonperfetti/bp-portfolio repository — not Remix or Netlify.',
+    },
+    {
+      input: 'What does this site run on?',
+      expected:
+        'It runs on "Next.js" 16 with "Payload" CMS, "Supabase" Postgres and "Vercel" hosting, documented in the brandonperfetti/bp-portfolio repository.',
+    },
+    {
+      input: 'What is this site built with?',
+      expected:
+        'The brandonperfetti/bp-portfolio repository says "Next.js", "Payload" and "Supabase" Postgres.',
+    },
+    {
+      input: 'What powers this site?',
+      expected:
+        '"Next.js" and "Payload" CMS over "Supabase" Postgres, from the brandonperfetti/bp-portfolio repository — the Projects page entry is a description of the site, not the source for its stack.',
+    },
+    {
+      input: 'What is under the hood on this site?',
+      expected:
+        'Under the hood: "Next.js", "Payload" CMS, "Supabase" Postgres, "Clerk" auth, hosted on "Vercel" — per the brandonperfetti/bp-portfolio repository.',
+    },
+  ],
+  task: (input) => askCorvusGrounded(input, { retrieve }),
+  // Three, and each catches a different failure: the facts, the source, and
+  // the specific inventions this question has produced twice.
+  scorers: [
+    containsExpectedFact,
+    citesRepoNotTechList,
+    neverNamesTheFabricatedStack,
+  ],
 })

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
+import { ABOUT_CORVUS_COLLECTION } from '@/lib/ai/aboutCorvus'
 import { CORVUS_SYSTEM_PROMPT } from '@/lib/ai/corvus'
 import {
   CORVUS_POSITIONING,
   GROUNDED_CONTEXT_HEADER,
-  REPO_DISAMBIGUATION_RULE,
+  SUBJECT_DISAMBIGUATION_RULE,
   SNIPPET_SOURCE_LABEL,
   TECH_PROFICIENCY_RANKING_RULE,
   buildGroundedSystem,
@@ -166,7 +167,7 @@ describe('buildGroundedSystem — citing the site, not the vendor', () => {
   })
 })
 
-describe('site-stack vs tech-I-use disambiguation (#147)', () => {
+describe('subject disambiguation (#147, widened by #167)', () => {
   const repoSnippet = snippet({
     collection: 'github-repos',
     title: 'brandonperfetti/bp-portfolio',
@@ -177,7 +178,7 @@ describe('site-stack vs tech-I-use disambiguation (#147)', () => {
 
   it('adds the rule when a repository passage is present', () => {
     const result = buildGroundedSystem([repoSnippet])
-    expect(result).toContain(REPO_DISAMBIGUATION_RULE)
+    expect(result).toContain(SUBJECT_DISAMBIGUATION_RULE)
     // The two halves the measured defect needs, named explicitly so a reword
     // that dropped either one fails here rather than in a keyed eval run.
     expect(result).toContain('what does this site run on')
@@ -200,7 +201,7 @@ describe('site-stack vs tech-I-use disambiguation (#147)', () => {
     // the prompt it got before #147, byte for byte, so no pre-existing eval
     // block's score can move because of this change.
     const withoutRepo = buildGroundedSystem([snippet()])
-    expect(withoutRepo).not.toContain(REPO_DISAMBIGUATION_RULE)
+    expect(withoutRepo).not.toContain(SUBJECT_DISAMBIGUATION_RULE)
     expect(withoutRepo).not.toContain('github.com')
   })
 
@@ -212,7 +213,7 @@ describe('site-stack vs tech-I-use disambiguation (#147)', () => {
 
   it('still returns the untouched persona prompt for no snippets at all', () => {
     expect(buildGroundedSystem([])).toBe(CORVUS_SYSTEM_PROMPT)
-    expect(buildGroundedSystem([])).not.toContain(REPO_DISAMBIGUATION_RULE)
+    expect(buildGroundedSystem([])).not.toContain(SUBJECT_DISAMBIGUATION_RULE)
   })
 })
 
@@ -286,7 +287,7 @@ describe('daily-driver ranking (#165)', () => {
     ])
 
     expect(both).toContain(TECH_PROFICIENCY_RANKING_RULE)
-    expect(both).toContain(REPO_DISAMBIGUATION_RULE)
+    expect(both).toContain(SUBJECT_DISAMBIGUATION_RULE)
   })
 
   it('still returns the untouched persona prompt for no snippets at all', () => {
@@ -368,5 +369,141 @@ describe('Corvus positioning (#166)', () => {
     // because of a positioning edit.
     expect(buildGroundedSystem([])).toBe(CORVUS_SYSTEM_PROMPT)
     expect(buildGroundedSystem([])).not.toContain(CORVUS_POSITIONING)
+  })
+})
+
+/**
+ * The three-way subject rule (#167).
+ *
+ * @remarks Two measured production failures on 2026-09-04, and the rule has to
+ * close both without reopening #147's mirror case.
+ */
+describe('three-way subject disambiguation (#167)', () => {
+  const aboutCorvus = snippet({
+    collection: ABOUT_CORVUS_COLLECTION,
+    title: 'About Corvus',
+    sourceUrl: '/corvus',
+    content: 'Corvus is the AI assistant built into this site.',
+    score: 1,
+  })
+  const repoSnippet = snippet({
+    collection: 'github-repos',
+    title: 'brandonperfetti/bp-portfolio',
+    sourceUrl: 'https://github.com/brandonperfetti/bp-portfolio',
+  })
+
+  it('fires on the About Corvus passage, with no repository present', () => {
+    // The #167 half #147 could not reach: the addressee is Corvus, and
+    // "what tech do you use" retrieves no repository at all.
+    const result = buildGroundedSystem([aboutCorvus])
+
+    expect(result).toContain(SUBJECT_DISAMBIGUATION_RULE)
+    expect(result).toContain('YOU — Corvus')
+  })
+
+  it('routes a question addressed to Corvus away from Brandon’s list', () => {
+    // The measured failure: "What tech do you use?" answered with Brandon's
+    // toolkit (Node.js, Vercel, Supabase, Vite, TanStack).
+    expect(buildGroundedSystem([aboutCorvus])).toContain(
+      "Never answer a question addressed to you from Brandon's technology list",
+    )
+  })
+
+  it.each([
+    'run on',
+    'built on',
+    'built with',
+    'made with',
+    'powered by',
+    'under the hood',
+  ])('names the "%s" phrasing for the site subject', (phrasing) => {
+    // #167's second measured failure was a phrasing miss and nothing else:
+    // the #147 rule said "run on", the visitor said "built on", and the answer
+    // came back Remix/TanStack/Netlify/Fly.io.
+    expect(buildGroundedSystem([repoSnippet])).toContain(phrasing)
+  })
+
+  it('forbids answering about this site from projects or the tech list', () => {
+    // `[measured, 2026-09-04]` "What powers this site?" retrieves the
+    // `Brandon Perfetti's Portfolio` PROJECT entry tied with the repository
+    // passage, and ahead of it. Retrieval cannot separate them; the rule must.
+    expect(buildGroundedSystem([repoSnippet])).toContain(
+      'Never answer a question about this site from a project entry or from the general technology list',
+    )
+  })
+
+  it('keeps #147’s mirror clause, so it cannot over-correct', () => {
+    // A rule that pushed toward the repository whenever one was in context
+    // would fix the site case and silently break "what does Brandon use".
+    expect(buildGroundedSystem([repoSnippet])).toContain(
+      'Never answer this one from a repository',
+    )
+  })
+
+  it('is ONE rule, not two rules competing', () => {
+    // #167 says replace or extend, never stack a second paragraph: two
+    // subject rules mean the model picks whichever it read last.
+    const result = buildGroundedSystem([aboutCorvus, repoSnippet])
+    const first = result.indexOf(SUBJECT_DISAMBIGUATION_RULE)
+
+    expect(first).toBeGreaterThan(-1)
+    expect(result.indexOf(SUBJECT_DISAMBIGUATION_RULE, first + 1)).toBe(-1)
+  })
+
+  it('stays absent when neither confusable subject was retrieved', () => {
+    const article = buildGroundedSystem([snippet()])
+
+    expect(article).not.toContain(SUBJECT_DISAMBIGUATION_RULE)
+    expect(article).not.toContain('YOU — Corvus')
+  })
+
+  it('fires on a site-shaped QUESTION even with no repository passage', () => {
+    // The gap the orchestrator measured. "What tech was this site built on?"
+    // is #167's own filed failure, and when no repository lands in the top-k
+    // the passages that DO come back are a project entry and the tech list —
+    // the two sources the rule forbids. Gating on passages alone left exactly
+    // that turn unguarded.
+    const result = buildGroundedSystem([
+      snippet({
+        collection: 'projects',
+        title: "Brandon Perfetti's Portfolio",
+        sourceUrl: '/projects',
+        questionSubject: 'site',
+      }),
+      snippet({
+        collection: 'tech-stack',
+        title: 'React',
+        sourceUrl: '/tech',
+        questionSubject: 'site',
+      }),
+    ])
+
+    expect(result).toContain(SUBJECT_DISAMBIGUATION_RULE)
+    expect(result).toContain(
+      'Never answer a question about this site from a project entry or from the general technology list',
+    )
+  })
+
+  it('stays absent for an unrelated question with the SAME passages', () => {
+    // The control for the case above: identical collections, no marker, so it
+    // is the question's shape doing the work and not the passages.
+    const result = buildGroundedSystem([
+      snippet({
+        collection: 'projects',
+        title: "Brandon Perfetti's Portfolio",
+        sourceUrl: '/projects',
+      }),
+      snippet({ collection: 'tech-stack', title: 'React', sourceUrl: '/tech' }),
+    ])
+
+    expect(result).not.toContain(SUBJECT_DISAMBIGUATION_RULE)
+  })
+
+  it('renders the About Corvus passage with a citable Source line', () => {
+    // It arrives as an ordinary snippet, so the existing citation rules cover
+    // it with no exception written for it.
+    expect(buildGroundedSystem([aboutCorvus])).toContain(
+      `${SNIPPET_SOURCE_LABEL} /corvus`,
+    )
   })
 })
