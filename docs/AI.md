@@ -486,6 +486,60 @@ a capture** — its header records exactly which repository facts came from this
 repo's own `CLAUDE.md`/`docs/` and which from the captured `/api/projects`
 record. No live GitHub call is made by any eval.
 
+#### Ranking Brandon's technologies (#165)
+
+`tech_stack.proficiency` is the ranking signal, and until #165 nothing used
+it. `[measured, prod 2026-09-04, signed in]` "What tech do you use?" answered
+TypeScript, TanStack, Vite, Vercel and Expo — every name real, **Next.js and
+React absent**, because retrieval is pure vector similarity and a
+similarity-ranked SAMPLE was being presented as a ranking. `featured` is no
+help (`true` on 37 of 40 rows) and `sortOrder` is just the `/tech` display
+order.
+
+| `proficiency` | Label        | In an answer                       |
+| ------------- | ------------ | ---------------------------------- |
+| `daily`       | Daily driver | leads                              |
+| `proficient`  | Proficient   | second, and said to be second      |
+| `familiar`    | Familiar     | mentioned if asked, never headline |
+| `exploring`   | Exploring    | mentioned if asked, never headline |
+| `NULL`        | —            | no proficiency line in the chunk   |
+
+`[measured, prod DB 2026-09-04]` ten rows are `daily`: TypeScript, Node.js,
+React, Next.js, GraphQL, Tailwind CSS, Clerk, Supabase, Vercel, AI SDK. The
+data half of #165 was Brandon's, through the Payload MCP on both environments.
+
+The code half is two changes at opposite ends:
+
+- **Chunk text** (`chunking.ts`): the human label is embedded rather than the
+  enum (`Proficiency: Daily driver`, not `Proficiency: daily` — "daily" alone
+  reads as a frequency), and a `daily` row's chunk OPENS with a sentence saying
+  the technology is one Brandon works in most days. A sentence rather than a
+  fourth label, and first rather than last, because prose about everyday use is
+  the shape a "what do you use?" question actually resembles; a label list is
+  not.
+- **Prompt** (`groundedSystem.ts`): `TECH_PROFICIENCY_RANKING_RULE` names the
+  four labels as an ORDER and says to lead with Daily driver, then Proficient,
+  and to say which is which. It also repeats "answer only from the passages you
+  were given" — ten daily rows against five retrieved passages is otherwise a
+  standing invitation to supply the rest from memory.
+
+Appended only when a `tech-stack` passage was retrieved, the same
+blast-radius contract as the repo rule above.
+
+**The chunk change needs a re-embed to take effect.** It moves `content_hash`,
+so affected rows re-embed on their next save — or all at once through
+`scripts/backfill-corvus-embeddings.ts`. The prompt half ships independently
+and does not wait for it.
+
+**Retrieval was deliberately NOT changed.** #165 floats a deterministic boost
+for `daily` rows on stack-shaped questions. It is not implemented, for two
+reasons. It cannot be measured here — a boost is a claim about embedding
+neighbourhoods, and there is no provider key outside Brandon's keyed runs. And
+it collides with #167: a boost keyed on stack-shaped PHRASING would fire on
+"what does this site run on" and "what tech do you use", the two questions
+#167 says must never be answered from the general tech list. If it is revisited
+it belongs behind the same subject routing, measured, not before it.
+
 ### Citing the site, not the vendor (#82 wave 4)
 
 Each retrieved passage renders as a numbered heading, a `Source:` line

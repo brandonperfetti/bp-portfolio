@@ -2,9 +2,13 @@ import { createHash } from 'node:crypto'
 
 import { describe, expect, it } from 'vitest'
 
+import { TechStack } from '@/collections/TechStack'
 import {
   CHUNK_OVERLAP_TOKENS,
   CORVUS_EMBEDDED_COLLECTIONS,
+  DAILY_DRIVER_PROFICIENCY,
+  TECH_PROFICIENCY_LABELS,
+  type TechProficiency,
   MAX_CHUNK_TOKENS,
   chunkDocument,
   chunkFlatRecord,
@@ -14,6 +18,7 @@ import {
   isEmbeddable,
   sourceUrlFor,
   takeTailTokens,
+  techProficiencyLabel,
   visibilityOf,
 } from '@/lib/ai/chunking'
 
@@ -410,6 +415,104 @@ describe('chunkFlatRecord', () => {
   it('leaves published_at null so retrieval never date-filters them out', () => {
     const [chunk] = chunkFlatRecord('tech-stack', { id: 1, name: 'Vitest' })
     expect(chunk.publishedAt).toBeNull()
+  })
+})
+
+/**
+ * #165 — the chunk has to carry the ranking signal, not just store it.
+ *
+ * @remarks Asked "What tech do you use?" on production (2026-09-04) Corvus
+ * answered TypeScript, TanStack, Vite, Vercel and Expo, omitting Next.js and
+ * React. `proficiency` already held the answer; `Proficiency: daily` was just
+ * a poor thing for a query vector to find, and "daily" alone reads as a
+ * frequency rather than a ranking.
+ */
+describe('tech-stack proficiency in the chunk (#165)', () => {
+  it('embeds the human label, not the raw enum value', () => {
+    const [chunk] = chunkFlatRecord('tech-stack', {
+      id: 1,
+      name: 'Next.js',
+      proficiency: 'daily',
+    })
+
+    expect(chunk.content).toContain('Proficiency: Daily driver')
+    expect(chunk.content).not.toContain('Proficiency: daily')
+  })
+
+  it('leads a daily-driver chunk with a sentence, before the labels', () => {
+    const [chunk] = chunkFlatRecord('tech-stack', {
+      id: 1,
+      name: 'Next.js',
+      proficiency: 'daily',
+    })
+
+    // First, so it is what a "what does Brandon use most?" query vector meets:
+    // prose about everyday use, not the head of a list of attributes.
+    expect(chunk.content.startsWith('Next.js is one of')).toBe(true)
+    expect(chunk.content).toContain('daily drivers')
+    expect(chunk.content.indexOf('daily drivers')).toBeLessThan(
+      chunk.content.indexOf('Technology: Next.js'),
+    )
+  })
+
+  it.each<TechProficiency>(['proficient', 'familiar', 'exploring'])(
+    'gives a %s row its label and NO lead sentence',
+    (proficiency) => {
+      const [chunk] = chunkFlatRecord('tech-stack', {
+        id: 2,
+        name: 'PostgreSQL',
+        proficiency,
+      })
+
+      expect(chunk.content).toContain(
+        `Proficiency: ${TECH_PROFICIENCY_LABELS[proficiency]}`,
+      )
+      // The lead is the discriminator. Handing it to every row would flatten
+      // exactly the ranking #165 exists to expose.
+      expect(chunk.content).not.toContain('daily drivers')
+      expect(chunk.content.startsWith('Technology: PostgreSQL')).toBe(true)
+    },
+  )
+
+  it('omits proficiency entirely when the row has none', () => {
+    // ~35 rows on prod carry NULL. A bare `Proficiency:` label, or an invented
+    // default, would both be claims the data does not make.
+    const [chunk] = chunkFlatRecord('tech-stack', { id: 3, name: 'Deno' })
+
+    expect(chunk.content).not.toContain('Proficiency')
+    expect(chunk.content).not.toContain('daily drivers')
+  })
+
+  it('passes an unknown proficiency through rather than dropping it', () => {
+    const [chunk] = chunkFlatRecord('tech-stack', {
+      id: 4,
+      name: 'Zig',
+      proficiency: 'occasional',
+    })
+
+    expect(chunk.content).toContain('Proficiency: occasional')
+  })
+
+  it('keeps the label map in step with the collection it copies', () => {
+    // The map is a copy (chunking.ts must not import Payload field config).
+    // This is what stops the copy drifting: add an option to TechStack and
+    // this fails until the label lands here too.
+    const field = TechStack.fields.find(
+      (candidate) => 'name' in candidate && candidate.name === 'proficiency',
+    )
+    const options = (field as { options: { label: string; value: string }[] })
+      .options
+
+    expect(Object.keys(TECH_PROFICIENCY_LABELS).sort()).toEqual(
+      options.map((option) => option.value).sort(),
+    )
+    for (const option of options) {
+      expect(techProficiencyLabel(option.value)).toBe(option.label)
+    }
+    // And the value the ranking rule keys on is a real option.
+    expect(
+      options.some((option) => option.value === DAILY_DRIVER_PROFICIENCY),
+    ).toBe(true)
   })
 })
 

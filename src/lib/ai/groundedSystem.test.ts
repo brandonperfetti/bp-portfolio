@@ -5,6 +5,7 @@ import {
   GROUNDED_CONTEXT_HEADER,
   REPO_DISAMBIGUATION_RULE,
   SNIPPET_SOURCE_LABEL,
+  TECH_PROFICIENCY_RANKING_RULE,
   buildGroundedSystem,
 } from '@/lib/ai/groundedSystem'
 import type { CorvusSnippet } from '@/lib/ai/retrieval'
@@ -211,5 +212,83 @@ describe('site-stack vs tech-I-use disambiguation (#147)', () => {
   it('still returns the untouched persona prompt for no snippets at all', () => {
     expect(buildGroundedSystem([])).toBe(CORVUS_SYSTEM_PROMPT)
     expect(buildGroundedSystem([])).not.toContain(REPO_DISAMBIGUATION_RULE)
+  })
+})
+
+/**
+ * Daily drivers lead (#165).
+ *
+ * @remarks The measured defect was an answer with nothing wrong in it:
+ * TypeScript, TanStack, Vite, Vercel, Expo — all real `/tech` rows, Next.js
+ * and React missing. So the assertions here are about the RULE being present
+ * and correctly scoped, not about wording a keyed eval would grade.
+ */
+describe('daily-driver ranking (#165)', () => {
+  const dailySnippet = snippet({
+    collection: 'tech-stack',
+    title: 'Next.js',
+    sourceUrl: '/tech',
+    content: [
+      "Next.js is one of Brandon Perfetti's daily-driver technologies.",
+      'Technology: Next.js',
+      'Proficiency: Daily driver',
+    ].join('\n'),
+  })
+
+  it('adds the rule when a tech-stack passage is present', () => {
+    const result = buildGroundedSystem([dailySnippet])
+
+    expect(result).toContain(TECH_PROFICIENCY_RANKING_RULE)
+    // The three load-bearing clauses, named so a reword that loses one fails
+    // here rather than in a keyed eval run.
+    expect(result).toContain('lead with the Daily driver entries')
+    expect(result).toContain('say which is which')
+    expect(result).toContain('Never headline a Familiar or Exploring entry')
+  })
+
+  it('names the ordering the Proficiency line encodes', () => {
+    // Without this the model has four labels and no idea they are a ranking.
+    expect(buildGroundedSystem([dailySnippet])).toContain(
+      'Daily driver, Proficient, Familiar or Exploring, in that order',
+    )
+  })
+
+  it('does not ask for names the retrieved passages do not contain', () => {
+    // Ten rows are daily on prod; retrieval hands over five passages. A rule
+    // demanding the full set would be a standing invitation to fabricate.
+    expect(buildGroundedSystem([dailySnippet])).toContain(
+      'Answer only from the passages you were given',
+    )
+  })
+
+  it('omits the rule entirely when no tech-stack passage was retrieved', () => {
+    // Same blast-radius contract as #147's repo rule: a turn that retrieves no
+    // technology gets the prompt it got before this change, byte for byte, so
+    // no unrelated eval block's score can move.
+    const withoutTech = buildGroundedSystem([snippet()])
+
+    expect(withoutTech).not.toContain(TECH_PROFICIENCY_RANKING_RULE)
+    expect(withoutTech).not.toContain('Daily driver')
+  })
+
+  it('stacks with the repo rule without either displacing the other', () => {
+    // Both fire on "what does this site run on" turns once repo documents
+    // exist, and they answer different questions — one picks the SUBJECT, the
+    // other ranks within Brandon's list.
+    const both = buildGroundedSystem([
+      dailySnippet,
+      snippet({
+        collection: 'github-repos',
+        title: 'brandonperfetti/bp-portfolio',
+        sourceUrl: 'https://github.com/brandonperfetti/bp-portfolio',
+      }),
+    ])
+
+    expect(both).toContain(TECH_PROFICIENCY_RANKING_RULE)
+    expect(both).toContain(REPO_DISAMBIGUATION_RULE)
+  })
+
+  it('still returns the untouched persona prompt for no snippets at all', () => {
+    expect(buildGroundedSystem([])).toBe(CORVUS_SYSTEM_PROMPT)
   })
 })
