@@ -401,6 +401,29 @@ describe('three-way subject disambiguation (#167)', () => {
     expect(result).toContain('YOU — Corvus')
   })
 
+  it('tells Corvus to LINK its own citation, not write the path as prose', () => {
+    // `[measured, Brandon's keyed eval:ci, 2026-09-04]` the "you = Corvus"
+    // block scored 0 on `cites-a-real-source-url` in all four cases, and the
+    // outputs show why: the model wrote `Source: /corvus` as plain text,
+    // copying the label it had just read out of the context block. The path
+    // was right and there was nothing to click — which since #158 is a real
+    // product failure, because an internal citation renders as an anchor.
+    const result = buildGroundedSystem([aboutCorvus])
+
+    expect(result).toContain(
+      `by linking its ${SNIPPET_SOURCE_LABEL} path, not by writing the path as plain text`,
+    )
+    // And it defers to the general instruction rather than restating it, so
+    // the two cannot drift into saying different things.
+    expect(result).toContain('cite it exactly as you cite any other passage')
+  })
+
+  it('asks for a link on every subject, not only the Corvus one', () => {
+    expect(buildGroundedSystem([repoSnippet])).toContain(
+      'Cite whichever passage the question is actually asking about, as a link',
+    )
+  })
+
   it('routes a question addressed to Corvus away from Brandon’s list', () => {
     // The measured failure: "What tech do you use?" answered with Brandon's
     // toolkit (Node.js, Vercel, Supabase, Vite, TanStack).

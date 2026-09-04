@@ -5,7 +5,10 @@ import { createCitationScorers } from './citation-scorers'
 import { createGuardedScorer } from './empty-output'
 import { GITHUB_REPO_FIXTURES } from './fixtures/github-repos'
 import { createFixtureRetriever } from './fixtures/retriever'
-import { containsExpectedFact } from './scorers'
+import { containsExpectedFact, createCitesLinkedSourceUrl } from './scorers'
+import { fixtureSourceUrls } from './fixtures/retriever'
+import { SITE_CHROME_URLS } from './fixtures/site-routes'
+import { ABOUT_CORVUS_SOURCE_URL } from '../src/lib/ai/aboutCorvus'
 import { withAboutCorvusSnippet } from '../src/lib/ai/aboutCorvus'
 import { markSiteSubject } from '../src/lib/ai/retrieval'
 
@@ -40,8 +43,43 @@ import { markSiteSubject } from '../src/lib/ai/retrieval'
  *    "built on" never reached it.
  */
 
-const { citesKnownSourceUrl, citesRepoNotTechList, citesTechListNotRepo } =
-  createCitationScorers()
+const { citesRepoNotTechList, citesTechListNotRepo } = createCitationScorers()
+
+/**
+ * The citation scorer for the Corvus-subject block, built for it alone.
+ *
+ * @remarks Two things had to change together, and both were measured on
+ * Brandon's keyed `eval:ci` run (2026-09-04, 86% overall, pass): the
+ * "you = Corvus" block scored **0 on `cites-a-real-source-url` in all four
+ * cases**, for two independent reasons.
+ *
+ * 1. **`/corvus` was not in any corpus.** `createCitesKnownSourceUrl` demands
+ *    `corpus.has(path)`, and `fixtureSourceUrls()` is built from the fixture
+ *    CHUNKS — `/`, five articles, `/projects`, `/tech`, `/uses`
+ *    `[measured]`. The About Corvus passage is code-owned and never chunked,
+ *    so its `sourceUrl` was reachable only through `alsoReal`
+ *    (`SITE_CHROME_URLS`), which answers "does this page exist" and not "is
+ *    this a source you were given". Hence a scorer built here, over this
+ *    block's real corpus: the fixture URLs **plus** the passage this block
+ *    actually hands the model. Every other block's scorer construction is
+ *    untouched, so nothing that already ran can move.
+ * 2. **The citation was not a link.** The answers wrote `Source: /corvus` as
+ *    prose. `citedPaths` finds that — its third pass reads bare paths out of
+ *    prose on purpose `[measured, 2026-09-04]`, so simply adding `/corvus` to
+ *    the corpus would have scored those same unclickable answers 1 and called
+ *    the defect fixed. Since #158 an internal citation is a real anchor, and
+ *    prose is not one. {@link createCitesLinkedSourceUrl} is the scorer that
+ *    can tell the difference.
+ *
+ * The prompt fix (the YOU rule now says "by linking its Source: path, not by
+ * writing the path as plain text") is what should move this score. This scorer
+ * is what makes the movement legible instead of averaging a real product
+ * failure into a pass.
+ */
+const citesLinkedSourceUrl = createCitesLinkedSourceUrl(
+  [...fixtureSourceUrls(), ABOUT_CORVUS_SOURCE_URL],
+  { alsoReal: SITE_CHROME_URLS },
+)
 
 /**
  * Both corpora, at the production floor.
@@ -256,17 +294,37 @@ evalite('Corvus subjects · "you" means CORVUS', {
         'I am the assistant on this site: the "Vercel AI SDK" for the chat, "pgvector" for retrieval, "streamdown" for rendering. See "/corvus".',
     },
     {
-      input: 'What model do you run on, and what can you answer?',
+      // Was "What model do you run on, and what can you answer?", which scored
+      // `contains-expected-fact` 50 on the keyed run. The passage supports
+      // both quoted literals, so the expectation was not asking for anything
+      // unstated — the CASE was the problem: a compound question invites one
+      // compressed answer, and the half that gets compressed is the specific
+      // model id. Split into two, each asking one thing, each quoting what the
+      // passage states about that thing. "by default" mirrors the passage's
+      // own framing (the model is env-selected), so the id is the direct
+      // answer rather than a detail the model may reasonably hedge away.
+      input: 'Which model do you run on by default?',
       expected:
-        'My chat model is env-selected — "gpt-5-mini" by default — and I answer questions about Brandon and about how this site is built, always with a link to the source. See "/corvus".',
+        'My chat model is env-selected; by default it is OpenAI\'s "gpt-5-mini", with Anthropic as the alternative provider. More about how I work is on "/corvus".',
+    },
+    {
+      // "What can you ANSWER…" was the first draft and `isAboutCorvusQuestion`
+      // does not route it `[measured, 2026-09-04]` — the tightened topic
+      // vocabulary has no bare `answer`, deliberately, since "can you answer
+      // this question about X?" is a request rather than a self-description.
+      // A case the addressee rule does not route would have measured the
+      // fixture corpus instead of the passage, so the phrasing moved to one
+      // the rule does route.
+      input: 'What are your capabilities, and what can you not do?',
+      expected:
+        'I answer questions about Brandon — his work history, technologies, projects and articles — and about how this site is built, always linking the source. I have no "memory" of previous conversations and cannot change site content. See "/corvus".',
     },
   ],
   task: (input) => askCorvusGrounded(input, { retrieve }),
-  // `citesKnownSourceUrl` matters here beyond citation hygiene: `/corvus` is a
-  // real route, so an answer that cited `/tech` instead would be citing a real
-  // page for a claim it does not support — the #147 failure shape, one subject
-  // over.
-  scorers: [containsExpectedFact, citesKnownSourceUrl],
+  // The citation scorer is link-aware and is built over this block's own
+  // corpus — see `citesLinkedSourceUrl` above for both halves of why the
+  // stock one scored 0 on answers that named the right path.
+  scorers: [containsExpectedFact, citesLinkedSourceUrl],
 })
 
 /**

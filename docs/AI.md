@@ -619,6 +619,39 @@ in place would let it read `/toptimelines` out of the middle and call it a
 fabricated path), so a repository citation is structurally invisible to
 `cites-a-real-source-url`.
 
+##### Citing the About Corvus passage as a LINK (#167 follow-on)
+
+`[measured, Brandon's keyed eval:ci, 2026-09-04, 86% overall, pass]` the
+"you = Corvus" block scored **0 on `cites-a-real-source-url` in all four
+cases**, and the outputs show the model naming the right path: it wrote
+`Source: /corvus` as plain prose, copying the label it had just read out of the
+context block. Two independent defects were behind one score:
+
+1. **The citation was not a link.** Since #158 an internal citation renders as
+   a real same-tab anchor; a path written as prose renders as prose, with
+   nothing to click. So the `YOU` clause of `SUBJECT_DISAMBIGUATION_RULE` now
+   defers to the general instruction in its own words — cite "exactly as you
+   cite any other passage — by linking its `Source:` path, not by writing the
+   path as plain text" — and the rule's closing sentence asks for a link on all
+   three subjects. Fixed in the prompt, not by relaxing a scorer.
+2. **`/corvus` was in no corpus.** `createCitesKnownSourceUrl` requires
+   `corpus.has(path)`, and `fixtureSourceUrls()` is built from the fixture
+   CHUNKS — the About Corvus passage is code-owned and never chunked, so its
+   `sourceUrl` was reachable only through `alsoReal` (`SITE_CHROME_URLS`),
+   which answers "does this page exist", not "is this a source you were given".
+
+The fix for (2) is a scorer built **for that block alone**
+(`cites-a-linked-source-url`), over the fixture URLs plus `/corvus`. Every
+other block's scorer construction is untouched, per the "adds only that"
+discipline in `citation-scorers.ts` — nothing that already ran can move.
+
+It is **link-aware**, and that is load-bearing rather than fastidious:
+`citedPaths` **does** find `Source: /corvus` in prose `[measured, 2026-09-04]`,
+so widening the corpus alone would have scored those same unclickable answers 1
+and declared the defect fixed. See the TSDoc on `linkedCitedPaths` and
+`createCitesLinkedSourceUrl` in `evals/scorers.ts` for how the two path passes
+relate and what each still judges.
+
 `evals/corvus-subjects.eval.ts` adds three blocks for #165 and #167 — what
 Brandon uses, what "you" means, and the site subject across five phrasings —
 kept in their own file so a routing regression cannot be averaged away by

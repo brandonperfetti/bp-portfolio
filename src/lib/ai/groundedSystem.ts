@@ -79,6 +79,27 @@ export const SNIPPET_SOURCE_LABEL = 'Source:'
  * specifically a phrasing miss, and a rule that says "questions like this one"
  * with one example is a rule that generalises at the model's discretion.
  *
+ * ## Why the YOU clause says "linking", out loud
+ *
+ * `[measured, Brandon's keyed eval:ci, 2026-09-04]` the "you = Corvus" block
+ * scored **0 on `cites-a-real-source-url` for all four cases** — and the
+ * outputs show the model DID name the right path. It wrote
+ * `Source: /corvus` as plain prose, mirroring the label it had just read in
+ * the context block, instead of `[Corvus](/corvus)`.
+ *
+ * That is a real user-facing failure, not a scoring artefact. #158 made
+ * internal citations real same-tab anchors, and a path written as prose is not
+ * an anchor: there is nothing to click. So the fix is in the instruction, not
+ * in the scorer's tolerance.
+ *
+ * The general instruction above already says to cite by LINKING that passage's
+ * {@link SNIPPET_SOURCE_LABEL} path. The YOU clause used to say only "cite its
+ * source path", and next to a passage whose own heading carries a literal
+ * source label line, that reads as permission to reproduce the line. It now
+ * defers to the general rule in the general rule's words and names the failure
+ * mode explicitly, and the closing "as a link" covers all three subjects at
+ * once.
+ *
  * ## The github.com sentence, retained verbatim
  *
  * It grants permission to cite a repository's address, which the surrounding
@@ -91,10 +112,10 @@ export const SNIPPET_SOURCE_LABEL = 'Source:'
  * contradiction.
  */
 export const SUBJECT_DISAMBIGUATION_RULE = `A question here can be about one of three different subjects, and they take different answers.
-1. YOU — Corvus, the assistant the visitor is talking to. "What do you run on", "what are you built with", "what tech do you use", "what can you do", "how do you work". Answer from the About Corvus passage and cite its ${SNIPPET_SOURCE_LABEL} path. Never answer a question addressed to you from Brandon's technology list; that is his stack, not yours.
+1. YOU — Corvus, the assistant the visitor is talking to. "What do you run on", "what are you built with", "what tech do you use", "what can you do", "how do you work". Answer from the About Corvus passage, and cite it exactly as you cite any other passage — by linking its ${SNIPPET_SOURCE_LABEL} path, not by writing the path as plain text. Never answer a question addressed to you from Brandon's technology list; that is his stack, not yours.
 2. THIS SITE — brandonperfetti.com itself. Phrase it however they like: what does this site run on, what was it built on, built with, made with, what is it powered by, what is under the hood here. Answer from the brandonperfetti/bp-portfolio repository passage when you have one, and from an article about this site's stack otherwise. Never answer a question about this site from a project entry or from the general technology list — neither describes what this site is built on.
 3. BRANDON — what technologies does Brandon use, what is his stack, what are his go-to tools. Answer from the site's /tech page. Never answer this one from a repository.
-Cite whichever passage the question is actually asking about, and if you genuinely cannot tell which subject is meant, say which one you are answering about. A repository passage's ${SNIPPET_SOURCE_LABEL} line is a github.com address, and unlike an address quoted inside a passage's body it IS that passage's source, so cite it as you would any other ${SNIPPET_SOURCE_LABEL} path.`
+Cite whichever passage the question is actually asking about, as a link, and if you genuinely cannot tell which subject is meant, say which one you are answering about. A repository passage's ${SNIPPET_SOURCE_LABEL} line is a github.com address, and unlike an address quoted inside a passage's body it IS that passage's source, so cite it as you would any other ${SNIPPET_SOURCE_LABEL} path.`
 
 /**
  * What Corvus is, said once per grounded turn (#166).
