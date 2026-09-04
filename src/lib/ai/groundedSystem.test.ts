@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { CORVUS_SYSTEM_PROMPT } from '@/lib/ai/corvus'
 import {
+  CORVUS_POSITIONING,
   GROUNDED_CONTEXT_HEADER,
   REPO_DISAMBIGUATION_RULE,
   SNIPPET_SOURCE_LABEL,
@@ -290,5 +291,82 @@ describe('daily-driver ranking (#165)', () => {
 
   it('still returns the untouched persona prompt for no snippets at all', () => {
     expect(buildGroundedSystem([])).toBe(CORVUS_SYSTEM_PROMPT)
+  })
+})
+
+/**
+ * The positioning line (#166).
+ *
+ * @remarks Three things were describing Corvus differently — the `/corvus`
+ * subtitle, this prompt, and what the citations pointed at. Brandon settled
+ * the copy on 2026-09-04 (candidate 2) and wrote the subtitle in the CMS
+ * himself; these assertions are how the prompt half stays in step with it.
+ */
+describe('Corvus positioning (#166)', () => {
+  it('states what Corvus is, on every grounded turn', () => {
+    const result = buildGroundedSystem([snippet()])
+    expect(result).toContain(CORVUS_POSITIONING)
+  })
+
+  it('names the subject Brandon chose, not a sandbox', () => {
+    // The subtitle it has to agree with: "A grounded assistant for everything
+    // Brandon: work history, technologies, projects, articles, and this
+    // site's own code". The old copy described a workspace for prompt
+    // iteration and image experiments, which is not what Corvus became.
+    const result = buildGroundedSystem([snippet()])
+
+    expect(result).toContain('grounded assistant for everything Brandon')
+    for (const subject of [
+      'work history',
+      'technologies',
+      'projects and articles',
+      'how this site itself is built',
+    ]) {
+      expect(result).toContain(subject)
+    }
+  })
+
+  it('names both sources — the site’s pages and the public repos', () => {
+    expect(buildGroundedSystem([snippet()])).toContain(
+      'the pages of this site and his public GitHub repositories',
+    )
+  })
+
+  it('refuses to read as new permission', () => {
+    // A confident statement of purpose sitting above a list of citation
+    // restrictions is exactly the text a model can mistake for a licence to
+    // fill gaps in the subject it was just handed. The line says otherwise in
+    // the same breath, and that clause is load-bearing, not padding.
+    const result = buildGroundedSystem([snippet()])
+
+    expect(result).toContain(
+      'it does not widen what you may claim or which URLs you may write',
+    )
+    expect(result).toContain('the rules above still hold exactly as written')
+    // And the constraints it defers to are still present, unsoftened.
+    expect(result).toContain(
+      `Those ${SNIPPET_SOURCE_LABEL} paths are the ONLY site URLs you may cite`,
+    )
+    expect(result).toContain(
+      'never claim the site says something that is not in here',
+    )
+  })
+
+  it('sits after the persona prompt, not inside it', () => {
+    const result = buildGroundedSystem([snippet()])
+
+    expect(result.startsWith(CORVUS_SYSTEM_PROMPT)).toBe(true)
+    expect(CORVUS_SYSTEM_PROMPT).not.toContain(CORVUS_POSITIONING)
+    expect(result.indexOf(CORVUS_POSITIONING)).toBeGreaterThan(
+      CORVUS_SYSTEM_PROMPT.length - 1,
+    )
+  })
+
+  it('leaves the ungrounded path byte-identical', () => {
+    // The one thing that must not move. The safety and persona blocks run
+    // ungrounded, so their prompt — and their recorded scores — cannot change
+    // because of a positioning edit.
+    expect(buildGroundedSystem([])).toBe(CORVUS_SYSTEM_PROMPT)
+    expect(buildGroundedSystem([])).not.toContain(CORVUS_POSITIONING)
   })
 })

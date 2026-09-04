@@ -231,6 +231,45 @@ it does not stop the truncation. Two candidates, neither implemented:
 Whichever lands, the acceptance test is a keyed run showing the safety-refusal
 case returning visible text at the chosen budget.
 
+## What Corvus is (#166)
+
+**A grounded assistant for everything Brandon: work history, technologies,
+projects, articles, and this site's own code — sourced from the pages here and
+his public repos.** Brandon settled that wording on 2026-09-04 during the
+wave-5 release smoke, and it is the `/corvus` subtitle verbatim (CMS content,
+his own write — a content edit, no deploy).
+
+Three things have to say the same thing, and before #166 they did not: the
+page copy still described "a practical AI workspace for Q&A, prompt iteration,
+and image generation experiments", the prompt described a persona, and the
+citations pointed at site pages and repositories. `CORVUS_POSITIONING` in
+`groundedSystem.ts` is the model-facing half, appended to every **grounded**
+turn.
+
+Two deliberate limits on it:
+
+- It is **not** in `CORVUS_SYSTEM_PROMPT`. That constant is frozen by contract
+  — `buildGroundedSystem([])` returns it by identity, the safety eval's
+  injection-leak assertion is built on its value, and `corvus.test.ts` pins the
+  routes it names. And the positioning is only meaningful when there are
+  passages: an ungrounded turn has no pages and no repositories for "sourced
+  from the pages here" to describe.
+- It does **not** narrow the persona to Brandon-only questions, which would
+  quietly repeal #77's broad scope, and it does not widen what may be claimed
+  or cited — it says so in its own closing sentence, because a confident
+  statement of purpose sitting above a list of citation restrictions is exactly
+  the text a model reads as new permission.
+
+Unlike the repo and proficiency rules it is **unconditional** within the
+grounded block, so every grounded eval block's prompt moves with it. That is
+the intended cost: what Corvus is is not a per-subject rule that can be gated
+on a collection. The ungrounded blocks are untouched, byte for byte.
+
+**Citation contract, post-sync.** `[measured, prod 2026-09-04, ops block C
+live check]` after the first GitHub sync, "what does this site run on" cites
+the `bp-portfolio` repository — the external-link confirmation is expected
+there, because the link really does leave the site.
+
 ## Persona scope
 
 Corvus's scope is **broad by design** (#77 follow-up): a genuinely useful
