@@ -68,16 +68,37 @@ import type { Page } from '@/payload-types'
  * unlocked a URL — never to a title edit, never to a first publish, never to a
  * top-level page, and never to a draft that has never been published.
  *
- * **Except on one path, and deliberately so.** `enforceSlugFreeze` is a
- * *field*-level `beforeValidate` hook, and Payload runs collection-level
- * `beforeValidate` first — so this guard speaks before the freeze does. An
- * unlock-less API rename (a REST `PATCH` or an MCP write that omits
- * `slugLock: false`) on a nested, published page therefore gets this 400 rather
- * than the field hook's silent revert. That is the better outcome of the two:
- * loud beats silent, and a caller told "this rename would break a URL" is
- * better served than one whose write appears to succeed with the slug quietly
- * put back. It is an imprecision, though, and the Posts hook has exactly the
- * same one — worth saying out loud so neither reads as an accident.
+ * ## Where this runs, and why that is what makes it correct
+ *
+ * Payload's update operation runs **field** `beforeValidate` *before*
+ * **collection** `beforeValidate`, and the field hooks write their results back
+ * into the same `data` object
+ * (`payload/collections/operations/utilities/update.ts` →
+ * `fields/hooks/beforeValidate/index.ts`, whose `siblingData` *is* the incoming
+ * `data`). So by the time this collection hook is called, `data.slug` is the
+ * slug the field chain `[formatSlugHook, enforceSlugFreeze]` has already
+ * settled on — the **effective** slug, not the raw payload key. Comparing it to
+ * `originalDoc.slug` is therefore the right comparison, and there is no
+ * title-derived rename that can slip past it:
+ *
+ * - A payload that omits `slug` does not reach `formatSlugHook` with an empty
+ *   value. Payload seeds an absent field's `value` from the stored document
+ *   (`getFallbackValue`), so the hook takes its `value.length > 0` branch and
+ *   returns the stored slug. Its derive-from-title fallback is unreachable on
+ *   an update whose stored slug is non-empty — including
+ *   `{ title, slugLock: false }`, which moves the title and leaves the URL
+ *   alone.
+ * - A payload that omits the unlock is reverted to the stored slug by
+ *   `enforceSlugFreeze` before this hook sees it, so an unlock-less API rename
+ *   on a nested, published page is a **silent no-op on the URL, not a 400**.
+ *   The loud refusal below is reserved for the one write that would really move
+ *   a live nested URL: an explicit `slugLock: false` with a genuinely different
+ *   slug.
+ *
+ * Both facts are pinned by pg-tier cases in
+ * `evals/pages-hierarchy-integration.test.ts` (and the Posts mirror in
+ * `evals/post-placement-integration.test.ts`), because neither is visible to a
+ * mocked fixture and both belong to Payload rather than to this repo.
  *
  * ## What it does not fix, stated plainly
  *

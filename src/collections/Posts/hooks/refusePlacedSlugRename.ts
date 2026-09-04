@@ -50,6 +50,22 @@ import type { Post } from '@/payload-types'
  * unlocked a URL — never to a title edit, never to a first publish, never to an
  * unplaced article, and never to a draft that has never been published.
  *
+ * ## Where this runs, and why that is what makes it correct
+ *
+ * Payload runs **field** `beforeValidate` *before* **collection**
+ * `beforeValidate`, and the field hooks write back into the same `data` object,
+ * so `data.slug` here is the slug the field chain
+ * `[formatSlugHook, enforceSlugFreeze]` already settled on — the **effective**
+ * slug, not the raw payload key. Two consequences, both pinned by pg-tier cases
+ * in `evals/post-placement-integration.test.ts`: a payload that omits `slug`
+ * cannot derive a new one from the title (Payload seeds an absent field's value
+ * from the stored document, so `formatSlugHook` returns the stored slug), and a
+ * payload that omits the unlock has already been reverted by
+ * `enforceSlugFreeze`, making an unlock-less API rename a silent no-op on the
+ * URL rather than this 400. The Pages mirror
+ * (`src/collections/Pages/hooks/refuseNestedSlugRename.ts`) carries the full
+ * argument and the Payload source references.
+ *
  * ## What it does not fix, stated plainly
  *
  * Un-placing an article *also* leaves its section URL 404ing, and this guard

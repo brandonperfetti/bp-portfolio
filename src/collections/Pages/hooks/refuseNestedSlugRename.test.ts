@@ -136,6 +136,27 @@ describe('refuseNestedSlugRename — when it stays silent', () => {
     ).resolves.toBeDefined()
   })
 
+  it('stays silent on a title-only unlock, because `data.slug` is the EFFECTIVE slug', async () => {
+    // Payload runs FIELD `beforeValidate` before COLLECTION `beforeValidate`,
+    // so `data` reaching this hook has already been through
+    // `[formatSlugHook, enforceSlugFreeze]`. On a `{ title, slugLock: false }`
+    // payload the field chain leaves the stored slug in place (Payload seeds
+    // an absent field's value from the stored document), so what this hook
+    // actually receives is the shape below — no slug movement, nothing to
+    // refuse. The end-to-end proof is the pg-tier case of the same name in
+    // `evals/pages-hierarchy-integration.test.ts`; this case pins the unit
+    // contract that goes with it.
+    await expect(
+      refuseNestedSlugRename(
+        args(
+          { title: 'A new title', slugLock: false, slug: 'brytecore' },
+          nestedPublished,
+        ),
+      ),
+    ).resolves.toBeDefined()
+    expect(findPublishedSlug).not.toHaveBeenCalled()
+  })
+
   it('allows a create — there is no live URL to break', async () => {
     await expect(
       refuseNestedSlugRename(

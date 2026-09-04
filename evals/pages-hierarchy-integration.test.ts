@@ -325,6 +325,92 @@ describe.skipIf(!connectionString)(
       expect(reread.path).toBe(`${MARKER}-root/${MARKER}-child/${MARKER}-grand`)
     })
 
+    it('a title-only PATCH with the unlock cannot derive a new slug behind the guard', async () => {
+      // The bypass a review proposed: `{ title, slugLock: false }` with NO
+      // `slug` key, on the theory that a guard comparing `data.slug` to
+      // `originalDoc.slug` sees nothing to refuse while `formatSlugHook`
+      // derives a new slug from the title behind its back.
+      //
+      // It cannot happen, and only the real pipeline proves why — two facts
+      // no fixture carries:
+      //
+      // 1. When `slug` is absent from the payload, Payload seeds the field
+      //    hook's `value` from the STORED document
+      //    (`fields/hooks/beforeValidate/getFallbackValue.ts`), so
+      //    `formatSlugHook` takes its first branch and returns the stored slug.
+      //    Its derive-from-title fallback is unreachable on an update whose
+      //    stored slug is non-empty.
+      // 2. Payload runs FIELD `beforeValidate` before COLLECTION
+      //    `beforeValidate` (`collections/operations/utilities/update.ts`),
+      //    and the field hooks write back into the same `data` object. So the
+      //    guard is handed the slug the field chain already resolved — it is
+      //    guarding the EFFECTIVE slug, not a raw payload key.
+      //
+      // Keep this case: it is the regression pin for both facts. If a Payload
+      // upgrade ever reverses the order or drops the fallback, this goes red
+      // here rather than silently in production.
+      const { docs } = await payload.find({
+        collection: 'pages',
+        overrideAccess: true,
+        pagination: false,
+        where: { slug: { equals: `${MARKER}-grand` } },
+      })
+      const grandchild = docs[0]
+      expect(grandchild._status).toBe('published')
+
+      const patched = await payload.update({
+        collection: 'pages',
+        id: grandchild.id,
+        overrideAccess: true,
+        data: { title: `${MARKER}-grand-bypass`, slugLock: false },
+      })
+
+      // The title moved; the URL did not.
+      expect(patched.title).toBe(`${MARKER}-grand-bypass`)
+      expect(patched.slug).toBe(`${MARKER}-grand`)
+      expect(patched.path).toBe(
+        `${MARKER}-root/${MARKER}-child/${MARKER}-grand`,
+      )
+
+      const reread = await payload.findByID({
+        collection: 'pages',
+        id: grandchild.id,
+        overrideAccess: true,
+      })
+      expect(reread.slug).toBe(`${MARKER}-grand`)
+      expect(reread.path).toBe(`${MARKER}-root/${MARKER}-child/${MARKER}-grand`)
+    })
+
+    it('an unlock-LESS API rename is reverted by the freeze, not refused by the guard', async () => {
+      // The corrected half of the hook-order story. Because the field chain
+      // runs first, `enforceSlugFreeze` has already put the slug back by the
+      // time the guard looks — so `{ slug: 'new' }` without `slugLock: false`
+      // is a silent no-op on the URL, NOT the 400 an earlier draft of this
+      // hook's TSDoc claimed. Pinned here because the difference between
+      // "loud" and "silent" is the whole subject of that paragraph.
+      const { docs } = await payload.find({
+        collection: 'pages',
+        overrideAccess: true,
+        pagination: false,
+        where: { slug: { equals: `${MARKER}-grand` } },
+      })
+      const grandchild = docs[0]
+
+      const patched = await payload.update({
+        collection: 'pages',
+        id: grandchild.id,
+        overrideAccess: true,
+        // `slugLock: true` is sent explicitly because the case above left the
+        // stored value at `false`, and `enforceSlugFreeze` falls back to the
+        // stored lock when the payload omits it.
+        data: { slug: `${MARKER}-grand-renamed-2`, slugLock: true },
+      })
+      expect(patched.slug).toBe(`${MARKER}-grand`)
+      expect(patched.path).toBe(
+        `${MARKER}-root/${MARKER}-child/${MARKER}-grand`,
+      )
+    })
+
     it('still allows a TOP-LEVEL published rename — #120 unchanged', async () => {
       const top = await mkPage(`${MARKER}-top`)
       expect(top.path).toBe(`${MARKER}-top`)

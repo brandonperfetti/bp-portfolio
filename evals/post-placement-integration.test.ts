@@ -382,6 +382,41 @@ describe.skipIf(!connectionString)(
       ).rejects.toThrow(/#150/)
     })
 
+    it('a title-only PATCH with the unlock cannot derive a new slug behind the guard', async () => {
+      // The Posts half of the regression pin the Pages file carries in full
+      // (`pages-hierarchy-integration.test.ts`, same case name). A review
+      // proposed `{ title, slugLock: false }` with no `slug` key as a way past
+      // a guard that compares `data.slug` to `originalDoc.slug`. It is not:
+      // Payload seeds an absent field's `value` from the stored document, so
+      // `formatSlugHook` returns the stored slug rather than deriving from the
+      // title, and FIELD `beforeValidate` runs before COLLECTION
+      // `beforeValidate`, so the guard is handed the slug the field chain
+      // already resolved.
+      const { docs } = await payload.find({
+        collection: 'posts',
+        overrideAccess: true,
+        pagination: false,
+        where: { slug: { equals: `${MARKER}-dup` } },
+      })
+      const patched = await payload.update({
+        collection: 'posts',
+        id: docs[0].id,
+        overrideAccess: true,
+        data: { title: `${MARKER}-dup-bypass`, slugLock: false } as never,
+      })
+      expect(patched.title).toBe(`${MARKER}-dup-bypass`)
+      expect(patched.slug).toBe(`${MARKER}-dup`)
+      expect(patched.path).toBe(`${MARKER}-work2/${MARKER}-dup`)
+
+      const reread = await payload.findByID({
+        collection: 'posts',
+        id: docs[0].id,
+        overrideAccess: true,
+      })
+      expect(reread.slug).toBe(`${MARKER}-dup`)
+      expect(reread.path).toBe(`${MARKER}-work2/${MARKER}-dup`)
+    })
+
     it('re-slugging an UNPLACED post is untouched — the #120 path still works', async () => {
       const { docs } = await payload.find({
         collection: 'posts',
