@@ -222,10 +222,32 @@ than on a transition that fires either way. The transition matrices in
 are unchanged across #148 — which is the evidence that routing the hook through
 the seam moved no behaviour.
 
-Known gap on the unpublish branch: unpublishing a document that has a pending
-autosaved rename purges nothing, because `previousDoc` is the draft and the
-served slug is absent from every `afterChange` argument. Measured 2026-09-02,
-pinned by a `KNOWN GAP` test in both matrices, tracked in a follow-up to #132.
+**Unpublish purges the path the site was SERVING (#155).** `previousDoc` is the
+latest _version_, so after any autosave it is the draft — already carrying the
+new slug — and testing `previousDoc._status === 'published'` alone failed
+closed: unpublishing a document with a pending autosaved rename purged
+**nothing**. Two pieces close it, neither costing the autosave anything:
+
+1. **`capturePublishedSlug` fires on unpublish.** Its guard mirrors Payload's
+   own `isSavingDraft` predicate instead of testing the `_status: 'draft'` body
+   that an unpublish and an autosave _share_.
+2. **It stashes the served PATH as well as the slug**, because under #148/#153 a
+   slug cannot name a placed document's URL. `readPreviousPublishedSlug`
+   (redirect rows) and `readPreviousPublishedPath` (revalidation) read the two
+   stashes; both come from one `findPublishedRow` lookup.
+
+The revalidation hooks prefer the captured path over `previousDoc`, and its
+presence is also what tells them a published row existed.
+
+`capturePublishedSlug`'s docblock is the single home for the measured table of
+what Payload passes on each transition, the `dist` citations for the predicate
+and the admin's request shapes, and the correction to an earlier wrong reading
+of `isSavingDraft`. Do not restate them here. The residual worth knowing at this
+level: a **Local-API explicit draft save** reads as an unpublish, because
+`createLocalReq` does not mirror the Local API's `draft` option into `req.query`
+— one extra lookup and one redundant purge of a still-live path, never a lost
+purge or a lost write. `evals/slug-redirect-integration.test.ts` proves the
+behaviour end to end and pins the autosave read count.
 
 **A revalidation failure never fails the write (#135, #156).** Payload runs
 `afterChange`/`afterDelete` collection hooks **inside the operation's

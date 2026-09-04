@@ -6,6 +6,7 @@ import type {
 import { revalidatePath, revalidateTag } from 'next/cache'
 
 import { publicPathFor } from '@/fields/slug/slugPaths'
+import { readPreviousPublishedPath } from '@/hooks/capturePublishedSlug'
 import { containRevalidation } from '@/hooks/containRevalidation'
 import type { Post } from '../../../payload-types'
 
@@ -101,16 +102,27 @@ const POST_SURFACES =
  * path; an unpublish purges `previousDoc`'s path; a published→published rename
  * purges only the NEW path here, and `createSlugRedirect` purges the old one.
  *
- * **Known gap on the unpublish branch, measured 2026-09-02.** `previousDoc` is
- * the latest *version*, and Posts autosaves every 100ms, so after any autosave
- * it is the DRAFT — `_status: 'draft'`. Unpublishing a document that has a
- * pending autosaved draft therefore fails the
- * `previousDoc._status === 'published'` test and purges NOTHING, leaving the
- * live URL serving its prerendered shell. `capturePublishedSlug` cannot cover
- * it either: unpublish sends `_status: 'draft'`, which is that hook's
- * early-return. Closing it needs a way to tell an unpublish from an autosave
- * draft save that this tree does not have, so it is pinned as a failing-shape
- * test rather than papered over; tracked in a follow-up to #132.
+ * **The unpublish branch, and the gap that used to be here (#155 closes it).**
+ * `previousDoc` is the latest *version*, and Posts autosaves every 100ms, so
+ * after any autosave it is the DRAFT — `_status: 'draft'`, already carrying the
+ * NEW slug. Testing `previousDoc._status === 'published'` alone therefore failed
+ * closed: unpublishing a document with a pending autosaved rename purged
+ * NOTHING, and the URL the site was serving kept its prerendered shell after the
+ * document was gone. [measured, 2026-09-04, Payload 3.86.0, PostgreSQL 16.13,
+ * full committed migration set] publish `meas-a` → autosave a rename to
+ * `meas-b` → unpublish leaves the main table row at slug `meas-a`,
+ * `_status: 'published'` right up to the unpublish, while both `doc` and
+ * `previousDoc` say `meas-b`/`draft` — the served slug is in no `afterChange`
+ * argument, exactly as the ticket said.
+ *
+ * The branch now prefers the path `capturePublishedSlug` stashed on
+ * `req.context`, which is read from the main table row and is therefore the URL
+ * actually being served; its presence is also the signal that a published row
+ * existed, so it fixes the `previousDoc._status` test as well as the path. That
+ * hook can now tell an unpublish from an autosave because it mirrors Payload's
+ * own `isSavingDraft` predicate — see its docblock for the measured table and
+ * for the correction to an earlier, wrong reading of that predicate. Autosave
+ * still costs no database read.
  *
  * `revalidateTag(tag, { expire: 0 })`, not `'max'` (#118): under
  * cacheComponents (`'use cache'` readers, #76) `'max'` is
@@ -196,9 +208,22 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
       )
     }
 
-    // If the post was previously published, we need to revalidate the old path
-    if (previousDoc._status === 'published' && doc._status !== 'published') {
-      const oldPath = publicPathFor('posts', previousDoc)
+    // If the post was previously published, we need to revalidate the old path.
+    //
+    // `previousDoc` alone is not enough (#155). It is the latest VERSION, so
+    // after any autosave it is the DRAFT — `_status: 'draft'` — and this test
+    // used to fail closed, purging nothing at all when an editor unpublished a
+    // document that had a pending autosaved rename. The captured path from
+    // `capturePublishedSlug` is the main table row's public path, i.e. the URL
+    // the site was actually serving, and its presence is itself the signal that
+    // a published row existed before this write. It is preferred over
+    // `previousDoc` because the draft may already carry the NEW slug.
+    const capturedOldPath = readPreviousPublishedPath(context, 'posts', doc.id)
+    const wasPublished =
+      previousDoc._status === 'published' || Boolean(capturedOldPath)
+
+    if (wasPublished && doc._status !== 'published') {
+      const oldPath = capturedOldPath ?? publicPathFor('posts', previousDoc)
 
       payload.logger.info(`Revalidating old post at path: ${oldPath}`)
 

@@ -3,41 +3,54 @@ import type { PayloadRequest } from 'payload'
 import type { SlugRoutedCollection } from './slugPaths'
 
 /**
- * Ask the database which slug the *published* version of a document is
- * currently serving.
+ * As much of the published row as a caller can need to name its public URL.
+ *
+ * @remarks `path` is the computed, stored, root-relative path. Pages always
+ * carry one; Posts carry one only when placed (#153). Both members are optional
+ * because this is a `select`ed projection, not a full document.
+ */
+export type PublishedRow = {
+  /** The computed public path, or `null`/absent when the document is unplaced. */
+  path?: unknown
+  /** The slug the document is published under. */
+  slug?: unknown
+}
+
+/**
+ * Ask the database which row the *published* version of a document is currently
+ * serving, projected to just the fields that name its URL.
  *
  * @param req - The in-flight request, forwarded so the lookup joins the same
  * transaction as the write that triggered it.
  * @param collectionSlug - A slug-routed collection (`slugPaths.ts`).
  * @param id - The document id.
- * @returns The live slug, or `null` when the document has never been
- * published.
+ * @returns The published row's `{ slug, path }`, or `null` when the document has
+ * never been published.
  *
- * @remarks This is the authoritative answer to "does a public URL exist for
- * this document, and what is it?". For a drafts-enabled collection Payload
- * writes the main table row on publish and keeps unpublished edits in the `_v`
- * versions table, so a row matching `_status: 'published'` is exactly the live
- * URL — and `originalDoc` is not, because after any autosave it is the draft
- * (see {@link capturePublishedSlug} for the measured version of that trap).
+ * @remarks **This function owns the `where` clause that defines "the live
+ * URL".** That is the whole point of it living here: for a drafts-enabled
+ * collection Payload writes the main table row on publish and keeps unpublished
+ * edits in the `_v` versions table, so a row matching `_status: 'published'` is
+ * exactly the live URL — and `originalDoc` is not, because after any autosave it
+ * is the draft (see {@link capturePublishedSlug} for the measured version of
+ * that trap).
  *
- * **Why it is shared.** The two hooks that need it — `enforceSlugFreeze`
- * (should this slug be allowed to move?) and `capturePublishedSlug` (what was
- * it before this write?) — are opposite ends of the same #120 URL contract,
- * and each had its own copy of this query. Two copies of the query that
- * *defines* what "the live URL" means is exactly the thing that drifts: a
- * future `where` clause added to one (a locale filter, a tenant scope) and not
- * the other would let the freeze protect one slug while the redirect recorded
- * another.
+ * A second copy of this query elsewhere is the thing that drifts: a future
+ * `where` clause added to one and not the other (a locale filter, a tenant
+ * scope) would let one caller protect a slug while another recorded a different
+ * one. #155 briefly had exactly that — a `findPublishedRow` inside
+ * `capturePublishedSlug` that needed `path` as well as `slug` — and it is folded
+ * back here instead, with {@link findPublishedSlug} kept as the thin slug-only
+ * wrapper the other three callers already use.
  *
- * **Cost.** A single indexed lookup, selecting only `slug` at `depth: 0`. Both
- * callers reach it only on the paths that actually need it — a locked
- * published document whose slug is moving, and a publish that follows a draft.
+ * **Cost.** A single indexed lookup at `depth: 0` selecting two columns. Every
+ * caller reaches it only on the paths that actually need it.
  */
-export const findPublishedSlug = async (
+export const findPublishedRow = async (
   req: PayloadRequest,
   collectionSlug: SlugRoutedCollection,
   id: number | string,
-): Promise<null | string> => {
+): Promise<null | PublishedRow> => {
   const { docs } = await req.payload.find({
     collection: collectionSlug,
     depth: 0,
@@ -45,11 +58,39 @@ export const findPublishedSlug = async (
     overrideAccess: true,
     pagination: false,
     req,
-    select: { slug: true },
+    select: { path: true, slug: true },
     where: {
       and: [{ id: { equals: id } }, { _status: { equals: 'published' } }],
     },
   })
-  const slug = (docs[0] as undefined | { slug?: unknown })?.slug
+  return (docs[0] as PublishedRow | undefined) ?? null
+}
+
+/**
+ * Ask the database which slug the *published* version of a document is
+ * currently serving.
+ *
+ * @param req - The in-flight request, forwarded so the lookup joins the same
+ * transaction as the write that triggered it.
+ * @param collectionSlug - A slug-routed collection (`slugPaths.ts`).
+ * @param id - The document id.
+ * @returns The live slug, or `null` when the document has never been published.
+ *
+ * @remarks The slug-only face of {@link findPublishedRow}, kept because most
+ * callers genuinely only ask "does a public URL exist for this document, and
+ * what is its slug?" — `enforceSlugFreeze` (should this slug be allowed to
+ * move?), `refuseNestedSlugRename` and `refusePlacedSlugRename` (has this ever
+ * been published?). Callers that must name a *placed* document's URL need the
+ * row, because a slug alone cannot produce `/work/brytecore` (#148).
+ *
+ * It delegates rather than issuing its own query, so the `where` that decides
+ * what "published" means exists exactly once.
+ */
+export const findPublishedSlug = async (
+  req: PayloadRequest,
+  collectionSlug: SlugRoutedCollection,
+  id: number | string,
+): Promise<null | string> => {
+  const slug = (await findPublishedRow(req, collectionSlug, id))?.slug
   return typeof slug === 'string' && slug.length > 0 ? slug : null
 }

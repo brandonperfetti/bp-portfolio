@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   capturePublishedSlug,
+  readPreviousPublishedPath,
   readPreviousPublishedSlug,
 } from '@/hooks/capturePublishedSlug'
 
@@ -26,15 +27,24 @@ import {
  * is live. A plain `vi.fn()` never swaps, so it could not catch the bug — this
  * one does.
  */
-const makeReq = (publishedSlug: null | string) => {
-  const req: { context: Record<string, unknown>; payload: { find: unknown } } =
-    {
-      context: {},
-      payload: { find: null },
-    }
+const makeReq = (
+  publishedSlug: null | string,
+  { path, query }: { path?: string; query?: Record<string, unknown> } = {},
+) => {
+  const req: {
+    context: Record<string, unknown>
+    payload: { find: unknown }
+    query: Record<string, unknown>
+  } = {
+    context: {},
+    payload: { find: null },
+    query: query ?? {},
+  }
   const find = vi.fn(async () => {
     req.context = { ...req.context }
-    return { docs: publishedSlug === null ? [] : [{ slug: publishedSlug }] }
+    return {
+      docs: publishedSlug === null ? [] : [{ path, slug: publishedSlug }],
+    }
   })
   req.payload.find = find
   return { find, req: req as never, rawReq: req }
@@ -43,8 +53,9 @@ const makeReq = (publishedSlug: null | string) => {
 const run = (
   args: Record<string, unknown>,
   publishedSlug: null | string = null,
+  reqOptions: { path?: string; query?: Record<string, unknown> } = {},
 ) => {
-  const { find, req, rawReq } = makeReq(publishedSlug)
+  const { find, req, rawReq } = makeReq(publishedSlug, reqOptions)
   // Payload hands the hook `req.context` as its `context` argument; the swap
   // above is what later detaches the two.
   const context = rawReq.context
@@ -111,16 +122,161 @@ describe('capturePublishedSlug', () => {
     ).toBeUndefined()
   })
 
-  it('does not query on an explicit draft save (the autosave path)', async () => {
+  it('does not query on an autosave draft save — the #155 call-count pin', async () => {
+    // THE acceptance criterion for #155: the 100ms admin autosave must not gain
+    // a database read. `[measured, @payloadcms/ui/dist/elements/Autosave/index.js:88-91]`
+    // autosave PATCHes `?autosave=true&…&draft=true`, so the discriminator is a
+    // `req.query` read and this returns before `payload.find` is reached.
+    const { find, liveContext, result } = run(
+      {
+        data: { _status: 'draft', slug: 'typing' },
+        originalDoc: { id: 55, _status: 'draft', slug: 'typin' },
+      },
+      'live',
+      { query: { autosave: 'true', draft: 'true' } },
+    )
+
+    await result
+    expect(find).toHaveBeenCalledTimes(0)
+    expect(
+      readPreviousPublishedSlug(liveContext(), 'posts', 55),
+    ).toBeUndefined()
+    expect(
+      readPreviousPublishedPath(liveContext(), 'posts', 55),
+    ).toBeUndefined()
+  })
+
+  it('captures on a PUBLISH sent with ?draft=true — not a draft save (#155 fix)', async () => {
+    // The misclassification the first cut of this hook shipped. `update.js:29`
+    // is `Boolean(draftArg && hasDraftsEnabled(...)) && data._status !==
+    // 'published' && !publishAllLocales`, so a REST `PATCH ?draft=true` with a
+    // `{_status:'published'}` body has `isSavingDraft === false`: Payload
+    // WRITES the main table and this is a real publish. Guarding on the query
+    // flag alone skipped the capture, so a rename made this way wrote no
+    // redirect row and purged no old path.
+    const { find, liveContext, result } = run(
+      {
+        data: { _status: 'published', slug: 'new-slug' },
+        originalDoc: { id: 55, _status: 'draft', slug: 'new-slug' },
+      },
+      'old-slug',
+      { query: { autosave: 'true', draft: 'true' } },
+    )
+
+    await result
+    expect(find).toHaveBeenCalledTimes(1)
+    expect(readPreviousPublishedSlug(liveContext(), 'posts', 55)).toBe(
+      'old-slug',
+    )
+    expect(readPreviousPublishedPath(liveContext(), 'posts', 55)).toBe(
+      '/articles/old-slug',
+    )
+  })
+
+  it('does not query on an explicit "Save draft" either (draft=true, no autosave)', async () => {
+    // `[measured, elements/PublishButton/index.js:94-96 and
+    // elements/SaveDraftButton/index.js:49]` both send `draft=true`.
+    const { find, result } = run(
+      {
+        data: { _status: 'draft', slug: 'typing' },
+        originalDoc: { id: 55, _status: 'draft', slug: 'typin' },
+      },
+      'live',
+      { query: { draft: 'true' } },
+    )
+
+    await result
+    expect(find).toHaveBeenCalledTimes(0)
+  })
+
+  it('captures the served path on an UNPUBLISH after an autosaved rename (#155)', async () => {
+    // The transition the hook used to swallow. `[measured, 2026-09-04,
+    // elements/UnpublishButton/index.js:78-105]` unpublish PATCHes with NO
+    // `draft` param and a `{ _status: 'draft' }` body — the same body an
+    // autosave sends, which is why the old `data._status === 'draft'` guard
+    // could not tell them apart. `originalDoc` is the autosaved draft carrying
+    // the NEW slug, so the served slug comes from the main-table lookup.
+    const { find, liveContext, result } = run(
+      {
+        data: { _status: 'draft' },
+        originalDoc: { id: 55, _status: 'draft', slug: 'new-slug' },
+      },
+      'old-slug',
+      { query: { depth: '0', 'fallback-locale': 'null' } },
+    )
+
+    await result
+    expect(find).toHaveBeenCalledTimes(1)
+    expect(readPreviousPublishedSlug(liveContext(), 'posts', 55)).toBe(
+      'old-slug',
+    )
+    expect(readPreviousPublishedPath(liveContext(), 'posts', 55)).toBe(
+      '/articles/old-slug',
+    )
+  })
+
+  it('stashes the PLACED path, which a slug alone could not name (#148)', async () => {
+    const { liveContext, result } = run(
+      {
+        data: { _status: 'draft' },
+        originalDoc: { id: 55, _status: 'draft', slug: 'new-slug' },
+      },
+      'old-slug',
+      { path: 'work/old-slug' },
+    )
+
+    await result
+    expect(readPreviousPublishedPath(liveContext(), 'posts', 55)).toBe(
+      '/work/old-slug',
+    )
+  })
+
+  it('stashes / for the root page rather than /home', async () => {
+    const { liveContext, result } = run(
+      {
+        collection: { slug: 'pages' },
+        data: { _status: 'draft' },
+        originalDoc: { id: 2, _status: 'draft', slug: 'renamed' },
+      },
+      'home',
+    )
+
+    await result
+    expect(readPreviousPublishedPath(liveContext(), 'pages', 2)).toBe('/')
+  })
+
+  it('costs no query on an unpublish whose originalDoc IS the published row', async () => {
+    // No pending draft: `originalDoc` is the main-table row, so both stashes
+    // come from it directly.
     const { find, liveContext, result } = run({
-      data: { _status: 'draft', slug: 'typing' },
-      originalDoc: { id: 55, _status: 'draft', slug: 'typin' },
+      data: { _status: 'draft' },
+      originalDoc: {
+        id: 55,
+        _status: 'published',
+        path: 'work/live',
+        slug: 'live',
+      },
     })
 
     await result
     expect(find).not.toHaveBeenCalled()
+    expect(readPreviousPublishedPath(liveContext(), 'posts', 55)).toBe(
+      '/work/live',
+    )
+  })
+
+  it('captures nothing on an unpublish of a document that was never published', async () => {
+    const { liveContext, result } = run(
+      {
+        data: { _status: 'draft' },
+        originalDoc: { id: 56, _status: 'draft', slug: 'hello' },
+      },
+      null,
+    )
+
+    await result
     expect(
-      readPreviousPublishedSlug(liveContext(), 'posts', 55),
+      readPreviousPublishedPath(liveContext(), 'posts', 56),
     ).toBeUndefined()
   })
 
@@ -204,5 +360,35 @@ describe('readPreviousPublishedSlug', () => {
         1,
       ),
     ).toBeUndefined()
+  })
+})
+
+describe('readPreviousPublishedPath', () => {
+  it('returns undefined for an empty or malformed context', () => {
+    expect(readPreviousPublishedPath(undefined, 'posts', 1)).toBeUndefined()
+    expect(readPreviousPublishedPath({} as never, 'posts', 1)).toBeUndefined()
+    expect(
+      readPreviousPublishedPath(
+        { previousPublishedPaths: 'nope' } as never,
+        'posts',
+        1,
+      ),
+    ).toBeUndefined()
+    expect(
+      readPreviousPublishedPath(
+        { previousPublishedPaths: { 'posts:1': '' } } as never,
+        'posts',
+        1,
+      ),
+    ).toBeUndefined()
+  })
+
+  it('is keyed per collection and document, like the slug stash', () => {
+    const context = {
+      previousPublishedPaths: { 'pages:1': '/a', 'posts:1': '/articles/a' },
+    } as never
+    expect(readPreviousPublishedPath(context, 'posts', 1)).toBe('/articles/a')
+    expect(readPreviousPublishedPath(context, 'pages', 1)).toBe('/a')
+    expect(readPreviousPublishedPath(context, 'posts', 2)).toBeUndefined()
   })
 })

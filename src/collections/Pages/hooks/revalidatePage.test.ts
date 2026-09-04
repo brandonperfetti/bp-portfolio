@@ -153,17 +153,70 @@ describe('revalidatePage old-path purge matrix (#132)', () => {
     expect(purgedPaths()).toEqual(['/a'])
   })
 
-  it('KNOWN GAP: unpublish after an autosaved rename purges nothing (#132)', () => {
-    // Identical to the Posts gap and for identical reasons — see the comment
-    // there. Pinned, not fixed.
+  it('unpublish after an autosaved rename purges the path the site was SERVING (#155)', () => {
+    // Was `KNOWN GAP: ... purges nothing`. Identical to the Posts case and
+    // measured the same way (2026-09-04, Payload 3.86.0, PostgreSQL 16.13):
+    // `previousDoc` is the autosaved draft carrying the NEW slug, so the served
+    // path exists only in the stash `capturePublishedSlug` fills from the main
+    // table row.
     revalidatePage(
       changeArgs(
+        { id: 7, slug: 'b', _status: 'draft' },
         { slug: 'b', _status: 'draft' },
+        { previousPublishedPaths: { 'pages:7': '/a' } },
+      ),
+    )
+
+    expect(purgedPaths()).toEqual(['/a'])
+  })
+
+  it('still purges nothing on an autosaved rename with no captured path', () => {
+    revalidatePage(
+      changeArgs(
+        { id: 8, slug: 'b', _status: 'draft' },
         { slug: 'b', _status: 'draft' },
       ),
     )
 
     expect(purgedPaths()).toEqual([])
+  })
+
+  it('purges the captured NESTED path when a placed page is unpublished (#148)', () => {
+    revalidatePage(
+      changeArgs(
+        { id: 9, slug: 'b', path: 'work/b', _status: 'draft' },
+        { slug: 'b', path: 'work/b', _status: 'draft' },
+        { previousPublishedPaths: { 'pages:9': '/work/brytecore' } },
+      ),
+    )
+
+    expect(purgedPaths()).toEqual(['/work/brytecore'])
+  })
+
+  it('purges / when the ROOT page is unpublished after an autosaved rename', () => {
+    // The stash resolves through `publicPathFor`, so the root arrives as `/`
+    // and not as `/home` — the vocabulary #148 unified.
+    revalidatePage(
+      changeArgs(
+        { id: 10, slug: 'renamed', _status: 'draft' },
+        { slug: 'renamed', _status: 'draft' },
+        { previousPublishedPaths: { 'pages:10': '/' } },
+      ),
+    )
+
+    expect(purgedPaths()).toEqual(['/'])
+  })
+
+  it('leaves the publish branch alone when a path was captured', () => {
+    revalidatePage(
+      changeArgs(
+        { id: 11, slug: 'b', _status: 'published' },
+        { slug: 'b', _status: 'draft' },
+        { previousPublishedPaths: { 'pages:11': '/a' } },
+      ),
+    )
+
+    expect(purgedPaths()).toEqual(['/b'])
   })
 
   it('maps the home page to / on both the current- and old-path branches', () => {

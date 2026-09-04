@@ -6,6 +6,7 @@ import type {
 import { revalidatePath, revalidateTag } from 'next/cache'
 
 import { publicPathFor } from '@/fields/slug/slugPaths'
+import { readPreviousPublishedPath } from '@/hooks/capturePublishedSlug'
 import { containRevalidation } from '@/hooks/containRevalidation'
 import type { Page } from '../../../payload-types'
 
@@ -61,11 +62,16 @@ const purgePageTags = () => {
  * rather than merely tidy — a placed page's path is `/work/brytecore`, which no
  * `/`+slug template can produce.
  *
- * The autosave gap on the unpublish branch is identical to the Posts one and
- * documented there: Pages autosaves at the same 100ms interval, so unpublishing
- * with a pending draft leaves `previousDoc._status === 'draft'` and purges
- * nothing. Measured 2026-09-02, pinned by test, tracked in a follow-up to
- * #132.
+ * The autosave gap on the unpublish branch was identical to the Posts one and
+ * is closed the same way (#155): Pages autosaves at the same 100ms interval, so
+ * unpublishing with a pending draft left `previousDoc._status === 'draft'` and
+ * purged nothing. [measured, 2026-09-04, Payload 3.86.0, PostgreSQL 16.13, full
+ * committed migration set] — the same harness ran both collections and both
+ * behaved identically. The branch now prefers the path `capturePublishedSlug`
+ * stashed from the main table row, which is the URL the site was serving; see
+ * `revalidatePost` and `capturePublishedSlug` for the measured discriminator
+ * that lets that hook fire on unpublish without costing the 100ms autosave a
+ * database read.
  *
  * `revalidateTag(tag, { expire: 0 })`, not `'max'` (#118): under
  * cacheComponents (`'use cache'` readers, #76) `'max'` is
@@ -121,9 +127,20 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
       )
     }
 
-    // If the page was previously published, we need to revalidate the old path
-    if (previousDoc?._status === 'published' && doc._status !== 'published') {
-      const oldPath = publicPathFor('pages', previousDoc)
+    // If the page was previously published, we need to revalidate the old path.
+    //
+    // `previousDoc` alone is not enough (#155) — it is the latest VERSION, so
+    // after any autosave it is the DRAFT and this test fails closed, purging
+    // nothing when a page with a pending autosaved rename is unpublished. The
+    // captured path is the main table row's public path (the URL the site was
+    // serving) and its presence is the signal that a published row existed.
+    // Same reasoning, same shape, as `revalidatePost`.
+    const capturedOldPath = readPreviousPublishedPath(context, 'pages', doc.id)
+    const wasPublished =
+      previousDoc?._status === 'published' || Boolean(capturedOldPath)
+
+    if (wasPublished && doc._status !== 'published') {
+      const oldPath = capturedOldPath ?? publicPathFor('pages', previousDoc)
 
       if (oldPath) {
         payload.logger.info(`Revalidating old page at path: ${oldPath}`)

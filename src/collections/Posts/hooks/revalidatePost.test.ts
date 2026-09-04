@@ -155,28 +155,87 @@ describe('revalidatePost old-path purge matrix (#132)', () => {
     expect(purgedPaths()).toContain('/articles/a')
   })
 
-  it('KNOWN GAP: unpublish after an autosaved rename purges nothing (#132)', () => {
-    // Measured on real Postgres, 2026-09-02. Unpublish sends
-    // `_status: 'draft'`, so `capturePublishedSlug` returns early and no
-    // captured slug exists; `previousDoc` is the autosaved draft, so
-    // `previousDoc._status === 'published'` is false and the old-path branch
-    // never runs at all. The live URL `/articles/a` keeps serving its
-    // prerendered shell after the document is unpublished.
+  it('unpublish after an autosaved rename purges the path the site was SERVING (#155)', () => {
+    // Was `KNOWN GAP: ... purges nothing`. Measured again on real Postgres
+    // 2026-09-04 (Payload 3.86.0, full committed migration set): publish
+    // `/articles/a`, autosave a rename to `b`, unpublish — and BOTH `doc` and
+    // `previousDoc` say `b`/`draft`, because `previousDoc` is the latest
+    // version. The served slug `a` is in no afterChange argument.
     //
-    // This is pinned rather than fixed: the true published slug is not present
-    // in ANY afterChange argument on this path, so closing it means teaching
-    // `capturePublishedSlug` to fire on unpublish — which needs a way to tell
-    // an unpublish from an autosave draft save that this tree does not have,
-    // and getting it wrong puts a database read on every 100ms autosave.
-    // Tracked in a follow-up to #132; change this expectation when that lands.
+    // What closes it is the stash: `capturePublishedSlug` now fires on
+    // unpublish (its discriminator is `req.query.draft`, Payload's own
+    // `isSavingDraft` input, not the `_status: 'draft'` body the unpublish
+    // shares with an autosave) and records the MAIN TABLE row's public path.
+    // `/articles/b` is never purged here — nothing was ever served there.
     revalidatePost(
       changeArgs(
+        { id: 7, slug: 'b', _status: 'draft' },
         { slug: 'b', _status: 'draft' },
+        { previousPublishedPaths: { 'posts:7': '/articles/a' } },
+      ),
+    )
+
+    expect(purgedPaths()).toContain('/articles/a')
+    expect(purgedPaths()).not.toContain('/articles/b')
+  })
+
+  it('still purges nothing on an autosaved rename with no captured path', () => {
+    // The stash is absent whenever no published row existed (a document that
+    // has never been published), and this branch must stay quiet then rather
+    // than purge `/articles/undefined`.
+    revalidatePost(
+      changeArgs(
+        { id: 8, slug: 'b', _status: 'draft' },
         { slug: 'b', _status: 'draft' },
       ),
     )
 
     expect(purgedPaths()).toEqual([])
+  })
+
+  it('purges the captured SECTION path when a placed article is unpublished (#148)', () => {
+    // A slug cannot name `/work/a`, which is why the stash holds the resolved
+    // path rather than the slug.
+    revalidatePost(
+      changeArgs(
+        { id: 9, slug: 'b', path: 'work/b', _status: 'draft' },
+        { slug: 'b', path: 'work/b', _status: 'draft' },
+        { previousPublishedPaths: { 'posts:9': '/work/a' } },
+      ),
+    )
+
+    expect(purgedPaths()).toContain('/work/a')
+  })
+
+  it('prefers the captured path over previousDoc when both are available', () => {
+    // `previousDoc` is the draft and may already carry the new slug; the stash
+    // is read from the main table row, so it wins.
+    revalidatePost(
+      changeArgs(
+        { id: 10, slug: 'b', _status: 'draft' },
+        { slug: 'b', _status: 'published' },
+        { previousPublishedPaths: { 'posts:10': '/articles/a' } },
+      ),
+    )
+
+    expect(purgedPaths()).toContain('/articles/a')
+    expect(purgedPaths()).not.toContain('/articles/b')
+  })
+
+  it('leaves the publish branch alone when a path was captured', () => {
+    // The stash is set on every publish-after-draft too (it is what
+    // `createSlugRedirect` reads), so the unpublish branch must stay gated on
+    // the document no longer being published.
+    revalidatePost(
+      changeArgs(
+        { id: 11, slug: 'b', _status: 'published' },
+        { slug: 'b', _status: 'draft' },
+        { previousPublishedPaths: { 'posts:11': '/articles/a' } },
+      ),
+    )
+
+    expect(purgedPaths()).toContain('/articles/b')
+    expect(purgedPaths()).not.toContain('/articles/a')
   })
 })
 
