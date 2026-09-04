@@ -56,6 +56,18 @@ Payload is the single source of truth for site content. Admin at `/admin`
   **Uses** (category-grouped tools), **Categories**, **Tags**, **Media**
   (Blob-backed), **Users** (admin operators).
 
+**Cleared hero text is stored as `NULL`, never as an empty Lexical root
+(#164).** A rich-text value whose `root.children` is `[]` is the one shape
+Lexical refuses to load — `setEditorState` throws error #38 — so the admin
+renders "Something went wrong: Minified Lexical error #38" in place of the
+editor and the field can only be fixed by a DB write. The hero group's
+`beforeChange` normaliser (`normalizeHeroByType`, `src/heros/`) therefore maps
+an empty root to `null` on every save, for every hero type, on top of the
+type-based clearing it already does; the predicate lives in
+`src/lib/content/lexicalEmptyRoot.ts`. This applies to every collection that
+mounts the shared `hero` group. Readers already tolerate `null` (a cleared hero
+renders nothing), so `null` is the canonical stored form for "no hero text".
+
 **Categories is labelled "Topics" in the admin — the slug stays `categories`
 (#149).** The public surface has said "topics" for a long time: the chips on
 `/articles`, the `?topic=` query param, `topics: string[]` on the read models.

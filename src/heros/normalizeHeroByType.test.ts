@@ -178,6 +178,53 @@ describe('normalizeHeroByType', () => {
     expect(result.effect).toBeNull()
   })
 
+  describe('empty Lexical root in richText (#164)', () => {
+    // The exact value found stored in `pages.hero_rich_text` for `about`,
+    // which made the hero tab render "Minified Lexical error #38" instead of
+    // an editor. AC 2: saving with the hero text cleared must store NULL.
+    const emptyRoot = {
+      root: {
+        type: 'root',
+        format: '',
+        indent: 0,
+        version: 1,
+        children: [],
+        direction: 'ltr',
+      },
+    }
+
+    // Every type that renders (and therefore can store) hero text; `blank`
+    // already nulls richText unconditionally and is covered above.
+    const nonBlankTypes = [
+      'none',
+      'standard',
+      'shader',
+      'image',
+      'carousel',
+    ] as const
+
+    it.each(nonBlankTypes)('%s stores an empty root as null', (type) => {
+      expect(normalizeHeroByType({ type, richText: emptyRoot }).richText).toBe(
+        null,
+      )
+    })
+
+    it('leaves a root with one paragraph child untouched', () => {
+      const paragraph = {
+        root: { type: 'root', children: [{ type: 'paragraph', version: 1 }] },
+      }
+      expect(
+        normalizeHeroByType({ type: 'none', richText: paragraph }).richText,
+      ).toBe(paragraph)
+    })
+
+    it('leaves null richText as null', () => {
+      expect(
+        normalizeHeroByType({ type: 'standard', richText: null }).richText,
+      ).toBeNull()
+    })
+  })
+
   it('does not mutate the input', () => {
     const input = {
       type: 'blank',

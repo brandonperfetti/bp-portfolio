@@ -1,5 +1,7 @@
 import type { FieldHook } from 'payload'
 
+import { nullIfEmptyLexicalRoot } from '@/lib/content/lexicalEmptyRoot'
+
 /**
  * Strip hero content the selected type doesn't render, so it can't linger
  * hidden in the admin and resurface later. The Media control shows only for
@@ -21,9 +23,15 @@ import type { FieldHook } from 'payload'
  *   `slides`, only the array field had the null-write bug), so a re-switch back
  *   picks up the field's own `DEFAULT true` again.
  * - `richText` / `links` render for every type but `blank`.
+ * - `richText` is additionally stored as `null` whenever it holds an empty
+ *   Lexical root, for every type — a root with zero children is the one value
+ *   Lexical refuses to load, so leaving it stored makes the hero tab
+ *   unopenable in the admin (error #38). See {@link nullIfEmptyLexicalRoot}.
  *
  * Pure and non-mutating; the field hook below applies it on every save.
  *
+ * @see #164 — the about page stored an empty root and its hero tab rendered
+ *   "Minified Lexical error #38" instead of an editor.
  * @see #65 — `image` reuses `media`; `carousel` adds `slides` + `effect`, so
  *   both must be cleared off a hero that switches away from those types.
  * @see #58 — About carried a seeded headshot in `hero.media` and a duplicate
@@ -72,6 +80,10 @@ export function normalizeHeroByType<
     next.richText = null
     next.links = []
   }
+  // After the type-based clearing, so `blank`'s explicit null is untouched and
+  // every other type gets the same guarantee: a cleared hero text is stored as
+  // NULL, never as the empty root that breaks the editor on load (#164).
+  next.richText = nullIfEmptyLexicalRoot(next.richText)
   return next
 }
 
