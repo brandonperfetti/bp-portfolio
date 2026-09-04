@@ -28,8 +28,15 @@ export interface InternalCorvusLinkOptions {
  * The fix is NOT `enabled: false`. Corvus is a broad assistant
  * (`CORVUS_SYSTEM_PROMPT`) and legitimately names off-site URLs; those should
  * keep their confirmation. What was wrong is that the guard could not tell
- * the two apart. `onLinkCheck` is exactly that seam: streamdown awaits it
- * and, on `true`, navigates without the modal.
+ * the two apart, and this predicate is the definition that does.
+ *
+ * #144 fed it to streamdown's `linkSafety.onLinkCheck`, which removed the
+ * modal from internal links but left them rendering as a `<button>` that
+ * `window.open`s a new tab. #158 replaces streamdown's link component
+ * outright (`components.a` in `CorvusChat.tsx`), so the same predicate now
+ * decides between a real same-tab `<a href>` and our own confirmation — see
+ * {@link classifyCorvusLink}. Nothing about what counts as "this site"
+ * changed with it, which is why every case below is still the #144 case.
  *
  * ## Where "this site" comes from
  *
@@ -49,10 +56,10 @@ export interface InternalCorvusLinkOptions {
  * dialer link does not. This predicate answers a different question — may
  * this link skip a safety confirmation? — and answers `false` for every
  * non-`http(s)` scheme, so a `mailto:` Corvus emits keeps its prompt rather
- * than silently opening a mail client. The trade is a modal whose copy says
- * "external website" for a `mailto:`, which is judged the safer error: the
- * system prompt forbids inventing links and tells Corvus to name the contact
- * form in words, so this is rare by construction.
+ * than silently opening a mail client. Under #144 the trade was a modal whose
+ * copy said "external website" for a `mailto:` — judged the safer error, but
+ * an error. {@link classifyCorvusLink} pays that back: the answer to "may it
+ * skip the prompt" is still no, and the prompt now says what it really does.
  *
  * Conservative in the same direction throughout: it answers `true` only for
  * what it can positively identify as this site, so anything unparseable — a
@@ -124,23 +131,66 @@ export function isInternalCorvusLink(
 }
 
 /**
- * The `onLinkCheck` streamdown's `linkSafety` takes.
+ * The href streamdown emits for a link whose markdown has not finished
+ * streaming (`parseIncompleteMarkdown`).
  *
- * @remarks Returned as a factory so the component builds it once (a new
- * function identity every render would defeat streamdown's memoised link
- * component) and so the `currentHost` read — the one impure input — happens
- * at exactly one call site.
- *
- * Synchronous on purpose. `LinkSafetyConfig.onLinkCheck` accepts
- * `Promise<boolean> | boolean`; returning a boolean keeps the internal-link
- * click free of a microtask hop, so the navigation stays inside the user
- * gesture.
- *
- * @param options - See {@link InternalCorvusLinkOptions}.
- * @returns A predicate streamdown can call per link click.
+ * @remarks Not a URL and never navigable. streamdown's own link component
+ * carries the same sentinel as `data-incomplete` and refuses to act on a
+ * click; {@link classifyCorvusLink} names it so our replacement component
+ * (#158) can do the same instead of classifying `streamdown:` as a hostile
+ * scheme and offering to open it.
  */
-export function createCorvusLinkCheck(
+export const STREAMDOWN_INCOMPLETE_LINK = 'streamdown:incomplete-link'
+
+/**
+ * What kind of destination a link in a Corvus reply points at (#158).
+ *
+ * @remarks Four kinds, because the visitor-facing consequence differs for
+ * each and the confirmation copy has to be honest about which one they are
+ * about to get:
+ *
+ * - `internal` — this site. Navigates in the same tab, no confirmation.
+ * - `mailto` / `tel` — a hand-off to another application on the visitor's
+ *   device. Confirmed, but "You're about to visit an external website" was a
+ *   lie about both (#158 item c); they get their own copy.
+ * - `external` — a genuinely off-site page. Confirmed, new tab.
+ *
+ * `incomplete` is not a destination at all — see
+ * {@link STREAMDOWN_INCOMPLETE_LINK}.
+ */
+export type CorvusLinkKind =
+  'internal' | 'external' | 'mailto' | 'tel' | 'incomplete'
+
+/**
+ * Classify a link target in a Corvus reply.
+ *
+ * @remarks Built ON {@link isInternalCorvusLink} rather than beside it: that
+ * predicate is the conservative "is this definitely this site" answer and
+ * stays the only place the host rules live. This function adds exactly one
+ * thing — telling the three flavours of "not this site" apart, so the
+ * confirmation can say something true. Anything it cannot positively identify
+ * as `mailto:`/`tel:` is `external`, which keeps the fall-through direction
+ * the same as the predicate's: unknown means confirm.
+ *
+ * @param href - The link target.
+ * @param options - See {@link InternalCorvusLinkOptions}.
+ * @returns The link's kind.
+ */
+export function classifyCorvusLink(
+  href: string | null | undefined,
   options: InternalCorvusLinkOptions = {},
-): (url: string) => boolean {
-  return (url: string) => isInternalCorvusLink(url, options)
+): CorvusLinkKind {
+  const value = typeof href === 'string' ? href.trim() : ''
+
+  if (value === STREAMDOWN_INCOMPLETE_LINK) return 'incomplete'
+  if (isInternalCorvusLink(value, options)) return 'internal'
+
+  // Scheme sniffed off the raw string rather than through `new URL`, because
+  // `mailto:`/`tel:` are opaque-path URLs: `new URL('tel:+15550100').protocol`
+  // is `tel:` but `.host` is empty, so nothing downstream would use the parse.
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(value)?.[1]?.toLowerCase()
+  if (scheme === 'mailto') return 'mailto'
+  if (scheme === 'tel') return 'tel'
+
+  return 'external'
 }

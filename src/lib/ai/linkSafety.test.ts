@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
-  createCorvusLinkCheck,
+  classifyCorvusLink,
   isInternalCorvusLink,
+  STREAMDOWN_INCOMPLETE_LINK,
 } from '@/lib/ai/linkSafety'
 
 /**
- * #144. The predicate that decides whether a link in a Corvus reply gets
- * streamdown's "external website" confirmation.
+ * #144, then #158. The predicate that decides whether a link in a Corvus
+ * reply is this site — and so, since #158, whether it renders as a real
+ * same-tab anchor or as a button carrying a confirmation.
  *
  * @remarks `getSiteUrl()` reads `process.env.NEXT_PUBLIC_SITE_URL` on every
  * call, so these tests set it per case rather than relying on whatever the
@@ -142,22 +144,51 @@ describe('isInternalCorvusLink', () => {
   })
 })
 
-describe('createCorvusLinkCheck', () => {
-  it('returns a synchronous predicate streamdown can await', () => {
-    const onLinkCheck = createCorvusLinkCheck()
-
-    // Boolean, not a promise: the internal-link click must stay inside the
-    // user gesture rather than resuming a microtask later.
-    expect(onLinkCheck('/tech')).toBe(true)
-    expect(onLinkCheck('https://vercel.com/docs')).toBe(false)
+/**
+ * #158. `classifyCorvusLink` is what decides between a same-tab anchor and a
+ * confirmation, and — the new part — which confirmation.
+ */
+describe('classifyCorvusLink', () => {
+  it.each([
+    ['/tech', 'internal'],
+    ['#top', 'internal'],
+    ['https://example-site.test/tech', 'internal'],
+    ['https://vercel.com/docs', 'external'],
+    ['//evil.test/phish', 'external'],
+    ['mailto:brandon@example-site.test', 'mailto'],
+    ['MAILTO:brandon@example-site.test', 'mailto'],
+    ['tel:+15550100', 'tel'],
+  ] as const)('classifies %s as %s', (href, kind) => {
+    expect(classifyCorvusLink(href)).toBe(kind)
   })
 
-  it('threads currentHost through to the predicate', () => {
-    const onLinkCheck = createCorvusLinkCheck({
-      currentHost: 'preview-abc.vercel.app',
-    })
+  it('names streamdown’s mid-stream sentinel rather than guessing at it', () => {
+    // A link whose closing paren has not streamed yet is not a destination.
+    // Classified as a scheme it would become "external" and the visitor would
+    // be offered a confirmation to open `streamdown:incomplete-link`.
+    expect(classifyCorvusLink(STREAMDOWN_INCOMPLETE_LINK)).toBe('incomplete')
+  })
 
-    expect(onLinkCheck('https://preview-abc.vercel.app/tech')).toBe(true)
-    expect(onLinkCheck('https://other-preview.vercel.app/tech')).toBe(false)
+  it('threads currentHost through to the internal predicate', () => {
+    expect(
+      classifyCorvusLink('https://preview-abc.vercel.app/tech', {
+        currentHost: 'preview-abc.vercel.app',
+      }),
+    ).toBe('internal')
+    expect(classifyCorvusLink('https://preview-abc.vercel.app/tech')).toBe(
+      'external',
+    )
+  })
+
+  it.each<[string | null, string]>([
+    ['javascript:alert(1)', 'a script URL'],
+    ['data:text/html,<b>x</b>', 'a data URL'],
+    ['', 'an empty href'],
+    ['tech', 'a bare word'],
+    [null, 'a missing href'],
+  ])('falls through to external for %s (%s)', (href) => {
+    // Same direction as `isInternalCorvusLink`: anything unrecognised keeps
+    // its confirmation rather than being waved through.
+    expect(classifyCorvusLink(href)).toBe('external')
   })
 })

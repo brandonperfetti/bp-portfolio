@@ -3,9 +3,9 @@
 ## Surface
 
 `/corvus` renders `CorvusChat` (Vercel AI SDK `useChat`) streaming from
-`POST /api/ai/chat`. Markdown rendering via streamdown/react-markdown —
-including its link-safety guard, which is configured rather than accepted by
-default (see "Links in a reply" below).
+`POST /api/ai/chat`. Markdown rendering via streamdown/react-markdown, with
+its link component **replaced** rather than configured, so an internal
+citation is a real same-tab anchor (see "Links in a reply" below).
 
 ## Server enforcement (`src/lib/ai/corvus.ts` + route)
 
@@ -58,13 +58,88 @@ framing ("Open external link?" / "You're about to visit an external
 website."). Uncontested, that means the `/tech` citation grounding exists to
 produce warns the visitor they are leaving the site — to go to the site.
 
-`CorvusChat.tsx` therefore passes an explicit
-`linkSafety={{ enabled: true, onLinkCheck }}`. It stays **enabled**: Corvus is
-a broad assistant that legitimately names off-site URLs, and those keep their
-confirmation. `onLinkCheck` is the seam that tells the two apart — streamdown
-awaits it per click and, on `true`, skips the modal. Once only genuinely
-off-site links reach it, the default copy is accurate, so no `renderModal`
-override ships.
+#144 configured that guard with `linkSafety={{ enabled: true, onLinkCheck }}`,
+which removed the modal from internal links and left everything else. **#158
+replaced the link component instead**, and that is the shape today.
+
+**Brandon's rule (#158, 2026-09-04): internal links navigate in the same tab;
+only external links open a new tab, and only they keep the confirmation.**
+
+`CorvusChat.tsx` passes `components={{ a: CorvusReplyLink }}` and **no
+`linkSafety` at all**. That is the only seam that can produce a real anchor:
+streamdown 2.5.0's `linkSafety` branch renders a `<button>` unconditionally
+and `renderModal` replaces the dialog, never the trigger
+(`dist/chunk-BO2N2NFS.js`, verified 2026-09-04), while a user `components`
+entry wins outright over the default map (`{...defaults, ...user}`, same
+file). With `CorvusReplyLink` mounted, `Lo` never renders, so keeping
+`linkSafety` would be configuration for a component that does not exist.
+
+The cost of owning the anchor is owning the confirmation, which streamdown
+does not export. `CorvusReplyLink` renders its own, and being ours it meets
+`docs/ACCESSIBILITY.md`'s overlay rule — "overlays trap and restore focus":
+
+- a real `role="dialog"` with `aria-modal="true"` and an accessible name
+  (streamdown's had `role="button"` on the backdrop, `role="presentation"` on
+  the panel, and no accessible name at all);
+- focus moved to the confirming action on open and **returned to the trigger**
+  on close (all four close paths — Escape, Cancel, Confirm, backdrop — share
+  one `close()`); Escape dismisses;
+- **Tab and Shift+Tab cycle within the dialog**, and the chat surface behind it
+  carries `inert` while it is open, so the composer, the mic and every other
+  citation are out of reach for the keyboard _and_ for a screen reader's
+  virtual cursor — a Tab trap alone closes only the first of those doors.
+
+Three implementation notes that are decisions rather than details. The dialog
+is **portalled to `document.body`**: it sits inside the chat card in the React
+tree, and marking its own ancestor `inert` would otherwise make the dialog
+inert too. `inert` is set imperatively on a node React renders without an
+`inert` prop, so a re-render cannot clobber it — React only reconciles
+attributes it was given.
+
+And **the focus restore happens in the effect cleanup that removes `inert`,
+after the attribute comes off** — never synchronously in `close()`. React
+batches the state update, so at `close()` time the surface is still inert, and
+`.focus()` inside an inert subtree is a **no-op** in a real browser:
+`activeElement` stays on `<body>`. That shipped briefly and was caught in
+Chromium, not in jsdom — **jsdom does not implement inert focusability**, so
+the unit test asserting the restore passed green throughout
+`[measured, 2026-09-04]`. The unit test is kept (it catches a restore deleted
+outright) but the `ExternalLinkConfirmation` story is the proof: it closes by
+Escape and by Cancel and asserts focus returns in a real browser. Reverting the
+fix turns that story red and leaves the jsdom suite green — which is the whole
+reason the story exists.
+
+The trap is hand-rolled, and that is a **deferral worth naming**: `CLAUDE.md`
+says new UI starts from a shadcn/ui primitive, but there is no dialog primitive
+in `src/components/ui` and `@radix-ui/react-dialog` is not a dependency, so
+satisfying that half of the rule means editing `package.json` — out of scope
+for #158. The story below is what gates the accessibility in the meantime;
+moving this dialog onto a real primitive is a follow-up.
+
+`CorvusChat.stories.tsx` carries an `ExternalLinkConfirmation` story that opens
+the dialog through the real `useChat` transport (a hand-built AI SDK v1
+UI-message-stream response, so the reply is genuinely streamed and genuinely
+rendered by streamdown), so the Storybook a11y addon gates it and the focus,
+trap and `inert` behaviour — open **and close** — is asserted in a real browser
+rather than only in jsdom.
+
+| Kind                | Renders    | Plain click                              |
+| ------------------- | ---------- | ---------------------------------------- |
+| internal            | `<a href>` | `router.push` — same tab, in-app         |
+| external `http(s)`  | `<button>` | confirm, then `window.open(…, '_blank')` |
+| `mailto:` / `tel:`  | `<button>` | confirm, then `window.open(…, '_self')`  |
+| mid-stream sentinel | `<span>`   | nothing                                  |
+
+The internal `href` is **real**, not decorative, and modified clicks
+(⌘/Ctrl/Shift/Alt, or any non-primary button) are left to the browser — which
+is what makes hover-preview, middle-click, "copy link address" and
+open-in-new-tab all mean what a visitor expects.
+
+`mailto:`/`tel:` get honest copy now ("Open your email app?" / "Start a phone
+call?"). #144 sent both through the "external website" modal and this document
+recorded that as a deliberate, conservative lie; owning the dialog is what
+made telling the truth free. They hand off with `_self` rather than `_blank`
+so the browsers that do not close a hand-off tab do not strand an empty one.
 
 **Internal** (`src/lib/ai/linkSafety.ts`) = path-relative (`/…`, `#…`, `?…`),
 **or** an `http(s)` URL whose host is the currently-served host
@@ -80,16 +155,21 @@ internal because its question is only "does this need `target=_blank`?" — the
 guard's question is "may this skip a safety prompt?", and the answer for a
 scheme that hands off to another application is no.
 
-**Measured, jsdom + the streamdown dist (2026-09-02):** an approved link is
-opened by streamdown with `window.open(href, '_blank', 'noreferrer')` — a
-**new tab, not a Next router push**. Two things follow. It is not a regression
-(streamdown's un-guarded branch renders `<a target="_blank">` too, so new-tab
-is its baseline for every link in both branches), and it means links in a
-reply render as `<button>`, not inspectable anchors — a consequence of
-`linkSafety` being enabled at all. Changing either would mean overriding
-`components.a`, and streamdown does not export its internal link component, so
-the override would have to reimplement the guard and modal wholesale. Tracked
-separately; not attempted here.
+**The #158 defect, for the record.** Under #144 an approved internal link was
+still opened by streamdown with `window.open(href, '_blank', 'noreferrer')`
+and still rendered as a `<button>` — measured in jsdom against the streamdown
+dist (2026-09-02) and reproduced on production by Brandon during the wave-5
+release smoke (2026-09-04, master `31be240`): the "technology page" citation
+and the "Read the full stack breakdown" article link both opened a new tab. It
+was never a regression — streamdown's un-guarded branch is `<a
+target="_blank">` too, so new-tab was its baseline in both branches — it was
+simply as far as configuring `linkSafety` could get. This document said the
+alternative "would have to reimplement the guard and modal wholesale"; #158
+did exactly that, and the paragraphs above are the result.
+
+No streamdown upgrade was needed or taken: the seam that fixed this
+(`components.a` overriding the default map) is present in the installed
+`2.5.0`, so `package.json` is untouched.
 
 ## The completion budget, and why a turn can come back empty (#138)
 

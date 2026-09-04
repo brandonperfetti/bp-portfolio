@@ -3,7 +3,17 @@
 import { useChat } from '@ai-sdk/react'
 import { useUser } from '@clerk/nextjs'
 import { DefaultChatTransport } from 'ai'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createPortal } from 'react-dom'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type AnchorHTMLAttributes,
+} from 'react'
 import { Streamdown } from 'streamdown'
 
 import { Copy as CopyIcon } from 'lucide-react'
@@ -13,7 +23,7 @@ import {
   createCorvusChatFetch,
   SIGN_IN_REQUIRED_CODE,
 } from '@/lib/ai/corvusChatFetch'
-import { createCorvusLinkCheck } from '@/lib/ai/linkSafety'
+import { classifyCorvusLink, type CorvusLinkKind } from '@/lib/ai/linkSafety'
 import { getCorvusGreeting } from '@/lib/corvus/greeting'
 import { useSpeechInput } from '@/lib/corvus/useSpeechInput'
 import { reportSpeechRecognitionError } from '@/lib/observability/clientTelemetry'
@@ -81,6 +91,340 @@ function ClerkFirstNameProbe({
 
   return null
 }
+
+/**
+ * Everything inside the confirmation dialog that can hold focus.
+ *
+ * @remarks Deliberately narrow. The dialog's own contents are three buttons
+ * and static text, so a general-purpose focusable selector (contenteditable,
+ * `audio[controls]`, positive tabindex ordering) would be scope the trap does
+ * not need and cannot be tested against. Widen it when the dialog grows a
+ * control this does not name, not before.
+ */
+const FOCUSABLE_SELECTOR =
+  'a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])'
+
+/**
+ * Confirmation copy per link kind (#158).
+ *
+ * @remarks The `external` strings are streamdown's own, kept verbatim. They
+ * were already accurate for an off-site page and reusing them keeps the
+ * visitor-facing wording unchanged for the case that has not changed — the
+ * modal here is a replacement for streamdown's, not a redesign of it.
+ *
+ * `mailto` and `tel` are the honest-copy half of #158. #144 sent both through
+ * the "external website" modal and `linkSafety.ts` documented that as the
+ * conservative error; with our own modal there is no reason to keep lying
+ * about what the button does.
+ */
+const LINK_CONFIRMATION_COPY: Record<
+  Exclude<CorvusLinkKind, 'internal' | 'incomplete'>,
+  { title: string; body: string; confirm: string }
+> = {
+  external: {
+    title: 'Open external link?',
+    body: "You're about to visit an external website.",
+    confirm: 'Open link',
+  },
+  mailto: {
+    title: 'Open your email app?',
+    body: 'This link hands off to whatever app composes your email.',
+    confirm: 'Open email app',
+  },
+  tel: {
+    title: 'Start a phone call?',
+    body: 'This link hands off to whatever app places your calls.',
+    confirm: 'Open dialler',
+  },
+}
+
+/**
+ * The link component streamdown renders for every anchor in a reply (#158).
+ *
+ * @remarks Replaces streamdown's `MarkdownA` wholesale via `components.a`,
+ * which is the ONLY seam that can produce a real `<a href>`: streamdown 2.5.0's
+ * `linkSafety` branch renders a `<button>` unconditionally and `renderModal`
+ * replaces only the dialog, never the trigger
+ * (`node_modules/streamdown/dist/chunk-BO2N2NFS.js`, verified 2026-09-04).
+ * Since a user `components` entry wins outright (`{...defaults, ...user}` in
+ * that same file), `linkSafety` is no longer passed at all — it would be dead
+ * configuration describing a component that never mounts.
+ *
+ * Brandon's rule for #158, and the whole shape of this component: **internal
+ * links navigate in the same tab; only external links open a new tab and keep
+ * the confirmation.**
+ *
+ * So an internal citation is a real anchor with a real `href` — inspectable,
+ * hoverable, middle-clickable, copyable — and its plain-click handler is a
+ * `router.push`, i.e. an in-app navigation rather than a document load.
+ * Modified clicks (⌘/Ctrl/Shift/Alt, or any non-primary button) are left
+ * alone so "open in a new tab" still means what the visitor expects; that is
+ * the browser's job and the reason the `href` is real rather than decorative.
+ *
+ * Everything else keeps a confirmation, because Corvus is a broad assistant
+ * that legitimately names off-site URLs. That branch is a `<button>` on
+ * purpose: it does not navigate on click, so rendering it as an anchor would
+ * promise something it does not do.
+ */
+function CorvusReplyLink({
+  children,
+  href,
+  className,
+  node: _node,
+  ...rest
+}: AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) {
+  const router = useRouter()
+  const titleId = useId()
+  const [confirming, setConfirming] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const confirmRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // `window.location.host` is read here rather than inside `linkSafety.ts` so
+  // that module stays pure. Assistant messages only ever exist after a client
+  // round trip, so there is no server render of this component to mismatch.
+  const kind = classifyCorvusLink(href, {
+    currentHost:
+      typeof window === 'undefined' ? undefined : window.location.host,
+  })
+
+  // Closing is state only. Restoring focus from HERE was a real bug: React
+  // batches the state update, so `inert` is still on the chat surface when the
+  // handler runs, and `.focus()` on an element inside an inert subtree is a
+  // no-op — `activeElement` stayed on `<body>` in Chromium. The restore
+  // therefore lives in the effect cleanup that removes `inert`, which is the
+  // only place ordered after it. All four close paths (Escape, Cancel,
+  // Confirm, backdrop) route through here, so all four are fixed by moving it
+  // once.
+  const close = useCallback(() => {
+    setConfirming(false)
+  }, [])
+
+  // Focus lands on the confirm button when the dialog opens: streamdown's own
+  // modal left focus on the (now hidden) trigger, so a keyboard visitor had to
+  // tab blind. Escape closes, and closing returns focus where it came from.
+  //
+  // Tab is TRAPPED, per `docs/ACCESSIBILITY.md` — "overlays trap and restore
+  // focus". Hand-rolled rather than reached for: there is no dialog primitive
+  // in `src/components/ui`, and `@radix-ui/react-dialog` is not a dependency
+  // (adding one would mean editing `package.json`, out of scope for #158).
+  // What is here is the minimum a modal owes a keyboard visitor and no more —
+  // cycle within the dialog, and nothing behind it is reachable.
+  useEffect(() => {
+    if (!confirming) return
+    confirmRef.current?.focus()
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        close()
+        return
+      }
+      if (event.key !== 'Tab') return
+
+      const panel = panelRef.current
+      if (!panel) return
+
+      // Queried per keystroke, not cached on open: the confirm button's label
+      // and the panel's contents are React-rendered, so a stale list would
+      // trap focus onto a node that is no longer there.
+      const focusables = [
+        ...panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ].filter((el) => !el.hasAttribute('disabled'))
+      if (!focusables.length) return
+
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement
+
+      // Also catches focus having escaped the panel entirely (a click on the
+      // backdrop, say): either edge sends it back inside rather than onward.
+      if (event.shiftKey && (active === first || !panel.contains(active))) {
+        event.preventDefault()
+        last.focus()
+      } else if (
+        !event.shiftKey &&
+        (active === last || !panel.contains(active))
+      ) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [close, confirming])
+
+  // The chat surface behind the dialog is made inert while it is open, so the
+  // composer, the mic and every citation are unreachable by keyboard AND by a
+  // screen reader's virtual cursor — a Tab trap alone only closes the first of
+  // those two doors.
+  //
+  // Set imperatively on a node React renders without an `inert` prop, which is
+  // why a re-render cannot clobber it: React only reconciles attributes it was
+  // given. It is also why the dialog is PORTALLED to `document.body` — it
+  // lives inside the chat card in the tree, and marking its own ancestor inert
+  // would make the dialog inert too.
+  //
+  // The cleanup ALSO restores focus, and the order inside it is the whole
+  // point rather than an accident: `inert` comes off first, and only then does
+  // the trigger get focus. Focusing while the subtree is still inert silently
+  // does nothing — that was the measured regression, and jsdom cannot see it
+  // because it does not implement inert focusability. The browser tier
+  // (`CorvusChat.stories.tsx`) is what proves this works.
+  useEffect(() => {
+    if (!confirming) return
+    // Optional: a caller could mount `Streamdown` outside the chat card. The
+    // restore below must not be conditional on finding it — the focus contract
+    // holds whether or not there is a surface to make inert.
+    const surface = document.querySelector<HTMLElement>(
+      '[data-slot="chat-card"]',
+    )
+    surface?.setAttribute('inert', '')
+
+    // Captured on open rather than read in the cleanup: the linter is right
+    // that a ref can change underneath a cleanup, and the node we owe focus to
+    // is specifically the trigger that OPENED this dialog.
+    const trigger = triggerRef.current
+
+    return () => {
+      surface?.removeAttribute('inert')
+      // Guarded against the unmount path: if the whole message list went away
+      // while the dialog was open, the trigger is detached and focusing it
+      // would move focus nowhere useful.
+      if (trigger && document.contains(trigger)) trigger.focus()
+    }
+  }, [confirming])
+
+  const linkClassName = [
+    'wrap-anywhere font-medium text-primary underline',
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  if (kind === 'incomplete' || !href) {
+    // Mid-stream markdown: streamdown emits a sentinel href for a link whose
+    // closing paren has not arrived. Render the text, not a target.
+    return (
+      <span className={linkClassName} data-incomplete data-streamdown="link">
+        {children}
+      </span>
+    )
+  }
+
+  if (kind === 'internal') {
+    return (
+      <a
+        {...rest}
+        className={linkClassName}
+        data-corvus-link="internal"
+        data-streamdown="link"
+        href={href}
+        onClick={(event) => {
+          if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return
+          }
+          event.preventDefault()
+          router.push(href)
+        }}
+      >
+        {children}
+      </a>
+    )
+  }
+
+  const copy = LINK_CONFIRMATION_COPY[kind]
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        className={`${linkClassName} appearance-none text-left`}
+        data-corvus-link={kind}
+        data-streamdown="link"
+        onClick={() => setConfirming(true)}
+        type="button"
+      >
+        {children}
+      </button>
+      {confirming &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/50 p-4 backdrop-blur-sm"
+            data-streamdown="link-safety-modal"
+            onClick={close}
+          >
+            <div
+              ref={panelRef}
+              aria-labelledby={titleId}
+              aria-modal="true"
+              className="relative flex w-full max-w-md flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-6 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+            >
+              <h2
+                className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+                id={titleId}
+              >
+                {copy.title}
+              </h2>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                {copy.body}
+              </p>
+              <p className="rounded-md bg-zinc-100 p-3 font-mono text-sm break-all dark:bg-zinc-800">
+                {href}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  className="flex-1 rounded-md border border-zinc-200 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                  onClick={close}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  ref={confirmRef}
+                  className="flex-1 rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
+                  onClick={() => {
+                    // `mailto:`/`tel:` hand off to another application; opening
+                    // them in a new tab leaves an empty one behind on the
+                    // browsers that do not close it themselves. Only a real
+                    // off-site PAGE gets `_blank`.
+                    if (kind === 'external') {
+                      window.open(href, '_blank', 'noreferrer')
+                    } else {
+                      window.open(href, '_self')
+                    }
+                    close()
+                  }}
+                  type="button"
+                >
+                  {copy.confirm}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
+  )
+}
+
+/**
+ * streamdown's component overrides for a Corvus reply.
+ *
+ * @remarks Module scope, so its identity is stable across renders —
+ * `Streamdown` memoises its merged component map on the `components` prop's
+ * identity, and a fresh object per render would rebuild it every token.
+ */
+const CORVUS_MARKDOWN_COMPONENTS = { a: CorvusReplyLink }
 
 export interface CorvusChatProps {
   /**
@@ -155,37 +499,6 @@ export default function CorvusChat({
     [],
   )
   const { messages, sendMessage, status, error } = useChat({ transport })
-
-  // #144. streamdown's `linkSafety` defaults to `{ enabled: true }`, which
-  // guards EVERY link with a modal whose copy hard-codes external framing
-  // ("You're about to visit an external website") — so the `/tech` citation
-  // that grounding (#82) exists to produce warned visitors that they were
-  // leaving the site to go to the site.
-  //
-  // Kept enabled, not disabled: Corvus is a broad assistant and legitimately
-  // names off-site URLs, which should keep the confirmation. `onLinkCheck`
-  // is the seam that tells the two apart — streamdown awaits it per click
-  // and, on `true`, navigates without the modal
-  // (`node_modules/streamdown/dist/chunk-BO2N2NFS.js`, verified 2026-09-02).
-  // Once only genuinely off-site links reach it, the default modal copy is
-  // accurate, so no `renderModal` override is needed.
-  //
-  // Memoised on the host: `Streamdown` is `memo`ised and compares
-  // `linkSafety` by identity, so a fresh object each render would defeat it.
-  // `window.location.host` is read here rather than inside the predicate to
-  // keep `linkSafety.ts` pure; it is undefined during SSR, which changes no
-  // markup (the guard renders the same element either way) and is corrected
-  // on the client before any click can happen.
-  const linkSafety = useMemo(
-    () => ({
-      enabled: true,
-      onLinkCheck: createCorvusLinkCheck({
-        currentHost:
-          typeof window === 'undefined' ? undefined : window.location.host,
-      }),
-    }),
-    [],
-  )
 
   // Chat's Turnstile flow is wired but armed separately from the contact
   // form (rollout decision 2026-08-10): tokens are only acquired when
@@ -394,7 +707,14 @@ export default function CorvusChat({
                   <MessageContent from={from}>
                     {isAssistant ? (
                       <div className="corvus-markdown max-w-none">
-                        <Streamdown linkSafety={linkSafety}>{text}</Streamdown>
+                        {/* #158: `components.a` — NOT `linkSafety`. See
+                            {@link CorvusReplyLink}: streamdown's guarded link
+                            is a `<button>` in every branch, so an internal
+                            citation could not be a real anchor until its link
+                            component was replaced outright. */}
+                        <Streamdown components={CORVUS_MARKDOWN_COMPONENTS}>
+                          {text}
+                        </Streamdown>
                       </div>
                     ) : (
                       <span className="whitespace-pre-wrap">{text}</span>

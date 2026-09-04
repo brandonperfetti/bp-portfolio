@@ -56,6 +56,14 @@ vi.mock('streamdown', () => ({
 vi.mock('@clerk/nextjs', () => ({
   useUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
 }))
+// #158: CorvusChat's reply-link component calls `useRouter` so an internal
+// citation can navigate in-app. Mocked here for the same reason every other
+// client-component suite in this repo mocks it — there is no app-router
+// context in jsdom. Link BEHAVIOUR is asserted in
+// `CorvusChat.linkSafety.test.tsx`, which drives the real streamdown.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+}))
 vi.mock('@/lib/motion/usePrefersReducedMotion', () => ({
   usePrefersReducedMotion: () => true,
 }))
