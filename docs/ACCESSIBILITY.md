@@ -14,6 +14,11 @@ These are release gates, not aspirations:
   `motion-reduce:transition-none`).
 - **Light/dark parity**: both themes reviewed for contrast (WCAG AA) on
   every new component; Storybook's theme toggle exists for exactly this.
+  Parity means both themes _clear_ the floors, not that both use the same
+  treatment: the Corvus sign-in-gate CTA's dark hover is a ring, not a fill
+  step (#139). Ratios are pinned in `src/styles/corvus-accent-contrast.test.ts`
+  and the arithmetic behind the choice is in the `tailwind.css` corvus token
+  block.
 - **Semantics**: real elements over ARIA where possible (`button`, `nav`,
   lists with `role="list"` where Tailwind resets apply); status text uses
   `role="status"` + `aria-live="polite"` (see explorer result counts);

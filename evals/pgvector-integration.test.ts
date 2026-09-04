@@ -432,15 +432,38 @@ describe.skipIf(!connectionString)(
       ).toBe(false)
     })
 
+    /**
+     * Drive `SYNTHETIC_PUBLIC` to its saved-then-edited state through the real
+     * `afterChange` hook, and return the document that state describes.
+     *
+     * @remarks Extracted so the two cases below own their own stored rows
+     * instead of reading whatever the case before them happened to leave
+     * behind. Run `-t 'PLACING'` on its own and the placement case used to find
+     * an empty table: `readStoredChunks` returned nothing, `isContentUnchanged`
+     * was false, `embedChunks` was called — and its "zero provider calls"
+     * assertion passed for the wrong reason on the full-file run and failed on
+     * the solo one. Both callers `mockClear()` immediately before the action
+     * they measure, because seeding legitimately embeds.
+     *
+     * Idempotent by construction: replaying the sequence over existing rows is
+     * exactly what the hook is built to do.
+     */
+    const seedEditedPublic = async () => {
+      await runAfterChange('posts', SYNTHETIC_PUBLIC)
+      const edited = {
+        ...SYNTHETIC_PUBLIC,
+        excerpt: 'SYNTHETIC_EDITED_BODY, rewritten after the first save.',
+      }
+      await runAfterChange('posts', edited, SYNTHETIC_PUBLIC)
+      return edited
+    }
+
     it('a metadata-only public → gated flip is corrected WITHOUT embedding', async () => {
       // The bypass this closes: flipping visibility changes no body text, so a
       // hash-only comparison reports "unchanged" and the stored row keeps
       // saying `public` — leaving a now-gated article's text reachable by
       // anonymous chat turns indefinitely.
-      const published = {
-        ...SYNTHETIC_PUBLIC,
-        excerpt: 'SYNTHETIC_EDITED_BODY, rewritten after the first save.',
-      }
+      const published = await seedEditedPublic()
       const before = await retrieve(chunkTextOf(published), false)
       expect(
         before.some((snippet) =>
@@ -476,6 +499,70 @@ describe.skipIf(!connectionString)(
       expect(
         signedIn.some((snippet) =>
           snippet.content.includes('SYNTHETIC_EDITED_BODY'),
+        ),
+      ).toBe(true)
+    })
+
+    it('PLACING an article rewrites source_url with zero provider calls (#153)', async () => {
+      // Seeds its OWN gated, edited rows rather than inheriting the gating
+      // case's leftovers, so `-t 'PLACING'` measures the same thing the
+      // full-file run does. The ONLY thing that moves after the seed is the
+      // placement, which is the whole point — a placement changes `parent` and
+      // not a byte of the body, so `isContentUnchanged` short-circuits and the
+      // fix has to land through the metadata path or not at all.
+      const published = await seedEditedPublic()
+      const stored0 = { ...published, access: { visibility: 'gated' } }
+      await runAfterChange('posts', stored0, published)
+
+      const before = await readStoredChunks(
+        db,
+        'posts',
+        Number(SYNTHETIC_PUBLIC.id),
+      )
+      expect(
+        [...before.values()].every(
+          (row) => row.sourceUrl === '/articles/synthetic-public-fixture',
+        ),
+      ).toBe(true)
+
+      embedChunksStub.mockClear()
+      const placed = { ...stored0, path: 'work/synthetic-public-fixture' }
+      await runAfterChange('posts', placed, stored0)
+      expect(
+        embedChunksStub,
+        'a URL is not a content change: placing must cost zero provider dollars',
+      ).not.toHaveBeenCalled()
+
+      const after = await readStoredChunks(
+        db,
+        'posts',
+        Number(SYNTHETIC_PUBLIC.id),
+      )
+      expect(after.size).toBe(before.size)
+      expect(
+        [...after.values()].every(
+          (row) => row.sourceUrl === '/work/synthetic-public-fixture',
+        ),
+        'every chunk of the document must be re-pointed, not just the first',
+      ).toBe(true)
+      // The content hashes are untouched, which is what proves the vectors
+      // still describe these rows and no re-embed is owed on the next save.
+      for (const [index, row] of after) {
+        expect(row.contentHash).toBe(before.get(index)?.contentHash)
+      }
+
+      // And un-placing puts it back, still without a provider call.
+      embedChunksStub.mockClear()
+      await runAfterChange('posts', stored0, placed)
+      expect(embedChunksStub).not.toHaveBeenCalled()
+      const restored = await readStoredChunks(
+        db,
+        'posts',
+        Number(SYNTHETIC_PUBLIC.id),
+      )
+      expect(
+        [...restored.values()].every(
+          (row) => row.sourceUrl === '/articles/synthetic-public-fixture',
         ),
       ).toBe(true)
     })

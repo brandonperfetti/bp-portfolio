@@ -9,12 +9,17 @@ import {
   GENERAL_HELPFULNESS_CASES,
   OFF_SITE_CASES,
   PERSONA_CASES,
+  REPO_GROUNDED_CASES,
+  REPO_UNKNOWN_CASES,
   SAFETY_CASES,
   SCOPE_GROUNDED_CASES,
   SITE_FACT_CASES,
+  SITE_STACK_CASES,
+  TECH_LIST_CASES,
   TECH_SOURCING_CASES,
   UNGROUNDED_CASES,
 } from './fixtures/datasets'
+import { GITHUB_REPO_FIXTURES } from './fixtures/github-repos'
 import { createCitationScorers } from './citation-scorers'
 import { createFixtureRetriever } from './fixtures/retriever'
 import { factuality } from './graded-scorers'
@@ -117,12 +122,21 @@ function registerMatrix(): void {
     citesKnownSourceUrl,
     neverFabricatesSiteUrl,
     citesSiteSourceNotVendor,
+    citesRepoSourceUrl,
+    neverFabricatesRepoUrl,
+    citesRepoNotTechList,
+    citesTechListNotRepo,
   } = createCitationScorers()
 
   // The same two retrievers the gate files build: production floor and top-k,
   // plus the floorless one the adjacent-context block needs.
   const retrieve = createFixtureRetriever()
   const retrieveWithoutFloor = createFixtureRetriever({ floor: 0 })
+  // The third retriever the gate file builds (#147): site corpus AND repo
+  // corpus, so the site-stack/tech-list pair is a real choice.
+  const retrieveWithRepos = createFixtureRetriever({
+    repos: GITHUB_REPO_FIXTURES,
+  })
 
   /** An ungrounded turn on the variant's model. */
   const ungrounded: MatrixTask = (input, variant) =>
@@ -221,6 +235,36 @@ function registerMatrix(): void {
         neverFabricatesSiteUrl,
         describesTheContactForm,
       ],
+    },
+    // The four wave-5 blocks (#147), here for the same contract reason: a
+    // matrix row and its gate row must grade the identical case with the
+    // identical rubric. These are also the blocks a model swap is most likely
+    // to move, because the disambiguation they measure is a prompt-following
+    // property rather than a knowledge one — and #147's own baseline was
+    // measured on this matrix, so the after-number has to come from it too.
+    {
+      name: 'Corvus site facts · a known public repository',
+      data: REPO_GROUNDED_CASES,
+      task: grounded(retrieveWithRepos),
+      scorers: [containsExpectedFact, citesRepoSourceUrl, factuality],
+    },
+    {
+      name: 'Corvus site facts · declines a repository that does not exist',
+      data: REPO_UNKNOWN_CASES,
+      task: grounded(retrieveWithRepos),
+      scorers: [refusesWhenNotGrounded, neverFabricatesRepoUrl],
+    },
+    {
+      name: 'Corvus site facts · what THIS SITE runs on',
+      data: SITE_STACK_CASES,
+      task: grounded(retrieveWithRepos),
+      scorers: [containsExpectedFact, citesRepoNotTechList],
+    },
+    {
+      name: 'Corvus site facts · what technologies Brandon works with',
+      data: TECH_LIST_CASES,
+      task: grounded(retrieveWithRepos),
+      scorers: [containsExpectedFact, citesTechListNotRepo],
     },
   ]
 

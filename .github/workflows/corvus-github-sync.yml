@@ -1,0 +1,200 @@
+# Weekly sync of the public GitHub repos into the Corvus retrieval index (#147),
+# against PRODUCTION.
+#
+# Why a schedule and not a chat-time tool call: reading a README at answer time
+# would add per-turn latency, rate-limit exposure, and a LIVE prompt-injection
+# surface — README text entering the prompt unreviewed, from a source the site
+# does not control. Indexing at sync time keeps every passage inspectable in
+# `corvus_embeddings` before a visitor can ever be answered from it. #147 says
+# this plainly and it is the load-bearing reason this file exists.
+#
+# The job runs `pnpm corvus:sync-github`, the same shape corvus-backfill.yml uses
+# for `pnpm corvus:backfill`: the package script is the one place the entry point
+# is spelled, so the workflow, the docs and an operator at a terminal cannot
+# drift apart on it.
+#
+# CORVUS_GITHUB_OWNER is deliberately NOT set below. `DEFAULT_GITHUB_OWNER` in
+# `src/lib/ai/githubReposFetch.ts` already resolves to `brandonperfetti`, and
+# pinning the same value here would be a second place to change it — the kind of
+# duplicate that goes stale silently because both copies look right in isolation.
+# Set it here only if this workflow ever needs to sync an account the code's
+# default does not name.
+#
+# Why the sweep matters more here than in corvus-backfill.yml: a repository made
+# private or deleted must stop being retrievable. `sync-github-repos.ts` prunes
+# by DEFAULT for that reason (the backfill's `--drop-orphans` is opt-in for the
+# opposite one), so this job passes NO flag — the safe behaviour is the one you
+# get by not thinking about it.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL_PROD  — PRODUCTION session-mode pooler string (port 5432),
+#                           the same secret corvus-backfill.yml and db-backup.yml
+#                           already use. Session mode for the same reason: this
+#                           is one long-lived batch process, not a serverless
+#                           request. Payload reads it as DATABASE_URI.
+#   OPENAI_API_KEY        — embeddings are an OpenAI-only provider axis
+#                           (AI_EMBEDDING_PROVIDER). Same secret the Evalite job
+#                           in ci.yml and corvus-backfill.yml already use.
+#
+# NEW secret, optional:
+#   CORVUS_GITHUB_SYNC_TOKEN — a fine-grained PAT with PUBLIC REPOSITORIES read
+#                           access and nothing else. Set it ONLY if the run
+#                           reports 403/404 on repositories that are public.
+#                           The step below falls back to the workflow's own
+#                           automatic GITHUB_TOKEN when it is unset.
+#
+# On the token, stated honestly because it was NOT measured from the lane that
+# wrote this file (api.github.com is unreachable there): the automatic
+# `secrets.GITHUB_TOKEN` is an installation token for THIS repository, and
+# GitHub documents it as carrying read access to public resources generally —
+# which is all `/users/{owner}/repos`, `/repos/{o}/{r}/readme` and
+# `/repos/{o}/{r}/languages` need for a PUBLIC repo. It is expected to suffice
+# and is what runs by default. The first dispatch is what will settle it: if
+# the counts line reports failures naming 403 or 404, add
+# CORVUS_GITHUB_SYNC_TOKEN and re-dispatch — no code change, the expression
+# below picks it up. This is deliberately an optional secret rather than a
+# required one, so the workflow is not blocked on provisioning a PAT that may
+# turn out to be unnecessary.
+#
+# Secrets are declared on the two STEPS that use them, never on the job — the
+# same posture corvus-backfill.yml documents at length. A job-level `env:` is in
+# scope for `pnpm install --frozen-lockfile`, whose allowed third-party build
+# scripts (@sentry/cli, esbuild, sharp, unrs-resolver) would then run holding
+# the production connection string and the provider key.
+#
+# Notes:
+# - GitHub disables cron workflows after 60 days without repo activity; the
+#   run-summary line below is what makes a silent stall visible in the Actions
+#   tab, the same convention db-backup.yml and corvus-backfill.yml use.
+# - This repo is public. The step summary prints the script's own counts line
+#   and nothing else — no connection string, no repository content.
+
+name: corvus-github-sync
+
+on:
+  schedule:
+    # Sunday 12:23 UTC (~05:23 PT). Deliberately AFTER corvus-backfill.yml's
+    # 11:07 slot rather than beside it: both write `corvus_embeddings` on the
+    # same production database, and while they touch disjoint collections there
+    # is no reason to make two long-lived session-mode connections compete. The
+    # 45-minute backfill timeout closes by ~11:52, so this starts clear of it.
+    # The minute is not :00, where GitHub queues everyone's hourly crons.
+    - cron: '23 12 * * 0'
+  workflow_dispatch:
+
+# Least privilege. `contents: read` is also exactly what the automatic
+# GITHUB_TOKEN needs to read public repositories through the REST API, so the
+# scope this declares for the checkout is the scope the sync runs under too.
+permissions:
+  contents: read
+
+# Runs must never overlap. Two passes would race on the same `corvus_embeddings`
+# rows, and — worse than in the backfill's case — one run's prune sweep could
+# fire against the other run's half-written index. `cancel-in-progress: false`
+# is the load-bearing half: killing a half-finished sync leaves repositories
+# indexed under a stale README, which is the state this job exists to clear.
+concurrency:
+  group: corvus-github-sync
+  cancel-in-progress: false
+
+env:
+  # Pinned to a full patch version for the same reason ci.yml pins it. Keep in
+  # step with ci.yml's NODE_VERSION when that moves.
+  NODE_VERSION: '24.18.0'
+
+jobs:
+  sync:
+    name: Sync public GitHub repos into Corvus (production)
+    runs-on: ubuntu-latest
+    # Bounded so a hung GitHub or provider call cannot hold the concurrency
+    # group and block next week's run. Generous because a cold index embeds
+    # every repository's README from scratch.
+    timeout-minutes: 30
+    steps:
+      # `persist-credentials: false` because nothing here uses git after the
+      # checkout. The default would leave a token in `.git/config` for the rest
+      # of the job — readable by the very next step, `pnpm install`, whose
+      # third-party build scripts run arbitrary code. Step-scoping the DB and
+      # provider secrets below is pointless if a token sits in a file beside
+      # them.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Fail on a missing secret with the secret's NAME, before spending a
+      # provider dollar or opening a production connection. GITHUB_TOKEN is not
+      # checked here: the fallback expression always resolves to at least the
+      # workflow's own automatic token, so it cannot be empty.
+      - name: Check required secrets are present
+        env:
+          DATABASE_URI: ${{ secrets.SUPABASE_DB_URL_PROD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$DATABASE_URI" || { echo "::error::SUPABASE_DB_URL_PROD secret is not set"; exit 1; }
+          test -n "$OPENAI_API_KEY" || { echo "::error::OPENAI_API_KEY secret is not set"; exit 1; }
+
+      # The script logs one counts line — `[corvus:github] done: listed=…
+      # indexable=… written=… metadataUpdated=… skippedRepos=… deleted=…
+      # failed=…` — and exits non-zero if any repository failed. Tee it so the
+      # next step can lift that line into the run summary whether this passes or
+      # fails. `PIPESTATUS` keeps the script's exit code rather than tee's.
+      #
+      # No flag is passed. `--no-prune` would leave a now-private repository
+      # retrievable, and `--dry-run` writes nothing; both exist for an operator
+      # at a terminal, not for the schedule.
+      - name: Sync public repos into corvus_embeddings (production)
+        id: sync
+        env:
+          DATABASE_URI: ${{ secrets.SUPABASE_DB_URL_PROD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Optional PAT first, the workflow's own automatic token otherwise.
+          # See the header for why this is a fallback rather than a requirement.
+          GITHUB_TOKEN: ${{ secrets.CORVUS_GITHUB_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+          # Signs Payload auth tokens this script never mints — it goes through
+          # the Local API with no user context. corvus-backfill.yml and ci.yml
+          # use a dummy for the same reason.
+          PAYLOAD_SECRET: 'ci-not-a-real-secret'
+        run: |
+          set -euo pipefail
+          log="${RUNNER_TEMP}/corvus-github-sync.log"
+          set +e
+          pnpm corvus:sync-github 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "log=${log}" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Report the run in the job summary
+        if: ${{ !cancelled() }}
+        env:
+          LOG_FILE: ${{ steps.sync.outputs.log }}
+          OUTCOME: ${{ steps.sync.outcome }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Corvus GitHub repo sync (production)"
+            echo
+            echo "Outcome: **${OUTCOME}**"
+            echo
+            if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
+              counts=$(grep -o '\[corvus:github\] done:[^"\\]*' "$LOG_FILE" | tail -1 || true)
+              if [ -n "$counts" ]; then
+                echo '```'
+                echo "$counts"
+                echo '```'
+              else
+                echo "No counts line was logged — the run did not reach the end of the sync."
+              fi
+            else
+              echo "No log was captured; the run failed before the sync step."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

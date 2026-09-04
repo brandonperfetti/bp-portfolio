@@ -149,3 +149,49 @@ describe('ArticlesArchiveComponent', () => {
     expect(root.container.querySelector('section')).toHaveClass('my-12')
   })
 })
+
+/**
+ * Placement (#153): a placed article's card must link at its section URL. The
+ * block's projection is deliberately narrow, so `path` has to be listed in it
+ * explicitly or the href silently reverts to `/articles/<slug>`.
+ */
+describe('ArticlesArchiveComponent · placed articles (#153)', () => {
+  it('passes a placed article’s path through to the card', async () => {
+    getAllArticles.mockResolvedValue([
+      {
+        slug: 'brytecore',
+        path: 'work/brytecore',
+        title: 'Brytecore',
+        date: '2025-01-01',
+        description: 'desc',
+      },
+    ])
+    const element = await ArticlesArchiveComponent({
+      blockType: 'articlesArchive',
+    } as never)
+    render(element as React.ReactElement)
+    expect(screen.getByLabelText('Read article: Brytecore')).toHaveAttribute(
+      'href',
+      '/work/brytecore',
+    )
+  })
+
+  it('links an unplaced article at /articles/<slug>', async () => {
+    getAllArticles.mockResolvedValue([
+      {
+        slug: 'plain',
+        title: 'Plain',
+        date: '2025-01-01',
+        description: 'desc',
+      },
+    ])
+    const element = await ArticlesArchiveComponent({
+      blockType: 'articlesArchive',
+    } as never)
+    render(element as React.ReactElement)
+    expect(screen.getByLabelText('Read article: Plain')).toHaveAttribute(
+      'href',
+      '/articles/plain',
+    )
+  })
+})

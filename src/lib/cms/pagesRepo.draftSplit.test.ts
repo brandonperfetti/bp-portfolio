@@ -17,7 +17,13 @@ vi.mock('next/headers', () => ({
   draftMode: async () => ({ isEnabled: draftState.isEnabled }),
 }))
 
-import { getPageBySlugDraftAware } from '@/lib/cms/pagesRepo'
+import {
+  getPageByPathDraftAware,
+  getPageBySlugDraftAware,
+  getPublishedPagePaths,
+  isReservedPagePath,
+  pathSegments,
+} from '@/lib/cms/pagesRepo'
 
 beforeEach(() => {
   find.mockReset()
@@ -35,7 +41,7 @@ describe('getPageBySlugDraftAware draft-split (#76 B2)', () => {
         collection: 'pages',
         draft: false,
         overrideAccess: false,
-        where: { slug: { equals: 'about' } },
+        where: { path: { equals: 'about' } },
       }),
     )
   })
@@ -48,7 +54,21 @@ describe('getPageBySlugDraftAware draft-split (#76 B2)', () => {
         collection: 'pages',
         draft: true,
         overrideAccess: true,
-        where: { slug: { equals: 'about' } },
+        where: { path: { equals: 'about' } },
+      }),
+    )
+  })
+
+  it('resolves a nested page on the full path, in ONE indexed equality read', async () => {
+    // Never a per-request ancestor walk: at depth 3 that would be three
+    // sequential round trips on a route that is supposed to prerender.
+    await getPageByPathDraftAware('work/brytecore')
+    expect(find).toHaveBeenCalledTimes(1)
+    expect(find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'pages',
+        draft: false,
+        where: { path: { equals: 'work/brytecore' } },
       }),
     )
   })
@@ -60,5 +80,54 @@ describe('getPageBySlugDraftAware draft-split (#76 B2)', () => {
     })
     find.mockResolvedValue({ docs: [] })
     await expect(getPageBySlugDraftAware('about')).resolves.toBeNull()
+  })
+})
+
+describe('getPublishedPagePaths (#148)', () => {
+  it('selects paths, excludes the root and reserved single-segment paths, keeps their children', async () => {
+    find.mockResolvedValue({
+      docs: [
+        { path: 'home', slug: 'home' },
+        { path: 'about', slug: 'about' },
+        { path: 'tech', slug: 'tech' },
+        { path: 'tech/ai', slug: 'ai' },
+        { path: 'work', slug: 'work' },
+        { path: 'work/brytecore', slug: 'brytecore' },
+        { path: null, slug: 'pre-migration' },
+      ],
+    })
+
+    await expect(getPublishedPagePaths()).resolves.toEqual([
+      'tech/ai',
+      'work',
+      'work/brytecore',
+      'pre-migration',
+    ])
+    expect(find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'pages',
+        select: { path: true, slug: true },
+        where: { _status: { equals: 'published' } },
+      }),
+    )
+  })
+})
+
+describe('isReservedPagePath (#148)', () => {
+  it('reserves a one-segment dedicated route and nothing beneath it', () => {
+    expect(isReservedPagePath(['tech'])).toBe(true)
+    expect(isReservedPagePath(['about'])).toBe(true)
+    expect(isReservedPagePath(['tech', 'ai'])).toBe(false)
+    expect(isReservedPagePath(['work', 'brytecore'])).toBe(false)
+    expect(isReservedPagePath(['colophon'])).toBe(false)
+    expect(isReservedPagePath([])).toBe(false)
+  })
+})
+
+describe('pathSegments', () => {
+  it('drops the empty strings a leading or trailing slash produces', () => {
+    expect(pathSegments('/tech/ai')).toEqual(['tech', 'ai'])
+    expect(pathSegments('tech/ai/')).toEqual(['tech', 'ai'])
+    expect(pathSegments('/')).toEqual([])
   })
 })

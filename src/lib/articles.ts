@@ -2,6 +2,7 @@ import { cacheLife, cacheTag } from 'next/cache'
 
 import {
   getAllCmsArticleSummaries,
+  getCmsArticleByPath,
   getCmsArticleBySlug,
   getCmsSearchArticles,
   type CmsArticleDetailResult,
@@ -42,6 +43,8 @@ interface Article {
 
 export interface ArticleWithSlug extends Article {
   slug: string
+  /** The placed article's stored path (#153); absent for `/articles/<slug>`. */
+  path?: string
   searchText: string
 }
 
@@ -65,6 +68,10 @@ export async function getAllArticles(): Promise<ArticleWithSlug[]> {
   const articles = await getAllCmsArticleSummaries()
   return articles.map((article) => ({
     slug: article.slug,
+    // The placed path travels with the projection (#153) — this explicit
+    // allowlist is what would otherwise silently drop it and send every
+    // article-card href back to `/articles/<slug>`.
+    path: article.path,
     title: article.title,
     description: article.description,
     seoTitle: article.seoTitle,
@@ -95,6 +102,17 @@ export async function getArticleBySlug(
   }
 
   return article
+}
+
+/**
+ * One **placed** article by its stored path (#153) — the `[...segments]`
+ * catch-all's reader, gated identically to {@link getArticleBySlug}.
+ */
+export async function getArticleByPath(
+  path: string,
+  viewer?: { isAuthenticated: boolean },
+): Promise<ArticleDetailWithSlug | null> {
+  return (await getCmsArticleByPath(path, viewer)) ?? null
 }
 
 /**
@@ -131,6 +149,7 @@ export async function getSearchArticles(): Promise<ArticleWithSlug[]> {
       // all CMS fields (prevents accidental leakage when repo types evolve).
       .map((article) => ({
         slug: article.slug,
+        path: article.path,
         title: article.title,
         description: article.description,
         seoTitle: article.seoTitle,

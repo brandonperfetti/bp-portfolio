@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 
 import { getSearchArticles } from '@/lib/articles'
 import { CMS_TAGS } from '@/lib/cms/cache'
+import { publicPathFor } from '@/fields/slug/slugPaths'
 
 type SearchPayloadItem = {
   title: string
@@ -21,7 +22,9 @@ async function buildSearchPayload(): Promise<SearchPayloadItem[]> {
     title: article.title,
     description: article.description,
     date: article.date,
-    href: `/articles/${article.slug}`,
+    // Via the one path seam, so a search hit and the link that produced it
+    // can never point at different URLs (#148).
+    href: publicPathFor('posts', article) ?? '#',
     searchText: article.searchText,
   }))
 }

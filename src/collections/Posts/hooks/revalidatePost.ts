@@ -5,6 +5,7 @@ import type {
 
 import { revalidatePath, revalidateTag } from 'next/cache'
 
+import { publicPathFor } from '@/fields/slug/slugPaths'
 import type { Post } from '../../../payload-types'
 
 /**
@@ -34,6 +35,57 @@ import type { Post } from '../../../payload-types'
  * the `posts-sitemap` tag purge is aspirational, nothing caches under it, per
  * docs/SEO.md.
  *
+ * **Which transitions purge which path (#132), and why the rename purge is
+ * NOT here.** #132 asked whether the published→published rename purge should
+ * move into this hook from `createSlugRedirect`. It stays there. The rule that
+ * settles it is one of ownership: **the hook that WRITES a redirect row owns
+ * purging that row's `from`; this hook owns the document's own paths.** Three
+ * reasons, in order of weight:
+ *
+ * 1. *Two path vocabularies, and they disagreed.* That was the original
+ *    reason and #148 closed it: this hook, `revalidatePage` and
+ *    `createSlugRedirect` now all spell a document's path with `publicPathFor`,
+ *    so a purge can no longer be issued for a string no row was written as.
+ *    What survives the conflict is the ownership rule itself, for reason 2.
+ * 2. *It is a consequence of the write, not of the transition.* The old path is
+ *    worth purging only because a redirect now exists to serve it. It belongs
+ *    inside the same `try`, after the row landed — not on a branch that fires
+ *    whether or not the write succeeded.
+ * 3. *Blast radius.* Consolidating would make this hook read
+ *    `capturePublishedSlug`'s `req.context` stash and adopt
+ *    `publicPathForSlug`, touching the publish, unpublish and sitemap branches
+ *    for no behavioural gain.
+ *
+ * **The placement caveat (#153), stated rather than papered over.** The
+ * vacated-path purge above fires from `previousDoc`, and `previousDoc` is the
+ * latest *version* — which under Posts' 100ms autosave is the DRAFT. An editor
+ * who sets a parent in the admin autosaves first (that draft already carries
+ * the NEW path, computed by `computePostPath`) and publishes second, so by the
+ * time this hook runs `previousDoc.path` is already the new one and the purge
+ * finds nothing to do. It fires correctly for a direct API update, and it is
+ * the honest thing to write either way; closing it for the admin flow needs the
+ * published-path capture that is #150's ground (`capturePublishedPath`), which
+ * is the same missing signal the KNOWN GAP below records. Until then a placed
+ * article's vacated URL may keep serving its prerendered shell until the next
+ * `cmsContent` refresh — a stale shell, never a 404, because the URL it vacated
+ * has no route of its own once the article is gone from it.
+ *
+ * The transitions this hook actually purges are pinned as a matrix in
+ * `revalidatePost.test.ts`. In summary: a publish purges the document's current
+ * path; an unpublish purges `previousDoc`'s path; a published→published rename
+ * purges only the NEW path here, and `createSlugRedirect` purges the old one.
+ *
+ * **Known gap on the unpublish branch, measured 2026-09-02.** `previousDoc` is
+ * the latest *version*, and Posts autosaves every 100ms, so after any autosave
+ * it is the DRAFT — `_status: 'draft'`. Unpublishing a document that has a
+ * pending autosaved draft therefore fails the
+ * `previousDoc._status === 'published'` test and purges NOTHING, leaving the
+ * live URL serving its prerendered shell. `capturePublishedSlug` cannot cover
+ * it either: unpublish sends `_status: 'draft'`, which is that hook's
+ * early-return. Closing it needs a way to tell an unpublish from an autosave
+ * draft save that this tree does not have, so it is pinned as a failing-shape
+ * test rather than papered over; tracked in a follow-up to #132.
+ *
  * `revalidateTag(tag, { expire: 0 })`, not `'max'` (#118): under
  * cacheComponents (`'use cache'` readers, #76) `'max'` is
  * stale-while-revalidate with a one-year stale window, so a publish/edit
@@ -57,11 +109,37 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
 }) => {
   if (!context.disableRevalidate) {
     if (doc._status === 'published') {
-      const path = `/articles/${doc.slug}`
+      const path = publicPathFor('posts', doc)
 
       payload.logger.info(`Revalidating post at path: ${path}`)
 
-      revalidatePath(path)
+      if (path) revalidatePath(path)
+
+      // Placement move (#153). Placing or un-placing an article changes its URL
+      // without changing its slug, so `createSlugRedirect` never fires and no
+      // redirect row exists — which means nobody else purges the path the
+      // article just left, and it would keep serving its prerendered shell at a
+      // URL the article no longer lives at.
+      //
+      // This does NOT reopen #132. That decision assigned the row's `from` to
+      // the hook that writes the row and the document's own paths to this one;
+      // a placement move produces no row at all, so the old path is
+      // unambiguously one of the document's own paths and unambiguously ours.
+      // The condition is narrowed to `slug` being UNCHANGED precisely so a
+      // published→published *rename* still behaves exactly as the #132 matrix
+      // pins it: only the new path here, the old one in `createSlugRedirect`.
+      const previousPath = publicPathFor('posts', previousDoc)
+      if (
+        previousPath &&
+        previousPath !== path &&
+        previousDoc.slug === doc.slug
+      ) {
+        payload.logger.info(
+          `Revalidating vacated post path after placement change: ${previousPath}`,
+        )
+        revalidatePath(previousPath)
+      }
+
       revalidatePath('/articles')
       revalidatePath('/api/search')
       revalidateTag('posts-sitemap', { expire: 0 })
@@ -70,11 +148,11 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
 
     // If the post was previously published, we need to revalidate the old path
     if (previousDoc._status === 'published' && doc._status !== 'published') {
-      const oldPath = `/articles/${previousDoc.slug}`
+      const oldPath = publicPathFor('posts', previousDoc)
 
       payload.logger.info(`Revalidating old post at path: ${oldPath}`)
 
-      revalidatePath(oldPath)
+      if (oldPath) revalidatePath(oldPath)
       revalidatePath('/articles')
       revalidatePath('/api/search')
       revalidateTag('posts-sitemap', { expire: 0 })
@@ -98,9 +176,9 @@ export const revalidateDelete: CollectionAfterDeleteHook<Post> = ({
   req: { context },
 }) => {
   if (!context.disableRevalidate) {
-    const path = `/articles/${doc?.slug}`
+    const path = publicPathFor('posts', doc ?? {})
 
-    revalidatePath(path)
+    if (path) revalidatePath(path)
     revalidatePath('/articles')
     revalidatePath('/api/search')
     revalidateTag('posts-sitemap', { expire: 0 })

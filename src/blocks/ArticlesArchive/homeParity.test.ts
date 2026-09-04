@@ -33,7 +33,12 @@ describe('stacked articles treatment', () => {
   })
 
   it('links the whole card to the article, with the read-article label', () => {
-    expect(view).toContain('href={`/articles/${article.slug}`}')
+    // The href goes through the one path seam rather than a hand-built
+    // `/articles/${…}` template (#148), so this pins the CALL and asserts the
+    // template is gone — a source scan that still allowed the literal would let
+    // the seam be bypassed again without failing.
+    expect(view).toContain("href={publicPathFor('posts', article) ?? '#'}")
+    expect(view).not.toContain('href={`/articles/${article.slug}`}')
     expect(view).toContain('aria-label={`Read article: ${article.title}`}')
   })
 

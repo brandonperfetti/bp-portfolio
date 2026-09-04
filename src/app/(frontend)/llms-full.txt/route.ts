@@ -5,6 +5,7 @@ import {
   sanitizeInlineMarkdown,
 } from '@/lib/llms/helpers'
 import { getSiteUrl } from '@/lib/site'
+import { publicPathFor } from '@/fields/slug/slugPaths'
 
 const MAX_ARTICLES = 200
 // #76 Piece 1: `export const revalidate = 3600` removed (incompatible with
@@ -39,7 +40,7 @@ export async function GET() {
           const updated = sanitizeInlineMarkdown(
             article.updatedAt || article.date,
           )
-          const url = `${canonicalSiteUrl}/articles/${article.slug}`
+          const url = `${canonicalSiteUrl}${publicPathFor('posts', article)}`
           const topics = formatOptionalList('Topics', article.topics)
           const keywords = formatOptionalList('Keywords', article.keywords)
           const tech = formatOptionalList('Tech', article.tech)

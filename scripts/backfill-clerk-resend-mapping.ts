@@ -56,7 +56,13 @@ import {
  *
  * Usage:
  *   payload run scripts/backfill-clerk-resend-mapping.ts
- *   payload run scripts/backfill-clerk-resend-mapping.ts --apply
+ *   payload run scripts/backfill-clerk-resend-mapping.ts -- --apply
+ *
+ * The `--` is load-bearing. `payload run` parses its own argv with minimist and
+ * rebuilds the script's `process.argv` from the POSITIONAL arguments only, so a
+ * bare `--apply` is consumed as an option to `payload` and never reaches the
+ * `process.argv.includes('--apply')` check below — the script would silently do
+ * a dry run while reporting the command that was meant to write.
  *
  * Requires `CLERK_SECRET_KEY` and `RESEND_API_KEY`; `UPSTASH_REDIS_REST_URL` /
  * `UPSTASH_REDIS_REST_TOKEN` are needed for the mirror half. Set

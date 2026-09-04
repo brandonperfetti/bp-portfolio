@@ -3,6 +3,7 @@ import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  collectionSlug: { value: 'pages' as string | undefined },
   dispatchFields: vi.fn(),
   formFields: {} as Record<string, { value: unknown }>,
   hasPublishedDoc: { value: false },
@@ -51,7 +52,10 @@ vi.mock('@payloadcms/ui', () => ({
       {...(htmlAttributes ?? {})}
     />
   ),
-  useDocumentInfo: () => ({ hasPublishedDoc: mocks.hasPublishedDoc.value }),
+  useDocumentInfo: () => ({
+    collectionSlug: mocks.collectionSlug.value,
+    hasPublishedDoc: mocks.hasPublishedDoc.value,
+  }),
   useField: () => ({ setValue: mocks.setValue, value: mocks.value.current }),
   useForm: () => ({ dispatchFields: mocks.dispatchFields }),
   useFormFields: (
@@ -61,7 +65,11 @@ vi.mock('@payloadcms/ui', () => ({
 
 vi.mock('./index.scss', () => ({}))
 
-import { SlugComponent, slugFieldDescription } from './SlugComponent'
+import {
+  SlugComponent,
+  resolvedPublicPath,
+  slugFieldDescription,
+} from './SlugComponent'
 
 /** The subset of `TextFieldClientProps` this component actually reads. */
 const slugProps = {
@@ -114,16 +122,104 @@ describe('slugFieldDescription', () => {
   })
 })
 
+describe('resolvedPublicPath', () => {
+  it('resolves a new top-level page from its slug alone', () => {
+    expect(resolvedPublicPath('pages', undefined, 'colophon')).toBe('/colophon')
+  })
+
+  it('keeps the ancestor prefix when a placed page is re-slugged', () => {
+    // The whole point: an editor renaming `brytecore` must see the URL that
+    // will actually move, not the bare slug (#120's lesson, #148's fix).
+    expect(resolvedPublicPath('pages', 'work/brytecore', 'brytecore-inc')).toBe(
+      '/work/brytecore-inc',
+    )
+  })
+
+  it('resolves a depth-3 page', () => {
+    expect(resolvedPublicPath('pages', 'a/b/c', 'c2')).toBe('/a/b/c2')
+  })
+
+  it('shows the site root as /', () => {
+    expect(resolvedPublicPath('pages', 'home', 'home')).toBe('/')
+  })
+
+  it('shows an unplaced post under /articles', () => {
+    expect(resolvedPublicPath('posts', undefined, 'hello-world')).toBe(
+      '/articles/hello-world',
+    )
+    // Null and empty stored paths are the same state — unplaced — and must not
+    // be synthesised into `path: slug`, which would read as `/hello-world`.
+    expect(resolvedPublicPath('posts', null, 'hello-world')).toBe(
+      '/articles/hello-world',
+    )
+    expect(resolvedPublicPath('posts', '', 'hello-world')).toBe(
+      '/articles/hello-world',
+    )
+  })
+
+  it('shows a PLACED post at its section path (#153)', () => {
+    expect(resolvedPublicPath('posts', 'work/brytecore', 'brytecore')).toBe(
+      '/work/brytecore',
+    )
+  })
+
+  it('keeps the section prefix when a placed post is re-slugged', () => {
+    expect(resolvedPublicPath('posts', 'work/brytecore', 'brytecore-inc')).toBe(
+      '/work/brytecore-inc',
+    )
+  })
+
+  it('shows nothing for a collection with no public URL, or with no slug yet', () => {
+    expect(resolvedPublicPath('categories', undefined, 'ai')).toBeNull()
+    expect(resolvedPublicPath('pages', 'work', '')).toBeNull()
+    expect(resolvedPublicPath(undefined, 'work', 'x')).toBeNull()
+  })
+})
+
 describe('SlugComponent', () => {
   beforeEach(() => {
     mocks.setValue.mockClear()
     mocks.dispatchFields.mockClear()
+    mocks.collectionSlug.value = 'pages'
     mocks.value.current = 'runbooks-to-agent-skills'
     mocks.formFields = {
       slugLock: { value: true },
       title: { value: 'A brand new title' },
     }
     mocks.hasPublishedDoc.value = false
+  })
+
+  it('shows the resolved full public path, not the bare slug', () => {
+    mocks.value.current = 'brytecore'
+    mocks.formFields.path = { value: 'work/brytecore' }
+
+    renderSlug()
+
+    expect(screen.getByText('/work/brytecore')).toBeInTheDocument()
+  })
+
+  it('puts the resolved path inside the description the input points at', () => {
+    // Sighted-only would repeat the #120 defect this component exists to fix.
+    mocks.value.current = 'brytecore'
+    mocks.formFields.path = { value: 'work/brytecore' }
+
+    renderSlug()
+
+    const describedBy = screen
+      .getByRole('textbox')
+      .getAttribute('aria-describedby')
+
+    expect(document.getElementById(describedBy as string)).toHaveTextContent(
+      /Served at \/work\/brytecore/,
+    )
+  })
+
+  it('omits the path line for a collection with no public URL', () => {
+    mocks.collectionSlug.value = 'categories'
+
+    renderSlug()
+
+    expect(screen.queryByText(/Served at/)).not.toBeInTheDocument()
   })
 
   it('does NOT re-derive the slug once the document is published (#120)', () => {

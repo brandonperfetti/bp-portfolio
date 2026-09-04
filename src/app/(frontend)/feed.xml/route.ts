@@ -3,6 +3,7 @@ import { Feed } from 'feed'
 import { getAllArticles } from '@/lib/articles'
 import { isFuturePublicationDate } from '@/lib/date'
 import { getSiteUrl, SITE_DESCRIPTION } from '@/lib/site'
+import { publicPathFor } from '@/fields/slug/slugPaths'
 
 // #76 Piece 1: `export const revalidate = 3600` removed (incompatible with
 // `cacheComponents`; removal-only in Piece 1). This handler already sets
@@ -42,7 +43,9 @@ export async function GET() {
   })
 
   for (const summary of articles) {
-    const url = `${siteUrl}/articles/${summary.slug}`
+    // One definition of an article's URL, shared with the sitemap, the
+    // canonical, and the redirect machinery (#148).
+    const url = `${siteUrl}${publicPathFor('posts', summary)}`
 
     feed.addItem({
       title: summary.title,

@@ -39,11 +39,13 @@ describe('CMS_TAGS vocabulary', () => {
   })
 
   it('redirects reader subscribes to the tag revalidateRedirects purges', () => {
-    // src/hooks/revalidateRedirects.ts purges the literal 'redirects'; the
-    // #120 reader (src/lib/cms/redirectsRepo.ts) caches under
-    // CMS_TAGS.redirects. Equal strings are what makes an auto-created or
-    // hand-edited redirect resolve on the next request instead of after the
-    // cmsContent TTL.
+    // Both sides now read this constant: src/hooks/revalidateRedirects.ts
+    // purges CMS_TAGS.redirects (#133) and the #120 reader
+    // (src/lib/cms/redirectsRepo.ts) caches under it. This test pins the VALUE
+    // — the literal tag string those two share — which is what makes an
+    // auto-created or hand-edited redirect resolve on the next request instead
+    // of after the cmsContent TTL. That the two sides genuinely reference the
+    // same constant is pinned in cacheTags.test.ts, which can see both.
     expect(CMS_TAGS.redirects).toBe('redirects')
   })
 

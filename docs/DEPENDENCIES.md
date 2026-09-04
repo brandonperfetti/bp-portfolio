@@ -86,7 +86,10 @@ one set, version-locked.
   just skips the upload. Sentry Logs is enabled on server/client/edge,
   forwarding `console.warn` / `console.error` (not `log`/`info`/`debug`).
   Session replay, cron monitoring, and alerting rules are intentionally not
-  wired — defaults first (#73).
+  wired — defaults first (#73). The `environment` tag must name a
+  deployment target, never a build mode: its resolution order and the
+  deliberate absence of `NODE_ENV` are documented on `getSentryEnvironment`
+  (`src/lib/observability/sentryConfig.ts`) and pinned by its test (#134).
 
 ## Supply-chain policy (#91)
 

@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { publicPathFor } from '@/fields/slug/slugPaths'
 
 /**
  * The members-only teaser shown in place of a gated article's body, with the
@@ -21,7 +22,14 @@ import { Button } from '@/components/ui/button'
  * browser-mode story cannot build (measured: rolldown fails resolving
  * `payload/dist/uploads/*`). This leaf imports nothing but the primitive.
  */
-export function MembersTeaser({ slug }: { slug: string }) {
+export function MembersTeaser({
+  slug,
+  path,
+}: {
+  slug: string
+  /** A placed article's stored path (#153); absent for `/articles/<slug>`. */
+  path?: string
+}) {
   return (
     <div className="mt-8 rounded-2xl border border-zinc-200 p-6 text-center dark:border-zinc-700/60">
       <p className="text-base font-medium text-zinc-800 dark:text-zinc-100">
@@ -31,7 +39,9 @@ export function MembersTeaser({ slug }: { slug: string }) {
         Sign in (it&apos;s free) to read the full piece.
       </p>
       <Button asChild variant="teal" className="mt-4 rounded-xl">
-        <a href={`/sign-in?redirect_url=/articles/${slug}`}>
+        <a
+          href={`/sign-in?redirect_url=${publicPathFor('posts', { path, slug }) ?? '/articles'}`}
+        >
           Sign in to continue
         </a>
       </Button>

@@ -226,26 +226,32 @@
    * teal-800 is 7.58:1. Ratios computed from these literal hex values, which
    * are Tailwind v3's — see the note on the palette drift below.
    *
-   * Known residual, stated rather than glossed. Against the DARK gate panel
-   * (--corvus-panel, white 4% over the black page ≈ #0a0a0a) the hover fill's
-   * own edge goes 5.29:1 → 2.61:1, under the 3:1 WCAG 1.4.11 non-text floor.
-   * That is a real cost and it buys a bigger one: a label users have to READ
-   * at 3.74:1 is the worse failure, and 1.4.3 is the primary requirement. No
-   * teal step resolves both here — dark needs the fill's luminance in
-   * [0.109, 0.183] to clear the label and the edge at once, and the only ramp
-   * step inside that window is teal-700, which is the RESTING fill, so it
-   * would mean no visible hover at all. The squeeze comes from the near-black
-   * surface, not from this token; a lighter dark CTA treatment, or a hover
-   * that adds an outline instead of moving the fill, is the fix, and that is a
-   * design decision rather than an accessibility sweep. The resting state is
-   * unaffected and still clears the edge at 3.62:1.
+   * The dark residual this block used to record is now RESOLVED, in the way
+   * the note predicted (#139). Against the DARK gate panel (--corvus-panel,
+   * white 4% over the black page = #0a0a0a) the teal-800 hover FILL measures
+   * 2.61:1, under the 3:1 WCAG 1.4.11 non-text floor, and no teal step clears
+   * the label and the edge at once — dark needs the fill's luminance in
+   * [0.109, 0.183], and the only ramp step inside that window is teal-700,
+   * which is the RESTING fill, i.e. no visible hover at all. So in dark the
+   * fill does NOT move on hover: the affordance is a ring
+   * (--corvus-accent-ring-hover, teal-300) drawn outside the button's edge.
+   * Computed against these literal hexes:
+   *   ring vs the resting fill  (#5eead4 on #0f766e) = 3.70:1  ≥ 3   ✅
+   *   ring vs the gate panel    (#5eead4 on #0a0a0a) = 13.38:1 ≥ 3   ✅
+   *   label on the fill         (#ffffff on #0f766e) = 5.47:1  ≥ 4.5 ✅
+   *   resting fill vs the panel (#0f766e on #0a0a0a) = 3.62:1  ≥ 3   ✅
+   * The ring is deliberately not --corvus-accent (teal-400): that measures
+   * 2.94:1 against the resting fill and would miss the non-text floor on its
+   * inner edge. LIGHT is untouched and keeps its darker-fill hover, which
+   * clears both floors there (label 7.58:1, fill edge 6.90:1). The rule lives
+   * at `.corvus-surface [data-slot='sign-in-gate-cta']` below; all four ratios
+   * are asserted in `src/styles/corvus-accent-contrast.test.ts`.
    *
-   * --corvus-accent-hover is currently referenced by NOTHING (measured: no
-   * `var(--corvus-accent-hover)` anywhere in the repo), so it is left exactly
-   * as it is — an unrendered value cannot fail a contrast check. Worth knowing
-   * before wiring it up: its LIGHT value (#0d9488) would measure 3.41:1 as
-   * text on --corvus-panel, i.e. it would land under AA the moment it is used
-   * for a label.
+   * --corvus-accent-hover (teal-300 dark / teal-600 light) was deleted here:
+   * it was referenced by NOTHING, and its light value (#0d9488) measured
+   * 3.41:1 as text on --corvus-panel, i.e. it was a trap for whoever wired it
+   * up. The dark ring gets its own purpose-named token instead, so its one
+   * meaning is legible from its name.
    *
    * Palette drift, noted once for the whole block: these are Tailwind v3
    * hexes, while the utility classes the components use resolve v4's OKLCH
@@ -254,8 +260,8 @@
    * stays in the file's own v3 vocabulary rather than mixing one v4 value in.
    * Reconciling the block is its own change. */
   --corvus-accent: #2dd4bf; /* teal-400 — text/icon */
-  --corvus-accent-hover: #5eead4; /* teal-300 — currently unreferenced */
   --corvus-accent-ink: #ffffff; /* text on a teal fill */
+  --corvus-accent-ring-hover: #5eead4; /* teal-300 — dark CTA hover ring */
   --corvus-accent-solid: #0f766e; /* teal-700 — filled CTA (Button primary) */
   --corvus-accent-solid-hover: #115e59; /* teal-800 — 7.58:1 with the ink */
   --corvus-border: rgb(255 255 255 / 10%); /* shadcn --border (dark) */
@@ -296,7 +302,6 @@
   --corvus-ink: #18181b; /* zinc-900 */
   --corvus-muted: #71717a; /* zinc-500 */
   --corvus-accent: #0f766e; /* teal-700 — text/icon */
-  --corvus-accent-hover: #0d9488; /* teal-600 */
   --corvus-border: #e4e4e7; /* zinc-200 (shadcn --border light) */
 
   /* Bubbles (Option A): user is the site's teal (inherited), assistant is a
@@ -487,6 +492,45 @@
 
 .corvus-surface [data-slot='sign-in-gate-cta']:hover {
   background-color: var(--corvus-accent-solid-hover);
+}
+
+/* Dark theme only (#139): outline-on-hover instead of a fill step. Scoped to
+ * `:root.dark` — the light theme keeps the darker-fill hover above, which
+ * clears both AA floors on the light gate panel. The bounding proof is in the
+ * token block: no teal fill can hold the label at 4.5:1 AND the button's own
+ * edge at 3:1 against the near-black panel without landing on the resting
+ * fill, so the dark hover keeps the resting fill and adds a ring instead.
+ *
+ * `:root.dark` is the deliberate mirror of the light override's own
+ * `:root:not(.dark) .corvus-surface` a few blocks up — same anchor, same
+ * specificity, so the two theme rules read as a pair. The sheet's
+ * `@custom-variant dark` governs `dark:` UTILITY classes in markup; it is not
+ * the idiom for hand-written rules like these.
+ *
+ * A box-shadow ring rather than an `outline`: `outline` is the sitewide
+ * focus-visible indicator, and the `:focus-visible` rule below re-colors it.
+ * `:not(:focus-visible)` then keeps exactly ONE indicator on screen at a
+ * time — a keyboard user who also has the pointer over the control gets the
+ * focus outline, not both. */
+:root.dark .corvus-surface [data-slot='sign-in-gate-cta'] {
+  transition: box-shadow 150ms ease-out;
+}
+
+:root.dark .corvus-surface [data-slot='sign-in-gate-cta']:hover {
+  /* Fill stays where it rests — this is the whole point of #139. */
+  background-color: var(--corvus-accent-solid);
+}
+
+:root.dark
+  .corvus-surface
+  [data-slot='sign-in-gate-cta']:hover:not(:focus-visible) {
+  box-shadow: 0 0 0 2px var(--corvus-accent-ring-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root.dark .corvus-surface [data-slot='sign-in-gate-cta'] {
+    transition: none;
+  }
 }
 
 /* Overrides the CTA's own teal focus ring (a `ring-*` box-shadow, not the

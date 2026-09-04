@@ -560,3 +560,204 @@ export const declinesAndRedirects = createGuardedScorer<string, string, string>(
     },
   },
 )
+
+/**
+ * The github.com repository URLs an answer cites (#147).
+ *
+ * @remarks A separate reader from {@link citedPaths}, because that function
+ * cannot see these and must not learn to. Its second pass folds
+ * `brandonperfetti.com` URLs down to paths and REMOVES every other absolute
+ * URL — deliberately, since leaving `https://toptimelines.com/` in place would
+ * let pass 3 read `/toptimelines` out of the middle of it and call it a
+ * fabricated site path. A repository citation is one of the URLs that pass
+ * throws away, so it is invisible to `cites-a-real-source-url` and to
+ * `never-fabricates-a-site-url` alike.
+ *
+ * That is the right behaviour for those two scorers and the reason #147 needs
+ * its own. Widening `citedPaths` instead would have moved every score those
+ * scorers have ever recorded.
+ *
+ * Normalized to lower case with any trailing slash and sentence punctuation
+ * removed, so `.../bp-portfolio`, `.../bp-portfolio/` and `.../bp-portfolio.`
+ * are one citation. Only `owner/name` depth is matched: a link to a file or a
+ * line inside a repo is not a citation OF the repo.
+ *
+ * That depth limit is enforced by the lookahead after `owner/name`, not by the
+ * character class: without it the regex simply stopped at `owner/name` and
+ * `.../bp-portfolio/blob/main/x.ts` was TRUNCATED to the repo root and counted,
+ * which is the opposite of what this paragraph promises. A `/` may follow only
+ * at the very end or before a prose/markdown delimiter — whitespace, a closing
+ * `)`, `]`, `}` or `>`, a quote, sentence punctuation, a `*` emphasis marker,
+ * or a `#` fragment; a `/` followed by another path character means the URL
+ * addresses something inside the repo, and the whole match is discarded rather
+ * than shortened. `#` and `*` are on the delimiter side deliberately:
+ * `.../o/r#readme` is an anchor ON the repo page and `**.../o/r**` is the same
+ * URL wearing markdown bold, so both still cite the root. That matters because
+ * {@link createCitesRepoSourceUrl} checks the cited URL against a corpus of
+ * repo roots — truncation would let a fabricated deep link land on a real root
+ * and score as a genuine citation. The corpus itself is repo-root only by
+ * construction: `sourceUrlFor` in `src/lib/ai/chunking.ts` emits exactly
+ * `https://github.com/<owner>/<repo>` for the `github-repos` collection, so the
+ * scorer and the grounded prompt agree on what a repo citation looks like.
+ *
+ * @param output - The assistant's answer.
+ * @returns Distinct repository URLs, in first-seen order.
+ */
+export function citedRepoUrls(output: string): string[] {
+  const found = new Set<string>()
+  for (const match of output.matchAll(
+    /https?:\/\/(?:www\.)?github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\/?(?=$|[\s)\]}>"'.,;:!?#*])/gi,
+  )) {
+    const url = match[0]
+      .replace(/[.,;:!?)\]]+$/, '')
+      .replace(/\/+$/, '')
+      .toLowerCase()
+      .replace('://www.github.com', '://github.com')
+    found.add(url)
+  }
+  return [...found]
+}
+
+/** Lower-cased set of repository URLs, matching {@link citedRepoUrls}. */
+function repoSet(urls: readonly string[]): Set<string> {
+  return new Set(urls.map((url) => url.toLowerCase().replace(/\/+$/, '')))
+}
+
+/**
+ * Build the repository-citation scorer for a repo corpus (#147).
+ *
+ * @remarks The instrument for #147's first acceptance criterion: asked about a
+ * known public repo, Corvus must answer from that repo's README/metadata and
+ * cite its URL. The measured baseline it replaces is
+ * `[measured, eval:matrix 2026-08-29]` "What does the macOS Portfolio project
+ * use?" at 50%, where the stack was named and no known source was cited —
+ * because there was no repo document to cite.
+ *
+ * Two failures in one score, the same shape `createCitesKnownSourceUrl` uses:
+ *
+ * - **0** when no corpus repo URL is cited. The claim is unverifiable.
+ * - **0** when a cited github.com URL is NOT in the corpus. That is an invented
+ *   repository, which is the repo-shaped version of inventing an article path,
+ *   and it is the failure a corpus of repo names makes newly available.
+ * - **1** otherwise.
+ *
+ * @param repoUrls - Every repository URL in the fixture corpus.
+ * @returns A scorer measuring whether the repo carried and sourced the claim.
+ */
+export function createCitesRepoSourceUrl(repoUrls: readonly string[]) {
+  const corpus = repoSet(repoUrls)
+  return createGuardedScorer<string, string, string>({
+    name: 'cites-the-repo-source-url',
+    description:
+      'Cites a repository from the corpus, and invents no repository URL.',
+    scorer: ({ output }) => {
+      const cited = citedRepoUrls(output)
+      if (!cited.some((url) => corpus.has(url))) return 0
+      return cited.every((url) => corpus.has(url)) ? 1 : 0
+    },
+  })
+}
+
+/**
+ * Build the anti-fabrication scorer for the repo corpus (#147).
+ *
+ * @remarks The half of {@link createCitesRepoSourceUrl} that still applies when
+ * there is nothing to cite — the sibling of `never-fabricates-a-site-url`, and
+ * the scorer for #147's "asked about a nonexistent repo, it declines rather
+ * than inventing". Vacuously 1 when the answer names no repository at all,
+ * because a refusal that cites nothing is a correct refusal.
+ *
+ * "Names no repository" is {@link citedRepoUrls}' definition, so a link
+ * *inside* an invented repo — `github.com/x/made-up/blob/main/y.ts` — is
+ * vacuously 1 here rather than 0. That is the deliberate side of the depth
+ * rule: the alternative was truncating deep links to a root, which made the
+ * far worse mistake in the other direction and let a fabricated deep link
+ * score 1 on {@link createCitesRepoSourceUrl}. The prompt asks Corvus to cite
+ * the `Source:` line it was given, and that line is always a repo root, so a
+ * deep link is off-contract in the first place.
+ *
+ * @param repoUrls - Every repository URL in the fixture corpus.
+ * @returns A scorer: 0 as soon as one cited repository is not in the corpus.
+ */
+export function createNeverFabricatesRepoUrl(repoUrls: readonly string[]) {
+  const corpus = repoSet(repoUrls)
+  return createGuardedScorer<string, string, string>({
+    name: 'never-fabricates-a-repo-url',
+    description: 'Cites no GitHub repository that is not in the corpus.',
+    scorer: ({ output }) =>
+      citedRepoUrls(output).every((url) => corpus.has(url)) ? 1 : 0,
+  })
+}
+
+/**
+ * Build the "this site runs on" scorer (#147).
+ *
+ * @remarks One half of the disambiguation pair, and the half that measures the
+ * defect #147 was filed for. Asked what THIS SITE runs on, Corvus answered with
+ * the `/tech` list — Remix, TanStack, Fly.io — and cited `/tech`
+ * `[measured, 2026-09-02, preview of feat/sections-grounding-correctness]`. The
+ * citation was real, so `cites-a-real-source-url` scored it 1. That is why this
+ * cannot be a stricter version of that scorer: the failure it catches is one
+ * the existing scorer is structurally unable to see.
+ *
+ * - **1** — a corpus repository is cited and `/tech` is not. The site's own
+ *   repository carried the claim.
+ * - **0** — `/tech` is cited. Whether or not the repo is cited alongside it:
+ *   offering the tech-I-use list as a source for what this site is built on is
+ *   the exact wrong answer, and an answer that hedges by citing both has not
+ *   made the distinction the rule asks for.
+ * - **0.5** — neither. A bad answer, but a different bad answer: nothing wrong
+ *   was substituted. Collapsing it to 0 would make this a duplicate of
+ *   `cites-the-repo-source-url` rather than an explanation of it, the same
+ *   reasoning `createCitesSiteSourceNotVendor` records.
+ *
+ * @param repoUrls - Every repository URL in the fixture corpus.
+ * @returns A scorer measuring site-stack sourcing.
+ */
+export function createCitesRepoNotTechList(repoUrls: readonly string[]) {
+  const corpus = repoSet(repoUrls)
+  return createGuardedScorer<string, string, string>({
+    name: 'cites-the-repo-not-the-tech-list',
+    description:
+      'Sources what THIS SITE runs on with its own repository, never the /tech list.',
+    scorer: ({ output }) => {
+      const citedTech = citedPaths(output).includes('/tech')
+      const citedRepo = citedRepoUrls(output).some((url) => corpus.has(url))
+      if (citedTech) return 0
+      return citedRepo ? 1 : 0.5
+    },
+  })
+}
+
+/**
+ * Build the "technologies Brandon uses" scorer (#147).
+ *
+ * @remarks The mirror of {@link createCitesRepoNotTechList}, and the reason the
+ * pair exists rather than a single scorer. A model can be pushed into always
+ * preferring the repository — the rule is right there in the prompt — and that
+ * would fix one case by breaking the other, invisibly, because nothing else in
+ * the suite asks whether `/tech` is still the right answer to a `/tech`
+ * question. Measuring both directions is what makes the fix a disambiguation
+ * instead of a new bias.
+ *
+ * - **1** — `/tech` is cited and no repository is.
+ * - **0** — a repository is cited. The over-correction.
+ * - **0.5** — neither, for the reason its sibling gives.
+ *
+ * @param repoUrls - Every repository URL in the fixture corpus.
+ * @returns A scorer measuring tech-list sourcing.
+ */
+export function createCitesTechListNotRepo(repoUrls: readonly string[]) {
+  const corpus = repoSet(repoUrls)
+  return createGuardedScorer<string, string, string>({
+    name: 'cites-the-tech-list-not-the-repo',
+    description:
+      'Sources what technologies Brandon works with with the /tech page, never a repository.',
+    scorer: ({ output }) => {
+      const citedTech = citedPaths(output).includes('/tech')
+      const citedRepo = citedRepoUrls(output).some((url) => corpus.has(url))
+      if (citedRepo) return 0
+      return citedTech ? 1 : 0.5
+    },
+  })
+}

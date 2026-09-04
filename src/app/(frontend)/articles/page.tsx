@@ -7,6 +7,7 @@ import { NotFoundState } from '@/components/cms/NotFoundState'
 import { ShareButton } from '@/components/cms/ShareButton'
 import { SimpleLayout } from '@/components/SimpleLayout'
 import { getSearchArticles } from '@/lib/articles'
+import { publicPathFor } from '@/fields/slug/slugPaths'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { resolvePageShareTargetIds } from '@/lib/cms/pageShareTargets'
 import { getCmsPageByPath } from '@/lib/cms/pagesRepo'
@@ -90,7 +91,7 @@ export default async function ArticlesIndex() {
         itemListElement: articles.slice(0, 50).map((article, index) => ({
           '@type': 'ListItem',
           position: index + 1,
-          url: `${canonicalSiteUrl}/articles/${article.slug}`,
+          url: `${canonicalSiteUrl}${publicPathFor('posts', article)}`,
           name: article.title,
         })),
       }

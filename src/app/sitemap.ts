@@ -3,7 +3,8 @@ import { type MetadataRoute } from 'next'
 
 import { getAllArticles } from '@/lib/articles'
 import { CMS_TAGS } from '@/lib/cms/cache'
-import { getPublishedPageSlugs } from '@/lib/cms/pagesRepo'
+import { publicPathFor } from '@/fields/slug/slugPaths'
+import { getPublishedPagePaths } from '@/lib/cms/pagesRepo'
 import { isFuturePublicationDate, toValidDate } from '@/lib/date'
 import { getSiteUrl } from '@/lib/site'
 
@@ -21,17 +22,22 @@ import { getSiteUrl } from '@/lib/site'
  * prerender-safe.
  */
 async function getSitemapData(): Promise<{
-  articles: Array<{ slug: string; lastModifiedMs: number | null }>
+  articles: Array<{
+    slug: string
+    /** A placed article's stored path (#153); absent for `/articles/<slug>`. */
+    path?: string
+    lastModifiedMs: number | null
+  }>
   newestArticleMs: number | null
-  pageSlugs: string[]
+  pagePaths: string[]
 }> {
   'use cache'
   cacheTag(CMS_TAGS.articles, CMS_TAGS.pages)
   cacheLife('cmsContent')
 
-  const [allArticles, pageSlugs] = await Promise.all([
+  const [allArticles, pagePaths] = await Promise.all([
     getAllArticles(),
-    getPublishedPageSlugs(),
+    getPublishedPagePaths(),
   ])
 
   const publicArticles = allArticles.filter(
@@ -41,7 +47,14 @@ async function getSitemapData(): Promise<{
   const articles = publicArticles.map((article) => {
     const freshness =
       toValidDate(article.updatedAt) || toValidDate(article.date)
-    return { slug: article.slug, lastModifiedMs: freshness?.getTime() ?? null }
+    return {
+      slug: article.slug,
+      // Carried through this deliberately-narrow projection because the URL is
+      // built from it below: without `path`, a placed article would be listed
+      // at `/articles/<slug>`, a URL that 308s (#153).
+      path: article.path,
+      lastModifiedMs: freshness?.getTime() ?? null,
+    }
   })
 
   const newestArticleMs = articles.reduce<number | null>((latest, article) => {
@@ -51,7 +64,7 @@ async function getSitemapData(): Promise<{
       : latest
   }, null)
 
-  return { articles, newestArticleMs, pageSlugs }
+  return { articles, newestArticleMs, pagePaths }
 }
 
 /**
@@ -68,7 +81,7 @@ async function getSitemapData(): Promise<{
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = getSiteUrl()
-  const { articles, newestArticleMs, pageSlugs } = await getSitemapData()
+  const { articles, newestArticleMs, pagePaths } = await getSitemapData()
 
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: siteUrl, changeFrequency: 'weekly', priority: 1 },
@@ -107,7 +120,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]
 
   const articleRoutes: MetadataRoute.Sitemap = articles.map((article) => ({
-    url: `${siteUrl}/articles/${article.slug}`,
+    url: `${siteUrl}${publicPathFor('posts', article)}`,
     lastModified:
       article.lastModifiedMs === null
         ? undefined
@@ -116,10 +129,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }))
 
-  // Published page-builder pages served by the [slug] catch-all (M5 —
-  // these were previously missing from the sitemap entirely).
-  const pageRoutes: MetadataRoute.Sitemap = pageSlugs.map((slug) => ({
-    url: `${siteUrl}/${slug}`,
+  // Published page-builder pages served by the [...segments] catch-all (M5 —
+  // these were previously missing from the sitemap entirely). URLs come from
+  // `publicPathFor`, so a placed page lists its real nested URL rather than a
+  // `/`+slug guess that would 404 (#148).
+  const pageRoutes: MetadataRoute.Sitemap = pagePaths.map((path) => ({
+    url: `${siteUrl}${publicPathFor('pages', { path })}`,
     changeFrequency: 'monthly',
     priority: 0.5,
   }))

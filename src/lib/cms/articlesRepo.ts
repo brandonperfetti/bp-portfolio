@@ -11,6 +11,7 @@ import type {
 } from '@/lib/cms/types'
 import {
   getGatedPostContent,
+  getPostByPath,
   getPostBySlug,
   getPublishedPostSummaries,
   getPublishedPosts,
@@ -121,6 +122,10 @@ const toSummary = (post: PublishedPostSummary): CmsArticleSummary => {
   const tech = termTitles(post.tags)
   return {
     slug: post.slug || '',
+    // Placement (#153): present only when the post has been placed under a
+    // section page, so `publicPathFor` answers `/articles/<slug>` for the
+    // unplaced default and `/<path>` for the rest.
+    path: post.path || undefined,
     title: post.title,
     description: post.excerpt || post.meta?.description || '',
     seoTitle: post.meta?.title || undefined,
@@ -165,7 +170,36 @@ export async function getCmsArticleBySlug(
   slug: string,
   viewer?: { isAuthenticated: boolean },
 ): Promise<CmsArticleDetailResult | null> {
-  const post = await getPostBySlug(slug)
+  return toDetail(await getPostBySlug(slug), viewer)
+}
+
+/**
+ * One **placed** published article by its stored path (#153), gated identically
+ * to {@link getCmsArticleBySlug}.
+ *
+ * @remarks The `[...segments]` catch-all's reader. An unplaced post has no
+ * `path`, so it can never be reached here — `/articles/[slug]` stays its only
+ * URL, which is the whole v3 invariant.
+ */
+export async function getCmsArticleByPath(
+  path: string,
+  viewer?: { isAuthenticated: boolean },
+): Promise<CmsArticleDetailResult | null> {
+  return toDetail(await getPostByPath(path), viewer)
+}
+
+/**
+ * Map a resolved post to the detail shape, applying the §12 gate.
+ *
+ * @remarks Shared by the slug reader and the path reader so a placed article
+ * and an unplaced one can never differ in what they withhold from an anonymous
+ * viewer — the gating rule has exactly one implementation, reached by both
+ * URLs.
+ */
+async function toDetail(
+  post: Awaited<ReturnType<typeof getPostBySlug>>,
+  viewer?: { isAuthenticated: boolean },
+): Promise<CmsArticleDetailResult | null> {
   if (!post) return null
   const allowed = canAccess(viewer?.isAuthenticated ?? false, post)
   // Gated posts come back without `content` (field-level access hides it

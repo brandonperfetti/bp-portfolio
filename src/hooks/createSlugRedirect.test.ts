@@ -147,6 +147,10 @@ describe('createSlugRedirect', () => {
             type: 'reference',
             reference: { relationTo: 'posts', value: 55 },
           },
+          // #130: a rename is permanent by definition, and the hook says so
+          // explicitly rather than leaning on the field's `defaultValue` —
+          // an `update` of an existing row does not re-apply a default.
+          type: '301',
         },
       }),
     )
@@ -224,7 +228,7 @@ describe('createSlugRedirect', () => {
       expect.objectContaining({
         collection: 'redirects',
         id: 9,
-        data: expect.objectContaining({ from: '/articles/b' }),
+        data: expect.objectContaining({ from: '/articles/b', type: '301' }),
       }),
     )
   })
@@ -246,6 +250,7 @@ describe('createSlugRedirect', () => {
             type: 'reference',
             reference: { relationTo: 'pages', value: 7 },
           },
+          type: '301',
         },
       }),
     )

@@ -108,6 +108,7 @@ const LIGHT = ':root:not(.dark) .corvus-surface'
 const accentInk = token(DARK, 'corvus-accent-ink')
 const accentSolid = token(DARK, 'corvus-accent-solid')
 const accentSolidHover = token(DARK, 'corvus-accent-solid-hover')
+const accentRingHover = token(DARK, 'corvus-accent-ring-hover')
 
 // Per-theme surfaces these render on.
 const groundDark = token(DARK, 'corvus-ground')
@@ -170,20 +171,114 @@ describe('--corvus-accent-solid-hover (sign-in gate CTA hover)', () => {
   })
 
   it('clears the non-text floor against the light gate panel', () => {
-    // Light improves on both axes. Dark does NOT — the hover fill's edge
-    // against the near-black panel measures ~2.6:1, under the 3:1 non-text
-    // floor, and that shortfall is accepted deliberately: no teal step clears
-    // the label AND the edge in dark without being the resting fill. It is
-    // documented at the token, and it is a transient hover state on a control
-    // whose resting appearance (asserted above) still clears the edge. Not
-    // asserted here, because a test that passed would be asserting something
-    // false.
+    // Light improves on both axes, which is why the fill step survives there.
+    // Dark no longer uses a fill step at all (#139, below) — that is what
+    // closed the ~2.6:1 edge this file used to record as an accepted residual.
     expectRatio(
       accentSolidHover,
       panelLight,
       NON_TEXT_AA,
       'hover fill vs light gate',
     )
+  })
+
+  it('is scoped to the light theme only — dark keeps the resting fill on hover', () => {
+    // The bounding proof (#139): the darker fill is what fails against the
+    // near-black gate panel, so dark must NOT take it.
+    expect(
+      contrast(accentSolidHover, panelDark),
+      'premise check: the darker hover fill really does miss the dark edge floor',
+    ).toBeLessThan(NON_TEXT_AA)
+    expect(
+      /:root\.dark\s+\.corvus-surface\s+\[data-slot='sign-in-gate-cta'\]:hover\s*\{[^}]*background-color:\s*var\(--corvus-accent-solid\)/.test(
+        cssCode,
+      ),
+      "dark's :hover must pin the RESTING fill, overriding the shared darker-fill hover",
+    ).toBe(true)
+  })
+})
+
+/**
+ * #139 — the dark CTA's hover affordance is a ring, not a fill step.
+ *
+ * @remarks The ring has TWO edges and both are non-text UI under WCAG 1.4.11:
+ * the inner one against the button's own (resting) fill, the outer one against
+ * the gate panel. A ring that only cleared one of them would be invisible on
+ * the other side.
+ */
+describe('--corvus-accent-ring-hover (dark sign-in gate CTA hover ring)', () => {
+  it('clears the non-text floor on BOTH of its edges', () => {
+    expectRatio(
+      accentRingHover,
+      accentSolid,
+      NON_TEXT_AA,
+      'ring vs resting fill',
+    )
+    expectRatio(
+      accentRingHover,
+      panelDark,
+      NON_TEXT_AA,
+      'ring vs dark gate panel',
+    )
+  })
+
+  it('leaves the label — and the resting fill it sits on — untouched', () => {
+    // The fill does not move on hover in dark, so the label keeps the resting
+    // ratio rather than acquiring a second, worse one.
+    expectRatio(
+      accentInk,
+      accentSolid,
+      TEXT_AA,
+      'CTA label under the dark hover',
+    )
+    expectRatio(
+      accentSolid,
+      panelDark,
+      NON_TEXT_AA,
+      'fill edge under the dark hover',
+    )
+  })
+
+  it('is not --corvus-accent, which would miss the floor on its inner edge', () => {
+    // teal-400 measures ~2.94:1 against teal-700 — the near miss that made a
+    // purpose-named token worth having.
+    expect(accentRingHover).not.toBe(accentDark)
+    expect(contrast(accentDark, accentSolid)).toBeLessThan(NON_TEXT_AA)
+  })
+
+  it('is actually rendered, dark-only, and never fights the focus indicator', () => {
+    // A token nothing references cannot fail a contrast check — and cannot
+    // help a user either. Pin the wiring, not just the value.
+    expect(
+      cssCode.includes('var(--corvus-accent-ring-hover)'),
+      '--corvus-accent-ring-hover must be referenced by the CTA hover rule',
+    ).toBe(true)
+    // Dark-only: the light block must not redefine it, and the ring rule must
+    // be scoped to `:root.dark`.
+    expect(
+      new RegExp(
+        `:root\\.dark[\\s\\S]{0,200}?:hover:not\\(:focus-visible\\)\\s*\\{[^}]*var\\(--corvus-accent-ring-hover\\)`,
+      ).test(cssCode),
+      'the ring must be dark-scoped and suppressed while :focus-visible shows',
+    ).toBe(true)
+  })
+
+  it('honours prefers-reduced-motion for its transition', () => {
+    // Repo convention (`.animate-text-shimmer`, the mic pulse, the
+    // constellation twinkle): the motion is declared, then switched off in a
+    // `prefers-reduced-motion: reduce` block.
+    const reduceBlocks = cssCode.match(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\n\}/g,
+    )
+    expect(reduceBlocks, 'no reduced-motion blocks found').toBeTruthy()
+    expect(
+      (reduceBlocks as string[]).some(
+        (block) =>
+          block.includes("[data-slot='sign-in-gate-cta']") &&
+          /transition:\s*none/.test(block),
+      ),
+      "the CTA's hover transition must be disabled under prefers-reduced-motion",
+    ).toBe(true)
   })
 })
 
@@ -221,17 +316,13 @@ describe('--corvus-accent (text and icon roles)', () => {
   })
 })
 
-describe('--corvus-accent-hover', () => {
-  it('is still referenced by nothing, which is why its value is not audited', () => {
-    // Left exactly as it was: an unrendered value cannot fail a contrast
-    // check, and changing a colour nobody sees is not an accessibility fix.
-    // This is the tripwire — the day someone wires it up, they get told here
-    // that the light value needs checking rather than discovering it in
-    // review. Its light value (#0d9488) measures ~3.4:1 on the panel.
-    expect(
-      cssCode.includes('var(--corvus-accent-hover)'),
-      '--corvus-accent-hover is now used: audit its contrast in BOTH themes ' +
-        'against the surface it renders on and add the cases above',
-    ).toBe(false)
+describe('--corvus-accent-hover (deleted in #139)', () => {
+  it('is gone from both theme blocks, prose included', () => {
+    // It was referenced by nothing and its light value (#0d9488) measured
+    // ~3.4:1 as text on the panel — a trap for whoever wired it up. The dark
+    // hover ring got its own purpose-named token instead. Declaration-shaped
+    // match so the block comment explaining the deletion is allowed to name it.
+    expect(/--corvus-accent-hover:/.test(css)).toBe(false)
+    expect(cssCode.includes('var(--corvus-accent-hover)')).toBe(false)
   })
 })
