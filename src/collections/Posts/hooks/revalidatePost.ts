@@ -6,7 +6,33 @@ import type {
 import { revalidatePath, revalidateTag } from 'next/cache'
 
 import { publicPathFor } from '@/fields/slug/slugPaths'
+import { containRevalidation } from '@/hooks/containRevalidation'
 import type { Post } from '../../../payload-types'
+
+/**
+ * Purge the article list/search surfaces and both post data-cache tags.
+ *
+ * @remarks Named for the same reason `purgePageTags` is named one collection
+ * over: all three branches below need this identical group of four, and a
+ * branch that purged three of them would be a silent staleness bug — the
+ * archive would refresh while `/api/search` kept the removed article, or the
+ * reverse. Naming it also means the four literals exist once, so a route rename
+ * cannot update two branches and miss the third.
+ *
+ * `{ expire: 0 }`, never `'max'` (#118) — under cacheComponents `'max'` is
+ * stale-while-revalidate with a one-year window, so an edit keeps serving old
+ * content until a background refresh happens to land.
+ */
+const purgePostSurfaces = () => {
+  revalidatePath('/articles')
+  revalidatePath('/api/search')
+  revalidateTag('posts-sitemap', { expire: 0 })
+  revalidateTag('posts', { expire: 0 })
+}
+
+/** What {@link purgePostSurfaces} covers, for the containment log line. */
+const POST_SURFACES =
+  'the /articles, /api/search and posts/posts-sitemap surfaces'
 
 /**
  * afterChange hook that keeps published articles live without a redeploy:
@@ -93,6 +119,17 @@ import type { Post } from '../../../payload-types'
  * re-caches that stale render into the CDN in the meantime. `{ expire: 0 }`
  * expires the entry outright instead, so the next read blocks for fresh data.
  *
+ * **A revalidation failure never fails the write (#156).** Every
+ * `revalidatePath`/`revalidateTag` call below goes through
+ * `containRevalidation` (`src/hooks/containRevalidation.ts`): the failure is
+ * logged at `error` with the path and the reason, and the article still lands.
+ * Read that module's docblock for the transaction mechanics, for the survey of
+ * `scripts/` that found no caller wanting revalidation to be fatal, and for why
+ * `disableRevalidate` alone was not enough — it is shared with `revalidatePage`
+ * and `revalidateRedirects` so the guarantee is stated once. The
+ * `disableRevalidate` fast path itself is unchanged — the flag still
+ * short-circuits the whole hook before any purge is attempted.
+ *
  * That is a purge PROFILE, not a purge REACH — an earlier revision of this
  * comment called it "the documented read-your-writes profile outside Server
  * Actions", which overstates it. Read-your-writes needs the work-store state
@@ -113,7 +150,13 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
 
       payload.logger.info(`Revalidating post at path: ${path}`)
 
-      if (path) revalidatePath(path)
+      if (path)
+        containRevalidation(
+          payload,
+          'post write',
+          `the post path ${path}`,
+          () => revalidatePath(path),
+        )
 
       // Placement move (#153). Placing or un-placing an article changes its URL
       // without changing its slug, so `createSlugRedirect` never fires and no
@@ -137,13 +180,20 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
         payload.logger.info(
           `Revalidating vacated post path after placement change: ${previousPath}`,
         )
-        revalidatePath(previousPath)
+        containRevalidation(
+          payload,
+          'post write',
+          `the vacated post path ${previousPath}`,
+          () => revalidatePath(previousPath),
+        )
       }
 
-      revalidatePath('/articles')
-      revalidatePath('/api/search')
-      revalidateTag('posts-sitemap', { expire: 0 })
-      revalidateTag('posts', { expire: 0 })
+      containRevalidation(
+        payload,
+        'post write',
+        POST_SURFACES,
+        purgePostSurfaces,
+      )
     }
 
     // If the post was previously published, we need to revalidate the old path
@@ -152,11 +202,19 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
 
       payload.logger.info(`Revalidating old post at path: ${oldPath}`)
 
-      if (oldPath) revalidatePath(oldPath)
-      revalidatePath('/articles')
-      revalidatePath('/api/search')
-      revalidateTag('posts-sitemap', { expire: 0 })
-      revalidateTag('posts', { expire: 0 })
+      if (oldPath)
+        containRevalidation(
+          payload,
+          'post write',
+          `the old post path ${oldPath}`,
+          () => revalidatePath(oldPath),
+        )
+      containRevalidation(
+        payload,
+        'post write',
+        POST_SURFACES,
+        purgePostSurfaces,
+      )
     }
   }
   return doc
@@ -170,19 +228,27 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
  * {@link revalidatePost}). Same `{ expire: 0 }` profile reasoning — and the
  * same caveat that the profile is not what gives the purge cross-instance
  * reach — as {@link revalidatePost} (#118).
+ *
+ * Purges are contained by `containRevalidation` for the same reason as
+ * {@link revalidatePost} (#156), and the reason is not weaker here: `afterDelete`
+ * also runs inside the operation's transaction, so an uncontained throw would
+ * resurrect the article the caller asked to delete.
  */
 export const revalidateDelete: CollectionAfterDeleteHook<Post> = ({
   doc,
-  req: { context },
+  req: { context, payload },
 }) => {
   if (!context.disableRevalidate) {
     const path = publicPathFor('posts', doc ?? {})
 
-    if (path) revalidatePath(path)
-    revalidatePath('/articles')
-    revalidatePath('/api/search')
-    revalidateTag('posts-sitemap', { expire: 0 })
-    revalidateTag('posts', { expire: 0 })
+    if (path)
+      containRevalidation(
+        payload,
+        'post write',
+        `the deleted post path ${path}`,
+        () => revalidatePath(path),
+      )
+    containRevalidation(payload, 'post write', POST_SURFACES, purgePostSurfaces)
   }
 
   return doc

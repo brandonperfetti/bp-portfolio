@@ -3,6 +3,7 @@ import type { CollectionAfterChangeHook } from 'payload'
 import { revalidateTag } from 'next/cache'
 
 import { CMS_TAGS } from '@/lib/cms/cache'
+import { containRevalidation } from '@/hooks/containRevalidation'
 
 /**
  * afterChange hook that purges the redirects data-cache tag whenever a
@@ -48,18 +49,23 @@ import { CMS_TAGS } from '@/lib/cms/cache'
  *    even when this hook was reached via `createSlugRedirect`'s
  *    `payload.create({ …, req })`. That is what lets a script or a test write
  *    a redirect row without stubbing `next/cache` at all.
- * 2. **the try/catch** — the ticket's "optionally wrap", and it is not
- *    optional. The flag only helps callers who know to set it; the wrap covers
- *    the ones who do not, and the honest position is that we cannot enumerate
- *    them. `[inference]` The scheduled-publish job
- *    (`payload/dist/versions/schedule/job.js`) publishes through
- *    `payload.update` without setting `disableRevalidate`, so whether its
- *    redirect row survives would otherwise depend on whether the job happened
- *    to be driven from inside a Next request scope — a property of the
+ * 2. **`containRevalidation`** (`src/hooks/containRevalidation.ts`) — the
+ *    ticket's "optionally wrap", and it is not optional. The flag only helps
+ *    callers who know to set it; the wrap covers the ones who do not, and the
+ *    honest position is that we cannot enumerate them. `[inference]` The
+ *    scheduled-publish job (`payload/dist/versions/schedule/job.js`) publishes
+ *    through `payload.update` without setting `disableRevalidate`, so whether
+ *    its redirect row survives would otherwise depend on whether the job
+ *    happened to be driven from inside a Next request scope — a property of the
  *    deployment, not of the code. Ranking the two outcomes settles it: a
  *    swallowed purge costs at most one `cmsContent` TTL of a stale redirect
  *    mapping, while a thrown purge costs the redirect row itself and the old
  *    URL 404s permanently. The failure is logged at `error`, never silent.
+ *
+ *    The wrap was inline here until #156 found the same containment written a
+ *    second and third time in `revalidatePost`/`revalidatePage`. All three now
+ *    share one function, whose docblock carries the transaction mechanics and
+ *    the survey of `scripts/`.
  *
  * The wrap deliberately does NOT extend to anything but the purge, so a real
  * defect in the surrounding hook still fails loudly.
@@ -72,16 +78,14 @@ export const revalidateRedirects: CollectionAfterChangeHook = ({
 
   payload.logger.info(`Revalidating redirects`)
 
-  try {
-    revalidateTag(CMS_TAGS.redirects, { expire: 0 })
-  } catch (error) {
-    // Never rethrow: see the docblock — an `afterChange` throw rolls the
-    // redirect row back, which is strictly worse than a stale cache entry.
-    payload.logger.error(
-      { err: error },
-      `Failed to revalidate the ${CMS_TAGS.redirects} tag; the redirect row is kept`,
-    )
-  }
+  // Never rethrow: see the docblock — an `afterChange` throw rolls the redirect
+  // row back, which is strictly worse than a stale cache entry.
+  containRevalidation(
+    payload,
+    'redirect row',
+    `the ${CMS_TAGS.redirects} tag`,
+    () => revalidateTag(CMS_TAGS.redirects, { expire: 0 }),
+  )
 
   return doc
 }

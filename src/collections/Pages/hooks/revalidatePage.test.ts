@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * Argument-shape pin for #118: `revalidateTag` must be called with the
@@ -20,6 +20,11 @@ vi.mock('next/cache', () => ({
 
 import { revalidateDelete, revalidatePage } from './revalidatePage'
 
+/** A logger with both levels the hook uses, so the #156 wrap can be observed. */
+const makeLogger = () => ({ error: vi.fn(), info: vi.fn() })
+
+let logger = makeLogger()
+
 const changeArgs = (
   doc: Record<string, unknown>,
   previousDoc: Record<string, unknown> | undefined,
@@ -28,7 +33,7 @@ const changeArgs = (
   ({
     doc,
     previousDoc,
-    req: { payload: { logger: { info: vi.fn() } }, context },
+    req: { payload: { logger }, context },
   }) as never
 
 describe('revalidatePage (afterChange)', () => {
@@ -217,7 +222,7 @@ describe('revalidateDelete (afterDelete)', () => {
 
     revalidateDelete({
       doc: { slug: 'about' },
-      req: { context: {} },
+      req: { context: {}, payload: { logger } },
     } as never)
 
     expect(mocks.revalidateTag).toHaveBeenCalledWith('pages', { expire: 0 })
@@ -232,10 +237,125 @@ describe('revalidateDelete (afterDelete)', () => {
 
     revalidateDelete({
       doc: { slug: 'about' },
-      req: { context: { disableRevalidate: true } },
+      req: { context: { disableRevalidate: true }, payload: { logger } },
     } as never)
 
     expect(mocks.revalidateTag).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Revalidation containment (#156) — the Pages half of the block in
+ * `src/collections/Posts/hooks/revalidatePost.test.ts`.
+ *
+ * `afterChange`/`afterDelete` run inside the operation's transaction
+ * (`payload/dist/collections/operations/utilities/update.js:330-341`), so a
+ * `revalidatePath` throw outside a Next request scope rolls the PAGE back, not
+ * just the purge. What these pin: the hook returns normally, the failure is
+ * logged at `error` naming the path, and the `disableRevalidate` fast path
+ * still attempts nothing.
+ */
+describe('revalidatePage · revalidation never fails the write (#156)', () => {
+  beforeEach(() => {
+    mocks.revalidatePath.mockReset()
+    mocks.revalidateTag.mockReset()
+    logger = makeLogger()
+  })
+
+  // Restore the plain spies so the blocks that follow are not left with a
+  // throwing `revalidatePath` installed.
+  afterEach(() => {
+    mocks.revalidatePath.mockReset()
+    mocks.revalidateTag.mockReset()
+  })
+
+  const boom = () => {
+    throw new Error('Invariant: static generation store missing')
+  }
+
+  it('does not propagate a revalidatePath throw on publish', () => {
+    mocks.revalidatePath.mockImplementation(boom)
+
+    expect(() =>
+      revalidatePage(
+        changeArgs(
+          { slug: 'about', _status: 'published' },
+          { _status: 'draft' },
+        ),
+      ),
+    ).not.toThrow()
+    expect(logger.error).toHaveBeenCalled()
+  })
+
+  it('does not propagate a revalidatePath throw on unpublish', () => {
+    mocks.revalidatePath.mockImplementation(boom)
+
+    expect(() =>
+      revalidatePage(
+        changeArgs(
+          { slug: 'about', _status: 'draft' },
+          { slug: 'about', _status: 'published' },
+        ),
+      ),
+    ).not.toThrow()
+    expect(logger.error).toHaveBeenCalled()
+  })
+
+  it('does not propagate a revalidateTag throw', () => {
+    mocks.revalidateTag.mockImplementation(boom)
+
+    expect(() =>
+      revalidatePage(
+        changeArgs(
+          { slug: 'about', _status: 'published' },
+          { _status: 'draft' },
+        ),
+      ),
+    ).not.toThrow()
+    expect(logger.error).toHaveBeenCalled()
+  })
+
+  it('logs the failing path and the reason', () => {
+    mocks.revalidatePath.mockImplementation(boom)
+
+    revalidatePage(
+      changeArgs({ slug: 'about', _status: 'published' }, { _status: 'draft' }),
+    )
+
+    const [meta, message] = logger.error.mock.calls[0] as [
+      { err: Error },
+      string,
+    ]
+    expect(message).toContain('/about')
+    expect(meta.err.message).toContain('static generation store missing')
+  })
+
+  it('still lands the write when revalidateDelete throws', () => {
+    mocks.revalidatePath.mockImplementation(boom)
+
+    expect(() =>
+      revalidateDelete({
+        doc: { slug: 'about' },
+        req: { context: {}, payload: { logger } },
+      } as never),
+    ).not.toThrow()
+    expect(logger.error).toHaveBeenCalled()
+  })
+
+  it('leaves the disableRevalidate fast path untouched — nothing is attempted', () => {
+    mocks.revalidatePath.mockImplementation(boom)
+
+    expect(() =>
+      revalidatePage(
+        changeArgs(
+          { slug: 'about', _status: 'published' },
+          { _status: 'draft' },
+          { disableRevalidate: true },
+        ),
+      ),
+    ).not.toThrow()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+    expect(logger.error).not.toHaveBeenCalled()
   })
 })

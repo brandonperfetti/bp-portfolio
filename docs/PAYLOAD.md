@@ -227,6 +227,25 @@ autosaved rename purges nothing, because `previousDoc` is the draft and the
 served slug is absent from every `afterChange` argument. Measured 2026-09-02,
 pinned by a `KNOWN GAP` test in both matrices, tracked in a follow-up to #132.
 
+**A revalidation failure never fails the write (#135, #156).** Payload runs
+`afterChange`/`afterDelete` collection hooks **inside the operation's
+transaction**, so a hook that throws does not lose a cache purge — it rolls back
+the document. `revalidatePath`/`revalidateTag` throw outside a Next request
+scope, which is every Local-API or job-driven write. `revalidatePost`,
+`revalidatePage`, both `revalidateDelete` companions and `revalidateRedirects`
+therefore route every purge through **`containRevalidation`
+(`src/hooks/containRevalidation.ts`)**, which logs at `error` with the failing
+path and the reason and returns normally.
+
+That module's docblock is the single home for the argument: the `dist` citations
+for the transaction mechanics, the measurement, and the survey of `scripts/`
+showing that no writer in this repo wants revalidation to be fatal. Do not
+restate them here.
+
+`context.disableRevalidate` is unchanged and is still the explicit opt-out — it
+short-circuits the whole hook before any purge is attempted. It is not a
+substitute for the wrap, because it only helps callers who set it.
+
 **Permanent vs temporary redirects (#130).** The plugin is configured with
 `redirectTypes: ['301', '302']`, which is what makes it emit a permanence
 field at all — without that option it emits none and every redirect served as

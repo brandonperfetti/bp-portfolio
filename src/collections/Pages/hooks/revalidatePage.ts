@@ -6,7 +6,25 @@ import type {
 import { revalidatePath, revalidateTag } from 'next/cache'
 
 import { publicPathFor } from '@/fields/slug/slugPaths'
+import { containRevalidation } from '@/hooks/containRevalidation'
 import type { Page } from '../../../payload-types'
+
+/**
+ * Expire both page data-cache tags with the immediate-expiration profile.
+ *
+ * @remarks Named because all three branches below need the identical pair and a
+ * branch that purged only one would be a silent staleness bug, not a visible
+ * one: the route would regenerate against a fresh `pages` read and a stale
+ * `pages-sitemap` one, or the reverse.
+ *
+ * `{ expire: 0 }`, never `'max'` (#118) — under cacheComponents `'max'` is
+ * stale-while-revalidate with a one-year window, so an edit keeps serving old
+ * content until a background refresh happens to land.
+ */
+const purgePageTags = () => {
+  revalidateTag('pages', { expire: 0 })
+  revalidateTag('pages-sitemap', { expire: 0 })
+}
 
 /**
  * afterChange hook that keeps published pages live without a redeploy:
@@ -62,24 +80,17 @@ import type { Page } from '../../../payload-types'
  * Route Handler, where `revalidateTag(tag, { expire: 0 })` is the documented
  * way to expire immediately (Next 16.3.0 docs, `revalidateTag` /
  * `updateTag`).
- */
-/**
- * Expire both page data-cache tags with the immediate-expiration profile.
  *
- * @remarks Named because all three branches below need the identical pair and a
- * branch that purged only one would be a silent staleness bug, not a visible
- * one: the route would regenerate against a fresh `pages` read and a stale
- * `pages-sitemap` one, or the reverse.
- *
- * `{ expire: 0 }`, never `'max'` (#118) — under cacheComponents `'max'` is
- * stale-while-revalidate with a one-year window, so an edit keeps serving old
- * content until a background refresh happens to land.
+ * **A revalidation failure never fails the write (#156).** Every
+ * `revalidatePath`/`revalidateTag` call below goes through
+ * `containRevalidation` (`src/hooks/containRevalidation.ts`), which logs at
+ * `error` with the path and the reason and lets the page land. That module's
+ * docblock is where the argument lives, once, for all three call sites — this
+ * hook, `revalidatePost` and `revalidateRedirects` (#135): `afterChange` runs
+ * inside the operation's transaction, so an uncontained throw rolls the page
+ * back, and no script in this repo wants revalidation to be fatal. The
+ * `disableRevalidate` fast path is unchanged.
  */
-const purgePageTags = () => {
-  revalidateTag('pages', { expire: 0 })
-  revalidateTag('pages-sitemap', { expire: 0 })
-}
-
 export const revalidatePage: CollectionAfterChangeHook<Page> = ({
   doc,
   previousDoc,
@@ -91,13 +102,23 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
 
       if (path) {
         payload.logger.info(`Revalidating page at path: ${path}`)
-        revalidatePath(path)
+        containRevalidation(
+          payload,
+          'page write',
+          `the page path ${path}`,
+          () => revalidatePath(path),
+        )
       }
       // The data layer (getCmsPageByPath / getPageLayout / CmsPageBlocks)
       // caches under the 'pages' tag — revalidatePath alone regenerates the
       // route against STALE data, so admin edits never surfaced without a
       // redeploy.
-      purgePageTags()
+      containRevalidation(
+        payload,
+        'page write',
+        'the pages/pages-sitemap tags',
+        purgePageTags,
+      )
     }
 
     // If the page was previously published, we need to revalidate the old path
@@ -106,9 +127,19 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
 
       if (oldPath) {
         payload.logger.info(`Revalidating old page at path: ${oldPath}`)
-        revalidatePath(oldPath)
+        containRevalidation(
+          payload,
+          'page write',
+          `the old page path ${oldPath}`,
+          () => revalidatePath(oldPath),
+        )
       }
-      purgePageTags()
+      containRevalidation(
+        payload,
+        'page write',
+        'the pages/pages-sitemap tags',
+        purgePageTags,
+      )
     }
   }
   return doc
@@ -116,16 +147,29 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
 
 /**
  * afterDelete companion to {@link revalidatePage}. Same `{ expire: 0 }`
- * immediate-expiration reasoning as {@link revalidatePage} (#118).
+ * immediate-expiration reasoning as {@link revalidatePage} (#118), and the same
+ * `containRevalidation` wrap (#156) — `afterDelete` is transactional too, so an
+ * uncontained throw would resurrect the page the caller deleted.
  */
 export const revalidateDelete: CollectionAfterDeleteHook<Page> = ({
   doc,
-  req: { context },
+  req: { context, payload },
 }) => {
   if (!context.disableRevalidate) {
     const path = publicPathFor('pages', doc ?? {})
-    if (path) revalidatePath(path)
-    purgePageTags()
+    if (path)
+      containRevalidation(
+        payload,
+        'page write',
+        `the deleted page path ${path}`,
+        () => revalidatePath(path),
+      )
+    containRevalidation(
+      payload,
+      'page write',
+      'the pages/pages-sitemap tags',
+      purgePageTags,
+    )
   }
 
   return doc
