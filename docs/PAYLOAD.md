@@ -544,6 +544,26 @@ Function grants are revoke-by-default too, as of the
 get no `EXECUTE` on functions created in `public`, so a deliberate RPC needs an
 explicit `GRANT EXECUTE` on that function in its own migration.
 
+Table grants are revoke-by-default too, as of the
+`20260905_190000_issue_159_table_acls` migration (#159). RLS alone was not
+enough: default-deny RLS gates the read/write half but does **not** gate
+`TRUNCATE` — measured on PostgreSQL 16, a role holding only `D` truncates an
+RLS-enabled, policy-free table successfully — and Supabase had pre-seeded
+`anon=Dxtm/postgres, authenticated=Dxtm/postgres` (TRUNCATE, REFERENCES,
+TRIGGER, MAINTAIN) on every table in `public` plus the TABLES default ACL. That
+migration revokes both halves for both roles.
+
+**Acceptance for table ACLs reads `pg_class.relacl`**, never
+`information_schema.role_table_grants`: that view is scoped to grants applicable
+to the executing role, and it reported **0** rows for `anon`/`authenticated` on
+the very production database whose `relacl` carried them. Check the default with
+`pg_default_acl` (join `pg_namespace` on `defaclnamespace`, `defaclobjtype='r'`).
+One entry is accepted residue and out of a repo migration's reach: the
+`supabase_admin`-grantor default (`anon=arwdDxtm/supabase_admin`) — `REVOKE`
+only removes privileges granted by the executing role, and migrations run as
+`postgres`. That is the same class as the #141 function-ACL residue; treat it as
+accepted, not as a gate failure.
+
 `ALTER DEFAULT PRIVILEGES` already handles the grant side for new tables, but
 it does **not** touch RLS state — that still needs the explicit `ENABLE` per
 table. For a bulk sweep, reuse the `pg_tables` loop in

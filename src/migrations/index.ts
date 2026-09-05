@@ -44,6 +44,7 @@ import * as migration_20260903_163051_posts_placement from './20260903_163051_po
 import * as migration_20260905_024451_m4_redirect_match_descendants from './20260905_024451_m4_redirect_match_descendants'
 import * as migration_20260905_173046_work_history_slug from './20260905_173046_work_history_slug'
 import * as migration_20260905_173125_categories_section_page from './20260905_173125_categories_section_page'
+import * as migration_20260905_190000_issue_159_table_acls from './20260905_190000_issue_159_table_acls'
 
 export const migrations = [
   {
@@ -275,5 +276,10 @@ export const migrations = [
     up: migration_20260905_173125_categories_section_page.up,
     down: migration_20260905_173125_categories_section_page.down,
     name: '20260905_173125_categories_section_page',
+  },
+  {
+    up: migration_20260905_190000_issue_159_table_acls.up,
+    down: migration_20260905_190000_issue_159_table_acls.down,
+    name: '20260905_190000_issue_159_table_acls',
   },
 ]
