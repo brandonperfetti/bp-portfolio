@@ -31,6 +31,17 @@ export type CmsRedirectType = '301' | '302'
  */
 export type CmsRedirect = {
   from: string
+  /**
+   * Does this row also cover everything under `from`, keeping the remainder of
+   * the requested path? (#150)
+   *
+   * @remarks Optional rather than required so the dozens of existing
+   * `{ from, to, type }` literals — in this file's own tests and in every
+   * caller that builds a list by hand — stay valid, and so a row read back
+   * before the column existed reads as `false` rather than as a type error.
+   * {@link resolveRedirect} treats anything but `true` as an exact-only row.
+   */
+  matchDescendants?: boolean
   to: string
   type: CmsRedirectType
 }
@@ -134,12 +145,44 @@ const isAbsoluteDestination = (destination: string): boolean =>
  *
  * Both callers hand the destination to `permanentRedirect` or `redirect`, both
  * of which accept absolute URLs and query-bearing paths as-is.
+ *
+ * ## Prefix rows, and why exact wins (#150)
+ *
+ * A row with `matchDescendants` covers `from` and everything beneath it,
+ * carrying the remainder across: `/work` → `/experience` sends
+ * `/work/brytecore` to `/experience/brytecore`. That is what makes a section
+ * move cost one row instead of one per descendant — see the field's comment in
+ * `src/plugins/index.ts` for the ceiling that motivates it.
+ *
+ * Three rules, all of them consequences rather than choices:
+ *
+ * 1. **Exact matches are tried first, across the whole list**, which is why
+ *    this is two passes and not one loop with a `continue`. A single pass would
+ *    let a prefix row that happens to sit earlier in the list beat a specific
+ *    override that sits later, making the answer depend on row order — and row
+ *    order here is "whatever Payload returned". An editor who writes
+ *    `/work/brytecore → /clients/brytecore` beside a `/work → /experience`
+ *    prefix row means the specific one.
+ * 2. **The boundary is a slash.** `startsWith('/work')` would also match
+ *    `/workshops`, a different page whose URL merely begins with the same
+ *    letters. The test is `target === from || target.startsWith(from + '/')`.
+ * 3. **The self-redirect guard applies to the REWRITTEN destination**, not to
+ *    the row's raw `to`. A prefix row whose target resolves back to where it
+ *    started — the shape a move-and-move-back leaves behind — produces
+ *    `/work/x → /work/x` only after the suffix is appended, so checking `to`
+ *    alone would miss it and serve an infinite redirect.
+ *
+ * A prefix row is skipped when its `to` is absolute: appending a path suffix to
+ * an editor's `https://example.com/moved` is a URL this function has no
+ * business inventing, and the exact-match pass has already served that row for
+ * the one request it genuinely describes.
  */
 export const resolveRedirect = (
   redirects: CmsRedirect[],
   path: string,
 ): CmsRedirectTarget | null => {
   const target = normalizeRedirectPath(path)
+
   for (const redirect of redirects) {
     if (normalizeRedirectPath(redirect.from) !== target) continue
     const destination = redirect.to.trim()
@@ -157,6 +200,27 @@ export const resolveRedirect = (
       ? null
       : { destination, permanent }
   }
+
+  for (const redirect of redirects) {
+    if (redirect.matchDescendants !== true) continue
+    const from = normalizeRedirectPath(redirect.from)
+    // The exact case was decided by the pass above; here `from` is a strict
+    // ancestor, and the slash is what keeps `/workshops` out of `/work`.
+    if (!target.startsWith(`${from}/`)) continue
+    const destination = redirect.to.trim()
+    if (!destination || isAbsoluteDestination(destination)) continue
+    const rewritten = `${normalizeRedirectPath(destination)}${target.slice(
+      from.length,
+    )}`
+    // The guard on the REWRITTEN destination, which is the only form that can
+    // equal the request.
+    if (rewritten === target) return null
+    return {
+      destination: rewritten,
+      permanent: isPermanentRedirect(redirect.type),
+    }
+  }
+
   return null
 }
 
@@ -218,7 +282,7 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
     limit: REDIRECT_LIMIT,
     overrideAccess: false,
     pagination: false,
-    select: { from: true, to: true, type: true },
+    select: { from: true, matchDescendants: true, to: true, type: true },
   })
 
   const idsByCollection = collectReferenceIds(docs)
@@ -273,9 +337,19 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
           url?: null | string
         }
 
+    // A row written before M4 added the column, or one an editor left unset,
+    // is an exact-only row — the pre-#150 behaviour of every row there is. The
+    // key is OMITTED rather than set to `false` in that case, so a flattened
+    // exact row is byte-identical to what this function returned before #150
+    // and every caller holding one keeps comparing equal.
+    const descendants: Pick<CmsRedirect, 'matchDescendants'> =
+      (doc as { matchDescendants?: unknown }).matchDescendants === true
+        ? { matchDescendants: true }
+        : {}
+
     if (to?.type === 'custom') {
       if (typeof to.url === 'string' && to.url.length > 0) {
-        redirects.push({ from, to: to.url, type })
+        redirects.push({ from, ...descendants, to: to.url, type })
       }
       continue
     }
@@ -286,7 +360,8 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
       continue
     const row = rowById.get(`${relationTo}:${value}`)
     const destination = publicPathFor(relationTo, row)
-    if (destination) redirects.push({ from, to: destination, type })
+    if (destination)
+      redirects.push({ from, ...descendants, to: destination, type })
   }
 
   return redirects

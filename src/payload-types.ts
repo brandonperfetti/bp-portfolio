@@ -1497,6 +1497,10 @@ export interface Redirect {
    * Permanent (301) tells browsers and search engines the move is forever and is cached indefinitely. Temporary (302) is for campaigns and short-lived moves.
    */
   type: '301' | '302';
+  /**
+   * Also redirect everything under this path, keeping the rest of the URL: /work → /experience also sends /work/brytecore to /experience/brytecore. Set automatically when a section page is moved.
+   */
+  matchDescendants?: boolean | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -2682,6 +2686,7 @@ export interface RedirectsSelect<T extends boolean = true> {
         url?: T;
       };
   type?: T;
+  matchDescendants?: T;
   updatedAt?: T;
   createdAt?: T;
 }

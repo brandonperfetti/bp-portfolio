@@ -564,6 +564,8 @@ describe.skipIf(!connectionString)(
         where: { from: { equals: `/${MARKER}-mv` } },
       })
       expect(own.totalDocs).toBe(1)
+      // D4: it is a PREFIX row, so it covers the whole subtree by itself.
+      expect(own.docs[0].matchDescendants).toBe(true)
 
       // And no per-descendant rows: D4 says one prefix row per move, so the
       // cascade passes `disableSlugRedirect` on every descendant write.

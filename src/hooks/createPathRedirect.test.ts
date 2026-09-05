@@ -24,11 +24,18 @@ import { createPathRedirect } from '@/hooks/createPathRedirect'
  * this file guards against (addendum 1) was that `previousDoc` is the autosaved
  * draft, not the published document.
  *
- * **The #120 assertions below are deliberately unchanged, byte for byte.** They
- * are AC1 of #150 — a top-level page and an unplaced post must still produce
- * exactly the rows they produced before paths existed — and they caught a
- * deletion in an earlier batch. The path-aware cases are additions beneath them,
- * never edits to them.
+ * **The #120 assertions below are preserved, not rewritten.** They are AC1 of
+ * #150 — a top-level page and an unplaced post must still produce exactly the
+ * rows they produced before paths existed — and they caught a deletion in an
+ * earlier batch, so the path-aware cases are additions beneath them rather than
+ * edits to them. Every `from`, `to` and `type` value is what it was.
+ *
+ * The one edit: the three exact-object `data` assertions gained the
+ * `matchDescendants` key, because the row itself gained the field (#150 D4) and
+ * an exact-object assertion that omitted it would be asserting a row the hook
+ * does not write. Nothing was loosened to absorb it — the assertions are still
+ * exact objects, and the key's VALUE is the thing worth pinning: `false` for a
+ * Post, which can have no subtree, and `true` for a Page, which can.
  */
 
 type FindResult = { docs: Array<{ id: number }> }
@@ -156,6 +163,8 @@ describe('createPathRedirect', () => {
         collection: 'redirects',
         data: {
           from: '/articles/old-slug',
+          // #150: a Post has no subtree, so its row is exact-only.
+          matchDescendants: false,
           to: {
             type: 'reference',
             reference: { relationTo: 'posts', value: 55 },
@@ -259,6 +268,8 @@ describe('createPathRedirect', () => {
       expect.objectContaining({
         data: {
           from: '/before',
+          // #150: a Page CAN have a subtree, so its row covers descendants.
+          matchDescendants: true,
           to: {
             type: 'reference',
             reference: { relationTo: 'pages', value: 7 },
@@ -287,6 +298,7 @@ describe('createPathRedirect', () => {
       expect.objectContaining({
         data: {
           from: '/work2/dup',
+          matchDescendants: false,
           to: {
             type: 'reference',
             reference: { relationTo: 'posts', value: 5 },
@@ -371,6 +383,7 @@ describe('createPathRedirect', () => {
       expect.objectContaining({
         data: {
           from: '/work2/dup',
+          matchDescendants: false,
           to: {
             type: 'reference',
             reference: { relationTo: 'posts', value: 5 },

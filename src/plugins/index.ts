@@ -69,18 +69,43 @@ export const plugins: Plugin[] = [
     overrides: {
       // @ts-expect-error - valid override; mapped fields don't resolve to the same type
       fields: ({ defaultFields }) => {
-        return defaultFields.map((field) => {
-          if ('name' in field && field.name === 'from') {
-            return {
-              ...field,
-              admin: {
-                description:
-                  'You will need to rebuild the website when changing this field.',
-              },
+        return [
+          ...defaultFields.map((field) => {
+            if ('name' in field && field.name === 'from') {
+              return {
+                ...field,
+                admin: {
+                  description:
+                    'You will need to rebuild the website when changing this field.',
+                },
+              }
             }
-          }
-          return field
-        })
+            return field
+          }),
+          // #150 (D4, Brandon 2026-09-02). Moving a section page moves every
+          // URL beneath it, and one row per descendant is the design that does
+          // not scale: `getCmsRedirects` reads at most `REDIRECT_LIMIT = 500`
+          // rows, and a handful of reorganisations on a site with a few hundred
+          // articles walks toward that ceiling. A prefix row is O(1) per move
+          // whatever the subtree size.
+          //
+          // It does not reintroduce redirect chains: `to` is still a document
+          // reference resolved through the target's CURRENT path at read time,
+          // so `/work/x` resolves to wherever that page lives now, in one hop.
+          // `resolveRedirect` tries exact matches first, so a specific row
+          // always beats the prefix it sits under.
+          {
+            name: 'matchDescendants',
+            type: 'checkbox',
+            defaultValue: false,
+            admin: {
+              description:
+                'Also redirect everything under this path, keeping the rest of the URL: /work → /experience also sends /work/brytecore to /experience/brytecore. Set automatically when a section page is moved.',
+              position: 'sidebar',
+            },
+            label: 'Redirect descendant paths too',
+          },
+        ]
       },
       hooks: {
         afterChange: [revalidateRedirects],

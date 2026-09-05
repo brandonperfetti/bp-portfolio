@@ -173,6 +173,16 @@ export const createPathRedirect: CollectionAfterChangeHook = async ({
 
   const data = {
     from,
+    // #150 (D4). A Page can have a subtree; a Post cannot — its `parent` is a
+    // Page, so nothing is ever stored beneath it. Marking a page's row as a
+    // prefix row is what makes a section move cost ONE row instead of one per
+    // descendant, and marking a post's would be a claim about URLs that cannot
+    // exist. Stated explicitly rather than left to the field's `defaultValue`,
+    // for the same reason `type` is: an `update` of an existing row does not
+    // re-apply a default, so a row first written for a post rename and later
+    // repointed by a page move must gain the flag, and the reverse must lose
+    // it.
+    matchDescendants: collectionSlug === 'pages',
     to: {
       type: 'reference' as const,
       reference: { relationTo: collectionSlug, value: doc.id },

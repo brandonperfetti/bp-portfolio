@@ -41,6 +41,7 @@ import * as migration_20260831_005000_issue_87_function_acls from './20260831_00
 import * as migration_20260902_205311_redirect_permanence from './20260902_205311_redirect_permanence'
 import * as migration_20260902_233433_pages_hierarchy from './20260902_233433_pages_hierarchy'
 import * as migration_20260903_163051_posts_placement from './20260903_163051_posts_placement'
+import * as migration_20260905_024451_m4_redirect_match_descendants from './20260905_024451_m4_redirect_match_descendants'
 
 export const migrations = [
   {
@@ -257,5 +258,10 @@ export const migrations = [
     up: migration_20260903_163051_posts_placement.up,
     down: migration_20260903_163051_posts_placement.down,
     name: '20260903_163051_posts_placement',
+  },
+  {
+    up: migration_20260905_024451_m4_redirect_match_descendants.up,
+    down: migration_20260905_024451_m4_redirect_match_descendants.down,
+    name: '20260905_024451_m4_redirect_match_descendants',
   },
 ]
