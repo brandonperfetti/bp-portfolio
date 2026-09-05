@@ -122,6 +122,12 @@ describe.skipIf(!connectionString)(
 
     const cleanup = async () => {
       if (!payload) return
+      // Rows `createPathRedirect` wrote for the moves these cases make (#150).
+      await payload.delete({
+        collection: 'redirects',
+        where: { from: { like: `%${MARKER}%` } },
+        overrideAccess: true,
+      })
       await payload.delete({
         collection: 'posts',
         where: { slug: { like: `%${MARKER}%` } },
@@ -360,26 +366,61 @@ describe.skipIf(!connectionString)(
       )
     })
 
-    it('refuses to re-slug a placed, PUBLISHED post until #150 (the stop-gap)', async () => {
-      // The row `createSlugRedirect` would write here has an `/articles` `from`,
-      // so `/work2/<old>` would become a hard 404. `refusePlacedSlugRename`
-      // turns that silent break into a refusal the editor can act on. Drop that
-      // commit and this case becomes "recomputes its path under the same
-      // parent", which is what the hooks alone do.
+    it('re-slugs a placed, PUBLISHED post and keys the row on /work2 (#150)', async () => {
+      // THE measured residue on issue #150 (comment 5530738984), now inverted.
+      // This case used to assert a 400 from `refusePlacedSlugRename`, the
+      // stop-gap that stood in for path-aware redirects; before that guard the
+      // hooks wrote `/articles/…-dup -> /articles/…-dup2` and left
+      // `/work2/…-dup` a hard 404. `createPathRedirect` keys the row on the
+      // served path, so the write succeeds and the URL that actually moved is
+      // the one preserved.
       const { docs } = await payload.find({
         collection: 'posts',
         overrideAccess: true,
         pagination: false,
         where: { slug: { equals: `${MARKER}-dup` } },
       })
-      await expect(
-        payload.update({
-          collection: 'posts',
-          id: docs[0].id,
-          overrideAccess: true,
-          data: { slug: `${MARKER}-dup2`, slugLock: false } as never,
-        }),
-      ).rejects.toThrow(/#150/)
+      const placed = docs[0]
+      expect(placed.path).toBe(`${MARKER}-work2/${MARKER}-dup`)
+
+      const renamed = await payload.update({
+        collection: 'posts',
+        id: placed.id,
+        overrideAccess: true,
+        data: { slug: `${MARKER}-dup2`, slugLock: false } as never,
+      })
+      expect(renamed.path).toBe(`${MARKER}-work2/${MARKER}-dup2`)
+
+      const rows = await payload.find({
+        collection: 'redirects',
+        depth: 0,
+        overrideAccess: true,
+        pagination: false,
+        where: { from: { equals: `/${MARKER}-work2/${MARKER}-dup` } },
+      })
+      expect(rows.totalDocs).toBe(1)
+      expect(rows.docs[0].to?.reference).toMatchObject({
+        relationTo: 'posts',
+        value: placed.id,
+      })
+
+      // NOT an /articles row — the exact defect this ticket closes.
+      const archiveRows = await payload.find({
+        collection: 'redirects',
+        depth: 0,
+        overrideAccess: true,
+        pagination: false,
+        where: { from: { equals: `/articles/${MARKER}-dup` } },
+      })
+      expect(archiveRows.totalDocs).toBe(0)
+
+      // Rename back so the cases after this one still find `…-dup`.
+      await payload.update({
+        collection: 'posts',
+        id: placed.id,
+        overrideAccess: true,
+        data: { slug: `${MARKER}-dup`, slugLock: false } as never,
+      })
     })
 
     it('a title-only PATCH with the unlock cannot derive a new slug behind the guard', async () => {

@@ -104,6 +104,12 @@ describe.skipIf(!connectionString)(
 
     const cleanup = async () => {
       if (!payload) return
+      // Rows `createPathRedirect` wrote for the moves these cases make (#150).
+      await payload.delete({
+        collection: 'redirects',
+        where: { from: { like: `%${MARKER}%` } },
+        overrideAccess: true,
+      })
       await payload.delete({
         collection: 'pages',
         where: { slug: { like: `%${MARKER}%` } },
@@ -242,13 +248,10 @@ describe.skipIf(!connectionString)(
     })
 
     it('recomputes a leaf’s own path when it is renamed', async () => {
-      // A DRAFT leaf, deliberately. `refuseNestedSlugRename` refuses this
-      // rename once the page is published, because #120's redirect writer
-      // would spell the row `/leaf → /leaf-renamed` and leave the real URL
-      // `…/-child/-leaf` with nothing pointing at it (#150). A never-published
-      // page has no live URL to strand, so the guard stays silent and the
-      // recomputation this test is actually about is still exercised end to
-      // end.
+      // A DRAFT leaf, deliberately: the case below covers the published
+      // rename and the path-keyed redirect row it now writes (#150). Keeping
+      // this one on a draft isolates the recomputation it is actually about
+      // from the redirect machinery entirely.
       const { docs } = await payload.find({
         collection: 'pages',
         overrideAccess: true,
@@ -292,12 +295,12 @@ describe.skipIf(!connectionString)(
       )
     })
 
-    it('REFUSES to rename a nested, PUBLISHED page until #150', async () => {
-      // The other half of the case above, through the real Payload write path
-      // rather than a hook fixture: the redirect row that would be written
-      // describes `/-grand`, a URL this page has never had, and the URL that
-      // actually moved gets nothing. The unlock is supplied, so this is the
-      // guard speaking and not `enforceSlugFreeze`.
+    it('renames a nested, PUBLISHED page and keys the redirect on its real path (#150)', async () => {
+      // This case used to assert a 400 from `refuseNestedSlugRename`, the
+      // stop-gap that stood in for path-aware redirects. #150 deletes the
+      // guard, so the same write must now SUCCEED and leave the URL that
+      // actually moved — `/…-root/…-child/…-grand`, never the bare `/…-grand`
+      // the slug-keyed writer described — pointing at the document.
       const { docs } = await payload.find({
         collection: 'pages',
         overrideAccess: true,
@@ -306,23 +309,39 @@ describe.skipIf(!connectionString)(
       })
       const grandchild = docs[0]
       expect(grandchild._status).toBe('published')
+      const oldPath = `/${MARKER}-root/${MARKER}-child/${MARKER}-grand`
 
-      await expect(
-        payload.update({
-          collection: 'pages',
-          id: grandchild.id,
-          overrideAccess: true,
-          data: { slug: `${MARKER}-grand-renamed`, slugLock: false },
-        }),
-      ).rejects.toThrow(/#150/)
-
-      // And the stored row did not move.
-      const reread = await payload.findByID({
+      const renamed = await payload.update({
         collection: 'pages',
         id: grandchild.id,
         overrideAccess: true,
+        data: { slug: `${MARKER}-grand-renamed`, slugLock: false },
       })
-      expect(reread.path).toBe(`${MARKER}-root/${MARKER}-child/${MARKER}-grand`)
+      expect(renamed.path).toBe(
+        `${MARKER}-root/${MARKER}-child/${MARKER}-grand-renamed`,
+      )
+
+      const rows = await payload.find({
+        collection: 'redirects',
+        depth: 0,
+        overrideAccess: true,
+        pagination: false,
+        where: { from: { equals: oldPath } },
+      })
+      expect(rows.totalDocs).toBe(1)
+      expect(rows.docs[0].to?.reference).toMatchObject({
+        relationTo: 'pages',
+        value: grandchild.id,
+      })
+      expect(rows.docs[0].type).toBe('301')
+
+      // Rename it back so the cases after this one still find `…-grand`.
+      await payload.update({
+        collection: 'pages',
+        id: grandchild.id,
+        overrideAccess: true,
+        data: { slug: `${MARKER}-grand`, slugLock: false },
+      })
     })
 
     it('a title-only PATCH with the unlock cannot derive a new slug behind the guard', async () => {

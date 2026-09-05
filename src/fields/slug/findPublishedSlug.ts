@@ -76,12 +76,16 @@ export const findPublishedRow = async (
  * @param id - The document id.
  * @returns The live slug, or `null` when the document has never been published.
  *
- * @remarks The slug-only face of {@link findPublishedRow}, kept because most
- * callers genuinely only ask "does a public URL exist for this document, and
- * what is its slug?" — `enforceSlugFreeze` (should this slug be allowed to
- * move?), `refuseNestedSlugRename` and `refusePlacedSlugRename` (has this ever
- * been published?). Callers that must name a *placed* document's URL need the
- * row, because a slug alone cannot produce `/work/brytecore` (#148).
+ * @remarks The slug-only face of {@link findPublishedRow}, kept for the one
+ * caller that genuinely only asks "does a public URL exist for this document,
+ * and what is its slug?" — `enforceSlugFreeze` (should this slug be allowed to
+ * move?). It had three: `refuseNestedSlugRename` and `refusePlacedSlugRename`
+ * asked the same question (has this ever been published?) and #150 deleted them
+ * both, because the hole they plugged was that a redirect row's `from` was
+ * spelled from a slug. Callers that must name a *placed* document's URL need
+ * the row, because a slug alone cannot produce `/work/brytecore` (#148) — which
+ * is exactly why the two guards are gone and this wrapper is down to one
+ * caller.
  *
  * It delegates rather than issuing its own query, so the `where` that decides
  * what "published" means exists exactly once.
