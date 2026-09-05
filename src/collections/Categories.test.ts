@@ -93,3 +93,45 @@ describe('Posts categories field label (#149)', () => {
     expect(admin?.description).toBeUndefined()
   })
 })
+
+/**
+ * #151 — a topic may point at the Page that is its home.
+ *
+ * Config-shape pins for the same reason the label pins above are: the field's
+ * presence, cardinality and target are what the migration, `payload-types.ts`
+ * and `getTopicSectionPaths` all agree on. The *behaviour* (which chip links
+ * where, and the fallback when the home is unpublished) is covered where it
+ * lives — `articlesRepo.test.ts` and `ArticleMeta.test.tsx`.
+ */
+describe('Categories sectionPage (#151)', () => {
+  const field = findFieldDeep(Categories.fields, 'sectionPage')
+
+  it('is a single, optional relationship to pages', () => {
+    expect(field).toMatchObject({
+      name: 'sectionPage',
+      type: 'relationship',
+      relationTo: 'pages',
+      hasMany: false,
+    })
+    // Opt-in: a topic without a home stays a pure filter (#136 Direction
+    // extended, item 5). `required` here would force a landing page on every
+    // topic that does not need one.
+    expect((field as { required?: boolean }).required).toBeFalsy()
+  })
+
+  it('sits in the sidebar with a description saying what it changes', () => {
+    const admin = (
+      field as { admin?: { position?: string; description?: string } }
+    ).admin
+    expect(admin?.position).toBe('sidebar')
+    expect(admin?.description).toMatch(/optional/i)
+    expect(admin?.description).toMatch(/\/articles/)
+  })
+
+  it('keeps the slug and title fields it already had', () => {
+    // The new relationship is additive: a migration that dropped either of
+    // these would take every topic chip and every `?topic=` link with it.
+    expect(findFieldDeep(Categories.fields, 'title')).toBeDefined()
+    expect(findFieldDeep(Categories.fields, 'slug')).toBeDefined()
+  })
+})

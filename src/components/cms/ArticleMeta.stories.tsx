@@ -96,3 +96,56 @@ export const GuestAuthor: Story = {
     ).toBeVisible()
   },
 }
+
+/**
+ * Topic chips as destinations (#151): one topic with a section home, one
+ * without. Both branches in one frame so the linked and unlinked chip can be
+ * compared side by side in either theme — they share the visual vocabulary of
+ * the `/articles` filter chips deliberately, and only these ones navigate.
+ */
+export const TopicChips: Story = {
+  args: {
+    author: { name: 'Brandon Perfetti', href: '/about' },
+    topics: ['Leadership', 'Engineering'],
+    topicLinks: [
+      {
+        title: 'Leadership',
+        slug: 'leadership',
+        sectionPath: 'work/leadership',
+      },
+      { title: 'Engineering', slug: 'engineering' },
+    ],
+    tech: ['React'],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+
+    // Has a home → links to the curated page.
+    await expect(
+      canvas.getByRole('link', { name: 'Leadership' }),
+    ).toHaveAttribute('href', '/work/leadership')
+    // No home → links to the pre-filtered archive view, never a 404.
+    await expect(
+      canvas.getByRole('link', { name: 'Engineering' }),
+    ).toHaveAttribute('href', '/articles?topic=Engineering')
+    // Tech chips are not a taxonomy with homes; they stay plain.
+    await expect(canvas.getByText('React').tagName).toBe('SPAN')
+  },
+}
+
+/**
+ * The pre-#151 shape, kept as a story because it is still a supported call:
+ * a caller holding only titles renders plain, unlinked chips.
+ */
+export const TopicChipsWithoutHrefs: Story = {
+  args: {
+    author: { name: 'Brandon Perfetti', href: '/about' },
+    topics: ['Leadership', 'Engineering'],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+
+    await expect(canvas.getByText('Leadership').tagName).toBe('SPAN')
+    await expect(canvas.getByText('Engineering').tagName).toBe('SPAN')
+  },
+}

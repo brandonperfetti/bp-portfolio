@@ -34,6 +34,34 @@ export interface CmsCategory {
   href?: string
 }
 
+/**
+ * One topic (Payload `categories` row) as an article page needs it: enough to
+ * render a chip **and** to decide where that chip points (#151).
+ *
+ * @remarks Deliberately a second, richer population sitting *alongside*
+ * `CmsArticleSummary.topics` rather than replacing it. `ArticlesExplorer`
+ * filters against a flat, deduped pool that merges topic titles and tag names
+ * into one `string[]`; widening that pool to objects would ripple into the
+ * filter matcher, the chip counting and their tests for no gain, since a
+ * filter chip is a state toggle that never needs an href. Two populations,
+ * two jobs — see the TSDoc on `ArticleMeta` and `ArticlesExplorer`.
+ */
+export interface CmsTopic {
+  /** The topic's display title — the chip's visible text. */
+  title: string
+  /** The topic's own slug (`categories.slug`), for keying and future routes. */
+  slug?: string
+  /**
+   * The root-relative path (no leading slash) of the topic's section home,
+   * present only when `sectionPage` is set **and** that page is published.
+   *
+   * An unset, unpublished or deleted `sectionPage` leaves this `undefined`,
+   * which is what makes the fallback to the filtered `/articles` view the
+   * default rather than a special case.
+   */
+  sectionPath?: string
+}
+
 export interface CmsArticleSummary {
   slug: string
   /**
@@ -61,6 +89,12 @@ export interface CmsArticleSummary {
   canonicalUrl?: string
   keywords?: string[]
   topics?: string[]
+  /**
+   * The same topics as {@link CmsArticleSummary.topics}, in the same order,
+   * carrying where each chip links (#151). See {@link CmsTopic} for why this
+   * sits alongside the flat list instead of replacing it.
+   */
+  topicLinks?: CmsTopic[]
   tech?: string[]
   noindex?: boolean
   searchIndexText?: string

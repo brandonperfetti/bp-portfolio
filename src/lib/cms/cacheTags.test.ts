@@ -304,6 +304,7 @@ function scanUseCacheDirectives(): Record<string, DirectiveKind> {
  */
 const EXPECTED_DIRECTIVE_KINDS: Record<string, DirectiveKind> = {
   // The CMS reader layer: small, tag-purged, must cross instances (#118).
+  'src/lib/cms/articlesRepo.ts#getTopicSectionPaths': 'remote',
   'src/lib/cms/articlesRepo.ts#isArticleScheduledFuture': 'remote',
   'src/lib/cms/authorsRepo.ts#getCmsAuthors': 'remote',
   'src/lib/cms/consentRepo.ts#getCmsConsentConfig': 'remote',

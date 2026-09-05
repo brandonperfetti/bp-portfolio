@@ -108,6 +108,25 @@ function articleMatchesQuery(
  * is what makes refresh, share and the back button all restore position.
  * Changing `q` or `topic` drops `page` inside the same `updateUrl` guard that
  * mirrors the filters, so a filter change always lands on page 1.
+ *
+ * @remarks **The filter chips here are not the topic chips on an article
+ * page, and must never become links (#151, #136 Direction extended item 3).**
+ *
+ * These chips are *state toggles*. Clicking one sets local state and mirrors
+ * `?topic=` through `router.replace` — no navigation, no new document, and the
+ * route stays fully static because nothing reads `searchParams` on the server.
+ * They are `<button>`s and a test pins that they call `router.replace` rather
+ * than rendering an anchor.
+ *
+ * The visually identical chips in `ArticleMeta` are *destinations*: they link
+ * to a topic's curated section home when it has one, and to this view
+ * pre-filtered when it does not. Same visual vocabulary, opposite jobs.
+ *
+ * There is a second reason not to unify them: this filter pool is
+ * {@link getArticleTaxonomyValues}, which **merges topics and tags into one
+ * flat list**. A tag is not a `categories` row and can never have a section
+ * home, so a chip here has no reliable topic identity to resolve an href from
+ * in the first place.
  */
 export function ArticlesExplorer({
   articles,

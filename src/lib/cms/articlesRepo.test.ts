@@ -4,7 +4,9 @@ import {
   getAllCmsArticleSummaries,
   getCmsArticleBySlug,
   getCmsSearchArticles,
+  getTopicSectionPaths,
   resolveArticleShareTargetIds,
+  resolveTopicHref,
 } from '@/lib/cms/articlesRepo'
 import { SHARE_TARGET_IDS } from '@/lib/share/vocabulary'
 import type { Post } from '@/payload-types'
@@ -34,6 +36,25 @@ vi.mock('next/cache', () => ({
   cacheTag: vi.fn(),
   cacheLife: vi.fn(),
 }))
+// #151: the topic → section-home lookup is the one read in this module that
+// does NOT go through lib/content/posts — it reads `categories` and `pages`
+// directly, in two passes. Mocked at the Local API so both passes' arguments
+// are assertable.
+const find = vi.fn()
+vi.mock('payload', () => ({
+  getPayload: async () => ({ find: (...args: unknown[]) => find(...args) }),
+}))
+
+/** Queue the two `payload.find` responses `getTopicSectionPaths` issues. */
+const mockSectionPageReads = (
+  topics: Array<{ id: number; title: string; sectionPage?: number | null }>,
+  pages: Array<{ id: number; path?: string | null; slug?: string | null }>,
+) => {
+  find.mockReset()
+  find.mockImplementation(async ({ collection }: { collection: string }) =>
+    collection === 'categories' ? { docs: topics } : { docs: pages },
+  )
+}
 
 const lexical = (text: string) => ({
   root: {
@@ -70,6 +91,8 @@ beforeEach(() => {
   getPublishedPosts.mockReset()
   getPublishedPostSummaries.mockReset()
   getPostBySlug.mockReset()
+  // No topic has a section home unless a test says so — the ordinary state.
+  mockSectionPageReads([], [])
 })
 
 describe('getAllCmsArticleSummaries', () => {
@@ -499,5 +522,192 @@ describe('placement on the article summary (#153)', () => {
     ])
     const [summary] = await getAllCmsArticleSummaries()
     expect(summary.path).toBeUndefined()
+  })
+})
+
+/**
+ * #151 — a topic can have a section home, and a chip resolves to it. Every
+ * assertion here is about the *fallback* being the default: a topic without a
+ * home, with an unpublished home, or with a deleted home must all land on the
+ * pre-filtered `/articles` view rather than on a 404.
+ */
+describe('resolveTopicHref (#151)', () => {
+  it('links a topic with a published section home at that page', () => {
+    expect(
+      resolveTopicHref({ title: 'Leadership', sectionPath: 'work/leadership' }),
+    ).toBe('/work/leadership')
+  })
+
+  it('falls back to the pre-filtered /articles view without one', () => {
+    expect(resolveTopicHref({ title: 'Engineering' })).toBe(
+      '/articles?topic=Engineering',
+    )
+  })
+
+  it('encodes a title that is not URL-safe', () => {
+    expect(resolveTopicHref({ title: 'AI & ML' })).toBe(
+      '/articles?topic=AI%20%26%20ML',
+    )
+  })
+
+  it('spells a root section home as / rather than /home', () => {
+    // Through `publicPathFor`, so a topic homed on the root page cannot spell
+    // its URL differently from the catch-all, the sitemap and CMSLink.
+    expect(resolveTopicHref({ title: 'Everything', sectionPath: 'home' })).toBe(
+      '/',
+    )
+  })
+})
+
+describe('getTopicSectionPaths (#151)', () => {
+  it('maps a topic to its published home, keyed case-insensitively', async () => {
+    mockSectionPageReads(
+      [{ id: 1, title: 'Leadership', sectionPage: 9 }],
+      [{ id: 9, path: 'work/leadership' }],
+    )
+
+    const paths = await getTopicSectionPaths()
+
+    expect(paths.get('leadership')).toBe('work/leadership')
+  })
+
+  it('reads only the referenced pages, and only the published ones', async () => {
+    mockSectionPageReads(
+      [
+        { id: 1, title: 'Leadership', sectionPage: 9 },
+        { id: 2, title: 'Engineering', sectionPage: null },
+      ],
+      [{ id: 9, path: 'work/leadership' }],
+    )
+
+    await getTopicSectionPaths()
+
+    const pagesRead = find.mock.calls
+      .map(([args]) => args)
+      .find((args) => args.collection === 'pages')
+    expect(pagesRead.where).toEqual({
+      id: { in: [9] },
+      _status: { equals: 'published' },
+    })
+  })
+
+  it('issues no page read at all when no topic has a home', async () => {
+    mockSectionPageReads([{ id: 1, title: 'Engineering' }], [])
+
+    expect((await getTopicSectionPaths()).size).toBe(0)
+    expect(find.mock.calls.some(([args]) => args.collection === 'pages')).toBe(
+      false,
+    )
+  })
+
+  it('omits a topic whose home is unpublished or deleted', async () => {
+    // The page read returns nothing for id 9 — the `_status` filter dropped it,
+    // or the row is gone. Either way the topic must not reach the map.
+    mockSectionPageReads([{ id: 1, title: 'Leadership', sectionPage: 9 }], [])
+
+    expect((await getTopicSectionPaths()).has('leadership')).toBe(false)
+  })
+
+  it('omits a page with no stored path rather than inventing one from its slug', async () => {
+    // `publicPathFor` falls back from `path` to `slug` to cover a row read
+    // before M1's backfill. This read cannot see one — M1 gave every page a
+    // path and `computePagePath` writes one on every save that has a slug —
+    // so the only pathless row it can see is a page with no slug at all, which
+    // has no public URL to send a reader to. It drops out of the map and the
+    // topic takes the ordinary fallback.
+    mockSectionPageReads(
+      [{ id: 1, title: 'Leadership', sectionPage: 9 }],
+      [{ id: 9, path: null, slug: 'leadership' }],
+    )
+
+    expect((await getTopicSectionPaths()).has('leadership')).toBe(false)
+  })
+})
+
+describe('topicLinks (#151) — on the detail path, and only there', () => {
+  it('carries the section path alongside the flat topic titles', async () => {
+    mockSectionPageReads(
+      [{ id: 1, title: 'Leadership', sectionPage: 9 }],
+      [{ id: 9, path: 'work/leadership' }],
+    )
+    getPostBySlug.mockResolvedValue(
+      makePost({
+        categories: [
+          { id: 1, title: 'Leadership', slug: 'leadership' } as never,
+          { id: 2, title: 'Engineering', slug: 'engineering' } as never,
+        ],
+      }),
+    )
+
+    const detail = await getCmsArticleBySlug('testing-react-without-tears')
+
+    // The flat pool ArticlesExplorer filters on is untouched — that is the
+    // whole reason `topicLinks` is a second field and not a widened `topics`.
+    expect(detail?.topics).toEqual(['Leadership', 'Engineering'])
+    expect(detail?.topicLinks).toEqual([
+      {
+        title: 'Leadership',
+        slug: 'leadership',
+        sectionPath: 'work/leadership',
+      },
+      { title: 'Engineering', slug: 'engineering', sectionPath: undefined },
+    ])
+  })
+
+  /**
+   * The list surfaces render no linked chip, so resolving topic homes for them
+   * would be two reads and a wider cache entry for a field every consumer
+   * drops (#76 Phase 0). Pinned as an absence, and as an absence of the READS,
+   * because computing and then discarding is the failure mode.
+   */
+  it('is absent from the list summaries, which issue no section-page read', async () => {
+    mockSectionPageReads(
+      [{ id: 1, title: 'Leadership', sectionPage: 9 }],
+      [{ id: 9, path: 'work/leadership' }],
+    )
+    getPublishedPostSummaries.mockResolvedValue([
+      makePost({ categories: [{ id: 1, title: 'Leadership' } as never] }),
+    ])
+
+    const [summary] = await getAllCmsArticleSummaries()
+
+    expect(summary.topics).toEqual(['Leadership'])
+    expect(summary).not.toHaveProperty('topicLinks')
+    expect(find).not.toHaveBeenCalled()
+  })
+
+  it('is absent from the search index, the largest payload on the site', async () => {
+    mockSectionPageReads(
+      [{ id: 1, title: 'Leadership', sectionPage: 9 }],
+      [{ id: 9, path: 'work/leadership' }],
+    )
+    getPublishedPosts.mockResolvedValue([
+      makePost({ categories: [{ id: 1, title: 'Leadership' } as never] }),
+    ])
+
+    const [article] = await getCmsSearchArticles()
+
+    expect(article).not.toHaveProperty('topicLinks')
+    expect(find).not.toHaveBeenCalled()
+  })
+
+  it('does not mistake a map index for the section-path map', async () => {
+    // `.map(toSummary)` would pass the array index as the second argument,
+    // which is the section-path map — handing this function a `Map` it never
+    // built. A number has no `.get`, so the guard is that nothing throws and
+    // no `topicLinks` appears.
+    getPublishedPostSummaries.mockResolvedValue([
+      makePost({ id: 1, slug: 'first' }),
+      makePost({
+        id: 2,
+        slug: 'second',
+        categories: [{ id: 1, title: 'Leadership' } as never],
+      }),
+    ])
+
+    const summaries = await getAllCmsArticleSummaries()
+
+    expect(summaries).toHaveLength(2)
+    expect(summaries[1]).not.toHaveProperty('topicLinks')
   })
 })

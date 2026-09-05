@@ -297,3 +297,54 @@ describe('ArticlesExplorer pagination (#88)', () => {
     expect(href).not.toContain('page=')
   })
 })
+
+/**
+ * #151 — the two chip populations must stay different things.
+ *
+ * `ArticleMeta`'s topic chips became `<Link>`s so a reader can reach a topic's
+ * section home. These chips look identical and must **not** follow: they are
+ * state toggles on a static, client-filtered route, and turning one into an
+ * anchor would navigate away from the very view it is meant to filter.
+ */
+describe('ArticlesExplorer filter chips never navigate (#151)', () => {
+  const articles: ArticleWithSlug[] = [
+    {
+      slug: 'react-observer-pattern',
+      title: 'Observer Pattern in React',
+      description: 'Practical observer pattern in component apps.',
+      author: 'Brandon Perfetti',
+      date: '2026-03-03',
+      topics: ['Leadership'],
+      topicLinks: [{ title: 'Leadership', sectionPath: 'work/leadership' }],
+      tech: ['TypeScript'],
+      searchText: 'observer react typescript',
+    },
+  ]
+
+  it('renders a topic filter as a button, not a link — even when that topic has a section home', () => {
+    render(<ArticlesExplorer articles={articles} />)
+
+    const chip = screen.getByRole('button', { name: 'Leadership' })
+    expect(chip.tagName).toBe('BUTTON')
+    expect(
+      screen.queryByRole('link', { name: 'Leadership' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('mirrors the filter through router.replace instead of navigating', async () => {
+    const user = userEvent.setup()
+    render(<ArticlesExplorer articles={articles} />)
+
+    await user.click(screen.getByRole('button', { name: 'Leadership' }))
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalled()
+    })
+    // `replace`, never `push`: a filter change is not a history entry, and it
+    // is certainly not a navigation to /work/leadership.
+    expect(pushMock).not.toHaveBeenCalled()
+    const [href] = replaceMock.mock.calls.at(-1) as [string]
+    expect(href).toContain('topic=Leadership')
+    expect(href).not.toContain('/work/leadership')
+  })
+})

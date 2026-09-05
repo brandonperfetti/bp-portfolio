@@ -6,6 +6,8 @@ import {
   SOCIAL_PLATFORM_ICONS,
   type ResolvedSocialLink,
 } from '@/blocks/SocialLinks/platforms'
+import { resolveTopicHref } from '@/lib/cms/topics'
+import type { CmsTopic } from '@/lib/cms/types'
 import { getExternalLinkProps } from '@/lib/link-utils'
 
 function isSiteOwnerAuthor(name: string) {
@@ -23,10 +25,28 @@ function isSiteOwnerAuthor(name: string) {
  * @param readingTimeMinutes - Optional reading-time value.
  * @param category - Optional fallback category when topic chips are absent.
  * @param topics - Optional topics list (deduped + trimmed, max 3).
+ * @param topicLinks - The same topics carrying where each one links (#151).
+ * When supplied, the chips render as `<Link>`s; when absent they render as the
+ * plain `<span>`s they were before, so a caller that has only titles is
+ * unchanged.
  * @param tech - Optional tech list (deduped + trimmed, max 3, excluding topic duplicates).
  * @returns Rendered metadata block, or `null` when no metadata is present.
  * @remarks If `author.href` is present it is preferred. Otherwise, site-owner
  * author names route to `/about`; external links use `getExternalLinkProps`.
+ *
+ * ## Two chip populations, two behaviours (#151, #136 Direction extended item 3)
+ *
+ * The topic chips **here** are *destinations*: an article names its topics, and
+ * clicking one should take the reader somewhere — a curated section home when
+ * the topic has one, the pre-filtered `/articles` view when it does not
+ * (`resolveTopicHref`). They are links.
+ *
+ * The visually identical chips in `ArticlesExplorer` are *state toggles*: they
+ * `router.replace` the `?topic=` param on a static, client-filtered route and
+ * must never navigate. They are buttons, and `ArticlesExplorer`'s own TSDoc
+ * says the same thing from its side.
+ *
+ * Same visual vocabulary, opposite jobs. Do not "helpfully" unify them.
  */
 export function ArticleMeta({
   author,
@@ -34,6 +54,7 @@ export function ArticleMeta({
   readingTimeMinutes,
   category,
   topics,
+  topicLinks,
   tech,
 }: {
   author?:
@@ -49,6 +70,7 @@ export function ArticleMeta({
   readingTimeMinutes?: number
   category?: string
   topics?: string[]
+  topicLinks?: CmsTopic[]
   tech?: string[]
 }): ReactElement | null {
   const rawAuthorName =
@@ -99,9 +121,21 @@ export function ArticleMeta({
     .map((url) => resolveSocialLink(url))
     .filter((link): link is ResolvedSocialLink => link !== null)
 
+  // The flat titles stay the source of the chips — same dedupe, same trim,
+  // same cap of three — so a caller that passes only `topics` renders exactly
+  // what it rendered before #151. `topicLinks` is consulted for the href and
+  // nothing else, and is allowed to stand in as the title source for a caller
+  // that has only the rich shape.
+  const topicTitles = topics ?? topicLinks?.map((topic) => topic.title) ?? []
   const topicChips = Array.from(
-    new Set((topics ?? []).map((item) => item.trim()).filter(Boolean)),
+    new Set(topicTitles.map((item) => item.trim()).filter(Boolean)),
   ).slice(0, 3)
+  const topicHrefs = new Map(
+    (topicLinks ?? []).map((topic) => [
+      topic.title.trim().toLowerCase(),
+      resolveTopicHref(topic),
+    ]),
+  )
   const topicLookup = new Set(topicChips.map((item) => item.toLowerCase()))
   const techChips = Array.from(
     new Set(
@@ -208,14 +242,29 @@ export function ArticleMeta({
       {topicChips.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-zinc-400 dark:text-zinc-500">Topics:</span>
-          {topicChips.map((item, index) => (
-            <span
-              key={`topic-${item}-${index}`}
-              className="rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800"
-            >
-              {item}
-            </span>
-          ))}
+          {topicChips.map((item, index) => {
+            const href = topicHrefs.get(item.toLowerCase())
+            const key = `topic-${item}-${index}`
+            // A chip with no resolved href stays the `<span>` it has always
+            // been rather than becoming a link to nowhere — which is what a
+            // caller that passes only `topics` gets, unchanged.
+            return href ? (
+              <Link
+                key={key}
+                href={href}
+                className="rounded-full bg-zinc-100 px-2 py-0.5 transition hover:bg-zinc-200 hover:text-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:hover:text-zinc-200 dark:focus-visible:ring-teal-400/80"
+              >
+                {item}
+              </Link>
+            ) : (
+              <span
+                key={key}
+                className="rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800"
+              >
+                {item}
+              </span>
+            )
+          })}
         </div>
       ) : null}
       {techChips.length > 0 ? (

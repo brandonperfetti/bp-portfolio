@@ -1,5 +1,7 @@
 import { cacheLife, cacheTag } from 'next/cache'
+import { getPayload } from 'payload'
 
+import configPromise from '@payload-config'
 import { flattenBlockText } from '@/lib/content/flattenBlockText'
 import { CMS_TAGS } from '@/lib/cms/cache'
 import { isFuturePublicationDate } from '@/lib/date'
@@ -73,6 +75,117 @@ const termTitles = (terms: Post['categories'] | Post['tags']): string[] =>
     .map((t) => (typeof t === 'object' && t !== null ? t.title : null))
     .filter((t): t is string => Boolean(t))
 
+/**
+ * Lowercased topic title → the root-relative path of its **published** section
+ * home (#151).
+ *
+ * @remarks Keyed on the lowercased title, not the id, because that is the key
+ * both consumers already hold: `toSummary` reads titles out of the populated
+ * relationship, and every comparison in the filter layer is already
+ * case-insensitive.
+ */
+export type TopicSectionPaths = ReadonlyMap<string, string>
+
+/** Nothing to link — the state before any topic has been given a home. */
+const NO_SECTION_PATHS: TopicSectionPaths = new Map()
+
+/**
+ * Resolve every topic that has a published section home, as one small map.
+ *
+ * @returns Lowercased topic title → section-home path (no leading slash).
+ *
+ * @remarks **Two reads rather than one populated read, deliberately.** Payload
+ * would populate `categories.sectionPage` at the default depth, but `Pages`
+ * declares `defaultPopulate: { title, slug }` — a populated page carries no
+ * `path` and no `_status`, which are exactly the two facts this needs: a
+ * nested home is `/work/leadership`, which a slug alone cannot name, and an
+ * unpublished home must fall back rather than link at a 404. Widening Pages'
+ * `defaultPopulate` would instead push a page projection into every populated
+ * relationship on the site, including the post-summary cache entry #76 Phase 0
+ * exists to keep small. So: ids from `categories` at depth 0, then one indexed
+ * `id IN (…)` read of the pages that are actually referenced.
+ *
+ * Both reads are trivially bounded — one row per topic, and at most that many
+ * pages — and they run once per cache generation, not once per article.
+ *
+ * Cached under **both** `posts` and `pages`: a topic edit purges `posts` (the
+ * Categories hooks below this file already do), and publishing or unpublishing
+ * a section home purges `pages` (`revalidatePage`). Missing the second tag
+ * would leave a chip pointing at a page that has since been unpublished —
+ * which is precisely the failure the fallback exists to prevent.
+ *
+ * `'use cache: remote'` so a tag purge reaches every serverless instance, not
+ * only the one that ran the hook (#118).
+ */
+export async function getTopicSectionPaths(): Promise<TopicSectionPaths> {
+  'use cache: remote'
+  cacheTag(CMS_TAGS.articles)
+  cacheTag(CMS_TAGS.pages)
+  cacheLife('cmsContent')
+
+  const payload = await getPayload({ config: configPromise })
+  const { docs: topics } = await payload.find({
+    collection: 'categories',
+    depth: 0,
+    limit: 500,
+    overrideAccess: false,
+    pagination: false,
+    select: { title: true, sectionPage: true },
+  })
+
+  const titlesByPageId = new Map<number, string[]>()
+  for (const topic of topics) {
+    const pageId = topic.sectionPage
+    const title = typeof topic.title === 'string' ? topic.title.trim() : ''
+    if (typeof pageId !== 'number' || !title) continue
+    titlesByPageId.set(pageId, [...(titlesByPageId.get(pageId) ?? []), title])
+  }
+  if (titlesByPageId.size === 0) return NO_SECTION_PATHS
+
+  const ids = [...titlesByPageId.keys()]
+  const { docs: pages } = await payload.find({
+    collection: 'pages',
+    depth: 0,
+    limit: ids.length,
+    overrideAccess: false,
+    pagination: false,
+    select: { path: true },
+    // A draft or unpublished home is not a destination. Left out of the map
+    // entirely rather than flagged, so every consumer's "no path" branch is the
+    // one fallback path (AC 3).
+    where: { id: { in: ids }, _status: { equals: 'published' } },
+  })
+
+  const sectionPaths = new Map<string, string>()
+  for (const page of pages) {
+    // No fallback to `slug` here, unlike `publicPathFor`. That fallback exists
+    // to cover a page row read before M1's backfill; this read cannot see one,
+    // because M1 gave every page a path and `computePagePath` writes one on
+    // every save that has a slug. What it CAN see is the one row that genuinely
+    // has no path — a page saved with no slug at all — and that page has no
+    // public URL to send a reader to. Skipping it lands the topic on the
+    // filtered view, which is the same safe degradation an unpublished home
+    // gets, rather than inventing `/` + an empty slug.
+    if (typeof page.path !== 'string' || !page.path) continue
+    for (const title of titlesByPageId.get(page.id) ?? []) {
+      sectionPaths.set(title.toLowerCase(), page.path)
+    }
+  }
+  return sectionPaths
+}
+
+/**
+ * Where a topic chip links (#151) — re-exported so the server side has one
+ * import site for the topic vocabulary. It lives in `@/lib/cms/topics` because
+ * it is pure and `ArticleMeta` (which has browser-mode stories) must be able
+ * to reach it without importing the Payload Local API; see that module.
+ *
+ * The async half of the question — *which* topics have a published home — is
+ * answered once per cache generation by {@link getTopicSectionPaths} and baked
+ * into the summary, so a chip needs no lookup at render time.
+ */
+export { resolveTopicHref } from '@/lib/cms/topics'
+
 /** Site-owner byline preserved verbatim when a post has no author relation. */
 const SITE_OWNER_FALLBACK = 'Brandon Perfetti'
 
@@ -111,15 +224,38 @@ const buildAuthor = (post: PublishedPostSummary): CmsAuthor | string => {
 /**
  * Map a post to the v3 summary shape.
  *
+ * @param post - The post, summary-projected or full.
+ * @param sectionPaths - Supplied ONLY by the article-detail path, which is the
+ * one surface that renders linked topic chips. Omitted everywhere else, and
+ * omitting it omits `topicLinks` from the result entirely rather than emitting
+ * a row of hrefless entries: the list surfaces (`/articles` cards, RSS,
+ * llms.txt, the sitemap, `/api/search`) all drop the field on the way out, and
+ * their payloads are exactly what #76 Phase 0 shrank to stay under the 2 MB
+ * cache-item ceiling.
+ *
  * @remarks Reads only the {@link PublishedPostSummary} list fields — never the
  * Lexical `content` — so it is safe to feed both the summary-projected list
  * read ({@link getPublishedPostSummaries}) and the full-body posts (from
  * {@link getPublishedPosts}, used by the search index). A full `Post` is a
  * superset of `PublishedPostSummary`, so both callers type-check.
  */
-const toSummary = (post: PublishedPostSummary): CmsArticleSummary => {
+const toSummary = (
+  post: PublishedPostSummary,
+  sectionPaths?: TopicSectionPaths,
+): CmsArticleSummary => {
   const topics = termTitles(post.categories)
   const tech = termTitles(post.tags)
+  const topicSlugs = new Map(
+    (post.categories ?? [])
+      .map((t) =>
+        typeof t === 'object' && t !== null && typeof t.title === 'string'
+          ? ([t.title, t.slug ?? undefined] as const)
+          : null,
+      )
+      .filter((pair): pair is readonly [string, string | undefined] =>
+        Boolean(pair),
+      ),
+  )
   return {
     slug: post.slug || '',
     // Placement (#153): present only when the post has been placed under a
@@ -137,6 +273,18 @@ const toSummary = (post: PublishedPostSummary): CmsArticleSummary => {
     category: topics[0] ? { title: topics[0] } : undefined,
     keywords: [...topics, ...tech],
     topics,
+    // The same topics, in the same order, plus where each chip points (#151).
+    // Built here rather than in the component so the async "which topics have
+    // a published home" question is answered once per cache generation.
+    ...(sectionPaths
+      ? {
+          topicLinks: topics.map((title) => ({
+            title,
+            slug: topicSlugs.get(title),
+            sectionPath: sectionPaths.get(title.toLowerCase()),
+          })),
+        }
+      : {}),
     tech,
     sourceType: 'local',
     ogImageMode: post.ogImageMode ?? undefined,
@@ -155,7 +303,14 @@ export async function getAllCmsArticleSummaries(): Promise<
   CmsArticleSummary[]
 > {
   const posts = await getPublishedPostSummaries()
-  return posts.filter((p) => Boolean(p.slug)).map(toSummary)
+  // NOT `.map(toSummary)`: `Array.prototype.map` passes the index as the second
+  // argument, which is the section-path map — a silent way to hand this
+  // function a `Map` it never meant to build.
+  //
+  // And it does not build one: the list surfaces this feeds never render a
+  // linked topic chip, so resolving topic homes here would be two reads and a
+  // wider cache entry for a field every consumer drops (#76 Phase 0).
+  return posts.filter((p) => Boolean(p.slug)).map((post) => toSummary(post))
 }
 
 /**
@@ -210,7 +365,9 @@ async function toDetail(
     content = (await getGatedPostContent(post.id)) ?? content
   }
   const bodyBlocks = allowed && content ? lexicalToBlocks(content) : []
-  const summary = toSummary(post)
+  // The article page is the one surface that renders linked topic chips, so
+  // this is the read that matters most for #151.
+  const summary = toSummary(post, await getTopicSectionPaths())
   return {
     ...summary,
     bodyBlocks,
@@ -272,6 +429,8 @@ export async function getCmsSearchArticles(): Promise<
   return posts
     .filter((p) => Boolean(p.slug))
     .map((post) => ({
+      // No section paths: `getSearchArticles`' public allowlist drops
+      // `topicLinks`, and this read's payload is the largest on the site.
       ...toSummary(post),
       searchText: canAccess(false, post)
         ? flattenBlockText(lexicalToBlocks(post.content))
