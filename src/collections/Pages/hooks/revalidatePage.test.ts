@@ -92,7 +92,7 @@ describe('revalidatePage (afterChange)', () => {
  * root page's `/` mapping.
  *
  * That mapping used to be a hand-built root-slug comparison here while
- * `publicPathForSlug('pages', 'home')` — the function `createSlugRedirect`
+ * `publicPathForSlug('pages', 'home')` — the function `createPathRedirect`
  * builds its rows from — yielded `/home`; the two vocabularies genuinely
  * disagreed. #148 closed that by making `publicPathFor` the single owner, and
  * both sides now call it. The matrix below is UNCHANGED — the same five
@@ -222,7 +222,7 @@ describe('revalidatePage old-path purge matrix (#132)', () => {
   it('maps the home page to / on both the current- and old-path branches', () => {
     // The root contract, stated as a test. Both this hook and
     // `publicPathForSlug` now answer `/`, so a purge issued here uncovers the
-    // row `createSlugRedirect` wrote — which is what the disagreement used to
+    // row `createPathRedirect` wrote — which is what the disagreement used to
     // prevent (#132 → #148).
     revalidatePage(
       changeArgs({ slug: 'home', _status: 'published' }, { _status: 'draft' }),

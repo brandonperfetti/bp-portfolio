@@ -15,7 +15,7 @@ import { pageBuilderBlocks } from '@/blocks/library'
 import { SHARE_TARGET_OPTIONS } from '@/globals/SiteSettings'
 import { hero } from '@/heros/config'
 import { capturePublishedSlug } from '@/hooks/capturePublishedSlug'
-import { createSlugRedirect } from '@/hooks/createSlugRedirect'
+import { createPathRedirect } from '@/hooks/createPathRedirect'
 import { populatePublishedAt } from '@/hooks/populatePublishedAt'
 import { generatePreviewPath } from '@/utilities/generatePreviewPath'
 import { computePagePath, validatePageHierarchy } from './hooks/pageHierarchy'
@@ -226,7 +226,7 @@ export const Pages: CollectionConfig = {
     ...slugField(),
   ],
   hooks: {
-    afterChange: [revalidatePage, createSlugRedirect],
+    afterChange: [revalidatePage, createPathRedirect],
     // `validatePageHierarchy` rejects an unservable placement before
     // `computePagePath` ever stores a path — the guard runs in `beforeValidate`,
     // the computation in `beforeChange`, so the stored `path` is always one the

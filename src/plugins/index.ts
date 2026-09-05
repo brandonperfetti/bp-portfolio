@@ -57,7 +57,7 @@ export const plugins: Plugin[] = [
     // The plugin builds this field `required: true` with NO default, which
     // would make every existing row invalid on its next save and force a pick
     // on every new one. The default is permanent: that is the right answer for
-    // the rename rows `createSlugRedirect` writes (the overwhelming majority)
+    // the rename rows `createPathRedirect` writes (the overwhelming majority)
     // and the safe answer for a hand-written one.
     redirectTypeFieldOverride: {
       admin: {

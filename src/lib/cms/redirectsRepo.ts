@@ -4,7 +4,8 @@ import { getPayload } from 'payload'
 import configPromise from '@payload-config'
 import {
   isSlugRoutedCollection,
-  publicPathForSlug,
+  publicPathFor,
+  type PathableDoc,
   type SlugRoutedCollection,
 } from '@/fields/slug/slugPaths'
 import { CMS_TAGS } from '@/lib/cms/cache'
@@ -188,12 +189,14 @@ const collectReferenceIds = (
  *
  * @remarks `'use cache: remote'` + the `redirects` tag: the tag is already
  * purged by `revalidateRedirects` on every write to the collection (including
- * the rows `createSlugRedirect` writes), and the shared tier is what lets that
+ * the rows `createPathRedirect` writes), and the shared tier is what lets that
  * purge reach the instance serving the read (#118).
  *
  * **Why the reference join is done by hand.** Rows created by
- * `createSlugRedirect` point at a *document*, so the destination path has to be
- * built from that document's current slug. Reading at `depth: 1` would let
+ * `createPathRedirect` point at a *document*, so the destination path has to be
+ * built from that document's current **path** — `publicPathFor`, not
+ * `publicPathForSlug`, because a placed post's URL is `/work/x` and its slug
+ * spells `/articles/x` (#150). Reading at `depth: 1` would let
  * Payload populate it, but the populated Posts would then be what this
  * function caches — well past the 2 MB Runtime Cache item ceiling that
  * `cacheTags.test.ts` documents. Reading at `depth: 0` and resolving the ids in
@@ -219,7 +222,7 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
   })
 
   const idsByCollection = collectReferenceIds(docs)
-  const slugById = new Map<string, string>()
+  const rowById = new Map<string, PathableDoc>()
 
   await Promise.all(
     [...idsByCollection.entries()].map(async ([relationTo, ids]) => {
@@ -229,12 +232,20 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
         limit: ids.size,
         overrideAccess: false,
         pagination: false,
-        select: { slug: true },
+        // `path` as well as `slug` (#150): a reference row's destination is the
+        // target's CURRENT public URL, and for a placed post or a nested page a
+        // slug alone spells the wrong one. Selecting one more indexed column is
+        // the whole cost.
+        select: { path: true, slug: true },
         where: { id: { in: [...ids] } },
       })
-      for (const doc of referenced as Array<{ id?: unknown; slug?: unknown }>) {
-        if (typeof doc.slug !== 'string') continue
-        slugById.set(`${relationTo}:${doc.id}`, doc.slug)
+      for (const doc of referenced as Array<PathableDoc & { id?: unknown }>) {
+        if (typeof doc.slug !== 'string' && typeof doc.path !== 'string')
+          continue
+        rowById.set(`${relationTo}:${doc.id}`, {
+          path: doc.path,
+          slug: doc.slug,
+        })
       }
     }),
   )
@@ -273,8 +284,8 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
     const value = to?.reference?.value
     if (!relationTo || (typeof value !== 'number' && typeof value !== 'string'))
       continue
-    const slug = slugById.get(`${relationTo}:${value}`)
-    const destination = publicPathForSlug(relationTo, slug)
+    const row = rowById.get(`${relationTo}:${value}`)
+    const destination = publicPathFor(relationTo, row)
     if (destination) redirects.push({ from, to: destination, type })
   }
 

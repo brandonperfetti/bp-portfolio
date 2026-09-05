@@ -88,7 +88,7 @@ describe('revalidatePost (afterChange)', () => {
  * Old-path purge transition matrix (#132).
  *
  * #132 asked whether the rename purge should move here from
- * `createSlugRedirect`. The answer is no — see the TSDoc on `revalidatePost`
+ * `createPathRedirect`. The answer is no — see the TSDoc on `revalidatePost`
  * for the reasoning — so what this block owns is the other half of that
  * decision: pinning exactly which transitions purge which path, so the split
  * cannot drift into a gap or an overlap without a test failing.
@@ -131,7 +131,7 @@ describe('revalidatePost old-path purge matrix (#132)', () => {
 
   it('a published-to-published rename purges ONLY the new path here', () => {
     // The admin shape: the autosaved draft already holds the new slug.
-    // `createSlugRedirect` purges `/articles/a`, in the same try that wrote the
+    // `createPathRedirect` purges `/articles/a`, in the same try that wrote the
     // redirect row whose `from` is that exact string.
     revalidatePost(
       changeArgs(
@@ -224,7 +224,7 @@ describe('revalidatePost old-path purge matrix (#132)', () => {
 
   it('leaves the publish branch alone when a path was captured', () => {
     // The stash is set on every publish-after-draft too (it is what
-    // `createSlugRedirect` reads), so the unpublish branch must stay gated on
+    // `createPathRedirect` reads), so the unpublish branch must stay gated on
     // the document no longer being published.
     revalidatePost(
       changeArgs(
@@ -391,11 +391,15 @@ describe('revalidatePost · revalidation never fails the write (#156)', () => {
 })
 
 /**
- * Placement moves (#153): placing or un-placing an article changes its URL
- * without changing its slug, so `createSlugRedirect` never fires and no
- * redirect row exists to own the vacated path. This hook therefore purges it —
- * narrowly, on the slug-unchanged condition, so the #132 rename split above is
- * untouched.
+ * Placement moves (#153, re-argued under #150): placing or un-placing an
+ * article changes its URL without changing its slug. Under the slug-keyed
+ * writer that meant no redirect row at all, and this hook was the only owner of
+ * the vacated path. `createPathRedirect` is path-keyed now and does write a row
+ * for a PUBLISHED placement move, purging that row's `from` itself — but it
+ * requires a previously published version and a published landing, so a draft
+ * or never-published placement move still leaves this hook as the only owner.
+ * The cases below are unchanged: they pin this hook's own behaviour, narrowly,
+ * on the slug-unchanged condition, so the #132 rename split above is untouched.
  */
 describe('revalidatePost · placement moves (#153)', () => {
   beforeEach(() => {

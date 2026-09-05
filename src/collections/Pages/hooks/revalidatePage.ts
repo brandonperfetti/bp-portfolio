@@ -44,7 +44,7 @@ const purgePageTags = () => {
  * paths — and the matrix is pinned in
  * `revalidatePage.test.ts`. A publish purges the page's current path; an
  * unpublish purges `previousDoc`'s path; a published→published rename purges
- * only the NEW path here, with `createSlugRedirect` purging the old one.
+ * only the NEW path here, with `createPathRedirect` purging the old one.
  *
  * **The vocabulary conflict is closed (#132 → #148).** Pages used to make the
  * argument concrete in the worst way: this hook hand-built the root's `/` in three

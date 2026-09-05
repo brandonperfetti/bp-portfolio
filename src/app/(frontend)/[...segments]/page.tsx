@@ -200,7 +200,7 @@ export default async function CmsPage({
     // dedicated routes, so a redirect row must never shadow one.
     //
     // The lookup is keyed by the REQUEST path, which is the string a redirect
-    // row's `from` is written as — `createSlugRedirect` builds it through the
+    // row's `from` is written as — `createPathRedirect` builds it through the
     // same `publicPathFor` seam, so reader and writer still share one
     // definition of what a page's public path is. See the matching note in
     // /articles/[slug].

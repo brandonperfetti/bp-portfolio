@@ -23,7 +23,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  *
  * What is real here: Postgres, the migrated schema, the whole Payload update
  * operation, the versions/drafts machinery, `enforceSlugFreeze`,
- * `capturePublishedSlug`, `createSlugRedirect`, the `schedulePublish` job, and
+ * `capturePublishedSlug`, `createPathRedirect`, the `schedulePublish` job, and
  * the `redirects` collection.
  *
  * **Why `next/cache` is still stubbed after #135.** #135 asked whether this
@@ -33,14 +33,14 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  *
  * 1. `revalidatePost` and `revalidatePage` call `revalidatePath` behind the
  *    `context.disableRevalidate` flag and nothing else, and they run BEFORE
- *    `createSlugRedirect` in each collection's `afterChange` array. So a
+ *    `createPathRedirect` in each collection's `afterChange` array. So a
  *    publish issued without that flag and without a Next scope throws in the
  *    FIRST hook and rolls back the post itself — long before any redirect hook
  *    is reached. That is a wider condition than #135 (which names only
  *    `revalidateRedirects`) and is deliberately left alone here.
  * 2. Stubbing also lets the test ASSERT the old path is purged, which is
  *    load-bearing: `revalidatePost` never purges it on a published-to-published
- *    rename (#132), `createSlugRedirect` does.
+ *    rename (#132), `createPathRedirect` does.
  *
  * What #135 did buy is proved directly below by
  * "keeps the redirect row when the redirects revalidation throws": the stub is

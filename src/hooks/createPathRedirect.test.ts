@@ -9,10 +9,11 @@ vi.mock('next/cache', () => ({
 }))
 
 import { capturePublishedSlug } from '@/hooks/capturePublishedSlug'
-import { createSlugRedirect } from '@/hooks/createSlugRedirect'
+import { createPathRedirect } from '@/hooks/createPathRedirect'
 
 /**
- * Auto-redirect on a deliberate published rename (#120).
+ * Auto-redirect on a deliberate published move (#120, generalised to paths by
+ * #150).
  *
  * The freeze hook makes a rename deliberate; this hook makes it safe. These
  * tests pin exactly when a row is written — and, just as important, when one is
@@ -22,6 +23,12 @@ import { createSlugRedirect } from '@/hooks/createSlugRedirect'
  * populates rather than hand-feeding a `previousDoc`, because the whole defect
  * this file guards against (addendum 1) was that `previousDoc` is the autosaved
  * draft, not the published document.
+ *
+ * **The #120 assertions below are deliberately unchanged, byte for byte.** They
+ * are AC1 of #150 — a top-level page and an unplaced post must still produce
+ * exactly the rows they produced before paths existed — and they caught a
+ * deletion in an earlier batch. The path-aware cases are additions beneath them,
+ * never edits to them.
  */
 
 type FindResult = { docs: Array<{ id: number }> }
@@ -50,14 +57,17 @@ const makeHarness = (existing: FindResult = { docs: [] }) => {
     rawReq: req,
     update,
     /** `payload.find` routed by collection: redirects vs the published-row probe. */
-    makeReq: (publishedSlug: null | string) => {
+    makeReq: (publishedSlug: null | string, publishedPath?: string) => {
       req.payload.find = vi.fn(
         async ({ collection }: { collection: string }) => {
           req.context = { ...req.context }
           return collection === 'redirects'
             ? await findRedirects()
             : {
-                docs: publishedSlug === null ? [] : [{ slug: publishedSlug }],
+                docs:
+                  publishedSlug === null
+                    ? []
+                    : [{ path: publishedPath, slug: publishedSlug }],
               }
         },
       )
@@ -68,7 +78,7 @@ const makeHarness = (existing: FindResult = { docs: [] }) => {
 
 /**
  * Run the real publish sequence: `capturePublishedSlug` (beforeChange) then
- * `createSlugRedirect` (afterChange), sharing one `req.context`.
+ * `createPathRedirect` (afterChange), sharing one `req.context`.
  */
 const publish = async ({
   collectionSlug = 'posts',
@@ -77,6 +87,7 @@ const publish = async ({
   doc,
   existing = { docs: [] } as FindResult,
   originalDoc,
+  publishedPath,
   publishedSlug,
 }: {
   collectionSlug?: string
@@ -85,10 +96,12 @@ const publish = async ({
   doc: Record<string, unknown>
   existing?: FindResult
   originalDoc: Record<string, unknown> | undefined
+  /** The published row's stored `path` column, when the document was placed. */
+  publishedPath?: string
   publishedSlug: null | string
 }) => {
   const harness = makeHarness(existing)
-  const req = harness.makeReq(publishedSlug)
+  const req = harness.makeReq(publishedSlug, publishedPath)
   Object.assign(harness.rawReq.context, context)
   const collection = { slug: collectionSlug }
 
@@ -104,7 +117,7 @@ const publish = async ({
     req,
   } as never)
 
-  await createSlugRedirect({
+  await createPathRedirect({
     collection,
     context: harness.rawReq.context,
     doc,
@@ -115,7 +128,7 @@ const publish = async ({
   return harness
 }
 
-describe('createSlugRedirect', () => {
+describe('createPathRedirect', () => {
   beforeEach(() => {
     mocks.revalidatePath.mockClear()
   })
@@ -256,6 +269,111 @@ describe('createSlugRedirect', () => {
     )
   })
 
+  /**
+   * THE #150 regression, from the measured residue on issue #150
+   * (comment 5530738984): a post placed at `work2/dup` renamed to `dup2` used
+   * to write `from: /articles/…-dup`, leaving `/work2/…-dup` a hard 404.
+   */
+  it('keys the row on the placed path for a placed post, not on /articles', async () => {
+    const { create } = await publish({
+      data: { _status: 'published', slug: 'dup2' },
+      doc: { id: 5, _status: 'published', path: 'work2/dup2', slug: 'dup2' },
+      originalDoc: { id: 5, _status: 'draft', path: 'work2/dup', slug: 'dup2' },
+      publishedPath: 'work2/dup',
+      publishedSlug: 'dup',
+    })
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          from: '/work2/dup',
+          to: {
+            type: 'reference',
+            reference: { relationTo: 'posts', value: 5 },
+          },
+          type: '301',
+        },
+      }),
+    )
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/work2/dup')
+  })
+
+  it('keys the row on the nested path for a nested page, not on the bare slug', async () => {
+    const { create } = await publish({
+      collectionSlug: 'pages',
+      data: { _status: 'published', slug: 'bcore' },
+      doc: { id: 7, _status: 'published', path: 'work/bcore', slug: 'bcore' },
+      originalDoc: {
+        id: 7,
+        _status: 'draft',
+        path: 'work/brytecore',
+        slug: 'bcore',
+      },
+      publishedPath: 'work/brytecore',
+      publishedSlug: 'brytecore',
+    })
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ from: '/work/brytecore' }),
+      }),
+    )
+  })
+
+  /**
+   * A re-parent moves the URL without touching the slug. A slug-keyed writer
+   * saw `from === to` and wrote nothing; a path-keyed one sees the move.
+   */
+  it('writes a row when only the parent moved and the slug did not', async () => {
+    const { create } = await publish({
+      collectionSlug: 'pages',
+      data: { _status: 'published', slug: 'brytecore' },
+      doc: {
+        id: 7,
+        _status: 'published',
+        path: 'experience/brytecore',
+        slug: 'brytecore',
+      },
+      originalDoc: {
+        id: 7,
+        _status: 'draft',
+        path: 'work/brytecore',
+        slug: 'brytecore',
+      },
+      publishedPath: 'work/brytecore',
+      publishedSlug: 'brytecore',
+    })
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ from: '/work/brytecore' }),
+      }),
+    )
+  })
+
+  it('falls back to the captured slug when no path was stashed', async () => {
+    const harness = makeHarness()
+    const req = harness.makeReq('old')
+    // A stash written by a capture hook from before the path stash existed.
+    Object.assign(harness.rawReq.context, {
+      previousPublishedSlugs: { 'posts:55': 'old' },
+    })
+
+    await createPathRedirect({
+      collection: { slug: 'posts' },
+      context: harness.rawReq.context,
+      doc: { id: 55, _status: 'published', slug: 'new' },
+      operation: 'update',
+      req,
+    } as never)
+
+    expect(harness.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ from: '/articles/old' }),
+      }),
+    )
+  })
+
   it('ignores collections whose slug is not a public URL', async () => {
     const { create } = await publish({
       collectionSlug: 'categories',
@@ -272,7 +390,7 @@ describe('createSlugRedirect', () => {
     const harness = makeHarness()
     const req = harness.makeReq(null)
 
-    await createSlugRedirect({
+    await createPathRedirect({
       collection: { slug: 'posts' },
       context: {},
       doc: { id: 55, _status: 'published', slug: 'brand-new' },
@@ -325,7 +443,7 @@ describe('createSlugRedirect', () => {
     } as never)
 
     await expect(
-      createSlugRedirect({
+      createPathRedirect({
         collection: { slug: 'posts' },
         context,
         doc,

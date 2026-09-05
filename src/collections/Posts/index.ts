@@ -34,7 +34,7 @@ import { Code } from '@/blocks/Code/config'
 import { MediaBlock } from '@/blocks/MediaBlock/config'
 import { generatePreviewPath } from '@/utilities/generatePreviewPath'
 import { capturePublishedSlug } from '@/hooks/capturePublishedSlug'
-import { createSlugRedirect } from '@/hooks/createSlugRedirect'
+import { createPathRedirect } from '@/hooks/createPathRedirect'
 import { populateAuthors } from './hooks/populateAuthors'
 import {
   deleteCorvusEmbeddings,
@@ -431,11 +431,11 @@ export const Posts: CollectionConfig = {
     beforeValidate: [validatePostPlacement, refusePlacedSlugRename],
     // `capturePublishedSlug` must run before the write: it reads the main-table
     // row, which is the only place the currently-served slug survives an
-    // autosaved draft (see createSlugRedirect).
+    // autosaved draft (see createPathRedirect).
     beforeChange: [capturePublishedSlug, computePostPath],
     afterChange: [
       revalidatePost,
-      createSlugRedirect,
+      createPathRedirect,
       refreshCorvusEmbeddings('posts'),
     ],
     afterRead: [populateAuthors],

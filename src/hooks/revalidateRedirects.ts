@@ -42,11 +42,11 @@ import { containRevalidation } from '@/hooks/containRevalidation'
  * integration test, a job runner) silently lost its row.
  *
  * 1. **`context.disableRevalidate`** — the explicit opt-out the sibling hooks
- *    (`revalidatePost`, `revalidatePage`, `createSlugRedirect`) already honour.
+ *    (`revalidatePost`, `revalidatePage`, `createPathRedirect`) already honour.
  *    Read from `req.context`, matching the siblings: a nested Local API call
  *    reassigns `req.context` to a fresh shallow spread
  *    (`createLocalReq.js:86`), so the caller's flag arrives here through `req`
- *    even when this hook was reached via `createSlugRedirect`'s
+ *    even when this hook was reached via `createPathRedirect`'s
  *    `payload.create({ …, req })`. That is what lets a script or a test write
  *    a redirect row without stubbing `next/cache` at all.
  * 2. **`containRevalidation`** (`src/hooks/containRevalidation.ts`) — the

@@ -72,7 +72,7 @@ describe('revalidateRedirects', () => {
   })
 
   it('reads the flag from req.context, which is the object a nested Local API call carries', () => {
-    // `createSlugRedirect` reaches this hook through
+    // `createPathRedirect` reaches this hook through
     // `payload.create({ collection: 'redirects', …, req })`, and Payload
     // reassigns `req.context` to a fresh shallow spread on the way in. The
     // caller's flag arrives on `req.context`; the sibling hooks read it from

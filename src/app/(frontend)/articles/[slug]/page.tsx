@@ -33,7 +33,7 @@ type PageProps = {
  *
  * @remarks The comparison half of the placed-article check (#153). Written
  * through `publicPathForSlug` rather than as a template so it stays the same
- * expression `createSlugRedirect` writes its rows with; a hand-built
+ * expression `createPathRedirect` writes its rows with; a hand-built
  * slash-articles-slash-slug template here would be a twelfth copy of the prefix
  * and would stop matching the moment the prefix moved.
  */
@@ -105,8 +105,10 @@ export default async function ArticlePage({ params }: PageProps) {
     // slug from `generateStaticParams` resolves and never reaches here, so the
     // route's partial-prerender profile is unchanged.
     //
-    // The path comes from `publicPathForSlug`, the same function
-    // `createSlugRedirect` used to WRITE the redirect row's `from`. Hand-building
+    // The path comes from `publicPathForSlug`, which resolves through the same
+    // `publicPathFor` seam `createPathRedirect` builds a row's `from` with
+    // (#150 — the writer takes the captured served path, and for an UNPLACED
+    // article that is exactly `/articles/<slug>`). Hand-building
     // `/articles/${slug}` here meant the reader and the writer each owned a copy
     // of the prefix, so moving the route would silently stop matching rows the
     // hook is still writing.
@@ -129,12 +131,15 @@ export default async function ArticlePage({ params }: PageProps) {
   // the #120 machinery would write. Two reasons, and the second is the one that
   // matters: (1) it self-heals — delete every redirect row and placement still
   // resolves correctly, because the truth is the document's own `path`; and
-  // (2) **placement writes no row at all today.** `createSlugRedirect` fires on
-  // a slug change, and placing an article changes its `parent`, not its slug —
-  // so without this branch a placed article would serve at BOTH URLs, which is
-  // exactly the duplicate-content failure the ticket exists to prevent. Making
-  // the row the mechanism instead is #150's ground (`capturePublishedPath` /
-  // `createPathRedirect`); this check is correct with or without it.
+  // (2) **a row cannot cover every case.** Since #150 `createPathRedirect` IS
+  // path-keyed, so placing a PUBLISHED article does now write
+  // `/articles/<slug> -> /<path>`; but the writer requires a previously
+  // published version and a published landing, so a placement made on a draft
+  // or on a never-published article still produces no row. Without this branch
+  // such an article would serve at BOTH URLs — the duplicate-content failure
+  // the ticket exists to prevent. The check is correct with or without a row,
+  // which is the property that made it the right mechanism before #150 and
+  // keeps it worth having after.
   const placedPath = publicPathFor('posts', article)
   const routePath = routePathFor(slug)
   if (placedPath && routePath && placedPath !== routePath) {

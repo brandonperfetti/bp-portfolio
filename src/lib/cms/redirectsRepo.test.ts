@@ -282,6 +282,50 @@ describe('getCmsRedirects', () => {
     ])
   })
 
+  /**
+   * #150. A reference row's destination is the target's current PUBLIC URL, and
+   * for a placed post that is its `path` — resolving it through the slug alone
+   * sent every inbound link to `/articles/<slug>`, a URL the document stopped
+   * serving the moment it was placed.
+   */
+  it('resolves a reference to a PLACED post through its path, not /articles', async () => {
+    stubFind({
+      redirects: [referenceRow('/work/old', 'posts', 55)],
+      posts: [{ id: 55, path: 'work/current', slug: 'current' }],
+    })
+
+    await expect(getCmsRedirects()).resolves.toEqual([
+      { from: '/work/old', to: '/work/current', type: '301' },
+    ])
+  })
+
+  it('resolves a reference to a NESTED page through its path', async () => {
+    stubFind({
+      redirects: [referenceRow('/work/brytecore', 'pages', 7)],
+      pages: [{ id: 7, path: 'experience/brytecore', slug: 'brytecore' }],
+    })
+
+    await expect(getCmsRedirects()).resolves.toEqual([
+      { from: '/work/brytecore', to: '/experience/brytecore', type: '301' },
+    ])
+  })
+
+  it('selects the path column alongside the slug on the reference join', async () => {
+    stubFind({
+      redirects: [referenceRow('/articles/old', 'posts', 55)],
+      posts: [{ id: 55, slug: 'current' }],
+    })
+
+    await getCmsRedirects()
+
+    expect(mocks.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'posts',
+        select: { path: true, slug: true },
+      }),
+    )
+  })
+
   it('collapses a would-be chain because every hop targets the document', async () => {
     // a -> doc and b -> doc, with the doc now at `c`. Neither row points at
     // another row, so `/articles/a` reaches `/articles/c` in ONE hop.

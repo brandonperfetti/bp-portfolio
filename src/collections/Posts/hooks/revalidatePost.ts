@@ -64,14 +64,14 @@ const POST_SURFACES =
  *
  * **Which transitions purge which path (#132), and why the rename purge is
  * NOT here.** #132 asked whether the published→published rename purge should
- * move into this hook from `createSlugRedirect`. It stays there. The rule that
+ * move into this hook from `createPathRedirect`. It stays there. The rule that
  * settles it is one of ownership: **the hook that WRITES a redirect row owns
  * purging that row's `from`; this hook owns the document's own paths.** Three
  * reasons, in order of weight:
  *
  * 1. *Two path vocabularies, and they disagreed.* That was the original
  *    reason and #148 closed it: this hook, `revalidatePage` and
- *    `createSlugRedirect` now all spell a document's path with `publicPathFor`,
+ *    `createPathRedirect` now all spell a document's path with `publicPathFor`,
  *    so a purge can no longer be issued for a string no row was written as.
  *    What survives the conflict is the ownership rule itself, for reason 2.
  * 2. *It is a consequence of the write, not of the transition.* The old path is
@@ -100,7 +100,7 @@ const POST_SURFACES =
  * The transitions this hook actually purges are pinned as a matrix in
  * `revalidatePost.test.ts`. In summary: a publish purges the document's current
  * path; an unpublish purges `previousDoc`'s path; a published→published rename
- * purges only the NEW path here, and `createSlugRedirect` purges the old one.
+ * purges only the NEW path here, and `createPathRedirect` purges the old one.
  *
  * **The unpublish branch, and the gap that used to be here (#155 closes it).**
  * `previousDoc` is the latest *version*, and Posts autosaves every 100ms, so
@@ -170,19 +170,28 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
           () => revalidatePath(path),
         )
 
-      // Placement move (#153). Placing or un-placing an article changes its URL
-      // without changing its slug, so `createSlugRedirect` never fires and no
-      // redirect row exists — which means nobody else purges the path the
-      // article just left, and it would keep serving its prerendered shell at a
-      // URL the article no longer lives at.
+      // Placement move (#153, re-argued under #150). Placing or un-placing an
+      // article changes its URL without changing its slug. That used to mean no
+      // redirect row was written at all — the writer was slug-keyed, so it saw
+      // `from === to` — and this branch was the ONLY thing purging the path the
+      // article just left.
+      //
+      // #150 made the writer path-keyed, so a placement move on a PUBLISHED
+      // article now does write a row, and `createPathRedirect` purges that
+      // row's `from` itself. This branch is not thereby redundant: the writer
+      // requires both a previously published version and a published landing,
+      // so a placement move made on a draft, or on an article that has never
+      // been published, still produces no row and still vacates a path this
+      // hook is the only owner of. Where both fire, the second `revalidatePath`
+      // is a no-op on an already-purged path.
       //
       // This does NOT reopen #132. That decision assigned the row's `from` to
-      // the hook that writes the row and the document's own paths to this one;
-      // a placement move produces no row at all, so the old path is
-      // unambiguously one of the document's own paths and unambiguously ours.
-      // The condition is narrowed to `slug` being UNCHANGED precisely so a
-      // published→published *rename* still behaves exactly as the #132 matrix
-      // pins it: only the new path here, the old one in `createSlugRedirect`.
+      // the hook that writes the row and the document's own paths to this one,
+      // and a vacated placement path is one of the document's own paths on
+      // either reading. The condition is narrowed to `slug` being UNCHANGED
+      // precisely so a published→published *rename* still behaves exactly as
+      // the #132 matrix pins it: only the new path here, the old one in
+      // `createPathRedirect`.
       const previousPath = publicPathFor('posts', previousDoc)
       if (
         previousPath &&

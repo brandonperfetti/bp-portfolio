@@ -122,7 +122,7 @@ const isDraftSaveRequest = (
  *
  * @remarks Separate from {@link readPreviousPublishedSlug} rather than replacing
  * it because the two answer different questions for different callers.
- * `createSlugRedirect` needs the **slug** to build a redirect row's `from`; the
+ * `createPathRedirect` needs the **slug** to build a redirect row's `from`; the
  * revalidation hooks need the **path**, and under #148 a slug cannot produce one
  * for a placed document (`/work/brytecore` is not `/` + any slug). Both are
  * stashed from the same single lookup, so the second reader costs no extra
@@ -176,7 +176,7 @@ export const readPreviousPublishedSlug = (
 
 /**
  * `beforeChange` hook that records the slug **and the served public path** a
- * document is *currently published under*, so `createSlugRedirect` can build the
+ * document is *currently published under*, so `createPathRedirect` can build the
  * old public path from the slug and the revalidation hooks can purge the path.
  *
  * @remarks **What it captures, and for whom.** One lookup fills two stashes on

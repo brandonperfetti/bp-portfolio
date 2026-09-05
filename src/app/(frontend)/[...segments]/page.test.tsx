@@ -225,7 +225,7 @@ describe('[...segments] redirect permanence (#130)', () => {
   })
 
   it('keys the redirect lookup on the full nested REQUEST path', async () => {
-    // The row `createSlugRedirect` writes is keyed by the document's public
+    // The row `createPathRedirect` writes is keyed by the document's public
     // path, which for a placed page is the whole thing — a lookup on the last
     // segment alone would never find it.
     getRedirectForPath.mockResolvedValue(null)
