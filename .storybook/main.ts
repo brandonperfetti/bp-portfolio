@@ -31,6 +31,25 @@ const config: StorybookConfig = {
       '@/blocks/WorkHistoryCard/Component': stub,
       '@/blocks/SocialLinks/Component': stub,
     }
+    // #162. `ai` (the Vercel AI SDK, a real client dependency of CorvusChat —
+    // `DefaultChatTransport`) imports `@opentelemetry/api`, which this
+    // framework resolves to Next's ncc-compiled copy
+    // (`next/dist/compiled/@opentelemetry/api`, it is in the framework's
+    // `optimizeDeps` list). That bundle ends with a Node-only bootstrap line,
+    // `__nccwpck_require__.ab = __dirname + '/'`, which is dead code in a
+    // browser but still evaluated at module scope — so every AI/CorvusChat
+    // story threw `ReferenceError: __dirname is not defined` at import and
+    // rendered nothing in the canvas. Nothing in our source can be un-imported
+    // to avoid it, so the shim is defined away here, at the bundler layer.
+    //
+    // Twin: `vitest.config.ts` carries the identical `define` for the
+    // `storybook` browser-mode project. That duplication is why this went
+    // unnoticed — the vitest tier was green while the human-facing canvas was
+    // broken. Keep the two values in step; if one changes, change both.
+    viteConfig.define = {
+      ...(viteConfig.define ?? {}),
+      __dirname: JSON.stringify('/'),
+    }
     return viteConfig
   },
 }
