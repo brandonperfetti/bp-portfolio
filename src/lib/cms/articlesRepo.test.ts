@@ -4,6 +4,8 @@ import {
   getAllCmsArticleSummaries,
   getCmsArticleBySlug,
   getCmsSearchArticles,
+  getPostRollupByCategory,
+  getPostRollupByPlacement,
   getTopicSectionPaths,
   resolveArticleShareTargetIds,
   resolveTopicHref,
@@ -24,6 +26,11 @@ const getPublishedPostSummaries = vi.fn()
 const getPostBySlug = vi.fn()
 const getGatedPostContent = vi.fn()
 vi.mock('@/lib/content/posts', () => ({
+  // The rollup readers (#152) issue their own scoped `payload.find`, but they
+  // reuse the summary projection this module exports — so the mock has to carry
+  // it, or the `select` they send is `undefined` and the assertion below is
+  // vacuous.
+  PUBLISHED_POST_SUMMARY_SELECT: { title: true, slug: true, path: true },
   getPublishedPosts: (...args: unknown[]) => getPublishedPosts(...args),
   getPublishedPostSummaries: (...args: unknown[]) =>
     getPublishedPostSummaries(...args),
@@ -709,5 +716,95 @@ describe('topicLinks (#151) — on the detail path, and only there', () => {
 
     expect(summaries).toHaveLength(2)
     expect(summaries[1]).not.toHaveProperty('topicLinks')
+  })
+})
+
+/**
+ * The rollup readers (#152). They are the only reads in this module besides
+ * `getTopicSectionPaths` that go straight to the Local API, so the `payload.find`
+ * mock is what pins their query — the published filter, the relationship
+ * predicate, the sort expression and the clamped limit.
+ */
+describe('post rollup readers (#152)', () => {
+  const findArgs = () => find.mock.calls.at(-1)?.[0] as Record<string, any>
+
+  beforeEach(() => {
+    find.mockReset()
+    find.mockResolvedValue({
+      docs: [
+        makePost({ id: 1, slug: 'first', title: 'First' }),
+        makePost({ id: 2, slug: 'second', title: 'Second' }),
+      ],
+    })
+  })
+
+  it('scopes the by-category read to published posts carrying the topic', async () => {
+    const rows = await getPostRollupByCategory(7, 'newest', 6)
+
+    expect(findArgs()).toMatchObject({
+      collection: 'posts',
+      draft: false,
+      limit: 6,
+      overrideAccess: false,
+      sort: '-publishedAt',
+      where: {
+        categories: { in: [7] },
+        _status: { equals: 'published' },
+      },
+    })
+    expect(rows.map((row) => row.slug)).toEqual(['first', 'second'])
+  })
+
+  it('scopes the by-placement read to posts parented to the page', async () => {
+    await getPostRollupByPlacement(3, 'newest', 6)
+
+    expect(findArgs().where).toEqual({
+      parent: { equals: 3 },
+      _status: { equals: 'published' },
+    })
+  })
+
+  it('maps each sort choice to its Payload sort expression', async () => {
+    await getPostRollupByCategory(7, 'oldest', 6)
+    expect(findArgs().sort).toBe('publishedAt')
+
+    await getPostRollupByCategory(7, 'title', 6)
+    expect(findArgs().sort).toBe('title')
+  })
+
+  it('clamps a stored limit to the block’s 1–12 range', async () => {
+    // A reader must not trust a number it did not validate: the field has
+    // min/max, but an API write or an older row can carry anything.
+    await getPostRollupByCategory(7, 'newest', 999)
+    expect(findArgs().limit).toBe(12)
+
+    await getPostRollupByCategory(7, 'newest', 0)
+    expect(findArgs().limit).toBe(1)
+
+    await getPostRollupByCategory(7, 'newest', -4)
+    expect(findArgs().limit).toBe(1)
+  })
+
+  it('uses the summary projection, so the entry cannot grow with body size', async () => {
+    await getPostRollupByCategory(7)
+    expect(findArgs().select).toEqual({ title: true, slug: true, path: true })
+  })
+
+  it('drops a row with no slug rather than emitting an empty href', async () => {
+    find.mockResolvedValue({
+      docs: [
+        makePost({ id: 1, slug: 'kept' }),
+        makePost({ id: 2, slug: null }),
+      ],
+    })
+
+    expect((await getPostRollupByCategory(7)).map((r) => r.slug)).toEqual([
+      'kept',
+    ])
+  })
+
+  it('emits no topicLinks — a rollup card renders no linked chips', async () => {
+    const [row] = await getPostRollupByCategory(7)
+    expect(row).not.toHaveProperty('topicLinks')
   })
 })

@@ -55,6 +55,17 @@ Payload is the single source of truth for site content. Admin at `/admin`
 - **Projects**, **TechStack** (name/category/proficiency/logo/url/githubRepo),
   **Uses** (category-grouped tools), **Categories**, **Tags**, **Media**
   (Blob-backed), **Users** (admin operators).
+- **`postRollup`** (#152) is the block a section or topic landing page uses to
+  show _its_ articles rather than the site's newest ones. `source` is
+  `by-category` (published posts carrying the chosen topic — the one that works
+  on day one) or `by-placement` (posts whose `parent` is the chosen page, #153).
+  Its `grid` and `stacked` layouts render through `ArticlesArchiveView`, so
+  there is one card vocabulary on the site; `compact-list` is its own dense,
+  dated `<ul>`. Every select carries an explicit `enumName`
+  (`enum_post_rollup_source` / `_sort` / `_layout`) for the reason
+  `ArticlesArchive/config.ts` records — the block nests three levels deep and
+  the generated identifier crowds Postgres's 63-character limit. An empty
+  result, or an unset relationship, renders `null`.
 - **Categories** carries an optional `sectionPage` relationship — "this topic
   has a home, and it's this Page" (#151). Opt-in by design: a topic without one
   stays a pure filter, and an unpublished or deleted target falls back to

@@ -11,6 +11,15 @@ export function ArticlesArchiveComponent() {
   )
 }
 
+export function PostRollupComponent() {
+  return (
+    <div className="my-12 rounded-2xl border border-dashed border-zinc-300 p-8 text-sm text-zinc-500 dark:border-zinc-600 dark:text-zinc-400">
+      PostRollup queries a topic&rsquo;s posts at runtime (server block — see
+      PageBuilder/PostRollup for the rendered treatments).
+    </div>
+  )
+}
+
 export function WorkHistoryCardComponent() {
   return (
     <div className="my-12 rounded-2xl border border-dashed border-zinc-300 p-8 text-sm text-zinc-500 dark:border-zinc-600 dark:text-zinc-400">

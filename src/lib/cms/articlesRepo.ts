@@ -17,6 +17,7 @@ import {
   getPostBySlug,
   getPublishedPostSummaries,
   getPublishedPosts,
+  PUBLISHED_POST_SUMMARY_SELECT,
   type PublishedPostSummary,
 } from '@/lib/content/posts'
 import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
@@ -172,6 +173,126 @@ export async function getTopicSectionPaths(): Promise<TopicSectionPaths> {
     }
   }
   return sectionPaths
+}
+
+/**
+ * How a {@link PostRollupBlock} orders the articles it rolls up (#152).
+ *
+ * @remarks Mirrors the block's `sort` select. Kept as its own union rather than
+ * read off the generated block type so the reader can be unit-tested (and
+ * called) without importing `payload-types`.
+ */
+export type PostRollupSort = 'newest' | 'oldest' | 'title'
+
+/** Payload `sort` expression for each {@link PostRollupSort} value. */
+const ROLLUP_SORT_EXPRESSIONS: Record<PostRollupSort, string> = {
+  newest: '-publishedAt',
+  oldest: 'publishedAt',
+  title: 'title',
+}
+
+/**
+ * How many articles one rollup may ask for — the block's `max`, restated here
+ * because a reader must not trust a stored number it did not validate.
+ */
+const POST_ROLLUP_MAX_LIMIT = 12
+
+const rollupLimit = (limit: number): number =>
+  Math.min(Math.max(Math.trunc(limit) || 1, 1), POST_ROLLUP_MAX_LIMIT)
+
+/**
+ * Shared body of the two rollup readers: one summary-projected, published-only
+ * `posts` read under a caller-supplied `where`.
+ *
+ * @remarks Not itself a cache scope — the exported readers are, so each source
+ * keeps its own cache key. Uses {@link PUBLISHED_POST_SUMMARY_SELECT}, the same
+ * projection `getPublishedPostSummaries` uses, so a rollup entry can never grow
+ * with article body size (#76 Phase 0).
+ */
+async function findRollupPosts(
+  where: Record<string, unknown>,
+  sort: PostRollupSort,
+  limit: number,
+): Promise<CmsArticleSummary[]> {
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'posts',
+    depth: 1,
+    draft: false,
+    limit: rollupLimit(limit),
+    overrideAccess: false,
+    pagination: false,
+    select: PUBLISHED_POST_SUMMARY_SELECT,
+    sort: ROLLUP_SORT_EXPRESSIONS[sort] ?? ROLLUP_SORT_EXPRESSIONS.newest,
+    where: { ...where, _status: { equals: 'published' } },
+  })
+  return (docs as PublishedPostSummary[])
+    .filter((post) => Boolean(post.slug))
+    .map((post) => toSummary(post))
+}
+
+/**
+ * Published articles carrying one topic, for the `by-category` rollup (#152).
+ *
+ * @param categoryId - The `categories` row id the block points at.
+ * @param sort - Display order.
+ * @param limit - How many to return (clamped to the block's 1–12 range).
+ *
+ * @remarks A scoped read rather than a filter over
+ * {@link getPublishedPostSummaries}: the whole-corpus list is cached at 1000
+ * rows and would have to be fetched, deserialized and scanned to render six
+ * cards, and — more to the point — the category relation is only reliably
+ * populated on the *projected* read this issues, at `depth: 1`.
+ *
+ * Cached under the `posts` tag alone. A category rename or a change to which
+ * posts carry it both purge `posts` (the Categories `afterChange` hook and the
+ * Posts hook respectively), so no `pages` tag is owed here — unlike
+ * {@link getTopicSectionPaths}, which reads `pages` rows.
+ *
+ * `'use cache: remote'` so a tag purge reaches every serverless instance, not
+ * only the one that ran the hook (#118). Bounded at 12 summary rows, so the
+ * entry is orders of magnitude under the 2 MB Runtime Cache item ceiling.
+ */
+export async function getPostRollupByCategory(
+  categoryId: number,
+  sort: PostRollupSort = 'newest',
+  limit = 6,
+): Promise<CmsArticleSummary[]> {
+  'use cache: remote'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
+  return findRollupPosts({ categories: { in: [categoryId] } }, sort, limit)
+}
+
+/**
+ * Published articles placed under one page, for the `by-placement` rollup
+ * (#152 × #153).
+ *
+ * @param pageId - The `pages` row id an article's `parent` must equal.
+ * @param sort - Display order.
+ * @param limit - How many to return (clamped to the block's 1–12 range).
+ *
+ * @remarks `parent` is the placement field Posts gained in #153 (verified
+ * against `src/collections/Posts/index.ts` at this tip — a `hasMany: false`
+ * relationship to `pages`, stored as `posts.parent_id`), so this is one indexed
+ * equality read. It returns nothing on a corpus where no article has been
+ * placed, which is every corpus until an editor places one — the empty state
+ * the block renders as `null`.
+ *
+ * Cached like {@link getPostRollupByCategory}: `posts` tag, remote tier. A
+ * placement change is a post edit, so the `posts` purge covers it; the *page*
+ * being pointed at is identified here only by id, and this read exposes nothing
+ * about the page itself, so it owes no `pages` tag.
+ */
+export async function getPostRollupByPlacement(
+  pageId: number,
+  sort: PostRollupSort = 'newest',
+  limit = 6,
+): Promise<CmsArticleSummary[]> {
+  'use cache: remote'
+  cacheTag(CMS_TAGS.articles)
+  cacheLife('cmsContent')
+  return findRollupPosts({ parent: { equals: pageId } }, sort, limit)
 }
 
 /**
