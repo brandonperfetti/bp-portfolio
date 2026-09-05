@@ -42,6 +42,8 @@ import * as migration_20260902_205311_redirect_permanence from './20260902_20531
 import * as migration_20260902_233433_pages_hierarchy from './20260902_233433_pages_hierarchy'
 import * as migration_20260903_163051_posts_placement from './20260903_163051_posts_placement'
 import * as migration_20260905_024451_m4_redirect_match_descendants from './20260905_024451_m4_redirect_match_descendants'
+import * as migration_20260905_173046_work_history_slug from './20260905_173046_work_history_slug'
+import * as migration_20260905_173125_categories_section_page from './20260905_173125_categories_section_page'
 
 export const migrations = [
   {
@@ -263,5 +265,15 @@ export const migrations = [
     up: migration_20260905_024451_m4_redirect_match_descendants.up,
     down: migration_20260905_024451_m4_redirect_match_descendants.down,
     name: '20260905_024451_m4_redirect_match_descendants',
+  },
+  {
+    up: migration_20260905_173046_work_history_slug.up,
+    down: migration_20260905_173046_work_history_slug.down,
+    name: '20260905_173046_work_history_slug',
+  },
+  {
+    up: migration_20260905_173125_categories_section_page.up,
+    down: migration_20260905_173125_categories_section_page.down,
+    name: '20260905_173125_categories_section_page',
   },
 ]

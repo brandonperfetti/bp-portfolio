@@ -1194,12 +1194,48 @@ export interface WorkHistoryCardBlock {
    */
   intro?: string | null;
   /**
+   * Optional. Leave empty for the full résumé card. Pick one role to render just that role’s facts — company, title, period, logo and description — which is what a /work/<slug> page uses.
+   */
+  entry?: (number | null) | WorkHistory;
+  /**
+   * Render the role’s description paragraph under its facts.
+   */
+  showDescription?: boolean | null;
+  /**
    * Retired placeholder — the work-history card itself needs no configuration.
    */
   note?: string | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'workHistoryCard';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "work-history".
+ */
+export interface WorkHistory {
+  id: number;
+  company: string;
+  title: string;
+  description?: string | null;
+  logo?: (number | null) | Media;
+  startDate: string;
+  /**
+   * Leave empty for a current role.
+   */
+  endDate?: string | null;
+  current?: boolean | null;
+  /**
+   * Addressing key, not a URL: Corvus cites this role at /work/<slug>, and the role’s Page under /work should use the same spelling. Derived from the company name.
+   */
+  slug?: string | null;
+  slugLock?: boolean | null;
+  /**
+   * Lower numbers sort first (most recent role on top).
+   */
+  sortOrder?: number | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1291,6 +1327,10 @@ export interface Category {
    */
   slug?: string | null;
   slugLock?: boolean | null;
+  /**
+   * Optional. When set, this topic’s chips on an article link to this page instead of a filtered /articles view. The filter chips on /articles are unaffected — they never navigate.
+   */
+  sectionPage?: (number | null) | Page;
   updatedAt: string;
   createdAt: string;
 }
@@ -1446,29 +1486,6 @@ export interface User {
     | null;
   password?: string | null;
   collection: 'users';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "work-history".
- */
-export interface WorkHistory {
-  id: number;
-  company: string;
-  title: string;
-  description?: string | null;
-  logo?: (number | null) | Media;
-  startDate: string;
-  /**
-   * Leave empty for a current role.
-   */
-  endDate?: string | null;
-  current?: boolean | null;
-  /**
-   * Lower numbers sort first (most recent role on top).
-   */
-  sortOrder?: number | null;
-  updatedAt: string;
-  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2408,6 +2425,8 @@ export interface VideoEmbedBlockSelect<T extends boolean = true> {
 export interface WorkHistoryCardBlockSelect<T extends boolean = true> {
   heading?: T;
   intro?: T;
+  entry?: T;
+  showDescription?: T;
   note?: T;
   id?: T;
   blockName?: T;
@@ -2580,6 +2599,7 @@ export interface CategoriesSelect<T extends boolean = true> {
   title?: T;
   slug?: T;
   slugLock?: T;
+  sectionPage?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -2668,6 +2688,8 @@ export interface WorkHistorySelect<T extends boolean = true> {
   startDate?: T;
   endDate?: T;
   current?: T;
+  slug?: T;
+  slugLock?: T;
   sortOrder?: T;
   updatedAt?: T;
   createdAt?: T;
