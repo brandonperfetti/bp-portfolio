@@ -197,12 +197,18 @@ describe('subject disambiguation (#147, widened by #167)', () => {
   })
 
   it('omits the rule entirely when no repository was retrieved', () => {
-    // The blast-radius decision. A turn that retrieves no repository must get
-    // the prompt it got before #147, byte for byte, so no pre-existing eval
-    // block's score can move because of this change.
+    // The blast-radius decision: a turn that retrieves no repository and no
+    // About Corvus passage must not be handed the three-way subject rule.
     const withoutRepo = buildGroundedSystem([snippet()])
     expect(withoutRepo).not.toContain(SUBJECT_DISAMBIGUATION_RULE)
-    expect(withoutRepo).not.toContain('github.com')
+    // And specifically not the sentence that grants repository citation, which
+    // is the half of that rule this case was written to fence off. The token
+    // `github.com` itself now appears in the UNCONDITIONAL general citation
+    // rule, as one of the two literal link shapes #167 asks for — so the
+    // assertion names the sentence rather than the token.
+    expect(withoutRepo).not.toContain(
+      `A repository passage's ${SNIPPET_SOURCE_LABEL} line is a github.com address`,
+    )
   })
 
   it('renders the repository URL under the passage Source label', () => {
@@ -401,21 +407,49 @@ describe('three-way subject disambiguation (#167)', () => {
     expect(result).toContain('YOU — Corvus')
   })
 
-  it('tells Corvus to LINK its own citation, not write the path as prose', () => {
-    // `[measured, Brandon's keyed eval:ci, 2026-09-04]` the "you = Corvus"
-    // block scored 0 on `cites-a-real-source-url` in all four cases, and the
-    // outputs show why: the model wrote `Source: /corvus` as plain text,
-    // copying the label it had just read out of the context block. The path
-    // was right and there was nothing to click — which since #158 is a real
-    // product failure, because an internal citation renders as an anchor.
+  it('does NOT restate the citation rule inside the YOU clause (#167)', () => {
+    // The citation shape is stated once, in the general instruction, and
+    // inherited by all three subjects. A per-subject restatement is a second
+    // copy that can be edited in one place and not the other — and the
+    // measurement that motivated the rule was never specific to this subject:
+    // every subject writes `Source: /path` as prose.
+    const result = buildGroundedSystem([aboutCorvus])
+
+    expect(result).toContain('1. YOU — Corvus')
+    expect(result).not.toContain(
+      'cite it exactly as you cite any other passage',
+    )
+  })
+
+  /**
+   * The #167 rider. `[measured, Brandon's keyed eval, 2026-09-04]` every
+   * answer wrote `Source: /path` as plain text and only the preview sometimes
+   * emitted a real markdown link, so the general rule names the literal shape
+   * and says outright that the bare line does not count. Asserted as text
+   * because the text IS the behaviour here — there is no other seam.
+   */
+  it('gives the general citation rule a literal markdown-link shape (#167)', () => {
     const result = buildGroundedSystem([aboutCorvus])
 
     expect(result).toContain(
-      `by linking its ${SNIPPET_SOURCE_LABEL} path, not by writing the path as plain text`,
+      `cite it by writing a markdown link whose target is that passage's ${SNIPPET_SOURCE_LABEL} value`,
     )
-    // And it defers to the general instruction rather than restating it, so
-    // the two cannot drift into saying different things.
-    expect(result).toContain('cite it exactly as you cite any other passage')
+    expect(result).toContain('`[About Corvus](/corvus)`')
+    expect(result).toContain(
+      '`[bp-portfolio](https://github.com/brandonperfetti/bp-portfolio)`',
+    )
+    expect(result).toContain(
+      `A line that reads \`${SNIPPET_SOURCE_LABEL} /corvus\` is not a citation`,
+    )
+    expect(result).toContain('it does not count as citing anything')
+  })
+
+  it('states the citation shape even with no About Corvus passage present', () => {
+    // It lives in the UNCONDITIONAL general instruction, not in the gated
+    // subject rule, so a turn that retrieves an ordinary article gets it too.
+    expect(buildGroundedSystem([snippet()])).toContain(
+      '`[About Corvus](/corvus)`',
+    )
   })
 
   it('asks for a link on every subject, not only the Corvus one', () => {

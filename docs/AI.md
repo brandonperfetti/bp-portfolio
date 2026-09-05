@@ -629,11 +629,17 @@ context block. Two independent defects were behind one score:
 
 1. **The citation was not a link.** Since #158 an internal citation renders as
    a real same-tab anchor; a path written as prose renders as prose, with
-   nothing to click. So the `YOU` clause of `SUBJECT_DISAMBIGUATION_RULE` now
-   defers to the general instruction in its own words — cite "exactly as you
-   cite any other passage — by linking its `Source:` path, not by writing the
-   path as plain text" — and the rule's closing sentence asks for a link on all
-   three subjects. Fixed in the prompt, not by relaxing a scorer.
+   nothing to click. `[measured, Brandon's keyed eval, 2026-09-04]` **every**
+   subject writes `Source: /path` as plain text and only the preview sometimes
+   emits a real link — so the defect belongs to the general citation
+   instruction, not to the `YOU` clause where it was first measured. That
+   instruction now carries the literal shape, stated **once** and inherited by
+   all three subjects: cite by writing a markdown link whose target is the
+   passage's `Source:` value — `[About Corvus](/corvus)`, or
+   `[bp-portfolio](https://github.com/brandonperfetti/bp-portfolio)` for a
+   repository passage — and a line that reads `Source: /corvus` does not count
+   as a citation at all. The `YOU` clause restates none of it, so the two
+   cannot drift. Fixed in the prompt, not by relaxing a scorer.
 2. **`/corvus` was in no corpus.** `createCitesKnownSourceUrl` requires
    `corpus.has(path)`, and `fixtureSourceUrls()` is built from the fixture
    CHUNKS — the About Corvus passage is code-owned and never chunked, so its
