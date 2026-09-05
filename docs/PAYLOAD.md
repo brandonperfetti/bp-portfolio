@@ -166,11 +166,59 @@ payload; omitting it is not consent. The admin component mirrors the rule (it
 stops re-deriving once `hasPublishedDoc`) purely so the editor is never shown a
 value the server is about to revert.
 
+**The unit of URL identity is the served PATH, not the slug (#150).** A row's
+`from` is built by `publicPathFor` from the path the document was being served
+at, which is why one hook covers four editorial actions that used to be
+different problems:
+
+| The editor…                  | `from`          | `to`            |
+| ---------------------------- | --------------- | --------------- |
+| renames an unplaced article  | `/articles/old` | `/articles/new` |
+| renames a top-level page     | `/old`          | `/new`          |
+| renames a **placed** article | `/work/old`     | `/work/new`     |
+| **un-places** an article     | `/work/old`     | `/articles/old` |
+| **re-parents** a page        | `/work/x`       | `/experience/x` |
+
+The last two move the URL without moving the slug, so a slug-keyed writer saw
+`from === to` and wrote nothing at all. The first two are unchanged from #120 —
+`publicPathFor` answers `/articles/<slug>` for a post with no `path` and
+`/<slug>` for a page whose `path` is its slug, which is every document that
+existed before hierarchy. `createPathRedirect` (formerly `createSlugRedirect`)
+is the writer; `capturePublishedSlug` keeps its name and stashes three values
+from one lookup — the slug, the public path, and the raw `path` column the
+subtree cascade matches on.
+
+**Moving a page moves its subtree, in the same transaction.**
+`cascadePagePaths` (Pages `afterChange`) reads the descendants of the old path
+prefix — one indexed read per collection — recomputes each one's stored `path`
+shallowest-first, and purges each vacated URL. Two flags govern it:
+`disablePathCascade` stops a descendant write re-entering the cascade (without
+it a depth-3 move is quadratic), and `disableSlugRedirect` stops each
+descendant writing its own row. Neither suppresses `refreshCorvusEmbeddings`:
+a placed post under a moved page genuinely changed its `sourceUrl`, so a
+section rename costs an embedding refresh proportional to the subtree. That is
+correct, not a bug. The cascade's writes are deliberately **not** wrapped —
+unlike the redirect write, a half-moved subtree is a correctness problem and
+should roll the move back.
+
+**Inbound coverage for a subtree is ONE row, not N** (D4). A moved page's row
+carries `matchDescendants`, which makes it match `from` and everything beneath
+it and carry the remainder across: `/work → /experience` also sends
+`/work/brytecore` to `/experience/brytecore`. `resolveRedirect` tries exact
+matches across the whole list first, so a specific override always beats the
+prefix it sits under regardless of row order; the boundary is a slash, so
+`/work` never swallows `/workshops`; and the self-redirect guard is applied to
+the **rewritten** destination, which is the only form that can equal the
+request. Migration `20260905_024451_m4_redirect_match_descendants` adds the
+column to the existing table — no new table, so no RLS line.
+
 **Redirects point at the document, not at a path** (`to.type: 'reference'`), so
 renaming `a → b → c` leaves both `/articles/a` and `/articles/b` resolving
-straight to `/articles/c` — chains cannot form. `src/lib/cms/redirectsRepo.ts`
-is the cached reader; `/articles/[slug]` and `/[...segments]` consult it on
-their not-found branch only, so a live document always wins over a stale row.
+straight to `/articles/c` — chains cannot form, and a prefix row inherits the
+same property because its destination is resolved through the target's current
+path at read time. `src/lib/cms/redirectsRepo.ts` is the cached reader;
+`/articles/[slug]` and `/[...segments]` consult it on their not-found branch
+only, so a live document always wins over a stale row.
 
 **Passing state between hooks: write to `req.context`, never to the `context`
 argument.** `createLocalReq` reassigns `req.context = getRequestContext(req,
@@ -190,7 +238,8 @@ autosave that is the DRAFT, which on a rename already holds the _new_ slug and
 reports `_status: 'draft'`. A `beforeChange` hook
 (`src/hooks/capturePublishedSlug.ts`) therefore reads the published main-table
 row — which a draft save never touches — and stashes it on `req.context` for
-`createSlugRedirect`. Anything added here that needs "the value the site is
+`createPathRedirect` and for the subtree cascade. Anything added here that
+needs "the value the site is
 currently serving" must do the same; `previousDoc` is not it.
 
 Scope: only **Posts** and **Pages** are slug-routed (`slugPaths.ts`).
@@ -206,8 +255,10 @@ rather than only in each hook's TSDoc:
 
 Concretely: `revalidatePost`/`revalidatePage` purge the document's current path
 on publish and `previousDoc`'s path on unpublish; a published→published rename
-purges only the NEW path there, and `createSlugRedirect` purges the old one —
-inside the same `try` that wrote the row, from the same `from` string.
+purges only the NEW path there, and `createPathRedirect` purges the old one —
+inside the same `try` that wrote the row, from the same `from` string. The
+subtree cascade follows the same rule for a move: it purges each descendant's
+vacated path, and each descendant's own revalidation hook purges its new one.
 
 The original reason was that there were **two path vocabularies** that
 disagreed about the home page — the revalidation hooks mapped it to `/` while
@@ -281,7 +332,7 @@ behaviours is a way to make an editor pick wrong.
 Anything not `'302'` reads as permanent — an unset, legacy or unrecognised
 value included. That is deliberately the pre-#130 behaviour, so a row written
 before the field existed is unchanged, and the conservative direction for a
-rename. The rename rows `createSlugRedirect` writes state `'301'` explicitly
+rename. The rename rows `createPathRedirect` writes state `'301'` explicitly
 rather than relying on the field default, because updating an existing row does
 not re-apply a default and a row an editor had flipped to temporary would
 otherwise stay temporary.
@@ -300,11 +351,13 @@ Known limits: the reader reads at most 500 rows.
 - `plugin-seo` — meta title/description/image + previews; `generateTitle` is
   `{title} - Brandon Perfetti`; posts URL-prefix `/articles`.
 - `plugin-redirects` — editorial redirects **plus** the rows
-  `createSlugRedirect` writes when a published Post/Page is deliberately
-  renamed; revalidated on change and served by `src/lib/cms/redirectsRepo.ts`
-  (#120). Before that, nothing in `src/` read the collection, so a redirect row
-  was inert. `redirectTypes: ['301', '302']` + a `defaultValue: '301'` override
-  give each row a permanence the routes act on (#130).
+  `createPathRedirect` writes when a published Post/Page is deliberately moved;
+  revalidated on change and served by `src/lib/cms/redirectsRepo.ts` (#120).
+  Before that, nothing in `src/` read the collection, so a redirect row was
+  inert. `redirectTypes: ['301', '302']` + a `defaultValue: '301'` override
+  give each row a permanence the routes act on (#130), and a
+  `matchDescendants` checkbox lets one row cover a moved section page's whole
+  subtree (#150).
 - `plugin-search` — synced search index over posts feeding `/api/search`.
 - `plugin-mcp` — Payload MCP endpoint at `/api/mcp` (API-key auth) so agents
   can operate the CMS. Collections opt in with `{ enabled: true }` objects.
