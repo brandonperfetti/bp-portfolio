@@ -61,8 +61,9 @@ vi.mock('@/blocks/RenderBlocks', () => ({
   RenderBlocks: () => <div data-testid="render-blocks" />,
 }))
 
-// Only reached by generateMetadata, which this suite doesn't exercise — mocked
-// so importing the route can't pull the whole Payload config into jsdom.
+// Reached by generateMetadata (exercised by the #176 block at the bottom) —
+// mocked so importing the route can't pull the whole Payload config into jsdom.
+// The empty settings object means the canonical falls back to `getSiteUrl()`.
 vi.mock('@/lib/cms/siteSettingsRepo', () => ({
   getCmsSiteSettings: vi.fn(async () => ({})),
 }))
@@ -86,7 +87,7 @@ vi.mock('next/navigation', () => ({
   },
 }))
 
-import CmsPage from '@/app/(frontend)/[...segments]/page'
+import CmsPage, { generateMetadata } from '@/app/(frontend)/[...segments]/page'
 
 const page = (hero: Partial<NonNullable<Page['hero']>> = {}) =>
   ({
@@ -397,5 +398,99 @@ describe('CmsPage · placed articles (#153)', () => {
     await expect(
       CmsPage({ params: Promise.resolve({ segments: ['work', 'gone'] }) }),
     ).rejects.toThrow('notFound')
+  })
+})
+
+/**
+ * The catch-all's `<title>` under the root layout's `%s - <siteName>` template
+ * (#176). This route composes its own metadata instead of calling
+ * `buildPageMetadata`, so the ticket's first pass fixed the dedicated routes
+ * and left every CMS-composed page — the #137 `/work/<slug>` set included —
+ * still shipping the site name twice. Both routes now share
+ * `resolvePageMetadataTitle`.
+ */
+describe('[...segments] generateMetadata — title vs the layout template (#176)', () => {
+  beforeEach(() => {
+    getPageByPathDraftAware.mockReset()
+    getArticleByPath.mockReset()
+    getArticleByPath.mockResolvedValue(null)
+    reservedPagePaths.clear()
+  })
+
+  /** A published `/work/brytecore` doc, optionally carrying an SEO title. */
+  const workPage = (meta?: { title?: string }) =>
+    ({
+      id: 1,
+      title: 'Brytecore',
+      subtitle: 'Senior Frontend Engineer',
+      slug: 'brytecore',
+      path: 'work/brytecore',
+      ...(meta ? { meta } : {}),
+    }) as unknown as Page
+
+  it('marks an authored meta.title absolute, so the site name is not appended', async () => {
+    getPageByPathDraftAware.mockResolvedValue(
+      workPage({
+        title: 'Brytecore — Senior Frontend Engineer | Brandon Perfetti',
+      }),
+    )
+
+    const meta = await generateMetadata({
+      params: Promise.resolve({ segments: ['work', 'brytecore'] }),
+    })
+
+    expect(meta.title).toEqual({
+      absolute: 'Brytecore — Senior Frontend Engineer | Brandon Perfetti',
+    })
+  })
+
+  it("leaves the document's own title a plain string, so the template still suffixes it", async () => {
+    getPageByPathDraftAware.mockResolvedValue(workPage())
+
+    const meta = await generateMetadata({
+      params: Promise.resolve({ segments: ['work', 'brytecore'] }),
+    })
+
+    expect(meta.title).toBe('Brytecore')
+  })
+
+  it('treats an empty meta.title as absent and falls back to the plain string', async () => {
+    getPageByPathDraftAware.mockResolvedValue(workPage({ title: '' }))
+
+    const meta = await generateMetadata({
+      params: Promise.resolve({ segments: ['work', 'brytecore'] }),
+    })
+
+    expect(meta.title).toBe('Brytecore')
+  })
+
+  it('leaves the description and canonical untouched', async () => {
+    getPageByPathDraftAware.mockResolvedValue(
+      workPage({ title: 'Brytecore — Brandon Perfetti' }),
+    )
+
+    const meta = await generateMetadata({
+      params: Promise.resolve({ segments: ['work', 'brytecore'] }),
+    })
+
+    expect(meta.description).toBe('Senior Frontend Engineer')
+    expect(meta.alternates?.canonical).toBe(
+      'https://example.com/work/brytecore',
+    )
+  })
+
+  it('leaves the placed-article branch alone — it already emits its own title', async () => {
+    getPageByPathDraftAware.mockResolvedValue(null)
+    getArticleByPath.mockResolvedValue({
+      slug: 'brytecore',
+      path: 'work/brytecore',
+      title: 'Brytecore',
+    })
+
+    const meta = await generateMetadata({
+      params: Promise.resolve({ segments: ['work', 'brytecore'] }),
+    })
+
+    expect(meta).toEqual({ title: 'article' })
   })
 })

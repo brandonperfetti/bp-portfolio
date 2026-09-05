@@ -5,6 +5,7 @@ import { cache } from 'react'
 import { ShareButton } from '@/components/cms/ShareButton'
 import { RenderRhythmPage } from '@/heros/RenderRhythmPage'
 import { EMPTY_CMS_SENTINEL } from '@/lib/cms/emptyCmsSentinel'
+import { resolvePageMetadataTitle } from '@/lib/cms/pageMetadata'
 import { resolvePageShareTargetIds } from '@/lib/cms/pageShareTargets'
 import { getRedirectForPath } from '@/lib/cms/redirectsRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
@@ -128,7 +129,13 @@ export async function generateMetadata({
   // the one URL `publicPathFor` names.
   const canonicalPath = publicPathFor('pages', page)
   return {
-    title: page.meta?.title || page.title,
+    // #176. This route composes its own metadata rather than going through
+    // `buildPageMetadata`, so the first pass at the ticket missed it and every
+    // CMS-composed page kept doubling the site name — `/work/brytecore` served
+    // "Brytecore — … | Brandon Perfetti - Brandon Perfetti". Same rule, one
+    // shared decision: an authored `meta.title` is final, the document's own
+    // title keeps the layout's `%s - <siteName>` template.
+    title: resolvePageMetadataTitle(page.meta?.title, page.title),
     description: page.meta?.description || page.subtitle || undefined,
     ...(canonicalPath
       ? { alternates: { canonical: `${base}${canonicalPath}` } }

@@ -108,6 +108,43 @@ export function resolveArticleSocialImage({
   )
 }
 
+/**
+ * Decide whether the root layout's `%s - <siteName>` title template applies to
+ * a page's `<title>` (#176).
+ *
+ * @param seoTitle - The SEO title an editor authored, if any.
+ * @param fallbackTitle - The route's own title, used when none was authored.
+ * @returns `{ absolute }` for an authored title (template skipped), or the
+ *   fallback as a plain string (template applies).
+ *
+ * @remarks The root layout (`src/app/(frontend)/layout.tsx`) sets
+ * `title.template = "%s - ${siteName}"`, so any plain string gets the site name
+ * appended. Editors write SEO titles that already carry the brand
+ * ("Tech Stack — Brandon Perfetti | Frontend & Full-Stack Engineer"), which
+ * shipped it twice — and search engines truncate around 60 characters, so the
+ * duplicate ate exactly the differentiator the editor wrote. An AUTHORED title
+ * is therefore final: `title.absolute` opts out of the template, matching what
+ * the articles route already does (`ArticleView.tsx`, "keep article SEO title
+ * exact"). The FALLBACK is a bare route or document name ("Home", "Lab Parent")
+ * and still wants the suffix, so it stays a plain string.
+ *
+ * This lives here rather than inline because two callers must agree:
+ * {@link buildPageMetadata} for the dedicated routes, and the `[...segments]`
+ * catch-all, which composes its own metadata and does NOT go through that
+ * builder. The first pass at #176 fixed only the former, so every CMS-composed
+ * page (the #137 `/work/<slug>` set, and any future section page) kept
+ * doubling. One helper is what stops the two from drifting again.
+ *
+ * Never apply this to `openGraph.title` / `twitter.title`: Next does not run
+ * the template over those, so they always take the exact string.
+ */
+export function resolvePageMetadataTitle(
+  seoTitle: string | null | undefined,
+  fallbackTitle: string,
+): Metadata['title'] {
+  return seoTitle ? { absolute: seoTitle } : fallbackTitle
+}
+
 export function buildPageMetadata({
   page,
   settings,
@@ -125,20 +162,10 @@ export function buildPageMetadata({
   const canonicalPath = path === '/' ? '' : path
   const canonical = `${siteUrl}${canonicalPath}`
 
-  // #176. The root layout sets `title.template = "%s - <siteName>"`, so a plain
-  // string here gets the site name appended. Editors write SEO titles that
-  // already carry the brand ("Tech Stack — Brandon Perfetti | Frontend &
-  // Full-Stack Engineer"), which shipped it twice — and search engines truncate
-  // around 60 characters, so the duplicate ate exactly the differentiator the
-  // editor wrote. An AUTHORED seoTitle is therefore final: `title.absolute`
-  // opts out of the template, matching what the articles route already does
-  // (`ArticleView.tsx`, "keep article SEO title exact"). The FALLBACK title is
-  // a bare route name ("Home", "About") and still wants the suffix, so it stays
-  // a plain string and the template applies. An editor who wants the site name
-  // types it into the SEO title field.
-  //
-  // `openGraph.title` / `twitter.title` are unchanged: Next never applies the
-  // template to those, so they always used the exact string and still do.
+  // #176: an authored seoTitle is final; the fallback keeps the layout's
+  // "%s - <siteName>" template. See {@link resolvePageMetadataTitle}. `title` below
+  // stays the plain string for openGraph/twitter, which never take the
+  // template.
   const authoredTitle = page?.seoTitle || undefined
   const title = authoredTitle || fallbackTitle
   const description = page?.seoDescription || fallbackDescription
@@ -162,7 +189,7 @@ export function buildPageMetadata({
     )
 
   return {
-    title: authoredTitle ? { absolute: authoredTitle } : title,
+    title: resolvePageMetadataTitle(authoredTitle, fallbackTitle),
     description,
     alternates: {
       canonical,
