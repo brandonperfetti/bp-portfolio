@@ -4,6 +4,7 @@ import {
   capturePublishedSlug,
   readPreviousPublishedPath,
   readPreviousPublishedSlug,
+  readPreviousPublishedStoredPath,
 } from '@/hooks/capturePublishedSlug'
 
 /**
@@ -228,6 +229,49 @@ describe('capturePublishedSlug', () => {
     await result
     expect(readPreviousPublishedPath(liveContext(), 'posts', 55)).toBe(
       '/work/old-slug',
+    )
+  })
+
+  /**
+   * The third stash (#150). The subtree cascade matches descendants' own
+   * `path` COLUMNS by prefix, so it needs the storage key — not the public
+   * form, which carries a leading slash and spells the root as `/`.
+   */
+  it('stashes the raw stored path column alongside the public one', async () => {
+    const { liveContext, result } = run(
+      {
+        collection: { slug: 'pages' },
+        data: { _status: 'published', slug: 'brytecore' },
+        originalDoc: { id: 7, _status: 'draft', slug: 'brytecore' },
+      },
+      'brytecore',
+      { path: 'work/brytecore' },
+    )
+
+    await result
+    expect(readPreviousPublishedStoredPath(liveContext(), 'pages', 7)).toBe(
+      'work/brytecore',
+    )
+    expect(readPreviousPublishedPath(liveContext(), 'pages', 7)).toBe(
+      '/work/brytecore',
+    )
+  })
+
+  it('stashes no stored path for an unplaced post, whose path column is NULL', async () => {
+    const { liveContext, result } = run(
+      {
+        data: { _status: 'published', slug: 'new-slug' },
+        originalDoc: { id: 55, _status: 'draft', slug: 'new-slug' },
+      },
+      'old-slug',
+    )
+
+    await result
+    expect(
+      readPreviousPublishedStoredPath(liveContext(), 'posts', 55),
+    ).toBeUndefined()
+    expect(readPreviousPublishedPath(liveContext(), 'posts', 55)).toBe(
+      '/articles/old-slug',
     )
   })
 

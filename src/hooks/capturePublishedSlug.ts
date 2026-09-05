@@ -13,6 +13,12 @@ const CONTEXT_KEY = 'previousPublishedSlugs'
 /** `req.context` key holding the pre-write published public PATH (#155). */
 const PATH_CONTEXT_KEY = 'previousPublishedPaths'
 
+/**
+ * `req.context` key holding the pre-write published **stored** `path` column —
+ * root-relative, no leading slash, `null` for an unplaced post (#150).
+ */
+const STORED_PATH_CONTEXT_KEY = 'previousPublishedStoredPaths'
+
 const contextKey = (collectionSlug: string, id: unknown): string =>
   `${collectionSlug}:${String(id)}`
 
@@ -134,6 +140,44 @@ export const readPreviousPublishedPath = (
   id: unknown,
 ): string | undefined => {
   const store: unknown = context?.[PATH_CONTEXT_KEY]
+  if (!store || typeof store !== 'object') return undefined
+  const value = (store as Record<string, unknown>)[
+    contextKey(collectionSlug, id)
+  ]
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+/**
+ * Read the **stored** `path` column a document was published under *before* the
+ * write currently in flight, as captured by {@link capturePublishedSlug}.
+ *
+ * @param context - Prefer `req.context`; see {@link readPreviousPublishedSlug}
+ * for why the `context` hook argument can be a detached object.
+ * @param collectionSlug - Payload collection slug.
+ * @param id - The document id.
+ * @returns The stored path (`work/brytecore`, `home`) with no leading slash, or
+ * `undefined` when the document had no published version, was unplaced, or the
+ * capture hook did not run.
+ *
+ * @remarks A third reader over the same single lookup, and the third one is not
+ * redundancy — it is the difference between a URL and a storage key. The
+ * subtree cascade (#150) needs the value descendants' own `path` columns were
+ * composed from, so it can match them by prefix and recompose them. That is the
+ * raw column, not {@link readPreviousPublishedPath}'s public form: the public
+ * form carries a leading slash, spells an unplaced post as `/articles/<slug>`,
+ * and spells the root page as `/` — three transformations that all have to be
+ * undone before a `path` column can be compared against it, and undoing the
+ * last one means comparing a slug to {@link ROOT_PAGE_SLUG} outside
+ * `slugPaths.ts`, which is the one thing that module asks no other module to
+ * do. Carrying the column itself costs one more key on an object that is
+ * already being written.
+ */
+export const readPreviousPublishedStoredPath = (
+  context: RequestContext | undefined,
+  collectionSlug: string,
+  id: unknown,
+): string | undefined => {
+  const store: unknown = context?.[STORED_PATH_CONTEXT_KEY]
   if (!store || typeof store !== 'object') return undefined
   const value = (store as Record<string, unknown>)[
     contextKey(collectionSlug, id)
@@ -312,6 +356,17 @@ export const capturePublishedSlug: CollectionBeforeChangeHook = async ({
       string
     >
     pathStore[key] = publishedPath
+  }
+
+  // The raw column too, for the subtree cascade (#150), which matches
+  // descendants' own `path` columns by prefix and therefore needs the storage
+  // key rather than the URL. See {@link readPreviousPublishedStoredPath}.
+  if (typeof publishedRow?.path === 'string' && publishedRow.path.length > 0) {
+    const storedStore = (target[STORED_PATH_CONTEXT_KEY] ??= {}) as Record<
+      string,
+      string
+    >
+    storedStore[key] = publishedRow.path
   }
 
   return data

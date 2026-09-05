@@ -18,7 +18,11 @@ import { capturePublishedSlug } from '@/hooks/capturePublishedSlug'
 import { createPathRedirect } from '@/hooks/createPathRedirect'
 import { populatePublishedAt } from '@/hooks/populatePublishedAt'
 import { generatePreviewPath } from '@/utilities/generatePreviewPath'
-import { computePagePath, validatePageHierarchy } from './hooks/pageHierarchy'
+import {
+  cascadePagePaths,
+  computePagePath,
+  validatePageHierarchy,
+} from './hooks/pageHierarchy'
 import { revalidateDelete, revalidatePage } from './hooks/revalidatePage'
 
 /**
@@ -225,7 +229,10 @@ export const Pages: CollectionConfig = {
     ...slugField(),
   ],
   hooks: {
-    afterChange: [revalidatePage, createPathRedirect],
+    // `cascadePagePaths` last: it recomputes the subtree beneath a moved page,
+    // and it must run after the redirect row for the page's OWN old path has
+    // landed (#150).
+    afterChange: [revalidatePage, createPathRedirect, cascadePagePaths],
     // `validatePageHierarchy` rejects an unservable placement before
     // `computePagePath` ever stores a path — the guard runs in `beforeValidate`,
     // the computation in `beforeChange`, so the stored `path` is always one the

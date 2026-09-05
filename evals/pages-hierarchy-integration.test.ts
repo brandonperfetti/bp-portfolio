@@ -491,5 +491,90 @@ describe.skipIf(!connectionString)(
         mkPage(`${MARKER}-clash`, articles.docs[0].id),
       ).rejects.toThrow(/already the article/i)
     })
+
+    /**
+     * The subtree fan-out (#150 AC2), on the real pipeline.
+     *
+     * @remarks A unit test can pin the write COUNT and the flags; only this
+     * tier can prove the recomposed paths actually land, because each
+     * descendant write re-enters Payload's whole update operation — including
+     * `computePagePath`/`computePostPath`, which recompose a child's path from
+     * its PARENT's stored path and would quietly write the old prefix back if
+     * the cascade wrote in the wrong order.
+     *
+     * Its own subtree, deliberately: the cases above assert on `…-root` and
+     * would see a moved tree instead.
+     */
+    it('moves a whole subtree when the section page is renamed (#150)', async () => {
+      const section = await mkPage(`${MARKER}-mv`)
+      const child = await mkPage(`${MARKER}-mv-child`, section.id)
+      expect(child.path).toBe(`${MARKER}-mv/${MARKER}-mv-child`)
+      const leaf = await mkPage(`${MARKER}-mv-leaf`, child.id)
+      expect(leaf.path).toBe(
+        `${MARKER}-mv/${MARKER}-mv-child/${MARKER}-mv-leaf`,
+      )
+      const placed = await payload.create({
+        collection: 'posts',
+        overrideAccess: true,
+        data: {
+          title: `${MARKER}-mv-post`,
+          slug: `${MARKER}-mv-post`,
+          _status: 'published',
+          content: lexical('body'),
+          parent: section.id,
+        } as never,
+      })
+      expect(placed.path).toBe(`${MARKER}-mv/${MARKER}-mv-post`)
+
+      await payload.update({
+        collection: 'pages',
+        id: section.id,
+        overrideAccess: true,
+        data: { slug: `${MARKER}-xp`, slugLock: false },
+      })
+
+      const pathOf = async (
+        collection: 'pages' | 'posts',
+        id: number | string,
+      ) =>
+        (await payload.findByID({ collection, id, overrideAccess: true })).path
+
+      // Every descendant moved, at every depth, in both collections. These
+      // are the STORED values read back, and the cascade supplies no path at
+      // all — `computePagePath`/`computePostPath` recompute each one from its
+      // parent's stored path, so this is the assertion that the recomputation
+      // (and the shallowest-first ordering it depends on) is what actually
+      // lands.
+      expect(await pathOf('pages', child.id)).toBe(
+        `${MARKER}-xp/${MARKER}-mv-child`,
+      )
+      expect(await pathOf('pages', leaf.id)).toBe(
+        `${MARKER}-xp/${MARKER}-mv-child/${MARKER}-mv-leaf`,
+      )
+      expect(await pathOf('posts', placed.id)).toBe(
+        `${MARKER}-xp/${MARKER}-mv-post`,
+      )
+
+      // The moved page's OWN old URL gets a row (`createPathRedirect`).
+      const own = await payload.find({
+        collection: 'redirects',
+        depth: 0,
+        overrideAccess: true,
+        pagination: false,
+        where: { from: { equals: `/${MARKER}-mv` } },
+      })
+      expect(own.totalDocs).toBe(1)
+
+      // And no per-descendant rows: D4 says one prefix row per move, so the
+      // cascade passes `disableSlugRedirect` on every descendant write.
+      const perDescendant = await payload.find({
+        collection: 'redirects',
+        depth: 0,
+        overrideAccess: true,
+        pagination: false,
+        where: { from: { equals: `/${MARKER}-mv/${MARKER}-mv-child` } },
+      })
+      expect(perDescendant.totalDocs).toBe(0)
+    }, 180_000)
   },
 )

@@ -1,12 +1,21 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PayloadRequest } from 'payload'
+
+const cacheMocks = vi.hoisted(() => ({ revalidatePath: vi.fn() }))
+
+vi.mock('next/cache', () => ({ revalidatePath: cacheMocks.revalidatePath }))
 
 import {
   CODE_OWNED_FIRST_SEGMENTS,
   PATH_MAX_DEPTH,
   parentIdOf,
 } from '@/fields/slug/documentPath'
-import { computePagePath, validatePageHierarchy } from './pageHierarchy'
+import {
+  cascadePagePaths,
+  computePagePath,
+  validatePageHierarchy,
+} from './pageHierarchy'
+import { refreshCorvusEmbeddings } from '@/hooks/corvusEmbeddings'
 
 /**
  * A page row as the hooks read it back through `findByID` / `find`.
@@ -310,5 +319,229 @@ describe('validatePageHierarchy · placed articles (#153)', () => {
     await expect(
       validatePageHierarchy(args({ slug: 'hello-world', parent: 5 })),
     ).rejects.toThrow(/already the article “hello-world”/)
+  })
+})
+
+/**
+ * The subtree cascade (#150 AC2/AC3/AC5).
+ *
+ * @remarks Its own harness rather than the tree stub above, because what these
+ * cases assert is not a decision about one document — it is the SHAPE of the
+ * fan-out: how many writes it makes, in what order, and with which `context`.
+ * A depth-3 tree is stated as data and every `payload.update` is recorded.
+ */
+describe('cascadePagePaths', () => {
+  type Doc = { collection: 'pages' | 'posts'; id: number; path: string }
+
+  /** A depth-3 subtree under `work`, plus one decoy that merely contains it. */
+  const subtree = (): Doc[] => [
+    { collection: 'pages', id: 2, path: 'work/brytecore' },
+    { collection: 'pages', id: 3, path: 'work/brytecore/team' },
+    { collection: 'posts', id: 20, path: 'work/launch' },
+    // `ILIKE '%work/%'` matches this too. The cascade must not renumber it.
+    { collection: 'pages', id: 99, path: 'homework/deep' },
+  ]
+
+  const harness = (docs: Doc[] = subtree()) => {
+    const updates: Array<{
+      collection: string
+      context: Record<string, unknown>
+      data: Record<string, unknown>
+      id: unknown
+    }> = []
+    const req = {
+      context: {
+        previousPublishedStoredPaths: { 'pages:1': 'work' },
+      } as Record<string, unknown>,
+      payload: {
+        find: vi.fn(async ({ collection }: { collection: string }) => ({
+          docs: docs.filter((doc) => doc.collection === collection),
+        })),
+        logger: { error: vi.fn(), info: vi.fn() },
+        update: vi.fn(
+          async (args: {
+            collection: string
+            context: Record<string, unknown>
+            data: Record<string, unknown>
+            id: unknown
+          }) => {
+            updates.push({
+              collection: args.collection,
+              context: args.context,
+              data: args.data,
+              id: args.id,
+            })
+            return { id: args.id }
+          },
+        ),
+      },
+    }
+    return { req, updates }
+  }
+
+  const move = async (
+    req: unknown,
+    context: Record<string, unknown> = {},
+    doc: Record<string, unknown> = { id: 1, path: 'experience' },
+  ) =>
+    cascadePagePaths({
+      collection: { slug: 'pages' },
+      context,
+      doc,
+      operation: 'update',
+      req,
+    } as never)
+
+  beforeEach(() => {
+    cacheMocks.revalidatePath.mockClear()
+  })
+
+  /**
+   * AC3, pinned as an exact count rather than an upper bound. Three
+   * descendants means three writes — not nine, which is what a cascade that
+   * re-entered itself for each descendant would perform on this tree.
+   */
+  it('performs exactly one update per descendant — O(subtree), not O(subtree²)', async () => {
+    const { req, updates } = harness()
+    await move(req)
+
+    expect(updates).toHaveLength(3)
+    expect(updates.map((u) => `${u.collection}#${u.id}`)).toEqual([
+      'pages#2',
+      'posts#20',
+      'pages#3',
+    ])
+  })
+
+  /**
+   * The cascade computes NO path. Each descendant's own `beforeChange`
+   * (`computePagePath` / `computePostPath`) is the single authority on how a
+   * path is composed, and a hand-computed value passed alongside it would be
+   * dead in the ordinary case and silently discarded in the one case where the
+   * two could disagree. The stored result is asserted where it is real, on
+   * Postgres, in `evals/pages-hierarchy-integration.test.ts`.
+   */
+  it('sends an empty data payload — the collection recomputes the path', async () => {
+    const { req, updates } = harness()
+    await move(req)
+
+    for (const update of updates) {
+      expect(update.data).toEqual({})
+      expect('path' in update.data).toBe(false)
+    }
+  })
+
+  /**
+   * Shallowest first, and it is the ONLY thing making the recomputation
+   * correct now that no path is supplied: `computePagePath` composes a child's
+   * path from its PARENT's stored path, so writing `work/brytecore/team`
+   * before `work/brytecore` recomputes the old prefix straight back in.
+   */
+  it('updates parents before their own children', async () => {
+    const { req, updates } = harness()
+    await move(req)
+
+    const order = updates.map((u) => `${u.collection}#${u.id}`)
+    expect(order.indexOf('pages#2')).toBeLessThan(order.indexOf('pages#3'))
+  })
+
+  it('does not touch a document that merely CONTAINS the prefix', async () => {
+    const { req, updates } = harness()
+    await move(req)
+
+    expect(updates.some((u) => u.id === 99)).toBe(false)
+  })
+
+  it('purges each descendant’s vacated URL', async () => {
+    const { req } = harness()
+    await move(req)
+
+    expect(cacheMocks.revalidatePath.mock.calls.map(([p]) => p)).toEqual([
+      '/work/brytecore',
+      '/work/launch',
+      '/work/brytecore/team',
+    ])
+  })
+
+  it('stops the recursion and suppresses per-descendant redirect rows', async () => {
+    const { req, updates } = harness()
+    await move(req)
+
+    for (const update of updates) {
+      expect(update.context.disablePathCascade).toBe(true)
+      expect(update.context.disableSlugRedirect).toBe(true)
+    }
+  })
+
+  /**
+   * AC5. The cascade flag must not reach the embeddings hook: a placed post
+   * under a moved page genuinely changed its `sourceUrl`, so it has to be
+   * re-embedded. Asserted by handing the real hook the exact context the
+   * cascade builds and checking it does not return early.
+   */
+  it('leaves refreshCorvusEmbeddings free to run on a moved post', async () => {
+    const { req, updates } = harness()
+    await move(req)
+
+    const postUpdate = updates.find((u) => u.collection === 'posts')
+    expect(postUpdate).toBeDefined()
+
+    // A `db.drizzle` that records the moment the hook reaches for it. The
+    // guard the cascade could have tripped (`context.disableRevalidate`) is
+    // the FIRST line of the hook, before any database access — so "was the
+    // driver read at all" is exactly the question worth asking.
+    let reachedTheDatabase = false
+    const db = {
+      get drizzle() {
+        reachedTheDatabase = true
+        return { execute: vi.fn(async () => []) }
+      },
+    }
+    const doc = { id: 20, _status: 'published' }
+    await refreshCorvusEmbeddings('posts')({
+      collection: { slug: 'posts' },
+      context: postUpdate!.context,
+      doc,
+      operation: 'update',
+      previousDoc: doc,
+      req: {
+        context: postUpdate!.context,
+        payload: { db, logger: { error: vi.fn(), info: vi.fn() } },
+        query: {},
+      },
+    } as never)
+
+    expect(reachedTheDatabase).toBe(true)
+  })
+
+  it('honours context.disablePathCascade — a descendant write cascades nothing', async () => {
+    const { req, updates } = harness()
+    await move(req, { disablePathCascade: true })
+
+    expect(updates).toHaveLength(0)
+  })
+
+  it('does nothing when the path did not move', async () => {
+    const { req, updates } = harness()
+    await move(req, {}, { id: 1, path: 'work' })
+
+    expect(updates).toHaveLength(0)
+    expect(req.payload.find).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when no previous published path was captured', async () => {
+    const { req, updates } = harness()
+    req.context = {}
+    await move(req)
+
+    expect(updates).toHaveLength(0)
+  })
+
+  it('honours context.disableRevalidate for the purge only', async () => {
+    const { req, updates } = harness()
+    await move(req, { disableRevalidate: true })
+
+    expect(updates).toHaveLength(3)
+    expect(cacheMocks.revalidatePath).not.toHaveBeenCalled()
   })
 })
