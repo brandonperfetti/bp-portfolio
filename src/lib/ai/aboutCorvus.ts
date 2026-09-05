@@ -92,12 +92,39 @@ export const ABOUT_CORVUS_STACK_ITEMS = [
  *
  * Every technology named here is in {@link ABOUT_CORVUS_STACK_ITEMS} and
  * therefore pinned against `docs/AI.md`.
+ *
+ * **No bare site path appears in this passage, and that is a rule rather than
+ * an accident (#167 follow-on).** The first bullet used to name the route —
+ * "streaming answers from this site's own /api/ai/chat route" — and it cost
+ * real score. [measured, Brandon's keyed eval:ci, after the citation-format rider]
+ * the "you = Corvus" answers finally ended with a correct
+ * `Source: [About Corvus](/corvus)` markdown link, and **4 of 5
+ * still scored 0** on `cites-a-linked-source-url`. The model was repeating
+ * `/api/ai/chat` in its prose, `citedPaths`' bare-path pass
+ * (`/(?<![A-Za-z0-9/])(\/[a-z0-9][a-z0-9\-\/]*)/gi`, `evals/scorers.ts`) read
+ * it as a cited site path, and the scorer's anti-fabrication half scored the
+ * whole answer 0 because no such page exists. The single case that scored 100
+ * was the one that happened not to mention it.
+ *
+ * The scorer was right on both counts, which is why the fix is here and not
+ * there. `/api/ai/chat` is not a page: a visitor who follows it gets a 405, and
+ * a citation is a promise that a link leads somewhere. It is also a product
+ * point independent of any eval — an assistant should not advertise an internal
+ * API route to a reader as though it were somewhere to go.
+ *
+ * So the passage describes the mechanism without spelling a path, and
+ * `aboutCorvus.test.ts` pins the class rather than the instance: **no bare site
+ * path other than {@link ABOUT_CORVUS_SOURCE_URL} may appear here.** Naming a
+ * route in prose ("the site's chat API") costs the reader nothing and cannot be
+ * mistaken for a link. The one place the route path legitimately belongs is
+ * `docs/AI.md` §Surface, which is written for an engineer, not handed to a
+ * model as citable material.
  */
 export const ABOUT_CORVUS_PASSAGE = [
   'Corvus is the AI assistant built into this site, brandonperfetti.com. Corvus is not a product Brandon sells and not a general-purpose chatbot hosted elsewhere; it is part of the site itself.',
   '',
   'What Corvus runs on:',
-  "- The Vercel AI SDK, streaming answers from this site's own /api/ai/chat route.",
+  "- The Vercel AI SDK, streaming answers through this site's own server-side chat API.",
   '- An env-selected chat model (AI_CHAT_PROVIDER and AI_CHAT_MODEL): OpenAI gpt-5-mini by default, with Anthropic as the alternative provider.',
   "- Retrieval over the site's own content: passages are embedded with OpenAI text-embedding-3-small and stored as vectors in a pgvector table called corvus_embeddings, in the site's Supabase Postgres database. Each question retrieves the nearest passages above a similarity floor, and those passages are what Corvus answers from.",
   "- A scheduled sync of Brandon's public GitHub repositories into that same index, under the github-repos collection, so questions about a repository are answered from the repository.",

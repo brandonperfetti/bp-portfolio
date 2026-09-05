@@ -38,6 +38,38 @@ const snippet = (over: Partial<CorvusSnippet> = {}): CorvusSnippet => ({
   ...over,
 })
 
+/**
+ * Every bare site path in a string, by the eval scorer's own rule.
+ *
+ * @remarks A deliberate LOCAL MIRROR of the bare-path pass in
+ * `citedPaths` (`evals/scorers.ts`) — the regex is copied, not imported.
+ * `src` and `evals` are separate Vitest projects with separate tsconfigs, and a
+ * unit test under `src/` reaching across into the eval harness would couple
+ * this suite to a root it does not otherwise share.
+ *
+ * A copied regex can drift from its original, so the case immediately below
+ * this one is a positive control: it feeds the mirror the exact bullet that
+ * caused the measured failure and asserts it is found. A drifted copy fails
+ * there rather than silently passing here.
+ *
+ * `ABOUT_CORVUS_SOURCE_URL` is excluded because the passage is allowed to name
+ * its own page — that is the citation the whole passage exists to earn.
+ *
+ * @param text - The passage, or any candidate string.
+ * @returns Bare site paths found, lower-cased, in first-seen order.
+ */
+const barePathsIn = (text: string): string[] => {
+  const found: string[] = []
+  for (const match of text.matchAll(
+    /(?<![A-Za-z0-9/])(\/[a-z0-9][a-z0-9\-/]*)/gi,
+  )) {
+    const path = match[1].toLowerCase().replace(/[.,;:!?)\]]+$/, '')
+    if (path === ABOUT_CORVUS_SOURCE_URL) continue
+    if (!found.includes(path)) found.push(path)
+  }
+  return found
+}
+
 describe('the passage itself', () => {
   it('says what Corvus is, what it runs on, and what it can answer', () => {
     // #167 names those three; a passage missing one of them leaves a question
@@ -87,6 +119,39 @@ describe('the passage itself', () => {
     expect(
       HEADER_NAV_LINKS.some((link) => link.href === ABOUT_CORVUS_SOURCE_URL),
     ).toBe(true)
+  })
+
+  /**
+   * No bare site path in the passage but its own source (#167 follow-on).
+   *
+   * @remarks The measured failure this pins.
+   * [measured, Brandon's keyed eval:ci, after the citation-format rider] the
+   * "you = Corvus" answers ended with a correct
+   * `Source: [About Corvus](/corvus)` markdown link and **4 of 5
+   * still scored 0** on `cites-a-linked-source-url`: the passage said
+   * "streaming answers from this site's own /api/ai/chat route", the model
+   * repeated the path in prose, and the scorer's anti-fabrication half read it
+   * as a cited page that does not exist. The one case that scored 100 was the
+   * one that did not mention it.
+   *
+   * The assertion is on the CLASS, not on that string. Any future bullet that
+   * names a route — an admin path, a feed, an API — reintroduces exactly this
+   * failure, and a test that only banned `/api/ai/chat` would not see it.
+   */
+  it('contains no bare site path other than its own source URL', () => {
+    expect(barePathsIn(ABOUT_CORVUS_PASSAGE)).toEqual([])
+  })
+
+  it('would catch the path that caused the failure — the guard is not vacuous', () => {
+    // The positive control. `barePathsIn` is a local mirror of the eval
+    // scorer's bare-path pass, so it has to be shown finding the exact string
+    // this case exists to keep out; an assertion of "no matches" made by a
+    // regex that matches nothing would pass forever.
+    expect(
+      barePathsIn(
+        "- The Vercel AI SDK, streaming answers from this site's own /api/ai/chat route.",
+      ),
+    ).toEqual(['/api/ai/chat'])
   })
 })
 

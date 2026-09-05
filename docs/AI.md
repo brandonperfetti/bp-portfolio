@@ -583,6 +583,20 @@ Three properties worth knowing:
   and the test fails until this document names it too. The provider is
   described as env-selected (`AI_CHAT_PROVIDER`) rather than pinned, so an env
   change cannot make the passage wrong.
+- **It names no bare site path but its own** (`/corvus`), and a test enforces
+  the class rather than any one string. The first bullet used to say "streaming
+  answers from this site's own `/api/ai/chat` route", and `[measured, keyed
+eval:ci, after the #167 citation-format rider]` that one path cost **4 of 5**
+  "you = Corvus" cases their entire `cites-a-linked-source-url` score: the
+  answers now ended with a correct `Source: [About Corvus](/corvus)` link, but
+  the model also repeated `/api/ai/chat` in prose, `citedPaths`' bare-path pass
+  read it as a cited site path, and the anti-fabrication half scored 0 because
+  no such page exists. The scorer was right twice over — that route returns 405
+  to a visitor who follows it, and an assistant should not offer an internal API
+  route to a reader as somewhere to go. The passage says "the site's own
+  server-side chat API" instead. **The route path belongs in §Surface above,
+  which is written for an engineer; not in a passage handed to a model as
+  citable material.**
 
 Addressee detection (`isAboutCorvusQuestion`) is a regex, and conservative in
 the direction that costs least: a false positive adds one inert passage, a
