@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildPageMetadata,
   resolveArticleSocialImage,
   resolvePageSocialImage,
 } from './pageMetadata'
 
+import type { CmsPageContent } from '@/lib/cms/types'
 import type { OgImageMode } from '@/lib/og/types'
 import { DEFAULT_SOCIAL_IMAGE } from '@/lib/site'
 
@@ -139,5 +141,87 @@ describe('resolvePageSocialImage — generated-card URL is path-keyed (#148)', (
     expect(
       resolvePageSocialImage({ ...generated, slug: 'colophon' }, settings),
     ).toBe('https://example.com/api/og/page/colophon')
+  })
+})
+
+/**
+ * Title handling under the root layout's `%s - <siteName>` template (#176).
+ *
+ * The layout appends the site name to any plain-string `title`. Editors write
+ * SEO titles that already carry the brand, so `/tech` shipped
+ * "Tech Stack — Brandon Perfetti | … - Brandon Perfetti". An authored
+ * `seoTitle` is now final (`title.absolute`, matching the articles route); the
+ * fallback title is a bare route name and still takes the suffix.
+ */
+describe('buildPageMetadata — title vs the layout template (#176)', () => {
+  const settings = {
+    canonicalUrl: 'https://example.com',
+    siteName: 'Brandon Perfetti',
+    generatedOgEnabled: false,
+  } as unknown as Parameters<typeof buildPageMetadata>[0]['settings']
+
+  const page = {
+    pageId: '1',
+    routeKey: '/tech',
+    slug: 'tech',
+    path: 'tech',
+    title: 'Tech',
+  } as unknown as CmsPageContent
+
+  /** Build args for one page, defaulting to the `/tech` shape. */
+  function metaArgs(overrides: Partial<CmsPageContent> | null = {}) {
+    return {
+      page:
+        overrides === null
+          ? null
+          : ({ ...page, ...overrides } as CmsPageContent),
+      settings,
+      fallbackTitle: 'Tech',
+      fallbackDescription: 'Fallback description.',
+      path: '/tech',
+    }
+  }
+
+  it('marks an authored seoTitle absolute, so the site name is not appended', () => {
+    const meta = buildPageMetadata(
+      metaArgs({ seoTitle: 'Tech Stack — Brandon Perfetti | Engineer' }),
+    )
+
+    expect(meta.title).toEqual({
+      absolute: 'Tech Stack — Brandon Perfetti | Engineer',
+    })
+  })
+
+  it('leaves the fallback title a plain string, so the template still suffixes it', () => {
+    const meta = buildPageMetadata(metaArgs({ seoTitle: undefined }))
+
+    expect(meta.title).toBe('Tech')
+  })
+
+  it('treats an empty seoTitle as absent and falls back to the plain string', () => {
+    const meta = buildPageMetadata(metaArgs({ seoTitle: '' }))
+
+    expect(meta.title).toBe('Tech')
+  })
+
+  it('falls back to a plain string when there is no page document at all', () => {
+    const meta = buildPageMetadata(metaArgs(null))
+
+    expect(meta.title).toBe('Tech')
+  })
+
+  it('leaves openGraph.title and twitter.title as the exact string, unchanged', () => {
+    const authored = 'Tech Stack — Brandon Perfetti | Engineer'
+    const meta = buildPageMetadata(metaArgs({ seoTitle: authored }))
+
+    expect(meta.openGraph?.title).toBe(authored)
+    expect(meta.twitter?.title).toBe(authored)
+  })
+
+  it('keeps openGraph/twitter on the fallback title when no seoTitle is authored', () => {
+    const meta = buildPageMetadata(metaArgs({ seoTitle: undefined }))
+
+    expect(meta.openGraph?.title).toBe('Tech')
+    expect(meta.twitter?.title).toBe('Tech')
   })
 })

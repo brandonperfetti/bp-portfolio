@@ -125,7 +125,22 @@ export function buildPageMetadata({
   const canonicalPath = path === '/' ? '' : path
   const canonical = `${siteUrl}${canonicalPath}`
 
-  const title = page?.seoTitle || fallbackTitle
+  // #176. The root layout sets `title.template = "%s - <siteName>"`, so a plain
+  // string here gets the site name appended. Editors write SEO titles that
+  // already carry the brand ("Tech Stack — Brandon Perfetti | Frontend &
+  // Full-Stack Engineer"), which shipped it twice — and search engines truncate
+  // around 60 characters, so the duplicate ate exactly the differentiator the
+  // editor wrote. An AUTHORED seoTitle is therefore final: `title.absolute`
+  // opts out of the template, matching what the articles route already does
+  // (`ArticleView.tsx`, "keep article SEO title exact"). The FALLBACK title is
+  // a bare route name ("Home", "About") and still wants the suffix, so it stays
+  // a plain string and the template applies. An editor who wants the site name
+  // types it into the SEO title field.
+  //
+  // `openGraph.title` / `twitter.title` are unchanged: Next never applies the
+  // template to those, so they always used the exact string and still do.
+  const authoredTitle = page?.seoTitle || undefined
+  const title = authoredTitle || fallbackTitle
   const description = page?.seoDescription || fallbackDescription
   const socialImage = resolvePageSocialImage(page, settings)
   const usesGeneratedCard = Boolean(
@@ -147,7 +162,7 @@ export function buildPageMetadata({
     )
 
   return {
-    title,
+    title: authoredTitle ? { absolute: authoredTitle } : title,
     description,
     alternates: {
       canonical,
