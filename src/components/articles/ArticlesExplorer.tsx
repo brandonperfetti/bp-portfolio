@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { type ArticleWithSlug } from '@/lib/articles'
+import type { ArticleWithSlug } from '@/lib/articles'
 import { publicPathFor } from '@/fields/slug/slugPaths'
 import { dedupeArticlesBySlug } from '@/lib/articleUtils'
 import { formatDate } from '@/lib/formatDate'
@@ -127,11 +127,48 @@ function articleMatchesQuery(
  * flat list**. A tag is not a `categories` row and can never have a section
  * home, so a chip here has no reliable topic identity to resolve an href from
  * in the first place.
+ *
+ * @remarks **The "View the ⟨X⟩ section →" affordance (#154)** is the answer to
+ * the pressure that keeps trying to turn those chips into links. When exactly
+ * one filter is active and it names a category that has a published home, the
+ * filter row offers an explicit, separate link to that home. Filtering still
+ * never navigates; the reader is offered the destination and chooses it.
+ *
+ * Three facts shape the implementation, and each one is load-bearing:
+ *
+ * 1. **The predicate is written as a count, not as `topic !== 'All'`.** Today
+ *    the explorer holds one topic string or `'All'`, so the two are the same
+ *    test — but the affordance is only correct for *exactly one* active filter,
+ *    and writing {@link activeFilters}`.length === 1` is what makes it stay
+ *    correct the day this becomes multi-select.
+ * 2. **The active filter may be a tag, and the lookup is by name.** Only
+ *    categories can have a home, so a tag normally misses — silently: no link,
+ *    no fallback, no empty state. But `sectionPaths` is keyed on the *title*,
+ *    and the filter pool merges topic and tag names into one flat, deduped
+ *    `string[]` ({@link getArticleTaxonomyValues}), so a tag named exactly like
+ *    a homed category **does** hit, and that is the intended outcome: the
+ *    reader filtered on "Leadership" and a section called Leadership exists —
+ *    offering it is right, whichever pool the chip came from. Suppressing it
+ *    would mean knowing each chip's provenance, which costs widening that pool
+ *    from strings to objects and rippling through the matcher, the chip
+ *    counting and their tests — the exact price `CmsTopic`'s docblock records
+ *    for #151, paid to make a correct link disappear.
+ * 3. **`/articles` is static with client-side filtering and must stay so.** The
+ *    map is resolved on the server, once, inside the existing `'use cache'`
+ *    scope (`getTopicSectionPaths`, #151 — reused, not duplicated) and handed
+ *    down as `sectionPaths`. Nothing here reads `searchParams` on the server
+ *    and nothing here fetches; the lookup is a plain object read.
+ *
+ * @param sectionPaths - Lowercased category title → the root-relative path of
+ * its published section home. Omitted (or empty) means no topic has a home,
+ * which is the ordinary state and renders no affordance anywhere.
  */
 export function ArticlesExplorer({
   articles,
+  sectionPaths,
 }: {
   articles: ArticleWithSlug[]
+  sectionPaths?: Record<string, string>
 }) {
   const isDev = process.env.NODE_ENV !== 'production'
   const router = useRouter()
@@ -273,6 +310,34 @@ export function ArticlesExplorer({
       (item) => !primarySet.has(item.toLowerCase()),
     )
   }, [primaryFilters, sortedDynamicFilters])
+
+  /**
+   * The filters currently narrowing the list — today at most one, because the
+   * explorer holds a single `topic` string. Modelled as an array so the #154
+   * predicate below is a count rather than a comparison against `'All'`.
+   */
+  const activeFilters = useMemo(
+    () => (activeTopicLabel === 'All' ? [] : [activeTopicLabel]),
+    [activeTopicLabel],
+  )
+
+  /**
+   * The section home to offer, or `null`. Non-null only when exactly one filter
+   * is active *and* its name matches a category with a published home. A
+   * homeless category, `'All'`, and a tag whose name matches nothing all
+   * resolve to `null`, silently.
+   *
+   * The lookup is on the label, so a *tag* named exactly like a homed category
+   * resolves too — deliberately; see the component docblock, fact 2.
+   */
+  const sectionLink = useMemo(() => {
+    if (activeFilters.length !== 1) return null
+    const label = activeFilters[0]
+    const path = sectionPaths?.[label.toLowerCase()]
+    if (!path) return null
+    const href = publicPathFor('pages', { path })
+    return href ? { href, label } : null
+  }, [activeFilters, sectionPaths])
 
   const isActiveFilter = useCallback(
     (candidate: string) =>
@@ -477,6 +542,24 @@ export function ArticlesExplorer({
                 {item}
               </button>
             ))}
+          </div>
+        )}
+        {sectionLink && (
+          // Last in the filter card, so it can never come between two chips in
+          // the tab order — the chips stay one uninterrupted run. A real
+          // `<Link>`, not a button: this one *is* a destination, unlike every
+          // chip above it (#151, #154).
+          <div>
+            <Link
+              href={sectionLink.href}
+              className="inline-flex items-center gap-1 rounded-full text-xs font-medium text-teal-700 transition hover:text-teal-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:text-teal-400 dark:hover:text-teal-300 dark:focus-visible:ring-teal-400/80"
+            >
+              <span>
+                View the <span className="capitalize">{sectionLink.label}</span>{' '}
+                section
+              </span>
+              <span aria-hidden="true">→</span>
+            </Link>
           </div>
         )}
       </div>

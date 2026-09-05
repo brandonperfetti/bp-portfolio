@@ -7,6 +7,7 @@ import { NotFoundState } from '@/components/cms/NotFoundState'
 import { ShareButton } from '@/components/cms/ShareButton'
 import { SimpleLayout } from '@/components/SimpleLayout'
 import { getSearchArticles } from '@/lib/articles'
+import { getTopicSectionPaths } from '@/lib/cms/articlesRepo'
 import { publicPathFor } from '@/fields/slug/slugPaths'
 import { buildPageMetadata } from '@/lib/cms/pageMetadata'
 import { resolvePageShareTargetIds } from '@/lib/cms/pageShareTargets'
@@ -36,11 +37,18 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function ArticlesIndex() {
   const siteUrl = getSiteUrl()
-  const [settings, page, articles] = await Promise.all([
+  const [settings, page, articles, topicSectionPaths] = await Promise.all([
     getCmsSiteSettings(),
     getCmsPageByPath('/articles'),
     getSearchArticles(),
+    // #154: which topics have a published section home, resolved server-side
+    // once inside `getTopicSectionPaths`' own `'use cache'` scope (#151's
+    // reader, reused — there is deliberately no second one). Handed to the
+    // explorer as a plain object so the affordance resolves client-side and
+    // this route stays statically rendered with no `searchParams` read.
+    getTopicSectionPaths(),
   ])
+  const sectionPaths = Object.fromEntries(topicSectionPaths)
   const canonicalSiteUrl = (settings.canonicalUrl || siteUrl).replace(
     /\/+$/,
     '',
@@ -154,7 +162,7 @@ export default async function ArticlesIndex() {
               <div className="text-sm text-zinc-500">Loading articles...</div>
             }
           >
-            <ArticlesExplorer articles={articles} />
+            <ArticlesExplorer articles={articles} sectionPaths={sectionPaths} />
           </Suspense>
         )}
         <CmsPageBlocks slug="articles" />

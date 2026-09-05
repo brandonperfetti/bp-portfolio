@@ -10,6 +10,12 @@
 - Gated posts (`access.visibility = 'gated'`) serve teaser-only to anonymous
   visitors — enforcement in the RSC via `canAccess`, not the client.
 - Per-article "Use with AI" menu + JSON-LD + canonical URLs.
+- Filter chips never navigate; when exactly one filter is active and it names a
+  category with a published section home, the filter row offers a separate
+  "View the ⟨X⟩ section →" link to it (#154).
+- Section and topic landing pages roll up their own articles with the
+  `postRollup` block — by category, or by placement — in a card grid, the
+  stacked list, or a compact dated index (#152).
 
 ## Corvus chat (`/corvus`)
 

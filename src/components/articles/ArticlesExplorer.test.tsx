@@ -348,3 +348,175 @@ describe('ArticlesExplorer filter chips never navigate (#151)', () => {
     expect(href).not.toContain('/work/leadership')
   })
 })
+
+/**
+ * #154 — "View the ⟨X⟩ section →".
+ *
+ * The affordance the #151 chips deliberately are not. It appears only when
+ * *exactly one* filter is active and that filter names a category with a
+ * published section home; it is a real `<Link>`, and it never displaces the
+ * chips it sits beside.
+ */
+describe('ArticlesExplorer section affordance (#154)', () => {
+  const articles: ArticleWithSlug[] = [
+    {
+      slug: 'what-a-staff-engineer-owns',
+      title: 'What a staff engineer actually owns',
+      description: 'Scope is not headcount.',
+      author: 'Brandon Perfetti',
+      date: '2026-08-11',
+      topics: ['Leadership'],
+      tech: ['TypeScript'],
+      searchText: 'staff engineer scope',
+    },
+    {
+      slug: 'postgres-row-level-security',
+      title: 'Row level security, without the footguns',
+      description: 'Default deny, then earn every policy.',
+      author: 'Brandon Perfetti',
+      date: '2026-06-18',
+      topics: ['Databases'],
+      tech: ['PostgreSQL'],
+      searchText: 'postgres rls',
+    },
+  ]
+
+  const sectionPaths = { leadership: 'work/leadership' }
+
+  const filterTo = async (label: string) => {
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: label }))
+  }
+
+  it('offers the section home when one category filter is active', async () => {
+    render(<ArticlesExplorer articles={articles} sectionPaths={sectionPaths} />)
+    await filterTo('Leadership')
+
+    const link = await screen.findByRole('link', {
+      name: 'View the Leadership section',
+    })
+    expect(link.tagName).toBe('A')
+    expect(link).toHaveAttribute('href', '/work/leadership')
+  })
+
+  it('keeps the arrow out of the accessible name', async () => {
+    render(<ArticlesExplorer articles={articles} sectionPaths={sectionPaths} />)
+    await filterTo('Leadership')
+
+    const link = await screen.findByRole('link', {
+      name: 'View the Leadership section',
+    })
+    // Visible glyph, hidden from assistive tech — which is why the name above
+    // resolves without it.
+    expect(link.textContent).toContain('→')
+    expect(link.querySelector('[aria-hidden="true"]')?.textContent).toBe('→')
+  })
+
+  it('stays hidden for a category with no section home', async () => {
+    render(<ArticlesExplorer articles={articles} sectionPaths={sectionPaths} />)
+    await filterTo('Databases')
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalled()
+    })
+    expect(screen.queryByRole('link', { name: /View the/ })).toBeNull()
+  })
+
+  it('stays hidden for a tag whose name matches no homed category', async () => {
+    // Only categories can have a home, so a tag normally misses — silently.
+    render(<ArticlesExplorer articles={articles} sectionPaths={sectionPaths} />)
+    await filterTo('TypeScript')
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalled()
+    })
+    expect(screen.queryByRole('link', { name: /View the/ })).toBeNull()
+  })
+
+  it('DOES offer the section for a tag named exactly like a homed category', async () => {
+    // The intended outcome, pinned rather than left to chance. `sectionPaths`
+    // is keyed on the title and the filter pool merges topic and tag names into
+    // one flat, deduped string[], so a tag called "Leadership" resolves the
+    // Leadership section — and should: the reader filtered on that name and a
+    // section of that name exists, so the link is correct and honest about
+    // where it goes.
+    //
+    // Suppressing it would require knowing which pool the chip came from, which
+    // means widening that pool from strings to objects and rippling through the
+    // matcher, the chip counting and their tests (the cost `CmsTopic`'s
+    // docblock records for #151) — paid to make a correct link disappear.
+    //
+    // No article here carries Leadership as a *topic*, so the chip clicked
+    // below can only have come from `tech`.
+    const tagOnly: ArticleWithSlug[] = [
+      {
+        slug: 'a-tag-named-leadership',
+        title: 'Notes from a team that ran itself',
+        description: 'Filed under databases, tagged leadership.',
+        author: 'Brandon Perfetti',
+        date: '2026-05-04',
+        topics: ['Databases'],
+        tech: ['Leadership'],
+        searchText: 'self-managing team notes',
+      },
+    ]
+
+    render(<ArticlesExplorer articles={tagOnly} sectionPaths={sectionPaths} />)
+    await filterTo('Leadership')
+
+    expect(
+      await screen.findByRole('link', { name: 'View the Leadership section' }),
+    ).toHaveAttribute('href', '/work/leadership')
+  })
+
+  it("stays hidden for 'All' — no filter, no destination", () => {
+    render(<ArticlesExplorer articles={articles} sectionPaths={sectionPaths} />)
+
+    expect(screen.queryByRole('link', { name: /View the/ })).toBeNull()
+  })
+
+  it('stays hidden when no topic has a home at all (the default)', async () => {
+    render(<ArticlesExplorer articles={articles} />)
+    await filterTo('Leadership')
+
+    expect(screen.queryByRole('link', { name: /View the/ })).toBeNull()
+  })
+
+  it('matches the category case-insensitively, as the filter layer does', async () => {
+    searchParamsMock = new URLSearchParams('topic=leadership')
+    render(<ArticlesExplorer articles={articles} sectionPaths={sectionPaths} />)
+
+    expect(
+      await screen.findByRole('link', { name: /View the .* section/ }),
+    ).toHaveAttribute('href', '/work/leadership')
+  })
+
+  it('does not interrupt the chip run in the tab order', async () => {
+    render(<ArticlesExplorer articles={articles} sectionPaths={sectionPaths} />)
+    await filterTo('Leadership')
+
+    const link = await screen.findByRole('link', {
+      name: 'View the Leadership section',
+    })
+    const focusables = Array.from(
+      document.querySelectorAll<HTMLElement>('button, a[href], input'),
+    )
+    // Last in the filter card: every chip precedes it, so no chip is displaced.
+    const chips = focusables.filter((el) => el.tagName === 'BUTTON')
+    expect(focusables.indexOf(link)).toBeGreaterThan(
+      focusables.indexOf(chips.at(-1) as HTMLElement),
+    )
+  })
+
+  it('disappears again when the filter is cleared', async () => {
+    render(<ArticlesExplorer articles={articles} sectionPaths={sectionPaths} />)
+    await filterTo('Leadership')
+    await screen.findByRole('link', { name: 'View the Leadership section' })
+
+    await filterTo('All')
+
+    await waitFor(() => {
+      expect(screen.queryByRole('link', { name: /View the/ })).toBeNull()
+    })
+  })
+})

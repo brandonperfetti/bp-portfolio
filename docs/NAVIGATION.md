@@ -168,6 +168,24 @@ never changes, was invisible to the slug-keyed writer.
 (Home → Work → Brytecore → title), derived from `path` in one indexed read. An
 unplaced one keeps the archive trail it has always emitted.
 
+## Topic section homes and the `/articles` affordance (#151, #154)
+
+A topic (`categories` row) may point at a Page that is its home. Article topic
+chips then link there; a topic without one stays a pure filter.
+
+**On `/articles` the filter chips still never navigate.** They are state
+toggles that mirror `?topic=` through `router.replace`, which is what keeps the
+route statically rendered. Instead, when **exactly one** filter is active and
+that filter names a category with a _published_ home, the filter row offers a
+separate `View the ⟨X⟩ section →` link (a real `<Link>`, arrow `aria-hidden`,
+rendered last in the card so it never interrupts the chip run in the tab
+order). A tag, a homeless category and `All` all render nothing — silently, with
+no empty state.
+
+The lookup is client-side over a `Record<lowercased category title, path>` the
+server page resolves once via `getTopicSectionPaths` and passes down, so no
+`searchParams` are read on the server and `/articles` stays `○ Static`.
+
 ## List pagination — the `?page` contract (#88)
 
 All four list surfaces share one param, one primitive
