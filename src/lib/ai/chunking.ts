@@ -46,6 +46,17 @@ export type CorvusCollectionSlug = (typeof CORVUS_EMBEDDED_COLLECTIONS)[number]
 export const CORVUS_GITHUB_REPOS_COLLECTION = 'github-repos'
 
 /**
+ * The section every role's Page lives under, and therefore the prefix a
+ * `work-history` citation composes against (#137).
+ *
+ * @remarks Not derived from `SLUG_ROUTED_COLLECTIONS`: `/work` is a hierarchy
+ * *Page* (`path: 'work'`), not a collection prefix, so there is nothing in the
+ * routing map to read it from. Named here so the one place that knows it is
+ * the one place that builds the citation.
+ */
+const WORK_SECTION_PREFIX = '/work'
+
+/**
  * Every value that may appear in `corvus_embeddings.collection`.
  *
  * @remarks Wider than {@link CorvusCollectionSlug} on purpose. The CMS-facing
@@ -169,8 +180,10 @@ export function hashChunkContent(content: string): string {
  * @param collection - Collection slug.
  * @param ref - For `posts`, the document (or any projection carrying `slug` and,
  * when placed, `path`); a bare slug string is accepted and read as unplaced. For
- * `github-repos`, the repo's `owner/name` full name. Unused by the four flat
- * collections, which have no per-document route.
+ * `work-history`, the document or slug naming the role's Page under `/work`
+ * (#137) — a row without one still cites `/`. For `github-repos`, the repo's
+ * `owner/name` full name. Unused by the remaining three flat collections, which
+ * cite the single index page that renders them.
  * @returns A URL for the chunk to cite, or `null` when none applies.
  */
 export function sourceUrlFor(
@@ -197,8 +210,22 @@ export function sourceUrlFor(
       return '/uses'
     case 'tech-stack':
       return '/tech'
-    case 'work-history':
-      return '/'
+    case 'work-history': {
+      // #137: a role's public home is its Page under the `/work` section, and
+      // `work-history` rows carry a slug precisely so this citation can be
+      // composed without a route of their own. Composed here rather than
+      // through `publicPathFor` on purpose: `work-history` is deliberately NOT
+      // in `SLUG_ROUTED_COLLECTIONS` (nothing routes on its slug, and putting
+      // it there would extend the #120 slug freeze to a collection with no URL
+      // to protect), so this is the one place that knows the `/work` prefix.
+      //
+      // The fallback to `/` is the pre-#137 behaviour and is deliberately
+      // kept: a row seeded before the slug field existed has no slug, and a
+      // citation of `/work/` — a URL that 404s — would be strictly worse than
+      // the homepage it used to cite.
+      const slug = typeof doc.slug === 'string' ? doc.slug.trim() : ''
+      return slug ? `${WORK_SECTION_PREFIX}/${slug}` : '/'
+    }
     case CORVUS_GITHUB_REPOS_COLLECTION: {
       const fullName = typeof ref === 'string' ? ref.trim() : ''
       // `owner/name`, both segments present. A half-formed value would
@@ -595,7 +622,12 @@ export function chunkFlatRecord(
       title,
       content,
       contentHash: hashChunkContent(content),
-      sourceUrl: sourceUrlFor(collection),
+      // The document, not nothing: `work-history` composes `/work/<slug>` from
+      // it (#137). The other three flat collections cite a fixed index page
+      // and ignore the argument entirely, so passing it is free.
+      sourceUrl: sourceUrlFor(collection, {
+        slug: typeof doc.slug === 'string' ? doc.slug : undefined,
+      }),
       // These four collections carry no access group — they render on public
       // index pages, so they are public by construction. Reading through
       // `visibilityOf` anyway means a future access group on any of them is

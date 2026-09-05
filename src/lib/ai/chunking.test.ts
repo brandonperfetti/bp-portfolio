@@ -95,7 +95,24 @@ describe('sourceUrlFor', () => {
     expect(sourceUrlFor('projects')).toBe('/projects')
     expect(sourceUrlFor('uses')).toBe('/uses')
     expect(sourceUrlFor('tech-stack')).toBe('/tech')
+  })
+
+  /**
+   * #137: a work-history row's citation is the role's Page under `/work`, not
+   * the homepage — the whole reason Corvus declined work-history questions was
+   * that `/` is not a citation anyone can follow to an answer.
+   */
+  it('cites a work-history row at its role page under /work', () => {
+    expect(sourceUrlFor('work-history', 'brytecore')).toBe('/work/brytecore')
+    expect(sourceUrlFor('work-history', { slug: 'brytecore' })).toBe(
+      '/work/brytecore',
+    )
+  })
+
+  it('keeps citing / for a work-history row seeded before slugs existed', () => {
     expect(sourceUrlFor('work-history')).toBe('/')
+    expect(sourceUrlFor('work-history', null)).toBe('/')
+    expect(sourceUrlFor('work-history', { slug: '   ' })).toBe('/')
   })
 })
 
@@ -285,6 +302,40 @@ describe('chunkFlatRecord', () => {
     expect(chunk.title).toBe('Acme — Technical PM')
     expect(chunk.sourceUrl).toBe('/')
     expect(chunk.chunkIndex).toBe(0)
+  })
+
+  /**
+   * The chunker has to hand the row's slug to `sourceUrlFor` for #137 to reach
+   * a stored chunk at all — a correct `sourceUrlFor` that nothing calls with a
+   * slug leaves every embedded row still citing `/`.
+   */
+  it('carries the role slug into a work-history chunk’s sourceUrl (#137)', () => {
+    const [chunk] = chunkFlatRecord('work-history', {
+      id: 3,
+      slug: 'brytecore',
+      company: 'Brytecore',
+      title: 'Senior Frontend Engineer',
+      startDate: '2024-09-02T00:00:00.000Z',
+      current: true,
+    })
+
+    expect(chunk.sourceUrl).toBe('/work/brytecore')
+  })
+
+  it('leaves the other flat collections’ citations untouched by the slug (#137)', () => {
+    const [project] = chunkFlatRecord('projects', {
+      id: 9,
+      slug: 'portfolio',
+      title: 'Portfolio',
+    })
+    const [tech] = chunkFlatRecord('tech-stack', {
+      id: 10,
+      slug: 'typescript',
+      name: 'TypeScript',
+    })
+
+    expect(project.sourceUrl).toBe('/projects')
+    expect(tech.sourceUrl).toBe('/tech')
   })
 
   it('renders a current role as Present', () => {

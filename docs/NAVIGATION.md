@@ -92,6 +92,33 @@ including `refreshCorvusEmbeddings` for a placed post, whose `sourceUrl`
 genuinely changed. So a section rename triggers an embedding refresh
 proportional to the subtree size. That is correct behaviour.
 
+## The `/work` section (#137)
+
+`/work` and `/work/<slug>` are **ordinary hierarchy Pages** — a `work` page with
+one child per role — not a route over the `work-history` collection. There is
+nothing route-specific to build: the catch-all above resolves them, the sitemap
+lists them at their full nested path, the canonical is built from the resolved
+document, and the JSON-LD `BreadcrumbList` reflects the real ancestor chain, all
+by the same machinery every other nested page uses.
+
+Two pieces make a role page carry the _facts_ rather than a retyped copy of
+them:
+
+- The **`workHistoryCard` block gains an optional `entry`** relationship
+  (#137). With `entry` empty it renders the whole résumé card, exactly as it did
+  before; with `entry` set it renders that one role's company, title, period,
+  logo and (optionally) description, read from the `work-history` row. One
+  block, one mode field — not a second near-identical block in the picker.
+- **`work-history` rows carry a `unique` slug**, and Corvus composes
+  `/work/<slug>` from it (`sourceUrlFor`), so a work-history answer cites a page
+  a visitor can actually open instead of the homepage. The slug routes nothing
+  by itself — `work-history` is deliberately absent from
+  `SLUG_ROUTED_COLLECTIONS`.
+
+The role Page's slug and the `work-history` row's slug are expected to match by
+editorial convention; nothing enforces it, because the citation is composed from
+the row and the page is resolved from its own `path`.
+
 ## Post placement — an article's two possible URLs (#153)
 
 An article has exactly one public URL, and which one depends on a single field.

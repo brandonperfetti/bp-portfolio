@@ -55,6 +55,23 @@ Payload is the single source of truth for site content. Admin at `/admin`
 - **Projects**, **TechStack** (name/category/proficiency/logo/url/githubRepo),
   **Uses** (category-grouped tools), **Categories**, **Tags**, **Media**
   (Blob-backed), **Users** (admin operators).
+- **Categories** carries an optional `sectionPage` relationship — "this topic
+  has a home, and it's this Page" (#151). Opt-in by design: a topic without one
+  stays a pure filter, and an unpublished or deleted target falls back to
+  `/articles?topic=<title>` rather than linking at a 404 (`resolveTopicHref`,
+  `src/lib/cms/topics.ts`). **It created no join table, and so needs no new RLS
+  line** — a fact worth stating because the ticket that added it expected the
+  opposite. Payload's Postgres adapter materialises a `_rels` table only for a
+  relationship that is `hasMany` or polymorphic; `sectionPage` is single-valued
+  and targets one collection, so it lands as `categories.section_page_id` with
+  an index, like every other 1:1 relationship in this schema. `categories`
+  itself pre-dates the #72 lockdown and already carries RLS, which adding a
+  column cannot weaken — RLS is a table property, not a column one. The
+  convention is unchanged for the next `hasMany` or polymorphic relationship on
+  this collection: that one **does** create `categories_rels` and **does** owe
+  the line in its own migration — see §"New-table RLS convention (#72)".
+- **WorkHistory** carries a `unique` slug (#137) — an addressing key, not a
+  route; see §"Slug freeze" below.
 
 **Cleared hero text is stored as `NULL`, never as an empty Lexical root
 (#164).** A rich-text value whose `root.children` is `[]` is the one shape
@@ -243,8 +260,16 @@ needs "the value the site is
 currently serving" must do the same; `previousDoc` is not it.
 
 Scope: only **Posts** and **Pages** are slug-routed (`slugPaths.ts`).
-Categories, Tags, Projects and Authors carry a slug with no public URL behind
-it and keep the plain derive-from-title behaviour.
+Categories, Tags, Projects, Authors and WorkHistory carry a slug with no public
+URL behind it and keep the plain derive-from-title behaviour.
+
+**WorkHistory's slug is an addressing key, not a route (#137).** It is `unique`
+and derives from `company`. Nothing resolves a `work-history` row by URL — the
+narrative for a role is a **Page** under `/work`, and the collection stays the
+structured facts behind it. Two consumers need to name a role without holding
+its id: Corvus composes `/work/<slug>` for the row's citation
+(`sourceUrlFor`, `src/lib/ai/chunking.ts`), and the `workHistoryCard` block's
+`entry` relationship and the role Page agree by convention on one spelling.
 
 **Who purges which path (#132).** Two hooks call `revalidatePath` on a rename
 and the split between them is a cross-file contract, so it is stated here
