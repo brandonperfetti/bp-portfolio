@@ -154,7 +154,8 @@ const isAbsoluteDestination = (destination: string): boolean =>
  * move cost one row instead of one per descendant — see the field's comment in
  * `src/plugins/index.ts` for the ceiling that motivates it.
  *
- * Three rules, all of them consequences rather than choices:
+ * Four rules, all of them consequences rather than choices — and rules 1 and 4
+ * are the same consequence twice, which is why the fourth was missed at first:
  *
  * 1. **Exact matches are tried first, across the whole list**, which is why
  *    this is two passes and not one loop with a `continue`. A single pass would
@@ -171,11 +172,62 @@ const isAbsoluteDestination = (destination: string): boolean =>
  *    started — the shape a move-and-move-back leaves behind — produces
  *    `/work/x → /work/x` only after the suffix is appended, so checking `to`
  *    alone would miss it and serve an infinite redirect.
+ * 4. **Among matching prefix rows, the LONGEST `from` wins** (ties keep the
+ *    first in list order). Rule 1 says row order must not decide an answer,
+ *    because row order is whatever Payload returned; this is that same argument
+ *    applied to prefix-against-prefix, and it took a walkthrough on a real
+ *    database to notice the first pass had only made it for exact-against-prefix.
  *
- * A prefix row is skipped when its `to` is absolute: appending a path suffix to
- * an editor's `https://example.com/moved` is a URL this function has no
- * business inventing, and the exact-match pass has already served that row for
- * the one request it genuinely describes.
+ * ## Why longest wins — the rename-under-rename case
+ *
+ * [measured, orchestrator walkthrough on a prod-restore database, admin UI,
+ * M4 applied] a three-level tree, renamed from the inside out:
+ *
+ * ```text
+ * rename  /lab-parent/lab-child → …/lab-kid   ⇒ row A: /lab-parent/lab-child  (prefix)
+ * move    the grandchild up one level          ⇒ row B: /lab-parent/lab-kid/lab-grandchild
+ * rename  /lab-parent → /lab-base              ⇒ row C: /lab-parent           (prefix)
+ * ```
+ *
+ * A request for `/lab-parent/lab-child/lab-grandchild` — an inbound link
+ * captured before either rename — matches BOTH A and C, and the answers differ:
+ *
+ * | chosen row | result | |
+ * | --- | --- | --- |
+ * | C (`/lab-parent`, shorter) | `/lab-base/lab-child/lab-grandchild` | **404** |
+ * | A (`/lab-parent/lab-child`, longer) | `/lab-base/lab-kid/lab-grandchild` | resolves |
+ *
+ * C carries the remainder `lab-child/lab-grandchild` across verbatim, and
+ * `lab-child` is a segment that has not existed since step 1 — so the shorter
+ * row confidently produces a URL nothing serves. A is the more specific truth:
+ * it was captured under an ancestor that has since moved, and its own
+ * destination is a *reference*, so it resolves through the child's CURRENT
+ * path — which already includes the renamed parent. Row B then covers the
+ * grandchild's own move on the next request; chains still cannot form, because
+ * every hop resolves through a document rather than through another row.
+ *
+ * Before this rule the answer was whichever of A and C `payload.find` happened
+ * to return first.
+ * [measured, unit probe: list C-then-A gave the dead URL, list A-then-C the
+ * live one]
+ *
+ * ## The chosen row is the only row
+ *
+ * Selection happens over the whole list BEFORE any destination is inspected,
+ * and a chosen row that cannot serve the request answers `null` rather than
+ * yielding to a shorter one. That covers two cases:
+ *
+ * - **An absolute `to`.** Appending a path suffix to an editor's
+ *   `https://example.com/moved` is a URL this function has no business
+ *   inventing; the exact-match pass has already served that row for the one
+ *   request it genuinely describes.
+ * - **A self-redirect** on the rewritten destination (rule 3).
+ *
+ * Falling through in either case would let a less specific ancestor answer for
+ * a subtree a more specific row owns — rule 4's defect arriving by a side door.
+ * "The most specific row says no" means no, exactly as it does in the exact
+ * pass, where a matching row with an empty or self-pointing destination
+ * likewise returns `null` instead of looking for a second opinion.
  */
 export const resolveRedirect = (
   redirects: CmsRedirect[],
@@ -201,27 +253,45 @@ export const resolveRedirect = (
       : { destination, permanent }
   }
 
+  // Pass two, in two steps: CHOOSE the row, then act on it. The choice is made
+  // over the whole list before any destination is looked at, because a row's
+  // destination must never decide which row applies — see rule 4 and the
+  // absolute-`to` case below.
+  let best: CmsRedirect | null = null
+  let bestLength = -1
+
   for (const redirect of redirects) {
     if (redirect.matchDescendants !== true) continue
     const from = normalizeRedirectPath(redirect.from)
     // The exact case was decided by the pass above; here `from` is a strict
     // ancestor, and the slash is what keeps `/workshops` out of `/work`.
     if (!target.startsWith(`${from}/`)) continue
-    const destination = redirect.to.trim()
-    if (!destination || isAbsoluteDestination(destination)) continue
-    const rewritten = `${normalizeRedirectPath(destination)}${target.slice(
-      from.length,
-    )}`
-    // The guard on the REWRITTEN destination, which is the only form that can
-    // equal the request.
-    if (rewritten === target) return null
-    return {
-      destination: rewritten,
-      permanent: isPermanentRedirect(redirect.type),
+    // Strictly greater, so a tie keeps the first row in list order.
+    if (from.length > bestLength) {
+      best = redirect
+      bestLength = from.length
     }
   }
 
-  return null
+  if (!best) return null
+
+  const from = normalizeRedirectPath(best.from)
+  const destination = best.to.trim()
+  // Both of these mean "the most specific row cannot serve this request", and
+  // both therefore mean NO redirect. Falling through to a shorter row here
+  // would let a less specific ancestor answer for a subtree a more specific one
+  // owns — the same defect rule 4 exists to prevent, arriving by a side door.
+  if (!destination || isAbsoluteDestination(destination)) return null
+  const rewritten = `${normalizeRedirectPath(destination)}${target.slice(
+    from.length,
+  )}`
+  // The guard on the REWRITTEN destination, which is the only form that can
+  // equal the request.
+  if (rewritten === target) return null
+  return {
+    destination: rewritten,
+    permanent: isPermanentRedirect(best.type),
+  }
 }
 
 /** Collect the referenced document ids per collection, at depth 0. */

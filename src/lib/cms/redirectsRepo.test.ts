@@ -163,6 +163,101 @@ describe('resolveRedirect · descendant prefix rows (#150)', () => {
     ).toEqual({ destination: '/experience/bc', permanent: false })
   })
 
+  /**
+   * Longest prefix wins (rule 4), from the orchestrator's walkthrough on a
+   * prod-restore database: a three-level tree renamed from the inside out
+   * leaves two prefix rows that both match one inbound URL, and only the more
+   * specific one produces a URL that still exists.
+   */
+  describe('two nested prefix rows both matching (#150, rule 4)', () => {
+    // Row A: the child was renamed lab-child -> lab-kid, under the OLD parent.
+    const rowA = prefixRow('/lab-parent/lab-child', '/lab-parent/lab-kid')
+    // Row C: the parent was then renamed lab-parent -> lab-base.
+    const rowC = prefixRow('/lab-parent', '/lab-base')
+    const inbound = '/lab-parent/lab-child/lab-grandchild'
+
+    it('picks the longer row regardless of list order', () => {
+      // The whole point. Row order is whatever Payload returned, and before
+      // rule 4 it decided the answer: [C, A] produced the dead
+      // `/lab-base/lab-child/lab-grandchild`, [A, C] the live one.
+      const fromCFirst = resolveRedirect([rowC, rowA], inbound)
+      const fromAFirst = resolveRedirect([rowA, rowC], inbound)
+
+      expect(fromCFirst).toEqual(fromAFirst)
+      expect(fromCFirst).toEqual(
+        permanentlyTo('/lab-parent/lab-kid/lab-grandchild'),
+      )
+    })
+
+    it('does not carry a segment that no longer exists', () => {
+      // What the shorter row would have done: `lab-child` has not existed
+      // since the first rename, so `/lab-base/lab-child/lab-grandchild` 404s.
+      expect(resolveRedirect([rowC, rowA], inbound)?.destination).not.toContain(
+        'lab-child',
+      )
+    })
+
+    /**
+     * The chain case, asserted at ONE hop. Row A's real destination is a
+     * document reference, which `getCmsRedirects` has already resolved through
+     * the child's CURRENT path — so the row this function sees says
+     * `/lab-base/lab-kid`, and the answer is the grandchild under the renamed
+     * parent. The grandchild's own move (row B) is a separate request and is
+     * deliberately not simulated here.
+     */
+    it('yields the live single-hop destination once the reference is resolved', () => {
+      const resolvedA = prefixRow('/lab-parent/lab-child', '/lab-base/lab-kid')
+
+      for (const list of [
+        [resolvedA, rowC],
+        [rowC, resolvedA],
+      ]) {
+        expect(resolveRedirect(list, inbound)).toEqual(
+          permanentlyTo('/lab-base/lab-kid/lab-grandchild'),
+        )
+      }
+    })
+
+    it('answers null when the LONGEST row leaves the site — no fallback to the shorter one', () => {
+      // The negative control. Falling through to `/lab-parent` here would let a
+      // less specific ancestor answer for a subtree the specific row owns —
+      // rule 4's defect arriving by a side door.
+      const absoluteA = prefixRow(
+        '/lab-parent/lab-child',
+        'https://example.com/moved',
+      )
+
+      expect(resolveRedirect([absoluteA, rowC], inbound)).toBeNull()
+      expect(resolveRedirect([rowC, absoluteA], inbound)).toBeNull()
+    })
+
+    it('answers null when the LONGEST row self-redirects, rather than falling back', () => {
+      const selfA = prefixRow('/lab-parent/lab-child', '/lab-parent/lab-child')
+
+      expect(resolveRedirect([selfA, rowC], inbound)).toBeNull()
+      expect(resolveRedirect([rowC, selfA], inbound)).toBeNull()
+    })
+
+    it('keeps first-in-list on a tie between equally specific rows', () => {
+      const first = prefixRow('/lab-parent', '/first')
+      const second = prefixRow('/lab-parent', '/second')
+
+      expect(resolveRedirect([first, second], '/lab-parent/x')).toEqual(
+        permanentlyTo('/first/x'),
+      )
+      expect(resolveRedirect([second, first], '/lab-parent/x')).toEqual(
+        permanentlyTo('/second/x'),
+      )
+    })
+
+    it('still lets an EXACT row beat the longest prefix row', () => {
+      // Rule 1 is unchanged by rule 4: the exact pass runs first and completes.
+      expect(
+        resolveRedirect([rowA, rowC, row(inbound, '/clients/gc')], inbound),
+      ).toEqual(permanentlyTo('/clients/gc'))
+    })
+  })
+
   it('skips a prefix row whose destination leaves the site', () => {
     // Appending a path suffix to an editor's absolute URL is a URL this
     // function has no business inventing.
