@@ -131,6 +131,11 @@ describe.skipIf(!connectionString)(
         where: { slug: { like: `%${MARKER}%` } },
         overrideAccess: true,
       })
+      await payload.delete({
+        collection: 'pages',
+        where: { slug: { like: `%${MARKER}%` } },
+        overrideAccess: true,
+      })
     }
 
     /** Create a post already published at `slug`. */
@@ -593,6 +598,76 @@ describe.skipIf(!connectionString)(
       const second = await redirectsFor(`/articles/${MARKER}-b`)
       expect(referenceValue(first.docs[0])).toBe(id)
       expect(referenceValue(second.docs[0])).toBe(id)
+    }, 180_000)
+
+    /**
+     * The second residue #150's comment records: un-placing a post clears its
+     * `path`, the article returns to `/articles/<slug>`, and the vacated
+     * section URL used to 404 — no page carries it, no post carries it, and
+     * the redirect table had nothing spelled that way.
+     *
+     * It is not a new branch in the hook. Un-placing changes the served path
+     * without changing the slug, so a slug-keyed writer computed
+     * `from === to` and returned; a path-keyed one sees a genuine move. This
+     * case exists because that is easy to break again by "optimising" the
+     * writer back onto the slug.
+     */
+    it('writes a path-keyed row when a placed post is UN-PLACED', async () => {
+      const section = await payload.create({
+        collection: 'pages',
+        overrideAccess: true,
+        context: { disableRevalidate: true },
+        data: {
+          title: `${MARKER}-section`,
+          layout: [{ blockType: 'spacer', size: 'md' }],
+          _status: 'published',
+          slug: `${MARKER}-section`,
+        } as never,
+      })
+
+      const id = await createPublished(`${MARKER}-placed`)
+      await payload.update({
+        collection: 'posts',
+        id,
+        overrideAccess: true,
+        context: { disableRevalidate: true },
+        data: { parent: section.id } as never,
+      })
+      const placed = await payload.findByID({
+        collection: 'posts',
+        id,
+        overrideAccess: true,
+      })
+      expect(placed.path).toBe(`${MARKER}-section/${MARKER}-placed`)
+
+      revalidatePath.mockClear()
+
+      // Un-place: `parent: null` is the editor clearing the field, which
+      // `placementOf` distinguishes from "not sent".
+      const unplaced = await payload.update({
+        collection: 'posts',
+        id,
+        overrideAccess: true,
+        data: { parent: null } as never,
+      })
+      expect(unplaced.path ?? null).toBeNull()
+
+      const vacated = `/${MARKER}-section/${MARKER}-placed`
+      const rows = await redirectsFor(vacated)
+      expect(rows.totalDocs).toBe(1)
+      expect(
+        (rows.docs[0].to as { reference?: { value?: unknown } } | undefined)
+          ?.reference?.value,
+      ).toBe(id)
+      // And the vacated URL is purged, so it falls through to the not-found
+      // branch that reads the row rather than serving its prerendered shell.
+      expect(revalidatePath).toHaveBeenCalledWith(vacated)
+
+      await payload.delete({
+        collection: 'pages',
+        id: section.id,
+        overrideAccess: true,
+      })
     }, 180_000)
   },
 )

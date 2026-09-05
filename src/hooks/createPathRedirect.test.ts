@@ -351,6 +351,37 @@ describe('createPathRedirect', () => {
     )
   })
 
+  /**
+   * The second #150 residue: un-placing clears `path`, so the article returns
+   * to `/articles/<slug>` and the section URL it vacated used to 404. The slug
+   * never moves, so a slug-keyed writer computed `from === to` and wrote
+   * nothing — this is the case that proves `to` is read off the document and
+   * not off its slug.
+   */
+  it('writes a row when a placed post is un-placed and the slug did not move', async () => {
+    const { create } = await publish({
+      data: { _status: 'published', parent: null, slug: 'dup' },
+      doc: { id: 5, _status: 'published', path: null, slug: 'dup' },
+      originalDoc: { id: 5, _status: 'draft', path: 'work2/dup', slug: 'dup' },
+      publishedPath: 'work2/dup',
+      publishedSlug: 'dup',
+    })
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          from: '/work2/dup',
+          to: {
+            type: 'reference',
+            reference: { relationTo: 'posts', value: 5 },
+          },
+          type: '301',
+        },
+      }),
+    )
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/work2/dup')
+  })
+
   it('falls back to the captured slug when no path was stashed', async () => {
     const harness = makeHarness()
     const req = harness.makeReq('old')
