@@ -36,6 +36,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  *
  * Runs in the `e2e` job, the only one with `pgvector/pgvector:pg16` and a real
  * `pnpm migrate`. Every row is marked and removed in `afterAll`.
+ *
+ * **The no-regression AC is pinned to a snapshot, not to a sweep.** Vitest runs
+ * this tier's files in parallel workers against ONE database, so at any instant
+ * the `posts` table also holds another file's in-flight fixtures — including
+ * the placed post `pages-hierarchy-integration.test.ts` creates for #150. The
+ * baseline captured in `beforeAll` is therefore the set of ids this AC means,
+ * and the AC re-reads exactly those. See the AC's own comment.
  */
 
 vi.mock('next/cache', () => ({
@@ -50,6 +57,20 @@ const connectionString = process.env.DATABASE_URI
 
 /** Marks every document this file writes, for exact cleanup. */
 const MARKER = 'zz-post-placement-integration'
+
+/**
+ * The slug prefix every eval-tier integration file marks its fixtures with.
+ *
+ * @remarks `zz-post-placement-integration`, `zz-pages-hierarchy-integration`
+ * and `zz-slug-redirect-integration` all start here, so "does not start with
+ * `zz-`" is the one predicate that separates real corpus rows from ANY of this
+ * tier's fixtures — not just this file's. Those three are the whole set that
+ * writes `posts` rows: the tier's other two database files
+ * (`pgvector-integration.test.ts`, `github-repos-pgvector.test.ts`) go straight
+ * at `corvus_embeddings` through a raw pg `Pool`, and the `'posts'` in their
+ * fixtures is that table's `collection` COLUMN, never a row in `posts`.
+ */
+const FIXTURE_PREFIX = 'zz-'
 
 /** A minimal valid `layout` — the Pages field is `required`, so `[]` is rejected. */
 const layout = [{ blockType: 'spacer', size: 'md' }]
@@ -120,6 +141,21 @@ describe.skipIf(!connectionString)(
      */
     let createdArchiveId: number | string | null = null
 
+    /**
+     * Every non-fixture post as it stood before this file wrote anything.
+     *
+     * @remarks Captured in `beforeAll` so the no-regression AC has an actual
+     * baseline to compare against. Rows whose slug starts with
+     * {@link FIXTURE_PREFIX} are excluded because they belong to this tier's
+     * other files, which run in PARALLEL workers against this same database
+     * and legitimately place their own posts.
+     */
+    let baseline: {
+      id: number | string
+      slug: string | null | undefined
+      path: string | null
+    }[] = []
+
     const cleanup = async () => {
       if (!payload) return
       // Rows `createPathRedirect` wrote for the moves these cases make (#150).
@@ -184,6 +220,19 @@ describe.skipIf(!connectionString)(
       ;({ publicPathFor } = await import('../src/fields/slug/slugPaths'))
       payload = await getPayload({ config })
       await cleanup()
+
+      // Before this file creates a single fixture, so the AC below compares
+      // against the corpus as M2 left it.
+      const { docs: preExisting } = await payload.find({
+        collection: 'posts',
+        overrideAccess: true,
+        limit: 0,
+        pagination: false,
+      })
+      baseline = preExisting
+        .filter((doc) => !(doc.slug ?? '').startsWith(FIXTURE_PREFIX))
+        .map((doc) => ({ id: doc.id, slug: doc.slug, path: doc.path ?? null }))
+
       section = await mkPage(`${MARKER}-work`)
     }, 120_000)
 
@@ -516,16 +565,45 @@ describe.skipIf(!connectionString)(
     })
 
     it('AC — every pre-existing post URL is byte-identical after M2', async () => {
-      // Nothing outside this file's own marker was placed, so every other post
-      // in the database must still answer `/articles/<slug>`.
-      const { docs } = await payload.find({
+      // "Byte-identical" is a statement about the posts that existed BEFORE
+      // this file ran, so it is those exact ids that get re-read — not
+      // whatever the table happens to hold now.
+      //
+      // The sweep this replaced (`slug not_like %MARKER%`) could not express
+      // that: this tier's files run in parallel Vitest workers against one
+      // database, so the rows it caught were another file's live fixtures.
+      // `pages-hierarchy-integration.test.ts` legitimately places a post for
+      // its #150 subtree-move case, and the sweep asserted that post's path
+      // was null — a cross-file race, not a regression in M2 (PR #179 CI).
+      for (const before of baseline) {
+        const after = await payload.findByID({
+          collection: 'posts',
+          id: before.id,
+          overrideAccess: true,
+        })
+        expect(after.slug).toBe(before.slug)
+        expect(after.path ?? null).toBe(before.path)
+        // Unchanged URL, derived from the snapshot: an unplaced post keeps
+        // `/articles/<slug>` byte for byte, and a post that was ALREADY placed
+        // before this file ran is pre-existing site content rather than
+        // anything M2 did to it.
+        expect(publicPathFor('posts', after)).toBe(
+          before.path ? `/${before.path}` : `/articles/${before.slug}`,
+        )
+      }
+
+      // On a freshly migrated CI database the baseline is empty, which would
+      // leave the loop above vacuous. This half always has something to say:
+      // the posts THIS file left unplaced must still answer `/articles`.
+      const { docs: plain } = await payload.find({
         collection: 'posts',
         overrideAccess: true,
-        limit: 1000,
+        limit: 0,
         pagination: false,
-        where: { slug: { not_like: `%${MARKER}%` } },
+        where: { slug: { like: `%${MARKER}-plain%` } },
       })
-      for (const doc of docs) {
+      expect(plain.length).toBeGreaterThan(0)
+      for (const doc of plain) {
         expect(doc.path ?? null).toBeNull()
         expect(publicPathFor('posts', doc)).toBe(`/articles/${doc.slug}`)
       }

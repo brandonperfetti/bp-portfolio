@@ -504,79 +504,123 @@ describe.skipIf(!connectionString)(
      *
      * Its own subtree, deliberately: the cases above assert on `…-root` and
      * would see a moved tree instead.
+     *
+     * **It also deletes its own rows before it returns.** This is the only
+     * case in the tier that leaves a PLACED post (non-null `path`) behind, and
+     * `post-placement-integration.test.ts` runs in a parallel worker against
+     * the same database while it exists. Leaving the delete to `afterAll` made
+     * that post visible to a sibling file for the whole run; the `finally`
+     * narrows the window to this test's own body. `afterAll` still sweeps the
+     * same rows, so a failure mid-body cannot leak them either.
      */
     it('moves a whole subtree when the section page is renamed (#150)', async () => {
-      const section = await mkPage(`${MARKER}-mv`)
-      const child = await mkPage(`${MARKER}-mv-child`, section.id)
-      expect(child.path).toBe(`${MARKER}-mv/${MARKER}-mv-child`)
-      const leaf = await mkPage(`${MARKER}-mv-leaf`, child.id)
-      expect(leaf.path).toBe(
-        `${MARKER}-mv/${MARKER}-mv-child/${MARKER}-mv-leaf`,
-      )
-      const placed = await payload.create({
-        collection: 'posts',
-        overrideAccess: true,
-        data: {
-          title: `${MARKER}-mv-post`,
-          slug: `${MARKER}-mv-post`,
-          _status: 'published',
-          content: lexical('body'),
-          parent: section.id,
-        } as never,
-      })
-      expect(placed.path).toBe(`${MARKER}-mv/${MARKER}-mv-post`)
-
-      await payload.update({
-        collection: 'pages',
-        id: section.id,
-        overrideAccess: true,
-        data: { slug: `${MARKER}-xp`, slugLock: false },
-      })
-
-      const pathOf = async (
+      // Leaf-first (newest first). Postgres would accept either order — both
+      // `parent` FKs are `ON DELETE set null` (`20260902_233433_pages_hierarchy`,
+      // `20260903_163051_posts_placement`) and no `beforeDelete` hook exists —
+      // so this is hygiene, not a constraint: unwinding in reverse creation
+      // order means no surviving row is ever left pointing at a parent that
+      // has just been deleted, not even for the span of this loop.
+      const created: { collection: 'pages' | 'posts'; id: number | string }[] =
+        []
+      const track = <T extends { id: number | string }>(
         collection: 'pages' | 'posts',
-        id: number | string,
-      ) =>
-        (await payload.findByID({ collection, id, overrideAccess: true })).path
+        doc: T,
+      ): T => {
+        created.unshift({ collection, id: doc.id })
+        return doc
+      }
 
-      // Every descendant moved, at every depth, in both collections. These
-      // are the STORED values read back, and the cascade supplies no path at
-      // all — `computePagePath`/`computePostPath` recompute each one from its
-      // parent's stored path, so this is the assertion that the recomputation
-      // (and the shallowest-first ordering it depends on) is what actually
-      // lands.
-      expect(await pathOf('pages', child.id)).toBe(
-        `${MARKER}-xp/${MARKER}-mv-child`,
-      )
-      expect(await pathOf('pages', leaf.id)).toBe(
-        `${MARKER}-xp/${MARKER}-mv-child/${MARKER}-mv-leaf`,
-      )
-      expect(await pathOf('posts', placed.id)).toBe(
-        `${MARKER}-xp/${MARKER}-mv-post`,
-      )
+      try {
+        const section = track('pages', await mkPage(`${MARKER}-mv`))
+        const child = track(
+          'pages',
+          await mkPage(`${MARKER}-mv-child`, section.id),
+        )
+        expect(child.path).toBe(`${MARKER}-mv/${MARKER}-mv-child`)
+        const leaf = track('pages', await mkPage(`${MARKER}-mv-leaf`, child.id))
+        expect(leaf.path).toBe(
+          `${MARKER}-mv/${MARKER}-mv-child/${MARKER}-mv-leaf`,
+        )
+        const placed = track(
+          'posts',
+          await payload.create({
+            collection: 'posts',
+            overrideAccess: true,
+            data: {
+              title: `${MARKER}-mv-post`,
+              slug: `${MARKER}-mv-post`,
+              _status: 'published',
+              content: lexical('body'),
+              parent: section.id,
+            } as never,
+          }),
+        )
+        expect(placed.path).toBe(`${MARKER}-mv/${MARKER}-mv-post`)
 
-      // The moved page's OWN old URL gets a row (`createPathRedirect`).
-      const own = await payload.find({
-        collection: 'redirects',
-        depth: 0,
-        overrideAccess: true,
-        pagination: false,
-        where: { from: { equals: `/${MARKER}-mv` } },
-      })
-      expect(own.totalDocs).toBe(1)
-      // D4: it is a PREFIX row, so it covers the whole subtree by itself.
-      expect(own.docs[0].matchDescendants).toBe(true)
+        await payload.update({
+          collection: 'pages',
+          id: section.id,
+          overrideAccess: true,
+          data: { slug: `${MARKER}-xp`, slugLock: false },
+        })
 
-      // And no per-descendant rows: D4 says one prefix row per move, so the
-      // cascade passes `disableSlugRedirect` on every descendant write.
-      const perDescendant = await payload.find({
-        collection: 'redirects',
-        depth: 0,
-        overrideAccess: true,
-        pagination: false,
-        where: { from: { equals: `/${MARKER}-mv/${MARKER}-mv-child` } },
-      })
-      expect(perDescendant.totalDocs).toBe(0)
+        const pathOf = async (
+          collection: 'pages' | 'posts',
+          id: number | string,
+        ) =>
+          (await payload.findByID({ collection, id, overrideAccess: true }))
+            .path
+
+        // Every descendant moved, at every depth, in both collections. These
+        // are the STORED values read back, and the cascade supplies no path at
+        // all — `computePagePath`/`computePostPath` recompute each one from its
+        // parent's stored path, so this is the assertion that the recomputation
+        // (and the shallowest-first ordering it depends on) is what actually
+        // lands.
+        expect(await pathOf('pages', child.id)).toBe(
+          `${MARKER}-xp/${MARKER}-mv-child`,
+        )
+        expect(await pathOf('pages', leaf.id)).toBe(
+          `${MARKER}-xp/${MARKER}-mv-child/${MARKER}-mv-leaf`,
+        )
+        expect(await pathOf('posts', placed.id)).toBe(
+          `${MARKER}-xp/${MARKER}-mv-post`,
+        )
+
+        // The moved page's OWN old URL gets a row (`createPathRedirect`).
+        const own = await payload.find({
+          collection: 'redirects',
+          depth: 0,
+          overrideAccess: true,
+          pagination: false,
+          where: { from: { equals: `/${MARKER}-mv` } },
+        })
+        expect(own.totalDocs).toBe(1)
+        // D4: it is a PREFIX row, so it covers the whole subtree by itself.
+        expect(own.docs[0].matchDescendants).toBe(true)
+
+        // And no per-descendant rows: D4 says one prefix row per move, so the
+        // cascade passes `disableSlugRedirect` on every descendant write.
+        const perDescendant = await payload.find({
+          collection: 'redirects',
+          depth: 0,
+          overrideAccess: true,
+          pagination: false,
+          where: { from: { equals: `/${MARKER}-mv/${MARKER}-mv-child` } },
+        })
+        expect(perDescendant.totalDocs).toBe(0)
+      } finally {
+        // `where`, not `id`: a by-id delete throws NotFound if the row never
+        // got created (an assertion above failed first), which would replace
+        // the real failure with a cleanup error.
+        for (const row of created) {
+          await payload.delete({
+            collection: row.collection,
+            where: { id: { equals: row.id } },
+            overrideAccess: true,
+          })
+        }
+      }
     }, 180_000)
   },
 )
