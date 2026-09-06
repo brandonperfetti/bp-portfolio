@@ -62,6 +62,10 @@ export default defineConfig({
               replacement: serverBlockStub,
             },
             {
+              find: /^@\/blocks\/PostRollup\/Component$/,
+              replacement: serverBlockStub,
+            },
+            {
               find: /^@\/blocks\/WorkHistoryCard\/Component$/,
               replacement: serverBlockStub,
             },

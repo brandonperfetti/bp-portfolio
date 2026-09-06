@@ -46,6 +46,17 @@ export type CorvusCollectionSlug = (typeof CORVUS_EMBEDDED_COLLECTIONS)[number]
 export const CORVUS_GITHUB_REPOS_COLLECTION = 'github-repos'
 
 /**
+ * The section every role's Page lives under, and therefore the prefix a
+ * `work-history` citation composes against (#137).
+ *
+ * @remarks Not derived from `SLUG_ROUTED_COLLECTIONS`: `/work` is a hierarchy
+ * *Page* (`path: 'work'`), not a collection prefix, so there is nothing in the
+ * routing map to read it from. Named here so the one place that knows it is
+ * the one place that builds the citation.
+ */
+const WORK_SECTION_PREFIX = '/work'
+
+/**
  * Every value that may appear in `corvus_embeddings.collection`.
  *
  * @remarks Wider than {@link CorvusCollectionSlug} on purpose. The CMS-facing
@@ -169,8 +180,10 @@ export function hashChunkContent(content: string): string {
  * @param collection - Collection slug.
  * @param ref - For `posts`, the document (or any projection carrying `slug` and,
  * when placed, `path`); a bare slug string is accepted and read as unplaced. For
- * `github-repos`, the repo's `owner/name` full name. Unused by the four flat
- * collections, which have no per-document route.
+ * `work-history`, the document or slug naming the role's Page under `/work`
+ * (#137) — a row without one still cites `/`. For `github-repos`, the repo's
+ * `owner/name` full name. Unused by the remaining three flat collections, which
+ * cite the single index page that renders them.
  * @returns A URL for the chunk to cite, or `null` when none applies.
  */
 export function sourceUrlFor(
@@ -197,8 +210,22 @@ export function sourceUrlFor(
       return '/uses'
     case 'tech-stack':
       return '/tech'
-    case 'work-history':
-      return '/'
+    case 'work-history': {
+      // #137: a role's public home is its Page under the `/work` section, and
+      // `work-history` rows carry a slug precisely so this citation can be
+      // composed without a route of their own. Composed here rather than
+      // through `publicPathFor` on purpose: `work-history` is deliberately NOT
+      // in `SLUG_ROUTED_COLLECTIONS` (nothing routes on its slug, and putting
+      // it there would extend the #120 slug freeze to a collection with no URL
+      // to protect), so this is the one place that knows the `/work` prefix.
+      //
+      // The fallback to `/` is the pre-#137 behaviour and is deliberately
+      // kept: a row seeded before the slug field existed has no slug, and a
+      // citation of `/work/` — a URL that 404s — would be strictly worse than
+      // the homepage it used to cite.
+      const slug = typeof doc.slug === 'string' ? doc.slug.trim() : ''
+      return slug ? `${WORK_SECTION_PREFIX}/${slug}` : '/'
+    }
     case CORVUS_GITHUB_REPOS_COLLECTION: {
       const fullName = typeof ref === 'string' ? ref.trim() : ''
       // `owner/name`, both segments present. A half-formed value would
@@ -398,6 +425,123 @@ const techNames = (value: unknown): string => {
 const dateOnly = (value: unknown): string => str(value).slice(0, 10)
 
 /**
+ * The values `tech_stack.proficiency` may hold.
+ *
+ * @remarks Mirrors the `options` on `src/collections/TechStack.ts`. Written
+ * out rather than derived from that config for the reason the label map below
+ * gives — importing the collection would drag Payload's field types into a
+ * module the eval fixtures load — and pinned against it by test, so the two
+ * cannot disagree.
+ */
+export type TechProficiency = 'daily' | 'proficient' | 'familiar' | 'exploring'
+
+/**
+ * `tech_stack.proficiency`'s stored values, mapped to their admin labels.
+ *
+ * @remarks A copy of the `options` on `src/collections/TechStack.ts`, and
+ * deliberately a copy rather than an import: that module pulls in Payload's
+ * field types, and `chunking.ts` is imported by the eval fixture retriever
+ * and by `scorers.test.ts`, neither of which should drag a CMS config in.
+ * `chunking.test.ts` pins the pair against each other, so the copy cannot
+ * drift silently.
+ *
+ * The label is what gets embedded (#165). The stored value is an enum —
+ * `Proficiency: daily` — and "daily" in isolation reads as a frequency, not a
+ * ranking, so a question phrased "what do you use most" had nothing in the
+ * passage to match on. `Proficiency: Daily driver` says the thing the field
+ * means, in the words a visitor would use.
+ *
+ * Keyed by {@link TechProficiency} rather than by `string`, so a typo cannot
+ * silently produce a map with no `daily` key — which would disable the lead
+ * sentence and the ranking signal with it, and would do so without failing
+ * anything but a keyed eval run.
+ */
+export const TECH_PROFICIENCY_LABELS: Record<TechProficiency, string> = {
+  daily: 'Daily driver',
+  proficient: 'Proficient',
+  familiar: 'Familiar',
+  exploring: 'Exploring',
+}
+
+/**
+ * The stored `proficiency` value that marks Brandon's everyday stack.
+ *
+ * @remarks Named because three things key on it: the lead sentence below, the
+ * ranking rule in `groundedSystem.ts`, and the docs. Ten rows carry it on the
+ * production database — TypeScript, Node.js, React, Next.js, GraphQL,
+ * Tailwind CSS, Clerk, Supabase, Vercel and AI SDK — measured 2026-09-04
+ * (#165).
+ */
+export const DAILY_DRIVER_PROFICIENCY: TechProficiency = 'daily'
+
+/**
+ * The human label for a stored proficiency value.
+ *
+ * @param proficiency - The stored enum value, possibly empty.
+ * @returns The admin label, or the raw value when it is not one we know
+ * (a value added to the collection before this map catches up embeds as
+ * itself rather than disappearing from the chunk).
+ */
+export function techProficiencyLabel(proficiency: string): string {
+  // Widened to `string` at the boundary on purpose: `doc.proficiency` arrives
+  // from a Payload document as unknown data, so the lookup has to tolerate a
+  // value the union does not name. The `??` below is what handles that, and
+  // the return type says an unknown value passes through rather than
+  // disappearing from the chunk.
+  return (
+    (TECH_PROFICIENCY_LABELS as Record<string, string | undefined>)[
+      proficiency
+    ] ?? proficiency
+  )
+}
+
+/**
+ * The sentence that opens a daily-driver technology's chunk (#165).
+ *
+ * @remarks The measured defect: asked "What tech do you use?" on production
+ * (2026-09-04) Corvus answered TypeScript, TanStack, Vite, Vercel and Expo —
+ * Next.js and React, the stack behind most of Brandon's repositories, absent.
+ * Retrieval is pure vector similarity, so the answer was whichever `tech-stack`
+ * rows happened to embed nearest the phrasing, and a bare `Proficiency: daily`
+ * line gave the ranking signal almost no surface to be found by.
+ *
+ * A sentence, not another label, and FIRST in the chunk: labelled fields embed
+ * as a list of attributes, while prose about what Brandon reaches for most days
+ * is the shape a "what do you use?" question actually resembles.
+ *
+ * Its VOCABULARY is constrained, and measurably so. The eval tier scores by
+ * query-term coverage rather than cosine distance (`fixtures/retriever.ts`),
+ * so a word in this sentence is a word every daily-driver chunk now matches
+ * on. A first draft carrying "stack", "technologies" and "works" lifted all
+ * six daily fixture rows over the Vitest and PostgreSQL rows for
+ * "which testing tool appears in the tech stack" and
+ * "what proficiency does the tech stack give PostgreSQL", breaking four
+ * retrieval preconditions in `evals/scorers.test.ts` `[measured, 2026-09-04]`.
+ * The wording below deliberately avoids the vocabulary those questions share
+ * with the labels. That is an artefact of the stand-in retriever, not of
+ * production embeddings — but the preconditions it protects are what keep a
+ * keyed eval run measuring Corvus rather than measuring a fixture.
+ *
+ * Note this changes chunk TEXT, so it changes `contentHash` — the four rows
+ * this affects re-embed on their next save, and
+ * `scripts/backfill-corvus-embeddings.ts` is what applies it to the whole
+ * corpus at once. Until one of those runs, stored rows keep the old wording;
+ * the prompt rule ships independently and does not wait for them.
+ *
+ * @param proficiency - The stored proficiency value.
+ * @param name - The technology's name, so the sentence names it.
+ * @returns The lead sentence, or `null` for every other proficiency.
+ */
+export function dailyDriverLead(
+  proficiency: string,
+  name: string,
+): string | null {
+  if (proficiency !== DAILY_DRIVER_PROFICIENCY) return null
+  const subject = name || 'This'
+  return `${subject} is one of Brandon Perfetti's daily drivers — he reaches for it most days, rather than having only tried it.`
+}
+
+/**
  * Render one flat-collection document as a single labelled record.
  *
  * @remarks These four collections are small, flat, and draft-free — a
@@ -438,16 +582,19 @@ export function chunkFlatRecord(
         label('Link', doc.link),
       ]
       break
-    case 'tech-stack':
+    case 'tech-stack': {
       title = str(doc.name) || null
+      const proficiency = str(doc.proficiency)
       lines = [
+        dailyDriverLead(proficiency, str(doc.name)),
         label('Technology', doc.name),
         label('Category', doc.category),
-        label('Proficiency', doc.proficiency),
+        label('Proficiency', techProficiencyLabel(proficiency)),
         label('URL', doc.url),
         label('Notes', doc.notes),
       ]
       break
+    }
     case 'work-history': {
       const company = str(doc.company)
       const role = str(doc.title)
@@ -475,7 +622,12 @@ export function chunkFlatRecord(
       title,
       content,
       contentHash: hashChunkContent(content),
-      sourceUrl: sourceUrlFor(collection),
+      // The document, not nothing: `work-history` composes `/work/<slug>` from
+      // it (#137). The other three flat collections cite a fixed index page
+      // and ignore the argument entirely, so passing it is free.
+      sourceUrl: sourceUrlFor(collection, {
+        slug: typeof doc.slug === 'string' ? doc.slug : undefined,
+      }),
       // These four collections carry no access group — they render on public
       // index pages, so they are public by construction. Reading through
       // `visibilityOf` anyway means a future access group on any of them is

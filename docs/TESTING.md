@@ -11,7 +11,20 @@
   `PLAYWRIGHT_EXECUTABLE_PATH`. Conditional skips guard content-dependent
   specs (e.g. empty article DB).
 - **Storybook** — `pnpm build-storybook` is a CI gate (story breakage);
-  a11y addon fails stories on serious violations. **Interaction tests**:
+  a11y addon fails stories on serious violations. That gate is
+  **compile-only**, though: it proves a story module builds, not that it
+  renders or that its `play` asserted anything. What catches a render failure
+  is `pnpm test:storybook` (browser-mode Vitest, real Chromium) or loading a
+  story id from a served `storybook-static` — the runner loads
+  `.storybook/main.ts` via `storybookTest({ configDir })`, so canvas and runner
+  share one vite config on purpose, and #162 is what happens when they diverge
+  (a `define: { __dirname }` only `vitest.config.ts` carried; eight
+  `AI/CorvusChat` stories threw in the canvas while the runner stayed green).
+  Any bundler-level setting added to one config belongs in both. Deliberately
+  **no separate Playwright canvas smoke gate** (#162): with the configs
+  converged the browser-mode tier already mounts every story in a real browser,
+  so a second harness would only re-test that and add a browser download to CI.
+  **Interaction tests**:
   `@storybook/addon-vitest` runs every story as a Vitest browser-mode test
   (Playwright Chromium) — the `storybook` project, `pnpm test:storybook`.
   `play` functions are the interactions (composer typing/refocus, FAQ

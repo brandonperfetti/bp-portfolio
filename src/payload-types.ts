@@ -312,6 +312,7 @@ export interface Page {
     | MediaBlock
     | NewsletterSignupBlock
     | PhotoStripBlock
+    | PostRollupBlock
     | ProseBlock
     | ShaderHeroBlock
     | SocialLinksBlock
@@ -410,6 +411,7 @@ export interface Post {
         | MediaBlock
         | NewsletterSignupBlock
         | PhotoStripBlock
+        | PostRollupBlock
         | ProseBlock
         | ShaderHeroBlock
         | SocialLinksBlock
@@ -776,6 +778,7 @@ export interface ColumnBlock {
         | MediaBlock
         | NewsletterSignupBlock
         | PhotoStripBlock
+        | PostRollupBlock
         | ProseBlock
         | SocialLinksBlock
         | SpacerBlock
@@ -1041,6 +1044,63 @@ export interface PhotoStripBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "PostRollupBlock".
+ */
+export interface PostRollupBlock {
+  heading?: string | null;
+  /**
+   * By category rolls up every published article carrying the topic you pick — it works today, on the topics articles already have. By placement rolls up the articles filed under a section page.
+   */
+  source: 'by-category' | 'by-placement';
+  /**
+   * The topic whose articles this section rolls up.
+   */
+  category?: (number | null) | Category;
+  /**
+   * The section page whose placed articles this rolls up. Leave empty and the section renders nothing.
+   */
+  page?: (number | null) | Page;
+  /**
+   * Order the rolled-up articles are shown in.
+   */
+  sort?: ('newest' | 'oldest' | 'title') | null;
+  /**
+   * How many articles to show.
+   */
+  limit?: number | null;
+  /**
+   * Card grid and stacked list are the two treatments the Articles Archive block already renders — same cards, same hover. Compact list is a dense, dated index for a section page that leads with prose.
+   */
+  layout?: ('grid' | 'stacked' | 'compact-list') | null;
+  /**
+   * Fade the articles up one after another as they scroll into view. Off by default. Honors reduced motion (renders static).
+   */
+  revealOnScroll?: boolean | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'postRollup';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories".
+ */
+export interface Category {
+  id: number;
+  title: string;
+  /**
+   * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
+   */
+  slug?: string | null;
+  slugLock?: boolean | null;
+  /**
+   * Optional. When set, this topic’s chips on an article link to this page instead of a filtered /articles view. The filter chips on /articles are unaffected — they never navigate.
+   */
+  sectionPage?: (number | null) | Page;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ProseBlock".
  */
 export interface ProseBlock {
@@ -1194,12 +1254,48 @@ export interface WorkHistoryCardBlock {
    */
   intro?: string | null;
   /**
+   * Optional. Leave empty for the full résumé card. Pick one role to render just that role’s facts — company, title, period, logo and description — which is what a /work/<slug> page uses.
+   */
+  entry?: (number | null) | WorkHistory;
+  /**
+   * Render the role’s description paragraph under its facts.
+   */
+  showDescription?: boolean | null;
+  /**
    * Retired placeholder — the work-history card itself needs no configuration.
    */
   note?: string | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'workHistoryCard';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "work-history".
+ */
+export interface WorkHistory {
+  id: number;
+  company: string;
+  title: string;
+  description?: string | null;
+  logo?: (number | null) | Media;
+  startDate: string;
+  /**
+   * Leave empty for a current role.
+   */
+  endDate?: string | null;
+  current?: boolean | null;
+  /**
+   * Addressing key, not a URL: Corvus cites this role at /work/<slug>, and the role’s Page under /work should use the same spelling. Derived from the company name.
+   */
+  slug?: string | null;
+  slugLock?: boolean | null;
+  /**
+   * Lower numbers sort first (most recent role on top).
+   */
+  sortOrder?: number | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1278,21 +1374,6 @@ export interface ShaderHeroBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'shaderHero';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories".
- */
-export interface Category {
-  id: number;
-  title: string;
-  /**
-   * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
-   */
-  slug?: string | null;
-  slugLock?: boolean | null;
-  updatedAt: string;
-  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1449,29 +1530,6 @@ export interface User {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "work-history".
- */
-export interface WorkHistory {
-  id: number;
-  company: string;
-  title: string;
-  description?: string | null;
-  logo?: (number | null) | Media;
-  startDate: string;
-  /**
-   * Leave empty for a current role.
-   */
-  endDate?: string | null;
-  current?: boolean | null;
-  /**
-   * Lower numbers sort first (most recent role on top).
-   */
-  sortOrder?: number | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "redirects".
  */
 export interface Redirect {
@@ -1497,6 +1555,10 @@ export interface Redirect {
    * Permanent (301) tells browsers and search engines the move is forever and is cached indefinitely. Temporary (302) is for campaigns and short-lived moves.
    */
   type: '301' | '302';
+  /**
+   * Also redirect everything under this path, keeping the rest of the URL: /work → /experience also sends /work/brytecore to /experience/brytecore. Set automatically when a section page is moved.
+   */
+  matchDescendants?: boolean | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -2006,6 +2068,7 @@ export interface PagesSelect<T extends boolean = true> {
         mediaBlock?: T | MediaBlockSelect<T>;
         newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
         photoStrip?: T | PhotoStripBlockSelect<T>;
+        postRollup?: T | PostRollupBlockSelect<T>;
         prose?: T | ProseBlockSelect<T>;
         shaderHero?: T | ShaderHeroBlockSelect<T>;
         socialLinks?: T | SocialLinksBlockSelect<T>;
@@ -2170,6 +2233,7 @@ export interface ColumnBlockSelect<T extends boolean = true> {
         mediaBlock?: T | MediaBlockSelect<T>;
         newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
         photoStrip?: T | PhotoStripBlockSelect<T>;
+        postRollup?: T | PostRollupBlockSelect<T>;
         prose?: T | ProseBlockSelect<T>;
         socialLinks?: T | SocialLinksBlockSelect<T>;
         spacer?: T | SpacerBlockSelect<T>;
@@ -2317,6 +2381,22 @@ export interface PhotoStripBlockSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "PostRollupBlock_select".
+ */
+export interface PostRollupBlockSelect<T extends boolean = true> {
+  heading?: T;
+  source?: T;
+  category?: T;
+  page?: T;
+  sort?: T;
+  limit?: T;
+  layout?: T;
+  revealOnScroll?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ProseBlock_select".
  */
 export interface ProseBlockSelect<T extends boolean = true> {
@@ -2404,6 +2484,8 @@ export interface VideoEmbedBlockSelect<T extends boolean = true> {
 export interface WorkHistoryCardBlockSelect<T extends boolean = true> {
   heading?: T;
   intro?: T;
+  entry?: T;
+  showDescription?: T;
   note?: T;
   id?: T;
   blockName?: T;
@@ -2471,6 +2553,7 @@ export interface PostsSelect<T extends boolean = true> {
         mediaBlock?: T | MediaBlockSelect<T>;
         newsletterSignup?: T | NewsletterSignupBlockSelect<T>;
         photoStrip?: T | PhotoStripBlockSelect<T>;
+        postRollup?: T | PostRollupBlockSelect<T>;
         prose?: T | ProseBlockSelect<T>;
         shaderHero?: T | ShaderHeroBlockSelect<T>;
         socialLinks?: T | SocialLinksBlockSelect<T>;
@@ -2576,6 +2659,7 @@ export interface CategoriesSelect<T extends boolean = true> {
   title?: T;
   slug?: T;
   slugLock?: T;
+  sectionPage?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -2664,6 +2748,8 @@ export interface WorkHistorySelect<T extends boolean = true> {
   startDate?: T;
   endDate?: T;
   current?: T;
+  slug?: T;
+  slugLock?: T;
   sortOrder?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -2682,6 +2768,7 @@ export interface RedirectsSelect<T extends boolean = true> {
         url?: T;
       };
   type?: T;
+  matchDescendants?: T;
   updatedAt?: T;
   createdAt?: T;
 }

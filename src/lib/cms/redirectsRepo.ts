@@ -4,7 +4,8 @@ import { getPayload } from 'payload'
 import configPromise from '@payload-config'
 import {
   isSlugRoutedCollection,
-  publicPathForSlug,
+  publicPathFor,
+  type PathableDoc,
   type SlugRoutedCollection,
 } from '@/fields/slug/slugPaths'
 import { CMS_TAGS } from '@/lib/cms/cache'
@@ -30,6 +31,17 @@ export type CmsRedirectType = '301' | '302'
  */
 export type CmsRedirect = {
   from: string
+  /**
+   * Does this row also cover everything under `from`, keeping the remainder of
+   * the requested path? (#150)
+   *
+   * @remarks Optional rather than required so the dozens of existing
+   * `{ from, to, type }` literals — in this file's own tests and in every
+   * caller that builds a list by hand — stay valid, and so a row read back
+   * before the column existed reads as `false` rather than as a type error.
+   * {@link resolveRedirect} treats anything but `true` as an exact-only row.
+   */
+  matchDescendants?: boolean
   to: string
   type: CmsRedirectType
 }
@@ -133,12 +145,96 @@ const isAbsoluteDestination = (destination: string): boolean =>
  *
  * Both callers hand the destination to `permanentRedirect` or `redirect`, both
  * of which accept absolute URLs and query-bearing paths as-is.
+ *
+ * ## Prefix rows, and why exact wins (#150)
+ *
+ * A row with `matchDescendants` covers `from` and everything beneath it,
+ * carrying the remainder across: `/work` → `/experience` sends
+ * `/work/brytecore` to `/experience/brytecore`. That is what makes a section
+ * move cost one row instead of one per descendant — see the field's comment in
+ * `src/plugins/index.ts` for the ceiling that motivates it.
+ *
+ * Four rules, all of them consequences rather than choices — and rules 1 and 4
+ * are the same consequence twice, which is why the fourth was missed at first:
+ *
+ * 1. **Exact matches are tried first, across the whole list**, which is why
+ *    this is two passes and not one loop with a `continue`. A single pass would
+ *    let a prefix row that happens to sit earlier in the list beat a specific
+ *    override that sits later, making the answer depend on row order — and row
+ *    order here is "whatever Payload returned". An editor who writes
+ *    `/work/brytecore → /clients/brytecore` beside a `/work → /experience`
+ *    prefix row means the specific one.
+ * 2. **The boundary is a slash.** `startsWith('/work')` would also match
+ *    `/workshops`, a different page whose URL merely begins with the same
+ *    letters. The test is `target === from || target.startsWith(from + '/')`.
+ * 3. **The self-redirect guard applies to the REWRITTEN destination**, not to
+ *    the row's raw `to`. A prefix row whose target resolves back to where it
+ *    started — the shape a move-and-move-back leaves behind — produces
+ *    `/work/x → /work/x` only after the suffix is appended, so checking `to`
+ *    alone would miss it and serve an infinite redirect.
+ * 4. **Among matching prefix rows, the LONGEST `from` wins** (ties keep the
+ *    first in list order). Rule 1 says row order must not decide an answer,
+ *    because row order is whatever Payload returned; this is that same argument
+ *    applied to prefix-against-prefix, and it took a walkthrough on a real
+ *    database to notice the first pass had only made it for exact-against-prefix.
+ *
+ * ## Why longest wins — the rename-under-rename case
+ *
+ * [measured, orchestrator walkthrough on a prod-restore database, admin UI,
+ * M4 applied] a three-level tree, renamed from the inside out:
+ *
+ * ```text
+ * rename  /lab-parent/lab-child → …/lab-kid   ⇒ row A: /lab-parent/lab-child  (prefix)
+ * move    the grandchild up one level          ⇒ row B: /lab-parent/lab-kid/lab-grandchild
+ * rename  /lab-parent → /lab-base              ⇒ row C: /lab-parent           (prefix)
+ * ```
+ *
+ * A request for `/lab-parent/lab-child/lab-grandchild` — an inbound link
+ * captured before either rename — matches BOTH A and C, and the answers differ:
+ *
+ * | chosen row | result | |
+ * | --- | --- | --- |
+ * | C (`/lab-parent`, shorter) | `/lab-base/lab-child/lab-grandchild` | **404** |
+ * | A (`/lab-parent/lab-child`, longer) | `/lab-base/lab-kid/lab-grandchild` | resolves |
+ *
+ * C carries the remainder `lab-child/lab-grandchild` across verbatim, and
+ * `lab-child` is a segment that has not existed since step 1 — so the shorter
+ * row confidently produces a URL nothing serves. A is the more specific truth:
+ * it was captured under an ancestor that has since moved, and its own
+ * destination is a *reference*, so it resolves through the child's CURRENT
+ * path — which already includes the renamed parent. Row B then covers the
+ * grandchild's own move on the next request; chains still cannot form, because
+ * every hop resolves through a document rather than through another row.
+ *
+ * Before this rule the answer was whichever of A and C `payload.find` happened
+ * to return first.
+ * [measured, unit probe: list C-then-A gave the dead URL, list A-then-C the
+ * live one]
+ *
+ * ## The chosen row is the only row
+ *
+ * Selection happens over the whole list BEFORE any destination is inspected,
+ * and a chosen row that cannot serve the request answers `null` rather than
+ * yielding to a shorter one. That covers two cases:
+ *
+ * - **An absolute `to`.** Appending a path suffix to an editor's
+ *   `https://example.com/moved` is a URL this function has no business
+ *   inventing; the exact-match pass has already served that row for the one
+ *   request it genuinely describes.
+ * - **A self-redirect** on the rewritten destination (rule 3).
+ *
+ * Falling through in either case would let a less specific ancestor answer for
+ * a subtree a more specific row owns — rule 4's defect arriving by a side door.
+ * "The most specific row says no" means no, exactly as it does in the exact
+ * pass, where a matching row with an empty or self-pointing destination
+ * likewise returns `null` instead of looking for a second opinion.
  */
 export const resolveRedirect = (
   redirects: CmsRedirect[],
   path: string,
 ): CmsRedirectTarget | null => {
   const target = normalizeRedirectPath(path)
+
   for (const redirect of redirects) {
     if (normalizeRedirectPath(redirect.from) !== target) continue
     const destination = redirect.to.trim()
@@ -156,7 +252,50 @@ export const resolveRedirect = (
       ? null
       : { destination, permanent }
   }
-  return null
+
+  // Pass two, in two steps: CHOOSE the row, then act on it. The choice is made
+  // over the whole list before any destination is looked at, because a row's
+  // destination must never decide which row applies — see rule 4 and the
+  // absolute-`to` case below.
+  let best: CmsRedirect | null = null
+  let bestLength = -1
+
+  for (const redirect of redirects) {
+    if (redirect.matchDescendants !== true) continue
+    const from = normalizeRedirectPath(redirect.from)
+    // The exact case was decided by the pass above; here `from` is a strict
+    // ancestor, and the slash is what keeps `/workshops` out of `/work`.
+    if (!target.startsWith(`${from}/`)) continue
+    // Strictly greater, so a tie keeps the first row in list order.
+    if (from.length > bestLength) {
+      best = redirect
+      bestLength = from.length
+    }
+  }
+
+  if (!best) return null
+
+  const from = normalizeRedirectPath(best.from)
+  const destination = best.to.trim()
+  // Both of these mean "the most specific row cannot serve this request", and
+  // both therefore mean NO redirect. Falling through to a shorter row here
+  // would let a less specific ancestor answer for a subtree a more specific one
+  // owns — the same defect rule 4 exists to prevent, arriving by a side door.
+  if (!destination || isAbsoluteDestination(destination)) return null
+  const base = normalizeRedirectPath(destination)
+  // The root normalises to `/`, so concatenating the suffix directly would
+  // spell `//<suffix>` — a protocol-relative URL that leaves the site.
+  const rewritten = `${base === '/' ? '' : base}${target.slice(from.length)}`
+  // Re-checked on the rewritten form, for the same reason the self-redirect
+  // guard below is: only this form can be served.
+  if (isAbsoluteDestination(rewritten)) return null
+  // The guard on the REWRITTEN destination, which is the only form that can
+  // equal the request.
+  if (rewritten === target) return null
+  return {
+    destination: rewritten,
+    permanent: isPermanentRedirect(best.type),
+  }
 }
 
 /** Collect the referenced document ids per collection, at depth 0. */
@@ -188,12 +327,14 @@ const collectReferenceIds = (
  *
  * @remarks `'use cache: remote'` + the `redirects` tag: the tag is already
  * purged by `revalidateRedirects` on every write to the collection (including
- * the rows `createSlugRedirect` writes), and the shared tier is what lets that
+ * the rows `createPathRedirect` writes), and the shared tier is what lets that
  * purge reach the instance serving the read (#118).
  *
  * **Why the reference join is done by hand.** Rows created by
- * `createSlugRedirect` point at a *document*, so the destination path has to be
- * built from that document's current slug. Reading at `depth: 1` would let
+ * `createPathRedirect` point at a *document*, so the destination path has to be
+ * built from that document's current **path** — `publicPathFor`, not
+ * `publicPathForSlug`, because a placed post's URL is `/work/x` and its slug
+ * spells `/articles/x` (#150). Reading at `depth: 1` would let
  * Payload populate it, but the populated Posts would then be what this
  * function caches — well past the 2 MB Runtime Cache item ceiling that
  * `cacheTags.test.ts` documents. Reading at `depth: 0` and resolving the ids in
@@ -215,11 +356,11 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
     limit: REDIRECT_LIMIT,
     overrideAccess: false,
     pagination: false,
-    select: { from: true, to: true, type: true },
+    select: { from: true, matchDescendants: true, to: true, type: true },
   })
 
   const idsByCollection = collectReferenceIds(docs)
-  const slugById = new Map<string, string>()
+  const rowById = new Map<string, PathableDoc>()
 
   await Promise.all(
     [...idsByCollection.entries()].map(async ([relationTo, ids]) => {
@@ -229,12 +370,20 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
         limit: ids.size,
         overrideAccess: false,
         pagination: false,
-        select: { slug: true },
+        // `path` as well as `slug` (#150): a reference row's destination is the
+        // target's CURRENT public URL, and for a placed post or a nested page a
+        // slug alone spells the wrong one. Selecting one more indexed column is
+        // the whole cost.
+        select: { path: true, slug: true },
         where: { id: { in: [...ids] } },
       })
-      for (const doc of referenced as Array<{ id?: unknown; slug?: unknown }>) {
-        if (typeof doc.slug !== 'string') continue
-        slugById.set(`${relationTo}:${doc.id}`, doc.slug)
+      for (const doc of referenced as Array<PathableDoc & { id?: unknown }>) {
+        if (typeof doc.slug !== 'string' && typeof doc.path !== 'string')
+          continue
+        rowById.set(`${relationTo}:${doc.id}`, {
+          path: doc.path,
+          slug: doc.slug,
+        })
       }
     }),
   )
@@ -262,9 +411,19 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
           url?: null | string
         }
 
+    // A row written before M4 added the column, or one an editor left unset,
+    // is an exact-only row — the pre-#150 behaviour of every row there is. The
+    // key is OMITTED rather than set to `false` in that case, so a flattened
+    // exact row is byte-identical to what this function returned before #150
+    // and every caller holding one keeps comparing equal.
+    const descendants: Pick<CmsRedirect, 'matchDescendants'> =
+      (doc as { matchDescendants?: unknown }).matchDescendants === true
+        ? { matchDescendants: true }
+        : {}
+
     if (to?.type === 'custom') {
       if (typeof to.url === 'string' && to.url.length > 0) {
-        redirects.push({ from, to: to.url, type })
+        redirects.push({ from, ...descendants, to: to.url, type })
       }
       continue
     }
@@ -273,9 +432,10 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
     const value = to?.reference?.value
     if (!relationTo || (typeof value !== 'number' && typeof value !== 'string'))
       continue
-    const slug = slugById.get(`${relationTo}:${value}`)
-    const destination = publicPathForSlug(relationTo, slug)
-    if (destination) redirects.push({ from, to: destination, type })
+    const row = rowById.get(`${relationTo}:${value}`)
+    const destination = publicPathFor(relationTo, row)
+    if (destination)
+      redirects.push({ from, ...descendants, to: destination, type })
   }
 
   return redirects

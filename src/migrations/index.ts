@@ -41,6 +41,11 @@ import * as migration_20260831_005000_issue_87_function_acls from './20260831_00
 import * as migration_20260902_205311_redirect_permanence from './20260902_205311_redirect_permanence'
 import * as migration_20260902_233433_pages_hierarchy from './20260902_233433_pages_hierarchy'
 import * as migration_20260903_163051_posts_placement from './20260903_163051_posts_placement'
+import * as migration_20260905_024451_m4_redirect_match_descendants from './20260905_024451_m4_redirect_match_descendants'
+import * as migration_20260905_173046_work_history_slug from './20260905_173046_work_history_slug'
+import * as migration_20260905_173125_categories_section_page from './20260905_173125_categories_section_page'
+import * as migration_20260905_190000_issue_159_table_acls from './20260905_190000_issue_159_table_acls'
+import * as migration_20260905_221622_m5_post_rollup_block from './20260905_221622_m5_post_rollup_block'
 
 export const migrations = [
   {
@@ -257,5 +262,30 @@ export const migrations = [
     up: migration_20260903_163051_posts_placement.up,
     down: migration_20260903_163051_posts_placement.down,
     name: '20260903_163051_posts_placement',
+  },
+  {
+    up: migration_20260905_024451_m4_redirect_match_descendants.up,
+    down: migration_20260905_024451_m4_redirect_match_descendants.down,
+    name: '20260905_024451_m4_redirect_match_descendants',
+  },
+  {
+    up: migration_20260905_173046_work_history_slug.up,
+    down: migration_20260905_173046_work_history_slug.down,
+    name: '20260905_173046_work_history_slug',
+  },
+  {
+    up: migration_20260905_173125_categories_section_page.up,
+    down: migration_20260905_173125_categories_section_page.down,
+    name: '20260905_173125_categories_section_page',
+  },
+  {
+    up: migration_20260905_190000_issue_159_table_acls.up,
+    down: migration_20260905_190000_issue_159_table_acls.down,
+    name: '20260905_190000_issue_159_table_acls',
+  },
+  {
+    up: migration_20260905_221622_m5_post_rollup_block.up,
+    down: migration_20260905_221622_m5_post_rollup_block.down,
+    name: '20260905_221622_m5_post_rollup_block',
   },
 ]

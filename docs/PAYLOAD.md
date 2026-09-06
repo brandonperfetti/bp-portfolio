@@ -55,6 +55,46 @@ Payload is the single source of truth for site content. Admin at `/admin`
 - **Projects**, **TechStack** (name/category/proficiency/logo/url/githubRepo),
   **Uses** (category-grouped tools), **Categories**, **Tags**, **Media**
   (Blob-backed), **Users** (admin operators).
+- **`postRollup`** (#152) is the block a section or topic landing page uses to
+  show _its_ articles rather than the site's newest ones. `source` is
+  `by-category` (published posts carrying the chosen topic — the one that works
+  on day one) or `by-placement` (posts whose `parent` is the chosen page, #153).
+  Its `grid` and `stacked` layouts render through `ArticlesArchiveView`, so
+  there is one card vocabulary on the site; `compact-list` is its own dense,
+  dated `<ul>`. Every select carries an explicit `enumName`
+  (`enum_post_rollup_source` / `_sort` / `_layout`) for the reason
+  `ArticlesArchive/config.ts` records — the block nests three levels deep and
+  the generated identifier crowds Postgres's 63-character limit. An empty
+  result, or an unset relationship, renders `null`.
+- **Categories** carries an optional `sectionPage` relationship — "this topic
+  has a home, and it's this Page" (#151). Opt-in by design: a topic without one
+  stays a pure filter, and an unpublished or deleted target falls back to
+  `/articles?topic=<title>` rather than linking at a 404 (`resolveTopicHref`,
+  `src/lib/cms/topics.ts`). **It created no join table, and so needs no new RLS
+  line** — a fact worth stating because the ticket that added it expected the
+  opposite. Payload's Postgres adapter materialises a `_rels` table only for a
+  relationship that is `hasMany` or polymorphic; `sectionPage` is single-valued
+  and targets one collection, so it lands as `categories.section_page_id` with
+  an index, like every other 1:1 relationship in this schema. `categories`
+  itself pre-dates the #72 lockdown and already carries RLS, which adding a
+  column cannot weaken — RLS is a table property, not a column one. The
+  convention is unchanged for the next `hasMany` or polymorphic relationship on
+  this collection: that one **does** create `categories_rels` and **does** owe
+  the line in its own migration — see §"New-table RLS convention (#72)".
+- **WorkHistory** carries a `unique` slug (#137) — an addressing key, not a
+  route; see §"Slug freeze" below.
+
+**Cleared hero text is stored as `NULL`, never as an empty Lexical root
+(#164).** A rich-text value whose `root.children` is `[]` is the one shape
+Lexical refuses to load — `setEditorState` throws error #38 — so the admin
+renders "Something went wrong: Minified Lexical error #38" in place of the
+editor and the field can only be fixed by a DB write. The hero group's
+`beforeChange` normaliser (`normalizeHeroByType`, `src/heros/`) therefore maps
+an empty root to `null` on every save, for every hero type, on top of the
+type-based clearing it already does; the predicate lives in
+`src/lib/content/lexicalEmptyRoot.ts`. This applies to every collection that
+mounts the shared `hero` group. Readers already tolerate `null` (a cleared hero
+renders nothing), so `null` is the canonical stored form for "no hero text".
 
 **Categories is labelled "Topics" in the admin — the slug stays `categories`
 (#149).** The public surface has said "topics" for a long time: the chips on
@@ -154,11 +194,73 @@ payload; omitting it is not consent. The admin component mirrors the rule (it
 stops re-deriving once `hasPublishedDoc`) purely so the editor is never shown a
 value the server is about to revert.
 
+**The unit of URL identity is the served PATH, not the slug (#150).** A row's
+`from` is built by `publicPathFor` from the path the document was being served
+at, which is why one hook covers four editorial actions that used to be
+different problems:
+
+| The editor…                  | `from`          | `to`            |
+| ---------------------------- | --------------- | --------------- |
+| renames an unplaced article  | `/articles/old` | `/articles/new` |
+| renames a top-level page     | `/old`          | `/new`          |
+| renames a **placed** article | `/work/old`     | `/work/new`     |
+| **un-places** an article     | `/work/old`     | `/articles/old` |
+| **re-parents** a page        | `/work/x`       | `/experience/x` |
+
+The last two move the URL without moving the slug, so a slug-keyed writer saw
+`from === to` and wrote nothing at all. The first two are unchanged from #120 —
+`publicPathFor` answers `/articles/<slug>` for a post with no `path` and
+`/<slug>` for a page whose `path` is its slug, which is every document that
+existed before hierarchy. `createPathRedirect` (formerly `createSlugRedirect`)
+is the writer; `capturePublishedSlug` keeps its name and stashes three values
+from one lookup — the slug, the public path, and the raw `path` column the
+subtree cascade matches on.
+
+**Moving a page moves its subtree, in the same transaction.**
+`cascadePagePaths` (Pages `afterChange`) reads the descendants of the old path
+prefix — one indexed read per collection — recomputes each one's stored `path`
+shallowest-first, and purges each vacated URL. Two flags govern it:
+`disablePathCascade` stops a descendant write re-entering the cascade (without
+it a depth-3 move is quadratic), and `disableSlugRedirect` stops each
+descendant writing its own row. Neither suppresses `refreshCorvusEmbeddings`:
+a placed post under a moved page genuinely changed its `sourceUrl`, so a
+section rename costs an embedding refresh proportional to the subtree. That is
+correct, not a bug. The cascade's writes are deliberately **not** wrapped —
+unlike the redirect write, a half-moved subtree is a correctness problem and
+should roll the move back.
+
+Its precondition is **"the page's stored path moved"**, not "the page was
+live". The old prefix is `capturePublishedSlug`'s stored-path stash, which is
+read from the MAIN-TABLE row whatever its `_status` — descendants' paths were
+composed from that row, and a draft save never writes it. Gating that one stash
+on a published row (as the first cut did) made the cascade skip the first
+publish of a never-published parent: a page drafted as `a`, given children
+(stored `a/c`), renamed to `b` in draft, then published, moved its own row to
+`b` and left `a/c` behind until the child's own next save. The slug and
+served-path stashes stay gated on a published row, because those describe a URL
+that was actually reachable — so a first publish still writes no redirect row.
+The residual: a **published** child under a never-published parent moves from
+`/a/c` to `/b/c` with no redirect row covering `/a/c`, because the D4 prefix row
+is keyed on the parent's own served URL and the parent had none.
+
+**Inbound coverage for a subtree is ONE row, not N** (D4). A moved page's row
+carries `matchDescendants`, which makes it match `from` and everything beneath
+it and carry the remainder across: `/work → /experience` also sends
+`/work/brytecore` to `/experience/brytecore`. `resolveRedirect` tries exact
+matches across the whole list first, so a specific override always beats the
+prefix it sits under regardless of row order; the boundary is a slash, so
+`/work` never swallows `/workshops`; and the self-redirect guard is applied to
+the **rewritten** destination, which is the only form that can equal the
+request. Migration `20260905_024451_m4_redirect_match_descendants` adds the
+column to the existing table — no new table, so no RLS line.
+
 **Redirects point at the document, not at a path** (`to.type: 'reference'`), so
 renaming `a → b → c` leaves both `/articles/a` and `/articles/b` resolving
-straight to `/articles/c` — chains cannot form. `src/lib/cms/redirectsRepo.ts`
-is the cached reader; `/articles/[slug]` and `/[...segments]` consult it on
-their not-found branch only, so a live document always wins over a stale row.
+straight to `/articles/c` — chains cannot form, and a prefix row inherits the
+same property because its destination is resolved through the target's current
+path at read time. `src/lib/cms/redirectsRepo.ts` is the cached reader;
+`/articles/[slug]` and `/[...segments]` consult it on their not-found branch
+only, so a live document always wins over a stale row.
 
 **Passing state between hooks: write to `req.context`, never to the `context`
 argument.** `createLocalReq` reassigns `req.context = getRequestContext(req,
@@ -176,14 +278,25 @@ Pages both run `autosave.interval: 100`, and Payload resolves the hook's
 `originalDoc`/`previousDoc` from `getLatestCollectionVersion` — after any
 autosave that is the DRAFT, which on a rename already holds the _new_ slug and
 reports `_status: 'draft'`. A `beforeChange` hook
-(`src/hooks/capturePublishedSlug.ts`) therefore reads the published main-table
-row — which a draft save never touches — and stashes it on `req.context` for
-`createSlugRedirect`. Anything added here that needs "the value the site is
-currently serving" must do the same; `previousDoc` is not it.
+(`src/hooks/capturePublishedSlug.ts`) therefore reads the main-table row —
+which a draft save never touches — and stashes it on `req.context` for
+`createPathRedirect` and for the subtree cascade. The redirect writer's two
+values are read from the row filtered to `_status: 'published'`; the cascade's
+prefix falls back to the unfiltered row, per the paragraph above. Anything
+added here that needs "the value the site is currently serving" must do the
+same; `previousDoc` is not it.
 
 Scope: only **Posts** and **Pages** are slug-routed (`slugPaths.ts`).
-Categories, Tags, Projects and Authors carry a slug with no public URL behind
-it and keep the plain derive-from-title behaviour.
+Categories, Tags, Projects, Authors and WorkHistory carry a slug with no public
+URL behind it and keep the plain derive-from-title behaviour.
+
+**WorkHistory's slug is an addressing key, not a route (#137).** It is `unique`
+and derives from `company`. Nothing resolves a `work-history` row by URL — the
+narrative for a role is a **Page** under `/work`, and the collection stays the
+structured facts behind it. Two consumers need to name a role without holding
+its id: Corvus composes `/work/<slug>` for the row's citation
+(`sourceUrlFor`, `src/lib/ai/chunking.ts`), and the `workHistoryCard` block's
+`entry` relationship and the role Page agree by convention on one spelling.
 
 **Who purges which path (#132).** Two hooks call `revalidatePath` on a rename
 and the split between them is a cross-file contract, so it is stated here
@@ -194,8 +307,10 @@ rather than only in each hook's TSDoc:
 
 Concretely: `revalidatePost`/`revalidatePage` purge the document's current path
 on publish and `previousDoc`'s path on unpublish; a published→published rename
-purges only the NEW path there, and `createSlugRedirect` purges the old one —
-inside the same `try` that wrote the row, from the same `from` string.
+purges only the NEW path there, and `createPathRedirect` purges the old one —
+inside the same `try` that wrote the row, from the same `from` string. The
+subtree cascade follows the same rule for a move: it purges each descendant's
+vacated path, and each descendant's own revalidation hook purges its new one.
 
 The original reason was that there were **two path vocabularies** that
 disagreed about the home page — the revalidation hooks mapped it to `/` while
@@ -210,10 +325,69 @@ than on a transition that fires either way. The transition matrices in
 are unchanged across #148 — which is the evidence that routing the hook through
 the seam moved no behaviour.
 
-Known gap on the unpublish branch: unpublishing a document that has a pending
-autosaved rename purges nothing, because `previousDoc` is the draft and the
-served slug is absent from every `afterChange` argument. Measured 2026-09-02,
-pinned by a `KNOWN GAP` test in both matrices, tracked in a follow-up to #132.
+**Unpublish purges the path the site was SERVING (#155).** `previousDoc` is the
+latest _version_, so after any autosave it is the draft — already carrying the
+new slug — and testing `previousDoc._status === 'published'` alone failed
+closed: unpublishing a document with a pending autosaved rename purged
+**nothing**. Two pieces close it, neither costing the autosave anything:
+
+1. **`capturePublishedSlug` fires on unpublish.** Its guard mirrors Payload's
+   own `isSavingDraft` predicate instead of testing the `_status: 'draft'` body
+   that an unpublish and an autosave _share_.
+2. **It stashes the served PATH as well as the slug**, because under #148/#153 a
+   slug cannot name a placed document's URL. `readPreviousPublishedSlug`
+   (redirect rows) and `readPreviousPublishedPath` (revalidation) read the two
+   stashes; both come from one `findPublishedRow` lookup.
+
+The revalidation hooks prefer the captured path over `previousDoc`, and its
+presence is also what tells them a published row existed.
+
+`capturePublishedSlug`'s docblock is the single home for the measured table of
+what Payload passes on each transition, the `dist` citations for the predicate
+and the admin's request shapes, and the correction to an earlier wrong reading
+of `isSavingDraft`. Do not restate them here. The residual worth knowing at this
+level: a **Local-API explicit draft save** reads as an unpublish, because
+`createLocalReq` does not mirror the Local API's `draft` option into `req.query`
+— one extra lookup and one redundant purge of a still-live path, never a lost
+purge or a lost write. `evals/slug-redirect-integration.test.ts` proves the
+behaviour end to end and pins the autosave read count.
+
+**A revalidation failure never fails the write (#135, #156).** Payload runs
+`afterChange`/`afterDelete` collection hooks **inside the operation's
+transaction**, so a hook that throws does not lose a cache purge — it rolls back
+the document. `revalidatePath`/`revalidateTag` throw outside a Next request
+scope, which is every Local-API or job-driven write. **Every purge in a
+collection or global hook therefore goes through `containRevalidation`
+(`src/hooks/containRevalidation.ts`)**, which logs at `error` with the failing
+path and the reason and returns normally — `revalidatePost`, `revalidatePage`,
+both `revalidateDelete` companions, `revalidateRedirects`,
+`revalidateCollectionTag` and its delete companion, `revalidateGlobal`,
+`createPathRedirect`'s post-write path purge, and `cascadePagePaths`'
+per-descendant vacated-path purge. That list is exhaustive, and a grep for
+`revalidatePath|revalidateTag` under `src/hooks`, `src/collections` and
+`src/globals` is how to keep it so.
+
+`cascadePagePaths` (`src/collections/Pages/hooks/pageHierarchy.ts`) is the one
+worth reading before adding a purge anywhere, because its own docblock says the
+cascade's writes are deliberately NOT wrapped and are allowed to roll the move
+back. That asymmetry is about the writes: a descendant update that throws means
+the cascade genuinely failed. A purge that throws means only that there is no
+static-generation store in this scope and says nothing about whether the subtree
+moved, so it is contained — once per descendant, so the log names the specific
+URL left stale and one failure does not abandon the rest of the loop.
+
+The `/api/revalidate` route handler is deliberately bare and is not in scope: it
+is an HTTP endpoint, not a hook, so a throw there fails a request and rolls back
+nothing. Do not "fix" it by wrapping it.
+
+That module's docblock is the single home for the argument: the `dist` citations
+for the transaction mechanics, the measurement, and the survey of `scripts/`
+showing that no writer in this repo wants revalidation to be fatal. Do not
+restate them here.
+
+`context.disableRevalidate` is unchanged and is still the explicit opt-out — it
+short-circuits the whole hook before any purge is attempted. It is not a
+substitute for the wrap, because it only helps callers who set it.
 
 **Permanent vs temporary redirects (#130).** The plugin is configured with
 `redirectTypes: ['301', '302']`, which is what makes it emit a permanence
@@ -228,7 +402,7 @@ behaviours is a way to make an editor pick wrong.
 Anything not `'302'` reads as permanent — an unset, legacy or unrecognised
 value included. That is deliberately the pre-#130 behaviour, so a row written
 before the field existed is unchanged, and the conservative direction for a
-rename. The rename rows `createSlugRedirect` writes state `'301'` explicitly
+rename. The rename rows `createPathRedirect` writes state `'301'` explicitly
 rather than relying on the field default, because updating an existing row does
 not re-apply a default and a row an editor had flipped to temporary would
 otherwise stay temporary.
@@ -247,11 +421,13 @@ Known limits: the reader reads at most 500 rows.
 - `plugin-seo` — meta title/description/image + previews; `generateTitle` is
   `{title} - Brandon Perfetti`; posts URL-prefix `/articles`.
 - `plugin-redirects` — editorial redirects **plus** the rows
-  `createSlugRedirect` writes when a published Post/Page is deliberately
-  renamed; revalidated on change and served by `src/lib/cms/redirectsRepo.ts`
-  (#120). Before that, nothing in `src/` read the collection, so a redirect row
-  was inert. `redirectTypes: ['301', '302']` + a `defaultValue: '301'` override
-  give each row a permanence the routes act on (#130).
+  `createPathRedirect` writes when a published Post/Page is deliberately moved;
+  revalidated on change and served by `src/lib/cms/redirectsRepo.ts` (#120).
+  Before that, nothing in `src/` read the collection, so a redirect row was
+  inert. `redirectTypes: ['301', '302']` + a `defaultValue: '301'` override
+  give each row a permanence the routes act on (#130), and a
+  `matchDescendants` checkbox lets one row cover a moved section page's whole
+  subtree (#150).
 - `plugin-search` — synced search index over posts feeding `/api/search`.
 - `plugin-mcp` — Payload MCP endpoint at `/api/mcp` (API-key auth) so agents
   can operate the CMS. Collections opt in with `{ enabled: true }` objects.
@@ -412,6 +588,26 @@ Function grants are revoke-by-default too, as of the
 `20260831_005000_issue_87_function_acls` migration (#87): `anon`/`authenticated`
 get no `EXECUTE` on functions created in `public`, so a deliberate RPC needs an
 explicit `GRANT EXECUTE` on that function in its own migration.
+
+Table grants are revoke-by-default too, as of the
+`20260905_190000_issue_159_table_acls` migration (#159). RLS alone was not
+enough: default-deny RLS gates the read/write half but does **not** gate
+`TRUNCATE` — measured on PostgreSQL 16, a role holding only `D` truncates an
+RLS-enabled, policy-free table successfully — and Supabase had pre-seeded
+`anon=Dxtm/postgres, authenticated=Dxtm/postgres` (TRUNCATE, REFERENCES,
+TRIGGER, MAINTAIN) on every table in `public` plus the TABLES default ACL. That
+migration revokes both halves for both roles.
+
+**Acceptance for table ACLs reads `pg_class.relacl`**, never
+`information_schema.role_table_grants`: that view is scoped to grants applicable
+to the executing role, and it reported **0** rows for `anon`/`authenticated` on
+the very production database whose `relacl` carried them. Check the default with
+`pg_default_acl` (join `pg_namespace` on `defaclnamespace`, `defaclobjtype='r'`).
+One entry is accepted residue and out of a repo migration's reach: the
+`supabase_admin`-grantor default (`anon=arwdDxtm/supabase_admin`) — `REVOKE`
+only removes privileges granted by the executing role, and migrations run as
+`postgres`. That is the same class as the #141 function-ACL residue; treat it as
+accepted, not as a gate failure.
 
 `ALTER DEFAULT PRIVILEGES` already handles the grant side for new tables, but
 it does **not** touch RLS state — that still needs the explicit `ENABLE` per

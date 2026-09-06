@@ -19,7 +19,7 @@ with hard-coded fallbacks. The command palette mirrors primary nav.
 | `/sign-in`, `/sign-up`, `/account`         | Clerk                         | Render only when Clerk enabled       |
 | `/next/preview`, `/next/exit-preview`      | —                             | Draft preview (secret-gated)         |
 | `/feed.xml`, `/llms.txt`, `/llms-full.txt` | route handlers                |                                      |
-| `/[...segments]`                           | Pages collection by `path`    | Page-builder catch-all — see below   |
+| `/[...segments]`                           | Pages, then Posts, by `path`  | Page-builder catch-all — see below   |
 
 ## Page hierarchy and the `[...segments]` catch-all (#148)
 
@@ -68,26 +68,56 @@ segments, and both same- and cross-collection path collisions. Its TSDoc is the
 contract, and each rejection carries a message written for the editor who sees
 it.
 
-**Renaming a nested page's slug is refused until #150.** The hole is the same
-one the Posts side has, arriving through the same door: `createSlugRedirect`
-builds a row's `from` from the _slug_, and a slug can only ever spell a
-top-level path. Rename `/work/brytecore` to `/work/bcore` and the row written is
-`from: /brytecore → /bcore` — two URLs that never existed — while
-`/work/brytecore`, the URL that actually moved, gets no row and **404s**. So
-`refuseNestedSlugRename` (`src/collections/Pages/hooks/`) rejects a slug rename
-on a published page **that has a parent**, and tells the editor to clear the
-parent, rename at the top level, and set the parent again. A **top-level** page's
-rename is untouched — there `path === slug`, so #120 spells the row correctly
-and keeps working byte for byte. It is a stop-gap in its own file, #150 deletes
-it, and its TSDoc carries the argument both ways. Re-parenting is not refused,
-for the same reason un-placing an article is not: that is an editor deliberately
-moving a document, not losing a URL as a side effect of changing something else.
+**Renaming a nested page's slug is allowed, and preserves the URL that moved
+(#150).** It was refused for one release, by a `refuseNestedSlugRename`
+stop-gap, because the redirect writer built a row's `from` from the _slug_ and a
+slug can only ever spell a top-level path: renaming `/work/brytecore` to
+`/work/bcore` wrote `from: /brytecore → /bcore`, two URLs that never existed,
+while `/work/brytecore` got no row and 404ed. `createPathRedirect` now keys the
+row on the served path, so the row is `/work/brytecore → reference(page)` and
+the guard is gone. A **top-level** page's rename is unchanged from #120, byte
+for byte — there `path === slug`, so both spellings agree.
 
-**Known limit.** Moving a parent does **not** cascade to its descendants — pages
-or placed posts alike: their stored paths stay stale until they are themselves
-saved. Deliberate — the cascade needs the redirect fan-out that extends #120,
-and landing one without the other would move a subtree of live URLs with nothing
-preserving the old ones (#150).
+**Moving a page moves its subtree.** `cascadePagePaths` recomputes every
+descendant page's and placed post's stored `path` inside the same request
+transaction, shallowest-first, and purges each URL the move vacated. Inbound
+links are covered by **one** prefix redirect row on the moved page rather than
+one row per descendant (D4): `/work → /experience` also sends
+`/work/brytecore` to `/experience/brytecore`. An exact row always beats the
+prefix it sits under.
+
+**The cost, stated rather than discovered.** Each descendant is written through
+`payload.update`, which fires that document's own `afterChange` chain —
+including `refreshCorvusEmbeddings` for a placed post, whose `sourceUrl`
+genuinely changed. So a section rename triggers an embedding refresh
+proportional to the subtree size. That is correct behaviour.
+
+## The `/work` section (#137)
+
+`/work` and `/work/<slug>` are **ordinary hierarchy Pages** — a `work` page with
+one child per role — not a route over the `work-history` collection. There is
+nothing route-specific to build: the catch-all above resolves them, the sitemap
+lists them at their full nested path, the canonical is built from the resolved
+document, and the JSON-LD `BreadcrumbList` reflects the real ancestor chain, all
+by the same machinery every other nested page uses.
+
+Two pieces make a role page carry the _facts_ rather than a retyped copy of
+them:
+
+- The **`workHistoryCard` block gains an optional `entry`** relationship
+  (#137). With `entry` empty it renders the whole résumé card, exactly as it did
+  before; with `entry` set it renders that one role's company, title, period,
+  logo and (optionally) description, read from the `work-history` row. One
+  block, one mode field — not a second near-identical block in the picker.
+- **`work-history` rows carry a `unique` slug**, and Corvus composes
+  `/work/<slug>` from it (`sourceUrlFor`), so a work-history answer cites a page
+  a visitor can actually open instead of the homepage. The slug routes nothing
+  by itself — `work-history` is deliberately absent from
+  `SLUG_ROUTED_COLLECTIONS`.
+
+The role Page's slug and the `work-history` row's slug are expected to match by
+editorial convention; nothing enforces it, because the citation is composed from
+the row and the page is resolved from its own `path`.
 
 ## Post placement — an article's two possible URLs (#153)
 
@@ -116,35 +146,45 @@ mismatch. It is deliberately not a redirect row: placing an article changes its
 self-heals if a row is ever deleted. `generateStaticParams` keeps emitting
 placed slugs so that redirect prerenders as a static 308.
 
-**Two ways a section URL becomes a hard 404 today, both #150's ground.**
+**Two ways a section URL used to become a hard 404, both closed by #150.**
 
 - **Un-placing.** Clearing `parent` sets `path` back to NULL, so the article is
   served at `/articles/<slug>` again and the check stops firing. The section URL
-  it vacated has no document behind it: the catch-all finds no page and no post
-  there, consults the #120 redirect table, finds nothing, and **404s**.
-- **Renaming a placed article's slug.** `createSlugRedirect` builds a row's
-  `from` from the _slug_, so renaming `/work/old` to `/work/new` writes
+  it vacated had no document behind it and no row spelled that way, so the
+  catch-all 404ed. It now gets a row: `from: /work/<slug> → reference(post)`,
+  resolving to `/articles/<slug>`, and the vacated path is purged so the row is
+  actually consulted.
+- **Renaming a placed article's slug.** The row used to be
   `from: /articles/old → /articles/new` — a pair of archive URLs, for a document
-  that lives under `/work`. The URL that actually moved, `/work/old`, gets no
-  row and **becomes a hard 404**. **Until #150 lands, renaming a placed post's
-  slug breaks its old section URL.**
+  living under `/work` — while `/work/old` got no row at all. It is now
+  `/work/old → reference(post)`.
 
-Neither is a stale shell; both are 404s, and neither is something placement can
-close on its own — the fix in both cases is #150's path-aware capture and
-redirect writer (`capturePublishedPath` / `createPathRedirect`), which spells a
-row's `from` with `publicPathFor` instead of a slug.
-
-Until then the **rename** half is refused rather than allowed to break silently:
-`refusePlacedSlugRename` (`src/collections/Posts/hooks/`) rejects a slug rename
-on a placed, published article and tells the editor to unplace, rename, and
-place again. It is a stop-gap in its own file, and #150 deletes it; its TSDoc
-carries the argument both ways. The **un-placing** half is not refused, because
-that is an editor deliberately saying "this no longer lives here" rather than
-losing a URL as a side effect of changing something else.
+Neither needed a new branch. `createPathRedirect` builds `from` with
+`publicPathFor` from the path the document was being served at, and both cases
+are simply "the served path moved" — which is also why un-placing, whose slug
+never changes, was invisible to the slug-keyed writer.
 
 **Breadcrumbs.** A placed article's `BreadcrumbList` is its real ancestor chain
 (Home → Work → Brytecore → title), derived from `path` in one indexed read. An
 unplaced one keeps the archive trail it has always emitted.
+
+## Topic section homes and the `/articles` affordance (#151, #154)
+
+A topic (`categories` row) may point at a Page that is its home. Article topic
+chips then link there; a topic without one stays a pure filter.
+
+**On `/articles` the filter chips still never navigate.** They are state
+toggles that mirror `?topic=` through `router.replace`, which is what keeps the
+route statically rendered. Instead, when **exactly one** filter is active and
+that filter names a category with a _published_ home, the filter row offers a
+separate `View the ⟨X⟩ section →` link (a real `<Link>`, arrow `aria-hidden`,
+rendered last in the card so it never interrupts the chip run in the tab
+order). A tag, a homeless category and `All` all render nothing — silently, with
+no empty state.
+
+The lookup is client-side over a `Record<lowercased category title, path>` the
+server page resolves once via `getTopicSectionPaths` and passes down, so no
+`searchParams` are read on the server and `/articles` stays `○ Static`.
 
 ## List pagination — the `?page` contract (#88)
 

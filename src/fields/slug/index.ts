@@ -26,7 +26,7 @@ type Slug = (
  * - **Once the document is published** it is frozen at the published value.
  *   A title edit can no longer move the URL; only an explicit unlock
  *   (`slugLock: false`) can, and that rename creates a redirect from the old
- *   path (`src/hooks/createSlugRedirect.ts`).
+ *   path (`src/hooks/createPathRedirect.ts`).
  *
  * Both halves are server-enforced by {@link enforceSlugFreeze}; the admin
  * component is a convenience that mirrors the same rule, never the gate. This

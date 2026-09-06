@@ -244,6 +244,19 @@ export function mirrorTargets(plan) {
 }
 
 /**
+ * The exact command that turns a dry run into a write.
+ *
+ * One const, used by the dry-run hint and asserted by the test, so the string
+ * an operator copies and the string the suite pins cannot drift apart. The
+ * `--` is load-bearing: `payload run` rebuilds the script's argv from
+ * positionals, so a bare `--apply` never reaches the script and the "write"
+ * run silently repeats the dry run — the trap wave 4 hit three times. Mirrors
+ * `docs/AUTH.md` and the backfill script's own docblock byte for byte (#157).
+ */
+export const APPLY_INVOCATION =
+  'payload run scripts/backfill-clerk-resend-mapping.ts -- --apply'
+
+/**
  * Render a plan as human-readable lines.
  *
  * @param plan - The result of {@link planBackfill}.
@@ -253,6 +266,13 @@ export function mirrorTargets(plan) {
  * @remarks The per-user line is the point of the dry run: this script's whole
  * safety model is that Brandon reads the plan before passing `--apply`, so
  * every decision has to be legible without cross-referencing anything.
+ *
+ * The closing dry-run line prints the **whole** invocation, separator and all
+ * ({@link APPLY_INVOCATION}), because it is the line an operator copies. It is
+ * wrapped in backticks so the copyable command has a visible delimiter — a
+ * double-click or drag through an undelimited run of words takes the trailing
+ * prose with it, which is the same class of paper-cut as the swallowed flag
+ * this line exists to prevent (#157).
  */
 export function formatPlan(plan, options = {}) {
   const apply = options.apply === true
@@ -305,7 +325,8 @@ export function formatPlan(plan, options = {}) {
   lines.push(
     apply
       ? 'Applying: writing external_id for the mapped users above, plus a Redis mirror key for every user with a known contact id.'
-      : 'Dry run: nothing was written — no external_id, no mirror keys. Re-run with --apply to write these.',
+      : 'Dry run: nothing was written — no external_id, no mirror keys. ' +
+          `Re-run with \`${APPLY_INVOCATION}\` to write these.`,
   )
 
   return lines

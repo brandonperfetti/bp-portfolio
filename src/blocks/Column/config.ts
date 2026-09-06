@@ -13,6 +13,7 @@ import { LogoCarousel } from '@/blocks/LogoCarousel/config'
 import { MediaBlock } from '@/blocks/MediaBlock/config'
 import { NewsletterSignup } from '@/blocks/NewsletterSignup/config'
 import { PhotoStrip } from '@/blocks/PhotoStrip/config'
+import { PostRollup } from '@/blocks/PostRollup/config'
 import { ProseBlock } from '@/blocks/Prose/config'
 import { SocialLinks } from '@/blocks/SocialLinks/config'
 import { Spacer } from '@/blocks/Spacer/config'
@@ -66,6 +67,7 @@ export const COLUMN_CONTENT_BLOCKS: Block[] = [
   MediaBlock,
   NewsletterSignup,
   PhotoStrip,
+  PostRollup,
   ProseBlock,
   SocialLinks,
   Spacer,

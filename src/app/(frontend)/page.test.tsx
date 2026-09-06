@@ -145,7 +145,9 @@ describe('home route — SEO artifacts preserved', () => {
       seoDescription: 'Doc-driven description.',
     })
     const meta = await generateMetadata()
-    expect(meta.title).toBe('Brandon Perfetti — Home')
+    // #176: an authored seoTitle is absolute, so the layout's
+    // "%s - <siteName>" template does not append the site name again.
+    expect(meta.title).toEqual({ absolute: 'Brandon Perfetti — Home' })
     expect(meta.description).toBe('Doc-driven description.')
     expect(getCmsPageByPath).toHaveBeenCalledWith('/')
   })
