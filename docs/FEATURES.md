@@ -12,7 +12,12 @@
 - Per-article "Use with AI" menu + JSON-LD + canonical URLs.
 - Filter chips never navigate; when exactly one filter is active and it names a
   category with a published section home, the filter row offers a separate
-  "View the ⟨X⟩ section →" link to it (#154).
+  "View the ⟨X⟩ section →" link to it (#154). The lookup is by name, so a _tag_
+  named exactly like a homed category offers the link too — deliberately: the
+  reader filtered on that name and a section by that name exists, so offering it
+  is right whichever pool the chip came from, and suppressing it would mean
+  carrying each chip's provenance through the filter pool, the matcher and their
+  tests (`ArticlesExplorer.tsx`, `sectionLink`).
 - Section and topic landing pages roll up their own articles with the
   `postRollup` block — by category, or by placement — in a card grid, the
   stacked list, or a compact dated index (#152).

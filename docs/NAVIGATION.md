@@ -19,7 +19,7 @@ with hard-coded fallbacks. The command palette mirrors primary nav.
 | `/sign-in`, `/sign-up`, `/account`         | Clerk                         | Render only when Clerk enabled       |
 | `/next/preview`, `/next/exit-preview`      | —                             | Draft preview (secret-gated)         |
 | `/feed.xml`, `/llms.txt`, `/llms-full.txt` | route handlers                |                                      |
-| `/[...segments]`                           | Pages collection by `path`    | Page-builder catch-all — see below   |
+| `/[...segments]`                           | Pages, then Posts, by `path`  | Page-builder catch-all — see below   |
 
 ## Page hierarchy and the `[...segments]` catch-all (#148)
 

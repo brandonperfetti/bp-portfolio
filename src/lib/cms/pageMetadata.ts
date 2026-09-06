@@ -145,6 +145,45 @@ export function resolvePageMetadataTitle(
   return seoTitle ? { absolute: seoTitle } : fallbackTitle
 }
 
+/**
+ * Compose the full `Metadata` for a **dedicated** route whose content comes from
+ * a Pages document — `/`, `/about`, `/articles`, `/tech`, `/projects`,
+ * `/corvus`, `/uses`.
+ *
+ * @param page - The route's Pages document, or `null` when none is published;
+ *   every field it contributes has a fallback, so a missing document degrades
+ *   to the route's own strings rather than to empty metadata.
+ * @param settings - SiteSettings, for the canonical host, site name and the
+ *   default OG image / Twitter card.
+ * @param fallbackTitle - The route's own title, used when no `seoTitle` is
+ *   authored. Kept a plain string so the layout template still appends the site
+ *   name — see {@link resolvePageMetadataTitle}.
+ * @param fallbackDescription - The route's own description, used when no
+ *   `seoDescription` is authored.
+ * @param path - The route's public path, which becomes the canonical URL. `'/'`
+ *   is special-cased so the result is `https://host`, never `https://host/`.
+ *
+ * @remarks **Why one composer and not per-route metadata.** Seven routes need
+ * the same six decisions — canonical, title-vs-template, description,
+ * social image, `summary_large_image` vs the settings default, and the
+ * openGraph/twitter titles that must NOT take the template. Spread across seven
+ * `generateMetadata` functions those drifted: #176 is exactly that failure, where
+ * the brand suffix doubled on the routes that had not been updated.
+ *
+ * **What it deliberately does not own.** The `[...segments]` catch-all composes
+ * its own metadata and does not call this — a CMS page there has no route-owned
+ * fallback title or path to hand in. What the two share instead is
+ * {@link resolvePageMetadataTitle}, extracted for precisely that reason (#176):
+ * the title rule is the half both must agree on, so it lives in one function
+ * rather than being restated on either side. Change the title rule there, not
+ * here.
+ *
+ * The `openGraph.title` / `twitter.title` below stay the plain `title` string
+ * while `title` itself goes through the resolver: Next never runs the layout's
+ * `%s` template over the social titles, so they always take the exact string,
+ * and routing them through the resolver would wrap them in an `{ absolute }`
+ * object the OG serialiser does not accept.
+ */
 export function buildPageMetadata({
   page,
   settings,
