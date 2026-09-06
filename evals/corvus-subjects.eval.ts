@@ -4,12 +4,13 @@ import { askCorvusGrounded } from './corvus-helpers'
 import { createCitationScorers } from './citation-scorers'
 import { createGuardedScorer } from './empty-output'
 import { GITHUB_REPO_FIXTURES } from './fixtures/github-repos'
-import { createFixtureRetriever } from './fixtures/retriever'
+import { createFixtureRetriever, fixtureSourceUrls } from './fixtures/retriever'
 import { containsExpectedFact, createCitesLinkedSourceUrl } from './scorers'
-import { fixtureSourceUrls } from './fixtures/retriever'
 import { SITE_CHROME_URLS } from './fixtures/site-routes'
-import { ABOUT_CORVUS_SOURCE_URL } from '../src/lib/ai/aboutCorvus'
-import { withAboutCorvusSnippet } from '../src/lib/ai/aboutCorvus'
+import {
+  ABOUT_CORVUS_SOURCE_URL,
+  withAboutCorvusSnippet,
+} from '../src/lib/ai/aboutCorvus'
 import { markSiteSubject } from '../src/lib/ai/retrieval'
 
 /**
