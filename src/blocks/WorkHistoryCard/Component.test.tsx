@@ -87,6 +87,55 @@ describe('WorkHistoryCardComponent · mode selection (#137)', () => {
   })
 })
 
+/**
+ * The rendered half of the #188 matrix. `hostContext.test.ts` pins what the
+ * helper returns; this pins that the block asks it the right question — which
+ * is the half that was wrong, since the helper's answer for a root-hosted card
+ * was never in dispute.
+ */
+describe('WorkHistoryCardComponent · width by mode (#188, #137)', () => {
+  const sectionOf = (ui: React.ReactElement) => {
+    const { container } = render(ui)
+    const section = container.querySelector('section')
+    if (!section) throw new Error('the block rendered no <section>')
+    return section
+  }
+
+  it('widens the per-entry card to the content measure at root', () => {
+    // The defect: on `/work/<slug>` this card sits above full-measure prose,
+    // and `max-w-xl` capped it well under the paragraph beneath it.
+    const section = sectionOf(<WorkHistoryCardComponent entry={entry()} />)
+    expect(section).toHaveClass('max-w-none')
+    expect(section).not.toHaveClass('max-w-xl')
+    // The root rhythm is untouched by the widening.
+    expect(section).toHaveClass('my-12')
+  })
+
+  it('keeps the résumé list on its reading measure at root', () => {
+    const section = sectionOf(<WorkHistoryCardComponent />)
+    expect(section).toHaveClass('max-w-xl')
+    expect(section).not.toHaveClass('max-w-none')
+  })
+
+  it('fills the column in BOTH modes when the editor picked the width', () => {
+    expect(
+      sectionOf(<WorkHistoryCardComponent entry={entry()} hosted="column" />),
+    ).toHaveClass('max-w-none')
+    expect(sectionOf(<WorkHistoryCardComponent hosted="column" />)).toHaveClass(
+      'max-w-none',
+    )
+  })
+
+  it('reads the measure off the same fallback the render branch takes', () => {
+    // An entry whose row was deleted comes back `null` and renders the résumé
+    // card, so it must take the résumé card's width too — not the width the
+    // unset `entry` field implied.
+    const section = sectionOf(<WorkHistoryCardComponent entry={7} />)
+    expect(screen.getByTestId('resume-card')).toBeInTheDocument()
+    expect(section).toHaveClass('max-w-xl')
+  })
+})
+
 describe('workHistoryEntryFacts', () => {
   it('reads a current role as an open-ended period, never as this year', () => {
     expect(workHistoryEntryFacts(entry())).toMatchObject({

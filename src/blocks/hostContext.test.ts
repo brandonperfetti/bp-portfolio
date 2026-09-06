@@ -10,6 +10,7 @@ import {
   DEFAULT_BLOCK_HOST_CONTEXT,
   blockRhythmClass,
   zeroConfigCardWidthClass,
+  zeroConfigCardWidthClassFor,
 } from '@/blocks/hostContext'
 
 const read = (relative: string) =>
@@ -77,12 +78,29 @@ const RHYTHM_CONVERTED_BLOCKS = [
   'src/blocks/VideoEmbed/Component.tsx',
 ]
 
-/** The blocks with no width control of their own (F3). */
-const ZERO_CONFIG_CARDS = [
-  'src/blocks/ContactForm/Component.tsx',
-  'src/blocks/NewsletterSignup/Component.tsx',
-  'src/blocks/WorkHistoryCard/Component.tsx',
+/**
+ * The blocks with no width control of their own (F3), each paired with the
+ * width helper it is required to call.
+ *
+ * Named per file rather than checked with one shared substring because the
+ * work block is the #188 exception: it picks its measure by mode, so it calls
+ * the two-argument helper. A substring check on `zeroConfigCardWidthClass`
+ * would pass for `…For` too and stop distinguishing them.
+ */
+const ZERO_CONFIG_CARDS: Array<[file: string, helper: string]> = [
+  ['src/blocks/ContactForm/Component.tsx', 'zeroConfigCardWidthClass(hosted)'],
+  [
+    'src/blocks/NewsletterSignup/Component.tsx',
+    'zeroConfigCardWidthClass(hosted)',
+  ],
+  [
+    'src/blocks/WorkHistoryCard/Component.tsx',
+    'zeroConfigCardWidthClassFor(hosted,',
+  ],
 ]
+
+/** Just the paths, for the audits that do not care which helper is called. */
+const ZERO_CONFIG_CARD_FILES = ZERO_CONFIG_CARDS.map(([file]) => file)
 
 describe('block host context', () => {
   it('assumes root, so every pre-existing call site renders unchanged', () => {
@@ -106,6 +124,37 @@ describe('block host context', () => {
     // Tailwind's class ordering.
     expect(blockRhythmClass('column')).toBe('')
     expect(zeroConfigCardWidthClass('column')).toBe('max-w-none')
+  })
+
+  /**
+   * The #188 matrix, all four cells, because the change is a widening at
+   * exactly one of them and every other cell is what must NOT move.
+   *
+   * | | `entry` (content) | list (form) |
+   * |---|---|---|
+   * | root | `max-w-none` ← the change | `max-w-xl` |
+   * | column | `max-w-none` | `max-w-none` |
+   */
+  it.each([
+    ['root', 'content', 'max-w-none'],
+    ['root', 'form', 'max-w-xl'],
+    ['column', 'content', 'max-w-none'],
+    ['column', 'form', 'max-w-none'],
+  ] as const)('a %s-hosted %s card is %s', (hosted, measure, expected) => {
+    expect(zeroConfigCardWidthClassFor(hosted, measure)).toBe(expected)
+  })
+
+  it('keeps the form cards on the measure they already shipped (#188)', () => {
+    // The one-argument helper is now the `form` case, and delegating must not
+    // have moved the contact form or the newsletter signup by a pixel.
+    for (const hosted of ['root', 'column', null, undefined] as const) {
+      expect(zeroConfigCardWidthClass(hosted)).toBe(
+        zeroConfigCardWidthClassFor(hosted, 'form'),
+      )
+    }
+    expect(zeroConfigCardWidthClassFor(null, 'form')).toBe('max-w-xl')
+    // A missing context is root, so an entry card still widens there.
+    expect(zeroConfigCardWidthClassFor(undefined, 'content')).toBe('max-w-none')
   })
 
   /**
@@ -148,7 +197,7 @@ describe('context-aware block grids', () => {
 
   it.each([
     ...CONTEXT_AWARE_GRIDS,
-    ...ZERO_CONFIG_CARDS,
+    ...ZERO_CONFIG_CARD_FILES,
     ...RHYTHM_CONVERTED_BLOCKS,
   ])('%s takes its outer rhythm from the host context', (file) => {
     const source = read(file)
@@ -156,9 +205,12 @@ describe('context-aware block grids', () => {
     expect(source).not.toContain('"my-12')
   })
 
-  it.each(ZERO_CONFIG_CARDS)('%s fills the column it is given', (file) => {
-    expect(read(file)).toContain('zeroConfigCardWidthClass')
-  })
+  it.each(ZERO_CONFIG_CARDS)(
+    '%s fills the column it is given, via %s',
+    (file, helper) => {
+      expect(read(file)).toContain(helper)
+    },
+  )
 
   it('covers every column-eligible block in the directory map', () => {
     // A block added to columns without an entry here would slip past the

@@ -47,19 +47,60 @@ export function blockRhythmClass(
 }
 
 /**
- * Reading width for the three zero-config cards (contact form, newsletter
- * signup, work history) — the blocks with no width control of their own.
+ * What a zero-config card is asking the page for at root.
+ *
+ * - `form` — a stack of inputs. A form wider than its labels is harder to
+ *   scan, not easier, so it takes a narrow measure of its own even when the
+ *   page could give it more.
+ * - `content` — prose and facts, which read at whatever measure the page sets
+ *   for prose. Capping it *below* the surrounding text is what reads as the
+ *   defect (#188).
+ */
+export type ZeroConfigCardMeasure = 'form' | 'content'
+
+/**
+ * Reading width for a zero-config card — the blocks with no width control of
+ * their own (contact form, newsletter signup, work history).
  *
  * @param hosted - Host context, if any.
- * @returns `max-w-xl` at root, where the card sits in the full content column
- * and needs a measure; `max-w-none` inside a column, where the editor already
- * picked the width and a capped card strands the rest of the section's
- * background band.
+ * @param measure - What the card is: a {@link ZeroConfigCardMeasure}.
+ * @returns `max-w-none` inside a column — the editor already picked the width
+ * and a capped card strands the rest of the section's background band — and at
+ * root the measure decides: `max-w-xl` for a `form`, `max-w-none` for
+ * `content`, which then fills the route's content column.
+ *
+ * @remarks **The `content` case is the exception #188 opened, and it is one
+ * block, not a new default.** Two of the three zero-config cards are forms and
+ * keep `max-w-xl` at root exactly as before; only the work-history block's
+ * per-entry mode asks for `content`, because on `/work/<slug>` it sits directly
+ * above full-measure prose and a card narrower than the paragraph beneath it
+ * reads as a layout bug rather than as a reading measure. The work block's
+ * OTHER mode — the résumé list — is still a `form`-measure card, so the
+ * distinction is per render, not per block.
+ */
+export function zeroConfigCardWidthClassFor(
+  hosted: BlockHostContext | null | undefined,
+  measure: ZeroConfigCardMeasure,
+): string {
+  if (hosted === 'column') return 'max-w-none'
+  return measure === 'content' ? 'max-w-none' : 'max-w-xl'
+}
+
+/**
+ * Reading width for a zero-config **form** card (contact form, newsletter
+ * signup).
+ *
+ * @param hosted - Host context, if any.
+ * @returns `max-w-xl` at root, `max-w-none` inside a column.
+ *
+ * @remarks Unchanged behaviour, now expressed as the `form` case of
+ * {@link zeroConfigCardWidthClassFor} so there is still exactly one place the
+ * two class literals are chosen.
  */
 export function zeroConfigCardWidthClass(
   hosted: BlockHostContext | null | undefined,
 ): string {
-  return hosted === 'column' ? 'max-w-none' : 'max-w-xl'
+  return zeroConfigCardWidthClassFor(hosted, 'form')
 }
 
 /**

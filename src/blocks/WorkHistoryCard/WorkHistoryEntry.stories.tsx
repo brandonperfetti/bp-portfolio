@@ -50,8 +50,12 @@ const meta = {
     showDescription: true,
   },
   decorators: [
+    // Stands in for the route's content column, which is what a root-hosted
+    // per-entry card now fills (#188). It was `max-w-xl` while the block
+    // capped itself there; keeping that would show a measure `/work/<slug>`
+    // no longer renders.
     (Story) => (
-      <div className="mx-auto max-w-xl">
+      <div className="mx-auto max-w-2xl">
         <Story />
       </div>
     ),
