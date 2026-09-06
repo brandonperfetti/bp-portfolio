@@ -5,6 +5,30 @@ import type {
 
 import { revalidatePath, revalidateTag } from 'next/cache'
 
+import { containRevalidation } from '@/hooks/containRevalidation'
+
+/**
+ * The whole purge for one collection: its data-cache tag, then every consumer
+ * route's shell.
+ *
+ * @remarks Named and shared for the same reason `purgePostSurfaces` is one
+ * collection over: the afterChange and afterDelete hooks below need the
+ * identical group, and a copy that purged the tag but not the paths would be a
+ * silent staleness bug of exactly the kind the `@remarks` above
+ * {@link revalidateCollectionTag} records. It is also the unit of containment —
+ * see {@link collectionSurfaces}.
+ */
+const purgeCollectionSurfaces = (tag: string, paths: string[]) => () => {
+  revalidateTag(tag, { expire: 0 })
+  for (const path of paths) {
+    revalidatePath(path)
+  }
+}
+
+/** What {@link purgeCollectionSurfaces} covers, for the containment log line. */
+const collectionSurfaces = (tag: string, paths: string[]) =>
+  `the ${tag} tag and the paths ${paths.join(', ') || '(none)'}`
+
 /**
  * Build afterChange/afterDelete hooks that revalidate a collection's data
  * cache tag AND the static routes that render it, so admin and MCP edits
@@ -38,6 +62,18 @@ import { revalidatePath, revalidateTag } from 'next/cache'
  * way to expire immediately (Next 16.3.0 docs, `revalidateTag` /
  * `updateTag`).
  *
+ * **A revalidation failure never fails the write (#156).** The purge goes
+ * through `containRevalidation` (`src/hooks/containRevalidation.ts`) for the
+ * reason that module's docblock argues once for every hook that shares it:
+ * Payload runs `afterChange` INSIDE the operation's transaction, so a purge
+ * that throws does not cost a cache entry — it rolls back the Categories or
+ * WorkHistory row that was just written. `revalidateTag`/`revalidatePath`
+ * throw `Invariant: static generation store missing` outside a Next request
+ * scope, which is every Local-API script, seed and job-driven write, and these
+ * collections are exactly what such writers touch. The `disableRevalidate` fast
+ * path is unchanged and still short-circuits the whole hook before any purge is
+ * attempted; it is not a substitute, because it only helps callers who set it.
+ *
  * @param tag - The cache tag the collection's repo caches under.
  * @param paths - Route paths whose prerenders render this collection.
  */
@@ -50,10 +86,12 @@ export const revalidateCollectionTag = (
       payload.logger.info(
         `Revalidating tag: ${tag} (paths: ${paths.join(', ') || 'none'})`,
       )
-      revalidateTag(tag, { expire: 0 })
-      for (const path of paths) {
-        revalidatePath(path)
-      }
+      containRevalidation(
+        payload,
+        'collection write',
+        collectionSurfaces(tag, paths),
+        purgeCollectionSurfaces(tag, paths),
+      )
     }
     return doc
   }
@@ -65,17 +103,24 @@ export const revalidateCollectionTag = (
  * @remarks Same `{ expire: 0 }` immediate-expiration reasoning as
  * {@link revalidateCollectionTag} — a delete must stop serving the removed
  * doc's data as fast as a save surfaces new data (#118).
+ *
+ * Containment (#156) applies here for a reason that is not weaker than on the
+ * afterChange side but stronger: `afterDelete` also runs inside the operation's
+ * transaction, so an uncontained purge throw resurrects the row the caller
+ * asked to delete.
  */
 export const revalidateCollectionTagDelete = (
   tag: string,
   paths: string[] = [],
 ): CollectionAfterDeleteHook => {
-  return ({ doc, req: { context } }) => {
+  return ({ doc, req: { payload, context } }) => {
     if (!context.disableRevalidate) {
-      revalidateTag(tag, { expire: 0 })
-      for (const path of paths) {
-        revalidatePath(path)
-      }
+      containRevalidation(
+        payload,
+        'collection write',
+        collectionSurfaces(tag, paths),
+        purgeCollectionSurfaces(tag, paths),
+      )
     }
     return doc
   }

@@ -22,6 +22,7 @@ import {
   publicPathFor,
 } from '@/fields/slug/slugPaths'
 import { readPreviousPublishedStoredPath } from '@/hooks/capturePublishedSlug'
+import { containRevalidation } from '@/hooks/containRevalidation'
 import type { Page } from '@/payload-types'
 
 /**
@@ -281,6 +282,24 @@ const readSubtree = async (
  * with where they are served — so these writes are NOT wrapped: they run on the
  * caller's transaction and are allowed to roll the move back. A move that
  * cannot take its children with it should not happen at all.
+ *
+ * **That asymmetry is about the WRITES, and it never covered the purge (#156).**
+ * The two failures are not the same event and must not share a posture. A
+ * descendant `payload.update` that throws means the cascade genuinely could not
+ * be completed, and rolling the move back is the correct answer. A
+ * `revalidatePath` that throws means only that there is no static-generation
+ * store in this scope — every Local-API script, seed, test and job-driven move —
+ * and it says nothing whatever about whether the subtree moved. Letting THAT
+ * roll the move back was the defect: the whole cascade, and the move that
+ * triggered it, discarded because a cache purge had no request scope to run in.
+ * The purge below therefore goes through `containRevalidation`, one contained
+ * call per descendant so the log names the specific URL that stayed stale and a
+ * failure on one descendant does not abandon the rest of the loop. The writes
+ * above stay bare, exactly as the paragraph before this one requires.
+ *
+ * `context.disableRevalidate` still skips the purge outright and leaves the
+ * cascade's writes to run — it is a caller saying "no cache work", not "no
+ * move".
  */
 export const cascadePagePaths: CollectionAfterChangeHook<Page> = async ({
   context,
@@ -333,7 +352,15 @@ export const cascadePagePaths: CollectionAfterChangeHook<Page> = async ({
       const vacated = publicPathFor(descendant.collection, {
         path: descendant.path,
       })
-      if (vacated) revalidatePath(vacated)
+      // Contained per descendant (#156), and the granularity is the point: the
+      // message has to name WHICH descendant's URL went stale, and a throw on
+      // one must not abandon the rest of the loop. See the docblock's failure
+      // posture — the writes above are deliberately unwrapped, this purge
+      // deliberately is not.
+      if (vacated)
+        containRevalidation(req.payload, 'subtree move', vacated, () =>
+          revalidatePath(vacated),
+        )
     }
   }
 

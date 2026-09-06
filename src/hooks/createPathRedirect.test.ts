@@ -137,7 +137,9 @@ const publish = async ({
 
 describe('createPathRedirect', () => {
   beforeEach(() => {
-    mocks.revalidatePath.mockClear()
+    // `mockReset`, not `mockClear`: the #156 containment case below installs a
+    // throwing implementation that must not leak into the next test.
+    mocks.revalidatePath.mockReset()
   })
 
   /**
@@ -468,6 +470,33 @@ describe('createPathRedirect', () => {
 
     expect(create).toHaveBeenCalledTimes(1)
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('contains a purge throw: the row still lands and the log names the path, not a failed write', async () => {
+    // #156. The purge sits inside the same `try` as the row write, so before
+    // containment a `revalidatePath` throw was caught by that `catch` and
+    // logged as "Failed to create redirect" — about a row that had already been
+    // created — and, this being an `afterChange` inside the operation's
+    // transaction, the row was rolled back with it. Both halves are asserted:
+    // the write happened, and the message is about revalidation.
+    mocks.revalidatePath.mockImplementation(() => {
+      throw new Error('Invariant: static generation store missing')
+    })
+
+    const { create, logger } = await publish({
+      data: { _status: 'published', slug: 'new-slug', slugLock: false },
+      doc: { id: 55, _status: 'published', slug: 'new-slug' },
+      originalDoc: { id: 55, _status: 'draft', slug: 'new-slug' },
+      publishedSlug: 'old-slug',
+    })
+
+    expect(create).toHaveBeenCalledTimes(1)
+    const [payload, message] = logger.error.mock.calls[0]
+    expect(message).toContain('/articles/old-slug')
+    expect(message).not.toContain('Failed to create redirect')
+    expect((payload.err as Error).message).toContain(
+      'static generation store missing',
+    )
   })
 
   it('never fails the editor’s publish when the redirect write throws', async () => {

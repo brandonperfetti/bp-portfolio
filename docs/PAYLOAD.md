@@ -340,11 +340,29 @@ behaviour end to end and pins the autosave read count.
 `afterChange`/`afterDelete` collection hooks **inside the operation's
 transaction**, so a hook that throws does not lose a cache purge — it rolls back
 the document. `revalidatePath`/`revalidateTag` throw outside a Next request
-scope, which is every Local-API or job-driven write. `revalidatePost`,
-`revalidatePage`, both `revalidateDelete` companions and `revalidateRedirects`
-therefore route every purge through **`containRevalidation`
+scope, which is every Local-API or job-driven write. **Every purge in a
+collection or global hook therefore goes through `containRevalidation`
 (`src/hooks/containRevalidation.ts`)**, which logs at `error` with the failing
-path and the reason and returns normally.
+path and the reason and returns normally — `revalidatePost`, `revalidatePage`,
+both `revalidateDelete` companions, `revalidateRedirects`,
+`revalidateCollectionTag` and its delete companion, `revalidateGlobal`,
+`createPathRedirect`'s post-write path purge, and `cascadePagePaths`'
+per-descendant vacated-path purge. That list is exhaustive, and a grep for
+`revalidatePath|revalidateTag` under `src/hooks`, `src/collections` and
+`src/globals` is how to keep it so.
+
+`cascadePagePaths` (`src/collections/Pages/hooks/pageHierarchy.ts`) is the one
+worth reading before adding a purge anywhere, because its own docblock says the
+cascade's writes are deliberately NOT wrapped and are allowed to roll the move
+back. That asymmetry is about the writes: a descendant update that throws means
+the cascade genuinely failed. A purge that throws means only that there is no
+static-generation store in this scope and says nothing about whether the subtree
+moved, so it is contained — once per descendant, so the log names the specific
+URL left stale and one failure does not abandon the rest of the loop.
+
+The `/api/revalidate` route handler is deliberately bare and is not in scope: it
+is an HTTP endpoint, not a hook, so a throw there fails a request and rolls back
+nothing. Do not "fix" it by wrapping it.
 
 That module's docblock is the single home for the argument: the `dist` citations
 for the transaction mechanics, the measurement, and the survey of `scripts/`

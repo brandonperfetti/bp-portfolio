@@ -393,7 +393,9 @@ describe('cascadePagePaths', () => {
     } as never)
 
   beforeEach(() => {
-    cacheMocks.revalidatePath.mockClear()
+    // `mockReset`, not `mockClear`: the #156 containment case installs a
+    // throwing implementation that must not leak into the next test.
+    cacheMocks.revalidatePath.mockReset()
   })
 
   /**
@@ -543,5 +545,50 @@ describe('cascadePagePaths', () => {
 
     expect(updates).toHaveLength(3)
     expect(cacheMocks.revalidatePath).not.toHaveBeenCalled()
+    // An opt-out, not a failure.
+    expect(req.payload.logger.error).not.toHaveBeenCalled()
+  })
+
+  /**
+   * #156. The cascade's stated failure posture — writes unwrapped, allowed to
+   * roll the move back — is about the WRITES. A `revalidatePath` throw means
+   * only that there is no static-generation store in this scope (every
+   * Local-API move, seed and job-driven publish), which says nothing about
+   * whether the subtree moved. Before containment it rolled the entire cascade,
+   * and the move that triggered it, back.
+   *
+   * Containment is per descendant, so this pins both halves of that: the loop
+   * continues past the failing descendant, and the log names the specific URL
+   * that stayed stale rather than one message for the whole move.
+   */
+  it('contains a purge throw on one descendant: the rest still purge and every write lands', async () => {
+    cacheMocks.revalidatePath.mockImplementation((path: string) => {
+      if (path === '/work/launch') {
+        throw new Error('Invariant: static generation store missing')
+      }
+    })
+
+    const { req, updates } = harness()
+
+    await expect(move(req)).resolves.toBeDefined()
+
+    // AC3 is untouched: every descendant was still written.
+    expect(updates).toHaveLength(3)
+    // The loop did not stop at the throwing descendant — the one AFTER it in
+    // the order was still purged.
+    expect(cacheMocks.revalidatePath.mock.calls.map(([p]) => p)).toEqual([
+      '/work/brytecore',
+      '/work/launch',
+      '/work/brytecore/team',
+    ])
+
+    // Exactly one failure, naming exactly the descendant that failed.
+    expect(req.payload.logger.error).toHaveBeenCalledTimes(1)
+    const [payload, message] = req.payload.logger.error.mock.calls[0]
+    expect(message).toContain('/work/launch')
+    expect(message).not.toContain('/work/brytecore')
+    expect((payload.err as Error).message).toContain(
+      'static generation store missing',
+    )
   })
 })

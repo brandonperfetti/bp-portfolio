@@ -2,6 +2,8 @@ import type { GlobalAfterChangeHook } from 'payload'
 
 import { revalidatePath, revalidateTag } from 'next/cache'
 
+import { containRevalidation } from '@/hooks/containRevalidation'
+
 /**
  * Build an afterChange hook that revalidates a global's cache tag and every
  * prerendered route.
@@ -29,6 +31,22 @@ import { revalidatePath, revalidateTag } from 'next/cache'
  * purge reach the instance serving that GET is the globals repos living on the
  * shared Runtime Cache — `'use cache: remote'`, #118 — not this argument.
  *
+ * **A revalidation failure never fails the write (#156).** The purge goes
+ * through `containRevalidation` (`src/hooks/containRevalidation.ts`), whose
+ * docblock carries the argument for every hook that shares it. The reason it
+ * applies to a GLOBAL is the same transaction mechanic as for collections —
+ * Payload runs the `afterChange` inside the operation's transaction, so a
+ * throwing purge rolls the global back — and the cost of losing that write is
+ * higher, not lower: Navigation, Footer, SiteSettings and Identity are what the
+ * whole site renders from, so a lost save is a site-wide edit silently
+ * discarded while the log says only that revalidation failed. The
+ * `disableRevalidate` fast path is unchanged and still skips the purge outright.
+ *
+ * The two purges are contained as ONE group, per that module's granularity
+ * note: the failure mode here is scope-wide (no static-generation store exists
+ * at all), so the `revalidatePath` after a thrown `revalidateTag` would fail
+ * identically, and both name the same surface in one message.
+ *
  * @param slug - The global slug; pages fetch globals with `global_<slug>` tags.
  */
 export const revalidateGlobal =
@@ -36,8 +54,15 @@ export const revalidateGlobal =
   ({ doc, req: { payload, context } }) => {
     if (!context.disableRevalidate) {
       payload.logger.info(`Revalidating global: ${slug}`)
-      revalidateTag(`global_${slug}`, { expire: 0 })
-      revalidatePath('/', 'layout')
+      containRevalidation(
+        payload,
+        'global write',
+        `the global_${slug} tag and the site-wide / layout`,
+        () => {
+          revalidateTag(`global_${slug}`, { expire: 0 })
+          revalidatePath('/', 'layout')
+        },
+      )
     }
     return doc
   }

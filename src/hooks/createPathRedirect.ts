@@ -11,6 +11,7 @@ import {
   readPreviousPublishedPath,
   readPreviousPublishedSlug,
 } from '@/hooks/capturePublishedSlug'
+import { containRevalidation } from '@/hooks/containRevalidation'
 
 /**
  * `afterChange` hook that keeps a moved published URL reachable: when a
@@ -131,6 +132,17 @@ import {
  * A failure here must never fail the editor's publish, so the write is wrapped
  * and logged. The `redirects` cache tag is purged for free: creating the row
  * runs the redirects collection's own `revalidateRedirects` hook.
+ *
+ * **Two different containments, and they are not interchangeable (#135, #156).**
+ * The `try` around the row write exists so a database failure does not fail the
+ * publish. The purge inside it goes through `containRevalidation` for a
+ * different reason: it runs AFTER the row has landed, so a `revalidatePath`
+ * throw would be reported by that `catch` as "Failed to create redirect" — a
+ * log line about a row that exists — and would then roll the row back with it,
+ * this being an `afterChange` inside the operation's transaction. Containing
+ * the purge separately is what keeps the message true and the row safe. Read
+ * `containRevalidation`'s docblock for the transaction mechanics and for why
+ * `disableRevalidate` (honoured just above the purge) is not a substitute.
  */
 export const createPathRedirect: CollectionAfterChangeHook = async ({
   collection,
@@ -228,7 +240,17 @@ export const createPathRedirect: CollectionAfterChangeHook = async ({
       `Path changed: redirecting ${from} -> ${to} (${collectionSlug}#${doc.id})`,
     )
 
-    if (!context?.disableRevalidate) revalidatePath(from)
+    // Contained, not bare (#156). The purge sits inside this `try` on purpose —
+    // it must stay conditional on the row having landed (see the docblock's
+    // ownership rule) — but that placement is exactly why it cannot be allowed
+    // to throw: an uncontained `revalidatePath` failure would be caught below
+    // and logged as "Failed to create redirect", which is false, the row is
+    // already written, and the operation would then roll it back anyway. The
+    // wrap makes the log line honest and the row's survival unconditional.
+    if (!context?.disableRevalidate)
+      containRevalidation(req.payload, 'redirect row', from, () =>
+        revalidatePath(from),
+      )
   } catch (error) {
     req.payload.logger.error(
       { err: error },
