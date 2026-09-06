@@ -275,6 +275,50 @@ describe('resolveRedirect · descendant prefix rows (#150)', () => {
       ),
     ).toEqual(permanentlyTo('https://example.com/moved'))
   })
+
+  /**
+   * A prefix row whose destination is the site ROOT (#182). The root is a
+   * legitimate destination — a page's public path can be `/` — but it is the
+   * one destination that normalises to a bare slash, and the carried remainder
+   * already begins with one. Concatenating the two spelled `//<remainder>`: a
+   * protocol-relative URL, which the catch-all hands straight to `redirect`
+   * and the browser resolves against the current scheme, i.e. off this site.
+   */
+  describe('a prefix row whose destination is the root (#182)', () => {
+    const toRoot = [prefixRow('/old', '/')]
+
+    it('rewrites to an internal path, not the protocol-relative //host', () => {
+      const resolved = resolveRedirect(toRoot, '/old/evil.com')
+
+      expect(resolved).toEqual(permanentlyTo('/evil.com'))
+      // Said twice on purpose: the value above is the answer, and NOT leaving
+      // the site is the property that made this a defect rather than a typo.
+      expect(resolved?.destination.startsWith('//')).toBe(false)
+    })
+
+    it('rewrites at any depth beneath the root destination', () => {
+      expect(resolveRedirect(toRoot, '/old/a/b')).toEqual(permanentlyTo('/a/b'))
+    })
+
+    /**
+     * The re-check on the REWRITTEN destination, for the same reason the
+     * self-redirect guard is measured there: the rewritten form is the only
+     * form that can be served. A request that already carries a doubled slash
+     * reaches the concatenation with a `//`-leading remainder, so the stored
+     * `to` being an ordinary internal path proves nothing about the answer.
+     */
+    it('answers null when the REWRITTEN destination leaves the site', () => {
+      expect(resolveRedirect(toRoot, '/old//evil.com')).toBeNull()
+    })
+
+    it('leaves an ordinary prefix rewrite untouched', () => {
+      // The control: collapsing the root to an empty base must not cost the
+      // normal case its own leading slash.
+      expect(resolveRedirect([prefixRow('/old', '/new')], '/old/x')).toEqual(
+        permanentlyTo('/new/x'),
+      )
+    })
+  })
 })
 
 describe('resolveRedirect', () => {

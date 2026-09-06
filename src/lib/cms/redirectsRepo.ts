@@ -282,9 +282,13 @@ export const resolveRedirect = (
   // would let a less specific ancestor answer for a subtree a more specific one
   // owns — the same defect rule 4 exists to prevent, arriving by a side door.
   if (!destination || isAbsoluteDestination(destination)) return null
-  const rewritten = `${normalizeRedirectPath(destination)}${target.slice(
-    from.length,
-  )}`
+  const base = normalizeRedirectPath(destination)
+  // The root normalises to `/`, so concatenating the suffix directly would
+  // spell `//<suffix>` — a protocol-relative URL that leaves the site.
+  const rewritten = `${base === '/' ? '' : base}${target.slice(from.length)}`
+  // Re-checked on the rewritten form, for the same reason the self-redirect
+  // guard below is: only this form can be served.
+  if (isAbsoluteDestination(rewritten)) return null
   // The guard on the REWRITTEN destination, which is the only form that can
   // equal the request.
   if (rewritten === target) return null
