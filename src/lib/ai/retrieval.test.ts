@@ -27,8 +27,12 @@ vi.mock('payload', () => ({
   })),
 }))
 
+import { ABOUT_CORVUS_COLLECTION } from '@/lib/ai/aboutCorvus'
+import type { CorvusSnippet } from '@/lib/ai/retrieval'
 import {
   CORVUS_SIMILARITY_FLOOR,
+  isSiteSubjectQuestion,
+  markSiteSubject,
   DEFAULT_RETRIEVAL_TOP_K,
   RETRIEVAL_OVERFETCH_FACTOR,
   RETRIEVAL_QUERY_TIMEOUT_MS,
@@ -475,5 +479,229 @@ describe('retrieveCorvusContext — never rejects', () => {
     executeMock.mockClear()
     await retrieveCorvusContext({ query: 'q', isAuthenticated: false })
     expect(renderSql(executeMock.mock.calls[0][0]).params[1]).toBe(false)
+  })
+})
+
+/**
+ * The about-Corvus passage, offered rather than retrieved (#167).
+ *
+ * @remarks It is a pure decision about the QUESTION, not about an embedding
+ * neighbourhood — which is exactly why it is testable here, with no provider
+ * key and no Postgres, and why the daily-driver retrieval boost #165 floated
+ * is not.
+ */
+describe('retrieveCorvusContext — the about-Corvus passage (#167)', () => {
+  it('leads the context on a question addressed to Corvus', async () => {
+    embedQueryMock.mockResolvedValue([0.1])
+    executeMock.mockResolvedValue({ rows: [row({ score: 0.9 })] })
+
+    const result = await retrieveCorvusContext({
+      query: 'What tech do you use?',
+      isAuthenticated: false,
+    })
+
+    expect(result[0].collection).toBe(ABOUT_CORVUS_COLLECTION)
+    expect(result).toHaveLength(2)
+  })
+
+  it('answers even when the provider is down', async () => {
+    // The one subject where an ungrounded turn has no excuse: the answer was
+    // never in the database, so a provider outage is no reason to lose it.
+    embedQueryMock.mockRejectedValue(new Error('provider down'))
+
+    const result = await retrieveCorvusContext({
+      query: 'What are you built with?',
+      isAuthenticated: false,
+    })
+
+    expect(result).toHaveLength(1)
+    expect(result[0].collection).toBe(ABOUT_CORVUS_COLLECTION)
+  })
+
+  it('answers even when the database is down', async () => {
+    embedQueryMock.mockResolvedValue([0.1])
+    executeMock.mockRejectedValue(new Error('relation does not exist'))
+
+    const result = await retrieveCorvusContext({
+      query: 'What model do you run on?',
+      isAuthenticated: false,
+    })
+
+    expect(result[0].collection).toBe(ABOUT_CORVUS_COLLECTION)
+  })
+
+  it('answers even when the vector query returns nothing at all', async () => {
+    embedQueryMock.mockResolvedValue([0.1])
+    executeMock.mockResolvedValue({ rows: [] })
+
+    const result = await retrieveCorvusContext({
+      query: 'What are you made with?',
+      isAuthenticated: false,
+    })
+
+    expect(result).toHaveLength(1)
+  })
+
+  it('stays out of a question about Brandon or the site', async () => {
+    embedQueryMock.mockResolvedValue([0.1])
+    executeMock.mockResolvedValue({ rows: [row({ score: 0.9 })] })
+
+    const brandon = await retrieveCorvusContext({
+      query: 'What technologies does Brandon use?',
+      isAuthenticated: false,
+    })
+    const site = await retrieveCorvusContext({
+      query: 'What does this site run on?',
+      isAuthenticated: false,
+    })
+
+    expect(brandon.map((s) => s.collection)).not.toContain(
+      ABOUT_CORVUS_COLLECTION,
+    )
+    expect(site.map((s) => s.collection)).not.toContain(ABOUT_CORVUS_COLLECTION)
+  })
+
+  it('respects the kill switch — a one-flag revert stays one flag', async () => {
+    // `CORVUS_DISABLE_RETRIEVAL` is documented as a true revert to the pre-#82
+    // chat path. A flag that left one passage behind would not be that.
+    vi.stubEnv('CORVUS_DISABLE_RETRIEVAL', 'true')
+
+    expect(
+      await retrieveCorvusContext({
+        query: 'What tech do you use?',
+        isAuthenticated: false,
+      }),
+    ).toEqual([])
+  })
+
+  it('still returns [] for an empty query', async () => {
+    expect(
+      await retrieveCorvusContext({ query: '   ', isAuthenticated: false }),
+    ).toEqual([])
+  })
+
+  it('leaves the ungrounded contract intact for everything else', async () => {
+    // The #82 invariant this sits directly upstream of: a turn that retrieves
+    // nothing and is not about Corvus still hands `buildGroundedSystem` an
+    // empty array.
+    embedQueryMock.mockResolvedValue([0.1])
+    executeMock.mockResolvedValue({ rows: [] })
+
+    expect(
+      await retrieveCorvusContext({
+        query: 'Where has Brandon worked?',
+        isAuthenticated: false,
+      }),
+    ).toEqual([])
+  })
+})
+
+/**
+ * Classifying the "this site" subject from the QUESTION (#167 addendum).
+ *
+ * @remarks Gating the prompt rule on retrieved passages alone left the
+ * ticket's own failing case uncovered — "what tech was this site built on?"
+ * with no repository in the top-k. This classifier is the second trigger, and
+ * it is pure, so the case that has no repository is testable without one.
+ */
+describe('isSiteSubjectQuestion (#167 addendum)', () => {
+  it.each([
+    'What tech was this site built on?',
+    'What does this site run on?',
+    'What is this site built with?',
+    'What powers this site?',
+    'What is under the hood on this site?',
+    'What is this website made with?',
+    'What stack is brandonperfetti.com built on?',
+  ])('classifies %s as the site subject', (query) => {
+    expect(isSiteSubjectQuestion(query)).toBe(true)
+  })
+
+  it.each([
+    ['What technologies does Brandon use?', "#147's mirror case"],
+    ['What tech do you use?', 'addressed to Corvus'],
+    ['What was TopTimelines built with?', 'a project, not this site'],
+    ['What is this site about?', 'a referent with no stack phrase'],
+    ['Where has Brandon worked?', 'unrelated'],
+    ['', 'empty'],
+  ])('does not claim %s (%s)', (query) => {
+    expect(isSiteSubjectQuestion(query)).toBe(false)
+  })
+
+  it('requires BOTH a site referent and a stack phrase', () => {
+    // Either half alone is a different question, and marking it would put a
+    // three-way subject rule in front of a turn that has no subject to pick.
+    expect(isSiteSubjectQuestion('what is the stack')).toBe(false)
+    expect(isSiteSubjectQuestion('tell me about this site')).toBe(false)
+  })
+
+  it('handles a missing query without throwing', () => {
+    expect(isSiteSubjectQuestion(null)).toBe(false)
+    expect(isSiteSubjectQuestion(undefined)).toBe(false)
+  })
+})
+
+describe('markSiteSubject (#167 addendum)', () => {
+  const s = (over: Partial<CorvusSnippet> = {}): CorvusSnippet => ({
+    collection: 'projects',
+    title: 'Portfolio',
+    content: 'body',
+    sourceUrl: '/projects',
+    score: 0.5,
+    ...over,
+  })
+
+  it('stamps the passages for a site-stack question', () => {
+    const marked = markSiteSubject('What tech was this site built on?', [s()])
+    expect(marked[0].questionSubject).toBe('site')
+  })
+
+  it('leaves other questions unmarked', () => {
+    expect(
+      markSiteSubject('What technologies does Brandon use?', [s()])[0]
+        .questionSubject,
+    ).toBeUndefined()
+  })
+
+  it('copies rather than mutating what it was handed', () => {
+    const snippets = [s()]
+    markSiteSubject('What powers this site?', snippets)
+    expect(snippets[0].questionSubject).toBeUndefined()
+  })
+
+  it('keeps the empty contract', () => {
+    expect(markSiteSubject('What powers this site?', [])).toEqual([])
+  })
+})
+
+describe('retrieveCorvusContext — marking the site subject (#167 addendum)', () => {
+  it('marks the passages a site-stack question came back with', async () => {
+    // The measured gap: the passages here are a project entry and a tech-stack
+    // row, exactly the wrong two sources, and no repository at all.
+    embedQueryMock.mockResolvedValue([0.1])
+    executeMock.mockResolvedValue({
+      rows: [row({ score: 0.5, collection: 'projects' })],
+    })
+
+    const result = await retrieveCorvusContext({
+      query: 'What tech was this site built on?',
+      isAuthenticated: false,
+    })
+
+    expect(result[0].questionSubject).toBe('site')
+  })
+
+  it('does not mark an unrelated question with the same passages', async () => {
+    embedQueryMock.mockResolvedValue([0.1])
+    executeMock.mockResolvedValue({
+      rows: [row({ score: 0.5, collection: 'projects' })],
+    })
+
+    const result = await retrieveCorvusContext({
+      query: 'What projects has Brandon shipped?',
+      isAuthenticated: false,
+    })
+
+    expect(result[0].questionSubject).toBeUndefined()
   })
 })

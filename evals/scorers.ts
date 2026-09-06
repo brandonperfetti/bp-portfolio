@@ -69,31 +69,83 @@ export function requiredFacts(expected: string | undefined): string[] {
  * @param output - The assistant's answer.
  * @returns Distinct site-relative paths, in first-seen order.
  */
+/** An absolute URL on this site, with its path captured. */
+const SITE_ABSOLUTE_URL = /^https?:\/\/(?:www\.)?brandonperfetti\.com(\/\S*)?$/i
+
+/** A markdown link's target: the `(...)` half of `[text](target)`. */
+const MARKDOWN_LINK_TARGET = /\]\(\s*([^)\s]+)\s*\)/g
+
+/**
+ * One citation's raw text, reduced to the path two answers can be compared on.
+ *
+ * @remarks Extracted so {@link citedPaths} and {@link linkedCitedPaths} cannot
+ * drift: their TSDoc claims both spellings of a citation are "judged
+ * identically", and before this existed that was a promise kept by two
+ * byte-identical copies of a closure. Now it is kept by there being one.
+ *
+ * A trailing sentence period is stripped; a trailing slash is folded away,
+ * because `/tech` and `/tech/` are the same page.
+ *
+ * @param raw - A candidate path, as it appeared in the answer.
+ * @returns The lower-cased path, or `null` when it is not site-relative.
+ */
+export function normalizeCitedPath(raw: string): string | null {
+  let path = raw.trim().replace(/[.,;:!?)\]]+$/, '')
+  if (path.length > 1) path = path.replace(/\/+$/, '')
+  return path.startsWith('/') ? path.toLowerCase() : null
+}
+
+/**
+ * The site path an absolute URL points at, if it is this site's.
+ *
+ * @param url - Any absolute URL found in an answer.
+ * @returns Its path (`/` for a bare origin), or `null` for an off-site URL.
+ */
+function siteUrlPath(url: string): string | null {
+  const site = SITE_ABSOLUTE_URL.exec(url)
+  return site ? (site[1] ?? '/') : null
+}
+
+/**
+ * Pass one: paths that appeared as MARKDOWN LINK targets.
+ *
+ * @remarks The single implementation of the link pass, shared by
+ * {@link citedPaths} (which goes on to two more passes) and
+ * {@link linkedCitedPaths} (which stops here). Both spellings of a linked
+ * citation — `/tech` and `https://brandonperfetti.com/tech` — fold to the same
+ * path, and because there is one copy of this loop they cannot stop doing so
+ * in one caller and not the other.
+ *
+ * @param output - The assistant's answer.
+ * @returns Normalized paths in first-seen order; duplicates possible.
+ */
+function markdownLinkPaths(output: string): string[] {
+  const paths: string[] = []
+  for (const match of output.matchAll(MARKDOWN_LINK_TARGET)) {
+    const target = match[1]
+    const raw = siteUrlPath(target) ?? (target.startsWith('/') ? target : null)
+    if (raw === null) continue
+    const path = normalizeCitedPath(raw)
+    if (path) paths.push(path)
+  }
+  return paths
+}
+
 export function citedPaths(output: string): string[] {
-  const found = new Set<string>()
+  // Seeded from the link pass, so link targets keep their first-seen position
+  // exactly as they did when this loop was written out here.
+  const found = new Set<string>(markdownLinkPaths(output))
 
   const add = (raw: string): void => {
-    let path = raw.trim().replace(/[.,;:!?)\]]+$/, '')
-    if (path.length > 1) path = path.replace(/\/+$/, '')
-    if (path.startsWith('/')) found.add(path.toLowerCase())
-  }
-
-  for (const match of output.matchAll(/\]\(\s*([^)\s]+)\s*\)/g)) {
-    const target = match[1]
-    const site = /^https?:\/\/(?:www\.)?brandonperfetti\.com(\/\S*)?$/i.exec(
-      target,
-    )
-    if (site) add(site[1] ?? '/')
-    else if (target.startsWith('/')) add(target)
+    const path = normalizeCitedPath(raw)
+    if (path) found.add(path)
   }
 
   const withoutUrls = output.replace(
     /https?:\/\/[^\s)>\]"']+/gi,
     (url): string => {
-      const site = /^https?:\/\/(?:www\.)?brandonperfetti\.com(\/\S*)?$/i.exec(
-        url,
-      )
-      if (site) add(site[1] ?? '/')
+      const sitePath = siteUrlPath(url)
+      if (sitePath) add(sitePath)
       return ' '
     },
   )
@@ -187,6 +239,72 @@ export function createCitesKnownSourceUrl(
       const paths = citedPaths(output)
       if (!paths.some((path) => corpus.has(path))) return 0
       return paths.every((path) => real.has(path)) ? 1 : 0
+    },
+  })
+}
+
+/**
+ * Site-relative paths an answer cites **as a markdown link**.
+ *
+ * @remarks {@link citedPaths}'s first pass alone. The difference matters, and
+ * it is a product difference rather than a parsing nicety: since #158 an
+ * internal citation renders as a real same-tab anchor, and a path written as
+ * prose renders as prose. Both are "the right path"; only one is clickable.
+ *
+ * `[measured, Brandon's keyed eval:ci, 2026-09-04]` the "you = Corvus" block
+ * wrote `Source: /corvus` as plain text in all four answers — the right path,
+ * reproduced from the label it had just read, and nothing to click. That is
+ * invisible to {@link citedPaths}, whose third pass deliberately finds bare
+ * paths in prose so that a fabricated one cannot hide there. This function is
+ * the complement: it asks whether the visitor was given a link.
+ *
+ * Absolute `brandonperfetti.com` link targets fold down to their path exactly
+ * as they do in {@link citedPaths} — not by coincidence and not by a promise
+ * in a comment: both functions run the SAME link pass, and
+ * `linkedCitedPaths(output)` is a subset of `citedPaths(output)` for every
+ * input, pinned by test.
+ *
+ * @param output - The assistant's answer.
+ * @returns Distinct site-relative paths that appeared as link targets.
+ */
+export function linkedCitedPaths(output: string): string[] {
+  return [...new Set(markdownLinkPaths(output))]
+}
+
+/**
+ * Build a citation scorer that requires the citation to be a LINK.
+ *
+ * @remarks A sibling of {@link createCitesKnownSourceUrl}, not a replacement
+ * for it, and deliberately a separate factory under a separate scorer name so
+ * that every block already using the original keeps measuring exactly what its
+ * recorded scores were measured against — the "adds only that" discipline
+ * `citation-scorers.ts` spells out.
+ *
+ * It asks the same two questions as its sibling (did you cite something from
+ * the corpus, and did you invent nothing) with one addition: the corpus
+ * citation has to have been a markdown link. Fabrication is still judged over
+ * {@link citedPaths}, i.e. over EVERY path in the answer including prose ones —
+ * writing `/articles/made-up` as plain text is no less an invention for not
+ * being linked.
+ *
+ * @param knownUrls - Every `sourceUrl` a block's corpus can cite.
+ * @param options - Real-but-unembedded site routes.
+ * @returns A scorer: 1 only when a corpus path was LINKED and nothing was
+ * invented.
+ */
+export function createCitesLinkedSourceUrl(
+  knownUrls: readonly string[],
+  options: CitationScorerOptions = {},
+) {
+  const corpus = pathSet(knownUrls)
+  const real = pathSet(knownUrls, options.alsoReal ?? [])
+  return createGuardedScorer<string, string, string>({
+    name: 'cites-a-linked-source-url',
+    description:
+      'Links at least one corpus source URL, and invents no site path.',
+    scorer: ({ output }) => {
+      if (!linkedCitedPaths(output).some((path) => corpus.has(path))) return 0
+      return citedPaths(output).every((path) => real.has(path)) ? 1 : 0
     },
   })
 }

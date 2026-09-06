@@ -8,6 +8,7 @@ import {
   type CmsArticleDetailResult,
 } from '@/lib/cms/articlesRepo'
 import { CMS_TAGS } from '@/lib/cms/cache'
+import type { CmsTopic } from '@/lib/cms/types'
 import { isFuturePublicationDate } from '@/lib/date'
 import type { OgImageMode } from '@/lib/og/types'
 
@@ -35,6 +36,17 @@ interface Article {
   canonicalUrl?: string
   keywords?: string[]
   topics?: string[]
+  /**
+   * The same topics as `topics`, carrying where each chip links (#151).
+   *
+   * @remarks Alongside the flat list, not instead of it: `ArticlesExplorer`
+   * filters against a merged topic+tag string pool and must not lose it.
+   *
+   * Populated on the **detail** path only (`getArticleBySlug` /
+   * `getArticleByPath`, which return the CMS detail unfiltered). The list
+   * projection in {@link getAllArticles} deliberately omits it — see there.
+   */
+  topicLinks?: CmsTopic[]
   tech?: string[]
   noindex?: boolean
   /** How this article's social image resolves (auto/bespoke/generated, T7). */
@@ -85,6 +97,14 @@ export async function getAllArticles(): Promise<ArticleWithSlug[]> {
     canonicalUrl: article.canonicalUrl,
     keywords: article.keywords,
     topics: article.topics,
+    // `topicLinks` is deliberately NOT projected here (#151). Only the article
+    // page renders linked topic chips, and it reads its article from
+    // `getArticleBySlug`/`getArticleByPath`, which pass the CMS detail through
+    // unfiltered. Every consumer of THIS list — the `/articles` explorer prop,
+    // RSS, llms.txt, the sitemap — reads `topics` and never the hrefs, so
+    // carrying them here would only widen the cached payload #76 Phase 0
+    // shrank. `articlesRepo` matches: it resolves topic homes on the detail
+    // path alone.
     tech: article.tech,
     noindex: article.noindex,
     searchText: '',

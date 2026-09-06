@@ -19,6 +19,7 @@ import {
 import { GITHUB_REPO_FIXTURES, fixtureRepoUrls } from './fixtures/github-repos'
 import { SITE_FIXTURE_DOCS } from './fixtures/site-content'
 import { SITE_CHROME_URLS } from './fixtures/site-routes'
+import { ABOUT_CORVUS_SOURCE_URL } from '../src/lib/ai/aboutCorvus'
 import {
   coverage,
   createFixtureRetriever,
@@ -32,6 +33,8 @@ import {
   citedRepoUrls,
   containsExpectedFact,
   createCitesKnownSourceUrl,
+  createCitesLinkedSourceUrl,
+  linkedCitedPaths,
   createCitesRepoNotTechList,
   createCitesRepoSourceUrl,
   createCitesSiteSourceNotVendor,
@@ -87,6 +90,19 @@ const neverFabricatesSiteUrlOnSite = createNeverFabricatesSiteUrl(
   CITATION_OPTIONS,
 )
 const citesSiteSourceNotVendor = createCitesSiteSourceNotVendor(SOURCE_URLS)
+
+/**
+ * The Corvus-subject block's citation scorer, as `corvus-subjects.eval.ts`
+ * builds it (#167 follow-on).
+ *
+ * @remarks Its corpus is the fixture URLs PLUS `/corvus`, because the About
+ * Corvus passage is code-owned and never chunked, so `fixtureSourceUrls()`
+ * cannot know about it.
+ */
+const citesLinkedSourceUrl = createCitesLinkedSourceUrl(
+  [...SOURCE_URLS, ABOUT_CORVUS_SOURCE_URL],
+  CITATION_OPTIONS,
+)
 
 /**
  * Call a scorer the way evalite does.
@@ -1032,4 +1048,171 @@ describe('repo eval retrieval preconditions (#147)', () => {
       expect(retrieveWithRepos(input)).toEqual([])
     },
   )
+})
+
+/**
+ * The link-aware citation scorer (#167 follow-on).
+ *
+ * @remarks Built for the Corvus-subject block after Brandon's keyed
+ * `eval:ci` run scored that block **0 on `cites-a-real-source-url` in all four
+ * cases** (2026-09-04). The answers named the right path — they wrote
+ * `Source: /corvus` as prose, copying the label out of the context block —
+ * so there were two independent defects, and this describe block pins both
+ * halves of the fix.
+ */
+describe('cites-a-linked-source-url (#167 follow-on)', () => {
+  it('scores 1 for a linked /corvus citation', async () => {
+    expect(
+      await score(
+        citesLinkedSourceUrl,
+        'I run on the Vercel AI SDK — more on my page, [Corvus](/corvus).',
+      ),
+    ).toBe(1)
+  })
+
+  it('scores 0 for the measured failure: plain-text "Source: /corvus"', async () => {
+    // The exact shape of the keyed run's output. `citedPaths` FINDS this path
+    // — its third pass reads bare paths out of prose on purpose — so a scorer
+    // built only on corpus membership would score it 1 and call an unclickable
+    // answer a good citation. Since #158 an internal citation is a real
+    // anchor; prose is not one.
+    expect(
+      await score(
+        citesLinkedSourceUrl,
+        "I can't change site content.\n\nSource: /corvus",
+      ),
+    ).toBe(0)
+  })
+
+  it('accepts the absolute spelling of a linked citation', async () => {
+    expect(
+      await score(
+        citesLinkedSourceUrl,
+        'See [my page](https://brandonperfetti.com/corvus).',
+      ),
+    ).toBe(1)
+  })
+
+  it('scores 0 when nothing is cited at all', async () => {
+    expect(
+      await score(citesLinkedSourceUrl, 'I run on the Vercel AI SDK.'),
+    ).toBe(0)
+  })
+
+  it('still fails an invented path, even alongside a good link', async () => {
+    // Fabrication is judged over EVERY path in the answer, linked or not:
+    // writing `/articles/made-up` as prose is no less an invention for not
+    // being a link.
+    expect(
+      await score(
+        citesLinkedSourceUrl,
+        'See [Corvus](/corvus) and also /articles/made-up for more.',
+      ),
+    ).toBe(0)
+  })
+
+  it('is why the stock scorer scored the block 0: /corvus is not in the corpus', async () => {
+    // The second half of the defect, pinned as a fact rather than described.
+    // `/corvus` is a real ROUTE (it is in SITE_CHROME_URLS) but was never a
+    // corpus SOURCE, and `createCitesKnownSourceUrl` requires the latter.
+    expect(SOURCE_URLS.map((url) => url.toLowerCase())).not.toContain('/corvus')
+    expect(SITE_CHROME_URLS).toContain('/corvus')
+    expect(
+      await score(citesKnownSourceUrlOnSite, 'See [Corvus](/corvus).'),
+    ).toBe(0)
+    // …and the block-local scorer, whose corpus includes it, scores it 1.
+    expect(await score(citesLinkedSourceUrl, 'See [Corvus](/corvus).')).toBe(1)
+  })
+
+  it('leaves the existing corpus scorer untouched for a /tech link', async () => {
+    // The "adds only that" check: the new factory is a sibling, so a block
+    // that already ran keeps scoring exactly as it did.
+    expect(
+      await score(
+        citesKnownSourceUrlOnSite,
+        'The [tech page](/tech) lists it.',
+      ),
+    ).toBe(1)
+    expect(
+      await score(citesLinkedSourceUrl, 'The [tech page](/tech) lists it.'),
+    ).toBe(1)
+  })
+})
+
+describe('linkedCitedPaths (#167 follow-on)', () => {
+  it('sees a markdown link and ignores a bare path in prose', () => {
+    expect(linkedCitedPaths('See [Corvus](/corvus).')).toEqual(['/corvus'])
+    expect(linkedCitedPaths('Source: /corvus')).toEqual([])
+    // The contrast with `citedPaths`, which is what makes the pair meaningful:
+    // it finds the prose path, and must keep doing so, or a fabricated path
+    // could hide there.
+    expect(citedPaths('Source: /corvus')).toEqual(['/corvus'])
+  })
+
+  it('folds an absolute site URL down to its path', () => {
+    expect(linkedCitedPaths('[x](https://brandonperfetti.com/tech)')).toEqual([
+      '/tech',
+    ])
+  })
+
+  it('ignores an off-site link target', () => {
+    expect(linkedCitedPaths('[docs](https://vercel.com/docs)')).toEqual([])
+  })
+
+  /**
+   * The invariant that replaces a promise in a comment.
+   *
+   * @remarks Both functions used to carry byte-identical copies of the
+   * normaliser and the link loop, and the TSDoc asserted they judged a
+   * citation "identically" — a claim nothing enforced. They now share one link
+   * pass, and this is what says so: for ANY output, the linked paths are a
+   * subset of all cited paths, and the two agree exactly when every path in
+   * the answer arrived as a link.
+   */
+  describe('stays in step with citedPaths', () => {
+    const SAMPLES = [
+      'See [Corvus](/corvus).',
+      'Source: /corvus',
+      'Both: [tech](/tech) and a bare /uses in prose.',
+      '[x](https://brandonperfetti.com/tech) plus https://brandonperfetti.com/uses',
+      '[docs](https://vercel.com/docs) and [Corvus](/corvus)',
+      'Trailing forms: [a](/tech/) and [b](/tech).',
+      'Nothing to cite at all.',
+      'Punctuation: see [Corvus](/corvus), then stop.',
+      'and/or TypeScript/JavaScript are not paths',
+    ]
+
+    it.each(SAMPLES)('linkedCitedPaths ⊆ citedPaths for: %s', (output) => {
+      const all = new Set(citedPaths(output))
+      for (const path of linkedCitedPaths(output)) {
+        expect(all.has(path), `${path} was linked but not cited`).toBe(true)
+      }
+    })
+
+    it.each([
+      'See [Corvus](/corvus).',
+      '[x](https://brandonperfetti.com/tech)',
+      'Both [tech](/tech) and [Corvus](/corvus).',
+      'Nothing to cite at all.',
+    ])('the two agree when every path is a link: %s', (output) => {
+      expect(linkedCitedPaths(output)).toEqual(citedPaths(output))
+    })
+
+    it('and diverge exactly when a path arrives as prose', () => {
+      const output = 'See [Corvus](/corvus) — the tech list is at /tech.'
+      expect(linkedCitedPaths(output)).toEqual(['/corvus'])
+      expect(citedPaths(output)).toEqual(['/corvus', '/tech'])
+    })
+
+    it('normalizes both spellings of a linked citation the same way', () => {
+      // One shared pass, so this cannot drift in one caller and not the other.
+      expect(
+        linkedCitedPaths('[a](https://brandonperfetti.com/tech/)'),
+      ).toEqual(['/tech'])
+      expect(linkedCitedPaths('[a](/tech/)')).toEqual(['/tech'])
+      expect(citedPaths('[a](https://brandonperfetti.com/tech/)')).toEqual([
+        '/tech',
+      ])
+    })
+  })
 })

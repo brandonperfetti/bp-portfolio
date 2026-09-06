@@ -85,7 +85,7 @@ describe('redirects plugin permanence field (#130)', () => {
     // with NO default, which would invalidate every existing row on its next
     // save and force a pick on every new one. `redirectTypeFieldOverride`
     // supplies the default, and permanent is the right one — it is what the
-    // rename rows `createSlugRedirect` writes need and the safe answer for a
+    // rename rows `createPathRedirect` writes need and the safe answer for a
     // hand-written row.
     const [redirects] = await buildRedirectsCollections()
     const type = findField(redirects.fields, 'type') as SelectField

@@ -1,5 +1,5 @@
 import type { Decorator, Meta, StoryObj } from '@storybook/nextjs-vite'
-import { expect, userEvent, waitFor, within } from 'storybook/test'
+import { expect, screen, userEvent, waitFor, within } from 'storybook/test'
 
 import CorvusChat from '@/components/CorvusChat'
 
@@ -231,7 +231,128 @@ const withCorvusSurface: Decorator = (Story) => (
   </div>
 )
 
+/**
+ * Streams one assistant reply containing an internal citation and an off-site
+ * link, through the real `useChat` transport (#158).
+ *
+ * @remarks A hand-built UI message stream rather than a mocked `useChat`,
+ * because the thing under test is streamdown's rendering of a reply and the
+ * component override that replaces its link component — a stubbed hook would
+ * render the markdown and prove nothing about the wiring. The frames and
+ * headers are the AI SDK's own v1 UI-message-stream protocol (`ai` 6.0.234,
+ * `UI_MESSAGE_STREAM_HEADERS`), so this is the shape `/api/ai/chat` really
+ * returns.
+ *
+ * @returns A restore closure that puts the original `window.fetch` back.
+ */
+function stubAssistantReply(markdown: string) {
+  const originalFetch = window.fetch
+  const frames = [
+    { type: 'start' },
+    { type: 'text-start', id: 't1' },
+    { type: 'text-delta', id: 't1', delta: markdown },
+    { type: 'text-end', id: 't1' },
+    { type: 'finish' },
+  ]
+  const body = `${frames.map((f) => `data: ${JSON.stringify(f)}\n\n`).join('')}data: [DONE]\n\n`
+
+  window.fetch = (async () =>
+    new Response(body, {
+      status: 200,
+      headers: {
+        'content-type': 'text/event-stream',
+        'x-vercel-ai-ui-message-stream': 'v1',
+      },
+    })) as typeof window.fetch
+  return () => {
+    window.fetch = originalFetch
+  }
+}
+
 export const Idle: Story = {}
+
+/**
+ * #158: the external-link confirmation, open.
+ *
+ * @remarks The story exists so the a11y addon gates this dialog — it is new
+ * UI, and `CLAUDE.md` requires new UI to carry a story for exactly that
+ * reason. It is also the only surface in the repo that hand-rolls a modal:
+ * there is no dialog primitive in `src/components/ui` and
+ * `@radix-ui/react-dialog` is not a dependency, so nothing else is enforcing
+ * its `role`/`aria-modal`/focus behaviour at the component level.
+ *
+ * The play function asserts what the unit tests cannot: that in a REAL
+ * browser, with a real focus model, opening the dialog moves focus into it,
+ * takes the chat surface behind it out of reach, and — the half jsdom is
+ * blind to — **gives focus back on close**.
+ *
+ * That last one is not hypothetical coverage. jsdom does not implement `inert`
+ * focusability, so a `.focus()` inside an inert subtree succeeds there and is a
+ * no-op in Chromium; an earlier version of this component restored focus
+ * synchronously in `close()` while the surface was still inert, and the jsdom
+ * test passed while `activeElement` stayed on `<body>` in a real browser
+ * `[measured by review, 2026-09-04]`. This story is the measurement that
+ * catches that class of bug, so both close paths are exercised: Escape, and
+ * Cancel.
+ */
+export const ExternalLinkConfirmation: Story = {
+  play: async ({ canvasElement }) => {
+    const restoreFetch = stubAssistantReply(
+      'His stack is on the [tech page](/tech), and the docs are at [Vercel](https://vercel.com/docs).',
+    )
+    try {
+      const canvas = within(canvasElement)
+      await userEvent.type(
+        canvas.getByPlaceholderText('Ask Corvus...'),
+        'Where are the docs?',
+      )
+      await userEvent.click(canvas.getByRole('button', { name: /send/i }))
+
+      // The internal citation is a real anchor; the off-site link is a button
+      // that asks first. That pair IS #158.
+      const citation = await canvas.findByRole('link', { name: 'tech page' })
+      await expect(citation).toHaveAttribute('href', '/tech')
+      const offSite = await canvas.findByRole('button', { name: 'Vercel' })
+
+      await userEvent.click(offSite)
+
+      // Portalled to document.body, so it is outside the story canvas —
+      // queried from the document, which is also what proves the portal.
+      const dialog = await screen.findByRole('dialog')
+      await expect(dialog).toHaveAttribute('aria-modal', 'true')
+      await expect(dialog).toHaveAccessibleName('Open external link?')
+      await expect(
+        screen.getByRole('button', { name: 'Open link' }),
+      ).toHaveFocus()
+
+      // The surface behind it is inert, so nothing in the chat is reachable.
+      const surface = canvasElement.querySelector('[data-slot="chat-card"]')
+      await expect(surface).toHaveAttribute('inert')
+      await expect(surface?.contains(dialog)).toBe(false)
+
+      // ESCAPE: the surface comes back, and focus lands on the link that
+      // opened the dialog — not on `<body>`. Both halves matter, and in this
+      // order: focusing before `inert` is removed is silently a no-op, which
+      // is exactly the regression this asserts against.
+      await userEvent.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      await expect(surface).not.toHaveAttribute('inert')
+      await expect(offSite).toHaveFocus()
+
+      // CANCEL: the same contract through a different close path. All four
+      // (Escape, Cancel, Confirm, backdrop) share one `close()`, so covering
+      // two of them covers the shared ordering.
+      await userEvent.click(offSite)
+      await screen.findByRole('dialog')
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      await expect(surface).not.toHaveAttribute('inert')
+      await expect(offSite).toHaveFocus()
+    } finally {
+      restoreFetch()
+    }
+  },
+}
 
 /**
  * Interaction: typing lands in the composer, and the retained v3 nicety —

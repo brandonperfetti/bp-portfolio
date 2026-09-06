@@ -46,6 +46,19 @@ After schema/plugin changes run `pnpm generate:types` and
 `pnpm generate:importmap`, commit the results (CI gates staleness). These
 files are prettier-ignored — never hand-format them.
 
+## Local database
+
+Local verification runs against a **restore of production**, not a
+hand-seeded database: `pnpm db:local:refresh` (`scripts/dev-db-restore.sh`,
+#85) pulls the latest encrypted dump, decrypts it with the passphrase from
+`.env.local` (`BACKUP_PASSPHRASE_PROD` for prod, `BACKUP_PASSPHRASE` for
+staging — both documented in `.env.example`, values in 1Password) and restores
+it locally. Anything that touches content shape, metadata or media is tried
+there first; staging is for verifying the deploy, not for discovering the bug.
+
+One consequence worth stating: a restored database references blob-hosted
+media, so `BLOB_READ_WRITE_TOKEN` must be set locally or every image 404s.
+
 ## Review
 
 - CodeRabbit reviews PRs; triage suggestions against product intent — apply,

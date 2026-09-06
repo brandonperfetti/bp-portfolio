@@ -15,6 +15,7 @@ import { LogoCarousel } from '@/blocks/LogoCarousel/config'
 import { MediaBlock } from '@/blocks/MediaBlock/config'
 import { NewsletterSignup } from '@/blocks/NewsletterSignup/config'
 import { PhotoStrip } from '@/blocks/PhotoStrip/config'
+import { PostRollup } from '@/blocks/PostRollup/config'
 import { ProseBlock } from '@/blocks/Prose/config'
 import { ShaderHero } from '@/blocks/ShaderHero/config'
 import { SocialLinks } from '@/blocks/SocialLinks/config'
@@ -53,6 +54,7 @@ export const pageBuilderBlocks: Block[] = [
   MediaBlock,
   NewsletterSignup,
   PhotoStrip,
+  PostRollup,
   ProseBlock,
   ShaderHero,
   SocialLinks,

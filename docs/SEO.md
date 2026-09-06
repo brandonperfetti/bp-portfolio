@@ -11,6 +11,31 @@
 - plugin-seo generation: title `{title} - Brandon Perfetti`; post URLs are
   prefixed `/articles`.
 
+### Which title wins, and whether the site name is appended (#176)
+
+The root layout (`src/app/(frontend)/layout.tsx`) sets
+`title.template = "%s - <siteName>"`, so anything returned as a plain string
+gets ` - Brandon Perfetti` appended.
+
+- **An authored SEO title is FINAL.** When an editor fills the `meta.title`
+  field on a page (or an article), that exact string is the `<title>` — nothing
+  is appended. If you want the site name in it, type it in. This is
+  `title: { absolute: … }` in `buildPageMetadata` and in the articles route.
+  The same rule applies to **CMS-composed pages served by the `[...segments]`
+  catch-all** (`/work/<slug>` and any future section page): that route builds
+  its own metadata, so both call one shared helper,
+  `resolvePageMetadataTitle` in `src/lib/cms/pageMetadata.ts`.
+- **No SEO title ⇒ the route's own title, plus the suffix.** The fallback
+  (`Home`, `About`, …) is a bare route name, so the template applies and the
+  tab reads `About - Brandon Perfetti`.
+- **`openGraph.title` / `twitter.title` never take the template**, in either
+  case; they are always the exact string.
+
+Practical consequence for editors: an SEO title that already contains
+"Brandon Perfetti" no longer ships it twice. Keep authored titles under ~60
+characters — that is where search engines truncate, and the duplicate suffix
+used to consume the part you wrote to be the differentiator.
+
 ## Structured data
 
 `src/lib/seo/jsonLd.ts` + `structuredData.ts` emit Person/Article/WebSite

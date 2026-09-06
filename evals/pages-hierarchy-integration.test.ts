@@ -104,6 +104,12 @@ describe.skipIf(!connectionString)(
 
     const cleanup = async () => {
       if (!payload) return
+      // Rows `createPathRedirect` wrote for the moves these cases make (#150).
+      await payload.delete({
+        collection: 'redirects',
+        where: { from: { like: `%${MARKER}%` } },
+        overrideAccess: true,
+      })
       await payload.delete({
         collection: 'pages',
         where: { slug: { like: `%${MARKER}%` } },
@@ -242,13 +248,10 @@ describe.skipIf(!connectionString)(
     })
 
     it('recomputes a leaf’s own path when it is renamed', async () => {
-      // A DRAFT leaf, deliberately. `refuseNestedSlugRename` refuses this
-      // rename once the page is published, because #120's redirect writer
-      // would spell the row `/leaf → /leaf-renamed` and leave the real URL
-      // `…/-child/-leaf` with nothing pointing at it (#150). A never-published
-      // page has no live URL to strand, so the guard stays silent and the
-      // recomputation this test is actually about is still exercised end to
-      // end.
+      // A DRAFT leaf, deliberately: the case below covers the published
+      // rename and the path-keyed redirect row it now writes (#150). Keeping
+      // this one on a draft isolates the recomputation it is actually about
+      // from the redirect machinery entirely.
       const { docs } = await payload.find({
         collection: 'pages',
         overrideAccess: true,
@@ -292,12 +295,12 @@ describe.skipIf(!connectionString)(
       )
     })
 
-    it('REFUSES to rename a nested, PUBLISHED page until #150', async () => {
-      // The other half of the case above, through the real Payload write path
-      // rather than a hook fixture: the redirect row that would be written
-      // describes `/-grand`, a URL this page has never had, and the URL that
-      // actually moved gets nothing. The unlock is supplied, so this is the
-      // guard speaking and not `enforceSlugFreeze`.
+    it('renames a nested, PUBLISHED page and keys the redirect on its real path (#150)', async () => {
+      // This case used to assert a 400 from `refuseNestedSlugRename`, the
+      // stop-gap that stood in for path-aware redirects. #150 deletes the
+      // guard, so the same write must now SUCCEED and leave the URL that
+      // actually moved — `/…-root/…-child/…-grand`, never the bare `/…-grand`
+      // the slug-keyed writer described — pointing at the document.
       const { docs } = await payload.find({
         collection: 'pages',
         overrideAccess: true,
@@ -306,23 +309,39 @@ describe.skipIf(!connectionString)(
       })
       const grandchild = docs[0]
       expect(grandchild._status).toBe('published')
+      const oldPath = `/${MARKER}-root/${MARKER}-child/${MARKER}-grand`
 
-      await expect(
-        payload.update({
-          collection: 'pages',
-          id: grandchild.id,
-          overrideAccess: true,
-          data: { slug: `${MARKER}-grand-renamed`, slugLock: false },
-        }),
-      ).rejects.toThrow(/#150/)
-
-      // And the stored row did not move.
-      const reread = await payload.findByID({
+      const renamed = await payload.update({
         collection: 'pages',
         id: grandchild.id,
         overrideAccess: true,
+        data: { slug: `${MARKER}-grand-renamed`, slugLock: false },
       })
-      expect(reread.path).toBe(`${MARKER}-root/${MARKER}-child/${MARKER}-grand`)
+      expect(renamed.path).toBe(
+        `${MARKER}-root/${MARKER}-child/${MARKER}-grand-renamed`,
+      )
+
+      const rows = await payload.find({
+        collection: 'redirects',
+        depth: 0,
+        overrideAccess: true,
+        pagination: false,
+        where: { from: { equals: oldPath } },
+      })
+      expect(rows.totalDocs).toBe(1)
+      expect(rows.docs[0].to?.reference).toMatchObject({
+        relationTo: 'pages',
+        value: grandchild.id,
+      })
+      expect(rows.docs[0].type).toBe('301')
+
+      // Rename it back so the cases after this one still find `…-grand`.
+      await payload.update({
+        collection: 'pages',
+        id: grandchild.id,
+        overrideAccess: true,
+        data: { slug: `${MARKER}-grand`, slugLock: false },
+      })
     })
 
     it('a title-only PATCH with the unlock cannot derive a new slug behind the guard', async () => {
@@ -472,5 +491,277 @@ describe.skipIf(!connectionString)(
         mkPage(`${MARKER}-clash`, articles.docs[0].id),
       ).rejects.toThrow(/already the article/i)
     })
+
+    /**
+     * The subtree fan-out (#150 AC2), on the real pipeline.
+     *
+     * @remarks A unit test can pin the write COUNT and the flags; only this
+     * tier can prove the recomposed paths actually land, because each
+     * descendant write re-enters Payload's whole update operation — including
+     * `computePagePath`/`computePostPath`, which recompose a child's path from
+     * its PARENT's stored path and would quietly write the old prefix back if
+     * the cascade wrote in the wrong order.
+     *
+     * Its own subtree, deliberately: the cases above assert on `…-root` and
+     * would see a moved tree instead.
+     *
+     * **It also deletes its own rows before it returns.** This is the only
+     * case in the tier that leaves a PLACED post (non-null `path`) behind, and
+     * `post-placement-integration.test.ts` runs in a parallel worker against
+     * the same database while it exists. Leaving the delete to `afterAll` made
+     * that post visible to a sibling file for the whole run; the `finally`
+     * narrows the window to this test's own body. `afterAll` still sweeps the
+     * same rows, so a failure mid-body cannot leak them either.
+     */
+    it('moves a whole subtree when the section page is renamed (#150)', async () => {
+      // Leaf-first (newest first). Postgres would accept either order — both
+      // `parent` FKs are `ON DELETE set null` (`20260902_233433_pages_hierarchy`,
+      // `20260903_163051_posts_placement`) and no `beforeDelete` hook exists —
+      // so this is hygiene, not a constraint: unwinding in reverse creation
+      // order means no surviving row is ever left pointing at a parent that
+      // has just been deleted, not even for the span of this loop.
+      const created: { collection: 'pages' | 'posts'; id: number | string }[] =
+        []
+      const track = <T extends { id: number | string }>(
+        collection: 'pages' | 'posts',
+        doc: T,
+      ): T => {
+        created.unshift({ collection, id: doc.id })
+        return doc
+      }
+
+      try {
+        const section = track('pages', await mkPage(`${MARKER}-mv`))
+        const child = track(
+          'pages',
+          await mkPage(`${MARKER}-mv-child`, section.id),
+        )
+        expect(child.path).toBe(`${MARKER}-mv/${MARKER}-mv-child`)
+        const leaf = track('pages', await mkPage(`${MARKER}-mv-leaf`, child.id))
+        expect(leaf.path).toBe(
+          `${MARKER}-mv/${MARKER}-mv-child/${MARKER}-mv-leaf`,
+        )
+        const placed = track(
+          'posts',
+          await payload.create({
+            collection: 'posts',
+            overrideAccess: true,
+            data: {
+              title: `${MARKER}-mv-post`,
+              slug: `${MARKER}-mv-post`,
+              _status: 'published',
+              content: lexical('body'),
+              parent: section.id,
+            } as never,
+          }),
+        )
+        expect(placed.path).toBe(`${MARKER}-mv/${MARKER}-mv-post`)
+
+        await payload.update({
+          collection: 'pages',
+          id: section.id,
+          overrideAccess: true,
+          data: { slug: `${MARKER}-xp`, slugLock: false },
+        })
+
+        const pathOf = async (
+          collection: 'pages' | 'posts',
+          id: number | string,
+        ) =>
+          (await payload.findByID({ collection, id, overrideAccess: true }))
+            .path
+
+        // Every descendant moved, at every depth, in both collections. These
+        // are the STORED values read back, and the cascade supplies no path at
+        // all — `computePagePath`/`computePostPath` recompute each one from its
+        // parent's stored path, so this is the assertion that the recomputation
+        // (and the shallowest-first ordering it depends on) is what actually
+        // lands.
+        expect(await pathOf('pages', child.id)).toBe(
+          `${MARKER}-xp/${MARKER}-mv-child`,
+        )
+        expect(await pathOf('pages', leaf.id)).toBe(
+          `${MARKER}-xp/${MARKER}-mv-child/${MARKER}-mv-leaf`,
+        )
+        expect(await pathOf('posts', placed.id)).toBe(
+          `${MARKER}-xp/${MARKER}-mv-post`,
+        )
+
+        // The moved page's OWN old URL gets a row (`createPathRedirect`).
+        const own = await payload.find({
+          collection: 'redirects',
+          depth: 0,
+          overrideAccess: true,
+          pagination: false,
+          where: { from: { equals: `/${MARKER}-mv` } },
+        })
+        expect(own.totalDocs).toBe(1)
+        // D4: it is a PREFIX row, so it covers the whole subtree by itself.
+        expect(own.docs[0].matchDescendants).toBe(true)
+
+        // And no per-descendant rows: D4 says one prefix row per move, so the
+        // cascade passes `disableSlugRedirect` on every descendant write.
+        const perDescendant = await payload.find({
+          collection: 'redirects',
+          depth: 0,
+          overrideAccess: true,
+          pagination: false,
+          where: { from: { equals: `/${MARKER}-mv/${MARKER}-mv-child` } },
+        })
+        expect(perDescendant.totalDocs).toBe(0)
+      } finally {
+        // `where`, not `id`: a by-id delete throws NotFound if the row never
+        // got created (an assertion above failed first), which would replace
+        // the real failure with a cleanup error.
+        for (const row of created) {
+          await payload.delete({
+            collection: row.collection,
+            where: { id: { equals: row.id } },
+            overrideAccess: true,
+          })
+        }
+      }
+    }, 180_000)
+
+    /**
+     * The cascade must also fire when the parent's move lands on its FIRST
+     * publish (CodeRabbit on #179).
+     *
+     * @remarks A never-published parent has no `_status: 'published'` row, so
+     * `findPublishedRow` answers `null` and the old capture returned before
+     * stashing anything — which made `cascadePagePaths` return on `!oldPath`
+     * and leave every descendant pointing at the pre-rename prefix until its
+     * own next save. The prefix descendants were actually composed from is the
+     * MAIN-TABLE row, published or not: a draft save never writes it
+     * (`collections/operations/utilities/update.js:253`), so it still holds
+     * the slug the children were built
+     * under.
+     *
+     * Only this tier can show it. The stale prefix is not a decision the hook
+     * makes — it is a row read back out of Postgres after a real publish, and
+     * the draft save in the middle has to be Payload's own, so that "the main
+     * table is untouched" is observed rather than assumed (it is asserted
+     * below, before the publish).
+     *
+     * **No placed post here, and that is a finding rather than an omission.**
+     * Posts' `parent` carries a `filterOptions` restricting it to pages whose
+     * `_status` equals `published` (`src/collections/Posts/index.ts:395-398`),
+     * which Payload enforces as a field validation on write, not merely as an
+     * admin picker filter — creating a post under a never-published page fails
+     * with a `ValidationError` naming Parent. So the post half of this case is
+     * unreachable while the parent has never shipped. It becomes reachable
+     * again after an UNPUBLISH (the main row's `_status` goes back to
+     * `'draft'`, so `findPublishedRow` answers `null` while descendants
+     * already exist), which is the same `null` branch this case pins.
+     *
+     * Same leaf-first `try/finally` as the #150 case above.
+     */
+    it('cascades a never-published parent’s move on its FIRST publish', async () => {
+      const created: { collection: 'pages' | 'posts'; id: number | string }[] =
+        []
+      const track = <T extends { id: number | string }>(
+        collection: 'pages' | 'posts',
+        doc: T,
+      ): T => {
+        created.unshift({ collection, id: doc.id })
+        return doc
+      }
+
+      try {
+        // NEVER published: created straight as a draft, so no row ever matches
+        // `_status: 'published'` for this id.
+        const section = track(
+          'pages',
+          await payload.create({
+            collection: 'pages',
+            overrideAccess: true,
+            data: {
+              title: `${MARKER}-np`,
+              layout,
+              _status: 'draft',
+              slug: `${MARKER}-np`,
+            } as never,
+          }),
+        )
+        expect(section.path).toBe(`${MARKER}-np`)
+
+        // A PUBLISHED descendant, so its URL is a real one the site serves —
+        // and a grandchild, so the shallowest-first recomposition is exercised
+        // on this branch too.
+        const child = track(
+          'pages',
+          await mkPage(`${MARKER}-np-child`, section.id),
+        )
+        expect(child.path).toBe(`${MARKER}-np/${MARKER}-np-child`)
+        const leaf = track('pages', await mkPage(`${MARKER}-np-leaf`, child.id))
+        expect(leaf.path).toBe(
+          `${MARKER}-np/${MARKER}-np-child/${MARKER}-np-leaf`,
+        )
+
+        // The rename arrives as a DRAFT save, exactly as the admin sends it.
+        await payload.update({
+          collection: 'pages',
+          id: section.id,
+          overrideAccess: true,
+          draft: true,
+          data: { slug: `${MARKER}-np-renamed`, slugLock: false },
+        })
+
+        // MEASURED, not assumed: the draft save left the main table alone, so
+        // the row still carries the prefix the descendants were composed from.
+        const mainAfterDraft = await payload.findByID({
+          collection: 'pages',
+          id: section.id,
+          overrideAccess: true,
+        })
+        expect(mainAfterDraft.path).toBe(`${MARKER}-np`)
+
+        // FIRST publish. The main row moves here, for the first time.
+        const published = await payload.update({
+          collection: 'pages',
+          id: section.id,
+          overrideAccess: true,
+          data: { _status: 'published' },
+        })
+        expect(published.path).toBe(`${MARKER}-np-renamed`)
+
+        const pathOf = async (
+          collection: 'pages' | 'posts',
+          id: number | string,
+        ) =>
+          (await payload.findByID({ collection, id, overrideAccess: true }))
+            .path
+
+        // The STORED paths, read back. Without the cascade these are still
+        // `${MARKER}-np/…` and stay that way until each document's own next
+        // save.
+        expect(await pathOf('pages', child.id)).toBe(
+          `${MARKER}-np-renamed/${MARKER}-np-child`,
+        )
+        expect(await pathOf('pages', leaf.id)).toBe(
+          `${MARKER}-np-renamed/${MARKER}-np-child/${MARKER}-np-leaf`,
+        )
+
+        // No redirect row for the parent itself, and that is correct: it was
+        // never served, so there is no old URL to send anywhere. The
+        // descendants' old URLs are the residual documented in `docs/PAYLOAD.md`.
+        const own = await payload.find({
+          collection: 'redirects',
+          depth: 0,
+          overrideAccess: true,
+          pagination: false,
+          where: { from: { equals: `/${MARKER}-np` } },
+        })
+        expect(own.totalDocs).toBe(0)
+      } finally {
+        for (const row of created) {
+          await payload.delete({
+            collection: row.collection,
+            where: { id: { equals: row.id } },
+            overrideAccess: true,
+          })
+        }
+      }
+    }, 180_000)
   },
 )

@@ -360,6 +360,10 @@ export function ArticleView({
       readingTimeMinutes={article.readingTimeMinutes}
       category={article.category?.title}
       topics={article.topics}
+      // #151: the same topics, carrying where each chip links. Resolved in
+      // `articlesRepo` inside the article's own cache scope, so the chips need
+      // no lookup at render time.
+      topicLinks={article.topicLinks}
       tech={article.tech}
     />
   )

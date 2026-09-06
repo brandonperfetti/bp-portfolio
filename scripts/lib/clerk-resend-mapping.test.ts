@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  APPLY_INVOCATION,
   formatPlan,
   indexContactsByEmail,
   listAllResendContacts,
@@ -391,7 +392,17 @@ describe('formatPlan', () => {
     const lines = formatPlan(plan())
 
     expect(lines.at(-1)).toContain('Dry run: nothing was written')
-    expect(lines.at(-1)).toContain('--apply')
+    // The separator is the assertion, not the flag: `payload run` swallows a
+    // bare `--apply`, so a hint printing only that reproduces the silent
+    // dry-run trap. Asserting the full copyable invocation means a regression
+    // back to the bare form fails here (#157).
+    expect(APPLY_INVOCATION).toBe(
+      'payload run scripts/backfill-clerk-resend-mapping.ts -- --apply',
+    )
+    expect(lines.at(-1)).toContain(APPLY_INVOCATION)
+    // Backticked, so a double-click or drag copy takes the command and not the
+    // trailing prose — the point of printing it at all.
+    expect(lines.at(-1)).toContain(`\`${APPLY_INVOCATION}\``)
     expect(lines.join('\n')).toContain('PLAN')
     expect(lines.join('\n')).not.toContain('MAP ')
   })

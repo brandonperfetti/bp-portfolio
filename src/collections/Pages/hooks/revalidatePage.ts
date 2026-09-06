@@ -6,7 +6,26 @@ import type {
 import { revalidatePath, revalidateTag } from 'next/cache'
 
 import { publicPathFor } from '@/fields/slug/slugPaths'
+import { readPreviousPublishedPath } from '@/hooks/capturePublishedSlug'
+import { containRevalidation } from '@/hooks/containRevalidation'
 import type { Page } from '../../../payload-types'
+
+/**
+ * Expire both page data-cache tags with the immediate-expiration profile.
+ *
+ * @remarks Named because all three branches below need the identical pair and a
+ * branch that purged only one would be a silent staleness bug, not a visible
+ * one: the route would regenerate against a fresh `pages` read and a stale
+ * `pages-sitemap` one, or the reverse.
+ *
+ * `{ expire: 0 }`, never `'max'` (#118) — under cacheComponents `'max'` is
+ * stale-while-revalidate with a one-year window, so an edit keeps serving old
+ * content until a background refresh happens to land.
+ */
+const purgePageTags = () => {
+  revalidateTag('pages', { expire: 0 })
+  revalidateTag('pages-sitemap', { expire: 0 })
+}
 
 /**
  * afterChange hook that keeps published pages live without a redeploy:
@@ -25,7 +44,7 @@ import type { Page } from '../../../payload-types'
  * paths — and the matrix is pinned in
  * `revalidatePage.test.ts`. A publish purges the page's current path; an
  * unpublish purges `previousDoc`'s path; a published→published rename purges
- * only the NEW path here, with `createSlugRedirect` purging the old one.
+ * only the NEW path here, with `createPathRedirect` purging the old one.
  *
  * **The vocabulary conflict is closed (#132 → #148).** Pages used to make the
  * argument concrete in the worst way: this hook hand-built the root's `/` in three
@@ -43,11 +62,16 @@ import type { Page } from '../../../payload-types'
  * rather than merely tidy — a placed page's path is `/work/brytecore`, which no
  * `/`+slug template can produce.
  *
- * The autosave gap on the unpublish branch is identical to the Posts one and
- * documented there: Pages autosaves at the same 100ms interval, so unpublishing
- * with a pending draft leaves `previousDoc._status === 'draft'` and purges
- * nothing. Measured 2026-09-02, pinned by test, tracked in a follow-up to
- * #132.
+ * The autosave gap on the unpublish branch was identical to the Posts one and
+ * is closed the same way (#155): Pages autosaves at the same 100ms interval, so
+ * unpublishing with a pending draft left `previousDoc._status === 'draft'` and
+ * purged nothing. [measured, 2026-09-04, Payload 3.86.0, PostgreSQL 16.13, full
+ * committed migration set] — the same harness ran both collections and both
+ * behaved identically. The branch now prefers the path `capturePublishedSlug`
+ * stashed from the main table row, which is the URL the site was serving; see
+ * `revalidatePost` and `capturePublishedSlug` for the measured discriminator
+ * that lets that hook fire on unpublish without costing the 100ms autosave a
+ * database read.
  *
  * `revalidateTag(tag, { expire: 0 })`, not `'max'` (#118): under
  * cacheComponents (`'use cache'` readers, #76) `'max'` is
@@ -62,24 +86,17 @@ import type { Page } from '../../../payload-types'
  * Route Handler, where `revalidateTag(tag, { expire: 0 })` is the documented
  * way to expire immediately (Next 16.3.0 docs, `revalidateTag` /
  * `updateTag`).
- */
-/**
- * Expire both page data-cache tags with the immediate-expiration profile.
  *
- * @remarks Named because all three branches below need the identical pair and a
- * branch that purged only one would be a silent staleness bug, not a visible
- * one: the route would regenerate against a fresh `pages` read and a stale
- * `pages-sitemap` one, or the reverse.
- *
- * `{ expire: 0 }`, never `'max'` (#118) — under cacheComponents `'max'` is
- * stale-while-revalidate with a one-year window, so an edit keeps serving old
- * content until a background refresh happens to land.
+ * **A revalidation failure never fails the write (#156).** Every
+ * `revalidatePath`/`revalidateTag` call below goes through
+ * `containRevalidation` (`src/hooks/containRevalidation.ts`), which logs at
+ * `error` with the path and the reason and lets the page land. That module's
+ * docblock is where the argument lives, once, for all three call sites — this
+ * hook, `revalidatePost` and `revalidateRedirects` (#135): `afterChange` runs
+ * inside the operation's transaction, so an uncontained throw rolls the page
+ * back, and no script in this repo wants revalidation to be fatal. The
+ * `disableRevalidate` fast path is unchanged.
  */
-const purgePageTags = () => {
-  revalidateTag('pages', { expire: 0 })
-  revalidateTag('pages-sitemap', { expire: 0 })
-}
-
 export const revalidatePage: CollectionAfterChangeHook<Page> = ({
   doc,
   previousDoc,
@@ -91,24 +108,55 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
 
       if (path) {
         payload.logger.info(`Revalidating page at path: ${path}`)
-        revalidatePath(path)
+        containRevalidation(
+          payload,
+          'page write',
+          `the page path ${path}`,
+          () => revalidatePath(path),
+        )
       }
       // The data layer (getCmsPageByPath / getPageLayout / CmsPageBlocks)
       // caches under the 'pages' tag — revalidatePath alone regenerates the
       // route against STALE data, so admin edits never surfaced without a
       // redeploy.
-      purgePageTags()
+      containRevalidation(
+        payload,
+        'page write',
+        'the pages/pages-sitemap tags',
+        purgePageTags,
+      )
     }
 
-    // If the page was previously published, we need to revalidate the old path
-    if (previousDoc?._status === 'published' && doc._status !== 'published') {
-      const oldPath = publicPathFor('pages', previousDoc)
+    // If the page was previously published, we need to revalidate the old path.
+    //
+    // `previousDoc` alone is not enough (#155) — it is the latest VERSION, so
+    // after any autosave it is the DRAFT and this test fails closed, purging
+    // nothing when a page with a pending autosaved rename is unpublished. The
+    // captured path is the main table row's public path (the URL the site was
+    // serving) and its presence is the signal that a published row existed.
+    // Same reasoning, same shape, as `revalidatePost`.
+    const capturedOldPath = readPreviousPublishedPath(context, 'pages', doc.id)
+    const wasPublished =
+      previousDoc?._status === 'published' || Boolean(capturedOldPath)
+
+    if (wasPublished && doc._status !== 'published') {
+      const oldPath = capturedOldPath ?? publicPathFor('pages', previousDoc)
 
       if (oldPath) {
         payload.logger.info(`Revalidating old page at path: ${oldPath}`)
-        revalidatePath(oldPath)
+        containRevalidation(
+          payload,
+          'page write',
+          `the old page path ${oldPath}`,
+          () => revalidatePath(oldPath),
+        )
       }
-      purgePageTags()
+      containRevalidation(
+        payload,
+        'page write',
+        'the pages/pages-sitemap tags',
+        purgePageTags,
+      )
     }
   }
   return doc
@@ -116,16 +164,29 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
 
 /**
  * afterDelete companion to {@link revalidatePage}. Same `{ expire: 0 }`
- * immediate-expiration reasoning as {@link revalidatePage} (#118).
+ * immediate-expiration reasoning as {@link revalidatePage} (#118), and the same
+ * `containRevalidation` wrap (#156) — `afterDelete` is transactional too, so an
+ * uncontained throw would resurrect the page the caller deleted.
  */
 export const revalidateDelete: CollectionAfterDeleteHook<Page> = ({
   doc,
-  req: { context },
+  req: { context, payload },
 }) => {
   if (!context.disableRevalidate) {
     const path = publicPathFor('pages', doc ?? {})
-    if (path) revalidatePath(path)
-    purgePageTags()
+    if (path)
+      containRevalidation(
+        payload,
+        'page write',
+        `the deleted page path ${path}`,
+        () => revalidatePath(path),
+      )
+    containRevalidation(
+      payload,
+      'page write',
+      'the pages/pages-sitemap tags',
+      purgePageTags,
+    )
   }
 
   return doc

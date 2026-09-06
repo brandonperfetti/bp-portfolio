@@ -18,6 +18,13 @@ const getCmsPageByPath = vi.fn(
 vi.mock('@/lib/articles', () => ({
   getSearchArticles: () => getSearchArticles(),
 }))
+// #154: the route resolves which topics have a published section home and
+// hands the map to the explorer as a plain object. Mocked here so the route
+// test stays free of the Payload Local API.
+const getTopicSectionPaths = vi.fn(async () => new Map<string, string>())
+vi.mock('@/lib/cms/articlesRepo', () => ({
+  getTopicSectionPaths: () => getTopicSectionPaths(),
+}))
 vi.mock('@/lib/cms/pagesRepo', () => ({
   getCmsPageByPath: (path: string) => getCmsPageByPath(path),
 }))
@@ -37,8 +44,18 @@ vi.mock('@/lib/site', () => ({
 // Probes for the explorer, page-builder blocks, layout, and share control. The
 // layout probe surfaces the `actions` slot so share assertions can see it.
 vi.mock('@/components/articles/ArticlesExplorer', () => ({
-  ArticlesExplorer: ({ articles }: { articles: unknown[] }) => (
-    <div data-testid="articles-explorer" data-count={articles.length} />
+  ArticlesExplorer: ({
+    articles,
+    sectionPaths,
+  }: {
+    articles: unknown[]
+    sectionPaths?: Record<string, string>
+  }) => (
+    <div
+      data-testid="articles-explorer"
+      data-count={articles.length}
+      data-section-paths={JSON.stringify(sectionPaths ?? null)}
+    />
   ),
 }))
 vi.mock('@/components/cms/CmsPageBlocks', () => ({
@@ -77,6 +94,7 @@ const scriptText = (container: HTMLElement) =>
 
 beforeEach(() => {
   vi.clearAllMocks()
+  getTopicSectionPaths.mockResolvedValue(new Map())
   getCmsPageByPath.mockResolvedValue(null)
 })
 
@@ -127,5 +145,48 @@ describe('articles route — reader Share control', () => {
     render(await ArticlesIndex())
 
     expect(screen.queryByTestId('share-button')).toBeNull()
+  })
+})
+
+/**
+ * #154 — the section affordance's server half. The route resolves the map once,
+ * inside `getTopicSectionPaths`' own cache scope, and passes it down as a plain
+ * serializable object: no `searchParams` read, so `/articles` stays static.
+ */
+describe('articles route — section paths for the explorer (#154)', () => {
+  it('passes the resolved topic → section-home map to the explorer', async () => {
+    getSearchArticles.mockResolvedValue([
+      { slug: 'a', title: 'A', description: 'd', date: '2026-01-01' },
+    ])
+    getTopicSectionPaths.mockResolvedValue(
+      new Map([['leadership', 'work/leadership']]),
+    )
+
+    render(await ArticlesIndex())
+
+    expect(screen.getByTestId('articles-explorer')).toHaveAttribute(
+      'data-section-paths',
+      '{"leadership":"work/leadership"}',
+    )
+  })
+
+  it('passes an empty object when no topic has a home', async () => {
+    getSearchArticles.mockResolvedValue([
+      { slug: 'a', title: 'A', description: 'd', date: '2026-01-01' },
+    ])
+
+    render(await ArticlesIndex())
+
+    expect(screen.getByTestId('articles-explorer')).toHaveAttribute(
+      'data-section-paths',
+      '{}',
+    )
+  })
+
+  it('resolves the map exactly once — the #151 reader, not a second one', async () => {
+    getSearchArticles.mockResolvedValue([])
+    render(await ArticlesIndex())
+
+    expect(getTopicSectionPaths).toHaveBeenCalledTimes(1)
   })
 })

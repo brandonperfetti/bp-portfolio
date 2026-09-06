@@ -19,6 +19,7 @@ import { LeadBlockComponent } from '@/blocks/Lead/Component'
 import { LogoCarouselComponent } from '@/blocks/LogoCarousel/Component'
 import { MediaBlockComponent } from '@/blocks/MediaBlock/Component'
 import { PhotoStripBlockComponent } from '@/blocks/PhotoStrip/Component'
+import { PostRollupComponent } from '@/blocks/PostRollup/Component'
 import { ProseBlockComponent } from '@/blocks/Prose/Component'
 import { ShaderHeroBlockComponent } from '@/blocks/ShaderHero/Component'
 import { SocialLinksBlockComponent } from '@/blocks/SocialLinks/Component'
@@ -130,6 +131,10 @@ export function RenderBlocks({
               )
             case 'photoStrip':
               return <PhotoStripBlockComponent key={key} {...block} />
+            case 'postRollup':
+              return (
+                <PostRollupComponent key={key} {...block} hosted={hosted} />
+              )
             case 'prose':
               return (
                 <ProseBlockComponent key={key} {...block} hosted={hosted} />

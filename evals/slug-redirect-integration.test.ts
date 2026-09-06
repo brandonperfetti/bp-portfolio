@@ -23,7 +23,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  *
  * What is real here: Postgres, the migrated schema, the whole Payload update
  * operation, the versions/drafts machinery, `enforceSlugFreeze`,
- * `capturePublishedSlug`, `createSlugRedirect`, the `schedulePublish` job, and
+ * `capturePublishedSlug`, `createPathRedirect`, the `schedulePublish` job, and
  * the `redirects` collection.
  *
  * **Why `next/cache` is still stubbed after #135.** #135 asked whether this
@@ -33,14 +33,14 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  *
  * 1. `revalidatePost` and `revalidatePage` call `revalidatePath` behind the
  *    `context.disableRevalidate` flag and nothing else, and they run BEFORE
- *    `createSlugRedirect` in each collection's `afterChange` array. So a
+ *    `createPathRedirect` in each collection's `afterChange` array. So a
  *    publish issued without that flag and without a Next scope throws in the
  *    FIRST hook and rolls back the post itself — long before any redirect hook
  *    is reached. That is a wider condition than #135 (which names only
  *    `revalidateRedirects`) and is deliberately left alone here.
  * 2. Stubbing also lets the test ASSERT the old path is purged, which is
  *    load-bearing: `revalidatePost` never purges it on a published-to-published
- *    rename (#132), `createSlugRedirect` does.
+ *    rename (#132), `createPathRedirect` does.
  *
  * What #135 did buy is proved directly below by
  * "keeps the redirect row when the redirects revalidation throws": the stub is
@@ -128,6 +128,11 @@ describe.skipIf(!connectionString)(
       })
       await payload.delete({
         collection: 'posts',
+        where: { slug: { like: `%${MARKER}%` } },
+        overrideAccess: true,
+      })
+      await payload.delete({
+        collection: 'pages',
         where: { slug: { like: `%${MARKER}%` } },
         overrideAccess: true,
       })
@@ -440,6 +445,123 @@ describe.skipIf(!connectionString)(
       })
     }, 180_000)
 
+    /**
+     * #155, at the tier that can actually prove it.
+     *
+     * The discriminator that closes #155 is REST plumbing, not hook branching:
+     * `capturePublishedSlug` decides whether a write is a draft save by
+     * mirroring Payload's own `isSavingDraft` predicate
+     * (`operations/utilities/update.js:29`) from `req.query` plus the incoming
+     * `_status`. A unit test that mocks `payload.find` cannot see any of that —
+     * it is the same class of gap that let #120 ship broken twice — so the
+     * proof belongs here, driving the real update/versions/drafts pipeline.
+     *
+     * The Local API is a faithful stand-in for the admin's REST call because
+     * `createLocalReq` does `req.query = req?.query || {}`
+     * (`payload/dist/utilities/createLocalReq.js:102`): a supplied `req.query`
+     * is kept verbatim, so passing the admin's own autosave query string
+     * (`?draft=true&autosave=true`,
+     * `@payloadcms/ui/dist/elements/Autosave/index.js:88-91`) reproduces exactly
+     * what the hook reads in production.
+     *
+     * The sequence is the reported one: publish, autosave a RENAME into a
+     * draft, then unpublish. Before #155 this purged nothing at all, because
+     * `previousDoc` is the autosaved draft and already carries the new slug.
+     */
+    it('purges the SERVED path when an autosaved rename is unpublished (#155)', async () => {
+      const served = `${MARKER}-served`
+      const renamed = `${MARKER}-renamed`
+      const id = await createPublished(served)
+
+      // (1) AUTOSAVE a rename — the admin's own query string.
+      revalidatePath.mockClear()
+      await payload.update({
+        collection: 'posts',
+        id,
+        draft: true,
+        autosave: true,
+        overrideAccess: true,
+        req: { query: { autosave: 'true', draft: 'true' } } as never,
+        data: { slug: renamed, slugLock: false, _status: 'draft' },
+      })
+
+      // A draft save never touches the main table (`update.js:253`), so the
+      // site is still serving the ORIGINAL path at this point.
+      const stillServing = await payload.db.findOne({
+        collection: 'posts',
+        where: { id: { equals: id } },
+      } as never)
+      expect((stillServing as { slug?: string } | null)?.slug).toBe(served)
+
+      // (2) UNPUBLISH — the admin sends no `draft` param and a draft body.
+      revalidatePath.mockClear()
+      await payload.update({
+        collection: 'posts',
+        id,
+        overrideAccess: true,
+        req: { query: { depth: '0', 'fallback-locale': 'null' } } as never,
+        data: { _status: 'draft' },
+      })
+
+      const purged = revalidatePath.mock.calls.map(([p]) => p as string)
+
+      // THE assertion: the URL the site was actually serving is purged...
+      expect(purged).toContain(`/articles/${served}`)
+      // ...and the draft's slug, which nothing was ever served at, is not.
+      expect(purged).not.toContain(`/articles/${renamed}`)
+
+      // An unpublish is not a rename: no redirect row is written for either
+      // path, so #155's capture cannot leak into #120's redirect behaviour.
+      expect((await redirectsFor(`/articles/${served}`)).totalDocs).toBe(0)
+      expect((await redirectsFor(`/articles/${renamed}`)).totalDocs).toBe(0)
+    }, 180_000)
+
+    /**
+     * The other half of #155's acceptance criteria: the 100ms autosave must not
+     * gain a database read. Counted against the real adapter, so it prices the
+     * whole pipeline rather than one hook's own `find`.
+     */
+    it('adds no database read to an autosave draft save (#155)', async () => {
+      const id = await createPublished(`${MARKER}-cost`)
+
+      let reads = 0
+      const wrapped: Array<[string, unknown]> = []
+      for (const method of ['find', 'findOne', 'findVersions'] as const) {
+        const db = payload.db as unknown as Record<
+          string,
+          (...a: never[]) => unknown
+        >
+        const original = db[method].bind(payload.db)
+        wrapped.push([method, original])
+        db[method] = (...args: never[]) => {
+          reads += 1
+          return original(...args)
+        }
+      }
+
+      try {
+        await payload.update({
+          collection: 'posts',
+          id,
+          draft: true,
+          autosave: true,
+          overrideAccess: true,
+          context: { disableRevalidate: true },
+          req: { query: { autosave: 'true', draft: 'true' } } as never,
+          data: { slug: `${MARKER}-cost-2`, slugLock: false, _status: 'draft' },
+        })
+      } finally {
+        const db = payload.db as unknown as Record<string, unknown>
+        for (const [method, original] of wrapped) db[method] = original
+      }
+
+      // Pinned exactly, not as an upper bound: the point is that
+      // `capturePublishedSlug` returns on the `req.query` check BEFORE issuing
+      // its `findPublishedRow` lookup, so this number must not move when the
+      // guard changes. It was the same 5 before #155 landed.
+      expect(reads).toBe(5)
+    }, 180_000)
+
     it('does not stack a second row when the same path is renamed again', async () => {
       const id = await createPublished(`${MARKER}-a`)
 
@@ -476,6 +598,76 @@ describe.skipIf(!connectionString)(
       const second = await redirectsFor(`/articles/${MARKER}-b`)
       expect(referenceValue(first.docs[0])).toBe(id)
       expect(referenceValue(second.docs[0])).toBe(id)
+    }, 180_000)
+
+    /**
+     * The second residue #150's comment records: un-placing a post clears its
+     * `path`, the article returns to `/articles/<slug>`, and the vacated
+     * section URL used to 404 — no page carries it, no post carries it, and
+     * the redirect table had nothing spelled that way.
+     *
+     * It is not a new branch in the hook. Un-placing changes the served path
+     * without changing the slug, so a slug-keyed writer computed
+     * `from === to` and returned; a path-keyed one sees a genuine move. This
+     * case exists because that is easy to break again by "optimising" the
+     * writer back onto the slug.
+     */
+    it('writes a path-keyed row when a placed post is UN-PLACED', async () => {
+      const section = await payload.create({
+        collection: 'pages',
+        overrideAccess: true,
+        context: { disableRevalidate: true },
+        data: {
+          title: `${MARKER}-section`,
+          layout: [{ blockType: 'spacer', size: 'md' }],
+          _status: 'published',
+          slug: `${MARKER}-section`,
+        } as never,
+      })
+
+      const id = await createPublished(`${MARKER}-placed`)
+      await payload.update({
+        collection: 'posts',
+        id,
+        overrideAccess: true,
+        context: { disableRevalidate: true },
+        data: { parent: section.id } as never,
+      })
+      const placed = await payload.findByID({
+        collection: 'posts',
+        id,
+        overrideAccess: true,
+      })
+      expect(placed.path).toBe(`${MARKER}-section/${MARKER}-placed`)
+
+      revalidatePath.mockClear()
+
+      // Un-place: `parent: null` is the editor clearing the field, which
+      // `placementOf` distinguishes from "not sent".
+      const unplaced = await payload.update({
+        collection: 'posts',
+        id,
+        overrideAccess: true,
+        data: { parent: null } as never,
+      })
+      expect(unplaced.path ?? null).toBeNull()
+
+      const vacated = `/${MARKER}-section/${MARKER}-placed`
+      const rows = await redirectsFor(vacated)
+      expect(rows.totalDocs).toBe(1)
+      expect(
+        (rows.docs[0].to as { reference?: { value?: unknown } } | undefined)
+          ?.reference?.value,
+      ).toBe(id)
+      // And the vacated URL is purged, so it falls through to the not-found
+      // branch that reads the row rather than serving its prerendered shell.
+      expect(revalidatePath).toHaveBeenCalledWith(vacated)
+
+      await payload.delete({
+        collection: 'pages',
+        id: section.id,
+        overrideAccess: true,
+      })
     }, 180_000)
   },
 )

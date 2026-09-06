@@ -3,9 +3,9 @@
 ## Surface
 
 `/corvus` renders `CorvusChat` (Vercel AI SDK `useChat`) streaming from
-`POST /api/ai/chat`. Markdown rendering via streamdown/react-markdown —
-including its link-safety guard, which is configured rather than accepted by
-default (see "Links in a reply" below).
+`POST /api/ai/chat`. Markdown rendering via streamdown/react-markdown, with
+its link component **replaced** rather than configured, so an internal
+citation is a real same-tab anchor (see "Links in a reply" below).
 
 ## Server enforcement (`src/lib/ai/corvus.ts` + route)
 
@@ -58,13 +58,88 @@ framing ("Open external link?" / "You're about to visit an external
 website."). Uncontested, that means the `/tech` citation grounding exists to
 produce warns the visitor they are leaving the site — to go to the site.
 
-`CorvusChat.tsx` therefore passes an explicit
-`linkSafety={{ enabled: true, onLinkCheck }}`. It stays **enabled**: Corvus is
-a broad assistant that legitimately names off-site URLs, and those keep their
-confirmation. `onLinkCheck` is the seam that tells the two apart — streamdown
-awaits it per click and, on `true`, skips the modal. Once only genuinely
-off-site links reach it, the default copy is accurate, so no `renderModal`
-override ships.
+#144 configured that guard with `linkSafety={{ enabled: true, onLinkCheck }}`,
+which removed the modal from internal links and left everything else. **#158
+replaced the link component instead**, and that is the shape today.
+
+**Brandon's rule (#158, 2026-09-04): internal links navigate in the same tab;
+only external links open a new tab, and only they keep the confirmation.**
+
+`CorvusChat.tsx` passes `components={{ a: CorvusReplyLink }}` and **no
+`linkSafety` at all**. That is the only seam that can produce a real anchor:
+streamdown 2.5.0's `linkSafety` branch renders a `<button>` unconditionally
+and `renderModal` replaces the dialog, never the trigger
+(`dist/chunk-BO2N2NFS.js`, verified 2026-09-04), while a user `components`
+entry wins outright over the default map (`{...defaults, ...user}`, same
+file). With `CorvusReplyLink` mounted, `Lo` never renders, so keeping
+`linkSafety` would be configuration for a component that does not exist.
+
+The cost of owning the anchor is owning the confirmation, which streamdown
+does not export. `CorvusReplyLink` renders its own, and being ours it meets
+`docs/ACCESSIBILITY.md`'s overlay rule — "overlays trap and restore focus":
+
+- a real `role="dialog"` with `aria-modal="true"` and an accessible name
+  (streamdown's had `role="button"` on the backdrop, `role="presentation"` on
+  the panel, and no accessible name at all);
+- focus moved to the confirming action on open and **returned to the trigger**
+  on close (all four close paths — Escape, Cancel, Confirm, backdrop — share
+  one `close()`); Escape dismisses;
+- **Tab and Shift+Tab cycle within the dialog**, and the chat surface behind it
+  carries `inert` while it is open, so the composer, the mic and every other
+  citation are out of reach for the keyboard _and_ for a screen reader's
+  virtual cursor — a Tab trap alone closes only the first of those doors.
+
+Three implementation notes that are decisions rather than details. The dialog
+is **portalled to `document.body`**: it sits inside the chat card in the React
+tree, and marking its own ancestor `inert` would otherwise make the dialog
+inert too. `inert` is set imperatively on a node React renders without an
+`inert` prop, so a re-render cannot clobber it — React only reconciles
+attributes it was given.
+
+And **the focus restore happens in the effect cleanup that removes `inert`,
+after the attribute comes off** — never synchronously in `close()`. React
+batches the state update, so at `close()` time the surface is still inert, and
+`.focus()` inside an inert subtree is a **no-op** in a real browser:
+`activeElement` stays on `<body>`. That shipped briefly and was caught in
+Chromium, not in jsdom — **jsdom does not implement inert focusability**, so
+the unit test asserting the restore passed green throughout
+`[measured, 2026-09-04]`. The unit test is kept (it catches a restore deleted
+outright) but the `ExternalLinkConfirmation` story is the proof: it closes by
+Escape and by Cancel and asserts focus returns in a real browser. Reverting the
+fix turns that story red and leaves the jsdom suite green — which is the whole
+reason the story exists.
+
+The trap is hand-rolled, and that is a **deferral worth naming**: `CLAUDE.md`
+says new UI starts from a shadcn/ui primitive, but there is no dialog primitive
+in `src/components/ui` and `@radix-ui/react-dialog` is not a dependency, so
+satisfying that half of the rule means editing `package.json` — out of scope
+for #158. The story below is what gates the accessibility in the meantime;
+moving this dialog onto a real primitive is a follow-up.
+
+`CorvusChat.stories.tsx` carries an `ExternalLinkConfirmation` story that opens
+the dialog through the real `useChat` transport (a hand-built AI SDK v1
+UI-message-stream response, so the reply is genuinely streamed and genuinely
+rendered by streamdown), so the Storybook a11y addon gates it and the focus,
+trap and `inert` behaviour — open **and close** — is asserted in a real browser
+rather than only in jsdom.
+
+| Kind                | Renders    | Plain click                              |
+| ------------------- | ---------- | ---------------------------------------- |
+| internal            | `<a href>` | `router.push` — same tab, in-app         |
+| external `http(s)`  | `<button>` | confirm, then `window.open(…, '_blank')` |
+| `mailto:` / `tel:`  | `<button>` | confirm, then `window.open(…, '_self')`  |
+| mid-stream sentinel | `<span>`   | nothing                                  |
+
+The internal `href` is **real**, not decorative, and modified clicks
+(⌘/Ctrl/Shift/Alt, or any non-primary button) are left to the browser — which
+is what makes hover-preview, middle-click, "copy link address" and
+open-in-new-tab all mean what a visitor expects.
+
+`mailto:`/`tel:` get honest copy now ("Open your email app?" / "Start a phone
+call?"). #144 sent both through the "external website" modal and this document
+recorded that as a deliberate, conservative lie; owning the dialog is what
+made telling the truth free. They hand off with `_self` rather than `_blank`
+so the browsers that do not close a hand-off tab do not strand an empty one.
 
 **Internal** (`src/lib/ai/linkSafety.ts`) = path-relative (`/…`, `#…`, `?…`),
 **or** an `http(s)` URL whose host is the currently-served host
@@ -80,16 +155,21 @@ internal because its question is only "does this need `target=_blank`?" — the
 guard's question is "may this skip a safety prompt?", and the answer for a
 scheme that hands off to another application is no.
 
-**Measured, jsdom + the streamdown dist (2026-09-02):** an approved link is
-opened by streamdown with `window.open(href, '_blank', 'noreferrer')` — a
-**new tab, not a Next router push**. Two things follow. It is not a regression
-(streamdown's un-guarded branch renders `<a target="_blank">` too, so new-tab
-is its baseline for every link in both branches), and it means links in a
-reply render as `<button>`, not inspectable anchors — a consequence of
-`linkSafety` being enabled at all. Changing either would mean overriding
-`components.a`, and streamdown does not export its internal link component, so
-the override would have to reimplement the guard and modal wholesale. Tracked
-separately; not attempted here.
+**The #158 defect, for the record.** Under #144 an approved internal link was
+still opened by streamdown with `window.open(href, '_blank', 'noreferrer')`
+and still rendered as a `<button>` — measured in jsdom against the streamdown
+dist (2026-09-02) and reproduced on production by Brandon during the wave-5
+release smoke (2026-09-04, master `31be240`): the "technology page" citation
+and the "Read the full stack breakdown" article link both opened a new tab. It
+was never a regression — streamdown's un-guarded branch is `<a
+target="_blank">` too, so new-tab was its baseline in both branches — it was
+simply as far as configuring `linkSafety` could get. This document said the
+alternative "would have to reimplement the guard and modal wholesale"; #158
+did exactly that, and the paragraphs above are the result.
+
+No streamdown upgrade was needed or taken: the seam that fixed this
+(`components.a` overriding the default map) is present in the installed
+`2.5.0`, so `package.json` is untouched.
 
 ## The completion budget, and why a turn can come back empty (#138)
 
@@ -151,6 +231,45 @@ it does not stop the truncation. Two candidates, neither implemented:
 Whichever lands, the acceptance test is a keyed run showing the safety-refusal
 case returning visible text at the chosen budget.
 
+## What Corvus is (#166)
+
+**A grounded assistant for everything Brandon: work history, technologies,
+projects, articles, and this site's own code — sourced from the pages here and
+his public repos.** Brandon settled that wording on 2026-09-04 during the
+wave-5 release smoke, and it is the `/corvus` subtitle verbatim (CMS content,
+his own write — a content edit, no deploy).
+
+Three things have to say the same thing, and before #166 they did not: the
+page copy still described "a practical AI workspace for Q&A, prompt iteration,
+and image generation experiments", the prompt described a persona, and the
+citations pointed at site pages and repositories. `CORVUS_POSITIONING` in
+`groundedSystem.ts` is the model-facing half, appended to every **grounded**
+turn.
+
+Two deliberate limits on it:
+
+- It is **not** in `CORVUS_SYSTEM_PROMPT`. That constant is frozen by contract
+  — `buildGroundedSystem([])` returns it by identity, the safety eval's
+  injection-leak assertion is built on its value, and `corvus.test.ts` pins the
+  routes it names. And the positioning is only meaningful when there are
+  passages: an ungrounded turn has no pages and no repositories for "sourced
+  from the pages here" to describe.
+- It does **not** narrow the persona to Brandon-only questions, which would
+  quietly repeal #77's broad scope, and it does not widen what may be claimed
+  or cited — it says so in its own closing sentence, because a confident
+  statement of purpose sitting above a list of citation restrictions is exactly
+  the text a model reads as new permission.
+
+Unlike the repo and proficiency rules it is **unconditional** within the
+grounded block, so every grounded eval block's prompt moves with it. That is
+the intended cost: what Corvus is is not a per-subject rule that can be gated
+on a collection. The ungrounded blocks are untouched, byte for byte.
+
+**Citation contract, post-sync.** `[measured, prod 2026-09-04, ops block C
+live check]` after the first GitHub sync, "what does this site run on" cites
+the `bp-portfolio` repository — the external-link confirmation is expected
+there, because the link really does leave the site.
+
 ## Persona scope
 
 Corvus's scope is **broad by design** (#77 follow-up): a genuinely useful
@@ -192,15 +311,15 @@ Deliberately **not** a Payload collection — it is a derived, rebuildable index
 written by hooks and a backfill script, so it never appears in a generated
 schema snapshot and CI's migration-drift gate stays quiet.
 
-| Column                                | Why it is there                                                                                                                                                                                  |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `embedding vector(1536)`              | `text-embedding-3-small`'s native width (decision D6(a))                                                                                                                                         |
-| `content`, `content_hash`             | the chunk and the sha256 that makes refresh cheap                                                                                                                                                |
-| `collection`, `doc_id`, `chunk_index` | `UNIQUE` together — the upsert key the hooks target                                                                                                                                              |
-| `title`, `source_url`                 | what a citation is rendered from — `sourceUrlFor` resolves a post through `publicPathFor`, so a **placed** post (#153) is cited at its section path and every unplaced one at `/articles/<slug>` |
-| `visibility`                          | a copy of Posts' `access.visibility`, so retrieval can filter without joining back into Payload                                                                                                  |
-| `published_at`                        | so scheduled-future posts can be excluded                                                                                                                                                        |
-| `model`                               | which embedding model wrote the row, so a model change is detectable instead of silently mixing vector spaces                                                                                    |
+| Column                                | Why it is there                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `embedding vector(1536)`              | `text-embedding-3-small`'s native width (decision D6(a))                                                                                                                                                                                                                                                                                                           |
+| `content`, `content_hash`             | the chunk and the sha256 that makes refresh cheap                                                                                                                                                                                                                                                                                                                  |
+| `collection`, `doc_id`, `chunk_index` | `UNIQUE` together — the upsert key the hooks target                                                                                                                                                                                                                                                                                                                |
+| `title`, `source_url`                 | what a citation is rendered from — `sourceUrlFor` resolves a post through `publicPathFor`, so a **placed** post (#153) is cited at its section path and every unplaced one at `/articles/<slug>`; a `work-history` row is cited at `/work/<slug>`, the role's Page under the `/work` section (#137), falling back to `/` for a row seeded before that slug existed |
+| `visibility`                          | a copy of Posts' `access.visibility`, so retrieval can filter without joining back into Payload                                                                                                                                                                                                                                                                    |
+| `published_at`                        | so scheduled-future posts can be excluded                                                                                                                                                                                                                                                                                                                          |
+| `model`                               | which embedding model wrote the row, so a model change is detectable instead of silently mixing vector spaces                                                                                                                                                                                                                                                      |
 
 Index: **HNSW** with `vector_cosine_ops`, plus a btree on `(collection, doc_id)`
 for the hooks' per-document path. HNSW rather than IVFFlat because the migration
@@ -366,7 +485,7 @@ timestamp changes on every push, so folding it in would re-embed every active
 repo every week for nothing. A moved `pushed_at` alone takes the metadata-repair
 path: one `UPDATE`, zero provider calls.
 
-#### The site-stack vs tech-I-use disambiguation
+#### Three subjects: you, this site, Brandon (#147, #167)
 
 `/tech` lists the technologies Brandon **works with**. The `bp-portfolio`
 repository document describes what **this site** is built on. Before #147 only
@@ -376,17 +495,130 @@ the first was indexed, so the corpus could not tell them apart:
 TanStack, Fly.io, Netlify, DigitalOcean" and cited `/tech` — a real citation and
 the wrong list.
 
-`buildGroundedSystem` therefore appends `REPO_DISAMBIGUATION_RULE`, which draws
-the distinction and grants permission to cite a repository's github.com
-`Source:` line (the neighbouring "a third-party address is never the source for
-a claim about this site" sentence would otherwise read as a ban on the one
-citation a repo passage has). The rule is appended **only when a `github-repos`
-passage was retrieved**: a turn with no repository in context gets a
-byte-identical prompt to the pre-#147 one, so no pre-existing eval block's score
-can move because of this change.
+#167 then measured the two ways that two-subject rule was still too narrow, on
+production 2026-09-04:
 
-Four eval cases gate it, and the last two are a pair on purpose — a prompt that
-always preferred the repository would fix one and silently break the other:
+- **"What tech do you use?"** answered with Brandon's toolkit (Node.js, Vercel,
+  Supabase, Vite, TanStack). The question was addressed to **Corvus** — and
+  worse than a misread, there was no about-Corvus grounding anywhere in the
+  corpus, so even a correct reading of "you" had nothing to cite.
+- **"What tech was this site built on?"** answered Remix, TanStack, Netlify and
+  Fly.io — #147's own failure, back, because the rule named the phrasing "run
+  on" and the visitor said "built on".
+
+`buildGroundedSystem` therefore appends `SUBJECT_DISAMBIGUATION_RULE`, one rule
+covering all three subjects. Rewritten rather than joined by a second
+paragraph: two paragraphs both explaining how to pick a subject is how a model
+gets to pick whichever it read last.
+
+| Asked about    | Answer from                                   | Never from                              |
+| -------------- | --------------------------------------------- | --------------------------------------- |
+| **you/Corvus** | the About Corvus passage, cite `/corvus`      | Brandon's technology list               |
+| **this site**  | the `bp-portfolio` repo, then a stack article | a project entry, or the technology list |
+| **Brandon**    | `/tech`                                       | a repository                            |
+
+Every entry in the "never" column is a measured wrong answer, not a
+precaution — including `projects`: `[measured, 2026-09-04]` "What powers this
+site?" and "What is under the hood on this site?" retrieve the
+`Brandon Perfetti's Portfolio` **project** entry tied with the repository
+passage and listed ahead of it. Retrieval cannot separate them at this corpus
+size; the rule is the only thing that can.
+
+The site-subject phrasings are enumerated in the rule — run on / built on /
+built with / made with / powered by / under the hood — because #167's second
+failure was purely a phrasing miss, and a rule that says "questions like this
+one" with a single example generalises at the model's discretion.
+
+It also grants permission to cite a repository's github.com `Source:` line, the
+sentence retained verbatim from #147 (the neighbouring "a third-party address is
+never the source for a claim about this site" would otherwise read as a ban on
+the one citation a repo passage has).
+
+The rule is appended on **either** of two triggers: a `github-repos` or About
+Corvus passage is in context, **or** the question itself is site-shaped
+(`questionSubject === 'site'`, stamped onto the passages by `markSiteSubject`
+in `retrieval.ts`, which is where the query is known — `buildGroundedSystem`
+never sees it).
+
+The second trigger is not belt-and-braces. Gating on passages alone left
+**#167's own filed failure uncovered**: "what tech was this site built on?"
+when no repository lands in the top-k got no rule, and the passages that do
+come back in that case are the project entry and the tech list — the two
+sources the rule forbids. A rule that only fires once the right passage has
+been retrieved fires when it is least needed. A turn that is about none of the
+three subjects and retrieved no passage belonging to any still gets the prompt
+it got before, so no unrelated eval block's score can move.
+
+##### The About Corvus passage (`src/lib/ai/aboutCorvus.ts`)
+
+Code-owned: never embedded, never synced, no row in `corvus_embeddings`, no
+Payload document. Brandon chose that (design (i), 2026-09-04) over an embedded
+document under a new collection value, which would have needed a backfill
+script, a sync story, and a re-embed every time this file changed.
+
+A measured fact settles it beyond the operational cost: `[measured,
+2026-09-04]` **"What are you made with?" and "What is under the hood here?"
+retrieve nothing at all** above the production similarity floor. An embedded
+about-Corvus document would have had to win a similarity contest it was
+demonstrably losing. A code-owned one does not compete — it is offered when the
+addressee is Corvus, by `withAboutCorvusSnippet` in `retrieval.ts`.
+
+It arrives as an ordinary `CorvusSnippet` (collection `about-corvus`, source
+`/corvus`, first in the list) rather than as a second argument to
+`buildGroundedSystem`, so it renders with the same numbered heading and
+`Source:` label as every other passage and the citation rules already cover it
+with no exception written for it.
+
+Three properties worth knowing:
+
+- **It survives an outage.** It is offered on every non-kill-switch return
+  path, the `catch` included. So "what are you built with?" is answered
+  correctly even when the embedding provider is down — the one subject where an
+  ungrounded turn has no excuse, since the answer was never in the database.
+- **The kill switch still wins.** `CORVUS_DISABLE_RETRIEVAL` returns `[]`, and
+  `buildGroundedSystem([])` is still `CORVUS_SYSTEM_PROMPT` byte for byte.
+- **It cannot silently go stale.** `ABOUT_CORVUS_STACK_ITEMS` lists every
+  technology the passage claims, and `aboutCorvus.test.ts` asserts each one
+  appears BOTH in the passage and in this file. Add a technology to the passage
+  and the test fails until this document names it too. The provider is
+  described as env-selected (`AI_CHAT_PROVIDER`) rather than pinned, so an env
+  change cannot make the passage wrong.
+- **It names no bare site path but its own** (`/corvus`), and a test enforces
+  the class rather than any one string. The first bullet used to say "streaming
+  answers from this site's own `/api/ai/chat` route", and `[measured, keyed
+eval:ci, after the #167 citation-format rider]` that one path cost **4 of 5**
+  "you = Corvus" cases their entire `cites-a-linked-source-url` score: the
+  answers now ended with a correct `Source: [About Corvus](/corvus)` link, but
+  the model also repeated `/api/ai/chat` in prose, `citedPaths`' bare-path pass
+  read it as a cited site path, and the anti-fabrication half scored 0 because
+  no such page exists. The scorer was right twice over — that route returns 405
+  to a visitor who follows it, and an assistant should not offer an internal API
+  route to a reader as somewhere to go. The passage says "the site's own
+  server-side chat API" instead. **The route path belongs in §Surface above,
+  which is written for an engineer; not in a passage handed to a model as
+  citable material.**
+
+Addressee detection (`isAboutCorvusQuestion`) is a regex, and conservative in
+the direction that costs least: a false positive adds one inert passage, a
+false negative is the measured defect itself. Second-person address alone is
+not enough — "what do you think of Postgres?" is addressed to Corvus and is not
+about Corvus — so a match needs an addressee **and** a self-referential topic,
+unless the visitor names Corvus outright. The topic vocabulary is **stack and
+capability nouns only**: an earlier draft carrying the bare verbs `do`, `know`
+and `work` matched both "what do you think of Postgres?" and "do you know who
+won the game?" `[measured, 2026-09-04]` — the very examples this paragraph
+gives as exclusions — so verbs now earn their place only inside a phrase that
+can mean nothing else (`what can you do`, `run on`, `under the hood`). Both
+counter-examples are pinned as negative tests. The known miss is a follow-up turn
+("and what about you?"), which carries no topic word; retrieval embeds only the
+latest user message, so that limitation belongs to the module rather than to
+the rule.
+
+##### Eval coverage
+
+`site-facts.eval.ts` carries the four #147 cases, and the last two are a pair
+on purpose — a prompt that always preferred the repository would fix one and
+silently break the other:
 
 | Case                                     | Correct citation                     |
 | ---------------------------------------- | ------------------------------------ |
@@ -401,10 +633,114 @@ in place would let it read `/toptimelines` out of the middle and call it a
 fabricated path), so a repository citation is structurally invisible to
 `cites-a-real-source-url`.
 
+##### Citing the About Corvus passage as a LINK (#167 follow-on)
+
+`[measured, Brandon's keyed eval:ci, 2026-09-04, 86% overall, pass]` the
+"you = Corvus" block scored **0 on `cites-a-real-source-url` in all four
+cases**, and the outputs show the model naming the right path: it wrote
+`Source: /corvus` as plain prose, copying the label it had just read out of the
+context block. Two independent defects were behind one score:
+
+1. **The citation was not a link.** Since #158 an internal citation renders as
+   a real same-tab anchor; a path written as prose renders as prose, with
+   nothing to click. `[measured, Brandon's keyed eval, 2026-09-04]` **every**
+   subject writes `Source: /path` as plain text and only the preview sometimes
+   emits a real link — so the defect belongs to the general citation
+   instruction, not to the `YOU` clause where it was first measured. That
+   instruction now carries the literal shape, stated **once** and inherited by
+   all three subjects: cite by writing a markdown link whose target is the
+   passage's `Source:` value — `[About Corvus](/corvus)`, or
+   `[bp-portfolio](https://github.com/brandonperfetti/bp-portfolio)` for a
+   repository passage — and a line that reads `Source: /corvus` does not count
+   as a citation at all. The `YOU` clause restates none of it, so the two
+   cannot drift. Fixed in the prompt, not by relaxing a scorer.
+2. **`/corvus` was in no corpus.** `createCitesKnownSourceUrl` requires
+   `corpus.has(path)`, and `fixtureSourceUrls()` is built from the fixture
+   CHUNKS — the About Corvus passage is code-owned and never chunked, so its
+   `sourceUrl` was reachable only through `alsoReal` (`SITE_CHROME_URLS`),
+   which answers "does this page exist", not "is this a source you were given".
+
+The fix for (2) is a scorer built **for that block alone**
+(`cites-a-linked-source-url`), over the fixture URLs plus `/corvus`. Every
+other block's scorer construction is untouched, per the "adds only that"
+discipline in `citation-scorers.ts` — nothing that already ran can move.
+
+It is **link-aware**, and that is load-bearing rather than fastidious:
+`citedPaths` **does** find `Source: /corvus` in prose `[measured, 2026-09-04]`,
+so widening the corpus alone would have scored those same unclickable answers 1
+and declared the defect fixed. See the TSDoc on `linkedCitedPaths` and
+`createCitesLinkedSourceUrl` in `evals/scorers.ts` for how the two path passes
+relate and what each still judges.
+
+`evals/corvus-subjects.eval.ts` adds three blocks for #165 and #167 — what
+Brandon uses, what "you" means, and the site subject across five phrasings —
+kept in their own file so a routing regression cannot be averaged away by
+strong grounding scores in `eval:facts`. Two scorers are local to it:
+`leads-with-daily-drivers` (positional, because #165's failure named real
+technologies in the wrong order) and `never-names-the-fabricated-stack`
+(binary, and scoped to the exact five names the production answers invented,
+so it stays a regression test rather than a vocabulary filter). Every question
+in that file was checked against the fixture retriever before it was written
+down.
+
 Fixtures live in `evals/fixtures/github-repos.ts` and are **reconstructions, not
 a capture** — its header records exactly which repository facts came from this
 repo's own `CLAUDE.md`/`docs/` and which from the captured `/api/projects`
 record. No live GitHub call is made by any eval.
+
+#### Ranking Brandon's technologies (#165)
+
+`tech_stack.proficiency` is the ranking signal, and until #165 nothing used
+it. `[measured, prod 2026-09-04, signed in]` "What tech do you use?" answered
+TypeScript, TanStack, Vite, Vercel and Expo — every name real, **Next.js and
+React absent**, because retrieval is pure vector similarity and a
+similarity-ranked SAMPLE was being presented as a ranking. `featured` is no
+help (`true` on 37 of 40 rows) and `sortOrder` is just the `/tech` display
+order.
+
+| `proficiency` | Label        | In an answer                       |
+| ------------- | ------------ | ---------------------------------- |
+| `daily`       | Daily driver | leads                              |
+| `proficient`  | Proficient   | second, and said to be second      |
+| `familiar`    | Familiar     | mentioned if asked, never headline |
+| `exploring`   | Exploring    | mentioned if asked, never headline |
+| `NULL`        | —            | no proficiency line in the chunk   |
+
+`[measured, prod DB 2026-09-04]` ten rows are `daily`: TypeScript, Node.js,
+React, Next.js, GraphQL, Tailwind CSS, Clerk, Supabase, Vercel, AI SDK. The
+data half of #165 was Brandon's, through the Payload MCP on both environments.
+
+The code half is two changes at opposite ends:
+
+- **Chunk text** (`chunking.ts`): the human label is embedded rather than the
+  enum (`Proficiency: Daily driver`, not `Proficiency: daily` — "daily" alone
+  reads as a frequency), and a `daily` row's chunk OPENS with a sentence saying
+  the technology is one Brandon works in most days. A sentence rather than a
+  fourth label, and first rather than last, because prose about everyday use is
+  the shape a "what do you use?" question actually resembles; a label list is
+  not.
+- **Prompt** (`groundedSystem.ts`): `TECH_PROFICIENCY_RANKING_RULE` names the
+  four labels as an ORDER and says to lead with Daily driver, then Proficient,
+  and to say which is which. It also repeats "answer only from the passages you
+  were given" — ten daily rows against five retrieved passages is otherwise a
+  standing invitation to supply the rest from memory.
+
+Appended only when a `tech-stack` passage was retrieved, the same
+blast-radius contract as the repo rule above.
+
+**The chunk change needs a re-embed to take effect.** It moves `content_hash`,
+so affected rows re-embed on their next save — or all at once through
+`scripts/backfill-corvus-embeddings.ts`. The prompt half ships independently
+and does not wait for it.
+
+**Retrieval was deliberately NOT changed.** #165 floats a deterministic boost
+for `daily` rows on stack-shaped questions. It is not implemented, for two
+reasons. It cannot be measured here — a boost is a claim about embedding
+neighbourhoods, and there is no provider key outside Brandon's keyed runs. And
+it collides with #167: a boost keyed on stack-shaped PHRASING would fire on
+"what does this site run on" and "what tech do you use", the two questions
+#167 says must never be answered from the general tech list. If it is revisited
+it belongs behind the same subject routing, measured, not before it.
 
 ### Citing the site, not the vendor (#82 wave 4)
 
@@ -450,8 +786,20 @@ stored chunk shape are untouched.
 `buildGroundedSystem([])` returns `CORVUS_SYSTEM_PROMPT` **by identity, byte
 for byte** — nothing appended, trimmed or re-joined. That is asserted by unit
 test, and it is what makes "degrades gracefully" a fact rather than an
-intention, because every retrieval failure path returns `[]`: a provider
-outage, an empty table, a query that clears nothing.
+intention: a provider outage, an empty table or a query that clears nothing all
+land on it.
+
+**One passage is the exception, and only for one kind of question (#167).** On
+a turn addressed to Corvus, `retrieveCorvusContext` returns the code-owned
+About Corvus passage on every failure path including the `catch` — see
+"The About Corvus passage" above. So the honest statement is: every retrieval
+failure path returns `[]` **except a Corvus-addressed turn, which returns that
+single passage**. That is deliberate and is the whole point of the passage
+being code-owned rather than embedded — it is the one subject whose answer was
+never in the database, so losing it to a database or provider outage would be a
+failure with no excuse. Every other question still degrades to the untouched
+persona prompt, and `CORVUS_DISABLE_RETRIEVAL` still returns `[]`
+unconditionally.
 
 A query that "misses" is a real path, not a theoretical one.
 `applySimilarityFloor` over-fetches 4× and discards everything under
