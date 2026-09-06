@@ -42,6 +42,12 @@ export const Pages: CollectionConfig = {
   defaultPopulate: {
     title: true,
     slug: true,
+    // `path` travels with every populated page read (#189) — without it a
+    // `CMSLink` reference to a placed page resolves through `publicPathFor`
+    // with no path in hand and falls back to `/`+slug, so a link to
+    // `work/brytecore` is spelled `/brytecore` and 404s (#148). Mirrors the
+    // same line on Posts (#153).
+    path: true,
   },
   admin: {
     defaultColumns: ['title', 'slug', 'updatedAt'],
