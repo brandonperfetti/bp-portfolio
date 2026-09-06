@@ -4,7 +4,10 @@ import type {
   RequestContext,
 } from 'payload'
 
-import { findPublishedRow } from '@/fields/slug/findPublishedSlug'
+import {
+  findMainTableRow,
+  findPublishedRow,
+} from '@/fields/slug/findPublishedSlug'
 import { isSlugRoutedCollection, publicPathFor } from '@/fields/slug/slugPaths'
 
 /** `req.context` key holding the pre-write published slug, keyed per document. */
@@ -14,10 +17,12 @@ const CONTEXT_KEY = 'previousPublishedSlugs'
 const PATH_CONTEXT_KEY = 'previousPublishedPaths'
 
 /**
- * `req.context` key holding the pre-write published **stored** `path` column —
- * root-relative, no leading slash, `null` for an unplaced post (#150).
+ * `req.context` key holding the pre-write **stored** `path` column from the
+ * MAIN table — root-relative, no leading slash, absent for an unplaced post
+ * (#150). Not gated on publish status; see
+ * {@link readPreviousStoredPath}.
  */
-const STORED_PATH_CONTEXT_KEY = 'previousPublishedStoredPaths'
+const STORED_PATH_CONTEXT_KEY = 'previousStoredPaths'
 
 const contextKey = (collectionSlug: string, id: unknown): string =>
   `${collectionSlug}:${String(id)}`
@@ -148,18 +153,18 @@ export const readPreviousPublishedPath = (
 }
 
 /**
- * Read the **stored** `path` column a document was published under *before* the
- * write currently in flight, as captured by {@link capturePublishedSlug}.
+ * Read the **stored** `path` column a document's MAIN-TABLE row held *before*
+ * the write currently in flight, as captured by {@link capturePublishedSlug}.
  *
  * @param context - Prefer `req.context`; see {@link readPreviousPublishedSlug}
  * for why the `context` hook argument can be a detached object.
  * @param collectionSlug - Payload collection slug.
  * @param id - The document id.
  * @returns The stored path (`work/brytecore`, `home`) with no leading slash, or
- * `undefined` when the document had no published version, was unplaced, or the
- * capture hook did not run.
+ * `undefined` when the document was unplaced, had no main row, or the capture
+ * hook did not run.
  *
- * @remarks A third reader over the same single lookup, and the third one is not
+ * @remarks A third reader over the same lookup, and the third one is not
  * redundancy — it is the difference between a URL and a storage key. The
  * subtree cascade (#150) needs the value descendants' own `path` columns were
  * composed from, so it can match them by prefix and recompose them. That is the
@@ -167,12 +172,22 @@ export const readPreviousPublishedPath = (
  * form carries a leading slash, spells an unplaced post as `/articles/<slug>`,
  * and spells the root page as `/` — three transformations that all have to be
  * undone before a `path` column can be compared against it, and undoing the
- * last one means comparing a slug to {@link ROOT_PAGE_SLUG} outside
- * `slugPaths.ts`, which is the one thing that module asks no other module to
- * do. Carrying the column itself costs one more key on an object that is
- * already being written.
+ * last one means comparing a slug to `ROOT_PAGE_SLUG` outside `slugPaths.ts`,
+ * which is the one thing that module asks no other module to do. Carrying the
+ * column itself costs one more key on an object that is already being written.
+ *
+ * **It says `Stored`, not `PublishedStored`, and the missing word is the fix
+ * (CodeRabbit on #179).** This value is deliberately NOT gated on publish
+ * status, unlike its two siblings. A parent that has never been published has
+ * no published row at all, yet its descendants' `path` columns were still
+ * composed from *something* — the main-table row, which a draft save never
+ * writes (`collections/operations/utilities/update.js:253`). Gating this stash
+ * on a published row made the
+ * cascade skip that parent's first publish entirely and leave the subtree at
+ * the old prefix. The name carried the old gate; keeping it would have made
+ * every call site read as a stronger guarantee than the value has.
  */
-export const readPreviousPublishedStoredPath = (
+export const readPreviousStoredPath = (
   context: RequestContext | undefined,
   collectionSlug: string,
   id: unknown,
@@ -289,6 +304,28 @@ export const readPreviousPublishedSlug = (
  * Scheduled publish is covered: `versions/schedule/job.js` publishes through
  * `payload.update({ data: { _status: 'published' } })`, the same update path,
  * so this hook sees it like any other publish.
+ *
+ * @remarks **The first publish of a NEVER-published parent still moves its
+ * subtree (CodeRabbit on #179).** The three stashes used to share one gate —
+ * "is there a published row?" — and for two of them that is the right question,
+ * because a redirect row and a cache purge both describe a URL that was being
+ * served. For the stored-path stash it was the wrong question, and the bug it
+ * caused was silent: create a draft page `a`, put a child under it (stored
+ * `a/c`), rename `a → b` with draft saves, then publish `a` for the first time.
+ * The main row moves to `b`, `findPublishedRow` finds nothing (there has never
+ * been a `_status: 'published'` row), the stash stayed empty, and
+ * `cascadePagePaths` returned on `!oldPath` before reading the subtree — so `c`
+ * kept its `a/c` path until its own next save.
+ *
+ * The prefix the cascade needs is not "the published path", it is "the path
+ * this row held before this write", and that is the MAIN-TABLE row whatever its
+ * `_status`: a draft save never writes it
+ * (`collections/operations/utilities/update.js:253`), so it is by
+ * construction the value every descendant's `path` was composed from. So when
+ * the published lookup comes back empty this hook falls back to
+ * {@link findMainTableRow} — for the stored path ONLY. The slug and served-path
+ * stashes stay gated exactly as before, which is why a first publish still
+ * writes no redirect row for the page itself.
  */
 export const capturePublishedSlug: CollectionBeforeChangeHook = async ({
   collection,
@@ -332,15 +369,39 @@ export const capturePublishedSlug: CollectionBeforeChangeHook = async ({
       ? publishedRow.slug
       : undefined
 
-  // No published version => a first publish => nothing to redirect from and
-  // nothing that was being served.
-  if (!publishedSlug) return data
+  // No published version => nothing was being served => no redirect row and no
+  // URL to purge. But the SUBTREE still has to move: the row descendants' paths
+  // were composed from is the main-table row, published or not, so fall back to
+  // it for the stored-path stash alone. See the "first publish of a never
+  // published parent" paragraph in this hook's docblock.
+  const storedPathRow = publishedSlug
+    ? publishedRow
+    : await findMainTableRow(req, collectionSlug, id)
 
   // MUST be `req.context`, re-dereferenced here, AFTER every await above — see
   // the note on nested Local API calls in this hook's docblock. `context` may
   // already be detached at this point.
   const target = (req.context ?? context) as Record<string, unknown>
   const key = contextKey(collectionSlug, id)
+
+  // The raw column, for the subtree cascade (#150), which matches descendants'
+  // own `path` columns by prefix and therefore needs the storage key rather
+  // than the URL. See {@link readPreviousStoredPath}.
+  if (
+    typeof storedPathRow?.path === 'string' &&
+    storedPathRow.path.length > 0
+  ) {
+    const storedStore = (target[STORED_PATH_CONTEXT_KEY] ??= {}) as Record<
+      string,
+      string
+    >
+    storedStore[key] = storedPathRow.path
+  }
+
+  // Everything below names a URL that was being SERVED, so it stays gated on a
+  // published row: a document nobody could reach needs no redirect written for
+  // it and has no prerendered shell to purge.
+  if (!publishedSlug) return data
 
   const slugStore = (target[CONTEXT_KEY] ??= {}) as Record<string, string>
   slugStore[key] = publishedSlug
@@ -356,17 +417,6 @@ export const capturePublishedSlug: CollectionBeforeChangeHook = async ({
       string
     >
     pathStore[key] = publishedPath
-  }
-
-  // The raw column too, for the subtree cascade (#150), which matches
-  // descendants' own `path` columns by prefix and therefore needs the storage
-  // key rather than the URL. See {@link readPreviousPublishedStoredPath}.
-  if (typeof publishedRow?.path === 'string' && publishedRow.path.length > 0) {
-    const storedStore = (target[STORED_PATH_CONTEXT_KEY] ??= {}) as Record<
-      string,
-      string
-    >
-    storedStore[key] = publishedRow.path
   }
 
   return data

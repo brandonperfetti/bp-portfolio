@@ -229,6 +229,20 @@ correct, not a bug. The cascade's writes are deliberately **not** wrapped —
 unlike the redirect write, a half-moved subtree is a correctness problem and
 should roll the move back.
 
+Its precondition is **"the page's stored path moved"**, not "the page was
+live". The old prefix is `capturePublishedSlug`'s stored-path stash, which is
+read from the MAIN-TABLE row whatever its `_status` — descendants' paths were
+composed from that row, and a draft save never writes it. Gating that one stash
+on a published row (as the first cut did) made the cascade skip the first
+publish of a never-published parent: a page drafted as `a`, given children
+(stored `a/c`), renamed to `b` in draft, then published, moved its own row to
+`b` and left `a/c` behind until the child's own next save. The slug and
+served-path stashes stay gated on a published row, because those describe a URL
+that was actually reachable — so a first publish still writes no redirect row.
+The residual: a **published** child under a never-published parent moves from
+`/a/c` to `/b/c` with no redirect row covering `/a/c`, because the D4 prefix row
+is keyed on the parent's own served URL and the parent had none.
+
 **Inbound coverage for a subtree is ONE row, not N** (D4). A moved page's row
 carries `matchDescendants`, which makes it match `from` and everything beneath
 it and carry the remainder across: `/work → /experience` also sends
@@ -264,11 +278,13 @@ Pages both run `autosave.interval: 100`, and Payload resolves the hook's
 `originalDoc`/`previousDoc` from `getLatestCollectionVersion` — after any
 autosave that is the DRAFT, which on a rename already holds the _new_ slug and
 reports `_status: 'draft'`. A `beforeChange` hook
-(`src/hooks/capturePublishedSlug.ts`) therefore reads the published main-table
-row — which a draft save never touches — and stashes it on `req.context` for
-`createPathRedirect` and for the subtree cascade. Anything added here that
-needs "the value the site is
-currently serving" must do the same; `previousDoc` is not it.
+(`src/hooks/capturePublishedSlug.ts`) therefore reads the main-table row —
+which a draft save never touches — and stashes it on `req.context` for
+`createPathRedirect` and for the subtree cascade. The redirect writer's two
+values are read from the row filtered to `_status: 'published'`; the cascade's
+prefix falls back to the unfiltered row, per the paragraph above. Anything
+added here that needs "the value the site is currently serving" must do the
+same; `previousDoc` is not it.
 
 Scope: only **Posts** and **Pages** are slug-routed (`slugPaths.ts`).
 Categories, Tags, Projects, Authors and WorkHistory carry a slug with no public

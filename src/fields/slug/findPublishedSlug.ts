@@ -67,6 +67,56 @@ export const findPublishedRow = async (
 }
 
 /**
+ * Read a document's **main-table** row, whatever its publish status.
+ *
+ * @param req - The in-flight request, forwarded so the lookup joins the same
+ * transaction as the write that triggered it.
+ * @param collectionSlug - A slug-routed collection (`slugPaths.ts`).
+ * @param id - The document id.
+ * @returns The main row's `{ slug, path }`, or `null` when no row exists.
+ *
+ * @remarks **The same projection as {@link findPublishedRow} with the
+ * `_status` clause deliberately dropped**, and the difference is the whole
+ * point: this answers "what did the main table hold before this write?" rather
+ * than "what URL is live?". For a document that has never been published those
+ * are different questions with different answers — there is no live URL, but
+ * the main row still exists (Payload's `create` writes it even for a
+ * `_status: 'draft'` document) and still carries the `path` that every
+ * descendant's own stored `path` was composed from.
+ *
+ * **Why a `find` with no `draft` flag reads the main table.**
+ * `[read-from-source, payload 3.86.0, collections/operations/find.js:96]` the
+ * operation branches on the conjunction of `hasDraftsEnabled(collectionConfig)`
+ * and `draftsEnabled` — only then does it call `payload.db.queryDrafts` (:105),
+ * which reads the `_v` versions table. With `draft` omitted (`draftsEnabled`
+ * undefined) it falls to the `else` at :122 and calls `payload.db.find`, the
+ * plain main-table read. So omitting the flag is not an accident of the call
+ * site; it is the documented switch.
+ *
+ * **Cost.** One indexed lookup at `depth: 0` selecting two columns, and only on
+ * the branch where {@link findPublishedRow} already came back empty — a first
+ * publish or an unpublish of a never-published document. It is never on the
+ * autosave path, which returns before any query at all.
+ */
+export const findMainTableRow = async (
+  req: PayloadRequest,
+  collectionSlug: SlugRoutedCollection,
+  id: number | string,
+): Promise<null | PublishedRow> => {
+  const { docs } = await req.payload.find({
+    collection: collectionSlug,
+    depth: 0,
+    limit: 1,
+    overrideAccess: true,
+    pagination: false,
+    req,
+    select: { path: true, slug: true },
+    where: { id: { equals: id } },
+  })
+  return (docs[0] as PublishedRow | undefined) ?? null
+}
+
+/**
  * Ask the database which slug the *published* version of a document is
  * currently serving.
  *

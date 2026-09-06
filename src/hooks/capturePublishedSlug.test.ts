@@ -4,7 +4,7 @@ import {
   capturePublishedSlug,
   readPreviousPublishedPath,
   readPreviousPublishedSlug,
-  readPreviousPublishedStoredPath,
+  readPreviousStoredPath,
 } from '@/hooks/capturePublishedSlug'
 
 /**
@@ -30,7 +30,22 @@ import {
  */
 const makeReq = (
   publishedSlug: null | string,
-  { path, query }: { path?: string; query?: Record<string, unknown> } = {},
+  {
+    mainRow,
+    path,
+    query,
+  }: {
+    /**
+     * The MAIN-TABLE row, returned for the fallback lookup that carries no
+     * `_status` clause. Distinguishing the two queries by their `where` is the
+     * point: the published lookup and the main-table lookup answer differently
+     * for a never-published document, and a mock that ignored the argument
+     * could not show the difference.
+     */
+    mainRow?: { path?: string; slug?: string }
+    path?: string
+    query?: Record<string, unknown>
+  } = {},
 ) => {
   const req: {
     context: Record<string, unknown>
@@ -41,12 +56,18 @@ const makeReq = (
     payload: { find: null },
     query: query ?? {},
   }
-  const find = vi.fn(async () => {
-    req.context = { ...req.context }
-    return {
-      docs: publishedSlug === null ? [] : [{ path, slug: publishedSlug }],
-    }
-  })
+  const find = vi.fn(
+    async (args: { draft?: unknown; where?: Record<string, unknown> }) => {
+      req.context = { ...req.context }
+      // `findPublishedRow` sends `{ and: [id, _status] }`; `findMainTableRow`
+      // sends a bare `{ id }`.
+      const isPublishedLookup = Array.isArray(args?.where?.and)
+      if (!isPublishedLookup) return { docs: mainRow ? [mainRow] : [] }
+      return {
+        docs: publishedSlug === null ? [] : [{ path, slug: publishedSlug }],
+      }
+    },
+  )
   req.payload.find = find
   return { find, req: req as never, rawReq: req }
 }
@@ -54,7 +75,11 @@ const makeReq = (
 const run = (
   args: Record<string, unknown>,
   publishedSlug: null | string = null,
-  reqOptions: { path?: string; query?: Record<string, unknown> } = {},
+  reqOptions: {
+    mainRow?: { path?: string; slug?: string }
+    path?: string
+    query?: Record<string, unknown>
+  } = {},
 ) => {
   const { find, req, rawReq } = makeReq(publishedSlug, reqOptions)
   // Payload hands the hook `req.context` as its `context` argument; the swap
@@ -249,12 +274,79 @@ describe('capturePublishedSlug', () => {
     )
 
     await result
-    expect(readPreviousPublishedStoredPath(liveContext(), 'pages', 7)).toBe(
+    expect(readPreviousStoredPath(liveContext(), 'pages', 7)).toBe(
       'work/brytecore',
     )
     expect(readPreviousPublishedPath(liveContext(), 'pages', 7)).toBe(
       '/work/brytecore',
     )
+  })
+
+  /**
+   * The never-published parent (CodeRabbit on #179). The three stashes no
+   * longer share one gate: the subtree cascade's prefix comes from the MAIN
+   * row, which exists whether or not the document has ever shipped, while the
+   * redirect writer's slug and the purge's served path stay gated on a
+   * published row because they describe a URL that was actually reachable.
+   */
+  it('stashes the stored path from the MAIN row when nothing was ever published', async () => {
+    const { find, liveContext, result } = run(
+      {
+        collection: { slug: 'pages' },
+        data: { _status: 'published', slug: 'b' },
+        originalDoc: { id: 8, _status: 'draft', slug: 'b' },
+      },
+      // No published row: this page is being published for the first time.
+      null,
+      { mainRow: { path: 'a', slug: 'a' } },
+    )
+
+    await result
+    // Two lookups: the published one came back empty, so the main-table one
+    // ran. Neither is on the autosave path, which returns before any query.
+    expect(find).toHaveBeenCalledTimes(2)
+    // And the second one is genuinely UNFILTERED — a bare `{ id }` with no
+    // `_status` clause and no `draft` flag. Pinned here as well as in
+    // `findPublishedSlug.test.ts`, because this is the call site whose
+    // behaviour would silently revert if the filter came back.
+    const [fallbackArgs] = find.mock.calls[1]
+    expect(fallbackArgs.where).toEqual({ id: { equals: 8 } })
+    expect(fallbackArgs.draft).toBeUndefined()
+    // `a` is the prefix every descendant's own `path` was composed from, and
+    // it is what `cascadePagePaths` needs to find them.
+    expect(readPreviousStoredPath(liveContext(), 'pages', 8)).toBe('a')
+    // Nothing was ever served, so no redirect row and no URL to purge.
+    expect(readPreviousPublishedSlug(liveContext(), 'pages', 8)).toBeUndefined()
+    expect(readPreviousPublishedPath(liveContext(), 'pages', 8)).toBeUndefined()
+  })
+
+  it('stashes nothing at all when the main row has no path either', async () => {
+    // An unplaced post's `path` column is NULL, so there is no prefix and no
+    // subtree — the fallback must not invent one.
+    //
+    // Every assertion below is an `undefined`, which on its own would also
+    // pass if the fallback never ran at all. So the FIRST thing asserted is
+    // that it ran, and ran unfiltered: two calls, the second carrying a bare
+    // `{ id }` with no `_status` clause and no `draft` flag.
+    const { find, liveContext, result } = run(
+      {
+        data: { _status: 'published', slug: 'hello' },
+        originalDoc: { id: 9, _status: 'draft', slug: 'hello' },
+      },
+      null,
+      { mainRow: { slug: 'hello' } },
+    )
+
+    await result
+    expect(find).toHaveBeenCalledTimes(2)
+    const [fallbackArgs] = find.mock.calls[1]
+    expect(fallbackArgs.where).toEqual({ id: { equals: 9 } })
+    expect(fallbackArgs.draft).toBeUndefined()
+
+    // It ran, it found a row, and that row simply had no path to stash.
+    expect(readPreviousStoredPath(liveContext(), 'posts', 9)).toBeUndefined()
+    expect(readPreviousPublishedSlug(liveContext(), 'posts', 9)).toBeUndefined()
+    expect(readPreviousPublishedPath(liveContext(), 'posts', 9)).toBeUndefined()
   })
 
   it('stashes no stored path for an unplaced post, whose path column is NULL', async () => {
@@ -267,9 +359,7 @@ describe('capturePublishedSlug', () => {
     )
 
     await result
-    expect(
-      readPreviousPublishedStoredPath(liveContext(), 'posts', 55),
-    ).toBeUndefined()
+    expect(readPreviousStoredPath(liveContext(), 'posts', 55)).toBeUndefined()
     expect(readPreviousPublishedPath(liveContext(), 'posts', 55)).toBe(
       '/articles/old-slug',
     )

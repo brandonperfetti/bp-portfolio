@@ -351,7 +351,7 @@ describe('cascadePagePaths', () => {
     }> = []
     const req = {
       context: {
-        previousPublishedStoredPaths: { 'pages:1': 'work' },
+        previousStoredPaths: { 'pages:1': 'work' },
       } as Record<string, unknown>,
       payload: {
         find: vi.fn(async ({ collection }: { collection: string }) => ({

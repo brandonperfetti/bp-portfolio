@@ -21,7 +21,7 @@ import {
   type SlugRoutedCollection,
   publicPathFor,
 } from '@/fields/slug/slugPaths'
-import { readPreviousPublishedStoredPath } from '@/hooks/capturePublishedSlug'
+import { readPreviousStoredPath } from '@/hooks/capturePublishedSlug'
 import { containRevalidation } from '@/hooks/containRevalidation'
 import type { Page } from '@/payload-types'
 
@@ -275,6 +275,35 @@ const readSubtree = async (
  * compute `oldPath === newPath` and cascade nothing, on exactly the admin path
  * this hook exists for.
  *
+ * **What that stash requires, precisely: a main-table row, NOT a published
+ * one** (CodeRabbit on #179). This matters because the two are different for a
+ * page that has never shipped, and the cascade needs the weaker one. Descendant
+ * paths are composed from whatever the parent's main row said at the time, and
+ * a draft save never touches that row — so a page drafted as `a`, given
+ * children (stored `a/c`), renamed to `b` in draft and then published for the
+ * FIRST time moves its main row to `b` with no published row ever having
+ * existed. The stash used to be gated on one, so `oldPath` was `undefined`, the
+ * `return` below fired, and the subtree silently kept the `a` prefix.
+ * `readPreviousStoredPath` is now fed from the main row on that branch, which
+ * is why this hook's precondition is "the page moved", not "the page was
+ * live".
+ *
+ * **What that fallback costs, stated rather than discovered later.** It widens
+ * the Local-API residual `isDraftSaveRequest` already documents — Payload's
+ * `createLocalReq` does not mirror the Local API's own `draft` option into
+ * `req.query`, so a `payload.update({ draft: true })` is not recognised as a
+ * draft save and the capture runs anyway. For a published parent that residual
+ * was one wasted `find`; with the fallback it now also reaches NEVER-published
+ * parents, and for both it means this cascade fires on the draft save as well
+ * as on the publish. `[measured]` the new
+ * `evals/pages-hierarchy-integration.test.ts` case logs `Subtree moved` twice.
+ * The extra pass is waste, not corruption: descendants recompute from the
+ * parent's MAIN row, which the draft save did not touch, so every path is
+ * rewritten to the value it already had. The admin path is unaffected — its
+ * autosave and "Save draft" are REST and carry `draft=true` in the query
+ * string, so they return before any of this. A caller that wants the fast path
+ * can pass `req: { query: { draft: 'true' } }`.
+ *
  * **Failure posture is deliberately asymmetric, and different from the redirect
  * writer's.** `createPathRedirect` swallows its own failure because a missing
  * redirect row must never fail an editor's publish. A half-cascaded subtree is
@@ -313,11 +342,7 @@ export const cascadePagePaths: CollectionAfterChangeHook<Page> = async ({
   // `req.context` first, for the same reason the redirect writer reads it
   // there: a nested Local API call swaps it and detaches the argument.
   const previousContext = req.context ?? context
-  const oldPath = readPreviousPublishedStoredPath(
-    previousContext,
-    'pages',
-    doc.id,
-  )
+  const oldPath = readPreviousStoredPath(previousContext, 'pages', doc.id)
   const newPath =
     typeof doc.path === 'string' && doc.path.length > 0 ? doc.path : null
   if (!oldPath || !newPath || oldPath === newPath) return doc

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  findMainTableRow,
   findPublishedRow,
   findPublishedSlug,
 } from '@/fields/slug/findPublishedSlug'
@@ -63,6 +64,48 @@ describe('findPublishedRow', () => {
     const { req } = makeReq([])
 
     await expect(findPublishedRow(req, 'posts', 7)).resolves.toBeNull()
+  })
+})
+
+/**
+ * The same projection with the `_status` clause deliberately absent — and its
+ * absence is the whole contract, so it is pinned as an exact `where` rather
+ * than a partial match. Adding a `_status` filter here would silently restore
+ * the CodeRabbit-#179 defect: a never-published parent's first publish would
+ * stop cascading its subtree.
+ */
+describe('findMainTableRow', () => {
+  it('asks for the row by id ALONE, with no publish-status clause', async () => {
+    const { find, req } = makeReq([{ path: 'a', slug: 'a' }])
+
+    await findMainTableRow(req, 'pages', 3)
+
+    expect(find).toHaveBeenCalledTimes(1)
+    const [args] = find.mock.calls[0]
+    expect(args.where).toEqual({ id: { equals: 3 } })
+    // No `draft: true`: `collections/operations/find.js:96` branches to
+    // `queryDrafts` (the `_v` table) only when that flag is set, so omitting
+    // it is what makes this the MAIN-table read.
+    expect(args.draft).toBeUndefined()
+    expect(args.depth).toBe(0)
+    expect(args.select).toEqual({ path: true, slug: true })
+    expect(args.req).toBe(req)
+    expect(args.overrideAccess).toBe(true)
+  })
+
+  it('returns the row for a document that has never been published', async () => {
+    const { req } = makeReq([{ path: 'a', slug: 'a' }])
+
+    await expect(findMainTableRow(req, 'pages', 3)).resolves.toEqual({
+      path: 'a',
+      slug: 'a',
+    })
+  })
+
+  it('returns null when no row exists at all', async () => {
+    const { req } = makeReq([])
+
+    await expect(findMainTableRow(req, 'pages', 3)).resolves.toBeNull()
   })
 })
 
