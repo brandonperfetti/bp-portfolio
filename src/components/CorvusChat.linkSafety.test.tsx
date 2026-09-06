@@ -351,6 +351,54 @@ describe('CorvusChat confirmation dialog a11y (#158 AC3)', () => {
     ).toBe(false)
   })
 
+  /**
+   * The inert target is the OWNING card, not the first one in the document
+   * (CodeRabbit on #179).
+   *
+   * @remarks A document-wide `querySelector` returns whichever chat card
+   * mounted earliest, which is only ever the right answer when exactly one is
+   * mounted. Two are mounted routinely: the Storybook autodocs page renders
+   * every `AI/CorvusChat` story on one page. The failure is doubly wrong —
+   * the card whose modal is open stays reachable behind it, and an unrelated
+   * card is frozen until that modal closes.
+   */
+  it('makes only the card the link belongs to inert, not the first one', async () => {
+    chatState.messages = [
+      assistantMessage(
+        'c2',
+        'The docs are at [Vercel](https://vercel.com/docs).',
+      ) as ChatState['messages'][number],
+    ]
+    // Two independent mounts, as an autodocs page produces.
+    render(
+      <div>
+        <CorvusChat />
+        <CorvusChat />
+      </div>,
+    )
+
+    const cards = [
+      ...document.querySelectorAll<HTMLElement>('[data-slot="chat-card"]'),
+    ]
+    expect(cards).toHaveLength(2)
+
+    // Open from the link in the SECOND card, so "first in the document" and
+    // "the one that owns this dialog" are different nodes.
+    const triggers = screen.getAllByRole('button', { name: 'Vercel' })
+    expect(triggers).toHaveLength(2)
+    expect(cards[1].contains(triggers[1])).toBe(true)
+    await userEvent.click(triggers[1])
+
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(cards[1].hasAttribute('inert')).toBe(true)
+    expect(cards[0].hasAttribute('inert')).toBe(false)
+
+    // And the cleanup gives that same card back — the one it took.
+    await userEvent.keyboard('{Escape}')
+    expect(cards[1].hasAttribute('inert')).toBe(false)
+    expect(cards[0].hasAttribute('inert')).toBe(false)
+  })
+
   it('renders outside the chat card, so inert cannot swallow it', async () => {
     // The dialog lives inside the chat card in the React tree; portalling it
     // to `document.body` is what lets its own ancestor be marked inert.

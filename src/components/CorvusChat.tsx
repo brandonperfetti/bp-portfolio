@@ -273,18 +273,32 @@ function CorvusReplyLink({
   // (`CorvusChat.stories.tsx`) is what proves this works.
   useEffect(() => {
     if (!confirming) return
-    // Optional: a caller could mount `Streamdown` outside the chat card. The
-    // restore below must not be conditional on finding it — the focus contract
-    // holds whether or not there is a surface to make inert.
-    const surface = document.querySelector<HTMLElement>(
-      '[data-slot="chat-card"]',
-    )
-    surface?.setAttribute('inert', '')
 
     // Captured on open rather than read in the cleanup: the linter is right
     // that a ref can change underneath a cleanup, and the node we owe focus to
     // is specifically the trigger that OPENED this dialog.
     const trigger = triggerRef.current
+
+    // Resolved by walking UP from the trigger, not by a document-wide query.
+    // Several chat cards can be mounted at once — the Storybook autodocs page
+    // renders every `AI/CorvusChat` story on one page — and a document query
+    // returns the FIRST match in the DOM, which is whichever card mounted
+    // earliest rather than the one this link lives in. Two things then go
+    // wrong at once. The card that owns the dialog is never made inert, so
+    // its composer, mic and citations stay reachable behind its own modal —
+    // the exact failure this effect exists to prevent. And an unrelated card,
+    // which has no dialog open, is frozen until this one closes.
+    //
+    // `closest` cannot pick the wrong card: it only ever returns an ancestor
+    // of the trigger.
+    //
+    // Optional: a caller could mount `Streamdown` outside the chat card, and
+    // the trigger may be gone already on an unmount. The restore below must
+    // not be conditional on finding a surface — the focus contract holds
+    // whether or not there is one to make inert.
+    const surface =
+      trigger?.closest<HTMLElement>('[data-slot="chat-card"]') ?? null
+    surface?.setAttribute('inert', '')
 
     return () => {
       surface?.removeAttribute('inert')
