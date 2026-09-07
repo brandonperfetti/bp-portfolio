@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { hydrateRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
 
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -120,7 +120,15 @@ describe('CookieBanner visibility across the four consent states (#140)', () => 
     const user = userEvent.setup()
     renderBanner(true)
     await user.click(screen.getByRole('button', { name: /^accept all$/i }))
-    expect(banner()).not.toBeInTheDocument()
+    // RACE (#186): "accept all" hands off to c15t, which persists the choice
+    // and notifies its store subscribers on its own schedule — not inside the
+    // `act` that `user.click` awaits. Reading the DOM on the next line passes
+    // on an idle machine and goes red under CPU contention. `waitFor`, not a
+    // bare assertion: this is a wait for an async write to land, and
+    // "simplifying" it back to a synchronous read reintroduces the flake.
+    await waitFor(() => {
+      expect(banner()).not.toBeInTheDocument()
+    })
   })
 
   it('not required (false) + undecided → hidden', () => {
@@ -180,10 +188,22 @@ describe('CookieBanner dialog triggers (#112 — return-focus capture)', () => {
       // The capture is what CookieDialog consumes on open. Without it the
       // dialog would read `document.activeElement` — already `<body>`, because
       // this banner un-renders itself the moment activeUI becomes 'dialog'.
+      //
+      // Read ONCE and synchronously: `takeConsentTrigger` consumes the
+      // capture, so it can never go inside a retrying `waitFor` — and the
+      // synchronous read is the assertion, since the capture happens in the
+      // click handler itself. That is exactly what this test's name claims.
       expect(takeConsentTrigger()).toEqual({ id, element: trigger })
-      expect(
-        screen.queryByRole('region', { name: /cookie consent/i }),
-      ).not.toBeInTheDocument()
+
+      // RACE (#186): the unmount, by contrast, is c15t's — `setActiveUI`
+      // notifies subscribers outside the `act` that `user.click` awaits, so
+      // under CPU contention the banner is still mounted on the next line.
+      // Do not collapse this back into a synchronous `expect`.
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('region', { name: /cookie consent/i }),
+        ).not.toBeInTheDocument()
+      })
     },
   )
 })
@@ -269,6 +289,16 @@ describe('CookieBanner hydration (#140)', () => {
       </ConsentManagerProvider>,
     )
     await user.click(screen.getByRole('button', { name: /^accept all$/i }))
+    // RACE (#186): c15t persists the choice asynchronously, outside the `act`
+    // that `user.click` awaits, so reading `localStorage` on the next line is
+    // a coin flip — measured 4 of 7 red under CPU contention, all of them the
+    // downstream `expect(persisted).toBeTruthy()`. Waiting for the write is
+    // the whole point of this helper: it exists to produce an AUTHENTIC
+    // persisted payload, and a null one silently changes what the hydration
+    // tests below are testing. Do not collapse this back to a bare read.
+    await waitFor(() => {
+      expect(localStorage.getItem('bp-consent-seed')).toBeTruthy()
+    })
     const stored = localStorage.getItem('bp-consent-seed')
     cleanup()
     return stored
