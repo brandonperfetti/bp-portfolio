@@ -62,7 +62,13 @@ export function RenderRhythmPage({
       )}
       {actions ? <div className="mt-8 flex justify-end">{actions}</div> : null}
       <div className={profile.blocksWrapperClass}>
-        <RenderBlocks blocks={page.layout} />
+        {/* The whole document is in hand here, so the blocks get its identity
+            as well as its layout — the third of the three readers that can
+            name their host without reading the request (#177). */}
+        <RenderBlocks
+          blocks={page.layout}
+          hostDoc={{ collection: 'pages', id: page.id }}
+        />
       </div>
     </Container>
   )

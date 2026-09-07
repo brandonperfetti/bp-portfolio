@@ -158,3 +158,34 @@ export const COLUMN_STACK_SPACING_CLASS = 'space-y-10'
  * rendered; a block with no query container anywhere above it would silently
  * resolve every container query as false and collapse to one column.
  */
+
+/**
+ * Which document a block is rendering inside — the block's *identity*
+ * context, as opposed to {@link BlockHostContext}, which is its *position*.
+ *
+ * @remarks The two answer different questions and neither substitutes for the
+ * other. `hosted` says "root or column", which is a layout fact and is what a
+ * block reads to decide its own margin and measure. This says "the `pages` doc
+ * with id 7", which is a content fact: it is what lets a block query for
+ * things related to the document it was placed on, without knowing the route
+ * it was requested through.
+ *
+ * Deliberately the collection *and* the id, never the id alone: `pages` and
+ * `posts` both host layout blocks, both use numeric ids, and a block that
+ * queried `parent = 7` without knowing which collection 7 came from would
+ * silently roll up the wrong document's children (#177).
+ *
+ * @remarks This is a **render-time prop, not a request-scope read.** It is
+ * threaded from the readers that already loaded the document down through
+ * `RenderBlocks`, so a block stays prerenderable: reading `headers()` to
+ * recover "which page am I on?" would opt every page containing such a block
+ * out of static rendering, which is the opposite of what a CMS block should
+ * cost. `hostContext.test.ts` asserts the render path takes no request-scope
+ * API.
+ */
+export type BlockHostDocument = {
+  /** Collection the hosting document lives in. */
+  collection: 'pages' | 'posts'
+  /** The hosting document's id. */
+  id: number
+}
