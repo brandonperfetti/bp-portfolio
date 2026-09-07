@@ -32,6 +32,25 @@ These are release gates, not aspirations:
 
   The command palette (cmdk) predates the primitive and keeps its own dialog.
 
+- **List paging**: a page step re-anchors the reader (#183). Every list
+  surface pages with `router.push(…, { scroll: false })` — #88's back-button
+  restore depends on it — so nothing moves on its own: the whole result set is
+  replaced under a viewport parked wherever the reader left it, and focus dies
+  with the control that was clicked. `usePageChangeAnchor`
+  (`src/lib/usePageChangeAnchor.ts`, threaded through `ListPagination`) pays
+  that back: it scrolls the **results container** to the top of the viewport
+  (its `scroll-mt-16` clears the sticky header) and moves focus onto it. The
+  container, not the first card: it is the only target that exists on every
+  surface in every state, it keeps the reader _outside_ the first result's own
+  links, and the next Tab walks the results from their start. It therefore
+  carries `tabIndex={-1}` **and an accessible name** — a `<ul role="list">`
+  takes an `aria-label`, a bare `<div>` needs `role="region"` with one, because
+  focus landing on an unnamed generic announces nothing. The scroll is smooth,
+  and instant under `prefers-reduced-motion` (via the shared
+  `getPrefersReducedMotion`). It is armed from the pagination click and spent
+  only on the page it was armed for, never inferred from a `page` change: a
+  filter reset drops `?page` while the reader is typing, and anchoring there
+  would rip focus out of the search box.
 - **Reduced motion**: every animated surface — headline, scroll reveals,
   hover lifts, parallax, shader hero, tech viz, expand/collapse — renders
   static, fully functional DOM under `prefers-reduced-motion`. Motion

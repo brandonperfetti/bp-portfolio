@@ -18,20 +18,35 @@ import { interactUntil } from './support/hydration'
  * `interactUntil` because the explorers' handlers attach post-hydration under
  * cacheComponents/PPR (#114 mechanism A).
  *
+ * A skip here is reported, not swallowed: CI runs `pnpm test:e2e` with
+ * `reporter: 'html'` (`playwright.config.ts:11`) and uploads
+ * `playwright-report/` as an artifact (`.github/workflows/ci.yml`, "Upload
+ * Playwright report"), where every skipped test is listed by title with the
+ * reason string it skipped on. No workflow greps e2e output for skips and no
+ * step fails on one — that is the suite's standing convention for
+ * content-dependent cases (`docs/TESTING.md`) — so each `test.skip` below
+ * carries a reason naming *its own surface*, and a reader of the report can
+ * tell which surfaces were actually exercised.
+ *
  * The suite runs with `reducedMotion: 'reduce'` (see `playwright.config.ts`),
  * so the anchor takes its `behavior: 'auto'` branch and the scroll has landed
  * by the time the URL has changed — no settle-wait is needed or wanted.
  */
 
 /**
- * How far below the viewport top the results may sit and still count as
- * anchored.
+ * How far below the viewport top the anchored results container may sit and
+ * still count as anchored: **96px = 64 + 32**.
  *
- * @remarks The anchor carries `scroll-mt-16` (64px) so the sticky header does
- * not cover the row it lands on — the same offset id-linked sections use. The
- * budget is that offset plus slack for the header's own measured height.
+ * @remarks 64px is the anchor's own `scroll-mt-16` (`4rem`), which exists to
+ * clear the sticky header — `src/components/Header.tsx` renders that bar at
+ * `h-16`, so the offset is the header's height exactly, not an approximation.
+ * The extra 32px is settling margin, and it is that size for a reason: it
+ * absorbs sub-pixel rounding in `boundingBox()`, the 1–2px the browser can
+ * leave behind when `scrollIntoView` lands against the document's scroll
+ * limits, and the container's own top border/padding — while staying well
+ * under the ~64px that would let a visibly un-anchored container pass.
  */
-const ANCHOR_TOLERANCE_PX = 160
+const ANCHOR_TOLERANCE_PX = 96
 
 /**
  * Scroll far enough down that "the viewport did not move" would be visible.
@@ -58,10 +73,20 @@ async function topOffset(locator: Locator): Promise<number> {
  * Walk one surface from page 1 to page 2 and assert the re-anchor.
  *
  * @param page - The page under test, already on the surface's route.
- * @param firstCard - Locator resolving to the first result card.
+ * @param results - Locator resolving to the anchored results container — the
+ * element that carries `tabIndex={-1}` and `scroll-mt-16`.
+ * @param firstCard - Locator resolving to the first result inside it.
+ *
+ * @remarks The tolerance is measured against the *container*, not the first
+ * card: the container is what `scrollIntoView` targets and what `scroll-mt-16`
+ * offsets, and it is the only element whose distance from the viewport top
+ * means the same thing on all four surfaces (`/uses` renders a section
+ * heading above its first card). The first card is then asserted to be in the
+ * viewport, which is the reader-facing half of the AC.
  */
 async function assertPageStepReAnchors(
   page: Page,
+  results: Locator,
   firstCard: Locator,
 ): Promise<void> {
   // Park the viewport at the bottom: `scroll: false` leaves it exactly here,
@@ -74,7 +99,7 @@ async function assertPageStepReAnchors(
   })
 
   // The results are at the top of the viewport, under the header offset.
-  const offset = await topOffset(firstCard)
+  const offset = await topOffset(results)
   expect(offset).toBeGreaterThanOrEqual(0)
   expect(offset).toBeLessThanOrEqual(ANCHOR_TOLERANCE_PX)
 
@@ -91,7 +116,7 @@ async function assertPageStepReAnchors(
     )
   })
   expect(focusHoldsResults).toBe(true)
-  await expect(firstCard).toBeVisible()
+  await expect(firstCard).toBeInViewport()
 }
 
 /**
@@ -99,22 +124,27 @@ async function assertPageStepReAnchors(
  * exercisable in this environment.
  *
  * @param page - The page under test, already on the route.
- * @param explorer - A locator that proves the interactive surface rendered.
+ * @param surface - A locator that proves the populated surface rendered.
+ * @param emptyState - A locator for this route's *specific* empty state.
  * @param paginationLabel - The `aria-label` of the surface's pagination nav.
  *
- * @remarks The `.or(…)` settle mirrors `articles-pagination.spec.ts`: block on
- * the surface resolving to EITHER its explorer or its empty state before
- * deciding, so the skip is made on real content rather than on a race — and an
- * empty database skips rather than fails.
+ * @remarks The `.or(…)` settle mirrors `articles-pagination.spec.ts:34`: block
+ * on the surface resolving to EITHER its populated state or its empty state
+ * before deciding, so the skip is made on real content rather than on a race —
+ * and an empty database skips rather than fails. The empty-state locator has
+ * to be the route's own copy (`getByText('Uses list coming soon')`), never
+ * something both branches render: an `h1` is server-rendered on every route
+ * and visible before hydration, so an `.or()` on it settles immediately and
+ * the count below is taken too early — a silent skip instead of a failure.
  */
 async function hasPagination(
   page: Page,
-  explorer: Locator,
+  surface: Locator,
+  emptyState: Locator,
   paginationLabel: string,
 ): Promise<boolean> {
-  const emptyState = page.getByRole('heading', { level: 1 })
-  await expect(explorer.or(emptyState).first()).toBeVisible()
-  if ((await explorer.count()) === 0) {
+  await expect(surface.or(emptyState).first()).toBeVisible()
+  if ((await surface.count()) === 0) {
     return false
   }
   return (
@@ -122,8 +152,15 @@ async function hasPagination(
   )
 }
 
-const skipReason =
-  'This environment renders a single page here, so the pagination control is a deliberate no-op.'
+/**
+ * The reason one surface skipped, named so the CI report says which.
+ *
+ * @param route - The route that renders a single page here.
+ * @returns The skip annotation text.
+ */
+function skipReason(route: string): string {
+  return `${route} renders a single page in this environment, so its pagination control is a deliberate no-op.`
+}
 
 test('a page step on /articles anchors the reader to the results', async ({
   page,
@@ -132,11 +169,16 @@ test('a page step on /articles anchors the reader to the results', async ({
   const paginated = await hasPagination(
     page,
     page.getByPlaceholder('Search articles'),
+    page.getByText('No published articles'),
     'Articles pagination',
   )
-  test.skip(!paginated, skipReason)
+  test.skip(!paginated, skipReason('/articles'))
 
-  await assertPageStepReAnchors(page, page.locator('article').first())
+  await assertPageStepReAnchors(
+    page,
+    page.getByRole('region', { name: 'Article results' }),
+    page.locator('article').first(),
+  )
 })
 
 test('a page step on /tech anchors the reader to the results', async ({
@@ -146,11 +188,57 @@ test('a page step on /tech anchors the reader to the results', async ({
   const paginated = await hasPagination(
     page,
     page.getByPlaceholder('Search tech'),
+    page.getByText('Tech stack coming soon'),
     'Tech pagination',
   )
-  test.skip(!paginated, skipReason)
+  test.skip(!paginated, skipReason('/tech'))
 
-  await assertPageStepReAnchors(page, page.getByRole('listitem').first())
+  const results = page.getByRole('list', { name: 'Tech results' })
+  await assertPageStepReAnchors(
+    page,
+    results,
+    results.getByRole('listitem').first(),
+  )
+})
+
+test('a page step on /uses anchors the reader to the results', async ({
+  page,
+}) => {
+  await page.goto('/uses')
+  const results = page.getByRole('region', { name: 'Uses results' })
+  const paginated = await hasPagination(
+    page,
+    results,
+    page.getByText('Uses list coming soon'),
+    'Uses pagination',
+  )
+  test.skip(!paginated, skipReason('/uses'))
+
+  await assertPageStepReAnchors(
+    page,
+    results,
+    results.getByRole('listitem').first(),
+  )
+})
+
+test('a page step on /projects anchors the reader to the results', async ({
+  page,
+}) => {
+  await page.goto('/projects')
+  const results = page.getByRole('list', { name: 'Projects results' })
+  const paginated = await hasPagination(
+    page,
+    results,
+    page.getByText('Projects coming soon'),
+    'Projects pagination',
+  )
+  test.skip(!paginated, skipReason('/projects'))
+
+  await assertPageStepReAnchors(
+    page,
+    results,
+    results.getByRole('listitem').first(),
+  )
 })
 
 test('a filter change does not steal focus out of the search box', async ({
@@ -160,9 +248,10 @@ test('a filter change does not steal focus out of the search box', async ({
   const paginated = await hasPagination(
     page,
     page.getByPlaceholder('Search articles'),
+    page.getByText('No published articles'),
     'Articles pagination',
   )
-  test.skip(!paginated, skipReason)
+  test.skip(!paginated, skipReason('/articles'))
 
   // #88 drops `?page` when the query changes — a `page` change that arrives
   // mid-keystroke. The anchor is armed from the pagination click, never

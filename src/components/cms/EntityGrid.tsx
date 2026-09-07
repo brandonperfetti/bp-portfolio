@@ -31,6 +31,21 @@ import { getExternalLinkProps } from '@/lib/link-utils'
 const ENTITY_GRID_PAGE_SIZE = 24
 
 /**
+ * The results list's accessible name, derived from the pagination landmark's.
+ *
+ * @param label - The `label` prop, e.g. `"Projects pagination"`.
+ * @returns A name for the list the #183 anchor focuses, e.g.
+ * `"Projects results"`.
+ *
+ * @remarks Derived rather than a second prop so one caller-supplied noun names
+ * both landmarks and the two can never drift apart.
+ */
+function resultsLabelFrom(label: string): string {
+  const subject = label.replace(/\s*pagination\s*$/i, '').trim()
+  return subject ? `${subject} results` : 'Results'
+}
+
+/**
  * Responsive card grid for CMS entity lists (projects, tech stack): logo,
  * name, description, optional full-card link — one shared surface so every
  * entity collection renders identically.
@@ -84,6 +99,7 @@ export function EntityGrid({
 
   /** The results list — the #183 scroll/focus anchor for a page step. */
   const resultsRef = useRef<HTMLUListElement>(null)
+  const resultsLabel = resultsLabelFrom(label)
 
   const goToPage = useCallback(
     (nextPage: number) => {
@@ -103,12 +119,13 @@ export function EntityGrid({
     <>
       <ScrollReveal targets="li" revealKey={String(currentPage)}>
         {/* #183 re-anchor target — see the note in `ArticlesExplorer` for why
-            `tabIndex={-1}` draws no focus ring and what `scroll-mt-16` pays
-            for. */}
+            `tabIndex={-1}` draws no focus ring, what `scroll-mt-16` pays for,
+            and why the container carries an accessible name. */}
         <ul
           ref={resultsRef}
           tabIndex={-1}
           role="list"
+          aria-label={resultsLabel}
           className="grid scroll-mt-16 grid-cols-1 gap-x-12 gap-y-12 sm:grid-cols-2 sm:gap-y-16 lg:grid-cols-3"
         >
           {visibleItems.map((item, index) => {

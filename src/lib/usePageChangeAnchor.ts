@@ -23,8 +23,12 @@ export interface PageChangeAnchor {
    * Arm the re-anchor for the page change this click is about to perform.
    * Called from the click handler, so only a *user-driven* page change
    * anchors — see the hook's remarks.
+   *
+   * @param target - The page the click is navigating to. The arming is spent
+   * only when `page` actually becomes this value; see the hook's remarks on
+   * why a bare boolean was not enough.
    */
-  armAnchor: () => void
+  armAnchor: (target: number) => void
 }
 
 /**
@@ -49,6 +53,18 @@ export interface PageChangeAnchor {
  *   "page changed, therefore anchor" would rip focus out of the input
  *   mid-word. Arming from the click is the only signal that separates the two,
  *   and it makes the initial mount a no-op for free.
+ * - **Armed with the target, not with a boolean.** A bare flag says "a page
+ *   change is coming" but nothing about *which*, and the push it was armed for
+ *   is not guaranteed to land: the surfaces' debounced filter `updateUrl`
+ *   fires a `router.replace` that drops `?page`, so a click inside the debounce
+ *   window is superseded and `page` never moves — as does a Back before the
+ *   push commits. A flag nothing cleared then survives to the *next* page
+ *   change, which is typically the filter reset that arrives mid-keystroke:
+ *   stolen focus, from a click that navigated nothing. This is the same bug
+ *   class `isPlainClick`'s remarks record having already been fixed once for
+ *   #88's boundary restore. So the arm carries the target page and is spent
+ *   only when `page` actually becomes it; any other page change discards it,
+ *   and unmount clears it.
  * - **Motion.** `block: 'start'` with `behavior: 'smooth'`, downgraded to
  *   `'auto'` under `prefers-reduced-motion` via the shared
  *   {@link getPrefersReducedMotion} read (no component may re-check
@@ -70,13 +86,29 @@ export function usePageChangeAnchor({
   page,
   resultsRef,
 }: PageChangeAnchorOptions): PageChangeAnchor {
-  const armedRef = React.useRef(false)
+  const armedRef = React.useRef<number | null>(null)
+
+  // Nothing to tear down but the arming itself: an armed anchor must not
+  // outlive the control that armed it.
+  React.useEffect(
+    () => () => {
+      armedRef.current = null
+    },
+    [],
+  )
 
   React.useEffect(() => {
-    if (!armedRef.current) {
+    const armedFor = armedRef.current
+    if (armedFor === null) {
       return
     }
-    armedRef.current = false
+    // Spend or discard, never carry: a page change that is not the armed one
+    // means the push was superseded (or the reader went Back), and the arming
+    // must not survive to the next, unrelated change.
+    armedRef.current = null
+    if (armedFor !== page) {
+      return
+    }
 
     const anchor = resultsRef?.current
     if (!anchor) {
@@ -96,8 +128,8 @@ export function usePageChangeAnchor({
 
   return React.useMemo(
     () => ({
-      armAnchor: () => {
-        armedRef.current = true
+      armAnchor: (target: number) => {
+        armedRef.current = target
       },
     }),
     [],

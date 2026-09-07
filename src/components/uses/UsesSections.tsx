@@ -115,9 +115,15 @@ export function UsesSections({ sections }: { sections: CmsUseSection[] }) {
       {/* A wrapper, not the outer element: the #183 anchor has to be the
           results *only*, so scrolling its top into view cannot land on the
           pagination strip below them. See `ArticlesExplorer` for why
-          `tabIndex={-1}` draws no focus ring and what `scroll-mt-16` pays
-          for. */}
-      <div ref={resultsRef} tabIndex={-1} className="scroll-mt-16 space-y-20">
+          `tabIndex={-1}` draws no focus ring, what `scroll-mt-16` pays for,
+          and why a focused `<div>` needs `role="region"` to carry a name. */}
+      <div
+        ref={resultsRef}
+        tabIndex={-1}
+        role="region"
+        aria-label="Uses results"
+        className="scroll-mt-16 space-y-20"
+      >
         {visibleSections.map((section) => (
           <Section key={section.key} title={section.title}>
             <ScrollReveal targets="li" revealKey={String(currentPage)}>

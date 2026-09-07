@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 
 import { buttonVariants } from '@/components/ui/button'
-import { usePageChangeAnchor } from '@/components/ui/usePageChangeAnchor'
+import { usePageChangeAnchor } from '@/lib/usePageChangeAnchor'
 import { cn } from '@/lib/utils'
 
 /**
@@ -458,10 +458,13 @@ export function ListPagination({
       }
       // Arm the #183 re-anchor only for a click that changes the page. The
       // current-page link navigates nothing (the surface's `goToPage` bails on
-      // an unchanged query string), so arming there would leave the flag set
-      // for whatever moved `page` next — a filter reset, mid-keystroke.
+      // an unchanged query string), so arming there would spend the arming on
+      // whatever moved `page` next — a filter reset, mid-keystroke. The arm
+      // carries `target`, so even a click whose push is superseded (the
+      // debounced filter `replace` drops `?page`) cannot anchor a later,
+      // unrelated page change.
       if (target !== page) {
-        armAnchor()
+        armAnchor(target)
       }
       event.preventDefault()
       onNavigate(target)

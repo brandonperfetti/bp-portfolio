@@ -408,12 +408,13 @@ export function TechExplorer({
         revealKey={`${normalizedQueryText}|${category}|${currentPage}`}
       >
         {/* #183 re-anchor target — see the note in `ArticlesExplorer` for why
-            `tabIndex={-1}` draws no focus ring and what `scroll-mt-16` pays
-            for. */}
+            `tabIndex={-1}` draws no focus ring, what `scroll-mt-16` pays for,
+            and why the container carries an accessible name. */}
         <ul
           ref={resultsRef}
           tabIndex={-1}
           role="list"
+          aria-label="Tech results"
           className="grid scroll-mt-16 grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2 lg:grid-cols-3"
         >
           {visibleItems.map((tech, index) => (

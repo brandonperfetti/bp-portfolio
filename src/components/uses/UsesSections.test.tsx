@@ -173,8 +173,10 @@ describe('UsesSections pagination (#88)', () => {
   it('re-anchors scroll and focus to the rendered sections on a page step (#183)', async () => {
     const user = userEvent.setup()
     const sections = makeSections(USES_PAGE_SIZE + 1)
-    const { container, rerender } = render(<UsesSections sections={sections} />)
-    const results = container.querySelector('[tabindex="-1"]') as HTMLElement
+    const { rerender } = render(<UsesSections sections={sections} />)
+    // Queried by role and name, not by `[tabindex]`: the anchor is a focus
+    // target, so it has to announce itself (#183 / `docs/ACCESSIBILITY.md`).
+    const results = screen.getByRole('region', { name: 'Uses results' })
     // jsdom implements no layout and no `scrollIntoView`; the stub is the
     // assertion surface.
     const scrollIntoView = vi.fn()

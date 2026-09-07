@@ -3,7 +3,7 @@ import { useRef } from 'react'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { usePageChangeAnchor } from '@/components/ui/usePageChangeAnchor'
+import { usePageChangeAnchor } from '@/lib/usePageChangeAnchor'
 
 /**
  * Unit coverage for the #183 re-anchor hook, exercised through a harness
@@ -38,9 +38,12 @@ let scrollIntoView: ReturnType<typeof vi.fn>
 
 function Harness({
   page,
+  armTarget,
   withContainer = true,
 }: {
   page: number
+  /** The page the harness's "arm" click claims it is navigating to. */
+  armTarget: number
   withContainer?: boolean
 }) {
   const resultsRef = useRef<HTMLDivElement>(null)
@@ -53,7 +56,11 @@ function Harness({
       {/* Arming is a click in the real control, so it is a click here too —
           and it keeps the handle out of a module-level variable a render
           would have to reassign. */}
-      <button type="button" data-testid="arm" onClick={anchor.armAnchor}>
+      <button
+        type="button"
+        data-testid="arm"
+        onClick={() => anchor.armAnchor(armTarget)}
+      >
         arm
       </button>
       <div ref={resultsRef} tabIndex={-1} data-testid="results">
@@ -72,7 +79,16 @@ function renderHarness(options?: {
   scrollable?: boolean
 }) {
   const harnessProps = { withContainer: options?.withContainer }
-  const view = render(<Harness page={1} {...harnessProps} />)
+  // The rendered `page`, tracked so an arming re-render (which has to carry the
+  // click's target) never accidentally moves the page itself.
+  let currentPage = 1
+  const view = render(<Harness page={1} armTarget={1} {...harnessProps} />)
+  const show = (page: number, armTarget: number) => {
+    currentPage = page
+    view.rerender(
+      <Harness page={page} armTarget={armTarget} {...harnessProps} />,
+    )
+  }
   const results = view.getByTestId('results') as HTMLElement
   if (options?.scrollable === false) {
     // Model the jsdom-shaped element: no `scrollIntoView` at all.
@@ -91,12 +107,21 @@ function renderHarness(options?: {
     results,
     /** A page change that came from a pagination click. */
     navigate: (page: number) => {
+      show(currentPage, page)
       fireEvent.click(view.getByTestId('arm'))
-      view.rerender(<Harness page={page} {...harnessProps} />)
+      show(page, page)
+    },
+    /**
+     * A click on a page control whose navigation never lands — the debounced
+     * filter `replace` supersedes the push, so `page` never moves.
+     */
+    armOnly: (target: number) => {
+      show(currentPage, target)
+      fireEvent.click(view.getByTestId('arm'))
     },
     /** A page change that came from somewhere else (a filter reset). */
     driftTo: (page: number) => {
-      view.rerender(<Harness page={page} {...harnessProps} />)
+      show(page, page)
     },
   }
 }
@@ -161,6 +186,34 @@ describe('usePageChangeAnchor (#183)', () => {
 
     driftTo(3)
     expect(scrollIntoView).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not anchor a later page change when the armed push was superseded', () => {
+    // The leak a bare boolean had: the reader clicks "page 3" inside the
+    // debounced filter window, the surface's `router.replace` drops `?page`
+    // and supersedes the push, so `page` lands on 1 instead of 3 — and the
+    // arming must not survive to spend itself on that reset (which arrives
+    // mid-keystroke) or on anything after it.
+    const { results, navigate, armOnly, driftTo } = renderHarness()
+
+    // On page 2, click "page 3" — then the filter reset lands on page 1
+    // instead, because the `replace` superseded the push.
+    driftTo(2)
+    armOnly(3)
+    driftTo(1)
+
+    expect(scrollIntoView).not.toHaveBeenCalled()
+    expect(document.activeElement).not.toBe(results)
+
+    // A later, unrelated page change is still not the discarded arming's —
+    // including one that happens to land on the page it was armed for.
+    driftTo(3)
+    expect(scrollIntoView).not.toHaveBeenCalled()
+
+    // …and the next real click anchors normally.
+    navigate(2)
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).toBe(results)
   })
 
   it('is inert when no results container was supplied', () => {
