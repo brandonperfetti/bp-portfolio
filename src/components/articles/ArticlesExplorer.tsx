@@ -581,9 +581,11 @@ export function ArticlesExplorer({
 
             Because focus lands here, the container needs an accessible name
             (`docs/ACCESSIBILITY.md` §Semantics): a bare `<div>` is a generic
-            with no name-bearing role and would announce nothing. The three
-            other surfaces anchor a `<ul role="list">` and take the name
-            alone; this grid holds `<article>`s, so `role="list"` would lie.
+            with no name-bearing role and would announce nothing. Two of the
+            other surfaces (`EntityGrid`, `TechExplorer`) anchor a
+            `<ul role="list">` and take the name alone; `UsesSections` anchors
+            a named `<section>`, exactly as this one does. This grid holds
+            `<article>`s, so `role="list"` would lie.
             §Semantics also prefers a real element over an ARIA role where one
             exists — a named `<section>` is already a landmark region, so it
             needs no `role="region"` of its own. */}
