@@ -267,6 +267,23 @@ act is the publish, so that is where the block sits — two `beforeChange` guard
 in `src/collections/Pages/hooks/servedPrefix.ts`, both firing on `_status`
 alone, so the 100ms autosave gains no read.
 
+**"At publish" covers the re-parent too, and the reason is worth knowing before
+someone reads the guard and concludes otherwise** (raised as a hole in review,
+disproved by measurement). Moving an already-published page onto a draft parent
+lands a served URL under an unserved prefix without publishing anything, and the
+publish guard tests `data._status`, so the write looks invisible to it. It is
+not: Payload's `beforeValidate` **field** pass runs before every collection
+`beforeChange` hook and merges the original document into the incoming data
+(`payload/dist/fields/hooks/beforeValidate/index.js`), so a
+`payload.update({ data: { parent } })` reaches the guard carrying the row's own
+`_status: 'published'` and is refused on the **Parent** field like any other
+publish. `evals/pages-hierarchy-integration.test.ts` pins it — the merge is a
+Payload internal the guard depends on, and that case is what fails if it ever
+changes. The invariant is therefore enforced over every write that goes through
+the collection hooks; what it does not cover is stated below (rows written
+before the guards, and writes that bypass `beforeChange` — direct SQL, a
+migration, `db.updateOne`).
+
 **Decision: the unpublish mirror REFUSES; it does not cascade-unpublish**
 (Brandon, #180). Sweeping the subtree offline for the editor was considered and
 rejected on three counts. It is a bulk write nobody asked for and nobody sees —
@@ -288,7 +305,13 @@ is the root-page contract: the root contributes no path segment, so its
 children are stored at `<child>` and not `home/<child>`, and a
 `path LIKE 'home/%'` read would report no blockers while the root was taken out
 from under the whole site. That branch reads by `parent` and leans on the
-publish guard for depth. `readServedChildrenByParent`'s TSDoc is the single home
+publish guard for depth, which is the one place the narrow form shows from
+outside: a published GRANDCHILD under a draft direct child of the root is not in
+that read, so unpublishing the root in that state would be allowed. The publish
+guard refuses to create that state in either direction, so it can only pre-exist
+the guards or be written around them. The non-root branch has no such gap — it
+is a prefix read and sees every depth.
+`readServedChildrenByParent`'s TSDoc is the single home
 for it.
 
 **Pre-existing violations are found, not assumed away.** The guards act on new
@@ -403,10 +426,27 @@ what Payload passes on each transition, the `dist` citations for the predicate
 and the admin's request shapes, and the correction to an earlier wrong reading
 of `isSavingDraft`. Do not restate them here. The residual worth knowing at this
 level: a **Local-API explicit draft save** reads as an unpublish, because
-`createLocalReq` does not mirror the Local API's `draft` option into `req.query`
-— one extra lookup and one redundant purge of a still-live path, never a lost
-purge or a lost write. `evals/slug-redirect-integration.test.ts` proves the
-behaviour end to end and pins the autosave read count.
+`createLocalReq` does not mirror the Local API's `draft` option into `req.query`.
+For the capture itself that is one extra lookup and one redundant purge of a
+still-live path — never a lost purge, never a lost write.
+
+**Since #180 the same residual IS a lost write one hook over.** The served-prefix
+unpublish guard (`refuseUnpublishWithServedDescendants`) reads the identical
+predicate, so a `payload.update({ draft: true })` on a **published** page that
+has published descendants is REFUSED, though it would have unpublished nothing.
+That is a false refusal — a step up in severity from a wasted read — and the
+sentence above no longer covers every consumer of the residual. It is
+unreachable from the admin (autosave and "Save draft" are REST and carry
+`draft=true`) and unreached in this repo. That guard's docblock is the single
+home for the measurement, for the `req: { query: { draft: 'true' } }` escape
+hatch, and for where the follow-up should start: `createLocalReq` sets
+`req.payloadAPI` fifteen lines before the `req.query` line the residual rests
+on, so the fix does not need the caller sweep the ticket implies — but
+`payloadAPI` alone cannot separate a Local-API draft save from a Local-API
+unpublish, which is the design choice the ticket has to carry.
+`evals/slug-redirect-integration.test.ts` proves the capture behaviour end to end
+and pins the autosave read count; the false refusal is pinned in both directions
+by `src/collections/Pages/hooks/servedPrefix.test.ts`.
 
 **A revalidation failure never fails the write (#135, #156).** Payload runs
 `afterChange`/`afterDelete` collection hooks **inside the operation's

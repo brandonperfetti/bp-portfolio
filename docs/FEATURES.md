@@ -40,8 +40,13 @@
   taken offline on the editor's behalf — one gesture never unpublishes
   documents the editor did not name, and never one they would have to remember
   in order to undo.
-- Between them: **everything the site serves has a served parent.** That is what
-  lets a section rename carry its whole subtree with a single redirect row.
+- **Moving a live page checks the parent too.** Re-parenting an already-published
+  page onto a draft one is refused by the same rule and the same message —
+  publishing is not the only way a live URL can end up under a path the site
+  does not serve.
+- Between them, for everything saved through the admin or the API:
+  **everything the site serves has a served parent.** That is what lets a
+  section rename carry its whole subtree with a single redirect row.
 - Renaming or re-parenting a published page moves its subtree in the same save
   and leaves one prefix redirect behind, so old links keep working (#150).
 
