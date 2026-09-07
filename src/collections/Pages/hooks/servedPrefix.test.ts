@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { PayloadRequest } from 'payload'
 
-import { refusePublishUnderUnpublishedParent } from './servedPrefix'
+import {
+  refusePublishUnderUnpublishedParent,
+  refuseUnpublishWithServedDescendants,
+} from './servedPrefix'
 
 /**
  * Unit coverage for the served-prefix guards (#180).
@@ -247,5 +250,285 @@ describe('refusePublishUnderUnpublishedParent (#180)', () => {
         args(req, { _status: 'published', parent: 99 }),
       ),
     ).resolves.toBeTruthy()
+  })
+})
+
+describe('refuseUnpublishWithServedDescendants (#180)', () => {
+  /** A published section page with a published child page beneath it. */
+  const servedSubtree = (): Row[] => [
+    {
+      _status: 'published',
+      collection: 'pages',
+      id: 1,
+      path: 'work',
+      slug: 'work',
+      title: 'Work',
+    },
+    {
+      _status: 'published',
+      collection: 'pages',
+      id: 2,
+      parent: 1,
+      path: 'work/brytecore',
+      slug: 'brytecore',
+      title: 'Brytecore',
+    },
+  ]
+
+  it('refuses an unpublish while a published child PAGE sits beneath it', async () => {
+    const { req } = stub(servedSubtree())
+
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).rejects.toThrow(/Unpublish the page “Brytecore” \(\/work\/brytecore\)/)
+  })
+
+  it('refuses an unpublish while a published placed POST sits beneath it', async () => {
+    const { req } = stub([
+      servedSubtree()[0],
+      {
+        _status: 'published',
+        collection: 'posts',
+        id: 7,
+        parent: 1,
+        path: 'work/hello',
+        slug: 'hello',
+        title: 'Hello',
+      },
+    ])
+
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).rejects.toThrow(/Unpublish the article “Hello” \(\/work\/hello\)/)
+  })
+
+  it('names the SHALLOWEST blocker and counts the rest', async () => {
+    const { req } = stub([
+      ...servedSubtree(),
+      {
+        _status: 'published',
+        collection: 'pages',
+        id: 3,
+        parent: 2,
+        path: 'work/brytecore/deep',
+        slug: 'deep',
+        title: 'Deep',
+      },
+    ])
+
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).rejects.toThrow(/“Brytecore”.*and 1 more below this page/)
+  })
+
+  it('allows an unpublish once every descendant is a draft', async () => {
+    const rows = servedSubtree()
+    rows[1]._status = 'draft'
+    const { req } = stub(rows)
+
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).resolves.toBeTruthy()
+  })
+
+  it('allows a LEAF unpublish — #155 unchanged', async () => {
+    const { req } = stub([servedSubtree()[1]])
+
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 2 }),
+      ),
+    ).resolves.toBeTruthy()
+  })
+
+  it('does not mistake a path that merely CONTAINS the prefix for a descendant', async () => {
+    // Payload's `like` is a contains, so the read returns `homework/deep`; the
+    // guard's JS re-filter is what keeps it from refusing.
+    const { req } = stub([
+      servedSubtree()[0],
+      {
+        _status: 'published',
+        collection: 'pages',
+        id: 9,
+        path: 'homework/deep',
+        slug: 'deep',
+        title: 'Homework detail',
+      },
+    ])
+
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).resolves.toBeTruthy()
+  })
+
+  it('reads the SITE ROOT’s children by `parent`, never by a `home/` prefix', async () => {
+    // The root contributes no segment, so its children are stored at `<child>`
+    // and `path LIKE 'home/%'` matches nothing. A prefix read here would let
+    // the root be unpublished out from under the whole site.
+    const { req, calls } = stub([
+      {
+        _status: 'published',
+        collection: 'pages',
+        id: 1,
+        path: 'home',
+        slug: 'home',
+        title: 'Home',
+      },
+      {
+        _status: 'published',
+        collection: 'pages',
+        id: 2,
+        parent: 1,
+        path: 'about',
+        slug: 'about',
+        title: 'About',
+      },
+    ])
+
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).rejects.toThrow(/“About”/)
+
+    const subtreeReads = calls.filter((call) =>
+      JSON.stringify(call.where).includes('like'),
+    )
+    expect(subtreeReads).toEqual([])
+  })
+
+  it('issues NO query for a publish', async () => {
+    const { req, calls } = stub(servedSubtree())
+
+    await refuseUnpublishWithServedDescendants(
+      args(req, { _status: 'published' }, { id: 1 }),
+    )
+    expect(calls).toEqual([])
+  })
+
+  it('issues NO query on an admin autosave', async () => {
+    const { req, calls } = stub(servedSubtree(), {
+      autosave: 'true',
+      draft: 'true',
+    })
+
+    await refuseUnpublishWithServedDescendants(
+      args(req, { _status: 'draft' }, { id: 1 }),
+    )
+    expect(calls).toEqual([])
+  })
+
+  it('stops after ONE read when the page is not currently served', async () => {
+    const rows = servedSubtree()
+    rows[0]._status = 'draft'
+    const { req, calls } = stub(rows)
+
+    await refuseUnpublishWithServedDescendants(
+      args(req, { _status: 'draft' }, { id: 1 }),
+    )
+    expect(calls).toHaveLength(1)
+  })
+
+  it('ignores a create', async () => {
+    const { req, calls } = stub(servedSubtree())
+
+    await refuseUnpublishWithServedDescendants(
+      args(req, { _status: 'draft' }, { id: 1 }, 'create'),
+    )
+    expect(calls).toEqual([])
+  })
+
+  /**
+   * The residual, pinned in BOTH directions (#180 follow-up).
+   *
+   * @remarks `createLocalReq` does not mirror the Local API's `draft` option
+   * into `req.query` (`payload/dist/utilities/createLocalReq.js:102`), while
+   * `updateDocument` DOES set `data._status = 'draft'` for such a call
+   * (`collections/operations/utilities/update.js:29-33`). So a Local-API draft
+   * save on a served page with served descendants is refused although it would
+   * have unpublished nothing. That is a false refusal, not a wasted lookup, and
+   * it is why the escape hatch is pinned beside it.
+   */
+  it('FALSELY refuses a Local-API explicit draft save (documented residual)', async () => {
+    const { req } = stub(servedSubtree())
+
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).rejects.toThrow(/still has published documents under it/)
+  })
+
+  it('takes the documented escape hatch: `req: { query: { draft: "true" } }`', async () => {
+    const { req, calls } = stub(servedSubtree(), { draft: 'true' })
+
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).resolves.toBeTruthy()
+    expect(calls).toEqual([])
+  })
+
+  it('does not read `req.query` on a publish, so no request shape can force one through', async () => {
+    // The publish guard is query-free by construction; this pins that the
+    // unpublish guard's query read cannot be turned into a publish bypass —
+    // `data._status === 'published'` loses to nothing.
+    const { req } = stub(
+      [{ _status: 'draft', collection: 'pages', id: 1, slug: 'work' }],
+      { draft: 'true' },
+    )
+
+    const { fields } = await rejection(
+      refusePublishUnderUnpublishedParent(
+        args(req, { _status: 'published', parent: 1 }),
+      ) as Promise<unknown>,
+    )
+    expect(fields[0]?.message).toMatch(/not published/)
+  })
+})
+
+describe('the guards do not share hidden state', () => {
+  it('never issues a write of its own — a refusal is a refusal, not a cascade', async () => {
+    // Brandon's decision on #180: the unpublish mirror REFUSES rather than
+    // cascade-unpublishing the subtree, so no bulk write can hide behind an
+    // editor's single gesture. The stub exposes only `find`; any `update` the
+    // guards attempted would throw here rather than pass silently.
+    const { req } = stub([
+      {
+        _status: 'published',
+        collection: 'pages',
+        id: 1,
+        path: 'work',
+        slug: 'work',
+      },
+      {
+        _status: 'published',
+        collection: 'pages',
+        id: 2,
+        parent: 1,
+        path: 'work/child',
+        slug: 'child',
+      },
+    ])
+    const update = vi.fn()
+    ;(req.payload as unknown as { update: unknown }).update = update
+
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).rejects.toThrow()
+    expect(update).not.toHaveBeenCalled()
   })
 })

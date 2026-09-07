@@ -24,7 +24,10 @@ import {
   validatePageHierarchy,
 } from './hooks/pageHierarchy'
 import { revalidateDelete, revalidatePage } from './hooks/revalidatePage'
-import { refusePublishUnderUnpublishedParent } from './hooks/servedPrefix'
+import {
+  refusePublishUnderUnpublishedParent,
+  refuseUnpublishWithServedDescendants,
+} from './hooks/servedPrefix'
 
 /**
  * Layout-builder pages — how Brandon adds/removes site sections on the fly.
@@ -248,15 +251,16 @@ export const Pages: CollectionConfig = {
     // (#150): `createPathRedirect` now keys the row on the served path, so the
     // rename it refused writes `/work/<old> -> /work/<new>` and needs no guard.
     beforeValidate: [validatePageHierarchy],
-    // The served-prefix guard (#180) runs FIRST, so a refused publish costs
-    // nothing downstream — no `publishedAt` stamp, no `capturePublishedSlug`
-    // lookup, no path recomputation. It lives in `beforeChange` rather than
-    // beside `validatePageHierarchy` because the rule is about the publish
-    // TRANSITION, not about the placement: the same parent/child pair is legal
-    // to save all day and illegal only at the moment one of them changes what
-    // the site serves.
+    // The two served-prefix guards (#180) run FIRST, so a refused publish or
+    // unpublish costs nothing downstream — no `publishedAt` stamp, no
+    // `capturePublishedSlug` lookup, no path recomputation. They live in
+    // `beforeChange` rather than beside `validatePageHierarchy` because the
+    // rule is about the publish TRANSITION, not about the placement: the same
+    // parent/child pair is legal to save all day and illegal only at the
+    // moment one of them changes what the site serves.
     beforeChange: [
       refusePublishUnderUnpublishedParent,
+      refuseUnpublishWithServedDescendants,
       populatePublishedAt,
       capturePublishedSlug,
       computePagePath,

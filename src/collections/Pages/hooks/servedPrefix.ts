@@ -1,7 +1,8 @@
-import { ValidationError } from 'payload'
+import { APIError, ValidationError } from 'payload'
 import type { CollectionBeforeChangeHook, PayloadRequest } from 'payload'
 
 import { placementOf } from '@/fields/slug/documentPath'
+import { ROOT_PAGE_SLUG, publicPathFor } from '@/fields/slug/slugPaths'
 import type { Page } from '@/payload-types'
 
 /**
@@ -28,18 +29,23 @@ import type { Page } from '@/payload-types'
  * state at publish removes the residual rather than documenting it — every
  * subtree move now has a served prefix to key its row on.
  *
- * **The NARROW rule** (Brandon, #180): the parent, not the whole ancestor
- * chain. The guard below checks the immediate parent's main-table `_status` and
- * nothing above it. Inductively that is the full invariant — a published parent
- * had to pass this same guard against ITS parent — and the narrow form is what
- * keeps the publish path to a single indexed read instead of a depth-3 ancestor
- * walk.
+ * **Two guards, and the second one REFUSES rather than cascading** (Brandon,
+ * #180). The mirror of "you may not publish under a draft parent" is "you may
+ * not unpublish out from under a served descendant", and the tempting
+ * alternative — unpublish the subtree for the editor — was rejected: an
+ * unpublish that silently takes N other documents off the site is a bulk write
+ * nobody asked for and nobody sees, and it is not reversible by the same
+ * gesture (re-publishing the parent does not re-publish what was swept). A
+ * refusal names what is in the way and leaves the editor holding the decision.
+ * Symmetry is the other half: one rule the editor learns once, enforced at both
+ * ends.
  *
- * **The unpublish mirror is the other half of the invariant** and is not here
- * yet: nothing above stops an editor unpublishing `work` while
- * `work/brytecore` is still served, which reopens the same hole from the other
- * end. It lands in the next commit, as a refusal rather than a
- * cascade-unpublish.
+ * **The NARROW rule** (Brandon, #180): the parent, not the whole ancestor
+ * chain. Guard 1 checks the immediate parent's main-table `_status`; guard 2
+ * checks descendants of the page's own served path. Inductively those two
+ * compose into the full invariant — a published parent had to pass guard 1
+ * against ITS parent — and the narrow form is what keeps the publish path to a
+ * single indexed read instead of a depth-3 ancestor walk.
  */
 
 /**
@@ -72,14 +78,17 @@ type GuardRow = {
  * falls to the `else` at :129 and calls `payload.db.find`. Same fact
  * `findMainTableRow` (`src/fields/slug/findPublishedSlug.ts`) rests on.
  *
- * The main table is the right table to ask: "is the parent's URL live?" is
- * exactly "is the parent's main row published?" — a parent with a published row
- * and a newer unpublished draft is still being served, and the `_v` table would
- * answer about the draft instead.
+ * The main table is the right table for both guards. Guard 1 asks "is the
+ * parent's URL live?", which is exactly "is the main row published?" — a
+ * parent with a published row and a newer unpublished draft is still being
+ * served. Guard 2 asks "what prefix are this page's descendants stored under?",
+ * and a draft save never writes the main row
+ * (`collections/operations/utilities/update.js:253`), so the main row is by
+ * construction the value every descendant's `path` was composed from.
  *
  * This is a local read rather than a call into `findMainTableRow` because that
  * function's projection is `{ path, slug }` — it exists to name a URL, and
- * widening it to carry `_status` and `title` for this guard would make every
+ * widening it to carry `_status` and `title` for these guards would make every
  * one of its four callers pay for columns they do not read.
  */
 const readPageMainRow = async (
@@ -113,6 +122,42 @@ const labelFor = (row: GuardRow | null | undefined): string => {
   if (typeof row?.title === 'string' && row.title.length > 0) return row.title
   if (typeof row?.slug === 'string' && row.slug.length > 0) return row.slug
   return 'that page'
+}
+
+/**
+ * Is the write in flight a **draft save** — an autosave or an explicit "Save
+ * draft" — rather than a publish or an unpublish?
+ *
+ * @param req - The in-flight request.
+ * @param data - The incoming payload, for the `_status` clause Payload itself
+ *   applies.
+ * @returns `true` when the write is a draft save.
+ *
+ * @remarks **A deliberate COPY of the predicate in
+ * `src/hooks/capturePublishedSlug.ts`, not an import.** That one is
+ * module-private, and #180's fence does not include the file it lives in, so
+ * exporting it is out of scope here. The duplication is stated rather than
+ * hidden: the two copies must stay in step, and the clean fix — exporting the
+ * predicate from `capturePublishedSlug.ts` and deleting this — is filed as a
+ * follow-up.
+ *
+ * Read that file's docblock for the measured evidence; the short version is
+ * that an unpublish and an autosave arrive at `beforeChange` with the SAME
+ * `data._status: 'draft'`, the same `operation`, and the same `originalDoc`,
+ * and only `req.query` separates them. The `data._status === 'published'` test
+ * comes first because Payload's own `isSavingDraft`
+ * (`collections/operations/utilities/update.js:29`) ANDs that clause in: a
+ * REST `PATCH ?draft=true` carrying `{ _status: 'published' }` is a real
+ * publish and writes the main table.
+ */
+const isDraftSaveRequest = (
+  req: PayloadRequest | undefined,
+  data: Record<string, unknown> | undefined,
+): boolean => {
+  if (data?._status === 'published') return false
+  const query = req?.query as Record<string, unknown> | undefined
+  const flag = query?.draft ?? query?.autosave
+  return flag === true || flag === 'true'
 }
 
 /**
@@ -178,5 +223,206 @@ export const refusePublishUnderUnpublishedParent: CollectionBeforeChangeHook<
       req,
     },
     req?.t,
+  )
+}
+
+/**
+ * Every published Page and placed Post stored beneath `prefix`.
+ *
+ * @param req - The in-flight request, so the reads join the write's
+ *   transaction.
+ * @param prefix - The unpublishing page's stored `path`, e.g. `work`.
+ * @returns The blockers found, shallowest first, or an empty array.
+ *
+ * @remarks **A deliberate COPY of `readSubtree`'s query shape
+ * (`pageHierarchy.ts`), narrowed to published rows.** That function is
+ * module-private and its collection is inside this fence only for
+ * registration, so this is a copy with the reason written down rather than a
+ * silent second vocabulary: two reads, one per collection, both on the indexed
+ * `path` column, neither recursive — a subtree is a string prefix in this
+ * schema, which is the whole reason `path` is stored rather than walked.
+ *
+ * **`like` then a second filter in JS**, for the same measured reason
+ * `readSubtree` gives: Payload's `like` compiles to `ILIKE '%value%'`, a
+ * *contains* and not a prefix, so `work/` also matches `homework/deep`. The
+ * indexed read is still the right read; the exact predicate is re-applied here
+ * so the guard cannot refuse an unpublish over a document that merely shares a
+ * substring.
+ *
+ * Shallowest first so the message names the topmost blocker — the one the
+ * editor has to deal with first — rather than an arbitrary leaf.
+ */
+const readServedDescendantsByPrefix = async (
+  req: PayloadRequest,
+  prefix: string,
+): Promise<Array<GuardRow & { collection: 'pages' | 'posts' }>> => {
+  const found: Array<GuardRow & { collection: 'pages' | 'posts' }> = []
+
+  for (const collection of ['pages', 'posts'] as const) {
+    const { docs } = await req.payload.find({
+      collection,
+      depth: 0,
+      limit: 0,
+      overrideAccess: true,
+      pagination: false,
+      req,
+      select: { _status: true, path: true, slug: true, title: true },
+      where: {
+        and: [
+          { path: { like: `${prefix}/` } },
+          { _status: { equals: 'published' } },
+        ],
+      },
+    })
+    for (const doc of docs as GuardRow[]) {
+      if (typeof doc.path !== 'string') continue
+      if (!doc.path.startsWith(`${prefix}/`)) continue
+      found.push({ ...doc, collection })
+    }
+  }
+
+  return found.sort(
+    (a, b) =>
+      String(a.path).split('/').length - String(b.path).split('/').length,
+  )
+}
+
+/**
+ * Every published Page and placed Post whose `parent` is this page.
+ *
+ * @param req - The in-flight request.
+ * @param id - The unpublishing page's id.
+ * @returns The blockers found.
+ *
+ * @remarks **The site root needs this second query shape, and a prefix read
+ * would be silently wrong for it.** The root contributes NO segment to its
+ * children — `parentPathPrefix` returns `''` when the parent's path is
+ * `ROOT_PAGE_SLUG` (`documentPath.ts`), which is the storage half of the
+ * root-page contract: the root serves `/`, so its children serve `/<child>`
+ * and are stored at `<child>`, not `home/<child>`. So
+ * `path LIKE 'home/%'` matches NOTHING beneath the root, and a guard built on
+ * it alone would let the root be unpublished out from under the entire site
+ * while reporting no blockers at all.
+ *
+ * **Depth is covered by guard 1, not by a walk.** This read sees the root's
+ * direct children only; a published grandchild under a DRAFT child is a state
+ * {@link refusePublishUnderUnpublishedParent} refuses to create, so under the
+ * invariant a published grandchild implies a published child, which this read
+ * finds. `scripts/audit-served-prefix.sql` is how a pre-existing violation from
+ * before the guard is found rather than assumed away.
+ *
+ * The posts read is vacuous today — Posts' `parent` carries
+ * `filterOptions: … slug: { not_equals: ROOT_PAGE_SLUG }`, so no post can be
+ * placed under the root — and it is here anyway, because this guard should not
+ * silently depend on another collection's picker rule staying as it is.
+ */
+const readServedChildrenByParent = async (
+  req: PayloadRequest,
+  id: number | string,
+): Promise<Array<GuardRow & { collection: 'pages' | 'posts' }>> => {
+  const found: Array<GuardRow & { collection: 'pages' | 'posts' }> = []
+
+  for (const collection of ['pages', 'posts'] as const) {
+    const { docs } = await req.payload.find({
+      collection,
+      depth: 0,
+      limit: 0,
+      overrideAccess: true,
+      pagination: false,
+      req,
+      select: { _status: true, path: true, slug: true, title: true },
+      where: {
+        and: [{ parent: { equals: id } }, { _status: { equals: 'published' } }],
+      },
+    })
+    for (const doc of docs as GuardRow[]) found.push({ ...doc, collection })
+  }
+
+  return found
+}
+
+/**
+ * `beforeChange` guard: refuse to unpublish a page while something beneath it
+ * is still served.
+ *
+ * @remarks **Why an `APIError` and not a `ValidationError`.** The mirror guard
+ * has a field to point at; this one does not. The write being refused sets
+ * `_status`, and `_status` renders no component
+ * (`admin.components.Field: false`, `payload/dist/versions/baseFields.js`), so
+ * a field error dispatched there is written into form state nothing draws.
+ * `parent` is the wrong field — the editor's parent is not the problem, their
+ * children are — and there is no "children" field to target, because the
+ * relationship is stored on the child. An `APIError` carries its message to the
+ * editor in full: `formatErrors` emits `{ errors: [{ message }] }` for an
+ * `APIError` with no `data` (`payload/dist/utilities/formatErrors.js`), and
+ * `Form` toasts every entry that has a `message`
+ * (`@payloadcms/ui/dist/forms/Form/index.js:391-393, 409-413`). A 400 is
+ * `isPublic` by construction (`payload/dist/errors/APIError.js`), so the
+ * sentence is not swapped for "Something went wrong."
+ *
+ * **Cost, and where it is not paid.** The guard returns before any read on a
+ * publish (`_status !== 'draft'`) and on an admin draft save or autosave
+ * ({@link isDraftSaveRequest}, which the admin's own `?draft=true` /
+ * `?autosave=true` query string satisfies). An unpublish pays one indexed
+ * main-row read, and only if that row is actually published does it pay the two
+ * subtree reads.
+ *
+ * **The residual, stated rather than hidden: a Local-API explicit draft save
+ * reads as an unpublish, and here that is a FALSE REFUSAL rather than a wasted
+ * lookup.** `createLocalReq` does `req.query = req?.query || {}`
+ * (`payload/dist/utilities/createLocalReq.js:102`) — it does not mirror the
+ * Local API's own `draft` option into `req.query` — while
+ * `updateDocument` DOES set `data._status = 'draft'` for such a call
+ * (`collections/operations/utilities/update.js:29-33`). So
+ * `payload.update({ draft: true })` on a PUBLISHED page that has published
+ * descendants is refused, though it would not have unpublished anything.
+ * `capturePublishedSlug` pays one wasted `find` for the same residual; this
+ * guard turns it into a rejection, which is a step up in severity and is why it
+ * is written down here and filed as a follow-up. It is unreachable from the
+ * admin (autosave and "Save draft" are REST and carry `draft=true`) and
+ * unreached in this repo (every Local-API draft save in the tree is on a page
+ * whose main row is not published, so the guard returns on the status check).
+ * A Local-API caller that needs the fast path can pass
+ * `req: { query: { draft: 'true' } }` — the same escape hatch
+ * `capturePublishedSlug` documents. Both directions are pinned by test.
+ *
+ * @param args - Payload's `beforeChange` arguments.
+ * @returns `data`, unchanged, when the write is allowed.
+ * @throws APIError naming the shallowest served descendant.
+ */
+export const refuseUnpublishWithServedDescendants: CollectionBeforeChangeHook<
+  Page
+> = async ({ data, operation, originalDoc, req }) => {
+  if (operation !== 'update') return data
+  if (data?._status !== 'draft') return data
+  if (isDraftSaveRequest(req, data)) return data
+
+  const id = originalDoc?.id
+  if (id === undefined || id === null) return data
+
+  const own = await readPageMainRow(req, id)
+  // Not currently served => this write takes nothing off the site.
+  if (own?._status !== 'published') return data
+  const path = typeof own.path === 'string' && own.path ? own.path : null
+  if (!path) return data
+
+  const blockers =
+    path === ROOT_PAGE_SLUG
+      ? await readServedChildrenByParent(req, id)
+      : await readServedDescendantsByPrefix(req, path)
+
+  if (blockers.length === 0) return data
+
+  const first = blockers[0]
+  const firstUrl = publicPathFor(first.collection, first)
+  const noun = first.collection === 'posts' ? 'article' : 'page'
+  const rest =
+    blockers.length === 1
+      ? ''
+      : ` (and ${blockers.length - 1} more below this page)`
+
+  throw new APIError(
+    `“${labelFor(own)}” still has published documents under it, so unpublishing it would leave them served under a URL that no longer resolves. Unpublish the ${noun} “${labelFor(first)}”${firstUrl ? ` (${firstUrl})` : ''}${rest} first, then unpublish this page.`,
+    400,
   )
 }

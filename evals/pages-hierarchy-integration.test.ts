@@ -895,5 +895,157 @@ describe.skipIf(!connectionString)(
         }
       }
     }, 180_000)
+
+    /**
+     * The unpublish mirror (#180, #155), on the real pipeline.
+     *
+     * @remarks Brandon's decision is that this REFUSES rather than
+     * cascade-unpublishing the subtree: an unpublish that silently takes N
+     * other documents off the site is a bulk write nobody asked for and nobody
+     * can undo with the same gesture. So the assertions are about what the
+     * editor is told and about what is still published afterwards.
+     *
+     * Both descendant shapes are exercised, because the guard reads two
+     * collections: a child PAGE and a placed POST. The post is the one that
+     * cannot be reached from a unit test's fixture at all — its `path` is
+     * composed by `computePostPath` from this page's stored path, so only the
+     * real pipeline puts it under the prefix the guard reads.
+     */
+    it('refuses unpublishing a page while a page or a placed post below it is still served (#180)', async () => {
+      const created: { collection: 'pages' | 'posts'; id: number | string }[] =
+        []
+      const track = <T extends { id: number | string }>(
+        collection: 'pages' | 'posts',
+        doc: T,
+      ): T => {
+        created.unshift({ collection, id: doc.id })
+        return doc
+      }
+
+      const unpublish = (id: number | string, collection: 'pages' | 'posts') =>
+        payload.update({
+          collection,
+          id,
+          overrideAccess: true,
+          // The shape the admin's Unpublish button sends: no `draft` param and
+          // a `{ _status: 'draft' }` body
+          // (`@payloadcms/ui/dist/elements/UnpublishButton/index.js:78-105`).
+          req: { query: { depth: '0', 'fallback-locale': 'null' } } as never,
+          data: { _status: 'draft' },
+        })
+
+      try {
+        const section = track('pages', await mkPage(`${MARKER}-up`))
+        const child = track(
+          'pages',
+          await mkPage(`${MARKER}-up-child`, section.id),
+        )
+        expect(child.path).toBe(`${MARKER}-up/${MARKER}-up-child`)
+        const placed = track(
+          'posts',
+          await createFixturePost(payload, {
+            data: {
+              title: `${MARKER}-up-post`,
+              slug: `${MARKER}-up-post`,
+              _status: 'published',
+              content: lexical('body'),
+              parent: section.id,
+            },
+          }),
+        )
+        expect(placed.path).toBe(`${MARKER}-up/${MARKER}-up-post`)
+
+        // (1) Refused, and the message names a served descendant by its URL.
+        await expect(unpublish(section.id, 'pages')).rejects.toThrow(
+          /still has published documents under it/,
+        )
+
+        // The refusal is a refusal: the section is still published, and so is
+        // everything under it. No hidden bulk write happened.
+        const stillLive = await payload.find({
+          collection: 'pages',
+          overrideAccess: true,
+          pagination: false,
+          where: { slug: { equals: `${MARKER}-up` } },
+        })
+        expect(stillLive.docs[0]._status).toBe('published')
+
+        // (2) The PLACED POST alone is enough to hold the unpublish open.
+        await unpublish(child.id, 'pages')
+        await expect(unpublish(section.id, 'pages')).rejects.toThrow(
+          new RegExp(`the article “${MARKER}-up-post”`),
+        )
+
+        // (3) With both descendants drafted, the same write succeeds.
+        await unpublish(placed.id, 'posts')
+        const unpublished = await unpublish(section.id, 'pages')
+        expect(unpublished._status).toBe('draft')
+      } finally {
+        for (const row of created) {
+          await payload.delete({
+            collection: row.collection,
+            where: { id: { equals: row.id } },
+            overrideAccess: true,
+          })
+        }
+      }
+    }, 180_000)
+
+    /**
+     * A leaf unpublish is untouched — #155 unchanged.
+     *
+     * @remarks #155's own end-to-end proof is on Posts
+     * (`evals/slug-redirect-integration.test.ts`, "purges the SERVED path when
+     * an autosaved rename is unpublished"), which no Pages guard can reach.
+     * This is the Pages-side companion: the guard must not make the ordinary
+     * unpublish — the one that takes exactly one URL off the site — cost
+     * anything or refuse anything.
+     */
+    it('still allows a LEAF unpublish, and an unpublish of a page with only DRAFT children (#155)', async () => {
+      const created: { collection: 'pages' | 'posts'; id: number | string }[] =
+        []
+      const track = <T extends { id: number | string }>(
+        collection: 'pages' | 'posts',
+        doc: T,
+      ): T => {
+        created.unshift({ collection, id: doc.id })
+        return doc
+      }
+
+      try {
+        const section = track('pages', await mkPage(`${MARKER}-leafup`))
+        const leaf = track(
+          'pages',
+          await mkPage(`${MARKER}-leafup-child`, section.id),
+        )
+
+        const draftedLeaf = await payload.update({
+          collection: 'pages',
+          id: leaf.id,
+          overrideAccess: true,
+          req: { query: { depth: '0', 'fallback-locale': 'null' } } as never,
+          data: { _status: 'draft' },
+        })
+        expect(draftedLeaf._status).toBe('draft')
+
+        // The parent now has a child, but not a SERVED one, so it unpublishes.
+        const draftedSection = await payload.update({
+          collection: 'pages',
+          id: section.id,
+          overrideAccess: true,
+          req: { query: { depth: '0', 'fallback-locale': 'null' } } as never,
+          data: { _status: 'draft' },
+        })
+        expect(draftedSection._status).toBe('draft')
+      } finally {
+        for (const row of created) {
+          await payload.delete({
+            collection: row.collection,
+            where: { id: { equals: row.id } },
+            overrideAccess: true,
+          })
+        }
+      }
+    }, 180_000)
   },
 )
