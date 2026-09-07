@@ -1,6 +1,11 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import {
+  createFixturePage,
+  createFixturePost,
+} from './fixtures/payload-fixtures'
+
 /**
  * Pages hierarchy against a REAL Payload instance on REAL Postgres (#148).
  *
@@ -124,16 +129,14 @@ describe.skipIf(!connectionString)(
 
     /** Create a published page, letting the hooks compute its path. */
     const mkPage = async (slug: string, parent?: number | string) =>
-      payload.create({
-        collection: 'pages',
-        overrideAccess: true,
+      createFixturePage(payload, {
         data: {
           title: slug,
           layout,
           _status: 'published',
           slug,
           ...(parent === undefined ? {} : { parent }),
-        } as never,
+        },
       })
 
     beforeAll(async () => {
@@ -260,16 +263,14 @@ describe.skipIf(!connectionString)(
       })
       const child = docs[0]
 
-      const leaf = await payload.create({
-        collection: 'pages',
-        overrideAccess: true,
+      const leaf = await createFixturePage(payload, {
         data: {
           title: `${MARKER}-leaf`,
           layout,
           _status: 'draft',
           slug: `${MARKER}-leaf`,
           parent: child.id,
-        } as never,
+        },
       })
 
       const renamed = await payload.update({
@@ -476,15 +477,13 @@ describe.skipIf(!connectionString)(
       // thing under test.
       if (articles.docs.length === 0) return
 
-      await payload.create({
-        collection: 'posts',
-        overrideAccess: true,
+      await createFixturePost(payload, {
         data: {
           title: 'Clash',
           slug: `${MARKER}-clash`,
           _status: 'published',
           content: lexical('body'),
-        } as never,
+        },
       })
 
       await expect(
@@ -543,16 +542,14 @@ describe.skipIf(!connectionString)(
         )
         const placed = track(
           'posts',
-          await payload.create({
-            collection: 'posts',
-            overrideAccess: true,
+          await createFixturePost(payload, {
             data: {
               title: `${MARKER}-mv-post`,
               slug: `${MARKER}-mv-post`,
               _status: 'published',
               content: lexical('body'),
               parent: section.id,
-            } as never,
+            },
           }),
         )
         expect(placed.path).toBe(`${MARKER}-mv/${MARKER}-mv-post`)
@@ -672,15 +669,13 @@ describe.skipIf(!connectionString)(
         // `_status: 'published'` for this id.
         const section = track(
           'pages',
-          await payload.create({
-            collection: 'pages',
-            overrideAccess: true,
+          await createFixturePage(payload, {
             data: {
               title: `${MARKER}-np`,
               layout,
               _status: 'draft',
               slug: `${MARKER}-np`,
-            } as never,
+            },
           }),
         )
         expect(section.path).toBe(`${MARKER}-np`)

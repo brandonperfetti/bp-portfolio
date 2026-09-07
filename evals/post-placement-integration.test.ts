@@ -1,6 +1,13 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import {
+  FIXTURE_SLUG_PREFIX,
+  createFixturePage,
+  createFixturePost,
+  createReservedFixturePage,
+} from './fixtures/payload-fixtures'
+
 /**
  * Post placement against a REAL Payload instance on REAL Postgres (#153).
  *
@@ -69,8 +76,13 @@ const MARKER = 'zz-post-placement-integration'
  * (`pgvector-integration.test.ts`, `github-repos-pgvector.test.ts`) go straight
  * at `corvus_embeddings` through a raw pg `Pool`, and the `'posts'` in their
  * fixtures is that table's `collection` COLUMN, never a row in `posts`.
+ *
+ * Imported rather than restated since #191: the same constant is what
+ * `evals/fixtures/payload-fixtures.ts` ENFORCES at every fixture write, so the
+ * predicate this baseline filters on and the rule the writes obey can no
+ * longer drift apart.
  */
-const FIXTURE_PREFIX = 'zz-'
+const FIXTURE_PREFIX = FIXTURE_SLUG_PREFIX
 
 /** A minimal valid `layout` — the Pages field is `required`, so `[]` is rejected. */
 const layout = [{ blockType: 'spacer', size: 'md' }]
@@ -189,29 +201,25 @@ describe.skipIf(!connectionString)(
     }
 
     const mkPage = async (slug: string, parent?: number | string) =>
-      payload.create({
-        collection: 'pages',
-        overrideAccess: true,
+      createFixturePage(payload, {
         data: {
           title: slug,
           layout,
           _status: 'published',
           slug,
           ...(parent === undefined ? {} : { parent }),
-        } as never,
+        },
       })
 
     const mkPost = async (slug: string, parent?: number | string) =>
-      payload.create({
-        collection: 'posts',
-        overrideAccess: true,
+      createFixturePost(payload, {
         data: {
           title: slug,
           slug,
           content: lexical('body'),
           _status: 'published',
           ...(parent === undefined ? {} : { parent }),
-        } as never,
+        },
       })
 
     beforeAll(async () => {
@@ -373,7 +381,14 @@ describe.skipIf(!connectionString)(
     })
 
     it('rejects a placement inside the /articles archive', async () => {
-      const archive = await mkPage('articles')
+      const archive = await createReservedFixturePage(payload, {
+        data: {
+          title: 'articles',
+          layout,
+          _status: 'published',
+          slug: 'articles',
+        },
+      })
         .then((page) => {
           // Ours, so `cleanup` may remove it. The fallback below is NOT ours.
           createdArchiveId = page.id

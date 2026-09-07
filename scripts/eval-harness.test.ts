@@ -72,6 +72,15 @@ const MATRIX_FLAG = 'CORVUS_EVAL_MATRIX'
 /** The module every eval file must reach, and the hop it reaches it through. */
 const HELPERS_MODULE = './corvus-helpers'
 
+/**
+ * The one module allowed to call `payload.create` for `posts`/`pages` (#191).
+ *
+ * @remarks Relative to the eval root. Everything else in `evals/**` must route
+ * its fixture writes through it, so the `zz-` slug prefix is enforced at the
+ * write rather than trusted to a docblock.
+ */
+const FIXTURE_MODULE_REL = 'fixtures/payload-fixtures.ts'
+
 /** Pins `OPENAI_BASE_URL` so the autoevals grader talks to OpenAI, not a gateway. */
 const BASE_URL_MODULE = './openai-base-url'
 
@@ -100,6 +109,54 @@ function evalRootSources(): string[] {
   return readdirSync(EVAL_ROOT, { withFileTypes: true })
     .filter((entry) => entry.isFile() && /\.m?ts$/.test(entry.name))
     .map((entry) => join(EVAL_ROOT, entry.name))
+}
+
+/**
+ * Every `.ts`/`.mts` file under the eval root, subdirectories included.
+ *
+ * @remarks {@link evalRootSources} deliberately stays flat — the `@/` alias
+ * guard it feeds is about the files evalite loads. The fixture guard below is
+ * about every file that can write a row, and `evals/fixtures/` is exactly
+ * where those live, so it needs the whole tree.
+ *
+ * @param dir - Directory to walk; defaults to the eval root.
+ */
+function evalSourcesDeep(dir: string = EVAL_ROOT): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) return evalSourcesDeep(full)
+    return entry.isFile() && /\.m?ts$/.test(entry.name) ? [full] : []
+  })
+}
+
+/**
+ * The collections a `payload.create(` call in `source` writes to, if any.
+ *
+ * @remarks Grep-based and deliberately so: this runs in the quality job with
+ * no database, no Payload and no import of the eval sources, so it has to
+ * judge text. Every `payload.create` call names its `collection` — the option
+ * is required — and every call site in this tree writes it as the FIRST key,
+ * so a bounded window after the opening paren is enough to classify one. A
+ * call the window cannot classify is reported as `'?'` rather than skipped:
+ * an unclassifiable create is the hole the convention already had, and
+ * silently passing it would rebuild that hole inside the guard.
+ *
+ * Comments are blanked first, by {@link stripTsComments}, so a `payload.create`
+ * quoted in a docblock — this file's own guard message, for one — is prose.
+ *
+ * @param source - Raw TypeScript source.
+ * @returns One entry per `payload.create(` call, in source order.
+ */
+function payloadCreateTargets(source: string): string[] {
+  const code = stripTsComments(source)
+  const targets: string[] = []
+  const pattern = /payload\.create\(/g
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(code)) !== null) {
+    const window = code.slice(match.index, match.index + 200)
+    targets.push(/collection:\s*'([^']+)'/.exec(window)?.[1] ?? '?')
+  }
+  return targets
 }
 
 /**
@@ -437,6 +494,66 @@ describe('eval harness wiring', () => {
         ).toBe(true)
       }
     }
+  })
+})
+
+describe('eval fixture hygiene', () => {
+  it('classifies a create by its collection', () => {
+    expect(
+      payloadCreateTargets(
+        "await payload.create({ collection: 'posts', data })",
+      ),
+    ).toEqual(['posts'])
+    expect(
+      payloadCreateTargets("payload.create({\n  collection: 'pages',\n})"),
+    ).toEqual(['pages'])
+  })
+
+  it('ignores a create that only appears in a comment', () => {
+    expect(
+      payloadCreateTargets("// payload.create({ collection: 'posts' })"),
+    ).toEqual([])
+  })
+
+  it('reports a create it cannot classify rather than passing it', () => {
+    // The guard must never be quieter than the convention it replaces.
+    expect(payloadCreateTargets('payload.create(args)')).toEqual(['?'])
+  })
+
+  it('routes every posts/pages fixture write through the shared helper', () => {
+    // #191. The eval tier runs its files in parallel workers against ONE
+    // database, so every cross-file assertion in it separates real corpus rows
+    // from fixtures by the `zz-` slug prefix alone — the baseline snapshot in
+    // `post-placement-integration.test.ts` and all three files' `slug like
+    // %MARKER%` sweeps. Wave 6 wrote that prefix down in a docblock; a
+    // docblock cannot fail a build. `evals/fixtures/payload-fixtures.ts`
+    // enforces it at the write, and this is the assertion that a new fixture
+    // cannot go around it.
+    const helper = join(EVAL_ROOT, FIXTURE_MODULE_REL)
+    expect(existsSync(helper), 'the fixture helper must exist').toBe(true)
+
+    for (const file of evalSourcesDeep()) {
+      if (file === helper) continue
+      const targets = payloadCreateTargets(readFileSync(file, 'utf8'))
+      expect(
+        targets.filter((target) => ['pages', 'posts', '?'].includes(target)),
+        `${relative(REPO_ROOT, file)} writes a posts/pages row directly; use createFixturePage/createFixturePost from ${FIXTURE_MODULE_REL} so the zz- prefix is enforced`,
+      ).toEqual([])
+    }
+  })
+
+  it('keeps the prefix check inside the helper', () => {
+    // Routing the writes through a helper that no longer checks anything would
+    // pass the assertion above and enforce nothing, so the check itself is
+    // pinned. Source text, not behaviour: this file runs in the quality job,
+    // which has neither a database nor an initialised Payload to call it with.
+    const helper = readFileSync(join(EVAL_ROOT, FIXTURE_MODULE_REL), 'utf8')
+    expect(helper).toMatch(/FIXTURE_SLUG_PREFIX\s*=\s*'zz-'/)
+    expect(
+      helper,
+      'the helper must reject an unprefixed slug, not merely document the rule',
+    ).toMatch(/startsWith\(FIXTURE_SLUG_PREFIX\)/)
+    expect(stripTsComments(helper)).toMatch(/throw new Error\(/)
   })
 })
 

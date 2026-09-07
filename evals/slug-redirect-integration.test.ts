@@ -1,6 +1,11 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import {
+  createFixturePage,
+  createFixturePost,
+} from './fixtures/payload-fixtures'
+
 /**
  * Slug freeze + auto-redirect against a REAL Payload instance on REAL Postgres
  * (#120, addendum 2).
@@ -140,9 +145,7 @@ describe.skipIf(!connectionString)(
 
     /** Create a post already published at `slug`. */
     const createPublished = async (slug: string) => {
-      const doc = await payload.create({
-        collection: 'posts',
-        overrideAccess: true,
+      const doc = await createFixturePost(payload, {
         context: { disableRevalidate: true },
         data: {
           title: `Integration ${slug}`,
@@ -302,9 +305,7 @@ describe.skipIf(!connectionString)(
     }, 180_000)
 
     it('writes no redirect for a first publish', async () => {
-      const draft = await payload.create({
-        collection: 'posts',
-        overrideAccess: true,
+      const draft = await createFixturePost(payload, {
         context: { disableRevalidate: true },
         data: {
           title: 'First publish',
@@ -613,16 +614,14 @@ describe.skipIf(!connectionString)(
      * writer back onto the slug.
      */
     it('writes a path-keyed row when a placed post is UN-PLACED', async () => {
-      const section = await payload.create({
-        collection: 'pages',
-        overrideAccess: true,
+      const section = await createFixturePage(payload, {
         context: { disableRevalidate: true },
         data: {
           title: `${MARKER}-section`,
           layout: [{ blockType: 'spacer', size: 'md' }],
           _status: 'published',
           slug: `${MARKER}-section`,
-        } as never,
+        },
       })
 
       const id = await createPublished(`${MARKER}-placed`)
