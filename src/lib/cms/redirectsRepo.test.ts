@@ -356,6 +356,35 @@ describe('resolveRedirect · descendant prefix rows (#150)', () => {
       )
     })
 
+    it('never answers the request path when the chain leads back to it', () => {
+      // The self-redirect guard, on the HOP's answer. The exact pass guards a
+      // row's own `to` and the fall-through guards the rewritten form, but the
+      // hop's answer was resolved against the CAPTURE-TIME spelling and had
+      // never been re-asked against the request. A chain whose last row points
+      // back at the requested path therefore composed a redirect to the path
+      // that was asked for — and, every row here being a 301, a 308 the
+      // browser caches indefinitely.
+      const chainStart: CmsRedirect = {
+        ...prefixRow('/a', '/c'),
+        toPathAtCapture: '/b',
+      }
+      const backAtTheRequest = row('/b/leaf', '/a/leaf')
+
+      const resolved = resolveRedirect(
+        [chainStart, backAtTheRequest],
+        '/a/leaf',
+      )
+
+      expect(resolved?.destination).not.toBe('/a/leaf')
+      // Not merely "not a loop" — a null would satisfy that and 404 a request
+      // this table can still answer. A chain that leads back to the request is
+      // the same evidence as a chain that leads nowhere: the capture-time
+      // spelling is not to be trusted. So it takes the same branch, and the
+      // current-path rewrite (built on the live path of the chosen row's own
+      // target) answers, subject to its own `rewritten === target` guard.
+      expect(resolved).toEqual(permanentlyTo('/c/leaf'))
+    })
+
     it('re-resolves the capture-time form through a LATER ancestor move', () => {
       // Row B dropped — the grandchild never moved — but the parent still did.
       // The capture-time form `/lab-parent/lab-kid/lab-grandchild` is stale in

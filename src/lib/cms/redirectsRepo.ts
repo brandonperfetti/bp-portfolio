@@ -321,6 +321,17 @@ type HopBudget = { exhausted: boolean; remaining: number }
  * document's, and the capture-time form is a spelling that may serve nothing.
  * Serving the latter would have been a regression against the pre-#178 answer.
  *
+ * **A walk that comes back to the request takes the same branch.** The hop's
+ * answer is a form this function can serve, so rule 3's self-redirect guard is
+ * asked of it too: `next` was resolved against the capture-time spelling and
+ * never against the request, so a chain whose last row points back produces a
+ * destination equal to the path asked for. That is an infinite redirect, and
+ * at 301 a 308 the browser caches past any retraction. It is the same evidence
+ * as a chain that ends — the capture-time spelling is not to be trusted — so
+ * the answer is the same fall-through rather than a `null`: the chosen row's
+ * own destination is a live document's path, and the current-path rewrite
+ * carries its own `rewritten === target` guard, so it cannot loop in turn.
+ *
  * Four properties fall out, and each is a test below:
  *
  * 1. **Bounded.** {@link MAX_REDIRECT_HOPS} hops, tracked in a shared
@@ -350,9 +361,10 @@ type HopBudget = { exhausted: boolean; remaining: number }
  *    rule is surfaced to that editor in the redirect-type field's admin
  *    description (`src/plugins/index.ts`), because it is their row that
  *    downgrades every chain passing through it.
- * 4. **A hop that finds nothing falls back, it does not serve the snapshot.**
- *    See the paragraph above and the branch itself: identical under a complete
- *    table, strictly safer under an incomplete one.
+ * 4. **A hop that finds nothing — or finds its way back to the request —
+ *    falls back, it does not serve the snapshot.** See the two paragraphs
+ *    above and the branch itself: identical under a complete table, strictly
+ *    safer under an incomplete one, and never a redirect to the request.
  *
  * **Hops are not moves.** The budget is spent only when pass 2 chooses a
  * `matchDescendants` row that carries a snapshot whose rewrite differs from the
@@ -479,13 +491,40 @@ const resolveThroughHops = (
       // A further hop answered: that is the live URL, and permanence is the
       // product of the whole chain (see the docblock — a 302 anywhere makes the
       // answer temporary).
-      if (next)
-        return {
-          destination: next.destination,
-          permanent: permanent && next.permanent,
-        }
-      // Nothing is keyed at the capture-time spelling. Fall through to the
-      // current-path rewrite below rather than serving `viaCapture`.
+      //
+      // Unless the chain leads back to the request. Rule 3's guard is asked of
+      // every form this function can serve, and the walk's answer is one of
+      // them: `next` was resolved against `viaCapture`, never against `target`,
+      // so the chain's last row pointing back at the requested path composes a
+      // destination equal to it — an infinite redirect, and a 308 the browser
+      // caches past any retraction. Stems, not spellings, as everywhere else
+      // here: a hop may answer `/a/leaf?x=1`, which points back just the same.
+      // Absolute answers are excluded from the comparison rather than
+      // normalised, because normalising a host produces a nonsense path and an
+      // answer that leaves the site cannot be the loop this asks about.
+      if (next) {
+        const leadsBackToTheRequest =
+          !isAbsoluteDestination(next.destination) &&
+          normalizeRedirectPath(next.destination) === target
+        if (!leadsBackToTheRequest)
+          return {
+            destination: next.destination,
+            permanent: permanent && next.permanent,
+          }
+      }
+      // Nothing is keyed at the capture-time spelling, or what is keyed there
+      // leads back here. Fall through to the current-path rewrite below rather
+      // than serving `viaCapture`.
+      //
+      // A chain that returns to the request is the same evidence as a chain
+      // that ends: the capture-time spelling is not to be trusted, and this is
+      // already the branch for that. Declining outright (`null`, a 404) would
+      // be the stricter reading, and it is the wrong one — the chosen row's
+      // own destination is a live document's path, so the rewrite below is a
+      // real answer where `null` is none, and it cannot itself loop because the
+      // `rewritten === target` guard is applied to it. `/a` → `/c` captured at
+      // `/b`, with a `/b/leaf` row pointing back at `/a/leaf`, answers
+      // `/c/leaf` rather than 404ing a URL the table can still resolve.
       //
       // Under a COMPLETE table the two are the same string: if the target had
       // moved since capture there would be a row keyed at the snapshot and the
