@@ -368,7 +368,10 @@ describe('resolveRedirect · descendant prefix rows (#150)', () => {
 
     it('falls back to the current path for a row with no snapshot', () => {
       // A pre-#178 row, byte for byte the old behaviour — which is also why
-      // such a row still survives only ONE move and cannot be backfilled.
+      // such a row still survives only ONE move and is not backfilled: not
+      // because the value is unrecorded (`_pages_v` holds historical paths),
+      // but because `maxPerDoc: 50` under a 100 ms autosave prunes that
+      // history, and a partly-wrong snapshot is worse than a NULL.
       const legacyA = prefixRow('/lab-parent/lab-child', '/lab-base/lab-kid')
 
       expect(resolveRedirect([legacyA, rowB, rowC], inbound)).toEqual(

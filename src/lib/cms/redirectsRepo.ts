@@ -134,12 +134,16 @@ const isAbsoluteDestination = (destination: string): boolean =>
 /**
  * How many capture-time rewrites one request may walk (#178).
  *
- * @remarks Each hop is one historical move of an ancestor, so five is already
- * well past what a real editorial history produces for a single URL — and the
- * cap is not there to be generous, it is there so a cycle terminates. It also
- * bounds the cost: each hop re-walks the (at most `REDIRECT_LIMIT`) rows
- * already in hand, so the worst case is five passes over an in-memory list, no
- * extra reads.
+ * @remarks A hop is not a move: budget is spent only when a snapshot-carrying
+ * prefix row rewrites a request onto a spelling that differs from the one
+ * asked for — an exact match and the walk's terminating frame are both free.
+ * So hops are at most moves, not equal to them: the three-move
+ * `lab-parent`/`lab-child`/`lab-grandchild` repro (#178) costs exactly ONE
+ * hop. Read five as a floor, not a cap on moves — it buys *at least* five
+ * chained ancestor moves, and usually more — and it exists so a cycle
+ * terminates rather than to be generous. It also bounds the cost: each hop
+ * re-walks the (at most `REDIRECT_LIMIT`) rows already in hand, so the worst
+ * case is five passes over an in-memory list, no extra reads.
  */
 const MAX_REDIRECT_HOPS = 5
 
