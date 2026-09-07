@@ -41,12 +41,33 @@ import { interactUntil } from './support/hydration'
  * clear the sticky header — `src/components/Header.tsx` renders that bar at
  * `h-16`, so the offset is the header's height exactly, not an approximation.
  * The extra 32px is settling margin, and it is that size for a reason: it
- * absorbs sub-pixel rounding in `boundingBox()`, the 1–2px the browser can
- * leave behind when `scrollIntoView` lands against the document's scroll
- * limits, and the container's own top border/padding — while staying well
- * under the ~64px that would let a visibly un-anchored container pass.
+ * absorbs sub-pixel rounding in the measured rect, whatever a `scrollIntoView`
+ * that lands against the document's scroll limits stops short by, and the
+ * container's own top border/padding — while staying well under the ~64px that
+ * would let a visibly un-anchored container pass. That middle term used to be
+ * written here as "1–2px"; the figure was never measured — the commit that
+ * introduced it (#183) justifies the 32px as settling margin and cites no
+ * number — and where it has since been measured the browser left nothing
+ * behind at all: `/tech?page=2` reports `scrollY` 430 of a possible 430,
+ * exactly its limit. It is stated as an unquantified term now, and
+ * `SCROLL_END_EPSILON_PX` allows a pixel for it.
  */
 const ANCHOR_TOLERANCE_PX = 96
+
+/**
+ * Slack allowed when deciding a document is at its scroll limit: **1px**.
+ *
+ * @remarks `scrollY`, `scrollHeight` and `innerHeight` are fractional on a
+ * fractional device pixel ratio, so a viewport against its scroll limit can
+ * report a `scrollY` a sliver short of `scrollHeight - innerHeight`. One pixel
+ * covers that, and one pixel is what the only measurement of this supports:
+ * `/tech?page=2` lands at 430 of a possible 430, dead on the limit, so nothing
+ * observed here needs more (`ANCHOR_TOLERANCE_PX` carries the note about the
+ * unmeasured "1–2px" this used to have to agree with). Widen it only against a
+ * measurement: every pixel added here is a pixel of stopping-short that stops
+ * failing.
+ */
+const SCROLL_END_EPSILON_PX = 1
 
 /**
  * Scroll far enough down that "the viewport did not move" would be visible.
@@ -60,13 +81,46 @@ async function scrollToBottom(page: Page): Promise<void> {
     .toBeGreaterThan(0)
 }
 
-/** The distance from the viewport top to an element's top edge. */
-async function topOffset(locator: Locator): Promise<number> {
-  const box = await locator.boundingBox()
-  if (!box) {
+/**
+ * Where the anchored container sits, and how much room the document gave the
+ * anchor to put it there.
+ *
+ * @param locator - The element to measure — the anchored results container.
+ * @returns `offset`, the distance from the viewport top to the element's top
+ * edge; `scrollY`, the scroll position it was measured at; and `maxScrollY`,
+ * the furthest this document can scroll.
+ *
+ * @remarks All three come out of one `evaluate` round trip on purpose: the
+ * assertion below compares them against each other, and an offset read in a
+ * separate call can describe a different frame than the scroll metrics do.
+ * `offset` is what `boundingBox().y` reported before; the zero-size guard is
+ * slightly wider than that call's null check — a rect with a width but no
+ * height throws here instead of yielding a top — which is stricter, never
+ * looser, for an element whose job is to hold the results.
+ */
+async function anchorMetrics(locator: Locator): Promise<{
+  offset: number
+  scrollY: number
+  maxScrollY: number
+}> {
+  const { offset, laidOut, scrollY, maxScrollY } = await locator.evaluate(
+    (element) => {
+      const box = element.getBoundingClientRect()
+      return {
+        offset: box.top,
+        laidOut: box.width > 0 && box.height > 0,
+        scrollY: window.scrollY,
+        maxScrollY: Math.max(
+          0,
+          document.documentElement.scrollHeight - window.innerHeight,
+        ),
+      }
+    },
+  )
+  if (!laidOut) {
     throw new Error('the element under test has no layout box')
   }
-  return box.y
+  return { offset, scrollY, maxScrollY }
 }
 
 /**
@@ -98,10 +152,49 @@ async function assertPageStepReAnchors(
     await expect(page).toHaveURL(/[?&]page=2/, { timeout: 2000 })
   })
 
-  // The results are at the top of the viewport, under the header offset.
-  const offset = await topOffset(results)
-  expect(offset).toBeGreaterThanOrEqual(0)
-  expect(offset).toBeLessThanOrEqual(ANCHOR_TOLERANCE_PX)
+  // The results are at the top of the viewport, under the header offset — or
+  // as near it as the document's height permits. Scrolling clamps at
+  // `scrollHeight - innerHeight`, so a surface whose last page is shorter than
+  // one viewport cannot put anything below the hero at the top however it is
+  // scrolled: on `/tech?page=2` the two remaining rows leave a 1343px document
+  // in a 913px viewport, so `scrollY` maxes out at 430. Landing the list under
+  // the header takes 728 (its 792px document position less `scroll-mt-16`'s
+  // 64), and even the looser position the tolerance would accept — 696, which
+  // is what `scrollNeededToAnchor` computes — is past the limit. The list
+  // lands 362px down (169px in CI's viewport, same cause), and
+  // `window.scrollTo({ top: 728 })` by hand lands at 430 too. `/articles`,
+  // `/uses` and `/projects` carry enough rows onto page 2 that the scroll the
+  // tolerance needs stays inside that range, so it binds there exactly as it
+  // always did.
+  //
+  // On a document that can still scroll, the second clause is false and the
+  // tolerance binds exactly as it did before: an anchor that ran late, or
+  // stopped short by more than the tolerance, fails on it, and one that never
+  // ran leaves the viewport below the results, where the lower bound catches
+  // it instead. On a document at its scroll limit the clause is permissive by
+  // construction, and worth being honest about: substitute
+  // `scrollY >= maxScrollY - 1` into `scrollNeededToAnchor > maxScrollY` and
+  // it reduces to `offset > 97`, already true of anything that got past the
+  // first clause. The clamp erases the difference between an anchor that ran
+  // and one that never did, so no scroll assertion can separate them there —
+  // the clause states a fact about the document, it does not vouch for the
+  // anchor. Focus is what still separates them, and it is asserted below,
+  // separately and unconditionally: no clamp applies to it, and on `/tech` it
+  // is the whole of the guard.
+  const { offset, scrollY, maxScrollY } = await anchorMetrics(results)
+  const scrollNeededToAnchor = scrollY + offset - ANCHOR_TOLERANCE_PX
+  const anchorOutOfRoom =
+    scrollNeededToAnchor > maxScrollY &&
+    scrollY >= maxScrollY - SCROLL_END_EPSILON_PX
+
+  expect(
+    offset,
+    `the results start ${offset}px above the viewport top at scrollY ${scrollY} of a possible ${maxScrollY} — the viewport is still below them, where both an anchor that never ran and one that scrolled past them leave it`,
+  ).toBeGreaterThanOrEqual(0)
+  expect(
+    offset <= ANCHOR_TOLERANCE_PX || anchorOutOfRoom,
+    `the results sit ${offset}px below the viewport top, past the ${ANCHOR_TOLERANCE_PX}px tolerance, at scrollY ${scrollY} of a possible ${maxScrollY} — the tolerance is met from scrollY ${scrollNeededToAnchor}, and the document could have brought them closer to the top than this`,
+  ).toBe(true)
 
   // …and focus is on the results container the first card lives in, so the
   // next Tab continues from the results rather than restarting at the top of
