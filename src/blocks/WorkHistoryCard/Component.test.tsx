@@ -102,8 +102,9 @@ describe('WorkHistoryCardComponent · width by mode (#188, #137)', () => {
   }
 
   it('widens the per-entry card to the content measure at root', () => {
-    // The defect: on `/work/<slug>` this card sits above full-measure prose,
-    // and `max-w-xl` capped it well under the paragraph beneath it.
+    // The defect: at root the entry card takes the route's content column
+    // (`max-w-none` inside `Container`), the same measure an uncapped `lead`
+    // block takes; `max-w-xl` capped it well under that.
     const section = sectionOf(<WorkHistoryCardComponent entry={entry()} />)
     expect(section).toHaveClass('max-w-none')
     expect(section).not.toHaveClass('max-w-xl')
