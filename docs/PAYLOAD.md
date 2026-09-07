@@ -239,9 +239,65 @@ publish of a never-published parent: a page drafted as `a`, given children
 `b` and left `a/c` behind until the child's own next save. The slug and
 served-path stashes stay gated on a published row, because those describe a URL
 that was actually reachable — so a first publish still writes no redirect row.
-The residual: a **published** child under a never-published parent moves from
-`/a/c` to `/b/c` with no redirect row covering `/a/c`, because the D4 prefix row
-is keyed on the parent's own served URL and the parent had none.
+**The served-prefix invariant closes what used to be the residual here (#180).**
+That paragraph used to end with one: a **published** child under a
+never-published parent moved from `/a/c` to `/b/c` with no redirect row
+covering `/a/c`, because the D4 prefix row is keyed on the parent's own served
+URL and the parent had none. The invariant removes the state rather than
+documenting its consequence:
+
+> **Every served page's ancestors are served too.** A page may not be published
+> while its parent is unpublished, and a page may not be unpublished while a
+> page or a placed post beneath it is still published.
+
+A published child of an unpublished parent is the ONE way a served URL sits
+under an unserved prefix, so refusing it means every subtree move now has a
+served parent path to key its `matchDescendants` row on. The cascade itself is
+unchanged — it still moves drafts and published rows alike, and a first publish
+of a never-published parent still writes no redirect row for the parent, which
+is correct because nothing was ever served there.
+
+**Enforcement is at PUBLISH, not at placement, and that is forced.** Posts say
+the same thing declaratively — `parent` carries
+`filterOptions: () => ({ _status: { equals: 'published' }, … })`, which Payload
+enforces as a field validation on every write. Pages cannot copy it: a section
+is legitimately drafted whole and published top-down (#137), so a write-time
+rule would refuse `work/brytecore` before `work` had shipped. The illegitimate
+act is the publish, so that is where the block sits — two `beforeChange` guards
+in `src/collections/Pages/hooks/servedPrefix.ts`, both firing on `_status`
+alone, so the 100ms autosave gains no read.
+
+**Decision: the unpublish mirror REFUSES; it does not cascade-unpublish**
+(Brandon, #180). Sweeping the subtree offline for the editor was considered and
+rejected on three counts. It is a bulk write nobody asked for and nobody sees —
+one gesture takes N documents off the site. It is not reversible by the same
+gesture: re-publishing the parent does not re-publish what was swept, so the
+editor cannot undo it without remembering what was live. And it breaks the
+symmetry that makes the rule learnable — publishing already refuses rather than
+publishing ancestors for you, so unpublishing refuses rather than unpublishing
+descendants for you. The refusal names the shallowest blocker and its URL, and
+leaves the decision with the editor.
+
+**The rule is NARROW: the parent, not the ancestor chain.** The publish guard
+checks the immediate parent's main-table `_status`; the unpublish guard checks
+descendants of the page's own served path. Those compose inductively into the
+full invariant — a published parent had to pass the same guard against ITS
+parent — and the narrow form keeps a publish to one indexed read instead of a
+depth-3 ancestor walk. The site root needs a second query shape, and the reason
+is the root-page contract: the root contributes no path segment, so its
+children are stored at `<child>` and not `home/<child>`, and a
+`path LIKE 'home/%'` read would report no blockers while the root was taken out
+from under the whole site. That branch reads by `parent` and leans on the
+publish guard for depth. `readServedChildrenByParent`'s TSDoc is the single home
+for it.
+
+**Pre-existing violations are found, not assumed away.** The guards act on new
+writes; rows that predate them are what
+`scripts/audit-served-prefix.sql` is for — published pages whose parent page is
+not published, and published placed posts whose parent page is not published,
+read from the MAIN tables with an expected result of 0 rows. It is read-only and
+safe against production. It takes the connection string from `DATABASE_URI`; the
+file names the variable and never a value.
 
 **Inbound coverage for a subtree is ONE row, not N** (D4). A moved page's row
 carries `matchDescendants`, which makes it match `from` and everything beneath
