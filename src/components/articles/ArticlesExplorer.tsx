@@ -452,8 +452,12 @@ export function ArticlesExplorer({
     [pathname, searchParams],
   )
 
-  /** The results grid — the #183 scroll/focus anchor for a page step. */
-  const resultsRef = useRef<HTMLDivElement>(null)
+  /**
+   * The results grid — the #183 scroll/focus anchor for a page step. It is a
+   * `<section>`, which has no interface of its own, so `HTMLElement` is the
+   * type it actually holds.
+   */
+  const resultsRef = useRef<HTMLElement>(null)
 
   const goToPage = useCallback(
     (nextPage: number) => {
