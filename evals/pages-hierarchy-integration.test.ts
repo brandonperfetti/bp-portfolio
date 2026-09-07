@@ -143,6 +143,32 @@ describe.skipIf(!connectionString)(
         },
       })
 
+    /**
+     * Create a DRAFT page, letting the hooks compute its path.
+     *
+     * @remarks Needed since #180: a published page under an unpublished parent
+     * is now refused at publish, so any subtree whose top is a draft has to be
+     * drafted all the way down.
+     */
+    const mkDraftPage = async (slug: string, parent?: number | string) =>
+      createFixturePage(payload, {
+        data: {
+          title: slug,
+          layout,
+          _status: 'draft',
+          slug,
+          ...(parent === undefined ? {} : { parent }),
+        },
+      })
+
+    /** The per-field messages a rejected write carried, if it was a `ValidationError`. */
+    const fieldErrors = async (run: Promise<unknown>) => {
+      const error = (await run.catch((thrown: unknown) => thrown)) as {
+        data?: { errors?: Array<{ message?: string; path?: string }> }
+      }
+      return error.data?.errors ?? []
+    }
+
     beforeAll(async () => {
       const { getPayload } = await import('payload')
       const { default: config } = await import('../src/payload.config')
@@ -654,6 +680,17 @@ describe.skipIf(!connectionString)(
      * `'draft'`, so `findPublishedRow` answers `null` while descendants
      * already exist), which is the same `null` branch this case pins.
      *
+     * **The descendants are DRAFTS since #180, and what this case proves is
+     * unchanged.** They used to be published, which is precisely the state
+     * `refusePublishUnderUnpublishedParent` now refuses to create — a served
+     * URL under an unserved prefix. Nothing here depended on their being
+     * served: `cascadePagePaths` reads the subtree by stored `path`, not by
+     * `_status`, and the recomposition it performs is the same either way. The
+     * assertions below are on STORED paths, which is why they still hold. What
+     * the change does remove is the reason the residual paragraph in
+     * `docs/PAYLOAD.md` existed at all — the redirect-row hole only ever opened
+     * for a *published* child, and there can no longer be one here.
+     *
      * Same leaf-first `try/finally` as the #150 case above.
      */
     it('cascades a never-published parent’s move on its FIRST publish', async () => {
@@ -683,15 +720,19 @@ describe.skipIf(!connectionString)(
         )
         expect(section.path).toBe(`${MARKER}-np`)
 
-        // A PUBLISHED descendant, so its URL is a real one the site serves —
-        // and a grandchild, so the shallowest-first recomposition is exercised
-        // on this branch too.
+        // Descendants at two depths, so the shallowest-first recomposition is
+        // exercised on this branch too. Drafts, because #180 refuses a
+        // published child under an unpublished parent — see this case's
+        // docblock for why that costs the case nothing.
         const child = track(
           'pages',
-          await mkPage(`${MARKER}-np-child`, section.id),
+          await mkDraftPage(`${MARKER}-np-child`, section.id),
         )
         expect(child.path).toBe(`${MARKER}-np/${MARKER}-np-child`)
-        const leaf = track('pages', await mkPage(`${MARKER}-np-leaf`, child.id))
+        const leaf = track(
+          'pages',
+          await mkDraftPage(`${MARKER}-np-leaf`, child.id),
+        )
         expect(leaf.path).toBe(
           `${MARKER}-np/${MARKER}-np-child/${MARKER}-np-leaf`,
         )
@@ -751,6 +792,99 @@ describe.skipIf(!connectionString)(
           where: { from: { equals: `/${MARKER}-np` } },
         })
         expect(own.totalDocs).toBe(0)
+      } finally {
+        for (const row of created) {
+          await payload.delete({
+            collection: row.collection,
+            where: { id: { equals: row.id } },
+            overrideAccess: true,
+          })
+        }
+      }
+    }, 180_000)
+
+    /**
+     * The served-prefix invariant at publish (#180), on the real pipeline.
+     *
+     * @remarks Only this tier can prove it. The guard reads the parent's
+     * MAIN-TABLE row, and "the main table" is a claim about Payload's drafts
+     * machinery rather than about the hook: a `_status: 'draft'` create still
+     * writes a main row, a draft save still does not, and a `find` with no
+     * `draft` flag still reads that table
+     * (`collections/operations/find.js:103,129`). A stub answering `find`
+     * asserts the branch; only Postgres asserts the row.
+     *
+     * It also pins the SURFACING, which is the half a unit test states and this
+     * tier confirms: the write is refused with a `ValidationError` whose
+     * per-field entry sits on `parent`, not on `_status` — the field Payload
+     * declares with `admin.components.Field: false`
+     * (`payload/dist/versions/baseFields.js`) and therefore renders nowhere.
+     */
+    it('refuses publishing a page under a DRAFT parent, and allows it once the parent ships (#180)', async () => {
+      const created: { collection: 'pages' | 'posts'; id: number | string }[] =
+        []
+      const track = <T extends { id: number | string }>(
+        collection: 'pages' | 'posts',
+        doc: T,
+      ): T => {
+        created.unshift({ collection, id: doc.id })
+        return doc
+      }
+
+      try {
+        const section = track('pages', await mkDraftPage(`${MARKER}-sp`))
+        expect(section._status).toBe('draft')
+
+        const errors = await fieldErrors(
+          mkPage(`${MARKER}-sp-child`, section.id),
+        )
+        expect(errors).toHaveLength(1)
+        expect(errors[0].path).toBe('parent')
+        expect(errors[0].message).toMatch(
+          new RegExp(`“${MARKER}-sp” is not published`),
+        )
+
+        // Refused in `beforeChange`, so nothing was written — not even a
+        // draft row for the page that tried to publish.
+        const after = await payload.find({
+          collection: 'pages',
+          overrideAccess: true,
+          pagination: false,
+          where: { slug: { equals: `${MARKER}-sp-child` } },
+        })
+        expect(after.docs).toHaveLength(0)
+
+        // A DRAFT child under the same draft parent is untouched by the guard:
+        // drafting a section top-down is the workflow #137 is built on.
+        const draftChild = track(
+          'pages',
+          await mkDraftPage(`${MARKER}-sp-draft`, section.id),
+        )
+        expect(draftChild.path).toBe(`${MARKER}-sp/${MARKER}-sp-draft`)
+
+        // Publish the parent, then the same child write succeeds.
+        await payload.update({
+          collection: 'pages',
+          id: section.id,
+          overrideAccess: true,
+          data: { _status: 'published' },
+        })
+        const child = track(
+          'pages',
+          await mkPage(`${MARKER}-sp-child`, section.id),
+        )
+        expect(child.path).toBe(`${MARKER}-sp/${MARKER}-sp-child`)
+        expect(child._status).toBe('published')
+
+        // And publishing the page that was already a draft under it now works
+        // too — the same transition, arriving as an update rather than a create.
+        const promoted = await payload.update({
+          collection: 'pages',
+          id: draftChild.id,
+          overrideAccess: true,
+          data: { _status: 'published' },
+        })
+        expect(promoted._status).toBe('published')
       } finally {
         for (const row of created) {
           await payload.delete({
