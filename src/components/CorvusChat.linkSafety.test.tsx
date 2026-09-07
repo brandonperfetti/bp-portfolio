@@ -347,6 +347,9 @@ describe('CorvusChat confirmation dialog a11y (#158 AC3)', () => {
     await openConfirmation()
 
     const surface = document.querySelector('[data-slot="chat-card"]')
+    // Non-null FIRST: `surface?.closest(…)` on a missing surface is
+    // `undefined`, which passes `.not.toBeNull()` vacuously.
+    expect(surface).not.toBeNull()
     expect(surface?.closest('[aria-hidden="true"]')).not.toBeNull()
     // The composer is behind it, so it is hidden too — asserted through the
     // surface rather than by tabbing, which the trap above already covers.
@@ -359,11 +362,11 @@ describe('CorvusChat confirmation dialog a11y (#158 AC3)', () => {
     await openConfirmation()
     await userEvent.keyboard('{Escape}')
 
-    expect(
-      document
-        .querySelector('[data-slot="chat-card"]')
-        ?.closest('[aria-hidden="true"]'),
-    ).toBeNull()
+    // Non-null FIRST, so this asserts "present and no longer hidden" rather
+    // than being satisfied by a surface that vanished.
+    const surface = document.querySelector('[data-slot="chat-card"]')
+    expect(surface).not.toBeNull()
+    expect(surface?.closest('[aria-hidden="true"]')).toBeNull()
   })
 
   /**

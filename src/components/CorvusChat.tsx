@@ -328,15 +328,15 @@ function CorvusReplyLink({
           <Button
             ref={confirmRef}
             className="flex-1"
-            // `teal`, not `default`, even though #190 now paints `default`
-            // with the same teal-700 fill and white label. The two differ
-            // only on HOVER: `default` is `bg-primary/90`, which composites
-            // teal-700 over the dialog's `bg-background` and so LIGHTENS in
-            // light mode (white label 5.39:1 → 4.47:1), while `teal` carries
-            // the measured site doctrine of hovering DARKER to teal-800
-            // (7.53:1). This button had teal-800 on hover before #169 and
-            // keeps it. Collapsing the two variants is a change to
-            // `ui/button.tsx` and is recorded as a follow-up.
+            // `teal`, not `default`. Since #190 the two are equivalent —
+            // same teal-700 fill, same white label, and the same teal-800
+            // hover, now that `default` consumes `--primary-hover` instead of
+            // `bg-primary/90`. So this is no longer a choice between two
+            // appearances: `teal` is simply what this button has rendered
+            // since #113 and it is kept until the variants are collapsed.
+            // Retiring `teal` is a change to `ui/button.tsx` and every one of
+            // its call sites, and is recorded as a follow-up ticket; when that
+            // lands, this becomes `default` with no visual change.
             variant="teal"
             onClick={() => {
               // `mailto:`/`tel:` hand off to another application; opening

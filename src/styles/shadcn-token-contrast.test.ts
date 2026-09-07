@@ -237,9 +237,10 @@ describe('shadcn token layer — palette identity (#190)', () => {
   it('paints --ring with the focus teal, matching the base-layer outline', () => {
     // `docs/STYLING.md`: "visible focus-visible rings (teal) on every
     // interactive element". The ring token had no relationship to that.
-    // Light is teal-600 rather than the base layer's teal-500 because teal-500
-    // measures 2.42:1 on the light `--background` — under 1.4.11. See the
-    // finding recorded on the base-layer outline rule.
+    // Light is teal-600 rather than the teal-500 the base layer carried before
+    // #190, because teal-500 measures 2.42:1 on the light `--background` —
+    // under 1.4.11. The base-layer rule was moved to teal-600 in the same
+    // change and is asserted below, so the two agree.
     expectStep(LIGHT, 'ring', 'teal-600')
     expectStep(DARK, 'ring', 'teal-400')
   })
@@ -336,13 +337,15 @@ describe('shadcn token layer — WCAG floors in both themes (#190)', () => {
         // shadcn's stock `bg-primary/90`, which lightens in light mode.
         //
         // Deliberately NOT asserted: the hovered fill's own edge against the
-        // page. It is 7.53:1 in light but 2.64:1 in dark, under 1.4.11 — a
-        // pre-existing property of the site's teal-700 -> teal-800 doctrine
-        // (`ui/button.tsx`'s `teal` variant has shipped it since #113), not
-        // something the token introduced. The REST fill carries the boundary
+        // page. It is 7.53:1 in light but 2.64:1 in dark, under 1.4.11. That
+        // is pre-existing for `ui/button.tsx`'s `teal` variant, which has
+        // shipped teal-700 -> teal-800 since #113; for `default` it is a
+        // deliberate regression, since shadcn's stock `bg-primary/90`
+        // composited to 3.18:1 in dark. The REST fill carries the boundary
         // (pinned above) and the label never drops. Recorded in the
-        // `--primary-hover` comment in `tailwind.css` and left as a follow-up
-        // rather than pinned to a floor it misses.
+        // `--primary-hover` comment in `tailwind.css` and left to the
+        // `default`/`teal` retirement-and-hover-step ticket rather than pinned
+        // to a floor it misses.
         expectRatio(
           token(sel, 'primary-foreground'),
           token(sel, 'primary-hover'),
@@ -407,9 +410,11 @@ describe('shadcn token layer — WCAG floors in both themes (#190)', () => {
  * The base-layer `focus-visible` outline, which is a different mechanism from
  * `--ring` and was the one focus indicator nothing asserted.
  *
- * @remarks `@layer base` draws `outline: 2px solid var(--color-teal-N)` on
- * every interactive element, with an `outline-color` override under `.dark`.
- * Those are Tailwind ramp variables rather than declarations in the shadcn
+ * @remarks `@layer base` draws `outline: 2px solid var(--color-teal-N)` in a
+ * zero-specificity `:where()` rule, with an `outline-color` override under
+ * `.dark`. What this pins is that base rule's step; how far the rule reaches
+ * is a separate question (components that set their own `focus-visible:`
+ * utility override it). Those are Tailwind ramp variables rather than declarations in the shadcn
  * block, so {@link token} cannot read them; the step NAME is parsed out of the
  * rule instead and its ratio re-derived from {@link RAMP}. That keeps the
  * assertion honest in both directions — changing the rule to a step that does
@@ -419,7 +424,14 @@ describe('shadcn token layer — WCAG floors in both themes (#190)', () => {
 describe('base-layer focus-visible outline (#190)', () => {
   /** The ramp step named by a `var(--color-<step>)` in the matched rule. */
   function outlineStep(pattern: RegExp): keyof typeof RAMP {
-    const step = pattern.exec(cssCode)?.[1]
+    // Exactly one rule, not merely a first one: `exec` would take the earliest
+    // match and leave a second outline rule added later silently unchecked.
+    const matches = [...cssCode.matchAll(new RegExp(pattern, 'g'))]
+    expect(
+      matches.length,
+      `expected exactly one focus-visible outline matching ${pattern}`,
+    ).toBe(1)
+    const step = matches[0]?.[1]
     expect(step, `no focus-visible outline matched ${pattern}`).toBeDefined()
     expect(
       Object.keys(RAMP),
@@ -429,9 +441,8 @@ describe('base-layer focus-visible outline (#190)', () => {
   }
 
   it('light: the sitewide outline clears 1.4.11 on the page', () => {
-    // teal-500 measured 2.42:1 here — under the 3:1 non-text floor, on every
-    // focusable element on the site. teal-600 is 3.66:1, and is the step
-    // `--ring` already uses.
+    // teal-500 measured 2.42:1 here — under the 3:1 non-text floor. teal-600
+    // is 3.66:1, and is the step `--ring` already uses.
     const step = outlineStep(/outline:\s*2px solid var\(--color-(teal-\d+)\)/)
     expectRatio(
       RAMP[step] as unknown as Oklch,

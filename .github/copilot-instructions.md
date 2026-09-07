@@ -65,9 +65,9 @@ surface only** — it is not a CMS and has no runtime integration.
   Storybook story; serious a11y violations fail the story.
 - **shadcn primitives are themed at the token layer**, never repainted per
   call site, and every token pair that renders text or a fill edge is AA-pinned
-  by test (`--destructive` and the dark `--border`/`--input` alphas are the
-  documented exceptions) — `docs/STYLING.md` §shadcn primitives are themed at
-  the token layer.
+  by test (`--destructive`, the dark `--border`/`--input` alphas, and
+  `--primary-hover`'s own dark fill edge are the documented exceptions) —
+  `docs/STYLING.md` §shadcn primitives are themed at the token layer.
 - Tests accompany behavior changes: Vitest unit/component, Playwright e2e,
   Evalite for Corvus behavior.
 

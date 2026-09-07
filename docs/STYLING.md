@@ -48,10 +48,13 @@ are already described — so the doctrine lives here rather than in
   where it is a fill edge or ring) for the surfaces
   (`--background`/`--foreground`, `--card*`, `--popover*`), primary and its
   hover, secondary, muted, accent and the ring — plus the base layer's
-  `focus-visible` outline. Add a themed token, add its pair. Two documented
+  `focus-visible` outline. Add a themed token, add its pair. Three documented
   exceptions: `--border`/`--input` are named steps in light but an alpha white
-  in dark, so identity is not assertable there; and `--destructive*` is the
-  generator's red, unused by any component and deliberately unpinned. Its
+  in dark, so identity is not assertable there; `--destructive*` is the
+  generator's red, unused by any component and deliberately unpinned; and
+  `--primary-hover` is pinned on identity, label ratio and hover direction but
+  not on its own fill edge, which is 2.64:1 against the dark page — recorded in
+  the token's comment and left to the `default`/`teal` ticket. Its
   sibling `corvus-accent-contrast.test.ts` does the same job for the
   `.corvus-surface` hex tokens.
 

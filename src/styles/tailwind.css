@@ -25,7 +25,7 @@
  * `src/styles/shadcn-token-contrast.test.ts` for every role that renders text
  * or a fill edge: the surfaces (background/card/popover and their
  * foregrounds), primary and its hover step, secondary, muted, accent and the
- * ring. Two deliberate exceptions, and they are the only two:
+ * ring. Three deliberate exceptions, and they are the only three:
  *
  *   --border / --input   named steps in light (zinc-200), but an alpha white
  *                        in dark (`oklch(1 0 0 / 10%)`, `/ 15%`) — not a ramp
@@ -33,6 +33,10 @@
  *                        the pair is left to the surfaces it sits between.
  *   --destructive*       the generator's red, unused by any component and
  *                        deliberately unpinned — see its own comment below.
+ *   --primary-hover      identity and the LABEL ratio are pinned in both
+ *                        themes, and so is the hover direction; the hovered
+ *                        FILL EDGE against the page is not, because in dark it
+ *                        is 2.64:1, under 1.4.11 — see its own comment below.
  *
  * Add a themed token here, add its pair there.
  *
@@ -79,12 +83,11 @@
    *   white on teal-700          5.39:1  ≥ 4.5  (label, 1.4.3)
    *   teal-700 on --background   5.39:1  ≥ 3    (fill edge, light)
    *   teal-700 on --background   3.69:1  ≥ 3    (fill edge, dark)
-   * The hover step is NOT set here: `ui/button.tsx` hovers `bg-primary/90`,
-   * which composites teal-700 90% over the page and DARKENS in dark while
-   * lightening in light (white on it: 4.47:1 light, 6.26:1 dark — both clear
-   * 1.4.3, so it holds, but it is not the measured teal-700 → teal-800 hover
-   * doctrine either). Moving that variant onto the doctrine is a change to a
-   * CONSUMER and is recorded as a follow-up, not made here. */
+   * The hover step is --primary-hover, declared just below: `ui/button.tsx`
+   * used to hover `bg-primary/90`, which composites teal-700 90% over the page
+   * and LIGHTENS in light mode; its `default` variant now consumes the token
+   * instead, so the primitive hovers on the same measured doctrine as the
+   * bespoke Button. */
   --primary: oklch(0.511 0.096 186.391); /* teal-700 */
   --primary-foreground: oklch(1 0 0); /* white */
   /* Hover step for the brand fill: teal-800, the site's MEASURED hover
@@ -96,16 +99,22 @@
    *   teal-800 on --background     7.53:1  >= 3    (fill edge, light)
    *   teal-800 on --background     2.64:1  <  3    (fill edge, DARK)
    * That last number is the one pair in this block that does not clear
-   * 1.4.11, and it is PRE-EXISTING rather than introduced here: the `teal`
-   * variant in `ui/button.tsx` has shipped teal-700 -> teal-800 in both themes
-   * since #113 and the bespoke Button does the same, so this token adopts the
-   * doctrine already on the page rather than inventing one. The REST state
-   * carries the control's boundary (teal-700, 3.69:1 in dark) and the label
-   * stays at 7.53:1 throughout, so the button never becomes unidentifiable —
-   * but the dark hovered edge is recorded and left as a follow-up, not
-   * silently pinned to a floor it misses. The test asserts what IS true in
-   * both themes: identity, the label floor, and that the hover is DARKER than
-   * the rest. */
+   * 1.4.11, and it is PRE-EXISTING only for the `teal` variant: that variant
+   * in `ui/button.tsx` has shipped teal-700 -> teal-800 in both themes since
+   * #113 and the bespoke Button does the same, so for `teal` this token adopts
+   * the doctrine already on the page rather than inventing one. For the
+   * `default` variant it is a REGRESSION, and a deliberate one: shadcn's stock
+   * `hover:bg-primary/90` composited to 3.18:1 against zinc-950, which clears
+   * the floor, so moving `default` onto this token lowers its dark hovered
+   * fill edge from 3.18:1 to 2.64:1. The trade bought the correct hover
+   * DIRECTION in light (5.39:1 -> 4.47:1 lightening becomes 7.53:1 darkening)
+   * and a higher dark label (6.26:1 -> 7.53:1). What still identifies the
+   * control on a dark page is the REST state (teal-700, 3.69:1) and the label
+   * (7.53:1), and hover is a transient state layered on an already-identified
+   * control — so the edge is recorded and left to the `default`/`teal`
+   * retirement-and-hover-step ticket, not silently pinned to a floor it
+   * misses. The test asserts what IS true in both themes: identity, the label
+   * floor, and that the hover is DARKER than the rest. */
   --primary-hover: oklch(0.437 0.078 188.216); /* teal-800 */
   /* Neutral roles — already the site's zinc ramp step for step before #190,
    * confirmed rather than moved. --accent is shadcn's HOVER SURFACE (the
@@ -131,10 +140,10 @@
   --border: oklch(0.92 0.004 286.32); /* zinc-200 */
   --input: oklch(0.92 0.004 286.32); /* zinc-200 */
   /* Focus indicator, teal — the same language as the base layer's
-   * `focus-visible` outline below. teal-600 rather than that rule's teal-500
-   * because teal-500 measures 2.42:1 on the light page, under 1.4.11; teal-600
-   * is 3.66:1. (The base-layer outline's own light value is a separate
-   * finding, recorded for #190 follow-up rather than changed here.) */
+   * `focus-visible` outline below. teal-600 rather than the teal-500 that rule
+   * carried before #190, because teal-500 measures 2.42:1 on the light page,
+   * under 1.4.11; teal-600 is 3.66:1. That rule was moved to teal-600 in the
+   * same change, so the two no longer disagree. */
   --ring: oklch(0.6 0.118 184.704); /* teal-600 */
   --radius: 0.625rem;
 }
@@ -249,11 +258,18 @@
     [tabindex]:not([tabindex='-1'])
   ):focus-visible {
     /* teal-600, not teal-500: teal-500 on the light page measures 2.42:1,
-     * under the 3:1 WCAG 1.4.11 floor for a non-text indicator, and this rule
-     * draws the focus indicator for EVERY interactive element on the site.
-     * teal-600 is 3.66:1 and is the same step `--ring` uses, so the two no
-     * longer disagree. The dark rule below stays on teal-400 (10.66:1).
-     * Both are pinned by `src/styles/shadcn-token-contrast.test.ts`. */
+     * under the 3:1 WCAG 1.4.11 floor for a non-text indicator. teal-600 is
+     * 3.66:1 and is the same step `--ring` uses, so the two no longer
+     * disagree. The dark rule below stays on teal-400 (10.66:1). Both are
+     * pinned by `src/styles/shadcn-token-contrast.test.ts`.
+     *
+     * This is the BASE rule, and nothing here claims how far it reaches:
+     * `:where()` is zero-specificity and this sits in `@layer base`, so any
+     * component that sets its own `focus-visible:` utility wins. Around 30
+     * call sites in `src/` do exactly that (`focus:outline-none` plus a
+     * `focus-visible:ring-teal-500/80`) and never see this outline; bringing
+     * those rings onto the measured step is a follow-up on #190, not a change
+     * made here. */
     outline: 2px solid var(--color-teal-600);
     outline-offset: 2px;
   }

@@ -331,6 +331,9 @@ export const ExternalLinkConfirmation: Story = {
       // `aria-hidden`, so the chat card sits under an `aria-hidden` ancestor
       // instead of carrying an attribute of its own.
       const surface = canvasElement.querySelector('[data-slot="chat-card"]')
+      // Non-null FIRST: `surface?.closest(…)` on a missing surface is
+      // `undefined`, which passes `.not.toBe(null)` vacuously.
+      await expect(surface).not.toBe(null)
       await expect(surface?.closest('[aria-hidden="true"]')).not.toBe(null)
       await expect(surface?.contains(dialog)).toBe(false)
 

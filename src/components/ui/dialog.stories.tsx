@@ -84,9 +84,15 @@ export const Default: Story = {
     const dialog = await screen.findByRole('dialog')
     // The title IS the accessible name — Radix warns at runtime without one.
     await expect(dialog).toHaveAccessibleName('Delete this draft?')
-    await expect(
-      within(dialog).getByRole('button', { name: 'Close' }),
-    ).toBeVisible()
+    // `DialogContent` enters under `animate-in fade-in-0 zoom-in-95
+    // duration-200`, so for ~200ms after open the panel — and the ✕ inside it
+    // — still computes as not visible. Poll rather than sample once: without
+    // the wait this assertion lands mid-fade under the full suite's load.
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole('button', { name: 'Close' }),
+      ).toBeVisible(),
+    )
     // Portalled out of the story canvas.
     await expect(canvasElement.contains(dialog)).toBe(false)
 
