@@ -83,7 +83,7 @@ describe('findMainTableRow', () => {
     expect(find).toHaveBeenCalledTimes(1)
     const [args] = find.mock.calls[0]
     expect(args.where).toEqual({ id: { equals: 3 } })
-    // No `draft: true`: `collections/operations/find.js:96` branches to
+    // No `draft: true`: `collections/operations/find.js:103` branches to
     // `queryDrafts` (the `_v` table) only when that flag is set, so omitting
     // it is what makes this the MAIN-table read.
     expect(args.draft).toBeUndefined()
