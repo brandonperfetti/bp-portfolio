@@ -897,6 +897,112 @@ describe.skipIf(!connectionString)(
     }, 180_000)
 
     /**
+     * The OTHER route into the same illegal state — re-parenting an
+     * ALREADY-PUBLISHED page onto a draft parent, with the caller sending no
+     * `_status` at all (#180, standards review S1).
+     *
+     * @remarks **This case exists because the review reasoned the guard could
+     * not see this write, and the pipeline says otherwise — so the reason it is
+     * closed gets pinned rather than re-derived.** Guard 1 returns on
+     * `data._status !== 'published'`, and the argument was that a
+     * `payload.update({ data: { parent } })` carries no `_status`, so both
+     * guards return and `computePagePath` stores the new path under an unserved
+     * prefix. It does not, and the reason is upstream of the hook:
+     * `beforeValidate` **fields** run before the collection `beforeChange`
+     * hooks (`collections/operations/utilities/update.js:90` then `:125`) and
+     * one of that pass's documented responsibilities is "Merge original
+     * document data into incoming data"
+     * (`payload/dist/fields/hooks/beforeValidate/index.js`). So `data` reaching
+     * guard 1 on ANY update is the merged document, carrying the row's own
+     * `_status: 'published'`, and the guard fires.
+     *
+     * That makes this the one assertion in the file whose real subject is a
+     * Payload internal the guard silently depends on. Only this tier can hold
+     * it: a unit stub is handed whatever `data` shape the test author believes
+     * in — which is precisely how the hole was reasoned into existence — while
+     * here the shape comes from the operation. If Payload ever stops merging,
+     * the hole becomes real and this case is what says so.
+     *
+     * The second half is the control: the same re-parent onto a PUBLISHED
+     * parent must still succeed and still move the row, so the refusal is the
+     * guard reading the parent's status and not the pipeline refusing moves.
+     */
+    it('refuses re-parenting a PUBLISHED page under a draft parent even though the write sends no `_status` (#180)', async () => {
+      const created: { collection: 'pages' | 'posts'; id: number | string }[] =
+        []
+      const track = <T extends { id: number | string }>(
+        collection: 'pages' | 'posts',
+        doc: T,
+      ): T => {
+        created.unshift({ collection, id: doc.id })
+        return doc
+      }
+
+      try {
+        // Created parent-first so the `finally` unwind (which reverses) deletes
+        // leaf-first, the same reason the #150 case gives.
+        const draftSection = track('pages', await mkDraftPage(`${MARKER}-rp`))
+        expect(draftSection._status).toBe('draft')
+
+        const live = track('pages', await mkPage(`${MARKER}-rp-live`))
+        expect(live.path).toBe(`${MARKER}-rp-live`)
+        expect(live._status).toBe('published')
+
+        // The write the review's probe modelled: a move and nothing else. No
+        // `_status` in `data`, no `draft` flag, no publish gesture.
+        const errors = await fieldErrors(
+          payload.update({
+            collection: 'pages',
+            data: { parent: draftSection.id },
+            id: live.id,
+            overrideAccess: true,
+          }),
+        )
+        expect(errors).toHaveLength(1)
+        expect(errors[0].path).toBe('parent')
+        expect(errors[0].message).toMatch(
+          new RegExp(`“${MARKER}-rp” is not published`),
+        )
+
+        // Refused in `beforeChange`, so the row did not move: still served at
+        // its own top-level path, still under no parent.
+        const { docs } = await payload.find({
+          collection: 'pages',
+          overrideAccess: true,
+          pagination: false,
+          where: { id: { equals: live.id } },
+        })
+        expect(docs[0]?.path).toBe(`${MARKER}-rp-live`)
+
+        // Publish the section and the IDENTICAL write goes through, moving the
+        // page under it — the guard reads the parent's status, it does not
+        // blanket-refuse a `_status`-less move.
+        await payload.update({
+          collection: 'pages',
+          data: { _status: 'published' },
+          id: draftSection.id,
+          overrideAccess: true,
+        })
+        const moved = await payload.update({
+          collection: 'pages',
+          data: { parent: draftSection.id },
+          id: live.id,
+          overrideAccess: true,
+        })
+        expect(moved.path).toBe(`${MARKER}-rp/${MARKER}-rp-live`)
+        expect(moved._status).toBe('published')
+      } finally {
+        for (const row of created) {
+          await payload.delete({
+            collection: row.collection,
+            where: { id: { equals: row.id } },
+            overrideAccess: true,
+          })
+        }
+      }
+    }, 180_000)
+
+    /**
      * The unpublish mirror (#180, #155), on the real pipeline.
      *
      * @remarks Brandon's decision is that this REFUSES rather than

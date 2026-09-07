@@ -171,6 +171,33 @@ const isDraftSaveRequest = (
  * one indexed read happens on exactly the transition it describes: publishing a
  * placed page.
  *
+ * **`data._status` is not "what the caller sent", and the difference is what
+ * closes the re-parent route into the same illegal state** (raised as a hole in
+ * standards review, #180 S1; disproved here by measurement). The worry was that
+ * moving an ALREADY-PUBLISHED page onto a draft parent with
+ * `payload.update({ data: { parent } })` — no `_status`, no `draft` flag —
+ * slips past both guards, since this one returns on
+ * `data._status !== 'published'` and the mirror on `data._status !== 'draft'`,
+ * and `validatePageHierarchy` never looks at a parent's status. It does not
+ * slip past, because `data` at this point is not the caller's patch: Payload's
+ * `beforeValidate` **field** pass runs first
+ * (`collections/operations/utilities/update.js:90`, collection `beforeChange`
+ * at `:125`) and one of its four documented jobs is "Merge original document
+ * data into incoming data"
+ * (`payload/dist/fields/hooks/beforeValidate/index.js`). So on every update —
+ * Local API, REST `PATCH`, bulk `where`, all of which reach `updateDocument`
+ * through that same line — `data` arrives merged and carries the row's own
+ * `_status: 'published'`, and this guard refuses the move. `[measured]` the
+ * probe is in `evals/pages-hierarchy-integration.test.ts` ("…even though the
+ * write sends no `_status`"), which goes RED with this guard disabled: without
+ * it the move is accepted and the page is stored under the unserved prefix.
+ *
+ * That makes the merge a Payload internal this guard silently depends on, which
+ * is why the pg case pins it rather than the unit tier: a stub is handed
+ * whatever `data` shape the author believes in, and believing the unmerged
+ * shape is exactly how the hole was reasoned into existence. If Payload ever
+ * stops merging, the hole is real and that case is what says so.
+ *
  * **The error is a `ValidationError` targeting `parent`, and the field is
  * chosen, not incidental.** `[read-from-source, payload 3.88.0]` a thrown
  * `ValidationError` reaches the admin as
@@ -210,6 +237,14 @@ export const refusePublishUnderUnpublishedParent: CollectionBeforeChangeHook<
   if (parent._status === 'published') return data
 
   const label = labelFor(parent)
+  // A `ValidationError`, where the other 12 admin-visible refusals in this tree
+  // (`documentPath.ts`, `pageHierarchy.ts`, `postPlacement.ts`, and guard 2
+  // below) are all `APIError(msg, 400)`. The exception is deliberate and the
+  // reason is in the docblock above: only a `ValidationError` carries a
+  // `data.errors[].path` the admin can bind to a FIELD, and `parent` is the one
+  // field the editor can act on — `_status`, the field this rule is really
+  // about, renders no component at all. Read that argument before "normalizing"
+  // this to the house `APIError`.
   throw new ValidationError(
     {
       collection: 'pages',
@@ -248,6 +283,15 @@ export const refusePublishUnderUnpublishedParent: CollectionBeforeChangeHook<
  * indexed read is still the right read; the exact predicate is re-applied here
  * so the guard cannot refuse an unpublish over a document that merely shares a
  * substring.
+ *
+ * **The one line of the original this copy does NOT carry is its `id` guard**
+ * (`if (typeof doc.id !== 'number' && typeof doc.id !== 'string') continue`),
+ * and the absence is deliberate rather than dropped. `readSubtree` exists to
+ * hand each row's `id` to `payload.update`, so an unusable `id` makes the row
+ * unusable to it. This reader never touches `id` — its blockers become a
+ * sentence via {@link labelFor} and `publicPathFor`, from `title`/`slug`/`path`
+ * — and it does not even `select` the column, so the same guard here would be
+ * an inert line filtering on a field this function never reads.
  *
  * Shallowest first so the message names the topmost blocker — the one the
  * editor has to deal with first — rather than an arbitrary leaf.
@@ -304,12 +348,20 @@ const readServedDescendantsByPrefix = async (
  * it alone would let the root be unpublished out from under the entire site
  * while reporting no blockers at all.
  *
- * **Depth is covered by guard 1, not by a walk.** This read sees the root's
- * direct children only; a published grandchild under a DRAFT child is a state
- * {@link refusePublishUnderUnpublishedParent} refuses to create, so under the
- * invariant a published grandchild implies a published child, which this read
- * finds. `scripts/audit-served-prefix.sql` is how a pre-existing violation from
- * before the guard is found rather than assumed away.
+ * **Depth is covered by guard 1, not by a walk — this branch is the one
+ * genuinely shallow read in the change, and here is exactly what it does not
+ * see.** It reads the root's DIRECT children only. A published GRANDCHILD under
+ * a draft direct child of the root is therefore invisible to it, and
+ * unpublishing the root in that state would be allowed. That state is one
+ * {@link refusePublishUnderUnpublishedParent} refuses to create — it refuses
+ * both the publish of the grandchild under the draft child and the re-parent of
+ * an already-published grandchild onto it — so under the invariant a published
+ * grandchild implies a published child, which this read finds. It can still
+ * pre-exist the guards, or be written around them (direct SQL, a migration,
+ * `db.updateOne`), and `scripts/audit-served-prefix.sql` is how such a row is
+ * found rather than assumed away. The non-root branch has no such gap:
+ * {@link readServedDescendantsByPrefix} is a prefix read and sees the whole
+ * subtree at every depth.
  *
  * The posts read is vacuous today — Posts' `parent` carries
  * `filterOptions: … slug: { not_equals: ROOT_PAGE_SLUG }`, so no post can be
@@ -385,6 +437,29 @@ const readServedChildrenByParent = async (
  * A Local-API caller that needs the fast path can pass
  * `req: { query: { draft: 'true' } }` — the same escape hatch
  * `capturePublishedSlug` documents. Both directions are pinned by test.
+ *
+ * **Where the follow-up should START, because the fix as filed is heavier than
+ * the one available** `[spec reviewer, #180; re-measured here]`. The ticket
+ * reads "export the predicate, then make Local-API callers pass `req.query`" —
+ * a caller sweep, which makes the residual look unfixable in place. It is not.
+ * `createLocalReq` sets `req.payloadAPI = 'local'` at
+ * `utilities/createLocalReq.js:87`, FIFTEEN lines before the
+ * `req.query = req?.query || {}` at `:102` this residual rests on, and
+ * `payloadAPI: 'GraphQL' | 'local' | 'REST'` is a declared field of
+ * `PayloadRequest` (`payload/dist/types/index.d.ts`). One clause here sees what
+ * no caller would have to be changed to say.
+ *
+ * It is NOT taken in this change, and the reason is the half the ticket has to
+ * carry: `payloadAPI` separates Local from REST, it does NOT separate the two
+ * Local-API intents. `payload.update({ draft: true })` and
+ * `payload.update({ data: { _status: 'draft' } })` both arrive as
+ * `payloadAPI: 'local'` with `data._status: 'draft'` — `updateDocument` stamps
+ * the first (`:29-33`), the second carries it — so skipping the guard on
+ * `payloadAPI === 'local'` would drop the false refusal AND stop guarding
+ * genuine script-driven unpublishes, which is where an audit is least likely to
+ * catch the damage. A real design choice for whoever takes the ticket, not a
+ * one-liner. The clean fix remains asking Payload for the draft flag on the
+ * hook argument.
  *
  * @param args - Payload's `beforeChange` arguments.
  * @returns `data`, unchanged, when the write is allowed.

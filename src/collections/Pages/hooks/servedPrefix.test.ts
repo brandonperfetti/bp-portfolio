@@ -251,6 +251,83 @@ describe('refusePublishUnderUnpublishedParent (#180)', () => {
       ),
     ).resolves.toBeTruthy()
   })
+
+  // The shape standards review reasoned was a hole (S1): re-parenting an
+  // ALREADY-PUBLISHED page onto a draft parent, with the caller sending no
+  // `_status`. It is not one, and the reason is upstream of the hook — Payload's
+  // `beforeValidate` FIELD pass merges the original document into `data` before
+  // any collection `beforeChange` hook runs
+  // (`payload/dist/fields/hooks/beforeValidate/index.js`, "Merge original
+  // document data into incoming data"; ordered at
+  // `collections/operations/utilities/update.js:90` then `:125`), so the write
+  // arrives carrying the row's own `_status: 'published'`. These two cases pin
+  // the DECISION on that shape; `evals/pages-hierarchy-integration.test.ts` pins
+  // that the shape is what the pipeline actually produces, which is the half a
+  // stub cannot honestly assert about itself.
+  it('refuses a re-parent of an ALREADY-PUBLISHED page onto a DRAFT parent', async () => {
+    const { req } = stub([
+      {
+        _status: 'draft',
+        collection: 'pages',
+        id: 1,
+        path: 'lab',
+        slug: 'lab',
+        title: 'Lab',
+      },
+    ])
+
+    const { fields } = await rejection(
+      refusePublishUnderUnpublishedParent(
+        args(
+          req,
+          // As the merge delivers it: the mover's own `parent`, over the row's
+          // current status.
+          { _status: 'published', parent: 1, slug: 'brytecore' },
+          { _status: 'published', id: 2, parent: 7, slug: 'brytecore' },
+        ),
+      ) as Promise<unknown>,
+    )
+    expect(fields).toEqual([
+      expect.objectContaining({ label: 'Parent', path: 'parent' }),
+    ])
+    expect(fields[0]?.message).toMatch(/“Lab” is not published/)
+  })
+
+  it('allows a re-parent of an already-published page onto a PUBLISHED parent', async () => {
+    const { req } = stub([
+      { _status: 'published', collection: 'pages', id: 1, slug: 'work' },
+    ])
+
+    await expect(
+      refusePublishUnderUnpublishedParent(
+        args(
+          req,
+          { _status: 'published', parent: 1, slug: 'brytecore' },
+          { _status: 'published', id: 2, parent: 7, slug: 'brytecore' },
+        ),
+      ),
+    ).resolves.toBeTruthy()
+  })
+
+  it('allows re-parenting a DRAFT page onto a draft parent, query-free', async () => {
+    // The whole point of enforcing at the transition and not at the placement
+    // (#137): a section is drafted top-down, and moving a draft around inside
+    // it changes nothing the site serves.
+    const { req, calls } = stub([
+      { _status: 'draft', collection: 'pages', id: 1, slug: 'lab' },
+    ])
+
+    await expect(
+      refusePublishUnderUnpublishedParent(
+        args(
+          req,
+          { _status: 'draft', parent: 1, slug: 'brytecore' },
+          { _status: 'draft', id: 2, parent: 7, slug: 'brytecore' },
+        ),
+      ),
+    ).resolves.toBeTruthy()
+    expect(calls).toEqual([])
+  })
 })
 
 describe('refuseUnpublishWithServedDescendants (#180)', () => {
