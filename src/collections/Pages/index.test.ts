@@ -18,8 +18,7 @@ import { publicPathFor } from '@/fields/slug/slugPaths'
  * The sibling for Posts is `src/collections/Posts/index.test.ts`.
  */
 
-const defaultPopulate = Pages.defaultPopulate as
-  Record<string, unknown> | undefined
+const defaultPopulate = Pages.defaultPopulate
 
 /**
  * A stored page reduced to the fields `defaultPopulate` admits — the shape a

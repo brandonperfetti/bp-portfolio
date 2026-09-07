@@ -68,9 +68,11 @@ export const workHistoryEntryFacts = (
  * Inside a column it fills the width the editor picked, rather than leaving
  * the right half of a full-width column empty. At root the MODE decides
  * (#188): the résumé list keeps the `max-w-xl` reading measure the zero-config
- * cards share, while the per-entry card widens to the content measure, because
- * on `/work/<slug>` it sits directly above full-measure prose and a narrower
- * card there reads as a bug rather than as a measure.
+ * cards share, while the per-entry card drops its cap and fills the route's
+ * content column (`max-w-none` inside `Container`), the same measure an
+ * uncapped `lead` block takes. A `prose` block sits narrower than that on
+ * purpose (~65ch), so the card is not promised to match every sibling — only
+ * to stop being capped below the column the page gives it.
  *
  * @remarks A relationship pointing at a deleted row comes back `null`, which
  * falls through to the résumé card rather than rendering an empty box — the
@@ -92,7 +94,7 @@ export function WorkHistoryCardComponent({
       className={cn(
         blockRhythmClass(hosted),
         // The mode picks the measure, not the block (#188): the per-entry card
-        // is content and fills the route's content column, the résumé list is
+        // is content and takes the whole content column, the résumé list is
         // the form-measure card it has always been. `facts` is the same value
         // the render branch below reads, so the two can never disagree.
         zeroConfigCardWidthClassFor(hosted, facts ? 'content' : 'form'),

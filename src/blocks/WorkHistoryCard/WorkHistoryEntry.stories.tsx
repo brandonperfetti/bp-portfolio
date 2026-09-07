@@ -51,11 +51,13 @@ const meta = {
   },
   decorators: [
     // Stands in for the route's content column, which is what a root-hosted
-    // per-entry card now fills (#188). It was `max-w-xl` while the block
-    // capped itself there; keeping that would show a measure `/work/<slug>`
-    // no longer renders.
+    // per-entry card now fills (#188). Mirrors `Container`'s inner measure at
+    // every breakpoint (`src/components/Container.tsx`), so the desktop frame
+    // is the 5xl one the route renders rather than the sub-`lg` 2xl alone. It
+    // was `max-w-xl` while the block capped itself there; keeping that would
+    // show a measure `/work/<slug>` no longer renders.
     (Story) => (
-      <div className="mx-auto max-w-2xl">
+      <div className="mx-auto max-w-2xl lg:max-w-5xl">
         <Story />
       </div>
     ),

@@ -52,9 +52,9 @@ export function blockRhythmClass(
  * - `form` — a stack of inputs. A form wider than its labels is harder to
  *   scan, not easier, so it takes a narrow measure of its own even when the
  *   page could give it more.
- * - `content` — prose and facts, which read at whatever measure the page sets
- *   for prose. Capping it *below* the surrounding text is what reads as the
- *   defect (#188).
+ * - `content` — prose and facts, which take the content column the route
+ *   already set rather than a cap of their own. Capping a card *below* the
+ *   column it was given is what reads as the defect (#188).
  */
 export type ZeroConfigCardMeasure = 'form' | 'content'
 
@@ -72,9 +72,11 @@ export type ZeroConfigCardMeasure = 'form' | 'content'
  * @remarks **The `content` case is the exception #188 opened, and it is one
  * block, not a new default.** Two of the three zero-config cards are forms and
  * keep `max-w-xl` at root exactly as before; only the work-history block's
- * per-entry mode asks for `content`, because on `/work/<slug>` it sits directly
- * above full-measure prose and a card narrower than the paragraph beneath it
- * reads as a layout bug rather than as a reading measure. The work block's
+ * per-entry mode asks for `content`, because on `/work/<slug>` a 576px card
+ * inside a content column that reaches `lg:max-w-5xl` reads as a layout bug
+ * rather than as a reading measure. `content` means "no cap of its own", so it
+ * matches an uncapped sibling such as `lead`; a `prose` block deliberately
+ * stays narrower (~65ch) and is not the thing being matched. The work block's
  * OTHER mode — the résumé list — is still a `form`-measure card, so the
  * distinction is per render, not per block.
  */

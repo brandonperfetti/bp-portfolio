@@ -97,14 +97,14 @@ const NO_SECTION_PATHS: TopicSectionPaths = new Map()
  *
  * @remarks **Two reads rather than one populated read, deliberately.** Payload
  * would populate `categories.sectionPage` at the default depth, but `Pages`
- * declares `defaultPopulate: { title, slug }` — a populated page carries no
- * `path` and no `_status`, which are exactly the two facts this needs: a
- * nested home is `/work/leadership`, which a slug alone cannot name, and an
- * unpublished home must fall back rather than link at a 404. Widening Pages'
- * `defaultPopulate` would instead push a page projection into every populated
- * relationship on the site, including the post-summary cache entry #76 Phase 0
- * exists to keep small. So: ids from `categories` at depth 0, then one indexed
- * `id IN (…)` read of the pages that are actually referenced.
+ * declares `defaultPopulate` narrowly. `path` is in it since #189, so a
+ * populated page can now name `/work/leadership`; `_status` is not, and this
+ * needs it — an unpublished home must fall back rather than link at a 404.
+ * `defaultPopulate` is deliberately kept to what every populated relationship
+ * on the site can afford to carry, including the post-summary cache entry #76
+ * Phase 0 exists to keep small, so `_status` is queried here rather than added
+ * there. So: ids from `categories` at depth 0, then one indexed `id IN (…)`
+ * read of the pages that are actually referenced.
  *
  * Both reads are trivially bounded — one row per topic, and at most that many
  * pages — and they run once per cache generation, not once per article.
