@@ -599,6 +599,60 @@ describe('getCmsRedirects', () => {
     expect(resolveRedirect([flattened], '/articles/old/deeper')).toBeNull()
   })
 
+  it('carries toPathAtCapture through the flattening (#178)', async () => {
+    // The two destinations DISAGREE on purpose: `to` follows the reference to
+    // where the page lives now, `toPathAtCapture` is frozen where it lived when
+    // the row was written. A flattening that dropped the column, or that
+    // rebuilt it from the reference, would make them agree and the whole hop
+    // in `resolveRedirect` would be dead code.
+    stubFind({
+      redirects: [
+        {
+          ...referenceRow('/lab-parent/lab-child', 'pages', 19),
+          matchDescendants: true,
+          toPathAtCapture: '/lab-parent/lab-kid',
+        },
+      ],
+      pages: [{ id: 19, path: 'lab-base/lab-kid', slug: 'lab-kid' }],
+    })
+
+    await expect(getCmsRedirects()).resolves.toEqual([
+      {
+        from: '/lab-parent/lab-child',
+        matchDescendants: true,
+        to: '/lab-base/lab-kid',
+        toPathAtCapture: '/lab-parent/lab-kid',
+        type: '301',
+      },
+    ])
+  })
+
+  it('reads a row written before #178 with the snapshot key omitted', async () => {
+    // Omitted, not `null` — same guarantee as `matchDescendants` above, and it
+    // is what tells `resolveRedirect` to fall back to the current path.
+    stubFind({
+      redirects: [
+        { ...referenceRow('/work', 'pages', 7), matchDescendants: true },
+      ],
+      pages: [{ id: 7, path: 'experience', slug: 'experience' }],
+    })
+
+    const [flattened] = await getCmsRedirects()
+    expect('toPathAtCapture' in flattened).toBe(false)
+  })
+
+  it('asks Payload for the snapshot column (#178)', async () => {
+    stubFind({ redirects: [] })
+    await getCmsRedirects()
+
+    expect(mocks.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'redirects',
+        select: expect.objectContaining({ toPathAtCapture: true }),
+      }),
+    )
+  })
+
   it('collapses a would-be chain because every hop targets the document', async () => {
     // a -> doc and b -> doc, with the doc now at `c`. Neither row points at
     // another row, so `/articles/a` reaches `/articles/c` in ONE hop.

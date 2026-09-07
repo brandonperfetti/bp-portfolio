@@ -36,6 +36,12 @@ import { createPathRedirect } from '@/hooks/createPathRedirect'
  * does not write. Nothing was loosened to absorb it — the assertions are still
  * exact objects, and the key's VALUE is the thing worth pinning: `false` for a
  * Post, which can have no subtree, and `true` for a Page, which can.
+ *
+ * #178 made the same edit for the same reason, and the same way: the exact
+ * objects gained `toPathAtCapture` rather than being relaxed to
+ * `objectContaining`, because the value is the assertion — it must be the
+ * target's NEW served path, the one a descendant row written after this moment
+ * will spell.
  */
 
 type FindResult = { docs: Array<{ id: number }> }
@@ -171,6 +177,11 @@ describe('createPathRedirect', () => {
             type: 'reference',
             reference: { relationTo: 'posts', value: 55 },
           },
+          // #178: the served path the target has AT THIS MOMENT, frozen. The
+          // reference above will follow the document through every later
+          // rename; this is the one spelling a URL captured beneath this row
+          // was keyed against, and the only thing that can be looked up again.
+          toPathAtCapture: '/articles/new-slug',
           // #130: a rename is permanent by definition, and the hook says so
           // explicitly rather than leaning on the field's `defaultValue` —
           // an `update` of an existing row does not re-apply a default.
@@ -276,6 +287,9 @@ describe('createPathRedirect', () => {
             type: 'reference',
             reference: { relationTo: 'pages', value: 7 },
           },
+          // #178. THE case the snapshot exists for: this is a prefix row, so
+          // descendant URLs get rewritten through it.
+          toPathAtCapture: '/now',
           type: '301',
         },
       }),
@@ -305,6 +319,7 @@ describe('createPathRedirect', () => {
             type: 'reference',
             reference: { relationTo: 'posts', value: 5 },
           },
+          toPathAtCapture: '/work2/dup2',
           type: '301',
         },
       }),
@@ -366,6 +381,46 @@ describe('createPathRedirect', () => {
   })
 
   /**
+   * #178. The snapshot is what makes a prefix row survive a SECOND move of its
+   * own target, and it is only useful if it records the path the target is
+   * being served at NOW — the path that descendant rows written from this
+   * moment on will spell. `to` is a reference and will follow the document
+   * away from this value; that divergence is the entire point.
+   */
+  it('snapshots the target’s NEW served path, not its old one (#178)', async () => {
+    const { create } = await publish({
+      collectionSlug: 'pages',
+      data: { _status: 'published', slug: 'lab-kid' },
+      doc: {
+        id: 19,
+        _status: 'published',
+        path: 'lab-parent/lab-kid',
+        slug: 'lab-kid',
+      },
+      originalDoc: {
+        id: 19,
+        _status: 'draft',
+        path: 'lab-parent/lab-child',
+        slug: 'lab-kid',
+      },
+      publishedPath: 'lab-parent/lab-child',
+      publishedSlug: 'lab-child',
+    })
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          from: '/lab-parent/lab-child',
+          matchDescendants: true,
+          // Not `/lab-parent/lab-child` (where it WAS) and not whatever it
+          // will be after the parent is renamed later — where it is now.
+          toPathAtCapture: '/lab-parent/lab-kid',
+        }),
+      }),
+    )
+  })
+
+  /**
    * The second #150 residue: un-placing clears `path`, so the article returns
    * to `/articles/<slug>` and the section URL it vacated used to 404. The slug
    * never moves, so a slug-keyed writer computed `from === to` and wrote
@@ -390,6 +445,8 @@ describe('createPathRedirect', () => {
             type: 'reference',
             reference: { relationTo: 'posts', value: 5 },
           },
+          // Un-placed, so the target is served from the archive again.
+          toPathAtCapture: '/articles/dup',
           type: '301',
         },
       }),

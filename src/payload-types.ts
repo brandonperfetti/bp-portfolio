@@ -1559,6 +1559,10 @@ export interface Redirect {
    * Also redirect everything under this path, keeping the rest of the URL: /work → /experience also sends /work/brytecore to /experience/brytecore. Set automatically when a section page is moved.
    */
   matchDescendants?: boolean | null;
+  /**
+   * The path the target was served at when this row was written. Filled automatically; used to re-resolve descendant URLs through the redirect table when the target has moved again.
+   */
+  toPathAtCapture?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -2769,6 +2773,7 @@ export interface RedirectsSelect<T extends boolean = true> {
       };
   type?: T;
   matchDescendants?: T;
+  toPathAtCapture?: T;
   updatedAt?: T;
   createdAt?: T;
 }

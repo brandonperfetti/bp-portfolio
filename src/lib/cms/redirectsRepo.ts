@@ -43,6 +43,22 @@ export type CmsRedirect = {
    */
   matchDescendants?: boolean
   to: string
+  /**
+   * The path the target was being served at when this row was written (#178).
+   *
+   * @remarks `to` is resolved through the target's CURRENT path, which is the
+   * right answer for `from` itself and the wrong lookup key for anything
+   * captured beneath it — the rows for those descendants are keyed at the
+   * spelling in force at capture. This is that spelling, and
+   * {@link resolveRedirect} rewrites onto it first for exactly that reason.
+   *
+   * Optional, and omitted rather than `null` when unset, for the same reason
+   * `matchDescendants` is: a row written before #178 has no snapshot and can
+   * never gain one (the move it records already happened), so the reader must
+   * treat its absence as "fall back to the current path", which is the
+   * pre-#178 behaviour byte for byte.
+   */
+  toPathAtCapture?: string
   type: CmsRedirectType
 }
 
@@ -356,7 +372,15 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
     limit: REDIRECT_LIMIT,
     overrideAccess: false,
     pagination: false,
-    select: { from: true, matchDescendants: true, to: true, type: true },
+    select: {
+      from: true,
+      matchDescendants: true,
+      to: true,
+      // #178. One more indexed varchar, and the only thing that can tell the
+      // resolver which spelling a descendant's row was keyed against.
+      toPathAtCapture: true,
+      type: true,
+    },
   })
 
   const idsByCollection = collectReferenceIds(docs)
@@ -421,9 +445,18 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
         ? { matchDescendants: true }
         : {}
 
+    // #178, and the key is OMITTED when unset for the same reason: a row that
+    // predates the column flattens byte-identically to what this function
+    // returned before, so every caller holding one keeps comparing equal.
+    const rawCapture = (doc as { toPathAtCapture?: unknown }).toPathAtCapture
+    const capture: Pick<CmsRedirect, 'toPathAtCapture'> =
+      typeof rawCapture === 'string' && rawCapture.trim().length > 0
+        ? { toPathAtCapture: rawCapture }
+        : {}
+
     if (to?.type === 'custom') {
       if (typeof to.url === 'string' && to.url.length > 0) {
-        redirects.push({ from, ...descendants, to: to.url, type })
+        redirects.push({ from, ...capture, ...descendants, to: to.url, type })
       }
       continue
     }
@@ -435,7 +468,13 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
     const row = rowById.get(`${relationTo}:${value}`)
     const destination = publicPathFor(relationTo, row)
     if (destination)
-      redirects.push({ from, ...descendants, to: destination, type })
+      redirects.push({
+        from,
+        ...capture,
+        ...descendants,
+        to: destination,
+        type,
+      })
   }
 
   return redirects

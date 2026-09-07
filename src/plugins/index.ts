@@ -105,6 +105,30 @@ export const plugins: Plugin[] = [
             },
             label: 'Redirect descendant paths too',
           },
+          // #178. The snapshot that makes a prefix row survive a SECOND move
+          // of its own target. `to` is a document reference resolved through
+          // the target's CURRENT path at read time, which is right for the
+          // exact URL the row was written for and wrong for a descendant URL
+          // captured underneath it: the descendant's own row is keyed at the
+          // path the descendant had WHEN IT MOVED, and that spelling contains
+          // the target's path as it was at capture, not as it is now. Storing
+          // the capture-time path gives `resolveRedirect` the one spelling
+          // that can be looked up again — see its docblock for the hop.
+          //
+          // Deliberately a plain path column and not a second reference:
+          // nothing here should resolve to a live document, because the whole
+          // point is to reconstruct a URL that is no longer served.
+          {
+            name: 'toPathAtCapture',
+            type: 'text',
+            admin: {
+              description:
+                'The path the target was served at when this row was written. Filled automatically; used to re-resolve descendant URLs through the redirect table when the target has moved again.',
+              position: 'sidebar',
+              readOnly: true,
+            },
+            label: 'Target path at capture',
+          },
         ]
       },
       hooks: {

@@ -99,6 +99,17 @@ import { containRevalidation } from '@/hooks/containRevalidation'
  * pass to get wrong. It also means a row needs no maintenance when the document
  * is renamed again.
  *
+ * **Why the row ALSO snapshots the target's path (#178).** A reference that
+ * always resolves forward is exactly what breaks a URL captured under a prefix
+ * row whose target then moves again: the descendant's own row is keyed at the
+ * path the descendant had at ITS capture, which spells the ancestor the way the
+ * ancestor was spelled then — so rewriting a request onto the ancestor's
+ * *current* path produces a URL no row is keyed at, and the descendant's row is
+ * never consulted. `toPathAtCapture` freezes the spelling that row was keyed
+ * against, and {@link resolveRedirect} uses it as a lookup key before falling
+ * back to the current path. Rows stay immutable — this writer never revisits a
+ * row it wrote for a different move.
+ *
  * **Idempotency.** `from` is `unique: true` on the plugin's collection, so a
  * repeated rename back and forth would collide. The hook reads first and
  * updates the existing row instead of stacking a second one — which is also the
@@ -199,6 +210,15 @@ export const createPathRedirect: CollectionAfterChangeHook = async ({
       type: 'reference' as const,
       reference: { relationTo: collectionSlug, value: doc.id },
     },
+    // #178. The served path the target has RIGHT NOW, frozen onto the row.
+    // `to` is a reference, so the row's destination follows the document
+    // forever — correct for `from` itself and not enough for a URL captured
+    // beneath it, whose own row is keyed at a path spelled the way things were
+    // at this moment. Written for every row, not only the `matchDescendants`
+    // ones that need it: it is the same expression either way, and a row can
+    // gain the flag later (a post rename repointed by a page move), at which
+    // point a missing snapshot would be a hole nothing could backfill.
+    toPathAtCapture: to,
     // #130 added a permanence field to the collection. A rename is by
     // definition a permanent move, so this hook states 301 rather than relying
     // on the field's `defaultValue`: an `update` of an existing row does not
