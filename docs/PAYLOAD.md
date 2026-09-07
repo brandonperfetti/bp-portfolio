@@ -510,7 +510,9 @@ statement belongs in it — `redirects` was swept by the #72 backfill and its RL
 is already on. `scripts/check-migrations-rls.mjs` agrees: the migration creates
 no table, so it carries no obligation.
 
-Known limits: the reader reads at most 500 rows.
+Known limits: the reader reads at most 500 rows — and since #178 it walks
+that one list up to five times per request, resolving each capture-time
+rewrite through it (`docs/NAVIGATION.md` §How many moves a URL survives).
 
 ## Plugins (`src/plugins/index.ts`)
 

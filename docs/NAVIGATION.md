@@ -92,6 +92,63 @@ including `refreshCorvusEmbeddings` for a placed post, whose `sourceUrl`
 genuinely changed. So a section rename triggers an embedding refresh
 proportional to the subtree size. That is correct behaviour.
 
+### How many moves a URL survives (#178)
+
+**The guarantee: an inbound URL keeps working through as many moves as its
+history has rows, up to five hops.** Not "one move" — that was the pre-#178
+limit, and it was not a design decision so much as a missing lookup key.
+
+Each redirect row's `to` is a document reference, resolved at read time through
+the target's **current** path. That is exactly right for the URL the row is
+keyed at, and it is the wrong key for anything captured beneath a prefix row:
+the descendant's own row is keyed at the path the descendant had when **it**
+moved, and that spelling names the ancestor as the ancestor was named then. So
+rewriting a request onto the ancestor's current path lands on a spelling no row
+is keyed at, and the descendant's row is never consulted — a request every hop
+of which has a row still 404s. [measured, unit probe on the pre-fix tree] the
+three-move `lab-parent`/`lab-child`/`lab-grandchild` repro answered
+`/lab-base/lab-kid/lab-grandchild`, a path nothing serves.
+
+So every row also stores `toPathAtCapture`: the path its target was being
+served at when the row was written. `resolveRedirect` rewrites the remainder
+onto **that** path first, re-resolves the result through the same table, and
+repeats. Each hop is one historical move, and the walk ends when nothing is
+keyed at the rewritten form.
+
+Three limits, stated rather than discovered:
+
+- **Five hops** (`MAX_REDIRECT_HOPS`). A longer chain, or a cycle, answers no
+  redirect at all rather than a half-walked guess. No extra database reads —
+  every hop re-walks the same in-memory row list, which is still the one 500-row
+  read, now traversed up to five times.
+- **Rows written before #178 still survive exactly one move, and cannot be
+  backfilled.** Such a row has no snapshot, so the reader falls back to the
+  current path — the pre-#178 behaviour byte for byte. The path its target was
+  served at on the day it was written is not recorded anywhere, so nothing can
+  reconstruct it.
+- **The snapshot is a PATH, not a reference**, deliberately: its whole job is to
+  name a URL that is no longer served, which no live reference can do. The
+  consequence is that a spelling re-used later by a different document could in
+  principle be hopped onto — a page deleted and its slug taken by another. Rows
+  are immutable and destinations are still document references, so the answer
+  stays a real document's current URL; it may just be the wrong document's.
+  Not observed; recorded here because the reader cannot detect it.
+
+**Permanence now collapses to the chain's product.** A 301 row whose walk passes
+through a 302 row answers 307, not 308 — `permanent && next.permanent`. This is
+the conservative direction (a 302 is an editor saying the destination is not
+settled, and a 308 is cached indefinitely), but it is a real behaviour change
+and the alternative — reporting the FIRST row's permanence, since that is the
+row whose URL the visitor asked for — is defensible. Open for Brandon.
+
+**The rejected alternative: [cascade rows].** On every move, rewrite the
+existing rows that point into the moved subtree, so each row's key stays current
+and one lookup always suffices. It was rejected twice over: it mutates history,
+so a row no longer records what happened, and it makes each move cost O(rows
+touching the subtree) writes inside the editor's publish transaction — the
+per-descendant cost D4 chose one prefix row to avoid, arriving by a different
+door and pushing at the same 500-row ceiling.
+
 ## The `/work` section (#137)
 
 `/work` and `/work/<slug>` are **ordinary hierarchy Pages** — a `work` page with
