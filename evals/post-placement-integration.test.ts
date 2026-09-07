@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import { ensureArticlesAnchor } from './fixtures/articles-anchor'
 import {
   FIXTURE_SLUG_PREFIX,
   createFixturePage,
   createFixturePost,
-  createReservedFixturePage,
 } from './fixtures/payload-fixtures'
 
 /**
@@ -135,23 +135,25 @@ describe.skipIf(!connectionString)(
     let section: { id: number | string; path?: string | null }
 
     /**
-     * The `/articles` archive page THIS run created, or null.
+     * The `/articles` archive anchor, shared with `pages-hierarchy` (#191).
      *
-     * @remarks The one row this file writes that cannot carry {@link MARKER}:
-     * the archive-rejection case needs the real reserved slug `articles`, and
-     * `articles` is in `RESERVED_PAGE_SLUGS` (a serve/emit exclusion) rather
-     * than `CODE_OWNED_FIRST_SEGMENTS`, so creating it SUCCEEDS on a database
-     * that has no `/articles` page yet. The `like %MARKER%` sweep then walked
-     * straight past it and it survived `afterAll` — measured on a fresh
-     * migrated database, where a second run of this file inherited it.
+     * @remarks This file used to create the anchor inside its own case and
+     * delete it in `afterAll` when it had been the creator. That made a row
+     * two files depend on appear and disappear on this file's schedule:
+     * measured at `76d7115`, `pages-hierarchy-integration.test.ts`'s
+     * `/articles` collision case asserted nothing at all when run without this
+     * file beside it (3/3 runs) and asserted normally when run with it (5/5) —
+     * a silent, order-decided vacuum rather than a flake, which is why 12
+     * scheduled orders never went red.
      *
-     * Deleting `slug equals 'articles'` unconditionally would be worse than
-     * the leak: on a shared or seeded database the `.catch` fallback finds a
-     * REAL archive page that the corpus owns, and `afterAll` would destroy
-     * site content. So the id is captured only on the branch that created it,
-     * and only that id is deleted.
+     * `evals/fixtures/articles-anchor.ts` now owns it: created at most once,
+     * never mutated, never deleted. `pages.path` is unique (M1), so exactly one
+     * such row can exist and a per-file anchor is impossible; making the
+     * singleton immortal is what removes the shared MUTABLE state. See that
+     * module's header for why not deleting it is strictly safer than the
+     * bookkeeping it replaces.
      */
-    let createdArchiveId: number | string | null = null
+    let archiveAnchorId: number | string | null = null
 
     /**
      * Every non-fixture post as it stood before this file wrote anything.
@@ -186,18 +188,10 @@ describe.skipIf(!connectionString)(
         where: { slug: { like: `%${MARKER}%` } },
         overrideAccess: true,
       })
-      if (createdArchiveId !== null) {
-        // `where`, not `id`: the by-id delete throws NotFound if the row is
-        // already gone, which would turn a re-run or a partially-cleaned
-        // database into an afterAll failure. Same no-throw shape as the two
-        // sweeps above.
-        await payload.delete({
-          collection: 'pages',
-          where: { id: { equals: createdArchiveId } },
-          overrideAccess: true,
-        })
-        createdArchiveId = null
-      }
+      // The `/articles` anchor is deliberately NOT swept here — it is
+      // tier-owned and shared with `pages-hierarchy-integration.test.ts`,
+      // which runs in a parallel worker against this same database. See
+      // `evals/fixtures/articles-anchor.ts`.
     }
 
     const mkPage = async (slug: string, parent?: number | string) =>
@@ -242,6 +236,7 @@ describe.skipIf(!connectionString)(
         .map((doc) => ({ id: doc.id, slug: doc.slug, path: doc.path ?? null }))
 
       section = await mkPage(`${MARKER}-work`)
+      archiveAnchorId = await ensureArticlesAnchor(payload)
     }, 120_000)
 
     afterAll(cleanup)
@@ -381,39 +376,15 @@ describe.skipIf(!connectionString)(
     })
 
     it('rejects a placement inside the /articles archive', async () => {
-      const archive = await createReservedFixturePage(payload, {
-        data: {
-          title: 'articles',
-          layout,
-          _status: 'published',
-          slug: 'articles',
-        },
-      })
-        .then((page) => {
-          // Ours, so `cleanup` may remove it. The fallback below is NOT ours.
-          createdArchiveId = page.id
-          return page
-        })
-        .catch(async () => {
-          const { docs } = await payload.find({
-            collection: 'pages',
-            overrideAccess: true,
-            pagination: false,
-            where: { path: { equals: 'articles' } },
-          })
-          return docs[0]
-        })
-      // Neither branch produced a page: `create` failed for a reason other
-      // than the row already existing. Returning here would pass vacuously
-      // and hide the real rejection this case is the only assertion of.
-      if (!archive) {
-        throw new Error(
-          'no /articles archive page: creating it failed and none exists to fall back on',
-        )
-      }
-      await expect(mkPost(`${MARKER}-inarchive`, archive.id)).rejects.toThrow(
-        /inside the article archive/,
-      )
+      // The anchor is acquired in `beforeAll` from the tier-owned helper, so
+      // this case neither creates nor destroys a row a sibling file reads.
+      expect(
+        archiveAnchorId,
+        'the /articles anchor must exist, or this case asserts nothing',
+      ).not.toBeNull()
+      await expect(
+        mkPost(`${MARKER}-inarchive`, archiveAnchorId as number | string),
+      ).rejects.toThrow(/inside the article archive/)
     })
 
     it('rejects a placement deeper than the shared cap', async () => {

@@ -81,6 +81,18 @@ const HELPERS_MODULE = './corvus-helpers'
  */
 const FIXTURE_MODULE_REL = 'fixtures/payload-fixtures.ts'
 
+/**
+ * The one module allowed to name the `/articles` anchor slug (#191).
+ *
+ * @remarks Relative to the eval root. `pages.path` is unique, so exactly one
+ * `articles` page can exist in the whole database and two files cannot each
+ * own one — the anchor is tier-owned, created at most once and never deleted.
+ * A test file that names the slug itself is reintroducing the create/delete
+ * bookkeeping that made a sibling file's assertion appear and disappear on
+ * this file's schedule.
+ */
+const ANCHOR_MODULE_REL = 'fixtures/articles-anchor.ts'
+
 /** Pins `OPENAI_BASE_URL` so the autoevals grader talks to OpenAI, not a gateway. */
 const BASE_URL_MODULE = './openai-base-url'
 
@@ -130,6 +142,18 @@ function evalSourcesDeep(dir: string = EVAL_ROOT): string[] {
 }
 
 /**
+ * The `zz-` MARKER constant an eval file marks its own fixtures with.
+ *
+ * @param source - Raw TypeScript source; comments are stripped first, so a
+ *   docblock that quotes a SIBLING file's marker is not mistaken for a
+ *   declaration of it.
+ * @returns The marker, or `undefined` for a file that declares none.
+ */
+function fixtureMarker(source: string): string | undefined {
+  return /const\s+MARKER\s*=\s*'(zz-[^']+)'/.exec(stripTsComments(source))?.[1]
+}
+
+/**
  * The collections a `payload.create(` call in `source` writes to, if any.
  *
  * @remarks Grep-based and deliberately so: this runs in the quality job with
@@ -145,7 +169,8 @@ function evalSourcesDeep(dir: string = EVAL_ROOT): string[] {
  * quoted in a docblock — this file's own guard message, for one — is prose.
  *
  * @param source - Raw TypeScript source.
- * @returns One entry per `payload.create(` call, in source order.
+ * @returns One entry per `payload.create(` call, in source order, naming the
+ *   collection it writes to or `'?'` when the scan could not classify it.
  */
 function payloadCreateTargets(source: string): string[] {
   const code = stripTsComments(source)
@@ -539,6 +564,66 @@ describe('eval fixture hygiene', () => {
         targets.filter((target) => ['pages', 'posts', '?'].includes(target)),
         `${relative(REPO_ROOT, file)} writes a posts/pages row directly; use createFixturePage/createFixturePost from ${FIXTURE_MODULE_REL} so the zz- prefix is enforced`,
       ).toEqual([])
+    }
+  })
+
+  it('gives every writing file a marker no sibling shares', () => {
+    // #191, the deterministic half of "these files do not share fixture
+    // state". The tier's cross-file assertions all reduce to "this row is
+    // mine, that one is a sibling's", and `slug like %MARKER%` is how each
+    // file says it — two files sharing a marker, or one file's code naming
+    // another's, and the sweeps start deleting each other's rows mid-run.
+    //
+    // Comments are stripped, so the docblocks that legitimately quote
+    // `zz-pages-hierarchy-integration-mv-post` to explain the history are
+    // prose, not a reference.
+    const markers = new Map<string, string>()
+    for (const file of evalSourcesDeep()) {
+      const marker = fixtureMarker(readFileSync(file, 'utf8'))
+      if (marker === undefined) continue
+      expect(
+        markers.get(marker),
+        `${relative(REPO_ROOT, file)} reuses the fixture marker "${marker}"`,
+      ).toBeUndefined()
+      markers.set(marker, file)
+    }
+    expect(markers.size).toBeGreaterThan(1)
+
+    for (const file of evalSourcesDeep()) {
+      const code = stripTsComments(readFileSync(file, 'utf8'))
+      for (const [marker, owner] of markers) {
+        if (owner === file) continue
+        expect(
+          code.includes(marker),
+          `${relative(REPO_ROOT, file)} names ${relative(REPO_ROOT, owner)}'s fixture marker "${marker}"`,
+        ).toBe(false)
+      }
+    }
+  })
+
+  it('leaves the /articles anchor to the one module that owns it', () => {
+    // `pages.path` is unique (M1), so the `articles` page is a singleton and a
+    // per-file anchor is impossible. It used to be created and deleted by
+    // `post-placement-integration.test.ts` and merely READ — with a silent
+    // `return` when absent — by `pages-hierarchy-integration.test.ts`, which
+    // made the second file's assertion run or not run according to the first
+    // file's schedule in a parallel worker. `fixtures/articles-anchor.ts` now
+    // creates it at most once and never deletes it; a test file that names the
+    // slug again is rebuilding that coupling.
+    const owner = join(EVAL_ROOT, ANCHOR_MODULE_REL)
+    expect(existsSync(owner), 'the anchor helper must exist').toBe(true)
+
+    // Scoped to the files that declare a fixture MARKER, which is exactly the
+    // population that writes `pages`/`posts` rows and could therefore own an
+    // anchor. `scorers.ts` matches the word `articles` while grading a
+    // citation's text and writes nothing at all.
+    for (const file of evalSourcesDeep()) {
+      const source = readFileSync(file, 'utf8')
+      if (file === owner || fixtureMarker(source) === undefined) continue
+      expect(
+        /'articles'/.test(stripTsComments(source)),
+        `${relative(REPO_ROOT, file)} names the /articles anchor slug; call ensureArticlesAnchor() from ${ANCHOR_MODULE_REL} instead`,
+      ).toBe(false)
     }
   })
 

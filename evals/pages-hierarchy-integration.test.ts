@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import { ensureArticlesAnchor } from './fixtures/articles-anchor'
 import {
   createFixturePage,
   createFixturePost,
@@ -466,16 +467,15 @@ describe.skipIf(!connectionString)(
     })
 
     it('rejects a page whose path collides with a Post’s /articles URL', async () => {
-      const articles = await payload.find({
-        collection: 'pages',
-        overrideAccess: true,
-        pagination: false,
-        where: { path: { equals: 'articles' } },
-      })
-      // The `/articles` anchor page exists in every seeded database; skip the
-      // assertion rather than invent one, since creating it would itself be the
-      // thing under test.
-      if (articles.docs.length === 0) return
+      // The anchor comes from the tier-owned helper, not from whatever a
+      // parallel worker happens to have created. It used to come from
+      // `post-placement-integration.test.ts`'s in-flight fixture, and the
+      // `if (…length === 0) return` below it meant this case asserted NOTHING
+      // whenever that file was not running beside it — measured at `76d7115`
+      // as vacuous on 3/3 file-isolated runs and live on 5/5 paired runs.
+      // `ensureArticlesAnchor` cannot return null, so there is no skip branch
+      // left to hide in.
+      const anchorId = await ensureArticlesAnchor(payload)
 
       await createFixturePost(payload, {
         data: {
@@ -486,9 +486,9 @@ describe.skipIf(!connectionString)(
         },
       })
 
-      await expect(
-        mkPage(`${MARKER}-clash`, articles.docs[0].id),
-      ).rejects.toThrow(/already the article/i)
+      await expect(mkPage(`${MARKER}-clash`, anchorId)).rejects.toThrow(
+        /already the article/i,
+      )
     })
 
     /**
