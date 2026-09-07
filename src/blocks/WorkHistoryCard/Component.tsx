@@ -70,9 +70,10 @@ export const workHistoryEntryFacts = (
  * (#188): the résumé list keeps the `max-w-xl` reading measure the zero-config
  * cards share, while the per-entry card drops its cap and fills the route's
  * content column (`max-w-none` inside `Container`), the same measure an
- * uncapped `lead` block takes. A `prose` block sits narrower than that on
- * purpose (~65ch), so the card is not promised to match every sibling — only
- * to stop being capped below the column the page gives it.
+ * uncapped `lead` block takes — and a root-hosted `prose` block too: `prose`
+ * carries no width cap of its own here (see `Prose/Component.tsx`), so it
+ * fills the same column. The card is not promised to match every sibling —
+ * only to stop being capped below the column the page gives it.
  *
  * @remarks A relationship pointing at a deleted row comes back `null`, which
  * falls through to the résumé card rather than rendering an empty box — the

@@ -19,8 +19,14 @@ import type { ProseBlock } from '@/payload-types'
  * is inherited, not chosen here; changing it is a site-wide typography
  * decision, not a block one.
  *
- * No width override: an article body caps at the `prose` measure (~65ch) and
- * so does this. That is the point of the block.
+ * No width override: `prose` itself carries no `max-width` in this repo — the
+ * site's `typography.ts` sets `theme.typography` outright (not under
+ * `theme.extend`), which replaces `@tailwindcss/typography`'s default
+ * `DEFAULT.css` — the one that defines the ~65ch cap — rather than merging
+ * into it. So an article body, and this block alike, fill whatever width
+ * their host gives them; the class list only has to match the article body's,
+ * not carry a measure of its own. Whether `prose` SHOULD carry a measure is a
+ * site-wide typography decision, out of scope here.
  *
  * Empty content renders nothing (`RichTextContent` returns null), so a block
  * an editor added and never filled leaves no gap behind.

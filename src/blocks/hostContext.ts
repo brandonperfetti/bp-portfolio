@@ -75,10 +75,11 @@ export type ZeroConfigCardMeasure = 'form' | 'content'
  * per-entry mode asks for `content`, because on `/work/<slug>` a 576px card
  * inside a content column that reaches `lg:max-w-5xl` reads as a layout bug
  * rather than as a reading measure. `content` means "no cap of its own", so it
- * matches an uncapped sibling such as `lead`; a `prose` block deliberately
- * stays narrower (~65ch) and is not the thing being matched. The work block's
- * OTHER mode — the résumé list — is still a `form`-measure card, so the
- * distinction is per render, not per block.
+ * matches an uncapped sibling such as `lead` — and a root-hosted `prose`
+ * block too, which carries no width cap of its own in this repo (see
+ * `Prose/Component.tsx` for the mechanism). The work block's OTHER mode — the
+ * résumé list — is still a `form`-measure card, so the distinction is per
+ * render, not per block.
  */
 export function zeroConfigCardWidthClassFor(
   hosted: BlockHostContext | null | undefined,
