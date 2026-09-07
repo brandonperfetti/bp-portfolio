@@ -63,6 +63,9 @@ surface only** — it is not a CMS and has no runtime integration.
   `eslint-plugin-tsdoc`); document _why_, not _what_.
 - New UI starts from shadcn/ui primitives (`src/components/ui`) and gets a
   Storybook story; serious a11y violations fail the story.
+- **shadcn primitives are themed at the token layer**, never repainted per
+  call site, and every token pair is AA-pinned by test — `docs/STYLING.md`
+  §shadcn primitives are themed at the token layer.
 - Tests accompany behavior changes: Vitest unit/component, Playwright e2e,
   Evalite for Corvus behavior.
 

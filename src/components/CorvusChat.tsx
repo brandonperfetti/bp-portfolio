@@ -309,8 +309,17 @@ function CorvusReplyLink({
     }
   }, [confirming])
 
+  // teal-700 / teal-400 rather than `text-primary` (#190). `--primary` is a
+  // FILL token — one colour in both themes (teal-700), paired with white — so
+  // reading it as TEXT is a role confusion that only went unnoticed while the
+  // scaffold happened to make it near-black in light and near-white in dark.
+  // Themed to the site palette it measures 3.69:1 on the dark page and 2.61:1
+  // on the dark assistant bubble, both under WCAG 1.4.3. This is the site's
+  // actual link accent instead — the nav's active-link pair, identical to
+  // `--corvus-accent` in each theme: 5.16:1 / 4.90:1 in light (page / bubble),
+  // 10.66:1 / 7.98:1 in dark.
   const linkClassName = [
-    'wrap-anywhere font-medium text-primary underline',
+    'wrap-anywhere font-medium text-teal-700 underline dark:text-teal-400',
     className,
   ]
     .filter(Boolean)
