@@ -42,7 +42,10 @@ import {
  * the write back long before anything asserted here could be observed.
  *
  * Runs in the `e2e` job, the only one with `pgvector/pgvector:pg16` and a real
- * `pnpm migrate`. Every row is marked and removed in `afterAll`.
+ * `pnpm migrate`. Every row this file creates is marked and removed in
+ * `afterAll`, with one exception: the `/articles` anchor, which
+ * `ensureArticlesAnchor` finds-or-creates, carries no `MARKER`, and is never
+ * deleted — see `evals/fixtures/articles-anchor.ts`.
  *
  * **The no-regression AC is pinned to a snapshot, not to a sweep.** Vitest runs
  * this tier's files in parallel workers against ONE database, so at any instant

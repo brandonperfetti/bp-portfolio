@@ -21,6 +21,13 @@ import type { Payload } from 'payload'
  * that broke it; and `scripts/eval-harness.test.ts` fails the build if an eval
  * file calls `payload.create` for these collections without coming through
  * this module.
+ *
+ * **Scope: `payload.create` only.** `assertFixtureSlug` and the harness guard
+ * both classify `payload.create` call sites; they do not reach `payload.update`.
+ * The tier also writes `slug` through `payload.update` in several places (all
+ * currently `zz-`-prefixed by hand), and an unprefixed update would widen a
+ * sibling's baseline exactly as an unprefixed create would — nothing here
+ * catches that. Tracked as a follow-up, not fixed here.
  */
 
 /**
@@ -36,13 +43,16 @@ export const FIXTURE_SLUG_PREFIX = 'zz-'
  * Slugs the prefix rule cannot cover, and the reason each one is exempt.
  *
  * @remarks Exactly one entry, and it is not a matter of taste. The `/articles`
- * archive anchor must have the literal path `articles` for the two guards that
- * depend on it to fire at all — `assertNotInArticlesNamespace`
- * (`src/collections/Posts/hooks/postPlacement.ts`) and the `/articles/<slug>`
- * namespace branch of `assertNoCrossCollectionCollision`
- * (`src/fields/slug/documentPath.ts`) both key off `postSlugCollidingWith`,
- * which matches a path whose FIRST SEGMENT is the slug-routed prefix. A
- * `zz-articles` page collides with nothing and would turn both cases vacuous.
+ * archive anchor must have the literal slug `articles` — not for its OWN path
+ * (`postSlugCollidingWith('articles')` returns `null`; a page's own path never
+ * collides with itself) but for its CHILDREN's: any page or post placed under
+ * it lands at `articles/<slug>`, and that two-segment shape is exactly what
+ * `postSlugCollidingWith` (`src/fields/slug/documentPath.ts:408-414`) matches
+ * against its FIRST SEGMENT. The two guards that depend on that match —
+ * `assertNotInArticlesNamespace` (`src/collections/Posts/hooks/postPlacement.ts`)
+ * and the `/articles/<slug>` namespace branch of `assertNoCrossCollectionCollision`
+ * (`src/fields/slug/documentPath.ts`) — both call it. A `zz-articles` anchor
+ * would change the first segment and turn both cases vacuous.
  *
  * The allow-list is a `Set` rather than a boolean flag so that adding an
  * exemption is a visible edit to a reviewed list, not an argument at a call

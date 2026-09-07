@@ -44,7 +44,10 @@ import {
  * anything this file asserts could be observed.
  *
  * Runs in the `e2e` job, the only one with `pgvector/pgvector:pg16` and a real
- * `pnpm migrate`. Every row is marked and removed in `afterAll`.
+ * `pnpm migrate`. Every row this file creates is marked and removed in
+ * `afterAll`, with one exception: the `/articles` anchor, which
+ * `ensureArticlesAnchor` finds-or-creates, carries no `MARKER`, and is never
+ * deleted — see `evals/fixtures/articles-anchor.ts`.
  */
 
 vi.mock('next/cache', () => ({
