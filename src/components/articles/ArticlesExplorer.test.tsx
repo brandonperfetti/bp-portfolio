@@ -6,7 +6,15 @@ import {
   within,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 
 import { ArticlesExplorer } from '@/components/articles/ArticlesExplorer'
 import type { ArticleWithSlug } from '@/lib/articles'
@@ -24,6 +32,26 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/articles',
   useSearchParams: () => searchParamsMock,
 }))
+
+// jsdom ships no `matchMedia`, and the #183 anchor reads the shared
+// reduced-motion preference through it. Stubbed to "no preference" so the
+// anchor takes its smooth-scroll branch (mirrors `CookieBanner.test`).
+beforeAll(() => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }),
+  })
+})
 
 beforeEach(() => {
   searchParamsMock = new URLSearchParams('')
@@ -277,6 +305,35 @@ describe('ArticlesExplorer pagination (#88)', () => {
         scroll: false,
       })
     })
+  })
+
+  it('re-anchors scroll and focus to the results grid on a page step (#183)', async () => {
+    const user = userEvent.setup()
+    const articles = makeArticles(ARTICLES_PAGE_SIZE + 1)
+    const { container, rerender } = render(
+      <ArticlesExplorer articles={articles} />,
+    )
+    const results = container.querySelector('[tabindex="-1"]') as HTMLElement
+    // jsdom implements no layout and no `scrollIntoView`; the stub is the
+    // assertion surface.
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(results, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+
+    await user.click(screen.getByRole('link', { name: 'Go to page 2' }))
+    // `next/navigation` is mocked, so nothing re-renders on its own — mirror
+    // the navigation the push would have caused, which is the render the
+    // anchor effect actually runs in.
+    searchParamsMock = new URLSearchParams('page=2')
+    rerender(<ArticlesExplorer articles={articles} />)
+
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'smooth',
+      block: 'start',
+    })
+    expect(document.activeElement).toBe(results)
   })
 
   it('drops ?page when the search query changes', async () => {

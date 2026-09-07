@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { Section } from '@/components/Section'
@@ -93,6 +93,9 @@ export function UsesSections({ sections }: { sections: CmsUseSection[] }) {
     [pathname, searchParams],
   )
 
+  /** The rendered sections — the #183 scroll/focus anchor for a page step. */
+  const resultsRef = useRef<HTMLDivElement>(null)
+
   const goToPage = useCallback(
     (nextPage: number) => {
       const currentQueryString = searchParams.toString()
@@ -109,20 +112,27 @@ export function UsesSections({ sections }: { sections: CmsUseSection[] }) {
 
   return (
     <div className="space-y-20">
-      {visibleSections.map((section) => (
-        <Section key={section.key} title={section.title}>
-          <ScrollReveal targets="li" revealKey={String(currentPage)}>
-            <ul
-              role="list"
-              className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2"
-            >
-              {section.items.map((item) => (
-                <TechCard key={item.slug} item={item} monogram={false} />
-              ))}
-            </ul>
-          </ScrollReveal>
-        </Section>
-      ))}
+      {/* A wrapper, not the outer element: the #183 anchor has to be the
+          results *only*, so scrolling its top into view cannot land on the
+          pagination strip below them. See `ArticlesExplorer` for why
+          `tabIndex={-1}` draws no focus ring and what `scroll-mt-16` pays
+          for. */}
+      <div ref={resultsRef} tabIndex={-1} className="scroll-mt-16 space-y-20">
+        {visibleSections.map((section) => (
+          <Section key={section.key} title={section.title}>
+            <ScrollReveal targets="li" revealKey={String(currentPage)}>
+              <ul
+                role="list"
+                className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2"
+              >
+                {section.items.map((item) => (
+                  <TechCard key={item.slug} item={item} monogram={false} />
+                ))}
+              </ul>
+            </ScrollReveal>
+          </Section>
+        ))}
+      </div>
 
       <ListPagination
         page={currentPage}
@@ -130,6 +140,7 @@ export function UsesSections({ sections }: { sections: CmsUseSection[] }) {
         buildHref={buildPageHref}
         onNavigate={goToPage}
         label="Uses pagination"
+        resultsRef={resultsRef}
       />
     </div>
   )

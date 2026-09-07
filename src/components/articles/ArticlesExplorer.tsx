@@ -452,6 +452,9 @@ export function ArticlesExplorer({
     [pathname, searchParams],
   )
 
+  /** The results grid — the #183 scroll/focus anchor for a page step. */
+  const resultsRef = useRef<HTMLDivElement>(null)
+
   const goToPage = useCallback(
     (nextPage: number) => {
       const currentQueryString = searchParams.toString()
@@ -570,7 +573,16 @@ export function ArticlesExplorer({
         immediate={queryText.length > 0 || topic !== 'All' || currentPage > 1}
         revealKey={`${queryText}|${topic}|${currentPage}`}
       >
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        {/* The #183 re-anchor target: `tabIndex={-1}` so a page step can put
+            focus on the results themselves (the base focus outline is scoped
+            to `[tabindex]:not([tabindex='-1'])`, so nothing flashes a ring),
+            and `scroll-mt-16` so the sticky header does not sit over the row
+            we just scrolled to — the same offset id-linked sections use. */}
+        <div
+          ref={resultsRef}
+          tabIndex={-1}
+          className="grid scroll-mt-16 grid-cols-1 gap-8 lg:grid-cols-3"
+        >
           {visibleArticles.map((article) => {
             const author = getAuthor(article)
             const topicValues = (article.topics ?? [])
@@ -691,6 +703,7 @@ export function ArticlesExplorer({
         buildHref={buildPageHref}
         onNavigate={goToPage}
         label="Articles pagination"
+        resultsRef={resultsRef}
       />
 
       {filtered.length === 0 && (

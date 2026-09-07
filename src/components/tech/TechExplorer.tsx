@@ -291,6 +291,9 @@ export function TechExplorer({
     [pathname, searchParams],
   )
 
+  /** The results list — the #183 scroll/focus anchor for a page step. */
+  const resultsRef = useRef<HTMLUListElement>(null)
+
   const goToPage = useCallback(
     (nextPage: number) => {
       const currentQueryString = searchParams.toString()
@@ -404,9 +407,14 @@ export function TechExplorer({
         }
         revealKey={`${normalizedQueryText}|${category}|${currentPage}`}
       >
+        {/* #183 re-anchor target — see the note in `ArticlesExplorer` for why
+            `tabIndex={-1}` draws no focus ring and what `scroll-mt-16` pays
+            for. */}
         <ul
+          ref={resultsRef}
+          tabIndex={-1}
           role="list"
-          className="grid grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2 lg:grid-cols-3"
+          className="grid scroll-mt-16 grid-cols-1 gap-x-12 gap-y-16 sm:grid-cols-2 lg:grid-cols-3"
         >
           {visibleItems.map((tech, index) => (
             <TechCard
@@ -428,6 +436,7 @@ export function TechExplorer({
         buildHref={buildPageHref}
         onNavigate={goToPage}
         label="Tech pagination"
+        resultsRef={resultsRef}
       />
 
       {filteredItems.length === 0 && (

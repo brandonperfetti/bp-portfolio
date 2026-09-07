@@ -1,6 +1,14 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 
 import { TechExplorer } from '@/components/tech/TechExplorer'
 import type { CmsEntityItem } from '@/lib/cms/types'
@@ -64,6 +72,26 @@ function makeTech(count: number): CmsEntityItem[] {
     category: 'Tooling',
   }))
 }
+
+// jsdom ships no `matchMedia`, and the #183 anchor reads the shared
+// reduced-motion preference through it. Stubbed to "no preference" so the
+// anchor takes its smooth-scroll branch (mirrors `CookieBanner.test`).
+beforeAll(() => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }),
+  })
+})
 
 beforeEach(() => {
   searchParamsMock = new URLSearchParams('')
@@ -130,6 +158,32 @@ describe('TechExplorer pagination (#88)', () => {
     expect(pushMock).toHaveBeenCalledWith('/tech?category=Tooling&page=2', {
       scroll: false,
     })
+  })
+
+  it('re-anchors scroll and focus to the results list on a page step (#183)', async () => {
+    const user = userEvent.setup()
+    const items = makeTech(TECH_PAGE_SIZE + 1)
+    const { container, rerender } = render(<TechExplorer items={items} />)
+    const results = container.querySelector('[tabindex="-1"]') as HTMLElement
+    // jsdom implements no layout and no `scrollIntoView`; the stub is the
+    // assertion surface.
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(results, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+
+    await user.click(screen.getByRole('link', { name: 'Go to page 2' }))
+    // `next/navigation` is mocked, so mirror the navigation the push would
+    // have caused — that is the render the anchor effect runs in.
+    searchParamsMock = new URLSearchParams('page=2')
+    rerender(<TechExplorer items={items} />)
+
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'smooth',
+      block: 'start',
+    })
+    expect(document.activeElement).toBe(results)
   })
 
   it('drops ?page when a category filter changes', async () => {
