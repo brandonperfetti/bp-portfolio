@@ -40,7 +40,15 @@ FROM pages AS child
 JOIN pages AS parent
   ON parent.id = child.parent_id
 WHERE child._status = 'published'
-  AND parent._status <> 'published'
+  -- `IS DISTINCT FROM`, not `<>`: `_status` is NULLABLE. The column is declared
+  -- `DEFAULT 'draft'` with no NOT NULL (migration 20260722_033130), so
+  -- `NULL <> 'published'` evaluates to NULL rather than true and a `<>` here
+  -- silently drops every parent whose status is unset. Those are exactly the
+  -- rows this file exists to find: a NULL gets in only by a write that went
+  -- around the publish guards, which is the same way the violations predating
+  -- those guards did. The comparison that hides them is the one that would make
+  -- this audit answer "0 rows" for a database that has the defect.
+  AND parent._status IS DISTINCT FROM 'published'
 ORDER BY child.path;
 
 \echo '== 2. Published PLACED POSTS whose parent page is not published =='
@@ -60,5 +68,6 @@ FROM posts AS post
 JOIN pages AS parent
   ON parent.id = post.parent_id
 WHERE post._status = 'published'
-  AND parent._status <> 'published'
+  -- Nullable `_status` again; see query 1 for why `<>` would hide a violation.
+  AND parent._status IS DISTINCT FROM 'published'
 ORDER BY post.path;
