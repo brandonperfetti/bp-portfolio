@@ -230,4 +230,41 @@ describe('usePageChangeAnchor (#183)', () => {
     expect(() => navigate(2)).not.toThrow()
     expect(document.activeElement).toBe(results)
   })
+
+  it('does not carry an arming across unmount into a fresh instance', () => {
+    // S-2A-3: the mount-scoped cleanup (`armedRef.current = null`) is inert —
+    // `armedRef` is a `useRef` scoped to one component instance, so it is
+    // deallocated with that instance whether or not the cleanup runs. This
+    // asserts exactly that fact: arm, unmount, then mount a brand-new
+    // instance already sitting on the armed page — a leaked arming would
+    // fire here, but a fresh `useRef` starts at `null` regardless of the
+    // predecessor's fate, so nothing scrolls or focuses.
+    const { results, armOnly } = renderHarness()
+    armOnly(2)
+    cleanup()
+
+    // React flushes mount effects synchronously inside `render()`'s own
+    // `act()` call, so a leaked arm would fire *before* `render()` returns.
+    // The stub has to already be in place for that effect to find — on the
+    // prototype, since the node it will land on does not exist yet — or a
+    // leaked call goes unobserved and the scroll assertion below is vacuous.
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+    try {
+      const view = render(<Harness page={2} armTarget={2} />)
+      const freshResults = view.getByTestId('results') as HTMLElement
+
+      expect(scrollIntoView).not.toHaveBeenCalled()
+      expect(document.activeElement).not.toBe(results)
+      expect(document.activeElement).not.toBe(freshResults)
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+        configurable: true,
+        value: originalScrollIntoView,
+      })
+    }
+  })
 })

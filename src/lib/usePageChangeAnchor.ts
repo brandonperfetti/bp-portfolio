@@ -79,6 +79,31 @@ export interface PageChangeAnchor {
  *   `[tabindex]:not([tabindex='-1'])` (`src/styles/tailwind.css`) — so a
  *   programmatic focus here draws no teal outline, by construction rather than
  *   by luck.
+ * - **Known edge case: a reset that lands on the armed page.** The arm
+ *   carries a target page, not a transition — it cannot tell "the push this
+ *   click made landed" from "some other change happened to land `page` on
+ *   the same number". Concretely: the reader is on page 2 with a search
+ *   edit still inside its debounce window, and clicks "1". That arms `1`.
+ *   If the debounced reset's `router.replace` (which drops `?page` on a
+ *   query/topic change) lands before the click's own push resolves, `page`
+ *   goes 2 → 1 from the *reset*, and the effect sees `armedFor === page` and
+ *   fires — scrolling to and focusing the results, mid-keystroke. This is
+ *   the one case the target arm cannot distinguish from a genuine click
+ *   settling, and it happens to be the direction the click itself asked
+ *   for (page 1), so the reader ends up where they clicked, just steered
+ *   there by the wrong event. It does not reproduce for any other target:
+ *   a reset always drops to page 1, so an arm for page 2 or later is safe.
+ * - **Known edge case: two rapid clicks.** Clicking page N then page P
+ *   before either settles arms `P` — the second `armAnchor` call overwrites
+ *   the first, there is no queue. If P's push lands first, `page` becomes P
+ *   and the anchor fires as normal. If N's push happens to land first
+ *   instead, `armedFor` (`P`) does not match `page` (`N`), so the arm is
+ *   discarded in the effect's `armedFor !== page` branch and nothing scrolls
+ *   or focuses — including when `page` later does reach P, because the
+ *   arming that would have matched it is already gone. The reader's
+ *   viewport and focus simply stay where they were, which is the pre-#183
+ *   behavior on that click. This fails toward inaction, never toward
+ *   stealing focus from somewhere the reader didn't ask to go.
  * - **Guards.** A missing ref, or a jsdom element with no `scrollIntoView`,
  *   degrades to doing nothing rather than throwing.
  */

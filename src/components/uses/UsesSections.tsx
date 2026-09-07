@@ -116,11 +116,13 @@ export function UsesSections({ sections }: { sections: CmsUseSection[] }) {
           results *only*, so scrolling its top into view cannot land on the
           pagination strip below them. See `ArticlesExplorer` for why
           `tabIndex={-1}` draws no focus ring, what `scroll-mt-16` pays for,
-          and why a focused `<div>` needs `role="region"` to carry a name. */}
-      <div
+          and why a focused container needs a name — here that container is
+          a `<section>`, which is already a landmark region on its own
+          (`docs/ACCESSIBILITY.md` §Semantics: real elements over ARIA), so
+          no `role="region"` is added. */}
+      <section
         ref={resultsRef}
         tabIndex={-1}
-        role="region"
         aria-label="Uses results"
         className="scroll-mt-16 space-y-20"
       >
@@ -138,7 +140,7 @@ export function UsesSections({ sections }: { sections: CmsUseSection[] }) {
             </ScrollReveal>
           </Section>
         ))}
-      </div>
+      </section>
 
       <ListPagination
         page={currentPage}

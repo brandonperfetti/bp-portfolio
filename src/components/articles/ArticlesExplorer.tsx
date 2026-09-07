@@ -583,12 +583,13 @@ export function ArticlesExplorer({
             (`docs/ACCESSIBILITY.md` §Semantics): a bare `<div>` is a generic
             with no name-bearing role and would announce nothing. The three
             other surfaces anchor a `<ul role="list">` and take the name
-            alone; this grid holds `<article>`s, so `role="list"` would lie —
-            `role="region"` is the honest container role. */}
-        <div
+            alone; this grid holds `<article>`s, so `role="list"` would lie.
+            §Semantics also prefers a real element over an ARIA role where one
+            exists — a named `<section>` is already a landmark region, so it
+            needs no `role="region"` of its own. */}
+        <section
           ref={resultsRef}
           tabIndex={-1}
-          role="region"
           aria-label="Article results"
           className="grid scroll-mt-16 grid-cols-1 gap-8 lg:grid-cols-3"
         >
@@ -702,7 +703,7 @@ export function ArticlesExplorer({
               </HoverMotionCard>
             )
           })}
-        </div>
+        </section>
       </ScrollReveal>
 
       <ListPagination
