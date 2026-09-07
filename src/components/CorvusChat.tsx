@@ -36,6 +36,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   Conversation,
@@ -170,7 +171,6 @@ function CorvusReplyLink({
 }: AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) {
   const router = useRouter()
   const [confirming, setConfirming] = useState(false)
-  const triggerRef = useRef<HTMLButtonElement>(null)
   const confirmRef = useRef<HTMLButtonElement>(null)
 
   // `window.location.host` is read here rather than inside `linkSafety.ts` so
@@ -181,82 +181,23 @@ function CorvusReplyLink({
       typeof window === 'undefined' ? undefined : window.location.host,
   })
 
-  // Closing is state only, and the ONE path every dismissal routes through —
-  // Radix's Escape and outside-click both arrive here via `onOpenChange`,
-  // alongside Cancel and Confirm. Restoring focus from HERE was a real bug:
-  // React batches the state update, so `inert` is still on the chat surface
-  // when the handler runs, and `.focus()` on an element inside an inert
-  // subtree is a no-op — `activeElement` stayed on `<body>` in Chromium. The
-  // restore therefore lives in the effect cleanup that removes `inert`, which
-  // is the only place ordered after it.
+  // Closing is state only. Cancel and Confirm route through here; Radix's
+  // Escape and outside-click arrive as `onOpenChange(false)` and set the same
+  // state directly.
+  //
+  // Nothing else happens here, and nothing else happens anywhere in this
+  // component (#169). The hand-rolled `inert` effect and the manual focus
+  // restore that used to sit at this spot are gone: they were not
+  // belt-and-braces but a coupled pair — the card-scoped `inert` is what
+  // DISABLED the primitive's own restore (focusing into an inert subtree is
+  // silently a no-op), and the manual `trigger.focus()` in the cleanup is what
+  // then repaired it. `hideOthers` takes the rest of the page out of the
+  // accessibility tree while the dialog is open, and `DialogTrigger` (below)
+  // is what gives Radix the node to restore focus to. See
+  // `docs/ACCESSIBILITY.md` §Focus.
   const close = useCallback(() => {
     setConfirming(false)
   }, [])
-
-  // The chat surface behind the dialog is made inert while it is open, so the
-  // composer, the mic and every citation are unreachable by keyboard AND by a
-  // screen reader's virtual cursor — a focus trap alone only closes the first
-  // of those two doors.
-  //
-  // KEPT after the move onto the shadcn `Dialog` (#169), which took over the
-  // trap, Escape, outside-click, `aria-modal` and the portal. Radix hides the
-  // rest of the page a different way: `hideOthers` marks the portal's BODY-LEVEL
-  // siblings `aria-hidden`, so what it takes out is the whole app root, not this
-  // card. On a page with two chat cards mounted — the Storybook autodocs page is
-  // one — that is both too much and untargeted, which is precisely the failure
-  // `CorvusChat.linkSafety.test.tsx` pins ("makes only the card the link belongs
-  // to inert, not the first one"). The card-scoped `inert` is therefore ours to
-  // keep, and it composes with Radix rather than duplicating it.
-  //
-  // Set imperatively on a node React renders without an `inert` prop, which is
-  // why a re-render cannot clobber it: React only reconciles attributes it was
-  // given. It is also why the dialog is PORTALLED to `document.body` — it
-  // lives inside the chat card in the tree, and marking its own ancestor inert
-  // would make the dialog inert too. `DialogContent` portals for us now.
-  //
-  // The cleanup ALSO restores focus, and the order inside it is the whole
-  // point rather than an accident: `inert` comes off first, and only then does
-  // the trigger get focus. Focusing while the subtree is still inert silently
-  // does nothing — that was the measured regression, and jsdom cannot see it
-  // because it does not implement inert focusability. The browser tier
-  // (`CorvusChat.stories.tsx`) is what proves this works.
-  useEffect(() => {
-    if (!confirming) return
-
-    // Captured on open rather than read in the cleanup: the linter is right
-    // that a ref can change underneath a cleanup, and the node we owe focus to
-    // is specifically the trigger that OPENED this dialog.
-    const trigger = triggerRef.current
-
-    // Resolved by walking UP from the trigger, not by a document-wide query.
-    // Several chat cards can be mounted at once — the Storybook autodocs page
-    // renders every `AI/CorvusChat` story on one page — and a document query
-    // returns the FIRST match in the DOM, which is whichever card mounted
-    // earliest rather than the one this link lives in. Two things then go
-    // wrong at once. The card that owns the dialog is never made inert, so
-    // its composer, mic and citations stay reachable behind its own modal —
-    // the exact failure this effect exists to prevent. And an unrelated card,
-    // which has no dialog open, is frozen until this one closes.
-    //
-    // `closest` cannot pick the wrong card: it only ever returns an ancestor
-    // of the trigger.
-    //
-    // Optional: a caller could mount `Streamdown` outside the chat card, and
-    // the trigger may be gone already on an unmount. The restore below must
-    // not be conditional on finding a surface — the focus contract holds
-    // whether or not there is one to make inert.
-    const surface =
-      trigger?.closest<HTMLElement>('[data-slot="chat-card"]') ?? null
-    surface?.setAttribute('inert', '')
-
-    return () => {
-      surface?.removeAttribute('inert')
-      // Guarded against the unmount path: if the whole message list went away
-      // while the dialog was open, the trigger is detached and focusing it
-      // would move focus nowhere useful.
-      if (trigger && document.contains(trigger)) trigger.focus()
-    }
-  }, [confirming])
 
   // teal-700 / teal-400 rather than `text-primary` (#190). `--primary` is a
   // FILL token — one colour in both themes (teal-700), paired with white — so
@@ -315,101 +256,107 @@ function CorvusReplyLink({
   const copy = LINK_CONFIRMATION_COPY[kind]
 
   return (
-    <>
-      <button
-        ref={triggerRef}
-        className={`${linkClassName} appearance-none text-left`}
-        data-corvus-link={kind}
-        data-streamdown="link"
-        onClick={() => setConfirming(true)}
-        type="button"
-      >
-        {children}
-      </button>
-      <Dialog
-        open={confirming}
-        onOpenChange={(next) => {
-          if (!next) close()
+    // `DialogTrigger asChild` rather than a bare button beside the dialog, and
+    // that is what makes the focus RESTORE Radix's (#169). `DialogContentModal`
+    // handles `onCloseAutoFocus` by calling `event.preventDefault()` — which
+    // cancels `FocusScope`'s own restore — and then focusing
+    // `context.triggerRef.current` instead
+    // (`@radix-ui/react-dialog/dist/index.mjs`). That ref is populated ONLY by
+    // `DialogTrigger`. Opening a controlled dialog from a plain sibling button
+    // therefore leaves the ref null, so the primitive cancels its restore and
+    // then focuses nothing, and focus falls to `<body>` — measured here in
+    // jsdom and true of any browser, since it is one code path with no
+    // environment-dependent step. Registering the trigger is the whole fix:
+    // Radix then restores focus to it on close, in the right order, with
+    // nothing hand-rolled left in this component.
+    <Dialog open={confirming} onOpenChange={setConfirming}>
+      <DialogTrigger asChild>
+        <button
+          className={`${linkClassName} appearance-none text-left`}
+          data-corvus-link={kind}
+          data-streamdown="link"
+          type="button"
+        >
+          {children}
+        </button>
+      </DialogTrigger>
+      <DialogContent
+        // Radix 1.1.20 deliberately does NOT emit `aria-modal` — it hides the
+        // rest of the page with `aria-hidden` on the portal's siblings
+        // instead, because `aria-modal` is inconsistently honoured across
+        // screen readers (verified in
+        // `@radix-ui/react-dialog/dist/index.mjs`, `DialogContentImpl`, which
+        // sets `role`, `aria-labelledby` and `aria-describedby` and nothing
+        // else). The attribute is set here because it IS true of this dialog
+        // and because `CorvusChat.linkSafety.test.tsx` and the
+        // `ExternalLinkConfirmation` story both pin it as part of #158's a11y
+        // floor. `contentProps` spread after Radix's own attributes, so this
+        // wins. Set at the call site, not in the primitive: overriding
+        // upstream's semantics for every future dialog is a larger decision
+        // than honouring one existing contract.
+        aria-modal="true"
+        className="max-w-md gap-3 sm:max-w-md"
+        data-streamdown="link-safety-modal"
+        // No ✕: Cancel is already the dismissal, and #158's rule for this
+        // modal is that it replaces streamdown's rather than redesigning it.
+        showCloseButton={false}
+        // Focus lands on the CONFIRMING action, not on Radix's default (the
+        // first focusable, i.e. Cancel). streamdown's own modal left focus on
+        // the now-hidden trigger and a keyboard visitor had to tab blind;
+        // landing on the affirmative action is what replaced that.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          confirmRef.current?.focus()
         }}
       >
-        <DialogContent
-          // Radix 1.1.20 deliberately does NOT emit `aria-modal` — it hides the
-          // rest of the page with `aria-hidden` on the portal's siblings
-          // instead, because `aria-modal` is inconsistently honoured across
-          // screen readers (verified in
-          // `@radix-ui/react-dialog/dist/index.mjs`, `DialogContentImpl`, which
-          // sets `role`, `aria-labelledby` and `aria-describedby` and nothing
-          // else). The attribute is set here because it IS true of this dialog
-          // and because `CorvusChat.linkSafety.test.tsx` and the
-          // `ExternalLinkConfirmation` story both pin it as part of #158's a11y
-          // floor. `contentProps` spread after Radix's own attributes, so this
-          // wins. Set at the call site, not in the primitive: overriding
-          // upstream's semantics for every future dialog is a larger decision
-          // than honouring one existing contract.
-          aria-modal="true"
-          className="max-w-md gap-3 sm:max-w-md"
-          data-streamdown="link-safety-modal"
-          // No ✕: Cancel is already the dismissal, and #158's rule for this
-          // modal is that it replaces streamdown's rather than redesigning it.
-          showCloseButton={false}
-          // Focus lands on the CONFIRMING action, not on Radix's default (the
-          // first focusable, i.e. Cancel). streamdown's own modal left focus on
-          // the now-hidden trigger and a keyboard visitor had to tab blind;
-          // landing on the affirmative action is what replaced that.
-          onOpenAutoFocus={(event) => {
-            event.preventDefault()
-            confirmRef.current?.focus()
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>{copy.title}</DialogTitle>
-            <DialogDescription>{copy.body}</DialogDescription>
-          </DialogHeader>
-          <p className="rounded-md bg-muted p-3 font-mono text-sm break-all">
-            {href}
-          </p>
-          <DialogFooter className="sm:justify-stretch">
-            <Button
-              className="flex-1"
-              onClick={close}
-              type="button"
-              variant="outline"
-            >
-              Cancel
-            </Button>
-            <Button
-              ref={confirmRef}
-              className="flex-1"
-              // `teal`, not `default`, even though #190 now paints `default`
-              // with the same teal-700 fill and white label. The two differ
-              // only on HOVER: `default` is `bg-primary/90`, which composites
-              // teal-700 over the dialog's `bg-background` and so LIGHTENS in
-              // light mode (white label 5.39:1 → 4.47:1), while `teal` carries
-              // the measured site doctrine of hovering DARKER to teal-800
-              // (7.53:1). This button had teal-800 on hover before #169 and
-              // keeps it. Collapsing the two variants is a change to
-              // `ui/button.tsx` and is recorded as a follow-up.
-              variant="teal"
-              onClick={() => {
-                // `mailto:`/`tel:` hand off to another application; opening
-                // them in a new tab leaves an empty one behind on the
-                // browsers that do not close it themselves. Only a real
-                // off-site PAGE gets `_blank`.
-                if (kind === 'external') {
-                  window.open(href, '_blank', 'noreferrer')
-                } else {
-                  window.open(href, '_self')
-                }
-                close()
-              }}
-              type="button"
-            >
-              {copy.confirm}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+        <DialogHeader>
+          <DialogTitle>{copy.title}</DialogTitle>
+          <DialogDescription>{copy.body}</DialogDescription>
+        </DialogHeader>
+        <p className="rounded-md bg-muted p-3 font-mono text-sm break-all">
+          {href}
+        </p>
+        <DialogFooter className="sm:justify-stretch">
+          <Button
+            className="flex-1"
+            onClick={close}
+            type="button"
+            variant="outline"
+          >
+            Cancel
+          </Button>
+          <Button
+            ref={confirmRef}
+            className="flex-1"
+            // `teal`, not `default`, even though #190 now paints `default`
+            // with the same teal-700 fill and white label. The two differ
+            // only on HOVER: `default` is `bg-primary/90`, which composites
+            // teal-700 over the dialog's `bg-background` and so LIGHTENS in
+            // light mode (white label 5.39:1 → 4.47:1), while `teal` carries
+            // the measured site doctrine of hovering DARKER to teal-800
+            // (7.53:1). This button had teal-800 on hover before #169 and
+            // keeps it. Collapsing the two variants is a change to
+            // `ui/button.tsx` and is recorded as a follow-up.
+            variant="teal"
+            onClick={() => {
+              // `mailto:`/`tel:` hand off to another application; opening
+              // them in a new tab leaves an empty one behind on the
+              // browsers that do not close it themselves. Only a real
+              // off-site PAGE gets `_blank`.
+              if (kind === 'external') {
+                window.open(href, '_blank', 'noreferrer')
+              } else {
+                window.open(href, '_self')
+              }
+              close()
+            }}
+            type="button"
+          >
+            {copy.confirm}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

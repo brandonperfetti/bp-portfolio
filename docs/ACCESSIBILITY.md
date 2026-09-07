@@ -8,19 +8,27 @@ These are release gates, not aspirations:
 - **Focus**: visible `focus-visible` rings everywhere (teal); focus order
   follows DOM; overlays trap and restore focus. **The overlay mechanism is the
   shadcn `Dialog` primitive** (`src/components/ui/dialog.tsx`, Radix): it owns
-  the focus trap, focus restore, Escape, outside-click dismissal, the portal
-  and `role="dialog"` — do not hand-roll any of them. Two things it does not
-  do, and a caller may still owe:
+  the focus trap, the focus restore, Escape, outside-click dismissal, the
+  portal and `role="dialog"`, and it hides the rest of the page from the
+  accessibility tree (`aria-hidden` on the portal's body-level siblings). Do
+  not hand-roll any of them — and **nothing hand-rolled remains**: #169
+  deleted the last of it, the card-scoped `inert` effect and manual focus
+  restore that `CorvusReplyLink` used to carry. Two things the caller still
+  owes:
   - **`aria-modal`.** Radix omits it deliberately (it hides the rest of the
     page with `aria-hidden` on the portal's siblings instead). Pass it through
     `DialogContent` where a contract asks for it — `CorvusReplyLink` in
     `src/components/CorvusChat.tsx` does.
-  - **Scoped `inert`.** Radix's `aria-hidden` sweep takes the whole app root,
-    which is both too broad and untargeted when several instances of a surface
-    are mounted. A caller that must silence exactly one subtree sets `inert` on
-    it itself; `CorvusReplyLink` marks the owning `[data-slot="chat-card"]`,
-    and removes `inert` **before** restoring focus (focusing inside an inert
-    subtree is silently a no-op — jsdom cannot see this, the browser tier can).
+  - **Open it from a `DialogTrigger`.** The restore is Radix's, but only if
+    Radix knows the trigger. `DialogContentModal` handles close-auto-focus by
+    calling `event.preventDefault()` — cancelling `FocusScope`'s own restore —
+    and focusing `context.triggerRef.current` instead, and `DialogTrigger` is
+    the only thing that populates that ref. A controlled dialog opened from a
+    plain sibling button therefore restores focus to **nothing** and drops it
+    on `<body>`. `CorvusReplyLink` wraps its trigger in
+    `<DialogTrigger asChild>` for exactly this reason. The restore is also
+    deferred one tick (`setTimeout(…, 0)` in `FocusScope`'s cleanup), so a
+    test must `waitFor` it rather than assert on the tick after close.
 
   The command palette (cmdk) predates the primitive and keeps its own dialog.
 

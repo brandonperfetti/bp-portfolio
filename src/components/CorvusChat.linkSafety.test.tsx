@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -329,13 +329,22 @@ describe('CorvusChat confirmation dialog a11y (#158 AC3)', () => {
 
   it('makes the chat surface behind it unreachable while open', async () => {
     // `docs/ACCESSIBILITY.md`: overlays trap and restore focus. A Tab trap
-    // alone shuts only the keyboard door — `inert` also takes the composer,
-    // the mic and every citation out of a screen reader's virtual cursor.
+    // alone shuts only the keyboard door — the composer, the mic and every
+    // citation must also leave a screen reader's virtual cursor.
+    //
+    // The REQUIREMENT is asserted here, not the mechanism (#169). This used to
+    // read `surface.hasAttribute('inert')`, which pinned the hand-rolled
+    // effect that set it. `DialogContent` now owns this: Radix's `hideOthers`
+    // marks the portal's body-level siblings `aria-hidden`, so the card is
+    // covered by an `aria-hidden` ancestor rather than carrying an attribute
+    // of its own. Either way the surface is out of the accessibility tree,
+    // which is the thing the visitor needs — so this asserts unreachability
+    // and lets the primitive choose how.
     await openConfirmation()
 
     const surface = document.querySelector('[data-slot="chat-card"]')
-    expect(surface?.hasAttribute('inert')).toBe(true)
-    // The composer is behind it, so it is inert too — asserted through the
+    expect(surface?.closest('[aria-hidden="true"]')).not.toBeNull()
+    // The composer is behind it, so it is hidden too — asserted through the
     // surface rather than by tabbing, which the trap above already covers.
     expect(surface?.contains(screen.getByLabelText('Message Corvus'))).toBe(
       true,
@@ -347,22 +356,28 @@ describe('CorvusChat confirmation dialog a11y (#158 AC3)', () => {
     await userEvent.keyboard('{Escape}')
 
     expect(
-      document.querySelector('[data-slot="chat-card"]')?.hasAttribute('inert'),
-    ).toBe(false)
+      document
+        .querySelector('[data-slot="chat-card"]')
+        ?.closest('[aria-hidden="true"]'),
+    ).toBeNull()
   })
 
   /**
-   * The inert target is the OWNING card, not the first one in the document
-   * (CodeRabbit on #179).
+   * Several chat cards on one page, which is routine — the Storybook autodocs
+   * page renders every `AI/CorvusChat` story at once.
    *
-   * @remarks A document-wide `querySelector` returns whichever chat card
-   * mounted earliest, which is only ever the right answer when exactly one is
-   * mounted. Two are mounted routinely: the Storybook autodocs page renders
-   * every `AI/CorvusChat` story on one page. The failure is doubly wrong —
-   * the card whose modal is open stays reachable behind it, and an unrelated
-   * card is frozen until that modal closes.
+   * @remarks Written for a `document.querySelector` bug in the hand-rolled
+   * `inert` effect (CodeRabbit on #179): it marked whichever card mounted
+   * earliest, so the card that OWNED the open modal stayed reachable behind
+   * it while an unrelated card froze. #169 deleted that effect, and with it
+   * the class of bug — Radix does not query for cards at all. What survives
+   * is the requirement underneath it: with a modal open, NO chat surface on
+   * the page is reachable, and every one of them comes back on close. Hiding
+   * all of them is correct modal behaviour rather than the old over-reach;
+   * the old defect was that the owning card was simultaneously left
+   * reachable, which cannot happen under the primitive.
    */
-  it('makes only the card the link belongs to inert, not the first one', async () => {
+  it('takes every chat surface on the page out of reach, and gives them all back', async () => {
     chatState.messages = [
       assistantMessage(
         'c2',
@@ -390,13 +405,14 @@ describe('CorvusChat confirmation dialog a11y (#158 AC3)', () => {
     await userEvent.click(triggers[1])
 
     expect(screen.getByRole('dialog')).toBeTruthy()
-    expect(cards[1].hasAttribute('inert')).toBe(true)
-    expect(cards[0].hasAttribute('inert')).toBe(false)
+    expect(cards[1].closest('[aria-hidden="true"]')).not.toBeNull()
+    expect(cards[0].closest('[aria-hidden="true"]')).not.toBeNull()
 
-    // And the cleanup gives that same card back — the one it took.
+    // And the close gives every one of them back — including the card that
+    // never owned the dialog, which is what a leaked hide would strand.
     await userEvent.keyboard('{Escape}')
-    expect(cards[1].hasAttribute('inert')).toBe(false)
-    expect(cards[0].hasAttribute('inert')).toBe(false)
+    expect(cards[1].closest('[aria-hidden="true"]')).toBeNull()
+    expect(cards[0].closest('[aria-hidden="true"]')).toBeNull()
   })
 
   it('renders outside the chat card, so inert cannot swallow it', async () => {
@@ -409,29 +425,38 @@ describe('CorvusChat confirmation dialog a11y (#158 AC3)', () => {
   })
 
   it('closes on Escape and returns focus to the link that opened it', async () => {
-    // NECESSARY, NOT SUFFICIENT — see this block's docblock. jsdom will let a
-    // focus call inside an inert subtree succeed, so this cannot tell a
-    // working restore from one that is ordered wrongly. The story does.
+    // The restore is the PRIMITIVE's now (#169), and it is asynchronous:
+    // Radix's `FocusScope` cleanup defers `focus(previouslyFocusedElement)`
+    // into a `setTimeout(…, 0)`
+    // (`@radix-ui/react-focus-scope/dist/index.mjs`), so a bare assertion on
+    // the tick after Escape sees `<body>` and the `waitFor` is load-bearing
+    // rather than defensive — it is what lets jsdom observe a restore this
+    // suite used to observe only because the component did it synchronously
+    // in an effect cleanup.
     await openConfirmation()
 
     await userEvent.keyboard('{Escape}')
 
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(document.activeElement).toBe(
-      screen.getByRole('button', { name: 'Vercel' }),
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Vercel' }),
+      ),
     )
   })
 
   it('restores focus after Cancel too, not only after Escape', async () => {
     // All four close paths (Escape, Cancel, Confirm, backdrop) route through
-    // one `close()`, so this is the cheap check that the shared path is the
-    // shared path.
+    // one `close()` and therefore through one unmount, so this is the cheap
+    // check that the shared path is the shared path.
     await openConfirmation()
 
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
-    expect(document.activeElement).toBe(
-      screen.getByRole('button', { name: 'Vercel' }),
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Vercel' }),
+      ),
     )
   })
 })
