@@ -335,9 +335,13 @@ column to the existing table — no new table, so no RLS line.
 
 **Redirects point at the document, not at a path** (`to.type: 'reference'`), so
 renaming `a → b → c` leaves both `/articles/a` and `/articles/b` resolving
-straight to `/articles/c` — chains cannot form, and a prefix row inherits the
-same property because its destination is resolved through the target's current
-path at read time. `src/lib/cms/redirectsRepo.ts` is the cached reader;
+straight to `/articles/c` — no chain forms **for the URL a row is keyed at**.
+That property does **not** extend to URLs captured beneath a prefix row: since
+#178 such a request is rewritten onto the row's `toPathAtCapture` and
+re-resolved through the same list, up to `MAX_REDIRECT_HOPS` times, because
+resolving through the target's current path is exactly what skips the era the
+descendant's own row is keyed under (`docs/NAVIGATION.md` §How many moves a URL
+survives). `src/lib/cms/redirectsRepo.ts` is the cached reader;
 `/articles/[slug]` and `/[...segments]` consult it on their not-found branch
 only, so a live document always wins over a stale row.
 
@@ -510,9 +514,13 @@ statement belongs in it — `redirects` was swept by the #72 backfill and its RL
 is already on. `scripts/check-migrations-rls.mjs` agrees: the migration creates
 no table, so it carries no obligation.
 
-Known limits: the reader reads at most 500 rows — and since #178 it walks
-that one list up to five times per request, resolving each capture-time
-rewrite through it (`docs/NAVIGATION.md` §How many moves a URL survives).
+Known limits: the reader reads at most 500 rows — and since #178 it may walk
+that one list up to six times per request (the initial pass plus five hops),
+resolving each capture-time rewrite through it (`docs/NAVIGATION.md` §How many
+moves a URL survives). The 500-row ceiling is also what makes the resolver's
+fall-back-rather-than-serve-the-snapshot rule load-bearing: a row past the
+ceiling is a missing intermediate hop, and serving the capture-time spelling
+there would answer a permanent redirect to a dead URL.
 
 ## Plugins (`src/plugins/index.ts`)
 

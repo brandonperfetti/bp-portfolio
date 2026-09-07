@@ -1552,7 +1552,7 @@ export interface Redirect {
     url?: string | null;
   };
   /**
-   * Permanent (301) tells browsers and search engines the move is forever and is cached indefinitely. Temporary (302) is for campaigns and short-lived moves.
+   * Permanent (301) tells browsers and search engines the move is forever and is cached indefinitely. Temporary (302) is for campaigns and short-lived moves. Temporary is contagious: an older URL whose redirect is resolved by walking through this row answers as temporary too, even if its own row is permanent. That is deliberate — a wrong temporary answer self-heals once this row becomes permanent, while a wrong permanent one stays in a browser cache long after the server stops sending it.
    */
   type: '301' | '302';
   /**
