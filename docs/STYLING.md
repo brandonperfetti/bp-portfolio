@@ -40,14 +40,18 @@ are already described — so the doctrine lives here rather than in
   consumes it as `hover:bg-primary-hover`. shadcn's stock `hover:bg-primary/90`
   composites the fill over the page and so lightens in light mode, which is the
   wrong direction for the same accessibility reason the bespoke Button records.
-  Do not reintroduce an alpha hover on a fill.
+  Do not reintroduce an alpha hover on a fill. `--secondary-hover` is the same
+  rule applied to the neutral fill: the `secondary` variant's stock
+  `hover:bg-secondary/80` lightened in light mode too, and the token steps one
+  notch down the zinc ramp in each theme (zinc-100 → zinc-200 light, zinc-800 →
+  zinc-900 dark) so hover darkens in both.
 - **Every value is a named Tailwind ramp step, and every role that renders text
   or a fill edge is pinned.** `src/styles/shadcn-token-contrast.test.ts` parses
   the stylesheet, asserts each token IS the step its comment names, and
   re-derives the WCAG ratio in both themes (4.5:1 where the role is text, 3:1
   where it is a fill edge or ring) for the surfaces
-  (`--background`/`--foreground`, `--card*`, `--popover*`), primary and its
-  hover, secondary, muted, accent and the ring — plus the base layer's
+  (`--background`/`--foreground`, `--card*`, `--popover*`), primary and
+  secondary each with their hover, muted, accent and the ring — plus the base layer's
   `focus-visible` outline. Add a themed token, add its pair. Three documented
   exceptions: `--border`/`--input` are named steps in light but an alpha white
   in dark, so identity is not assertable there; `--destructive*` is the

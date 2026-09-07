@@ -24,8 +24,9 @@
  * its line. Identity AND WCAG ratio, both themes, are pinned by
  * `src/styles/shadcn-token-contrast.test.ts` for every role that renders text
  * or a fill edge: the surfaces (background/card/popover and their
- * foregrounds), primary and its hover step, secondary, muted, accent and the
- * ring. Three deliberate exceptions, and they are the only three:
+ * foregrounds), primary and secondary each with their hover step, muted,
+ * accent and the ring. Three deliberate exceptions, and they are the only
+ * three:
  *
  *   --border / --input   named steps in light (zinc-200), but an alpha white
  *                        in dark (`oklch(1 0 0 / 10%)`, `/ 15%`) — not a ramp
@@ -123,6 +124,26 @@
    * hover the site has. zinc-900 on zinc-100 is 16.11:1. */
   --secondary: oklch(0.967 0.001 286.375); /* zinc-100 */
   --secondary-foreground: oklch(0.21 0.006 285.885); /* zinc-900 */
+  /* Hover step for the secondary fill, on the same doctrine as
+   * --primary-hover: hover DARKENS, and it is a named ramp step rather than
+   * an alpha composite. `ui/button.tsx`'s `secondary` variant used to hover
+   * `bg-secondary/80`, which composites zinc-100 at 80% over the page and so
+   * LIGHTENS in light mode — the exact thing `docs/STYLING.md` says not to
+   * reintroduce, and the last such alpha hover on a fill left in the file.
+   * One notch down the zinc ramp in each theme, so the direction is the same
+   * in both: zinc-100 -> zinc-200 here, zinc-800 -> zinc-900 in dark.
+   *   zinc-900 on zinc-200        13.98:1  >= 4.5  (label, 1.4.3)
+   * Like --secondary itself, this is a SURFACE rather than a fill edge — the
+   * `secondary` variant is a low-emphasis control on the page, and neither
+   * the rest step nor the hover step is pinned against --background at
+   * 1.4.11 (zinc-100 on white is 1.27:1 by construction). The label floor and
+   * the hover direction are what the test asserts, exactly as for
+   * --primary-hover.
+   * Light is the easy theme for that call — the hover step separates from the
+   * page slightly BETTER than the rest step does (1.27:1 hovered vs 1.10:1 at
+   * rest on white, and the same against --card/--popover, which are white
+   * here). The dark block records the case where it does not. */
+  --secondary-hover: oklch(0.92 0.004 286.32); /* zinc-200 */
   --muted: oklch(0.967 0.001 286.375); /* zinc-100 */
   /* zinc-600, not the scaffold's zinc-500: `text-muted-foreground` renders
    * over --muted as well as over the page, and zinc-500 measures 4.39:1 on
@@ -164,6 +185,30 @@
   --primary-hover: oklch(0.437 0.078 188.216); /* teal-800 */
   --secondary: oklch(0.274 0.006 286.033); /* zinc-800 */
   --secondary-foreground: oklch(0.985 0 0); /* zinc-50 */
+  /* See the light block for the doctrine. One notch down the same ramp:
+   *   zinc-50 on zinc-900         16.98:1  >= 4.5  (label, 1.4.3)
+   * KNOWN, and the reason the light block points here: this step is the SAME
+   * zinc-900 as --card and --popover in this theme. Hovered fill against the
+   * container it might sit in:
+   *   --background (zinc-950)     1.12:1
+   *   --card (zinc-900)           1.00:1   ← identical colour
+   *   --popover (zinc-900)        1.00:1   ← identical colour
+   *   --muted / --accent (zinc-800)  1.19:1
+   * On a card or popover surface in dark, a hovered `secondary` control is
+   * therefore indistinguishable from its container: the affordance INVERTS on
+   * hover, since the rest step (zinc-800) does separate from zinc-900 at
+   * 1.19:1. This is LATENT, not live. Nothing in `src/` renders `bg-card` or
+   * `bg-popover` (zero matches), `ui/dialog.tsx` paints its panel with
+   * `bg-background`, and the only `variant="secondary"` on the shadcn Button
+   * is in `button.stories.tsx` — every production "secondary" placement
+   * (`not-found.tsx`, `home/Resume.tsx`) is the bespoke
+   * `src/components/Button.tsx`, which owns its own colours.
+   * So it is recorded rather than designed around: picking a hover step to
+   * clear a surface no component renders would move a live colour to satisfy
+   * a hypothetical one. The moment a `bg-card` or `bg-popover` surface hosts a
+   * `secondary` control, this token needs revisiting — the fix is a hover step
+   * that is not also a surface token, not an alpha. */
+  --secondary-hover: oklch(0.21 0.006 285.885); /* zinc-900 */
   --muted: oklch(0.274 0.006 286.033); /* zinc-800 */
   /* zinc-400 clears both floors here (5.66:1 on zinc-800, 7.56:1 on the page),
    * so dark does not move with light. */
@@ -191,6 +236,7 @@
   --color-primary-hover: var(--primary-hover);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary-hover: var(--secondary-hover);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);

@@ -24,8 +24,15 @@ const buttonVariants = cva(
           'bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40',
         outline:
           'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50',
+        // `hover:bg-secondary-hover` (zinc-200 light / zinc-900 dark), not the
+        // stock `hover:bg-secondary/80` — the same correction as `default`
+        // above, and the last alpha hover on a fill in this file. 80% zinc-100
+        // over a white page LIGHTENS, which `docs/STYLING.md` §shadcn
+        // primitives forbids; the token steps one notch down the zinc ramp in
+        // each theme, so hover darkens in both. Themed at the token layer, so
+        // the measured pairs live in `tailwind.css` next to `--secondary`.
         secondary:
-          'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+          'bg-secondary text-secondary-foreground hover:bg-secondary-hover',
         ghost:
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         // NOT `text-primary`: `--primary` is a FILL token (teal-700 in both

@@ -155,6 +155,7 @@ const RAMP = {
   'teal-800': [0.437, 0.078, 188.216],
   'zinc-50': [0.985, 0, 0],
   'zinc-100': [0.967, 0.001, 286.375],
+  'zinc-200': [0.92, 0.004, 286.32],
   'zinc-600': [0.442, 0.017, 285.786],
   'zinc-400': [0.705, 0.015, 286.067],
   'zinc-800': [0.274, 0.006, 286.033],
@@ -213,6 +214,17 @@ describe('shadcn token layer — palette identity (#190)', () => {
     // teal-700 -> teal-800 since #113.
     expectStep(LIGHT, 'primary-hover', 'teal-800')
     expectStep(DARK, 'primary-hover', 'teal-800')
+  })
+
+  it('keeps the secondary hover on the same doctrine: one notch DOWN the zinc ramp', () => {
+    // `hover:bg-secondary-hover` on `ui/button.tsx`'s `secondary` variant.
+    // The stock shadcn hover is `bg-secondary/80`, which composites zinc-100
+    // at 80% over the page and LIGHTENS in light mode — the last such alpha
+    // hover on a fill in the file, and the thing `docs/STYLING.md` says not
+    // to reintroduce. Named steps, so identity is assertable here exactly as
+    // it is for `--primary-hover`.
+    expectStep(LIGHT, 'secondary-hover', 'zinc-200')
+    expectStep(DARK, 'secondary-hover', 'zinc-900')
   })
 
   it('names the surface roles as ramp steps in both themes', () => {
@@ -374,6 +386,34 @@ describe('shadcn token layer — WCAG floors in both themes (#190)', () => {
           TEXT_AA,
           `[${theme}] --accent-foreground on --accent`,
         )
+      })
+
+      it('secondary hover: the label holds, and the step DARKENS', () => {
+        // The same two halves as the primary-hover case above, and pinned at
+        // the same threshold for the same reason: `--secondary-hover` is the
+        // fill sitting behind `--secondary-foreground` text, so the label
+        // floor is 1.4.3's 4.5:1 (13.98:1 light, 16.98:1 dark).
+        //
+        // Deliberately NOT asserted — again as for `--primary-hover`, and for
+        // a reason that applies to `--secondary` itself: this pair is a
+        // low-emphasis SURFACE, not a fill edge. zinc-100 on white is 1.27:1
+        // by construction, and the rest step is not pinned against the page
+        // either (see 'secondary and accent: label on the surface'), so
+        // pinning the hover step there would hold the hover to a floor the
+        // role it hovers has never been held to.
+        expectRatio(
+          token(sel, 'secondary-foreground'),
+          token(sel, 'secondary-hover'),
+          TEXT_AA,
+          `[${theme}] --secondary-foreground on --secondary-hover`,
+        )
+        const rest = luminance(token(sel, 'secondary'))
+        const hover = luminance(token(sel, 'secondary-hover'))
+        expect(
+          hover,
+          `[${theme}] --secondary-hover must be DARKER than --secondary: ` +
+            `luminance ${hover.toFixed(4)} vs ${rest.toFixed(4)}`,
+        ).toBeLessThan(rest)
       })
 
       it('muted-foreground: text on the page AND on the muted surface', () => {
