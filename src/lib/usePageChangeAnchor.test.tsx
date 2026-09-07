@@ -77,6 +77,7 @@ function Harness({
 function renderHarness(options?: {
   withContainer?: boolean
   scrollable?: boolean
+  focusable?: boolean
 }) {
   const harnessProps = { withContainer: options?.withContainer }
   // The rendered `page`, tracked so an arming re-render (which has to carry the
@@ -101,6 +102,14 @@ function renderHarness(options?: {
     Object.defineProperty(results, 'scrollIntoView', {
       configurable: true,
       value: scrollIntoView,
+    })
+  }
+  if (options?.focusable === false) {
+    // The same environment gap on the other half of the anchor: an element
+    // the DOM implementation handed back without a `focus` method.
+    Object.defineProperty(results, 'focus', {
+      configurable: true,
+      value: undefined,
     })
   }
   return {
@@ -229,6 +238,17 @@ describe('usePageChangeAnchor (#183)', () => {
 
     expect(() => navigate(2)).not.toThrow()
     expect(document.activeElement).toBe(results)
+  })
+
+  it('still scrolls when the element has no focus method', () => {
+    const { results, navigate } = renderHarness({ focusable: false })
+
+    expect(() => navigate(2)).not.toThrow()
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    // The guard is what keeps the scroll: an unguarded `focus` call would
+    // have thrown out of the effect before this assertion could hold, and
+    // focus itself never moved.
+    expect(document.activeElement).not.toBe(results)
   })
 
   it('does not carry an arming across unmount into a fresh instance', () => {

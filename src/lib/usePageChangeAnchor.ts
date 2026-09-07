@@ -104,8 +104,11 @@ export interface PageChangeAnchor {
  *   viewport and focus simply stay where they were, which is the pre-#183
  *   behavior on that click. This fails toward inaction, never toward
  *   stealing focus from somewhere the reader didn't ask to go.
- * - **Guards.** A missing ref, or a jsdom element with no `scrollIntoView`,
- *   degrades to doing nothing rather than throwing.
+ * - **Guards.** A missing ref, or a jsdom element with no `scrollIntoView`
+ *   and/or no `focus`, degrades to doing nothing rather than throwing. Both
+ *   methods are feature-detected independently — the environment gap is the
+ *   same class for either, and neither half of the anchor is a precondition
+ *   for the other.
  */
 export function usePageChangeAnchor({
   page,
@@ -140,15 +143,21 @@ export function usePageChangeAnchor({
       return
     }
 
-    // jsdom implements no layout and, depending on the version, no
-    // `scrollIntoView` at all.
+    // jsdom implements no layout and, depending on the version, neither
+    // `scrollIntoView` nor `focus` on every element it hands back. Both calls
+    // are guarded the same way: a missing method degrades to doing nothing
+    // rather than throwing, and the two halves of the anchor are independent
+    // — a scroll with no focus is still better than an exception that skips
+    // both.
     if (typeof anchor.scrollIntoView === 'function') {
       anchor.scrollIntoView({
         behavior: getPrefersReducedMotion() ? 'auto' : 'smooth',
         block: 'start',
       })
     }
-    anchor.focus({ preventScroll: true })
+    if (typeof anchor.focus === 'function') {
+      anchor.focus({ preventScroll: true })
+    }
   }, [page, resultsRef])
 
   return React.useMemo(
