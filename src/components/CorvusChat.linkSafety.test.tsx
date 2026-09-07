@@ -223,7 +223,7 @@ describe('CorvusChat external links (#158 AC2)', () => {
     expect(openSpy).toHaveBeenCalledWith(
       'https://vercel.com/docs',
       '_blank',
-      'noreferrer',
+      'noopener,noreferrer',
     )
     expect(externalModal()).toBeNull()
   })

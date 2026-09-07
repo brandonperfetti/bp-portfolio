@@ -344,7 +344,13 @@ function CorvusReplyLink({
               // browsers that do not close it themselves. Only a real
               // off-site PAGE gets `_blank`.
               if (kind === 'external') {
-                window.open(href, '_blank', 'noreferrer')
+                // `noopener` is named alongside `noreferrer` rather than
+                // left implied: every current browser infers it from
+                // `noreferrer`, but the guarantee that matters here — the
+                // opened page gets no `window.opener` handle back — should
+                // be stated by the call, not inherited from a side effect
+                // of the referrer rule.
+                window.open(href, '_blank', 'noopener,noreferrer')
               } else {
                 window.open(href, '_self')
               }
