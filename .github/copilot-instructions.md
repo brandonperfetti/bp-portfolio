@@ -64,8 +64,10 @@ surface only** — it is not a CMS and has no runtime integration.
 - New UI starts from shadcn/ui primitives (`src/components/ui`) and gets a
   Storybook story; serious a11y violations fail the story.
 - **shadcn primitives are themed at the token layer**, never repainted per
-  call site, and every token pair is AA-pinned by test — `docs/STYLING.md`
-  §shadcn primitives are themed at the token layer.
+  call site, and every token pair that renders text or a fill edge is AA-pinned
+  by test (`--destructive` and the dark `--border`/`--input` alphas are the
+  documented exceptions) — `docs/STYLING.md` §shadcn primitives are themed at
+  the token layer.
 - Tests accompany behavior changes: Vitest unit/component, Playwright e2e,
   Evalite for Corvus behavior.
 

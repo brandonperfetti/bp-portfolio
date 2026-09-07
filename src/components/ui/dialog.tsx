@@ -25,9 +25,11 @@ import { cn } from '@/lib/utils'
  *    variant is explicit — the same pairing `CookieDialog` already carries on
  *    its hand-rolled Radix dialog.
  *
- * Upstream's `DialogFooter` also accepts a `showCloseButton` prop that renders
- * a `Button`; it is dropped here rather than carried as dead configuration
- * that would make this primitive import another one.
+ * Upstream's `showCloseButton` prop is carried, on {@link DialogContent} where
+ * upstream puts it. It defaults to `true` and renders Radix's own
+ * `DialogPrimitive.Close`, so this primitive imports no other primitive to
+ * honour it. `CorvusReplyLink` in `src/components/CorvusChat.tsx` passes
+ * `showCloseButton={false}`.
  *
  * Colours come from the token layer (`bg-background`, `text-muted-foreground`,
  * `focus:ring-ring`) — see `docs/STYLING.md` §shadcn primitives are themed at
@@ -49,8 +51,9 @@ function DialogTrigger({
 /**
  * Portals the dialog out of the React tree it is declared in.
  *
- * @remarks Rendered into `document.body`, which is what lets a caller mark the
- * dialog's own ancestor `inert` without swallowing the dialog with it.
+ * @remarks Rendered into `document.body`, which is what lets Radix's
+ * `hideOthers` mark the panel's body-level siblings `aria-hidden` — the whole
+ * page behind the modal — without hiding the panel along with them.
  */
 function DialogPortal({
   ...props

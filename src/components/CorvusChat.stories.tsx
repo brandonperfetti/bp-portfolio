@@ -276,24 +276,23 @@ export const Idle: Story = {}
  *
  * @remarks The story exists so the a11y addon gates this dialog — it is new
  * UI, and `CLAUDE.md` requires new UI to carry a story for exactly that
- * reason. It is also the only surface in the repo that hand-rolls a modal:
- * there is no dialog primitive in `src/components/ui` and
- * `@radix-ui/react-dialog` is not a dependency, so nothing else is enforcing
- * its `role`/`aria-modal`/focus behaviour at the component level.
+ * reason. Since #169 the dialog is the shadcn `Dialog` primitive
+ * (`src/components/ui/dialog.tsx`), which has its own story; this one gates
+ * the primitive AS THIS SURFACE USES IT — controlled `open`, no close button,
+ * focus deliberately on the confirming action, `aria-modal` passed by hand.
  *
  * The play function asserts what the unit tests cannot: that in a REAL
  * browser, with a real focus model, opening the dialog moves focus into it,
- * takes the chat surface behind it out of reach, and — the half jsdom is
- * blind to — **gives focus back on close**.
+ * takes the chat surface behind it out of reach, and **gives focus back on
+ * close**.
  *
- * That last one is not hypothetical coverage. jsdom does not implement `inert`
- * focusability, so a `.focus()` inside an inert subtree succeeds there and is a
- * no-op in Chromium; an earlier version of this component restored focus
- * synchronously in `close()` while the surface was still inert, and the jsdom
- * test passed while `activeElement` stayed on `<body>` in a real browser
- * `[measured by review, 2026-09-04]`. This story is the measurement that
- * catches that class of bug, so both close paths are exercised: Escape, and
- * Cancel.
+ * That last one is not hypothetical coverage. The restore is Radix's, and it
+ * only happens because the trigger is a `DialogTrigger`:
+ * `DialogContentModal` cancels `FocusScope`'s own restore and focuses its
+ * `triggerRef` instead, so an unregistered trigger silently drops focus on
+ * `<body>` — measured while #169 retired the hand-rolled restore
+ * `[measured, 2026-09-07]`. Both close paths are exercised, Escape and
+ * Cancel, because they share one unmount.
  */
 export const ExternalLinkConfirmation: Story = {
   play: async ({ canvasElement }) => {

@@ -251,22 +251,26 @@ describe('CorvusChat external links (#158 AC2)', () => {
  * had no accessible name. The replacement is a real dialog; these assertions
  * are the floor it may not drop below.
  *
- * ## What jsdom CANNOT prove here, and where the proof lives
+ * ## These assert the requirement, not the mechanism
  *
- * **jsdom does not implement `inert` focusability.** In a real browser
- * `.focus()` on an element inside an inert subtree is a no-op; in jsdom it
- * succeeds. That gap produced a genuine false positive: an earlier version of
- * this component restored focus synchronously inside `close()`, while the chat
- * surface was still inert, and the "returns focus to the link" test below
- * passed green while `activeElement` stayed on `<body>` in Chromium
- * `[measured by review, 2026-09-04]`.
+ * The dialog is the shadcn `Dialog` primitive since #169, so what is pinned
+ * here is what a visitor needs — the chat surface unreachable while the modal
+ * is open, focus back on the originating link after it closes — and not the
+ * attribute a particular implementation happens to use. Three assertions used
+ * to read `hasAttribute('inert')`, which pinned a hand-rolled effect; they now
+ * read through Radix's `aria-hidden` sweep, and would keep passing if the
+ * primitive changed how it hides the page again.
  *
- * The test is kept — it pins the intent and it catches a restore that is
- * removed altogether — but the **browser tier is the proof**: the
+ * The restore is asynchronous — `FocusScope`'s cleanup defers it into a
+ * `setTimeout(…, 0)` — so those two assertions `waitFor` rather than reading
+ * `activeElement` on the tick after close.
+ *
+ * The **browser tier is still the stronger proof**: the
  * `ExternalLinkConfirmation` story in `CorvusChat.stories.tsx` closes the
- * dialog by Escape and by Cancel and asserts in real Chromium that focus lands
- * back on the originating link and the surface no longer carries `inert`.
- * Treat a green run here as necessary and not sufficient.
+ * dialog by Escape and by Cancel in real Chromium, with a real focus model.
+ * jsdom agrees with it today, which it did not while the restore was
+ * hand-rolled inside an `inert` subtree jsdom does not model
+ * `[measured by review, 2026-09-04]`.
  */
 describe('CorvusChat confirmation dialog a11y (#158 AC3)', () => {
   const openConfirmation = async () => {
@@ -415,9 +419,10 @@ describe('CorvusChat confirmation dialog a11y (#158 AC3)', () => {
     expect(cards[0].closest('[aria-hidden="true"]')).toBeNull()
   })
 
-  it('renders outside the chat card, so inert cannot swallow it', async () => {
-    // The dialog lives inside the chat card in the React tree; portalling it
-    // to `document.body` is what lets its own ancestor be marked inert.
+  it('renders outside the chat card, so hiding the page cannot swallow it', async () => {
+    // The dialog lives inside the chat card in the React tree; `DialogPortal`
+    // renders it into `document.body`, which is what lets Radix hide
+    // everything behind the modal without hiding the modal too.
     await openConfirmation()
 
     const surface = document.querySelector('[data-slot="chat-card"]')
