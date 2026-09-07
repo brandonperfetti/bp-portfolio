@@ -196,19 +196,43 @@ async function assertPageStepReAnchors(
     `the results sit ${offset}px below the viewport top, past the ${ANCHOR_TOLERANCE_PX}px tolerance, at scrollY ${scrollY} of a possible ${maxScrollY} — the tolerance is met from scrollY ${scrollNeededToAnchor}, and the document could have brought them closer to the top than this`,
   ).toBe(true)
 
-  // …and focus is on the results container the first card lives in, so the
-  // next Tab continues from the results rather than restarting at the top of
-  // the document.
-  const focusHoldsResults = await page.evaluate(() => {
-    const active = document.activeElement
-    return Boolean(
-      active &&
-      active !== document.body &&
-      active.getAttribute('tabindex') === '-1' &&
-      active.querySelector('article, li'),
-    )
-  })
-  expect(focusHoldsResults).toBe(true)
+  // …and focus is on the results container itself, so the next Tab continues
+  // from the results rather than restarting at the top of the document.
+  //
+  // Compared against the `results` element, not against a shape. This used to
+  // ask whether `document.activeElement` was some non-`body` element with
+  // `tabindex="-1"` that contained an `article` or an `li` — three properties
+  // the anchored container has and does not own. Any focusable wrapper
+  // anywhere on the page satisfies them, so focus could sit outside the
+  // results entirely and the assertion would still pass. The element the AC
+  // names is already in hand as the `results` locator, so ask the question
+  // about that element: evaluating on the locator hands the container to the
+  // page, where `===` is the whole test. The description is collected in the
+  // same round trip so a failure names what actually held focus instead of
+  // reporting `false`.
+  const { focusHoldsResults, activeElementDescription } =
+    await results.evaluate((element) => {
+      const active = document.activeElement
+      const describe = (): string => {
+        if (!active) return 'nothing (document.activeElement was null)'
+        if (active === document.body) {
+          return '<body> — focus was never moved off the document'
+        }
+        const id = active.id ? `#${active.id}` : ''
+        const testId = active.getAttribute('data-testid')
+        return `<${active.tagName.toLowerCase()}${id}>${
+          testId ? ` [data-testid="${testId}"]` : ''
+        }`
+      }
+      return {
+        focusHoldsResults: active === element,
+        activeElementDescription: describe(),
+      }
+    })
+  expect(
+    focusHoldsResults,
+    `focus is on ${activeElementDescription}, not on the anchored results container — the next Tab restarts at the top of the document instead of continuing from the new results`,
+  ).toBe(true)
   await expect(firstCard).toBeInViewport()
 }
 
