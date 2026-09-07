@@ -38,7 +38,14 @@ one set, version-locked.
 - `tailwindcss` v4 + `@tailwindcss/postcss` + `@tailwindcss/typography` —
   CSS-first styling; `typography.ts` config retained from v3.
 - `radix-ui`, `class-variance-authority`, `tailwind-merge`, `clsx`,
-  `tw-animate-css` — shadcn/ui stack (`src/components/ui`).
+  `tw-animate-css` — shadcn/ui stack (`src/components/ui`). **`radix-ui` is the
+  unified package and is the only Radix entry point here** — reach for
+  `import { Dialog } from 'radix-ui'`, never the scoped
+  `@radix-ui/react-<part>` twin, which would put a second copy of the same
+  primitive in the tree. It backs `ui/button.tsx` (`Slot`),
+  `ui/dialog.tsx` (`Dialog`, added for #169 — no manifest change was needed,
+  because upstream shadcn's own dialog file imports it this way too) and the
+  consent components (`Dialog`, `Switch`).
 - `lucide-react` v1 — icons (no brand logos in v1).
 - `cmdk` — command palette semantics; `okapibm25` — palette ranking.
 - `gsap` — motion (tokens in `src/lib/motion/timing.ts`).

@@ -6,7 +6,24 @@ These are release gates, not aspirations:
   palette (cmdk semantics), explorers, card links, expandable details
   (aria-expanded/aria-controls), chat composer, theme toggle.
 - **Focus**: visible `focus-visible` rings everywhere (teal); focus order
-  follows DOM; overlays trap and restore focus (cmdk dialog does this).
+  follows DOM; overlays trap and restore focus. **The overlay mechanism is the
+  shadcn `Dialog` primitive** (`src/components/ui/dialog.tsx`, Radix): it owns
+  the focus trap, focus restore, Escape, outside-click dismissal, the portal
+  and `role="dialog"` — do not hand-roll any of them. Two things it does not
+  do, and a caller may still owe:
+  - **`aria-modal`.** Radix omits it deliberately (it hides the rest of the
+    page with `aria-hidden` on the portal's siblings instead). Pass it through
+    `DialogContent` where a contract asks for it — `CorvusReplyLink` in
+    `src/components/CorvusChat.tsx` does.
+  - **Scoped `inert`.** Radix's `aria-hidden` sweep takes the whole app root,
+    which is both too broad and untargeted when several instances of a surface
+    are mounted. A caller that must silence exactly one subtree sets `inert` on
+    it itself; `CorvusReplyLink` marks the owning `[data-slot="chat-card"]`,
+    and removes `inert` **before** restoring focus (focusing inside an inert
+    subtree is silently a no-op — jsdom cannot see this, the browser tier can).
+
+  The command palette (cmdk) predates the primitive and keeps its own dialog.
+
 - **Reduced motion**: every animated surface — headline, scroll reveals,
   hover lifts, parallax, shader hero, tech viz, expand/collapse — renders
   static, fully functional DOM under `prefers-reduced-motion`. Motion

@@ -4,11 +4,9 @@ import { useChat } from '@ai-sdk/react'
 import { useUser } from '@clerk/nextjs'
 import { DefaultChatTransport } from 'ai'
 import { useRouter } from 'next/navigation'
-import { createPortal } from 'react-dom'
 import {
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
@@ -30,6 +28,15 @@ import { reportSpeechRecognitionError } from '@/lib/observability/clientTelemetr
 import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
 import { useMounted } from '@/lib/useMounted'
 import { RavenMark } from '@/components/corvus/RavenMark'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Conversation,
   ConversationContent,
@@ -91,18 +98,6 @@ function ClerkFirstNameProbe({
 
   return null
 }
-
-/**
- * Everything inside the confirmation dialog that can hold focus.
- *
- * @remarks Deliberately narrow. The dialog's own contents are three buttons
- * and static text, so a general-purpose focusable selector (contenteditable,
- * `audio[controls]`, positive tabindex ordering) would be scope the trap does
- * not need and cannot be tested against. Widen it when the dialog grows a
- * control this does not name, not before.
- */
-const FOCUSABLE_SELECTOR =
-  'a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])'
 
 /**
  * Confirmation copy per link kind (#158).
@@ -174,11 +169,9 @@ function CorvusReplyLink({
   ...rest
 }: AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) {
   const router = useRouter()
-  const titleId = useId()
   const [confirming, setConfirming] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const confirmRef = useRef<HTMLButtonElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
 
   // `window.location.host` is read here rather than inside `linkSafety.ts` so
   // that module stays pure. Assistant messages only ever exist after a client
@@ -188,82 +181,38 @@ function CorvusReplyLink({
       typeof window === 'undefined' ? undefined : window.location.host,
   })
 
-  // Closing is state only. Restoring focus from HERE was a real bug: React
-  // batches the state update, so `inert` is still on the chat surface when the
-  // handler runs, and `.focus()` on an element inside an inert subtree is a
-  // no-op — `activeElement` stayed on `<body>` in Chromium. The restore
-  // therefore lives in the effect cleanup that removes `inert`, which is the
-  // only place ordered after it. All four close paths (Escape, Cancel,
-  // Confirm, backdrop) route through here, so all four are fixed by moving it
-  // once.
+  // Closing is state only, and the ONE path every dismissal routes through —
+  // Radix's Escape and outside-click both arrive here via `onOpenChange`,
+  // alongside Cancel and Confirm. Restoring focus from HERE was a real bug:
+  // React batches the state update, so `inert` is still on the chat surface
+  // when the handler runs, and `.focus()` on an element inside an inert
+  // subtree is a no-op — `activeElement` stayed on `<body>` in Chromium. The
+  // restore therefore lives in the effect cleanup that removes `inert`, which
+  // is the only place ordered after it.
   const close = useCallback(() => {
     setConfirming(false)
   }, [])
 
-  // Focus lands on the confirm button when the dialog opens: streamdown's own
-  // modal left focus on the (now hidden) trigger, so a keyboard visitor had to
-  // tab blind. Escape closes, and closing returns focus where it came from.
-  //
-  // Tab is TRAPPED, per `docs/ACCESSIBILITY.md` — "overlays trap and restore
-  // focus". Hand-rolled rather than reached for: there is no dialog primitive
-  // in `src/components/ui`, and `@radix-ui/react-dialog` is not a dependency
-  // (adding one would mean editing `package.json`, out of scope for #158).
-  // What is here is the minimum a modal owes a keyboard visitor and no more —
-  // cycle within the dialog, and nothing behind it is reachable.
-  useEffect(() => {
-    if (!confirming) return
-    confirmRef.current?.focus()
-
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        close()
-        return
-      }
-      if (event.key !== 'Tab') return
-
-      const panel = panelRef.current
-      if (!panel) return
-
-      // Queried per keystroke, not cached on open: the confirm button's label
-      // and the panel's contents are React-rendered, so a stale list would
-      // trap focus onto a node that is no longer there.
-      const focusables = [
-        ...panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
-      ].filter((el) => !el.hasAttribute('disabled'))
-      if (!focusables.length) return
-
-      const first = focusables[0]
-      const last = focusables[focusables.length - 1]
-      const active = document.activeElement
-
-      // Also catches focus having escaped the panel entirely (a click on the
-      // backdrop, say): either edge sends it back inside rather than onward.
-      if (event.shiftKey && (active === first || !panel.contains(active))) {
-        event.preventDefault()
-        last.focus()
-      } else if (
-        !event.shiftKey &&
-        (active === last || !panel.contains(active))
-      ) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [close, confirming])
-
   // The chat surface behind the dialog is made inert while it is open, so the
   // composer, the mic and every citation are unreachable by keyboard AND by a
-  // screen reader's virtual cursor — a Tab trap alone only closes the first of
-  // those two doors.
+  // screen reader's virtual cursor — a focus trap alone only closes the first
+  // of those two doors.
+  //
+  // KEPT after the move onto the shadcn `Dialog` (#169), which took over the
+  // trap, Escape, outside-click, `aria-modal` and the portal. Radix hides the
+  // rest of the page a different way: `hideOthers` marks the portal's BODY-LEVEL
+  // siblings `aria-hidden`, so what it takes out is the whole app root, not this
+  // card. On a page with two chat cards mounted — the Storybook autodocs page is
+  // one — that is both too much and untargeted, which is precisely the failure
+  // `CorvusChat.linkSafety.test.tsx` pins ("makes only the card the link belongs
+  // to inert, not the first one"). The card-scoped `inert` is therefore ours to
+  // keep, and it composes with Radix rather than duplicating it.
   //
   // Set imperatively on a node React renders without an `inert` prop, which is
   // why a re-render cannot clobber it: React only reconciles attributes it was
   // given. It is also why the dialog is PORTALLED to `document.body` — it
   // lives inside the chat card in the tree, and marking its own ancestor inert
-  // would make the dialog inert too.
+  // would make the dialog inert too. `DialogContent` portals for us now.
   //
   // The cleanup ALSO restores focus, and the order inside it is the whole
   // point rather than an accident: `inert` comes off first, and only then does
@@ -377,65 +326,89 @@ function CorvusReplyLink({
       >
         {children}
       </button>
-      {confirming &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/50 p-4 backdrop-blur-sm"
-            data-streamdown="link-safety-modal"
-            onClick={close}
-          >
-            <div
-              ref={panelRef}
-              aria-labelledby={titleId}
-              aria-modal="true"
-              className="relative flex w-full max-w-md flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-6 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
-              onClick={(event) => event.stopPropagation()}
-              role="dialog"
+      <Dialog
+        open={confirming}
+        onOpenChange={(next) => {
+          if (!next) close()
+        }}
+      >
+        <DialogContent
+          // Radix 1.1.20 deliberately does NOT emit `aria-modal` — it hides the
+          // rest of the page with `aria-hidden` on the portal's siblings
+          // instead, because `aria-modal` is inconsistently honoured across
+          // screen readers (verified in
+          // `@radix-ui/react-dialog/dist/index.mjs`, `DialogContentImpl`, which
+          // sets `role`, `aria-labelledby` and `aria-describedby` and nothing
+          // else). The attribute is set here because it IS true of this dialog
+          // and because `CorvusChat.linkSafety.test.tsx` and the
+          // `ExternalLinkConfirmation` story both pin it as part of #158's a11y
+          // floor. `contentProps` spread after Radix's own attributes, so this
+          // wins. Set at the call site, not in the primitive: overriding
+          // upstream's semantics for every future dialog is a larger decision
+          // than honouring one existing contract.
+          aria-modal="true"
+          className="max-w-md gap-3 sm:max-w-md"
+          data-streamdown="link-safety-modal"
+          // No ✕: Cancel is already the dismissal, and #158's rule for this
+          // modal is that it replaces streamdown's rather than redesigning it.
+          showCloseButton={false}
+          // Focus lands on the CONFIRMING action, not on Radix's default (the
+          // first focusable, i.e. Cancel). streamdown's own modal left focus on
+          // the now-hidden trigger and a keyboard visitor had to tab blind;
+          // landing on the affirmative action is what replaced that.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            confirmRef.current?.focus()
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{copy.title}</DialogTitle>
+            <DialogDescription>{copy.body}</DialogDescription>
+          </DialogHeader>
+          <p className="rounded-md bg-muted p-3 font-mono text-sm break-all">
+            {href}
+          </p>
+          <DialogFooter className="sm:justify-stretch">
+            <Button
+              className="flex-1"
+              onClick={close}
+              type="button"
+              variant="outline"
             >
-              <h2
-                className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
-                id={titleId}
-              >
-                {copy.title}
-              </h2>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                {copy.body}
-              </p>
-              <p className="rounded-md bg-zinc-100 p-3 font-mono text-sm break-all dark:bg-zinc-800">
-                {href}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  className="flex-1 rounded-md border border-zinc-200 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                  onClick={close}
-                  type="button"
-                >
-                  Cancel
-                </button>
-                <button
-                  ref={confirmRef}
-                  className="flex-1 rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
-                  onClick={() => {
-                    // `mailto:`/`tel:` hand off to another application; opening
-                    // them in a new tab leaves an empty one behind on the
-                    // browsers that do not close it themselves. Only a real
-                    // off-site PAGE gets `_blank`.
-                    if (kind === 'external') {
-                      window.open(href, '_blank', 'noreferrer')
-                    } else {
-                      window.open(href, '_self')
-                    }
-                    close()
-                  }}
-                  type="button"
-                >
-                  {copy.confirm}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+              Cancel
+            </Button>
+            <Button
+              ref={confirmRef}
+              className="flex-1"
+              // `teal`, not `default`, even though #190 now paints `default`
+              // with the same teal-700 fill and white label. The two differ
+              // only on HOVER: `default` is `bg-primary/90`, which composites
+              // teal-700 over the dialog's `bg-background` and so LIGHTENS in
+              // light mode (white label 5.39:1 → 4.47:1), while `teal` carries
+              // the measured site doctrine of hovering DARKER to teal-800
+              // (7.53:1). This button had teal-800 on hover before #169 and
+              // keeps it. Collapsing the two variants is a change to
+              // `ui/button.tsx` and is recorded as a follow-up.
+              variant="teal"
+              onClick={() => {
+                // `mailto:`/`tel:` hand off to another application; opening
+                // them in a new tab leaves an empty one behind on the
+                // browsers that do not close it themselves. Only a real
+                // off-site PAGE gets `_blank`.
+                if (kind === 'external') {
+                  window.open(href, '_blank', 'noreferrer')
+                } else {
+                  window.open(href, '_self')
+                }
+                close()
+              }}
+              type="button"
+            >
+              {copy.confirm}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
