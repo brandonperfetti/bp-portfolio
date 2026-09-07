@@ -243,9 +243,16 @@ type HopBudget = { exhausted: boolean; remaining: number }
  * row confidently produces a URL nothing serves. A is the more specific truth:
  * it was captured under an ancestor that has since moved, and its own
  * destination is a *reference*, so it resolves through the child's CURRENT
- * path — which already includes the renamed parent. Row B then covers the
+ * path — which already includes the renamed parent.
+ *
+ * [Superseded by #178, and left standing because the rule above is still the
+ * one that picks the row.] This paragraph used to end "row B then covers the
  * grandchild's own move on the next request; chains still cannot form, because
- * every hop resolves through a document rather than through another row.
+ * every hop resolves through a document rather than through another row." Both
+ * halves are false and the ticket exists because of it: B is keyed at a
+ * spelling the current-path rewrite never produces, so B is never consulted at
+ * all, and the fix below deliberately resolves one row's rewritten form through
+ * the table again — a bounded chain, by design. See "The historical hop".
  *
  * Before this rule the answer was whichever of A and C `payload.find` happened
  * to return first.
@@ -298,10 +305,19 @@ type HopBudget = { exhausted: boolean; remaining: number }
  * target's path as of this row's own capture, which is exactly the era the next
  * row is filed under — and the result is re-resolved through the same table.
  * Here that is `/lab-parent/lab-kid/lab-grandchild`, which B answers exactly,
- * giving `/lab-base/lab-grandchild`. One more resolution finds nothing keyed
- * there, so the walk stops and that is the answer.
+ * giving `/lab-base/lab-grandchild` — and an exact match spends no budget, so
+ * the walk is one hop long even though the history is three moves.
  *
- * Three properties fall out, and each is a test below:
+ * **When the re-resolution finds nothing, the walk does NOT serve the
+ * capture-time form** — it falls through to the pre-#178 current-path rewrite.
+ * Under a complete table those are the same string (nothing keyed at the
+ * snapshot means the target has not moved since capture), so this is not a
+ * behaviour difference; under a table missing an intermediate row — deleted in
+ * admin, or past the {@link REDIRECT_LIMIT} read — the current path is a live
+ * document's, and the capture-time form is a spelling that may serve nothing.
+ * Serving the latter would have been a regression against the pre-#178 answer.
+ *
+ * Four properties fall out, and each is a test below:
  *
  * 1. **Bounded.** {@link MAX_REDIRECT_HOPS} hops, tracked in a shared
  *    {@link HopBudget}. Exhaustion answers `null` all the way up rather than
@@ -313,17 +329,44 @@ type HopBudget = { exhausted: boolean; remaining: number }
  * 3. **Permanence is the chain's product.** A permanent hop through a temporary
  *    one is temporary: `permanent && next.permanent`. This is a real behaviour
  *    change worth stating — a 301 row whose walk passes through a 302 row now
- *    answers 307 rather than 308 — and it is the conservative direction, since
- *    the 302 is an editor saying "this destination is not settled" and caching
- *    the composite forever would outlive that. Open question for #178: whether
- *    the editor-visible permanence should instead be the FIRST row's, since
- *    that is the row whose URL the visitor asked for.
+ *    answers 307 rather than 308.
+ *
+ *    **Decided (#178): keep the product.** The alternative — report the FIRST
+ *    row's permanence, since that is the row whose URL the visitor asked for —
+ *    is defensible, and it loses on the asymmetry of harm. A wrong 307 costs a
+ *    ranking signal, is recoverable, and self-heals: the day the 302 becomes a
+ *    301 the composite becomes 308 with no intervention. A wrong 308 is cached
+ *    by the browser effectively indefinitely, the server can never retract it,
+ *    and the visitor keeps going to a destination that may since have been
+ *    retired. One is a temporary loss of a signal; the other is a permanent
+ *    loss of a visitor no deploy can fix. The frequency is low by
+ *    construction, too: `createPathRedirect` hard-codes `type: '301'` on every
+ *    row it writes, so a 302 can only enter a chain by an editor hand-writing
+ *    one — exactly the case where "not settled" is a deliberate statement. The
+ *    rule is surfaced to that editor in the redirect-type field's admin
+ *    description (`src/plugins/index.ts`), because it is their row that
+ *    downgrades every chain passing through it.
+ * 4. **A hop that finds nothing falls back, it does not serve the snapshot.**
+ *    See the paragraph above and the branch itself: identical under a complete
+ *    table, strictly safer under an incomplete one.
+ *
+ * **Hops are not moves.** The budget is spent only when pass 2 chooses a
+ * `matchDescendants` row that carries a snapshot whose rewrite differs from the
+ * request. An exactly-keyed row costs nothing, and the terminating frame costs
+ * nothing, so the guarantee is a FLOOR: at least five chained ancestor moves,
+ * and often more. The repro above is three moves and one hop.
  *
  * A row with no snapshot (everything written before #178) keeps the pre-#178
  * behaviour exactly: the remainder goes onto the current path, one rewrite, no
- * hop. Such a row therefore still survives exactly one move of its target and
- * cannot be backfilled — the path its target was served at that day is not
- * recorded anywhere.
+ * hop. Such a row therefore still survives exactly one move of its target, and
+ * is not backfilled — not because the value is unrecorded (`path` is a stored
+ * field, so `_pages_v` does hold historical paths and a `createdAt`-bounded
+ * migration could reconstruct some of them) but because it cannot be
+ * reconstructed RELIABLY: `versions.maxPerDoc: 50` under a 100 ms autosave
+ * interval prunes version history long before an old rename's date, so a
+ * backfill would leave most rows NULL and silently fill some wrongly. A NULL
+ * degrades to exactly the pre-#178 behaviour; a wrong snapshot sends a walk
+ * down a wrong branch and is indistinguishable from a right one.
  */
 export const resolveRedirect = (
   redirects: CmsRedirect[],
@@ -437,9 +480,22 @@ const resolveThroughHops = (
           destination: next.destination,
           permanent: permanent && next.permanent,
         }
-      // Nothing is keyed at the capture-time spelling, which means the target
-      // has not moved since capture and that spelling IS current. Serve it.
-      return { destination: viaCapture, permanent }
+      // Nothing is keyed at the capture-time spelling. Fall through to the
+      // current-path rewrite below rather than serving `viaCapture`.
+      //
+      // Under a COMPLETE table the two are the same string: if the target had
+      // moved since capture there would be a row keyed at the snapshot and the
+      // hop would have matched it, so "nothing matched" means the snapshot IS
+      // the current path. Under an incomplete one they differ, and the
+      // capture-time form is the worse of the two — it is a spelling that was
+      // current in the past and may serve nothing now, whereas the current-path
+      // rewrite is at least built on a live document's path. The table can be
+      // incomplete two ways: an editor deletes an intermediate row (the
+      // collection is fully editable in admin), or the row falls outside the
+      // {@link REDIRECT_LIMIT} read. Serving the stale form there would be a
+      // regression against pre-#178 behaviour, and in the most expensive
+      // direction this system has — a 301 to a dead URL, cached by the browser
+      // past any server-side retraction.
     }
   }
 
@@ -518,8 +574,10 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
       from: true,
       matchDescendants: true,
       to: true,
-      // #178. One more indexed varchar, and the only thing that can tell the
-      // resolver which spelling a descendant's row was keyed against.
+      // #178. One more varchar on a row this read already selects — not
+      // indexed, and it needs no index: it is never a lookup key in SQL, only
+      // in the in-memory walk. It is the only thing that can tell the resolver
+      // which spelling a descendant's row was keyed against.
       toPathAtCapture: true,
       type: true,
     },

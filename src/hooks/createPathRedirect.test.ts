@@ -44,7 +44,9 @@ import { createPathRedirect } from '@/hooks/createPathRedirect'
  * will spell.
  */
 
-type FindResult = { docs: Array<{ id: number }> }
+type FindResult = {
+  docs: Array<{ id: number; toPathAtCapture?: null | string }>
+}
 
 /**
  * Harness whose nested Local API calls swap `req.context` the way Payload's
@@ -264,6 +266,66 @@ describe('createPathRedirect', () => {
         collection: 'redirects',
         id: 9,
         data: expect.objectContaining({ from: '/articles/b', type: '301' }),
+      }),
+    )
+  })
+
+  /**
+   * #178 — the snapshot is WRITE-ONCE, and the update branch is the only place
+   * that could break it.
+   *
+   * `/a → /b`, then `/b → /a`, then `/a → /c`. The third move finds row
+   * `/articles/b` already present (the first move wrote it) and repoints it.
+   * Everything else on that row is a statement about where the document lives
+   * NOW and must be rewritten; `toPathAtCapture` is a statement about the era
+   * that began when `/articles/b` was vacated, and the descendant rows written
+   * during that era are keyed under it. Overwriting it erases the era and
+   * strands them.
+   */
+  it('preserves a snapshot the row it updates already carries', async () => {
+    const { update } = await publish({
+      data: { _status: 'published', slug: 'c' },
+      doc: { id: 55, _status: 'published', slug: 'c' },
+      existing: { docs: [{ id: 9, toPathAtCapture: '/articles/a' }] },
+      originalDoc: { id: 55, _status: 'draft', slug: 'c' },
+      publishedSlug: 'b',
+    })
+
+    // An exact object: the point of this test is the one key, and an
+    // `objectContaining` would pass just as happily on the row that overwrote
+    // it. Every other key IS repointed, which is what the branch is for.
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'redirects',
+        id: 9,
+        data: {
+          from: '/articles/b',
+          matchDescendants: false,
+          to: {
+            type: 'reference',
+            reference: { relationTo: 'posts', value: 55 },
+          },
+          toPathAtCapture: '/articles/a',
+          type: '301',
+        },
+      }),
+    )
+  })
+
+  it('writes the snapshot when the row it updates has none (a pre-#178 row)', async () => {
+    // Write-once, not never-write: a row that predates the column has no era to
+    // protect, and the current move is the best information available.
+    const { update } = await publish({
+      data: { _status: 'published', slug: 'c' },
+      doc: { id: 55, _status: 'published', slug: 'c' },
+      existing: { docs: [{ id: 9 }] },
+      originalDoc: { id: 55, _status: 'draft', slug: 'c' },
+      publishedSlug: 'b',
+    })
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ toPathAtCapture: '/articles/c' }),
       }),
     )
   })

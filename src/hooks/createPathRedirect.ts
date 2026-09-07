@@ -95,9 +95,12 @@ import { containRevalidation } from '@/hooks/containRevalidation'
  * makes the row resolve through the document's *current* slug at read time
  * (`src/lib/cms/redirectsRepo.ts`). Renaming `a → b → c` therefore leaves
  * `/articles/a` and `/articles/b` both resolving straight to `/articles/c`:
- * redirect chains cannot form by construction, so there is no chain-collapsing
- * pass to get wrong. It also means a row needs no maintenance when the document
- * is renamed again.
+ * for the URL a row is KEYED at, no chain forms and there is no chain-
+ * collapsing pass to get wrong. It also means a row needs no maintenance when
+ * the document is renamed again. (#178 added a bounded chain for URLs captured
+ * *beneath* a prefix row, where the same live reference is what breaks them —
+ * see the next paragraph and `resolveRedirect`. The collapsing that pass does
+ * do, `permanent && next.permanent`, is over permanence, not destinations.)
  *
  * **Why the row ALSO snapshots the target's path (#178).** A reference that
  * always resolves forward is exactly what breaks a URL captured under a prefix
@@ -107,8 +110,12 @@ import { containRevalidation } from '@/hooks/containRevalidation'
  * *current* path produces a URL no row is keyed at, and the descendant's row is
  * never consulted. `toPathAtCapture` freezes the spelling that row was keyed
  * against, and {@link resolveRedirect} uses it as a lookup key before falling
- * back to the current path. Rows stay immutable — this writer never revisits a
- * row it wrote for a different move.
+ * back to the current path. **The snapshot is write-once:** the idempotency
+ * branch below repoints an existing row's `to`, `type` and `matchDescendants`,
+ * but preserves any `toPathAtCapture` the row already carries, because that
+ * value names the era the descendants' rows are keyed under and a move-back-
+ * then-move-again would otherwise erase it. The rest of the row is not
+ * immutable and never was.
  *
  * **Idempotency.** `from` is `unique: true` on the plugin's collection, so a
  * repeated rename back and forth would collide. The hook reads first and
@@ -240,9 +247,24 @@ export const createPathRedirect: CollectionAfterChangeHook = async ({
 
     const current = existing.docs[0]
     if (current) {
+      // #178. The snapshot is WRITE-ONCE. Everything else on the row is
+      // repointed by a later move — that is what the idempotency branch is for
+      // — but `toPathAtCapture` names the era that began the moment `from` was
+      // vacated, and the descendant rows written during that era are keyed
+      // under it. Overwriting it would erase an era: `/a → /b`, then `/b → /a`,
+      // then `/a → /c` would rewrite row `/a`'s snapshot from `/b` to `/c`, and
+      // every row filed under the `/b` spelling would become unreachable.
+      // Preserving it costs nothing when the row is repointed at a different
+      // document: the resolver re-resolves the capture-time form through the
+      // table and, finding nothing keyed there, falls through to the new
+      // target's current path.
+      const captured =
+        typeof current.toPathAtCapture === 'string'
+          ? current.toPathAtCapture.trim()
+          : ''
       await req.payload.update({
         collection: 'redirects',
-        data,
+        data: captured ? { ...data, toPathAtCapture: captured } : data,
         id: current.id,
         overrideAccess: true,
         req,
