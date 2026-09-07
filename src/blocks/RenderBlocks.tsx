@@ -87,8 +87,8 @@ export type RenderableBlock = ColumnContentBlock | LayoutBlock
  * that cannot name its host — a Storybook story, a test rendering a bare block
  * list — keeps working, and a block that reads it treats "no host" the way it
  * already treats "no selection". Handed only to the blocks that need it:
- * `container`, because it is the sole route to a nested column, and (from
- * #177's second half) whichever leaf actually asks.
+ * `container`, because it is the sole route to a nested column, and
+ * `postRollup`, the one leaf that asks (#177).
  */
 export function RenderBlocks({
   blocks,
@@ -161,7 +161,12 @@ export function RenderBlocks({
               return <PhotoStripBlockComponent key={key} {...block} />
             case 'postRollup':
               return (
-                <PostRollupComponent key={key} {...block} hosted={hosted} />
+                <PostRollupComponent
+                  key={key}
+                  {...block}
+                  hosted={hosted}
+                  hostDoc={hostDoc}
+                />
               )
             case 'prose':
               return (

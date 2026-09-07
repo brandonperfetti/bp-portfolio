@@ -59,6 +59,15 @@ Payload is the single source of truth for site content. Admin at `/admin`
   show _its_ articles rather than the site's newest ones. `source` is
   `by-category` (published posts carrying the chosen topic — the one that works
   on day one) or `by-placement` (posts whose `parent` is the chosen page, #153).
+  **A `by-placement` rollup with an empty `page` picker rolls up the hosting
+  page's own placed articles** (#177) — #152's design, buildable once
+  `RenderBlocks` began carrying the hosting document's collection and id
+  (`BlockHostDocument` in `src/blocks/hostContext.ts`, threaded as a prop from
+  `RenderRhythmPage` / `CmsPageBlocks` / `CmsPostBlocks`, never a `headers()`
+  read, so a page carrying one stays prerenderable). A chosen page always
+  overrides. **On a Post host the empty picker renders nothing**, because "the
+  posts placed under the page this block is on" has no meaning under a post;
+  a rollup on an article must pick a page explicitly.
   Its `grid` and `stacked` layouts render through `ArticlesArchiveView`, so
   there is one card vocabulary on the site; `compact-list` is its own dense,
   dated `<ul>`. Every select carries an explicit `enumName`

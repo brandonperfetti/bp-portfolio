@@ -1057,7 +1057,7 @@ export interface PostRollupBlock {
    */
   category?: (number | null) | Category;
   /**
-   * The section page whose placed articles this rolls up. Leave empty and the section renders nothing.
+   * The section page whose placed articles this rolls up. Leave empty on a page and it rolls up that page’s own placed articles. On an article, leave it empty and the section renders nothing — pick a page instead.
    */
   page?: (number | null) | Page;
   /**
