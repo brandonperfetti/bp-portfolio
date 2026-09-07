@@ -149,8 +149,10 @@ function token(selector: string, name: string): Oklch {
 const RAMP = {
   white: [1, 0, 0],
   'teal-400': [0.777, 0.152, 181.912],
+  'teal-500': [0.704, 0.14, 182.503],
   'teal-600': [0.6, 0.118, 184.704],
   'teal-700': [0.511, 0.096, 186.391],
+  'teal-800': [0.437, 0.078, 188.216],
   'zinc-50': [0.985, 0, 0],
   'zinc-100': [0.967, 0.001, 286.375],
   'zinc-600': [0.442, 0.017, 285.786],
@@ -201,6 +203,35 @@ describe('shadcn token layer — palette identity (#190)', () => {
     expectStep(DARK, 'primary', 'teal-700')
     expectStep(LIGHT, 'primary-foreground', 'white')
     expectStep(DARK, 'primary-foreground', 'white')
+  })
+
+  it('keeps the brand hover on the site doctrine: teal-800, BOTH themes', () => {
+    // `hover:bg-primary-hover` on `ui/button.tsx`'s `default` variant. The
+    // stock shadcn hover is `bg-primary/90`, which composites the fill over
+    // the page and LIGHTENS in light mode; the site's written rule is that
+    // hover DARKENS, and `Button.tsx` / `--corvus-accent-solid` have shipped
+    // teal-700 -> teal-800 since #113.
+    expectStep(LIGHT, 'primary-hover', 'teal-800')
+    expectStep(DARK, 'primary-hover', 'teal-800')
+  })
+
+  it('names the surface roles as ramp steps in both themes', () => {
+    // These carried no ramp-step name and no assertion before, while the
+    // block's own header claimed every value was a named, pinned step. They
+    // are named now, and `--foreground` on `--background` — the most-rendered
+    // pair on the site — is pinned below.
+    expectStep(LIGHT, 'background', 'white')
+    expectStep(LIGHT, 'foreground', 'zinc-950')
+    expectStep(LIGHT, 'card', 'white')
+    expectStep(LIGHT, 'card-foreground', 'zinc-950')
+    expectStep(LIGHT, 'popover', 'white')
+    expectStep(LIGHT, 'popover-foreground', 'zinc-950')
+    expectStep(DARK, 'background', 'zinc-950')
+    expectStep(DARK, 'foreground', 'zinc-50')
+    expectStep(DARK, 'card', 'zinc-900')
+    expectStep(DARK, 'card-foreground', 'zinc-50')
+    expectStep(DARK, 'popover', 'zinc-900')
+    expectStep(DARK, 'popover-foreground', 'zinc-50')
   })
 
   it('paints --ring with the focus teal, matching the base-layer outline', () => {
@@ -277,6 +308,56 @@ describe('shadcn token layer — WCAG floors in both themes (#190)', () => {
         )
       })
 
+      it('surfaces: body text on the page, on a card and in a popover', () => {
+        // The most-rendered pair in the layer, and previously unasserted.
+        expectRatio(
+          token(sel, 'foreground'),
+          page,
+          TEXT_AA,
+          `[${theme}] --foreground on --background`,
+        )
+        expectRatio(
+          token(sel, 'card-foreground'),
+          token(sel, 'card'),
+          TEXT_AA,
+          `[${theme}] --card-foreground on --card`,
+        )
+        expectRatio(
+          token(sel, 'popover-foreground'),
+          token(sel, 'popover'),
+          TEXT_AA,
+          `[${theme}] --popover-foreground on --popover`,
+        )
+      })
+
+      it('primary hover: the label holds, and the step DARKENS', () => {
+        // Two assertions, because the doctrine has two halves. The label floor
+        // is absolute; the direction is what distinguishes this hover from
+        // shadcn's stock `bg-primary/90`, which lightens in light mode.
+        //
+        // Deliberately NOT asserted: the hovered fill's own edge against the
+        // page. It is 7.53:1 in light but 2.64:1 in dark, under 1.4.11 — a
+        // pre-existing property of the site's teal-700 -> teal-800 doctrine
+        // (`ui/button.tsx`'s `teal` variant has shipped it since #113), not
+        // something the token introduced. The REST fill carries the boundary
+        // (pinned above) and the label never drops. Recorded in the
+        // `--primary-hover` comment in `tailwind.css` and left as a follow-up
+        // rather than pinned to a floor it misses.
+        expectRatio(
+          token(sel, 'primary-foreground'),
+          token(sel, 'primary-hover'),
+          TEXT_AA,
+          `[${theme}] --primary-foreground on --primary-hover`,
+        )
+        const rest = luminance(token(sel, 'primary'))
+        const hover = luminance(token(sel, 'primary-hover'))
+        expect(
+          hover,
+          `[${theme}] --primary-hover must be DARKER than --primary: ` +
+            `luminance ${hover.toFixed(4)} vs ${rest.toFixed(4)}`,
+        ).toBeLessThan(rest)
+      })
+
       it('secondary and accent: label on the surface', () => {
         expectRatio(
           token(sel, 'secondary-foreground'),
@@ -320,4 +401,53 @@ describe('shadcn token layer — WCAG floors in both themes (#190)', () => {
       })
     })
   }
+})
+
+/**
+ * The base-layer `focus-visible` outline, which is a different mechanism from
+ * `--ring` and was the one focus indicator nothing asserted.
+ *
+ * @remarks `@layer base` draws `outline: 2px solid var(--color-teal-N)` on
+ * every interactive element, with an `outline-color` override under `.dark`.
+ * Those are Tailwind ramp variables rather than declarations in the shadcn
+ * block, so {@link token} cannot read them; the step NAME is parsed out of the
+ * rule instead and its ratio re-derived from {@link RAMP}. That keeps the
+ * assertion honest in both directions — changing the rule to a step that does
+ * not clear the floor fails here, and so does changing it to a step this file
+ * does not know.
+ */
+describe('base-layer focus-visible outline (#190)', () => {
+  /** The ramp step named by a `var(--color-<step>)` in the matched rule. */
+  function outlineStep(pattern: RegExp): keyof typeof RAMP {
+    const step = pattern.exec(cssCode)?.[1]
+    expect(step, `no focus-visible outline matched ${pattern}`).toBeDefined()
+    expect(
+      Object.keys(RAMP),
+      `outline step ${step} is not in this file's RAMP table`,
+    ).toContain(step)
+    return step as keyof typeof RAMP
+  }
+
+  it('light: the sitewide outline clears 1.4.11 on the page', () => {
+    // teal-500 measured 2.42:1 here — under the 3:1 non-text floor, on every
+    // focusable element on the site. teal-600 is 3.66:1, and is the step
+    // `--ring` already uses.
+    const step = outlineStep(/outline:\s*2px solid var\(--color-(teal-\d+)\)/)
+    expectRatio(
+      RAMP[step] as unknown as Oklch,
+      token(LIGHT, 'background'),
+      NON_TEXT_AA,
+      `[light] base-layer outline (${step}) on --background`,
+    )
+  })
+
+  it('dark: the outline override clears 1.4.11 on the page', () => {
+    const step = outlineStep(/outline-color:\s*var\(--color-(teal-\d+)\)/)
+    expectRatio(
+      RAMP[step] as unknown as Oklch,
+      token(DARK, 'background'),
+      NON_TEXT_AA,
+      `[dark] base-layer outline (${step}) on --background`,
+    )
+  })
 })
