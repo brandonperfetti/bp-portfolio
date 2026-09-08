@@ -31,6 +31,30 @@
   `.next` types can false-fail the push — remove `.next` and retry before
   suspecting real breakage.
 
+## Pre-push: the pg integration tier
+
+The Husky pre-push hook above does **not** cover the Postgres integration
+tier. Run it by hand before pushing anything that touches Payload hooks,
+page hierarchy, redirects or the Corvus embeddings store:
+
+```bash
+# export DATABASE_URI and PAYLOAD_SECRET first (values in .env.local)
+pnpm exec vitest run --root evals
+```
+
+Two properties of this tier decide how its fixtures must be written:
+
+- **Its files run in parallel workers against ONE database.** A "sweep
+  everything that isn't mine" assertion is therefore a race, not a baseline —
+  on CI the database is freshly migrated and empty, so a sibling file's
+  fixture is the only thing such a sweep can ever see. Snapshot the baseline
+  **by id** in `beforeAll`, assert exactly those ids, and unwind fixtures in
+  the test's own `try/finally`.
+  `[measured: PR #179 build-e2e failure + deterministic single-file repro]`
+- **A green local run does not clear an order-dependent flake.** Both lanes
+  and three reruns were 324/324 before CI failed on exactly this. Run the tier
+  anyway — it catches most things — but **CI arbitrates.**
+
 ## AI eval gate
 
 - Branches touching the Corvus eval harness or eval-adjacent config
@@ -63,6 +87,18 @@ media, so `BLOB_READ_WRITE_TOKEN` must be set locally or every image 404s.
 
 - CodeRabbit reviews PRs; triage suggestions against product intent — apply,
   or note why skipped (inline comment only when non-obvious).
+- **Two configuration facts worth knowing before you wait on a review:** the
+  Essentials plan **skips draft PRs** by default (set
+  `reviews.auto_review.drafts: true` to change it), and the path filters
+  exclude `src/migrations/**` and `payload-types.ts` — so a finding about a
+  migration arrives attached to the _collection_ file that generated it, not
+  to the migration. `[source: review 5126093754 header]`
+- **Declining a finding is a per-thread argument with receipts**, not a
+  dismissal: name the file, the test, or the documented ops order that makes
+  the finding wrong. CodeRabbit's learnings system reads those replies and
+  suppresses the pattern on later PRs, so a well-argued decline pays forward.
+  `"Fixed in <sha>"` on an accepted finding produces a learning the same way.
+  `[measured: #179 F2 decline, runbook order quoted]`
 - **Oversized release PRs:** when CodeRabbit declines a PR for size (>150
   files), first force a review with `@coderabbitai review`; if it still
   declines, the review gate is satisfied only by every constituent commit
