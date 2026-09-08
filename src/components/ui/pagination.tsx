@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 
 import { buttonVariants } from '@/components/ui/button'
+import { usePageChangeAnchor } from '@/lib/usePageChangeAnchor'
 import { cn } from '@/lib/utils'
 
 /**
@@ -328,6 +329,17 @@ export interface ListPaginationProps {
   label: string
   /** Extra classes for the `<nav>`. */
   className?: string
+  /**
+   * The surface's results container, re-anchored after a page change (#183).
+   *
+   * @remarks Threaded through this one component on purpose: it is the single
+   * place every list surface already funnels its page steps through, so the
+   * scroll/focus behavior lands on all of them without a copy per surface.
+   * The element must carry `tabIndex={-1}` (and, for the sticky header,
+   * `scroll-mt-16`). Optional — omitting it keeps the pre-#183 behavior, which
+   * is what the primitive's own unit tests and its story render.
+   */
+  resultsRef?: React.RefObject<HTMLElement | null>
 }
 
 /**
@@ -364,6 +376,14 @@ export interface ListPaginationProps {
  *   that clears the flag — cannot leave it armed for a later page change. The
  *   current-page link is the target because it is the one control guaranteed
  *   to exist on every page, and it already carries `aria-current="page"`.
+ * - **The page step re-anchors the reader (#183).** Surfaces page with
+ *   `scroll: false`, so without this nothing moves: a new page of results is
+ *   swapped in below a viewport that is still parked wherever the reader left
+ *   it. Passing `resultsRef` opts a surface into
+ *   {@link usePageChangeAnchor}, which scrolls that container's top into view
+ *   and moves focus into it. It is armed from the click rather than inferred
+ *   from `page`, so a filter-driven reset to page 1 — which happens mid-typing
+ *   — never steals focus out of the search box.
  * - This component is deliberately router-free: it takes `buildHref` and
  *   `onNavigate` rather than reaching for `next/navigation`. That keeps it
  *   renderable from a plain Storybook story and reusable unchanged by the
@@ -404,8 +424,9 @@ export function ListPagination({
   onNavigate,
   label,
   className,
+  resultsRef,
 }: ListPaginationProps): React.ReactElement | null {
-  // Both hooks run before the `totalPages <= 1` early return: hooks may not be
+  // All hooks run before the `totalPages <= 1` early return: hooks may not be
   // conditional, and this component legitimately renders nothing.
   const currentPageRef = React.useRef<HTMLAnchorElement>(null)
   const restoreFocusRef = React.useRef(false)
@@ -418,6 +439,13 @@ export function ListPagination({
     currentPageRef.current?.focus()
   }, [page])
 
+  // Declared AFTER the boundary restore so that when a surface supplies a
+  // results container the anchor is the last focus move of the two, and the
+  // reader lands in the results rather than back on the control strip. Where
+  // no container is supplied the restore above is still the only mover, which
+  // is why #88's boundary contract is untouched.
+  const { armAnchor } = usePageChangeAnchor({ page, resultsRef })
+
   if (totalPages <= 1) {
     return null
   }
@@ -427,6 +455,16 @@ export function ListPagination({
     (target: number) => (event: React.MouseEvent<HTMLAnchorElement>) => {
       if (!isPlainClick(event)) {
         return
+      }
+      // Arm the #183 re-anchor only for a click that changes the page. The
+      // current-page link navigates nothing (the surface's `goToPage` bails on
+      // an unchanged query string), so arming there would spend the arming on
+      // whatever moved `page` next — a filter reset, mid-keystroke. The arm
+      // carries `target`, so even a click whose push is superseded (the
+      // debounced filter `replace` drops `?page`) cannot anchor a later,
+      // unrelated page change.
+      if (target !== page) {
+        armAnchor(target)
       }
       event.preventDefault()
       onNavigate(target)

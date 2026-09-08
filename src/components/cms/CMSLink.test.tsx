@@ -30,6 +30,38 @@ describe('resolveCmsHref', () => {
     ).toBe('/work/brytecore')
   })
 
+  it('links a placed page shaped exactly as Pages.defaultPopulate returns it (#189)', () => {
+    // The ticket's repro, at the seam it actually broke: `{ title, slug, path }`
+    // is the whole of a populated page reference under the #189
+    // `defaultPopulate`. Before `path` joined that projection the same link
+    // arrived as `{ title, slug }` and rendered `/brytecore`.
+    expect(
+      resolveCmsHref({
+        type: 'reference',
+        reference: {
+          relationTo: 'pages',
+          value: {
+            title: 'Brytecore',
+            slug: 'brytecore',
+            path: 'work/brytecore',
+          } as never,
+        },
+      }),
+    ).toBe('/work/brytecore')
+  })
+
+  it('links the root page at / when the populated reference carries its path too (#189)', () => {
+    expect(
+      resolveCmsHref({
+        type: 'reference',
+        reference: {
+          relationTo: 'pages',
+          value: { title: 'Home', slug: 'home', path: 'home' } as never,
+        },
+      }),
+    ).toBe('/')
+  })
+
   it('links the root page at / rather than /home', () => {
     expect(
       resolveCmsHref({

@@ -452,6 +452,13 @@ export function ArticlesExplorer({
     [pathname, searchParams],
   )
 
+  /**
+   * The results grid — the #183 scroll/focus anchor for a page step. It is a
+   * `<section>`, which has no interface of its own, so `HTMLElement` is the
+   * type it actually holds.
+   */
+  const resultsRef = useRef<HTMLElement>(null)
+
   const goToPage = useCallback(
     (nextPage: number) => {
       const currentQueryString = searchParams.toString()
@@ -570,7 +577,28 @@ export function ArticlesExplorer({
         immediate={queryText.length > 0 || topic !== 'All' || currentPage > 1}
         revealKey={`${queryText}|${topic}|${currentPage}`}
       >
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        {/* The #183 re-anchor target: `tabIndex={-1}` so a page step can put
+            focus on the results themselves (the base focus outline is scoped
+            to `[tabindex]:not([tabindex='-1'])`, so nothing flashes a ring),
+            and `scroll-mt-16` so the sticky header does not sit over the row
+            we just scrolled to — the same offset id-linked sections use.
+
+            Because focus lands here, the container needs an accessible name
+            (`docs/ACCESSIBILITY.md` §Semantics): a bare `<div>` is a generic
+            with no name-bearing role and would announce nothing. Two of the
+            other surfaces (`EntityGrid`, `TechExplorer`) anchor a
+            `<ul role="list">` and take the name alone; `UsesSections` anchors
+            a named `<section>`, exactly as this one does. This grid holds
+            `<article>`s, so `role="list"` would lie.
+            §Semantics also prefers a real element over an ARIA role where one
+            exists — a named `<section>` is already a landmark region, so it
+            needs no `role="region"` of its own. */}
+        <section
+          ref={resultsRef}
+          tabIndex={-1}
+          aria-label="Article results"
+          className="grid scroll-mt-16 grid-cols-1 gap-8 lg:grid-cols-3"
+        >
           {visibleArticles.map((article) => {
             const author = getAuthor(article)
             const topicValues = (article.topics ?? [])
@@ -681,7 +709,7 @@ export function ArticlesExplorer({
               </HoverMotionCard>
             )
           })}
-        </div>
+        </section>
       </ScrollReveal>
 
       <ListPagination
@@ -691,6 +719,7 @@ export function ArticlesExplorer({
         buildHref={buildPageHref}
         onNavigate={goToPage}
         label="Articles pagination"
+        resultsRef={resultsRef}
       />
 
       {filtered.length === 0 && (

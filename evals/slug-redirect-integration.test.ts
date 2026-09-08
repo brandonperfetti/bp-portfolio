@@ -1,6 +1,11 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import {
+  createFixturePage,
+  createFixturePost,
+} from './fixtures/payload-fixtures'
+
 /**
  * Slug freeze + auto-redirect against a REAL Payload instance on REAL Postgres
  * (#120, addendum 2).
@@ -65,6 +70,25 @@ vi.mock('next/cache', () => ({
   unstable_cache: (fn: unknown) => fn,
   cacheTag: vi.fn(),
   cacheLife: vi.fn(),
+}))
+
+/**
+ * The one place this tier reads the redirect table through the REAL reader
+ * (#178).
+ *
+ * @remarks `evals/vitest.config.ts` aliases `@payload-config` to
+ * `src/test/payloadConfigStub.ts` — an empty object that exists only so unit
+ * tests can import route handlers without dragging the CMS into jsdom. Every
+ * other case in this file talks to Payload through the instance `beforeAll`
+ * builds, so the stub never mattered. The #178 case is different: the defect is
+ * in `getCmsRedirects`/`resolveRedirect`, which reach Payload through that
+ * alias at module scope, and a stub config would give them no database at all.
+ * Pointing the alias at the real config for this file is what lets the assertion
+ * be about the reader the site actually runs rather than a hand-built row list —
+ * which is the same reason this whole tier exists (see the docblock above).
+ */
+vi.mock('@payload-config', async () => ({
+  default: (await import('../src/payload.config')).default,
 }))
 
 const connectionString = process.env.DATABASE_URI
@@ -140,9 +164,7 @@ describe.skipIf(!connectionString)(
 
     /** Create a post already published at `slug`. */
     const createPublished = async (slug: string) => {
-      const doc = await payload.create({
-        collection: 'posts',
-        overrideAccess: true,
+      const doc = await createFixturePost(payload, {
         context: { disableRevalidate: true },
         data: {
           title: `Integration ${slug}`,
@@ -302,9 +324,7 @@ describe.skipIf(!connectionString)(
     }, 180_000)
 
     it('writes no redirect for a first publish', async () => {
-      const draft = await payload.create({
-        collection: 'posts',
-        overrideAccess: true,
+      const draft = await createFixturePost(payload, {
         context: { disableRevalidate: true },
         data: {
           title: 'First publish',
@@ -613,16 +633,14 @@ describe.skipIf(!connectionString)(
      * writer back onto the slug.
      */
     it('writes a path-keyed row when a placed post is UN-PLACED', async () => {
-      const section = await payload.create({
-        collection: 'pages',
-        overrideAccess: true,
+      const section = await createFixturePage(payload, {
         context: { disableRevalidate: true },
         data: {
           title: `${MARKER}-section`,
           layout: [{ blockType: 'spacer', size: 'md' }],
           _status: 'published',
           slug: `${MARKER}-section`,
-        } as never,
+        },
       })
 
       const id = await createPublished(`${MARKER}-placed`)
@@ -669,5 +687,138 @@ describe.skipIf(!connectionString)(
         overrideAccess: true,
       })
     }, 180_000)
+
+    /**
+     * #178, the whole ticket, on the pipeline that produced it.
+     *
+     * A URL captured under an ancestor that has since moved AGAIN used to 404
+     * although every hop of its history had a row. The rows are fine; the
+     * lookup skipped one. `resolveRedirect` chose the most specific prefix row,
+     * rewrote the remainder onto that row's target's CURRENT path, and produced
+     * a spelling no row is keyed at — so the grandchild's own row, sitting in
+     * the same list, was never consulted.
+     *
+     * Everything here is real: the three published pages, `cascadePagePaths`
+     * recomputing the subtree on each move, `createPathRedirect` writing each
+     * row (and its `toPathAtCapture` snapshot), and the site's own reader —
+     * `getCmsRedirects` + `resolveRedirect` — answering the request. The rows
+     * are NOT hand-built, which is the point: the unit tests can only assert
+     * that the resolver handles a list shaped like this, and the defect was
+     * that the list the hooks actually write is shaped like this.
+     *
+     * "200" at this tier means "a published document is served at the
+     * destination, and none is served at the answer the pre-fix code gave" —
+     * there is no HTTP server here, and the route's not-found branch does
+     * nothing with the destination but hand it to `permanentRedirect`.
+     */
+    it('resolves a URL whose ancestor moved TWICE, and 404s at neither hop (#178)', async () => {
+      const { getCmsRedirects, resolveRedirect } =
+        await import('../src/lib/cms/redirectsRepo')
+      const parentSlug = `${MARKER}-lab-parent`
+      const baseSlug = `${MARKER}-lab-base`
+      const childSlug = `${MARKER}-lab-child`
+      const kidSlug = `${MARKER}-lab-kid`
+      const grandchildSlug = `${MARKER}-lab-grandchild`
+
+      const mkPage = async (slug: string, parent?: number | string) =>
+        createFixturePage(payload, {
+          context: { disableRevalidate: true },
+          data: {
+            title: slug,
+            layout: [{ blockType: 'spacer', size: 'md' }],
+            _status: 'published',
+            slug,
+            ...(parent === undefined ? {} : { parent }),
+          },
+        })
+      const movePage = async (
+        id: number | string,
+        data: Record<string, unknown>,
+      ) =>
+        payload.update({
+          collection: 'pages',
+          id,
+          overrideAccess: true,
+          context: { disableRevalidate: true },
+          data: data as never,
+        })
+      const pathOf = async (id: number | string) =>
+        (
+          await payload.findByID({
+            collection: 'pages',
+            id,
+            overrideAccess: true,
+          })
+        ).path
+      const servedAt = async (path: string) =>
+        (
+          await payload.find({
+            collection: 'pages',
+            depth: 0,
+            overrideAccess: true,
+            pagination: false,
+            where: { path: { equals: path.replace(/^\//, '') } },
+          })
+        ).totalDocs
+
+      // The tree, published: /parent → /parent/child → /parent/child/grandchild.
+      const parent = await mkPage(parentSlug)
+      const child = await mkPage(childSlug, parent.id)
+      const grandchild = await mkPage(grandchildSlug, child.id)
+      // The URL an inbound link captured, before any of the three moves.
+      const inbound = `/${parentSlug}/${childSlug}/${grandchildSlug}`
+      expect(await pathOf(grandchild.id)).toBe(
+        `${parentSlug}/${childSlug}/${grandchildSlug}`,
+      )
+
+      // (1) Rename the child ⇒ row A, keyed at the child's old path.
+      await movePage(child.id, { slug: kidSlug, slugLock: false })
+      // (2) Move the grandchild up one level ⇒ row B, keyed at the path the
+      //     grandchild had AFTER step 1 — which spells the child as `lab-kid`.
+      await movePage(grandchild.id, { parent: parent.id })
+      // (3) Rename the parent ⇒ row C, and the cascade moves both descendants.
+      await movePage(parent.id, { slug: baseSlug, slugLock: false })
+
+      expect(await pathOf(grandchild.id)).toBe(`${baseSlug}/${grandchildSlug}`)
+
+      const rowFor = async (from: string) =>
+        (
+          await payload.find({
+            collection: 'redirects',
+            depth: 0,
+            overrideAccess: true,
+            pagination: false,
+            where: { from: { equals: from } },
+          })
+        ).docs[0]
+
+      // The three rows the moves wrote, each with the snapshot that names the
+      // era the NEXT row is filed under.
+      expect(await rowFor(`/${parentSlug}/${childSlug}`)).toMatchObject({
+        matchDescendants: true,
+        toPathAtCapture: `/${parentSlug}/${kidSlug}`,
+      })
+      expect(
+        await rowFor(`/${parentSlug}/${kidSlug}/${grandchildSlug}`),
+      ).toMatchObject({ toPathAtCapture: `/${parentSlug}/${grandchildSlug}` })
+      expect(await rowFor(`/${parentSlug}`)).toMatchObject({
+        matchDescendants: true,
+        toPathAtCapture: `/${baseSlug}`,
+      })
+
+      // THE assertion, through the site's own reader.
+      const resolved = resolveRedirect(await getCmsRedirects(), inbound)
+      expect(resolved).toEqual({
+        destination: `/${baseSlug}/${grandchildSlug}`,
+        permanent: true,
+      })
+
+      // ...and the destination is a URL that actually serves, while the answer
+      // the pre-#178 resolver gave is not.
+      expect(await servedAt(resolved!.destination)).toBe(1)
+      expect(await servedAt(`/${baseSlug}/${kidSlug}/${grandchildSlug}`)).toBe(
+        0,
+      )
+    }, 240_000)
   },
 )

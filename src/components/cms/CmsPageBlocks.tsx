@@ -9,6 +9,11 @@ import { getPageLayoutBySlug } from '@/lib/cms/layoutsRepo'
  * @remarks Spacer-only layouts (the seed default) are treated as empty so
  * routes don't grow stray whitespace before any real blocks are added.
  *
+ * This is one of the three readers that already hold the hosting document, so
+ * it is one of the three that can name it: the Pages doc's id goes down with
+ * the blocks as `hostDoc`, which is how a block placed on `/uses` can ask
+ * about `/uses` without reading the request (#177).
+ *
  * @param slug - Pages collection slug for this route (`home` for `/`).
  * @param exclude - Block types the route consumes in a dedicated slot instead
  * (home renders its `photoStrip` block under the hero, not down here).
@@ -20,12 +25,18 @@ export async function CmsPageBlocks({
   slug: string
   exclude?: string[]
 }) {
-  const layout = await getPageLayoutBySlug(slug)
-  if (!layout?.length) return null
+  const hosted = await getPageLayoutBySlug(slug)
+  const layout = hosted?.layout
+  if (!hosted || !layout?.length) return null
   const blocks = exclude?.length
     ? layout.filter((block) => !exclude.includes(block.blockType))
     : layout
   const meaningful = blocks.some((block) => block.blockType !== 'spacer')
   if (!meaningful) return null
-  return <RenderBlocks blocks={blocks} />
+  return (
+    <RenderBlocks
+      blocks={blocks}
+      hostDoc={{ collection: 'pages', id: hosted.id }}
+    />
+  )
 }

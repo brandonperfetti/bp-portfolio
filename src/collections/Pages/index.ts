@@ -24,6 +24,10 @@ import {
   validatePageHierarchy,
 } from './hooks/pageHierarchy'
 import { revalidateDelete, revalidatePage } from './hooks/revalidatePage'
+import {
+  refusePublishUnderUnpublishedParent,
+  refuseUnpublishWithServedDescendants,
+} from './hooks/servedPrefix'
 
 /**
  * Layout-builder pages — how Brandon adds/removes site sections on the fly.
@@ -42,6 +46,12 @@ export const Pages: CollectionConfig = {
   defaultPopulate: {
     title: true,
     slug: true,
+    // `path` travels with every populated page read (#189) — without it a
+    // `CMSLink` reference to a placed page resolves through `publicPathFor`
+    // with no path in hand and falls back to `/`+slug, so a link to
+    // `work/brytecore` is spelled `/brytecore` and 404s (#148). Mirrors the
+    // same line on Posts (#153).
+    path: true,
   },
   admin: {
     defaultColumns: ['title', 'slug', 'updatedAt'],
@@ -241,7 +251,20 @@ export const Pages: CollectionConfig = {
     // (#150): `createPathRedirect` now keys the row on the served path, so the
     // rename it refused writes `/work/<old> -> /work/<new>` and needs no guard.
     beforeValidate: [validatePageHierarchy],
-    beforeChange: [populatePublishedAt, capturePublishedSlug, computePagePath],
+    // The two served-prefix guards (#180) run FIRST, so a refused publish or
+    // unpublish costs nothing downstream — no `publishedAt` stamp, no
+    // `capturePublishedSlug` lookup, no path recomputation. They live in
+    // `beforeChange` rather than beside `validatePageHierarchy` because the
+    // rule is about the publish TRANSITION, not about the placement: the same
+    // parent/child pair is legal to save all day and illegal only at the
+    // moment one of them changes what the site serves.
+    beforeChange: [
+      refusePublishUnderUnpublishedParent,
+      refuseUnpublishWithServedDescendants,
+      populatePublishedAt,
+      capturePublishedSlug,
+      computePagePath,
+    ],
     afterDelete: [revalidateDelete],
   },
   versions: {

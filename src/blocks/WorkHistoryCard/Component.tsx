@@ -2,7 +2,7 @@ import { CardChromeHeader } from '@/blocks/CardChromeHeader'
 import {
   type BlockHostContext,
   blockRhythmClass,
-  zeroConfigCardWidthClass,
+  zeroConfigCardWidthClassFor,
 } from '@/blocks/hostContext'
 import {
   WorkHistoryEntry,
@@ -64,10 +64,16 @@ export const workHistoryEntryFacts = (
  *   read depth, so no extra query is issued here.
  *
  * @param props - The stored block (`heading` / `intro`, #40; `entry` and
- * `showDescription`, #137), plus `hosted`: where the block is rendering. At
- * root it keeps its reading measure; inside a column it fills the width the
- * editor picked, rather than leaving the right half of a full-width column
- * empty.
+ * `showDescription`, #137), plus `hosted`: where the block is rendering.
+ * Inside a column it fills the width the editor picked, rather than leaving
+ * the right half of a full-width column empty. At root the MODE decides
+ * (#188): the résumé list keeps the `max-w-xl` reading measure the zero-config
+ * cards share, while the per-entry card drops its cap and fills the route's
+ * content column (`max-w-none` inside `Container`), the same measure an
+ * uncapped `lead` block takes — and a root-hosted `prose` block too: `prose`
+ * carries no width cap of its own here (see `Prose/Component.tsx`), so it
+ * fills the same column. The card is not promised to match every sibling —
+ * only to stop being capped below the column the page gives it.
  *
  * @remarks A relationship pointing at a deleted row comes back `null`, which
  * falls through to the résumé card rather than rendering an empty box — the
@@ -86,7 +92,14 @@ export function WorkHistoryCardComponent({
 
   return (
     <section
-      className={cn(blockRhythmClass(hosted), zeroConfigCardWidthClass(hosted))}
+      className={cn(
+        blockRhythmClass(hosted),
+        // The mode picks the measure, not the block (#188): the per-entry card
+        // is content and takes the whole content column, the résumé list is
+        // the form-measure card it has always been. `facts` is the same value
+        // the render branch below reads, so the two can never disagree.
+        zeroConfigCardWidthClassFor(hosted, facts ? 'content' : 'form'),
+      )}
     >
       {facts ? (
         <WorkHistoryEntry

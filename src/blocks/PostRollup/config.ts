@@ -72,17 +72,18 @@ export const PostRollup: Block = {
       admin: {
         condition: (_data, siblingData) =>
           siblingData?.source === 'by-placement',
-        // The design's "leave empty to roll up posts placed under the page this
-        // block is on" is not offered yet, and the description says so rather
-        // than promising it: `RenderBlocks` dispatches a block with no identity
-        // for the document hosting it (`hostContext.ts` carries `root` |
-        // `column` and nothing else), so a block cannot ask "which page am I
-        // on?" without new plumbing through every call site. Until that exists,
-        // an empty picker rolls up nothing — the same empty-state branch an
-        // unpopulated category takes — instead of silently rolling up the whole
-        // corpus.
+        // #177 built the design's "leave empty to use the hosting page"
+        // fallback: `RenderBlocks` now carries the hosting document's
+        // collection and id (`hostContext.ts`'s `BlockHostDocument`), so the
+        // block can resolve "this page" without a request-scope read. The
+        // description promises the fallback and names its one exception rather
+        // than leaving an editor to discover it on an article: the block is
+        // registered on Posts too, and "the posts placed under the page this
+        // block is on" has no meaning under a post, so there the empty picker
+        // still rolls up nothing — the same empty branch an unset category
+        // takes, never the whole corpus.
         description:
-          'The section page whose placed articles this rolls up. Leave empty and the section renders nothing.',
+          'The section page whose placed articles this rolls up. Leave empty on a page and it rolls up that page’s own placed articles. On an article, leave it empty and the section renders nothing — pick a page instead.',
       },
     },
     {

@@ -9,56 +9,219 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* shadcn/ui design tokens (zinc base). Light values on :root, dark values on
- * .dark — parity in both themes is an acceptance criterion. */
+/* shadcn/ui design tokens, themed to the SITE palette (#190). Light values on
+ * :root, dark values on .dark — parity in both themes is an acceptance
+ * criterion, and "parity" means both themes clear the floors, not that both
+ * carry the same value.
+ *
+ * Doctrine (docs/STYLING.md §shadcn tokens are the theme): every shadcn
+ * primitive is themed HERE, once, and a per-surface override is for semantics
+ * — never for repainting a primitive that arrived the wrong colour. The
+ * bespoke `src/components/Button.tsx` and the `.corvus-surface` block below
+ * are the REFERENCE this layer is derived from, not targets to restyle.
+ *
+ * Every value is a literal Tailwind v4.3.3 ramp step, named in the comment on
+ * its line. Identity AND WCAG ratio, both themes, are pinned by
+ * `src/styles/shadcn-token-contrast.test.ts` for every role that renders text
+ * or a fill edge: the surfaces (background/card/popover and their
+ * foregrounds), primary and secondary each with their hover step, muted,
+ * accent and the ring. Three deliberate exceptions, and they are the only
+ * three:
+ *
+ *   --border / --input   named steps in light (zinc-200), but an alpha white
+ *                        in dark (`oklch(1 0 0 / 10%)`, `/ 15%`) — not a ramp
+ *                        step at all, so identity is not assertable there and
+ *                        the pair is left to the surfaces it sits between.
+ *   --destructive*       the generator's red, unused by any component and
+ *                        deliberately unpinned — see its own comment below.
+ *   --primary-hover      identity and the LABEL ratio are pinned in both
+ *                        themes, and so is the hover direction; the hovered
+ *                        FILL EDGE against the page is not, because in dark it
+ *                        is 2.64:1, under 1.4.11 — see its own comment below.
+ *
+ * Add a themed token here, add its pair there.
+ *
+ * What #190 actually changed, having checked the scaffold rather than assuming
+ * it: the NEUTRAL half was already the site's zinc ramp step for step, so it
+ * is confirmed and commented, not moved. Three things were genuinely wrong:
+ *
+ *   --primary          zinc-900, inverting to zinc-200 in dark. Every
+ *                      primitive reaching for the brand got near-black (light)
+ *                      or near-white (dark). First live sighting: the /work
+ *                      feature cards store `appearance: "default"`, `CMSLink`
+ *                      renders the shadcn Button, and the cards grew near-black
+ *                      buttons matching nothing on the site
+ *                      [measured 2026-09-06].
+ *   --ring             a zinc step, with no relationship to the teal focus
+ *                      outline the base layer draws — and 2.63:1 on the light
+ *                      page, under the 3:1 WCAG 1.4.11 floor for a non-text
+ *                      indicator.
+ *   --muted-foreground zinc-500, which is 4.39:1 on --muted (zinc-100) in
+ *                      light: under the 4.5:1 WCAG 1.4.3 floor for the text it
+ *                      carries. Dark was always fine.
+ */
 :root {
   /* Drives native UI (scrollbars, form controls) AND Clerk's default
    * theme, whose dark mode keys off color-scheme — this is what makes
    * Clerk components follow the site's next-themes toggle with no JS. */
   color-scheme: light;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.21 0.006 285.885);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.21 0.006 285.885);
+  /* Page and panel surfaces. Named steps and pinned like everything else in
+   * this block: white/zinc-950 in light, zinc-950/zinc-50 on the page and
+   * zinc-900/zinc-50 on a panel in dark. `--foreground` on `--background` is
+   * the most-rendered pair on the site, so it is asserted rather than
+   * assumed — 19.89:1 light, 19.05:1 dark. */
+  --background: oklch(1 0 0); /* white */
+  --foreground: oklch(0.141 0.005 285.823); /* zinc-950 */
+  --card: oklch(1 0 0); /* white */
+  --card-foreground: oklch(0.141 0.005 285.823); /* zinc-950 */
+  --popover: oklch(1 0 0); /* white */
+  --popover-foreground: oklch(0.141 0.005 285.823); /* zinc-950 */
+  /* Brand fill. teal-700 with white text, IDENTICAL in both themes — the one
+   * decision that makes a `default` shadcn Button the sibling of the bespoke
+   * primary Button (`bg-teal-700 … dark:bg-teal-700`) and of
+   * --corvus-accent-solid. Both of those hold one value across themes on
+   * purpose, so this must not invert the way the scaffold did.
+   *   white on teal-700          5.39:1  ≥ 4.5  (label, 1.4.3)
+   *   teal-700 on --background   5.39:1  ≥ 3    (fill edge, light)
+   *   teal-700 on --background   3.69:1  ≥ 3    (fill edge, dark)
+   * The hover step is --primary-hover, declared just below: `ui/button.tsx`
+   * used to hover `bg-primary/90`, which composites teal-700 90% over the page
+   * and LIGHTENS in light mode; its `default` variant now consumes the token
+   * instead, so the primitive hovers on the same measured doctrine as the
+   * bespoke Button. */
+  --primary: oklch(0.511 0.096 186.391); /* teal-700 */
+  --primary-foreground: oklch(1 0 0); /* white */
+  /* Hover step for the brand fill: teal-800, the site's MEASURED hover
+   * doctrine (hover DARKENS — `src/components/Button.tsx` and
+   * `--corvus-accent-solid` both do this) rather than shadcn's stock
+   * `hover:bg-primary/90`, which composites the fill over the page and so
+   * LIGHTENS in light mode. One value in both themes, like --primary itself.
+   *   white on teal-800            7.53:1  >= 4.5  (label, 1.4.3)
+   *   teal-800 on --background     7.53:1  >= 3    (fill edge, light)
+   *   teal-800 on --background     2.64:1  <  3    (fill edge, DARK)
+   * That last number is the one pair in this block that does not clear
+   * 1.4.11, and it is PRE-EXISTING only for the `teal` variant: that variant
+   * in `ui/button.tsx` has shipped teal-700 -> teal-800 in both themes since
+   * #113 and the bespoke Button does the same, so for `teal` this token adopts
+   * the doctrine already on the page rather than inventing one. For the
+   * `default` variant it is a REGRESSION, and a deliberate one: shadcn's stock
+   * `hover:bg-primary/90` composited to 3.18:1 against zinc-950, which clears
+   * the floor, so moving `default` onto this token lowers its dark hovered
+   * fill edge from 3.18:1 to 2.64:1. The trade bought the correct hover
+   * DIRECTION in light (5.39:1 -> 4.47:1 lightening becomes 7.53:1 darkening)
+   * and a higher dark label (6.26:1 -> 7.53:1). What still identifies the
+   * control on a dark page is the REST state (teal-700, 3.69:1) and the label
+   * (7.53:1), and hover is a transient state layered on an already-identified
+   * control — so the edge is recorded and left to the `default`/`teal`
+   * retirement-and-hover-step ticket, not silently pinned to a floor it
+   * misses. The test asserts what IS true in both themes: identity, the label
+   * floor, and that the hover is DARKER than the rest. */
+  --primary-hover: oklch(0.437 0.078 188.216); /* teal-800 */
+  /* Neutral roles — already the site's zinc ramp step for step before #190,
+   * confirmed rather than moved. --accent is shadcn's HOVER SURFACE (the
+   * `outline`/`ghost` hover pair), not the brand accent: the brand accent is
+   * --primary, and repainting these teal would put a teal wash on every ghost
+   * hover the site has. zinc-900 on zinc-100 is 16.11:1. */
+  --secondary: oklch(0.967 0.001 286.375); /* zinc-100 */
+  --secondary-foreground: oklch(0.21 0.006 285.885); /* zinc-900 */
+  /* Hover step for the secondary fill, on the same doctrine as
+   * --primary-hover: hover DARKENS, and it is a named ramp step rather than
+   * an alpha composite. `ui/button.tsx`'s `secondary` variant used to hover
+   * `bg-secondary/80`, which composites zinc-100 at 80% over the page and so
+   * LIGHTENS in light mode — the exact thing `docs/STYLING.md` says not to
+   * reintroduce, and the last such alpha hover on a fill left in the file.
+   * One notch down the zinc ramp in each theme, so the direction is the same
+   * in both: zinc-100 -> zinc-200 here, zinc-800 -> zinc-900 in dark.
+   *   zinc-900 on zinc-200        13.98:1  >= 4.5  (label, 1.4.3)
+   * Like --secondary itself, this is a SURFACE rather than a fill edge — the
+   * `secondary` variant is a low-emphasis control on the page, and neither
+   * the rest step nor the hover step is pinned against --background at
+   * 1.4.11 (zinc-100 on white is 1.27:1 by construction). The label floor and
+   * the hover direction are what the test asserts, exactly as for
+   * --primary-hover.
+   * Light is the easy theme for that call — the hover step separates from the
+   * page slightly BETTER than the rest step does (1.27:1 hovered vs 1.10:1 at
+   * rest on white, and the same against --card/--popover, which are white
+   * here). The dark block records the case where it does not. */
+  --secondary-hover: oklch(0.92 0.004 286.32); /* zinc-200 */
+  --muted: oklch(0.967 0.001 286.375); /* zinc-100 */
+  /* zinc-600, not the scaffold's zinc-500: `text-muted-foreground` renders
+   * over --muted as well as over the page, and zinc-500 measures 4.39:1 on
+   * zinc-100 — a near miss under 1.4.3. zinc-600 is 7.02:1 there and 7.73:1
+   * on the page. */
+  --muted-foreground: oklch(0.442 0.017 285.786); /* zinc-600 */
+  --accent: oklch(0.967 0.001 286.375); /* zinc-100 */
+  --accent-foreground: oklch(0.21 0.006 285.885); /* zinc-900 */
+  /* Left on the generator's red: the site palette has no destructive hue, and
+   * no component currently renders `variant="destructive"`. Its dark pair is
+   * measured and recorded as a follow-up rather than pinned by a test that
+   * would fail on a token nothing uses. */
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.705 0.015 286.067);
+  --border: oklch(0.92 0.004 286.32); /* zinc-200 */
+  --input: oklch(0.92 0.004 286.32); /* zinc-200 */
+  /* Focus indicator, teal — the same language as the base layer's
+   * `focus-visible` outline below. teal-600 rather than the teal-500 that rule
+   * carried before #190, because teal-500 measures 2.42:1 on the light page,
+   * under 1.4.11; teal-600 is 3.66:1. That rule was moved to teal-600 in the
+   * same change, so the two no longer disagree. */
+  --ring: oklch(0.6 0.118 184.704); /* teal-600 */
   --radius: 0.625rem;
 }
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.006 285.885);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.92 0.004 286.32);
-  --primary-foreground: oklch(0.21 0.006 285.885);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.141 0.005 285.823); /* zinc-950 */
+  --foreground: oklch(0.985 0 0); /* zinc-50 */
+  --card: oklch(0.21 0.006 285.885); /* zinc-900 */
+  --card-foreground: oklch(0.985 0 0); /* zinc-50 */
+  --popover: oklch(0.21 0.006 285.885); /* zinc-900 */
+  --popover-foreground: oklch(0.985 0 0); /* zinc-50 */
+  /* Deliberately NOT inverted — see the light block. The brand fill is one
+   * colour on this site, in both themes. */
+  --primary: oklch(0.511 0.096 186.391); /* teal-700 */
+  --primary-foreground: oklch(1 0 0); /* white */
+  /* See the light block for the doctrine and the measured pairs. */
+  --primary-hover: oklch(0.437 0.078 188.216); /* teal-800 */
+  --secondary: oklch(0.274 0.006 286.033); /* zinc-800 */
+  --secondary-foreground: oklch(0.985 0 0); /* zinc-50 */
+  /* See the light block for the doctrine. One notch down the same ramp:
+   *   zinc-50 on zinc-900         16.98:1  >= 4.5  (label, 1.4.3)
+   * KNOWN, and the reason the light block points here: this step is the SAME
+   * zinc-900 as --card and --popover in this theme. Hovered fill against the
+   * container it might sit in:
+   *   --background (zinc-950)     1.12:1
+   *   --card (zinc-900)           1.00:1   ← identical colour
+   *   --popover (zinc-900)        1.00:1   ← identical colour
+   *   --muted / --accent (zinc-800)  1.19:1
+   * On a card or popover surface in dark, a hovered `secondary` control is
+   * therefore indistinguishable from its container: the affordance INVERTS on
+   * hover, since the rest step (zinc-800) does separate from zinc-900 at
+   * 1.19:1. This is LATENT, not live. Nothing in `src/` renders `bg-card` or
+   * `bg-popover` (zero matches), `ui/dialog.tsx` paints its panel with
+   * `bg-background`, and the only `variant="secondary"` on the shadcn Button
+   * is in `button.stories.tsx` — every production "secondary" placement
+   * (`not-found.tsx`, `home/Resume.tsx`) is the bespoke
+   * `src/components/Button.tsx`, which owns its own colours.
+   * So it is recorded rather than designed around: picking a hover step to
+   * clear a surface no component renders would move a live colour to satisfy
+   * a hypothetical one. The moment a `bg-card` or `bg-popover` surface hosts a
+   * `secondary` control, this token needs revisiting — the fix is a hover step
+   * that is not also a surface token, not an alpha. */
+  --secondary-hover: oklch(0.21 0.006 285.885); /* zinc-900 */
+  --muted: oklch(0.274 0.006 286.033); /* zinc-800 */
+  /* zinc-400 clears both floors here (5.66:1 on zinc-800, 7.56:1 on the page),
+   * so dark does not move with light. */
+  --muted-foreground: oklch(0.705 0.015 286.067); /* zinc-400 */
+  --accent: oklch(0.274 0.006 286.033); /* zinc-800 */
+  --accent-foreground: oklch(0.985 0 0); /* zinc-50 */
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.552 0.016 285.938);
+  /* teal-400, the same step the base layer's dark focus outline uses — 10.66:1
+   * on the dark page. */
+  --ring: oklch(0.777 0.152 181.912); /* teal-400 */
 }
 
 @theme inline {
@@ -70,8 +233,10 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary-hover: var(--secondary-hover);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
@@ -138,7 +303,20 @@
     [role='button'],
     [tabindex]:not([tabindex='-1'])
   ):focus-visible {
-    outline: 2px solid var(--color-teal-500);
+    /* teal-600, not teal-500: teal-500 on the light page measures 2.42:1,
+     * under the 3:1 WCAG 1.4.11 floor for a non-text indicator. teal-600 is
+     * 3.66:1 and is the same step `--ring` uses, so the two no longer
+     * disagree. The dark rule below stays on teal-400 (10.66:1). Both are
+     * pinned by `src/styles/shadcn-token-contrast.test.ts`.
+     *
+     * This is the BASE rule, and nothing here claims how far it reaches:
+     * `:where()` is zero-specificity and this sits in `@layer base`, so any
+     * component that sets its own `focus-visible:` utility wins. Around 30
+     * call sites in `src/` do exactly that (`focus:outline-none` plus a
+     * `focus-visible:ring-teal-500/80`) and never see this outline; bringing
+     * those rings onto the measured step is a follow-up on #190, not a change
+     * made here. */
+    outline: 2px solid var(--color-teal-600);
     outline-offset: 2px;
   }
 

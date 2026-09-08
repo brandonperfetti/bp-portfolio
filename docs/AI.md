@@ -75,53 +75,61 @@ file). With `CorvusReplyLink` mounted, `Lo` never renders, so keeping
 `linkSafety` would be configuration for a component that does not exist.
 
 The cost of owning the anchor is owning the confirmation, which streamdown
-does not export. `CorvusReplyLink` renders its own, and being ours it meets
-`docs/ACCESSIBILITY.md`'s overlay rule — "overlays trap and restore focus":
+does not export. `CorvusReplyLink` renders its own — **on the shadcn `Dialog`
+primitive** (`src/components/ui/dialog.tsx`, #169), not hand-rolled. That
+primitive wraps Radix from the **unified `radix-ui` package**, which has been a
+dependency since the shadcn stack landed and already backs
+`src/components/consent/CookieDialog.tsx`; #158's note that
+`@radix-ui/react-dialog` "is not a dependency" was true only of the scoped
+twin, and adding it would have put a second copy of the same primitive in the
+tree. No manifest change was needed or made.
 
-- a real `role="dialog"` with `aria-modal="true"` and an accessible name
-  (streamdown's had `role="button"` on the backdrop, `role="presentation"` on
-  the panel, and no accessible name at all);
-- focus moved to the confirming action on open and **returned to the trigger**
-  on close (all four close paths — Escape, Cancel, Confirm, backdrop — share
-  one `close()`); Escape dismisses;
-- **Tab and Shift+Tab cycle within the dialog**, and the chat surface behind it
-  carries `inert` while it is open, so the composer, the mic and every other
-  citation are out of reach for the keyboard _and_ for a screen reader's
-  virtual cursor — a Tab trap alone closes only the first of those doors.
+What that buys, against `docs/ACCESSIBILITY.md`'s overlay rule — "overlays trap
+and restore focus":
 
-Three implementation notes that are decisions rather than details. The dialog
-is **portalled to `document.body`**: it sits inside the chat card in the React
-tree, and marking its own ancestor `inert` would otherwise make the dialog
-inert too. `inert` is set imperatively on a node React renders without an
-`inert` prop, so a re-render cannot clobber it — React only reconciles
-attributes it was given.
+- Radix owns the **focus trap** (Tab and Shift+Tab cycle within the dialog),
+  the **focus restore**, **Escape**, outside-click dismissal, the **portal**
+  and `role="dialog"`. None of it is hand-rolled any more: #169 deleted the
+  last of it, a card-scoped `inert` effect and a manual restore in the effect
+  cleanup.
+- The chat surface behind it leaves the accessibility tree because Radix's
+  `hideOthers` marks the portal's body-level siblings `aria-hidden` — so the
+  composer, the mic and every other citation are out of reach for the keyboard
+  _and_ for a screen reader's virtual cursor. A Tab trap alone closes only the
+  first of those doors.
+- An accessible name from `DialogTitle`, and `aria-modal="true"`.
 
-And **the focus restore happens in the effect cleanup that removes `inert`,
-after the attribute comes off** — never synchronously in `close()`. React
-batches the state update, so at `close()` time the surface is still inert, and
-`.focus()` inside an inert subtree is a **no-op** in a real browser:
-`activeElement` stays on `<body>`. That shipped briefly and was caught in
-Chromium, not in jsdom — **jsdom does not implement inert focusability**, so
-the unit test asserting the restore passed green throughout
-`[measured, 2026-09-04]`. The unit test is kept (it catches a restore deleted
-outright) but the `ExternalLinkConfirmation` story is the proof: it closes by
-Escape and by Cancel and asserts focus returns in a real browser. Reverting the
-fix turns that story red and leaves the jsdom suite green — which is the whole
-reason the story exists.
+Three things the **call site** still owns, and each is a decision rather than a
+detail.
 
-The trap is hand-rolled, and that is a **deferral worth naming**: `CLAUDE.md`
-says new UI starts from a shadcn/ui primitive, but there is no dialog primitive
-in `src/components/ui` and `@radix-ui/react-dialog` is not a dependency, so
-satisfying that half of the rule means editing `package.json` — out of scope
-for #158. The story below is what gates the accessibility in the meantime;
-moving this dialog onto a real primitive is a follow-up.
+`aria-modal` is passed by hand. Radix omits it deliberately — it hides the rest
+of the page with `aria-hidden` instead, because the attribute is inconsistently
+honoured by screen readers — and #158's spec pins it, so `DialogContent`
+receives it explicitly here rather than in the primitive.
+
+Focus lands on the **confirming** action rather than Radix's default first
+focusable, via `onOpenAutoFocus`. streamdown's own modal left focus on the
+now-hidden trigger and a keyboard visitor had to tab blind; landing on the
+affirmative action is what replaced that.
+
+The trigger is a **`DialogTrigger asChild`**, and that is load-bearing rather
+than stylistic. `DialogContentModal` handles close-auto-focus by calling
+`event.preventDefault()` — cancelling `FocusScope`'s own
+`focus(previouslyFocusedElement)` — and focusing `context.triggerRef.current`
+instead, and only `DialogTrigger` populates that ref. A controlled dialog
+opened from a plain sibling button therefore restores focus to **nothing** and
+drops it on `<body>`; that was measured in jsdom while #169 was retiring the
+hand-rolled restore, and it is one code path with no environment-dependent
+step, so it was equally true in Chromium `[measured, 2026-09-07]`. Radix's
+restore is also deferred one tick (`setTimeout(…, 0)` in `FocusScope`'s
+cleanup), which is why both the unit test and the story `waitFor` it.
 
 `CorvusChat.stories.tsx` carries an `ExternalLinkConfirmation` story that opens
 the dialog through the real `useChat` transport (a hand-built AI SDK v1
 UI-message-stream response, so the reply is genuinely streamed and genuinely
 rendered by streamdown), so the Storybook a11y addon gates it and the focus,
-trap and `inert` behaviour — open **and close** — is asserted in a real browser
-rather than only in jsdom.
+trap and page-hiding behaviour — open **and close** — is asserted in a real
+browser rather than only in jsdom.
 
 | Kind                | Renders    | Plain click                              |
 | ------------------- | ---------- | ---------------------------------------- |

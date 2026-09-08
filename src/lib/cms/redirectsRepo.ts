@@ -43,6 +43,22 @@ export type CmsRedirect = {
    */
   matchDescendants?: boolean
   to: string
+  /**
+   * The path the target was being served at when this row was written (#178).
+   *
+   * @remarks `to` is resolved through the target's CURRENT path, which is the
+   * right answer for `from` itself and the wrong lookup key for anything
+   * captured beneath it — the rows for those descendants are keyed at the
+   * spelling in force at capture. This is that spelling, and
+   * {@link resolveRedirect} rewrites onto it first for exactly that reason.
+   *
+   * Optional, and omitted rather than `null` when unset, for the same reason
+   * `matchDescendants` is: a row written before #178 has no snapshot and can
+   * never gain one (the move it records already happened), so the reader must
+   * treat its absence as "fall back to the current path", which is the
+   * pre-#178 behaviour byte for byte.
+   */
+  toPathAtCapture?: string
   type: CmsRedirectType
 }
 
@@ -114,6 +130,35 @@ export const normalizeRedirectPath = (path: string): string => {
  */
 const isAbsoluteDestination = (destination: string): boolean =>
   /^[a-z][a-z0-9+.\-]*:/i.test(destination) || destination.startsWith('//')
+
+/**
+ * How many capture-time rewrites one request may walk (#178).
+ *
+ * @remarks A hop is not a move: budget is spent only when a snapshot-carrying
+ * prefix row rewrites a request onto a spelling that differs from the one
+ * asked for — an exact match and the walk's terminating frame are both free.
+ * So hops are at most moves, not equal to them: the three-move
+ * `lab-parent`/`lab-child`/`lab-grandchild` repro (#178) costs exactly ONE
+ * hop. Read five as a floor, not a cap on moves — it buys *at least* five
+ * chained ancestor moves, and usually more — and it exists so a cycle
+ * terminates rather than to be generous. It also bounds the cost: each hop
+ * re-walks the (at most `REDIRECT_LIMIT`) rows already in hand, so the worst
+ * case is five passes over an in-memory list, no extra reads.
+ */
+const MAX_REDIRECT_HOPS = 5
+
+/**
+ * The hop budget for one call, shared by every frame of the walk.
+ *
+ * @remarks Mutable and shared rather than a number passed down, because the two
+ * outcomes a frame must tell apart — "the chain ended, nothing further matched"
+ * and "the chain ran out of budget" — are BOTH a `null` return. Without
+ * `exhausted`, a cyclic pair would exhaust the budget deep in the walk and the
+ * frame above would read that `null` as a clean termination and serve its own
+ * capture-time URL. The flag makes exhaustion propagate all the way out as
+ * `null`, which is the honest answer: we do not know where this URL goes.
+ */
+type HopBudget = { exhausted: boolean; remaining: number }
 
 /**
  * Pure lookup over an already-loaded redirect list.
@@ -202,9 +247,16 @@ const isAbsoluteDestination = (destination: string): boolean =>
  * row confidently produces a URL nothing serves. A is the more specific truth:
  * it was captured under an ancestor that has since moved, and its own
  * destination is a *reference*, so it resolves through the child's CURRENT
- * path — which already includes the renamed parent. Row B then covers the
+ * path — which already includes the renamed parent.
+ *
+ * [Superseded by #178, and left standing because the rule above is still the
+ * one that picks the row.] This paragraph used to end "row B then covers the
  * grandchild's own move on the next request; chains still cannot form, because
- * every hop resolves through a document rather than through another row.
+ * every hop resolves through a document rather than through another row." Both
+ * halves are false and the ticket exists because of it: B is keyed at a
+ * spelling the current-path rewrite never produces, so B is never consulted at
+ * all, and the fix below deliberately resolves one row's rewritten form through
+ * the table again — a bounded chain, by design. See "The historical hop".
  *
  * Before this rule the answer was whichever of A and C `payload.find` happened
  * to return first.
@@ -228,10 +280,134 @@ const isAbsoluteDestination = (destination: string): boolean =>
  * "The most specific row says no" means no, exactly as it does in the exact
  * pass, where a matching row with an empty or self-pointing destination
  * likewise returns `null` instead of looking for a second opinion.
+ *
+ * ## The historical hop — surviving a SECOND move (#178)
+ *
+ * Rule 4 above picks the most specific row and rewrites the remainder onto that
+ * row's CURRENT destination. That is right while the chosen row's target has
+ * moved once. It breaks the moment the target moves again, and the walkthrough
+ * on the ticket is the same three-level tree, one step further:
+ *
+ * ```text
+ * (1) rename  /lab-parent/lab-child → …/lab-kid   ⇒ A: /lab-parent/lab-child       (prefix)
+ * (2) move    the grandchild up one level          ⇒ B: /lab-parent/lab-kid/lab-grandchild
+ * (3) rename  /lab-parent → /lab-base              ⇒ C: /lab-parent                (prefix)
+ * ```
+ *
+ * `GET /lab-parent/lab-child/lab-grandchild`: rule 4 chooses A, A's target now
+ * lives at `/lab-base/lab-kid`, and the remainder lands as
+ * `/lab-base/lab-kid/lab-grandchild` — **404**. Every hop of that URL's history
+ * has a row, and B is sitting in the same list, unread. It is unread because B
+ * is keyed at `/lab-parent/lab-kid/lab-grandchild`: the spelling in force when
+ * the grandchild moved, which names A's target as `/lab-parent/lab-kid`, the
+ * path A's target no longer has. The rewrite jumped straight to the present and
+ * skipped the era B is filed under.
+ * [measured, unit probe on the pre-#178 tree: the repro answered
+ * `/lab-base/lab-kid/lab-grandchild`.]
+ *
+ * So the rewrite goes onto {@link CmsRedirect.toPathAtCapture} FIRST — the
+ * target's path as of this row's own capture, which is exactly the era the next
+ * row is filed under — and the result is re-resolved through the same table.
+ * Here that is `/lab-parent/lab-kid/lab-grandchild`, which B answers exactly,
+ * giving `/lab-base/lab-grandchild` — and an exact match spends no budget, so
+ * the walk is one hop long even though the history is three moves.
+ *
+ * **When the re-resolution finds nothing, the walk does NOT serve the
+ * capture-time form** — it falls through to the pre-#178 current-path rewrite.
+ * Under a complete table those are the same string (nothing keyed at the
+ * snapshot means the target has not moved since capture), so this is not a
+ * behaviour difference; under a table missing an intermediate row — deleted in
+ * admin, or past the {@link REDIRECT_LIMIT} read — the current path is a live
+ * document's, and the capture-time form is a spelling that may serve nothing.
+ * Serving the latter would have been a regression against the pre-#178 answer.
+ *
+ * **A walk that comes back to the request takes the same branch.** The hop's
+ * answer is a form this function can serve, so rule 3's self-redirect guard is
+ * asked of it too: `next` was resolved against the capture-time spelling and
+ * never against the request, so a chain whose last row points back produces a
+ * destination equal to the path asked for. That is an infinite redirect, and
+ * at 301 a 308 the browser caches past any retraction. It is the same evidence
+ * as a chain that ends — the capture-time spelling is not to be trusted — so
+ * the answer is the same fall-through rather than a `null`: the chosen row's
+ * own destination is a live document's path, and the current-path rewrite
+ * carries its own `rewritten === target` guard, so it cannot loop in turn.
+ *
+ * Four properties fall out, and each is a test below:
+ *
+ * 1. **Bounded.** {@link MAX_REDIRECT_HOPS} hops, tracked in a shared
+ *    {@link HopBudget}. Exhaustion answers `null` all the way up rather than
+ *    serving a partial walk, which is what makes a cyclic pair terminate.
+ * 2. **Every rewritten form is re-asked `isAbsoluteDestination`** — the
+ *    capture-time form, and each hop's own form through the recursion. The
+ *    wave-6 `//host` guard is not weakened by having more forms to guard; it is
+ *    applied to all of them.
+ * 3. **Permanence is the chain's product.** A permanent hop through a temporary
+ *    one is temporary: `permanent && next.permanent`. This is a real behaviour
+ *    change worth stating — a 301 row whose walk passes through a 302 row now
+ *    answers 307 rather than 308.
+ *
+ *    **Decided (#178): keep the product.** The alternative — report the FIRST
+ *    row's permanence, since that is the row whose URL the visitor asked for —
+ *    is defensible, and it loses on the asymmetry of harm. A wrong 307 costs a
+ *    ranking signal, is recoverable, and self-heals: the day the 302 becomes a
+ *    301 the composite becomes 308 with no intervention. A wrong 308 is cached
+ *    by the browser effectively indefinitely, the server can never retract it,
+ *    and the visitor keeps going to a destination that may since have been
+ *    retired. One is a temporary loss of a signal; the other is a permanent
+ *    loss of a visitor no deploy can fix. The frequency is low by
+ *    construction, too: `createPathRedirect` hard-codes `type: '301'` on every
+ *    row it writes, so a 302 can only enter a chain by an editor hand-writing
+ *    one — exactly the case where "not settled" is a deliberate statement. The
+ *    rule is surfaced to that editor in the redirect-type field's admin
+ *    description (`src/plugins/index.ts`), because it is their row that
+ *    downgrades every chain passing through it.
+ * 4. **A hop that finds nothing — or finds its way back to the request —
+ *    falls back, it does not serve the snapshot.** See the two paragraphs
+ *    above and the branch itself: identical under a complete table, strictly
+ *    safer under an incomplete one, and never a redirect to the request.
+ *
+ * **Hops are not moves.** The budget is spent only when pass 2 chooses a
+ * `matchDescendants` row that carries a snapshot whose rewrite differs from the
+ * request. An exactly-keyed row costs nothing, and the terminating frame costs
+ * nothing, so the guarantee is a FLOOR: at least five chained ancestor moves,
+ * and often more. The repro above is three moves and one hop.
+ *
+ * A row with no snapshot (everything written before #178) keeps the pre-#178
+ * behaviour exactly: the remainder goes onto the current path, one rewrite, no
+ * hop. Such a row therefore still survives exactly one move of its target, and
+ * is not backfilled — not because the value is unrecorded (`path` is a stored
+ * field, so `_pages_v` does hold historical paths and a `createdAt`-bounded
+ * migration could reconstruct some of them) but because it cannot be
+ * reconstructed RELIABLY: `versions.maxPerDoc: 50` under a 100 ms autosave
+ * interval prunes version history long before an old rename's date, so a
+ * backfill would leave most rows NULL and silently fill some wrongly. A NULL
+ * degrades to exactly the pre-#178 behaviour; a wrong snapshot sends a walk
+ * down a wrong branch and is indistinguishable from a right one.
  */
 export const resolveRedirect = (
   redirects: CmsRedirect[],
   path: string,
+): CmsRedirectTarget | null =>
+  resolveThroughHops(redirects, path, {
+    exhausted: false,
+    remaining: MAX_REDIRECT_HOPS,
+  })
+
+/**
+ * One step of {@link resolveRedirect}, plus the hop budget it may spend.
+ *
+ * @param redirects - The same flattened list, unchanged across hops.
+ * @param path - The path this step is resolving.
+ * @param hops - Shared, mutable budget. See {@link HopBudget}.
+ *
+ * @remarks Everything in {@link resolveRedirect}'s docblock is the contract for
+ * this function; it is separate only because the capture-time rewrite has to
+ * re-enter it.
+ */
+const resolveThroughHops = (
+  redirects: CmsRedirect[],
+  path: string,
+  hops: HopBudget,
 ): CmsRedirectTarget | null => {
   const target = normalizeRedirectPath(path)
 
@@ -282,20 +458,101 @@ export const resolveRedirect = (
   // would let a less specific ancestor answer for a subtree a more specific one
   // owns — the same defect rule 4 exists to prevent, arriving by a side door.
   if (!destination || isAbsoluteDestination(destination)) return null
+  const permanent = isPermanentRedirect(best.type)
+  const remainder = target.slice(from.length)
+
+  // ## The historical hop (#178)
+  //
+  // The capture-time spelling FIRST, because it is the only form other rows are
+  // keyed at. `snapshot` is absent on a pre-#178 row, and then this whole block
+  // is skipped and the current-path rewrite below is the answer, exactly as it
+  // was before this change.
+  const snapshot = best.toPathAtCapture?.trim()
+  // A snapshot is always an internal path — the writer builds it with
+  // `publicPathFor` — but this function is exported and takes a caller's list,
+  // and appending a suffix to a host is a URL it has no business inventing.
+  if (snapshot && !isAbsoluteDestination(snapshot)) {
+    const captureBase = normalizeRedirectPath(snapshot)
+    const viaCapture = `${captureBase === '/' ? '' : captureBase}${remainder}`
+    // Asked on THIS rewritten form too, and again on every form a further hop
+    // produces: each one is a candidate destination in its own right.
+    if (!isAbsoluteDestination(viaCapture) && viaCapture !== target) {
+      if (hops.remaining <= 0) {
+        // Out of budget: the chain is longer than a real history can be, or it
+        // is a cycle. Either way this answer cannot be trusted, and the flag
+        // makes every frame above return `null` rather than serve a partial
+        // walk as if it had terminated.
+        hops.exhausted = true
+        return null
+      }
+      hops.remaining -= 1
+      const next = resolveThroughHops(redirects, viaCapture, hops)
+      if (hops.exhausted) return null
+      // A further hop answered: that is the live URL, and permanence is the
+      // product of the whole chain (see the docblock — a 302 anywhere makes the
+      // answer temporary).
+      //
+      // Unless the chain leads back to the request. Rule 3's guard is asked of
+      // every form this function can serve, and the walk's answer is one of
+      // them: `next` was resolved against `viaCapture`, never against `target`,
+      // so the chain's last row pointing back at the requested path composes a
+      // destination equal to it — an infinite redirect, and a 308 the browser
+      // caches past any retraction. Stems, not spellings, as everywhere else
+      // here: a hop may answer `/a/leaf?x=1`, which points back just the same.
+      // Absolute answers are excluded from the comparison rather than
+      // normalised, because normalising a host produces a nonsense path and an
+      // answer that leaves the site cannot be the loop this asks about.
+      if (next) {
+        const leadsBackToTheRequest =
+          !isAbsoluteDestination(next.destination) &&
+          normalizeRedirectPath(next.destination) === target
+        if (!leadsBackToTheRequest)
+          return {
+            destination: next.destination,
+            permanent: permanent && next.permanent,
+          }
+      }
+      // Nothing is keyed at the capture-time spelling, or what is keyed there
+      // leads back here. Fall through to the current-path rewrite below rather
+      // than serving `viaCapture`.
+      //
+      // A chain that returns to the request is the same evidence as a chain
+      // that ends: the capture-time spelling is not to be trusted, and this is
+      // already the branch for that. Declining outright (`null`, a 404) would
+      // be the stricter reading, and it is the wrong one — the chosen row's
+      // own destination is a live document's path, so the rewrite below is a
+      // real answer where `null` is none, and it cannot itself loop because the
+      // `rewritten === target` guard is applied to it. `/a` → `/c` captured at
+      // `/b`, with a `/b/leaf` row pointing back at `/a/leaf`, answers
+      // `/c/leaf` rather than 404ing a URL the table can still resolve.
+      //
+      // Under a COMPLETE table the two are the same string: if the target had
+      // moved since capture there would be a row keyed at the snapshot and the
+      // hop would have matched it, so "nothing matched" means the snapshot IS
+      // the current path. Under an incomplete one they differ, and the
+      // capture-time form is the worse of the two — it is a spelling that was
+      // current in the past and may serve nothing now, whereas the current-path
+      // rewrite is at least built on a live document's path. The table can be
+      // incomplete two ways: an editor deletes an intermediate row (the
+      // collection is fully editable in admin), or the row falls outside the
+      // {@link REDIRECT_LIMIT} read. Serving the stale form there would be a
+      // regression against pre-#178 behaviour, and in the most expensive
+      // direction this system has — a 301 to a dead URL, cached by the browser
+      // past any server-side retraction.
+    }
+  }
+
   const base = normalizeRedirectPath(destination)
   // The root normalises to `/`, so concatenating the suffix directly would
   // spell `//<suffix>` — a protocol-relative URL that leaves the site.
-  const rewritten = `${base === '/' ? '' : base}${target.slice(from.length)}`
+  const rewritten = `${base === '/' ? '' : base}${remainder}`
   // Re-checked on the rewritten form, for the same reason the self-redirect
   // guard below is: only this form can be served.
   if (isAbsoluteDestination(rewritten)) return null
   // The guard on the REWRITTEN destination, which is the only form that can
   // equal the request.
   if (rewritten === target) return null
-  return {
-    destination: rewritten,
-    permanent: isPermanentRedirect(best.type),
-  }
+  return { destination: rewritten, permanent }
 }
 
 /** Collect the referenced document ids per collection, at depth 0. */
@@ -356,7 +613,17 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
     limit: REDIRECT_LIMIT,
     overrideAccess: false,
     pagination: false,
-    select: { from: true, matchDescendants: true, to: true, type: true },
+    select: {
+      from: true,
+      matchDescendants: true,
+      to: true,
+      // #178. One more varchar on a row this read already selects — not
+      // indexed, and it needs no index: it is never a lookup key in SQL, only
+      // in the in-memory walk. It is the only thing that can tell the resolver
+      // which spelling a descendant's row was keyed against.
+      toPathAtCapture: true,
+      type: true,
+    },
   })
 
   const idsByCollection = collectReferenceIds(docs)
@@ -421,9 +688,18 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
         ? { matchDescendants: true }
         : {}
 
+    // #178, and the key is OMITTED when unset for the same reason: a row that
+    // predates the column flattens byte-identically to what this function
+    // returned before, so every caller holding one keeps comparing equal.
+    const rawCapture = (doc as { toPathAtCapture?: unknown }).toPathAtCapture
+    const capture: Pick<CmsRedirect, 'toPathAtCapture'> =
+      typeof rawCapture === 'string' && rawCapture.trim().length > 0
+        ? { toPathAtCapture: rawCapture }
+        : {}
+
     if (to?.type === 'custom') {
       if (typeof to.url === 'string' && to.url.length > 0) {
-        redirects.push({ from, ...descendants, to: to.url, type })
+        redirects.push({ from, ...capture, ...descendants, to: to.url, type })
       }
       continue
     }
@@ -435,7 +711,13 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
     const row = rowById.get(`${relationTo}:${value}`)
     const destination = publicPathFor(relationTo, row)
     if (destination)
-      redirects.push({ from, ...descendants, to: destination, type })
+      redirects.push({
+        from,
+        ...capture,
+        ...descendants,
+        to: destination,
+        type,
+      })
   }
 
   return redirects

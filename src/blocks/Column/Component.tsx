@@ -3,6 +3,7 @@ import {
   columnRevealParams,
   COLUMN_REVEAL_TARGET_ATTR,
 } from '@/blocks/Column/reveal'
+import type { BlockHostDocument } from '@/blocks/hostContext'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 import type { ColumnBlock } from '@/payload-types'
 
@@ -21,10 +22,27 @@ import type { ColumnBlock } from '@/payload-types'
  * (targets `[data-reveal-item]`) can stagger them — the homepage rail
  * treatment. Off (the default), the blocks are dispatched as one batch with
  * no wrapper, byte-identical to before this control existed.
+ *
+ * `hostDoc` rides through untouched on both branches — the batched dispatch
+ * and the per-block reveal one — so a block learns which document it was
+ * composed on regardless of how the column chose to stack it (#177).
+ *
+ * @param props - The stored column block, plus `hostDoc`: the document this
+ * column was composed on ({@link BlockHostDocument}), forwarded to the nested
+ * dispatch.
  */
-export function ColumnBlockComponent(props: ColumnBlock) {
-  const { content, contentInset, revealChildren, size, sticky, visibility } =
-    props
+export function ColumnBlockComponent(
+  props: ColumnBlock & { hostDoc?: BlockHostDocument },
+) {
+  const {
+    content,
+    contentInset,
+    hostDoc,
+    revealChildren,
+    size,
+    sticky,
+    visibility,
+  } = props
   const reveal = columnRevealParams(revealChildren)
 
   return (
@@ -41,11 +59,11 @@ export function ColumnBlockComponent(props: ColumnBlock) {
       {reveal ? (
         (content ?? []).map((block, index) => (
           <div key={block.id ?? index} {...{ [COLUMN_REVEAL_TARGET_ATTR]: '' }}>
-            <RenderBlocks blocks={[block]} hosted="column" />
+            <RenderBlocks blocks={[block]} hosted="column" hostDoc={hostDoc} />
           </div>
         ))
       ) : (
-        <RenderBlocks blocks={content} hosted="column" />
+        <RenderBlocks blocks={content} hosted="column" hostDoc={hostDoc} />
       )}
     </ColumnShell>
   )

@@ -1057,7 +1057,7 @@ export interface PostRollupBlock {
    */
   category?: (number | null) | Category;
   /**
-   * The section page whose placed articles this rolls up. Leave empty and the section renders nothing.
+   * The section page whose placed articles this rolls up. Leave empty on a page and it rolls up that page’s own placed articles. On an article, leave it empty and the section renders nothing — pick a page instead.
    */
   page?: (number | null) | Page;
   /**
@@ -1552,13 +1552,17 @@ export interface Redirect {
     url?: string | null;
   };
   /**
-   * Permanent (301) tells browsers and search engines the move is forever and is cached indefinitely. Temporary (302) is for campaigns and short-lived moves.
+   * Permanent (301) tells browsers and search engines the move is forever and is cached indefinitely. Temporary (302) is for campaigns and short-lived moves. Temporary is contagious: an older URL whose redirect is resolved by walking through this row answers as temporary too, even if its own row is permanent. That is deliberate — a wrong temporary answer self-heals once this row becomes permanent, while a wrong permanent one stays in a browser cache long after the server stops sending it.
    */
   type: '301' | '302';
   /**
    * Also redirect everything under this path, keeping the rest of the URL: /work → /experience also sends /work/brytecore to /experience/brytecore. Set automatically when a section page is moved.
    */
   matchDescendants?: boolean | null;
+  /**
+   * The path the target was served at when this row was written. Filled automatically; used to re-resolve descendant URLs through the redirect table when the target has moved again.
+   */
+  toPathAtCapture?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -2769,6 +2773,7 @@ export interface RedirectsSelect<T extends boolean = true> {
       };
   type?: T;
   matchDescendants?: T;
+  toPathAtCapture?: T;
   updatedAt?: T;
   createdAt?: T;
 }

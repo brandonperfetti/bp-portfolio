@@ -26,6 +26,7 @@ import { SocialLinksBlockComponent } from '@/blocks/SocialLinks/Component'
 import { SpacerBlockComponent } from '@/blocks/Spacer/Component'
 import {
   type BlockHostContext,
+  type BlockHostDocument,
   DEFAULT_BLOCK_HOST_CONTEXT,
 } from '@/blocks/hostContext'
 import { visibilityClass } from '@/blocks/visibility'
@@ -65,19 +66,38 @@ export type RenderableBlock = ColumnContentBlock | LayoutBlock
  * visibility is instead applied on the column shell, since a `column` is
  * rendered by the container rather than dispatched here.
  *
+ * @remarks `hosted` and `hostDoc` are the two halves of a block's context and
+ * they are not interchangeable: `hosted` is *where on the page* (root or
+ * column — a layout fact), `hostDoc` is *which document* (a `pages` or `posts`
+ * id — a content fact). A block reads the first to size itself and the second
+ * to query for things belonging to its host (#177). Both are ordinary props
+ * threaded from the readers that already hold the answer, never a `headers()`
+ * read: recovering the hosting document from the request would opt every page
+ * carrying such a block out of static rendering.
+ *
  * @param blocks - The blocks to dispatch, in stored order.
  * @param hosted - Where these blocks are rendering (see
  * {@link BlockHostContext}). Defaults to `root`, so every call site that
  * predates this prop renders exactly as it did; the column block passes
  * `column`, which is how a block learns it no longer owns the page width.
  * Blocks that lay out identically in either context simply ignore it.
+ * @param hostDoc - The document these blocks were composed on (see
+ * {@link BlockHostDocument}), when the caller knows it. Optional and
+ * undefined-by-default for the same reason `hosted` has a default: a call site
+ * that cannot name its host — a Storybook story, a test rendering a bare block
+ * list — keeps working, and a block that reads it treats "no host" the way it
+ * already treats "no selection". Handed only to the blocks that need it:
+ * `container`, because it is the sole route to a nested column, and
+ * `postRollup`, the one leaf that asks (#177).
  */
 export function RenderBlocks({
   blocks,
   hosted = DEFAULT_BLOCK_HOST_CONTEXT,
+  hostDoc,
 }: {
   blocks: RenderableBlock[] | null | undefined
   hosted?: BlockHostContext
+  hostDoc?: BlockHostDocument
 }) {
   if (!blocks?.length) return null
 
@@ -98,7 +118,15 @@ export function RenderBlocks({
             case 'carousel':
               return <CarouselComponent key={key} {...block} hosted={hosted} />
             case 'container':
-              return <ContainerBlockComponent key={key} {...block} />
+              // The only route from here to a nested column, so it is also
+              // the only route the host document has into one (#177).
+              return (
+                <ContainerBlockComponent
+                  key={key}
+                  {...block}
+                  hostDoc={hostDoc}
+                />
+              )
             case 'content':
               return (
                 <ContentBlockComponent key={key} {...block} hosted={hosted} />
@@ -133,7 +161,12 @@ export function RenderBlocks({
               return <PhotoStripBlockComponent key={key} {...block} />
             case 'postRollup':
               return (
-                <PostRollupComponent key={key} {...block} hosted={hosted} />
+                <PostRollupComponent
+                  key={key}
+                  {...block}
+                  hosted={hosted}
+                  hostDoc={hostDoc}
+                />
               )
             case 'prose':
               return (

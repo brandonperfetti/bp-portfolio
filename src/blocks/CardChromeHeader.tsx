@@ -17,10 +17,11 @@ import { cn } from '@/lib/utils'
  * card with no chrome render exactly the DOM it rendered before #40, in both
  * host contexts. Not an empty `<header>`, not a wrapper: nothing.
  *
- * @remarks Rendered inside the block's own `<section>`, so at layout root it
- * inherits the card's `max-w-xl` measure and lines up with the card's left
- * edge, and inside a column it spans whatever width the editor picked —
- * the same rule `zeroConfigCardWidthClass` applies to the card itself.
+ * @remarks Rendered inside the block's own `<section>`, so it inherits
+ * whatever measure the card took and lines up with the card's left edge: the
+ * `max-w-xl` form measure at root, `max-w-none` inside a column, and
+ * `max-w-none` at root for the work block's per-entry card (#188). That is
+ * the same rule `zeroConfigCardWidthClassFor` applies to the card itself.
  */
 export function CardChromeHeader({ heading, intro }: CardChrome) {
   if (!hasCardChrome({ heading, intro })) return null

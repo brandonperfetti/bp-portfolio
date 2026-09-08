@@ -38,7 +38,14 @@ one set, version-locked.
 - `tailwindcss` v4 + `@tailwindcss/postcss` + `@tailwindcss/typography` —
   CSS-first styling; `typography.ts` config retained from v3.
 - `radix-ui`, `class-variance-authority`, `tailwind-merge`, `clsx`,
-  `tw-animate-css` — shadcn/ui stack (`src/components/ui`).
+  `tw-animate-css` — shadcn/ui stack (`src/components/ui`). **`radix-ui` is the
+  unified package and is the only Radix entry point here** — reach for
+  `import { Dialog } from 'radix-ui'`, never the scoped
+  `@radix-ui/react-<part>` twin, which would put a second copy of the same
+  primitive in the tree. It backs `ui/button.tsx` (`Slot`),
+  `ui/dialog.tsx` (`Dialog`, added for #169 — no manifest change was needed,
+  because upstream shadcn's own dialog file imports it this way too) and the
+  consent components (`Dialog`, `Switch`).
 - `lucide-react` v1 — icons (no brand logos in v1).
 - `cmdk` — command palette semantics; `okapibm25` — palette ranking.
 - `gsap` — motion (tokens in `src/lib/motion/timing.ts`).
@@ -110,13 +117,19 @@ the dependencies that PR actually adds.
 - **Trunk→trunk (`develop` → `master`): warn-only, i.e. informational.** Such a
   PR diffs all of `develop` against `master`, so every dependency reads as
   newly-added and the action re-evaluates the whole tree — which is why the
-  cutover PR #90 merged with this check red on 1 error + 11 warnings. It is not
-  hypothetical under the threshold above either: `image-size@2.0.2` carries two
-  high-severity advisories in the runtime scope with **no published fix**
-  (#100), so a whole-tree evaluation is red on that alone while introducing
-  nothing. `warn-only: true` overrides `fail-on-severity` and completes
-  successfully, so a `develop → master` merge is never again a mystery red
-  check. Revisit when `image-size >= 2.0.3` ships.
+  cutover PR #90 merged with this check red on 1 error + 11 warnings.
+  Payload 3.87.0 swapped upload dimensioning from `image-size` to
+  `image-dimensions` (`pnpm why image-dimensions` resolves `image-dimensions@2.5.1`
+  through every `@payloadcms/*` package at 3.88.0), so the two high-severity
+  `image-size@2.0.2` advisories (#100) are no longer in the runtime scope.
+  The only surviving `image-size@2.0.2` edge is dev-only —
+  `pnpm why image-size` resolves it solely through
+  `@storybook/nextjs-vite → vite-plugin-storybook-nextjs`, and `pnpm why
+image-size --prod` returns nothing. `warn-only: true` stays in force on the
+  same rationale as before: a whole-tree `develop → master` diff re-evaluates
+  every dependency, dev-only included, so it would otherwise still redden this
+  check on a path that carries no runtime risk. #100 owns following up on the
+  advisory itself; this entry only tracks why the check is warn-only.
 - **Not required/blocking.** Branch protection is a separate decision (#91,
   out of scope) — tune first, require later.
 

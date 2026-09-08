@@ -22,6 +22,34 @@
   `postRollup` block — by category, or by placement — in a card grid, the
   stacked list, or a compact dated index (#152).
 
+## Pages and sections (`/[...segments]`)
+
+- A page gets a nested URL by pointing its **Parent** at another page —
+  `/work/brytecore`, `/tech/ai` — up to three levels deep, with no code and no
+  deploy. The Slug sidebar shows the full path the page will be served at.
+- A whole section can be drafted top-down: create `work`, then everything under
+  it, and publish when the section is ready. Nothing about placement is
+  refused while the documents are drafts.
+- **Publishing is what checks the parent.** A page cannot be published while its
+  parent is still a draft — the URL would sit under a path the site does not
+  serve. The save is refused on the **Parent** field, naming the page to publish
+  first (#180).
+- **Unpublishing checks the other direction, and refuses rather than tidying.**
+  A page cannot be unpublished while a page or a placed article below it is
+  still published; the message names the topmost one and its URL. Nothing is
+  taken offline on the editor's behalf — one gesture never unpublishes
+  documents the editor did not name, and never one they would have to remember
+  in order to undo.
+- **Moving a live page checks the parent too.** Re-parenting an already-published
+  page onto a draft one is refused by the same rule and the same message —
+  publishing is not the only way a live URL can end up under a path the site
+  does not serve.
+- Between them, for everything saved through the admin or the API:
+  **everything the site serves has a served parent.** That is what lets a
+  section rename carry its whole subtree with a single redirect row.
+- Renaming or re-parenting a published page moves its subtree in the same save
+  and leaves one prefix redirect behind, so old links keep working (#150).
+
 ## Corvus chat (`/corvus`)
 
 - Streaming chat over `/api/ai/chat` (Vercel AI SDK). Server-enforced persona
