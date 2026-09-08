@@ -92,6 +92,114 @@ including `refreshCorvusEmbeddings` for a placed post, whose `sourceUrl`
 genuinely changed. So a section rename triggers an embedding refresh
 proportional to the subtree size. That is correct behaviour.
 
+### How many moves a URL survives (#178)
+
+**The guarantee: an inbound URL keeps working through as many moves as its
+history has rows, up to five hops.** Not "one move" — that was the pre-#178
+limit, and it was not a design decision so much as a missing lookup key.
+
+Each redirect row's `to` is a document reference, resolved at read time through
+the target's **current** path. That is exactly right for the URL the row is
+keyed at, and it is the wrong key for anything captured beneath a prefix row:
+the descendant's own row is keyed at the path the descendant had when **it**
+moved, and that spelling names the ancestor as the ancestor was named then. So
+rewriting a request onto the ancestor's current path lands on a spelling no row
+is keyed at, and the descendant's row is never consulted — a request every hop
+of which has a row still 404s. [measured, unit probe on the pre-fix tree] the
+three-move `lab-parent`/`lab-child`/`lab-grandchild` repro answered
+`/lab-base/lab-kid/lab-grandchild`, a path nothing serves.
+
+So every row also stores `toPathAtCapture`: the path its target was being
+served at when the row was written. `resolveRedirect` rewrites the remainder
+onto **that** path first, re-resolves the result through the same table, and
+repeats. The walk ends when nothing is keyed at the rewritten form, and when it
+ends that way the answer is the ordinary pre-#178 rewrite onto the target's
+current path, not the capture-time spelling.
+
+**A hop is not a move.** Budget is spent only when a prefix row carrying a
+snapshot rewrites a request onto a spelling that differs from the one asked for.
+A row matched exactly costs nothing, and the last row in a walk costs nothing —
+so the repro above is **three moves and one hop**. Read the number below as a
+floor, not a ceiling: five hops buys _at least_ five chained ancestor moves, and
+usually more.
+
+Four limits, stated rather than discovered:
+
+- **Five hops** (`MAX_REDIRECT_HOPS`). A longer chain, or a cycle, answers no
+  redirect at all rather than a half-walked guess. No extra database reads —
+  every hop re-walks the same in-memory row list, which is still the one 500-row
+  read, traversed up to six times (the initial pass plus five hops).
+- **A hop that finds nothing falls back; it never serves the snapshot.** Under a
+  complete table the two are the same string — if the target had moved since
+  capture there would be a row keyed at the snapshot and the hop would have
+  matched it. Under an incomplete one they differ, and the snapshot is the worse
+  answer: a spelling that was current in the past and may serve nothing today.
+  The table can be incomplete two ways, both reachable — an editor deletes an
+  intermediate row (the redirects collection is fully editable in admin), or the
+  row falls outside the 500-row read. Serving the stale form there would answer
+  a **301 to a dead URL** where the pre-#178 code answered the live one, so the
+  resolver falls through to the current-path rewrite instead.
+- **Rows written before #178 still survive exactly one move, and are not
+  backfilled.** Such a row has no snapshot, so the reader falls back to the
+  current path — the pre-#178 behaviour byte for byte. The reason not to backfill
+  is unreliability, not absence: `path` is a stored field, so `_pages_v` does
+  hold historical paths and a `createdAt`-bounded migration could reconstruct
+  some of them. But `versions.maxPerDoc: 50` under a 100 ms autosave interval
+  burns fifty versions in a few seconds of editing, so history rarely reaches
+  back to an old rename. Such a backfill would leave most rows NULL and silently
+  fill some **wrongly** — and a NULL degrades to exactly the pre-#178 behaviour
+  while a wrong snapshot sends a walk down a wrong branch, indistinguishable
+  from a right one.
+- **The snapshot is a PATH, not a reference**, deliberately: its whole job is to
+  name a URL that is no longer served, which no live reference can do. The
+  consequence is a path collision: a spelling vacated by one document and later
+  re-used by another can be hopped onto, so `/old-a/leaf` can answer a permanent
+  redirect into an unrelated document's subtree. Destinations are still document
+  references, so the answer stays a real document's current URL; it may just be
+  the wrong document's, and the resolver cannot detect the substitution.
+  **Shipped as a known limit**, on two grounds: the precondition is compound (a
+  path vacated _and_ re-occupied by a different document _and_ that document then
+  moved, with a live prefix row still keyed at the vacated spelling), and the
+  pre-#178 answer for the same request was a rewrite onto a path that served
+  nothing either. **The obvious guard does not work.** Snapshotting the target's
+  id alongside the path and rejecting a next-hop row that names a different
+  document rejects the correct case just as readily: in the repro above, row A's
+  target is the child and the row matched at A's capture path is the
+  **grandchild's** — a different document by design. `createdAt` ordering does
+  not separate them either; in both the repro and the collision the next-hop row
+  was written after the capturing row. Closing this needs ancestor-lineage
+  identity, which this design deliberately gave up. Do not file the id-snapshot
+  follow-up as written.
+
+**Permanence now collapses to the chain's product.** A 301 row whose walk passes
+through a 302 row answers 307, not 308 — `permanent && next.permanent`.
+
+**Decided: keep the chain's product.** The alternative — report the FIRST row's
+permanence, since that is the row whose URL the visitor asked for — is
+defensible, and it loses on the asymmetry of harm. A wrong 307 costs a ranking
+signal, is recoverable, and self-heals: the day the 302 becomes a 301 the
+composite becomes 308 and equity consolidates with no intervention. A wrong 308
+is cached by browsers effectively indefinitely (Chrome holds it until the user
+clears site data), the server can never retract it, and a visitor whose browser
+learned the pair keeps following it after the destination is retired. One is a
+temporary loss of a signal; the other is a permanent loss of a visitor that no
+deploy can fix. Two supporting reasons: the frequency is low by construction —
+`createPathRedirect` hard-codes `type: '301'` on every row it writes, so a 302
+enters a chain only when an editor deliberately writes one — and the decision is
+reversible in the direction that matters, since the first-row rule could be
+adopted later with no data change while a fleet of wrongly-cached 308s could
+not be undone at all. The rule is stated in the redirect-type field's admin
+description, because the editor writing the 302 is the person who causes it and
+nothing on the downgraded row shows what happened.
+
+**The rejected alternative: [cascade rows].** On every move, rewrite the
+existing rows that point into the moved subtree, so each row's key stays current
+and one lookup always suffices. It was rejected twice over: it mutates history,
+so a row no longer records what happened, and it makes each move cost O(rows
+touching the subtree) writes inside the editor's publish transaction — the
+per-descendant cost D4 chose one prefix row to avoid, arriving by a different
+door and pushing at the same 500-row ceiling.
+
 ## The `/work` section (#137)
 
 `/work` and `/work/<slug>` are **ordinary hierarchy Pages** — a `work` page with

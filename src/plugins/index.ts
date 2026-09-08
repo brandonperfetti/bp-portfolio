@@ -62,7 +62,7 @@ export const plugins: Plugin[] = [
     redirectTypeFieldOverride: {
       admin: {
         description:
-          'Permanent (301) tells browsers and search engines the move is forever and is cached indefinitely. Temporary (302) is for campaigns and short-lived moves.',
+          'Permanent (301) tells browsers and search engines the move is forever and is cached indefinitely. Temporary (302) is for campaigns and short-lived moves. Temporary is contagious: an older URL whose redirect is resolved by walking through this row answers as temporary too, even if its own row is permanent. That is deliberate — a wrong temporary answer self-heals once this row becomes permanent, while a wrong permanent one stays in a browser cache long after the server stops sending it.',
       },
       defaultValue: '301',
     },
@@ -89,11 +89,17 @@ export const plugins: Plugin[] = [
           // articles walks toward that ceiling. A prefix row is O(1) per move
           // whatever the subtree size.
           //
-          // It does not reintroduce redirect chains: `to` is still a document
-          // reference resolved through the target's CURRENT path at read time,
-          // so `/work/x` resolves to wherever that page lives now, in one hop.
-          // `resolveRedirect` tries exact matches first, so a specific row
-          // always beats the prefix it sits under.
+          // `to` is still a document reference resolved through the target's
+          // CURRENT path at read time, so `/work/x` resolves to wherever that
+          // page lives now. `resolveRedirect` tries exact matches first, so a
+          // specific row always beats the prefix it sits under.
+          //
+          // It used to say "in one hop, so no chains". #178 retracted that for
+          // prefix rows specifically: a URL captured beneath one is rewritten
+          // onto `toPathAtCapture` and re-resolved through the same list, up to
+          // `MAX_REDIRECT_HOPS` times, because the live reference is precisely
+          // what skips the era the descendant's own row is keyed under. Still
+          // one 500-row read; the walk is in memory.
           {
             name: 'matchDescendants',
             type: 'checkbox',
@@ -104,6 +110,30 @@ export const plugins: Plugin[] = [
               position: 'sidebar',
             },
             label: 'Redirect descendant paths too',
+          },
+          // #178. The snapshot that makes a prefix row survive a SECOND move
+          // of its own target. `to` is a document reference resolved through
+          // the target's CURRENT path at read time, which is right for the
+          // exact URL the row was written for and wrong for a descendant URL
+          // captured underneath it: the descendant's own row is keyed at the
+          // path the descendant had WHEN IT MOVED, and that spelling contains
+          // the target's path as it was at capture, not as it is now. Storing
+          // the capture-time path gives `resolveRedirect` the one spelling
+          // that can be looked up again — see its docblock for the hop.
+          //
+          // Deliberately a plain path column and not a second reference:
+          // nothing here should resolve to a live document, because the whole
+          // point is to reconstruct a URL that is no longer served.
+          {
+            name: 'toPathAtCapture',
+            type: 'text',
+            admin: {
+              description:
+                'The path the target was served at when this row was written. Filled automatically; used to re-resolve descendant URLs through the redirect table when the target has moved again.',
+              position: 'sidebar',
+              readOnly: true,
+            },
+            label: 'Target path at capture',
           },
         ]
       },

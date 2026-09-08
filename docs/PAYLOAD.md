@@ -59,6 +59,15 @@ Payload is the single source of truth for site content. Admin at `/admin`
   show _its_ articles rather than the site's newest ones. `source` is
   `by-category` (published posts carrying the chosen topic — the one that works
   on day one) or `by-placement` (posts whose `parent` is the chosen page, #153).
+  **A `by-placement` rollup with an empty `page` picker rolls up the hosting
+  page's own placed articles** (#177) — #152's design, buildable once
+  `RenderBlocks` began carrying the hosting document's collection and id
+  (`BlockHostDocument` in `src/blocks/hostContext.ts`, threaded as a prop from
+  `RenderRhythmPage` / `CmsPageBlocks` / `CmsPostBlocks`, never a `headers()`
+  read, so a page carrying one stays prerenderable). A chosen page always
+  overrides. **On a Post host the empty picker renders nothing**, because "the
+  posts placed under the page this block is on" has no meaning under a post;
+  a rollup on an article must pick a page explicitly.
   Its `grid` and `stacked` layouts render through `ArticlesArchiveView`, so
   there is one card vocabulary on the site; `compact-list` is its own dense,
   dated `<ul>`. Every select carries an explicit `enumName`
@@ -239,9 +248,88 @@ publish of a never-published parent: a page drafted as `a`, given children
 `b` and left `a/c` behind until the child's own next save. The slug and
 served-path stashes stay gated on a published row, because those describe a URL
 that was actually reachable — so a first publish still writes no redirect row.
-The residual: a **published** child under a never-published parent moves from
-`/a/c` to `/b/c` with no redirect row covering `/a/c`, because the D4 prefix row
-is keyed on the parent's own served URL and the parent had none.
+**The served-prefix invariant closes what used to be the residual here (#180).**
+That paragraph used to end with one: a **published** child under a
+never-published parent moved from `/a/c` to `/b/c` with no redirect row
+covering `/a/c`, because the D4 prefix row is keyed on the parent's own served
+URL and the parent had none. The invariant removes the state rather than
+documenting its consequence:
+
+> **Every served page's ancestors are served too.** A page may not be published
+> while its parent is unpublished, and a page may not be unpublished while a
+> page or a placed post beneath it is still published.
+
+A published child of an unpublished parent is the ONE way a served URL sits
+under an unserved prefix, so refusing it means every subtree move now has a
+served parent path to key its `matchDescendants` row on. The cascade itself is
+unchanged — it still moves drafts and published rows alike, and a first publish
+of a never-published parent still writes no redirect row for the parent, which
+is correct because nothing was ever served there.
+
+**Enforcement is at PUBLISH, not at placement, and that is forced.** Posts say
+the same thing declaratively — `parent` carries
+`filterOptions: () => ({ _status: { equals: 'published' }, … })`, which Payload
+enforces as a field validation on every write. Pages cannot copy it: a section
+is legitimately drafted whole and published top-down (#137), so a write-time
+rule would refuse `work/brytecore` before `work` had shipped. The illegitimate
+act is the publish, so that is where the block sits — two `beforeChange` guards
+in `src/collections/Pages/hooks/servedPrefix.ts`, both firing on `_status`
+alone, so the 100ms autosave gains no read.
+
+**"At publish" covers the re-parent too, and the reason is worth knowing before
+someone reads the guard and concludes otherwise** (raised as a hole in review,
+disproved by measurement). Moving an already-published page onto a draft parent
+lands a served URL under an unserved prefix without publishing anything, and the
+publish guard tests `data._status`, so the write looks invisible to it. It is
+not: Payload's `beforeValidate` **field** pass runs before every collection
+`beforeChange` hook and merges the original document into the incoming data
+(`payload/dist/fields/hooks/beforeValidate/index.js`), so a
+`payload.update({ data: { parent } })` reaches the guard carrying the row's own
+`_status: 'published'` and is refused on the **Parent** field like any other
+publish. `evals/pages-hierarchy-integration.test.ts` pins it — the merge is a
+Payload internal the guard depends on, and that case is what fails if it ever
+changes. The invariant is therefore enforced over every write that goes through
+the collection hooks; what it does not cover is stated below (rows written
+before the guards, and writes that bypass `beforeChange` — direct SQL, a
+migration, `db.updateOne`).
+
+**Decision: the unpublish mirror REFUSES; it does not cascade-unpublish**
+(Brandon, #180). Sweeping the subtree offline for the editor was considered and
+rejected on three counts. It is a bulk write nobody asked for and nobody sees —
+one gesture takes N documents off the site. It is not reversible by the same
+gesture: re-publishing the parent does not re-publish what was swept, so the
+editor cannot undo it without remembering what was live. And it breaks the
+symmetry that makes the rule learnable — publishing already refuses rather than
+publishing ancestors for you, so unpublishing refuses rather than unpublishing
+descendants for you. The refusal names the shallowest blocker and its URL, and
+leaves the decision with the editor.
+
+**The rule is NARROW: the parent, not the ancestor chain.** The publish guard
+checks the immediate parent's main-table `_status`; the unpublish guard checks
+descendants of the page's own served path. Those compose inductively into the
+full invariant — a published parent had to pass the same guard against ITS
+parent — and the narrow form keeps a publish to one indexed read instead of a
+depth-3 ancestor walk. The site root needs a second query shape, and the reason
+is the root-page contract: the root contributes no path segment, so its
+children are stored at `<child>` and not `home/<child>`, and a
+`path LIKE 'home/%'` read would report no blockers while the root was taken out
+from under the whole site. That branch reads by `parent` and leans on the
+publish guard for depth, which is the one place the narrow form shows from
+outside: a published GRANDCHILD under a draft direct child of the root is not in
+that read, so unpublishing the root in that state would be allowed. The publish
+guard refuses to create that state in either direction, so it can only pre-exist
+the guards or be written around them. The non-root branch has no such gap — it
+is a prefix read and sees every depth.
+`readServedChildrenByParent`'s TSDoc is the single home
+for it.
+
+**Pre-existing violations are found, not assumed away.** The guards act on new
+writes; rows that predate them are what
+`scripts/audit-served-prefix.sql` is for — published pages whose parent page is
+not published, and published placed posts whose parent page is not published,
+read from the MAIN tables with an expected result of 0 rows. It is read-only and
+safe against production. It takes the connection string from `DATABASE_URI`; the
+file names the variable and never a value.
 
 **Inbound coverage for a subtree is ONE row, not N** (D4). A moved page's row
 carries `matchDescendants`, which makes it match `from` and everything beneath
@@ -256,9 +344,13 @@ column to the existing table — no new table, so no RLS line.
 
 **Redirects point at the document, not at a path** (`to.type: 'reference'`), so
 renaming `a → b → c` leaves both `/articles/a` and `/articles/b` resolving
-straight to `/articles/c` — chains cannot form, and a prefix row inherits the
-same property because its destination is resolved through the target's current
-path at read time. `src/lib/cms/redirectsRepo.ts` is the cached reader;
+straight to `/articles/c` — no chain forms **for the URL a row is keyed at**.
+That property does **not** extend to URLs captured beneath a prefix row: since
+#178 such a request is rewritten onto the row's `toPathAtCapture` and
+re-resolved through the same list, up to `MAX_REDIRECT_HOPS` times, because
+resolving through the target's current path is exactly what skips the era the
+descendant's own row is keyed under (`docs/NAVIGATION.md` §How many moves a URL
+survives). `src/lib/cms/redirectsRepo.ts` is the cached reader;
 `/articles/[slug]` and `/[...segments]` consult it on their not-found branch
 only, so a live document always wins over a stale row.
 
@@ -347,10 +439,27 @@ what Payload passes on each transition, the `dist` citations for the predicate
 and the admin's request shapes, and the correction to an earlier wrong reading
 of `isSavingDraft`. Do not restate them here. The residual worth knowing at this
 level: a **Local-API explicit draft save** reads as an unpublish, because
-`createLocalReq` does not mirror the Local API's `draft` option into `req.query`
-— one extra lookup and one redundant purge of a still-live path, never a lost
-purge or a lost write. `evals/slug-redirect-integration.test.ts` proves the
-behaviour end to end and pins the autosave read count.
+`createLocalReq` does not mirror the Local API's `draft` option into `req.query`.
+For the capture itself that is one extra lookup and one redundant purge of a
+still-live path — never a lost purge, never a lost write.
+
+**Since #180 the same residual IS a lost write one hook over.** The served-prefix
+unpublish guard (`refuseUnpublishWithServedDescendants`) reads the identical
+predicate, so a `payload.update({ draft: true })` on a **published** page that
+has published descendants is REFUSED, though it would have unpublished nothing.
+That is a false refusal — a step up in severity from a wasted read — and the
+sentence above no longer covers every consumer of the residual. It is
+unreachable from the admin (autosave and "Save draft" are REST and carry
+`draft=true`) and unreached in this repo. That guard's docblock is the single
+home for the measurement, for the `req: { query: { draft: 'true' } }` escape
+hatch, and for where the follow-up should start: `createLocalReq` sets
+`req.payloadAPI` fifteen lines before the `req.query` line the residual rests
+on, so the fix does not need the caller sweep the ticket implies — but
+`payloadAPI` alone cannot separate a Local-API draft save from a Local-API
+unpublish, which is the design choice the ticket has to carry.
+`evals/slug-redirect-integration.test.ts` proves the capture behaviour end to end
+and pins the autosave read count; the false refusal is pinned in both directions
+by `src/collections/Pages/hooks/servedPrefix.test.ts`.
 
 **A revalidation failure never fails the write (#135, #156).** Payload runs
 `afterChange`/`afterDelete` collection hooks **inside the operation's
@@ -414,7 +523,13 @@ statement belongs in it — `redirects` was swept by the #72 backfill and its RL
 is already on. `scripts/check-migrations-rls.mjs` agrees: the migration creates
 no table, so it carries no obligation.
 
-Known limits: the reader reads at most 500 rows.
+Known limits: the reader reads at most 500 rows — and since #178 it may walk
+that one list up to six times per request (the initial pass plus five hops),
+resolving each capture-time rewrite through it (`docs/NAVIGATION.md` §How many
+moves a URL survives). The 500-row ceiling is also what makes the resolver's
+fall-back-rather-than-serve-the-snapshot rule load-bearing: a row past the
+ceiling is a missing intermediate hop, and serving the capture-time spelling
+there would answer a permanent redirect to a dead URL.
 
 ## Plugins (`src/plugins/index.ts`)
 

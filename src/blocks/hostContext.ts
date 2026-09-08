@@ -47,19 +47,63 @@ export function blockRhythmClass(
 }
 
 /**
- * Reading width for the three zero-config cards (contact form, newsletter
- * signup, work history) — the blocks with no width control of their own.
+ * What a zero-config card is asking the page for at root.
+ *
+ * - `form` — a stack of inputs. A form wider than its labels is harder to
+ *   scan, not easier, so it takes a narrow measure of its own even when the
+ *   page could give it more.
+ * - `content` — prose and facts, which take the content column the route
+ *   already set rather than a cap of their own. Capping a card *below* the
+ *   column it was given is what reads as the defect (#188).
+ */
+export type ZeroConfigCardMeasure = 'form' | 'content'
+
+/**
+ * Reading width for a zero-config card — the blocks with no width control of
+ * their own (contact form, newsletter signup, work history).
  *
  * @param hosted - Host context, if any.
- * @returns `max-w-xl` at root, where the card sits in the full content column
- * and needs a measure; `max-w-none` inside a column, where the editor already
- * picked the width and a capped card strands the rest of the section's
- * background band.
+ * @param measure - What the card is: a {@link ZeroConfigCardMeasure}.
+ * @returns `max-w-none` inside a column — the editor already picked the width
+ * and a capped card strands the rest of the section's background band — and at
+ * root the measure decides: `max-w-xl` for a `form`, `max-w-none` for
+ * `content`, which then fills the route's content column.
+ *
+ * @remarks **The `content` case is the exception #188 opened, and it is one
+ * block, not a new default.** Two of the three zero-config cards are forms and
+ * keep `max-w-xl` at root exactly as before; only the work-history block's
+ * per-entry mode asks for `content`, because on `/work/<slug>` a 576px card
+ * inside a content column that reaches `lg:max-w-5xl` reads as a layout bug
+ * rather than as a reading measure. `content` means "no cap of its own", so it
+ * matches an uncapped sibling such as `lead` — and a root-hosted `prose`
+ * block too, which carries no width cap of its own in this repo (see
+ * `Prose/Component.tsx` for the mechanism). The work block's OTHER mode — the
+ * résumé list — is still a `form`-measure card, so the distinction is per
+ * render, not per block.
+ */
+export function zeroConfigCardWidthClassFor(
+  hosted: BlockHostContext | null | undefined,
+  measure: ZeroConfigCardMeasure,
+): string {
+  if (hosted === 'column') return 'max-w-none'
+  return measure === 'content' ? 'max-w-none' : 'max-w-xl'
+}
+
+/**
+ * Reading width for a zero-config **form** card (contact form, newsletter
+ * signup).
+ *
+ * @param hosted - Host context, if any.
+ * @returns `max-w-xl` at root, `max-w-none` inside a column.
+ *
+ * @remarks Unchanged behaviour, now expressed as the `form` case of
+ * {@link zeroConfigCardWidthClassFor} so there is still exactly one place the
+ * two class literals are chosen.
  */
 export function zeroConfigCardWidthClass(
   hosted: BlockHostContext | null | undefined,
 ): string {
-  return hosted === 'column' ? 'max-w-none' : 'max-w-xl'
+  return zeroConfigCardWidthClassFor(hosted, 'form')
 }
 
 /**
@@ -114,3 +158,34 @@ export const COLUMN_STACK_SPACING_CLASS = 'space-y-10'
  * rendered; a block with no query container anywhere above it would silently
  * resolve every container query as false and collapse to one column.
  */
+
+/**
+ * Which document a block is rendering inside — the block's *identity*
+ * context, as opposed to {@link BlockHostContext}, which is its *position*.
+ *
+ * @remarks The two answer different questions and neither substitutes for the
+ * other. `hosted` says "root or column", which is a layout fact and is what a
+ * block reads to decide its own margin and measure. This says "the `pages` doc
+ * with id 7", which is a content fact: it is what lets a block query for
+ * things related to the document it was placed on, without knowing the route
+ * it was requested through.
+ *
+ * Deliberately the collection *and* the id, never the id alone: `pages` and
+ * `posts` both host layout blocks, both use numeric ids, and a block that
+ * queried `parent = 7` without knowing which collection 7 came from would
+ * silently roll up the wrong document's children (#177).
+ *
+ * @remarks This is a **render-time prop, not a request-scope read.** It is
+ * threaded from the readers that already loaded the document down through
+ * `RenderBlocks`, so a block stays prerenderable: reading `headers()` to
+ * recover "which page am I on?" would opt every page containing such a block
+ * out of static rendering, which is the opposite of what a CMS block should
+ * cost. `hostContext.test.ts` asserts the render path takes no request-scope
+ * API.
+ */
+export type BlockHostDocument = {
+  /** Collection the hosting document lives in. */
+  collection: 'pages' | 'posts'
+  /** The hosting document's id. */
+  id: number
+}

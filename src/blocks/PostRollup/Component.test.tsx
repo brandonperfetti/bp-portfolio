@@ -122,13 +122,105 @@ describe('PostRollupComponent · by-placement (#153)', () => {
     )
   })
 
-  it('renders nothing, and issues no query, when no page is chosen', async () => {
-    // The design's "leave empty to use the hosting page" fallback is not
-    // offered: the dispatcher carries no page identity. An empty picker must
-    // therefore roll up NOTHING rather than the whole corpus.
+  it('renders nothing, and issues no query, when no page is chosen and no host is named', async () => {
+    // No picker and no `hostDoc` — a Storybook render, a bare test, a caller
+    // that predates #177. Still the empty branch, never the whole corpus.
     const element = await PostRollupComponent(block({ source: 'by-placement' }))
 
     expect(element).toBeNull()
+    expect(getPostRollupByPlacement).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * #177: the empty page picker, which #152 designed and could not build. The
+ * fallback is the hosting *page*; a Post host keeps the old empty branch, and
+ * a chosen page always wins over both.
+ */
+describe('PostRollupComponent · by-placement, empty picker (#177)', () => {
+  beforeEach(() => {
+    getPostRollupByCategory.mockReset()
+    getPostRollupByPlacement.mockReset()
+    getPostRollupByPlacement.mockResolvedValue([
+      { ...summary(1), path: 'work/brytecore', slug: 'brytecore' },
+    ])
+  })
+
+  it('rolls up the hosting page’s placed articles on a Page host', async () => {
+    render(
+      await PostRollupComponent({
+        ...block({ source: 'by-placement', limit: 3 }),
+        hostDoc: { collection: 'pages', id: 42 },
+      }),
+    )
+
+    expect(getPostRollupByPlacement).toHaveBeenCalledWith(42, 'newest', 3)
+    expect(screen.getByLabelText('Read article: Article 1')).toHaveAttribute(
+      'href',
+      '/work/brytecore',
+    )
+  })
+
+  it('renders nothing on a Post host — decision (a)', async () => {
+    // The block is registered on Posts too, and "the posts placed under the
+    // page this block is on" is undefined for a post host: a post is not a
+    // parent of posts. So the empty picker keeps the empty branch there, and
+    // the `posts` id is never mistaken for a `pages` id.
+    const element = await PostRollupComponent({
+      ...block({ source: 'by-placement' }),
+      hostDoc: { collection: 'posts', id: 42 },
+    })
+
+    expect(element).toBeNull()
+    expect(getPostRollupByPlacement).not.toHaveBeenCalled()
+  })
+
+  it('lets a chosen page override the host on either collection', async () => {
+    // The picker is an override, not a hint — including on a Post host, where
+    // picking a page is how a rollup on an article is meant to work.
+    await PostRollupComponent({
+      ...block({ source: 'by-placement', page: 3 }),
+      hostDoc: { collection: 'pages', id: 42 },
+    })
+    await PostRollupComponent({
+      ...block({ source: 'by-placement', page: 3 }),
+      hostDoc: { collection: 'posts', id: 42 },
+    })
+
+    expect(getPostRollupByPlacement).toHaveBeenNthCalledWith(1, 3, 'newest', 6)
+    expect(getPostRollupByPlacement).toHaveBeenNthCalledWith(2, 3, 'newest', 6)
+  })
+
+  it('resolves the same page column-nested as at root', async () => {
+    // The ticket's "column-nested behaves the same" requirement, at this end
+    // of the path: the fallback reads `hostDoc` and never `hosted`, so where
+    // the block sits cannot change which page it rolls up. The other end —
+    // that `hostDoc` actually survives `container` → `column` → `RenderBlocks`
+    // — is asserted in `hostContext.test.ts`, since that is a forwarding fact
+    // about the dispatcher rather than a decision this component makes.
+    await PostRollupComponent({
+      ...block({ source: 'by-placement' }),
+      hostDoc: { collection: 'pages', id: 42 },
+    })
+    await PostRollupComponent({
+      ...block({ source: 'by-placement' }),
+      hosted: 'column',
+      hostDoc: { collection: 'pages', id: 42 },
+    })
+
+    expect(getPostRollupByPlacement).toHaveBeenNthCalledWith(1, 42, 'newest', 6)
+    expect(getPostRollupByPlacement).toHaveBeenNthCalledWith(2, 42, 'newest', 6)
+  })
+
+  it('ignores the host entirely when the source is by-category', async () => {
+    getPostRollupByCategory.mockResolvedValue([summary(1)])
+
+    await PostRollupComponent({
+      ...block({ category: 7 }),
+      hostDoc: { collection: 'pages', id: 42 },
+    })
+
+    expect(getPostRollupByCategory).toHaveBeenCalledWith(7, 'newest', 6)
     expect(getPostRollupByPlacement).not.toHaveBeenCalled()
   })
 })

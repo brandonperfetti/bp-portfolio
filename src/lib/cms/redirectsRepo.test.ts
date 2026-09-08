@@ -258,6 +258,265 @@ describe('resolveRedirect · descendant prefix rows (#150)', () => {
     })
   })
 
+  /**
+   * #178 — the SECOND move, and the hop that survives it.
+   *
+   * The rule-4 block above stops one step short of the ticket: it never moves
+   * the grandchild. Once the grandchild has its own row, rule 4's answer is a
+   * URL nothing serves, because that row is keyed at the spelling in force when
+   * the grandchild moved — an era the current-path rewrite skips over.
+   *
+   * The rows here are as `getCmsRedirects` flattens them AFTER all three steps:
+   * every `to` already resolved through its target's CURRENT path, and every
+   * `toPathAtCapture` frozen at the row's own capture.
+   */
+  describe('a URL captured under an ancestor that moved AGAIN (#178)', () => {
+    /** A: the child renamed under the OLD parent; target now at /lab-base/lab-kid. */
+    const rowA: CmsRedirect = {
+      ...prefixRow('/lab-parent/lab-child', '/lab-base/lab-kid'),
+      toPathAtCapture: '/lab-parent/lab-kid',
+    }
+    /** B: the grandchild moved up one level; target now at /lab-base/lab-grandchild. */
+    const rowB: CmsRedirect = {
+      ...prefixRow(
+        '/lab-parent/lab-kid/lab-grandchild',
+        '/lab-base/lab-grandchild',
+      ),
+      toPathAtCapture: '/lab-parent/lab-grandchild',
+    }
+    /** C: the parent renamed; target now at /lab-base. */
+    const rowC: CmsRedirect = {
+      ...prefixRow('/lab-parent', '/lab-base'),
+      toPathAtCapture: '/lab-base',
+    }
+    const inbound = '/lab-parent/lab-child/lab-grandchild'
+
+    it('resolves the four-step repro to the live URL, in any list order', () => {
+      // THE ticket. Before the hop this answered
+      // `/lab-base/lab-kid/lab-grandchild` — a 404 with row B unread in the
+      // same list.
+      for (const list of [
+        [rowA, rowB, rowC],
+        [rowC, rowB, rowA],
+        [rowB, rowC, rowA],
+      ]) {
+        expect(resolveRedirect(list, inbound)).toEqual(
+          permanentlyTo('/lab-base/lab-grandchild'),
+        )
+      }
+    })
+
+    it('never emits a segment that stopped existing at step 1', () => {
+      expect(
+        resolveRedirect([rowA, rowB, rowC], inbound)?.destination,
+      ).not.toContain('lab-child')
+    })
+
+    it('falls back to the current path when nothing is keyed at the capture-time form', () => {
+      // Row A alone. Its snapshot `/lab-parent/lab-kid` differs from its
+      // current destination `/lab-base/lab-kid`, so the target HAS moved since
+      // capture — under a complete table there would be a row keyed at the
+      // snapshot (row C is that row) and the hop would have matched it. There
+      // is not one here, so the capture-time form names a parent that has not
+      // existed since step 3, and serving it would be a PERMANENT redirect to a
+      // dead URL. The current-path rewrite is at least built on the live path
+      // of row A's own target, which is what the pre-#178 code answered.
+      expect(resolveRedirect([rowA], inbound)).toEqual(
+        permanentlyTo('/lab-base/lab-kid/lab-grandchild'),
+      )
+    })
+
+    it('answers the LIVE destination when an intermediate row is missing', () => {
+      // The regression guard. Both ways a table goes incomplete are reachable:
+      // the redirects collection carries no delete restriction, and a row can
+      // fall outside the REDIRECT_LIMIT read. Chain `/a` → `/b` → `/c`.
+      const chainStart: CmsRedirect = {
+        ...prefixRow('/a', '/c'),
+        toPathAtCapture: '/b',
+      }
+      const middle: CmsRedirect = {
+        ...prefixRow('/b', '/c'),
+        toPathAtCapture: '/c',
+      }
+
+      // Complete table: unchanged by this rule — the hop finds the `/b` row and
+      // the walk composes exactly as it did.
+      expect(resolveRedirect([chainStart, middle], '/a/leaf')).toEqual(
+        permanentlyTo('/c/leaf'),
+      )
+      // The `/b` row gone: the capture-time form `/b/leaf` is a URL nothing
+      // serves. Falling through answers the live one instead.
+      expect(resolveRedirect([chainStart], '/a/leaf')).toEqual(
+        permanentlyTo('/c/leaf'),
+      )
+      // The bar this has to clear: a pre-#178 row, which has always answered
+      // the live URL for exactly this request.
+      expect(resolveRedirect([prefixRow('/a', '/c')], '/a/leaf')).toEqual(
+        permanentlyTo('/c/leaf'),
+      )
+    })
+
+    it('never answers the request path when the chain leads back to it', () => {
+      // The self-redirect guard, on the HOP's answer. The exact pass guards a
+      // row's own `to` and the fall-through guards the rewritten form, but the
+      // hop's answer was resolved against the CAPTURE-TIME spelling and had
+      // never been re-asked against the request. A chain whose last row points
+      // back at the requested path therefore composed a redirect to the path
+      // that was asked for — and, every row here being a 301, a 308 the
+      // browser caches indefinitely.
+      const chainStart: CmsRedirect = {
+        ...prefixRow('/a', '/c'),
+        toPathAtCapture: '/b',
+      }
+      const backAtTheRequest = row('/b/leaf', '/a/leaf')
+
+      const resolved = resolveRedirect(
+        [chainStart, backAtTheRequest],
+        '/a/leaf',
+      )
+
+      expect(resolved?.destination).not.toBe('/a/leaf')
+      // Not merely "not a loop" — a null would satisfy that and 404 a request
+      // this table can still answer. A chain that leads back to the request is
+      // the same evidence as a chain that leads nowhere: the capture-time
+      // spelling is not to be trusted. So it takes the same branch, and the
+      // current-path rewrite (built on the live path of the chosen row's own
+      // target) answers, subject to its own `rewritten === target` guard.
+      expect(resolved).toEqual(permanentlyTo('/c/leaf'))
+    })
+
+    it('re-resolves the capture-time form through a LATER ancestor move', () => {
+      // Row B dropped — the grandchild never moved — but the parent still did.
+      // The capture-time form `/lab-parent/lab-kid/lab-grandchild` is stale in
+      // its FIRST segment, and row C is what fixes it. The walk composes: hop
+      // one restores the era, hop two brings that era forward.
+      expect(resolveRedirect([rowA, rowC], inbound)).toEqual(
+        permanentlyTo('/lab-base/lab-kid/lab-grandchild'),
+      )
+    })
+
+    it('falls back to the current path for a row with no snapshot', () => {
+      // A pre-#178 row, byte for byte the old behaviour — which is also why
+      // such a row still survives only ONE move and is not backfilled: not
+      // because the value is unrecorded (`_pages_v` holds historical paths),
+      // but because `maxPerDoc: 50` under a 100 ms autosave prunes that
+      // history, and a partly-wrong snapshot is worse than a NULL.
+      const legacyA = prefixRow('/lab-parent/lab-child', '/lab-base/lab-kid')
+
+      expect(resolveRedirect([legacyA, rowB, rowC], inbound)).toEqual(
+        permanentlyTo('/lab-base/lab-kid/lab-grandchild'),
+      )
+    })
+
+    it('walks four hops, one short of the cap', () => {
+      // Four ancestors renamed in turn. Each row's snapshot names the era the
+      // next row is filed under, so the walk is exactly as long as the history.
+      const chain: CmsRedirect[] = [
+        { ...prefixRow('/v0', '/v4'), toPathAtCapture: '/v1' },
+        { ...prefixRow('/v1', '/v4'), toPathAtCapture: '/v2' },
+        { ...prefixRow('/v2', '/v4'), toPathAtCapture: '/v3' },
+        { ...prefixRow('/v3', '/v4'), toPathAtCapture: '/v4' },
+      ]
+
+      expect(resolveRedirect(chain, '/v0/leaf')).toEqual(
+        permanentlyTo('/v4/leaf'),
+      )
+    })
+
+    it('answers null when the walk outruns the hop cap', () => {
+      // Six links: one more than MAX_REDIRECT_HOPS. Serving the partial walk
+      // would be asserting a destination this function has not actually
+      // reached, so it declines.
+      const chain: CmsRedirect[] = Array.from({ length: 6 }, (_unused, i) => ({
+        ...prefixRow(`/w${i}`, '/w6'),
+        toPathAtCapture: `/w${i + 1}`,
+      }))
+
+      expect(resolveRedirect(chain, '/w0/leaf')).toBeNull()
+    })
+
+    it('answers null for a cyclic pair rather than looping', () => {
+      // Two rows whose snapshots name each other — the shape a move-and-move-
+      // back leaves if both rows survive. The budget is what terminates it, and
+      // `exhausted` is what stops the outer frame serving `/a/leaf` as if the
+      // inner walk had ended cleanly.
+      const cycle: CmsRedirect[] = [
+        { ...prefixRow('/a', '/current'), toPathAtCapture: '/b' },
+        { ...prefixRow('/b', '/current'), toPathAtCapture: '/a' },
+      ]
+
+      expect(resolveRedirect(cycle, '/a/leaf')).toBeNull()
+      expect(resolveRedirect(cycle, '/b/leaf')).toBeNull()
+    })
+
+    it('re-asks the absolute-destination guard on the capture-time form', () => {
+      // The wave-6 `//host` guard (#182), on the new form. A snapshot at the
+      // root would spell `//lab-grandchild` if concatenated naively.
+      const rootCapture: CmsRedirect = {
+        ...prefixRow('/lab-parent/lab-child', '/lab-base/lab-kid'),
+        toPathAtCapture: '/',
+      }
+
+      // Pinned through a row keyed at the capture-time form rather than on the
+      // walk's own answer: an exact match on `/lab-grandchild` is only possible
+      // if that is the string the hop looked up, which is the assertion — a
+      // naive concatenation would have looked up `//lab-grandchild` and matched
+      // nothing. (The single-row spelling of this case now falls through to the
+      // current-path rewrite, so it can no longer show which form was tried.)
+      const landing = row('/lab-grandchild', '/moved-grandchild')
+
+      expect(resolveRedirect([rootCapture, landing], inbound)).toEqual(
+        permanentlyTo('/moved-grandchild'),
+      )
+      // And the fall-through answer is a same-origin path either way.
+      expect(resolveRedirect([rootCapture], inbound)?.destination).not.toMatch(
+        /^\/\//,
+      )
+    })
+
+    it('refuses a snapshot that leaves the site instead of appending to a host', () => {
+      const hostCapture: CmsRedirect = {
+        ...prefixRow('/lab-parent/lab-child', '/lab-base/lab-kid'),
+        toPathAtCapture: 'https://example.com/lab-kid',
+      }
+
+      // The snapshot is unusable, so the current-path rewrite answers — the
+      // pre-#178 behaviour, not a null.
+      expect(resolveRedirect([hostCapture], inbound)).toEqual(
+        permanentlyTo('/lab-base/lab-kid/lab-grandchild'),
+      )
+    })
+
+    it('collapses permanence to the chain’s product', () => {
+      // Worth stating loudly: a 301 whose walk passes through a 302 answers
+      // 307, not 308. See the docblock — the 302 is an editor saying the
+      // destination is not settled, and caching the composite forever would
+      // outlive that.
+      const temporaryB: CmsRedirect = {
+        ...prefixRow(
+          '/lab-parent/lab-kid/lab-grandchild',
+          '/lab-base/lab-grandchild',
+          '302',
+        ),
+        toPathAtCapture: '/lab-parent/lab-grandchild',
+      }
+
+      expect(resolveRedirect([rowA, temporaryB, rowC], inbound)).toEqual({
+        destination: '/lab-base/lab-grandchild',
+        permanent: false,
+      })
+    })
+
+    it('still lets an EXACT row beat the whole walk', () => {
+      expect(
+        resolveRedirect(
+          [rowA, rowB, rowC, row(inbound, '/clients/gc')],
+          inbound,
+        ),
+      ).toEqual(permanentlyTo('/clients/gc'))
+    })
+  })
+
   it('skips a prefix row whose destination leaves the site', () => {
     // Appending a path suffix to an editor's absolute URL is a URL this
     // function has no business inventing.
@@ -597,6 +856,60 @@ describe('getCmsRedirects', () => {
     const [flattened] = await getCmsRedirects()
     expect('matchDescendants' in flattened).toBe(false)
     expect(resolveRedirect([flattened], '/articles/old/deeper')).toBeNull()
+  })
+
+  it('carries toPathAtCapture through the flattening (#178)', async () => {
+    // The two destinations DISAGREE on purpose: `to` follows the reference to
+    // where the page lives now, `toPathAtCapture` is frozen where it lived when
+    // the row was written. A flattening that dropped the column, or that
+    // rebuilt it from the reference, would make them agree and the whole hop
+    // in `resolveRedirect` would be dead code.
+    stubFind({
+      redirects: [
+        {
+          ...referenceRow('/lab-parent/lab-child', 'pages', 19),
+          matchDescendants: true,
+          toPathAtCapture: '/lab-parent/lab-kid',
+        },
+      ],
+      pages: [{ id: 19, path: 'lab-base/lab-kid', slug: 'lab-kid' }],
+    })
+
+    await expect(getCmsRedirects()).resolves.toEqual([
+      {
+        from: '/lab-parent/lab-child',
+        matchDescendants: true,
+        to: '/lab-base/lab-kid',
+        toPathAtCapture: '/lab-parent/lab-kid',
+        type: '301',
+      },
+    ])
+  })
+
+  it('reads a row written before #178 with the snapshot key omitted', async () => {
+    // Omitted, not `null` — same guarantee as `matchDescendants` above, and it
+    // is what tells `resolveRedirect` to fall back to the current path.
+    stubFind({
+      redirects: [
+        { ...referenceRow('/work', 'pages', 7), matchDescendants: true },
+      ],
+      pages: [{ id: 7, path: 'experience', slug: 'experience' }],
+    })
+
+    const [flattened] = await getCmsRedirects()
+    expect('toPathAtCapture' in flattened).toBe(false)
+  })
+
+  it('asks Payload for the snapshot column (#178)', async () => {
+    stubFind({ redirects: [] })
+    await getCmsRedirects()
+
+    expect(mocks.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'redirects',
+        select: expect.objectContaining({ toPathAtCapture: true }),
+      }),
+    )
   })
 
   it('collapses a would-be chain because every hop targets the document', async () => {

@@ -63,9 +63,10 @@ const contextKey = (collectionSlug: string, id: unknown): string =>
  * value Payload itself branches on. `parseParams(req.query)` yields `draft`,
  * which the REST handler passes straight through as `draftArg`
  * (`payload/dist/collections/endpoints/updateByID.js:8,11` →
- * `collections/operations/updateByID.js:34,122`), and `draftArg` feeds
+ * `collections/operations/updateByID.js:34,123`), and `draftArg` feeds
  * `isSavingDraft` (`collections/operations/utilities/update.js:29`), which is
- * what decides whether the main table is written at all (`update.js:253`,
+ * what decides whether the main table is written at all
+ * (`collections/operations/utilities/update.js:253`,
  * `if (!isSavingDraft)` guards `db.updateOne`). Mirroring that predicate asks
  * exactly the question this hook needs — "will this write touch the row the
  * site is serving?" — rather than approximating it.
@@ -73,7 +74,8 @@ const contextKey = (collectionSlug: string, id: unknown): string =>
  * **Correction (2026-09-04, review of the first cut).** An earlier revision of
  * this docblock said `draftArg` was the SOLE input to `isSavingDraft`, and the
  * guard below tested `req.query.draft` alone. That was wrong, and it was a live
- * defect, not a documentation slip. `update.js:29` ANDs three terms, not one:
+ * defect, not a documentation slip.
+ * `collections/operations/utilities/update.js:29` ANDs three terms, not one:
  * `draftArg && hasDraftsEnabled(...)`, then `data._status !== 'published'`,
  * then `!publishAllLocales` — so a REST `PATCH ?draft=true` carrying
  * `{ _status: 'published' }` is a **real publish**: `isSavingDraft` is false and
@@ -81,10 +83,11 @@ const contextKey = (collectionSlug: string, id: unknown): string =>
  * early, and stashed nothing, so a rename made that way wrote no redirect row
  * and purged no old path. The guard now checks `data._status !== 'published'`
  * first, which is the same clause Payload uses. (The third conjunct needs no
- * mirror: `publishAllLocales` is `!draftArg && …` at `update.js:27`, so it is
+ * mirror: `publishAllLocales` is `!draftArg && …` at
+ * `collections/operations/utilities/update.js:27`, so it is
  * always false whenever `draftArg` is truthy.)
  *
- * `[measured, @payloadcms/ui 3.86.0 dist]` The admin sends what that implies:
+ * `[measured, @payloadcms/ui 3.88.0 dist]` The admin sends what that implies:
  * autosave `?autosave=true&…&draft=true` (`elements/Autosave/index.js:88-91`),
  * "Save draft" `?…&draft=true` (`elements/PublishButton/index.js:94-96`,
  * `elements/SaveDraftButton/index.js:49`), publish `?depth=0&locale=…` with no
@@ -269,7 +272,8 @@ export const readPreviousPublishedSlug = (
  * autosaved draft. That was a real defect in the first cut of this batch.
  *
  * The reliable old public URL is the **main table row** before this write: a
- * draft save never touches it (`update.js:253`, `if (!isSavingDraft)` guards
+ * draft save never touches it
+ * (`collections/operations/utilities/update.js:253`, `if (!isSavingDraft)` guards
  * `db.updateOne`), so it still holds the slug the site is serving. This hook
  * reads it and stashes it on `req.context`, which `afterChange` receives as its
  * own `context` (both are `req.context`).
@@ -338,7 +342,8 @@ export const capturePublishedSlug: CollectionBeforeChangeHook = async ({
   if (operation !== 'update') return data
 
   // A DRAFT SAVE — autosave or explicit — never touches the main table
-  // (`update.js:253`), so it cannot move or remove a public URL, and this is the
+  // (`collections/operations/utilities/update.js:253`), so it cannot move or
+  // remove a public URL, and this is the
   // 100ms admin autosave path, so it must stay free. This used to test
   // `data._status === 'draft'`, which ALSO swallowed the unpublish (#155): an
   // unpublish sends exactly that body. See {@link isDraftSaveRequest} for the

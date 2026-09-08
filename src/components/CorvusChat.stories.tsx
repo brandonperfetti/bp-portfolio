@@ -276,24 +276,23 @@ export const Idle: Story = {}
  *
  * @remarks The story exists so the a11y addon gates this dialog — it is new
  * UI, and `CLAUDE.md` requires new UI to carry a story for exactly that
- * reason. It is also the only surface in the repo that hand-rolls a modal:
- * there is no dialog primitive in `src/components/ui` and
- * `@radix-ui/react-dialog` is not a dependency, so nothing else is enforcing
- * its `role`/`aria-modal`/focus behaviour at the component level.
+ * reason. Since #169 the dialog is the shadcn `Dialog` primitive
+ * (`src/components/ui/dialog.tsx`), which has its own story; this one gates
+ * the primitive AS THIS SURFACE USES IT — controlled `open`, no close button,
+ * focus deliberately on the confirming action, `aria-modal` passed by hand.
  *
  * The play function asserts what the unit tests cannot: that in a REAL
  * browser, with a real focus model, opening the dialog moves focus into it,
- * takes the chat surface behind it out of reach, and — the half jsdom is
- * blind to — **gives focus back on close**.
+ * takes the chat surface behind it out of reach, and **gives focus back on
+ * close**.
  *
- * That last one is not hypothetical coverage. jsdom does not implement `inert`
- * focusability, so a `.focus()` inside an inert subtree succeeds there and is a
- * no-op in Chromium; an earlier version of this component restored focus
- * synchronously in `close()` while the surface was still inert, and the jsdom
- * test passed while `activeElement` stayed on `<body>` in a real browser
- * `[measured by review, 2026-09-04]`. This story is the measurement that
- * catches that class of bug, so both close paths are exercised: Escape, and
- * Cancel.
+ * That last one is not hypothetical coverage. The restore is Radix's, and it
+ * only happens because the trigger is a `DialogTrigger`:
+ * `DialogContentModal` cancels `FocusScope`'s own restore and focuses its
+ * `triggerRef` instead, so an unregistered trigger silently drops focus on
+ * `<body>` — measured while #169 retired the hand-rolled restore
+ * `[measured, 2026-09-07]`. Both close paths are exercised, Escape and
+ * Cancel, because they share one unmount.
  */
 export const ExternalLinkConfirmation: Story = {
   play: async ({ canvasElement }) => {
@@ -325,29 +324,39 @@ export const ExternalLinkConfirmation: Story = {
         screen.getByRole('button', { name: 'Open link' }),
       ).toHaveFocus()
 
-      // The surface behind it is inert, so nothing in the chat is reachable.
+      // Nothing in the chat is reachable behind it. Asserted as the
+      // REQUIREMENT rather than as the old hand-rolled `inert` attribute
+      // (#169): `DialogContent` now hides the rest of the page with Radix's
+      // `hideOthers`, which marks the portal's body-level siblings
+      // `aria-hidden`, so the chat card sits under an `aria-hidden` ancestor
+      // instead of carrying an attribute of its own.
       const surface = canvasElement.querySelector('[data-slot="chat-card"]')
-      await expect(surface).toHaveAttribute('inert')
+      // Non-null FIRST: `surface?.closest(…)` on a missing surface is
+      // `undefined`, which passes `.not.toBe(null)` vacuously.
+      await expect(surface).not.toBe(null)
+      await expect(surface?.closest('[aria-hidden="true"]')).not.toBe(null)
       await expect(surface?.contains(dialog)).toBe(false)
 
       // ESCAPE: the surface comes back, and focus lands on the link that
-      // opened the dialog — not on `<body>`. Both halves matter, and in this
-      // order: focusing before `inert` is removed is silently a no-op, which
-      // is exactly the regression this asserts against.
+      // opened the dialog — not on `<body>`. This is the REAL-BROWSER proof
+      // of the restore, and it is the assertion that fails if the trigger
+      // stops being a `DialogTrigger`: `DialogContentModal` cancels
+      // `FocusScope`'s restore and focuses its own `triggerRef` instead, so an
+      // unregistered trigger means focus goes nowhere at all.
       await userEvent.keyboard('{Escape}')
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-      await expect(surface).not.toHaveAttribute('inert')
-      await expect(offSite).toHaveFocus()
+      await expect(surface?.closest('[aria-hidden="true"]')).toBe(null)
+      await waitFor(() => expect(offSite).toHaveFocus())
 
       // CANCEL: the same contract through a different close path. All four
-      // (Escape, Cancel, Confirm, backdrop) share one `close()`, so covering
-      // two of them covers the shared ordering.
+      // (Escape, Cancel, Confirm, backdrop) end in one unmount, so covering
+      // two of them covers the shared restore.
       await userEvent.click(offSite)
       await screen.findByRole('dialog')
       await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-      await expect(surface).not.toHaveAttribute('inert')
-      await expect(offSite).toHaveFocus()
+      await expect(surface?.closest('[aria-hidden="true"]')).toBe(null)
+      await waitFor(() => expect(offSite).toHaveFocus())
     } finally {
       restoreFetch()
     }

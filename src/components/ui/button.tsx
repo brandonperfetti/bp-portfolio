@@ -9,16 +9,39 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        // `hover:bg-primary-hover` (teal-800), not shadcn's stock
+        // `hover:bg-primary/90`. The stock hover composites the fill over
+        // whatever is behind it, so in light mode it LIGHTENS — white label
+        // 5.39:1 -> 4.47:1 — against the site's own written doctrine that
+        // hover DARKENS (see the `teal` variant below, `docs/STYLING.md`
+        // §shadcn primitives, and the `--primary-hover` block in
+        // `tailwind.css` for the measured pairs). Themed at the token layer
+        // rather than hard-coded here, so the rule the repo keeps repeating —
+        // fix the variable, never repaint the primitive — holds for the hover
+        // step too.
+        default: 'bg-primary text-primary-foreground hover:bg-primary-hover',
         destructive:
           'bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40',
         outline:
           'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50',
+        // `hover:bg-secondary-hover` (zinc-200 light / zinc-900 dark), not the
+        // stock `hover:bg-secondary/80` — the same correction as `default`
+        // above, and the last alpha hover on a fill in this file. 80% zinc-100
+        // over a white page LIGHTENS, which `docs/STYLING.md` §shadcn
+        // primitives forbids; the token steps one notch down the zinc ramp in
+        // each theme, so hover darkens in both. Themed at the token layer, so
+        // the measured pairs live in `tailwind.css` next to `--secondary`.
         secondary:
-          'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+          'bg-secondary text-secondary-foreground hover:bg-secondary-hover',
         ghost:
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
-        link: 'text-primary underline-offset-4 hover:underline',
+        // NOT `text-primary`: `--primary` is a FILL token (teal-700 in both
+        // themes, paired with white), so reading it as TEXT is the same role
+        // confusion #190 fixed in `CorvusReplyLink` — it measures 3.69:1 on
+        // the dark page, under WCAG 1.4.3. This is the site's link accent
+        // instead, the pair the nav's active link and `--corvus-accent` both
+        // use: teal-700 on white is 5.39:1, teal-400 on zinc-950 is 10.66:1.
+        link: 'text-teal-700 underline-offset-4 hover:underline dark:text-teal-400',
         // The site's own teal CTA fill (#113) — zinc/teal palette, identical in
         // light and dark (white text on teal-700, teal-800 on hover), matching
         // the `--corvus-accent-solid` tokens and the pre-port gated-article

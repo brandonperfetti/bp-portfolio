@@ -85,11 +85,11 @@ export const findPublishedRow = async (
  * descendant's own stored `path` was composed from.
  *
  * **Why a `find` with no `draft` flag reads the main table.**
- * `[read-from-source, payload 3.86.0, collections/operations/find.js:96]` the
+ * `[read-from-source, payload 3.88.0, collections/operations/find.js:103]` the
  * operation branches on the conjunction of `hasDraftsEnabled(collectionConfig)`
- * and `draftsEnabled` — only then does it call `payload.db.queryDrafts` (:105),
+ * and `draftsEnabled` — only then does it call `payload.db.queryDrafts` (:112),
  * which reads the `_v` versions table. With `draft` omitted (`draftsEnabled`
- * undefined) it falls to the `else` at :122 and calls `payload.db.find`, the
+ * undefined) it falls to the `else` at :129 and calls `payload.db.find`, the
  * plain main-table read. So omitting the flag is not an accident of the call
  * site; it is the documented switch.
  *

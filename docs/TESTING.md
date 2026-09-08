@@ -44,6 +44,17 @@
   shipped a broken hook twice because the mocked unit tier could not reproduce
   Payload's `req.context` swap on nested Local API calls. Anything that depends
   on hook plumbing rather than its own branching belongs here.
+  **Fixtures in this tier are enforced, not conventional (#191).** Its files run
+  in parallel Vitest workers against ONE database, so every cross-file assertion
+  separates real corpus rows from fixtures by the `zz-` slug prefix alone; write
+  every `posts`/`pages` fixture through `evals/fixtures/payload-fixtures.ts`,
+  which throws on an unprefixed slug, and get the shared `/articles` archive
+  anchor from `evals/fixtures/articles-anchor.ts`, which creates it at most once
+  and never deletes it — a file that creates and deletes that singleton itself
+  decides, from a parallel worker, whether a sibling file's collision case
+  asserts anything at all. `scripts/eval-harness.test.ts` fails the build on a
+  direct `payload.create`, a reused fixture marker, and a test file that names
+  the anchor slug.
 - **Evals** — Evalite for Corvus, run from the `evals/` root and **gating** as
   of #82; `evals/*.test.ts` run in `e2e` via `vitest run --root evals`, not in
   `pnpm test` (see `docs/AI.md` §Evals).

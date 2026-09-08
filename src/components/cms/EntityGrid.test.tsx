@@ -1,6 +1,14 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 
 import { EntityGrid } from '@/components/cms/EntityGrid'
 import type { CmsEntityItem } from '@/lib/cms/types'
@@ -52,6 +60,26 @@ function makeProjects(count: number): CmsEntityItem[] {
     description: `Description ${index + 1}`,
   }))
 }
+
+// jsdom ships no `matchMedia`, and the #183 anchor reads the shared
+// reduced-motion preference through it. Stubbed to "no preference" so the
+// anchor takes its smooth-scroll branch (mirrors `CookieBanner.test`).
+beforeAll(() => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }),
+  })
+})
 
 beforeEach(() => {
   searchParamsMock = new URLSearchParams('')
@@ -141,5 +169,35 @@ describe('EntityGrid pagination (#88)', () => {
     await user.click(screen.getByRole('link', { name: 'Go to page 2' }))
 
     expect(pushMock).toHaveBeenCalledWith('/projects?page=2', { scroll: false })
+  })
+
+  it('re-anchors scroll and focus to the results list on a page step (#183)', async () => {
+    const user = userEvent.setup()
+    const items = makeProjects(ENTITY_GRID_PAGE_SIZE + 1)
+    const { rerender } = render(
+      <EntityGrid items={items} label="Projects pagination" />,
+    )
+    // Queried by role and name, not by `[tabindex]`: the anchor is a focus
+    // target, so it has to announce itself (#183 / `docs/ACCESSIBILITY.md`).
+    const results = screen.getByRole('list', { name: 'Projects results' })
+    // jsdom implements no layout and no `scrollIntoView`; the stub is the
+    // assertion surface.
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(results, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+
+    await user.click(screen.getByRole('link', { name: 'Go to page 2' }))
+    // `next/navigation` is mocked, so mirror the navigation the push would
+    // have caused — that is the render the anchor effect runs in.
+    searchParamsMock = new URLSearchParams('page=2')
+    rerender(<EntityGrid items={items} label="Projects pagination" />)
+
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'smooth',
+      block: 'start',
+    })
+    expect(document.activeElement).toBe(results)
   })
 })
