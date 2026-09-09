@@ -226,6 +226,15 @@ export const createPathRedirect: CollectionAfterChangeHook = async ({
     // gain the flag later (a post rename repointed by a page move), at which
     // point a missing snapshot would be a hole nothing could backfill.
     toPathAtCapture: to,
+    // #201. WHICH document that path belonged to, beside the path itself. A
+    // path is only an identity at a point in time: once this document vacates
+    // `to`, another can take it, and then every rule keyed on the snapshot
+    // above silently describes the wrong document — see `resolveRedirect`'s
+    // "The capture's identity" section. Two inert text columns rather than a
+    // relationship, because the value has to survive the deletion of the
+    // document it names.
+    toCollectionAtCapture: collectionSlug,
+    toIdAtCapture: String(doc.id),
     // #130 added a permanence field to the collection. A rename is by
     // definition a permanent move, so this hook states 301 rather than relying
     // on the field's `defaultValue`: an `update` of an existing row does not
@@ -262,9 +271,23 @@ export const createPathRedirect: CollectionAfterChangeHook = async ({
         typeof current.toPathAtCapture === 'string'
           ? current.toPathAtCapture.trim()
           : ''
+      // #201. The identity belongs to the snapshot, so the two are preserved
+      // or replaced TOGETHER — never a new document's id against an era it
+      // never held, which is a wrong anchor, and a wrong anchor sends a whole
+      // subtree somewhere confidently wrong. A row that predates #201 has a
+      // snapshot and no identity; it keeps both, and keeps the pre-#201
+      // behaviour with them. A row that predates #178 has neither, and gains
+      // both from this write — they describe the same capture.
       await req.payload.update({
         collection: 'redirects',
-        data: captured ? { ...data, toPathAtCapture: captured } : data,
+        data: captured
+          ? {
+              ...data,
+              toCollectionAtCapture: current.toCollectionAtCapture ?? null,
+              toIdAtCapture: current.toIdAtCapture ?? null,
+              toPathAtCapture: captured,
+            }
+          : data,
         id: current.id,
         overrideAccess: true,
         req,

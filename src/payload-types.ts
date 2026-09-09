@@ -1563,6 +1563,14 @@ export interface Redirect {
    * The path the target was served at when this row was written. Filled automatically; used to re-resolve descendant URLs through the redirect table when the target has moved again.
    */
   toPathAtCapture?: string | null;
+  /**
+   * The collection of the document this row was captured for. Filled automatically.
+   */
+  toCollectionAtCapture?: string | null;
+  /**
+   * The id of the document this row was captured for. Filled automatically; it is what keeps a descendant URL pointing at that document after its old path has been re-used by another one.
+   */
+  toIdAtCapture?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -2774,6 +2782,8 @@ export interface RedirectsSelect<T extends boolean = true> {
   type?: T;
   matchDescendants?: T;
   toPathAtCapture?: T;
+  toCollectionAtCapture?: T;
+  toIdAtCapture?: T;
   updatedAt?: T;
   createdAt?: T;
 }
