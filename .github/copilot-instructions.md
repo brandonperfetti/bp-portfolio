@@ -110,3 +110,22 @@ surface only** — it is not a CMS and has no runtime integration.
 - Testing strategy: `docs/TESTING.md`
 - Ongoing upkeep tasks: `docs/MAINTENANCE.md`
 - Documentation standards: `docs/DOCUMENTATION.md`
+
+## Agent skills
+
+Per-repo config the engineering skills (`to-tickets`, `to-spec`, `triage`,
+`wayfinder`, `code-review`) read instead of asking.
+
+### Issue tracker
+
+GitHub Issues on `brandonperfetti/bp-portfolio`, via the `gh` CLI. See
+`docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles, kept as their own names. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context. See `docs/agents/domain.md`.
