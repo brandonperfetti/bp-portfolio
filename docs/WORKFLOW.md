@@ -44,12 +44,19 @@ pnpm exec vitest run --root evals
 
 Two properties of this tier decide how its fixtures must be written:
 
-- **Its files run in parallel workers against ONE database.** A "sweep
-  everything that isn't mine" assertion is therefore a race, not a baseline —
-  on CI the database is freshly migrated and empty, so a sibling file's
-  fixture is the only thing such a sweep can ever see. Snapshot the baseline
-  **by id** in `beforeAll`, assert exactly those ids, and unwind fixtures in
-  the test's own `try/finally`.
+- **Its files run in parallel workers against ONE database.** Two rules follow.
+  The first is enforced, not advisory: **every fixture slug carries the `zz-`
+  namespace** (`FIXTURE_SLUG_PREFIX` in `evals/fixtures/payload-fixtures.ts`) —
+  `createFixturePage` / `createFixturePost` throw on an unprefixed slug, and a
+  file cleans up only its own marker, so no file can widen a sibling's view of
+  the corpus (#191). The second is how a cross-file assertion is written:
+  **pin it to a snapshot, never to a sweep.** "Sweep everything that isn't
+  mine" is a race, not a baseline — on CI the database is freshly migrated and
+  empty, so a sibling's in-flight fixture is the only thing such a sweep can
+  ever see. Capture the baseline by id in `beforeAll`, then **re-read each of
+  those ids individually**: the assertion stays per-id and positive, never
+  "the collection contains exactly this set", which a concurrent insert would
+  break. Fixtures unwind in the test's own `try/finally`.
   `[measured: PR #179 build-e2e failure + deterministic single-file repro]`
 - **A green local run does not clear an order-dependent flake.** Both lanes
   and three reruns were 324/324 before CI failed on exactly this. Run the tier
