@@ -263,10 +263,14 @@ export const createPathRedirect: CollectionAfterChangeHook = async ({
       // under it. Overwriting it would erase an era: `/a → /b`, then `/b → /a`,
       // then `/a → /c` would rewrite row `/a`'s snapshot from `/b` to `/c`, and
       // every row filed under the `/b` spelling would become unreachable.
-      // Preserving it costs nothing when the row is repointed at a different
-      // document: the resolver re-resolves the capture-time form through the
-      // table and, finding nothing keyed there, falls through to the new
-      // target's current path.
+      // Preserving it is also what makes the repoint safe when the row is
+      // repointed at a DIFFERENT document, and #201 is why. This sentence used
+      // to end "falls through to the new target's current path", which was true
+      // of the resolver as #178 left it and is exactly the defect #201 filed:
+      // the fall-through handed a URL from the first document's era to whoever
+      // holds the path now. The snapshot is preserved together with the
+      // identity written below, and the resolver rewrites onto the CAPTURED
+      // document's current path instead.
       const captured =
         typeof current.toPathAtCapture === 'string'
           ? current.toPathAtCapture.trim()
