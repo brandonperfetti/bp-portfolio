@@ -914,7 +914,7 @@ from the 2026-08-29 baseline onward measured global 78, 88, 88, 86, 88, 94, 91,
 
 The margin is measured against the runs **after** that baseline, and the
 exclusion is the substance of the ratchet rather than a convenience: 78/75 was
-scored before the three fixes #122 required had landed — the vendor-vs-site
+scored before the three fixes required by #122 had landed — the vendor-vs-site
 citation, the cited-answer nudge, and the `declines-and-redirects` disposition
 (#198) — so it describes a Corvus that no longer exists. Re-flooring against it
 would pin the gate to a version of the product we deliberately replaced. Among
