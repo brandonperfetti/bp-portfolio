@@ -82,6 +82,13 @@
   (see § Local database from backups). Watch for GitHub's
   60-days-of-repo-inactivity cron disable; re-enable from the Actions
   tab if it trips.
+- **Served-prefix audit (weekly, #206)**:
+  `.github/workflows/audit-served-prefix.yml` runs
+  `scripts/audit-served-prefix.sql` against production every Monday 06:41 UTC
+  (`SUPABASE_DB_URL_PROD`, step-scoped) and **fails** on a published document
+  under an unpublished ancestor — exit 1 for a violation, exit 2 for an audit
+  that never completed, 0 for clean. The fix is editorial; see `docs/PAYLOAD.md`
+  § "Where the audit runs, and what to do when it fires".
 - **Email deliverability (Resend domain auth)**: brandonperfetti.com is
   verified in Resend (us-east-1 — co-located with the iad1 functions,
   same logic as Upstash) via DNS records at Hover: an MX + SPF TXT on the

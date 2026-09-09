@@ -327,9 +327,34 @@ for it.
 writes; rows that predate them are what
 `scripts/audit-served-prefix.sql` is for — published pages whose parent page is
 not published, and published placed posts whose parent page is not published,
-read from the MAIN tables with an expected result of 0 rows. It is read-only and
+read from the MAIN tables. The expected result is **0 rows from the two
+violation queries, plus exactly one row from the third** — a tagged count,
+`AUDIT_SERVED_PREFIX_VIOLATIONS=0`, which always returns a row and is how a
+runner tells "clean" from "the query never ran". It is read-only and
 safe against production. It takes the connection string from `DATABASE_URI`; the
 file names the variable and never a value.
+
+**Where the audit runs, and what to do when it fires** (#206).
+`.github/workflows/audit-served-prefix.yml` runs that script against production
+every Monday at 06:41 UTC, and on `workflow_dispatch`. It **fails the job** on a
+non-zero total: a violation is a live URL under a prefix the site 404s, nothing
+repairs it on its own, and a summary line nobody is paged for is how production
+served four pages under a draft `/work` for days. The run summary carries the
+outcome without opening logs, in three distinguishable forms, each with its own
+exit code — `0 violations` (exit 0), `N violation(s)` with the offending rows
+(exit 1), and **the audit did not complete** (exit 2), which is what a query
+error or a dropped connection produces and is explicitly NOT a pass. The three
+codes are the point: an error must fail _differently_ from a violation, not
+merely also fail. The script's third statement prints
+`AUDIT_SERVED_PREFIX_VIOLATIONS=<n>`, which is the line the job parses; its
+absence is a failure, so an empty result can never be mistaken for a clean one.
+
+When it fires, the fix is **editorial, not automatic** — the job repairs
+nothing on purpose. Each row names the published document and the unpublished
+parent above it: either publish the parent (the URL was meant to be served) or
+unpublish the children (it was not). Both go through the admin UI, where the
+#180 guards apply. The one thing not to do is re-run the job hoping it clears:
+the state is at rest, and only a write changes it.
 
 **Inbound coverage for a subtree is ONE row, not N** (D4). A moved page's row
 carries `matchDescendants`, which makes it match `from` and everything beneath
