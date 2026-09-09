@@ -71,6 +71,24 @@ surface only** — it is not a CMS and has no runtime integration.
 - Tests accompany behavior changes: Vitest unit/component, Playwright e2e,
   Evalite for Corvus behavior.
 
+## Gotchas (traps that have already cost us a session)
+
+- **Payload `find`: `limit: N` still caps the result even with
+  `pagination: false`.** `limit: 0` is the only unlimited form — it is the
+  value that clears the cap and forces `pagination = false` internally. A
+  `limit: 1000` meant as "everything" is a silent cap.
+  `[source: @payloadcms/drizzle findMany.js:16-18,117 @ 3.88.0]`
+- **Payload Local API: `draft: true` is not mirrored into `req.query`.**
+  `createLocalReq` only ever writes `req.query.depth`
+  (`createLocalReq.js:102-104`); `draft` and `autosave` travel in the
+  operation's args object instead. So any hook keyed on reading
+  `req.query.draft` / `req.query.autosave` **cannot see a Local-API draft
+  save** and will take its non-draft branch. The admin UI and REST both carry
+  `?draft=true` and are unaffected — this bites scripts, seeds, tests and MCP
+  writes. See the `cascadePagePaths` docblock in
+  `src/collections/Pages/hooks/servedPrefix.ts` for the worked case, and #197
+  for the live defect. `[source: payload 3.88.0]`
+
 ## Progressive disclosure (read the doc that matches the task)
 
 - Architecture and app map: `docs/ARCHITECTURE.md`
