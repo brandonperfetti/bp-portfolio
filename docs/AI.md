@@ -898,8 +898,8 @@ so a disagreement is legible.
 | Command            | What it does                                     |
 | ------------------ | ------------------------------------------------ |
 | `pnpm eval`        | watch mode                                       |
-| `pnpm eval:ci`     | the gate — global `--threshold 75`               |
-| `pnpm eval:facts`  | the site-fact block on its own, `--threshold 70` |
+| `pnpm eval:ci`     | the gate — global `--threshold 80`               |
+| `pnpm eval:facts`  | the site-fact block on its own, `--threshold 75` |
 | `pnpm eval:matrix` | opt-in model comparison, gates nothing           |
 
 Registration counts move when a block is added, and the thresholds are averages
@@ -907,6 +907,24 @@ over the whole pool, so it is worth recording: `pnpm eval:ci` collected **34**
 evals before #147 and **41** after `[measured, keyless, 2026-09-02]`, across the
 same five files. That is the loosening this doc has always warned about; the
 response is #122's ratchet against a fresh keyed run, never a shrunken block.
+
+**The first ratchet landed 2026-09-09 (#122): 75/70 → 80/75.** Eight keyed runs
+from the 2026-08-29 baseline onward measured global 78, 88, 88, 86, 88, 94, 91,
+90 and site-facts 75, 83, 88.
+
+The margin is measured against the runs **after** that baseline, and the
+exclusion is the substance of the ratchet rather than a convenience: 78/75 was
+scored before the three fixes required by #122 had landed — the vendor-vs-site
+citation, the cited-answer nudge, and the `declines-and-redirects` disposition
+(#198) — so it describes a Corvus that no longer exists. Re-flooring against it
+would pin the gate to a version of the product we deliberately replaced. Among
+the post-fix runs the worst global is **86** and the worst site-facts is **83**,
+so 80/75 sits six and eight points under them.
+
+A floor is only useful if an ordinary bad day stays green and a real regression
+does not, and two things eat that margin: the pool changes when a block is added
+(34 → 41 evals above, 54 today), and one block can move a long way on its own —
+safety scored 69 on a run whose global was still 88.
 
 **Two threshold invocations, because evalite has one.** `--threshold` is a
 single global average over every score in the run, with no per-eval or
@@ -983,7 +1001,7 @@ matrix, and ad-hoc runs. An explicitly set value still wins.
 passes `--threshold 0` so it reports without gating.
 
 It is opt-in for two reasons and both matter. Every variant's scores would fold
-into the same global average, so the 75% gate would stop meaning "is Corvus
+into the same global average, so the 80% gate would stop meaning "is Corvus
 good enough" and start meaning "is the average of two models good enough". And
 a run is 30 cases × 2 variants × 3 trials = 180 model turns plus the grader
 calls, doubling provider spend on every PR against an explicit in-repo cost
