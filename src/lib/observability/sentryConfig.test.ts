@@ -3,10 +3,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getClientSentryDsn,
   getSentryEnvironment,
+  getSentryInitDecision,
   getServerSentryDsn,
   getTracesSampleRate,
   isFilteredUserAgent,
+  isLocalDevelopmentEnvironment,
   isNoisyTransaction,
+  isSpotlightRequested,
   isSuppressedSentryLogMessage,
   sentryDropBotEvent,
   sentryDropNoisyLog,
@@ -14,6 +17,7 @@ import {
   SENTRY_DENY_URLS,
   SENTRY_IGNORE_ERRORS,
   sentryTracesSampler,
+  warnIfDevDsnIgnored,
 } from '@/lib/observability/sentryConfig'
 
 /**
@@ -169,7 +173,412 @@ describe('getSentryEnvironment', () => {
       .replace(/\/\/.*$/gm, '')
     expect(code).toContain('process.env.NEXT_PUBLIC_VERCEL_ENV')
     expect(code).not.toMatch(/process\.env\[/)
-    expect(code).not.toMatch(/process\.env\.NODE_ENV/)
+
+    // NODE_ENV must stay out of the ENVIRONMENT chain (that conflation is
+    // the #134 defect) — but #194 reads it legitimately elsewhere in this
+    // module as the build-mode half of `isLocalDevelopmentEnvironment`.
+    // Scope the guard to `getSentryEnvironment`'s own body rather than the
+    // whole file, so it keeps testing what it was written to test.
+    const environmentFn = code.slice(
+      code.indexOf('export function getSentryEnvironment'),
+    )
+    const environmentBody = environmentFn.slice(0, environmentFn.indexOf('\n}'))
+    expect(environmentBody).toContain('process.env.NEXT_PUBLIC_VERCEL_ENV')
+    expect(environmentBody).not.toMatch(/process\.env\.NODE_ENV/)
+  })
+})
+
+/**
+ * #194: the send gate is no longer "DSN present" but "DSN present OR
+ * Spotlight enabled in development". These cases are the contract — every
+ * `Sentry.init` call site in the repo reads this one function, so the
+ * matrix below is the whole behaviour.
+ *
+ * Every case stubs the full env shape rather than relying on ambient
+ * values: `NODE_ENV` is `test` under Vitest, so a case that forgot to stub
+ * it would silently test the wrong row.
+ */
+describe('getSentryInitDecision (#194)', () => {
+  const DSN = 'https://public@o1.ingest.sentry.io/1'
+
+  /** A developer's laptop: `next dev`, no Vercel signals. */
+  function stubLocalDev({
+    dsn = '',
+    spotlight = '',
+  }: { dsn?: string; spotlight?: string } = {}) {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('VERCEL_ENV', '')
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', '')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', dsn)
+    vi.stubEnv('SENTRY_DSN', '')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_SPOTLIGHT', spotlight)
+    vi.stubEnv('SENTRY_SPOTLIGHT', '')
+  }
+
+  it('local dev + Spotlight on + no DSN: inits WITHOUT a DSN and forwards to Spotlight', () => {
+    stubLocalDev({ spotlight: '1' })
+    expect(getSentryInitDecision('client')).toEqual({
+      init: true,
+      dsn: undefined,
+      spotlight: true,
+      dsnIgnoredInDevelopment: false,
+    })
+    expect(getSentryInitDecision('server')).toEqual({
+      init: true,
+      dsn: undefined,
+      spotlight: true,
+      dsnIgnoredInDevelopment: false,
+    })
+  })
+
+  it('local dev + Spotlight OFF: no init at all — a contributor without the sidecar gets the pre-#194 quiet boot', () => {
+    stubLocalDev()
+    expect(getSentryInitDecision('client')).toMatchObject({
+      init: false,
+      spotlight: false,
+    })
+    expect(getSentryInitDecision('server')).toMatchObject({
+      init: false,
+      spotlight: false,
+    })
+  })
+
+  it('#194 THE FENCE: a DSN configured locally is IGNORED — the shared project cannot receive a laptop event, Spotlight on or off', () => {
+    // The inverted third acceptance criterion of #194: this exact env
+    // shape (DSN set, no VERCEL_ENV, no NEXT_PUBLIC_VERCEL_ENV) used to be
+    // the ONE that sent, and it is the one BP-PORTFOLIO-F/G came from.
+    stubLocalDev({ dsn: DSN, spotlight: '1' })
+    expect(getSentryInitDecision('client')).toEqual({
+      init: true,
+      dsn: undefined,
+      spotlight: true,
+      dsnIgnoredInDevelopment: true,
+    })
+    expect(getSentryInitDecision('server')).toEqual({
+      init: true,
+      dsn: undefined,
+      spotlight: true,
+      dsnIgnoredInDevelopment: true,
+    })
+
+    stubLocalDev({ dsn: DSN })
+    expect(getSentryInitDecision('client')).toEqual({
+      init: false,
+      dsn: undefined,
+      spotlight: false,
+      dsnIgnoredInDevelopment: true,
+    })
+  })
+
+  it('#194: the server DSN fallback is fenced too — SENTRY_DSN alone cannot send from a laptop', () => {
+    stubLocalDev({ spotlight: '1' })
+    vi.stubEnv('SENTRY_DSN', 'https://server@o1.ingest.sentry.io/2')
+    expect(getSentryInitDecision('server')).toMatchObject({
+      dsn: undefined,
+      dsnIgnoredInDevelopment: true,
+    })
+  })
+
+  it('production is byte-identical to pre-#194: DSN present → init with that DSN, Spotlight never on', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('VERCEL_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', DSN)
+    vi.stubEnv('SENTRY_DSN', '')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_SPOTLIGHT', '')
+    vi.stubEnv('SENTRY_SPOTLIGHT', '')
+    expect(getSentryInitDecision('client')).toEqual({
+      init: true,
+      dsn: DSN,
+      spotlight: false,
+      dsnIgnoredInDevelopment: false,
+    })
+  })
+
+  it('production with SENTRY_SPOTLIGHT accidentally set: still DSN-only — a sidecar forwarder can never arm on a deploy', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('VERCEL_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', DSN)
+    vi.stubEnv('SENTRY_DSN', '')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_SPOTLIGHT', '1')
+    vi.stubEnv('SENTRY_SPOTLIGHT', '1')
+    expect(getSentryInitDecision('server')).toEqual({
+      init: true,
+      dsn: DSN,
+      spotlight: false,
+      dsnIgnoredInDevelopment: false,
+    })
+  })
+
+  it('vercel-staging and preview are unchanged: DSN present → init with that DSN, no Spotlight', () => {
+    for (const shape of [
+      { NEXT_PUBLIC_SENTRY_ENVIRONMENT: 'staging', NEXT_PUBLIC_VERCEL_ENV: '' },
+      { NEXT_PUBLIC_SENTRY_ENVIRONMENT: '', NEXT_PUBLIC_VERCEL_ENV: 'preview' },
+    ]) {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv(
+        'NEXT_PUBLIC_SENTRY_ENVIRONMENT',
+        shape.NEXT_PUBLIC_SENTRY_ENVIRONMENT,
+      )
+      vi.stubEnv('SENTRY_ENVIRONMENT', '')
+      vi.stubEnv('VERCEL_ENV', '')
+      vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', shape.NEXT_PUBLIC_VERCEL_ENV)
+      vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', DSN)
+      vi.stubEnv('SENTRY_DSN', '')
+      vi.stubEnv('NEXT_PUBLIC_SENTRY_SPOTLIGHT', '')
+      vi.stubEnv('SENTRY_SPOTLIGHT', '')
+      expect(getSentryInitDecision('client')).toEqual({
+        init: true,
+        dsn: DSN,
+        spotlight: false,
+        dsnIgnoredInDevelopment: false,
+      })
+    }
+  })
+
+  it('a deployed environment TAGGED development still sends: the deployment-target half alone must not fence a real deploy', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_ENVIRONMENT', 'development')
+    vi.stubEnv('SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('VERCEL_ENV', '')
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', '')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', DSN)
+    vi.stubEnv('SENTRY_DSN', '')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_SPOTLIGHT', '')
+    vi.stubEnv('SENTRY_SPOTLIGHT', '')
+    expect(getSentryInitDecision('client')).toMatchObject({
+      init: true,
+      dsn: DSN,
+      spotlight: false,
+    })
+  })
+
+  it('CI (NODE_ENV=test, no DSN, no deployment signal): no init and no Spotlight, even if the switch leaks in', () => {
+    vi.stubEnv('CI', 'true')
+    vi.stubEnv('NODE_ENV', 'test')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('VERCEL_ENV', '')
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', '')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', '')
+    vi.stubEnv('SENTRY_DSN', '')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_SPOTLIGHT', '1')
+    vi.stubEnv('SENTRY_SPOTLIGHT', '1')
+    expect(getSentryInitDecision('client')).toEqual({
+      init: false,
+      dsn: undefined,
+      spotlight: false,
+      dsnIgnoredInDevelopment: false,
+    })
+    expect(getSentryInitDecision('server')).toEqual({
+      init: false,
+      dsn: undefined,
+      spotlight: false,
+      dsnIgnoredInDevelopment: false,
+    })
+  })
+
+  it('never carries a DSN into an init it also marks Spotlight-only', () => {
+    stubLocalDev({ dsn: DSN, spotlight: '1' })
+    const decision = getSentryInitDecision('server')
+    expect(decision.spotlight && decision.dsn).toBeFalsy()
+  })
+
+  describe("the 'edge' runtime row", () => {
+    // @sentry/vercel-edge 10.70.0 ships no `spotlight` option and no
+    // Spotlight integration, so an edge decision can never be
+    // Spotlight-only. The rule lives in the decision (not at the call
+    // site) precisely so it is provable here alongside every other row.
+    it('local + Spotlight on + no DSN: does NOT init — there is nowhere to send', () => {
+      stubLocalDev({ spotlight: '1' })
+      expect(getSentryInitDecision('edge')).toEqual({
+        init: false,
+        dsn: undefined,
+        spotlight: false,
+        dsnIgnoredInDevelopment: false,
+      })
+    })
+
+    it('#194 THE FENCE holds on edge too: local + DSN + Spotlight on → no init, DSN ignored', () => {
+      stubLocalDev({ dsn: DSN, spotlight: '1' })
+      expect(getSentryInitDecision('edge')).toEqual({
+        init: false,
+        dsn: undefined,
+        spotlight: false,
+        dsnIgnoredInDevelopment: true,
+      })
+    })
+
+    it('production + DSN: inits with the DSN, exactly like the server runtime', () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('NEXT_PUBLIC_SENTRY_ENVIRONMENT', '')
+      vi.stubEnv('SENTRY_ENVIRONMENT', '')
+      vi.stubEnv('VERCEL_ENV', 'production')
+      vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'production')
+      vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', DSN)
+      vi.stubEnv('SENTRY_DSN', '')
+      vi.stubEnv('NEXT_PUBLIC_SENTRY_SPOTLIGHT', '1')
+      vi.stubEnv('SENTRY_SPOTLIGHT', '1')
+      expect(getSentryInitDecision('edge')).toEqual({
+        init: true,
+        dsn: DSN,
+        spotlight: false,
+        dsnIgnoredInDevelopment: false,
+      })
+      expect(getSentryInitDecision('edge')).toEqual(
+        getSentryInitDecision('server'),
+      )
+    })
+  })
+})
+
+describe('warnIfDevDsnIgnored (#194)', () => {
+  const base = {
+    init: true,
+    dsn: undefined,
+    spotlight: true,
+  } as const
+
+  it('warns once, naming the variables and never a value', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    warnIfDevDsnIgnored({ ...base, dsnIgnoredInDevelopment: true })
+
+    expect(warn).toHaveBeenCalledTimes(1)
+    const message = String(warn.mock.calls[0]![0])
+    expect(message).toContain('NEXT_PUBLIC_SENTRY_DSN')
+    expect(message).toContain('SENTRY_DSN')
+    expect(message).toContain('NEXT_PUBLIC_SENTRY_SPOTLIGHT')
+    // The repo is public. This string is the one place a DSN value could
+    // plausibly be interpolated by a well-meaning future edit.
+    expect(message).not.toMatch(/https?:\/\/\S+@/)
+    warn.mockRestore()
+  })
+
+  it('says nothing when no DSN is being ignored — the common case must be silent', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    warnIfDevDsnIgnored({ ...base, dsnIgnoredInDevelopment: false })
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})
+
+describe('isLocalDevelopmentEnvironment (#194)', () => {
+  it('requires BOTH halves — build mode and the absence of a deployment signal', () => {
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('VERCEL_ENV', '')
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', '')
+
+    vi.stubEnv('NODE_ENV', 'development')
+    expect(isLocalDevelopmentEnvironment()).toBe(true)
+
+    // Build mode without the deployment half: `vercel dev`-style local
+    // preview, or a deploy explicitly tagged something else.
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'preview')
+    expect(isLocalDevelopmentEnvironment()).toBe(false)
+
+    // Deployment half without the build mode: Vitest / CI.
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', '')
+    vi.stubEnv('NODE_ENV', 'test')
+    expect(isLocalDevelopmentEnvironment()).toBe(false)
+  })
+})
+
+describe('isSpotlightRequested (#194)', () => {
+  it('is off when neither variable is set', () => {
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_SPOTLIGHT', '')
+    vi.stubEnv('SENTRY_SPOTLIGHT', '')
+    expect(isSpotlightRequested()).toBe(false)
+  })
+
+  it('reads the NEXT_PUBLIC_ twin first so ONE variable arms both runtimes that can reach a sidecar (browser + Node)', () => {
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_SPOTLIGHT', '1')
+    vi.stubEnv('SENTRY_SPOTLIGHT', '')
+    expect(isSpotlightRequested()).toBe(true)
+  })
+
+  it("falls back to the SDK's own SENTRY_SPOTLIGHT so setting that alone is not silently ignored server-side", () => {
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_SPOTLIGHT', '')
+    vi.stubEnv('SENTRY_SPOTLIGHT', '1')
+    expect(isSpotlightRequested()).toBe(true)
+  })
+
+  it('treats explicit off values as off, so commenting the line out is not the only way to disable it', () => {
+    vi.stubEnv('SENTRY_SPOTLIGHT', '')
+    for (const value of ['0', 'false', 'FALSE', 'off', 'no', '  ']) {
+      vi.stubEnv('NEXT_PUBLIC_SENTRY_SPOTLIGHT', value)
+      expect(isSpotlightRequested()).toBe(false)
+    }
+  })
+
+  it('accepts a sidecar URL as the value — the Node SDK reads SENTRY_SPOTLIGHT as a URL when it is not a boolean', () => {
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_SPOTLIGHT', '')
+    vi.stubEnv('SENTRY_SPOTLIGHT', 'http://localhost:9000/stream')
+    expect(isSpotlightRequested()).toBe(true)
+  })
+})
+
+describe('#194: the Spotlight package never reaches application code', () => {
+  it('is a devDependency only, and nothing under src/ imports it', async () => {
+    // The Spotlight desktop app / sidecar / MCP server is a TOOL Brandon
+    // runs, not a library this app links against: the browser and Node
+    // Sentry SDKs carry their own `spotlight` option, so `Sentry.init` is
+    // the entire integration. Assert that directly — a stray
+    // `import '@spotlightjs/spotlight'` in a client file would drag a
+    // node:http sidecar server into the browser bundle.
+    const { readFile } = await import('node:fs/promises')
+    const { resolve } = await import('node:path')
+    const pkg = JSON.parse(
+      await readFile(resolve(process.cwd(), 'package.json'), 'utf8'),
+    ) as {
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+    expect(pkg.devDependencies?.['@spotlightjs/spotlight']).toBeTruthy()
+    expect(pkg.dependencies?.['@spotlightjs/spotlight']).toBeUndefined()
+
+    const { readdir } = await import('node:fs/promises')
+    const srcRoot = resolve(process.cwd(), 'src')
+    const IMPORTS =
+      /(?:from|import|require)\s*\(?\s*['"]@spotlightjs\/spotlight/
+    const importers: string[] = []
+    const mentions: string[] = []
+    const walk = async (dir: string): Promise<void> => {
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        const full = resolve(dir, entry.name)
+        if (entry.isDirectory()) {
+          await walk(full)
+          continue
+        }
+        if (!/\.(ts|tsx|js|mjs)$/.test(entry.name)) continue
+        const contents = await readFile(full, 'utf8')
+        const relative = full.slice(srcRoot.length + 1)
+        if (contents.includes('@spotlightjs/spotlight')) mentions.push(relative)
+        // Test and story files are excluded from the IMPORT check on
+        // purpose — they are never bundled for a visitor, and this file's
+        // own positive control below is a literal that would match.
+        if (/\.(test|stories)\.[jt]sx?$/.test(entry.name)) continue
+        if (IMPORTS.test(contents)) importers.push(relative)
+      }
+    }
+    await walk(srcRoot)
+
+    expect(importers).toEqual([])
+    // Positive control for the scan itself: the docblocks in this file and
+    // in `instrumentation-client.ts` NAME the package, so an empty mention
+    // list would mean the walk found nothing and the assertion above is
+    // vacuously true.
+    expect(mentions.length).toBeGreaterThan(0)
+    expect(IMPORTS.test("import * as S from '@spotlightjs/spotlight'")).toBe(
+      true,
+    )
   })
 })
 
