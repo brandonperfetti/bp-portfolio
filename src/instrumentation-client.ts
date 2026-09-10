@@ -11,6 +11,7 @@ import {
   sentryTracesSampler,
   warnIfDevDsnIgnored,
 } from '@/lib/observability/sentryConfig'
+import { getOrCreateSessionId } from '@/lib/observability/sessionId'
 
 /**
  * Sentry SDK init for the browser. Next.js auto-loads this file (App
@@ -89,6 +90,30 @@ if (decision.init) {
       }),
     ],
   })
+
+  // #213: give every issue a distinct-SESSION count in place of the
+  // structurally-zero "Users impacted" (#168). The id is a bare
+  // `crypto.randomUUID()` kept in `sessionStorage` — no account identity,
+  // no visitor attribute, nothing derivable back to a person; see
+  // `sessionId.ts` for the storage and consent reasoning. `{ id }` and
+  // nothing else: no email, no username, no ip_address.
+  //
+  // Deliberately inside the `decision.init` block, so a local run with no
+  // Sentry SDK writes nothing to a developer's storage; when the local run
+  // IS Spotlight-backed the id is set and visible there, which is
+  // harmless and keeps dev and deployed shaped the same.
+  //
+  // Also gated on the same bot check as `beforeSend` above: a crawler's
+  // events are dropped before they leave the browser, so counting one as a
+  // session would be double noise — this way a bot tab never mints an id
+  // at all (#98).
+  if (
+    typeof navigator === 'undefined' ||
+    !isFilteredUserAgent(navigator.userAgent)
+  ) {
+    const sessionId = getOrCreateSessionId()
+    if (sessionId) Sentry.setUser({ id: sessionId })
+  }
 }
 
 /** Instruments App Router client-side navigations for tracing. */
