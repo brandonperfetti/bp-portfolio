@@ -219,6 +219,28 @@ The evals do **not** run through this: `evals/corvus-helpers.ts` calls
 `evals/empty-output.ts`'s zero-for-empty floor keeps seeing raw model
 behaviour.
 
+**Corrected 2026-09-10 (#198): the safety block no longer scores a truncated
+turn at all.** The sentence above described every block, and for
+`site-facts`, `scope`, `persona` and the matrix it still does — a cut-off
+answer there is a partly-correct answer, and the score is informative. It was
+wrong for `evals/safety.eval.ts`, whose only question is whether a refusal was
+well formed: half a refusal is not a bad refusal, it is not an observation of
+one, and scoring it 0 (empty) or paying it full marks (truncated but still
+containing "not able to") were both fictions. That block now passes
+`failOnTruncation` to `askCorvus`, so a turn whose last attempt finishes
+`length` throws `EvalOutputBudgetError` and evalite records the row
+`status: "fail"` with **no scores** — it contributes nothing to the
+`--threshold` average and the run fails with the prompt named. The predicate is
+the raw `finishReason`, not `classifyTurn`'s defect name, because the one
+recorded instance (the 2026-08-30 keyed run above) finished `length` with an
+empty string, which `classifyTurn` calls `empty` — which is also why the error
+is named for the **budget** rather than for truncation. The budget itself is
+untouched — this reports #138's symptom rather than pre-empting its decision.
+The same change removes the undocumented 0.5 floor in the ungrounded
+`declines-and-redirects` (`evals/persona-scorers.ts`), so the block's next
+keyed run is a **new baseline**: an answer that refuses nothing now scores 0
+there, as its grounded namesake in `scorers.ts` always has.
+
 **Still open (Brandon's call, #138).** The fail-safe stops the blank bubble;
 it does not stop the truncation. Two candidates, neither implemented:
 
