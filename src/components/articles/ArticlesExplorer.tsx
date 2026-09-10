@@ -559,7 +559,7 @@ export function ArticlesExplorer({
           <div>
             <Link
               href={sectionLink.href}
-              className="inline-flex items-center gap-1 rounded-full text-xs font-medium text-teal-700 transition hover:text-teal-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:text-teal-400 dark:hover:text-teal-300 dark:focus-visible:ring-teal-400/80"
+              className="inline-flex items-center gap-1 rounded-full text-xs font-medium text-link-accent transition hover:text-teal-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:hover:text-teal-300 dark:focus-visible:ring-teal-400/80"
             >
               <span>
                 View the <span className="capitalize">{sectionLink.label}</span>{' '}

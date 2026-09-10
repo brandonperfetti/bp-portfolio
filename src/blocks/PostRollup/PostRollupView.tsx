@@ -90,7 +90,7 @@ export function PostRollupView({
             href={publicPathFor('posts', article) ?? '#'}
             className="group flex flex-col gap-1 rounded-lg py-3 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6 dark:focus-visible:ring-teal-400/70"
           >
-            <span className="text-sm font-medium text-zinc-800 group-hover:text-teal-700 dark:text-zinc-100 dark:group-hover:text-teal-400">
+            <span className="text-sm font-medium text-zinc-800 group-hover:text-link-accent dark:text-zinc-100">
               {article.title}
             </span>
             <span className="shrink-0 text-xs text-zinc-500 tabular-nums dark:text-zinc-400">

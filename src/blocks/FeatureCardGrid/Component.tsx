@@ -64,7 +64,7 @@ export function FeatureCardGridComponent(
                     </div>
                   ) : null}
                   {card.eyebrow ? (
-                    <p className="mt-4 text-xs font-semibold tracking-wide text-teal-700 uppercase dark:text-teal-400">
+                    <p className="mt-4 text-xs font-semibold tracking-wide text-link-accent uppercase">
                       {card.eyebrow}
                     </p>
                   ) : null}

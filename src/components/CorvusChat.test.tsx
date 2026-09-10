@@ -228,16 +228,21 @@ describe('CorvusChat', () => {
     // from the OKLCH tokens Tailwind 4.3.3 resolves.
     //
     // On /corvus this class is overridden by `.corvus-surface
-    // [data-slot='message-copy-button']:hover` (--corvus-accent, already
-    // teal-700 in light); this pins the component's own behaviour.
+    // [data-slot='message-copy-button']:hover` (--corvus-accent, which since
+    // #202 aliases the same --link-accent token); this pins the component's
+    // own behaviour. The utility is `hover:text-link-accent` rather than the
+    // literal pair since #202 — one class, because the token inverts on
+    // `.dark` instead of the call site carrying a `dark:` variant. Its
+    // identity as teal-700/teal-400 is pinned in
+    // `src/styles/shadcn-token-contrast.test.ts`, which is where the ratios
+    // quoted above are recomputed.
     chatState.messages = [assistantMessage('m1', 'Hello from Corvus')]
     render(<CorvusChat />)
 
     const className = screen.getByRole('button', { name: /copy/i }).className
 
     expect(className).not.toContain('hover:text-teal-600')
-    expect(className).toContain('hover:text-teal-700')
-    expect(className).toContain('dark:hover:text-teal-400')
+    expect(className).toContain('hover:text-link-accent')
   })
 
   it('focuses the composer when / is pressed outside a field', () => {

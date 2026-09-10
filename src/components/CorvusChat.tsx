@@ -199,17 +199,26 @@ function CorvusReplyLink({
     setConfirming(false)
   }, [])
 
-  // teal-700 / teal-400 rather than `text-primary` (#190). `--primary` is a
-  // FILL token — one colour in both themes (teal-700), paired with white — so
-  // reading it as TEXT is a role confusion that only went unnoticed while the
-  // scaffold happened to make it near-black in light and near-white in dark.
-  // Themed to the site palette it measures 3.69:1 on the dark page and 2.61:1
-  // on the dark assistant bubble, both under WCAG 1.4.3. This is the site's
-  // actual link accent instead — the nav's active-link pair, identical to
-  // `--corvus-accent` in each theme: 5.16:1 / 4.90:1 in light (page / bubble),
-  // 10.66:1 / 7.98:1 in dark.
+  // `--link-accent` (teal-700 / teal-400) rather than `text-primary` (#190).
+  // `--primary` is a FILL token — one colour in both themes (teal-700), paired
+  // with white — so reading it as TEXT is a role confusion that only went
+  // unnoticed while the scaffold happened to make it near-black in light and
+  // near-white in dark. Themed to the site palette it measures 3.69:1 on the
+  // dark page and 2.61:1 on the dark assistant bubble, both under WCAG 1.4.3.
+  // This is the site's actual link accent instead — the nav's active-link
+  // pair, and the token `--corvus-accent` aliases it since #202.
+  //
+  // Ratios on the CORVUS surfaces, recomputed from the resolved v4 value that
+  // alias now carries (the v3 figures this comment used to quote in
+  // parentheses): 5.14:1 (5.24) on the light ground and 4.88:1 (4.98) on the
+  // light assistant bubble; 11.26:1 (11.28) on the dark ground and 7.99:1
+  // (8.00) on the dark bubble. All clear 4.5:1, and all four are asserted from
+  // source by `src/styles/corvus-accent-contrast.test.ts` rather than trusted
+  // from here. The light bubble is the tightest pair on the surface and the
+  // move spends 0.10 of its 0.48 margin — recorded so a future nudge to
+  // `--corvus-bubble-assistant` knows what it is eating into.
   const linkClassName = [
-    'wrap-anywhere font-medium text-teal-700 underline dark:text-teal-400',
+    'text-link-accent font-medium wrap-anywhere underline',
     className,
   ]
     .filter(Boolean)
@@ -680,9 +689,12 @@ export default function CorvusChat({
                       // is 5.36:1. Dark is already fine (teal-400 on zinc-900
                       // is 9.50:1) and is left alone. Overridden on /corvus by
                       // `.corvus-surface [data-slot='message-copy-button']
-                      // :hover` (--corvus-accent, already teal-700 in light),
-                      // so this fixes the component outside that surface.
-                      className="inline-flex items-center gap-1 rounded px-1 text-xs text-zinc-500 hover:text-teal-700 dark:text-zinc-400 dark:hover:text-teal-400"
+                      // :hover`, which reads --corvus-accent — since #202 an
+                      // alias of the very --link-accent this class resolves,
+                      // so the two agree by construction instead of by
+                      // coincidence. This fixes the component outside that
+                      // surface.
+                      className="inline-flex items-center gap-1 rounded px-1 text-xs text-zinc-500 hover:text-link-accent dark:text-zinc-400"
                     >
                       <CopyIcon className="h-3.5 w-3.5" />
                       {copiedId === message.id ? 'Copied' : 'Copy'}
