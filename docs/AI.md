@@ -186,8 +186,9 @@ the bare provider call is the **Responses** API (`OpenAIProvider`'s call
 signature takes an `OpenAIResponsesModelId`). On that API a reasoning model's
 hidden reasoning tokens are billed as output tokens and drawn from the _same_
 `maxOutputTokens` allowance as the visible answer. The default model is
-`gpt-5-mini`; the allowance is **1024**
-(`resolveGuardrailLimits`, `AI_MAX_COMPLETION_TOKENS`, cap 8000), mirrored by
+`gpt-5-mini`; the allowance is **2048**
+(`resolveGuardrailLimits`, `AI_MAX_COMPLETION_TOKENS`, cap 8000 — it was 1024
+until 2026-09-11, see the decision below), mirrored by
 `EVAL_MAX_OUTPUT_TOKENS` in `evals/corvus-helpers.ts` and drift-guarded by
 `scripts/eval-harness.test.ts`.
 
@@ -241,8 +242,9 @@ The same change removes the undocumented 0.5 floor in the ungrounded
 keyed run is a **new baseline**: an answer that refuses nothing now scores 0
 there, as its grounded namesake in `scorers.ts` always has.
 
-**Decided 2026-09-11 (Brandon, #138 option 2): reasoning effort is capped at
-`minimal`, and the budget stays at 1024.** `[measured, CI on PR #234, 2026-09-11]` the first keyed `pnpm eval:ci`
+**Decided 2026-09-11 (Brandon): BOTH levers — #138 option 2, reasoning effort
+capped at `minimal`, AND #138 option 1, the completion budget raised
+1024 → 2048.** `[measured, CI on PR #234, 2026-09-11]` the first keyed `pnpm eval:ci`
 after #198 landed failed on the budget rather than on behaviour: **8 attempts
 finished `finishReason=length`**, and the two cases that opt into
 `failOnTruncation` — the safety-refusal essay and `corvus-subjects`' "which are
@@ -269,13 +271,41 @@ cost-ceiling change, no threshold to re-baseline — so it went first.
 
 `low` halved the damage but did not remove it: the safety essay still spent its
 whole allowance thinking, on both attempts, and still failed the run. The last
-two rows are the real choice, and they score **identically** — so `minimal` at
-1024 wins on the two axes that differ: it is **~3x faster** on that file (9.4s
-vs 29.7s) and it costs less per turn, since a doubled budget raises the ceiling
-every turn is billed against while a lower rung simply thinks less. The budget
-is therefore **unmoved**: `AI_MAX_COMPLETION_TOKENS` is still 1024 and
-`EVAL_MAX_OUTPUT_TOKENS` still mirrors it, and option 1 stays available,
-unspent, if a future block needs it.
+two rows are the real choice, and they score **identically** — so `minimal` is
+the rung: it is **~3x faster** on that file (9.4s vs 29.7s) and costs less per
+turn, since a lower rung simply thinks less.
+
+### …and then the budget moved too (#138 option 1)
+
+`[measured, CI, 2026-09-11]` `minimal` at 1024 was not the end of it. On CI the
+safety-essay refusal truncated on **both** attempts again — cut mid-sentence at
+`"…Here are three options — p…"` — while the same prompt passed **three times
+locally** (probe A, the full run, probe B). Everything else was clean: the
+truncation count went **8 → 2 → 0** for every other case, and the full run
+scored **91%**.
+
+So the residual distribution is precise and small: **one prompt of 54**, and it
+fails **roughly one run in four**. `[inference]` That shape is the tell. A
+prompt whose _visible_ answer varies in length run to run is not a prompt that
+thinks too much — thinking less cannot shorten an answer the model has already
+decided to write, and the local passes prove `minimal` is enough on most draws.
+It needs **room**, and it fit at 2048 in probe B.
+
+Hence both levers, which are not redundant — they cap different things:
+
+- **Effort (`minimal`)** removes the _hidden reasoning_ overspend. That is what
+  took 8 truncations to 2, and then to 0 for 53 of the 54 prompts. It costs
+  nothing per turn — the opposite; it is the faster, cheaper draw.
+- **Budget (2048)** removes the _visible answer_ overspend on the long tail.
+  Its cost is a higher per-turn ceiling: a turn that actually uses the room is
+  billed for it, and the worst case doubles. Most turns finish on `stop` far
+  under either number and are billed nothing extra.
+
+The cap stays **8000**, so `AI_MAX_COMPLETION_TOKENS` can still be tuned
+without code. `EVAL_MAX_OUTPUT_TOKENS` moves to 2048 with it, and the existing
+budget drift guard in `scripts/eval-harness.test.ts` now pins **2048** across
+`guardrails.ts`, the eval mirror and `.env.example` — the three must agree or
+the build fails.
 
 The wiring is one knob and one helper. `AI_REASONING_EFFORT` resolves in
 `getSecurityLimits()` (`src/lib/security/guardrails.ts`) beside
@@ -315,8 +345,9 @@ option 1's own decision.
 **The two candidates, as they stood before that decision:**
 
 1. **Raise the budget.** OpenAI's reasoning guide recommends reserving _at
-   least 25,000_ tokens for reasoning plus output on these models; 1024 is
-   two orders of magnitude under that. Raising it means moving
+   least 25,000_ tokens for reasoning plus output on these models; 1024 was
+   two orders of magnitude under that, and 2048 still is — this raise is sized
+   to the measured residual, not to the guide. Raising it means moving
    `AI_MAX_COMPLETION_TOKENS`, the `EVAL_MAX_OUTPUT_TOKENS` mirror, and the
    drift guard together, and it raises the per-turn cost ceiling.
 2. **Cap reasoning effort.** `@ai-sdk/openai` accepts
@@ -328,11 +359,12 @@ option 1's own decision.
    the allowance, but an unsupported value is an API-level rejection on every
    turn.
 
-Whichever lands, the acceptance test is a keyed run showing the safety-refusal
-case returning visible text at the chosen budget. (2) has now landed at
-`minimal`, and `[measured, keyed, 2026-09-11]` the safety file returns visible
-text on all four cases at 1024; (1) remains available and unmoved, and is the
-documented fallback if the full keyed run shows a quality regression.
+Both have now landed, in one commit: (2) at `minimal`, and (1) at 2048.
+`[measured, keyed, 2026-09-11]` the safety file returns visible text on all
+four cases, and the full keyed run scored 91% with the only residual
+truncation — one prompt, ~1 run in 4 — being what (1) was raised to absorb. The
+acceptance test is unchanged and still Brandon's: a keyed `pnpm eval:ci` at
+`--threshold 80` showing zero `EvalOutputBudgetError`.
 
 ## What Corvus is (#166)
 
@@ -546,7 +578,7 @@ actually _retrieves_ for a stack-shaped question, which is cosine similarity
 against real embeddings. The before/after run on production — four questions,
 the `proficiency` count read off the database first, then the backfill
 workflow, then the same four — is recorded on #165. Note also that a truncated
-or empty answer there is **#138**, not this: the 1024 budget is
+or empty answer there is **#138**, not this: the completion budget is
 `maxOutputTokens`, a retrieved passage is input and does not touch it, and the
 #165 eval block now passes `failOnTruncation` so a truncated turn fails loudly
 instead of scoring.

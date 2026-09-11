@@ -384,7 +384,8 @@ describe('eval harness wiring', () => {
 
   it('runs eval turns on production’s completion budget', () => {
     // #122 ROOT CAUSE, and the guard that stops it recurring. The harness ran
-    // at 512 output tokens while production passes 1024, and gpt-5-mini is a
+    // at 512 output tokens while production passed 1024 (2048 since #138
+    // option 1, 2026-09-11), and gpt-5-mini is a
     // reasoning model whose hidden reasoning tokens come out of that same
     // allowance — so the gate systematically produced turns that finished on
     // `length` with no visible text, which the empty-output floor then
@@ -417,7 +418,7 @@ describe('eval harness wiring', () => {
     )
 
     expect(productionDefault, 'guardrails.ts default must be readable').toBe(
-      1024,
+      2048,
     )
     expect(envExample, '.env.example must agree with it').toBe(
       productionDefault,

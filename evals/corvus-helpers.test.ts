@@ -91,7 +91,8 @@ describe.each([
 ])('%s', (_name, ask) => {
   it('gives the model production’s completion budget', async () => {
     // #122 ROOT CAUSE. This was 512 while production passes
-    // `limits.maxCompletionTokens` — 1024 by default (guardrails.ts,
+    // `limits.maxCompletionTokens` — 2048 by default since #138 option 1
+    // (guardrails.ts,
     // .env.example). gpt-5-mini is a reasoning model and its hidden reasoning
     // tokens come out of this same allowance, so 512 systematically produced
     // turns that finished on `length` with no text: PR #126's first keyed run
@@ -103,12 +104,12 @@ describe.each([
     await ask('who is brandon?')
 
     expect(generateTextMock).toHaveBeenCalledWith(
-      expect.objectContaining({ maxOutputTokens: 1024 }),
+      expect.objectContaining({ maxOutputTokens: 2048 }),
     )
   })
 
   it('gives the model production’s reasoning effort (#138 option 2)', async () => {
-    // The budget's other half. Hidden reasoning is billed against the 1024
+    // The budget's other half. Hidden reasoning is billed against the 2048
     // above, so an eval that thinks harder than a visitor's turn does is not
     // measuring the visitor's turn. Built by production's OWN helper, so the
     // namespace and the reasoning-model gate cannot drift from the route;
@@ -336,7 +337,7 @@ describe('formatOutputBudgetFailure', () => {
       attempts: 2,
     })
 
-    expect(message).toContain('1024')
+    expect(message).toContain('2048')
     expect(message).toContain('finishReason=length on all 2 attempts')
     expect(message).toContain('#138')
     expect(message).toContain('"Write my 2000-word history essay')

@@ -70,10 +70,10 @@ export type AskCorvusOptions = CorvusModelOption & TruncationPolicyOption
  *
  * @remarks MIRRORS PRODUCTION, and the mirror is the whole point. The chat
  * route hands `streamText` `limits.maxCompletionTokens`
- * (`src/app/api/ai/chat/route.ts`), which resolves to **1024** by default:
- * `toPositiveInt(env, 1024, 8000)` in `src/lib/security/guardrails.ts`, reading
+ * (`src/app/api/ai/chat/route.ts`), which resolves to **2048** by default:
+ * `toPositiveInt(env, 2048, 8000)` in `src/lib/security/guardrails.ts`, reading
  * `CORVUS_MAX_COMPLETION_TOKENS` then `AI_MAX_COMPLETION_TOKENS`, the latter
- * being the knob deploys actually set (`AI_MAX_COMPLETION_TOKENS=1024` in
+ * being the knob deploys actually set (`AI_MAX_COMPLETION_TOKENS=2048` in
  * `.env.example`). An eval that scores Corvus under a tighter budget than a
  * visitor gets is not measuring Corvus.
  *
@@ -103,7 +103,7 @@ export type AskCorvusOptions = CorvusModelOption & TruncationPolicyOption
  * `scripts/eval-harness.test.ts` pins the mirror against both sources, so
  * drift fails the build instead of quietly manufacturing empty rows again.
  */
-const EVAL_MAX_OUTPUT_TOKENS = 1024
+const EVAL_MAX_OUTPUT_TOKENS = 2048
 
 /**
  * The reasoning effort every eval turn runs at (#138 option 2).

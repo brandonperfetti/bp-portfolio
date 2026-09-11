@@ -205,7 +205,7 @@ beforeEach(() => {
     imageRatePerMinute: 2,
     maxMessageChars: 1500,
     maxMessages: 12,
-    maxCompletionTokens: 1024,
+    maxCompletionTokens: 2048,
     reasoningEffort: 'minimal',
     imageDailyLimit: 0,
     publicChatEnabled: true,
@@ -724,14 +724,14 @@ describe('POST /api/ai/chat — empty-reply fail-safe (#138)', () => {
     expect(recordedTransform()).toBeTypeOf('function')
     // The budget itself is untouched by this batch.
     expect(streamTextMock.mock.calls[0]?.[0]).toMatchObject({
-      maxOutputTokens: 1024,
+      maxOutputTokens: 2048,
     })
   })
 
   it('caps the reasoning effort that shares that budget (#138 option 2)', async () => {
     // The other half of the same allowance: on the Responses API hidden
     // reasoning is billed against `maxOutputTokens`, so an uncapped reasoning
-    // pass can spend the 1024 above and leave nothing for the answer —
+    // pass can spend the 2048 above and leave nothing for the answer —
     // `[measured, keyed, 2026-09-11]` effort-unset/1024 truncated 8 attempts
     // with two `EvalOutputBudgetError`s; `low`/1024 still lost the
     // safety-essay refusal; `minimal`/1024 cleared the safety file 4/4. The

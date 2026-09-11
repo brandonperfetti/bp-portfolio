@@ -137,8 +137,9 @@ export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]
  * @remarks `minimal`, decided by Brandon on 2026-09-11 (#138 option 2) from
  * three keyed probes. On the Responses API a reasoning model's hidden
  * reasoning is billed against the same `maxOutputTokens` allowance as the
- * visible answer, so at `maxCompletionTokens` = 1024 a turn that thinks hard
- * can finish `length` with half an answer or none.
+ * visible answer, so a turn that thinks hard can finish `length` with half an
+ * answer or none. The probes below all ran at the then-current 1024 budget;
+ * that budget is now 2048 (#138 option 1, same commit), and `minimal` stays.
  *
  * `[measured, keyed, 2026-09-11]` the numbers this value comes from:
  *
@@ -479,10 +480,18 @@ export function getSecurityLimits() {
     // AI_MAX_COMPLETION_TOKENS is the env knob deploys actually set today
     // (.env.example) — honor it as the last fallback so enforcing this
     // limit doesn't silently shrink replies.
+    //
+    // 1024 -> 2048 on 2026-09-11 (#138 option 1, alongside option 2's effort
+    // cap). `[measured, keyed, 2026-09-11]` at `minimal`/1024 exactly ONE
+    // prompt of 54 — the safety-essay refusal — still truncated, and
+    // nondeterministically: clean on three local runs, dead on BOTH attempts
+    // on CI, cut mid-sentence at "…Here are three options — p…". A visible
+    // answer whose length varies run to run cannot be fixed by thinking less;
+    // it needs room. It fit at 2048 in probe B. The cap stays 8000.
     maxCompletionTokens: toPositiveInt(
       process.env.CORVUS_MAX_COMPLETION_TOKENS ||
         process.env.AI_MAX_COMPLETION_TOKENS,
-      1024,
+      2048,
       8000,
     ),
     // #138 option 2 (Brandon, 2026-09-11). Sits beside the completion budget

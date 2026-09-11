@@ -330,7 +330,7 @@ describe('[measured] @ai-sdk/openai turns the helper’s object into reasoning.e
 
     const result = await provider(modelId).doGenerate({
       prompt: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }],
-      maxOutputTokens: 1024,
+      maxOutputTokens: 2048,
       providerOptions,
     })
 
@@ -344,7 +344,7 @@ describe('[measured] @ai-sdk/openai turns the helper’s object into reasoning.e
     )
 
     expect(body?.reasoning).toEqual({ effort: 'low' })
-    expect(body?.max_output_tokens).toBe(1024)
+    expect(body?.max_output_tokens).toBe(2048)
     expect(warnings).toEqual([])
   })
 
