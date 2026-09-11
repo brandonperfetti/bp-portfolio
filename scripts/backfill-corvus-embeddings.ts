@@ -236,6 +236,9 @@ async function run(): Promise<void> {
   // it. `scripts/corvus-backfill-workflow.test.ts` pins the workflow's STEPS
   // and secrets, not this script's step list, so it needs none either.
   try {
+    // No `req`, deliberately: the hooks forward theirs so the summary's `find`
+    // joins the save's transaction, but a repair tool has no request and wants
+    // a plain read of what is committed.
     await refreshTechStackSummary({ payload, db })
   } catch (error) {
     totals.failed += 1

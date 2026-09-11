@@ -244,9 +244,48 @@ describe('readTechStackSummaryRows', () => {
       overrideAccess: true,
     })
   })
+
+  it('omits the `req` key entirely when the caller has no request', async () => {
+    // The backfill is that caller. An explicit `req: undefined` is not the same
+    // thing as an absent key, so the shape is pinned rather than the value.
+    const payload = fakePayload(FOURTEEN)
+
+    await readTechStackSummaryRows(payload)
+
+    const args = payload.find.mock.calls[0][0] as Record<string, unknown>
+    expect(Object.hasOwn(args, 'req')).toBe(false)
+  })
+
+  it('forwards `req` so the read joins the caller’s transaction', async () => {
+    // `@payloadcms/db-postgres` runs with transactions on by default, so a
+    // Local API call without `req` takes a separate connection and would read
+    // the collection as it was BEFORE the save that triggered the refresh.
+    const payload = fakePayload(FOURTEEN)
+    const req = { id: 'req-1' } as unknown as Parameters<
+      typeof readTechStackSummaryRows
+    >[1]
+
+    await readTechStackSummaryRows(payload, req)
+
+    expect(payload.find).toHaveBeenCalledWith(
+      expect.objectContaining({ collection: 'tech-stack', req }),
+    )
+  })
 })
 
 describe('refreshTechStackSummary', () => {
+  it('forwards its `req` down to the `find`', async () => {
+    const db = createFakeDb([])
+    const payload = fakePayload(FOURTEEN)
+    const req = { id: 'req-2' } as unknown as Parameters<
+      typeof readTechStackSummaryRows
+    >[1]
+
+    await refreshTechStackSummary({ payload, db, req })
+
+    expect(payload.find).toHaveBeenCalledWith(expect.objectContaining({ req }))
+  })
+
   it('NAMES every row it had to skip, at warn level', async () => {
     // The wave-7 learning-10 trap, made loud: a technology Brandon believes is
     // a daily driver whose stored `proficiency` is `''` silently drops out of

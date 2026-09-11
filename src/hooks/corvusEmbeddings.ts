@@ -114,7 +114,10 @@ function drizzleOf(payload: unknown): CorvusEmbeddingsDb | null {
  *   refresh a summary of all rows, so this step re-reads the collection and
  *   re-composes one chunk carrying the whole `daily` tier. It is inside the
  *   existing `try` on purpose: a failure logs and leaves the stale summary,
- *   and never fails the save.
+ *   and never fails the save. The re-read forwards `req`, so it runs inside
+ *   the save's transaction and sees the save — the repo's convention for a
+ *   hook-side Local API read. Without it the summary would be composed from
+ *   pre-save rows.
  *
  * The provider call is awaited rather than fired and forgotten, bounded by
  * {@link HOOK_EMBEDDING_TIMEOUT_MS}: a floating promise in a serverless
@@ -228,7 +231,8 @@ export const refreshCorvusEmbeddings = (
       // `content_hash` before the provider is called, so editing a
       // technology's `notes` re-composes the same line of names and makes zero
       // embedding calls. The cost of this step on a no-op save is one `find`
-      // over ~50 rows plus one indexed SELECT.
+      // over ~50 rows plus one indexed SELECT — and that `find` runs on THIS
+      // request's transaction, because `req` is forwarded below.
       //
       // It shares `deadline` with the per-row sync above rather than starting
       // its own: the bound is a property of the save, so whatever the per-row
@@ -243,6 +247,10 @@ export const refreshCorvusEmbeddings = (
           refreshTechStackSummary({
             payload,
             db,
+            // `req` so the summary's `find` joins THIS save's transaction —
+            // without it the read takes its own connection and composes the
+            // summary from pre-save rows. See `readTechStackSummaryRows`.
+            req,
             abortSignal: deadline.signal,
           }),
           deadline.signal,
@@ -316,6 +324,10 @@ export const deleteCorvusEmbeddings = (
           refreshTechStackSummary({
             payload,
             db,
+            // `req` so the summary's `find` joins THIS delete's transaction —
+            // without it the read takes its own connection and still sees the
+            // row that was just deleted. See `readTechStackSummaryRows`.
+            req,
             abortSignal: deadline.signal,
           }),
           deadline.signal,

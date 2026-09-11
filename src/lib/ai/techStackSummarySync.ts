@@ -1,4 +1,4 @@
-import type { Payload } from 'payload'
+import type { Payload, PayloadRequest } from 'payload'
 
 import {
   CORVUS_TECH_STACK_SUMMARY_COLLECTION,
@@ -58,11 +58,26 @@ import {
  * (`isEmbeddable` returns `true` for every non-post), so there is no published
  * view to ask for — every row is the published row.
  *
+ * `req` is forwarded when the caller has one, because `@payloadcms/db-postgres`
+ * runs with transactions on by default (`src/payload.config.ts` sets no
+ * `transactionOptions`) and a Local API call WITHOUT `req` takes a separate
+ * connection outside the caller's transaction. From a hook that means reading
+ * the collection as it was BEFORE the save that triggered the refresh — an
+ * `afterChange` would compose the summary from pre-save rows, and an
+ * `afterDelete` would still see the deleted row. The repo's convention for a
+ * hook-side read is `req.payload.find({ …, req })`
+ * (`src/hooks/createPathRedirect.ts`). The backfill script has no request and
+ * passes none: it runs outside any transaction on purpose, which is what a
+ * repair tool wants.
+ *
  * @param payload - The Payload instance.
+ * @param req - The hook's Payload request, when there is one, so the read joins
+ * the caller's transaction.
  * @returns The rows, in Payload's default order.
  */
 export async function readTechStackSummaryRows(
   payload: Payload,
+  req?: PayloadRequest,
 ): Promise<TechStackSummaryRow[]> {
   const result = await payload.find({
     collection: 'tech-stack',
@@ -70,6 +85,10 @@ export async function readTechStackSummaryRows(
     limit: 0,
     pagination: false,
     overrideAccess: true,
+    // Spread rather than `req` — passing an explicit `undefined` key is not the
+    // same as omitting it for every Payload version, and the backfill's read
+    // must stay a plain out-of-transaction read.
+    ...(req ? { req } : {}),
   })
   // Through `unknown`: the generated `TechStack` type has no index signature,
   // and {@link TechStackSummaryRow} deliberately does — it is the "whatever
@@ -182,12 +201,20 @@ export async function syncTechStackSummaryEmbeddings(args: {
  * failure reads as a retrieval problem rather than a data one. So every
  * skipped row is named at `warn`, with its stored value, on every refresh.
  *
- * @param args - Payload instance, database handle, optional abort signal.
+ * `req` is optional and forwarded to the `find` only. A hook MUST pass it so
+ * the read runs inside the save's transaction and sees the save that triggered
+ * it; the backfill script deliberately passes nothing, because a repair tool
+ * has no request and wants a plain read. See
+ * {@link readTechStackSummaryRows} for the full reason.
+ *
+ * @param args - Payload instance, database handle, optional request, optional
+ * abort signal.
  * @returns A {@link SyncResult} describing what changed.
  */
 export async function refreshTechStackSummary(args: {
   payload: Payload
   db: CorvusEmbeddingsDb
+  req?: PayloadRequest
   abortSignal?: AbortSignal
 }): Promise<SyncResult> {
   const { payload, db } = args
@@ -199,7 +226,7 @@ export async function refreshTechStackSummary(args: {
   // Unbounded when no signal is passed, which is the backfill: a repair tool
   // should fail loudly and be re-run, not give up on a clock.
   const rows = await withDeadline(
-    readTechStackSummaryRows(payload),
+    readTechStackSummaryRows(payload, args.req),
     args.abortSignal,
   )
   const composition = chunkTechStackSummary(rows)

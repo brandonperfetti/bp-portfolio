@@ -450,6 +450,36 @@ describe('8. re-emits the daily-driver summary on tech-stack writes (#165)', () 
     expect(order).toEqual(['per-row', 'summary'])
   })
 
+  it('forwards the hook’s `req` so the summary reads THIS transaction', async () => {
+    // Transactions are on by default under `@payloadcms/db-postgres`, so a
+    // summary `find` without `req` takes its own connection and composes from
+    // PRE-save rows — the save that triggered the refresh would be invisible
+    // to it. Identity, not `expect.anything()`: a fresh object would be a
+    // different transaction.
+    syncDocumentEmbeddingsMock.mockResolvedValue(synced)
+    refreshTechStackSummaryMock.mockResolvedValue(synced)
+    const { args } = changeArgs({ doc: { id: 9 }, previousDoc: { id: 9 } })
+
+    await refreshCorvusEmbeddings('tech-stack')(args)
+
+    expect(refreshTechStackSummaryMock.mock.calls[0][0].req).toBe(
+      (args as unknown as { req: unknown }).req,
+    )
+  })
+
+  it('afterDelete forwards the hook’s `req` too', async () => {
+    // Same reason, opposite direction: without `req` the read runs outside the
+    // delete's transaction and still SEES the row that was just deleted.
+    refreshTechStackSummaryMock.mockResolvedValue(synced)
+    const { args } = deleteArgs()
+
+    await deleteCorvusEmbeddings('tech-stack')(args)
+
+    expect(refreshTechStackSummaryMock.mock.calls[0][0].req).toBe(
+      (args as unknown as { req: unknown }).req,
+    )
+  })
+
   it.each(['posts', 'projects', 'uses', 'work-history'] as const)(
     'does not re-emit on a %s write',
     async (collection) => {
