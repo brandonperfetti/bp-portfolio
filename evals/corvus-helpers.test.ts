@@ -338,7 +338,9 @@ describe('formatOutputBudgetFailure', () => {
     })
 
     expect(message).toContain('2048')
-    expect(message).toContain('finishReason=length on all 2 attempts')
+    expect(message).toContain(
+      'final attempt ended with finishReason=length after 2 attempts',
+    )
     expect(message).toContain('#138')
     expect(message).toContain('"Write my 2000-word history essay')
     expect(message).toContain('"I am not able to write th"')

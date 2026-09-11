@@ -436,13 +436,28 @@ export interface CorvusChatProps {
    * that does not lose their words.
    */
   starterPrompt?: string
+  /**
+   * Whether this instance claims the page-wide `/` focus shortcut.
+   *
+   * @remarks Defaults to `true`, which is exactly what this component did
+   * before the prop existed — `/corvus` passes nothing and its behaviour is
+   * unchanged. The listener is on `window`, so it is a PAGE-WIDE claim on a
+   * single key, and the CMS block can put this component on any page: a block
+   * instance dropped onto `/articles` would hijack the `/` that
+   * `ArticlesExplorer` already owns for its filter field, and two block
+   * instances on one page would fight over focus. A caller that is not the
+   * page's primary chat surface passes `false`, and then no listener is
+   * registered at all.
+   */
+  globalShortcut?: boolean
 }
 
 /**
  * Corvus chat client on `useChat` + streamdown (replaces the v3 manual
  * `ReadableStream` reader over a hand-rolled NDJSON protocol).
  *
- * @remarks Retained v3 niceties: `/` focuses the input, Enter submits
+ * @remarks Retained v3 niceties: `/` focuses the input (unless the caller
+ * releases the key with `globalShortcut={false}`), Enter submits
  * (Shift+Enter for newline), textarea autosize, assistant copy buttons, and a
  * reduced-motion-aware intro (no entrance animation when reduced motion is
  * set). Presentation is built on our own reconstructed
@@ -472,6 +487,7 @@ export default function CorvusChat({
   subtitle = 'Prefix your prompt with image: or Dali: to generate an image.',
   headingLevel = 'h1',
   starterPrompt,
+  globalShortcut = true,
 }: CorvusChatProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   // The agent name's tag. Capitalised local because JSX reads a lowercase
@@ -524,8 +540,13 @@ export default function CorvusChat({
   // gate again.
   const signInRequired = isSignInRequiredError(error)
 
-  // `/` focuses the chat input from anywhere on the page (v3 behavior).
+  // `/` focuses the chat input from anywhere on the page (v3 behavior), but
+  // only for the instance that CLAIMS the key — see `globalShortcut`. The flag
+  // is in the dependency array and guards the registration itself, so a
+  // `false` caller adds no `window` listener rather than adding one that
+  // no-ops.
   useEffect(() => {
+    if (!globalShortcut) return
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const inField =
@@ -539,7 +560,7 @@ export default function CorvusChat({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [globalShortcut])
 
   const autosize = useCallback(() => {
     const el = inputRef.current

@@ -104,11 +104,40 @@ describe('getOrCreateSessionId', () => {
   })
 
   it('returns undefined when there is no storage at all (server render, where globalThis.sessionStorage is absent)', () => {
-    // `null`, not `undefined`: an explicit `undefined` argument re-triggers
-    // the default parameter, which is exactly the jsdom storage this case
-    // is meant to be without. The shipped path reaches the same guard when
-    // the default expression itself evaluates to undefined.
+    // `null`, not `undefined`: an explicit `undefined` argument takes the
+    // `globalThis.sessionStorage` fallback, which is exactly the jsdom storage
+    // this case is meant to be without. The shipped path reaches the same
+    // guard when that fallback itself evaluates to undefined.
     expect(getOrCreateSessionId(null as unknown as Storage)).toBeUndefined()
+  })
+
+  it('survives a globalThis.sessionStorage GETTER that throws, with no argument', () => {
+    // The failure a default parameter could not catch: `= globalThis.sessionStorage`
+    // is evaluated before the body, so a `SecurityError` from the getter — a
+    // partitioned iframe, blocked site data — escaped the `try` and would have
+    // taken the Sentry init down with it. Resolving inside the `try` is the fix,
+    // and this is the only test shape that can tell the two apart.
+    const original = Object.getOwnPropertyDescriptor(
+      globalThis,
+      'sessionStorage',
+    )
+    Object.defineProperty(globalThis, 'sessionStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('denied', 'SecurityError')
+      },
+    })
+    try {
+      expect(() => getOrCreateSessionId()).not.toThrow()
+      expect(getOrCreateSessionId()).toBeUndefined()
+    } finally {
+      if (original) {
+        Object.defineProperty(globalThis, 'sessionStorage', original)
+      } else {
+        // @ts-expect-error — restoring the absent-property state jsdom had.
+        delete globalThis.sessionStorage
+      }
+    }
   })
 
   it('is gated on isSessionIdAllowed, which ships open (Sentry outside consent) — and is the ONLY place to close it', async () => {

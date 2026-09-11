@@ -713,6 +713,30 @@ describe('chunkTechStackSummary (#165)', () => {
     }
   })
 
+  it('keeps the "other entries" sentence VERBATIM when nothing was skipped', () => {
+    const { chunks, skipped } = chunkTechStackSummary(rows(FOURTEEN))
+
+    expect(skipped).toEqual([])
+    expect(chunks[0].content).toContain(
+      `Other entries on that page are marked ${TECH_PROFICIENCY_LABELS.proficient} or lower, not ${TECH_PROFICIENCY_LABELS.daily}.`,
+    )
+  })
+
+  it('DROPS that sentence when a row was skipped, because it would be false', () => {
+    // A skipped row is one whose tier the composer could not read, so "other
+    // entries are marked Proficient or lower" is a confident claim about
+    // exactly the rows nobody classified. The daily line is untouched.
+    const { chunks, skipped } = chunkTechStackSummary([
+      ...rows(FOURTEEN),
+      { id: 99, name: 'Deno', proficiency: 'occasionally' },
+    ])
+
+    expect(skipped).toHaveLength(1)
+    expect(chunks[0].content).not.toContain('Other entries on that page')
+    expect(chunks[0].content).toContain('the complete Daily driver tier')
+    expect(chunks[0].content.split('\n')).toHaveLength(2)
+  })
+
   it('cites /tech, the same page the per-row chunks cite', () => {
     const { chunks } = chunkTechStackSummary(rows(['Next.js']))
 

@@ -38,7 +38,7 @@ export const CorvusChatBlock: Block = {
       options: [...CORVUS_CHAT_VARIANT_OPTIONS],
       admin: {
         description:
-          'How tall the chat frame is. Every option is a fixed height — never a share of the screen — so the block cannot push the rest of the page out of the fold.',
+          'How tall the chat frame is. Every option is a fixed height — never a share of the screen — and the conversation scrolls inside that frame, so the block takes the same amount of the page however long the chat gets.',
       },
     },
     {

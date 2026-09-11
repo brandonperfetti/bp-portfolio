@@ -291,6 +291,11 @@ export interface OutputBudgetFailureReport {
  * message is someone who ran `pnpm eval:ci` and now has to decide whether the
  * budget moved or the prompt grew. The remedy is #138's, not this run's.
  *
+ * The wording says "final attempt", not "all N attempts", because the throw
+ * site only ever inspects the LAST `finishReason` — an earlier attempt may
+ * have failed some other way, and claiming otherwise would send the reader
+ * looking for a truncation that never happened.
+ *
  * @param report - The prompt, the surviving text and the attempt count.
  * @returns The error message.
  */
@@ -303,7 +308,7 @@ export function formatOutputBudgetFailure(
       : `only ${JSON.stringify(clip(report.text, 120))}`
   return [
     `[corvus-eval] harness error: the completion budget (${EVAL_MAX_OUTPUT_TOKENS} tokens) ended this turn`,
-    `finishReason=length on all ${report.attempts} attempts, leaving ${survived}`,
+    `final attempt ended with finishReason=length after ${report.attempts} attempts, leaving ${survived}`,
     'a half-emitted answer is not a score — see #138 for the budget decision',
     `prompt: ${JSON.stringify(clip(report.prompt, 100))}`,
   ].join(' · ')

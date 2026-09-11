@@ -117,28 +117,44 @@ export function isSessionIdAllowed(): boolean {
  * privacy modes and embedded contexts, and a Sentry init must never be the
  * reason a page fails to boot.
  *
- * @param storage - Storage to use; defaults to `globalThis.sessionStorage`.
+ * **The `globalThis.sessionStorage` read is INSIDE the `try`**, not a default
+ * parameter value. A default is evaluated before the body runs, so in the
+ * contexts this function exists for — a partitioned iframe, a browser
+ * configured to block site data — the `SecurityError` the getter throws would
+ * escape past the `try` this docblock promises and take the Sentry init down
+ * with it. Resolving it inside is what makes the promise true, and it changes
+ * nothing else: an explicitly passed `storage` is still used as-is and still
+ * short-circuits when falsy.
+ *
+ * @param storage - Storage to use; when omitted, `globalThis.sessionStorage` is
+ * read inside the `try`.
  * @returns A stable-per-tab v4 UUID, or `undefined` when storage or
  * `crypto.randomUUID` is unavailable, or when
  * {@link isSessionIdAllowed} is false.
  */
-export function getOrCreateSessionId(
-  storage: Storage | undefined = globalThis.sessionStorage,
-): string | undefined {
-  if (!isSessionIdAllowed() || !storage) return undefined
+export function getOrCreateSessionId(storage?: Storage): string | undefined {
+  if (!isSessionIdAllowed()) return undefined
 
   try {
-    const existing = storage.getItem(SENTRY_SESSION_ID_STORAGE_KEY)
+    // `=== undefined`, not `??`: this reproduces the default-parameter
+    // semantics exactly (an explicit `null` stays `null` and short-circuits
+    // below), with only the EVALUATION moved inside the `try`.
+    const resolved = storage === undefined ? globalThis.sessionStorage : storage
+    if (!resolved) return undefined
+
+    const existing = resolved.getItem(SENTRY_SESSION_ID_STORAGE_KEY)
     if (existing) return existing
 
     const created = createSessionId()
     if (!created) return undefined
 
-    storage.setItem(SENTRY_SESSION_ID_STORAGE_KEY, created)
+    resolved.setItem(SENTRY_SESSION_ID_STORAGE_KEY, created)
     return created
   } catch {
     // Storage disabled (Safari private mode, partitioned third-party
-    // context, a browser configured to block site data). No id, no user,
+    // context, a browser configured to block site data) — including a
+    // `globalThis.sessionStorage` GETTER that throws, which is why the read
+    // above is here and not in a default parameter. No id, no user,
     // no error — issues simply keep reading 0 users for that visitor.
     return undefined
   }

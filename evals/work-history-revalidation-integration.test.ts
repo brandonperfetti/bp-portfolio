@@ -142,7 +142,14 @@ describe.skipIf(!connectionString)(
       })
     }, 120_000)
 
-    afterAll(cleanup)
+    // Destroy the pool as well as the rows: without it the suite holds an
+    // open Postgres connection after the last assertion and vitest waits on it
+    // — the sibling `redirect-capture-identity-integration.test.ts` already
+    // tears down this way.
+    afterAll(async () => {
+      await cleanup()
+      await payload?.db?.destroy?.()
+    }, 60_000)
 
     beforeEach(() => {
       mocks.revalidatePath.mockReset()

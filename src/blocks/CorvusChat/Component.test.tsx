@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -344,5 +344,18 @@ describe('corvusChat block — #158/#179 modal behaviour in a NARROW column', ()
     expect(rail.className).toContain('lg:sticky')
     const block = within(rail).getByRole('heading', { level: 2 })
     expect(block.textContent).toBe('Corvus')
+  })
+})
+
+describe('corvusChat block — the page-wide / shortcut (CodeRabbit #234)', () => {
+  it('does not hijack the page-wide / shortcut', () => {
+    // An editor can drop this block on any page, and `CorvusChat`'s `/`
+    // listener is on `window` — on `/articles` it would steal the key
+    // `ArticlesExplorer` owns for its filter field. The block releases it.
+    render(<CorvusChatBlockComponent variant="full" heading="Corvus" />)
+
+    fireEvent.keyDown(window, { key: '/' })
+
+    expect(screen.getByLabelText('Message Corvus')).not.toHaveFocus()
   })
 })

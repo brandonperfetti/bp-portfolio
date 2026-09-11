@@ -145,7 +145,10 @@ describe.skipIf(!connectionString)(
       try {
         await clean()
       } finally {
-        await client.end()
+        // Optional-call: when `beforeAll` failed before `new Client`, an
+        // unguarded `client.end()` throws a TypeError here and REPLACES the
+        // real setup error in the report.
+        await client?.end()
       }
     })
 
@@ -194,6 +197,68 @@ describe.skipIf(!connectionString)(
       // The agreement that keeps the restated predicates honest: the tagged
       // total is the sum of the two detail queries, not an independent count
       // that happens to look right today.
+      expect(tagged).toBe(pages.rowCount! + posts.rowCount!)
+      expect(tagged).toBe(baseline + 2)
+    }, 60_000)
+
+    it('finds a child under a parent whose _status is NULL (the IS DISTINCT FROM guard)', async () => {
+      // The regression guard `scripts/audit-served-prefix.sql` argues for in
+      // prose: `_status` is nullable (`DEFAULT 'draft'`, no NOT NULL), so
+      // `parent._status <> 'published'` evaluates to NULL for these rows and
+      // drops them — the audit would answer "0 rows" for a database that has
+      // the defect. `IS DISTINCT FROM` is what keeps them. A NULL gets in only
+      // by a write that went around the publish guards, which is exactly how
+      // the production violations arose, so this is the shape that matters
+      // most and the one a `<>` would hide.
+      await clean()
+
+      const parent = await client.query(
+        `INSERT INTO pages (title, slug, path, _status, updated_at, created_at)
+         VALUES ($1, $1, $1, NULL, now(), now()) RETURNING id`,
+        [`${MARKER}-null-parent`],
+      )
+      const parentId = parent.rows[0].id as number
+
+      await client.query(
+        `INSERT INTO pages (title, slug, path, parent_id, _status, updated_at, created_at)
+         VALUES ($1, $1, $2, $3, 'published', now(), now())`,
+        [
+          `${MARKER}-null-child`,
+          `${MARKER}-null-parent/${MARKER}-null-child`,
+          parentId,
+        ],
+      )
+      await client.query(
+        `INSERT INTO posts (title, slug, path, parent_id, _status, updated_at, created_at)
+         VALUES ($1, $1, $2, $3, 'published', now(), now())`,
+        [
+          `${MARKER}-null-post`,
+          `${MARKER}-null-parent/${MARKER}-null-post`,
+          parentId,
+        ],
+      )
+
+      const [pagesQuery, postsQuery] = statements()
+      const pages = await client.query(pagesQuery)
+      const posts = await client.query(postsQuery)
+      const tagged = await total()
+
+      expect(pages.rows).toEqual([
+        expect.objectContaining({
+          page_slug: `${MARKER}-null-child`,
+          served_path: `${MARKER}-null-parent/${MARKER}-null-child`,
+          parent_slug: `${MARKER}-null-parent`,
+          parent_status: null,
+        }),
+      ])
+      expect(posts.rows).toEqual([
+        expect.objectContaining({
+          post_slug: `${MARKER}-null-post`,
+          parent_status: null,
+        }),
+      ])
+      // And the tagged total COUNTS them — the third statement restates the
+      // predicates, so it is its own place for the `<>` to creep back in.
       expect(tagged).toBe(pages.rowCount! + posts.rowCount!)
       expect(tagged).toBe(baseline + 2)
     }, 60_000)

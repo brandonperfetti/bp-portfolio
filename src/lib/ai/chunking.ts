@@ -669,6 +669,12 @@ export interface TechStackSummaryComposition {
  * a passage that says "these are all of them" makes the duplicate read as
  * detail rather than as a second, shorter list.
  *
+ * The third sentence is DROPPED whenever `skipped` is non-empty. It asserts
+ * something about every other row on the page, and a skipped row is precisely
+ * one whose tier this composer could not read — leaving the sentence in would
+ * embed a confident claim about rows nobody classified. The daily line stays
+ * exactly as true as it was; only the claim about the remainder goes.
+ *
  * **It costs nothing against #138.** The 1024-token ceiling is
  * `maxOutputTokens`, a COMPLETION budget; a retrieved passage is input and
  * does not touch it `[source: evals/corvus-helpers.ts, src/lib/security/guardrails.ts]`.
@@ -713,11 +719,21 @@ export function chunkTechStackSummary(
 
   const dailyLabel = TECH_PROFICIENCY_LABELS[DAILY_DRIVER_PROFICIENCY]
   const secondLabel = TECH_PROFICIENCY_LABELS[SUMMARY_SECOND_TIER]
+  // The third sentence is omitted when anything was SKIPPED, because it would
+  // then be a claim the composer cannot make: a skipped row is one whose tier
+  // is `''` or unrecognised, so "other entries are marked <second tier> or
+  // lower" is false of exactly the rows this composition could not read. The
+  // clean case keeps the sentence verbatim — it is the double-counting
+  // mitigation the docblock argues for.
   const content = [
     `${dailyLabel}s: ${daily.join(', ')}.`,
     `That is the complete ${dailyLabel} tier on Brandon Perfetti's /tech page — all ${daily.length} of them, not a sample.`,
-    `Other entries on that page are marked ${secondLabel} or lower, not ${dailyLabel}.`,
-  ].join('\n')
+    skipped.length
+      ? null
+      : `Other entries on that page are marked ${secondLabel} or lower, not ${dailyLabel}.`,
+  ]
+    .filter(Boolean)
+    .join('\n')
 
   return {
     chunks: [

@@ -334,13 +334,22 @@ above answered for `low` and `minimal`; both ran clean, so the "an unsupported
 value fails every turn" risk the 2026-09-03 comment flagged is retired for
 these two.
 
-**What is still outstanding** is quality, not truncation: the `minimal` probe
-covered `safety.eval.ts` only (4 cases). The remaining step is a **full keyed
-`pnpm eval:ci` at `--threshold 80`**, which is the check for the other 50
-cases — a rung that thinks less could cost a `site-facts` or `scope` answer
-what it gained on the refusal. If any block regresses there, the measured
-fallback is `low` + 2048 (the fourth row above), and the budget move becomes
-option 1's own decision.
+**Resolved, 2026-09-11.** The step that was outstanding here — a full keyed
+`pnpm eval:ci` at `--threshold 80` over the other 50 cases, because a rung that
+thinks less could cost a `site-facts` or `scope` answer what it gained on the
+refusal — has now run. `[measured, keyed, 2026-09-11]` it scored **91%** with
+**zero truncations locally**, and the CI Evalite check is green on `8d2dc7f` at
+`minimal` / 2048 `[measured, CI, 2026-09-11]` (run 34642530697). No block regressed below the
+threshold, so the `low` + 2048 fallback was not taken.
+
+Two things stay on the watch list rather than being closed:
+
+- **`site-facts` moved 86% → 81% at `minimal`.** Still above the threshold, and
+  the block to read first if a future run dips — it is the one that pays for
+  thinking less.
+- **`AI_REASONING_EFFORT=low` is the env-only fallback.** It needs no code
+  change and no deploy; it is the first lever to pull if `minimal` stops
+  holding, with the budget already sized for it.
 
 **The two candidates, as they stood before that decision:**
 
@@ -361,10 +370,12 @@ option 1's own decision.
 
 Both have now landed, in one commit: (2) at `minimal`, and (1) at 2048.
 `[measured, keyed, 2026-09-11]` the safety file returns visible text on all
-four cases, and the full keyed run scored 91% with the only residual
-truncation — one prompt, ~1 run in 4 — being what (1) was raised to absorb. The
-acceptance test is unchanged and still Brandon's: a keyed `pnpm eval:ci` at
-`--threshold 80` showing zero `EvalOutputBudgetError`.
+four cases. Brandon's acceptance test — a keyed `pnpm eval:ci` at
+`--threshold 80` showing zero `EvalOutputBudgetError` — **has been met**: the
+full keyed run scored 91% with no truncation, which is the same run recorded
+under "Resolved" above. The residual truncation noted while (1) was being sized
+(one prompt, ~1 run in 4 at the old budget) is what 2048 was raised to absorb,
+and it did not recur.
 
 ## What Corvus is (#166)
 

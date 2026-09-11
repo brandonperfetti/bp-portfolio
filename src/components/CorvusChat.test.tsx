@@ -252,4 +252,15 @@ describe('CorvusChat', () => {
 
     expect(screen.getByLabelText('Message Corvus')).toHaveFocus()
   })
+
+  it('does NOT claim / when globalShortcut is false', () => {
+    // The listener is on `window`, so an instance that does not own the page
+    // would otherwise hijack a key another surface already owns — the CMS
+    // block is exactly that caller.
+    render(<CorvusChat globalShortcut={false} />)
+
+    fireEvent.keyDown(window, { key: '/' })
+
+    expect(screen.getByLabelText('Message Corvus')).not.toHaveFocus()
+  })
 })

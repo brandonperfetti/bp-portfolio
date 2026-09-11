@@ -158,7 +158,10 @@ describe.skipIf(!connectionString)(
       try {
         await cleanup()
       } finally {
-        await client.end()
+        // Optional-call: when `beforeAll` failed before `new Client`, an
+        // unguarded `client.end()` throws a TypeError here and REPLACES the
+        // real setup error in the report.
+        await client?.end()
       }
     })
 

@@ -27,6 +27,12 @@ import type { CorvusChatBlock } from '@/payload-types'
  * - **`headingLevel` is `h2`, in both host contexts**
  *   ({@link CORVUS_CHAT_BLOCK_HEADING_LEVEL}) — a page hosting this block keeps
  *   exactly one `<h1>`, and `h2` is the only level that can never be a skip.
+ * - **The block releases the page-wide `/` shortcut** (`globalShortcut={false}`).
+ *   An editor can drop this block on any page, and the listener `CorvusChat`
+ *   registers for `/corvus` is on `window`: on `/articles` it would hijack the
+ *   `/` that `ArticlesExplorer` already owns for its filter field, and two
+ *   block instances on one page would fight over focus. `/corvus` passes
+ *   nothing and keeps the shortcut.
  * - **The block carries `.corvus-surface` itself**
  *   ({@link CORVUS_CHAT_BLOCK_SURFACE_CLASS}) — Corvus looks like Corvus
  *   wherever an editor drops it, instead of inheriting a skin no page-builder
@@ -64,6 +70,7 @@ export function CorvusChatBlockComponent({
         title={headingText}
         headingLevel={CORVUS_CHAT_BLOCK_HEADING_LEVEL}
         starterPrompt={starter}
+        globalShortcut={false}
       />
     </section>
   )
