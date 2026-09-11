@@ -4,6 +4,7 @@ import { ArticlesArchive } from '@/blocks/ArticlesArchive/config'
 import { CallToAction } from '@/blocks/CallToAction/config'
 import { Carousel } from '@/blocks/Carousel/config'
 import { ContactForm } from '@/blocks/ContactForm/config'
+import { CorvusChatBlock } from '@/blocks/CorvusChat/config'
 import { Container } from '@/blocks/Container/config'
 import { Content } from '@/blocks/Content/config'
 import { FaqList } from '@/blocks/FaqList/config'
@@ -45,6 +46,7 @@ export const pageBuilderBlocks: Block[] = [
   ContactForm,
   Container,
   Content,
+  CorvusChatBlock,
   FaqList,
   FeatureCardGrid,
   Heading,

@@ -384,6 +384,17 @@ function CorvusReplyLink({
  */
 const CORVUS_MARKDOWN_COMPONENTS = { a: CorvusReplyLink }
 
+/**
+ * Heading levels the agent header's name may render at.
+ *
+ * @remarks Deliberately a closed set of three rather than a hand-narrowed
+ * slice of React's intrinsic elements: the name is a heading, and the only
+ * question is which rank. `h1` is the page-owning case (`/corvus`), `h2` the
+ * block case (`src/blocks/CorvusChat`), and `h3` exists for a future surface
+ * that genuinely nests under a section heading.
+ */
+export type CorvusChatHeadingLevel = 'h1' | 'h2' | 'h3'
+
 export interface CorvusChatProps {
   /**
    * The compact in-card agent header's name — CMS-driven (`page?.title`)
@@ -394,6 +405,37 @@ export interface CorvusChatProps {
   title?: string
   /** The agent header's subtitle line, one row below `title`. */
   subtitle?: string
+  /**
+   * The heading rank `title` renders at.
+   *
+   * @remarks Defaults to `'h1'`, which is exactly what this component emitted
+   * before the prop existed — `/corvus` passes nothing and its DOM is
+   * unchanged. A caller that is NOT the page's primary content must pass a
+   * lower rank, or the page ends up with two `<h1>`s: an a11y/SEO defect that
+   * is invisible in a screenshot (#192 finding 2). Only the tag changes; the
+   * classes, the `data-slot` and the text are identical at every rank, so this
+   * is an outline control and not a size control.
+   */
+  headingLevel?: CorvusChatHeadingLevel
+  /**
+   * Text to pre-fill the composer with.
+   *
+   * @remarks **The composer only, and only as the visitor's own draft.** It
+   * seeds `input` state, exactly as if the visitor had typed it: it is
+   * editable, clearable, and nothing is sent until they submit — at which
+   * point it travels as a normal `user` message through the same
+   * `sendMessage` path as typed or dictated text. It never becomes a `system`
+   * message and never reaches the prompt: the system prompt is server-enforced
+   * and `/api/ai/chat`'s body schema is `{ messages }` and nothing else
+   * (`src/app/api/ai/chat/route.ts`), so there is no field for it to travel in
+   * even if this component tried. `CorvusChat.starterPrompt.test.tsx` asserts
+   * that from the wire, not from this docblock.
+   *
+   * Read once, as the initial state: a later change to the prop does not
+   * overwrite what the visitor has since typed, which is the only behaviour
+   * that does not lose their words.
+   */
+  starterPrompt?: string
 }
 
 /**
@@ -416,8 +458,9 @@ export interface CorvusChatProps {
  * below) — this component's own utility classes are the zinc/teal default
  * and stay that way outside `.corvus-surface` (e.g. in Storybook).
  *
- * Owns the page's compact in-card agent header (raven avatar, `title` as an
- * `<h1>`, `subtitle`, a green "online" dot) — `CorvusPage` no longer renders
+ * Owns the page's compact in-card agent header (raven avatar, `title` at
+ * `headingLevel` — `<h1>` unless a caller lowers it, `subtitle`, a green
+ * "online" dot) — `CorvusPage` no longer renders
  * a separate hero-style header, so this component is the single source of
  * that identity band. Also owns the Web Speech voice-input mic button (#80)
  * via {@link useSpeechInput}: transcribed speech lands in the same composer
@@ -427,9 +470,17 @@ export interface CorvusChatProps {
 export default function CorvusChat({
   title = 'Corvus',
   subtitle = 'Prefix your prompt with image: or Dali: to generate an image.',
+  headingLevel = 'h1',
+  starterPrompt,
 }: CorvusChatProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const [input, setInput] = useState('')
+  // The agent name's tag. Capitalised local because JSX reads a lowercase
+  // identifier as a literal element name, not as a variable.
+  const HeadingTag = headingLevel
+  // Seeded once (see `starterPrompt`): `useState`'s initial value is read on
+  // the first render only, which is what makes the starter a draft the visitor
+  // owns rather than a value that keeps reasserting itself.
+  const [input, setInput] = useState(starterPrompt ?? '')
   // True only while a dictation session is actively feeding the composer.
   // Cleared on send so a late final transcript can't repopulate the box after
   // it's been cleared (the "voice message doesn't clear on send" bug).
@@ -592,7 +643,9 @@ export default function CorvusChat({
       {/* Compact in-card agent header (replaces the separate hero-style
           header/constellation backdrop the page used to render — that
           "went overboard"; this is the whole identity band now). `title`
-          is the page's one accessible `<h1>`. */}
+          is the page's one accessible heading — `<h1>` by default, which is
+          what `/corvus` renders; a caller that is not the page's primary
+          content passes a lower `headingLevel` (#217). */}
       <div
         data-slot="agent-header"
         className="mb-3 flex shrink-0 items-center gap-3 border-b border-zinc-100 pb-3 dark:border-zinc-700/40"
@@ -605,12 +658,12 @@ export default function CorvusChat({
           <RavenMark aria-hidden="true" className="h-5 w-5" />
         </div>
         <div className="min-w-0">
-          <h1
+          <HeadingTag
             data-slot="agent-name"
             className="truncate text-[15px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-100"
           >
             {title}
-          </h1>
+          </HeadingTag>
           <p
             data-slot="agent-subtitle"
             className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400"

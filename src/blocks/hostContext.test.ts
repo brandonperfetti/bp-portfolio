@@ -43,6 +43,7 @@ const COLUMN_ELIGIBLE_BLOCK_DIRS: Record<string, string> = {
   articlesArchive: 'ArticlesArchive',
   carousel: 'Carousel',
   contactForm: 'ContactForm',
+  corvusChat: 'CorvusChat',
   cta: 'CallToAction',
   faqList: 'FaqList',
   featureCardGrid: 'FeatureCardGrid',

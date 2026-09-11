@@ -55,6 +55,30 @@ Payload is the single source of truth for site content. Admin at `/admin`
 - **Projects**, **TechStack** (name/category/proficiency/logo/url/githubRepo),
   **Uses** (category-grouped tools), **Categories**, **Tags**, **Media**
   (Blob-backed), **Users** (admin operators).
+- **`corvusChat`** (#217 phase 1, `[2026-09-11]`) puts the Corvus assistant on
+  any page — including inside a `container` → `column`, which is the placement
+  it was built for. Three fields: `variant` (`compact` 24rem / `sidebar` 32rem /
+  `full` 44rem), an optional `heading` (the agent's name) and an optional
+  `starterPrompt`. **Height comes from the variant, never from the viewport and
+  never from an editor-entered number** — `CorvusChat`'s root is `h-full`, and
+  against an auto-height grid item that resolves to `auto`, so without a frame
+  the card grows unbounded and the conversation never becomes a scroll region
+  (`[measured]` 367px empty → 1883px with 1500px of content, zero scroll owners;
+  with the block, root is a flat 512px and `[data-slot='conversation']` owns the
+  scroll). **The block carries `.corvus-surface` itself**, so a placed Corvus
+  looks like Corvus wherever it lands rather than inheriting a skin the page
+  builder never applies; the argument is recorded in
+  `src/blocks/CorvusChat/variants.ts` and in the block's Storybook docs. The
+  agent's name renders as an `h2` in both host contexts, so a page hosting the
+  block keeps exactly one `<h1>`. `starterPrompt` **pre-fills the composer and
+  nothing else** — it is the visitor's editable draft, it is sent only when they
+  press send, and it travels as a `user` message; `/api/ai/chat`'s body schema
+  is still `{ messages }` and phase 1 does not touch it (page-context grounding
+  is phase 2). The select carries an explicit `enumName`
+  (`enum_corvus_chat_variant`) for the reason `ArticlesArchive/config.ts`
+  records. Storage: four tables plus one enum
+  (`20260911_152336_issue_217_corvus_chat_block`), the same four-table shape
+  every block takes here — registering it for columns added none.
 - **`postRollup`** (#152) is the block a section or topic landing page uses to
   show _its_ articles rather than the site's newest ones. `source` is
   `by-category` (published posts carrying the chosen topic — the one that works

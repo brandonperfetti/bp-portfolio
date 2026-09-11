@@ -303,6 +303,7 @@ export interface Page {
     | ContactFormBlock
     | ContainerBlock
     | ContentBlock
+    | CorvusChatBlock
     | FaqListBlock
     | FeatureCardGridBlock
     | HeadingBlock
@@ -402,6 +403,7 @@ export interface Post {
         | ContactFormBlock
         | ContainerBlock
         | ContentBlock
+        | CorvusChatBlock
         | FaqListBlock
         | FeatureCardGridBlock
         | HeadingBlock
@@ -769,6 +771,7 @@ export interface ColumnBlock {
         | CallToActionBlock
         | CarouselBlock
         | ContactFormBlock
+        | CorvusChatBlock
         | FaqListBlock
         | FeatureCardGridBlock
         | HeadingBlock
@@ -791,6 +794,27 @@ export interface ColumnBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'column';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "CorvusChatBlock".
+ */
+export interface CorvusChatBlock {
+  /**
+   * How tall the chat frame is. Every option is a fixed height — never a share of the screen — so the block cannot push the rest of the page out of the fold.
+   */
+  variant: 'compact' | 'sidebar' | 'full';
+  /**
+   * The name shown in the chat's header row. Defaults to Corvus. Rendered as an h2, so a page keeps exactly one h1.
+   */
+  heading?: string | null;
+  /**
+   * Optional opening question, pre-typed into the message box. The visitor can edit or clear it, and nothing is sent until they press send — this is a suggestion, not an instruction to Corvus.
+   */
+  starterPrompt?: string | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'corvusChat';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2071,6 +2095,7 @@ export interface PagesSelect<T extends boolean = true> {
         contactForm?: T | ContactFormBlockSelect<T>;
         container?: T | ContainerBlockSelect<T>;
         content?: T | ContentBlockSelect<T>;
+        corvusChat?: T | CorvusChatBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
         heading?: T | HeadingBlockSelect<T>;
@@ -2236,6 +2261,7 @@ export interface ColumnBlockSelect<T extends boolean = true> {
         cta?: T | CallToActionBlockSelect<T>;
         carousel?: T | CarouselBlockSelect<T>;
         contactForm?: T | ContactFormBlockSelect<T>;
+        corvusChat?: T | CorvusChatBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
         heading?: T | HeadingBlockSelect<T>;
@@ -2254,6 +2280,17 @@ export interface ColumnBlockSelect<T extends boolean = true> {
         videoEmbed?: T | VideoEmbedBlockSelect<T>;
         workHistoryCard?: T | WorkHistoryCardBlockSelect<T>;
       };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "CorvusChatBlock_select".
+ */
+export interface CorvusChatBlockSelect<T extends boolean = true> {
+  variant?: T;
+  heading?: T;
+  starterPrompt?: T;
   id?: T;
   blockName?: T;
 }
@@ -2556,6 +2593,7 @@ export interface PostsSelect<T extends boolean = true> {
         contactForm?: T | ContactFormBlockSelect<T>;
         container?: T | ContainerBlockSelect<T>;
         content?: T | ContentBlockSelect<T>;
+        corvusChat?: T | CorvusChatBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
         heading?: T | HeadingBlockSelect<T>;

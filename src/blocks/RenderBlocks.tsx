@@ -5,6 +5,7 @@ import { CallToActionBlockComponent } from '@/blocks/CallToAction/Component'
 import { CarouselComponent } from '@/blocks/Carousel/Component'
 import { ContactFormComponent } from '@/blocks/ContactForm/Component'
 import { ContainerBlockComponent } from '@/blocks/Container/Component'
+import { CorvusChatBlockComponent } from '@/blocks/CorvusChat/Component'
 import { FaqListComponent } from '@/blocks/FaqList/Component'
 import { NewsletterSignupComponent } from '@/blocks/NewsletterSignup/Component'
 import { StatsComponent } from '@/blocks/Stats/Component'
@@ -130,6 +131,14 @@ export function RenderBlocks({
             case 'content':
               return (
                 <ContentBlockComponent key={key} {...block} hosted={hosted} />
+              )
+            case 'corvusChat':
+              return (
+                <CorvusChatBlockComponent
+                  key={key}
+                  {...block}
+                  hosted={hosted}
+                />
               )
             case 'featureCardGrid':
               return (
