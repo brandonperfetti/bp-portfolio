@@ -112,6 +112,30 @@ const retrieve = (query: string) =>
   markSiteSubject(query, withAboutCorvusSnippet(query, fixtureRetrieve(query)))
 
 /**
+ * The same corpus, plus the daily-driver summary chunk (#165).
+ *
+ * @remarks Scoped to the block below rather than applied to `retrieve`, and
+ * that scoping is the point: the summary is what the "what does Brandon use"
+ * block exists to measure, and leaving the Corvus-subject and site-subject
+ * blocks on the corpus their numbers were recorded against means any movement
+ * there stays attributable to something other than this ticket. The retrieval
+ * COMPETITION the summary introduces against #167's repository passage is real
+ * and is measured on Brandon's keyed run, not here — this tier scores by
+ * query-term coverage, not cosine distance.
+ */
+const retrieveWithSummary = (query: string) =>
+  markSiteSubject(
+    query,
+    withAboutCorvusSnippet(
+      query,
+      createFixtureRetriever({
+        repos: GITHUB_REPO_FIXTURES,
+        summary: true,
+      })(query),
+    ),
+  )
+
+/**
  * Every question below was checked against {@link retrieve} before it was
  * written down `[measured, 2026-09-04]`: each returns passages above the
  * production floor, and the ones that must choose between candidates have both
@@ -208,7 +232,19 @@ evalite('Corvus subjects · what BRANDON uses, daily drivers first', {
         'His daily drivers include "TypeScript", "React" and "Next.js", per "/tech" — other entries there are marked proficient rather than daily.',
     },
   ],
-  task: (input) => askCorvusGrounded(input, { retrieve }),
+  // `failOnTruncation` (#198): #138's 1024-token completion ceiling truncated
+  // two of these exact three questions to EMPTY on 2026-09-09, and an empty
+  // answer scores 0 — which would read as "the summary chunk didn't work"
+  // when the mechanism is the reasoning pass eating the allowance before any
+  // visible text is emitted. Failing the turn as a harness error instead
+  // makes #138 impossible to mistake for #165. The chunk itself costs nothing
+  // against that budget: 1024 is `maxOutputTokens`, and a retrieved passage is
+  // input.
+  task: (input) =>
+    askCorvusGrounded(input, {
+      retrieve: retrieveWithSummary,
+      failOnTruncation: true,
+    }),
   // The pair: `containsExpectedFact` says the right names were there,
   // `leadsWithDailyDrivers` says they were where a ranking would put them.
   // #165's measured failure scored well on the first and badly on the second.

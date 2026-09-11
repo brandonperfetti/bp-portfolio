@@ -46,6 +46,45 @@ export type CorvusCollectionSlug = (typeof CORVUS_EMBEDDED_COLLECTIONS)[number]
 export const CORVUS_GITHUB_REPOS_COLLECTION = 'github-repos'
 
 /**
+ * The non-CMS collection holding the one daily-driver summary chunk (#165).
+ *
+ * @remarks A pseudo-collection, following {@link
+ * CORVUS_GITHUB_REPOS_COLLECTION} exactly, and for the same two reasons.
+ *
+ * **Why not a reserved `doc_id` inside `tech-stack`.** `deleteDocumentEmbeddings`
+ * and the per-row refresh hook key on `(collection, doc_id)`, so a summary
+ * living in the `tech-stack` namespace would sit inside the range the per-row
+ * path sweeps. A future "delete every `tech-stack` row and rebuild" — which
+ * `--drop-orphans` is entitled to do — would either take the summary with it
+ * or need a special case written into the generic store. Separating the
+ * collection puts that special case in one obvious place instead.
+ *
+ * **Why not a designated real row.** A `tech-stack` document named "Daily
+ * drivers" would render on `/tech` as a technology, which it is not. Rejected
+ * on the product surface, not on the index.
+ *
+ * Deliberately NOT a member of {@link CORVUS_EMBEDDED_COLLECTIONS}: that
+ * constant is the registry of collections carrying a refresh HOOK, and there
+ * is no Payload document here to hang one on. The summary is re-emitted by the
+ * `tech-stack` hook (see `src/hooks/corvusEmbeddings.ts`) and repaired by
+ * `scripts/backfill-corvus-embeddings.ts`, which is where its authority lives.
+ *
+ * `corvus_embeddings.collection` is a plain `text` column and `doc_id` a plain
+ * integer (#82 decision D3c anticipated exactly this), so nothing about this
+ * value needs a migration.
+ */
+export const CORVUS_TECH_STACK_SUMMARY_COLLECTION = 'tech-stack-summary'
+
+/**
+ * The summary's document id — there is exactly one such document.
+ *
+ * @remarks `1` rather than `0` because `doc_id` is `NOT NULL integer` with no
+ * further constraint and every other collection's ids start at 1; a zero would
+ * read as "unset" to anybody scanning the table by eye.
+ */
+export const TECH_STACK_SUMMARY_DOC_ID = 1
+
+/**
  * The section every role's Page lives under, and therefore the prefix a
  * `work-history` citation composes against (#137).
  *
@@ -65,9 +104,16 @@ const WORK_SECTION_PREFIX = '/work'
  * `github-repos` "document" is meaningless. What has to widen is the shape of
  * a ROW: `CorvusChunk` describes what gets written, and `github-repos` rows are
  * written by `src/lib/ai/githubReposSync.ts` through the same store primitives.
+ *
+ * `tech-stack-summary` (#165) widens it for the second time on the same
+ * grounds: the daily-driver summary is a ROW derived from every published
+ * `tech-stack` document and belonging to none of them, written by
+ * `src/lib/ai/techStackSummarySync.ts` through those same primitives.
  */
 export type CorvusChunkCollection =
-  CorvusCollectionSlug | typeof CORVUS_GITHUB_REPOS_COLLECTION
+  | CorvusCollectionSlug
+  | typeof CORVUS_GITHUB_REPOS_COLLECTION
+  | typeof CORVUS_TECH_STACK_SUMMARY_COLLECTION
 
 /**
  * One row destined for `corvus_embeddings`, minus the vector itself.
@@ -226,6 +272,11 @@ export function sourceUrlFor(
       const slug = typeof doc.slug === 'string' ? doc.slug.trim() : ''
       return slug ? `${WORK_SECTION_PREFIX}/${slug}` : '/'
     }
+    case CORVUS_TECH_STACK_SUMMARY_COLLECTION:
+      // The SAME citation the per-row chunks carry (#165). The summary is a
+      // different view of exactly the page those rows render on, so whichever
+      // passage answers, the visitor is sent to `/tech`.
+      return '/tech'
     case CORVUS_GITHUB_REPOS_COLLECTION: {
       const fullName = typeof ref === 'string' ? ref.trim() : ''
       // `owner/name`, both segments present. A half-formed value would
@@ -539,6 +590,155 @@ export function dailyDriverLead(
   if (proficiency !== DAILY_DRIVER_PROFICIENCY) return null
   const subject = name || 'This'
   return `${subject} is one of Brandon Perfetti's daily drivers — he reaches for it most days, rather than having only tried it.`
+}
+
+/**
+ * The second tier the summary is allowed to NAME, and the only one (#165).
+ *
+ * @remarks `TECH_PROFICIENCY_RANKING_RULE` asks for two tiers and says which
+ * is which, so naming `proficient` is what the prompt already expects. It
+ * stops there on purpose: the same rule says "never headline a Familiar or
+ * Exploring entry as something he uses", and a summary chunk carrying those
+ * two would hand the model exactly the material that rule forbids it to
+ * headline, in the passage most likely to be retrieved for a stack question.
+ * Carrying them is the one shape here that could make Corvus WORSE.
+ */
+const SUMMARY_SECOND_TIER: TechProficiency = 'proficient'
+
+/**
+ * One `tech-stack` row, as the summary composer needs to read it.
+ *
+ * @remarks Both fields are `unknown` and the rest of the document is tolerated,
+ * because this is fed straight from `payload.find` and from the eval fixtures:
+ * the composer's whole job on the way in is to decide what it can trust, not to
+ * assume the shape it was handed. See {@link chunkTechStackSummary}.
+ */
+export interface TechStackSummaryRow {
+  name?: unknown
+  proficiency?: unknown
+  [key: string]: unknown
+}
+
+/** What {@link chunkTechStackSummary} composed, and what it had to drop. */
+export interface TechStackSummaryComposition {
+  /** The chunk, or `[]` when no row carries the daily tier. */
+  chunks: CorvusChunk[]
+  /** Daily-driver names, in the order the rows arrived. */
+  daily: string[]
+  /**
+   * Rows that carry neither a usable name nor a known tier.
+   *
+   * @remarks Returned rather than logged, because this module is pure and the
+   * eval fixtures import it. `techStackSummarySync.ts` is what puts these
+   * through `payload.logger`. See the wave-7 learning this guards against:
+   * production data can be missing the field a shipped feature depends on with
+   * no error anywhere — all four `work-history` rows carried `slug: null` and
+   * would have re-embedded citing the homepage. The analogue here is a row
+   * Brandon believes is `daily` carrying `''`: the summary silently omits it
+   * and the failure looks like a retrieval problem rather than a data one.
+   */
+  skipped: Array<{ name: string; proficiency: string }>
+}
+
+/**
+ * Compose the one chunk that carries Brandon's whole daily-driver tier (#165).
+ *
+ * @remarks **The measured problem is granularity, not ranking.** Retrieval
+ * hands the model five passages (`DEFAULT_RETRIEVAL_TOP_K`) and a `tech-stack`
+ * row is one chunk each, so five slots can never carry fourteen daily drivers
+ * — `[measured, 2026-09-10]` fourteen per-row chunks are ~730 estimated tokens
+ * against a window of ~255. One passage can. That arithmetic is the whole
+ * design: no query-shape detection is added, so there is nothing new to
+ * collide with #167's routing, and the fix is measurable in the ordinary way.
+ *
+ * **It sits ALONGSIDE the per-row chunks, never replacing them.** The per-row
+ * chunk is the only passage carrying a technology's `Category`, `URL` and
+ * `Notes`, and four retrieval preconditions in `evals/scorers.test.ts` assert
+ * that a narrow question ("what proficiency does the tech stack give
+ * PostgreSQL") still lands on its own row. Deleting those would be a
+ * regression, not a trade-off. Nothing in this function touches them —
+ * `chunking.test.ts` pins that as an assertion rather than an intention.
+ *
+ * **Shape "C", compact by construction.** One line of names, one sentence
+ * saying the line is the COMPLETE tier, one sentence naming the second tier.
+ * `[measured, this tree's estimator]` ~87 estimated tokens for fourteen daily
+ * drivers — comfortably one chunk under {@link TARGET_CHUNK_TOKENS}, so no
+ * splitting logic applies and none is written. The "complete tier" sentence is
+ * also the double-counting mitigation: with the summary and two or three
+ * per-row daily chunks in the same window the model sees some names twice, and
+ * a passage that says "these are all of them" makes the duplicate read as
+ * detail rather than as a second, shorter list.
+ *
+ * **It costs nothing against #138.** The 1024-token ceiling is
+ * `maxOutputTokens`, a COMPLETION budget; a retrieved passage is input and
+ * does not touch it `[source: evals/corvus-helpers.ts, src/lib/security/guardrails.ts]`.
+ *
+ * `proficiency` is read defensively on purpose — see {@link
+ * TechStackSummaryComposition.skipped}.
+ *
+ * @param rows - Every published `tech-stack` row, in the order to name them.
+ * @returns The chunk plus what was named and what was dropped.
+ */
+export function chunkTechStackSummary(
+  rows: readonly TechStackSummaryRow[],
+): TechStackSummaryComposition {
+  const daily: string[] = []
+  const skipped: Array<{ name: string; proficiency: string }> = []
+
+  for (const row of rows) {
+    const name = str(row.name)
+    const proficiency = str(row.proficiency)
+    // An unnamed row cannot appear in a line of names, and a row whose tier is
+    // `''` or a value this module does not know is NOT silently treated as
+    // daily — it is reported. Both are the same failure from the summary's
+    // point of view: a row that should have been in the tier and is not.
+    //
+    // `Object.hasOwn`, not `in`: `in` walks the prototype chain, so a stored
+    // value of `toString` (or `constructor`, or `valueOf`) would test TRUE
+    // against an object literal and sail past this guard — neither named in the
+    // tier nor reported in `skipped`, which is exactly the silent swallow this
+    // channel exists to prevent. Unlikely from a Payload select field, and the
+    // guard's whole job is paranoia about what the database actually holds.
+    if (!name || !Object.hasOwn(TECH_PROFICIENCY_LABELS, proficiency)) {
+      skipped.push({ name, proficiency })
+      continue
+    }
+    if (proficiency === DAILY_DRIVER_PROFICIENCY) daily.push(name)
+  }
+
+  // No daily tier, no summary. Returning `[]` rather than a chunk saying "he
+  // has no daily drivers" is what lets the sync DELETE the row: an empty tier
+  // is a data state the index must reflect, not a sentence to embed.
+  if (!daily.length) return { chunks: [], daily, skipped }
+
+  const dailyLabel = TECH_PROFICIENCY_LABELS[DAILY_DRIVER_PROFICIENCY]
+  const secondLabel = TECH_PROFICIENCY_LABELS[SUMMARY_SECOND_TIER]
+  const content = [
+    `${dailyLabel}s: ${daily.join(', ')}.`,
+    `That is the complete ${dailyLabel} tier on Brandon Perfetti's /tech page — all ${daily.length} of them, not a sample.`,
+    `Other entries on that page are marked ${secondLabel} or lower, not ${dailyLabel}.`,
+  ].join('\n')
+
+  return {
+    chunks: [
+      {
+        collection: CORVUS_TECH_STACK_SUMMARY_COLLECTION,
+        docId: TECH_STACK_SUMMARY_DOC_ID,
+        chunkIndex: 0,
+        title: `${dailyLabel}s`,
+        content,
+        contentHash: hashChunkContent(content),
+        sourceUrl: sourceUrlFor(CORVUS_TECH_STACK_SUMMARY_COLLECTION),
+        // Public by construction, exactly as the per-row `tech-stack` chunks
+        // are: `/tech` is an anonymous page, and every name here is already
+        // rendered on it.
+        visibility: 'public',
+        publishedAt: null,
+      },
+    ],
+    daily,
+    skipped,
+  }
 }
 
 /**

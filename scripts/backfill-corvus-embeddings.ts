@@ -11,6 +11,7 @@ import {
   syncDocumentEmbeddings,
 } from '../src/lib/ai/embeddingsStore'
 import { getEmbeddingModelId } from '../src/lib/ai/embeddings'
+import { refreshTechStackSummary } from '../src/lib/ai/techStackSummarySync'
 import { canDropOrphans, orphanDeleteBounds } from './lib/orphan-guard.mjs'
 
 /**
@@ -209,6 +210,38 @@ async function run(): Promise<void> {
           `(untouched since ${bounds.notTouchedSince})`,
       )
     }
+  }
+
+  // #165 — the daily-driver summary, as one EXPLICIT step after the loop.
+  //
+  // Not a member of `CORVUS_EMBEDDED_COLLECTIONS`, and that constant is left
+  // alone: it is documented as "the single source of truth for which
+  // collections carry a refresh hook", and `tech-stack-summary` has no Payload
+  // document to hang a hook on. Adding it there would wire a hook onto a
+  // collection Payload knows nothing about — the same reason `github-repos`
+  // stays out of it.
+  //
+  // This step is the AUTHORITY for the summary: the `tech-stack` hook re-emits
+  // it on every write but is deliberately fail-open, so a hook that failed
+  // leaves a stale summary and says nothing anyone is watching. This is what
+  // repairs it. It runs on every backfill, orphan sweep or not, because a
+  // stale summary is a stale answer rather than a stale row.
+  //
+  // It fails LOUDLY — counted into `totals.failed`, which is what makes the
+  // run exit non-zero — for the reason this script's docblock gives: a hook
+  // must swallow, a repair tool must not.
+  //
+  // The `corvus-backfill.yml` workflow needs no change: it runs
+  // `pnpm corvus:backfill`, which runs this script, so the step travels with
+  // it. `scripts/corvus-backfill-workflow.test.ts` pins the workflow's STEPS
+  // and secrets, not this script's step list, so it needs none either.
+  try {
+    await refreshTechStackSummary({ payload, db })
+  } catch (error) {
+    totals.failed += 1
+    payload.logger.error(
+      `[backfill:corvus] tech-stack summary failed: ${String(error)}`,
+    )
   }
 
   payload.logger.info(

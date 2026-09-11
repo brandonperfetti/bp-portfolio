@@ -423,6 +423,68 @@ rows a failed hook left stale, and re-embeds everything after an
 different `model` as absent. The hash skip makes a re-run over an already
 current index nearly free, so running it is never the wrong call.
 
+### The daily-driver summary chunk (#165, 2026-09-11)
+
+`collection: 'tech-stack-summary'`, `doc_id` 1 — a second non-CMS
+pseudo-collection, holding exactly **one** chunk that names Brandon's whole
+`daily` tier in a single line, says that line is the complete tier, and names
+the `Proficient` tier in one closing sentence. It carries neither `Familiar`
+nor `Exploring`, because `TECH_PROFICIENCY_RANKING_RULE` forbids headlining
+those and the summary is the passage most likely to be retrieved for a stack
+question. It cites **`/tech`**, the same page the per-row chunks cite, and it
+sits **alongside** them — a narrow question ("what proficiency does the tech
+stack give PostgreSQL") still answers from that technology's own row, which is
+the only passage carrying its category, URL and notes.
+
+Why it exists: the measured problem was granularity, not ranking. Retrieval
+hands the model five passages and a technology is one chunk each, so five slots
+can never carry fourteen daily drivers — ~730 estimated tokens of tier against
+a window of ~255. One passage can, at ~82 estimated tokens for fourteen names
+`[measured, this tree's estimator]`. No query-shape detection is added, so
+nothing here collides with #167's routing.
+
+**Who refreshes it.** The `tech-stack` `afterChange` hook re-emits it after the
+per-row sync, inside the same `try`, so a failure logs and leaves the _stale_
+summary rather than failing the save; `afterDelete` does the same, because a
+deleted technology can shrink the tier. **One deadline covers the whole hook**:
+a single `createDeadline(HOOK_EMBEDDING_TIMEOUT_MS)` is shared by the per-row
+sync and the summary step, so a `tech-stack` save's worst case is that one
+budget however many steps run, and `withDeadline` extends it over the work an
+`AbortSignal` cannot reach by itself — the drizzle statements and the
+`payload.find` over the collection, which on a slow database is the likelier
+stall than the provider call. The ordinary save costs nothing — the
+line of names is unchanged by a `notes` edit, so `isContentUnchanged`
+short-circuits before the provider. `scripts/backfill-corvus-embeddings.ts`
+carries one explicit step after the collection loop and is the **authority**:
+it is what repairs a summary a fail-open hook never wrote. `corvus-backfill.yml`
+needs no change — it runs the script. `CORVUS_EMBEDDED_COLLECTIONS` is
+unchanged: it is the registry of collections carrying a hook, and this one has
+no Payload document.
+
+**Read the `proficiency` values before believing a count.** A row whose stored
+value is `''` or unknown is skipped and named at `warn` on every refresh. That
+is deliberate: without it, a technology missing from the answer looks like a
+retrieval problem rather than a data one.
+
+**The retrieval proof is a keyed run, not a test here.** The four tests that
+ship with this (three in `retrieval.test.ts`, one in `chunking.test.ts`) prove
+the routing and the "alongside" property; none of them can prove the summary
+actually _retrieves_ for a stack-shaped question, which is cosine similarity
+against real embeddings. The before/after run on production — four questions,
+the `proficiency` count read off the database first, then the backfill
+workflow, then the same four — is recorded on #165. Note also that a truncated
+or empty answer there is **#138**, not this: the 1024 budget is
+`maxOutputTokens`, a retrieved passage is input and does not touch it, and the
+#165 eval block now passes `failOnTruncation` so a truncated turn fails loudly
+instead of scoring.
+
+One framing correction while it is in view: the ticket's original question,
+"What tech do **you** use?", is addressed to **Corvus** under #167's subject
+rule and must be answered from the About-Corvus passage, never from Brandon's
+technology list. The acceptance criterion uses "What tech does **Brandon**
+use?", which is the right one — do not re-test the original phrasing and read a
+correct #167 answer as a #165 failure.
+
 ### Public GitHub repos as a collection (#147)
 
 `collection: 'github-repos'` is the first non-CMS collection in the index: one
