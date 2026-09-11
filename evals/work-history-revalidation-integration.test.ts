@@ -145,10 +145,15 @@ describe.skipIf(!connectionString)(
     // Destroy the pool as well as the rows: without it the suite holds an
     // open Postgres connection after the last assertion and vitest waits on it
     // — the sibling `redirect-capture-identity-integration.test.ts` already
-    // tears down this way.
+    // tears down this way. And it is in a `finally`, so a REJECTED cleanup
+    // still destroys the pool — otherwise the run hangs on an open connection
+    // on the very failure worth reporting.
     afterAll(async () => {
-      await cleanup()
-      await payload?.db?.destroy?.()
+      try {
+        await cleanup()
+      } finally {
+        await payload?.db?.destroy?.()
+      }
     }, 60_000)
 
     beforeEach(() => {
