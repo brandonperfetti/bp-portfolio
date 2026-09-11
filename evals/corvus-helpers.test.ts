@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { generateText } from 'ai'
+import type { LanguageModel } from 'ai'
 import type { MockInstance } from 'vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -74,11 +75,18 @@ function warnings(): string {
   return warn.mock.calls.map((call) => String(call[0])).join('\n')
 }
 
+/** The per-call options both entry points share, for the shared cases below. */
+type SharedAskOptions = { model?: LanguageModel }
+
 describe.each([
-  ['askCorvus', (prompt: string) => askCorvus(prompt)],
+  [
+    'askCorvus',
+    (prompt: string, options?: SharedAskOptions) => askCorvus(prompt, options),
+  ],
   [
     'askCorvusGrounded',
-    (prompt: string) => askCorvusGrounded(prompt, { retrieve }),
+    (prompt: string, options?: SharedAskOptions) =>
+      askCorvusGrounded(prompt, { retrieve, ...options }),
   ],
 ])('%s', (_name, ask) => {
   it('gives the model production’s completion budget', async () => {
@@ -96,6 +104,39 @@ describe.each([
 
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({ maxOutputTokens: 1024 }),
+    )
+  })
+
+  it('gives the model production’s reasoning effort (#138 option 2)', async () => {
+    // The budget's other half. Hidden reasoning is billed against the 1024
+    // above, so an eval that thinks harder than a visitor's turn does is not
+    // measuring the visitor's turn. Built by production's OWN helper, so the
+    // namespace and the reasoning-model gate cannot drift from the route;
+    // only the effort literal is mirrored, and
+    // `scripts/eval-harness.test.ts` pins that against `guardrails.ts` and
+    // `.env.example`.
+    respondWith(turn('A real answer about Brandon.'))
+
+    await ask('who is brandon?')
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerOptions: { openai: { reasoningEffort: 'minimal' } },
+      }),
+    )
+  })
+
+  it('sends no reasoningEffort for a non-reasoning matrix variant', async () => {
+    // `matrix.eval.ts` names a model per variant. Pointed at a non-reasoning
+    // one, the provider would warn "reasoningEffort is not supported for
+    // non-reasoning models" on every call — so the helper sends nothing, and
+    // a model comparison stays readable.
+    respondWith(turn('A real answer about Brandon.'))
+
+    await ask('who is brandon?', { model: 'gpt-4o' })
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({ providerOptions: {} }),
     )
   })
 

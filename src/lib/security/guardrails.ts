@@ -103,6 +103,93 @@ function toPositiveInt(
   return Math.min(parsed, maximum)
 }
 
+/**
+ * The reasoning-effort ladder the installed provider accepts.
+ *
+ * @remarks Copied from the provider, deliberately, and verified against it by
+ * test rather than by memory: `@ai-sdk/openai@3.0.87`
+ * `dist/index.d.ts:12` types the chat path's option as
+ * `"none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"`, and
+ * `dist/index.mjs:693` is the same list as a `z.enum`. The Responses path
+ * (the one Corvus runs on) types it loosely as `string`
+ * (`dist/index.d.ts:1087`) and forwards whatever it is given as
+ * `reasoning.effort` (`dist/index.mjs:5477-5482`), so nothing in the SDK
+ * would reject a typo — OpenAI would, on every turn. This list is the guard
+ * that stops a typo in an env var from being a production outage.
+ * `src/lib/ai/corvus.test.ts` pins it against the installed provider.
+ */
+export const REASONING_EFFORTS = [
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const
+
+/** One rung of {@link REASONING_EFFORTS}. */
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]
+
+/**
+ * The reasoning effort Corvus runs at when `AI_REASONING_EFFORT` is unset.
+ *
+ * @remarks `minimal`, decided by Brandon on 2026-09-11 (#138 option 2) from
+ * three keyed probes. On the Responses API a reasoning model's hidden
+ * reasoning is billed against the same `maxOutputTokens` allowance as the
+ * visible answer, so at `maxCompletionTokens` = 1024 a turn that thinks hard
+ * can finish `length` with half an answer or none.
+ *
+ * `[measured, keyed, 2026-09-11]` the numbers this value comes from:
+ *
+ * - effort unset (provider default), 1024 — **8 truncated attempts**, two
+ *   `failOnTruncation` cases dead on both attempts, 2 `EvalOutputBudgetError`
+ *   (CI on PR #234).
+ * - `low` / 1024, full `eval:ci` — **2 truncated attempts**, both of them the
+ *   safety-essay refusal, 1 `EvalOutputBudgetError`. Better, not clean.
+ * - `minimal` / 1024, safety file — **4/4 no truncation**, 75%, **9.4s**.
+ * - `low` / 2048, safety file — 4/4 no truncation, 75%, **29.7s**.
+ *
+ * `minimal` over a budget raise because the last two rows score the same and
+ * `minimal` is ~3x faster on that file at a lower per-turn cost — the budget
+ * (#138 option 1) stays where it is, unspent and available.
+ *
+ * Read by `scripts/eval-harness.test.ts` FROM THIS SOURCE, exactly as the
+ * completion budget is, so the eval mirror and `.env.example` cannot drift
+ * from it.
+ */
+export const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'minimal'
+
+/**
+ * Resolves an env string onto the reasoning-effort ladder.
+ *
+ * @param value - Raw env value, or `undefined` when unset.
+ * @param fallback - Effort to use when unset or unrecognized.
+ * @returns A value the provider accepts; never throws.
+ *
+ * Side effects:
+ * - Logs one `console.warn` for an unrecognized value.
+ *
+ * @remarks Never throws, and that is the point: this runs on the chat
+ * request path, and a fat-fingered env var must degrade to the default rather
+ * than 500 every Corvus turn. The warn is how the mistake still gets noticed.
+ */
+function toReasoningEffort(
+  value: string | undefined,
+  fallback: ReasoningEffort,
+): ReasoningEffort {
+  if (value === undefined) return fallback
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) return fallback
+  if ((REASONING_EFFORTS as readonly string[]).includes(normalized)) {
+    return normalized as ReasoningEffort
+  }
+  console.warn(
+    `[corvus] ignoring AI_REASONING_EFFORT=${JSON.stringify(value)} — expected one of ${REASONING_EFFORTS.join(', ')}; using ${fallback}`,
+  )
+  return fallback
+}
+
 function getDayKey(now = new Date()) {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`
 }
@@ -397,6 +484,14 @@ export function getSecurityLimits() {
         process.env.AI_MAX_COMPLETION_TOKENS,
       1024,
       8000,
+    ),
+    // #138 option 2 (Brandon, 2026-09-11). Sits beside the completion budget
+    // because it spends the same allowance: hidden reasoning tokens come out
+    // of `maxCompletionTokens`. Applied only to a reasoning model, by
+    // `corvusProviderOptions` (`src/lib/ai/corvus.ts`).
+    reasoningEffort: toReasoningEffort(
+      process.env.AI_REASONING_EFFORT,
+      DEFAULT_REASONING_EFFORT,
     ),
     imageDailyLimit: toPositiveInt(
       process.env.CORVUS_IMAGE_DAILY_LIMIT,

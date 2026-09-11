@@ -428,6 +428,53 @@ describe('eval harness wiring', () => {
     ).toBe(productionDefault)
   })
 
+  it('runs eval turns at production’s reasoning effort', () => {
+    // #138 option 2 (Brandon, 2026-09-11). The SECOND half of the same
+    // budget: on the Responses API a reasoning model's hidden reasoning is
+    // billed against `maxOutputTokens`, so the effort and the budget together
+    // decide whether an answer fits. `[measured, keyed, 2026-09-11]`
+    // effort-unset/1024 truncated 8 attempts and raised two
+    // `EvalOutputBudgetError`s (CI on PR #234); `low`/1024 cut that to 2
+    // attempts and one error (the safety-essay refusal); `minimal`/1024
+    // cleared the safety file 4/4 at 75% in 9.4s, matching `low`/2048's
+    // scores in a third of the time — so the default is `minimal` and the
+    // budget does not move.
+    //
+    // Same mirror, same reason, same guard as the budget above:
+    // `corvus-helpers.ts` holds a literal rather than calling
+    // `getSecurityLimits()`, because that reads process.env and would make
+    // the gate's effort depend on the shell. So this asserts the literal
+    // against BOTH sources of production's default.
+    const harness = readFileSync(join(EVAL_ROOT, 'corvus-helpers.ts'), 'utf8')
+    const evalEffort = /EVAL_REASONING_EFFORT\s*=\s*'([a-z]+)'/.exec(
+      harness,
+    )?.[1]
+
+    const guardrails = readFileSync(
+      join(REPO_ROOT, 'src/lib/security/guardrails.ts'),
+      'utf8',
+    )
+    const productionDefault =
+      /DEFAULT_REASONING_EFFORT:\s*ReasoningEffort\s*=\s*'([a-z]+)'/.exec(
+        guardrails,
+      )?.[1]
+
+    const envExample = /^AI_REASONING_EFFORT=([a-z]+)$/m.exec(
+      readFileSync(join(REPO_ROOT, '.env.example'), 'utf8'),
+    )?.[1]
+
+    expect(productionDefault, 'guardrails.ts default must be readable').toBe(
+      'minimal',
+    )
+    expect(envExample, '.env.example must agree with it').toBe(
+      productionDefault,
+    )
+    expect(
+      evalEffort,
+      'the eval reasoning effort must mirror production, or the gate scores a Corvus that thinks harder than a visitor’s does',
+    ).toBe(productionDefault)
+  })
+
   it('passes no temperature, which the gate’s model would discard', () => {
     // Removed on this branch after PR #126 logged
     // `AI SDK Warning (openai.responses / gpt-5-mini): The feature

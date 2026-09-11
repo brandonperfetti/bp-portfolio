@@ -241,8 +241,78 @@ The same change removes the undocumented 0.5 floor in the ungrounded
 keyed run is a **new baseline**: an answer that refuses nothing now scores 0
 there, as its grounded namesake in `scorers.ts` always has.
 
-**Still open (Brandon's call, #138).** The fail-safe stops the blank bubble;
-it does not stop the truncation. Two candidates, neither implemented:
+**Decided 2026-09-11 (Brandon, #138 option 2): reasoning effort is capped at
+`minimal`, and the budget stays at 1024.** `[measured, CI on PR #234, 2026-09-11]` the first keyed `pnpm eval:ci`
+after #198 landed failed on the budget rather than on behaviour: **8 attempts
+finished `finishReason=length`**, and the two cases that opt into
+`failOnTruncation` — the safety-refusal essay and `corvus-subjects`' "which are
+his daily drivers?" — hit `length` on **both** of their attempts, raising two
+`EvalOutputBudgetError`s and exiting 1 with the 80% threshold otherwise passed.
+That is the harness refusing to score half-answers, exactly as #198 designed
+it, and it is the distribution this decision rests on.
+
+Effort **before** a budget raise, deliberately. The two options attack
+different halves of the same allowance: option 1 buys more room (and more cost
+per turn, at every turn), while capping the effort spends less of the room
+already there. Effort is the cheaper, reversible move — one env value, no
+cost-ceiling change, no threshold to re-baseline — so it went first.
+
+**The rung is `minimal`, from three keyed probes `[measured, keyed,
+2026-09-11]`:**
+
+| Effort / budget                 | Scope                 | Truncation                                                                                          | Score      | Wall clock |
+| ------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------- | ---------- | ---------- |
+| unset (provider default) / 1024 | full `eval:ci`        | **8 attempts**, 2 prompts dead on both attempts                                                     | — (exit 1) | —          |
+| `low` / 1024                    | full `eval:ci`        | **2 attempts** — one prompt, the safety-essay refusal, on both attempts → 1 `EvalOutputBudgetError` | — (exit 1) | —          |
+| `minimal` / 1024                | `safety.eval.ts` only | **4/4 clean**                                                                                       | 75%        | **9.4s**   |
+| `low` / 2048                    | `safety.eval.ts` only | 4/4 clean                                                                                           | 75%        | 29.7s      |
+
+`low` halved the damage but did not remove it: the safety essay still spent its
+whole allowance thinking, on both attempts, and still failed the run. The last
+two rows are the real choice, and they score **identically** — so `minimal` at
+1024 wins on the two axes that differ: it is **~3x faster** on that file (9.4s
+vs 29.7s) and it costs less per turn, since a doubled budget raises the ceiling
+every turn is billed against while a lower rung simply thinks less. The budget
+is therefore **unmoved**: `AI_MAX_COMPLETION_TOKENS` is still 1024 and
+`EVAL_MAX_OUTPUT_TOKENS` still mirrors it, and option 1 stays available,
+unspent, if a future block needs it.
+
+The wiring is one knob and one helper. `AI_REASONING_EFFORT` resolves in
+`getSecurityLimits()` (`src/lib/security/guardrails.ts`) beside
+`maxCompletionTokens`, against the provider's ladder
+(`none | minimal | low | medium | high | xhigh | max`), defaulting to
+`DEFAULT_REASONING_EFFORT = 'minimal'`; an unrecognized value logs one `warn` and
+falls back rather than throwing, because this resolves on the chat request path
+and a typo in an env var must not take Corvus down. `corvusProviderOptions()`
+(`src/lib/ai/corvus.ts`) turns that into
+`{ openai: { reasoningEffort } }` — and into `{}` unless the model is a
+reasoning model by the provider's own predicate (a `gpt-5*` id that is not
+`gpt-5-chat*`, or `o1`/`o3`/`o4-mini`, `@ai-sdk/openai@3.0.87`
+`dist/index.mjs:45`), because the Responses path warns
+"reasoningEffort is not supported for non-reasoning models" for anything else
+(`dist/index.mjs:5514-5518`). The chat route and `evals/corvus-helpers.ts`
+build their options through that one function; the harness mirrors only the
+effort literal (`EVAL_REASONING_EFFORT`), on the same gate-stability grounds as
+the budget, and `scripts/eval-harness.test.ts` pins it against `guardrails.ts`
+and `.env.example` together.
+
+`[measured, offline, 2026-09-11]` the installed provider does turn that object
+into `reasoning: { effort: … }` on the wire and emits no warning for it —
+`src/lib/ai/corvus.test.ts` captures the request through a stub `fetch`, so the
+check needs no key. Whether OpenAI _accepts_ the rung is what the keyed probes
+above answered for `low` and `minimal`; both ran clean, so the "an unsupported
+value fails every turn" risk the 2026-09-03 comment flagged is retired for
+these two.
+
+**What is still outstanding** is quality, not truncation: the `minimal` probe
+covered `safety.eval.ts` only (4 cases). The remaining step is a **full keyed
+`pnpm eval:ci` at `--threshold 80`**, which is the check for the other 50
+cases — a rung that thinks less could cost a `site-facts` or `scope` answer
+what it gained on the refusal. If any block regresses there, the measured
+fallback is `low` + 2048 (the fourth row above), and the budget move becomes
+option 1's own decision.
+
+**The two candidates, as they stood before that decision:**
 
 1. **Raise the budget.** OpenAI's reasoning guide recommends reserving _at
    least 25,000_ tokens for reasoning plus output on these models; 1024 is
@@ -259,7 +329,10 @@ it does not stop the truncation. Two candidates, neither implemented:
    turn.
 
 Whichever lands, the acceptance test is a keyed run showing the safety-refusal
-case returning visible text at the chosen budget.
+case returning visible text at the chosen budget. (2) has now landed at
+`minimal`, and `[measured, keyed, 2026-09-11]` the safety file returns visible
+text on all four cases at 1024; (1) remains available and unmoved, and is the
+documented fallback if the full keyed run shows a quality regression.
 
 ## What Corvus is (#166)
 

@@ -11,10 +11,18 @@ import { CORVUS_EMPTY_REPLY_FAILSAFE } from '@/lib/ai/emptyReplyFailsafe'
  * separately in `@/lib/security/chatGate.test.ts`.
  */
 
-vi.mock('@/lib/ai/corvus', () => ({
-  getCorvusModel: vi.fn(() => ({ modelId: 'mock-model' })),
-  CORVUS_SYSTEM_PROMPT: 'You are Corvus.',
-}))
+vi.mock('@/lib/ai/corvus', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/ai/corvus')>()
+  return {
+    getCorvusModel: vi.fn(() => ({ modelId: 'mock-model' })),
+    CORVUS_SYSTEM_PROMPT: 'You are Corvus.',
+    // NOT stubbed (#138 option 2). The question these tests answer is which
+    // object the route hands `streamText`, and a stub would answer it with
+    // whatever the stub was told to say — including for the reasoning-model
+    // gate, whose whole job is to return `{}` sometimes.
+    corvusProviderOptions: actual.corvusProviderOptions,
+  }
+})
 
 const streamTextMock = vi.fn()
 const validateUIMessagesMock = vi.fn()
@@ -198,6 +206,7 @@ beforeEach(() => {
     maxMessageChars: 1500,
     maxMessages: 12,
     maxCompletionTokens: 1024,
+    reasoningEffort: 'minimal',
     imageDailyLimit: 0,
     publicChatEnabled: true,
     publicImageEnabled: true,
@@ -717,6 +726,53 @@ describe('POST /api/ai/chat — empty-reply fail-safe (#138)', () => {
     expect(streamTextMock.mock.calls[0]?.[0]).toMatchObject({
       maxOutputTokens: 1024,
     })
+  })
+
+  it('caps the reasoning effort that shares that budget (#138 option 2)', async () => {
+    // The other half of the same allowance: on the Responses API hidden
+    // reasoning is billed against `maxOutputTokens`, so an uncapped reasoning
+    // pass can spend the 1024 above and leave nothing for the answer —
+    // `[measured, keyed, 2026-09-11]` effort-unset/1024 truncated 8 attempts
+    // with two `EvalOutputBudgetError`s; `low`/1024 still lost the
+    // safety-essay refusal; `minimal`/1024 cleared the safety file 4/4. The
+    // effort comes from `getSecurityLimits()`, so `AI_REASONING_EFFORT` is
+    // the one knob.
+    await POST(makeRequest(validBody))
+
+    expect(streamTextMock.mock.calls[0]?.[0]).toMatchObject({
+      providerOptions: { openai: { reasoningEffort: 'minimal' } },
+    })
+  })
+
+  it('passes whatever effort the guardrails resolved, not a literal', async () => {
+    getSecurityLimitsMock.mockReturnValue({
+      ...getSecurityLimitsMock(),
+      reasoningEffort: 'low',
+    })
+
+    await POST(makeRequest(validBody))
+
+    expect(streamTextMock.mock.calls[0]?.[0]).toMatchObject({
+      providerOptions: { openai: { reasoningEffort: 'low' } },
+    })
+  })
+
+  it('sends no reasoningEffort when the model is not a reasoning model', async () => {
+    // `@ai-sdk/openai@3.0.87` warns "reasoningEffort is not supported for
+    // non-reasoning models" on every such turn and sends nothing, so the
+    // route must not ask. Pointing `AI_CHAT_MODEL` at `gpt-4o` is the real
+    // way that happens.
+    vi.stubEnv('AI_CHAT_MODEL', 'gpt-4o')
+
+    await POST(makeRequest(validBody))
+
+    expect(streamTextMock.mock.calls[0]?.[0]).toMatchObject({
+      providerOptions: {},
+    })
+    expect(
+      (streamTextMock.mock.calls[0]?.[0] as { providerOptions: object })
+        .providerOptions,
+    ).not.toHaveProperty('openai')
   })
 
   it('turns an empty length-terminated completion into a visible reply', async () => {

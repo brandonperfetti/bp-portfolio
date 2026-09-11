@@ -6,7 +6,12 @@ import { type FinishReason, type LanguageModel, generateText } from 'ai'
 // not edit — can keep its own aliased imports; eval sources still import
 // relatively, and `scripts/eval-harness.test.ts` fails the build on any `@/`
 // specifier written in this directory.
-import { getCorvusModel, CORVUS_SYSTEM_PROMPT } from '../src/lib/ai/corvus'
+import {
+  corvusProviderOptions,
+  getCorvusModel,
+  modelIdOf,
+  CORVUS_SYSTEM_PROMPT,
+} from '../src/lib/ai/corvus'
 import { buildGroundedSystem } from '../src/lib/ai/groundedSystem'
 import type { CorvusSnippet } from '../src/lib/ai/retrieval'
 
@@ -99,6 +104,32 @@ export type AskCorvusOptions = CorvusModelOption & TruncationPolicyOption
  * drift fails the build instead of quietly manufacturing empty rows again.
  */
 const EVAL_MAX_OUTPUT_TOKENS = 1024
+
+/**
+ * The reasoning effort every eval turn runs at (#138 option 2).
+ *
+ * @remarks MIRRORS PRODUCTION's default, for exactly the reason the budget
+ * above does: hidden reasoning is billed against {@link
+ * EVAL_MAX_OUTPUT_TOKENS}, so an eval that lets the model think harder than a
+ * visitor's turn does is not measuring the visitor's turn — it is measuring a
+ * more expensive Corvus that then runs out of allowance in a different place.
+ * Production resolves `DEFAULT_REASONING_EFFORT` in
+ * `src/lib/security/guardrails.ts` (`AI_REASONING_EFFORT`,
+ * `AI_REASONING_EFFORT=minimal` in `.env.example`), which carries the three
+ * keyed probes this value was chosen from — `[measured, keyed, 2026-09-11]`
+ * `minimal`/1024 cleared the safety file 4/4 with no truncation at 75% in
+ * 9.4s, where `low`/1024 still lost the safety-essay refusal.
+ *
+ * A mirrored literal, not `getSecurityLimits().reasoningEffort`, on the same
+ * grounds as the budget: that function reads `process.env`, which would make
+ * the gate's effort depend on the shell it runs in. The SHAPE is not
+ * mirrored — `corvusProviderOptions` is imported from production, so the
+ * object handed to the provider, and the reasoning-model predicate that
+ * decides whether to send it at all, are the route's and not a copy.
+ * `scripts/eval-harness.test.ts` pins this literal against `guardrails.ts`
+ * and `.env.example`.
+ */
+const EVAL_REASONING_EFFORT = 'minimal'
 
 /**
  * Finish reasons that mean the model stopped because it was done.
@@ -355,6 +386,15 @@ async function runCorvusTurn(options: {
       system: options.system,
       prompt: options.prompt,
       maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS,
+      // Built by production's own helper, from the model this turn actually
+      // runs on — so a `matrix.eval.ts` variant pointed at a non-reasoning
+      // model sends no `reasoningEffort` and collects no provider warning,
+      // while the gate's `gpt-5-mini` gets the same object the chat route
+      // sends.
+      providerOptions: corvusProviderOptions(
+        EVAL_REASONING_EFFORT,
+        modelIdOf(options.model),
+      ),
     })
     text = result.text
     finishReason = result.finishReason
