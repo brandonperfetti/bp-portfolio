@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  DEFAULT_REASONING_EFFORT,
+  REASONING_EFFORTS,
   getRequestClientIp,
+  getSecurityLimits,
   isAllowedRequestSource,
 } from '@/lib/security/guardrails'
 
@@ -177,5 +180,76 @@ describe('verifyRequestTurnstileToken', () => {
       await import('@/lib/security/guardrails')
     const result = await verifyRequestTurnstileToken({ token: 'tok' })
     expect(result).toEqual({ required: true, ok: false })
+  })
+})
+
+/**
+ * Reasoning-effort resolver (#138 option 2, Brandon 2026-09-11).
+ *
+ * @remarks The knob exists because hidden reasoning is billed against the
+ * same `maxCompletionTokens` allowance as the visible answer on a reasoning
+ * model, so `AI_REASONING_EFFORT` and `AI_MAX_COMPLETION_TOKENS` spend one
+ * budget between them. The properties pinned here are the ones a bad deploy
+ * would break: the default is the value the eval mirror and `.env.example`
+ * are drift-guarded against (`scripts/eval-harness.test.ts`), and an
+ * unrecognized value must degrade rather than throw — this runs on the chat
+ * request path, and a fat-fingered env var taking Corvus down would be a
+ * worse outage than the truncation it was set to fix.
+ */
+describe('getSecurityLimits — reasoningEffort', () => {
+  it('defaults to the documented effort when the env is unset', () => {
+    vi.stubEnv('AI_REASONING_EFFORT', undefined as unknown as string)
+
+    expect(getSecurityLimits().reasoningEffort).toBe(DEFAULT_REASONING_EFFORT)
+    // `[measured, keyed, 2026-09-11]` the rung Brandon's probes settled on:
+    // `minimal`/1024 cleared the safety file 4/4 with no truncation at 75% in
+    // 9.4s, where `low`/1024 still lost the safety-essay refusal on both
+    // attempts, and `low`/2048 scored the same for ~3x the wall clock.
+    expect(DEFAULT_REASONING_EFFORT).toBe('minimal')
+  })
+
+  it.each(REASONING_EFFORTS)('honours the valid value %s', (effort) => {
+    vi.stubEnv('AI_REASONING_EFFORT', effort)
+
+    expect(getSecurityLimits().reasoningEffort).toBe(effort)
+  })
+
+  it('accepts a value whatever its case or padding', () => {
+    vi.stubEnv('AI_REASONING_EFFORT', '  MINIMAL ')
+
+    expect(getSecurityLimits().reasoningEffort).toBe('minimal')
+  })
+
+  it.each([
+    ['an unknown rung', 'lowest'],
+    ['a number', '1'],
+    ['a provider-shaped typo', 'mimimal'],
+  ])('falls back to the default on %s, with one warning', (_case, value) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('AI_REASONING_EFFORT', value)
+
+    expect(getSecurityLimits().reasoningEffort).toBe(DEFAULT_REASONING_EFFORT)
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(String(warn.mock.calls[0]?.[0])).toContain('AI_REASONING_EFFORT')
+    warn.mockRestore()
+  })
+
+  it('never throws on a bad value — a bad env must not take the chat down', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('AI_REASONING_EFFORT', 'definitely-not-an-effort')
+
+    expect(() => getSecurityLimits()).not.toThrow()
+    warn.mockRestore()
+  })
+
+  it('treats an empty value as unset, silently', () => {
+    // Deploy platforms hand an unset variable through as `''` often enough
+    // that warning on it would cry wolf on a correct configuration.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('AI_REASONING_EFFORT', '')
+
+    expect(getSecurityLimits().reasoningEffort).toBe(DEFAULT_REASONING_EFFORT)
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 })

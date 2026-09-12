@@ -37,19 +37,26 @@ const changeArgs = (
   }) as never
 
 describe('revalidatePage (afterChange)', () => {
-  it('purges pages/pages-sitemap with expire:0 on publish', () => {
+  it('purges the pages tag and /sitemap.xml with expire:0 on publish', () => {
     revalidatePage(
       changeArgs({ slug: 'about', _status: 'published' }, { _status: 'draft' }),
     )
 
     expect(mocks.revalidateTag).toHaveBeenCalledWith('pages', { expire: 0 })
-    expect(mocks.revalidateTag).toHaveBeenCalledWith('pages-sitemap', {
-      expire: 0,
-    })
+    // #209: the sitemap's outer scope is a plain `'use cache'`, so the route
+    // needs its own purge — a `pages` tag purge alone left a freshly generated
+    // /sitemap.xml missing a page 28.5 h after it was published.
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/sitemap.xml')
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/about')
+    // The dead tag is gone, not merely unasserted: firing it again would put
+    // the "already covered" illusion back.
+    expect(mocks.revalidateTag).not.toHaveBeenCalledWith(
+      'pages-sitemap',
+      expect.anything(),
+    )
   })
 
-  it('purges pages/pages-sitemap with expire:0 on unpublish', () => {
+  it('purges the pages tag and /sitemap.xml with expire:0 on unpublish', () => {
     mocks.revalidateTag.mockClear()
     mocks.revalidatePath.mockClear()
 
@@ -61,10 +68,14 @@ describe('revalidatePage (afterChange)', () => {
     )
 
     expect(mocks.revalidateTag).toHaveBeenCalledWith('pages', { expire: 0 })
-    expect(mocks.revalidateTag).toHaveBeenCalledWith('pages-sitemap', {
-      expire: 0,
-    })
+    // An unpublish removes a URL from the sitemap; leaving the route's own
+    // entry alone is the same defect pointed the other way.
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/sitemap.xml')
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/about')
+    expect(mocks.revalidateTag).not.toHaveBeenCalledWith(
+      'pages-sitemap',
+      expect.anything(),
+    )
   })
 
   it('skips revalidation entirely when disableRevalidate is set', () => {
@@ -110,7 +121,56 @@ describe('revalidatePage old-path purge matrix (#132)', () => {
     mocks.revalidatePath.mockClear()
   })
 
-  const purgedPaths = () => mocks.revalidatePath.mock.calls.map(([p]) => p)
+  /**
+   * The DOCUMENT paths this hook purged, with the constant `/sitemap.xml`
+   * filtered out.
+   *
+   * @remarks #209 added `revalidatePath('/sitemap.xml')` to every purging
+   * branch, and it is deliberately not part of this matrix: the matrix is about
+   * WHICH document path a transition purges, and folding a constant into every
+   * expected array would make five assertions restate the same fact and read as
+   * though the sitemap were transition-dependent. That it fires on every
+   * purging branch — publish, unpublish and delete — is asserted once each in
+   * the three suites above and once below.
+   */
+  const purgedPaths = () =>
+    mocks.revalidatePath.mock.calls
+      .map(([p]) => p)
+      .filter((p) => p !== '/sitemap.xml')
+
+  it.each([
+    [
+      'publish',
+      () =>
+        revalidatePage(
+          changeArgs({ slug: 'a', _status: 'published' }, { _status: 'draft' }),
+        ),
+    ],
+    [
+      'unpublish',
+      () =>
+        revalidatePage(
+          changeArgs(
+            { slug: 'a', _status: 'draft' },
+            { slug: 'a', _status: 'published' },
+          ),
+        ),
+    ],
+    [
+      'delete',
+      () =>
+        revalidateDelete({
+          doc: { slug: 'a' },
+          req: { context: {}, payload: { logger } },
+        } as never),
+    ],
+  ])('purges /sitemap.xml on the %s branch (#209)', (_name, run) => {
+    // Iterating rather than asserting once on publish: the defect #209 is about
+    // is a branch that forgets the sitemap, and a publish-only assertion is
+    // exactly the shape that would let one keep forgetting.
+    run()
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/sitemap.xml')
+  })
 
   it('first publish purges the new path and no old path', () => {
     revalidatePage(
@@ -269,7 +329,7 @@ describe('revalidatePage old-path purge matrix (#132)', () => {
 })
 
 describe('revalidateDelete (afterDelete)', () => {
-  it('purges pages/pages-sitemap with the immediate-expiration expire:0 profile', () => {
+  it('purges the pages tag and /sitemap.xml with the immediate-expiration expire:0 profile', () => {
     mocks.revalidateTag.mockClear()
     mocks.revalidatePath.mockClear()
 
@@ -279,9 +339,12 @@ describe('revalidateDelete (afterDelete)', () => {
     } as never)
 
     expect(mocks.revalidateTag).toHaveBeenCalledWith('pages', { expire: 0 })
-    expect(mocks.revalidateTag).toHaveBeenCalledWith('pages-sitemap', {
-      expire: 0,
-    })
+    // A deleted page must leave the sitemap too (#209).
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/sitemap.xml')
+    expect(mocks.revalidateTag).not.toHaveBeenCalledWith(
+      'pages-sitemap',
+      expect.anything(),
+    )
   })
 
   it('skips revalidation entirely when disableRevalidate is set', () => {

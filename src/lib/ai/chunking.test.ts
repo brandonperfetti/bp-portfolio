@@ -6,11 +6,15 @@ import { TechStack } from '@/collections/TechStack'
 import {
   CHUNK_OVERLAP_TOKENS,
   CORVUS_EMBEDDED_COLLECTIONS,
+  CORVUS_TECH_STACK_SUMMARY_COLLECTION,
   DAILY_DRIVER_PROFICIENCY,
+  TARGET_CHUNK_TOKENS,
   TECH_PROFICIENCY_LABELS,
+  TECH_STACK_SUMMARY_DOC_ID,
   type TechProficiency,
   MAX_CHUNK_TOKENS,
   chunkDocument,
+  chunkTechStackSummary,
   chunkFlatRecord,
   chunkPost,
   estimateTokens,
@@ -621,5 +625,227 @@ describe('CORVUS_EMBEDDED_COLLECTIONS', () => {
     expect(slugs).not.toContain('pages')
     expect(slugs).not.toContain('categories')
     expect(slugs).not.toContain('tags')
+  })
+})
+
+/**
+ * The daily-driver summary chunk (#165).
+ *
+ * @remarks Everything here is pure, so it is the half of #165 that can be
+ * pinned exactly. What it deliberately does NOT prove is that the summary
+ * chunk retrieves for a stack-shaped question — that is cosine similarity
+ * against real embeddings and needs a provider key, so it is Brandon's keyed
+ * run and is written up in `docs/AI.md` §Corvus.
+ */
+describe('chunkTechStackSummary (#165)', () => {
+  /** Fourteen daily drivers, the count the production tier carried on 2026-09-09. */
+  const FOURTEEN = [
+    'TypeScript',
+    'Node.js',
+    'React',
+    'Next.js',
+    'GraphQL',
+    'Tailwind CSS',
+    'Clerk',
+    'Supabase',
+    'Vercel',
+    'AI SDK',
+    'Payload',
+    'Vitest',
+    'Playwright',
+    'Storybook',
+  ]
+
+  const rows = (
+    names: string[],
+    proficiency: string = DAILY_DRIVER_PROFICIENCY,
+  ) => names.map((name, index) => ({ id: index + 1, name, proficiency }))
+
+  it('emits exactly ONE chunk, comfortably under the chunker target', () => {
+    // The arithmetic behind the whole design: five retrieval slots cannot
+    // carry fourteen per-row chunks (~730 estimated tokens against a window
+    // of ~255), and one passage can. Compact BY CONSTRUCTION — a single line
+    // of names — so no splitting logic applies and none is written.
+    const { chunks } = chunkTechStackSummary(rows(FOURTEEN))
+
+    expect(chunks).toHaveLength(1)
+    expect(estimateTokens(chunks[0].content)).toBe(82)
+    expect(estimateTokens(chunks[0].content)).toBeLessThan(TARGET_CHUNK_TOKENS)
+  })
+
+  it('carries the whole daily tier as one line of names', () => {
+    const { chunks, daily } = chunkTechStackSummary(rows(FOURTEEN))
+
+    expect(daily).toEqual(FOURTEEN)
+    const [firstLine] = chunks[0].content.split('\n')
+    for (const name of FOURTEEN) expect(firstLine).toContain(name)
+  })
+
+  it('says it is the COMPLETE tier, which is the double-counting mitigation', () => {
+    // With the summary and two or three per-row daily chunks in the same
+    // window the model sees some names twice. Saying "these are all of them"
+    // makes the duplicate read as detail rather than as a second, shorter list.
+    const { chunks } = chunkTechStackSummary(rows(FOURTEEN))
+
+    expect(chunks[0].content).toContain('the complete Daily driver tier')
+    expect(chunks[0].content).toContain('all 14 of them, not a sample')
+  })
+
+  it('names the Proficient tier and NEVER Familiar or Exploring', () => {
+    // `TECH_PROFICIENCY_RANKING_RULE` says "never headline a Familiar or
+    // Exploring entry as something he uses". A summary carrying those two
+    // would hand the model exactly that material, in the passage most likely
+    // to be retrieved for a stack question — the one shape here that could
+    // make Corvus worse.
+    const { chunks } = chunkTechStackSummary([
+      ...rows(FOURTEEN),
+      ...rows(['Rust'], 'familiar'),
+      ...rows(['Elixir'], 'exploring'),
+      ...rows(['PostgreSQL'], 'proficient'),
+    ])
+
+    expect(chunks[0].content).toContain(TECH_PROFICIENCY_LABELS.proficient)
+    expect(chunks[0].content).not.toContain(TECH_PROFICIENCY_LABELS.familiar)
+    expect(chunks[0].content).not.toContain(TECH_PROFICIENCY_LABELS.exploring)
+    // And no non-daily technology is NAMED, whatever its tier.
+    for (const name of ['Rust', 'Elixir', 'PostgreSQL']) {
+      expect(chunks[0].content).not.toContain(name)
+    }
+  })
+
+  it('keeps the "other entries" sentence VERBATIM when nothing was skipped', () => {
+    const { chunks, skipped } = chunkTechStackSummary(rows(FOURTEEN))
+
+    expect(skipped).toEqual([])
+    expect(chunks[0].content).toContain(
+      `Other entries on that page are marked ${TECH_PROFICIENCY_LABELS.proficient} or lower, not ${TECH_PROFICIENCY_LABELS.daily}.`,
+    )
+  })
+
+  it('DROPS that sentence when a row was skipped, because it would be false', () => {
+    // A skipped row is one whose tier the composer could not read, so "other
+    // entries are marked Proficient or lower" is a confident claim about
+    // exactly the rows nobody classified. The daily line is untouched.
+    const { chunks, skipped } = chunkTechStackSummary([
+      ...rows(FOURTEEN),
+      { id: 99, name: 'Deno', proficiency: 'occasionally' },
+    ])
+
+    expect(skipped).toHaveLength(1)
+    expect(chunks[0].content).not.toContain('Other entries on that page')
+    expect(chunks[0].content).toContain('the complete Daily driver tier')
+    expect(chunks[0].content.split('\n')).toHaveLength(2)
+  })
+
+  it('cites /tech, the same page the per-row chunks cite', () => {
+    const { chunks } = chunkTechStackSummary(rows(['Next.js']))
+
+    expect(chunks[0].sourceUrl).toBe('/tech')
+    expect(chunks[0].collection).toBe(CORVUS_TECH_STACK_SUMMARY_COLLECTION)
+    expect(chunks[0].docId).toBe(TECH_STACK_SUMMARY_DOC_ID)
+    expect(chunks[0].chunkIndex).toBe(0)
+    expect(chunks[0].visibility).toBe('public')
+    expect(chunks[0].contentHash).toBe(hashChunkContent(chunks[0].content))
+  })
+
+  it('REPORTS a row with an empty or unknown proficiency instead of guessing', () => {
+    // The wave-7 learning-10 trap: production data can be missing the field a
+    // shipped feature depends on with no error anywhere. A technology Brandon
+    // believes is daily whose stored value is `''` drops out of the line of
+    // names, and without this report the short answer reads as a retrieval
+    // problem rather than a data one.
+    const { chunks, daily, skipped } = chunkTechStackSummary([
+      { id: 1, name: 'Next.js', proficiency: 'daily' },
+      { id: 2, name: 'React', proficiency: '' },
+      { id: 3, name: 'Deno', proficiency: 'occasionally' },
+      { id: 4, name: '', proficiency: 'daily' },
+      { id: 5, proficiency: 'daily' },
+      // A PROTOTYPE key. `proficiency in TECH_PROFICIENCY_LABELS` walks the
+      // chain, so this row tested true against the label map and sailed past
+      // the guard — neither named in the tier nor reported, which is the exact
+      // silent swallow the `skipped` channel exists to prevent.
+      // `Object.hasOwn` is the whole fix, and this row is what pins it.
+      { id: 6, name: 'Bun', proficiency: 'toString' },
+      { id: 7, name: 'Effect', proficiency: 'constructor' },
+    ])
+
+    expect(daily).toEqual(['Next.js'])
+    expect(chunks[0].content).not.toContain('React')
+    expect(chunks[0].content).not.toContain('Bun')
+    expect(skipped).toEqual([
+      { name: 'React', proficiency: '' },
+      { name: 'Deno', proficiency: 'occasionally' },
+      { name: '', proficiency: 'daily' },
+      { name: '', proficiency: 'daily' },
+      { name: 'Bun', proficiency: 'toString' },
+      { name: 'Effect', proficiency: 'constructor' },
+    ])
+  })
+
+  it('emits NO chunk when the daily tier is empty, so the row can be deleted', () => {
+    // An empty tier is a data state the index must reflect, not a sentence to
+    // embed. `syncTechStackSummaryEmbeddings` turns `[]` into a DELETE.
+    expect(chunkTechStackSummary([]).chunks).toEqual([])
+    expect(
+      chunkTechStackSummary(rows(['PostgreSQL'], 'proficient')).chunks,
+    ).toEqual([])
+  })
+
+  it('is stable: the same rows compose the same hash', () => {
+    expect(chunkTechStackSummary(rows(FOURTEEN)).chunks[0].contentHash).toBe(
+      chunkTechStackSummary(rows(FOURTEEN)).chunks[0].contentHash,
+    )
+  })
+
+  /**
+   * #167 routing proof, test 4 — "alongside", implemented rather than intended.
+   *
+   * @remarks The revised ACs require BOTH "names the daily-driver tier" and "a
+   * narrow single-technology question still answers from that row". The
+   * per-row chunk is the only passage carrying a technology's `Category`,
+   * `URL` and `Notes`, and four retrieval preconditions in
+   * `evals/scorers.test.ts` assert that a narrow proficiency question lands on
+   * it. Deleting those would be a regression, not a trade-off — so composing
+   * the summary must not move a single byte of them.
+   */
+  it('does not change any per-row chunk when the summary is composed', () => {
+    const docs = [
+      { id: 1, name: 'Next.js', category: 'framework', proficiency: 'daily' },
+      {
+        id: 2,
+        name: 'PostgreSQL',
+        category: 'data',
+        proficiency: 'proficient',
+        url: 'https://www.postgresql.org/',
+        notes: 'Primary datastore.',
+      },
+    ]
+    const before = docs.map((doc) => chunkFlatRecord('tech-stack', doc)[0])
+
+    chunkTechStackSummary(docs)
+
+    const after = docs.map((doc) => chunkFlatRecord('tech-stack', doc)[0])
+    for (const [index, chunk] of after.entries()) {
+      expect(chunk.content).toBe(before[index].content)
+      expect(chunk.contentHash).toBe(before[index].contentHash)
+      expect(chunk.collection).toBe('tech-stack')
+    }
+  })
+})
+
+describe('the summary pseudo-collection (#165)', () => {
+  it('cites /tech from sourceUrlFor', () => {
+    expect(sourceUrlFor(CORVUS_TECH_STACK_SUMMARY_COLLECTION)).toBe('/tech')
+  })
+
+  it('is NOT in the hook registry', () => {
+    // `CORVUS_EMBEDDED_COLLECTIONS` is documented as the single source of
+    // truth for which collections carry a refresh HOOK, and there is no
+    // Payload document here to hang one on — the same reason `github-repos`
+    // stays out of it. The `tech-stack` hook re-emits the summary; the
+    // backfill repairs it.
+    expect(CORVUS_EMBEDDED_COLLECTIONS).not.toContain(
+      CORVUS_TECH_STACK_SUMMARY_COLLECTION,
+    )
   })
 })

@@ -16,21 +16,23 @@ import { getPostLayoutBySlug } from '@/lib/cms/layoutsRepo'
  * that only make sense on a page are expected to say so rather than to guess:
  * the post rollup, for one, renders nothing here when its page picker is
  * empty, because "the posts placed under the page this block is on" has no
- * meaning under a post.
+ * meaning under a post. The local is `hostPost` and deliberately not
+ * `hosted`: `hosted` is taken, and means the *position* half of block context
+ * (`'root' | 'column'`, `src/blocks/hostContext.ts`), not the document (#199).
  *
  * @param slug - Post slug (the article page's own slug).
  */
 export async function CmsPostBlocks({ slug }: { slug: string }) {
-  const hosted = await getPostLayoutBySlug(slug)
-  const layout = hosted?.layout
-  if (!hosted || !layout?.length) return null
+  const hostPost = await getPostLayoutBySlug(slug)
+  const layout = hostPost?.layout
+  if (!hostPost || !layout?.length) return null
   const meaningful = layout.some((block) => block.blockType !== 'spacer')
   if (!meaningful) return null
   return (
     <Container className="mt-16 sm:mt-20">
       <RenderBlocks
         blocks={layout}
-        hostDoc={{ collection: 'posts', id: hosted.id }}
+        hostDoc={{ collection: 'posts', id: hostPost.id }}
       />
     </Container>
   )

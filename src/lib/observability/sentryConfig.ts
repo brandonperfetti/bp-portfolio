@@ -4,16 +4,26 @@
  * `sentry.edge.config.ts`).
  *
  * @remarks
- * Every helper here is env-gated on a Sentry DSN being present, mirroring
- * the Resend/Blob pattern in `payload.config.ts`
+ * Outside local development every helper here is env-gated on a Sentry DSN
+ * being present, mirroring the Resend/Blob pattern in `payload.config.ts`
  * (`process.env.RESEND_API_KEY ? {...} : {}`,
  * `enabled: Boolean(process.env.BLOB_READ_WRITE_TOKEN)`). With no DSN,
  * {@link getClientSentryDsn} / {@link getServerSentryDsn} return
  * `undefined` and every entrypoint skips its `Sentry.init` call entirely —
- * local dev and CI boot with zero Sentry activity (no network calls, no
- * global error handlers installed, no tunnel route traffic). This module
- * is intentionally framework-free (no `@sentry/nextjs` import) so it stays
- * trivially unit-testable without mocking the SDK.
+ * CI and DSN-less deploys boot with zero Sentry activity (no network calls,
+ * no global error handlers installed, no tunnel route traffic).
+ *
+ * **Local development is the one exception (#194).** DSN presence used to be
+ * the ONLY send gate, so a `pnpm dev` server ingested laptop errors — and
+ * ~110 envelopes per `pnpm test:e2e` run — into the same shared
+ * `bp-portfolio` project as production. The gate is now
+ * "DSN present **or** Spotlight enabled in development", expressed once in
+ * {@link getSentryInitDecision}, and in a local run a configured DSN is
+ * deliberately **ignored** rather than honoured. See that function for the
+ * full matrix.
+ *
+ * This module is intentionally framework-free (no `@sentry/nextjs` import)
+ * so it stays trivially unit-testable without mocking the SDK.
  */
 
 /**
@@ -111,6 +121,228 @@ export function getSentryEnvironment(): string {
     process.env.NEXT_PUBLIC_VERCEL_ENV ||
     'development'
   )
+}
+
+/**
+ * Whether this process is a **local** run (a developer's `pnpm dev`, a
+ * `vitest` run, a script) rather than a deployed one.
+ *
+ * @remarks
+ * Both halves carry weight and neither alone is sufficient:
+ *
+ * - `getSentryEnvironment() === 'development'` is the deployment-target
+ *   half. It is the documented fall-through of the #134 chain — nothing
+ *   identifies a deployment, so this is a laptop or CI. It alone is not
+ *   enough because an operator can set `NEXT_PUBLIC_SENTRY_ENVIRONMENT=development`
+ *   on a real Vercel deployment, which must keep sending to Sentry.
+ * - `NODE_ENV === 'development'` is the build-mode half — `next dev` only.
+ *   It alone is not enough either: `NODE_ENV` is `production` on every
+ *   built deploy including Preview (the #134 defect), and `test` under
+ *   Vitest.
+ *
+ * Requiring both means CI (`NODE_ENV=test`, no deployment signal) is NOT
+ * "local development" for this purpose — it never initialises Sentry at
+ * all, because it has no DSN, which is the pre-#194 behaviour preserved.
+ *
+ * Written as literal `process.env.NODE_ENV` static member access so Next
+ * inlines it into the browser bundle (see {@link getSentryEnvironment}).
+ *
+ * @returns `true` for a local `next dev` run, `false` for every deployed
+ * environment and for CI.
+ */
+export function isLocalDevelopmentEnvironment(): boolean {
+  return (
+    process.env.NODE_ENV === 'development' &&
+    getSentryEnvironment() === 'development'
+  )
+}
+
+/**
+ * Values of the Spotlight switch that mean "off". Anything else — including
+ * the documented `1` — means on.
+ */
+const SPOTLIGHT_DISABLED_VALUES = new Set(['0', 'false', 'off', 'no'])
+
+/**
+ * Whether the developer has opted into Spotlight, the local error sink
+ * (#194).
+ *
+ * @remarks
+ * `NEXT_PUBLIC_SENTRY_SPOTLIGHT` is read first, deliberately, for exactly
+ * the reason {@link getSentryEnvironment} reads its `NEXT_PUBLIC_` twin
+ * first: the prefix is what gets the value inlined into the **browser**
+ * bundle, and it is equally readable server-side, so one variable arms
+ * both runtimes that can reach a sidecar — the browser and Node. (The edge
+ * runtime cannot, and {@link getSentryInitDecision} never gives it a
+ * Spotlight decision regardless of this switch.) `SENTRY_SPOTLIGHT` — the
+ * name the Sentry Node SDK reads natively
+ * `[source: @sentry/node-core 10.70.0 utils/spotlight.ts]` — remains as a
+ * server-only fallback so an operator who sets the SDK's own variable is
+ * not surprised by the server ignoring it.
+ *
+ * Opt-in rather than on-by-default in development: a contributor who has
+ * never installed Spotlight gets today's behaviour (no init, no sockets)
+ * instead of a per-envelope POST to a dead port. `.env.example` therefore
+ * ships this **empty**, documented, for the developer to set in their own
+ * `.env.local` — which is also what keeps that file's "leave every var
+ * below empty and zero Sentry code paths run" header true.
+ *
+ * @returns `true` when either variable is set to anything other than an
+ * explicit off value.
+ */
+export function isSpotlightRequested(): boolean {
+  const raw = (
+    process.env.NEXT_PUBLIC_SENTRY_SPOTLIGHT ||
+    process.env.SENTRY_SPOTLIGHT ||
+    ''
+  )
+    .trim()
+    .toLowerCase()
+  if (!raw) return false
+  return !SPOTLIGHT_DISABLED_VALUES.has(raw)
+}
+
+/**
+ * Which runtime is asking. It selects the DSN variables to read and, for
+ * `'edge'`, whether Spotlight is reachable at all.
+ *
+ * @remarks
+ * `'server'` and `'edge'` read the same DSN chain (`SENTRY_DSN`, then the
+ * public one) and differ only in their Spotlight capability — see
+ * {@link getSentryInitDecision}.
+ */
+export type SentryRuntimeKind = 'client' | 'server' | 'edge'
+
+/**
+ * The single send decision every `Sentry.init` call site in this repo obeys.
+ *
+ * @remarks
+ * `init: false` means the entrypoint must not call `Sentry.init` at all —
+ * not "call it disabled". `dsn` is only ever present when `init` is true.
+ */
+export type SentryInitDecision = {
+  /** Whether the entrypoint calls `Sentry.init` at all. */
+  init: boolean
+  /** DSN to send to, or `undefined` for a Spotlight-only (local) init. */
+  dsn?: string
+  /** Whether to attach the Spotlight sidecar forwarder. */
+  spotlight: boolean
+  /**
+   * `true` when a DSN is configured but a local run is deliberately
+   * dropping it — the one case worth a startup line, since it is the
+   * difference between "my errors go nowhere" and "my errors go to
+   * Spotlight" for someone who still has the old `.env.local`.
+   */
+  dsnIgnoredInDevelopment: boolean
+}
+
+/**
+ * Resolve whether — and how — a runtime initialises Sentry (#194).
+ *
+ * @remarks
+ * The matrix, which the unit tests pin case for case:
+ *
+ * | env shape | init | dsn | spotlight |
+ * | --- | --- | --- | --- |
+ * | client/server, local, `SENTRY_SPOTLIGHT` on, no DSN | yes | — | yes |
+ * | client/server, local, `SENTRY_SPOTLIGHT` on, DSN set | yes | **ignored** | yes |
+ * | client/server, local, Spotlight off, no DSN | no | — | no |
+ * | client/server, local, Spotlight off, DSN set | no | **ignored** | no |
+ * | **edge**, local, Spotlight on or off, DSN set or not | **no** | **ignored** | no |
+ * | any runtime, production / staging / preview, DSN set | yes | yes | no |
+ * | any runtime, production / staging / preview, no DSN | no | — | no |
+ * | any runtime, CI (`NODE_ENV=test`, no DSN) | no | — | no |
+ *
+ * **Why `'edge'` has its own row.** `@sentry/vercel-edge` 10.70.0 ships no
+ * `spotlight` option and no Spotlight integration: the Node one POSTs over
+ * `node:http` and the browser one over the page's `fetch`, neither of which
+ * exists in that runtime `[source: vercel-edge 10.70.0 build/types has no spotlight symbol]`.
+ * So a local edge decision can neither send to the shared project (the
+ * fence) nor forward to a sidecar — the honest answer is not to initialise
+ * a client with nowhere to send. The rule lives here rather than at the
+ * call site so `sentry.edge.config.ts` obeys the decision verbatim, like
+ * the other two, and so the fence is provable in the same test file as
+ * every other row.
+ *
+ * Two invariants are load-bearing and are each pinned by their own test:
+ *
+ * 1. **Deployed behaviour is byte-identical to pre-#194**: outside local
+ *    development this is still exactly `Boolean(dsn)`, and `spotlight` is
+ *    never true — an accidental `SENTRY_SPOTLIGHT=1` in a Vercel
+ *    environment cannot arm a sidecar forwarder in production.
+ * 2. **The shared DSN cannot fire from a laptop**: in a local run the DSN
+ *    is dropped on the floor whether or not Spotlight is on. Local capture
+ *    is still intentional (Brandon, #194) — Spotlight is simply the sink
+ *    now, so errors surface faster and never touch the shared project's
+ *    quota or its `escalating` state.
+ *
+ * A DSN-less `Sentry.init` still reaches Spotlight: `Client#sendEnvelope`
+ * emits `beforeEnvelope` — which is where both Spotlight integrations hook
+ * — *before* it checks for a transport, and `Client#init` force-installs
+ * integrations when no DSN is set but a `Spotlight*` integration is present
+ * `[source: @sentry/core 10.70.0 client.js:288-295,404-406]`.
+ *
+ * @param runtime - `'client'` reads {@link getClientSentryDsn}; `'server'`
+ * and `'edge'` read {@link getServerSentryDsn}, and differ only in whether
+ * Spotlight can be reached.
+ * @returns The decision this runtime must obey.
+ */
+export function getSentryInitDecision(
+  runtime: SentryRuntimeKind,
+): SentryInitDecision {
+  const dsn = runtime === 'client' ? getClientSentryDsn() : getServerSentryDsn()
+
+  if (!isLocalDevelopmentEnvironment()) {
+    return {
+      init: Boolean(dsn),
+      dsn,
+      spotlight: false,
+      dsnIgnoredInDevelopment: false,
+    }
+  }
+
+  const spotlight = runtime !== 'edge' && isSpotlightRequested()
+  return {
+    init: spotlight,
+    dsn: undefined,
+    spotlight,
+    dsnIgnoredInDevelopment: Boolean(dsn),
+  }
+}
+
+/**
+ * Startup line printed by every runtime whose decision carries
+ * {@link SentryInitDecision.dsnIgnoredInDevelopment}.
+ *
+ * @remarks
+ * Names the variables, never their values — this repo is public and the
+ * message is the one thing here that could plausibly grow a value by
+ * accident.
+ */
+export const SENTRY_DEV_DSN_IGNORED_WARNING =
+  '[sentry] A Sentry DSN is set locally (NEXT_PUBLIC_SENTRY_DSN / SENTRY_DSN) ' +
+  'and is being IGNORED: local runs never send to the shared project (#194). ' +
+  'Remove it from .env.local and set NEXT_PUBLIC_SENTRY_SPOTLIGHT=1 to see ' +
+  'local errors in Spotlight instead.'
+
+/**
+ * Print {@link SENTRY_DEV_DSN_IGNORED_WARNING} when this runtime's decision
+ * is dropping a locally-configured DSN.
+ *
+ * @remarks
+ * Lives here rather than being repeated in each entrypoint so the three
+ * cannot drift — the same reason {@link sentryDropBotEvent} does. Each
+ * runtime makes its own decision and calls this itself, so a local run with
+ * a leftover DSN prints the line once per runtime that loads (client, Node,
+ * and edge if it is exercised). That is deliberate: silence from one
+ * runtime would suggest that runtime is still sending.
+ *
+ * @param decision - The decision from {@link getSentryInitDecision}.
+ */
+export function warnIfDevDsnIgnored(decision: SentryInitDecision): void {
+  if (decision.dsnIgnoredInDevelopment) {
+    console.warn(SENTRY_DEV_DSN_IGNORED_WARNING)
+  }
 }
 
 /**

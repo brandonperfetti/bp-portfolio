@@ -12,7 +12,10 @@ import { getPageLayoutBySlug } from '@/lib/cms/layoutsRepo'
  * This is one of the three readers that already hold the hosting document, so
  * it is one of the three that can name it: the Pages doc's id goes down with
  * the blocks as `hostDoc`, which is how a block placed on `/uses` can ask
- * about `/uses` without reading the request (#177).
+ * about `/uses` without reading the request (#177). The local is `hostPage`
+ * and deliberately not `hosted`: `hosted` is taken, and means the *position*
+ * half of block context (`'root' | 'column'`, `src/blocks/hostContext.ts`),
+ * not the document (#199).
  *
  * @param slug - Pages collection slug for this route (`home` for `/`).
  * @param exclude - Block types the route consumes in a dedicated slot instead
@@ -25,9 +28,9 @@ export async function CmsPageBlocks({
   slug: string
   exclude?: string[]
 }) {
-  const hosted = await getPageLayoutBySlug(slug)
-  const layout = hosted?.layout
-  if (!hosted || !layout?.length) return null
+  const hostPage = await getPageLayoutBySlug(slug)
+  const layout = hostPage?.layout
+  if (!hostPage || !layout?.length) return null
   const blocks = exclude?.length
     ? layout.filter((block) => !exclude.includes(block.blockType))
     : layout
@@ -36,7 +39,7 @@ export async function CmsPageBlocks({
   return (
     <RenderBlocks
       blocks={blocks}
-      hostDoc={{ collection: 'pages', id: hosted.id }}
+      hostDoc={{ collection: 'pages', id: hostPage.id }}
     />
   )
 }

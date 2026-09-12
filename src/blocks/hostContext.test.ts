@@ -43,6 +43,7 @@ const COLUMN_ELIGIBLE_BLOCK_DIRS: Record<string, string> = {
   articlesArchive: 'ArticlesArchive',
   carousel: 'Carousel',
   contactForm: 'ContactForm',
+  corvusChat: 'CorvusChat',
   cta: 'CallToAction',
   faqList: 'FaqList',
   featureCardGrid: 'FeatureCardGrid',
@@ -308,19 +309,19 @@ describe('block host document', () => {
     // a nested block has. A container that swallowed `hostDoc` would leave a
     // column-nested block unable to learn a fact its root-level twin knows,
     // which is the behaviour split #177 exists to prevent.
+    //
+    // Only the dispatcher's own hop is read as source here, and only because
+    // `RenderBlocks` is this file's subject. The container half of the path —
+    // and both of the column's dispatch branches, which used to be a
+    // `hostDoc=\{hostDoc\}` occurrence COUNT in this file — is asserted from
+    // rendered output instead, in
+    // `src/blocks/Container/Component.test.tsx` › "container · host document
+    // forwarding" (#199): a source regex passes for the wrong reason on an
+    // equivalent refactor it does not recognise, and fails for the wrong
+    // reason on a reformat.
     expect(read('src/blocks/RenderBlocks.tsx')).toMatch(
       /<ContainerBlockComponent[\s\S]{0,120}hostDoc=\{hostDoc\}/,
     )
-    expect(read('src/blocks/Container/Component.tsx')).toMatch(
-      /<ColumnBlockComponent[\s\S]{0,120}hostDoc=\{props\.hostDoc\}/,
-    )
-  })
-
-  it('forwards it on both of the column’s dispatch branches', () => {
-    // A column dispatches its blocks as one batch, or one at a time when
-    // `revealChildren` is on. Two call sites, so two chances to drop it.
-    const column = read('src/blocks/Column/Component.tsx')
-    expect(column.match(/hostDoc=\{hostDoc\}/g)).toHaveLength(2)
   })
 
   it.each(HOST_DOC_RENDER_PATH)('%s reads no request scope', (file) => {

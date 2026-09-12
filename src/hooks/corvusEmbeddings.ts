@@ -9,6 +9,22 @@ import {
   deleteDocumentEmbeddings,
   syncDocumentEmbeddings,
 } from '@/lib/ai/embeddingsStore'
+import { refreshTechStackSummary } from '@/lib/ai/techStackSummarySync'
+import {
+  type Deadline,
+  createDeadline,
+  withDeadline,
+} from '@/lib/ai/withDeadline'
+
+/**
+ * The one collection whose write also re-emits a derived summary chunk (#165).
+ *
+ * @remarks A per-row hook cannot refresh a summary of ALL rows — it is handed
+ * one `doc` — so the summary gets its own step, which re-reads the collection.
+ * Named here rather than inlined so the two hooks below agree about it and so
+ * the condition is greppable from the summary's own module.
+ */
+const SUMMARY_SOURCE_COLLECTION: CorvusCollectionSlug = 'tech-stack'
 
 /**
  * Wall-clock bound on the provider call a single content save may trigger.
@@ -93,10 +109,33 @@ function drizzleOf(payload: unknown): CorvusEmbeddingsDb | null {
  *   the same "the index is derived and rebuildable" stance the migration takes
  *   by keeping the table out of the Payload config.
  *
+ * - **On `tech-stack` only, the daily-driver summary is re-emitted** after the
+ *   per-row sync and inside the same `try` (#165). A per-row hook cannot
+ *   refresh a summary of all rows, so this step re-reads the collection and
+ *   re-composes one chunk carrying the whole `daily` tier. It is inside the
+ *   existing `try` on purpose: a failure logs and leaves the stale summary,
+ *   and never fails the save. The re-read forwards `req`, so it runs inside
+ *   the save's transaction and sees the save — the repo's convention for a
+ *   hook-side Local API read. Without it the summary would be composed from
+ *   pre-save rows.
+ *
  * The provider call is awaited rather than fired and forgotten, bounded by
  * {@link HOOK_EMBEDDING_TIMEOUT_MS}: a floating promise in a serverless
  * function is not guaranteed to run at all, and an awaited-but-bounded call
  * has a knowable worst case.
+ *
+ * **ONE deadline, for everything this hook does.** The bound above is a
+ * property of the SAVE, not of each step, so a single
+ * {@link createDeadline} call is made once at the top of
+ * the `try`, cancelled in a `finally`, and shared by the per-row sync and the summary re-emit. Giving
+ * the summary step a second, independent timeout would silently double a
+ * `tech-stack` save's worst case while this docblock went on naming one
+ * constant. Each step gets the signal AND is raced against it through
+ * {@link withDeadline}, because the signal alone only reaches `embedChunks` —
+ * the drizzle statements and `refreshTechStackSummary`'s `payload.find` over
+ * the whole collection take no signal, and on a slow database the `find` is
+ * the likelier stall than the provider. So the worst case of a `tech-stack`
+ * save is {@link HOOK_EMBEDDING_TIMEOUT_MS}, once, whatever the step count.
  *
  * @param collection - Which embedded collection this hook is wired onto.
  * @returns An `afterChange` hook.
@@ -108,6 +147,10 @@ export const refreshCorvusEmbeddings = (
     const { payload, context } = req
     if (context?.disableRevalidate) return doc
 
+    // Declared out here so the `finally` can cancel the timer on EVERY exit —
+    // including the early returns inside the `try` — rather than leaving it
+    // pending for the rest of the budget in a serverless function.
+    let deadline: Deadline | null = null
     try {
       const db = drizzleOf(payload)
       if (!db) return doc
@@ -138,12 +181,22 @@ export const refreshCorvusEmbeddings = (
         return doc
       }
 
-      const result = await syncDocumentEmbeddings({
-        db,
-        collection,
-        doc: current,
-        abortSignal: AbortSignal.timeout(HOOK_EMBEDDING_TIMEOUT_MS),
-      })
+      // ONE deadline for the whole hook, created here and shared by every
+      // step below — see the docblock. `withDeadline` is what extends it over
+      // the work the signal cannot reach (drizzle statements; the summary's
+      // `find`); the signal itself is still passed in so the provider call
+      // aborts at the source rather than merely being abandoned.
+      deadline = createDeadline(HOOK_EMBEDDING_TIMEOUT_MS)
+
+      const result = await withDeadline(
+        syncDocumentEmbeddings({
+          db,
+          collection,
+          doc: current,
+          abortSignal: deadline.signal,
+        }),
+        deadline.signal,
+      )
 
       if (result.metadataUpdated > 0) {
         // Logged distinctly from a re-embed: this path spends NO provider
@@ -159,6 +212,50 @@ export const refreshCorvusEmbeddings = (
             `written=${result.written} deleted=${result.deleted}`,
         )
       }
+
+      // #165 — the daily-driver summary, AFTER the per-row sync and INSIDE
+      // this same `try`. Both halves of that placement are load-bearing:
+      //
+      // - After, because the summary is a view of the collection this save
+      //   just changed; composing it first would embed the previous tier.
+      // - Inside, and NOT in a second try/catch of its own, because this
+      //   hook's whole contract is that it never throws. A failure to rebuild
+      //   the summary therefore lands in the `catch` below, logs, and leaves
+      //   the STALE summary row in place — a content save can never fail on
+      //   it, and the backfill is the repair path exactly as it is for every
+      //   other failure here.
+      //
+      // `context.disableRevalidate` is honoured by the guard at the top of the
+      // hook, so the e2e seed and bulk imports still spend nothing. And the
+      // ordinary save spends nothing either: `isContentUnchanged` compares
+      // `content_hash` before the provider is called, so editing a
+      // technology's `notes` re-composes the same line of names and makes zero
+      // embedding calls. The cost of this step on a no-op save is one `find`
+      // over ~50 rows plus one indexed SELECT — and that `find` runs on THIS
+      // request's transaction, because `req` is forwarded below.
+      //
+      // It shares `deadline` with the per-row sync above rather than starting
+      // its own: the bound is a property of the save, so whatever the per-row
+      // step already spent comes out of this step's budget. Note the two
+      // returns UPSTREAM of here — the autosave guard and the unpublish branch
+      // — skip this step entirely. Inert today, because `tech-stack` is
+      // draft-free and neither fires for it; if the collection ever gains
+      // drafts, the summary would stop refreshing on unpublish, which is the
+      // same tier-shrinks direction the `afterDelete` mirror exists to cover.
+      if (collection === SUMMARY_SOURCE_COLLECTION) {
+        await withDeadline(
+          refreshTechStackSummary({
+            payload,
+            db,
+            // `req` so the summary's `find` joins THIS save's transaction —
+            // without it the read takes its own connection and composes the
+            // summary from pre-save rows. See `readTechStackSummaryRows`.
+            req,
+            abortSignal: deadline.signal,
+          }),
+          deadline.signal,
+        )
+      }
     } catch (error) {
       // NEVER throw: a provider outage or a database hiccup must not fail the
       // content save. The stale row stays; the backfill script repairs it.
@@ -166,6 +263,8 @@ export const refreshCorvusEmbeddings = (
         `[corvus] embedding refresh failed for ${collection}; leaving the ` +
           `existing rows in place (payload run scripts/backfill-corvus-embeddings.ts repairs it): ${String(error)}`,
       )
+    } finally {
+      deadline?.done()
     }
 
     return doc
@@ -180,6 +279,10 @@ export const refreshCorvusEmbeddings = (
  * failed delete leaves content in the index that no longer exists on the site,
  * so it logs at error level and names the repair path explicitly.
  *
+ * Also one deadline for the whole hook, for the reason
+ * {@link refreshCorvusEmbeddings} gives: the summary re-emit shares the delete's
+ * own {@link HOOK_EMBEDDING_TIMEOUT_MS} rather than starting a second one.
+ *
  * @param collection - Which embedded collection this hook is wired onto.
  * @returns An `afterDelete` hook.
  */
@@ -190,6 +293,7 @@ export const deleteCorvusEmbeddings = (
     const { payload, context } = req
     if (context?.disableRevalidate) return doc
 
+    let deadline: Deadline | null = null
     try {
       const db = drizzleOf(payload)
       if (!db) return doc
@@ -197,15 +301,45 @@ export const deleteCorvusEmbeddings = (
       const docId = Number((doc as HookDoc)?.id)
       if (!Number.isFinite(docId)) return doc
 
-      await deleteDocumentEmbeddings(db, collection, docId)
+      // One deadline for this hook too, shared by the delete and the re-emit.
+      deadline = createDeadline(HOOK_EMBEDDING_TIMEOUT_MS)
+
+      await withDeadline(
+        deleteDocumentEmbeddings(db, collection, docId),
+        deadline.signal,
+      )
       payload.logger.info(
         `[corvus] embeddings deleted for ${collection}#${docId}`,
       )
+
+      // #165 — a deleted technology can SHRINK the daily-driver tier, and a
+      // summary that still names it is worse than a stale one: Corvus would
+      // cite `/tech` for a technology the page no longer lists. So the
+      // re-emit runs here too, after the row's own delete and inside the same
+      // never-throw `try`. When the last daily driver goes, the composer
+      // returns no chunk and the sync DELETES the summary row rather than
+      // embedding an empty tier — see `syncTechStackSummaryEmbeddings`.
+      if (collection === SUMMARY_SOURCE_COLLECTION) {
+        await withDeadline(
+          refreshTechStackSummary({
+            payload,
+            db,
+            // `req` so the summary's `find` joins THIS delete's transaction —
+            // without it the read takes its own connection and still sees the
+            // row that was just deleted. See `readTechStackSummaryRows`.
+            req,
+            abortSignal: deadline.signal,
+          }),
+          deadline.signal,
+        )
+      }
     } catch (error) {
       payload.logger.error(
         `[corvus] embedding delete failed for ${collection}; stale rows may ` +
           `remain (payload run scripts/backfill-corvus-embeddings.ts repairs it): ${String(error)}`,
       )
+    } finally {
+      deadline?.done()
     }
 
     return doc

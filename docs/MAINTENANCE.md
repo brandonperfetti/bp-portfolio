@@ -60,9 +60,15 @@
   `NEXT_PUBLIC_SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE`) live in Vercel's
   per-environment settings; the Sentry Vercel integration populates the
   auth-token/org/project automatically once connected, leaving only
-  `NEXT_PUBLIC_SENTRY_DSN` to set by hand per environment. No DSN → Sentry is
-  fully inert (no import, no init). `SENTRY_AUTH_TOKEN` is a build-only secret
-  (source-map upload); rotate it like Resend/Blob if exposed.
+  `NEXT_PUBLIC_SENTRY_DSN` to set by hand per environment. On a deployed
+  environment or in CI, no DSN → Sentry is fully inert (no import, no init).
+  **Local development is the exception since #194**: there a DSN is ignored
+  outright and `NEXT_PUBLIC_SENTRY_SPOTLIGHT` is the gate — armed, the SDK
+  inits with _no_ DSN and forwards to a local Spotlight sidecar; unarmed, it
+  stays inert as before. So **a DSN belongs in deployed environments only** —
+  see “Local errors go to Spotlight” below. `SENTRY_AUTH_TOKEN` is a
+  build-only secret (source-map upload); rotate it like Resend/Blob if
+  exposed.
 - **Database backups (nightly, encrypted)**: Supabase free tier has NO
   automated backups, and the DB is the canonical copy of all content —
   `.github/workflows/db-backup.yml` runs a nightly `pg_dump` (session
@@ -82,6 +88,13 @@
   (see § Local database from backups). Watch for GitHub's
   60-days-of-repo-inactivity cron disable; re-enable from the Actions
   tab if it trips.
+- **Served-prefix audit (weekly, #206)**:
+  `.github/workflows/audit-served-prefix.yml` runs
+  `scripts/audit-served-prefix.sql` against production every Monday 06:41 UTC
+  (`SUPABASE_DB_URL_PROD`, step-scoped) and **fails** on a published document
+  under an unpublished ancestor — exit 1 for a violation, exit 2 for an audit
+  that never completed, 0 for clean. The fix is editorial; see `docs/PAYLOAD.md`
+  § "Where the audit runs, and what to do when it fires".
 - **Email deliverability (Resend domain auth)**: brandonperfetti.com is
   verified in Resend (us-east-1 — co-located with the iad1 functions,
   same logic as Upstash) via DNS records at Hover: an MX + SPF TXT on the
@@ -107,6 +120,76 @@
   `next build` requires TS7 to be the workspace `typescript` dep — no
   clean dual-version path. Revisit when typescript-eslint ships TS7
   support, then it's a one-line bump.
+
+## Local errors go to Spotlight, never to the shared project (#194)
+
+Before wave 8, DSN presence was the only send gate, so a `pnpm dev` server
+posted laptop errors into the same `bp-portfolio` project as production —
+and roughly 110 envelopes per `pnpm test:e2e` run, mostly session/pageload
+traffic rather than error capture. Local capture is still intentional;
+[Spotlight](https://spotlightjs.com) is simply the sink now.
+
+**The rule**, implemented once in `getSentryInitDecision`
+(`src/lib/observability/sentryConfig.ts`) and obeyed by all three runtime
+entrypoints: in a local run (`NODE_ENV=development` **and** no deployment
+signal) any configured DSN is **ignored** — the SDK either initialises with
+no DSN and forwards to the Spotlight sidecar, or does not initialise at all.
+Deployed environments are untouched: DSN present → init with it, Spotlight
+never on. A stray `SENTRY_SPOTLIGHT` in a Vercel environment cannot arm
+anything.
+
+**Setting it up (one-time).**
+
+1. Remove `NEXT_PUBLIC_SENTRY_DSN` and `SENTRY_DSN` from `.env.local`. If you
+   leave one in, every runtime prints a startup line naming the variable and
+   ignores it.
+2. Set `NEXT_PUBLIC_SENTRY_SPOTLIGHT=1` in your own `.env.local`. It ships
+   **empty** in `.env.example` on purpose: this is opt-in, so a contributor
+   who has never installed Spotlight gets the pre-#194 behaviour — local dev
+   initialises no Sentry SDK at all — and the "leave every var empty and zero
+   Sentry code paths run" promise at the top of that block stays true.
+3. Run the sidecar. Either the Spotlight desktop app (v4.11.x), or
+   `pnpm exec spotlight` from the repo — `@spotlightjs/spotlight` is a
+   devDependency. It listens on `http://localhost:8969`; the overlay/app
+   reads `http://localhost:8969/stream`.
+4. `pnpm dev`. Server, edge-free client and Node errors, plus
+   `console.warn`/`console.error` logs and sampled traces, appear in
+   Spotlight within a second or so.
+
+**What you see where.** Browser and Node errors, logs and traces land in
+Spotlight. Errors thrown in `src/proxy.ts` (the Edge runtime) do **not** —
+`@sentry/vercel-edge` ships no Spotlight transport; they still print in the
+terminal and are captured normally on every deploy. Nothing local reaches
+sentry.io, so there is no cloud retention for local errors; if that ever
+bites, the recorded fallback is a second Sentry project with its own dev DSN
+(#194 option 2).
+
+**With no sidecar running**, the integrations retry three envelopes, give up,
+and log only through Sentry's debug logger — which `debug: false` leaves
+disabled. So a missing sidecar is silent, not noisy.
+
+**Agent access (MCP).** Spotlight ships an MCP server, so an agent session can
+read local errors directly. Register it in the Claude desktop app's MCP config:
+
+```json
+{
+  "mcpServers": {
+    "spotlight": {
+      "command": "npx",
+      "args": ["-y", "--prefer-online", "@spotlightjs/spotlight@latest", "mcp"]
+    }
+  }
+}
+```
+
+It exposes `search_errors`, `search_logs`, `search_traces` and `get_traces`.
+
+**Knock-on:** with no local DSN, `next.config.mjs` never applies
+`withSentryConfig`, so the `tunnelRoute: '/monitoring'` rewrite leaves the dev
+path entirely — which is what removed the four `MaxListenersExceededWarning`
+lines per navigation (#173, #215). No change was needed in `next.config.mjs`:
+its `sentryDsnConfigured` gate reads the DSN vars directly and is already
+correct for a DSN-less local run.
 
 ## Local database from backups (#85)
 

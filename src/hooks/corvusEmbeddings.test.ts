@@ -12,12 +12,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
  */
 const syncDocumentEmbeddingsMock = vi.fn()
 const deleteDocumentEmbeddingsMock = vi.fn()
+const refreshTechStackSummaryMock = vi.fn()
 
 vi.mock('@/lib/ai/embeddingsStore', () => ({
   syncDocumentEmbeddings: (...args: unknown[]) =>
     syncDocumentEmbeddingsMock(...args),
   deleteDocumentEmbeddings: (...args: unknown[]) =>
     deleteDocumentEmbeddingsMock(...args),
+}))
+
+vi.mock('@/lib/ai/techStackSummarySync', () => ({
+  refreshTechStackSummary: (...args: unknown[]) =>
+    refreshTechStackSummaryMock(...args),
 }))
 
 import {
@@ -414,4 +420,228 @@ describe('7. carries the collection slug through to the store', () => {
       )
     },
   )
+})
+
+describe('8. re-emits the daily-driver summary on tech-stack writes (#165)', () => {
+  const synced = {
+    written: 1,
+    deleted: 0,
+    metadataUpdated: 0,
+    skipped: false,
+  }
+
+  it('runs the summary step AFTER the per-row sync, on tech-stack only', async () => {
+    // The order is the assertion, not a detail: the summary is a view of the
+    // collection this save just changed, so composing it first would embed
+    // the previous tier.
+    const order: string[] = []
+    syncDocumentEmbeddingsMock.mockImplementation(async () => {
+      order.push('per-row')
+      return synced
+    })
+    refreshTechStackSummaryMock.mockImplementation(async () => {
+      order.push('summary')
+      return synced
+    })
+    const { args } = changeArgs({ doc: { id: 9 }, previousDoc: { id: 9 } })
+
+    await refreshCorvusEmbeddings('tech-stack')(args)
+
+    expect(order).toEqual(['per-row', 'summary'])
+  })
+
+  it('forwards the hook’s `req` so the summary reads THIS transaction', async () => {
+    // Transactions are on by default under `@payloadcms/db-postgres`, so a
+    // summary `find` without `req` takes its own connection and composes from
+    // PRE-save rows — the save that triggered the refresh would be invisible
+    // to it. Identity, not `expect.anything()`: a fresh object would be a
+    // different transaction.
+    syncDocumentEmbeddingsMock.mockResolvedValue(synced)
+    refreshTechStackSummaryMock.mockResolvedValue(synced)
+    const { args } = changeArgs({ doc: { id: 9 }, previousDoc: { id: 9 } })
+
+    await refreshCorvusEmbeddings('tech-stack')(args)
+
+    expect(refreshTechStackSummaryMock.mock.calls[0][0].req).toBe(
+      (args as unknown as { req: unknown }).req,
+    )
+  })
+
+  it('afterDelete forwards the hook’s `req` too', async () => {
+    // Same reason, opposite direction: without `req` the read runs outside the
+    // delete's transaction and still SEES the row that was just deleted.
+    refreshTechStackSummaryMock.mockResolvedValue(synced)
+    const { args } = deleteArgs()
+
+    await deleteCorvusEmbeddings('tech-stack')(args)
+
+    expect(refreshTechStackSummaryMock.mock.calls[0][0].req).toBe(
+      (args as unknown as { req: unknown }).req,
+    )
+  })
+
+  it.each(['posts', 'projects', 'uses', 'work-history'] as const)(
+    'does not re-emit on a %s write',
+    async (collection) => {
+      syncDocumentEmbeddingsMock.mockResolvedValue(synced)
+      const { args } = changeArgs({
+        doc: { id: 9, _status: 'published' },
+        previousDoc: { id: 9, _status: 'published' },
+      })
+
+      await refreshCorvusEmbeddings(collection)(args)
+
+      expect(refreshTechStackSummaryMock).not.toHaveBeenCalled()
+    },
+  )
+
+  it('honours context.disableRevalidate', async () => {
+    const { args } = changeArgs({ context: { disableRevalidate: true } })
+    await refreshCorvusEmbeddings('tech-stack')(args)
+
+    expect(refreshTechStackSummaryMock).not.toHaveBeenCalled()
+  })
+
+  it('gives the summary step the SAME deadline object as the per-row sync', async () => {
+    // One deadline for the whole hook. A second, independent
+    // `AbortSignal.timeout(HOOK_EMBEDDING_TIMEOUT_MS)` here would silently
+    // double a tech-stack save's worst case while the docblock went on naming
+    // one constant — so the assertion is object IDENTITY, not "an AbortSignal
+    // was passed", which any number of timeouts would satisfy.
+    syncDocumentEmbeddingsMock.mockResolvedValue(synced)
+    refreshTechStackSummaryMock.mockResolvedValue(synced)
+    const { args } = changeArgs({ doc: { id: 9 }, previousDoc: { id: 9 } })
+
+    await refreshCorvusEmbeddings('tech-stack')(args)
+
+    const syncSignal = syncDocumentEmbeddingsMock.mock.calls[0][0].abortSignal
+    const summarySignal =
+      refreshTechStackSummaryMock.mock.calls[0][0].abortSignal
+    expect(syncSignal).toBeInstanceOf(AbortSignal)
+    expect(summarySignal).toBe(syncSignal)
+  })
+
+  it('bounds the WHOLE hook at ONE HOOK_EMBEDDING_TIMEOUT_MS, not 2x', async () => {
+    // The test the previous version of this case could not be: it asserted
+    // `expect.any(AbortSignal)` and a constant, and would have passed
+    // unchanged against `AbortSignal.timeout(600_000)` or against two
+    // independent deadlines.
+    //
+    // The shape is what makes it discriminating. The per-row sync spends
+    // almost the WHOLE budget and then succeeds; the summary step then hangs
+    // forever and honours no signal, so the only thing that can settle this
+    // hook is the hook's own deadline.
+    //
+    // - One shared deadline: 1ms of budget is left when the summary starts, so
+    //   the hook fails open at exactly HOOK_EMBEDDING_TIMEOUT_MS.
+    // - A second, independent deadline for the summary step: it starts with a
+    //   fresh full budget, so at HOOK_EMBEDDING_TIMEOUT_MS the hook is STILL
+    //   pending and the `resolves` assertion below fails. That is the
+    //   regression this case exists to catch, and the reason the previous
+    //   version of it — `expect.any(AbortSignal)` plus a constant — could not.
+    vi.useFakeTimers()
+    try {
+      syncDocumentEmbeddingsMock.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve(synced), HOOK_EMBEDDING_TIMEOUT_MS - 1),
+          ),
+      )
+      refreshTechStackSummaryMock.mockImplementation(
+        () => new Promise(() => {}),
+      )
+      const doc = { id: 9 }
+      const { args, log } = changeArgs({ doc, previousDoc: { id: 9 } })
+
+      const pending = refreshCorvusEmbeddings('tech-stack')(args)
+      let settled = false
+      void pending.then(() => {
+        settled = true
+      })
+
+      // The per-row sync has just returned; the summary step is running and
+      // the hook is still waiting on it.
+      await vi.advanceTimersByTimeAsync(HOOK_EMBEDDING_TIMEOUT_MS - 1)
+      expect(refreshTechStackSummaryMock).toHaveBeenCalledTimes(1)
+      expect(settled).toBe(false)
+
+      // One more millisecond spends the SHARED budget: failed open, with the
+      // save's own document returned so the save completes.
+      await vi.advanceTimersByTimeAsync(1)
+      await expect(pending).resolves.toBe(doc)
+      expect(log.error).toHaveBeenCalledWith(
+        expect.stringContaining('backfill-corvus-embeddings.ts'),
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds the afterDelete hook the same way', async () => {
+    vi.useFakeTimers()
+    try {
+      deleteDocumentEmbeddingsMock.mockResolvedValue(undefined)
+      refreshTechStackSummaryMock.mockImplementation(
+        () => new Promise(() => {}),
+      )
+      const doc = { id: 9 }
+      const { args, log } = deleteArgs({ doc })
+
+      const pending = deleteCorvusEmbeddings('tech-stack')(args)
+      await vi.advanceTimersByTimeAsync(HOOK_EMBEDDING_TIMEOUT_MS)
+
+      await expect(pending).resolves.toBe(doc)
+      expect(log.error).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('FAILS OPEN: a throwing summary step does not fail the save', async () => {
+    // The whole point of putting the step inside the existing `try`. A
+    // failure logs, leaves the STALE summary row in place, and the save
+    // completes — the backfill is the repair path, exactly as it is for every
+    // other failure in this hook.
+    syncDocumentEmbeddingsMock.mockResolvedValue(synced)
+    refreshTechStackSummaryMock.mockRejectedValue(new Error('provider down'))
+    const { args, log } = changeArgs({ doc: { id: 9 }, previousDoc: { id: 9 } })
+
+    await expect(
+      refreshCorvusEmbeddings('tech-stack')(args),
+    ).resolves.toBeDefined()
+
+    expect(log.error).toHaveBeenCalledWith(
+      expect.stringContaining('backfill-corvus-embeddings.ts'),
+    )
+    // And the per-row work still happened: the summary failure is downstream
+    // of it, so the technology's own chunk is already written.
+    expect(syncDocumentEmbeddingsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-emits on afterDelete too — the tier can SHRINK', async () => {
+    refreshTechStackSummaryMock.mockResolvedValue(synced)
+    const { args } = deleteArgs({ doc: { id: 9 } })
+
+    await deleteCorvusEmbeddings('tech-stack')(args)
+
+    expect(deleteDocumentEmbeddingsMock).toHaveBeenCalledTimes(1)
+    expect(refreshTechStackSummaryMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails open on afterDelete as well', async () => {
+    refreshTechStackSummaryMock.mockRejectedValue(new Error('db gone'))
+    const { args, log } = deleteArgs({ doc: { id: 9 } })
+
+    await expect(
+      deleteCorvusEmbeddings('tech-stack')(args),
+    ).resolves.toBeDefined()
+    expect(log.error).toHaveBeenCalled()
+  })
+
+  it('does not re-emit on a non-tech-stack delete', async () => {
+    const { args } = deleteArgs({ doc: { id: 9 } })
+    await deleteCorvusEmbeddings('posts')(args)
+
+    expect(refreshTechStackSummaryMock).not.toHaveBeenCalled()
+  })
 })

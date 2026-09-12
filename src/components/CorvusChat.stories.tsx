@@ -217,8 +217,41 @@ async function tabToSignInGateCta(cta: HTMLAnchorElement) {
 
 /** The dark hover ring, `--corvus-accent-ring-hover` (teal-300) as rendered. */
 const RING_RGB = 'rgb(94, 234, 212)'
-/** `--corvus-accent` (teal-400), the focus outline colour on the dark surface. */
-const FOCUS_RGB = 'rgb(45, 212, 191)'
+/**
+ * The colour a `.corvus-surface` custom property resolves to, read back
+ * through the same CSS property the assertion reads.
+ *
+ * @remarks This used to be a pinned literal, `FOCUS_RGB = 'rgb(45, 212, 191)'`
+ * — Tailwind v3's `#2dd4bf`. #202 made `--corvus-accent` an alias of the
+ * site-level `--link-accent`, which is the v4 ramp step
+ * `oklch(0.777 0.152 181.912)` = `rgb(0, 213, 190)`, and the literal went
+ * stale in a gate `pnpm build-storybook` cannot see: that build is compile-only
+ * (`docs/TESTING.md` §Layers), and this assertion only runs under
+ * `pnpm test:storybook`. Re-pinning the new hex would leave the same trap for
+ * the next token move, so the expectation is DERIVED from the token instead.
+ *
+ * The probe is appended inside the element under test, so it inherits the same
+ * `.corvus-surface` custom-property scope, and the value is read off
+ * `outlineColor` — the identical property and therefore the identical
+ * serialisation as the assertion it is compared against. It is not
+ * tautological: it asserts that the CTA's outline IS the accent token, so a
+ * rule that stopped painting the outline, or painted it from some other
+ * colour, still fails.
+ *
+ * @param scope - An element inside the `.corvus-surface` subtree.
+ * @param token - Custom property name, e.g. `--corvus-accent`.
+ * @returns The resolved colour as the browser serialises `outline-color`.
+ */
+function resolvedTokenColor(scope: HTMLElement, token: string): string {
+  const probe = document.createElement('span')
+  probe.style.outlineColor = `var(${token})`
+  scope.appendChild(probe)
+  try {
+    return getComputedStyle(probe).outlineColor
+  } finally {
+    probe.remove()
+  }
+}
 /** `--corvus-accent-solid` (teal-700), the resting fill dark hover keeps. */
 const RESTING_FILL_RGB = 'rgb(15, 118, 110)'
 /** `--corvus-accent-solid-hover` (teal-800), the light theme's hover fill. */
@@ -519,7 +552,14 @@ export const SignInGateHoverDarkKeyboardFocus: Story = {
       // they hold on BOTH paths — they are the assertions this story had
       // before #139 and must not disappear behind a canvas skip.
       const style = getComputedStyle(cta)
-      await expect(style.outlineColor).toBe(FOCUS_RGB)
+      // Derived from `--corvus-accent` rather than pinned to a hex — see
+      // `resolvedTokenColor`. The token is teal-400 on this surface; since
+      // #202 it aliases `--link-accent`, so the ramp step is named in one
+      // place (`tailwind.css`) instead of transcribed into this file.
+      const focusColour = resolvedTokenColor(cta, '--corvus-accent')
+      await expect(focusColour).not.toBe('')
+      await expect(focusColour).not.toBe('rgba(0, 0, 0, 0)')
+      await expect(style.outlineColor).toBe(focusColour)
       await expect(style.outlineStyle).toBe('solid')
       await expect(parseFloat(style.outlineWidth)).toBeGreaterThan(0)
       // The fill still does not step, focused or not.

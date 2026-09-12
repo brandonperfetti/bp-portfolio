@@ -2,11 +2,12 @@ import * as Sentry from '@sentry/nextjs'
 
 import {
   getSentryEnvironment,
-  getServerSentryDsn,
+  getSentryInitDecision,
   SENTRY_CONSOLE_LOG_LEVELS,
   sentryDropBotEvent,
   sentryDropNoisyLog,
   sentryTracesSampler,
+  warnIfDevDsnIgnored,
 } from '@/lib/observability/sentryConfig'
 
 /**
@@ -15,10 +16,21 @@ import {
  *
  * @remarks
  * Imported by `src/instrumentation.ts`'s `register()` when
- * `NEXT_RUNTIME === 'nodejs'`. Entirely env-gated: `Sentry.init` is only
- * called when {@link getServerSentryDsn} returns a value, so local dev and
- * CI with no DSN configured never initialize the SDK — no error capture,
- * no tracing, no outbound requests.
+ * `NEXT_RUNTIME === 'nodejs'`. Entirely env-gated via the shared
+ * {@link getSentryInitDecision}: deployed environments init only with a
+ * DSN (unchanged), CI never inits, and a local `pnpm dev` inits **without
+ * a DSN** and forwards to the Spotlight sidecar instead (#194) — so a
+ * laptop error surfaces immediately and reaches the shared `bp-portfolio`
+ * project never.
+ *
+ * `spotlight: true` is the SDK's own option; it resolves the sidecar URL
+ * from `SENTRY_SPOTLIGHT` when that holds a URL rather than a boolean, and
+ * otherwise defaults to `http://localhost:8969/stream`
+ * `[source: node-core 10.70.0 utils+integrations/spotlight.ts]`.
+ * With no sidecar listening the integration counts failures and stops
+ * after three, logging only through Sentry's debug logger — which
+ * `debug: false` leaves disabled, so an absent sidecar prints nothing
+ * `[source: core 10.70.0 utils/debug-logger.js _maybeLog]`.
  *
  * Defaults first (#73): no session replay, no cron monitoring, no
  * alerting-rule buildout — just error capture (always on), low-rate
@@ -26,11 +38,17 @@ import {
  * (`console.warn`/`console.error` only — see
  * {@link SENTRY_CONSOLE_LOG_LEVELS}).
  */
-const dsn = getServerSentryDsn()
+const decision = getSentryInitDecision('server')
 
-if (dsn) {
+warnIfDevDsnIgnored(decision)
+
+if (decision.init) {
   Sentry.init({
-    dsn,
+    // Spread rather than `dsn: decision.dsn`: a Spotlight-only init must
+    // carry NO `dsn` key at all, not a key holding undefined, so "no DSN"
+    // is literal in the options object a reader (or a test) inspects.
+    ...(decision.dsn ? { dsn: decision.dsn } : {}),
+    spotlight: decision.spotlight,
     environment: getSentryEnvironment(),
     tracesSampler: sentryTracesSampler,
     // Internal SDK debug logging only, not app logs — keep it off outside

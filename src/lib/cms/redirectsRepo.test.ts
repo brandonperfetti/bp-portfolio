@@ -517,6 +517,297 @@ describe('resolveRedirect · descendant prefix rows (#150)', () => {
     })
   })
 
+  /**
+   * #201 — a re-used path, and the identity that keeps a capture honest.
+   *
+   * `toPathAtCapture` records a PATH, and a path is not a stable identity: once
+   * the document it named vacates it, another document can take it. Two shapes
+   * follow, and both are reachable from the hooks as written:
+   *
+   * 1. **The row itself is repointed.** `from` is `unique` on the collection,
+   *    so when the new occupant vacates the same path `createPathRedirect`
+   *    updates the existing row rather than stacking a second one. The row's
+   *    `to` then names the NEW document while its write-once snapshot still
+   *    names the era of the old one.
+   * 2. **The hop walks into the new occupant's own row.** A row keyed exactly
+   *    at the captured path is normally the captured document's next move —
+   *    that is what makes the #178 walk work — but after the path is re-used it
+   *    can instead be a different document's.
+   *
+   * Both are silent 301s into a subtree the link was never about. The fix is
+   * the id recorded beside the path (`toIdAtCapture`, resolved to
+   * `capturedTargetPath` by {@link getCmsRedirects}); these tests are the
+   * semantics table.
+   */
+  describe('a path vacated by one document and taken by another (#201)', () => {
+    /** Add the capture-time identity, and where that document lives now. */
+    const capturedFor = (
+      redirect: CmsRedirect,
+      toIdAtCapture: string,
+      capturedTargetPath?: string,
+    ): CmsRedirect => ({
+      ...redirect,
+      toIdAtCapture,
+      ...(capturedTargetPath ? { capturedTargetPath } : {}),
+    })
+
+    /**
+     * A was renamed `/work/acme` → `/work/acme-corp`, writing this row. B was
+     * later created at the vacated `/work/acme` and renamed to `/work/beta`,
+     * and `from` being unique the hook REPOINTED this same row at B while
+     * preserving A's snapshot (#178's write-once rule).
+     */
+    const repointedAtB = capturedFor(
+      {
+        ...prefixRow('/work/acme', '/work/beta'),
+        toPathAtCapture: '/work/acme-corp',
+      },
+      'pages:1',
+      '/work/acme-corp',
+    )
+
+    it('rewrites a descendant onto the CAPTURED document, not the new occupant', () => {
+      // THE ticket. `/work/acme/leaf` is a URL from A's tenure; the row's `to`
+      // now names B, so the pre-#201 rewrite answered `/work/beta/leaf` — a
+      // live page in a subtree the link was never about, served as a 301.
+      expect(resolveRedirect([repointedAtB], '/work/acme/leaf')).toEqual(
+        permanentlyTo('/work/acme-corp/leaf'),
+      )
+    })
+
+    it('leaves the EXACT key answering the row’s own destination', () => {
+      // Deliberately unchanged, and the boundary of this ticket. `/work/acme`
+      // itself was most recently B's URL — B vacated it, which is why the row
+      // was repointed — so the last document to leave a path keeps that path's
+      // own redirect (#120's rule). Only the subtree, which no row is keyed at
+      // and which the snapshot is the sole key for, is anchored to the capture.
+      expect(resolveRedirect([repointedAtB], '/work/acme')).toEqual(
+        permanentlyTo('/work/beta'),
+      )
+    })
+
+    it('never hops through the row of a later occupant of the captured path', () => {
+      // A's first move row, whose snapshot names `/work/acme`; A has since
+      // moved on to `/work/acme-corp`. B took `/work/acme` and moved to
+      // `/work/beta`, writing its OWN row keyed at `/work/acme` (A's row there
+      // was deleted in admin, or fell outside the REDIRECT_LIMIT read — the
+      // two ways the docblock already names for an incomplete table).
+      const captureOfA = capturedFor(
+        {
+          ...prefixRow('/work/old', '/work/acme-corp'),
+          toPathAtCapture: '/work/acme',
+        },
+        'pages:1',
+        '/work/acme-corp',
+      )
+      const bsOwnRow = capturedFor(
+        {
+          ...prefixRow('/work/acme', '/work/beta'),
+          toPathAtCapture: '/work/beta',
+        },
+        'pages:2',
+        '/work/beta',
+      )
+
+      // Without B in the table this already answered A's subtree; adding a row
+      // about a DIFFERENT document must not change that answer.
+      expect(resolveRedirect([captureOfA], '/work/old/leaf')).toEqual(
+        permanentlyTo('/work/acme-corp/leaf'),
+      )
+      expect(resolveRedirect([captureOfA, bsOwnRow], '/work/old/leaf')).toEqual(
+        permanentlyTo('/work/acme-corp/leaf'),
+      )
+    })
+
+    it('still hops through a row keyed at the captured path when it is the SAME document', () => {
+      // The guard on the guard: the exclusion above is about a re-occupier, not
+      // about every row keyed at a snapshot. A's own next move is keyed there
+      // too, and that row is exactly what #178's walk exists to reach.
+      const captureOfA = capturedFor(
+        {
+          ...prefixRow('/work/old', '/work/acme-x'),
+          toPathAtCapture: '/work/acme',
+        },
+        'pages:1',
+        '/work/acme-x',
+      )
+      const asNextMove = capturedFor(
+        {
+          ...prefixRow('/work/acme', '/work/acme-x'),
+          toPathAtCapture: '/work/acme-corp',
+        },
+        'pages:1',
+        '/work/acme-x',
+      )
+      const leafMovedOut = row('/work/acme-corp/leaf', '/work/moved-leaf')
+
+      expect(
+        resolveRedirect(
+          [captureOfA, asNextMove, leafMovedOut],
+          '/work/old/leaf',
+        ),
+      ).toEqual(permanentlyTo('/work/moved-leaf'))
+    })
+
+    it('still hops through a row that records no identity at all', () => {
+      // A pre-#201 row in the middle of a chain is not evidence of a
+      // re-occupier — it is evidence of nothing, and the walk treats it as it
+      // always did.
+      const captureOfA = capturedFor(
+        {
+          ...prefixRow('/work/old', '/work/acme-x'),
+          toPathAtCapture: '/work/acme',
+        },
+        'pages:1',
+        '/work/acme-x',
+      )
+      const legacyMiddle: CmsRedirect = {
+        ...prefixRow('/work/acme', '/work/acme-x'),
+        toPathAtCapture: '/work/acme-corp',
+      }
+      const leafMovedOut = row('/work/acme-corp/leaf', '/work/moved-leaf')
+
+      expect(
+        resolveRedirect(
+          [captureOfA, legacyMiddle, leafMovedOut],
+          '/work/old/leaf',
+        ),
+      ).toEqual(permanentlyTo('/work/moved-leaf'))
+    })
+
+    it('lets an editor’s custom redirect at the captured path answer the hop', () => {
+      // Boundary 4, and the one shape rule 3 deliberately does NOT reject.
+      //
+      // A row keyed exactly at the capture base normally belongs either to the
+      // captured document's own next move (hop through it) or to a later
+      // occupant (reject it, rule 3). A row whose `to` is a custom URL is
+      // neither: it carries no identity at all, because a custom destination is
+      // an editor's statement rather than a document reference (boundary 3), so
+      // the filter cannot see it — and it should not want to.
+      // `createPathRedirect` writes `to.type: 'reference'` on every row it
+      // creates AND on every row it repoints, so a custom destination at this
+      // key can only have been typed by a person, about this exact path. A
+      // human statement about where a path's era goes outranks a lineage this
+      // module infers from a snapshot.
+      const captureOfA = capturedFor(
+        {
+          ...prefixRow('/work/old', '/work/acme-corp'),
+          toPathAtCapture: '/work/acme',
+        },
+        'pages:1',
+        '/work/acme-corp',
+      )
+      // As `getCmsRedirects` flattens an editor's custom row: a destination and
+      // no identity, whatever the identity COLUMNS still hold.
+      const editorsOwnRow = prefixRow('/work/acme', '/campaigns/spring')
+
+      expect(
+        resolveRedirect([captureOfA, editorsOwnRow], '/work/old/leaf'),
+      ).toEqual(permanentlyTo('/campaigns/spring/leaf'))
+      // The contrast that makes this a decision rather than a hole: the same
+      // key, a hook-written row, a different document's identity — rejected,
+      // and the walk falls back to the captured document's subtree.
+      expect(
+        resolveRedirect(
+          [
+            captureOfA,
+            capturedFor(
+              {
+                ...prefixRow('/work/acme', '/work/beta'),
+                toPathAtCapture: '/work/beta',
+              },
+              'pages:2',
+              '/work/beta',
+            ),
+          ],
+          '/work/old/leaf',
+        ),
+      ).toEqual(permanentlyTo('/work/acme-corp/leaf'))
+    })
+
+    it('404s a descendant when the captured document is gone', () => {
+      // The case the ticket asked to be decided rather than left to fall out of
+      // the query. The identity is recorded and resolves to NOTHING — the page
+      // was deleted or unpublished — so the only paths on offer are the new
+      // occupant's, and a wrong 200 is the failure worth refusing. A 404 is
+      // visible and gets reported; a plausible wrong page does not.
+      const orphaned = capturedFor(
+        {
+          ...prefixRow('/work/acme', '/work/beta'),
+          toPathAtCapture: '/work/acme-corp',
+        },
+        'pages:1',
+      )
+
+      expect(resolveRedirect([orphaned], '/work/acme/leaf')).toBeNull()
+      // The exact key is unaffected: that URL is B's to answer.
+      expect(resolveRedirect([orphaned], '/work/acme')).toEqual(
+        permanentlyTo('/work/beta'),
+      )
+    })
+
+    it('leaves a row with no captured identity exactly as it was (AC 4)', () => {
+      // Every row written before this change carries no identity, and nothing
+      // can reconstruct one — so it keeps today's answer, this bug included.
+      // That is the whole of the compatibility promise, and it is why the
+      // assertion here is the WRONG destination: making it right would mean
+      // inventing an identity, which is the one thing a null row cannot have.
+      const legacyRepointed: CmsRedirect = {
+        ...prefixRow('/work/acme', '/work/beta'),
+        toPathAtCapture: '/work/acme-corp',
+      }
+
+      expect(resolveRedirect([legacyRepointed], '/work/acme/leaf')).toEqual(
+        permanentlyTo('/work/beta/leaf'),
+      )
+    })
+
+    it('keeps the #178 three-move lineage resolving once identities are recorded (AC 3)', () => {
+      // The same repro as the block above, with every row carrying the id of
+      // the document it was captured for — which is what every row written
+      // after this change looks like. The walk is unchanged: each hop passes
+      // through a row keyed at the previous row's snapshot, and each of those
+      // rows belongs to the document whose era it names.
+      const rowA = capturedFor(
+        {
+          ...prefixRow('/lab-parent/lab-child', '/lab-base/lab-kid'),
+          toPathAtCapture: '/lab-parent/lab-kid',
+        },
+        'pages:11',
+        '/lab-base/lab-kid',
+      )
+      const rowB = capturedFor(
+        {
+          ...prefixRow(
+            '/lab-parent/lab-kid/lab-grandchild',
+            '/lab-base/lab-grandchild',
+          ),
+          toPathAtCapture: '/lab-parent/lab-grandchild',
+        },
+        'pages:12',
+        '/lab-base/lab-grandchild',
+      )
+      const rowC = capturedFor(
+        {
+          ...prefixRow('/lab-parent', '/lab-base'),
+          toPathAtCapture: '/lab-base',
+        },
+        'pages:10',
+        '/lab-base',
+      )
+
+      for (const list of [
+        [rowA, rowB, rowC],
+        [rowC, rowB, rowA],
+        [rowB, rowC, rowA],
+      ]) {
+        expect(
+          resolveRedirect(list, '/lab-parent/lab-child/lab-grandchild'),
+        ).toEqual(permanentlyTo('/lab-base/lab-grandchild'))
+      }
+    })
+  })
+
   it('skips a prefix row whose destination leaves the site', () => {
     // Appending a path suffix to an editor's absolute URL is a URL this
     // function has no business inventing.
@@ -909,6 +1200,204 @@ describe('getCmsRedirects', () => {
         collection: 'redirects',
         select: expect.objectContaining({ toPathAtCapture: true }),
       }),
+    )
+  })
+
+  it('asks Payload for the capture identity columns (#201)', async () => {
+    stubFind({ redirects: [] })
+    await getCmsRedirects()
+
+    expect(mocks.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'redirects',
+        select: expect.objectContaining({
+          toCollectionAtCapture: true,
+          toIdAtCapture: true,
+        }),
+      }),
+    )
+  })
+
+  it('resolves the capture identity to that document’s CURRENT path (#201)', async () => {
+    // The row was captured for page 19 and has since been repointed at page 20
+    // — the shape a re-used path leaves behind. All three destinations
+    // disagree on purpose: `to` is where the row points NOW, `toPathAtCapture`
+    // is a spelling frozen in the past, and `capturedTargetPath` is where the
+    // document the row was actually about lives today. Only the third can
+    // rewrite that document's old subtree correctly.
+    stubFind({
+      redirects: [
+        {
+          ...referenceRow('/work/acme', 'pages', 20),
+          matchDescendants: true,
+          toPathAtCapture: '/work/acme-corp',
+          toCollectionAtCapture: 'pages',
+          toIdAtCapture: '19',
+        },
+      ],
+      pages: [
+        { id: 19, path: 'work/acme-corp', slug: 'acme-corp' },
+        { id: 20, path: 'work/beta', slug: 'beta' },
+      ],
+    })
+
+    const redirects = await getCmsRedirects()
+    expect(redirects).toEqual([
+      {
+        capturedTargetPath: '/work/acme-corp',
+        from: '/work/acme',
+        matchDescendants: true,
+        to: '/work/beta',
+        toIdAtCapture: 'pages:19',
+        toPathAtCapture: '/work/acme-corp',
+        type: '301',
+      },
+    ])
+    // And end to end through the resolver: the subtree follows the captured
+    // document, the exact key stays with the row's own destination.
+    expect(resolveRedirect(redirects, '/work/acme/leaf')).toEqual(
+      permanentlyTo('/work/acme-corp/leaf'),
+    )
+    expect(resolveRedirect(redirects, '/work/acme')).toEqual(
+      permanentlyTo('/work/beta'),
+    )
+  })
+
+  it('keeps the identity but drops the path when the captured document is gone (#201)', async () => {
+    // The distinction the two keys exist to carry. Page 19 was deleted, so the
+    // join answers nothing for it — but the row still records that it was ABOUT
+    // page 19, which is what makes the resolver decline rather than hand the
+    // subtree to page 20.
+    stubFind({
+      redirects: [
+        {
+          ...referenceRow('/work/acme', 'pages', 20),
+          matchDescendants: true,
+          toPathAtCapture: '/work/acme-corp',
+          toCollectionAtCapture: 'pages',
+          toIdAtCapture: '19',
+        },
+      ],
+      pages: [{ id: 20, path: 'work/beta', slug: 'beta' }],
+    })
+
+    const [flattened] = await getCmsRedirects()
+    expect(flattened.toIdAtCapture).toBe('pages:19')
+    expect('capturedTargetPath' in flattened).toBe(false)
+    expect(resolveRedirect([flattened], '/work/acme/leaf')).toBeNull()
+  })
+
+  /**
+   * #201 — the identity is for REFERENCE rows, and the gate is at the
+   * flattening because that is the last place the distinction survives.
+   *
+   * An editor can repoint any row's `to` at a custom URL. That URL is the
+   * editor's own statement about where the path goes, and the two identity
+   * rules would each override it in a different direction: rule 1 would rewrite
+   * descendants onto the captured document's path instead of the editor's
+   * destination, and rule 2 would 404 them outright because a document the row
+   * no longer mentions has been deleted. Neither is the editor's intent, and
+   * `resolveRedirect` cannot tell the two row kinds apart — a relative custom
+   * URL and a reference-derived path are the same string by then.
+   */
+  describe('a row repointed at a CUSTOM url keeps its editor’s destination (#201)', () => {
+    const customRowCapturedForPage19 = {
+      from: '/work/acme',
+      matchDescendants: true,
+      to: { type: 'custom', url: '/campaigns/spring' },
+      toCollectionAtCapture: 'pages',
+      toIdAtCapture: '19',
+      toPathAtCapture: '/work/acme-corp',
+      type: '301' as const,
+    }
+
+    it('does not rewrite descendants onto the captured document', async () => {
+      // Page 19 is alive and elsewhere; rule 1 must not pull the subtree back
+      // to it, because this row no longer points at page 19 at all.
+      stubFind({
+        redirects: [customRowCapturedForPage19],
+        pages: [{ id: 19, path: 'work/acme-corp', slug: 'acme-corp' }],
+      })
+
+      const redirects = await getCmsRedirects()
+      expect('toIdAtCapture' in redirects[0]).toBe(false)
+      expect('capturedTargetPath' in redirects[0]).toBe(false)
+      expect(resolveRedirect(redirects, '/work/acme/leaf')).toEqual(
+        permanentlyTo('/campaigns/spring/leaf'),
+      )
+    })
+
+    it('does not 404 descendants because the captured document was deleted', async () => {
+      // The same row with page 19 gone. Rule 2's 404 exists so a live document
+      // cannot inherit another's subtree; there is no such inheritance here —
+      // the destination is a URL an editor typed, and withdrawing it would be
+      // a redirect the row's own contents never asked for.
+      stubFind({ redirects: [customRowCapturedForPage19], pages: [] })
+
+      const redirects = await getCmsRedirects()
+      expect(resolveRedirect(redirects, '/work/acme/leaf')).toEqual(
+        permanentlyTo('/campaigns/spring/leaf'),
+      )
+      expect(resolveRedirect(redirects, '/work/acme')).toEqual(
+        permanentlyTo('/campaigns/spring'),
+      )
+    })
+  })
+
+  it('reads a row written before #201 with both identity keys omitted', async () => {
+    // Omitted, not `null` — the third time this file asserts it, and the reason
+    // is unchanged: a row that predates the column must flatten byte-identically
+    // to what this function returned before, so every existing assertion here
+    // is also the compatibility promise (AC 4).
+    stubFind({
+      redirects: [
+        {
+          ...referenceRow('/work', 'pages', 7),
+          matchDescendants: true,
+          toPathAtCapture: '/experience',
+        },
+      ],
+      pages: [{ id: 7, path: 'experience', slug: 'experience' }],
+    })
+
+    const [flattened] = await getCmsRedirects()
+    expect('toIdAtCapture' in flattened).toBe(false)
+    expect('capturedTargetPath' in flattened).toBe(false)
+  })
+
+  it('joins the captured document in the SAME query as the reference (#201)', async () => {
+    // One query per collection, not two: the identity's cost is a couple more
+    // ids in an `in` clause the read already makes.
+    stubFind({
+      redirects: [
+        {
+          ...referenceRow('/work/acme', 'pages', 20),
+          toPathAtCapture: '/work/acme-corp',
+          toCollectionAtCapture: 'pages',
+          toIdAtCapture: '19',
+        },
+      ],
+      pages: [
+        { id: 19, path: 'work/acme-corp', slug: 'acme-corp' },
+        { id: 20, path: 'work/beta', slug: 'beta' },
+      ],
+    })
+
+    await getCmsRedirects()
+
+    const pageQueries = (
+      mocks.find.mock.calls as Array<
+        [{ collection: string; where?: { id?: { in?: unknown[] } } }]
+      >
+    ).filter(([args]) => args.collection === 'pages')
+    expect(pageQueries).toHaveLength(1)
+    // The captured id goes into the clause as the string the varchar holds;
+    // Payload sanitises it against the `id` field's own type on the way to
+    // Postgres. [measured: the pg-tier test in
+    // `evals/redirect-capture-identity-integration.test.ts` resolves a captured
+    // id through this exact path against a real `serial` column.]
+    expect(pageQueries[0][0].where?.id?.in).toEqual(
+      expect.arrayContaining(['19', 20]),
     )
   })
 

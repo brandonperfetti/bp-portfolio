@@ -199,17 +199,26 @@ function CorvusReplyLink({
     setConfirming(false)
   }, [])
 
-  // teal-700 / teal-400 rather than `text-primary` (#190). `--primary` is a
-  // FILL token — one colour in both themes (teal-700), paired with white — so
-  // reading it as TEXT is a role confusion that only went unnoticed while the
-  // scaffold happened to make it near-black in light and near-white in dark.
-  // Themed to the site palette it measures 3.69:1 on the dark page and 2.61:1
-  // on the dark assistant bubble, both under WCAG 1.4.3. This is the site's
-  // actual link accent instead — the nav's active-link pair, identical to
-  // `--corvus-accent` in each theme: 5.16:1 / 4.90:1 in light (page / bubble),
-  // 10.66:1 / 7.98:1 in dark.
+  // `--link-accent` (teal-700 / teal-400) rather than `text-primary` (#190).
+  // `--primary` is a FILL token — one colour in both themes (teal-700), paired
+  // with white — so reading it as TEXT is a role confusion that only went
+  // unnoticed while the scaffold happened to make it near-black in light and
+  // near-white in dark. Themed to the site palette it measures 3.69:1 on the
+  // dark page and 2.61:1 on the dark assistant bubble, both under WCAG 1.4.3.
+  // This is the site's actual link accent instead — the nav's active-link
+  // pair, and the token `--corvus-accent` aliases it since #202.
+  //
+  // Ratios on the CORVUS surfaces, recomputed from the resolved v4 value that
+  // alias now carries (the v3 figures this comment used to quote in
+  // parentheses): 5.14:1 (5.24) on the light ground and 4.88:1 (4.98) on the
+  // light assistant bubble; 11.26:1 (11.28) on the dark ground and 7.99:1
+  // (8.00) on the dark bubble. All clear 4.5:1, and all four are asserted from
+  // source by `src/styles/corvus-accent-contrast.test.ts` rather than trusted
+  // from here. The light bubble is the tightest pair on the surface and the
+  // move spends 0.10 of its 0.48 margin — recorded so a future nudge to
+  // `--corvus-bubble-assistant` knows what it is eating into.
   const linkClassName = [
-    'wrap-anywhere font-medium text-teal-700 underline dark:text-teal-400',
+    'text-link-accent font-medium wrap-anywhere underline',
     className,
   ]
     .filter(Boolean)
@@ -375,6 +384,17 @@ function CorvusReplyLink({
  */
 const CORVUS_MARKDOWN_COMPONENTS = { a: CorvusReplyLink }
 
+/**
+ * Heading levels the agent header's name may render at.
+ *
+ * @remarks Deliberately a closed set of three rather than a hand-narrowed
+ * slice of React's intrinsic elements: the name is a heading, and the only
+ * question is which rank. `h1` is the page-owning case (`/corvus`), `h2` the
+ * block case (`src/blocks/CorvusChat`), and `h3` exists for a future surface
+ * that genuinely nests under a section heading.
+ */
+export type CorvusChatHeadingLevel = 'h1' | 'h2' | 'h3'
+
 export interface CorvusChatProps {
   /**
    * The compact in-card agent header's name — CMS-driven (`page?.title`)
@@ -385,13 +405,59 @@ export interface CorvusChatProps {
   title?: string
   /** The agent header's subtitle line, one row below `title`. */
   subtitle?: string
+  /**
+   * The heading rank `title` renders at.
+   *
+   * @remarks Defaults to `'h1'`, which is exactly what this component emitted
+   * before the prop existed — `/corvus` passes nothing and its DOM is
+   * unchanged. A caller that is NOT the page's primary content must pass a
+   * lower rank, or the page ends up with two `<h1>`s: an a11y/SEO defect that
+   * is invisible in a screenshot (#192 finding 2). Only the tag changes; the
+   * classes, the `data-slot` and the text are identical at every rank, so this
+   * is an outline control and not a size control.
+   */
+  headingLevel?: CorvusChatHeadingLevel
+  /**
+   * Text to pre-fill the composer with.
+   *
+   * @remarks **The composer only, and only as the visitor's own draft.** It
+   * seeds `input` state, exactly as if the visitor had typed it: it is
+   * editable, clearable, and nothing is sent until they submit — at which
+   * point it travels as a normal `user` message through the same
+   * `sendMessage` path as typed or dictated text. It never becomes a `system`
+   * message and never reaches the prompt: the system prompt is server-enforced
+   * and `/api/ai/chat`'s body schema is `{ messages }` and nothing else
+   * (`src/app/api/ai/chat/route.ts`), so there is no field for it to travel in
+   * even if this component tried. `CorvusChat.starterPrompt.test.tsx` asserts
+   * that from the wire, not from this docblock.
+   *
+   * Read once, as the initial state: a later change to the prop does not
+   * overwrite what the visitor has since typed, which is the only behaviour
+   * that does not lose their words.
+   */
+  starterPrompt?: string
+  /**
+   * Whether this instance claims the page-wide `/` focus shortcut.
+   *
+   * @remarks Defaults to `true`, which is exactly what this component did
+   * before the prop existed — `/corvus` passes nothing and its behaviour is
+   * unchanged. The listener is on `window`, so it is a PAGE-WIDE claim on a
+   * single key, and the CMS block can put this component on any page: a block
+   * instance dropped onto `/articles` would hijack the `/` that
+   * `ArticlesExplorer` already owns for its filter field, and two block
+   * instances on one page would fight over focus. A caller that is not the
+   * page's primary chat surface passes `false`, and then no listener is
+   * registered at all.
+   */
+  globalShortcut?: boolean
 }
 
 /**
  * Corvus chat client on `useChat` + streamdown (replaces the v3 manual
  * `ReadableStream` reader over a hand-rolled NDJSON protocol).
  *
- * @remarks Retained v3 niceties: `/` focuses the input, Enter submits
+ * @remarks Retained v3 niceties: `/` focuses the input (unless the caller
+ * releases the key with `globalShortcut={false}`), Enter submits
  * (Shift+Enter for newline), textarea autosize, assistant copy buttons, and a
  * reduced-motion-aware intro (no entrance animation when reduced motion is
  * set). Presentation is built on our own reconstructed
@@ -407,8 +473,9 @@ export interface CorvusChatProps {
  * below) — this component's own utility classes are the zinc/teal default
  * and stay that way outside `.corvus-surface` (e.g. in Storybook).
  *
- * Owns the page's compact in-card agent header (raven avatar, `title` as an
- * `<h1>`, `subtitle`, a green "online" dot) — `CorvusPage` no longer renders
+ * Owns the page's compact in-card agent header (raven avatar, `title` at
+ * `headingLevel` — `<h1>` unless a caller lowers it, `subtitle`, a green
+ * "online" dot) — `CorvusPage` no longer renders
  * a separate hero-style header, so this component is the single source of
  * that identity band. Also owns the Web Speech voice-input mic button (#80)
  * via {@link useSpeechInput}: transcribed speech lands in the same composer
@@ -418,9 +485,18 @@ export interface CorvusChatProps {
 export default function CorvusChat({
   title = 'Corvus',
   subtitle = 'Prefix your prompt with image: or Dali: to generate an image.',
+  headingLevel = 'h1',
+  starterPrompt,
+  globalShortcut = true,
 }: CorvusChatProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const [input, setInput] = useState('')
+  // The agent name's tag. Capitalised local because JSX reads a lowercase
+  // identifier as a literal element name, not as a variable.
+  const HeadingTag = headingLevel
+  // Seeded once (see `starterPrompt`): `useState`'s initial value is read on
+  // the first render only, which is what makes the starter a draft the visitor
+  // owns rather than a value that keeps reasserting itself.
+  const [input, setInput] = useState(starterPrompt ?? '')
   // True only while a dictation session is actively feeding the composer.
   // Cleared on send so a late final transcript can't repopulate the box after
   // it's been cleared (the "voice message doesn't clear on send" bug).
@@ -464,8 +540,13 @@ export default function CorvusChat({
   // gate again.
   const signInRequired = isSignInRequiredError(error)
 
-  // `/` focuses the chat input from anywhere on the page (v3 behavior).
+  // `/` focuses the chat input from anywhere on the page (v3 behavior), but
+  // only for the instance that CLAIMS the key — see `globalShortcut`. The flag
+  // is in the dependency array and guards the registration itself, so a
+  // `false` caller adds no `window` listener rather than adding one that
+  // no-ops.
   useEffect(() => {
+    if (!globalShortcut) return
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const inField =
@@ -479,7 +560,7 @@ export default function CorvusChat({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [globalShortcut])
 
   const autosize = useCallback(() => {
     const el = inputRef.current
@@ -583,7 +664,9 @@ export default function CorvusChat({
       {/* Compact in-card agent header (replaces the separate hero-style
           header/constellation backdrop the page used to render — that
           "went overboard"; this is the whole identity band now). `title`
-          is the page's one accessible `<h1>`. */}
+          is the page's one accessible heading — `<h1>` by default, which is
+          what `/corvus` renders; a caller that is not the page's primary
+          content passes a lower `headingLevel` (#217). */}
       <div
         data-slot="agent-header"
         className="mb-3 flex shrink-0 items-center gap-3 border-b border-zinc-100 pb-3 dark:border-zinc-700/40"
@@ -596,12 +679,12 @@ export default function CorvusChat({
           <RavenMark aria-hidden="true" className="h-5 w-5" />
         </div>
         <div className="min-w-0">
-          <h1
+          <HeadingTag
             data-slot="agent-name"
             className="truncate text-[15px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-100"
           >
             {title}
-          </h1>
+          </HeadingTag>
           <p
             data-slot="agent-subtitle"
             className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400"
@@ -680,9 +763,12 @@ export default function CorvusChat({
                       // is 5.36:1. Dark is already fine (teal-400 on zinc-900
                       // is 9.50:1) and is left alone. Overridden on /corvus by
                       // `.corvus-surface [data-slot='message-copy-button']
-                      // :hover` (--corvus-accent, already teal-700 in light),
-                      // so this fixes the component outside that surface.
-                      className="inline-flex items-center gap-1 rounded px-1 text-xs text-zinc-500 hover:text-teal-700 dark:text-zinc-400 dark:hover:text-teal-400"
+                      // :hover`, which reads --corvus-accent — since #202 an
+                      // alias of the very --link-accent this class resolves,
+                      // so the two agree by construction instead of by
+                      // coincidence. This fixes the component outside that
+                      // surface.
+                      className="inline-flex items-center gap-1 rounded px-1 text-xs text-zinc-500 hover:text-link-accent dark:text-zinc-400"
                     >
                       <CopyIcon className="h-3.5 w-3.5" />
                       {copiedId === message.id ? 'Copied' : 'Copy'}

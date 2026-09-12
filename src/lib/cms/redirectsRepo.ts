@@ -59,6 +59,47 @@ export type CmsRedirect = {
    * pre-#178 behaviour byte for byte.
    */
   toPathAtCapture?: string
+  /**
+   * WHICH document {@link CmsRedirect.toPathAtCapture} was the path of (#201),
+   * as `"<collection>:<id>"`.
+   *
+   * @remarks A path is not an identity. `toPathAtCapture` freezes a spelling,
+   * and a spelling can be re-used: once the document it named vacates it,
+   * another document can take it, and every rule keyed on that string then
+   * silently describes the wrong document. This is the string that says which
+   * one was meant.
+   *
+   * Composed here from two stored columns rather than carried as a relationship
+   * field on purpose — see the migration header. The point of the value is to
+   * name a document that may since have been DELETED, and a relationship is
+   * cleaned up on delete, which would turn "the captured document is gone" into
+   * "there was never a capture" — the one distinction {@link resolveRedirect}
+   * needs to answer 404 instead of serving whoever holds the path now.
+   *
+   * Omitted rather than `null` when unset, like every other optional key here:
+   * a row written before this column flattens byte-identically to what this
+   * function returned before, so every caller holding one keeps comparing
+   * equal, and the resolver's un-anchored branch is the pre-#201 behaviour.
+   */
+  toIdAtCapture?: string
+  /**
+   * Where the document named by {@link CmsRedirect.toIdAtCapture} is served
+   * NOW (#201).
+   *
+   * @remarks Derived, not stored: {@link getCmsRedirects} resolves the captured
+   * id through the same join that resolves `to`. For the overwhelming majority
+   * of rows it is the same string as `to` — the row still points at the
+   * document it was captured for — and the two diverge only when the row has
+   * been repointed at a different document, which is exactly the case this
+   * ticket is about.
+   *
+   * **Absent while `toIdAtCapture` is present means the captured document no
+   * longer resolves** (deleted, or unpublished so it serves no path). That pair
+   * is a distinct state from "no capture identity at all", and
+   * {@link resolveRedirect} answers 404 for it rather than falling back to the
+   * current occupant of the path.
+   */
+  capturedTargetPath?: string
   type: CmsRedirectType
 }
 
@@ -146,6 +187,24 @@ const isAbsoluteDestination = (destination: string): boolean =>
  * case is five passes over an in-memory list, no extra reads.
  */
 const MAX_REDIRECT_HOPS = 5
+
+/**
+ * The capture identity a row carries, or `undefined` (#201).
+ *
+ * @param redirect - A flattened row.
+ *
+ * @remarks **The one notion of "absent".** The value arrives from a nullable
+ * varchar, so three spellings mean the same thing — the key omitted, an empty
+ * string, and a string of spaces — and a function that asked about them
+ * differently in two places would eventually answer differently in two places.
+ * Both guards in {@link resolveRedirect} and the hop's re-occupier filter go
+ * through here, so the anchor and every candidate it is compared against are
+ * normalised identically before anything is decided.
+ */
+const captureIdOf = (redirect: CmsRedirect): string | undefined => {
+  const id = redirect.toIdAtCapture?.trim()
+  return id ? id : undefined
+}
 
 /**
  * The hop budget for one call, shared by every frame of the walk.
@@ -372,6 +431,92 @@ type HopBudget = { exhausted: boolean; remaining: number }
  * nothing, so the guarantee is a FLOOR: at least five chained ancestor moves,
  * and often more. The repro above is three moves and one hop.
  *
+ * ## The capture's identity — when the captured PATH is re-used (#201)
+ *
+ * Everything above keys on a path, and a path is only an identity at a point in
+ * time. Nothing stops a later document from taking a path an earlier one
+ * vacated, and when that happens the capture starts describing the wrong
+ * document — silently, as a 301 to a live page, which is the failure this
+ * system pays most for. Two shapes, both reachable from the hooks as written:
+ *
+ * 1. **The row is repointed.** `from` is `unique`, so when the new occupant
+ *    vacates the same path `createPathRedirect` updates the existing row
+ *    instead of stacking a second one. Its `to` then names the NEW document
+ *    while its write-once snapshot still names the old one's era, and the
+ *    current-path rewrite above sends every URL from the old tenure into the
+ *    new document's subtree.
+ * 2. **The hop walks into the new occupant's own row.** A row keyed exactly at
+ *    the captured path is normally the captured document's next move — that is
+ *    what makes the walk above work — but after the path is re-used it can
+ *    instead belong to a different document entirely.
+ *
+ * So a row records WHICH document it was captured for, beside the path:
+ * {@link CmsRedirect.toIdAtCapture}, resolved by {@link getCmsRedirects} to
+ * that document's current path as {@link CmsRedirect.capturedTargetPath}. Three
+ * rules follow, and all three are the same rule — **the subtree of a capture
+ * belongs to the captured document, not to the path**:
+ *
+ * 1. **The rewrite is anchored to the captured document.** The fall-through
+ *    base is `capturedTargetPath`, not the row's current `to`. For a row that
+ *    still points at the document it was captured for these are the same
+ *    string, so this changes nothing for all but a repointed row.
+ * 2. **A captured document that no longer serves anything answers `null`.**
+ *    The identity is recorded and resolves to no path — deleted, or unpublished
+ *    — so the only destinations on offer belong to some other document. A 404
+ *    is visible and gets reported; a plausible wrong page does not. This is the
+ *    "captured document no longer serves the captured path" case the ticket
+ *    asked to be decided explicitly rather than left to fall out of the query,
+ *    and the decision is: **404, never the new occupant.** Note the *other*
+ *    half of that case — the captured document moved ON — is not a fallback at
+ *    all: the hop resolves it, and rule 1 rewrites onto wherever it lives now.
+ *    That is #178's promise, and it is kept.
+ * 3. **A hop never passes through a row keyed exactly at the captured path
+ *    whose own identity is a different document.** Such a row is a later
+ *    occupant's, not the next link in this row's lineage. Rows keyed BENEATH
+ *    the snapshot (a former descendant that moved out — #178's row B) and rows
+ *    keyed at an ANCESTOR of it (a parent renamed later — #178's row C) are
+ *    untouched: both are the walk working as designed, and neither is a claim
+ *    about who held the captured path.
+ *
+ * Four boundaries, and each is a decision rather than a consequence — the
+ * first two are about which requests the rules reach, the last two about which
+ * rows they may speak for.
+ *
+ * **1. The exact-key match is deliberately NOT anchored.** `/x` itself, when both
+ * documents have vacated `/x`, was most recently the new occupant's URL — that
+ * is *why* the row was repointed — so the last document to leave a path keeps
+ * that path's own redirect, which is #120's rule and unchanged. The subtree is
+ * different in kind: no row is keyed at it, the snapshot is its only key, and
+ * that key names an era. Anchoring is therefore scoped to exactly the
+ * destinations only a capture can produce.
+ *
+ * **2. A row with no identity keeps today's behaviour, bug included.** There is
+ * nothing to reconstruct one from, and inventing one would attach a live
+ * document to an era it never held — the same argument that refused a
+ * `toPathAtCapture` backfill in #178, and a wrong anchor is worse than none.
+ *
+ * **3. Rules 1 and 2 reach only a row whose destination is a DOCUMENT.** An
+ * editor may repoint any row's `to` at a custom URL, and that URL is then the
+ * editor's own statement about where this path goes: rule 1 must not overwrite
+ * it with the captured document's current path, and rule 2 must not withdraw it
+ * because a document the row no longer mentions has been deleted. This is
+ * enforced by giving such a row no identity at all
+ * ({@link captureIdentityOf}) rather than by a branch here, because by the time
+ * a list reaches this function a relative custom URL and a reference-derived
+ * path are the same string.
+ *
+ * **4. An editor's custom redirect keyed exactly at the captured path answers
+ * the hop, and rule 3 does not reject it.** It carries no identity (boundary 3),
+ * so the filter cannot tell it from a legacy row — and it should not reject it
+ * anyway. `createPathRedirect` writes `to.type: 'reference'` on every row it
+ * creates AND on every row it repoints, so a custom destination at that key can
+ * only have been typed by a person, about that exact path. A human statement
+ * about where a path's era goes outranks a lineage this module infers, and the
+ * shape cannot arise from a hook by accident. Pinned by
+ * `lets an editor's custom redirect at the captured path answer the hop` in
+ * `redirectsRepo.test.ts`; contrast the row REJECTED by rule 3, which carries a
+ * different document's capture identity and is therefore a hook artifact.
+ *
  * A row with no snapshot (everything written before #178) keeps the pre-#178
  * behaviour exactly: the remainder goes onto the current path, one rewrite, no
  * hop. Such a row therefore still survives exactly one move of its target, and
@@ -461,6 +606,19 @@ const resolveThroughHops = (
   const permanent = isPermanentRedirect(best.type)
   const remainder = target.slice(from.length)
 
+  // ## The capture's identity (#201)
+  //
+  // `anchor` is `undefined` on every row written before this change — see
+  // {@link captureIdOf} for why that is the ONE spelling of absent here — and
+  // then every branch below reads exactly as it did.
+  const anchor = captureIdOf(best)
+  const anchoredPath =
+    anchor === undefined ? undefined : best.capturedTargetPath?.trim()
+  // Recorded, and resolving to nothing: the captured document is deleted or
+  // unpublished. The only paths still on offer belong to whoever holds this one
+  // now, and serving those would be the wrong 200 this ticket is about.
+  if (anchor !== undefined && !anchoredPath) return null
+
   // ## The historical hop (#178)
   //
   // The capture-time spelling FIRST, because it is the only form other rows are
@@ -486,7 +644,27 @@ const resolveThroughHops = (
         return null
       }
       hops.remaining -= 1
-      const next = resolveThroughHops(redirects, viaCapture, hops)
+      // #201, rule 3. A row keyed EXACTLY at the captured path is normally the
+      // captured document's own next move — the link this walk exists to
+      // follow. Once the path has been re-used it can instead be a later
+      // occupant's row, and following that one lands the request in a subtree
+      // it was never about. Both identities have to be known to say so: a row
+      // that records none is evidence of nothing, and is left in the list.
+      // Rows keyed beneath the snapshot, or at an ancestor of it, are never
+      // candidates for this — they make no claim about who held the captured
+      // path.
+      const hopList =
+        anchor === undefined
+          ? redirects
+          : redirects.filter((candidate) => {
+              const candidateAnchor = captureIdOf(candidate)
+              return (
+                candidateAnchor === undefined ||
+                candidateAnchor === anchor ||
+                normalizeRedirectPath(candidate.from) !== captureBase
+              )
+            })
+      const next = resolveThroughHops(hopList, viaCapture, hops)
       if (hops.exhausted) return null
       // A further hop answered: that is the live URL, and permanence is the
       // product of the whole chain (see the docblock — a 302 anywhere makes the
@@ -542,7 +720,10 @@ const resolveThroughHops = (
     }
   }
 
-  const base = normalizeRedirectPath(destination)
+  // #201, rule 1: the captured document's CURRENT path, not the row's current
+  // destination. Identical strings unless this row has been repointed at a
+  // different document, which is the whole of the difference.
+  const base = normalizeRedirectPath(anchoredPath ?? destination)
   // The root normalises to `/`, so concatenating the suffix directly would
   // spell `//<suffix>` — a protocol-relative URL that leaves the site.
   const rewritten = `${base === '/' ? '' : base}${remainder}`
@@ -555,12 +736,75 @@ const resolveThroughHops = (
   return { destination: rewritten, permanent }
 }
 
-/** Collect the referenced document ids per collection, at depth 0. */
+/**
+ * The capture-time identity a row records, normalised (#201).
+ *
+ * @param doc - A raw `redirects` row, at depth 0.
+ * @returns The collection and id, or `null` — for any of four reasons: the row
+ * predates #201 and records neither; it records a collection that is no longer
+ * slug-routed; it records a blank id; or its `to` is a **custom URL** rather
+ * than a document reference, in which case the destination is an editor's own
+ * statement and the identity rules must not reach it (boundary 3 in
+ * {@link resolveRedirect}'s docblock).
+ *
+ * @remarks Two stored columns, one value. The id is stringified because the
+ * column is a varchar — see the migration header for why an inert text pair
+ * rather than a relationship — and because that is the form the flattened key
+ * and the `rowById` map already speak.
+ */
+const captureIdentityOf = (
+  doc: unknown,
+): { collection: SlugRoutedCollection; id: string } | null => {
+  const row = doc as {
+    to?: null | { type?: string }
+    toCollectionAtCapture?: unknown
+    toIdAtCapture?: unknown
+  }
+  // The identity governs a row whose destination is a DOCUMENT, and only such a
+  // row. An editor may repoint any row's `to` at a custom URL, and that URL is
+  // then the editor's own statement about where this path goes: it must not be
+  // overridden by the captured document's current path, and it must not be
+  // withdrawn (a 404) because a document the row no longer mentions has been
+  // deleted. The gate lives HERE rather than in `resolveRedirect` because this
+  // is the only place the distinction still exists — the resolver takes a
+  // flattened list in which a relative custom URL and a reference-derived path
+  // are the same string.
+  if (row.to?.type !== 'reference') return null
+  const collection = row.toCollectionAtCapture
+  const id = row.toIdAtCapture
+  if (typeof collection !== 'string' || !isSlugRoutedCollection(collection))
+    return null
+  // A varchar column, so a string or nothing: `payload-types.ts` types it
+  // `toIdAtCapture?: string | null`. There is deliberately no number branch —
+  // an id arriving as one would mean a column of a different type, and a
+  // conversion for a shape this schema cannot produce is a branch no test can
+  // reach.
+  if (typeof id !== 'string') return null
+  const key = id.trim()
+  return key ? { collection, id: key } : null
+}
+
+/**
+ * Collect the document ids to join per collection, at depth 0.
+ *
+ * @remarks Two kinds of id, deliberately in ONE map: a row's `to` reference
+ * (its live destination) and its capture-time identity (#201). They are usually
+ * the same document, they are always in the same collections, and merging them
+ * keeps the join at one query per collection rather than two — the cost of the
+ * identity column is a few more ids in an `in` clause the read already makes.
+ */
 const collectReferenceIds = (
   docs: Array<{ to?: unknown }>,
 ): Map<SlugRoutedCollection, Set<number | string>> => {
   const byCollection = new Map<SlugRoutedCollection, Set<number | string>>()
+  const add = (relationTo: SlugRoutedCollection, value: number | string) => {
+    const ids = byCollection.get(relationTo) ?? new Set()
+    ids.add(value)
+    byCollection.set(relationTo, ids)
+  }
   for (const doc of docs) {
+    const captured = captureIdentityOf(doc)
+    if (captured) add(captured.collection, captured.id)
     const to = doc.to as
       | undefined
       | {
@@ -572,9 +816,7 @@ const collectReferenceIds = (
     const value = to.reference?.value
     if (!relationTo || !isSlugRoutedCollection(relationTo)) continue
     if (typeof value !== 'number' && typeof value !== 'string') continue
-    const ids = byCollection.get(relationTo) ?? new Set()
-    ids.add(value)
-    byCollection.set(relationTo, ids)
+    add(relationTo, value)
   }
   return byCollection
 }
@@ -622,6 +864,12 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
       // in the in-memory walk. It is the only thing that can tell the resolver
       // which spelling a descendant's row was keyed against.
       toPathAtCapture: true,
+      // #201. Two more varchars on the same row, for the same reason: they are
+      // never a lookup key in SQL, only in the in-memory walk. What they add is
+      // an identity for the snapshot above, so a path that has since been
+      // re-used cannot silently redescribe a different document.
+      toCollectionAtCapture: true,
+      toIdAtCapture: true,
       type: true,
     },
   })
@@ -697,9 +945,34 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
         ? { toPathAtCapture: rawCapture }
         : {}
 
+    // #201, and the keys are OMITTED when unset for the third time and the
+    // same reason. `capturedTargetPath` is derived here rather than stored:
+    // the identity is frozen, where that document lives is not. It is dropped
+    // when the captured document no longer resolves to a path — deleted, or
+    // unpublished — and that pair (an identity, no path) is what tells
+    // `resolveRedirect` to answer 404 instead of serving the path's new owner.
+    const capturedDoc = captureIdentityOf(doc)
+    const identity: Pick<CmsRedirect, 'capturedTargetPath' | 'toIdAtCapture'> =
+      {}
+    if (capturedDoc) {
+      identity.toIdAtCapture = `${capturedDoc.collection}:${capturedDoc.id}`
+      const capturedPath = publicPathFor(
+        capturedDoc.collection,
+        rowById.get(identity.toIdAtCapture),
+      )
+      if (capturedPath) identity.capturedTargetPath = capturedPath
+    }
+
     if (to?.type === 'custom') {
       if (typeof to.url === 'string' && to.url.length > 0) {
-        redirects.push({ from, ...capture, ...descendants, to: to.url, type })
+        redirects.push({
+          from,
+          ...capture,
+          ...identity,
+          ...descendants,
+          to: to.url,
+          type,
+        })
       }
       continue
     }
@@ -714,6 +987,7 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
       redirects.push({
         from,
         ...capture,
+        ...identity,
         ...descendants,
         to: destination,
         type,

@@ -101,6 +101,59 @@ function token(selector: string, name: string): string {
   return (found as string).toLowerCase()
 }
 
+/**
+ * Resolve `--link-accent` out of the shadcn `oklch()` block as an `#rrggbb`.
+ *
+ * @remarks The one cross-vocabulary conversion in this file, and it exists
+ * because #202 made `--corvus-accent` an ALIAS of `--link-accent` rather than
+ * a second declaration of the same pair. The sibling
+ * `shadcn-token-contrast.test.ts` pins that token's identity and its floors in
+ * its own `oklch()` vocabulary; what is still only measurable HERE is how the
+ * resolved colour behaves against the Corvus surfaces — the composited dark
+ * panel, the assistant bubble, the send icon's `color-mix` hover fill — none
+ * of which the shadcn file knows about. So the value is converted once, here,
+ * with the conversion named, instead of the corvus pairs going unmeasured.
+ *
+ * Round-tripping through sRGB is lossless enough for the job: every step in
+ * the ramp is in gamut, and the ratios below are quoted to two decimals.
+ *
+ * @param selector - `:root` or `.dark`, the shadcn theme blocks.
+ * @returns The alias target as a lowercase `#rrggbb`.
+ */
+function linkAccent(selector: string): string {
+  const start = cssCode.indexOf(`\n${selector} {`)
+  expect(start, `${selector} block must exist in tailwind.css`).toBeGreaterThan(
+    -1,
+  )
+  const block = cssCode.slice(start + 1, cssCode.indexOf('\n}', start))
+  const found = /--link-accent:\s*oklch\(([^)]*)\)/.exec(block)?.[1]
+  expect(
+    found,
+    `${selector} must declare --link-accent as an oklch() colour`,
+  ).toBeDefined()
+  const [L, C, hDeg] = (found as string).trim().split(/\s+/).map(Number)
+  const h = (hDeg * Math.PI) / 180
+  const a = C * Math.cos(h)
+  const b = C * Math.sin(h)
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3
+  const linear = [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ]
+  return `#${linear
+    .map((v) => Math.min(1, Math.max(0, v)))
+    .map((v) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055))
+    .map((v) =>
+      Math.round(v * 255)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`
+}
+
 const DARK = '.corvus-surface'
 const LIGHT = ':root:not(.dark) .corvus-surface'
 
@@ -116,8 +169,15 @@ const groundLight = token(LIGHT, 'corvus-ground')
 const panelLight = token(LIGHT, 'corvus-panel')
 // `--corvus-panel` in dark is `rgb(255 255 255 / 4%)`, not a hex — composited.
 const panelDark = over('#ffffff', 4, groundDark)
-const accentDark = token(DARK, 'corvus-accent')
-const accentLight = token(LIGHT, 'corvus-accent')
+// `--corvus-accent` is an ALIAS of `--link-accent` since #202, so it is
+// resolved from the shadcn block rather than read as a hex here — and the two
+// theme blocks that carry it are the SITE's, not Corvus's, because that is
+// where the pair now inverts. `.corvus-surface` is nested inside `:root` /
+// `.dark`, so a Corvus surface under a light root sees the `:root` value and
+// one under a dark root sees the `.dark` value — the same inversion the
+// deleted `:root:not(.dark) .corvus-surface` redeclaration used to produce.
+const accentDark = linkAccent('.dark')
+const accentLight = linkAccent(':root')
 const mutedDark = token(DARK, 'corvus-muted')
 const mutedLight = token(LIGHT, 'corvus-muted')
 const bubbleDark = token(DARK, 'corvus-bubble-assistant')

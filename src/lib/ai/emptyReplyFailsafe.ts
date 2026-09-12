@@ -16,7 +16,7 @@ import type { TextStreamPart, ToolSet } from 'ai'
  * `node_modules/@ai-sdk/openai/dist/index.d.ts`, verified 2026-09-02). On
  * that API a reasoning model's hidden reasoning tokens are billed as output
  * tokens and drawn from the same `maxOutputTokens` allowance as the visible
- * answer. The default model is `gpt-5-mini` and the allowance is 1024
+ * answer. The default model is `gpt-5-mini` and the allowance is 2048
  * (`resolveGuardrailLimits`), so a turn that needs to think — the observed
  * case is a safety refusal — can spend the whole budget reasoning and finish
  * `length` with nothing rendered. The visitor sees an empty bubble.

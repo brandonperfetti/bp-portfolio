@@ -11,14 +11,47 @@ import { containRevalidation } from '@/hooks/containRevalidation'
 import type { Post } from '../../../payload-types'
 
 /**
- * Purge the article list/search surfaces and both post data-cache tags.
+ * Purge the article list/search surfaces, the `posts` data-cache tag and
+ * `/sitemap.xml`.
  *
- * @remarks Named for the same reason `purgePageTags` is named one collection
- * over: all three branches below need this identical group of four, and a
- * branch that purged three of them would be a silent staleness bug — the
+ * @remarks Named for the same reason `purgePageSurfaces` is named one
+ * collection over: all three branches below need this identical group of four,
+ * and a branch that purged three of them would be a silent staleness bug — the
  * archive would refresh while `/api/search` kept the removed article, or the
  * reverse. Naming it also means the four literals exist once, so a route rename
  * cannot update two branches and miss the third.
+ *
+ * **`/sitemap.xml` joins the group (#209).** The sitemap's outer scope,
+ * `getSitemapData`, is a **plain** `'use cache'` (`src/app/sitemap.ts:34-36`)
+ * tagged `articles` + `pages`, and a plain scope's purge "reaches only the
+ * instance that issued it" (`src/lib/articles.ts:136-146`).
+ * [measured, grep, 2026-09-10] no hook called `revalidatePath('/sitemap.xml')`.
+ * The bug was
+ * found on the Pages side — `/work` missing from a freshly generated sitemap
+ * 28.5 h after publish `[measured, prod 2026-09-09 21:56Z]` — but the Posts
+ * side reads the same route through the same plain scope, so an article
+ * publish had the identical exposure and gets the identical purge. See
+ * `revalidatePage.ts` for the full argument, including why this is necessary
+ * without being provably sufficient.
+ *
+ * **`posts-sitemap` is gone (#209).** Fired here, subscribed by nothing
+ * `[measured, grep across src, docs and .github]`; the docblock below used to
+ * say so in as many words ("aspirational, nothing caches under it"). A tag
+ * nothing reads is worse than no tag: it made this exact staleness look
+ * already-covered. Deleted rather than given an invented subscriber —
+ * `revalidatePath` is the honest mechanism for a route.
+ *
+ * **Not widened past what can be cited.** `/feed.xml`, `/llms.txt` and
+ * `/llms-full.txt` read the same articles data and are deliberately NOT purged
+ * here: `[source]` none of the three opens a `'use cache'` scope at all, so
+ * they hold no per-instance value to go stale — their only cached read is
+ * `getPublishedPostSummaries`, which is `'use cache: remote'` + `cacheTag`
+ * (`src/lib/content/posts.ts:81-86`) and is already reached by the `posts`
+ * purge above — and their own staleness ceiling is the explicit
+ * `Cache-Control: s-maxage=3600` each sets on its Response, a CDN TTL no
+ * `revalidatePath` call participates in. Neither of the llms routes lists
+ * pages at all (`PRIMARY_NAV_LINKS` is hard-coded), so the `/work` class of
+ * defect cannot reach them.
  *
  * `{ expire: 0 }`, never `'max'` (#118) — under cacheComponents `'max'` is
  * stale-while-revalidate with a one-year window, so an edit keeps serving old
@@ -27,18 +60,18 @@ import type { Post } from '../../../payload-types'
 const purgePostSurfaces = () => {
   revalidatePath('/articles')
   revalidatePath('/api/search')
-  revalidateTag('posts-sitemap', { expire: 0 })
+  revalidatePath('/sitemap.xml')
   revalidateTag('posts', { expire: 0 })
 }
 
 /** What {@link purgePostSurfaces} covers, for the containment log line. */
 const POST_SURFACES =
-  'the /articles, /api/search and posts/posts-sitemap surfaces'
+  'the /articles, /api/search, /sitemap.xml and posts surfaces'
 
 /**
  * afterChange hook that keeps published articles live without a redeploy:
- * pairs `revalidatePath` on `/articles/[slug]` with purges of the
- * 'posts' and 'posts-sitemap' data-cache tags.
+ * pairs `revalidatePath` on `/articles/[slug]` with the `posts` data-cache tag
+ * purge and the list/search/sitemap route purges.
  *
  * @remarks Both purges are required — the tag purge refreshes list/search
  * consumers cached under `CMS_TAGS.articles`, while `revalidatePath`
@@ -58,9 +91,10 @@ const POST_SURFACES =
  * (#118, this batch's sibling commit) is what removes the coin flip for the
  * converted reads. Still true and unchanged: the search index stays on the
  * in-memory tier (over the 2 MB Runtime Cache item ceiling) and converges on
- * its `cmsContent` cadence, and the sitemap refreshes on its own revalidate —
- * the `posts-sitemap` tag purge is aspirational, nothing caches under it, per
- * docs/SEO.md.
+ * its `cmsContent` cadence. The sitemap no longer merely "refreshes on its own
+ * revalidate": #209 replaced the aspirational `posts-sitemap` tag — fired here,
+ * subscribed by nothing — with a `revalidatePath('/sitemap.xml')` in
+ * `purgePostSurfaces` above, which is the mechanism a ROUTE actually has.
  *
  * **Which transitions purge which path (#132), and why the rename purge is
  * NOT here.** #132 asked whether the published→published rename purge should
@@ -256,12 +290,12 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
 
 /**
  * afterDelete companion to {@link revalidatePost}: purges the deleted
- * article's path plus the same 'posts'/'posts-sitemap' tags. The detail
+ * article's path plus the same {@link purgePostSurfaces} group — the `posts`
+ * tag, `/articles`, `/api/search` and `/sitemap.xml` (#209). The detail
  * page 404s immediately; the search index converges on its `cmsContent`
- * cadence and the sitemap on its own revalidate (same semantics as
- * {@link revalidatePost}). Same `{ expire: 0 }` profile reasoning — and the
- * same caveat that the profile is not what gives the purge cross-instance
- * reach — as {@link revalidatePost} (#118).
+ * cadence (same semantics as {@link revalidatePost}). Same `{ expire: 0 }`
+ * profile reasoning — and the same caveat that the profile is not what gives
+ * the purge cross-instance reach — as {@link revalidatePost} (#118).
  *
  * Purges are contained by `containRevalidation` for the same reason as
  * {@link revalidatePost} (#156), and the reason is not weaker here: `afterDelete`

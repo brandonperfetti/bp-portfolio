@@ -194,9 +194,14 @@ describe.skipIf(!connectionString)(
       await cleanup()
     }, 120_000)
 
+    // `finally`, so a REJECTED cleanup still destroys the pool — otherwise the
+    // run hangs on an open connection on the very failure worth reporting.
     afterAll(async () => {
-      await cleanup()
-      await payload?.db?.destroy?.()
+      try {
+        await cleanup()
+      } finally {
+        await payload?.db?.destroy?.()
+      }
     }, 60_000)
 
     it('creates exactly one redirect for a rename made through an autosaved draft', async () => {

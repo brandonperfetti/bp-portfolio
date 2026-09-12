@@ -42,10 +42,20 @@ import { createPathRedirect } from '@/hooks/createPathRedirect'
  * `objectContaining`, because the value is the assertion — it must be the
  * target's NEW served path, the one a descendant row written after this moment
  * will spell.
+ *
+ * #201 makes it a third time, for the third instance of the same reason: the
+ * exact objects gained `toCollectionAtCapture` and `toIdAtCapture`, and their
+ * values are the assertion — a snapshot without an identity is a path, and a
+ * path can be re-used by a different document.
  */
 
 type FindResult = {
-  docs: Array<{ id: number; toPathAtCapture?: null | string }>
+  docs: Array<{
+    id: number
+    toCollectionAtCapture?: null | string
+    toIdAtCapture?: null | string
+    toPathAtCapture?: null | string
+  }>
 }
 
 /**
@@ -184,6 +194,12 @@ describe('createPathRedirect', () => {
           // rename; this is the one spelling a URL captured beneath this row
           // was keyed against, and the only thing that can be looked up again.
           toPathAtCapture: '/articles/new-slug',
+          // #201: WHICH document that path belonged to. The snapshot above is
+          // a spelling, and a spelling can be re-used by another document; this
+          // is what says which one the row was about, and it is written for
+          // every row for the same reason the snapshot is.
+          toCollectionAtCapture: 'posts',
+          toIdAtCapture: '55',
           // #130: a rename is permanent by definition, and the hook says so
           // explicitly rather than leaning on the field's `defaultValue` —
           // an `update` of an existing row does not re-apply a default.
@@ -306,8 +322,93 @@ describe('createPathRedirect', () => {
             reference: { relationTo: 'posts', value: 55 },
           },
           toPathAtCapture: '/articles/a',
+          // #201: preserved WITH the snapshot, and here that means preserved as
+          // nothing. A row that predates the identity columns keeps its era
+          // un-anchored rather than gaining this document's id against a path
+          // this document may never have held — a wrong anchor is worse than
+          // none, and it would send a whole subtree somewhere confidently
+          // wrong.
+          toCollectionAtCapture: null,
+          toIdAtCapture: null,
           type: '301',
         },
+      }),
+    )
+  })
+
+  /**
+   * #201 — the identity travels with the snapshot, and the repoint is where it
+   * earns its keep.
+   *
+   * `from` is unique on the collection, so when a path is vacated by one
+   * document, taken by a second, and vacated again, the SECOND move updates the
+   * first document's row. Everything on that row that describes where the
+   * target lives now is rewritten — that is what the branch is for — but the
+   * snapshot names an era, and the identity names whose era it was. Writing
+   * this document's id against that path would anchor a whole subtree to the
+   * wrong document, which is the silent 301 into another document's subtree
+   * that #201 is about.
+   */
+  it('preserves the identity a row already carries, with its snapshot', async () => {
+    const { update } = await publish({
+      data: { _status: 'published', slug: 'c' },
+      doc: { id: 55, _status: 'published', slug: 'c' },
+      existing: {
+        docs: [
+          {
+            id: 9,
+            toCollectionAtCapture: 'pages',
+            toIdAtCapture: '42',
+            toPathAtCapture: '/articles/a',
+          },
+        ],
+      },
+      originalDoc: { id: 55, _status: 'draft', slug: 'c' },
+      publishedSlug: 'b',
+    })
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'redirects',
+        id: 9,
+        data: {
+          from: '/articles/b',
+          matchDescendants: false,
+          to: {
+            type: 'reference',
+            reference: { relationTo: 'posts', value: 55 },
+          },
+          toPathAtCapture: '/articles/a',
+          // Page 42's era, not post 55's — even though post 55 is the document
+          // this write is about.
+          toCollectionAtCapture: 'pages',
+          toIdAtCapture: '42',
+          type: '301',
+        },
+      }),
+    )
+  })
+
+  it('writes the identity when the row it updates has no snapshot either', async () => {
+    // The pair is replaced together as well as preserved together: a row that
+    // predates #178 records no era at all, so this move's path and this move's
+    // document are both the best information available and they describe the
+    // same capture.
+    const { update } = await publish({
+      data: { _status: 'published', slug: 'c' },
+      doc: { id: 55, _status: 'published', slug: 'c' },
+      existing: { docs: [{ id: 9 }] },
+      originalDoc: { id: 55, _status: 'draft', slug: 'c' },
+      publishedSlug: 'b',
+    })
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          toCollectionAtCapture: 'posts',
+          toIdAtCapture: '55',
+          toPathAtCapture: '/articles/c',
+        }),
       }),
     )
   })
@@ -352,6 +453,8 @@ describe('createPathRedirect', () => {
           // #178. THE case the snapshot exists for: this is a prefix row, so
           // descendant URLs get rewritten through it.
           toPathAtCapture: '/now',
+          toCollectionAtCapture: 'pages',
+          toIdAtCapture: '7',
           type: '301',
         },
       }),
@@ -382,6 +485,8 @@ describe('createPathRedirect', () => {
             reference: { relationTo: 'posts', value: 5 },
           },
           toPathAtCapture: '/work2/dup2',
+          toCollectionAtCapture: 'posts',
+          toIdAtCapture: '5',
           type: '301',
         },
       }),
@@ -509,6 +614,8 @@ describe('createPathRedirect', () => {
           },
           // Un-placed, so the target is served from the archive again.
           toPathAtCapture: '/articles/dup',
+          toCollectionAtCapture: 'posts',
+          toIdAtCapture: '5',
           type: '301',
         },
       }),

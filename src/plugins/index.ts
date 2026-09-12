@@ -135,6 +135,40 @@ export const plugins: Plugin[] = [
             },
             label: 'Target path at capture',
           },
+          // #201. WHICH document the path above belonged to. A path is only an
+          // identity at a point in time: `from` is unique, so when a later
+          // document occupies the captured path and then vacates it in turn,
+          // this row is REPOINTED at that document while the snapshot still
+          // names the first one's era — and every URL from that era would be
+          // rewritten into a subtree it was never about. Two plain text
+          // columns, not a relationship, precisely because the value must
+          // survive the deletion of the document it names: a relationship is
+          // cleaned up on delete, which would erase the difference between
+          // "the captured document is gone" (404) and "there was never a
+          // capture" (pre-#201 behaviour). See `resolveRedirect`'s "The
+          // capture's identity" section for what the reader does with them.
+          {
+            name: 'toCollectionAtCapture',
+            type: 'text',
+            admin: {
+              description:
+                'The collection of the document this row was captured for. Filled automatically.',
+              position: 'sidebar',
+              readOnly: true,
+            },
+            label: 'Target collection at capture',
+          },
+          {
+            name: 'toIdAtCapture',
+            type: 'text',
+            admin: {
+              description:
+                'The id of the document this row was captured for. Filled automatically; it is what keeps a descendant URL pointing at that document after its old path has been re-used by another one.',
+              position: 'sidebar',
+              readOnly: true,
+            },
+            label: 'Target id at capture',
+          },
         ]
       },
       hooks: {

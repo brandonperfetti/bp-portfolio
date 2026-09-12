@@ -303,6 +303,7 @@ export interface Page {
     | ContactFormBlock
     | ContainerBlock
     | ContentBlock
+    | CorvusChatBlock
     | FaqListBlock
     | FeatureCardGridBlock
     | HeadingBlock
@@ -402,6 +403,7 @@ export interface Post {
         | ContactFormBlock
         | ContainerBlock
         | ContentBlock
+        | CorvusChatBlock
         | FaqListBlock
         | FeatureCardGridBlock
         | HeadingBlock
@@ -769,6 +771,7 @@ export interface ColumnBlock {
         | CallToActionBlock
         | CarouselBlock
         | ContactFormBlock
+        | CorvusChatBlock
         | FaqListBlock
         | FeatureCardGridBlock
         | HeadingBlock
@@ -791,6 +794,27 @@ export interface ColumnBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'column';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "CorvusChatBlock".
+ */
+export interface CorvusChatBlock {
+  /**
+   * How tall the chat frame is. Every option is a fixed height — never a share of the screen — and the conversation scrolls inside that frame, so the block takes the same amount of the page however long the chat gets.
+   */
+  variant: 'compact' | 'sidebar' | 'full';
+  /**
+   * The name shown in the chat's header row. Defaults to Corvus. Rendered as an h2, so a page keeps exactly one h1.
+   */
+  heading?: string | null;
+  /**
+   * Optional opening question, pre-typed into the message box. The visitor can edit or clear it, and nothing is sent until they press send — this is a suggestion, not an instruction to Corvus.
+   */
+  starterPrompt?: string | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'corvusChat';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1563,6 +1587,14 @@ export interface Redirect {
    * The path the target was served at when this row was written. Filled automatically; used to re-resolve descendant URLs through the redirect table when the target has moved again.
    */
   toPathAtCapture?: string | null;
+  /**
+   * The collection of the document this row was captured for. Filled automatically.
+   */
+  toCollectionAtCapture?: string | null;
+  /**
+   * The id of the document this row was captured for. Filled automatically; it is what keeps a descendant URL pointing at that document after its old path has been re-used by another one.
+   */
+  toIdAtCapture?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -2063,6 +2095,7 @@ export interface PagesSelect<T extends boolean = true> {
         contactForm?: T | ContactFormBlockSelect<T>;
         container?: T | ContainerBlockSelect<T>;
         content?: T | ContentBlockSelect<T>;
+        corvusChat?: T | CorvusChatBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
         heading?: T | HeadingBlockSelect<T>;
@@ -2228,6 +2261,7 @@ export interface ColumnBlockSelect<T extends boolean = true> {
         cta?: T | CallToActionBlockSelect<T>;
         carousel?: T | CarouselBlockSelect<T>;
         contactForm?: T | ContactFormBlockSelect<T>;
+        corvusChat?: T | CorvusChatBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
         heading?: T | HeadingBlockSelect<T>;
@@ -2246,6 +2280,17 @@ export interface ColumnBlockSelect<T extends boolean = true> {
         videoEmbed?: T | VideoEmbedBlockSelect<T>;
         workHistoryCard?: T | WorkHistoryCardBlockSelect<T>;
       };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "CorvusChatBlock_select".
+ */
+export interface CorvusChatBlockSelect<T extends boolean = true> {
+  variant?: T;
+  heading?: T;
+  starterPrompt?: T;
   id?: T;
   blockName?: T;
 }
@@ -2548,6 +2593,7 @@ export interface PostsSelect<T extends boolean = true> {
         contactForm?: T | ContactFormBlockSelect<T>;
         container?: T | ContainerBlockSelect<T>;
         content?: T | ContentBlockSelect<T>;
+        corvusChat?: T | CorvusChatBlockSelect<T>;
         faqList?: T | FaqListBlockSelect<T>;
         featureCardGrid?: T | FeatureCardGridBlockSelect<T>;
         heading?: T | HeadingBlockSelect<T>;
@@ -2774,6 +2820,8 @@ export interface RedirectsSelect<T extends boolean = true> {
   type?: T;
   matchDescendants?: T;
   toPathAtCapture?: T;
+  toCollectionAtCapture?: T;
+  toIdAtCapture?: T;
   updatedAt?: T;
   createdAt?: T;
 }

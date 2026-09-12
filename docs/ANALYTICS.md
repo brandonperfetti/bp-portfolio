@@ -83,6 +83,36 @@ exempt them:
 - **Cloudflare Turnstile** — bot/security challenge on the contact form (and,
   when armed, Corvus chat).
 
+## Sessions in Sentry (#213) — outside the banner, like the rest of Sentry
+
+Sentry sits **outside** c15t (`docs/MAINTENANCE.md` §Sentry) because its
+events carry no identity. #168 confirmed that: no `setUser` from Clerk, no
+`sendDefaultPii`, so every issue read "Users impacted: 0" — a constant, not a
+measurement.
+
+#213 makes that field mean something without changing the posture. The
+browser SDK now sets a **random per-tab id** — a bare `crypto.randomUUID()`
+held in `sessionStorage` under `bp.sentry.sessionId`, minted once per tab and
+gone when the tab closes — as `Sentry.setUser({ id })`, and nothing else. It
+takes no inputs: no account id, no email, no IP, no user-agent, no timestamp,
+no seed, so it cannot be worked backwards to a person by anyone. Two errors
+from one tab are one session; two tabs are two. A known bot user-agent mints
+no id at all, matching the `beforeSend` filter that already drops those
+events (#98).
+
+Why it stays outside the banner: a value in client storage is not
+automatically "strictly necessary" under ePrivacy, but this one is neither an
+identifier of a person nor linkable across visits or sites — it exists only
+to make an error report interpretable, and it dies with the tab. That reading
+lives in exactly one place, `isSessionIdAllowed()` in
+`src/lib/observability/sessionId.ts`; moving Sentry inside consent means
+changing that one function to read the c15t state and nothing else.
+
+Names only, as ever: nothing here is a secret, and no DSN or id value belongs
+in this repo. See `src/lib/observability/sessionId.ts` for the full
+reasoning and `src/lib/observability/sessionId.test.ts` for the assertions
+that pin it.
+
 ## Verifying it (browser / preview, not sandbox)
 
 The a11y gate (`addon-a11y`, `test:'error'`) and the Storybook `play` functions

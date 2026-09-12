@@ -11,26 +11,61 @@ import { containRevalidation } from '@/hooks/containRevalidation'
 import type { Page } from '../../../payload-types'
 
 /**
- * Expire both page data-cache tags with the immediate-expiration profile.
+ * Expire the `pages` data-cache tag and regenerate `/sitemap.xml`.
  *
- * @remarks Named because all three branches below need the identical pair and a
- * branch that purged only one would be a silent staleness bug, not a visible
- * one: the route would regenerate against a fresh `pages` read and a stale
- * `pages-sitemap` one, or the reverse.
+ * @remarks Named because all three branches below need this identical pair and
+ * a branch that did one without the other would be a silent staleness bug, not
+ * a visible one: the sitemap would regenerate against a fresh `pages` read
+ * while its own route entry stayed put, or the reverse.
+ *
+ * **Why `/sitemap.xml` is a PATH purge and not a tag (#209).** The sitemap's
+ * outer scope, `getSitemapData`, is a **plain** `'use cache'`
+ * (`src/app/sitemap.ts:34-36`) tagged `articles` + `pages` with
+ * `cacheLife('cmsContent')` — the `:remote` scope is only the inner
+ * `getPublishedPagePaths` (`src/lib/cms/pagesRepo.ts:279-281`). A plain scope's
+ * purge "reaches only the instance that issued it"
+ * (`src/lib/articles.ts:136-146`), so a `pages` tag purge fired from a write
+ * handler never had to reach the instance holding the sitemap's own entry.
+ * `[measured, prod 2026-09-09 21:56Z]` a FRESHLY generated `/sitemap.xml`
+ * (`x-vercel-cache: MISS`, `age: 0`) still omitted `/work` 28.5 h after that
+ * page went `_status: published`, while listing its four children — past the
+ * `cmsContent` 24 h `expire`, with the emit filter ruled out by a unit probe
+ * over the real production paths and the READ ruled out by
+ * `evals/sitemap-page-paths-integration.test.ts`. `revalidatePath` is the
+ * documented mechanism for a ROUTE's own entry, and no hook was calling it for
+ * this one `[measured, grep, 2026-09-10]`.
+ *
+ * Honest about its reach: this is necessary, and it may not be sufficient. If
+ * the surviving value is an in-memory copy on an instance that never handles
+ * the write, a path purge issued from the writing instance has the same
+ * horizon the tag purge did. The remaining candidates and the live isolation
+ * step that separates them are in #209; this closes the half that is a plain
+ * missing call.
+ *
+ * **`pages-sitemap` is gone (#209).** It was fired here and subscribed by
+ * nothing `[measured, grep across src, docs and .github]` — `docs/SEO.md`
+ * called it aspirational. A tag with no subscriber is not a cheap safety net:
+ * it reads, in three docblocks and six assertions, as though a second surface
+ * were covered, and it is exactly what made this bug look already-handled.
+ * `revalidatePath` on the route is the honest mechanism, so the tag is deleted
+ * rather than given an invented subscriber.
  *
  * `{ expire: 0 }`, never `'max'` (#118) — under cacheComponents `'max'` is
  * stale-while-revalidate with a one-year window, so an edit keeps serving old
  * content until a background refresh happens to land.
  */
-const purgePageTags = () => {
+const purgePageSurfaces = () => {
   revalidateTag('pages', { expire: 0 })
-  revalidateTag('pages-sitemap', { expire: 0 })
+  revalidatePath('/sitemap.xml')
 }
+
+/** What {@link purgePageSurfaces} covers, for the containment log line. */
+const PAGE_SURFACES = 'the pages tag and /sitemap.xml'
 
 /**
  * afterChange hook that keeps published pages live without a redeploy:
- * pairs `revalidatePath` on the page's route with purges of the
- * 'pages'/'pages-sitemap' data-cache tags.
+ * pairs `revalidatePath` on the page's route with the `pages` tag purge and a
+ * `/sitemap.xml` regeneration (#209).
  *
  * @remarks The data layer (getCmsPageByPath / getPageLayout / CmsPageBlocks)
  * caches under the 'pages' tag — `revalidatePath` alone regenerates the
@@ -122,8 +157,8 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
       containRevalidation(
         payload,
         'page write',
-        'the pages/pages-sitemap tags',
-        purgePageTags,
+        PAGE_SURFACES,
+        purgePageSurfaces,
       )
     }
 
@@ -154,8 +189,8 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
       containRevalidation(
         payload,
         'page write',
-        'the pages/pages-sitemap tags',
-        purgePageTags,
+        PAGE_SURFACES,
+        purgePageSurfaces,
       )
     }
   }
@@ -181,12 +216,7 @@ export const revalidateDelete: CollectionAfterDeleteHook<Page> = ({
         `the deleted page path ${path}`,
         () => revalidatePath(path),
       )
-    containRevalidation(
-      payload,
-      'page write',
-      'the pages/pages-sitemap tags',
-      purgePageTags,
-    )
+    containRevalidation(payload, 'page write', PAGE_SURFACES, purgePageSurfaces)
   }
 
   return doc
