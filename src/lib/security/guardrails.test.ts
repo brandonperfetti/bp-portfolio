@@ -201,11 +201,10 @@ describe('getSecurityLimits — reasoningEffort', () => {
     vi.stubEnv('AI_REASONING_EFFORT', undefined as unknown as string)
 
     expect(getSecurityLimits().reasoningEffort).toBe(DEFAULT_REASONING_EFFORT)
-    // `[measured, keyed, 2026-09-11]` the rung Brandon's probes settled on:
-    // `minimal`/1024 cleared the safety file 4/4 with no truncation at 75% in
-    // 9.4s, where `low`/1024 still lost the safety-essay refusal on both
-    // attempts, and `low`/2048 scored the same for ~3x the wall clock.
-    expect(DEFAULT_REASONING_EFFORT).toBe('minimal')
+    // Was `minimal` (#138, 2026-09-11) until the model 400'd that rung on
+    // 2026-09-15; `low` is the nearest one it still accepts, and #138 measured
+    // it clean at 2048 (safety file 4/4, 75%). See DEFAULT_REASONING_EFFORT.
+    expect(DEFAULT_REASONING_EFFORT).toBe('low')
   })
 
   it.each(REASONING_EFFORTS)('honours the valid value %s', (effort) => {

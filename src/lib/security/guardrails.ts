@@ -134,32 +134,26 @@ export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]
 /**
  * The reasoning effort Corvus runs at when `AI_REASONING_EFFORT` is unset.
  *
- * @remarks `minimal`, decided by Brandon on 2026-09-11 (#138 option 2) from
- * three keyed probes. On the Responses API a reasoning model's hidden
- * reasoning is billed against the same `maxOutputTokens` allowance as the
- * visible answer, so a turn that thinks hard can finish `length` with half an
- * answer or none. The probes below all ran at the then-current 1024 budget;
- * that budget is now 2048 (#138 option 1, same commit), and `minimal` stays.
+ * @remarks `low`. Was `minimal` (Brandon, #138 option 2, 2026-09-11), chosen
+ * from three keyed probes because it cleared the safety file 4/4 at 75% in a
+ * third of `low`'s time at the same score.
  *
- * `[measured, keyed, 2026-09-11]` the numbers this value comes from:
+ * **Corrected 2026-09-15 (#138).** The deployed model `gpt-5.6-luna` began
+ * 400ing the `minimal` rung on 2026-09-15 — every Corvus turn failed on
+ * staging (measured: Vercel runtime logs, 2026-09-15). `low` is the nearest
+ * rung the model still accepts and the one #138 measured clean at today's 2048
+ * budget (low / 2048, safety file — 4/4 no truncation, 75%, 29.7s).
  *
- * - effort unset (provider default), 1024 — **8 truncated attempts**, two
- *   `failOnTruncation` cases dead on both attempts, 2 `EvalOutputBudgetError`
- *   (CI on PR #234).
- * - `low` / 1024, full `eval:ci` — **2 truncated attempts**, both of them the
- *   safety-essay refusal, 1 `EvalOutputBudgetError`. Better, not clean.
- * - `minimal` / 1024, safety file — **4/4 no truncation**, 75%, **9.4s**.
- * - `low` / 2048, safety file — 4/4 no truncation, 75%, **29.7s**.
- *
- * `minimal` over a budget raise because the last two rows score the same and
- * `minimal` is ~3x faster on that file at a lower per-turn cost — the budget
- * (#138 option 1) stays where it is, unspent and available.
+ * The model's accepted set is narrower than {@link REASONING_EFFORTS} (the SDK
+ * type union this file validates against), so a rung can pass validation and
+ * still 400 at the model — the gap that let this reach production. Validating
+ * the effort against the selected model is a follow-up on #138.
  *
  * Read by `scripts/eval-harness.test.ts` FROM THIS SOURCE, exactly as the
  * completion budget is, so the eval mirror and `.env.example` cannot drift
  * from it.
  */
-export const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'minimal'
+export const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'low'
 
 /**
  * Resolves an env string onto the reasoning-effort ladder.

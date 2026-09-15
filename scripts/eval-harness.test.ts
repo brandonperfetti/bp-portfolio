@@ -438,8 +438,10 @@ describe('eval harness wiring', () => {
     // `EvalOutputBudgetError`s (CI on PR #234); `low`/1024 cut that to 2
     // attempts and one error (the safety-essay refusal); `minimal`/1024
     // cleared the safety file 4/4 at 75% in 9.4s, matching `low`/2048's
-    // scores in a third of the time — so the default is `minimal` and the
-    // budget does not move.
+    // scores in a third of the time — so the default WAS `minimal`. Corrected
+    // 2026-09-15: the deployed model withdrew `minimal` (400 on every turn),
+    // so the default is now `low`/2048 — the clean row above — and the budget
+    // still does not move.
     //
     // Same mirror, same reason, same guard as the budget above:
     // `corvus-helpers.ts` holds a literal rather than calling
@@ -465,7 +467,7 @@ describe('eval harness wiring', () => {
     )?.[1]
 
     expect(productionDefault, 'guardrails.ts default must be readable').toBe(
-      'minimal',
+      'low',
     )
     expect(envExample, '.env.example must agree with it').toBe(
       productionDefault,

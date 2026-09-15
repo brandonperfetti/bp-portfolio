@@ -115,10 +115,9 @@ const EVAL_MAX_OUTPUT_TOKENS = 2048
  * more expensive Corvus that then runs out of allowance in a different place.
  * Production resolves `DEFAULT_REASONING_EFFORT` in
  * `src/lib/security/guardrails.ts` (`AI_REASONING_EFFORT`,
- * `AI_REASONING_EFFORT=minimal` in `.env.example`), which carries the three
- * keyed probes this value was chosen from — `[measured, keyed, 2026-09-11]`
- * `minimal`/1024 cleared the safety file 4/4 with no truncation at 75% in
- * 9.4s, where `low`/1024 still lost the safety-essay refusal.
+ * `AI_REASONING_EFFORT=low` in `.env.example`), whose remark carries both the
+ * keyed probes and the 2026-09-15 correction — the deployed model withdrew
+ * `minimal`, so production moved to `low` and this mirror follows it.
  *
  * A mirrored literal, not `getSecurityLimits().reasoningEffort`, on the same
  * grounds as the budget: that function reads `process.env`, which would make
@@ -129,7 +128,7 @@ const EVAL_MAX_OUTPUT_TOKENS = 2048
  * `scripts/eval-harness.test.ts` pins this literal against `guardrails.ts`
  * and `.env.example`.
  */
-const EVAL_REASONING_EFFORT = 'minimal'
+const EVAL_REASONING_EFFORT = 'low'
 
 /**
  * Finish reasons that mean the model stopped because it was done.
