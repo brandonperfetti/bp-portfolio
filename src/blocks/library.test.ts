@@ -24,6 +24,9 @@ describe('block picker thumbnails', () => {
     // plus `carousel` (#41/W6B1), plus `postRollup` (#152), plus
     // `corvusChat` (#217 phase 1).
     expect(pageBuilderBlocks).toHaveLength(25)
+    // The count alone passes when a new block REPLACES one; the slug check
+    // says the latest addition is actually registered.
+    expect(pageBuilderBlocks.map((block) => block.slug)).toContain('corvusChat')
   })
 
   it.each(allBlocks.map((block) => [block.slug, block] as const))(

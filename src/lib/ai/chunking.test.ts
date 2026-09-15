@@ -722,10 +722,13 @@ describe('chunkTechStackSummary (#165)', () => {
     )
   })
 
-  it('DROPS that sentence when a row was skipped, because it would be false', () => {
+  it('DROPS that sentence and QUALIFIES the tier when a row was skipped', () => {
     // A skipped row is one whose tier the composer could not read, so "other
     // entries are marked Proficient or lower" is a confident claim about
-    // exactly the rows nobody classified. The daily line is untouched.
+    // exactly the rows nobody classified — and so is "the complete tier, all
+    // N of them": the skipped row may be a daily driver with an unreadable
+    // tier. The line of names is untouched; the passage stops vouching for
+    // the page (CodeRabbit on #235, src/lib/ai/chunking.ts:730).
     const { chunks, skipped } = chunkTechStackSummary([
       ...rows(FOURTEEN),
       { id: 99, name: 'Deno', proficiency: 'occasionally' },
@@ -733,7 +736,13 @@ describe('chunkTechStackSummary (#165)', () => {
 
     expect(skipped).toHaveLength(1)
     expect(chunks[0].content).not.toContain('Other entries on that page')
-    expect(chunks[0].content).toContain('the complete Daily driver tier')
+    expect(chunks[0].content).not.toContain('the complete')
+    expect(chunks[0].content).not.toContain('not a sample')
+    expect(chunks[0].content).toContain(
+      `Those are the ${FOURTEEN.length} entries Brandon Perfetti's /tech page currently marks ${TECH_PROFICIENCY_LABELS.daily}; the list may be incomplete.`,
+    )
+    const [firstLine] = chunks[0].content.split('\n')
+    for (const name of FOURTEEN) expect(firstLine).toContain(name)
     expect(chunks[0].content.split('\n')).toHaveLength(2)
   })
 

@@ -586,7 +586,10 @@ current index nearly free, so running it is never the wrong call.
 `collection: 'tech-stack-summary'`, `doc_id` 1 — a second non-CMS
 pseudo-collection, holding exactly **one** chunk that names Brandon's whole
 `daily` tier in a single line, says that line is the complete tier, and names
-the `Proficient` tier in one closing sentence. It carries neither `Familiar`
+the `Proficient` tier in one closing sentence — in the clean case. When a row's
+stored tier is unreadable (`skipped`, below) the passage says instead that the
+list may be incomplete and drops the closing sentence, because it cannot vouch
+for rows it could not classify (CodeRabbit on #235, 2026-09-15). It carries neither `Familiar`
 nor `Exploring`, because `TECH_PROFICIENCY_RANKING_RULE` forbids headlining
 those and the summary is the passage most likely to be retrieved for a stack
 question. It cites **`/tech`**, the same page the per-row chunks cite, and it

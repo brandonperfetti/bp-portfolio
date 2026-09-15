@@ -660,20 +660,28 @@ export interface TechStackSummaryComposition {
  * `chunking.test.ts` pins that as an assertion rather than an intention.
  *
  * **Shape "C", compact by construction.** One line of names, one sentence
- * saying the line is the COMPLETE tier, one sentence naming the second tier.
+ * saying the line is the COMPLETE tier (in the clean case — see the `skipped`
+ * paragraph below for what it says instead), one sentence naming the second
+ * tier.
  * `[measured, this tree's estimator]` ~87 estimated tokens for fourteen daily
  * drivers — comfortably one chunk under {@link TARGET_CHUNK_TOKENS}, so no
- * splitting logic applies and none is written. The "complete tier" sentence is
- * also the double-counting mitigation: with the summary and two or three
+ * splitting logic applies and none is written. In the clean case the
+ * "complete tier" sentence is also the double-counting mitigation: with the
+ * summary and two or three
  * per-row daily chunks in the same window the model sees some names twice, and
  * a passage that says "these are all of them" makes the duplicate read as
  * detail rather than as a second, shorter list.
  *
- * The third sentence is DROPPED whenever `skipped` is non-empty. It asserts
- * something about every other row on the page, and a skipped row is precisely
- * one whose tier this composer could not read — leaving the sentence in would
- * embed a confident claim about rows nobody classified. The daily line stays
- * exactly as true as it was; only the claim about the remainder goes.
+ * Whenever `skipped` is non-empty the passage stops vouching for the page.
+ * The third sentence is DROPPED: it asserts something about every other row,
+ * and a skipped row is precisely one whose tier this composer could not read —
+ * leaving it in would embed a confident claim about rows nobody classified.
+ * The second sentence is QUALIFIED for the same reason: a skipped row may
+ * itself be a daily driver whose stored tier is unreadable, so "the complete
+ * tier, all N of them" is a claim the composer cannot make either (CodeRabbit
+ * on #235 — Corvus would cite `/tech` for a list it cannot know is whole,
+ * against the never-fabricate rule). The line of names stays exactly as true
+ * as it was; what changes is how much the passage claims about it.
  *
  * **It costs nothing against #138.** The 1024-token ceiling is
  * `maxOutputTokens`, a COMPLETION budget; a retrieved passage is input and
@@ -719,15 +727,18 @@ export function chunkTechStackSummary(
 
   const dailyLabel = TECH_PROFICIENCY_LABELS[DAILY_DRIVER_PROFICIENCY]
   const secondLabel = TECH_PROFICIENCY_LABELS[SUMMARY_SECOND_TIER]
-  // The third sentence is omitted when anything was SKIPPED, because it would
-  // then be a claim the composer cannot make: a skipped row is one whose tier
-  // is `''` or unrecognised, so "other entries are marked <second tier> or
-  // lower" is false of exactly the rows this composition could not read. The
-  // clean case keeps the sentence verbatim — it is the double-counting
-  // mitigation the docblock argues for.
+  // Both claims about the page are gated on nothing having been SKIPPED: a
+  // skipped row is one whose tier is `''` or unrecognised, so "the complete
+  // tier" and "other entries are marked <second tier> or lower" are each a
+  // claim about exactly the rows this composition could not read. The clean
+  // case keeps both verbatim — the "complete" sentence is the double-counting
+  // mitigation the docblock argues for; the qualified one gives up that
+  // mitigation rather than state a completeness it cannot know.
   const content = [
     `${dailyLabel}s: ${daily.join(', ')}.`,
-    `That is the complete ${dailyLabel} tier on Brandon Perfetti's /tech page — all ${daily.length} of them, not a sample.`,
+    skipped.length
+      ? `Those are the ${daily.length} entries Brandon Perfetti's /tech page currently marks ${dailyLabel}; the list may be incomplete.`
+      : `That is the complete ${dailyLabel} tier on Brandon Perfetti's /tech page — all ${daily.length} of them, not a sample.`,
     skipped.length
       ? null
       : `Other entries on that page are marked ${secondLabel} or lower, not ${dailyLabel}.`,

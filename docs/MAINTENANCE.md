@@ -176,11 +176,16 @@ read local errors directly. Register it in the Claude desktop app's MCP config:
   "mcpServers": {
     "spotlight": {
       "command": "npx",
-      "args": ["-y", "--prefer-online", "@spotlightjs/spotlight@latest", "mcp"]
+      "args": ["-y", "--prefer-online", "@spotlightjs/spotlight@^4.11.8", "mcp"]
     }
   }
 }
 ```
+
+The range is the one `package.json` pins for the sidecar (`^4.11.8`), so the
+MCP server floats within the same 4.x major as the sidecar and never past it —
+`@latest` would let a future major change the tool surface without a
+repository change.
 
 It exposes `search_errors`, `search_logs`, `search_traces` and `get_traces`.
 

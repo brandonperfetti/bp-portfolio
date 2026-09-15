@@ -708,11 +708,21 @@ export default function CorvusChat({
               description={
                 <>
                   Ask about Brandon&apos;s work — or whatever else is on your
-                  mind. Press{' '}
-                  <kbd className="rounded border border-zinc-300 px-1 dark:border-zinc-600">
-                    /
-                  </kbd>{' '}
-                  to focus this chat anytime.
+                  mind.
+                  {/* Only the instance that CLAIMS the key may advertise it:
+                      a CMS block passes `globalShortcut={false}` (see the
+                      effect above), and a hint for a key that does nothing
+                      is a broken keyboard instruction, not a nicety. */}
+                  {globalShortcut && (
+                    <>
+                      {' '}
+                      Press{' '}
+                      <kbd className="rounded border border-zinc-300 px-1 dark:border-zinc-600">
+                        /
+                      </kbd>{' '}
+                      to focus this chat anytime.
+                    </>
+                  )}
                 </>
               }
             />

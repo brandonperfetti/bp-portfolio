@@ -263,4 +263,19 @@ describe('CorvusChat', () => {
 
     expect(screen.getByLabelText('Message Corvus')).not.toHaveFocus()
   })
+
+  it('advertises / in the empty state only when it owns the key', () => {
+    // The listener above is gated on `globalShortcut`; the empty-state copy
+    // has to follow it, or a CMS block tells visitors to press a key that does
+    // nothing (CodeRabbit on #235, src/components/CorvusChat.tsx:549).
+    const { unmount } = render(<CorvusChat />)
+    expect(screen.getByText(/to focus this chat anytime/)).toBeInTheDocument()
+    unmount()
+
+    render(<CorvusChat globalShortcut={false} />)
+    expect(screen.queryByText(/to focus this chat anytime/)).toBeNull()
+    expect(
+      screen.getByText(/whatever else is on your mind/),
+    ).toBeInTheDocument()
+  })
 })

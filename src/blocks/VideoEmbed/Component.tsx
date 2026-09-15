@@ -51,7 +51,7 @@ export function VideoEmbedComponent(
         <Link
           href={props.url}
           {...getExternalLinkProps(props.url)}
-          className="font-medium text-link-accent hover:text-teal-600"
+          className="font-medium text-link-accent hover:text-teal-600 dark:hover:text-teal-300"
         >
           {props.title}
         </Link>
