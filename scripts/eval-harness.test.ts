@@ -493,7 +493,7 @@ describe('eval harness wiring', () => {
   it('keeps evalite.config.ts inside the eval root', () => {
     // evalite loads config from `path.join(cwd, 'evalite.config.{ts,mts,js,mjs}')`
     // only (evalite/dist/config.js) — a root-level copy would be ignored, and
-    // the 60s testTimeout it carries would silently drop to evalite's 30s.
+    // the 120s testTimeout it carries would silently drop to evalite's 30s.
     const configs = [
       'evalite.config.ts',
       'evalite.config.mts',
@@ -505,6 +505,23 @@ describe('eval harness wiring', () => {
       configs.some((name) => existsSync(join(REPO_ROOT, name))),
       'a repo-root evalite.config is dead config now that evalite runs from the eval root',
     ).toBe(false)
+  })
+
+  it('keeps the per-row eval timeout at the measured 120s', () => {
+    // Same shape as the effort and budget pins above: a number that was
+    // measured, not chosen, read back from the source that carries it.
+    // evalite applies `testTimeout` per data row (each row is its own
+    // `it.concurrent`), and at effort `low` on the harness's default model the
+    // safety essay's two-attempt path completed in 63.6–72.6s — 60s cut it off
+    // mid-retry [measured 2026-09-15, CI run 35003845912 + local repro; the
+    // config's own docblock carries the numbers]. Pinned so the value cannot
+    // drift back under the measured path without this test naming it.
+    const config = readFileSync(join(EVAL_ROOT, 'evalite.config.ts'), 'utf8')
+    const timeout = /testTimeout:\s*([0-9_]+)/.exec(
+      stripTsComments(config),
+    )?.[1]
+    expect(timeout, 'evalite.config.ts must set testTimeout').toBeDefined()
+    expect(Number(timeout!.replace(/_/g, ''))).toBe(120_000)
   })
 
   it('gives the eval root a Vitest config that declares no projects', () => {
