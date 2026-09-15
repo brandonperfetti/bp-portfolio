@@ -206,7 +206,7 @@ beforeEach(() => {
     maxMessageChars: 1500,
     maxMessages: 12,
     maxCompletionTokens: 2048,
-    reasoningEffort: 'minimal',
+    reasoningEffort: 'low',
     imageDailyLimit: 0,
     publicChatEnabled: true,
     publicImageEnabled: true,
@@ -736,24 +736,27 @@ describe('POST /api/ai/chat — empty-reply fail-safe (#138)', () => {
     // with two `EvalOutputBudgetError`s; `low`/1024 still lost the
     // safety-essay refusal; `minimal`/1024 cleared the safety file 4/4. The
     // effort comes from `getSecurityLimits()`, so `AI_REASONING_EFFORT` is
-    // the one knob.
+    // the one knob. The fixture above says `low` because that is the rung
+    // production now runs at: the deployed model withdrew `minimal` on
+    // 2026-09-15 (see `DEFAULT_REASONING_EFFORT` in `guardrails.ts`), so a
+    // fixture still naming it would be pinning a value no live turn can send.
     await POST(makeRequest(validBody))
 
     expect(streamTextMock.mock.calls[0]?.[0]).toMatchObject({
-      providerOptions: { openai: { reasoningEffort: 'minimal' } },
+      providerOptions: { openai: { reasoningEffort: 'low' } },
     })
   })
 
   it('passes whatever effort the guardrails resolved, not a literal', async () => {
     getSecurityLimitsMock.mockReturnValue({
       ...getSecurityLimitsMock(),
-      reasoningEffort: 'low',
+      reasoningEffort: 'medium',
     })
 
     await POST(makeRequest(validBody))
 
     expect(streamTextMock.mock.calls[0]?.[0]).toMatchObject({
-      providerOptions: { openai: { reasoningEffort: 'low' } },
+      providerOptions: { openai: { reasoningEffort: 'medium' } },
     })
   })
 

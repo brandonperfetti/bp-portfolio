@@ -122,7 +122,7 @@ describe.each([
 
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        providerOptions: { openai: { reasoningEffort: 'minimal' } },
+        providerOptions: { openai: { reasoningEffort: 'low' } },
       }),
     )
   })

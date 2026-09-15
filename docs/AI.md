@@ -242,6 +242,43 @@ The same change removes the undocumented 0.5 floor in the ungrounded
 keyed run is a **new baseline**: an answer that refuses nothing now scores 0
 there, as its grounded namesake in `scorers.ts` always has.
 
+> **Corrected 2026-09-15 (#138, `72d737e`).** The decision record below names
+> `minimal` as the rung and stays as written, but it should not be relied on
+> for what production runs today. On 2026-09-15 the deployed model
+> (`gpt-5.6-luna`) began rejecting `minimal` outright — `[measured, Vercel
+runtime logs, dpl_B3pPxfiyvcZbq9NH4rv5hWxEJFMD]` every `/api/ai/chat` turn
+> on staging 400'd with `Unsupported value: 'minimal' … Supported values are:
+'none', 'low', 'medium', 'high', 'xhigh', and 'max'`. `[inference]` the
+> model's accepted enum changed between 2026-09-11 and 2026-09-15; nothing in
+> this tree changed. `DEFAULT_REASONING_EFFORT` therefore moved to **`low`** —
+> the nearest rung the model still accepts, and the one the table below had
+> already measured clean at the 2048 budget (`low` / 2048: 4/4, 75%) — and the
+> eval mirror (`EVAL_REASONING_EFFORT`), `.env.example` and the drift guard in
+> `scripts/eval-harness.test.ts` followed it. The trade `minimal` bought
+> (about 3× faster on the safety file) went with the rung; it was not wrong.
+> `AI_REASONING_EFFORT` remains the env override for any further move.
+>
+> **What `low` costs the gate, measured the same day** (receipts under
+> `_agent/initiatives/bp-portfolio-post-launch/evidence/2026-09-15-release-235-ci/`).
+> The Evalite job runs the harness's default model — CI sets no
+> `AI_CHAT_MODEL`, so `getCorvusModel()` resolves `gpt-5-mini` — while the
+> deployed site sets `AI_CHAT_MODEL=gpt-5.6-luna` (the model in the 400
+> above). The two accept disjoint low ends of the ladder: `gpt-5-mini` 400s
+> `none` ("Supported values are: 'minimal', 'low', 'medium', and 'high'") and
+> `gpt-5.6-luna` 400s `minimal`, so `low` is the lowest rung both take. On the
+> safety block's essay refusal at `low` / 2048, single draws (n=5 per cell)
+> truncated **5/5 on `gpt-5-mini`** (27.5–32.7s, ~8.5–9.2k chars of "here is
+> how to write it yourself") and **0/5 on `gpt-5.6-luna`** (6.5–11.9s); at
+> `minimal` on `gpt-5-mini` 0/5 (5.5–11.2s), at `none` on `gpt-5.6-luna` 0/5
+> (8.0–13.5s). Full keyed `eval:ci` on `gpt-5.6-luna` at `low`: **88%**, 54/54
+> rows, zero truncations, longest row 18.8s. So `low` is the right rung for
+> what production runs, and the gate's flake at `low` — the essay row timing
+> out at 60s, or double-truncating into `EvalOutputBudgetError` — is the gate
+> measuring a model production does not run. `evals/evalite.config.ts` moved
+> the per-row timeout 60s → 120s from the measured two-attempt path
+> (63.6–72.6s on `gpt-5-mini`) so the row can finish and report; which model
+> the gate should run is a decision on #138, not a config tweak.
+
 **Decided 2026-09-11 (Brandon): BOTH levers — #138 option 2, reasoning effort
 capped at `minimal`, AND #138 option 1, the completion budget raised
 1024 → 2048.** `[measured, CI on PR #234, 2026-09-11]` the first keyed `pnpm eval:ci`
@@ -311,7 +348,8 @@ The wiring is one knob and one helper. `AI_REASONING_EFFORT` resolves in
 `getSecurityLimits()` (`src/lib/security/guardrails.ts`) beside
 `maxCompletionTokens`, against the provider's ladder
 (`none | minimal | low | medium | high | xhigh | max`), defaulting to
-`DEFAULT_REASONING_EFFORT = 'minimal'`; an unrecognized value logs one `warn` and
+`DEFAULT_REASONING_EFFORT = 'low'` (`'minimal'` until the 2026-09-15 correction
+above); an unrecognized value logs one `warn` and
 falls back rather than throwing, because this resolves on the chat request path
 and a typo in an env var must not take Corvus down. `corvusProviderOptions()`
 (`src/lib/ai/corvus.ts`) turns that into
@@ -349,7 +387,10 @@ Two things stay on the watch list rather than being closed:
   thinking less.
 - **`AI_REASONING_EFFORT=low` is the env-only fallback.** It needs no code
   change and no deploy; it is the first lever to pull if `minimal` stops
-  holding, with the budget already sized for it.
+  holding, with the budget already sized for it. _Overtaken 2026-09-15:
+  `minimal` stopped holding at the model, not at the gate, and `low` is now the
+  code default (correction above) — the env knob is still the lever for any
+  further move._
 
 **The two candidates, as they stood before that decision:**
 
@@ -368,7 +409,8 @@ Two things stay on the watch list rather than being closed:
    the allowance, but an unsupported value is an API-level rejection on every
    turn.
 
-Both have now landed, in one commit: (2) at `minimal`, and (1) at 2048.
+Both have now landed, in one commit: (2) at `minimal`, and (1) at 2048 _(the
+rung has since moved to `low` — the 2026-09-15 correction above)_.
 `[measured, keyed, 2026-09-11]` the safety file returns visible text on all
 four cases. Brandon's acceptance test — a keyed `pnpm eval:ci` at
 `--threshold 80` showing zero `EvalOutputBudgetError` — **has been met**: the
