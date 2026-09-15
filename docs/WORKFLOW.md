@@ -67,7 +67,11 @@ Two properties of this tier decide how its fixtures must be written:
 - Branches touching the Corvus eval harness or eval-adjacent config
   (`evals/**`, guardrails, eval scripts/workflow) get **one keyed local
   `pnpm eval:ci` run before push** (Brandon runs it) — CI's first keyed run
-  must not be the first observation of eval behavior. The floors themselves
+  must not be the first observation of eval behavior. Export
+  `AI_CHAT_MODEL=gpt-5.6-luna` for that run: the CI job pins the gate to the
+  model production runs (`ci.yml`, `evals` job env; `docs/AI.md`, the
+  2026-09-15 correction), and a run on the code default `gpt-5-mini` measures
+  a model we do not ship. The floors themselves
   are invariants (see `CLAUDE.md`): fix the behavior or the harness, never
   lower a floor to get green.
 

@@ -281,6 +281,32 @@ jobs:
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # The gate measures the model production RUNS, not the code default.
+      # The harness resolves its model through `getCorvusModel()` (env-
+      # selected, AI_CHAT_MODEL); the deployed site sets that variable to
+      # gpt-5.6-luna [source: the 2026-09-15 staging runtime logs in the
+      # initiative's evidence, and Brandon's production-log read in the
+      # decision], while with nothing set here the job ran the code default,
+      # gpt-5-mini — a model we do not ship. That mismatch is the mechanism
+      # behind the red Evalite checks of 2026-09-15, not the score: on
+      # gpt-5-mini at effort `low` the safety block's essay refusal truncated
+      # on 5/5 single draws and the row failed 8 of 12 harness runs (6
+      # EvalOutputBudgetError, 2 timeouts before ef21fd4), while on
+      # gpt-5.6-luna it truncated on 0/5 draws and 0 of 3 full runs. Scores
+      # are not the tiebreaker — mini's clean draws score as well or better
+      # (94/86 on one run vs luna's 88/84 and 90/80) — the failure rate on a
+      # model production never sends is. Decision (Brandon + orchestrator,
+      # 2026-09-15, release-235 kickoff): pin this job, and only this job, to
+      # production's model. The 120s per-row timeout stays as headroom.
+      # Aligning the code default is the root cause and its own measured
+      # change: #238. Detail and receipts: docs/AI.md (the 2026-09-15
+      # correction) and the sansfaux initiative folder
+      # `_agent/initiatives/bp-portfolio-post-launch/evidence/2026-09-15-release-235-ci/`
+      # (outside this repo).
+      # An OpenAI id: AI_CHAT_PROVIDER is unset on this job, so
+      # `getCorvusModel()` hands it to `openai()`; setting the provider here
+      # would need a matching model id.
+      AI_CHAT_MODEL: gpt-5.6-luna
     steps:
       - uses: actions/checkout@v4
       - name: Skip if no provider key

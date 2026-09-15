@@ -260,10 +260,10 @@ runtime logs, dpl_B3pPxfiyvcZbq9NH4rv5hWxEJFMD]` every `/api/ai/chat` turn
 >
 > **What `low` costs the gate, measured the same day** (receipts under
 > `_agent/initiatives/bp-portfolio-post-launch/evidence/2026-09-15-release-235-ci/`).
-> The Evalite job runs the harness's default model — CI sets no
-> `AI_CHAT_MODEL`, so `getCorvusModel()` resolves `gpt-5-mini` — while the
-> deployed site sets `AI_CHAT_MODEL=gpt-5.6-luna` (the model in the 400
-> above). The two accept disjoint low ends of the ladder: `gpt-5-mini` 400s
+> The Evalite job ran the harness's default model — until the decision at
+> the end of this block, CI set no `AI_CHAT_MODEL`, so `getCorvusModel()`
+> resolved `gpt-5-mini` — while the deployed site sets
+> `AI_CHAT_MODEL=gpt-5.6-luna` (the model in the 400 above). The two accept disjoint low ends of the ladder: `gpt-5-mini` 400s
 > `none` ("Supported values are: 'minimal', 'low', 'medium', and 'high'") and
 > `gpt-5.6-luna` 400s `minimal`, so `low` is the lowest rung both take. On the
 > safety block's essay refusal at `low` / 2048, single draws (n=5 per cell)
@@ -276,8 +276,16 @@ runtime logs, dpl_B3pPxfiyvcZbq9NH4rv5hWxEJFMD]` every `/api/ai/chat` turn
 > out at 60s, or double-truncating into `EvalOutputBudgetError` — is the gate
 > measuring a model production does not run. `evals/evalite.config.ts` moved
 > the per-row timeout 60s → 120s from the measured two-attempt path
-> (63.6–72.6s on `gpt-5-mini`) so the row can finish and report; which model
-> the gate should run is a decision on #138, not a config tweak.
+> (63.6–72.6s on `gpt-5-mini`) so the row can finish and report. **Decided
+> 2026-09-15 (Brandon + orchestrator):** the `Evalite (Corvus)` job now sets
+> `AI_CHAT_MODEL=gpt-5.6-luna` in `ci.yml` (that job only), so the gate
+> measures the model production runs; a local keyed run should export the
+> same value to match it (`docs/WORKFLOW.md` §AI eval gate). Aligning the
+> code default in `getCorvusModelId()` is a separate, measured change,
+> ticketed as the root cause this mismatch exposed (#238). Scores were not
+> the tiebreaker — `gpt-5-mini`'s clean draws score as well or better (94% /
+> 86% on one run) — the essay row's failure rate on a model production never
+> sends was.
 
 **Decided 2026-09-11 (Brandon): BOTH levers — #138 option 2, reasoning effort
 capped at `minimal`, AND #138 option 1, the completion budget raised
