@@ -55,6 +55,30 @@ Payload is the single source of truth for site content. Admin at `/admin`
 - **Projects**, **TechStack** (name/category/proficiency/logo/url/githubRepo),
   **Uses** (category-grouped tools), **Categories**, **Tags**, **Media**
   (Blob-backed), **Users** (admin operators).
+- **`corvusChat`** (#217 phase 1, `[2026-09-11]`) puts the Corvus assistant on
+  any page — including inside a `container` → `column`, which is the placement
+  it was built for. Three fields: `variant` (`compact` 24rem / `sidebar` 32rem /
+  `full` 44rem), an optional `heading` (the agent's name) and an optional
+  `starterPrompt`. **Height comes from the variant, never from the viewport and
+  never from an editor-entered number** — `CorvusChat`'s root is `h-full`, and
+  against an auto-height grid item that resolves to `auto`, so without a frame
+  the card grows unbounded and the conversation never becomes a scroll region
+  (`[measured]` 367px empty → 1883px with 1500px of content, zero scroll owners;
+  with the block, root is a flat 512px and `[data-slot='conversation']` owns the
+  scroll). **The block carries `.corvus-surface` itself**, so a placed Corvus
+  looks like Corvus wherever it lands rather than inheriting a skin the page
+  builder never applies; the argument is recorded in
+  `src/blocks/CorvusChat/variants.ts` and in the block's Storybook docs. The
+  agent's name renders as an `h2` in both host contexts, so a page hosting the
+  block keeps exactly one `<h1>`. `starterPrompt` **pre-fills the composer and
+  nothing else** — it is the visitor's editable draft, it is sent only when they
+  press send, and it travels as a `user` message; `/api/ai/chat`'s body schema
+  is still `{ messages }` and phase 1 does not touch it (page-context grounding
+  is phase 2). The select carries an explicit `enumName`
+  (`enum_corvus_chat_variant`) for the reason `ArticlesArchive/config.ts`
+  records. Storage: four tables plus one enum
+  (`20260911_152336_issue_217_corvus_chat_block`), the same four-table shape
+  every block takes here — registering it for columns added none.
 - **`postRollup`** (#152) is the block a section or topic landing page uses to
   show _its_ articles rather than the site's newest ones. `source` is
   `by-category` (published posts carrying the chosen topic — the one that works
@@ -327,9 +351,34 @@ for it.
 writes; rows that predate them are what
 `scripts/audit-served-prefix.sql` is for — published pages whose parent page is
 not published, and published placed posts whose parent page is not published,
-read from the MAIN tables with an expected result of 0 rows. It is read-only and
+read from the MAIN tables. The expected result is **0 rows from the two
+violation queries, plus exactly one row from the third** — a tagged count,
+`AUDIT_SERVED_PREFIX_VIOLATIONS=0`, which always returns a row and is how a
+runner tells "clean" from "the query never ran". It is read-only and
 safe against production. It takes the connection string from `DATABASE_URI`; the
 file names the variable and never a value.
+
+**Where the audit runs, and what to do when it fires** (#206).
+`.github/workflows/audit-served-prefix.yml` runs that script against production
+every Monday at 06:41 UTC, and on `workflow_dispatch`. It **fails the job** on a
+non-zero total: a violation is a live URL under a prefix the site 404s, nothing
+repairs it on its own, and a summary line nobody is paged for is how production
+served four pages under a draft `/work` for days. The run summary carries the
+outcome without opening logs, in three distinguishable forms, each with its own
+exit code — `0 violations` (exit 0), `N violation(s)` with the offending rows
+(exit 1), and **the audit did not complete** (exit 2), which is what a query
+error or a dropped connection produces and is explicitly NOT a pass. The three
+codes are the point: an error must fail _differently_ from a violation, not
+merely also fail. The script's third statement prints
+`AUDIT_SERVED_PREFIX_VIOLATIONS=<n>`, which is the line the job parses; its
+absence is a failure, so an empty result can never be mistaken for a clean one.
+
+When it fires, the fix is **editorial, not automatic** — the job repairs
+nothing on purpose. Each row names the published document and the unpublished
+parent above it: either publish the parent (the URL was meant to be served) or
+unpublish the children (it was not). Both go through the admin UI, where the
+#180 guards apply. The one thing not to do is re-run the job hoping it clears:
+the state is at rest, and only a write changes it.
 
 **Inbound coverage for a subtree is ONE row, not N** (D4). A moved page's row
 carries `matchDescendants`, which makes it match `from` and everything beneath

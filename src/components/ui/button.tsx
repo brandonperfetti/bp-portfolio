@@ -39,9 +39,10 @@ const buttonVariants = cva(
         // themes, paired with white), so reading it as TEXT is the same role
         // confusion #190 fixed in `CorvusReplyLink` — it measures 3.69:1 on
         // the dark page, under WCAG 1.4.3. This is the site's link accent
-        // instead, the pair the nav's active link and `--corvus-accent` both
-        // use: teal-700 on white is 5.39:1, teal-400 on zinc-950 is 10.66:1.
-        link: 'text-teal-700 underline-offset-4 hover:underline dark:text-teal-400',
+        // instead, now a token (`--link-accent`, #202) that the nav's active
+        // link and `--corvus-accent` also resolve to: teal-700 on white is
+        // 5.39:1, teal-400 on zinc-950 is 10.66:1.
+        link: 'text-link-accent underline-offset-4 hover:underline',
         // The site's own teal CTA fill (#113) — zinc/teal palette, identical in
         // light and dark (white text on teal-700, teal-800 on hover), matching
         // the `--corvus-accent-solid` tokens and the pre-port gated-article

@@ -216,6 +216,53 @@ describe('shadcn token layer — palette identity (#190)', () => {
     expectStep(DARK, 'primary-hover', 'teal-800')
   })
 
+  it('paints --link-accent with the site link teal, and INVERTS it (#202)', () => {
+    // The ink counterpart to --primary's fill, and the one role in this block
+    // that must invert. Identity is also the colour-unchanged receipt for
+    // #202: these two steps are exactly what the literal
+    // `text-teal-700 dark:text-teal-400` the 13 call sites carried before
+    // resolved to, because `text-teal-700` reads Tailwind's own
+    // `--color-teal-700` and RAMP below is a transcription of that file. If a
+    // future edit moves the token off the step, the utility it replaced and
+    // the token stop agreeing and this fails.
+    expectStep(LIGHT, 'link-accent', 'teal-700')
+    expectStep(DARK, 'link-accent', 'teal-400')
+    // Not --primary: that pair is IDENTICAL across themes on purpose, which is
+    // legal for a fill edge (3.69:1 dark, over 1.4.11's 3:1) and illegal for
+    // 14px ink (under 1.4.3's 4.5:1). Asserting the inversion is what stops a
+    // future "harmonize the teals" sweep from collapsing the two roles back
+    // together — the #190 confusion this token exists to end.
+    expect(
+      token(LIGHT, 'link-accent'),
+      '--link-accent must not be the same value in both themes',
+    ).not.toEqual(token(DARK, 'link-accent'))
+    // And it reaches `text-link-accent` by the SAME route every other role in
+    // this block takes — a `--color-*` entry in `@theme inline` — rather than
+    // a second mechanism invented for it. Without this line the token could be
+    // correct and unreachable, and every call site would silently inherit.
+    expect(
+      /--color-link-accent:\s*var\(--link-accent\)/.test(cssCode),
+      '--link-accent must be exposed as a utility via @theme inline',
+    ).toBe(true)
+  })
+
+  it('leaves --corvus-accent as the single alias of that pair, not a copy', () => {
+    // #202's reconciliation. `.corvus-surface` used to declare the same pair
+    // in Tailwind v3 hexes (#2dd4bf / #0f766e) — a second definition of one
+    // role, and one that had drifted off the v4 ramp its own comment named.
+    // It is now `var(--link-accent)`, and the light `.corvus-surface`
+    // override no longer redefines it. Both halves are asserted: the alias is
+    // present, and no hex declaration of it survives anywhere.
+    expect(
+      /--corvus-accent:\s*var\(--link-accent\)/.test(cssCode),
+      '--corvus-accent must alias --link-accent',
+    ).toBe(true)
+    expect(
+      /--corvus-accent:\s*#/.test(cssCode),
+      '--corvus-accent must have no hex declaration left',
+    ).toBe(false)
+  })
+
   it('keeps the secondary hover on the same doctrine: one notch DOWN the zinc ramp', () => {
     // `hover:bg-secondary-hover` on `ui/button.tsx`'s `secondary` variant.
     // The stock shadcn hover is `bg-secondary/80`, which composites zinc-100
@@ -371,6 +418,27 @@ describe('shadcn token layer — WCAG floors in both themes (#190)', () => {
           `[${theme}] --primary-hover must be DARKER than --primary: ` +
             `luminance ${hover.toFixed(4)} vs ${rest.toFixed(4)}`,
         ).toBeLessThan(rest)
+      })
+
+      it('link accent: ink on the page, on a card and in a popover (#202)', () => {
+        // A TEXT role in every one of its call sites — nav links, `CMSLink`,
+        // the `link` Button variant, `Card`'s "Read more", the consent links,
+        // Corvus's markdown links — so 1.4.3's 4.5:1, never 1.4.11's 3:1.
+        // Asserted on all three surfaces because the token renders on all
+        // three: `Card` is a card, `CMSLink` lands inside popovers and on the
+        // page. Light is 5.39:1 on white, dark is 10.66:1 on zinc-950.
+        for (const [surface, label] of [
+          ['background', 'the page'],
+          ['card', 'a card'],
+          ['popover', 'a popover'],
+        ] as const) {
+          expectRatio(
+            token(sel, 'link-accent'),
+            token(sel, surface),
+            TEXT_AA,
+            `[${theme}] --link-accent on --${surface} (${label})`,
+          )
+        }
       })
 
       it('secondary and accent: label on the surface', () => {

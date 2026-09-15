@@ -32,8 +32,8 @@
     "generate:types": "payload generate:types",
     "generate:importmap": "payload generate:importmap",
     "eval": "cd evals && evalite watch",
-    "eval:ci": "cd evals && evalite run --threshold 75 --outputPath ./corvus-eval-run.json",
-    "eval:facts": "cd evals && evalite run site-facts.eval.ts --threshold 70",
+    "eval:ci": "cd evals && evalite run --threshold 80 --outputPath ./corvus-eval-run.json",
+    "eval:facts": "cd evals && evalite run site-facts.eval.ts --threshold 75",
     "eval:matrix": "cd evals && CORVUS_EVAL_MATRIX=1 evalite run matrix.eval.ts --threshold 0 --outputPath ./corvus-matrix.json"
   },
   "browserslist": "defaults, not ie <= 11",
@@ -95,6 +95,7 @@
     "@axe-core/playwright": "^4.12.1",
     "@clerk/backend": "^3.12.0",
     "@playwright/test": "^1.58.2",
+    "@spotlightjs/spotlight": "^4.11.8",
     "@storybook/addon-a11y": "^10.5.7",
     "@storybook/addon-mcp": "^0.7.0",
     "@storybook/addon-vitest": "10.5.7",

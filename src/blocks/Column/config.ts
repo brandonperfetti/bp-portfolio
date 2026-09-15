@@ -4,6 +4,7 @@ import { ArticlesArchive } from '@/blocks/ArticlesArchive/config'
 import { CallToAction } from '@/blocks/CallToAction/config'
 import { Carousel } from '@/blocks/Carousel/config'
 import { ContactForm } from '@/blocks/ContactForm/config'
+import { CorvusChatBlock } from '@/blocks/CorvusChat/config'
 import { FaqList } from '@/blocks/FaqList/config'
 import { FeatureCardGrid } from '@/blocks/FeatureCardGrid/config'
 import { Heading } from '@/blocks/Heading/config'
@@ -58,6 +59,7 @@ export const COLUMN_CONTENT_BLOCKS: Block[] = [
   CallToAction,
   Carousel,
   ContactForm,
+  CorvusChatBlock,
   FaqList,
   FeatureCardGrid,
   Heading,

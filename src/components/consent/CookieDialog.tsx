@@ -151,7 +151,7 @@ export function CookieDialog() {
           {dialog.privacyPolicyText && dialog.privacyPolicyHref ? (
             <a
               href={dialog.privacyPolicyHref}
-              className="mt-4 inline-block text-sm font-medium text-teal-700 underline underline-offset-2 hover:text-teal-600 dark:text-teal-400 dark:hover:text-teal-300"
+              className="mt-4 inline-block text-sm font-medium text-link-accent underline underline-offset-2 hover:text-teal-600 dark:hover:text-teal-300"
             >
               {dialog.privacyPolicyText}
             </a>

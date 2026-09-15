@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ABOUT_CORVUS_COLLECTION } from '@/lib/ai/aboutCorvus'
+import { chunkTechStackSummary } from '@/lib/ai/chunking'
 import { CORVUS_SYSTEM_PROMPT } from '@/lib/ai/corvus'
 import {
   CORVUS_POSITIONING,
@@ -277,6 +278,46 @@ describe('daily-driver ranking (#165)', () => {
 
     expect(withoutTech).not.toContain(TECH_PROFICIENCY_RANKING_RULE)
     expect(withoutTech).not.toContain('Daily driver')
+  })
+
+  it('adds the rule when ONLY the daily-driver summary passage was retrieved (#165)', () => {
+    // `chunkTechStackSummary` is written against this rule (it names two tiers
+    // and says which is which), and retrieval filters nothing by collection, so
+    // a window can hold the summary with no per-row `tech-stack` chunk. That
+    // window used to get no rule at all (CodeRabbit on #235, outside-diff).
+    // The passage is composed by the REAL producer rather than hand-copied, so
+    // a reword of the summary cannot leave this fixture asserting a passage
+    // Corvus never sees. Both branches: the clean tier ("complete … not a
+    // sample") and the skipped one ("may be incomplete"), the latter being the
+    // passage the rule's "partial view — say so" clause exists to meet.
+    const toSnippet = (chunk: {
+      collection: string
+      title: string | null
+      content: string
+      sourceUrl: string | null
+    }): CorvusSnippet => ({
+      collection: chunk.collection,
+      title: chunk.title,
+      content: chunk.content,
+      sourceUrl: chunk.sourceUrl,
+      score: 1,
+    })
+    const clean = chunkTechStackSummary([
+      { id: 1, name: 'TypeScript', proficiency: 'daily' },
+      { id: 2, name: 'Next.js', proficiency: 'daily' },
+    ]).chunks.map(toSnippet)
+    const skipped = chunkTechStackSummary([
+      { id: 1, name: 'TypeScript', proficiency: 'daily' },
+      { id: 3, name: 'Deno', proficiency: 'occasionally' },
+    ]).chunks.map(toSnippet)
+
+    for (const summaryOnly of [clean, skipped]) {
+      expect(summaryOnly).toHaveLength(1)
+      expect(summaryOnly[0].collection).toBe('tech-stack-summary')
+      const result = buildGroundedSystem(summaryOnly)
+      expect(result).toContain(TECH_PROFICIENCY_RANKING_RULE)
+    }
+    expect(skipped[0].content).toContain('may be incomplete')
   })
 
   it('stacks with the repo rule without either displacing the other', () => {

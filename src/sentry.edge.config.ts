@@ -2,11 +2,12 @@ import * as Sentry from '@sentry/nextjs'
 
 import {
   getSentryEnvironment,
-  getServerSentryDsn,
+  getSentryInitDecision,
   SENTRY_CONSOLE_LOG_LEVELS,
   sentryDropBotEvent,
   sentryDropNoisyLog,
   sentryTracesSampler,
+  warnIfDevDsnIgnored,
 } from '@/lib/observability/sentryConfig'
 
 /**
@@ -15,15 +16,27 @@ import {
  *
  * @remarks
  * Imported by `src/instrumentation.ts`'s `register()` when
- * `NEXT_RUNTIME === 'edge'`. Same DSN gate as
- * `src/sentry.server.config.ts` — see that file's remarks — so the edge
- * bundle stays inert without a configured DSN.
+ * `NEXT_RUNTIME === 'edge'`. Obeys {@link getSentryInitDecision} verbatim,
+ * exactly like the other two entrypoints — see `sentryConfig.ts` for the
+ * #194 matrix, including the `'edge'` row and why that runtime has one:
+ * `@sentry/vercel-edge` 10.70.0 ships no Spotlight support, so a local edge
+ * decision is always "do not init" (it can neither reach the shared project
+ * — the fence — nor a sidecar).
+ *
+ * The practical cost, stated where a reader will meet it: errors thrown in
+ * `src/proxy.ts` are not visible in Spotlight locally. They still surface in
+ * the terminal, and they are captured normally on every deployed
+ * environment.
  */
-const dsn = getServerSentryDsn()
+const decision = getSentryInitDecision('edge')
 
-if (dsn) {
+warnIfDevDsnIgnored(decision)
+
+if (decision.init) {
   Sentry.init({
-    dsn,
+    // Never a Spotlight-only init here (the 'edge' decision cannot produce
+    // one), but the spread keeps the three entrypoints identically shaped.
+    ...(decision.dsn ? { dsn: decision.dsn } : {}),
     environment: getSentryEnvironment(),
     tracesSampler: sentryTracesSampler,
     debug: false,

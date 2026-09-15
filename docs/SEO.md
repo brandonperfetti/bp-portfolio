@@ -45,11 +45,24 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
 ## Indexing surfaces
 
 - `src/app/sitemap.ts` — static routes + published articles + published
-  page-builder pages. Regenerates hourly (`revalidate = 3600`); its data
-  flows through the `posts`/`pages`-tagged caches, so content edits appear
-  on the next hourly regeneration. (The `posts-sitemap`/`pages-sitemap`
-  tags the hooks fire are aspirational — nothing subscribes to them yet.)
-- `src/app/robots.ts` — allows crawling, disallows `/admin`, `/api`.
+  page-builder pages. **Corrected 2026-09-10 (#209):** it has not regenerated
+  "hourly (`revalidate = 3600`)" since #76 removed that export — the data is
+  prepared in a `getSitemapData` scope on `cacheLife('cmsContent')`, which is
+  stale 300 s / revalidate 6 h / expire 24 h (`next.config.mjs`). And an edit no
+  longer waits for that cadence: the Pages and Posts hooks call
+  `revalidatePath('/sitemap.xml')` on publish, unpublish and delete. That call
+  is the mechanism — `getSitemapData` is a **plain** `'use cache'` scope, so its
+  `posts`/`pages` tag purges reach only the instance that issued them, which is
+  how a published page stayed out of a freshly generated sitemap for 28.5 h
+  `[measured, prod 2026-09-09]`. The `posts-sitemap`/`pages-sitemap` tags that
+  used to be fired here were subscribed by nothing and are **deleted**, not
+  waiting for a subscriber.
+- `src/app/robots.ts` — **corrected 2026-09-10 (#209):** it allows crawling
+  with no `Disallow` at all (`[measured, prod robots.txt 2026-09-09]`:
+  `User-Agent: *` / `Allow: /` / `Host:` / `Sitemap:`). The previous sentence
+  claimed `Disallow` entries for `/admin` and `/api` that the file does not
+  emit. Whether it SHOULD emit them is a separate decision, tracked on #210's
+  follow-ups; this line now describes what is served.
 - `/feed.xml` — RSS via `feed` from published posts.
 - `/llms.txt` + `/llms-full.txt` — LLM discovery endpoints
   (`src/lib/llms/helpers.ts`): site map summary, and per-article metadata +

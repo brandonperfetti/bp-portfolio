@@ -113,8 +113,15 @@ So every row also stores `toPathAtCapture`: the path its target was being
 served at when the row was written. `resolveRedirect` rewrites the remainder
 onto **that** path first, re-resolves the result through the same table, and
 repeats. The walk ends when nothing is keyed at the rewritten form, and when it
-ends that way the answer is the ordinary pre-#178 rewrite onto the target's
-current path, not the capture-time spelling.
+ends that way the answer is a rewrite onto the target's **current** path, not
+the capture-time spelling.
+
+**[Amended 2026-09-09, #201.]** "The target" in that last sentence used to mean
+the row's `to`, and now means the document the row was **captured for**, read
+from `toIdAtCapture`. The two are the same document — and therefore the same
+string — for every row but one shape: a row whose captured path was later
+re-used, which `createPathRedirect` repoints at the new occupant while the
+snapshot still names the old one's era. See the fourth bullet below.
 
 **A hop is not a move.** Budget is spent only when a prefix row carrying a
 snapshot rewrites a request onto a spelling that differs from the one asked for.
@@ -123,7 +130,9 @@ so the repro above is **three moves and one hop**. Read the number below as a
 floor, not a ceiling: five hops buys _at least_ five chained ancestor moves, and
 usually more.
 
-Four limits, stated rather than discovered:
+Four properties of the walk, stated rather than discovered. The fourth was a
+shipped limit until **#201** closed it; it is left in place, marked, because the
+reasoning that made it a limit is what the fix had to answer.
 
 - **Five hops** (`MAX_REDIRECT_HOPS`). A longer chain, or a cycle, answers no
   redirect at all rather than a half-walked guess. No extra database reads —
@@ -138,7 +147,14 @@ Four limits, stated rather than discovered:
   intermediate row (the redirects collection is fully editable in admin), or the
   row falls outside the 500-row read. Serving the stale form there would answer
   a **301 to a dead URL** where the pre-#178 code answered the live one, so the
-  resolver falls through to the current-path rewrite instead.
+  resolver falls through to the current-path rewrite instead. **[Amended
+  2026-09-09, #201:** that fall-through is now onto the **captured document's**
+  current path rather than the row's current destination, which is the same
+  string except on a repointed row — and on a repointed row whose captured
+  document has been deleted or unpublished there is no such path, so the walk
+  ends in a **terminal `null`**: a 404, deliberately, rather than handing the
+  subtree to whoever holds the path now. A 404 is visible and gets reported; a
+  plausible wrong page is not.**]**
 - **Rows written before #178 still survive exactly one move, and are not
   backfilled.** Such a row has no snapshot, so the reader falls back to the
   current path — the pre-#178 behaviour byte for byte. The reason not to backfill
@@ -152,24 +168,56 @@ Four limits, stated rather than discovered:
   from a right one.
 - **The snapshot is a PATH, not a reference**, deliberately: its whole job is to
   name a URL that is no longer served, which no live reference can do. The
-  consequence is a path collision: a spelling vacated by one document and later
-  re-used by another can be hopped onto, so `/old-a/leaf` can answer a permanent
-  redirect into an unrelated document's subtree. Destinations are still document
-  references, so the answer stays a real document's current URL; it may just be
-  the wrong document's, and the resolver cannot detect the substitution.
-  **Shipped as a known limit**, on two grounds: the precondition is compound (a
-  path vacated _and_ re-occupied by a different document _and_ that document then
-  moved, with a live prefix row still keyed at the vacated spelling), and the
-  pre-#178 answer for the same request was a rewrite onto a path that served
-  nothing either. **The obvious guard does not work.** Snapshotting the target's
-  id alongside the path and rejecting a next-hop row that names a different
-  document rejects the correct case just as readily: in the repro above, row A's
-  target is the child and the row matched at A's capture path is the
-  **grandchild's** — a different document by design. `createdAt` ordering does
-  not separate them either; in both the repro and the collision the next-hop row
-  was written after the capturing row. Closing this needs ancestor-lineage
-  identity, which this design deliberately gave up. Do not file the id-snapshot
-  follow-up as written.
+  consequence was a path collision: a spelling vacated by one document and later
+  re-used by another could be hopped onto, so `/old-a/leaf` answered a permanent
+  redirect into an unrelated document's subtree — a real document's current URL,
+  just the wrong document's, with the resolver unable to detect the
+  substitution.
+
+  **[Closed 2026-09-09 by #201. What follows is the paragraph as it stood, and
+  why its objection no longer holds — the objection was right about the guard it
+  described, and that is not the guard that shipped.]** This was shipped as a
+  known limit on two grounds: the precondition is compound (a path vacated _and_
+  re-occupied by a different document _and_ that document then moved, with a
+  live prefix row still keyed at the vacated spelling), and the pre-#178 answer
+  for the same request was a rewrite onto a path that served nothing either. The
+  stated reason not to fix it was that **the obvious guard does not work** —
+  snapshotting the target's id and "rejecting a next-hop row that names a
+  different document" rejects the correct case just as readily, because in the
+  three-move repro row A's target is the child while the row matched at A's
+  capture path is the **grandchild's**, a different document by design.
+
+  That objection is about a filter on the candidate row's **target**, applied to
+  every candidate. #201 filters on the candidate's **capture identity**, and
+  only for a candidate keyed **exactly at the capture base**. The grandchild's
+  row survives both halves: it is keyed at `/lab-parent/lab-kid/lab-grandchild`,
+  a strict descendant of row A's capture base `/lab-parent/lab-kid`, so it is
+  never a candidate for the filter at all. A row keyed exactly at the capture
+  base is the only row that makes a claim about **who held that path**, and if
+  its capture identity is a different document then it belongs to a later
+  occupant. Ancestor-lineage identity is still not recorded and is still not
+  needed. **The instruction that used to close this bullet — "do not file the
+  id-snapshot follow-up as written" — is therefore retired**; the follow-up was
+  filed as #201 and shipped, and it is the filter's shape, not the id, that the
+  objection turned on. Four tests in `redirectsRepo.test.ts` pin the four
+  outcomes:
+
+  - the three-move lineage still resolves with identities recorded, in all three
+    list orders (the grandchild's row is still reached);
+  - the collision no longer hops into the later occupant's row (red before the
+    fix);
+  - a row keyed at the capture base whose identity is the **same** document is
+    still hopped through;
+  - a row keyed there that records **no** identity is still hopped through, so
+    the filter cannot fire on a pre-#201 row.
+
+  Two things the fix deliberately does **not** do. It does not anchor the
+  **exact** key: `/old-a` itself, once both documents have vacated it, still
+  resolves to the new occupant, because `from` is unique and #120's rule is that
+  the last document to leave a path keeps that path's redirect — anchoring is
+  scoped to the subtree, whose only key is the snapshot. And it does not
+  backfill: a row written before #201 has no identity, cannot gain a truthful
+  one, and keeps the behaviour described above, collision included.
 
 **Permanence now collapses to the chain's product.** A 301 row whose walk passes
 through a 302 row answers 307, not 308 — `permanent && next.permanent`.

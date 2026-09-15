@@ -33,7 +33,7 @@ export function StatsComponent(
         >
           {items.map((item, index) => (
             <div key={item.id ?? index}>
-              <dd className="text-3xl font-bold tracking-tight text-teal-700 sm:text-4xl dark:text-teal-400">
+              <dd className="text-3xl font-bold tracking-tight text-link-accent sm:text-4xl">
                 {item.value}
               </dd>
               <dt className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">

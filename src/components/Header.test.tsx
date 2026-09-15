@@ -77,7 +77,9 @@ describe('Header', () => {
 
     const desktopArticles = screen
       .getAllByRole('link', { name: 'Articles' })
-      .find((el) => el.className.includes('text-teal-700'))
+      // `text-link-accent` since #202 — the token, not the literal
+      // `text-teal-700 dark:text-teal-400` pair it replaced.
+      .find((el) => el.className.includes('text-link-accent'))
     expect(desktopArticles).toBeTruthy()
   })
 

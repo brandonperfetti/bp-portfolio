@@ -1,7 +1,7 @@
 import { convertToModelMessages, streamText, validateUIMessages } from 'ai'
 import * as z from 'zod'
 
-import { getCorvusModel } from '@/lib/ai/corvus'
+import { corvusProviderOptions, getCorvusModel } from '@/lib/ai/corvus'
 import { createEmptyReplyFailsafe } from '@/lib/ai/emptyReplyFailsafe'
 import { buildGroundedSystem } from '@/lib/ai/groundedSystem'
 import {
@@ -241,6 +241,14 @@ export async function POST(req: Request) {
     system: buildGroundedSystem(snippets),
     messages: await convertToModelMessages(windowed),
     maxOutputTokens: limits.maxCompletionTokens,
+    // Reasoning-effort cap (#138 option 2, Brandon 2026-09-11). The other
+    // half of the same budget: hidden reasoning is billed against
+    // `maxOutputTokens` above, so capping the thinking is what leaves room
+    // for the answer. `corvusProviderOptions` returns `{}` unless the
+    // env-selected model is a reasoning model, so this is a no-op on
+    // `gpt-5-chat*`, on `gpt-4o`, and on the Anthropic path. The budget is
+    // NOT moved here — raising it is #138 option 1, a separate decision.
+    providerOptions: corvusProviderOptions(limits.reasoningEffort),
     experimental_transform: createEmptyReplyFailsafe(),
   })
 

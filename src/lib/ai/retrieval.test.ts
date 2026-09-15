@@ -28,6 +28,14 @@ vi.mock('payload', () => ({
 }))
 
 import { ABOUT_CORVUS_COLLECTION } from '@/lib/ai/aboutCorvus'
+import {
+  CORVUS_TECH_STACK_SUMMARY_COLLECTION,
+  chunkTechStackSummary,
+} from '@/lib/ai/chunking'
+import {
+  SUBJECT_DISAMBIGUATION_RULE,
+  buildGroundedSystem,
+} from '@/lib/ai/groundedSystem'
 import type { CorvusSnippet } from '@/lib/ai/retrieval'
 import {
   CORVUS_SIMILARITY_FLOOR,
@@ -703,5 +711,78 @@ describe('retrieveCorvusContext — marking the site subject (#167 addendum)', (
     })
 
     expect(result[0].questionSubject).toBeUndefined()
+  })
+})
+
+/**
+ * The #167 routing proof for #165's summary chunk.
+ *
+ * @remarks Pure functions, no key, no database — the cheap half of #165, and
+ * it lands in the same commit as the chunk. What these CANNOT prove is that
+ * the summary chunk actually retrieves for a stack-shaped question: that is
+ * cosine similarity against real embeddings, and it is Brandon's keyed run.
+ *
+ * The risk they DO cover is the one the design calls larger than
+ * double-counting: the summary will be the densest stack-shaped passage in the
+ * corpus, so it competes for the five top-k slots on every stack-shaped
+ * question — including "what does this site run on?", where #167 requires the
+ * `bp-portfolio` REPOSITORY passage to win.
+ */
+describe('the daily-driver summary and #167 routing (#165)', () => {
+  const summarySnippet = (
+    over: Partial<CorvusSnippet> = {},
+  ): CorvusSnippet => ({
+    collection: CORVUS_TECH_STACK_SUMMARY_COLLECTION,
+    title: 'Daily drivers',
+    content: chunkTechStackSummary([
+      { id: 1, name: 'Next.js', proficiency: 'daily' },
+      { id: 2, name: 'React', proficiency: 'daily' },
+      { id: 3, name: 'TypeScript', proficiency: 'daily' },
+    ]).chunks[0].content,
+    sourceUrl: '/tech',
+    score: 0.9,
+    ...over,
+  })
+
+  it('1. a site question STILL routes away, summary passage and all', () => {
+    // The assertion is that a passage from the new pseudo-collection is not
+    // accidentally exempt from the stamp. Nothing in `markSiteSubject` reads
+    // `collection` today, and this test is what keeps it that way.
+    const marked = markSiteSubject('What does this site run on?', [
+      summarySnippet(),
+    ])
+
+    expect(marked[0].questionSubject).toBe('site')
+  })
+
+  it('2. the Brandon question still is NOT stamped', () => {
+    // The #147 mirror case `isSiteSubjectQuestion`'s docblock names: a stack
+    // phrase with no site referent must keep answering from `/tech`.
+    expect(
+      markSiteSubject('What tech does Brandon use?', [summarySnippet()])[0]
+        .questionSubject,
+    ).toBeUndefined()
+    expect(isSiteSubjectQuestion('What tech does Brandon use?')).toBe(false)
+  })
+
+  it('3. the subject rule still fires with ONLY the summary in the window', () => {
+    // The regression the design is most worried about: a stack-shaped SITE
+    // question that retrieves the summary instead of the repository passage.
+    // The rule's second trigger is the question-shape stamp, not a repository
+    // passage, so a window holding only the summary must still carry it.
+    const system = buildGroundedSystem([
+      summarySnippet({ questionSubject: 'site' }),
+    ])
+
+    expect(system).toContain(SUBJECT_DISAMBIGUATION_RULE)
+  })
+
+  it('an unstamped summary alone does NOT drag the rule in', () => {
+    // The other half of trigger 3: gating exists for blast radius, so a
+    // Brandon-subject turn whose window holds the summary gets the prompt it
+    // got before this ticket.
+    expect(buildGroundedSystem([summarySnippet()])).not.toContain(
+      SUBJECT_DISAMBIGUATION_RULE,
+    )
   })
 })

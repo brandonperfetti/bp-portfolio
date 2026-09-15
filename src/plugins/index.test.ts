@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { Config, Field, SelectField } from 'payload'
+import type { Config, Field, SelectField, TextField } from 'payload'
 
 import { describe, expect, it } from 'vitest'
 
@@ -92,6 +92,23 @@ describe('redirects plugin permanence field (#130)', () => {
 
     expect(type.required).toBe(true)
     expect(type.defaultValue).toBe('301')
+  })
+
+  it.each([
+    ['toPathAtCapture', '#178'],
+    ['toCollectionAtCapture', '#201'],
+    ['toIdAtCapture', '#201'],
+  ])('carries the capture column %s (%s), read-only', async (name) => {
+    // The three columns the resolver's capture walk reads. They are written by
+    // `createPathRedirect` and by nothing else — a hand-edited snapshot or
+    // identity would silently re-anchor every descendant URL filed under it —
+    // so the admin field is read-only, and that is the part worth pinning: the
+    // plugin's `overrides.fields` is the only place it is stated.
+    const [redirects] = await buildRedirectsCollections()
+
+    const field = findField(redirects.fields, name) as TextField | undefined
+    expect(field?.type).toBe('text')
+    expect(field?.admin?.readOnly).toBe(true)
   })
 
   it('keeps that default among the offered options', async () => {

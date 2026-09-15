@@ -186,8 +186,9 @@ the bare provider call is the **Responses** API (`OpenAIProvider`'s call
 signature takes an `OpenAIResponsesModelId`). On that API a reasoning model's
 hidden reasoning tokens are billed as output tokens and drawn from the _same_
 `maxOutputTokens` allowance as the visible answer. The default model is
-`gpt-5-mini`; the allowance is **1024**
-(`resolveGuardrailLimits`, `AI_MAX_COMPLETION_TOKENS`, cap 8000), mirrored by
+`gpt-5-mini`; the allowance is **2048**
+(`resolveGuardrailLimits`, `AI_MAX_COMPLETION_TOKENS`, cap 8000 — it was 1024
+until 2026-09-11, see the decision below), mirrored by
 `EVAL_MAX_OUTPUT_TOKENS` in `evals/corvus-helpers.ts` and drift-guarded by
 `scripts/eval-harness.test.ts`.
 
@@ -219,12 +220,192 @@ The evals do **not** run through this: `evals/corvus-helpers.ts` calls
 `evals/empty-output.ts`'s zero-for-empty floor keeps seeing raw model
 behaviour.
 
-**Still open (Brandon's call, #138).** The fail-safe stops the blank bubble;
-it does not stop the truncation. Two candidates, neither implemented:
+**Corrected 2026-09-10 (#198): the safety block no longer scores a truncated
+turn at all.** The sentence above described every block, and for
+`site-facts`, `scope`, `persona` and the matrix it still does — a cut-off
+answer there is a partly-correct answer, and the score is informative. It was
+wrong for `evals/safety.eval.ts`, whose only question is whether a refusal was
+well formed: half a refusal is not a bad refusal, it is not an observation of
+one, and scoring it 0 (empty) or paying it full marks (truncated but still
+containing "not able to") were both fictions. That block now passes
+`failOnTruncation` to `askCorvus`, so a turn whose last attempt finishes
+`length` throws `EvalOutputBudgetError` and evalite records the row
+`status: "fail"` with **no scores** — it contributes nothing to the
+`--threshold` average and the run fails with the prompt named. The predicate is
+the raw `finishReason`, not `classifyTurn`'s defect name, because the one
+recorded instance (the 2026-08-30 keyed run above) finished `length` with an
+empty string, which `classifyTurn` calls `empty` — which is also why the error
+is named for the **budget** rather than for truncation. The budget itself is
+untouched — this reports #138's symptom rather than pre-empting its decision.
+The same change removes the undocumented 0.5 floor in the ungrounded
+`declines-and-redirects` (`evals/persona-scorers.ts`), so the block's next
+keyed run is a **new baseline**: an answer that refuses nothing now scores 0
+there, as its grounded namesake in `scorers.ts` always has.
+
+> **Corrected 2026-09-15 (#138, `72d737e`).** The decision record below names
+> `minimal` as the rung and stays as written, but it should not be relied on
+> for what production runs today. On 2026-09-15 the deployed model
+> (`gpt-5.6-luna`) began rejecting `minimal` outright — `[measured, Vercel
+runtime logs, dpl_B3pPxfiyvcZbq9NH4rv5hWxEJFMD]` every `/api/ai/chat` turn
+> on staging 400'd with `Unsupported value: 'minimal' … Supported values are:
+'none', 'low', 'medium', 'high', 'xhigh', and 'max'`. `[inference]` the
+> model's accepted enum changed between 2026-09-11 and 2026-09-15; nothing in
+> this tree changed. `DEFAULT_REASONING_EFFORT` therefore moved to **`low`** —
+> the nearest rung the model still accepts, and the one the table below had
+> already measured clean at the 2048 budget (`low` / 2048: 4/4, 75%) — and the
+> eval mirror (`EVAL_REASONING_EFFORT`), `.env.example` and the drift guard in
+> `scripts/eval-harness.test.ts` followed it. The trade `minimal` bought
+> (about 3× faster on the safety file) went with the rung; it was not wrong.
+> `AI_REASONING_EFFORT` remains the env override for any further move.
+>
+> **What `low` costs the gate, measured the same day** (receipts under
+> `_agent/initiatives/bp-portfolio-post-launch/evidence/2026-09-15-release-235-ci/`).
+> The Evalite job ran the harness's default model — until the decision at
+> the end of this block, CI set no `AI_CHAT_MODEL`, so `getCorvusModel()`
+> resolved `gpt-5-mini` — while the deployed site sets
+> `AI_CHAT_MODEL=gpt-5.6-luna` (the model in the 400 above). The two accept disjoint low ends of the ladder: `gpt-5-mini` 400s
+> `none` ("Supported values are: 'minimal', 'low', 'medium', and 'high'") and
+> `gpt-5.6-luna` 400s `minimal`, so `low` is the lowest rung both take. On the
+> safety block's essay refusal at `low` / 2048, single draws (n=5 per cell)
+> truncated **5/5 on `gpt-5-mini`** (27.5–32.7s, ~8.5–9.2k chars of "here is
+> how to write it yourself") and **0/5 on `gpt-5.6-luna`** (6.5–11.9s); at
+> `minimal` on `gpt-5-mini` 0/5 (5.5–11.2s), at `none` on `gpt-5.6-luna` 0/5
+> (8.0–13.5s). Full keyed `eval:ci` on `gpt-5.6-luna` at `low`: **88%**, 54/54
+> rows, zero truncations, longest row 18.8s. So `low` is the right rung for
+> what production runs, and the gate's flake at `low` — the essay row timing
+> out at 60s, or double-truncating into `EvalOutputBudgetError` — is the gate
+> measuring a model production does not run. `evals/evalite.config.ts` moved
+> the per-row timeout 60s → 120s from the measured two-attempt path
+> (63.6–72.6s on `gpt-5-mini`) so the row can finish and report. **Decided
+> 2026-09-15 (Brandon + orchestrator):** the `Evalite (Corvus)` job now sets
+> `AI_CHAT_MODEL=gpt-5.6-luna` in `ci.yml` (that job only), so the gate
+> measures the model production runs; a local keyed run should export the
+> same value to match it (`docs/WORKFLOW.md` §AI eval gate). Aligning the
+> code default in `getCorvusModelId()` is a separate, measured change,
+> ticketed as the root cause this mismatch exposed (#238). Scores were not
+> the tiebreaker — `gpt-5-mini`'s clean draws score as well or better (94% /
+> 86% on one run) — the essay row's failure rate on a model production never
+> sends was.
+
+**Decided 2026-09-11 (Brandon): BOTH levers — #138 option 2, reasoning effort
+capped at `minimal`, AND #138 option 1, the completion budget raised
+1024 → 2048.** `[measured, CI on PR #234, 2026-09-11]` the first keyed `pnpm eval:ci`
+after #198 landed failed on the budget rather than on behaviour: **8 attempts
+finished `finishReason=length`**, and the two cases that opt into
+`failOnTruncation` — the safety-refusal essay and `corvus-subjects`' "which are
+his daily drivers?" — hit `length` on **both** of their attempts, raising two
+`EvalOutputBudgetError`s and exiting 1 with the 80% threshold otherwise passed.
+That is the harness refusing to score half-answers, exactly as #198 designed
+it, and it is the distribution this decision rests on.
+
+Effort **before** a budget raise, deliberately. The two options attack
+different halves of the same allowance: option 1 buys more room (and more cost
+per turn, at every turn), while capping the effort spends less of the room
+already there. Effort is the cheaper, reversible move — one env value, no
+cost-ceiling change, no threshold to re-baseline — so it went first.
+
+**The rung is `minimal`, from three keyed probes `[measured, keyed,
+2026-09-11]`:**
+
+| Effort / budget                 | Scope                 | Truncation                                                                                          | Score      | Wall clock |
+| ------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------- | ---------- | ---------- |
+| unset (provider default) / 1024 | full `eval:ci`        | **8 attempts**, 2 prompts dead on both attempts                                                     | — (exit 1) | —          |
+| `low` / 1024                    | full `eval:ci`        | **2 attempts** — one prompt, the safety-essay refusal, on both attempts → 1 `EvalOutputBudgetError` | — (exit 1) | —          |
+| `minimal` / 1024                | `safety.eval.ts` only | **4/4 clean**                                                                                       | 75%        | **9.4s**   |
+| `low` / 2048                    | `safety.eval.ts` only | 4/4 clean                                                                                           | 75%        | 29.7s      |
+
+`low` halved the damage but did not remove it: the safety essay still spent its
+whole allowance thinking, on both attempts, and still failed the run. The last
+two rows are the real choice, and they score **identically** — so `minimal` is
+the rung: it is **~3x faster** on that file (9.4s vs 29.7s) and costs less per
+turn, since a lower rung simply thinks less.
+
+### …and then the budget moved too (#138 option 1)
+
+`[measured, CI, 2026-09-11]` `minimal` at 1024 was not the end of it. On CI the
+safety-essay refusal truncated on **both** attempts again — cut mid-sentence at
+`"…Here are three options — p…"` — while the same prompt passed **three times
+locally** (probe A, the full run, probe B). Everything else was clean: the
+truncation count went **8 → 2 → 0** for every other case, and the full run
+scored **91%**.
+
+So the residual distribution is precise and small: **one prompt of 54**, and it
+fails **roughly one run in four**. `[inference]` That shape is the tell. A
+prompt whose _visible_ answer varies in length run to run is not a prompt that
+thinks too much — thinking less cannot shorten an answer the model has already
+decided to write, and the local passes prove `minimal` is enough on most draws.
+It needs **room**, and it fit at 2048 in probe B.
+
+Hence both levers, which are not redundant — they cap different things:
+
+- **Effort (`minimal`)** removes the _hidden reasoning_ overspend. That is what
+  took 8 truncations to 2, and then to 0 for 53 of the 54 prompts. It costs
+  nothing per turn — the opposite; it is the faster, cheaper draw.
+- **Budget (2048)** removes the _visible answer_ overspend on the long tail.
+  Its cost is a higher per-turn ceiling: a turn that actually uses the room is
+  billed for it, and the worst case doubles. Most turns finish on `stop` far
+  under either number and are billed nothing extra.
+
+The cap stays **8000**, so `AI_MAX_COMPLETION_TOKENS` can still be tuned
+without code. `EVAL_MAX_OUTPUT_TOKENS` moves to 2048 with it, and the existing
+budget drift guard in `scripts/eval-harness.test.ts` now pins **2048** across
+`guardrails.ts`, the eval mirror and `.env.example` — the three must agree or
+the build fails.
+
+The wiring is one knob and one helper. `AI_REASONING_EFFORT` resolves in
+`getSecurityLimits()` (`src/lib/security/guardrails.ts`) beside
+`maxCompletionTokens`, against the provider's ladder
+(`none | minimal | low | medium | high | xhigh | max`), defaulting to
+`DEFAULT_REASONING_EFFORT = 'low'` (`'minimal'` until the 2026-09-15 correction
+above); an unrecognized value logs one `warn` and
+falls back rather than throwing, because this resolves on the chat request path
+and a typo in an env var must not take Corvus down. `corvusProviderOptions()`
+(`src/lib/ai/corvus.ts`) turns that into
+`{ openai: { reasoningEffort } }` — and into `{}` unless the model is a
+reasoning model by the provider's own predicate (a `gpt-5*` id that is not
+`gpt-5-chat*`, or `o1`/`o3`/`o4-mini`, `@ai-sdk/openai@3.0.87`
+`dist/index.mjs:45`), because the Responses path warns
+"reasoningEffort is not supported for non-reasoning models" for anything else
+(`dist/index.mjs:5514-5518`). The chat route and `evals/corvus-helpers.ts`
+build their options through that one function; the harness mirrors only the
+effort literal (`EVAL_REASONING_EFFORT`), on the same gate-stability grounds as
+the budget, and `scripts/eval-harness.test.ts` pins it against `guardrails.ts`
+and `.env.example` together.
+
+`[measured, offline, 2026-09-11]` the installed provider does turn that object
+into `reasoning: { effort: … }` on the wire and emits no warning for it —
+`src/lib/ai/corvus.test.ts` captures the request through a stub `fetch`, so the
+check needs no key. Whether OpenAI _accepts_ the rung is what the keyed probes
+above answered for `low` and `minimal`; both ran clean, so the "an unsupported
+value fails every turn" risk the 2026-09-03 comment flagged is retired for
+these two.
+
+**Resolved, 2026-09-11.** The step that was outstanding here — a full keyed
+`pnpm eval:ci` at `--threshold 80` over the other 50 cases, because a rung that
+thinks less could cost a `site-facts` or `scope` answer what it gained on the
+refusal — has now run. `[measured, keyed, 2026-09-11]` it scored **91%** with
+**zero truncations locally**, and the CI Evalite check is green on `8d2dc7f` at
+`minimal` / 2048 `[measured, CI, 2026-09-11]` (run 34642530697). No block regressed below the
+threshold, so the `low` + 2048 fallback was not taken.
+
+Two things stay on the watch list rather than being closed:
+
+- **`site-facts` moved 86% → 81% at `minimal`.** Still above the threshold, and
+  the block to read first if a future run dips — it is the one that pays for
+  thinking less.
+- **`AI_REASONING_EFFORT=low` is the env-only fallback.** It needs no code
+  change and no deploy; it is the first lever to pull if `minimal` stops
+  holding, with the budget already sized for it. _Overtaken 2026-09-15:
+  `minimal` stopped holding at the model, not at the gate, and `low` is now the
+  code default (correction above) — the env knob is still the lever for any
+  further move._
+
+**The two candidates, as they stood before that decision:**
 
 1. **Raise the budget.** OpenAI's reasoning guide recommends reserving _at
-   least 25,000_ tokens for reasoning plus output on these models; 1024 is
-   two orders of magnitude under that. Raising it means moving
+   least 25,000_ tokens for reasoning plus output on these models; 1024 was
+   two orders of magnitude under that, and 2048 still is — this raise is sized
+   to the measured residual, not to the guide. Raising it means moving
    `AI_MAX_COMPLETION_TOKENS`, the `EVAL_MAX_OUTPUT_TOKENS` mirror, and the
    drift guard together, and it raises the per-turn cost ceiling.
 2. **Cap reasoning effort.** `@ai-sdk/openai` accepts
@@ -236,8 +417,15 @@ it does not stop the truncation. Two candidates, neither implemented:
    the allowance, but an unsupported value is an API-level rejection on every
    turn.
 
-Whichever lands, the acceptance test is a keyed run showing the safety-refusal
-case returning visible text at the chosen budget.
+Both have now landed, in one commit: (2) at `minimal`, and (1) at 2048 _(the
+rung has since moved to `low` — the 2026-09-15 correction above)_.
+`[measured, keyed, 2026-09-11]` the safety file returns visible text on all
+four cases. Brandon's acceptance test — a keyed `pnpm eval:ci` at
+`--threshold 80` showing zero `EvalOutputBudgetError` — **has been met**: the
+full keyed run scored 91% with no truncation, which is the same run recorded
+under "Resolved" above. The residual truncation noted while (1) was being sized
+(one prompt, ~1 run in 4 at the old budget) is what 2048 was raised to absorb,
+and it did not recur.
 
 ## What Corvus is (#166)
 
@@ -400,6 +588,74 @@ rows a failed hook left stale, and re-embeds everything after an
 `AI_EMBEDDING_MODEL` change — `readStoredHashes` treats a row written by a
 different `model` as absent. The hash skip makes a re-run over an already
 current index nearly free, so running it is never the wrong call.
+
+### The daily-driver summary chunk (#165, 2026-09-11)
+
+`collection: 'tech-stack-summary'`, `doc_id` 1 — a second non-CMS
+pseudo-collection, holding exactly **one** chunk that names Brandon's whole
+`daily` tier in a single line, says that line is the complete tier, and names
+the `Proficient` tier in one closing sentence — in the clean case. When a row's
+stored tier is unreadable (`skipped`, below) the passage says instead that the
+list may be incomplete and drops the closing sentence, because it cannot vouch
+for rows it could not classify (CodeRabbit on #235, 2026-09-15). Its presence
+in a window is enough on its own to append `TECH_PROFICIENCY_RANKING_RULE`
+(`buildGroundedSystem`, since 2026-09-15) — before that only a per-row chunk
+did, so a summary-only window rendered the tier list with no rule. It carries neither `Familiar`
+nor `Exploring`, because `TECH_PROFICIENCY_RANKING_RULE` forbids headlining
+those and the summary is the passage most likely to be retrieved for a stack
+question. It cites **`/tech`**, the same page the per-row chunks cite, and it
+sits **alongside** them — a narrow question ("what proficiency does the tech
+stack give PostgreSQL") still answers from that technology's own row, which is
+the only passage carrying its category, URL and notes.
+
+Why it exists: the measured problem was granularity, not ranking. Retrieval
+hands the model five passages and a technology is one chunk each, so five slots
+can never carry fourteen daily drivers — ~730 estimated tokens of tier against
+a window of ~255. One passage can, at ~82 estimated tokens for fourteen names
+`[measured, this tree's estimator]`. No query-shape detection is added, so
+nothing here collides with #167's routing.
+
+**Who refreshes it.** The `tech-stack` `afterChange` hook re-emits it after the
+per-row sync, inside the same `try`, so a failure logs and leaves the _stale_
+summary rather than failing the save; `afterDelete` does the same, because a
+deleted technology can shrink the tier. **One deadline covers the whole hook**:
+a single `createDeadline(HOOK_EMBEDDING_TIMEOUT_MS)` is shared by the per-row
+sync and the summary step, so a `tech-stack` save's worst case is that one
+budget however many steps run, and `withDeadline` extends it over the work an
+`AbortSignal` cannot reach by itself — the drizzle statements and the
+`payload.find` over the collection, which on a slow database is the likelier
+stall than the provider call. The ordinary save costs nothing — the
+line of names is unchanged by a `notes` edit, so `isContentUnchanged`
+short-circuits before the provider. `scripts/backfill-corvus-embeddings.ts`
+carries one explicit step after the collection loop and is the **authority**:
+it is what repairs a summary a fail-open hook never wrote. `corvus-backfill.yml`
+needs no change — it runs the script. `CORVUS_EMBEDDED_COLLECTIONS` is
+unchanged: it is the registry of collections carrying a hook, and this one has
+no Payload document.
+
+**Read the `proficiency` values before believing a count.** A row whose stored
+value is `''` or unknown is skipped and named at `warn` on every refresh. That
+is deliberate: without it, a technology missing from the answer looks like a
+retrieval problem rather than a data one.
+
+**The retrieval proof is a keyed run, not a test here.** The four tests that
+ship with this (three in `retrieval.test.ts`, one in `chunking.test.ts`) prove
+the routing and the "alongside" property; none of them can prove the summary
+actually _retrieves_ for a stack-shaped question, which is cosine similarity
+against real embeddings. The before/after run on production — four questions,
+the `proficiency` count read off the database first, then the backfill
+workflow, then the same four — is recorded on #165. Note also that a truncated
+or empty answer there is **#138**, not this: the completion budget is
+`maxOutputTokens`, a retrieved passage is input and does not touch it, and the
+#165 eval block now passes `failOnTruncation` so a truncated turn fails loudly
+instead of scoring.
+
+One framing correction while it is in view: the ticket's original question,
+"What tech do **you** use?", is addressed to **Corvus** under #167's subject
+rule and must be answered from the About-Corvus passage, never from Brandon's
+technology list. The acceptance criterion uses "What tech does **Brandon**
+use?", which is the right one — do not re-test the original phrasing and read a
+correct #167 answer as a #165 failure.
 
 ### Public GitHub repos as a collection (#147)
 
@@ -733,7 +989,8 @@ The code half is two changes at opposite ends:
   were given" — ten daily rows against five retrieved passages is otherwise a
   standing invitation to supply the rest from memory.
 
-Appended only when a `tech-stack` passage was retrieved, the same
+Appended only when a `tech-stack` passage — or, since 2026-09-15, the
+`tech-stack-summary` passage (#165; CodeRabbit on #235) — was retrieved, the same
 blast-radius contract as the repo rule above.
 
 **The chunk change needs a re-embed to take effect.** It moves `content_hash`,
@@ -898,8 +1155,8 @@ so a disagreement is legible.
 | Command            | What it does                                     |
 | ------------------ | ------------------------------------------------ |
 | `pnpm eval`        | watch mode                                       |
-| `pnpm eval:ci`     | the gate — global `--threshold 75`               |
-| `pnpm eval:facts`  | the site-fact block on its own, `--threshold 70` |
+| `pnpm eval:ci`     | the gate — global `--threshold 80`               |
+| `pnpm eval:facts`  | the site-fact block on its own, `--threshold 75` |
 | `pnpm eval:matrix` | opt-in model comparison, gates nothing           |
 
 Registration counts move when a block is added, and the thresholds are averages
@@ -907,6 +1164,24 @@ over the whole pool, so it is worth recording: `pnpm eval:ci` collected **34**
 evals before #147 and **41** after `[measured, keyless, 2026-09-02]`, across the
 same five files. That is the loosening this doc has always warned about; the
 response is #122's ratchet against a fresh keyed run, never a shrunken block.
+
+**The first ratchet landed 2026-09-09 (#122): 75/70 → 80/75.** Eight keyed runs
+from the 2026-08-29 baseline onward measured global 78, 88, 88, 86, 88, 94, 91,
+90 and site-facts 75, 83, 88.
+
+The margin is measured against the runs **after** that baseline, and the
+exclusion is the substance of the ratchet rather than a convenience: 78/75 was
+scored before the three fixes required by #122 had landed — the vendor-vs-site
+citation, the cited-answer nudge, and the `declines-and-redirects` disposition
+(#198) — so it describes a Corvus that no longer exists. Re-flooring against it
+would pin the gate to a version of the product we deliberately replaced. Among
+the post-fix runs the worst global is **86** and the worst site-facts is **83**,
+so 80/75 sits six and eight points under them.
+
+A floor is only useful if an ordinary bad day stays green and a real regression
+does not, and two things eat that margin: the pool changes when a block is added
+(34 → 41 evals above, 54 today), and one block can move a long way on its own —
+safety scored 69 on a run whose global was still 88.
 
 **Two threshold invocations, because evalite has one.** `--threshold` is a
 single global average over every score in the run, with no per-eval or
@@ -983,7 +1258,7 @@ matrix, and ad-hoc runs. An explicitly set value still wins.
 passes `--threshold 0` so it reports without gating.
 
 It is opt-in for two reasons and both matter. Every variant's scores would fold
-into the same global average, so the 75% gate would stop meaning "is Corvus
+into the same global average, so the 80% gate would stop meaning "is Corvus
 good enough" and start meaning "is the average of two models good enough". And
 a run is 30 cases × 2 variants × 3 trials = 180 model turns plus the grader
 calls, doubling provider spend on every PR against an explicit in-repo cost

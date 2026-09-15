@@ -23,7 +23,11 @@
  * untouched persona prompt — which is exactly what the
  * `refuses-when-not-grounded` case is testing.
  */
-import { type CorvusChunk, chunkDocument } from '../../src/lib/ai/chunking'
+import {
+  type CorvusChunk,
+  chunkDocument,
+  chunkTechStackSummary,
+} from '../../src/lib/ai/chunking'
 import {
   type GithubRepoSource,
   chunkGithubRepo,
@@ -238,6 +242,34 @@ export function repoFixtureChunks(
 }
 
 /**
+ * The daily-driver summary chunk, composed from a corpus' own rows (#165).
+ *
+ * @remarks Separate from {@link fixtureChunks} and opt-in for exactly the
+ * reason {@link repoFixtureChunks} is: the site corpus is the input to
+ * `fixtureSourceUrls()`, the allow-list three existing scorers are built from,
+ * and every pre-existing eval block's recorded score was measured against the
+ * corpus as it stood. Widening the DEFAULT corpus would make those blocks'
+ * inputs different from the ones their numbers came from, and any movement
+ * would then be inseparable from this ticket's effect. So a caller asks for it.
+ *
+ * Composed through the REAL `chunkTechStackSummary` from the fixture's own
+ * `tech-stack` documents, so what the eval sees is byte-for-byte what
+ * `techStackSummarySync.ts` would write for the same rows. It carries no
+ * `sourceUrl` the corpus does not already have — `/tech` is the per-row
+ * citation too — so adding it cannot widen the citation allow-list either.
+ *
+ * @param docs - Fixture documents; defaults to the whole corpus.
+ * @returns The one summary chunk, or `[]` when no row carries the daily tier.
+ */
+export function summaryFixtureChunks(
+  docs: SiteFixtureDoc[] = SITE_FIXTURE_DOCS,
+): CorvusChunk[] {
+  return chunkTechStackSummary(
+    docs.filter((entry) => entry.collection === 'tech-stack').map((e) => e.doc),
+  ).chunks
+}
+
+/**
  * Every site-relative URL the fixture corpus can legitimately be cited by.
  *
  * @remarks This is the allow-list the `cites-a-real-source-url` scorer checks
@@ -294,6 +326,20 @@ export interface FixtureRetrieverOptions {
    * one.
    */
   repos?: GithubRepoSource[]
+  /**
+   * Index the daily-driver summary chunk ALONGSIDE the per-row chunks (#165).
+   *
+   * @remarks Defaults to `false`, so every call site that existed before #165
+   * builds byte-identically the corpus it always did. Pass `true` on the block
+   * that asks what BRANDON uses: that is the question the summary exists to
+   * answer, and it is also where the double-counting risk lives — the summary
+   * and two or three per-row daily chunks can land in the same window.
+   *
+   * Note what this tier cannot tell you. The score here is query-term
+   * coverage, not cosine distance, so a summary that wins a slot here has not
+   * been shown to win one in production. The retrieval proof is a keyed run.
+   */
+  summary?: boolean
 }
 
 /**
@@ -310,8 +356,13 @@ export function createFixtureRetriever(
     topK = DEFAULT_RETRIEVAL_TOP_K,
     floor = CORVUS_SIMILARITY_FLOOR,
     repos = [],
+    summary = false,
   } = options
-  const chunks = [...fixtureChunks(docs), ...repoFixtureChunks(repos)]
+  const chunks = [
+    ...fixtureChunks(docs),
+    ...repoFixtureChunks(repos),
+    ...(summary ? summaryFixtureChunks(docs) : []),
+  ]
 
   return (query: string): CorvusSnippet[] => {
     // Shaped as raw rows, then reduced by the production floor+top-k logic —

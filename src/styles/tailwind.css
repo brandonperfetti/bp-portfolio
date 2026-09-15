@@ -117,6 +117,46 @@
    * misses. The test asserts what IS true in both themes: identity, the label
    * floor, and that the hover is DARKER than the rest. */
   --primary-hover: oklch(0.437 0.078 188.216); /* teal-800 */
+  /* LINK ACCENT — the site's teal as INK, and the counterpart to --primary,
+   * which is the same brand teal as a FILL (#202, #190's role confusion). The
+   * two cannot be one token: --primary deliberately does NOT invert (teal-700
+   * in both themes, so a `default` Button is the sibling of the bespoke one),
+   * and at 3.69:1 on the dark page it is a legal fill edge but an illegal
+   * 14px link. The ink role must invert, and does: teal-700 on white is
+   * 5.39:1, teal-400 on zinc-950 is 10.66:1 — both over 1.4.3's 4.5:1.
+   *
+   * This is the pair that was the literal `text-teal-700 dark:text-teal-400`
+   * in 13 source files before #202: the nav's active link, `CMSLink`, `Card`,
+   * the `link` Button variant, the Corvus markdown link and copy button, the
+   * consent links, and the Stats/FeatureCardGrid/VideoEmbed accents. Consumed
+   * as `text-link-accent` through --color-link-accent in `@theme inline`
+   * below — the same route every other role here takes to a utility, not a
+   * second mechanism.
+   *
+   * `.corvus-surface` ALIASES its --corvus-accent to this (see that block):
+   * one definition of the pair on the site, and the `-solid`/`-ink`/
+   * `-ring-hover` fill family keeps its corvus- name because it is a
+   * different role.
+   *
+   * NOT the hover step, deliberately. #202 is ONE role — the resting ink — and
+   * the six call sites that pair this token with a hover keep their literal
+   * `hover:text-teal-600` / `dark:hover:text-teal-300`
+   * (`ArticlesArchive/ArticlesArchiveView.tsx`, `VideoEmbed/Component.tsx`,
+   * `articles/ArticlesExplorer.tsx`, `cms/CMSLink.tsx`,
+   * `consent/CookieBanner.tsx`, `consent/CookieDialog.tsx`). Both FILL roles
+   * here have a hover token (--primary-hover, --secondary-hover); the ink role
+   * has the resting half only, and a `--link-accent-hover` is the obvious
+   * follow-up rather than something to smuggle in behind a token rename.
+   * Whoever writes it should also settle a PRE-EXISTING problem those six
+   * carry, which #202 neither introduced nor fixed: teal-700 → teal-600
+   * LIGHTENS in light mode, the direction `docs/STYLING.md` says is wrong.
+   *
+   * NOT the badge ink. `text-teal-700` also survives in three chip call sites
+   * (`ArticleMeta`, `TechCard`, `ArticlesExplorer`'s tag pill) where it sits
+   * on a `bg-teal-50` tint and inverts to teal-200/teal-300 on a teal-900/950
+   * tint — a different pair, on a different backdrop, and routing it here
+   * would repaint it. That role wants its own token; #202 is not a sweep. */
+  --link-accent: oklch(0.511 0.096 186.391); /* teal-700 */
   /* Neutral roles — already the site's zinc ramp step for step before #190,
    * confirmed rather than moved. --accent is shadcn's HOVER SURFACE (the
    * `outline`/`ghost` hover pair), not the brand accent: the brand accent is
@@ -183,6 +223,9 @@
   --primary-foreground: oklch(1 0 0); /* white */
   /* See the light block for the doctrine and the measured pairs. */
   --primary-hover: oklch(0.437 0.078 188.216); /* teal-800 */
+  /* Ink accent, and unlike --primary it DOES invert — see the light block for
+   * why the fill role cannot serve as the text role. 10.66:1 on the page. */
+  --link-accent: oklch(0.777 0.152 181.912); /* teal-400 */
   --secondary: oklch(0.274 0.006 286.033); /* zinc-800 */
   --secondary-foreground: oklch(0.985 0 0); /* zinc-50 */
   /* See the light block for the doctrine. One notch down the same ramp:
@@ -234,6 +277,7 @@
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary-hover: var(--primary-hover);
+  --color-link-accent: var(--link-accent);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary-hover: var(--secondary-hover);
@@ -420,7 +464,10 @@
    *   resting fill vs the panel (#0f766e on #0a0a0a) = 3.62:1  ≥ 3   ✅
    * The ring is deliberately not --corvus-accent (teal-400): that measures
    * 2.94:1 against the resting fill and would miss the non-text floor on its
-   * inner edge. LIGHT is untouched and keeps its darker-fill hover, which
+   * inner edge — and that number SURVIVES #202's move of --corvus-accent onto
+   * the v4 ramp, re-measured rather than assumed: teal-400 against
+   * --corvus-accent-solid is 2.94:1 from the v3 hex and 2.94:1 from the v4
+   * one, because the fill did not move and the accent moved by ~0.008 ΔE. LIGHT is untouched and keeps its darker-fill hover, which
    * clears both floors there (label 7.58:1, fill edge 6.90:1). The rule lives
    * at `.corvus-surface [data-slot='sign-in-gate-cta']` below; all four ratios
    * are asserted in `src/styles/corvus-accent-contrast.test.ts`.
@@ -436,8 +483,32 @@
    * tokens (v4 teal-700 is #00786f, teal-800 #005f5a). The pairs differ by
    * well under a perceptible step and by <0.05 in every ratio here, so this
    * stays in the file's own v3 vocabulary rather than mixing one v4 value in.
-   * Reconciling the block is its own change. */
-  --corvus-accent: #2dd4bf; /* teal-400 — text/icon */
+   * Reconciling the block is its own change — EXCEPT for --corvus-accent,
+   * which #202 reconciled, because that one token was a second definition of
+   * the site's link-accent pair rather than a Corvus decision. It is now an
+   * ALIAS of --link-accent (`:root` / `.dark` above) and the light block below
+   * no longer redefines it: the pair inverts there on `.dark` exactly as it
+   * inverted here on `:root:not(.dark) .corvus-surface`, so the theme
+   * behaviour is unchanged and there is one definition of the pair on the
+   * site. ALIAS rather than RENAME because Corvus consumes the NAME
+   * `--corvus-accent` in ~15 rules in this stylesheet, in the authoring
+   * contract of `corvus/RavenMark.tsx` and `corvus/ConstellationMark.tsx`
+   * ("set `color: var(--corvus-accent)`"), in `CorvusChat.stories.tsx` and in
+   * `docs/ACCESSIBILITY.md` — and because it is the head of a five-token
+   * family whose other members (`-ink`, `-solid`, `-solid-hover`,
+   * `-ring-hover`) are FILL roles that are NOT the link accent and keep their
+   * v3 hexes. Renaming the head would orphan the family.
+   *
+   * The one MEASURED consequence, stated rather than buried: this token moves
+   * from the v3 hexes above onto the v4 ramp steps it always claimed in its
+   * comment — #2dd4bf → #00d5be (teal-400) in dark, #0f766e → #00786f
+   * (teal-700) in light. That is the drift this comment predicted, and every
+   * ratio below is recomputed from the resolved value in
+   * `corvus-accent-contrast.test.ts` rather than restated. There is no
+   * reconciliation without this move: the utilities the 13 link call sites
+   * render resolve v4, so pinning the general token to the v3 hexes instead
+   * would repaint 13 live call sites to avoid repainting one Corvus token. */
+  --corvus-accent: var(--link-accent); /* teal-400 dark / teal-700 light */
   --corvus-accent-ink: #ffffff; /* text on a teal fill */
   --corvus-accent-ring-hover: #5eead4; /* teal-300 — dark CTA hover ring */
   --corvus-accent-solid: #0f766e; /* teal-700 — filled CTA (Button primary) */
@@ -466,8 +537,11 @@
 }
 
 :root:not(.dark) .corvus-surface {
-  /* Light-theme override — zinc neutrals on the site's zinc-50 page, teal-700
-   * text/icon accent (the nav's light active-link color). --corvus-accent-ink
+  /* Light-theme override — zinc neutrals on the site's zinc-50 page. The
+   * teal-700 text/icon accent (the nav's light active-link color) is no longer
+   * redefined here: --corvus-accent is an alias of --link-accent since #202,
+   * and that token already inverts on `.dark`, so this block would only be
+   * restating it. --corvus-accent-ink
    * (#fff), --corvus-accent-solid (teal-700), --corvus-accent-solid-hover
    * (teal-800) and --corvus-status are NOT redefined, so they inherit the dark
    * values above — teal fills and their white text are identical in both
@@ -479,7 +553,6 @@
   --corvus-panel: #f4f4f5; /* zinc-100 — subtle raised surface only */
   --corvus-ink: #18181b; /* zinc-900 */
   --corvus-muted: #71717a; /* zinc-500 */
-  --corvus-accent: #0f766e; /* teal-700 — text/icon */
   --corvus-border: #e4e4e7; /* zinc-200 (shadcn --border light) */
 
   /* Bubbles (Option A): user is the site's teal (inherited), assistant is a

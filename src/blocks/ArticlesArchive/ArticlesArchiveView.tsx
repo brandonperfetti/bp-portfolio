@@ -109,7 +109,7 @@ export function ArticlesArchiveView({
           <div className="mt-8">
             <Link
               href="/articles"
-              className="text-sm font-medium text-teal-700 transition hover:text-teal-600 dark:text-teal-400 dark:hover:text-teal-300"
+              className="text-sm font-medium text-link-accent transition hover:text-teal-600 dark:hover:text-teal-300"
             >
               Browse all articles →
             </Link>

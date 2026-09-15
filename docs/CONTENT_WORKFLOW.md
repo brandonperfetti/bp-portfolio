@@ -13,8 +13,11 @@
 3. Publish (or schedule) — `revalidatePost` makes the article's detail
    page live at `/articles/[slug]` immediately. List surfaces converge on
    their TTLs, not instantly (measured 2026-08-10, docs/MAINTENANCE.md →
-   Watchpoints): `/articles` and the search palette within ≤5 minutes,
-   the sitemap on its hourly revalidate.
+   Watchpoints): `/articles` and the search palette within ≤5 minutes.
+   **Corrected 2026-09-10 (#209):** the sitemap is no longer one of them, and
+   never did have "an hourly revalidate" — #76 removed `revalidate = 3600`, and
+   `revalidatePost`/`revalidatePage` now purge `/sitemap.xml` on publish,
+   unpublish and delete. See `docs/SEO.md` § Indexing surfaces.
 4. Slugs lock after creation (`slugLock`). Changing a published slug breaks
    the URL contract — add a redirect via plugin-redirects if truly needed.
 

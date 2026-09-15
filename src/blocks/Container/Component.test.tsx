@@ -33,6 +33,20 @@ vi.mock('@/blocks/ArticlesArchive/Component', () => ({
 vi.mock('@/blocks/WorkHistoryCard/Component', () => ({
   WorkHistoryCardComponent: () => null,
 }))
+// `postRollup` is the one leaf block that reads `hostDoc` (#177), and it is an
+// async server component that queries the articles repo — neither of which
+// renders in jsdom. Standing it in with a synchronous probe that PRINTS the
+// host document it was handed is what makes the forwarding observable in the
+// DOM: everything between the probe and the assertion — `ContainerBlockComponent`,
+// `ColumnBlockComponent`, `ColumnShell`, `RenderBlocks` — is the real module,
+// so the only thing faked is the leaf's database call, not the path under test.
+vi.mock('@/blocks/PostRollup/Component', () => ({
+  PostRollupComponent: ({ hostDoc }: any) => (
+    <p data-testid="rollup-host">
+      {hostDoc ? `${hostDoc.collection}#${hostDoc.id}` : 'no host'}
+    </p>
+  ),
+}))
 
 const text = (value: string) => ({
   root: {
@@ -520,5 +534,75 @@ describe('ContainerBlockComponent section rhythm (#42)', () => {
     )
     const section = container.querySelector('section')
     expect(section?.className).toBe('my-12')
+  })
+})
+
+/**
+ * `hostDoc` forwarding (#177, #199) — asserted from what the tree RENDERS.
+ *
+ * @remarks Replaces the source-read regex that used to live in
+ * `hostContext.test.ts` (`read('…/Container/Component.tsx')` matched against
+ * `/<ColumnBlockComponent[\s\S]{0,120}hostDoc=\{props\.hostDoc\}/`). That
+ * assertion could pass for the wrong reason — spread the prop, rename the
+ * local, hoist the columns into a variable, and the behaviour is identical
+ * while the regex stops matching; equally it would have kept passing on a
+ * refactor that matched the text and broke the wiring. What is actually
+ * guarded is a BEHAVIOUR: `RenderBlocks` → `container` → `column` →
+ * `RenderBlocks` is the only path a nested block has, so a fact the container
+ * cannot hand through is a fact a column-nested block can never learn, and a
+ * column-nested rollup would silently roll up nothing where its root-level
+ * twin rolls up the page's posts.
+ *
+ * Both of the column's dispatch branches are covered, because they are two
+ * separate chances to drop the prop, and the negative case is asserted too —
+ * a probe that printed the host document no matter what would pass the
+ * positive cases and guard nothing.
+ */
+describe('container · host document forwarding', () => {
+  const rollupColumn = (revealChildren = false) =>
+    ({
+      blockType: 'container',
+      columns: [
+        {
+          blockType: 'column',
+          id: 'main',
+          size: 'full',
+          revealChildren,
+          content: [
+            { blockType: 'postRollup', id: 'r', source: 'by-placement' },
+          ],
+        },
+      ],
+    }) as unknown as ContainerBlock
+
+  it('hands each column the host document it was given', () => {
+    render(
+      <ContainerBlockComponent
+        {...rollupColumn()}
+        hostDoc={{ collection: 'pages', id: 42 }}
+      />,
+    )
+
+    expect(screen.getByTestId('rollup-host')).toHaveTextContent('pages#42')
+  })
+
+  it('forwards it on the per-block reveal branch too', () => {
+    render(
+      <ContainerBlockComponent
+        {...rollupColumn(true)}
+        hostDoc={{ collection: 'posts', id: 7 }}
+      />,
+    )
+
+    expect(screen.getByTestId('rollup-host')).toHaveTextContent('posts#7')
+  })
+
+  it('leaves a nested block hostless when the container was given no host', () => {
+    // The discriminating case. A root render (Storybook, a bare test, a route
+    // that has not been threaded) legitimately has no host document, and the
+    // leaf must see `undefined` rather than a value the container invented.
+    render(<ContainerBlockComponent {...rollupColumn()} />)
+
+    expect(screen.getByTestId('rollup-host')).toHaveTextContent('no host')
   })
 })

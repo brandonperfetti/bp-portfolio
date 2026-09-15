@@ -11,6 +11,11 @@ import {
   deleteCorvusEmbeddings,
   refreshCorvusEmbeddings,
 } from '@/hooks/corvusEmbeddings'
+import {
+  captureWorkHistorySurfaces,
+  readCapturedWorkHistorySurfaces,
+  workHistoryCardPaths,
+} from '@/hooks/workHistorySurfaces'
 
 /**
  * Résumé entries for the home-page Work block.
@@ -124,12 +129,31 @@ export const WorkHistory: CollectionConfig = {
     },
   ],
   hooks: {
+    /**
+     * Resolve the row's rendering surfaces while the relationship still exists
+     * (#207).
+     *
+     * @remarks Not optional plumbing: `entry_id` is `ON DELETE SET NULL`, so an
+     * `afterDelete` derivation matches nothing — the capture is the delete
+     * path's only window. See `captureWorkHistorySurfaces`.
+     */
+    beforeDelete: [captureWorkHistorySurfaces],
     afterChange: [
-      revalidateCollectionTag('work-history', ['/']),
+      // `['/']` is the home-page Resume card, which is a surface no query can
+      // find: it reads the collection directly rather than through a
+      // `workHistoryCard` block. Everything else is DERIVED (#207) — the pages
+      // and posts whose `layout` carries a `workHistoryCard` block naming this
+      // row — because #137 proved a hard-coded list goes stale the moment a
+      // second surface is added and says nothing when it does.
+      revalidateCollectionTag('work-history', ['/'], workHistoryCardPaths),
       refreshCorvusEmbeddings('work-history'),
     ],
     afterDelete: [
-      revalidateCollectionTagDelete('work-history', ['/']),
+      revalidateCollectionTagDelete(
+        'work-history',
+        ['/'],
+        readCapturedWorkHistorySurfaces,
+      ),
       deleteCorvusEmbeddings('work-history'),
     ],
   },

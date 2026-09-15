@@ -22,6 +22,18 @@ overrides:
   ip-address: '^10.3.1'
   dompurify: '^3.4.13'
   postcss: '^8.5.23'
+  # lightningcss: pinned DOWN to the version @tailwindcss/node@4.3.3 hard-pins
+  # (exactly 1.32.0). vite@8.1.5 declares `lightningcss: ^1.32.0`, and the
+  # webpack minimizer takes it as an optional `*` peer — both are satisfied by
+  # 1.32.0, so this override picks a version already inside every declared
+  # range rather than pinning over a conflict. It is load-bearing for
+  # durability, not satisfiability: without it a FROM-SCRATCH resolve (deleted
+  # lockfile) resolves those ranges to the newest release again and the tree
+  # carries two copies of a statically linked native addon (#195). An
+  # incremental `pnpm install` does NOT bring the duplicate back, so testing
+  # this entry by re-running install will make it look inert — it is not.
+  # Drop it once @tailwindcss/postcss ships a release that moves off 1.32.0.
+  lightningcss: 1.32.0
   hono: '^4.12.34' # @payloadcms/plugin-mcp path (prod)
   '@hono/node-server': '^1.19.15'
   valibot: '^1.4.2' # Storybook MCP addon (dev)

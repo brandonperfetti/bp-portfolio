@@ -84,10 +84,19 @@ one set, version-locked.
 ## Observability
 
 - `@sentry/nextjs` — error monitoring + performance tracing (server, client,
-  edge). Entirely env-gated on `NEXT_PUBLIC_SENTRY_DSN` (server/edge may use a
+  edge). Env-gated on `NEXT_PUBLIC_SENTRY_DSN` (server/edge may use a
   separate `SENTRY_DSN`): with no DSN the SDK is never imported by
-  `next.config.mjs` and every `Sentry.init` is skipped, so local dev and CI
-  boot with zero Sentry activity. Source-map upload (via the Sentry Vercel
+  `next.config.mjs` and, on a **deployed environment or in CI**, every
+  `Sentry.init` is skipped too — zero Sentry activity.
+  **Amended 2026-09-10 (#194):** local development no longer follows that
+  rule. There, a configured DSN is deliberately **ignored** (a local run can
+  never send to the shared project), and the send gate is
+  `NEXT_PUBLIC_SENTRY_SPOTLIGHT` instead: armed, the client and Node runtimes
+  `Sentry.init` with **no DSN** and forward envelopes to a local Spotlight
+  sidecar; unarmed, they still skip init entirely. The one decision lives in
+  `getSentryInitDecision` (`src/lib/observability/sentryConfig.ts`); the
+  workflow is in `docs/MAINTENANCE.md` § "Local errors go to Spotlight".
+  Source-map upload (via the Sentry Vercel
   integration) additionally needs `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` +
   `SENTRY_PROJECT` at build time; without them the build still succeeds and
   just skips the upload. Sentry Logs is enabled on server/client/edge,
@@ -97,6 +106,16 @@ one set, version-locked.
   deployment target, never a build mode: its resolution order and the
   deliberate absence of `NODE_ENV` are documented on `getSentryEnvironment`
   (`src/lib/observability/sentryConfig.ts`) and pinned by its test (#134).
+- `@spotlightjs/spotlight` (**devDependency**, added 2026-09-10 for #194) —
+  Spotlight's sidecar, overlay and MCP server: the local error sink that
+  replaced the shared DSN in development. A **tool**, not a library — no
+  application file imports it (asserted by a test), because both the browser
+  and Node Sentry SDKs carry their own `spotlight` option, so `Sentry.init`
+  is the entire integration. Run it with `pnpm exec spotlight` or the
+  desktop app. Its own Next.js docs page still describes a browser
+  `Spotlight.init()`; in 4.x the package's `exports` map resolves to a Node
+  sidecar server (`node:http`) and that browser entry is deprecated and
+  unreachable — do not import it from client code.
 
 ## Supply-chain policy (#91)
 

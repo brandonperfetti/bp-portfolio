@@ -1,10 +1,35 @@
 // @vitest-environment node
 import type { Field } from 'payload'
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// Recording factories: the point of #207 is not that TWO hooks are wired but
+// that each is wired with the RESOLVER that derives its surfaces. A count
+// assertion passes just as happily against `revalidateCollectionTag('work-history')`
+// with the derivation dropped — the exact regression #137 already shipped once.
+const { revalidateCalls, revalidateDeleteCalls } = vi.hoisted(() => ({
+  revalidateCalls: [] as unknown[][],
+  revalidateDeleteCalls: [] as unknown[][],
+}))
+
+vi.mock('@/hooks/revalidateCollection', () => ({
+  revalidateCollectionTag: (...args: unknown[]) => {
+    revalidateCalls.push(args)
+    return () => undefined
+  },
+  revalidateCollectionTagDelete: (...args: unknown[]) => {
+    revalidateDeleteCalls.push(args)
+    return () => undefined
+  },
+}))
 
 import { WorkHistory } from '@/collections/WorkHistory'
 import { WorkHistoryCard } from '@/blocks/WorkHistoryCard/config'
+import {
+  captureWorkHistorySurfaces,
+  readCapturedWorkHistorySurfaces,
+  workHistoryCardPaths,
+} from '@/hooks/workHistorySurfaces'
 import { isSlugRoutedCollection } from '@/fields/slug/slugPaths'
 
 /**
@@ -88,5 +113,38 @@ describe('workHistoryCard entry relationship (#137)', () => {
 
     expect(condition?.({}, { entry: 3 })).toBe(true)
     expect(condition?.({}, {})).toBe(false)
+  })
+})
+
+describe('revalidation surfaces (#207)', () => {
+  it('captures the rendering surfaces in beforeDelete, not afterDelete', () => {
+    // `entry_id` is `ON DELETE SET NULL` and the constraint fires inside the
+    // deleting transaction, so by `afterDelete` the relationship the purge list
+    // is derived from is already gone. A config that drops this hook purges `/`
+    // and nothing else on delete — which is the #207 bug, on the other path.
+    expect(WorkHistory.hooks?.beforeDelete).toEqual([
+      captureWorkHistorySurfaces,
+    ])
+  })
+
+  it('keeps the homepage purge and adds a derived resolver on both paths', () => {
+    // The home Resume card reads the collection DIRECTLY rather than through a
+    // `workHistoryCard` block, so no derivation can find it: `/` has to stay
+    // hard-coded, and dropping it would trade one stale surface for another.
+    // The counts pin that neither array lost a hook while gaining an argument.
+    expect(WorkHistory.hooks?.afterChange).toHaveLength(2)
+    expect(WorkHistory.hooks?.afterDelete).toHaveLength(2)
+
+    // And the arguments, which is where the regression would actually live.
+    expect(revalidateCalls).toContainEqual([
+      'work-history',
+      ['/'],
+      workHistoryCardPaths,
+    ])
+    expect(revalidateDeleteCalls).toContainEqual([
+      'work-history',
+      ['/'],
+      readCapturedWorkHistorySurfaces,
+    ])
   })
 })

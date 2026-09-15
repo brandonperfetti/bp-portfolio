@@ -178,6 +178,14 @@ const PROJECTS: SiteFixtureDoc[] = [
  * the evals assert. `/tech` itself renders client-side and returned no entries
  * to a server-side fetch, exactly as the batch handoff predicted — the REST
  * endpoint is the server-rendered substitute.
+ *
+ * These rows are ALSO the source of the daily-driver summary chunk (#165):
+ * `summaryFixtureChunks()` in `./retriever.ts` composes it from exactly this
+ * array through the real `chunkTechStackSummary`, so a block that opts in sees
+ * byte-for-byte what `techStackSummarySync.ts` would write for these rows. Six
+ * of the ten carry `daily`, against fourteen on production as of 2026-09-09 —
+ * so the summary composed here is SHORTER than the live one, and any count
+ * read off it is a count of this fixture, not of the site.
  */
 const TECH_STACK: SiteFixtureDoc[] = [
   {

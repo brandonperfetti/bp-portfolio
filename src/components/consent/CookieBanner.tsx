@@ -143,7 +143,7 @@ export function CookieBanner({
               type="button"
               {...{ [CONSENT_TRIGGER_ATTR]: 'banner-cookie-details' }}
               onClick={openDialogFrom('banner-cookie-details')}
-              className="font-medium text-teal-700 underline underline-offset-2 hover:text-teal-600 dark:text-teal-400 dark:hover:text-teal-300"
+              className="font-medium text-link-accent underline underline-offset-2 hover:text-teal-600 dark:hover:text-teal-300"
             >
               {banner.cookieDetailsLabel}
             </button>

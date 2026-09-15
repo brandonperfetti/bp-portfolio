@@ -1,0 +1,198 @@
+# Weekly served-prefix audit over PRODUCTION data at rest (#206).
+#
+# Why a schedule exists at all: the #180 guards are `beforeChange` hooks. They
+# refuse the WRITE that would publish a page under an unpublished parent, and
+# they repair nothing — a row written around them (`db.updateOne`, a migration,
+# a restore) or created before they shipped is invisible to them forever.
+# `scripts/audit-served-prefix.sql` is the query that finds those rows, and
+# until this file nothing ran it: on 2026-09-08 production served four
+# published pages under a draft `/work`, in sitemap.xml, found by hand during a
+# release smoke [measured].
+#
+# FAIL, NOT REPORT — the decision #206 left open. A violation is a live URL
+# under a prefix the site 404s, it is never transient (nothing repairs it on
+# its own), and there is no false-positive class to speak of: the query reads
+# the two main tables and the predicate is the invariant verbatim. A summary
+# line nobody is paged for is how `/work` sat unnoticed for days, which is the
+# ticket's own argument. So a non-zero total exits 1 and the run goes red; the
+# rows are in the summary so the editorial decision (publish the parent, or
+# unpublish the children) can be made without opening logs.
+#
+# The three outcomes are deliberately three, not two, and they carry three
+# DIFFERENT EXIT CODES so the distinction survives into anything that reads the
+# job's status rather than its summary (#206 AC 4):
+#   * total = 0        → exit 0, green, with an explicit "0 violations" line.
+#   * total > 0        → exit 1, red, "N violation(s)", rows in the summary.
+#   * no total at all  → exit 2, red, and worded differently ("the audit did
+#                        not complete"). An unset secret, a query that errors,
+#                        a connection that drops mid-file, or a psql pointed
+#                        at the wrong database
+#                        produces an EMPTY result set, and a check that reads
+#                        emptiness as cleanliness has rebuilt #206 one layer
+#                        up. `set -euo pipefail` + `psql -v ON_ERROR_STOP=1` +
+#                        a tagged total line that only a completed statement
+#                        can print are what keep those apart. psql's own
+#                        failure exit is 2 as well, so "2" reads as "the audit
+#                        did not run" from either half of that branch.
+#
+# Required repo secret (Settings → Secrets and variables → Actions) — it
+# already exists for corvus-backfill.yml and db-backup.yml; this adds no new
+# secret:
+#   SUPABASE_DB_URL_PROD  — PRODUCTION session-mode pooler string (port 5432).
+#
+# The secret is declared on the ONE step that uses it, never on the job. A
+# job-level `env:` is in scope for every step, and corvus-backfill.yml's header
+# records why that matters: its install step executes third-party build
+# scripts, which would inherit the production connection string for no reason.
+# Nothing here installs anything — `psql` is preinstalled on ubuntu-latest —
+# but the scoping rule is the repo's posture, not a per-workflow judgement, and
+# a future step added to this job inherits nothing by default.
+#
+# Notes:
+# - GitHub disables cron workflows after 60 days without repo activity; the
+#   run-summary line below is what makes a silent stall visible in the Actions
+#   tab, the same convention db-backup.yml and corvus-backfill.yml use.
+# - This repo is public. The summary prints slugs and paths — content that is
+#   already served at a public URL, which is the whole point of the finding —
+#   and never the connection string.
+
+name: audit-served-prefix
+
+on:
+  schedule:
+    # Monday 06:41 UTC (~23:41 PT Sunday). Clear of every other scheduled job
+    # that touches the same production database through SUPABASE_DB_URL_PROD:
+    # db-backup.yml's daily 09:17 window, corvus-backfill.yml's Sunday 11:07
+    # pass, and corvus-github-sync.yml's Sunday 12:23. Monday morning is
+    # also when a finding is most useful — the week's editorial work starts
+    # after it, not before. The minute is not :00, where GitHub's scheduler
+    # queues everyone's hourly crons.
+    - cron: '41 6 * * 1'
+  workflow_dispatch:
+
+# Least privilege: this job reads the checked-out repo and one Postgres
+# connection. It never pushes, comments, releases or deploys.
+permissions:
+  contents: read
+
+# Two concurrent audits would read the same rows and reach the same answer, so
+# overlap is harmless — but a queued second run adds nothing either. `true`
+# because the newer read is the one worth having.
+concurrency:
+  group: audit-served-prefix
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Served-prefix invariant (production)
+    runs-on: ubuntu-latest
+    # One indexed read against two tables. Ten minutes is already generous; the
+    # ceiling exists so a hung connection cannot hold a runner.
+    timeout-minutes: 10
+    steps:
+      # `persist-credentials: false`: nothing here uses git after the checkout,
+      # so the default only leaves the GITHUB_TOKEN in `.git/config` for the
+      # rest of the job.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run the served-prefix audit (production)
+        id: audit
+        env:
+          DATABASE_URI: ${{ secrets.SUPABASE_DB_URL_PROD }}
+        run: |
+          set -euo pipefail
+
+          # Exit 2 and `outcome=errored`, not 1: an unset secret is an audit
+          # that never ran, which is the same class as a query error and NOT
+          # the violation code. The 0/1/2 contract in the header holds for
+          # every branch of this step, including the one before psql starts —
+          # and the summary step reads `outcome`, so a branch that set none
+          # would print "the audit step did not run" while the log said why.
+          if [ -z "${DATABASE_URI:-}" ]; then
+            echo "::error::SUPABASE_DB_URL_PROD secret is not set; the audit did not run"
+            echo "outcome=errored" >> "$GITHUB_OUTPUT"
+            exit 2
+          fi
+
+          log="${RUNNER_TEMP}/audit-served-prefix.log"
+          echo "log=${log}" >> "$GITHUB_OUTPUT"
+
+          # `ON_ERROR_STOP=1` so a failed statement ends the file with a
+          # non-zero exit instead of psql shrugging and continuing to the next
+          # one. `PIPESTATUS` keeps psql's status rather than tee's.
+          set +e
+          psql "$DATABASE_URI" -v ON_ERROR_STOP=1 -f scripts/audit-served-prefix.sql 2>&1 | tee "$log"
+          psql_status=${PIPESTATUS[0]}
+          set -e
+
+          # Exit 2, not psql's own status, so "the audit did not run" is ONE
+          # code whichever half of that branch produced it.
+          if [ "$psql_status" -ne 0 ]; then
+            echo "::error::the audit query failed to run (psql exit ${psql_status}); this is NOT a clean result"
+            echo "outcome=errored" >> "$GITHUB_OUTPUT"
+            exit 2
+          fi
+
+          # The tag is printed only by a statement that ran to completion, so a
+          # missing tag means the file did not finish even though psql exited 0
+          # — a distinct failure from "0 violations".
+          total=$(grep -o 'AUDIT_SERVED_PREFIX_VIOLATIONS=[0-9]\+' "$log" | tail -1 | cut -d= -f2 || true)
+          if [ -z "$total" ]; then
+            echo "::error::the audit did not complete — no AUDIT_SERVED_PREFIX_VIOLATIONS line was printed; this is NOT a clean result"
+            echo "outcome=incomplete" >> "$GITHUB_OUTPUT"
+            exit 2
+          fi
+
+          echo "total=${total}" >> "$GITHUB_OUTPUT"
+          if [ "$total" -gt 0 ]; then
+            echo "::error::${total} served-prefix violation(s) in production — published pages under an unpublished ancestor"
+            echo "outcome=violations" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "outcome=clean" >> "$GITHUB_OUTPUT"
+          echo "0 served-prefix violations."
+
+      # `!cancelled()` so the summary is written on the failing runs too — a red
+      # run whose reason is only in the logs is the thing this job exists to
+      # stop being normal.
+      - name: Report the run in the job summary
+        if: ${{ !cancelled() }}
+        env:
+          LOG_FILE: ${{ steps.audit.outputs.log }}
+          OUTCOME: ${{ steps.audit.outputs.outcome }}
+          TOTAL: ${{ steps.audit.outputs.total }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Served-prefix invariant (production)"
+            echo
+            case "${OUTCOME:-}" in
+              clean)
+                echo "**0 violations** (exit 0) — every published page's ancestors are published too."
+                ;;
+              violations)
+                echo "**${TOTAL} violation(s)** (exit 1) — published documents under an unpublished ancestor."
+                echo
+                echo "Each row is a live URL sitting under a prefix the site 404s. The fix is"
+                echo "editorial, not automatic: publish the parent, or unpublish the children."
+                echo "See docs/PAYLOAD.md, \"Pre-existing violations are found, not assumed away\"."
+                ;;
+              errored|incomplete)
+                echo "**The audit did not complete** (exit 2). This is NOT a clean result — the database"
+                echo "was never successfully read, so nothing is known about the invariant."
+                ;;
+              *)
+                echo "**The audit step did not run.**"
+                ;;
+            esac
+            echo
+            if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
+              echo '```'
+              cat "$LOG_FILE"
+              echo '```'
+            else
+              echo "No output was captured."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
