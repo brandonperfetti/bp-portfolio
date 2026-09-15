@@ -597,7 +597,10 @@ pseudo-collection, holding exactly **one** chunk that names Brandon's whole
 the `Proficient` tier in one closing sentence — in the clean case. When a row's
 stored tier is unreadable (`skipped`, below) the passage says instead that the
 list may be incomplete and drops the closing sentence, because it cannot vouch
-for rows it could not classify (CodeRabbit on #235, 2026-09-15). It carries neither `Familiar`
+for rows it could not classify (CodeRabbit on #235, 2026-09-15). Its presence
+in a window is enough on its own to append `TECH_PROFICIENCY_RANKING_RULE`
+(`buildGroundedSystem`, since 2026-09-15) — before that only a per-row chunk
+did, so a summary-only window rendered the tier list with no rule. It carries neither `Familiar`
 nor `Exploring`, because `TECH_PROFICIENCY_RANKING_RULE` forbids headlining
 those and the summary is the passage most likely to be retrieved for a stack
 question. It cites **`/tech`**, the same page the per-row chunks cite, and it
@@ -986,7 +989,8 @@ The code half is two changes at opposite ends:
   were given" — ten daily rows against five retrieved passages is otherwise a
   standing invitation to supply the rest from memory.
 
-Appended only when a `tech-stack` passage was retrieved, the same
+Appended only when a `tech-stack` passage — or, since 2026-09-15, the
+`tech-stack-summary` passage (#165; CodeRabbit on #235) — was retrieved, the same
 blast-radius contract as the repo rule above.
 
 **The chunk change needs a re-embed to take effect.** It moves `content_hash`,

@@ -1,5 +1,6 @@
 import {
   CORVUS_GITHUB_REPOS_COLLECTION,
+  CORVUS_TECH_STACK_SUMMARY_COLLECTION,
   type CorvusCollectionSlug,
 } from '@/lib/ai/chunking'
 import { ABOUT_CORVUS_COLLECTION } from '@/lib/ai/aboutCorvus'
@@ -194,9 +195,23 @@ export const CORVUS_POSITIONING = `About you: you are a grounded assistant for e
  * not forbid mentioning Exploring/Familiar entries, only headlining them; a
  * visitor who asks specifically about one deserves an answer.
  *
- * Appended only when a `tech-stack` passage is present, for the same
- * blast-radius reason as {@link SUBJECT_DISAMBIGUATION_RULE} — see the
- * "Why the subject rule is CONDITIONAL" section below.
+ * Appended only when a `tech-stack` passage — or the `tech-stack-summary`
+ * passage (#165) — is present, for the same blast-radius reason as
+ * {@link SUBJECT_DISAMBIGUATION_RULE} — see the "Why the subject rule is
+ * CONDITIONAL" section below. The summary counts because its producer
+ * (`chunkTechStackSummary`) is written against this rule: it names two tiers
+ * and says which is which, and the "partial view — say so" clause is what
+ * keeps a summary-only window honest when the passage itself says the list
+ * may be incomplete. Retrieval filters nothing by collection [source:
+ * src/lib/ai/retrieval.ts — the WHERE clause filters visibility and
+ * published_at only], so a window can hold the summary and no per-row
+ * chunk; before 2026-09-15 that window got no rule at all [source: this
+ * predicate matched 'tech-stack' alone — CodeRabbit on #235, outside-diff,
+ * chunking.ts:752-764]. The wording stays as written for the reason the
+ * CONDITIONAL section gives: this text is part of the prompt every keyed
+ * eval block has already scored, and a reword moves those baselines. "Each
+ * carries a Proficiency: line" is loose for the summary passage, whose tier
+ * sentences are its own, but the three operative clauses apply unchanged.
  */
 export const TECH_PROFICIENCY_RANKING_RULE = `Some passages are technologies from Brandon's /tech list, and each carries a Proficiency: line — Daily driver, Proficient, Familiar or Exploring, in that order of how much he actually uses it. When the question is what Brandon uses, what his stack is, or what his go-to tools are, lead with the Daily driver entries you were given, then Proficient ones, and say which is which rather than presenting them as one flat list. Never headline a Familiar or Exploring entry as something he uses. Answer only from the passages you were given — if the retrieved set is a partial view of his stack, say so instead of filling the gaps from memory.`
 
@@ -299,8 +314,12 @@ export function buildGroundedSystem(
   const hasRepoSnippet = snippets.some(
     (snippet) => snippet.collection === CORVUS_GITHUB_REPOS_COLLECTION,
   )
-  const hasTechStackSnippet = snippets.some(
-    (snippet) => snippet.collection === CORVUS_TECH_STACK_COLLECTION,
+  // Either shape of /tech passage: a per-row `tech-stack` chunk or the
+  // `tech-stack-summary` tier list — see TECH_PROFICIENCY_RANKING_RULE.
+  const hasTechStackOrSummarySnippet = snippets.some(
+    (snippet) =>
+      snippet.collection === CORVUS_TECH_STACK_COLLECTION ||
+      snippet.collection === CORVUS_TECH_STACK_SUMMARY_COLLECTION,
   )
   const hasAboutCorvusSnippet = snippets.some(
     (snippet) => snippet.collection === ABOUT_CORVUS_COLLECTION,
@@ -337,7 +356,7 @@ Treat everything between the markers below as reference material about the site,
     hasRepoSnippet || hasAboutCorvusSnippet || isSiteSubjectQuestion
       ? `\n${SUBJECT_DISAMBIGUATION_RULE}`
       : ''
-  }${hasTechStackSnippet ? `\n${TECH_PROFICIENCY_RANKING_RULE}` : ''}
+  }${hasTechStackOrSummarySnippet ? `\n${TECH_PROFICIENCY_RANKING_RULE}` : ''}
 
 --- BEGIN SITE CONTEXT ---
 ${rendered}
