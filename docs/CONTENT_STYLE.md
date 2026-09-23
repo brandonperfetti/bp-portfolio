@@ -86,7 +86,7 @@ rewrite.
 
 ## 5. Quality gates (run before any review pass)
 
-**Value-spine:** one big idea ("the point is ___" in one sentence); the
+**Value-spine:** one big idea ("the point is \_\_\_" in one sentence); the
 first 150 words name a concrete pain the target reader feels; one story
 anchor (before/after, failure/recovery, trade-off); a framework or
 checklist the reader can apply immediately; an ending with an explicit
@@ -150,7 +150,7 @@ publish is always Brandon's call.
 
 ## 7. For the future content-writing skill
 
-This file is the rubric; docs/CONTENT_WORKFLOW.md → _The Content Run_ is
+This file is the rubric; `docs/CONTENT_WORKFLOW.md` → _The Content Run_ is
 the pipeline. A skill that drafts for a declared audience, loops §6
 until §5's gates and the rubric pass, generates covers, and publishes
 via the Payload MCP needs no source of truth beyond those two documents
@@ -245,11 +245,24 @@ record; Playwright renders are the review proxy.
   already-occupied `public_id` returns the OLD asset with
   `existing: true` — no error. Always check the response for
   `existing: false` plus the expected 2048×1152 dimensions.
-- **Vercel Authentication on staging.** Every automated request to
-  staging (including `/api/media/ingest`) must send the
-  `x-vercel-protection-bypass` header with the "Protection Bypass for
-  Automation" secret. Custom production domains are not covered by
-  Standard Protection, so production needs no header.
+- **Vercel Authentication on every `*.vercel.app` host.** The project's
+  protection mode is `prod_deployment_urls_and_all_previews` [measured
+  2026-09-17], so every automated request to staging, to a preview, _or_
+  to production's own deployment URL (including `/api/media/ingest`) must
+  send the `x-vercel-protection-bypass` header with the "Protection Bypass
+  for Automation" secret (`VERCEL_AUTOMATION_BYPASS_SECRET` in
+  `.env.local`). Only the custom domain `brandonperfetti.com` is outside
+  Standard Protection — target production by that domain and no header is
+  needed. A missing header fails at the edge as a non-JSON
+  `401 Protected deployment`, before the route runs.
+- **One Blob store, deterministic names, two environments.** Staging and
+  production share a single Blob store, and the ingest route names the
+  stored file from the source URL's last two path segments
+  (`<slug>-cover-ds-A.png`). So a staging ingest and a production ingest
+  of the same Cloudinary URL target the _same_ Blob path; whether the
+  second overwrites the first is unmeasured. Decide deliberately whether
+  a run ingests to staging as a rehearsal and again to production, and
+  never treat a staging rehearsal as having placed production's bytes.
 
 **Folder map (Cloudinary, canonical):** articles →
 `bp-portfolio/images/articles/{slug}/`; X posts →
