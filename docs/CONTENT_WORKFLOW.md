@@ -24,7 +24,15 @@
    `slugLock: false` — with the default `slugLock: true` the slug keeps
    following the title until first publish and the chosen slug is dropped
    [source: the Posts collection schema, first agent content run
-   2026-09-10].
+   2026-09-10]. Send `slugLock: true` back in the publish write (or any
+   write once the slug is final), and send `slug` in that same write — a
+   write that carries `title` but no `slug` re-derives the slug from the
+   title. A stored `slugLock: false` is a standing unlock:
+   `enforceSlugFreeze` defers to it, so a later `updatePosts` that sends a
+   new `title` without a `slug` re-derives the slug and moves the published
+   URL (the old path redirects, but the URL contract is broken) [source:
+   `src/fields/slug/enforceSlugFreeze.ts`, `src/fields/slug/formatSlug.ts`,
+   `src/hooks/createPathRedirect.ts`].
 
 ## Draft preview
 
