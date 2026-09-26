@@ -86,7 +86,7 @@ rewrite.
 
 ## 5. Quality gates (run before any review pass)
 
-**Value-spine:** one big idea ("the point is ___" in one sentence); the
+**Value-spine:** one big idea ("the point is \_\_\_" in one sentence); the
 first 150 words name a concrete pain the target reader feels; one story
 anchor (before/after, failure/recovery, trade-off); a framework or
 checklist the reader can apply immediately; an ending with an explicit
@@ -150,7 +150,7 @@ publish is always Brandon's call.
 
 ## 7. For the future content-writing skill
 
-This file is the rubric; docs/CONTENT_WORKFLOW.md → _The Content Run_ is
+This file is the rubric; `docs/CONTENT_WORKFLOW.md` → _The Content Run_ is
 the pipeline. A skill that drafts for a declared audience, loops §6
 until §5's gates and the rubric pass, generates covers, and publishes
 via the Payload MCP needs no source of truth beyond those two documents
@@ -245,11 +245,41 @@ record; Playwright renders are the review proxy.
   already-occupied `public_id` returns the OLD asset with
   `existing: true` — no error. Always check the response for
   `existing: false` plus the expected 2048×1152 dimensions.
-- **Vercel Authentication on staging.** Every automated request to
-  staging (including `/api/media/ingest`) must send the
-  `x-vercel-protection-bypass` header with the "Protection Bypass for
-  Automation" secret. Custom production domains are not covered by
-  Standard Protection, so production needs no header.
+- **Vercel Authentication on every `*.vercel.app` host.** The project's
+  protection mode is `prod_deployment_urls_and_all_previews` [measured
+  2026-09-17], so every automated request to staging, to a preview, _or_
+  to production's own deployment URL (including `/api/media/ingest`) must
+  send the `x-vercel-protection-bypass` header with the "Protection Bypass
+  for Automation" secret (`VERCEL_AUTOMATION_BYPASS_SECRET` in
+  `.env.local`). Only the custom domain `brandonperfetti.com` is outside
+  Standard Protection — target production by that domain and no header is
+  needed. A missing header fails at the edge as a non-JSON
+  `401 Protected deployment`, before the route runs.
+- **One Blob store today (by configuration, not code), deterministic
+  names, two environments.** Staging and production resolved to a single
+  Blob store when last checked [measured 2026-09-23]; the code guarantees
+  nothing of the kind. Each deployment derives its store from its own
+  `BLOB_READ_WRITE_TOKEN` (`src/lib/storage/mediaBlobUrl.ts`,
+  `src/payload.config.ts`), and Vercel holds that variable as three
+  separate entries — production, the `staging` custom environment,
+  preview [measured 2026-09-26, the project's env listing by name] — so
+  pointing any one of them at a token for a different store ends the
+  sharing silently (a rotated token for the same store keeps its store
+  id). Before relying on the shared path, compare the store ids in the
+  staging and production `BLOB_READ_WRITE_TOKEN` values — the id is the
+  token's middle segment (`vercel_blob_rw_<storeId>_…`): parse and print
+  only that segment, never the token, and never echo production's token
+  into a shell history, a handoff, or a receipt. A media URL's
+  `<storeId>.public.blob.vercel-storage.com` host shows the same id only
+  while `STORAGE_VERCEL_BLOB_BASE_URL` is unset; that override replaces
+  the host, so it does not identify the store. While they share a store,
+  the ingest route names the stored file from the source URL's last two
+  path segments (`<slug>-cover-ds-A.png`), so a staging ingest and a
+  production ingest of the same Cloudinary URL target the _same_ Blob
+  path; whether the second overwrites the first is unmeasured. Decide
+  deliberately whether a run ingests to staging as a rehearsal and again
+  to production, and never treat a staging rehearsal as having placed
+  production's bytes.
 
 **Folder map (Cloudinary, canonical):** articles →
 `bp-portfolio/images/articles/{slug}/`; X posts →
