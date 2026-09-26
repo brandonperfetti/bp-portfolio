@@ -197,8 +197,12 @@ Server-side fetch → Media doc in Blob via the Local API (dimensions,
 sizes, and the whole image pipeline apply); the stored filename is the
 source URL's last two path segments joined with `-`, i.e.
 `<slug>-cover-ds-A.png`. Guard rails: https + `res.cloudinary.com`
-allowlist only, raster `image/*` only, 12MB cap. Cloudinary =
-rasterization + archive of the source; Blob = serving copy.
+allowlist only; JPEG, PNG, WebP, AVIF or GIF only (the route itself
+rejects a non-`image/*` response and SVG with 415, and any other
+`image/*` — TIFF, say — passes that check but fails the Media
+collection's allowlist with 422); 12MB cap (413) [source:
+`src/app/api/media/ingest/route.ts`, `src/collections/Media.ts`].
+Cloudinary = rasterization + archive of the source; Blob = serving copy.
 
 ### 5. Attach, publish, verify
 
