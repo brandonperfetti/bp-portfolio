@@ -80,9 +80,14 @@ noted so future agents know what was tested, not just what was hoped.
   from the script-only pair in `.env.local`, `CMS_REVALIDATE_SECRET_STAGING`
   or `CMS_REVALIDATE_SECRET_PRODUCTION`, selected explicitly and paired
   with that environment's base URL (documented in `.env.example`; values
-  live in 1Password). After rotating a value in Vercel, redeploy that
-  environment — a running deployment keeps the value it was built with,
-  and the call 401s until it is redeployed.
+  live in 1Password). The value in Vercel and the script copy are separate
+  stores — nothing copies one to the other — so rotating an environment's
+  value is three steps: rotate it in Vercel, update the script copy in
+  both places (1Password is the record; `.env.local` is what a script
+  actually sends), then redeploy that environment (a running deployment
+  keeps the value it was built with). Skip either later step and the route
+  answers the script with its JSON 401 — the same response whichever side
+  is stale; skip both and the pair stays matched only until the next deploy.
 - `VERCEL_AUTOMATION_BYPASS_SECRET` (script-only, `.env.local`) — sent as
   the `x-vercel-protection-bypass` header. Vercel Authentication on this
   project is `prod_deployment_urls_and_all_previews` [measured
