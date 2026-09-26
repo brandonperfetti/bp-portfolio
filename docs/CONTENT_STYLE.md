@@ -255,14 +255,27 @@ record; Playwright renders are the review proxy.
   Standard Protection — target production by that domain and no header is
   needed. A missing header fails at the edge as a non-JSON
   `401 Protected deployment`, before the route runs.
-- **One Blob store, deterministic names, two environments.** Staging and
-  production share a single Blob store, and the ingest route names the
-  stored file from the source URL's last two path segments
-  (`<slug>-cover-ds-A.png`). So a staging ingest and a production ingest
-  of the same Cloudinary URL target the _same_ Blob path; whether the
-  second overwrites the first is unmeasured. Decide deliberately whether
-  a run ingests to staging as a rehearsal and again to production, and
-  never treat a staging rehearsal as having placed production's bytes.
+- **One Blob store today (by configuration, not code), deterministic
+  names, two environments.** Staging and production resolved to a single
+  Blob store when last checked [measured 2026-09-23]; the code guarantees
+  nothing of the kind. Each deployment derives its store from its own
+  `BLOB_READ_WRITE_TOKEN` (`src/lib/storage/mediaBlobUrl.ts`,
+  `src/payload.config.ts`), and Vercel holds that variable as three
+  separate entries — production, the `staging` custom environment,
+  preview [measured 2026-09-26, the project's env listing by name] — so
+  pointing any one of them at a token for a different store ends the
+  sharing silently (a rotated token for the same store keeps its store
+  id). Before relying on the shared path, compare the store id in a
+  staging media URL with a production one (the
+  `<storeId>.public.blob.vercel-storage.com` host, unless
+  `STORAGE_VERCEL_BLOB_BASE_URL` overrides it). While they share a store,
+  the ingest route names the stored file from the source URL's last two
+  path segments (`<slug>-cover-ds-A.png`), so a staging ingest and a
+  production ingest of the same Cloudinary URL target the _same_ Blob
+  path; whether the second overwrites the first is unmeasured. Decide
+  deliberately whether a run ingests to staging as a rehearsal and again
+  to production, and never treat a staging rehearsal as having placed
+  production's bytes.
 
 **Folder map (Cloudinary, canonical):** articles →
 `bp-portfolio/images/articles/{slug}/`; X posts →
