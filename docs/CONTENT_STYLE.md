@@ -265,10 +265,14 @@ record; Playwright renders are the review proxy.
   preview [measured 2026-09-26, the project's env listing by name] — so
   pointing any one of them at a token for a different store ends the
   sharing silently (a rotated token for the same store keeps its store
-  id). Before relying on the shared path, compare the store id in a
-  staging media URL with a production one (the
-  `<storeId>.public.blob.vercel-storage.com` host, unless
-  `STORAGE_VERCEL_BLOB_BASE_URL` overrides it). While they share a store,
+  id). Before relying on the shared path, compare the store ids in the
+  staging and production `BLOB_READ_WRITE_TOKEN` values — the id is the
+  token's middle segment (`vercel_blob_rw_<storeId>_…`): parse and print
+  only that segment, never the token, and never echo production's token
+  into a shell history, a handoff, or a receipt. A media URL's
+  `<storeId>.public.blob.vercel-storage.com` host shows the same id only
+  while `STORAGE_VERCEL_BLOB_BASE_URL` is unset; that override replaces
+  the host, so it does not identify the store. While they share a store,
   the ingest route names the stored file from the source URL's last two
   path segments (`<slug>-cover-ds-A.png`), so a staging ingest and a
   production ingest of the same Cloudinary URL target the _same_ Blob
