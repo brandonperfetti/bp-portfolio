@@ -86,10 +86,8 @@ import { chromium } from '@playwright/test'
 import sharp from 'sharp'
 
 import {
-  BYPASS_HEADER,
   FREEZE_CSS,
   compareFrames,
-  followSameOriginRedirects,
   formatSummary,
   parseArgs,
   redactUrl,
@@ -119,37 +117,33 @@ async function capture(browser, url, viewport, options) {
   try {
     // Never a context-wide `extraHTTPHeaders`: that sends the secret to every
     // origin the page loads from. `routeWithBypass` scopes it to `url`'s own
-    // origin and follows same-origin redirects itself, so every hop to a
-    // protected destination carries it and no off-site hop does (#252).
-    let startUrl = url
+    // origin and walks redirects itself, so every hop back to the deployment
+    // carries it and no hop to another origin does (#252).
+    let redirectedTo = null // the navigation's destination, when redirected
     if (options.bypassToken) {
       await context.route('**/*', (route) =>
-        routeWithBypass(route, url, options.bypassToken),
+        routeWithBypass(route, url, options.bypassToken, (finalUrl) => {
+          redirectedTo = finalUrl
+        }),
       )
-      // Navigate straight to where the page's own same-origin redirects end
-      // (e.g. an article slug 308ing to its placed path). routeWithBypass
-      // would still deliver the right body for the redirecting URL, but the
-      // document would keep the pre-redirect URL, which the app's router and
-      // relative links read. An off-site hop stops the walk: that redirect is
-      // left for the browser to follow, without the secret.
-      const resolved = await followSameOriginRedirects(
-        (hopUrl, init) =>
-          context.request.fetch(hopUrl, {
-            method: init.method,
-            headers: init.headers,
-            maxRedirects: 0,
-          }),
-        { url, headers: { [BYPASS_HEADER]: options.bypassToken } },
-        url,
-      )
-      if (resolved.stop !== 'cap') startUrl = resolved.url
     }
 
     const page = await context.newPage()
-    await page.goto(startUrl, {
+    await page.goto(url, {
       waitUntil: 'networkidle',
       timeout: options.timeout,
     })
+    // routeWithBypass walks the navigation's redirects itself, with the
+    // browser's own headers, and fulfills the destination's body at the URL
+    // the browser asked for. Navigate once more, straight to that
+    // destination, so the document's URL — which the app's router and
+    // relative links read — is the destination's.
+    if (redirectedTo) {
+      await page.goto(redirectedTo, {
+        waitUntil: 'networkidle',
+        timeout: options.timeout,
+      })
+    }
     await page.addStyleTag({ content: FREEZE_CSS })
 
     if (options.prescroll) {
