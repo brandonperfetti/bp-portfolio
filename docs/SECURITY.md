@@ -2,7 +2,8 @@
 
 The security standard for this repo: the rules a change is held to, by its
 author and by review. Each rule is true of the tree as measured on
-2026-09-27 (wave 9, based on `ef07dbd`) unless it is marked **Intended**,
+2026-09-27 — re-measured that day on the whole wave-9 branch at `ee81049`,
+first written against `ef07dbd` — unless it is marked **Intended**,
 and each names the file or check that holds it. **Operational** rules govern
 handling outside the repo — platform settings, credentials, data — so the
 tree cannot show them; they are `[stated]` and held by whoever operates the
@@ -63,8 +64,9 @@ another doc carried in passing lives here instead, and that doc points back.
   Vercel's own `NEXT_PUBLIC_VERCEL_ENV`.
 - **A secret is read on the server only** — route handlers, server
   components, Payload hooks and config, scripts. `[measured 2026-09-27]`
-  none of the 46 modules whose directive is `'use client'` reads a variable
-  other than `NEXT_PUBLIC_*` or `NODE_ENV`. Passing a secret to a client
+  none of the 47 modules whose directive is `'use client'` reads a variable
+  other than `NEXT_PUBLIC_*` or `NODE_ENV` (46 at `ef07dbd`; wave 9 added
+  `src/components/tech/HistoryWriteGuard.tsx`, which reads none). Passing a secret to a client
   component as a prop sends it to the browser just the same; that half is
   held by review.
 - **Shared-secret routes compare with `isValidSecret()`**
@@ -87,7 +89,10 @@ another doc carried in passing lives here instead, and that doc points back.
   a same-origin hop carries it, an off-site `Location` is followed without
   it), never as a browser-context-wide header, which hands it to every
   third-party origin the page loads — image CDNs, Blob storage, avatars.
-  `routeWithBypass` in `scripts/lib/page-diff.mjs` is the worked shape.
+  `routeWithBypass` in `scripts/lib/page-diff.mjs` is the worked shape; on
+  every hop off the captured origin it also strips `cookie`,
+  `authorization` and `proxy-authorization`
+  [source: `scripts/lib/page-diff.mjs:72-77`, `hopHeaders` at `:89-96`].
   _Moved from `docs/CONTENT_STYLE.md` §9 (#247 addendum)._
   The Playwright config's context-wide `extraHTTPHeaders` carries only the
   non-secret `x-vercel-ip-country` geo header
@@ -184,6 +189,43 @@ stay where they are:
   `FORCE ROW LEVEL SECURITY`. Procedure and the grant revocations behind
   it: `docs/PAYLOAD.md` § New-table RLS convention.
 
+## Media uploads
+
+- **A file enters Media only through an upload or `POST /api/media/ingest`.**
+  A Media **create** with no uploaded file may not carry `url`, `filename`,
+  `mimeType`, `filesize`, `width` or `height`, and a Media **update** with no
+  uploaded file may not change `filename`, `mimeType`, `filesize`, `width`
+  or `height` from the stored value (sending them back unchanged, and
+  `alt` or focal-point edits, pass). Both refusals are a 400 naming the
+  ingest route [source: `src/collections/Media.ts` — `beforeOperation`
+  hook `refuseCreateWithoutUpload` at `:72-93` over the fields at `:20-27`;
+  `beforeValidate` hook `refuseFilelessFileRewrite` at `:165-191` over the
+  fields at `:101-107`, compared by `sameStoredValue` at `:114-117`;
+  registered at `:229-231`; lane D, #242]. The update guard also passes
+  the storage adapter's own metadata write-back, which runs with the
+  server-only `context.skipCloudStorage`.
+- **Why.** Given a `filename` and a `url` and no file, Payload's create
+  fetches the `url` server-side from any public host and stores the bytes
+  under the caller's `filename` with overwriting forced on — a server-side
+  fetch of an arbitrary URL written to a caller-chosen path, past every
+  ingest rail. `[measured, local disk, 2026-09-27]` a fileless create wrote
+  the fetched bytes at exactly that filename; on Vercel Blob the same is
+  `[source]` (`plugin-cloud-storage` `hooks/afterChange.js:10`), not
+  measured, since a Blob write is a third-party write. A fileless update
+  fetches nothing, but a new `filename` re-points the row at a path that is
+  not its file. The guard's TSDoc carries the full receipts; the
+  measurements are in `docs/CONTENT_WORKFLOW.md` §4.
+- **The ingest route's rails** [source: `src/app/api/media/ingest/route.ts`]:
+  shared-secret auth through `isValidSecret`; the source must be `https:`
+  on `res.cloudinary.com` only (`:10`, `:72-84`), fetched with
+  `redirect: 'error'` so a 3xx cannot leave the allowlist (`:85-92`); a
+  raster `image/*` type, SVG refused (`:106-118`); at most 12 MB, checked on
+  the declared length and on the bytes (`:13`, `:126`, `:137`).
+- SVG uploads through the admin stay allowed for legacy content, and SVG
+  can carry scripts, so only trusted staff hold editor accounts
+  [source: `src/collections/Media.ts:197-198`, the collection's TSDoc].
+  **Operational.**
+
 ## End-user authorization (Clerk)
 
 - **Gating is decided on the server, in one function.**
@@ -264,7 +306,14 @@ stay there.
   only `Sentry.setUser` call is in `src/instrumentation-client.ts`, and
   `sendDefaultPii` appears nowhere in the tree. Changing that
   is a change to `isSessionIdAllowed()` and to `docs/ANALYTICS.md`
-  § Sessions in Sentry.
+  § Sessions in Sentry. The client-side Sentry **Logs** calls carry no
+  identity either `[measured 2026-09-27, at ee81049]`:
+  `HistoryWriteGuard` records a dropped history write as `{ method, path }`
+  only, and swallows only the browser's history-throttle `SecurityError` —
+  the cross-origin `SecurityError` still throws
+  [source: `src/components/tech/HistoryWriteGuard.tsx:16-27`, `:60`,
+  `:87-97`]; `clientTelemetry.ts` sends a speech-recognition error code and
+  a boolean [source: `src/lib/observability/clientTelemetry.ts:32-35`].
 - **A mailing-list contact is captured only with consent.** The contact
   form captures only when its unchecked-by-default opt-in is set and the
   message was delivered [source: `src/app/api/contact/route.ts`]; sign-up
