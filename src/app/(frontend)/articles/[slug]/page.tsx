@@ -28,9 +28,10 @@ import {
  * is only possible before the response starts streaming, so `await params`
  * stays outside `<Suspense>`. Prerendered slugs are unaffected, and the
  * per-request member unlock keeps its own Suspense boundary inside
- * `ArticleView`. `false` silences Cache Components' dev-time
- * `blocking-prerender-runtime` validation; it does not change production
- * rendering (`next/dist/docs` `instant.md`).
+ * `ArticleView`. Per Next's `instant.md`, `false` both silences Cache
+ * Components' dev-time `blocking-prerender-runtime` validation and opts the
+ * route out of the prerender-time static-shell validation. Measured: the
+ * `pnpm build` route table is identical with and without it.
  */
 export const instant = false
 

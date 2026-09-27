@@ -27,8 +27,10 @@ type Args = {
  * (`views/Root/metadata.js:32,47`, `utilities/getNextRequestI18n.js:17-18`).
  * There is nothing here to wrap in `<Suspense>`, and an authenticated admin
  * gains nothing from a prerendered shell, so the route is declared allowed to
- * block. This only exempts it from Cache Components' dev-time validation; the
- * production render is unchanged (`next/dist/docs` `instant.md`). If Payload
+ * block. Per Next's `instant.md`, `false` exempts the route from Cache
+ * Components' dev-time instant validation and also opts it out of the
+ * prerender-time static-shell validation. Measured: the `pnpm build` route
+ * table is identical with and without it. If Payload
  * ever re-scaffolds this file, `page.test.ts` beside it fails until the line
  * is restored.
  */
