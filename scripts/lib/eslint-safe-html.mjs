@@ -157,6 +157,8 @@ const noUnsanitizedHtml = {
     messages: {
       unsanitized:
         '`__html` must be produced by {{names}} (or a `const` holding its result). Raw strings here are an XSS sink — see #248. If this truly cannot use a sanitizer, disable this rule with a reason after ` -- `.',
+      duplicateHtml:
+        'Duplicate `__html` key: the last one wins, so an earlier sanitized value can be silently overridden. Keep exactly one.',
       notLiteral:
         '`dangerouslySetInnerHTML` must be an inline object literal whose `__html` comes from {{names}}, so its value can be checked.',
     },
@@ -183,14 +185,29 @@ const noUnsanitizedHtml = {
         })
         return
       }
-      const html = value.properties.find((p) => keyName(p) === '__html')
-      if (!html || !isSafe(html.value, context, sanitizers)) {
+      // Every `__html`, not just the first: with a duplicate key the LAST one
+      // renders, and in .js/.jsx nothing else flags the duplicate.
+      const htmls = value.properties.filter((p) => keyName(p) === '__html')
+      if (htmls.length === 0) {
         context.report({
-          node: html ?? reportNode,
+          node: reportNode,
           messageId: 'unsanitized',
           data: { names },
         })
+        return
       }
+      htmls.forEach((html, index) => {
+        if (index > 0) {
+          context.report({ node: html, messageId: 'duplicateHtml' })
+        }
+        if (!isSafe(html.value, context, sanitizers)) {
+          context.report({
+            node: html,
+            messageId: 'unsanitized',
+            data: { names },
+          })
+        }
+      })
     }
 
     return {
