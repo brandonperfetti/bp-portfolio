@@ -95,8 +95,18 @@ export const refuseCreateWithoutUpload: CollectionBeforeOperationHook = ({
 /**
  * The stored fields that describe a row's bytes. An update may carry them
  * unchanged (a client round-tripping the doc), but only an upload may change
- * them. `url` is not listed: the storage adapter recomputes it from
- * `filename` on every write, so a caller-sent `url` has no effect on update.
+ * them. `url` is not listed because a caller-sent `url` is never stored: the
+ * `url` field's own `beforeChange` hook recomputes it from `filename` on
+ * every write. Corrected 2026-09-27 (CodeRabbit round 1 on #271): this said
+ * "the storage adapter recomputes it" — do not rely on that wording; it is
+ * the mechanism only with a Blob token (`plugin-cloud-storage` `hooks/beforeChange.js:7-13`, through
+ * `generateFileURL`; `[source]`, unmeasured). Without one the adapter is off
+ * and payload's own upload `url` field recomputes it
+ * (`uploads/getBaseFields.js:108-116` → `generateFilePathOrURL.js:11-24`;
+ * with `serverURL` unset no value counts as external) — measured on local
+ * disk: a fileless `url`-only update, by id and by `where`, leaves the column
+ * at `/api/media/file/<filename>`. What a body `url` can do is drive a
+ * re-fetch under `uploadEdits`; `refuseUploadEditsRefetch` owns that.
  */
 const FILE_IDENTITY_FIELDS = [
   'filename',
@@ -157,10 +167,11 @@ const sameStoredValue = (incoming: unknown, stored: unknown): boolean =>
  * `beforeValidate` per document, for id and `where` updates alike. Nothing
  * earlier in the update path fetches or writes for this shape (measured in
  * addendum 2; `updateByID.js:98-106` passes no `originalDoc` to
- * `generateFileData`). Unmeasured and not covered: a REST update carrying an
- * `?uploadEdits` query could make `generateFileData` fetch the body's `url`
- * (`generateFileData.js:342`); that sets `req.file`, so this guard would let it
- * through.
+ * `generateFileData`) — unless the request carries an `uploadEdits` query.
+ * Corrected 2026-09-27 (CodeRabbit round 1 on #271, #270): this said that path
+ * was "unmeasured and not covered" — do not rely on that; it is now measured
+ * and guarded one step earlier by `refuseUploadEditsRefetch`, because that
+ * re-fetch sets `req.file` and so passes this hook.
  */
 export const refuseFilelessFileRewrite: CollectionBeforeValidateHook = ({
   context,
@@ -188,6 +199,127 @@ export const refuseFilelessFileRewrite: CollectionBeforeValidateHook = ({
     )
   }
   return data
+}
+
+/**
+ * The two body fields Payload's re-fetch reads to find the bytes it re-crops
+ * (`generateFileData.js:55`).
+ */
+const REFETCH_SOURCE_FIELDS = ['url', 'filename'] as const
+
+/**
+ * The `uploadEdits` refusal text, exported so tests pin the exact wording. Its
+ * own text, not the update guard's: this refusal fires on a `url` too, and on a
+ * bulk update even when the values sent are the stored ones.
+ */
+export const MEDIA_UPLOAD_EDITS_REFETCH_ERROR =
+  "A crop, resize or focal-point edit re-reads the Media row's own file, so it may send only that row's own url and filename, and a bulk update may send neither. To change the image, upload a new file; to attach an image from a URL use POST /api/media/ingest."
+
+/**
+ * Refuse a Media update whose `uploadEdits` query would make Payload re-fetch
+ * the file from a body `url`/`filename` that is not the row's own (#270; found
+ * by CodeRabbit round 1 on #271, 2026-09-27).
+ *
+ * @remarks What payload 3.88.0 does. On update, `generateFileData` takes its
+ * edits from `req.query.uploadEdits` (`generateFileData.js:342`); a body
+ * `focalX`/`focalY` alone never re-fetches, because with no `originalDoc` it
+ * is compared with itself (`:24-30`, `:362-367`). A query crop,
+ * `widthInPixels`/`heightInPixels`, or a focal point that differs from the
+ * body's makes it re-fetch the file when there is no `req.file` (`:16-33`,
+ * `:54`), from the BODY's `filename` and `url` (`:55`):
+ * a `url` starting with `/` is read from local disk at `staticDir/<filename>`
+ * (`:59-68`, skipped when local storage is disabled, as it is with Blob);
+ * otherwise `getExternalFile` fetches the `url` (`:69-76`; `safeFetch`, which
+ * refuses private addresses but allows any public host). Either way it forces
+ * `overwriteExistingFiles` and puts the bytes on `req.file` (`:262`, `:285`)
+ * under the body's `filename` — so `refuseFilelessFileRewrite` sees a file and
+ * lets the update through, and the ingest route's rails (Cloudinary-only,
+ * `redirect: 'error'`, 12 MB) never run. The update operation calls it before
+ * any `beforeValidate` hook (`updateByID.js:98`, `update.js:135`), so the
+ * guard is a `beforeOperation` hook, like the create guard.
+ *
+ * Measured on local disk (no Blob token), 2026-09-27 (#270, #271): with a body `url`
+ * of `http://127.0.0.1:9/…` the update failed only because `safeFetch` refused
+ * the loopback address ("Failed to fetch from http://127.0.0.1:9/…") — Payload
+ * had tried to fetch the body's URL. With a body `filename` naming ANOTHER
+ * row's file (and `url` `/api/media/file/<that name>`), the other row's file on
+ * disk was overwritten with the 3×2 crop, although the request then failed
+ * `filename`'s unique check and neither row changed. A public-host fetch was
+ * not measured (no network was used).
+ *
+ * Refused, with an `uploadEdits` query and no file: a `url` or `filename` that
+ * differs from the stored row's value as read (after `afterRead`); and a
+ * `where` (bulk) update carrying either — Payload runs `generateFileData` once
+ * per request, before its loop over the matched rows (`update.js:135-145`),
+ * and hands that one result to every row's update, so there is no single
+ * stored row to compare against; and no admin bulk-edit view sends
+ * `uploadEdits` (in `@payloadcms/ui` only the document view, the upload field
+ * and bulk UPLOAD reference it). Passed: an update that sends the row's own
+ * `url` and `filename` as read — measured on local disk, an admin-SHAPED crop
+ * and focal-point edit (the doc as `findByID` returns it, plus `uploadEdits`)
+ * pass and apply, and a crop with neither field changes nothing. That the
+ * REAL admin form posts that shape is `[inference]`, unmeasured: its edit
+ * view loads the doc with `findByID` at depth 0 (`@payloadcms/next`
+ * `views/Document/getDocumentData.js:23-36`) and puts `uploadEdits` in the
+ * action URL (`@payloadcms/ui` `providers/DocumentInfo/index.js:296-306`)
+ * `[source]`; that it posts the hidden `url`/`filename` is inferred from
+ * Payload's crop being unable to re-fetch without them. Unmeasured on Blob.
+ * Also passed: any update without `uploadEdits`, any with a real file, and
+ * one that sends neither field.
+ */
+export const refuseUploadEditsRefetch: CollectionBeforeOperationHook = async ({
+  args,
+  collection,
+  operation,
+  req,
+}) => {
+  const edits = req.query?.uploadEdits
+  if (
+    operation !== 'update' ||
+    req.file ||
+    typeof edits !== 'object' ||
+    edits === null
+  ) {
+    return args
+  }
+  const { data, id } = args as {
+    data?: Record<string, unknown>
+    id?: number | string
+  }
+  const incoming = data ?? {}
+  const sent = REFETCH_SOURCE_FIELDS.filter(
+    (field) => incoming[field] !== undefined && incoming[field] !== null,
+  )
+  if (sent.length === 0) {
+    return args
+  }
+  const stored =
+    id === undefined
+      ? null
+      : ((await req.payload.findByID({
+          collection: collection.slug as 'media',
+          depth: 0,
+          disableErrors: true,
+          id,
+          overrideAccess: true,
+          req,
+        })) as Record<string, unknown> | null)
+  // An id that finds nothing: Payload 404s before it would fetch.
+  if (id !== undefined && stored === null) {
+    return args
+  }
+  const changed = stored
+    ? sent.filter((field) => !sameStoredValue(incoming[field], stored[field]))
+    : sent
+  if (changed.length > 0) {
+    throw new APIError(
+      MEDIA_UPLOAD_EDITS_REFETCH_ERROR,
+      400,
+      { changed, uploadEdits: true },
+      true,
+    )
+  }
+  return args
 }
 
 /**
@@ -227,7 +359,7 @@ export const Media: CollectionConfig = {
   // Media (alt text, refreshed uploads) renders through both the posts and
   // pages caches (fresh-eyes review 2026-08, m1).
   hooks: {
-    beforeOperation: [refuseCreateWithoutUpload],
+    beforeOperation: [refuseCreateWithoutUpload, refuseUploadEditsRefetch],
     beforeValidate: [refuseFilelessFileRewrite],
     afterChange: [
       revalidateCollectionTag('posts', ['/articles']),

@@ -11,9 +11,11 @@ vi.mock('@/hooks/revalidateCollection', () => ({
 import {
   MEDIA_CREATE_WITHOUT_UPLOAD_ERROR,
   MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR,
+  MEDIA_UPLOAD_EDITS_REFETCH_ERROR,
   Media,
   refuseCreateWithoutUpload,
   refuseFilelessFileRewrite,
+  refuseUploadEditsRefetch,
 } from '@/collections/Media'
 
 /**
@@ -202,7 +204,7 @@ describe('refuseFilelessFileRewrite (#242, update path)', () => {
     })
   })
 
-  it('passes a url-only update (the adapter recomputes url from filename)', () => {
+  it('passes a url-only update (Payload recomputes the stored url from filename; pinned on the pg tier)', () => {
     expect(runUpdate({ url: 'https://elsewhere.test/x.png' })).toEqual({
       url: 'https://elsewhere.test/x.png',
     })
@@ -232,6 +234,152 @@ describe('refuseFilelessFileRewrite (#242, update path)', () => {
   it('is wired as a beforeValidate hook, where Payload hands it the stored doc', () => {
     expect(
       Media.hooks?.beforeValidate?.includes(refuseFilelessFileRewrite),
+    ).toBe(true)
+  })
+})
+
+type RefetchHookArgs = Parameters<typeof refuseUploadEditsRefetch>[0]
+
+/** The row as `findByID` returns it — `url` already through `afterRead`. */
+const AS_READ = {
+  ...STORED,
+  url: '/api/media/file/my-post-cover-A.png',
+}
+
+const CROP = {
+  crop: { x: 0, y: 0, width: 50, height: 50, unit: '%' },
+  widthInPixels: 1024,
+  heightInPixels: 576,
+}
+
+const runRefetch = (
+  args: Record<string, unknown>,
+  {
+    file,
+    operation = 'update',
+    query = { uploadEdits: CROP },
+    stored = AS_READ,
+  }: {
+    file?: PayloadRequest['file']
+    operation?: string
+    query?: Record<string, unknown>
+    stored?: Record<string, unknown> | null
+  } = {},
+) => {
+  const findByID = vi.fn(async () => stored)
+  const result = refuseUploadEditsRefetch({
+    args,
+    collection: { slug: 'media' },
+    operation,
+    req: { file, query, payload: { findByID } } as unknown as PayloadRequest,
+  } as unknown as RefetchHookArgs)
+  return { result, findByID }
+}
+
+describe('refuseUploadEditsRefetch (#270, update path under ?uploadEdits)', () => {
+  it("refuses a crop whose body url is not the row's own — the re-fetch would pull it server-side", async () => {
+    const { result } = runRefetch({
+      id: 7,
+      data: {
+        url: 'https://attacker.example/x.png',
+        filename: AS_READ.filename,
+      },
+    })
+    await expect(result).rejects.toMatchObject({
+      message: MEDIA_UPLOAD_EDITS_REFETCH_ERROR,
+      status: 400,
+      isPublic: true,
+    })
+  })
+
+  it('refuses a crop whose body filename names another file — the bytes would be written there', async () => {
+    const { result } = runRefetch({
+      id: 7,
+      data: {
+        url: '/api/media/file/other-post-cover.png',
+        filename: 'other-post-cover.png',
+      },
+    })
+    await expect(result).rejects.toThrow(MEDIA_UPLOAD_EDITS_REFETCH_ERROR)
+  })
+
+  it('refuses a focal-point-only uploadEdits carrying a foreign url (a changed focal point re-fetches too)', async () => {
+    const { result } = runRefetch(
+      { id: 7, data: { url: 'https://attacker.example/x.png' } },
+      { query: { uploadEdits: { focalPoint: { x: 10, y: 90 } } } },
+    )
+    await expect(result).rejects.toThrow(MEDIA_UPLOAD_EDITS_REFETCH_ERROR)
+  })
+
+  it('refuses a where (bulk) update carrying url or filename under uploadEdits, without reading any row', async () => {
+    const { result, findByID } = runRefetch({
+      where: { id: { in: [7, 8] } },
+      data: { url: AS_READ.url, filename: AS_READ.filename },
+    })
+    await expect(result).rejects.toThrow(MEDIA_UPLOAD_EDITS_REFETCH_ERROR)
+    expect(findByID).not.toHaveBeenCalled()
+  })
+
+  it("passes the admin's crop: the doc as read, both fields matching the stored row", async () => {
+    const { id: _id, ...asRead } = AS_READ
+    const args = { id: 7, data: { ...asRead, alt: 'cover' } }
+    const { result, findByID } = runRefetch(args)
+    await expect(result).resolves.toBe(args)
+    expect(findByID).toHaveBeenCalledWith(
+      expect.objectContaining({ collection: 'media', id: 7, depth: 0 }),
+    )
+  })
+
+  it("passes the admin's focal-point edit sent with uploadEdits and the doc as read", async () => {
+    const { id: _id, ...asRead } = AS_READ
+    const args = { id: 7, data: { ...asRead, focalX: 10, focalY: 90 } }
+    const { result } = runRefetch(args, {
+      query: { uploadEdits: { focalPoint: { x: 10, y: 90 } } },
+    })
+    await expect(result).resolves.toBe(args)
+  })
+
+  it('passes an update with neither url nor filename (Payload has nothing to fetch), without reading the row', async () => {
+    const args = { id: 7, data: { alt: 'new alt' } }
+    const { result, findByID } = runRefetch(args)
+    await expect(result).resolves.toBe(args)
+    expect(findByID).not.toHaveBeenCalled()
+  })
+
+  it('ignores updates without an uploadEdits object, updates with a file, and creates', async () => {
+    const foreign = {
+      id: 7,
+      data: { url: 'https://attacker.example/x.png', filename: 'x.png' },
+    }
+    for (const opts of [
+      { query: {} },
+      { query: { uploadEdits: 'crop' } },
+      { file: aFile },
+      { operation: 'create' },
+    ]) {
+      const { result, findByID } = runRefetch(foreign, opts)
+      await expect(result).resolves.toBe(foreign)
+      expect(findByID).not.toHaveBeenCalled()
+    }
+  })
+
+  it('leaves an id that finds no row to Payload, which 404s before it would fetch', async () => {
+    const args = { id: 999, data: { url: 'https://attacker.example/x.png' } }
+    const { result } = runRefetch(args, { stored: null })
+    await expect(result).resolves.toBe(args)
+  })
+
+  it("names the ingest route and the upload path, in its own words (not the update guard's)", () => {
+    expect(MEDIA_UPLOAD_EDITS_REFETCH_ERROR).toContain('POST /api/media/ingest')
+    expect(MEDIA_UPLOAD_EDITS_REFETCH_ERROR).toContain('upload a new file')
+    expect(MEDIA_UPLOAD_EDITS_REFETCH_ERROR).not.toBe(
+      MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR,
+    )
+  })
+
+  it('is wired as a beforeOperation hook, which runs before generateFileData re-fetches', () => {
+    expect(
+      Media.hooks?.beforeOperation?.includes(refuseUploadEditsRefetch),
     ).toBe(true)
   })
 })

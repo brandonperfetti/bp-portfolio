@@ -224,9 +224,18 @@ re-pointed URL shows whatever object sits at that path in the shared store
 _differs_ from the stored value and no file is sent
 [source: `refuseFilelessFileRewrite` in `src/collections/Media.ts`].
 `alt`, focal point and the file fields sent back unchanged still pass; to
-replace an image, ingest a new Media row and attach its id. Not covered,
-unmeasured: a REST update carrying an `?uploadEdits` query can make
-Payload fetch a body `url`. Never attach a cover with `createMedia`. Use the ingest route — a **media-creation** route
+replace an image, ingest a new Media row and attach its id. _Corrected
+2026-09-27 (CodeRabbit round 1 on #271, #270):_ this said an update
+carrying an `?uploadEdits` query was "not covered, unmeasured"; do not rely
+on that. `[measured, local disk, 2026-09-27]` under that query Payload
+re-fetches the file from the body's `url` and `filename`; such an update is
+now refused unless both match the stored row
+[source: `refuseUploadEditsRefetch` in `src/collections/Media.ts`; the
+receipts are in `docs/SECURITY.md` § Media uploads]. What still passes is a
+separate claim: `[measured, local disk]` an admin-shaped crop and
+focal-point edit (the doc as read, plus `uploadEdits`) pass;
+`[inference]`, unmeasured, that the real admin form posts that shape; not
+measured on Blob. Never attach a cover with `createMedia`. Use the ingest route — a **media-creation** route
 (Cloudinary source → Media doc), not a cache-revalidation call; it only
 reuses the secret's name:
 
