@@ -64,10 +64,13 @@ another doc carried in passing lives here instead, and that doc points back.
   Clerk publishable key and sign-in/up paths, the GA4 measurement id, the
   Sentry DSN, environment and Spotlight flag, the site name and URL, the
   Turnstile site key and chat-protection flag, and Vercel's own
-  `NEXT_PUBLIC_VERCEL_ENV`. `[measured 2026-09-27, at e2d989f]` the repo's
-  own config object sets neither `env` nor `compiler`: its top-level keys
-  are `allowedDevOrigins`, `cacheComponents`, `cacheLife` and `images`
-  (`next.config.mjs:4-111`). The wrappers add non-secret entries only:
+  `NEXT_PUBLIC_VERCEL_ENV`. `[measured 2026-09-27, at 9120247]` the repo's
+  own config object (`next.config.mjs:4-111`) sets neither `env` nor
+  `compiler`: its top-level keys are `allowedDevOrigins`, `cacheComponents`,
+  `cacheLife`, `images` and `redirects` (the instrument: the file imported
+  with `withPayload` stubbed to the identity, then `Object.keys` on the
+  default export; an earlier line-grep for `key:` missed the `redirects()`
+  method). The wrappers add non-secret entries only:
   `withPayload` sets `env.PAYLOAD_CACHE_COMPONENTS_ENABLED = 'true'`
   [source: `@payloadcms/next` 3.88.0 `dist/withPayload/withPayload.js:26-28`],
   the only `env` key in the resolved config when no Sentry DSN is set
