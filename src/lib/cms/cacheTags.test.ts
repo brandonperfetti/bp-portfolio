@@ -334,7 +334,8 @@ const EXPECTED_DIRECTIVE_KINDS: Record<string, DirectiveKind> = {
   // the reads it wraps. It sat in the "not CMS reads" group below until #209:
   // [measured, prod 2026-09-26, #209 comment] new pages and articles reached
   // /sitemap.xml only after a redeploy; [inference] this scope's per-instance
-  // copy is why, verified only by #209's production check.
+  // copy is why. #209's production check verifies the fix's effect; a pass is
+  // only consistent with this cause.
   'src/app/sitemap.ts#getSitemapData': 'remote',
 
   // Documented exceptions — oversized payloads that the 2 MB Runtime Cache

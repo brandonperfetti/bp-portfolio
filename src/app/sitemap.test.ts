@@ -203,7 +203,8 @@ describe('sitemap · placed articles (#153)', () => {
  * while only a redeploy with no code change put them in.
  * `[inference]` the cached assembly was on the per-instance tier, so a hook's
  * purge never reached the copy that was served — the diagnosis the shared tier
- * below acts on, verified only by #209's production check.
+ * below acts on. #209's production check verifies the fix's effect; a pass is
+ * only consistent with this cause, not proof of it.
  *
  * The chosen fix is a property of the cache scope, not of the emit, so it is
  * pinned as one: the assembly lives on the shared `'use cache: remote'` tier
@@ -215,7 +216,7 @@ describe('sitemap · placed articles (#153)', () => {
  * nothing about freshness. The tier scan and the tag test are the
  * fix-sensitive ones.
  */
-describe('sitemap freshness (#209)', () => {
+describe('sitemap cache tier, tags and emission (#209)', () => {
   it('caches the assembly on the shared remote tier — one scope, never plain `use cache`', () => {
     const source = readFileSync(join(__dirname, 'sitemap.ts'), 'utf8')
     // Directive lines only (a line holding nothing but the directive), so the
