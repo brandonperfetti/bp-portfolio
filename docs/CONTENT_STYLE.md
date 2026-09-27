@@ -251,9 +251,15 @@ record; Playwright renders are the review proxy.
   to production's own deployment URL (including `/api/media/ingest`) must
   send the `x-vercel-protection-bypass` header with the "Protection Bypass
   for Automation" secret (`VERCEL_AUTOMATION_BYPASS_SECRET` in
-  `.env.local`). Only the custom domain `brandonperfetti.com` is outside
-  Standard Protection — target production by that domain and no header is
-  needed. A missing header fails at the edge as a non-JSON
+  `.env.local`) — and only to the deployment's own origin, including across
+  redirects (each hop is judged on its own origin: a same-origin hop carries
+  it, an off-site `Location` is followed without it), never as a
+  browser-context-wide header, which hands it to every third-party origin
+  the page loads — image CDNs, Blob storage, avatars (#252;
+  `routeWithBypass` in `scripts/lib/page-diff.mjs` is the worked shape).
+  Only the custom domain `brandonperfetti.com` is outside Standard
+  Protection — target production by that domain and no header is needed.
+  A missing header fails at the edge as a non-JSON
   `401 Protected deployment`, before the route runs.
 - **One Blob store today (by configuration, not code), deterministic
   names, two environments.** Staging and production resolved to a single
