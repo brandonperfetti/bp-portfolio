@@ -152,6 +152,26 @@ image-size --prod` returns nothing. `warn-only: true` stays in force on the
 - **Not required/blocking.** Branch protection is a separate decision (#91,
   out of scope) — tune first, require later.
 
+### Release-age gate (#222)
+
+**Set 2026-09-26:** `minimumReleaseAge: 1440` in `pnpm-workspace.yaml` — pnpm
+refuses to resolve a version published less than one day (1440 minutes) ago.
+Before that date the key was absent and the `minimumReleaseAgeExclude` list
+beside it had no effect. Verify with `pnpm config get minimumReleaseAge`
+(`1440`).
+
+- **Where it bites:** resolution — `pnpm add`, `pnpm update`, and an install
+  that has to re-resolve. `[measured 2026-09-26, pnpm 11.24.0]` a
+  `--frozen-lockfile` install of a version that is already locked is **not**
+  re-checked, so the gate guards what enters the lockfile, not what is
+  already in it.
+- **Exceptions:** add a `name@version` entry to `minimumReleaseAgeExclude`
+  only with a reason written beside it (the case it exists for: a same-day
+  security patch). The entries present on 2026-09-26 predate the gate —
+  twelve name `next`/`@next/*`/`eslint-config-next` at `16.2.11`, which is no
+  longer locked (the tree runs `next@16.3.4`), and all eighteen are older than
+  the gate's one day, so none of them is currently doing anything.
+
 Residual advisories that cannot be fixed today are tracked in #100, not here:
 each is dev-only, non-exploitable in this usage, or has no published fix, and
 none should be force-overridden. `pnpm audit` / `pnpm audit --prod` is the
