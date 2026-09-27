@@ -10,9 +10,9 @@ import {
   DEFAULT_VIEWPORTS,
   FREEZE_CSS,
   MAX_BYPASS_REDIRECTS,
-  bypassHeadersFor,
   compareFrames,
-  followSameOriginRedirects,
+  followRedirects,
+  hopHeaders,
   formatSummary,
   isTargetOrigin,
   parseArgs,
@@ -195,31 +195,34 @@ describe('bypass header scoping (#252)', () => {
     )
   })
 
-  it('adds the header to a same-origin request and keeps its own headers', () => {
+  it('adds the secret on the captured origin and keeps the request headers', () => {
     expect(
-      bypassHeadersFor(
+      hopHeaders(
         'https://staging.example.test/api/x',
         target,
-        { accept: 'text/html' },
+        { accept: 'text/html', cookie: 'c=1' },
         token,
       ),
-    ).toEqual({ accept: 'text/html', [BYPASS_HEADER]: token })
+    ).toEqual({ accept: 'text/html', cookie: 'c=1', [BYPASS_HEADER]: token })
   })
 
-  it('leaves a cross-origin request untouched', () => {
+  it('sends another origin neither the secret nor the deployment credentials', () => {
+    const headers = {
+      accept: 'text/html',
+      Cookie: 'c=1',
+      authorization: 'Bearer x',
+      'proxy-authorization': 'Basic y',
+      [BYPASS_HEADER]: token,
+    }
     for (const url of [
       'https://res.cloudinary.com/demo/image/upload/a.png',
       'https://abc.public.blob.vercel-storage.com/a.webp',
-      'https://avatars.githubusercontent.com/u/1',
+      'https://clerk.example.test/v1/client/handshake',
     ]) {
-      expect(bypassHeadersFor(url, target, {}, token)).toBeNull()
+      expect(hopHeaders(url, target, headers, token)).toEqual({
+        accept: 'text/html',
+      })
     }
-  })
-
-  it('sends nothing when there is no token', () => {
-    expect(
-      bypassHeadersFor('https://staging.example.test/', target, {}, ''),
-    ).toBeNull()
   })
 
   /** A fake response: a status plus response headers. */
@@ -248,6 +251,7 @@ describe('bypass header scoping (#252)', () => {
       url: string,
       headers: Record<string, string>,
     ) => FakeResponse = () => res(200),
+    kind: 'subresource' | 'main-frame' | 'iframe' = 'subresource',
   ) => {
     const calls: { method: string; args: unknown[] }[] = []
     return {
@@ -256,8 +260,12 @@ describe('bypass header scoping (#252)', () => {
         request: () => ({
           url: () => url,
           method: () => 'GET',
-          headers: () => ({ accept: '*/*' }),
+          headers: () => ({ accept: '*/*', cookie: 'session=deployment-only' }),
           postDataBuffer: () => null,
+          isNavigationRequest: () => kind !== 'subresource',
+          frame: () => ({
+            parentFrame: () => (kind === 'iframe' ? {} : null),
+          }),
         }),
         continue: async (...args: unknown[]) => {
           calls.push({ method: 'continue', args })
@@ -293,7 +301,9 @@ describe('bypass header scoping (#252)', () => {
           maxRedirects: number
         }
         expect(init.maxRedirects).toBe(0)
-        return `${init.url} ${init.headers[BYPASS_HEADER] === token ? 'SECRET' : 'none'}`
+        const secret = init.headers[BYPASS_HEADER] === token ? 'SECRET' : 'none'
+        const cookie = init.headers.cookie ? ' +cookie' : ''
+        return `${init.url} ${secret}${cookie}`
       })
 
   it('continues a cross-origin request with no header override', async () => {
@@ -317,9 +327,9 @@ describe('bypass header scoping (#252)', () => {
     )
     await routeWithBypass(stub.route, target, token)
     expect(fetched(stub.calls)).toEqual([
-      `${base}/articles/old-slug SECRET`,
-      `${base}/topics/web/old-slug SECRET`,
-      `${base}/topics/web/new-slug SECRET`,
+      `${base}/articles/old-slug SECRET +cookie`,
+      `${base}/topics/web/old-slug SECRET +cookie`,
+      `${base}/topics/web/new-slug SECRET +cookie`,
     ])
     expect(stub.calls.at(-1)).toEqual({
       method: 'fulfill',
@@ -327,29 +337,67 @@ describe('bypass header scoping (#252)', () => {
     })
   })
 
-  it('stops at an off-site redirect and hands it to the browser, never fetching the third party', async () => {
+  it('walks an off-site round trip — the third party gets no secret or cookie, the way back gets the secret', async () => {
+    // Clerk's handshake shape: the page 307s to Clerk's domain, which 307s
+    // back. A browser-followed hop is never routed, so the way back would
+    // reach the deployment without the secret; every hop is fetched here.
     const base = 'https://staging.example.test'
+    const clerk = 'https://clerk.example.test/v1/client/handshake'
     const stub = stubRoute(
-      `${base}/avatar`,
+      `${base}/page`,
       site({
-        [`${base}/avatar`]: [302, '/avatar-2'],
-        [`${base}/avatar-2`]: [
-          307,
-          'https://avatars.githubusercontent.com/u/1',
-        ],
+        [`${base}/page`]: [307, `${clerk}?redirect_url=x`],
+        [`${clerk}?redirect_url=x`]: [307, `${base}/page?__clerk_db_jwt=j`],
+        [`${base}/page?__clerk_db_jwt=j`]: [307, `${base}/page-2`],
       }),
     )
     await routeWithBypass(stub.route, target, token)
     expect(fetched(stub.calls)).toEqual([
-      `${base}/avatar SECRET`,
-      `${base}/avatar-2 SECRET`,
+      `${base}/page SECRET +cookie`,
+      `${clerk}?redirect_url=x none`,
+      `${base}/page?__clerk_db_jwt=j SECRET +cookie`,
+      `${base}/page-2 SECRET +cookie`,
     ])
-    // The 307 goes back as-is: the browser follows it unrouted, headerless.
     expect(stub.calls.at(-1)).toEqual({
       method: 'fulfill',
-      args: [{ status: 307 }],
+      args: [{ status: 200 }],
     })
-    expect(JSON.stringify(stub.calls)).not.toContain('githubusercontent')
+  })
+
+  it('reports where a redirected main-frame navigation ended, and nothing else', async () => {
+    const base = 'https://staging.example.test'
+    const serve = site({ [`${base}/a/vary`]: [302, '/b/dest'] })
+    const seen: string[] = []
+    const record = (finalUrl: string) => seen.push(finalUrl)
+
+    await routeWithBypass(
+      stubRoute(`${base}/a/vary`, serve, 'main-frame').route,
+      target,
+      token,
+      record,
+    )
+    expect(seen).toEqual([`${base}/b/dest`])
+
+    // A redirected image or iframe keeps its URL; a direct hit reports nothing.
+    await routeWithBypass(
+      stubRoute(`${base}/a/vary`, serve).route,
+      target,
+      token,
+      record,
+    )
+    await routeWithBypass(
+      stubRoute(`${base}/a/vary`, serve, 'iframe').route,
+      target,
+      token,
+      record,
+    )
+    await routeWithBypass(
+      stubRoute(`${base}/b/dest`, serve, 'main-frame').route,
+      target,
+      token,
+      record,
+    )
+    expect(seen).toEqual([`${base}/b/dest`])
   })
 
   it('aborts a same-origin redirect loop after the hop cap', async () => {
@@ -366,6 +414,7 @@ describe('bypass header scoping (#252)', () => {
 
 describe('redirect following (#252)', () => {
   const target = 'https://staging.example.test/'
+  const token = 'test-bypass-token'
 
   it('reads a followable Location, relative or absolute', () => {
     const r = (status: number, location?: string) => ({
@@ -385,7 +434,7 @@ describe('redirect following (#252)', () => {
 
   it('re-issues a 303 (and a 301/302 after POST) as a GET without a body', async () => {
     const seen: string[] = []
-    const result = await followSameOriginRedirects(
+    const result = await followRedirects(
       async (url: string, init: { method: string; postData?: unknown }) => {
         seen.push(`${init.method} ${url} ${init.postData ? 'body' : 'nobody'}`)
         if (url.endsWith('/form')) {
@@ -400,6 +449,7 @@ describe('redirect following (#252)', () => {
         postData: 'a=1',
       },
       target,
+      token,
     )
     expect(seen).toEqual([
       'POST https://staging.example.test/form body',

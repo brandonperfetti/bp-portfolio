@@ -62,27 +62,39 @@ export function isTargetOrigin(requestUrl, targetUrl) {
   }
 }
 
-/**
- * Headers to send for one request: the request's own headers plus the bypass
- * secret, or `null` when the request must go out untouched.
- *
- * @remarks The secret unlocks every protected deployment of the project, so it
- * goes only to the captured page's own origin — never to the image CDNs, Blob
- * storage or avatar hosts the page also loads (#252).
- *
- * @param requestUrl - The URL the page is requesting.
- * @param targetUrl - The URL being captured.
- * @param headers - The request's current headers.
- * @param token - The bypass secret; empty means no protection bypass at all.
- * @returns The headers to send, or `null` to leave the request as it is.
- */
-export function bypassHeadersFor(requestUrl, targetUrl, headers, token) {
-  if (!token || !isTargetOrigin(requestUrl, targetUrl)) return null
-  return { ...headers, [BYPASS_HEADER]: token }
-}
-
-/** Most same-origin redirect hops followed with the bypass secret attached. */
+/** Most redirect hops followed for one request before it is aborted. */
 export const MAX_BYPASS_REDIRECTS = 10
+
+/**
+ * Request headers that must never follow a request to another origin: the
+ * bypass secret, and anything carrying the deployment's own credentials.
+ */
+const ORIGIN_BOUND_HEADERS = new Set([
+  BYPASS_HEADER,
+  'cookie',
+  'authorization',
+  'proxy-authorization',
+])
+
+/**
+ * The headers for one hop: the secret added on the captured page's origin,
+ * and the origin-bound headers stripped everywhere else.
+ *
+ * @param url - The hop's URL.
+ * @param targetUrl - The URL being captured.
+ * @param headers - The browser request's own headers.
+ * @param token - The bypass secret.
+ * @returns The headers to send on this hop.
+ */
+export function hopHeaders(url, targetUrl, headers, token) {
+  if (isTargetOrigin(url, targetUrl))
+    return { ...headers, [BYPASS_HEADER]: token }
+  return Object.fromEntries(
+    Object.entries(headers).filter(
+      ([name]) => !ORIGIN_BOUND_HEADERS.has(name.toLowerCase()),
+    ),
+  )
+}
 
 /**
  * The absolute URL a response redirects to, or `null` when it is not a
@@ -107,39 +119,38 @@ export function redirectTarget(response, fromUrl) {
 }
 
 /**
- * Follow a same-origin redirect chain one hop at a time, re-judging every
- * `Location` before the bypass secret goes with it.
+ * Follow a redirect chain one hop at a time, deciding per hop whether the
+ * bypass secret goes with it.
  *
- * @remarks Why by hand: Playwright never routes a redirect hop the browser
- * follows itself — the route handler runs for the first URL only — so a hop
- * the browser followed would reach a protected same-origin destination with
- * no header and capture the protection page instead (#252, CodeRabbit on
- * PR #259, measured: `/start` 302 → `/mid` 308 → `/dest` arrived headerless).
- * Every hop here is fetched with `maxRedirects: 0` and the secret attached
- * only while the next `Location` has the captured page's origin. The chain
- * stops at the first non-redirect (`final`), at the first off-site
- * `Location` (`offsite` — that redirect is handed back as-is, so the browser
- * follows it without the secret), or after {@link MAX_BYPASS_REDIRECTS} hops
- * (`cap`).
+ * @remarks Why by hand, and why every hop — off-site ones included:
+ * Playwright never routes a redirect hop the browser follows itself (the
+ * route handler runs for the first URL only; measured, CodeRabbit on
+ * PR #259). So any hop the browser followed would reach the deployment
+ * without the secret: a same-origin destination directly, or the way back
+ * from an off-site hop such as Clerk's handshake, which goes to Clerk's own
+ * domain and returns to the page (a Clerk development instance does this on
+ * every first document request). Every hop here is fetched with
+ * `maxRedirects: 0`; {@link hopHeaders} attaches the secret only on the
+ * captured page's origin and strips it, cookies and authorization on every
+ * other origin. The chain stops at the first non-redirect (`final`) or after
+ * {@link MAX_BYPASS_REDIRECTS} hops (`cap`).
  *
  * @param fetchHop - `(url, { method, headers, postData }) => APIResponse`,
  * fetching ONE hop with redirects off.
- * @param start - `{ url, method, headers, postData }` of the first request;
- * `headers` already carries the secret.
+ * @param start - `{ url, method, headers, postData }` of the browser's
+ * request; `headers` are its own, without the secret.
  * @param targetUrl - The URL being captured.
+ * @param token - The bypass secret.
  * @returns `{ response, url, stop }` — the last response, the URL it came
  * from, and why the chain stopped.
  */
-export async function followSameOriginRedirects(fetchHop, start, targetUrl) {
+export async function followRedirects(fetchHop, start, targetUrl, token) {
   let { url, method = 'GET', postData } = start
-  const { headers } = start
   for (let hop = 0; ; hop += 1) {
+    const headers = hopHeaders(url, targetUrl, start.headers, token)
     const response = await fetchHop(url, { method, headers, postData })
     const next = redirectTarget(response, url)
     if (!next) return { response, url, stop: 'final' }
-    if (!isTargetOrigin(next, targetUrl)) {
-      return { response, url, stop: 'offsite' }
-    }
     if (hop >= MAX_BYPASS_REDIRECTS) return { response, url, stop: 'cap' }
     // Browser semantics: 303, and 301/302 after a POST, re-issue as GET.
     const status = response.status()
@@ -155,18 +166,24 @@ export async function followSameOriginRedirects(fetchHop, start, targetUrl) {
 }
 
 /**
- * Playwright route handler that attaches the bypass secret to same-origin
- * requests only — redirect hops included.
+ * Playwright route handler that sends the bypass secret to the captured
+ * page's origin only — on every redirect hop, and never to another origin.
  *
  * @remarks Headers passed to `route.continue()` "apply to both the routed
  * request and any redirects it initiates" (Playwright `Route` docs), so
  * `continue({ headers })` would hand the secret to a third party whenever a
- * same-origin URL redirects off-site. A same-origin request is instead
- * fetched hop by hop through {@link followSameOriginRedirects} and the last
- * response fulfilled: a same-origin destination gets the secret on every
- * hop, an off-site `Location` goes back to the browser, which follows it
- * unrouted and without the secret, and a runaway chain is aborted. Every
- * other request is continued with no overrides.
+ * same-origin URL redirects off-site. A request to the captured origin is
+ * instead walked hop by hop through {@link followRedirects}, with the
+ * browser's own request headers, and the last response fulfilled; a runaway
+ * chain is aborted. A request that starts on any other origin is continued
+ * with no overrides.
+ *
+ * A fulfilled body keeps the URL the browser asked for. For a main-frame
+ * navigation whose chain ended somewhere else, `onRedirectedNavigation`
+ * receives the final URL so the caller can navigate there directly — the
+ * document then has the URL the app's router and relative links read, as
+ * resolved with the browser's own navigation headers (not a separate probe,
+ * which a redirect keyed on `Accept` would answer differently).
  *
  * Kept free of a Playwright import: `route` is duck-typed, so the decision and
  * the wiring are unit-tested with a stub (`page-diff.test.ts`).
@@ -174,29 +191,41 @@ export async function followSameOriginRedirects(fetchHop, start, targetUrl) {
  * @param route - A Playwright `Route`.
  * @param targetUrl - The URL being captured.
  * @param token - The bypass secret.
+ * @param {(finalUrl: string) => void} [onRedirectedNavigation] - Optional;
+ * called with the final URL when a main-frame navigation was redirected.
  * @returns Resolves once the request has been continued, fulfilled or
  * aborted.
  */
-export async function routeWithBypass(route, targetUrl, token) {
+export async function routeWithBypass(
+  route,
+  targetUrl,
+  token,
+  onRedirectedNavigation,
+) {
   const request = route.request()
-  const headers = bypassHeadersFor(
-    request.url(),
-    targetUrl,
-    request.headers(),
-    token,
-  )
-  if (!headers) return route.continue()
-  const { response, stop } = await followSameOriginRedirects(
-    (url, init) => route.fetch({ ...init, url, maxRedirects: 0 }),
+  if (!token || !isTargetOrigin(request.url(), targetUrl)) {
+    return route.continue()
+  }
+  const { response, url, stop } = await followRedirects(
+    (hopUrl, init) => route.fetch({ ...init, url: hopUrl, maxRedirects: 0 }),
     {
       url: request.url(),
       method: request.method(),
-      headers,
+      headers: request.headers(),
       postData: request.postDataBuffer() ?? undefined,
     },
     targetUrl,
+    token,
   )
   if (stop === 'cap') return route.abort('failed')
+  if (
+    url !== request.url() &&
+    onRedirectedNavigation &&
+    request.isNavigationRequest() &&
+    !request.frame().parentFrame()
+  ) {
+    onRedirectedNavigation(url)
+  }
   return route.fulfill({ response })
 }
 
