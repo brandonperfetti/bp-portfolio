@@ -7,27 +7,41 @@ import { getSiteUrl } from '@/lib/site'
  * surface.
  *
  * @remarks Neither serves anything a search engine should index — the admin is
- * a login-gated app shell (Payload's admin metadata carries no `noindex`, so
- * robots is the only signal it gets — `[measured, 2026-09-27]` 0 files in the
- * `@payloadcms/next@3.88.0` dist mention `noindex` or `robots`, against 46
- * for `generateMetadata`), and `/api` is JSON and POST endpoints: the Payload
+ * a login-gated app shell, and `/api` is JSON and POST endpoints: the Payload
  * REST surface, `/api/mcp`, `/api/ai/*`, `/api/search`, `/api/contact`. Crawl
  * budget on a low-authority domain is finite, and every fetch spent there is
  * one not spent on an article.
  *
- * `Disallow` is a crawl exclusion, not an index guarantee: a disallowed URL
- * that is linked elsewhere can still be listed, without its content. This
- * policy accepts that for `/admin` and `/api`, which have no public links and
- * nothing to index; guaranteed exclusion would need a crawlable `noindex`
- * response instead, which the admin does not emit today.
+ * **The admin does carry `noindex` (corrected 2026-09-27).** It renders
+ * `<meta name="robots" content="noindex, nofollow"/>` — Payload's default
+ * `admin.meta.robots` (`payload/dist/config/defaults.js`), which
+ * `src/payload.config.ts` does not override.
+ * `[measured, 2026-09-27, local production build]` on both `/admin/login`
+ * and `/admin` under `next start`, each answering 200. Two earlier lines here
+ * said the opposite; do not rely on them. The first read "Payload's admin
+ * metadata carries no `noindex`, so robots is the only signal it gets",
+ * backed by a grep of the wrong package
+ * (`@payloadcms/next` holds no admin robots default; `payload` does). The
+ * second read "guaranteed exclusion would need a crawlable `noindex` response
+ * instead, which the admin does not emit today". The observation was a grep
+ * with no hits; the conclusion drawn from it was wrong.
+ *
+ * `Disallow` is a crawl exclusion, not an index guarantee: while `/admin` is
+ * disallowed, crawlers cannot fetch it and so never read that `noindex`, and
+ * a disallowed admin URL linked elsewhere could still be listed without
+ * content. The trade-off is kept on purpose (#221): there are no public links
+ * to admin URLs and crawl budget is the reason for the rule, whereas
+ * guaranteed deindexing would mean allowing `/admin` so the `noindex` is read.
  *
  * Spelled so a prefix never swallows a page. `/admin$` + `/admin/` rather than
  * a bare `/admin`, and `/api/` rather than `/api`, because robots rules are
  * prefix matches: a bare `/admin` would also block a CMS page at
  * `/administration`, which the `[...segments]` catch-all would happily serve.
  * `$` (end-of-path) is RFC 9309 syntax, honoured by Google and Bing; a crawler
- * that ignores it still reaches only `/admin` itself, which redirects into the
- * blocked `/admin/` tree.
+ * that ignores it still reaches only `/admin` itself, which answers 200 with
+ * the same `noindex, nofollow` meta (`[measured, 2026-09-27, local]`; an
+ * earlier line here said it "redirects into the blocked `/admin/` tree", which
+ * was never measured and is not what the local build does).
  *
  * `/_next/` is deliberately NOT here. Google renders pages with their JS and
  * CSS, and a blocked chunk is a page that renders wrong at index time — a
