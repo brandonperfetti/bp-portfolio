@@ -213,7 +213,20 @@ not measured, since a Blob write is a third-party write. For staging media
 consistent with the fetched bytes having been written to that path in the
 shared store, rather than with a row that has nothing behind it; what
 actually happened there is not established. The guard refuses before the
-fetch. Never attach a cover with `createMedia`. Use the ingest route — a **media-creation** route
+fetch. **Updates too (added 2026-09-27):** a fileless `updateMedia` (by id
+or by `where`) does not fetch or write, but one carrying a new `filename`
+re-points the row at a path that is not its own file and orphans the old
+one, and one carrying `mimeType`/`filesize`/`width`/`height` rewrites them
+to whatever was sent `[measured, local disk, 2026-09-27]`; on Blob the
+re-pointed URL shows whatever object sits at that path in the shared store
+`[source; inference, unmeasured]`. Such an update is now refused with a
+400 naming `POST /api/media/ingest` when any of those five fields
+_differs_ from the stored value and no file is sent
+[source: `refuseFilelessFileRewrite` in `src/collections/Media.ts`].
+`alt`, focal point and the file fields sent back unchanged still pass; to
+replace an image, ingest a new Media row and attach its id. Not covered,
+unmeasured: a REST update carrying an `?uploadEdits` query can make
+Payload fetch a body `url`. Never attach a cover with `createMedia`. Use the ingest route — a **media-creation** route
 (Cloudinary source → Media doc), not a cache-revalidation call; it only
 reuses the secret's name:
 

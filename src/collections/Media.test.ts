@@ -10,12 +10,14 @@ vi.mock('@/hooks/revalidateCollection', () => ({
 
 import {
   MEDIA_CREATE_WITHOUT_UPLOAD_ERROR,
+  MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR,
   Media,
   refuseCreateWithoutUpload,
+  refuseFilelessFileRewrite,
 } from '@/collections/Media'
 
 /**
- * The Media create guard (#242) at the hook boundary.
+ * The Media create and update guards (#242) at the hook boundary.
  *
  * @remarks This pins the decision table — which operation, which `req.file`,
  * which `data` — and that the hook is wired where it runs before Payload's
@@ -108,6 +110,128 @@ describe('refuseCreateWithoutUpload (#242)', () => {
     // fails without the wiring), so it cannot catch the hook being dropped.
     expect(
       Media.hooks?.beforeOperation?.includes(refuseCreateWithoutUpload),
+    ).toBe(true)
+  })
+})
+
+type UpdateHookArgs = Parameters<typeof refuseFilelessFileRewrite>[0]
+
+const STORED = {
+  id: 7,
+  alt: 'cover',
+  filename: 'my-post-cover-A.png',
+  mimeType: 'image/png',
+  filesize: 2326456,
+  width: 2048,
+  height: 1152,
+  focalX: 50,
+  focalY: 50,
+}
+
+const runUpdate = (
+  data: Record<string, unknown>,
+  {
+    file,
+    operation = 'update',
+    context = {},
+  }: {
+    file?: PayloadRequest['file']
+    operation?: string
+    context?: Record<string, unknown>
+  } = {},
+) =>
+  refuseFilelessFileRewrite({
+    context,
+    data,
+    operation,
+    originalDoc: STORED,
+    req: { file } as PayloadRequest,
+  } as unknown as UpdateHookArgs)
+
+describe('refuseFilelessFileRewrite (#242, update path)', () => {
+  it('refuses a fileless update that re-points filename away from the stored one', () => {
+    expect(() => runUpdate({ filename: 'other-post-cover-A.png' })).toThrow(
+      MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR,
+    )
+  })
+
+  it('refuses the addendum-2 shape: url + new filename, no file', () => {
+    expect(() =>
+      runUpdate({
+        url: 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
+        filename: 'zz-new.jpg',
+      }),
+    ).toThrow(expect.objectContaining({ status: 400, isPublic: true }))
+  })
+
+  it.each([
+    ['mimeType', 'image/jpeg'],
+    ['filesize', 999],
+    ['width', 4096],
+    ['height', 1],
+  ])('refuses a fileless metadata-only rewrite of `%s`', (field, value) => {
+    expect(() => runUpdate({ [field]: value })).toThrow(
+      MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR,
+    )
+  })
+
+  it('names the ingest route', () => {
+    expect(MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR).toContain(
+      'POST /api/media/ingest',
+    )
+  })
+
+  it('passes alt and focal-point edits', () => {
+    expect(runUpdate({ alt: 'new alt' })).toEqual({ alt: 'new alt' })
+    expect(runUpdate({ focalX: 30, focalY: 70 })).toEqual({
+      focalX: 30,
+      focalY: 70,
+    })
+  })
+
+  it('passes the file fields sent back unchanged (a client round-tripping the doc)', () => {
+    const { id: _id, ...roundTrip } = STORED
+    expect(runUpdate({ ...roundTrip, alt: 'edited' })).toEqual({
+      ...roundTrip,
+      alt: 'edited',
+    })
+    // A form may stringify numbers; the stored value is what counts.
+    expect(runUpdate({ filesize: '2326456', width: '2048' })).toEqual({
+      filesize: '2326456',
+      width: '2048',
+    })
+  })
+
+  it('passes a url-only update (the adapter recomputes url from filename)', () => {
+    expect(runUpdate({ url: 'https://elsewhere.test/x.png' })).toEqual({
+      url: 'https://elsewhere.test/x.png',
+    })
+  })
+
+  it('passes any update that carries a file (a real re-upload)', () => {
+    expect(
+      runUpdate({ filename: 'replacement.png', filesize: 10 }, { file: aFile }),
+    ).toEqual({ filename: 'replacement.png', filesize: 10 })
+  })
+
+  it("passes the storage adapter's own write-back (context.skipCloudStorage)", () => {
+    expect(
+      runUpdate(
+        { filename: 'my-post-cover-A-x7Yz.png' },
+        { context: { skipCloudStorage: true } },
+      ),
+    ).toEqual({ filename: 'my-post-cover-A-x7Yz.png' })
+  })
+
+  it('never fires on a create (the create guard owns that)', () => {
+    expect(
+      runUpdate({ filename: 'other.png' }, { operation: 'create' }),
+    ).toEqual({ filename: 'other.png' })
+  })
+
+  it('is wired as a beforeValidate hook, where Payload hands it the stored doc', () => {
+    expect(
+      Media.hooks?.beforeValidate?.includes(refuseFilelessFileRewrite),
     ).toBe(true)
   })
 })

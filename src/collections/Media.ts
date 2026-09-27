@@ -1,4 +1,8 @@
-import type { CollectionBeforeOperationHook, CollectionConfig } from 'payload'
+import type {
+  CollectionBeforeOperationHook,
+  CollectionBeforeValidateHook,
+  CollectionConfig,
+} from 'payload'
 
 import { APIError } from 'payload'
 
@@ -52,7 +56,9 @@ export const MEDIA_CREATE_WITHOUT_UPLOAD_ERROR =
  * sends bytes — admin uploads, the ingest route's and the scripts' Local API
  * `payload.create({ file })` (Local API sets `req.file` from `file`) — is
  * untouched, and updates never reach it. The admin's Duplicate posts `{}` as
- * `data`, so it carries none of these fields and passes too.
+ * `data`, so it carries none of these fields and passes too. (Added
+ * 2026-09-27: the update-path counterpart is `refuseFilelessFileRewrite`
+ * below — a fileless update does not fetch, but it can re-point the row.)
  *
  * It is a `beforeOperation` hook, not `beforeValidate`/`beforeChange`, because
  * Payload's create runs `generateFileData` BEFORE those hooks, and with no file
@@ -84,6 +90,104 @@ export const refuseCreateWithoutUpload: CollectionBeforeOperationHook = ({
     )
   }
   return args
+}
+
+/**
+ * The stored fields that describe a row's bytes. An update may carry them
+ * unchanged (a client round-tripping the doc), but only an upload may change
+ * them. `url` is not listed: the storage adapter recomputes it from
+ * `filename` on every write, so a caller-sent `url` has no effect on update.
+ */
+const FILE_IDENTITY_FIELDS = [
+  'filename',
+  'mimeType',
+  'filesize',
+  'width',
+  'height',
+] as const
+
+/** The update refusal text, exported so tests pin the exact wording. */
+export const MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR =
+  "A Media row's file is changed by uploading a new one, not by editing its filename or file metadata. To attach an image from a URL use POST /api/media/ingest."
+
+/** Same value for our purposes: both absent, or equal once stringified. */
+const sameStoredValue = (incoming: unknown, stored: unknown): boolean =>
+  (incoming ?? null) === null
+    ? (stored ?? null) === null
+    : String(incoming) === String(stored ?? '')
+
+/**
+ * Refuse a Media update that re-points the row at another file, or rewrites
+ * the file's metadata, without an upload (#242, added 2026-09-27).
+ *
+ * @remarks Measured on local disk on 2026-09-27 (wave 9 lane D, addendum 2): a
+ * fileless `payload.update` — what the MCP `updateMedia` tool calls, by id or
+ * by `where` — carrying a new `filename` succeeded, fetched nothing, wrote
+ * nothing, and left the row naming a path with no bytes of its own while
+ * orphaning its old file. One carrying `mimeType`/`filesize`/`width`/`height`
+ * rewrote them to whatever was sent. On Blob the re-pointed `url` resolves to
+ * whatever object sits at that path in the shared store (`[source]`: with no
+ * `req.file` the cloud-storage `afterChange` neither uploads nor deletes) —
+ * the same plausible-but-not-its-own row the create guard exists for.
+ *
+ * Refused: any of `filename`, `mimeType`, `filesize`, `width`, `height` that
+ * DIFFERS from the stored value, with no file on the request. Metadata-only
+ * rewrites are refused too, not only a changed `filename`: those five fields
+ * describe the bytes, Payload itself only ever writes them from a file
+ * (`generateFileData`, which runs with `req.file` set), and a fileless write
+ * can only make them disagree with the bytes that are served — width and
+ * height feed image layout and OG metadata. Passed: `alt`, focal point and
+ * every other field; any of the five sent back UNCHANGED (a client
+ * round-tripping the doc — and Payload itself: measured 2026-09-27, the
+ * `data` this hook sees on an alt-only or focal-only Local API update already
+ * carries the stored file fields, so a presence check here would refuse every
+ * update; the comparison is load-bearing); any update with a file (a real re-upload sets
+ * `req.file`, and Payload fills these from it).
+ *
+ * Also passed: the storage adapter's own metadata write-back, which runs
+ * with `context.skipCloudStorage` set and `req.file` cleared right after it
+ * uploaded the bytes (`plugin-cloud-storage` `hooks/afterChange.js`). With
+ * `addRandomSuffix` on, that write-back changes `filename` to the suffixed
+ * name the Blob store chose (`storage-vercel-blob` `uploadFile.js`); it is
+ * off in this config, and the exemption keeps enabling it from breaking every
+ * upload. `context` is server-side only — no request body can set it.
+ *
+ * A `beforeValidate` hook, not `beforeOperation` like the create guard,
+ * because the comparison needs the stored doc and Payload hands it to
+ * `beforeValidate` per document, for id and `where` updates alike. Nothing
+ * earlier in the update path fetches or writes for this shape (measured in
+ * addendum 2; `updateByID.js:98-106` passes no `originalDoc` to
+ * `generateFileData`). Unmeasured and not covered: a REST update carrying an
+ * `?uploadEdits` query could make `generateFileData` fetch the body's `url`
+ * (`generateFileData.js:342`); that sets `req.file`, so this guard would let it
+ * through.
+ */
+export const refuseFilelessFileRewrite: CollectionBeforeValidateHook = ({
+  context,
+  data,
+  operation,
+  originalDoc,
+  req,
+}) => {
+  if (operation !== 'update' || req.file || context?.skipCloudStorage) {
+    return data
+  }
+  const incoming = (data ?? {}) as Record<string, unknown>
+  const stored = (originalDoc ?? {}) as Record<string, unknown>
+  const changed = FILE_IDENTITY_FIELDS.filter(
+    (field) =>
+      incoming[field] !== undefined &&
+      !sameStoredValue(incoming[field], stored[field]),
+  )
+  if (changed.length > 0) {
+    throw new APIError(
+      MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR,
+      400,
+      { changed },
+      true,
+    )
+  }
+  return data
 }
 
 /**
@@ -124,6 +228,7 @@ export const Media: CollectionConfig = {
   // pages caches (fresh-eyes review 2026-08, m1).
   hooks: {
     beforeOperation: [refuseCreateWithoutUpload],
+    beforeValidate: [refuseFilelessFileRewrite],
     afterChange: [
       revalidateCollectionTag('posts', ['/articles']),
       revalidateCollectionTag('pages', ['/']),
