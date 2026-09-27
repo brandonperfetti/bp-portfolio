@@ -166,8 +166,14 @@ image-size --prod` returns nothing. `warn-only: true` stays in force on the
   every dependency, dev-only included, so it would otherwise still redden this
   check on a path that carries no runtime risk. #100 owns following up on the
   advisory itself; this entry only tracks why the check is warn-only.
-- **Not required/blocking.** Branch protection is a separate decision (#91,
-  out of scope) — tune first, require later.
+- **Required on `master`, where it passes; nothing required on `develop`.**
+  `[measured 2026-09-27, GitHub rules API]` `dependency-review` is one of
+  `master`'s four required status checks, and `warn-only` lets it pass there
+  whatever it finds; `develop` requires no status checks, so a red run on a
+  `develop` PR is held by review, not by branch protection. Corrected
+  2026-09-27 (#260): this bullet used to read "Not required/blocking. Branch
+  protection is a separate decision (#91, out of scope) — tune first, require
+  later." Do not rely on it; the requirement exists on `master`.
 
 ### Release-age gate (#222)
 
