@@ -15,9 +15,16 @@
    their TTLs, not instantly (measured 2026-08-10, docs/MAINTENANCE.md →
    Watchpoints): `/articles` and the search palette within ≤5 minutes.
    **Corrected 2026-09-10 (#209):** the sitemap is no longer one of them, and
-   never did have "an hourly revalidate" — #76 removed `revalidate = 3600`, and
-   `revalidatePost`/`revalidatePage` now purge `/sitemap.xml` on publish,
-   unpublish and delete. See `docs/SEO.md` § Indexing surfaces.
+   never did have "an hourly revalidate" — #76 removed `revalidate = 3600`.
+   **Corrected again 2026-09-27 (#209):** the 2026-09-10 line went on to say
+   the hooks "now purge `/sitemap.xml` on publish, unpublish and delete", which
+   read as though that purge made the sitemap immediate; do not rely on it.
+   `[measured, prod 2026-09-26, #209 comment]` pages and articles published
+   after it shipped stayed out of the sitemap until a redeploy.
+   `getSitemapData` is now a `'use cache: remote'` scope, and the
+   `posts`/`pages` tag purge is expected to reach it on every instance —
+   `[inference]`, verified only by #209's production check. See
+   `docs/SEO.md` § Indexing surfaces.
 4. Slugs lock after creation (`slugLock`). Changing a published slug breaks
    the URL contract — add a redirect via plugin-redirects if truly needed.
    A new draft created via MCP with an explicit `slug` must also pass

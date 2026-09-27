@@ -43,8 +43,10 @@ describe('revalidatePost (afterChange)', () => {
     )
 
     expect(mocks.revalidateTag).toHaveBeenCalledWith('posts', { expire: 0 })
-    // #209: the sitemap's outer scope is a plain `'use cache'` whose tag purge
-    // reaches only the issuing instance, so the ROUTE needs its own purge.
+    // #209: `posts` is one of the two tags on the sitemap's `:remote` cached
+    // assembly, so this purge is expected to put a new article in the sitemap
+    // on every instance ([inference], verified only by #209's production
+    // check); the path purge targets the route's own static prerender.
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/sitemap.xml')
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/articles/hello')
     // The dead tag is deleted, not merely unasserted — firing it again would

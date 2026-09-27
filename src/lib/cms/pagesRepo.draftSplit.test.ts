@@ -111,6 +111,22 @@ describe('getPublishedPagePaths (#148)', () => {
       }),
     )
   })
+
+  it('reads every published page — limit 0, never a numeric cap (#220)', async () => {
+    await getPublishedPagePaths()
+
+    // `limit: N` caps a Payload `find` even with `pagination: false`; `limit: 0`
+    // is the only unlimited form (repo Gotcha). Any positive number here is a
+    // silent ceiling on the sitemap's page half and on generateStaticParams.
+    expect(find).toHaveBeenCalledTimes(1)
+    expect(find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'pages',
+        limit: 0,
+        pagination: false,
+      }),
+    )
+  })
 })
 
 describe('isReservedPagePath (#148)', () => {
