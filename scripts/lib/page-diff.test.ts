@@ -9,14 +9,17 @@ import {
   DEFAULT_THRESHOLD_PERCENT,
   DEFAULT_VIEWPORTS,
   FREEZE_CSS,
+  MAX_BYPASS_REDIRECTS,
   bypassHeadersFor,
   compareFrames,
+  followSameOriginRedirects,
   formatSummary,
   isTargetOrigin,
   parseArgs,
   parseMasks,
   parseViewports,
   redactUrl,
+  redirectTarget,
   routeWithBypass,
   verdict,
 } from './page-diff.mjs'
@@ -219,28 +222,79 @@ describe('bypass header scoping (#252)', () => {
     ).toBeNull()
   })
 
+  /** A fake response: a status plus response headers. */
+  const res = (status: number, headers: Record<string, string> = {}) => ({
+    status: () => status,
+    headers: () => headers,
+  })
+  type FakeResponse = ReturnType<typeof res>
+
+  /**
+   * A fake same-origin site: a redirect map plus a protected destination that
+   * answers 401 without the secret — the shape of a Vercel-protected deploy.
+   */
+  const site =
+    (redirects: Record<string, [number, string]>) =>
+    (url: string, headers: Record<string, string>): FakeResponse => {
+      const hop = redirects[url]
+      if (hop) return res(hop[0], { location: hop[1] })
+      return headers[BYPASS_HEADER] === token ? res(200) : res(401)
+    }
+
   /** A Playwright `Route` stand-in that records what the handler did. */
-  const stubRoute = (url: string) => {
+  const stubRoute = (
+    url: string,
+    serve: (
+      url: string,
+      headers: Record<string, string>,
+    ) => FakeResponse = () => res(200),
+  ) => {
     const calls: { method: string; args: unknown[] }[] = []
-    const response = { status: () => 302 }
     return {
       calls,
-      response,
       route: {
-        request: () => ({ url: () => url, headers: () => ({ accept: '*/*' }) }),
+        request: () => ({
+          url: () => url,
+          method: () => 'GET',
+          headers: () => ({ accept: '*/*' }),
+          postDataBuffer: () => null,
+        }),
         continue: async (...args: unknown[]) => {
           calls.push({ method: 'continue', args })
         },
-        fetch: async (...args: unknown[]) => {
-          calls.push({ method: 'fetch', args })
-          return response
+        abort: async (...args: unknown[]) => {
+          calls.push({ method: 'abort', args })
         },
-        fulfill: async (...args: unknown[]) => {
-          calls.push({ method: 'fulfill', args })
+        fetch: async (init: {
+          url: string
+          headers: Record<string, string>
+        }) => {
+          calls.push({ method: 'fetch', args: [init] })
+          return serve(init.url, init.headers)
+        },
+        fulfill: async (init: { response: FakeResponse }) => {
+          calls.push({
+            method: 'fulfill',
+            args: [{ status: init.response.status() }],
+          })
         },
       },
     }
   }
+
+  /** The URLs a stub route fetched, in order, and whether each carried the secret. */
+  const fetched = (calls: { method: string; args: unknown[] }[]) =>
+    calls
+      .filter((c) => c.method === 'fetch')
+      .map((c) => {
+        const init = c.args[0] as {
+          url: string
+          headers: Record<string, string>
+          maxRedirects: number
+        }
+        expect(init.maxRedirects).toBe(0)
+        return `${init.url} ${init.headers[BYPASS_HEADER] === token ? 'SECRET' : 'none'}`
+      })
 
   it('continues a cross-origin request with no header override', async () => {
     const stub = stubRoute('https://res.cloudinary.com/a.png')
@@ -249,24 +303,112 @@ describe('bypass header scoping (#252)', () => {
     expect(JSON.stringify(stub.calls)).not.toContain(token)
   })
 
-  it('fetches a same-origin request without following redirects, then fulfills it', async () => {
-    // `continue({ headers })` would carry the secret onto an off-site
-    // redirect; fetching with maxRedirects 0 hands the redirect back to the
-    // browser, whose next hop is routed — and judged — on its own origin.
-    const stub = stubRoute('https://staging.example.test/go-elsewhere')
+  it('carries the secret through every same-origin redirect hop to a protected destination', async () => {
+    // Playwright never routes a hop the browser follows itself, so a
+    // fulfilled 302 would reach /dest headerless and capture the 401 page
+    // (measured, CodeRabbit on PR #259). Each hop is fetched here instead.
+    const base = 'https://staging.example.test'
+    const stub = stubRoute(
+      `${base}/articles/old-slug`,
+      site({
+        [`${base}/articles/old-slug`]: [308, '/topics/web/old-slug'],
+        [`${base}/topics/web/old-slug`]: [302, `${base}/topics/web/new-slug`],
+      }),
+    )
     await routeWithBypass(stub.route, target, token)
-    expect(stub.calls).toEqual([
-      {
-        method: 'fetch',
-        args: [
-          {
-            headers: { accept: '*/*', [BYPASS_HEADER]: token },
-            maxRedirects: 0,
-          },
-        ],
-      },
-      { method: 'fulfill', args: [{ response: stub.response }] },
+    expect(fetched(stub.calls)).toEqual([
+      `${base}/articles/old-slug SECRET`,
+      `${base}/topics/web/old-slug SECRET`,
+      `${base}/topics/web/new-slug SECRET`,
     ])
+    expect(stub.calls.at(-1)).toEqual({
+      method: 'fulfill',
+      args: [{ status: 200 }],
+    })
+  })
+
+  it('stops at an off-site redirect and hands it to the browser, never fetching the third party', async () => {
+    const base = 'https://staging.example.test'
+    const stub = stubRoute(
+      `${base}/avatar`,
+      site({
+        [`${base}/avatar`]: [302, '/avatar-2'],
+        [`${base}/avatar-2`]: [
+          307,
+          'https://avatars.githubusercontent.com/u/1',
+        ],
+      }),
+    )
+    await routeWithBypass(stub.route, target, token)
+    expect(fetched(stub.calls)).toEqual([
+      `${base}/avatar SECRET`,
+      `${base}/avatar-2 SECRET`,
+    ])
+    // The 307 goes back as-is: the browser follows it unrouted, headerless.
+    expect(stub.calls.at(-1)).toEqual({
+      method: 'fulfill',
+      args: [{ status: 307 }],
+    })
+    expect(JSON.stringify(stub.calls)).not.toContain('githubusercontent')
+  })
+
+  it('aborts a same-origin redirect loop after the hop cap', async () => {
+    const base = 'https://staging.example.test'
+    const stub = stubRoute(
+      `${base}/a`,
+      site({ [`${base}/a`]: [302, '/b'], [`${base}/b`]: [302, '/a'] }),
+    )
+    await routeWithBypass(stub.route, target, token)
+    expect(fetched(stub.calls)).toHaveLength(MAX_BYPASS_REDIRECTS + 1)
+    expect(stub.calls.at(-1)).toEqual({ method: 'abort', args: ['failed'] })
+  })
+})
+
+describe('redirect following (#252)', () => {
+  const target = 'https://staging.example.test/'
+
+  it('reads a followable Location, relative or absolute', () => {
+    const r = (status: number, location?: string) => ({
+      status: () => status,
+      headers: () => (location ? { location } : {}),
+    })
+    expect(redirectTarget(r(302, '/x?y=1'), 'https://a.test/p/q')).toBe(
+      'https://a.test/x?y=1',
+    )
+    expect(redirectTarget(r(308, 'https://b.test/'), 'https://a.test/')).toBe(
+      'https://b.test/',
+    )
+    expect(redirectTarget(r(304, '/x'), 'https://a.test/')).toBeNull()
+    expect(redirectTarget(r(200, '/x'), 'https://a.test/')).toBeNull()
+    expect(redirectTarget(r(302), 'https://a.test/')).toBeNull()
+  })
+
+  it('re-issues a 303 (and a 301/302 after POST) as a GET without a body', async () => {
+    const seen: string[] = []
+    const result = await followSameOriginRedirects(
+      async (url: string, init: { method: string; postData?: unknown }) => {
+        seen.push(`${init.method} ${url} ${init.postData ? 'body' : 'nobody'}`)
+        if (url.endsWith('/form')) {
+          return { status: () => 303, headers: () => ({ location: '/done' }) }
+        }
+        return { status: () => 200, headers: () => ({}) }
+      },
+      {
+        url: 'https://staging.example.test/form',
+        method: 'POST',
+        headers: {},
+        postData: 'a=1',
+      },
+      target,
+    )
+    expect(seen).toEqual([
+      'POST https://staging.example.test/form body',
+      'GET https://staging.example.test/done nobody',
+    ])
+    expect(result).toMatchObject({
+      url: 'https://staging.example.test/done',
+      stop: 'final',
+    })
   })
 })
 

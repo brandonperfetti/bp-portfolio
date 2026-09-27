@@ -112,6 +112,18 @@ ruleTester.run('no-unsanitized-html', safeHtml.rules['no-unsanitized-html'], {
       options,
       errors: [{ messageId: 'notLiteral' }],
     },
+    // A duplicate key renders the LAST value: the safe first one proves nothing.
+    {
+      code: `${imp}const a = <div dangerouslySetInnerHTML={{ __html: toSafeJsonLd(x), __html: raw }} />`,
+      options,
+      errors: [{ messageId: 'duplicateHtml' }, { messageId: 'unsanitized' }],
+    },
+    // Even two safe values: the duplicate itself is reported.
+    {
+      code: `${imp}createElement('div', { dangerouslySetInnerHTML: { __html: toSafeJsonLd(a), __html: toSafeJsonLd(b) } })`,
+      options,
+      errors: [{ messageId: 'duplicateHtml' }],
+    },
     {
       code: `const a = <div dangerouslySetInnerHTML={{}} />`,
       options,
