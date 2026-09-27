@@ -3,6 +3,8 @@ import nextVitals from 'eslint-config-next/core-web-vitals'
 import nextTs from 'eslint-config-next/typescript'
 import tsdoc from 'eslint-plugin-tsdoc'
 
+import safeHtml from './scripts/lib/eslint-safe-html.mjs'
+
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -49,6 +51,21 @@ export default defineConfig([
           caughtErrorsIgnorePattern: '^_',
         },
       ],
+    },
+  },
+  {
+    // The JSON-LD escaping rule, gated (#248): `dangerouslySetInnerHTML`
+    // takes its `__html` from `toSafeJsonLd` only, and silencing that needs a
+    // written reason. Rule source and tests: scripts/lib/eslint-safe-html.*.
+    plugins: { local: safeHtml },
+    rules: {
+      'local/no-unsanitized-html': [
+        'error',
+        {
+          sanitizers: [{ name: 'toSafeJsonLd', from: ['@/lib/seo/jsonLd'] }],
+        },
+      ],
+      'local/no-unjustified-html-disable': 'error',
     },
   },
   {
