@@ -45,8 +45,12 @@
  * A protected Vercel deployment needs a bypass secret. Provide it as the
  * environment variable named by `BYPASS_TOKEN_ENV` in `lib/page-diff.mjs`
  * (currently `VERCEL_AUTOMATION_BYPASS_SECRET`) — it is sent as a request
- * header, never appended to the URL. `--bypass-token=` exists for one-off
- * runs but puts the secret in your shell history; prefer the environment.
+ * header, never appended to the URL, and only to the captured page's own
+ * origin: third-party hosts the page loads from (image CDNs, Blob storage,
+ * avatars) never receive it, including when a same-origin URL redirects to
+ * them (`routeWithBypass` in `lib/page-diff.mjs`). `--bypass-token=` exists
+ * for one-off runs but puts the secret in your shell history; prefer the
+ * environment.
  * No secret is ever printed: URLs pass through `redactUrl` before they reach
  * the console or `report.json`.
  *
@@ -82,12 +86,12 @@ import { chromium } from '@playwright/test'
 import sharp from 'sharp'
 
 import {
-  BYPASS_HEADER,
   FREEZE_CSS,
   compareFrames,
   formatSummary,
   parseArgs,
   redactUrl,
+  routeWithBypass,
   verdict,
 } from './lib/page-diff.mjs'
 
@@ -108,12 +112,18 @@ async function capture(browser, url, viewport, options) {
     deviceScaleFactor: 1,
     reducedMotion: 'reduce',
     colorScheme: 'light',
-    ...(options.bypassToken
-      ? { extraHTTPHeaders: { [BYPASS_HEADER]: options.bypassToken } }
-      : {}),
   })
 
   try {
+    // Never a context-wide `extraHTTPHeaders`: that sends the secret to every
+    // origin the page loads from. `routeWithBypass` scopes it to `url`'s own
+    // origin, redirects included (#252).
+    if (options.bypassToken) {
+      await context.route('**/*', (route) =>
+        routeWithBypass(route, url, options.bypassToken),
+      )
+    }
+
     const page = await context.newPage()
     await page.goto(url, {
       waitUntil: 'networkidle',

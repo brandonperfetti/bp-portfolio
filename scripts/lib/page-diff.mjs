@@ -42,6 +42,82 @@ export const BYPASS_TOKEN_ENV = 'VERCEL_AUTOMATION_BYPASS_SECRET'
 export const BYPASS_HEADER = 'x-vercel-protection-bypass'
 
 /**
+ * Whether a request goes to the same origin as the page being captured.
+ *
+ * @remarks Compares `URL#origin`, which folds scheme, host case and default
+ * ports, so `https://a.test` and `https://A.test:443/x` match while a subdomain,
+ * another port or `http` do not. An unparseable URL — or an opaque one such as
+ * `data:`, whose origin is the string `"null"` — is never the target.
+ *
+ * @param requestUrl - The URL the page is requesting.
+ * @param targetUrl - The URL being captured.
+ * @returns `true` only when both parse and their origins are equal.
+ */
+export function isTargetOrigin(requestUrl, targetUrl) {
+  try {
+    const target = new URL(targetUrl).origin
+    return target !== 'null' && new URL(requestUrl).origin === target
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Headers to send for one request: the request's own headers plus the bypass
+ * secret, or `null` when the request must go out untouched.
+ *
+ * @remarks The secret unlocks every protected deployment of the project, so it
+ * goes only to the captured page's own origin — never to the image CDNs, Blob
+ * storage or avatar hosts the page also loads (#252).
+ *
+ * @param requestUrl - The URL the page is requesting.
+ * @param targetUrl - The URL being captured.
+ * @param headers - The request's current headers.
+ * @param token - The bypass secret; empty means no protection bypass at all.
+ * @returns The headers to send, or `null` to leave the request as it is.
+ */
+export function bypassHeadersFor(requestUrl, targetUrl, headers, token) {
+  if (!token || !isTargetOrigin(requestUrl, targetUrl)) return null
+  return { ...headers, [BYPASS_HEADER]: token }
+}
+
+/**
+ * Playwright route handler that attaches the bypass secret to same-origin
+ * requests only.
+ *
+ * @remarks Two Playwright rules shape this, both in the `Route` docs: headers
+ * passed to `route.continue()` "apply to both the routed request and any
+ * redirects it initiates", and a route handler "will only be called for the
+ * first url if the response is a redirect". So `continue({ headers })` would
+ * still hand the secret to a third party whenever a same-origin URL redirects
+ * off-site. Instead a same-origin request is fetched with `maxRedirects: 0` and
+ * its response — a redirect included — is fulfilled back to the browser, which
+ * then follows the redirect as a new request that comes through this handler
+ * again and is judged on its own origin. Every other request is continued with
+ * no overrides.
+ *
+ * Kept free of a Playwright import: `route` is duck-typed, so the decision and
+ * the wiring are unit-tested with a stub (`page-diff.test.ts`).
+ *
+ * @param route - A Playwright `Route`.
+ * @param targetUrl - The URL being captured.
+ * @param token - The bypass secret.
+ * @returns Resolves once the request has been continued or fulfilled.
+ */
+export async function routeWithBypass(route, targetUrl, token) {
+  const request = route.request()
+  const headers = bypassHeadersFor(
+    request.url(),
+    targetUrl,
+    request.headers(),
+    token,
+  )
+  if (!headers) return route.continue()
+  const response = await route.fetch({ headers, maxRedirects: 0 })
+  return route.fulfill({ response })
+}
+
+/**
  * CSS injected into both pages before capture.
  *
  * @remarks Reduced-motion emulation already makes this site's animated
