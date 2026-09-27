@@ -12,10 +12,12 @@ import path from 'path'
  * `generateFileURL` hook — which the url `afterRead` hook checks *before*
  * `disablePayloadAccessControl` (see `@payloadcms/plugin-cloud-storage`
  * `hooks/afterRead`). The result is a domain-independent, env-aware media URL:
- * each deployment derives the store from its own `BLOB_READ_WRITE_TOKEN`, so
- * staging emits staging-store URLs and production emits production-store URLs
- * with zero `VERCEL_*` branching, and the value recomputes on every read (no
- * data migration; reverts cleanly if this is rolled back).
+ * each deployment derives its store from its own `BLOB_READ_WRITE_TOKEN`, so a
+ * media URL always points at the store *that deployment* writes to, with zero
+ * `VERCEL_*` branching, and the value recomputes on every read (no data
+ * migration; reverts cleanly if this is rolled back). Whether staging and
+ * production share a store is configuration, not code: `docs/CONTENT_STYLE.md`
+ * §9 records the current answer and how to re-check it.
  *
  * @see src/lib/cms/pageMetadata.ts — OG/social image URLs consume `media.url`
  *   and previously prefixed the canonical (production) origin onto the relative

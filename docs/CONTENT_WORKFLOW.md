@@ -185,8 +185,48 @@ metadata-only fields (`filename`, `mimeType`, `width`, `height`,
 Blob URL is derived from `filename` with no bytes behind it, a dead row
 that only appears to render if some other upload already put a file at
 that exact path (measured 2026-09-23, staging media 176; staging and
-production share one Blob store). Never attach a cover with
-`createMedia`. Use the ingest route — a **media-creation** route
+production share one Blob store). **Refused since #242 (2026-09-27):**
+a Media create that carries `url`, `filename`, `mimeType`, `filesize`,
+`width` or `height` with no file now fails with a 400 whose message names
+`POST /api/media/ingest` [source: `refuseCreateWithoutUpload` in
+`src/collections/Media.ts`; live on an environment only once that
+environment has deployed it]. **Corrected 2026-09-27:** "fetches nothing"
+and "no bytes behind it" above are not what the code does — do not rely
+on them. **Corrected again 2026-09-27 (same day):** the first correction
+said Payload fetches the `url` "and then stores nothing, because the Blob
+adapter uploads only a file sent with the request"; that is also wrong —
+do not rely on it either. What the code does, given a `filename` and a
+`url` and no file: Payload's create fetches the `url` server-side, from any
+public host (`generateFileData` → `getExternalFile`, payload 3.88.0 — none
+of the ingest route's guard rails apply); if the fetch fails the create
+throws (`FileRetrievalError`); if it succeeds the fetched bytes become the
+request's file under the caller's `filename`, with overwriting forced on,
+and the storage adapter uploads them [source: `generateFileData.js`
+`:68,76,190,262,285`; `plugin-cloud-storage` `hooks/afterChange.js:10`].
+`[measured, local disk, 2026-09-27]` with the guard removed and no Blob
+token, a fileless create carrying a Cloudinary `url` and a `filename`
+wrote a 109669-byte file at exactly that filename (the source's
+`content-length`); with the guard it was refused. That the Blob adapter
+does the same on staging or production is `[inference]` from the source —
+not measured, since a Blob write is a third-party write. For staging media
+176 this means the row rendering at a path production also uses is
+consistent with the fetched bytes having been written to that path in the
+shared store, rather than with a row that has nothing behind it; what
+actually happened there is not established. The guard refuses before the
+fetch. **Updates too (added 2026-09-27):** a fileless `updateMedia` (by id
+or by `where`) does not fetch or write, but one carrying a new `filename`
+re-points the row at a path that is not its own file and orphans the old
+one, and one carrying `mimeType`/`filesize`/`width`/`height` rewrites them
+to whatever was sent `[measured, local disk, 2026-09-27]`; on Blob the
+re-pointed URL shows whatever object sits at that path in the shared store
+`[source; inference, unmeasured]`. Such an update is now refused with a
+400 naming `POST /api/media/ingest` when any of those five fields
+_differs_ from the stored value and no file is sent
+[source: `refuseFilelessFileRewrite` in `src/collections/Media.ts`].
+`alt`, focal point and the file fields sent back unchanged still pass; to
+replace an image, ingest a new Media row and attach its id. Not covered,
+unmeasured: a REST update carrying an `?uploadEdits` query can make
+Payload fetch a body `url`. Never attach a cover with `createMedia`. Use the ingest route — a **media-creation** route
 (Cloudinary source → Media doc), not a cache-revalidation call; it only
 reuses the secret's name:
 
