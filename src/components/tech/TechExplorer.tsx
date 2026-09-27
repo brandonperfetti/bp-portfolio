@@ -77,6 +77,50 @@ function resolveCategory(item: CmsEntityItem) {
 type SortMode = 'name' | 'active'
 
 /**
+ * The query string `updateUrl` writes for a filter state, from the current
+ * one: `q`/`category`/`sort` set or dropped to match, every other param kept.
+ *
+ * @remarks #88: any filter/sort change resets to page 1 by dropping `page`,
+ * inside the same skip-when-no-URL-change guard used for the filters.
+ */
+function buildFilterQueryString(
+  currentQueryString: string,
+  nextQuery: string,
+  nextCategory: string,
+  nextSort: SortMode,
+): string {
+  const params = new URLSearchParams(currentQueryString)
+
+  const filtersChanged =
+    (params.get('q') ?? '') !== nextQuery.trim() ||
+    (params.get('category') ?? 'All') !== nextCategory ||
+    (params.get('sort') === 'active' ? 'active' : 'name') !== nextSort
+  if (filtersChanged) {
+    params.delete(PAGE_PARAM)
+  }
+
+  if (nextQuery.trim()) {
+    params.set('q', nextQuery.trim())
+  } else {
+    params.delete('q')
+  }
+
+  if (nextCategory !== 'All') {
+    params.set('category', nextCategory)
+  } else {
+    params.delete('category')
+  }
+
+  if (nextSort === 'active') {
+    params.set('sort', 'active')
+  } else {
+    params.delete('sort')
+  }
+
+  return params.toString()
+}
+
+/**
  * Tech entries per page (#88).
  *
  * @remarks Sized above the current tech-stack corpus on purpose: the shared
@@ -198,37 +242,12 @@ export function TechExplorer({
   const updateUrl = useCallback(
     (nextQuery: string, nextCategory: string, nextSort: SortMode) => {
       const currentQueryString = searchParams.toString()
-      const params = new URLSearchParams(currentQueryString)
-
-      // #88: any filter/sort change resets to page 1 by dropping the param,
-      // inside the same skip-when-no-URL-change guard used for the filters.
-      const filtersChanged =
-        (searchParams.get('q') ?? '') !== nextQuery.trim() ||
-        (searchParams.get('category') ?? 'All') !== nextCategory ||
-        (searchParams.get('sort') === 'active' ? 'active' : 'name') !== nextSort
-      if (filtersChanged) {
-        params.delete(PAGE_PARAM)
-      }
-
-      if (nextQuery.trim()) {
-        params.set('q', nextQuery.trim())
-      } else {
-        params.delete('q')
-      }
-
-      if (nextCategory !== 'All') {
-        params.set('category', nextCategory)
-      } else {
-        params.delete('category')
-      }
-
-      if (nextSort === 'active') {
-        params.set('sort', 'active')
-      } else {
-        params.delete('sort')
-      }
-
-      const queryString = params.toString()
+      const queryString = buildFilterQueryString(
+        currentQueryString,
+        nextQuery,
+        nextCategory,
+        nextSort,
+      )
       if (queryString === currentQueryString) {
         return
       }
@@ -254,6 +273,34 @@ export function TechExplorer({
    * navigated to (two history writes per traversal, and the traversal undone).
    */
   const lastFilterStateRef = useRef<string | null>(null)
+
+  // Once the state has caught up with a URL the reader navigated to, that URL
+  // is what the gate compares against. Without this the gate still held the
+  // state from before the traversal, so a clear made inside the debounce
+  // after Back to `?q=react` matched it and was never written: an unfiltered
+  // list under `?q=react` (CodeRabbit on PR #271). Recorded only when the URL
+  // is exactly what `updateUrl` would write for the state, so nothing is
+  // recorded for a non-canonical URL (`?sort=name` on load is still rewritten
+  // once, as before); judged on the raw `query`, so it lands before the
+  // debounce settles; and never while the input is focused, where the sync
+  // above leaves `query` to the reader. Declared before the write effect so
+  // it runs first.
+  useEffect(() => {
+    if (searchInputRef.current === document.activeElement) {
+      return
+    }
+    const currentQueryString = searchParams.toString()
+    if (
+      buildFilterQueryString(currentQueryString, query, category, sort) ===
+      currentQueryString
+    ) {
+      lastFilterStateRef.current = JSON.stringify([
+        query.trim(),
+        category,
+        sort,
+      ])
+    }
+  }, [query, category, sort, searchParams])
 
   useEffect(() => {
     // A debounce is still pending, so `debouncedQuery` is stale: it is either

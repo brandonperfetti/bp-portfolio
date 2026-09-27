@@ -266,6 +266,45 @@ describe('TechExplorer URL writes per burst (#249)', () => {
     expect(replaceMock).toHaveBeenCalledTimes(1)
   })
 
+  it('a clear made inside the debounce after a traversal still clears the URL', async () => {
+    // CodeRabbit on PR #271: Back/Forward to `?q=react` syncs `query` while
+    // `debouncedQuery` is still '' for 350 ms. A clear inside that window
+    // returned the filters to the state the write gate last recorded (''),
+    // so the gate skipped the write: an unfiltered list under `?q=react`.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      const items = makeTech(3)
+      const { rerender } = render(<TechExplorer items={items} />)
+
+      searchParamsMock = new URLSearchParams('q=react')
+      rerender(<TechExplorer items={items} />)
+      const box = screen.getByRole('searchbox', { name: 'Search technologies' })
+      expect(box).toHaveValue('react')
+
+      await user.clear(box)
+      await vi.advanceTimersByTimeAsync(450)
+
+      expect(box).toHaveValue('')
+      expect(replaceMock).toHaveBeenCalledWith('/tech', { scroll: false })
+      expect(replaceMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still rewrites a non-canonical URL once on load', async () => {
+    // The gate records a URL only when it is exactly what the explorer would
+    // write, so `?sort=name` (the default, spelled out) is still dropped.
+    searchParamsMock = new URLSearchParams('sort=name')
+    render(<TechExplorer items={makeTech(3)} />)
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/tech', { scroll: false })
+    })
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+  })
+
   it('a type-and-clear burst on a clean URL issues no writes at all', async () => {
     const user = userEvent.setup()
     render(<TechExplorer items={makeTech(3)} />)
