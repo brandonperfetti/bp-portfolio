@@ -75,7 +75,7 @@ vi.mock('next/navigation', () => ({
   },
 }))
 
-import ArticlePage from '@/app/(frontend)/articles/[slug]/page'
+import ArticlePage, { instant } from '@/app/(frontend)/articles/[slug]/page'
 
 const article = (over: Record<string, unknown> = {}) => ({
   slug: 'a-post',
@@ -209,5 +209,11 @@ describe('ArticlePage · placed articles (#153)', () => {
     expect(breadcrumb).toContain('https://example.com/articles')
     // An unplaced article never pays for an ancestor read.
     expect(getAncestorPages).not.toHaveBeenCalled()
+  })
+})
+
+describe('articles/[slug] render mode (#172)', () => {
+  it('is [block]: an unlisted slug may block, so 404/redirect keep real statuses', () => {
+    expect(instant).toBe(false)
   })
 })
