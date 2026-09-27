@@ -86,8 +86,10 @@ import { chromium } from '@playwright/test'
 import sharp from 'sharp'
 
 import {
+  BYPASS_HEADER,
   FREEZE_CSS,
   compareFrames,
+  followSameOriginRedirects,
   formatSummary,
   parseArgs,
   redactUrl,
@@ -117,15 +119,34 @@ async function capture(browser, url, viewport, options) {
   try {
     // Never a context-wide `extraHTTPHeaders`: that sends the secret to every
     // origin the page loads from. `routeWithBypass` scopes it to `url`'s own
-    // origin, redirects included (#252).
+    // origin and follows same-origin redirects itself, so every hop to a
+    // protected destination carries it and no off-site hop does (#252).
+    let startUrl = url
     if (options.bypassToken) {
       await context.route('**/*', (route) =>
         routeWithBypass(route, url, options.bypassToken),
       )
+      // Navigate straight to where the page's own same-origin redirects end
+      // (e.g. an article slug 308ing to its placed path). routeWithBypass
+      // would still deliver the right body for the redirecting URL, but the
+      // document would keep the pre-redirect URL, which the app's router and
+      // relative links read. An off-site hop stops the walk: that redirect is
+      // left for the browser to follow, without the secret.
+      const resolved = await followSameOriginRedirects(
+        (hopUrl, init) =>
+          context.request.fetch(hopUrl, {
+            method: init.method,
+            headers: init.headers,
+            maxRedirects: 0,
+          }),
+        { url, headers: { [BYPASS_HEADER]: options.bypassToken } },
+        url,
+      )
+      if (resolved.stop !== 'cap') startUrl = resolved.url
     }
 
     const page = await context.newPage()
-    await page.goto(url, {
+    await page.goto(startUrl, {
       waitUntil: 'networkidle',
       timeout: options.timeout,
     })
