@@ -31,6 +31,12 @@ import {
  * same-values updates pass. Only this tier shows Payload hands the hook the
  * stored doc as `originalDoc` for both shapes.
  *
+ * The `url`-column case (added 2026-09-27, CodeRabbit round 1 on #271) pins
+ * why `url` is not one of the update guard's fields: a fileless update that
+ * sends only a new `url`, by id or by `where`, leaves the STORED column at the
+ * filename-derived path — read with SQL, because `afterRead` recomputes the
+ * returned `url` and so cannot show what was written.
+ *
  * The `uploadEdits` cases (added 2026-09-27, #270, CodeRabbit round 1 on
  * #271) pin `refuseUploadEditsRefetch`: under an `uploadEdits` query Payload
  * re-fetches the file from the body's `url`/`filename` and sets `req.file`,
@@ -533,6 +539,47 @@ describe.skipIf(!connectionString)(
           filename: row.filename,
           url: row.url,
         })
+      } finally {
+        await deleteRow(row.id)
+      }
+    })
+
+    it('stores no caller-sent url: a fileless url-only update, by id and by where, leaves the url column filename-derived', async () => {
+      const row = await createRow('url-column')
+      const storedUrl = async () => {
+        const { pool } = payload.db as unknown as {
+          pool: {
+            query: (
+              text: string,
+              values: unknown[],
+            ) => Promise<{ rows: { url: string }[] }>
+          }
+        }
+        const result = await pool.query('SELECT url FROM media WHERE id = $1', [
+          row.id,
+        ])
+        return result.rows[0]?.url
+      }
+      try {
+        const expected = `/api/media/file/${row.filename}`
+        expect(await storedUrl()).toBe(expected)
+        await payload.update({
+          collection: 'media',
+          context,
+          id: row.id,
+          data: { url: 'https://attacker.example/by-id.png' } as never,
+          overrideAccess: true,
+        })
+        expect(await storedUrl()).toBe(expected)
+        const byWhere = await payload.update({
+          collection: 'media',
+          context,
+          where: { id: { equals: row.id } },
+          data: { url: 'https://attacker.example/by-where.png' } as never,
+          overrideAccess: true,
+        })
+        expect(byWhere.errors).toEqual([])
+        expect(await storedUrl()).toBe(expected)
       } finally {
         await deleteRow(row.id)
       }

@@ -203,7 +203,7 @@ describe('refuseFilelessFileRewrite (#242, update path)', () => {
     })
   })
 
-  it('passes a url-only update (the adapter recomputes url from filename)', () => {
+  it('passes a url-only update (Payload recomputes the stored url from filename; pinned on the pg tier)', () => {
     expect(runUpdate({ url: 'https://elsewhere.test/x.png' })).toEqual({
       url: 'https://elsewhere.test/x.png',
     })

@@ -95,8 +95,18 @@ export const refuseCreateWithoutUpload: CollectionBeforeOperationHook = ({
 /**
  * The stored fields that describe a row's bytes. An update may carry them
  * unchanged (a client round-tripping the doc), but only an upload may change
- * them. `url` is not listed: the storage adapter recomputes it from
- * `filename` on every write, so a caller-sent `url` has no effect on update.
+ * them. `url` is not listed because a caller-sent `url` is never stored: the
+ * `url` field's own `beforeChange` hook recomputes it from `filename` on
+ * every write. Corrected 2026-09-27 (CodeRabbit round 1 on #271): this said
+ * "the storage adapter recomputes it", which is the mechanism only with a
+ * Blob token (`plugin-cloud-storage` `hooks/beforeChange.js:7-13`, through
+ * `generateFileURL`; `[source]`, unmeasured). Without one the adapter is off
+ * and payload's own upload `url` field recomputes it
+ * (`uploads/getBaseFields.js:108-116` → `generateFilePathOrURL.js:11-24`;
+ * with `serverURL` unset no value counts as external) — measured on local
+ * disk: a fileless `url`-only update, by id and by `where`, leaves the column
+ * at `/api/media/file/<filename>`. What a body `url` can do is drive a
+ * re-fetch under `uploadEdits`; `refuseUploadEditsRefetch` owns that.
  */
 const FILE_IDENTITY_FIELDS = [
   'filename',
