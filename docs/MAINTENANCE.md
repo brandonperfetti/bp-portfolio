@@ -49,11 +49,9 @@
   (Drizzle-managed) remain unexposed — and, as of #72, additionally locked
   with default-deny RLS plus revoked `anon`/`authenticated` grants (see the
   new-table RLS convention in `docs/PAYLOAD.md`), so even adding `public` to
-  the exposed schemas could no longer leak rows on its own. Do NOT add
-  `public` (or
-  any schema containing real tables) to the exposed-schemas list, and do
-  NOT create tables in `api`; re-check both on the production project at
-  promotion.
+  the exposed schemas could no longer leak rows on its own. What must never
+  be exposed or created there: `docs/SECURITY.md` § Operational data and
+  infrastructure.
   Blob store `bp-portfolio-media` is public-read.
 - **Sentry (#73)**: env vars `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` /
   `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` (+ optional
@@ -66,18 +64,16 @@
   outright and `NEXT_PUBLIC_SENTRY_SPOTLIGHT` is the gate — armed, the SDK
   inits with _no_ DSN and forwards to a local Spotlight sidecar; unarmed, it
   stays inert as before. So **a DSN belongs in deployed environments only** —
-  see “Local errors go to Spotlight” below. `SENTRY_AUTH_TOKEN` is a
-  build-only secret (source-map upload); rotate it like Resend/Blob if
-  exposed.
+  see “Local errors go to Spotlight” below. `SENTRY_AUTH_TOKEN` rotation:
+  `docs/SECURITY.md` § Secret handling.
 - **Database backups (nightly, encrypted)**: Supabase free tier has NO
   automated backups, and the DB is the canonical copy of all content —
   `.github/workflows/db-backup.yml` runs a nightly `pg_dump` (session
   pooler, pg17 client) at 09:17 UTC, encrypts with AES-256, and uploads it
   to the **private Cloudflare R2 bucket `bp-portfolio-db-backups`** (#181),
-  kept off Supabase so a backup survives losing its source. It is never an
-  Actions artifact: this repo is PUBLIC, and a public repo's artifacts are
-  downloadable by any logged-in GitHub user. The dump stays encrypted in the
-  private bucket too — encryption is load-bearing, not optional. Retention is
+  kept off Supabase so a backup survives losing its source. Where the dump
+  may never go, and its encryption: `docs/SECURITY.md` § Operational data and
+  infrastructure. Retention is
   the bucket's lifecycle rule `expire-backups-30d` (objects deleted after 30
   days), the one retention mechanism; the workflow never deletes. The upload
   uses the runner's AWS CLI against R2's S3 API with the Actions secrets
@@ -224,14 +220,16 @@ restores the newest nightly encrypted backup into a local Docker Postgres, so
    backup workflow dumps with a pg17 client, and an older `pg_restore` cannot
    read the dump. The server being 16 while the client is 17 is fine and
    intended; the script refuses to run with an older client.
-4. Put the passphrase in `.env.local` (git-ignored, never committed):
+4. Put the passphrase in `.env.local` (git-ignored; `docs/SECURITY.md`
+   § Secret handling):
    `BACKUP_PASSPHRASE_PROD` for production backups (the default source) or
    `BACKUP_PASSPHRASE` for staging, plus the R2 read credentials
    `R2_BACKUP_ACCESS_KEY_ID`, `R2_BACKUP_SECRET_ACCESS_KEY` and
    `R2_BACKUP_ENDPOINT` (a token that can read `bp-portfolio-db-backups`).
-   Values live in the password manager; only the NAMES appear anywhere in this
-   repo. The script hands the R2 values to `aws` through its own environment,
-   with your `~/.aws` config and profile shut out.
+   Values live in the password manager (names only in the repo:
+   `docs/SECURITY.md` § Secret handling). The script hands the R2 values to
+   `aws` through its own environment, with your `~/.aws` config and profile
+   shut out.
 5. Point the app at the container:
    `DATABASE_URI=postgres://postgres:postgres@127.0.0.1:5432/bp_portfolio_dev`
    in `.env.local`. Swap back to the remote by editing that one string. Never
@@ -281,8 +279,8 @@ counts. Then: `pnpm migrate` (expect nothing to run) and `pnpm dev`.
   content, contact emails, and the users table.
 - **Port conflicts.** If a system Postgres already owns 5432, change the
   published port in `docker-compose.yml` to `127.0.0.1:5433:5432` (keep the
-  loopback prefix — the container holds real content behind the well-known
-  `postgres` password, so it must never listen beyond the machine), pass
+  loopback prefix — `docs/SECURITY.md` § Operational data and
+  infrastructure), pass
   `--port 5433`, and update `DATABASE_URI`. Do not assume the remap took — a system cluster
   listening on 5433 has silently shadowed the container before. Confirm with
   `docker compose ps` and `psql -h 127.0.0.1 -p <port> -U postgres -l`.
@@ -292,8 +290,8 @@ counts. Then: `pnpm migrate` (expect nothing to run) and `pnpm dev`.
   Actions tab and dispatch `db-backup.yml` by hand. `--dry-run` lists the
   bucket, so it also proves the R2 credentials work and names the object a
   real run would restore.
-- **Restored data is real.** It holds live content and the users table. Never
-  commit it, never attach it to an issue, never upload it anywhere.
+- **Restored data is real** — its handling rules are in `docs/SECURITY.md`
+  § Operational data and infrastructure.
 - Preflight failures, the newest-key choice and the R2 credential handling
   are pinned by `scripts/dev-db-restore.test.ts` (stubbed PATH, no network, no
   Docker); the real download/decrypt/restore is not covered by any test and is

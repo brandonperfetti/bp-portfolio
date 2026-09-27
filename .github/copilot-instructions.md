@@ -101,6 +101,8 @@ surface only** — it is not a CMS and has no runtime integration.
 - AI (Corvus, guardrails, retrieval grounding, evals, providers): `docs/AI.md`
 - Analytics and consent (c15t, GA4 Consent Mode v2, geo-gating): `docs/ANALYTICS.md`
 - Auth, gating, and email capture (Clerk): `docs/AUTH.md`
+- Security standard (HTML injection, secrets, access control, gating,
+  consent, advisories): `docs/SECURITY.md`
 - Content workflow (Notion planning → Payload publishing): `docs/CONTENT_WORKFLOW.md`
 - Content voice, article types, and revision gates: `docs/CONTENT_STYLE.md`
 - SEO and indexing routes: `docs/SEO.md`

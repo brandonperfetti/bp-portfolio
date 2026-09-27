@@ -95,6 +95,44 @@ describe('enforceSlugFreeze', () => {
     await expect(result).resolves.toBe('new-slug')
   })
 
+  /**
+   * A STORED `slugLock: false` is a standing unlock (#250). The write below
+   * sends a new `slug` and no `slugLock` — exactly what `docs/PAYLOAD.md` says
+   * is frozen — but the hook falls back to the stored `false`, so the new slug
+   * is kept and the live URL moves. `slugField()` puts the slug before the
+   * checkbox, so at this hook `siblingData.slugLock` is still unset for such a
+   * write. Pinned through the whole chain `slugField()` installs, because
+   * that is what a REST/MCP `update` runs.
+   */
+  it('lets a new slug through when the STORED slugLock is false and the write omits it', async () => {
+    const [slugTextField] = slugField()
+    const hooks = (slugTextField.hooks?.beforeValidate ?? []) as FieldHook[]
+    const { find, req } = makeReq('mcp-created-slug')
+    const data = { slug: 'renamed-by-a-later-write' }
+
+    const args = {
+      collection: draftsCollection,
+      data,
+      operation: 'update' as const,
+      originalDoc: {
+        id: 57,
+        _status: 'published',
+        slug: 'mcp-created-slug',
+        slugLock: false,
+      },
+      req,
+      siblingData: data,
+    }
+
+    let value: unknown = data.slug
+    for (const hook of hooks) {
+      value = await hook({ ...args, value } as never)
+    }
+
+    expect(value).toBe('renamed-by-a-later-write')
+    expect(find).not.toHaveBeenCalled()
+  })
+
   it('freezes a draft edit of a document that has a published version', async () => {
     // Autosave: `originalDoc` is the draft, so the hook has to ask the DB.
     const { result, find } = run(

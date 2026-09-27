@@ -8,6 +8,8 @@
 - pnpm 11 settings live in `pnpm-workspace.yaml` (overrides + `allowBuilds`
   with real boolean values). Native-build approvals go there, not
   package.json.
+- A release-age gate is in force (#222): pnpm will not resolve a version
+  published less than a day ago — `docs/DEPENDENCIES.md` § Release-age gate.
 - Dependency majors are pinned. All `payload` + `@payloadcms/*` packages move
   in lockstep — never upgrade one alone.
 
@@ -125,5 +127,4 @@ media, so `BLOB_READ_WRITE_TOKEN` must be set locally or every image 404s.
 
 ## Secrets
 
-`.env*` never enters git; `.env.example` documents every variable. Brandon
-populates Vercel/GitHub secrets as features land.
+The secret-handling rules live in `docs/SECURITY.md` § Secret handling.

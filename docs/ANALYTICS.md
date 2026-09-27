@@ -108,8 +108,8 @@ lives in exactly one place, `isSessionIdAllowed()` in
 `src/lib/observability/sessionId.ts`; moving Sentry inside consent means
 changing that one function to read the c15t state and nothing else.
 
-Names only, as ever: nothing here is a secret, and no DSN or id value belongs
-in this repo. See `src/lib/observability/sessionId.ts` for the full
+Nothing here is a secret; the names-only rule is `docs/SECURITY.md`
+§ Secret handling. See `src/lib/observability/sessionId.ts` for the full
 reasoning and `src/lib/observability/sessionId.test.ts` for the assertions
 that pin it.
 

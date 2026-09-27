@@ -118,8 +118,8 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
 - `/feed.xml` — RSS via `feed` from published posts.
 - `/llms.txt` + `/llms-full.txt` — LLM discovery endpoints
   (`src/lib/llms/helpers.ts`): site map summary, and per-article metadata +
-  summaries (deliberately NOT full bodies — full-corpus emission would leak
-  gated content; keep it that way).
+  summaries — what they must never carry: `docs/SECURITY.md` § End-user
+  authorization (Clerk).
 
 ## Paginated list views (`?page=N`)
 
@@ -169,8 +169,8 @@ The calls that follow from option (b):
 
 ## Rules
 
-- Never index gated bodies: teasers only in any public payload, feeds
-  included.
+- Gated bodies in public payloads and feeds: `docs/SECURITY.md` § End-user
+  authorization (Clerk).
 - New public routes must be added to the sitemap and, when content-bearing,
   to llms.txt.
 - Redirects for retired URLs go through plugin-redirects, not code.

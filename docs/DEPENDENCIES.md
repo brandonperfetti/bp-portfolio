@@ -166,8 +166,14 @@ image-size --prod` returns nothing. `warn-only: true` stays in force on the
   every dependency, dev-only included, so it would otherwise still redden this
   check on a path that carries no runtime risk. #100 owns following up on the
   advisory itself; this entry only tracks why the check is warn-only.
-- **Not required/blocking.** Branch protection is a separate decision (#91,
-  out of scope) — tune first, require later.
+- **Required on `master`, where it passes; nothing required on `develop`.**
+  `[measured 2026-09-27, GitHub rules API]` `dependency-review` is one of
+  `master`'s four required status checks, and `warn-only` lets it pass there
+  whatever it finds; `develop` requires no status checks, so a red run on a
+  `develop` PR is held by review, not by branch protection. Corrected
+  2026-09-27 (#260): this bullet used to read "Not required/blocking. Branch
+  protection is a separate decision (#91, out of scope) — tune first, require
+  later." Do not rely on it; the requirement exists on `master`.
 
 ### Release-age gate (#222)
 
@@ -182,9 +188,9 @@ beside it had no effect. Verify with `pnpm config get minimumReleaseAge`
   `--frozen-lockfile` install of a version that is already locked is **not**
   re-checked, so the gate guards what enters the lockfile, not what is
   already in it.
-- **Exceptions:** add a `name@version` entry to `minimumReleaseAgeExclude`
-  only with a reason written beside it (the case it exists for: a same-day
-  security patch). The entries present on 2026-09-26 predate the gate —
+- **Exceptions:** a `name@version` entry in `minimumReleaseAgeExclude`,
+  under the rule in `docs/SECURITY.md` § Dependency advisories (the case it
+  exists for: a same-day security patch). The entries present on 2026-09-26 predate the gate —
   twelve name `next`/`@next/*`/`eslint-config-next` at `16.2.11`, which is no
   longer locked (the tree runs `next@16.3.4`), and all eighteen are older than
   the gate's one day (`[measured 2026-09-26, npm registry publish times]`: the
@@ -211,7 +217,7 @@ that appears there and not here has not been assessed.
   `@payloadcms/plugin-mcp` (so it moves with the Payload set).
 
 Residual advisories that cannot be fixed today are tracked in #100, not here:
-each is dev-only, non-exploitable in this usage, or has no published fix, and
-none should be force-overridden. `pnpm audit` / `pnpm audit --prod` is the
+each is dev-only, non-exploitable in this usage, or has no published fix; how
+they may be handled is `docs/SECURITY.md` § Dependency advisories. `pnpm audit` / `pnpm audit --prod` is the
 check; the wave-1 remediation (36 of 44 advisories) lives in the scoped
 `pnpm-workspace.yaml` overrides.
