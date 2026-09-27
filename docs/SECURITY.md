@@ -204,16 +204,21 @@ stay where they are:
   registered at `:229-231`; lane D, #242]. The update guard also passes
   the storage adapter's own metadata write-back, which runs with the
   server-only `context.skipCloudStorage`.
+  **Known gap, not a rule that holds:** a REST update carrying an
+  `?uploadEdits` query may make Payload fetch a body `url`. That fetch would
+  set `req.file` and so pass both guards. Unmeasured; tracked in #270.
 - **Why.** Given a `filename` and a `url` and no file, Payload's create
   fetches the `url` server-side from any public host and stores the bytes
   under the caller's `filename` with overwriting forced on — a server-side
   fetch of an arbitrary URL written to a caller-chosen path, past every
   ingest rail. `[measured, local disk, 2026-09-27]` a fileless create wrote
-  the fetched bytes at exactly that filename; on Vercel Blob the same is
-  `[source]` (`plugin-cloud-storage` `hooks/afterChange.js:10`), not
-  measured, since a Blob write is a third-party write. A fileless update
+  the fetched bytes at exactly that filename. On Vercel Blob the same is
+  `[inference]` — read from source (`plugin-cloud-storage`
+  `hooks/afterChange.js:10`), unmeasured, since a Blob write is a
+  third-party write. `[measured, local disk, 2026-09-27]` a fileless update
   fetches nothing, but a new `filename` re-points the row at a path that is
-  not its file. The guard's TSDoc carries the full receipts; the
+  not its file; on Blob, what the re-pointed URL then shows is
+  `[inference]`, unmeasured. The guard's TSDoc carries the full receipts; the
   measurements are in `docs/CONTENT_WORKFLOW.md` §4.
 - **The ingest route's rails** [source: `src/app/api/media/ingest/route.ts`]:
   shared-secret auth through `isValidSecret`; the source must be `https:`
