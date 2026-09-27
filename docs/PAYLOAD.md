@@ -236,8 +236,10 @@ payload; omitting it is not consent **while the stored `slugLock` is `true`**.
 The hook falls back to the stored value when a write omits `slugLock`, so a
 document that stores `false` is a standing unlock: a later write carrying a
 different `slug` keeps it, and the published URL moves (the old path
-redirects) [source: `src/fields/slug/enforceSlugFreeze.ts`, the `lock`
-resolution; pinned by `src/fields/slug/enforceSlugFreeze.test.ts`]. An MCP
+redirects) [source: `src/fields/slug/formatSlug.ts`, where `formatSlugHook`
+normalises the sent slug and passes it on; `src/fields/slug/enforceSlugFreeze.ts`,
+the `lock` resolution; pinned by `src/fields/slug/enforceSlugFreeze.test.ts`].
+An MCP
 draft created with `slugLock: false` stores exactly that until a write sends
 `slugLock: true` back — `docs/CONTENT_WORKFLOW.md` step 4 says when. Corrected
 2026-09-27 (#250): the unqualified "omitting it is not consent" read as true
