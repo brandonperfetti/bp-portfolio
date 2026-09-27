@@ -74,7 +74,7 @@ describe('isHistoryThrottleError (#249)', () => {
 })
 
 describe('installHistoryWriteGuard (#249)', () => {
-  it('drops a throttled write instead of throwing, and reports it once per method', () => {
+  it('drops a throttled write instead of throwing, and reports it once per method and outcome', () => {
     const { history, calls, throwNext } = fakeHistory()
     const onDrop = vi.fn()
     installHistoryWriteGuard(history, onDrop)
@@ -86,7 +86,10 @@ describe('installHistoryWriteGuard (#249)', () => {
     throwNext(webkitThrottle())
     expect(() => history.pushState({}, '', '/tech?page=2')).not.toThrow()
 
-    expect(onDrop.mock.calls).toEqual([['replaceState'], ['pushState']])
+    expect(onDrop.mock.calls).toEqual([
+      ['replaceState', 'dropped'],
+      ['pushState', 'retrying'],
+    ])
     // Writes still reach the underlying method, with `history` as receiver.
     expect(calls).toHaveLength(3)
     expect(calls[0][0]).toBe(history)
@@ -151,9 +154,13 @@ describe('installHistoryWriteGuard · refused pushes are retried (CR round 6)', 
   /** A fake whose writes throw the throttle while `throttled` is true. */
   function throttledHistory() {
     const writes: Array<[string, unknown]> = []
-    const box = { throttled: true }
+    const box: { throttled: boolean; error: unknown } = {
+      throttled: true,
+      error: null,
+    }
     const make = (method: string) =>
       function (_data: unknown, _unused: string, url?: string | URL | null) {
+        if (box.error) throw box.error
         if (box.throttled) throw webkitThrottle()
         writes.push([method, url])
       }
@@ -208,6 +215,73 @@ describe('installHistoryWriteGuard · refused pushes are retried (CR round 6)', 
     vi.advanceTimersByTime(20_000)
 
     expect(writes).toEqual([])
+  })
+
+  it('reports a refused write folded into a pending push as retrying, not dropped', () => {
+    vi.useFakeTimers()
+    const { history } = throttledHistory()
+    const onRefusal = vi.fn()
+    installHistoryWriteGuard(history, onRefusal)
+
+    history.pushState({}, '', '/tech?page=2')
+    history.replaceState({}, '', '/tech?page=2&q=x')
+
+    expect(onRefusal.mock.calls).toEqual([
+      ['pushState', 'retrying'],
+      ['replaceState', 'retrying'],
+    ])
+  })
+
+  it('logs the give-up once when the retry budget runs out', () => {
+    vi.useFakeTimers()
+    const { history, writes } = throttledHistory()
+    const onRefusal = vi.fn()
+    installHistoryWriteGuard(history, onRefusal)
+
+    history.pushState({}, '', '/tech?page=2')
+    vi.advanceTimersByTime(60_000)
+
+    expect(onRefusal.mock.calls).toEqual([
+      ['pushState', 'retrying'],
+      ['pushState', 'gave_up'],
+    ])
+    expect(writes).toEqual([])
+  })
+
+  it('logs a non-throttle error from a retry as retry_failed and stops retrying', () => {
+    vi.useFakeTimers()
+    const { history, writes, box } = throttledHistory()
+    const onRefusal = vi.fn()
+    installHistoryWriteGuard(history, onRefusal)
+
+    history.pushState({}, '', '/tech?page=2')
+    box.error = new DOMException('Blocked attempt', 'SecurityError')
+    vi.advanceTimersByTime(1000)
+    box.error = null
+    box.throttled = false
+    vi.advanceTimersByTime(20_000)
+
+    expect(onRefusal.mock.calls).toEqual([
+      ['pushState', 'retrying'],
+      ['pushState', 'retry_failed'],
+    ])
+    expect(writes).toEqual([])
+  })
+
+  it('a Back/Forward traversal cancels the pending push, so the restore write stays a replace', () => {
+    vi.useFakeTimers()
+    const { history, writes, box } = throttledHistory()
+    const target = new EventTarget()
+    installHistoryWriteGuard(history, vi.fn(), target)
+
+    history.pushState({}, '', '/tech?page=3')
+    target.dispatchEvent(new Event('popstate'))
+    box.throttled = false
+    // Next's restore write for the traversed entry.
+    history.replaceState({}, '', '/tech')
+    vi.advanceTimersByTime(20_000)
+
+    expect(writes).toEqual([['replaceState', '/tech']])
   })
 
   it('gives up after its retry budget and cancels on uninstall', () => {
