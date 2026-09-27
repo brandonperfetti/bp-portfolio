@@ -44,8 +44,8 @@
      set AND the message delivered. The capture rule:
      `docs/SECURITY.md` § Consent and analytics data.
      Both land in the Resend contact list, segmented via
-     `RESEND_CONTACT_SEGMENT_ID`. Respect the marketing consent field, and
-     honor per-contact unsubscribe state before any broadcast ever sends.
+     `RESEND_CONTACT_SEGMENT_ID`. What a broadcast must honour:
+     `docs/SECURITY.md` § Consent and analytics data.
      (Migrated from the SendGrid marketing list 2026-08-10 — SendGrid walls
      contact storage behind a separate paid Marketing Campaigns plan.)
 - Payload transactional email (forgot-password etc.) rides the

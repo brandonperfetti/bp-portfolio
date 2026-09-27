@@ -21,8 +21,8 @@ citation is a real same-tab anchor (see "Links in a reply" below).
 - `limiter.ts`: Upstash Redis rate limits — per-minute and daily quota,
   keyed by (HMAC-hashed) IP for anonymous requests and by Clerk `userId`
   for signed-in ones (the route builds the key; see the chatGate bullet).
-  Without Upstash env, dev fails open (never ship that state to
-  production).
+  Without Upstash env, dev fails open (a state that must not reach
+  production: `docs/SECURITY.md` § Operational data and infrastructure).
 - `guardrails.ts`: shared quota/limit application; kill switches
   `CORVUS_DISABLE_CHAT` / `CORVUS_DISABLE_IMAGE` (renamed from `HERMES_*`,
   #77). The in-memory `applyRateLimit`/`applyDailyQuota` here are

@@ -107,7 +107,9 @@ measured below; the second is held by review (and by GitGuardian on PRs,
   not by git.
 - Only the NAMES appear anywhere in this repo. _Moved from
   `docs/MAINTENANCE.md` § Local database from backups, where it followed
-  "Values live in the password manager"._
+  "Values live in the password manager"; `docs/ANALYTICS.md` § Sessions in
+  Sentry restated it ("no DSN or id value belongs in this repo") and now
+  points here._
 - **MCP API keys** (an admin-equivalent secret, `docs/PAYLOAD.md`
   § Operating via MCP): Scope keys with the plugin's
   per-collection/per-operation permission checkboxes (adding a collection
@@ -248,6 +250,9 @@ stay where they are:
   message was delivered [source: `src/app/api/contact/route.ts`]; sign-up
   capture comes through the verified Clerk webhook. Mechanism:
   `docs/AUTH.md` § Email capture.
+- **Broadcasts:** Respect the marketing consent field, and honor
+  per-contact unsubscribe state before any broadcast ever sends. _Moved from
+  `docs/AUTH.md` § Email capture (#247 addendum 2)._
 
 ## Dependency advisories
 
@@ -272,8 +277,9 @@ stay where they are:
 
 ## Operational data and infrastructure
 
-**Operational** rules, moved here verbatim from `docs/MAINTENANCE.md` (#247);
-the procedures around them stay there.
+**Operational** rules, moved here verbatim (#247) — from
+`docs/MAINTENANCE.md` unless an entry says otherwise; the procedures around
+them stay in the source doc.
 
 - **Database backups** (`.github/workflows/db-backup.yml`): It is never an
   Actions artifact: this repo is PUBLIC, and a public repo's artifacts are
@@ -287,6 +293,11 @@ the procedures around them stay there.
   holds real content behind the well-known `postgres` password, so it must
   never listen beyond the machine. _Moved from § Local database from
   backups, the port-conflicts note._
+- **Rate limiting (Upstash):** Without Upstash env, dev fails open (never
+  ship that state to production). _Moved from `docs/AI.md` § Guardrails
+  (#247 addendum 2)._ `[source: src/lib/security/limiter.ts:13-26]` a
+  production build without it logs a loud error and degrades to
+  per-instance memory limits.
 - **Supabase Data API:** Do NOT add `public` (or any schema containing real
   tables) to the exposed-schemas list, and do NOT create tables in `api`;
   re-check both on the production project at promotion. _Moved from
