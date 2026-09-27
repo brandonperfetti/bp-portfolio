@@ -81,10 +81,14 @@ another doc carried in passing lives here instead, and that doc points back.
   [source: `src/app/api/clerk/webhook/route.ts`]. A new webhook route
   follows the same order. Mechanism: `docs/AUTH.md` § Email capture.
 - **A credential goes only to the origin it is for** — never as a header
-  set on every request a browser context or client makes. Applied to the
-  Vercel protection-bypass secret by `routeWithBypass` in
-  `scripts/lib/page-diff.mjs`, which judges each redirect hop on its own
-  origin (#252); the operator's rule for it is `docs/CONTENT_STYLE.md` §9.
+  set on every request a browser context or client makes. For the Vercel
+  protection-bypass secret (#252): send it only to the deployment's own
+  origin, including across redirects (each hop is judged on its own origin:
+  a same-origin hop carries it, an off-site `Location` is followed without
+  it), never as a browser-context-wide header, which hands it to every
+  third-party origin the page loads — image CDNs, Blob storage, avatars.
+  `routeWithBypass` in `scripts/lib/page-diff.mjs` is the worked shape.
+  _Moved from `docs/CONTENT_STYLE.md` §9 (#247 addendum)._
   The Playwright config's context-wide `extraHTTPHeaders` carries only the
   non-secret `x-vercel-ip-country` geo header
   [source: `playwright.config.ts`].
@@ -120,9 +124,8 @@ measured below; the second is held by review (and by GitGuardian on PRs,
 inside an operational step, where lifting it out would break the step; they
 stay where they are:
 
-- `docs/CONTENT_STYLE.md` §9 — the Vercel protection-bypass header goes
-  only to the deployment's own origin; a Blob store id is read from the
-  token's middle segment without printing the token.
+- `docs/CONTENT_STYLE.md` §9 — a Blob store id is read from the token's
+  middle segment without printing the token.
 - `docs/CONTENT_WORKFLOW.md` §0 and §4 — how a script sources and rotates
   the revalidate secret, and never echoes it into output, handoffs or
   receipts.

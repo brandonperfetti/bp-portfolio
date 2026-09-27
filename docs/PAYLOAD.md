@@ -807,7 +807,8 @@ accepted, not as a gate failure.
 `ALTER DEFAULT PRIVILEGES` already handles the grant side for new tables, but
 it does **not** touch RLS state — that still needs the explicit `ENABLE` per
 table. For a bulk sweep, reuse the `pg_tables` loop in
-`20260820_221032_rls_lockdown.ts` rather than hand-listing tables. **Never** set
-`FORCE ROW LEVEL SECURITY` — with no policies it would default-deny Payload's
-own owner connection. RLS here is owner-transparent, not an app access layer
+`20260820_221032_rls_lockdown.ts` rather than hand-listing tables.
+`FORCE ROW LEVEL SECURITY` is ruled out (`docs/SECURITY.md` § Payload access
+control): with no policies it would default-deny Payload's own owner
+connection. RLS here is owner-transparent, not an app access layer
 (Payload's gating is `src/access/*` + `getViewer()`).

@@ -36,8 +36,8 @@ citation is a real same-tab anchor (see "Links in a reply" below).
   error. Signed-in users skip the free-gate and are keyed by `userId` (not
   IP) in `limiter.ts` at a higher ceiling
   (`CORVUS_CHAT_RATE_LIMIT_PER_MINUTE_AUTHED` / `CORVUS_CHAT_DAILY_QUOTA_AUTHED`).
-  Every decision is server-resolved (Clerk session + trusted IP), never the
-  request body.
+  Where each decision's inputs come from: `docs/SECURITY.md` § End-user
+  authorization (Clerk).
 - Turnstile (wired 2026-08-10, env-gated): the contact form enforces
   whenever `TURNSTILE_SECRET_KEY` + `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
   exist; chat is armed separately via the `TURNSTILE_PROTECT_CHAT` /

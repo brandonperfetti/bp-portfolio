@@ -21,8 +21,8 @@
 - Enforcement happens in RSCs via `getViewer()` (`src/lib/auth/getViewer.ts`)
   - `canAccess(isAuthenticated, doc)` (`src/access/canAccess.ts`): gated
     bodies are excluded from the payload for anonymous viewers — a teaser +
-    sign-in prompt renders instead. Client `<Protect>`-style components are
-    UX only.
+    sign-in prompt renders instead. What client components may and may not
+    do: `docs/SECURITY.md` § End-user authorization (Clerk).
 - `getViewer()` returns `{ isAuthenticated, userId }` (`userId` added #74). The
   Corvus chat route is the first consumer keying a rate limit by Clerk `userId`
   — anonymous visitors hit an IP-keyed free-taste gate + abuse limit, signed-in
@@ -41,7 +41,8 @@
      with `CLERK_WEBHOOK_SIGNING_SECRET`) on sign-up.
   2. Contact form → explicit opt-in checkbox (unchecked by default) on
      the Messenger form; `/api/contact` captures only when the flag is
-     set AND the message delivered. Never capture without that flag.
+     set AND the message delivered. The capture rule:
+     `docs/SECURITY.md` § Consent and analytics data.
      Both land in the Resend contact list, segmented via
      `RESEND_CONTACT_SEGMENT_ID`. Respect the marketing consent field, and
      honor per-contact unsubscribe state before any broadcast ever sends.
