@@ -1,0 +1,212 @@
+# Security
+
+The security standard for this repo: the rules a change is held to, by its
+author and by review. Each rule is true of the tree as measured on
+2026-09-27 (wave 9, based on `ef07dbd`) unless it is marked **Intended**,
+and each names the file or check that holds it. **Operational** rules govern
+handling outside the repo — platform settings, credentials, data — so the
+tree cannot show them; they are `[stated]` and held by whoever operates the
+service.
+
+The repo is **public**: code, docs, commits, CI logs and issue text are
+readable by anyone.
+
+**How this doc relates to the topic docs.** It states each security rule
+once. The _mechanism_ behind a rule stays in the doc that owns its topic,
+and the rule links there: `docs/AUTH.md` (gating, email capture),
+`docs/ANALYTICS.md` (the consent runtime), `docs/AI.md` (Corvus guardrails
+and retrieval), `docs/PAYLOAD.md` (access helpers, the RLS migration
+procedure), `docs/DEPENDENCIES.md` (supply-chain policy). A security rule
+another doc carried in passing lives here instead, and that doc points back.
+
+## HTML injection through React escape hatches
+
+- **No raw `__html`.** Every `dangerouslySetInnerHTML` takes its `__html`
+  from `toSafeJsonLd()` in `src/lib/seo/jsonLd.ts`, imported under its own
+  name from `@/lib/seo/jsonLd`, or from a single-assignment `const` that
+  holds its result. `toSafeJsonLd` escapes `<`, `>`, U+2028 and U+2029, so
+  the serialized JSON cannot close its `<script>` tag or break a legacy
+  parser. `[measured 2026-09-27]` 21 sites across 9 files, all JSON-LD
+  `<script>` tags: 20 call the helper inline and 1 reads a hoisted `const`
+  (`scriptPayload` in `src/app/(frontend)/articles/page.tsx`).
+- **The gate is lint (#248).** `pnpm lint` fails a violation, locally and
+  in CI. Two rules from the local plugin `scripts/lib/eslint-safe-html.mjs`,
+  registered in `eslint.config.mjs` and tested in
+  `scripts/lib/eslint-safe-html.test.ts` (`RuleTester` cases, plus the
+  ESLint Node API run against the repo's own config):
+  - `local/no-unsanitized-html` — `__html` must come from an approved
+    helper (the `sanitizers` option; today only `toSafeJsonLd` from
+    `@/lib/seo/jsonLd`). A props object that is not an inline literal, or
+    that spreads, is rejected because its value cannot be checked, and a
+    **duplicate `__html` key** is reported on its own: the last key wins,
+    so a raw value could silently override a sanitized one.
+  - `local/no-unjustified-html-disable` — the escape hatch. A directive
+    that silences the gate, by name or blanket, needs a written reason
+    after `--`, with a space on each side, in this form:
+
+    ```ts
+    // eslint-disable-next-line local/no-unsanitized-html -- <why this HTML is safe>
+    ```
+
+- **An equivalent helper is the only other route.** HTML that is not
+  JSON-LD gets its own named, tested sanitizer, added to the rule's
+  `sanitizers` option so the gate recognizes it — not a disable comment.
+
+## Secrets and the server-only boundary
+
+- **Only `NEXT_PUBLIC_*` reaches the browser, so nothing secret carries that
+  prefix.** Next.js inlines `NEXT_PUBLIC_` variables into client bundles at
+  build time. `[measured 2026-09-27]` the names in use are all public by
+  design: the Clerk publishable key and sign-in/up paths, the GA4
+  measurement id, the Sentry DSN, environment and Spotlight flag, the site
+  name and URL, the Turnstile site key and chat-protection flag, and
+  Vercel's own `NEXT_PUBLIC_VERCEL_ENV`.
+- **A secret is read on the server only** — route handlers, server
+  components, Payload hooks and config, scripts. `[measured 2026-09-27]`
+  none of the 46 modules whose directive is `'use client'` reads a variable
+  other than `NEXT_PUBLIC_*` or `NODE_ENV`. Passing a secret to a client
+  component as a prop sends it to the browser just the same; that half is
+  held by review.
+- **Shared-secret routes compare with `isValidSecret()`**
+  (`src/lib/security/timingSafeSecret.ts`: SHA-256 of both sides, then
+  `timingSafeEqual`), **and fail closed** — it returns `false` when the
+  expected secret is unset or empty. `[measured 2026-09-27]` the three
+  shared-secret routes use it (`/api/revalidate`, `/api/media/ingest`,
+  `/next/preview`), and nothing in `src` or `scripts` compares a
+  `*SECRET`/`*TOKEN`/`*KEY` variable with `===` or `!==`.
+- **Inbound webhooks verify before they act.** `/api/clerk/webhook`
+  verifies the svix signature over the raw body with
+  `CLERK_WEBHOOK_SIGNING_SECRET` before reading the event: 503 when
+  unconfigured, 400 on a bad signature
+  [source: `src/app/api/clerk/webhook/route.ts`]. A new webhook route
+  follows the same order. Mechanism: `docs/AUTH.md` § Email capture.
+- **A credential goes only to the origin it is for** — never as a header
+  set on every request a browser context or client makes. Applied to the
+  Vercel protection-bypass secret by `routeWithBypass` in
+  `scripts/lib/page-diff.mjs`, which judges each redirect hop on its own
+  origin (#252); the operator's rule for it is `docs/CONTENT_STYLE.md` §9.
+  The Playwright config's context-wide `extraHTTPHeaders` carries only the
+  non-secret `x-vercel-ip-country` geo header
+  [source: `playwright.config.ts`].
+
+## Payload access control
+
+- **Every collection and global declares `access` explicitly.**
+  `[measured 2026-09-27]` all 11 collections in `src/collections/` and all
+  5 globals in `src/globals/` do. The posture (helpers in `src/access/`):
+  - **Writes** — `create`, `update`, `delete`, and a global's `update` —
+    are `authenticated`: a signed-in Payload admin user.
+  - **Reads** are `anyone` for public reference content (Authors,
+    Categories, Media, Projects, Tags, TechStack, Uses, WorkHistory, every
+    global); `authenticatedOrPublished` for the drafts-enabled Posts and
+    Pages, which gives an anonymous reader only `_status: 'published'`; and
+    `authenticated` for Users, whose `unlock` is restricted to the user's
+    own account.
+  - **Plugin collections keep their plugins' defaults**
+    [source: payload 3.88 plugin dists]: `redirects` and `search` read
+    publicly, `search` refuses `create`, and the MCP plugin's API-key
+    collection lets a user manage only their own keys. An operation a
+    plugin leaves unset falls back to Payload's default, a signed-in user.
+- **Clerk identity never grants CMS access.** Payload Users are the only
+  principals for `/admin`, REST, GraphQL and `/api/mcp`; Clerk guards none
+  of them [source: `src/access/authenticated.ts`, `docs/AUTH.md` § Setup].
+- **A gated body is hidden at the field, not only in the app.**
+  `Posts.content` carries field-level `read` access that returns it only to
+  a Payload user or when the post is not `gated`, so an anonymous REST,
+  GraphQL or MCP read omits it
+  [source: `src/collections/Posts/index.ts`, the `content` field]. A new
+  field that holds gated text needs the same rule.
+- **Visitor-facing reads of Posts and Pages pass `overrideAccess: false`**,
+  through a repo module (`src/lib/cms/*Repo.ts`, `src/lib/content/`).
+  Payload's Local API defaults `overrideAccess` to `true`
+  [source: payload 3.88 `collections/operations/local/find.js`], so leaving
+  it out is a bypass, not a default. `[measured 2026-09-27]` every
+  published read in `articlesRepo`, `pagesRepo` and `content/posts` passes
+  `false`. The deliberate `true` reads are Payload hooks and sync jobs that
+  must see every row; the draft readers, reached only in Next draft mode,
+  which `/next/preview` enables only after `PREVIEW_SECRET` **and** a
+  Payload user check; and `getGatedPostContent()`, called only after
+  `canAccess()` passes (next section).
+- **Database: default-deny RLS on every table in `public`.** A migration
+  that creates a table enables Row Level Security on it and on its `_v` /
+  `_rels` companions in the same file; CI fails the build otherwise
+  (`scripts/check-migrations-rls.mjs`, #117). Never set
+  `FORCE ROW LEVEL SECURITY`. Procedure and the grant revocations behind
+  it: `docs/PAYLOAD.md` § New-table RLS convention.
+
+## End-user authorization (Clerk)
+
+- **Gating is decided on the server, in one function.**
+  `canAccess(isAuthenticated, doc)` (`src/access/canAccess.ts`) is the only
+  check, fed by `getViewer()` (`src/lib/auth/getViewer.ts`), which reports
+  unauthenticated whenever Clerk is unconfigured. The proxy
+  (`src/proxy.ts`) only makes the session available and gates nothing;
+  `<Protect>`-style client components are UX, never the check. Mechanism:
+  `docs/AUTH.md` § Gating model.
+- **A gated body leaves the server only after `canAccess` passes.**
+  `toDetail` in `src/lib/cms/articlesRepo.ts` runs the check first and only
+  then calls `getGatedPostContent()`, the one read that overrides the field
+  gate [source].
+- **Every surface that emits article text applies the same gate**, and a
+  new surface must too. Today [source]: the article page (`toDetail`); the
+  search index (`getCmsSearchArticles` calls `canAccess(false, post)`, so a
+  gated post contributes only its excerpt); Corvus retrieval (the SQL
+  predicate in `src/lib/ai/retrieval.ts`, `docs/AI.md` § What an anonymous
+  visitor can retrieve); and `/llms-full.txt`, which emits each article's
+  description, never its body (`src/app/(frontend)/llms-full.txt/route.ts`).
+- **Identity is resolved server-side, never taken from the request body.**
+  Rate limits, the anonymous free-message gate and retrieval grounding key
+  on the Clerk session and the trusted IP (`docs/AI.md` § Guardrails).
+- Until Clerk Billing is enabled, `gated` means signed in and nothing more:
+  `requiredPlan` and `requiredFeature` are dormant fields `canAccess`
+  ignores [source: `src/access/canAccess.ts`].
+
+## Consent and analytics data
+
+- **Nothing that needs consent runs before it where consent is required.**
+  GA4 is the only consent-gated vendor. It loads only on production with a
+  measurement id, through c15t's Google tag with Consent Mode v2 defaults
+  denied [source: `src/components/consent/consent-config.ts`]. Where the
+  geo cookie says consent is required, or geo is unknown (fail-closed,
+  `src/lib/consent/jurisdiction.ts`), `measurement` stays denied until the
+  visitor grants it: GA4 sets no cookies, and Google receives only the
+  cookieless consent-mode ping disclosed in the dialog. Mechanism:
+  `docs/ANALYTICS.md`.
+- **No other script that sets non-essential cookies or identifies a visitor
+  loads.** `[measured 2026-09-27]` the frontend's third-party scripts are
+  Vercel Analytics and Speed Insights (cookieless), Cloudflare Turnstile
+  (security, essential) and GA4 through c15t. A new analytics or marketing
+  vendor ships as a consent-gated script in a consent category.
+- **Error reports carry no identity.** No `sendDefaultPii`, no Clerk
+  identity in `Sentry.setUser`; the one user field is the random per-tab id
+  from `src/lib/observability/sessionId.ts`. `[measured 2026-09-27]` the
+  only `Sentry.setUser` call is in `src/instrumentation-client.ts`, and
+  `sendDefaultPii` appears nowhere in the tree. Changing that
+  is a change to `isSessionIdAllowed()` and to `docs/ANALYTICS.md`
+  § Sessions in Sentry.
+- **A mailing-list contact is captured only with consent.** The contact
+  form captures only when its unchecked-by-default opt-in is set and the
+  message was delivered [source: `src/app/api/contact/route.ts`]; sign-up
+  capture comes through the verified Clerk webhook. Mechanism:
+  `docs/AUTH.md` § Email capture.
+
+## Dependency advisories
+
+- **The bar: a PR into `develop` does not introduce a runtime dependency
+  with a high- or critical-severity advisory.**
+  `.github/workflows/dependency-review.yml` fails such a PR
+  (`fail-on-severity: high`, default `runtime` scope); moderates and
+  dev-only paths are reported, not blocking. On `develop → master` the
+  check is warn-only, because that diff re-evaluates the whole tree.
+  `[measured 2026-09-27, GitHub rules API]` `dependency-review` is a
+  required status check on `master`, where warn-only lets it pass; `develop`
+  requires no checks, so a red run on a `develop` PR is held by review, not
+  by branch protection. Rationale: `docs/DEPENDENCIES.md` § Supply-chain
+  policy.
+- **Residual advisories are tracked, never force-overridden** — #100 holds
+  them; `pnpm audit` and `pnpm audit --prod` are the check
+  (`docs/DEPENDENCIES.md`).
+- **New versions wait a day.** `minimumReleaseAge: 1440` in
+  `pnpm-workspace.yaml` (#222); an exception in `minimumReleaseAgeExclude`
+  needs a written reason beside it. Details: `docs/DEPENDENCIES.md`
+  § Release-age gate.
