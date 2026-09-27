@@ -284,6 +284,49 @@ describe('installHistoryWriteGuard · refused pushes are retried (CR round 6)', 
     expect(writes).toEqual([['replaceState', '/tech']])
   })
 
+  it('listens for popstate in the capture phase, ahead of Next, and removes that same listener', () => {
+    const { history } = throttledHistory()
+    const target = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }
+    const uninstall = installHistoryWriteGuard(history, vi.fn(), target)
+
+    expect(target.addEventListener).toHaveBeenCalledTimes(1)
+    const [type, listener, options] = target.addEventListener.mock.calls[0]
+    expect(type).toBe('popstate')
+    expect(options).toEqual({ capture: true })
+
+    uninstall()
+
+    expect(target.removeEventListener).toHaveBeenCalledWith(
+      'popstate',
+      listener,
+      { capture: true },
+    )
+  })
+
+  it('cancels the pending push before a bubble-phase popstate listener registered earlier (Next) writes', () => {
+    vi.useFakeTimers()
+    const { history, writes, box } = throttledHistory()
+    // Next's listener, mounted before the guard (client-side nav to /tech):
+    // on popstate it writes the restore replace synchronously enough to beat
+    // a bubble-phase guard.
+    window.addEventListener('popstate', function nextRestore() {
+      window.removeEventListener('popstate', nextRestore)
+      box.throttled = false
+      history.replaceState({}, '', '/tech')
+    })
+    const uninstall = installHistoryWriteGuard(history, vi.fn())
+
+    history.pushState({}, '', '/tech?page=3')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+    vi.advanceTimersByTime(20_000)
+    uninstall()
+
+    expect(writes).toEqual([['replaceState', '/tech']])
+  })
+
   it('gives up after its retry budget and cancels on uninstall', () => {
     vi.useFakeTimers()
     const { history, writes, box } = throttledHistory()

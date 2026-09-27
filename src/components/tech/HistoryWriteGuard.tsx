@@ -90,8 +90,12 @@ const PUSH_RETRY_LIMIT = 15
  *   `gave_up`), which leaves the pre-fix inconsistency.
  * - A Back/Forward traversal while a push is pending cancels the pending push
  *   (`popstate`), so Next's restore write for the traversed entry is not
- *   turned into a new push that would cut off forward history. The pending
- *   entry is abandoned: measured in WebKit on a production build, Back from a
+ *   turned into a new push that would cut off forward history. The listener
+ *   is registered in the capture phase so it runs before Next's bubble-phase
+ *   `popstate` listener (`next/dist/client/components/app-router.js`)
+ *   whichever mounted first. That capture listeners on the event's own
+ *   target fire before its bubble listeners is an inference recalled from the
+ *   DOM spec's dispatch order, not re-read. The pending entry is abandoned: measured in WebKit on a production build, Back from a
  *   refused page 3 (shown over the page-2 entry) landed on page 1, no stray
  *   entry appeared after the window, and Forward still reached page 2.
  *
@@ -162,7 +166,12 @@ export function installHistoryWriteGuard(
   const onPopState = () => {
     if (active) clearPending()
   }
-  target.addEventListener('popstate', onPopState)
+  // Capture phase: Next's own `popstate` listener is a bubble-phase listener on
+  // `window`, registered whenever the app router mounted — before this guard
+  // when the reader navigated to `/tech` client-side. Registered in the bubble
+  // phase too, ours could run second, and Next's restore write would reach the
+  // guard with the push still pending and be sent as a push.
+  target.addEventListener('popstate', onPopState, { capture: true })
 
   const guard = (method: HistoryWriteMethod) =>
     function guardedHistoryWrite(
@@ -197,7 +206,7 @@ export function installHistoryWriteGuard(
   return () => {
     active = false
     clearPending()
-    target.removeEventListener('popstate', onPopState)
+    target.removeEventListener('popstate', onPopState, { capture: true })
     for (const method of ['pushState', 'replaceState'] as const) {
       if (history[method] === guarded[method])
         history[method] = previous[method]
