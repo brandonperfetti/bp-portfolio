@@ -87,7 +87,10 @@ vi.mock('next/navigation', () => ({
   },
 }))
 
-import CmsPage, { generateMetadata } from '@/app/(frontend)/[...segments]/page'
+import CmsPage, {
+  generateMetadata,
+  instant,
+} from '@/app/(frontend)/[...segments]/page'
 
 const page = (hero: Partial<NonNullable<Page['hero']>> = {}) =>
   ({
@@ -492,5 +495,14 @@ describe('[...segments] generateMetadata — title vs the layout template (#176)
     })
 
     expect(meta).toEqual({ title: 'article' })
+  })
+})
+
+describe('[...segments] render mode (#172)', () => {
+  it('is [block]: a path outside the prerender set may block, so 404/redirect keep real statuses', () => {
+    // [stream] would move `await params` under `<Suspense>` and commit a 200
+    // before `notFound()` / `permanentRedirect()` could run (see the export's
+    // TSDoc). `instant = false` is what keeps the dev log quiet instead.
+    expect(instant).toBe(false)
   })
 })
