@@ -329,6 +329,12 @@ const EXPECTED_DIRECTIVE_KINDS: Record<string, DirectiveKind> = {
   'src/lib/content/posts.ts#getPublishedPostPaths': 'remote',
   'src/lib/content/posts.ts#getPublishedPostSlugs': 'remote',
   'src/lib/content/posts.ts#getPublishedPostSummaries': 'remote',
+  // A route-level assembly of CMS reads (#209): tagged `posts` + `pages` and
+  // purged by both revalidation hooks, so it needs the shared tier as much as
+  // the reads it wraps. It sat in the "not CMS reads" group below until #209
+  // measured the cost: one per-instance copy kept new pages and articles out
+  // of /sitemap.xml until a redeploy.
+  'src/app/sitemap.ts#getSitemapData': 'remote',
 
   // Documented exceptions — oversized payloads that the 2 MB Runtime Cache
   // item ceiling excludes. They keep the in-memory tier and its instance-local
@@ -337,9 +343,8 @@ const EXPECTED_DIRECTIVE_KINDS: Record<string, DirectiveKind> = {
   'src/lib/content/posts.ts#getPublishedPosts': 'default',
   'src/app/api/search/route.ts#getPersistedSearchPayload': 'default',
 
-  // Not CMS reads: no admin purge exists for either, so TTL is already their
-  // only freshness driver and the shared tier would buy nothing.
-  'src/app/sitemap.ts#getSitemapData': 'default',
+  // Not a CMS read: no admin purge exists for it, so TTL is already its only
+  // freshness driver and the shared tier would buy nothing.
   'src/lib/tech/githubSignals.ts#getCachedTechSignalsIndex': 'default',
 }
 

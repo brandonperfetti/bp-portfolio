@@ -21,18 +21,14 @@ import type { Post } from '../../../payload-types'
  * reverse. Naming it also means the four literals exist once, so a route rename
  * cannot update two branches and miss the third.
  *
- * **`/sitemap.xml` joins the group (#209).** The sitemap's outer scope,
- * `getSitemapData`, is a **plain** `'use cache'` (`src/app/sitemap.ts:34-36`)
- * tagged `articles` + `pages`, and a plain scope's purge "reaches only the
- * instance that issued it" (`src/lib/articles.ts:136-146`).
- * [measured, grep, 2026-09-10] no hook called `revalidatePath('/sitemap.xml')`.
- * The bug was
- * found on the Pages side — `/work` missing from a freshly generated sitemap
- * 28.5 h after publish `[measured, prod 2026-09-09 21:56Z]` — but the Posts
- * side reads the same route through the same plain scope, so an article
- * publish had the identical exposure and gets the identical purge. See
- * `revalidatePage.ts` for the full argument, including why this is necessary
- * without being provably sufficient.
+ * **`/sitemap.xml` joins the group (#209).** The sitemap's cached assembly,
+ * `getSitemapData` (`src/app/sitemap.ts`), carries the `posts` tag as well as
+ * `pages`, so an article publish reaches it through the tag purge below — now
+ * that it is a `'use cache: remote'` scope. It was a plain `'use cache'`, and
+ * one per-instance copy starved articles and pages together:
+ * `[measured, prod, 2026-09-26]` two articles published between deploys never
+ * reached the sitemap until a redeploy. The path purge expires the route's own
+ * static prerender. See `revalidatePage.ts` for the full argument.
  *
  * **`posts-sitemap` is gone (#209).** Fired here, subscribed by nothing
  * `[measured, grep across src, docs and .github]`; the docblock below used to
@@ -94,7 +90,8 @@ const POST_SURFACES =
  * its `cmsContent` cadence. The sitemap no longer merely "refreshes on its own
  * revalidate": #209 replaced the aspirational `posts-sitemap` tag — fired here,
  * subscribed by nothing — with a `revalidatePath('/sitemap.xml')` in
- * `purgePostSurfaces` above, which is the mechanism a ROUTE actually has.
+ * `purgePostSurfaces` above, and moved the sitemap's cached assembly onto the
+ * `:remote` tier so the `posts` purge reaches it on every instance.
  *
  * **Which transitions purge which path (#132), and why the rename purge is
  * NOT here.** #132 asked whether the published→published rename purge should

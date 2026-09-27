@@ -45,18 +45,24 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
 ## Indexing surfaces
 
 - `src/app/sitemap.ts` — static routes + published articles + published
-  page-builder pages. **Corrected 2026-09-10 (#209):** it has not regenerated
-  "hourly (`revalidate = 3600`)" since #76 removed that export — the data is
-  prepared in a `getSitemapData` scope on `cacheLife('cmsContent')`, which is
-  stale 300 s / revalidate 6 h / expire 24 h (`next.config.mjs`). And an edit no
-  longer waits for that cadence: the Pages and Posts hooks call
-  `revalidatePath('/sitemap.xml')` on publish, unpublish and delete. That call
-  is the mechanism — `getSitemapData` is a **plain** `'use cache'` scope, so its
-  `posts`/`pages` tag purges reach only the instance that issued them, which is
-  how a published page stayed out of a freshly generated sitemap for 28.5 h
-  `[measured, prod 2026-09-09]`. The `posts-sitemap`/`pages-sitemap` tags that
-  used to be fired here were subscribed by nothing and are **deleted**, not
-  waiting for a subscriber.
+  page-builder pages. The route is a static prerender (`○`, 6 h revalidate /
+  1 d expire) built from `getSitemapData`, a **`'use cache: remote'`** scope
+  tagged `posts` + `pages` on `cacheLife('cmsContent')` (stale 300 s /
+  revalidate 6 h / expire 24 h, `next.config.mjs`). A publish, unpublish or
+  delete of a page or an article reaches it without a deploy: the Pages and
+  Posts hooks purge those tags — which reach the shared Runtime Cache entry
+  every instance reads — and call `revalidatePath('/sitemap.xml')` on the
+  route's own prerendered entry. **Corrected 2026-09-26 (#209):** the
+  2026-09-10 line here said the path purge "is the mechanism" because the scope
+  was a plain `'use cache'`. It was not enough, and should not be relied on:
+  `[measured, prod, 2026-09-26]` a page and two articles published after that
+  purge shipped stayed out of the sitemap for over an hour, and a redeploy with
+  no code change put them in (61 → 64 URLs). A plain scope's purge reaches
+  only the instance that issued it, and one scope carrying both tags starved
+  both collections at once; moving it to `:remote` is the fix, pinned in
+  `sitemap.test.ts`. The `posts-sitemap`/`pages-sitemap` tags the hooks used
+  to fire were subscribed by nothing and are **deleted** (#209, 2026-09-10),
+  not waiting for a subscriber.
 - `src/app/robots.ts` — **a recorded policy since 2026-09-26 (#221)**, pinned
   by `robots.test.ts`. One rule set for every crawler:
   `Disallow: /admin$`, `/admin/` and `/api/` — the Payload admin and the JSON

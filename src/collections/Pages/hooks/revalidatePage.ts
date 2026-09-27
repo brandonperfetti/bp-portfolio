@@ -18,29 +18,25 @@ import type { Page } from '../../../payload-types'
  * a visible one: the sitemap would regenerate against a fresh `pages` read
  * while its own route entry stayed put, or the reverse.
  *
- * **Why `/sitemap.xml` is a PATH purge and not a tag (#209).** The sitemap's
- * outer scope, `getSitemapData`, is a **plain** `'use cache'`
- * (`src/app/sitemap.ts:34-36`) tagged `articles` + `pages` with
- * `cacheLife('cmsContent')` — the `:remote` scope is only the inner
- * `getPublishedPagePaths` (`src/lib/cms/pagesRepo.ts:279-281`). A plain scope's
- * purge "reaches only the instance that issued it"
- * (`src/lib/articles.ts:136-146`), so a `pages` tag purge fired from a write
- * handler never had to reach the instance holding the sitemap's own entry.
- * `[measured, prod 2026-09-09 21:56Z]` a FRESHLY generated `/sitemap.xml`
- * (`x-vercel-cache: MISS`, `age: 0`) still omitted `/work` 28.5 h after that
- * page went `_status: published`, while listing its four children — past the
- * `cmsContent` 24 h `expire`, with the emit filter ruled out by a unit probe
- * over the real production paths and the READ ruled out by
- * `evals/sitemap-page-paths-integration.test.ts`. `revalidatePath` is the
- * documented mechanism for a ROUTE's own entry, and no hook was calling it for
- * this one `[measured, grep, 2026-09-10]`.
+ * **What reaches the sitemap, and why both calls stay (#209).** The route's
+ * cached assembly, `getSitemapData` (`src/app/sitemap.ts`), is a
+ * `'use cache: remote'` scope tagged `posts` + `pages`, so the `pages` tag
+ * purge here expires the one copy every instance reads. It used to be a plain
+ * `'use cache'`, and that was the defect: a plain scope's purge reaches only
+ * the instance that issued it, so the path purge below was added first and was
+ * honest that it might not be enough — it was not.
+ * `[measured, prod, 2026-09-26]` a page published after
+ * `revalidatePath('/sitemap.xml')` shipped stayed out of the sitemap for over
+ * an hour, and a redeploy with no code change put it in. Moving the scope to the shared tier is the fix; the
+ * regression is pinned in `src/app/sitemap.test.ts`.
  *
- * Honest about its reach: this is necessary, and it may not be sufficient. If
- * the surviving value is an in-memory copy on an instance that never handles
- * the write, a path purge issued from the writing instance has the same
- * horizon the tag purge did. The remaining candidates and the live isolation
- * step that separates them are in #209; this closes the half that is a plain
- * missing call.
+ * `revalidatePath('/sitemap.xml')` stays, and unlike the deleted tag below it
+ * has a subscriber: the route is a static prerender (`○`, 6h/1d) whose entry
+ * is tagged `_N_T_/sitemap.xml` as well as `posts`/`pages`
+ * `[measured, local next build, 2026-09-26]`. The tag purge expires that entry
+ * too, so the path purge is the explicit spelling of the same expiry rather
+ * than a second mechanism — kept because it names the route it means, and it
+ * costs nothing.
  *
  * **`pages-sitemap` is gone (#209).** It was fired here and subscribed by
  * nothing `[measured, grep across src, docs and .github]` — `docs/SEO.md`

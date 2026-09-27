@@ -9,14 +9,48 @@ import { isFuturePublicationDate, toValidDate } from '@/lib/date'
 import { getSiteUrl } from '@/lib/site'
 
 /**
- * Sitemap data prepared inside a `'use cache'` scope (#76 B3, restores the
- * caching Piece 1 removed with `revalidate = 3600`).
+ * Sitemap data prepared inside a `'use cache: remote'` scope (#76 B3 restored
+ * the caching Piece 1 removed with `revalidate = 3600`; #209 moved it to the
+ * shared tier).
  *
- * @remarks The future-dated publish gate reads `Date.now()`
- * (`isFuturePublicationDate`), which `cacheComponents` rejects during prerender;
- * running it here freezes `Date.now()` at cache generation and refreshes it on
- * the `cmsContent` cadence, so `/sitemap.xml` prerenders static and stays fresh
- * via the `posts`/`pages` cache tags. Returns only serializable primitives
+ * @remarks **Why `:remote` (#209).** This scope is tagged `posts` + `pages` and
+ * both revalidation hooks purge those tags on every publish, unpublish and
+ * delete — so it is a CMS read in every sense that matters, and it has to live
+ * where a purge can reach it. On plain `'use cache'` it lived in each
+ * instance's in-memory LRU, whose tag state is a module-level `Map`
+ * (`refreshTags` is a no-op in `next/dist/server/lib/cache-handlers/default.js`
+ * at 16.3.4): a hook's purge expired the copy on the instance that ran the
+ * hook and no other. `[inference]` whichever instance regenerated
+ * `/sitemap.xml` next rebuilt it from its own stale copy and re-cached the
+ * result — the #118 failure mode, measured there on the detail route, on the
+ * one scope #118's conversion skipped. Per-instance behaviour cannot be
+ * observed off-platform: a single local `next start` process refreshes
+ * correctly on both tiers.
+ * `[measured, prod, 2026-09-26, #209]` a page and two articles published
+ * after the `revalidatePath('/sitemap.xml')` fix stayed out of the sitemap
+ * (61 URLs) for over an hour; a redeploy with no code change took it to 64.
+ * One scope carries both tags, so one stale copy starved articles and pages
+ * together.
+ *
+ * On `:remote` the entry is the platform's shared Runtime Cache — the tier
+ * #118 measured fresh on the preview for the static detail route (5/5 timed
+ * edit trials, 2026-08-28) — so the purge reaches the copy every instance
+ * reads. The route stays `○` static
+ * (`[measured, local next build, 2026-09-26]`: 6h revalidate / 1d expire,
+ * `x-next-cache-tags` carrying `posts`, `pages` and `_N_T_/sitemap.xml`), so
+ * the hooks' tag and path purges still expire the prerendered entry, and its
+ * regeneration now reads a copy the purge could reach. Both inner reads were
+ * already `:remote` (`getPublishedPagePaths`, `getPublishedPostSummaries`);
+ * remote-in-remote is a supported nesting. The value is slugs and epoch-ms —
+ * under 100 bytes an entry, so a few kilobytes at today's ~60 URLs and nowhere
+ * near the 2 MB item ceiling that keeps the search index on the in-memory
+ * tier.
+ *
+ * The future-dated publish gate reads `Date.now()`
+ * (`isFuturePublicationDate`), which `cacheComponents` rejects during
+ * prerender; running it here freezes `Date.now()` at cache generation and
+ * refreshes it on the `cmsContent` cadence or the next purge, so
+ * `/sitemap.xml` prerenders static. Returns only serializable primitives
  * (slugs + epoch-ms) — the `Date` objects the sitemap shape needs are rebuilt
  * from those fixed timestamps in {@link sitemap} (never `Date.now()`), which is
  * prerender-safe.
@@ -31,7 +65,7 @@ async function getSitemapData(): Promise<{
   newestArticleMs: number | null
   pagePaths: string[]
 }> {
-  'use cache'
+  'use cache: remote'
   cacheTag(CMS_TAGS.articles, CMS_TAGS.pages)
   cacheLife('cmsContent')
 
@@ -72,7 +106,7 @@ async function getSitemapData(): Promise<{
  * URLs from the cached {@link getSitemapData} payload.
  *
  * @remarks
- * Kept outside the `'use cache'` scope so it stays a cheap pure reshape: it
+ * Kept outside the cache scope so it stays a cheap pure reshape: it
  * rebuilds the `Date` objects the `MetadataRoute.Sitemap` shape requires from
  * the fixed epoch-ms timestamps {@link getSitemapData} returns — never
  * `Date.now()`, which `cacheComponents` rejects during prerender — so
