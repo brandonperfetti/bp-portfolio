@@ -27,52 +27,126 @@ export function isHistoryThrottleError(error: unknown): boolean {
   )
 }
 
+/** How often a refused push is retried, and for how long (#249, CR round 6). */
+const PUSH_RETRY_INTERVAL_MS = 1000
 /**
- * Wrap `history.pushState` / `replaceState` so a throttle refusal drops that
- * one URL update instead of throwing.
+ * Retry budget for one refused push.
+ *
+ * @remarks WebKit's window is ten seconds from its first counted write, and a
+ * refused call does not count against it, so fifteen one-second attempts
+ * outlast any single window with margin.
+ */
+const PUSH_RETRY_LIMIT = 15
+
+/**
+ * Wrap `history.pushState` / `replaceState` so a throttle refusal never throws:
+ * a refused replace is dropped, and a refused push is retried until it lands.
  *
  * @param history - The `History` to guard (`window.history` in the app).
  * @param onDrop - Called once per method per installation, on its first
- *   dropped write, so a burst is recorded without a report per call.
- * @returns An uninstall function. It restores the original method when the
- *   guard is still the outermost wrapper; when something wrapped it since (Next
- *   captures the current method as its "original" on mount), the guard is left
- *   in place but made inert, passing every error through again.
+ *   refused write, so a burst is recorded without a report per call.
+ * @returns An uninstall function. It cancels a pending retry and restores the
+ *   original methods when the guard is still the outermost wrapper; when
+ *   something wrapped it since (Next captures the current method as its
+ *   "original" on mount), the guard is left in place but made inert, passing
+ *   every call and error straight through.
  *
- * @remarks Every other error is rethrown untouched, and the wrapped call keeps
- * the `history` receiver so native methods and Next's own patch both work.
+ * @remarks The two methods fail differently, so they are contained differently.
+ * A refused `replaceState` only leaves the address bar stale, and the next
+ * successful write re-syncs it, so it is dropped. A refused `pushState` is a
+ * missing history ENTRY: Next has already committed the new page, so the page
+ * runs ahead of the URL and Back skips it (measured in WebKit on a production
+ * build: page 2 shown, URL still `/tech`, Back left `/tech` entirely). So the
+ * push is kept pending and retried every second until the window clears, and
+ * while it is pending every later write is sent as that push instead: the
+ * latest intended state creates the missing entry rather than overwriting the
+ * one before it. A later write that lands clears the pending push. Every
+ * non-throttle error is rethrown untouched, and calls keep the `history`
+ * receiver so native methods and Next's own patch both work.
  */
 export function installHistoryWriteGuard(
   history: History,
   onDrop: (method: HistoryWriteMethod) => void,
 ): () => void {
-  const uninstallers = (['pushState', 'replaceState'] as const).map(
-    (method) => {
-      const previous = history[method]
-      let active = true
-      let reported = false
-      const guarded = function guardedHistoryWrite(
-        ...args: Parameters<History[typeof method]>
-      ): void {
-        try {
-          Reflect.apply(previous, history, args)
-        } catch (error) {
-          if (!active || !isHistoryThrottleError(error)) throw error
-          if (!reported) {
-            reported = true
-            onDrop(method)
-          }
+  const previous = {
+    pushState: history.pushState,
+    replaceState: history.replaceState,
+  }
+  let active = true
+  const reported = new Set<HistoryWriteMethod>()
+  let pendingPush: Parameters<History['pushState']> | null = null
+  let retryTimer: ReturnType<typeof setTimeout> | null = null
+  let retries = 0
+
+  const write = (
+    method: HistoryWriteMethod,
+    args: Parameters<History['pushState']>,
+  ): void => {
+    Reflect.apply(previous[method], history, args)
+  }
+  const clearPending = () => {
+    pendingPush = null
+    retries = 0
+    if (retryTimer !== null) clearTimeout(retryTimer)
+    retryTimer = null
+  }
+  const scheduleRetry = () => {
+    if (retryTimer !== null) return
+    retryTimer = setTimeout(() => {
+      retryTimer = null
+      if (!active || !pendingPush) return
+      try {
+        write('pushState', pendingPush)
+        clearPending()
+      } catch (error) {
+        retries += 1
+        if (!isHistoryThrottleError(error) || retries >= PUSH_RETRY_LIMIT) {
+          clearPending()
+          return
+        }
+        scheduleRetry()
+      }
+    }, PUSH_RETRY_INTERVAL_MS)
+  }
+
+  const guard = (method: HistoryWriteMethod) =>
+    function guardedHistoryWrite(
+      ...args: Parameters<History['pushState']>
+    ): void {
+      if (!active) {
+        write(method, args)
+        return
+      }
+      const effective: HistoryWriteMethod = pendingPush ? 'pushState' : method
+      try {
+        write(effective, args)
+        if (pendingPush) clearPending()
+      } catch (error) {
+        if (!isHistoryThrottleError(error)) throw error
+        if (!reported.has(method)) {
+          reported.add(method)
+          onDrop(method)
+        }
+        if (effective === 'pushState') {
+          pendingPush = args
+          scheduleRetry()
         }
       }
-      history[method] = guarded
-      return () => {
-        active = false
-        if (history[method] === guarded) history[method] = previous
-      }
-    },
-  )
+    }
+
+  const guarded = {
+    pushState: guard('pushState'),
+    replaceState: guard('replaceState'),
+  }
+  history.pushState = guarded.pushState
+  history.replaceState = guarded.replaceState
   return () => {
-    for (const uninstall of uninstallers) uninstall()
+    active = false
+    clearPending()
+    for (const method of ['pushState', 'replaceState'] as const) {
+      if (history[method] === guarded[method])
+        history[method] = previous[method]
+    }
   }
 }
 
@@ -90,6 +164,8 @@ function reportDroppedHistoryWrite(method: HistoryWriteMethod): void {
     .then((Sentry) => {
       Sentry.logger?.warn?.('tech.history.write_dropped', {
         method,
+        // A refused push is retried until it lands; a refused replace is not.
+        outcome: method === 'pushState' ? 'retrying' : 'dropped',
         path: window.location.pathname,
       })
     })
@@ -108,9 +184,10 @@ function reportDroppedHistoryWrite(method: HistoryWriteMethod): void {
  * catches it and replaces the whole app with its default error screen
  * `[measured: Playwright WebKit, production build]`. Wrapping the History
  * method is the one seam that reaches it. The trade is deliberate: a refused
- * write costs one URL update (the next successful write re-syncs the address
- * bar), where the throw costs the page. Scoped to the explorer's lifetime, and
- * the drop is logged, never silently ignored.
+ * replace costs one URL update (the next successful write re-syncs the address
+ * bar) and a refused push lands late (retried once the window clears), where
+ * the throw costs the page. Scoped to the explorer's lifetime, and every
+ * refusal is logged, never silently ignored.
  */
 export function HistoryWriteGuard(): null {
   useEffect(
