@@ -85,9 +85,10 @@ files are prettier-ignored — never hand-format them.
 
 Local verification runs against a **restore of production**, not a
 hand-seeded database: `pnpm db:local:refresh` (`scripts/dev-db-restore.sh`,
-#85) pulls the latest encrypted dump, decrypts it with the passphrase from
-`.env.local` (`BACKUP_PASSPHRASE_PROD` for prod, `BACKUP_PASSPHRASE` for
-staging — both documented in `.env.example`, values in 1Password) and restores
+#85) pulls the latest encrypted dump from the private R2 bucket (#181), using
+the `R2_BACKUP_*` credentials in `.env.local`, decrypts it with the passphrase
+from `.env.local` (`BACKUP_PASSPHRASE_PROD` for prod, `BACKUP_PASSPHRASE` for
+staging — all documented in `.env.example`, values in 1Password) and restores
 it locally. Anything that touches content shape, metadata or media is tried
 there first; staging is for verifying the deploy, not for discovering the bug.
 

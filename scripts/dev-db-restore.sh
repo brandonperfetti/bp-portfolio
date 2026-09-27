@@ -4,8 +4,9 @@
 # local Docker Postgres, so local dev runs against real content (#85).
 #
 # Pipeline:
-#   gh run list  -> newest successful `db-backup.yml` run
-#   gh run download -> the encrypted artifact for the chosen target
+#   aws s3api list-objects-v2 -> newest backup key for the target in the
+#                                private R2 bucket `db-backup.yml` uploads to
+#   aws s3 cp       -> the encrypted dump
 #   openssl enc -d  -> plaintext custom-format dump (temp dir, shredded on exit)
 #   psql            -> DROP + CREATE the local database
 #   pg_restore      -> load it
@@ -14,12 +15,17 @@
 # The decrypt and restore invocations are copied from the header comment of
 # `.github/workflows/db-backup.yml`, which is the source of truth for both.
 #
-# SOURCES. `db-backup.yml` backs up two targets from one nightly run and
-# uploads one artifact each, named `db-<target>-YYYY-MM-DD.dump.enc`:
-#   prod    (default) -> artifact db-prod-*.dump.enc,    passphrase BACKUP_PASSPHRASE_PROD
-#   staging           -> artifact db-staging-*.dump.enc, passphrase BACKUP_PASSPHRASE
-# Only the passphrase NAMES appear anywhere in this repo; the values live in
-# `.env.local` (git-ignored) and in the password manager.
+# SOURCES. `db-backup.yml` backs up two targets from one nightly run into the
+# private Cloudflare R2 bucket `bp-portfolio-db-backups` (#181), one object
+# each, keyed `<target>/<YYYY-MM-DD>/db-<target>-<YYYY-MM-DDTHHMMSSZ>.dump.enc`
+# — so the greatest key under `<target>/` is the newest:
+#   prod    (default) -> prefix prod/,    passphrase BACKUP_PASSPHRASE_PROD
+#   staging           -> prefix staging/, passphrase BACKUP_PASSPHRASE
+# Reading the bucket takes an R2 API token: R2_BACKUP_ACCESS_KEY_ID,
+# R2_BACKUP_SECRET_ACCESS_KEY and R2_BACKUP_ENDPOINT (the same names as the
+# workflow's Actions secrets). Only NAMES appear anywhere in this repo; the
+# values live in `.env.local` (git-ignored) and in the password manager, and
+# are handed to `aws` through its own environment variables, never argv.
 #
 # SAFETY. The restored database holds real content, real contact emails, and
 # the users table. The plaintext dump is written to a private temp directory
@@ -35,23 +41,27 @@ set -euo pipefail
 # Distinct exit codes so each failure mode is assertable (scripts/dev-db-restore.test.ts).
 readonly EX_USAGE=2        # bad flag or bad argument value
 readonly EX_MISSING_CMD=3  # a required binary is not on PATH
-readonly EX_GH_AUTH=4      # gh is installed but not authenticated
+readonly EX_R2=4           # the R2 bucket could not be listed (credentials, endpoint, network)
 readonly EX_NO_PASS=5      # passphrase absent from the environment and .env.local
 readonly EX_PG_CLIENT=6    # pg_restore older than the pg17 client the workflow dumps with
 readonly EX_NO_DB=7        # nothing answering on the target host:port
-readonly EX_ARTIFACT=8     # no successful run, or no/ambiguous artifact in it
+readonly EX_ARTIFACT=8     # no backup object for the target, or download/decrypt failed
 readonly EX_VERIFY=9       # restore finished but the result does not look like the site DB
+readonly EX_NO_R2_CREDS=10 # an R2_BACKUP_* value absent from the environment and .env.local
 
 # The backup workflow installs and dumps with a Postgres 17 client
 # (.github/workflows/db-backup.yml: "Install postgresql-client-17"), and a
 # custom-format dump cannot be read by an older pg_restore.
 readonly REQUIRED_PG_MAJOR=17
 readonly BACKUP_WORKFLOW='db-backup.yml'
+# A bucket name, not a secret; db-backup.yml's R2_BACKUP_BUCKET is the source.
+readonly R2_BUCKET="${R2_BACKUP_BUCKET:-bp-portfolio-db-backups}"
 # Not `readonly`: bash 3.2 (still /bin/bash on macOS) does not accept a
 # readonly array assignment. The whole script stays 3.2-compatible on purpose
 # — no `mapfile`, no empty-array expansion under `set -u`, no GNU-only `stat`
 # or `shred` assumptions — so `pnpm db:local:refresh` works without Homebrew bash.
 VERIFY_TABLES=(pages posts payload_migrations)
+R2_VARS=(R2_BACKUP_ACCESS_KEY_ID R2_BACKUP_SECRET_ACCESS_KEY R2_BACKUP_ENDPOINT)
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname -- "$SCRIPT_DIR")"
@@ -69,6 +79,7 @@ DB_USER='postgres'
 WORK_DIR=''
 ENC_FILE=''
 DUMP_FILE=''
+BACKUP_KEY=''
 
 die() {
   local code=$1
@@ -91,17 +102,19 @@ Options:
   --source prod|staging  Which backup target to restore (default: prod).
                          prod uses BACKUP_PASSPHRASE_PROD, staging uses
                          BACKUP_PASSPHRASE — both read from .env.local.
-  --dry-run              Run every preflight check and print the plan, then
-                         stop. Downloads nothing and touches no database.
+  --dry-run              Run every preflight check (including listing the
+                         bucket to find the newest backup) and print the plan,
+                         then stop. Downloads nothing and touches no database.
   --host HOST            Postgres host (default: 127.0.0.1). Loopback only.
   --port PORT            Postgres port (default: 5432). Use 5433 if you
                          remapped the compose port around a system cluster.
   --db NAME              Database to drop and recreate (default: bp_portfolio_dev).
   -h, --help             Show this help.
 
-Prerequisites: Docker running with `docker compose up -d --wait db`, an
-authenticated `gh`, Postgres client tools >= 17 on PATH, and the passphrase in
-.env.local. THIS DROPS THE TARGET DATABASE.
+Prerequisites: Docker running with `docker compose up -d --wait db`, the AWS
+CLI and Postgres client tools >= 17 on PATH, and in .env.local the passphrase
+plus R2_BACKUP_ACCESS_KEY_ID, R2_BACKUP_SECRET_ACCESS_KEY and
+R2_BACKUP_ENDPOINT. THIS DROPS THE TARGET DATABASE.
 EOF
 }
 
@@ -193,10 +206,11 @@ passphrase_var() {
   fi
 }
 
-# Artifact name pattern for the chosen target. db-backup.yml names each
-# artifact after the file it uploads: db-<target>-YYYY-MM-DD.dump.enc.
-artifact_pattern() {
-  printf 'db-%s-*.dump.enc' "$SOURCE"
+# Key pattern for the chosen target, as db-backup.yml writes it:
+# <target>/<YYYY-MM-DD>/db-<target>-<YYYY-MM-DDTHHMMSSZ>.dump.enc. Anything
+# else under the prefix is ignored rather than restored.
+backup_key_regex() {
+  printf '^%s/[0-9]{4}-[0-9]{2}-[0-9]{2}/db-%s-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z[.]dump[.]enc$' "$SOURCE" "$SOURCE"
 }
 
 require_commands() {
@@ -208,7 +222,7 @@ require_commands() {
   done
   if [[ -n $missing ]]; then
     die "$EX_MISSING_CMD" "required command(s) not found on PATH: ${missing}
-  gh       -> https://cli.github.com  (then: gh auth login)
+  aws      -> AWS CLI v2 (macOS: brew install awscli); R2 speaks the S3 API
   psql, pg_restore -> Postgres client tools >= ${REQUIRED_PG_MAJOR} (macOS: brew install postgresql@17)
   docker   -> Docker Desktop, then: docker compose up -d --wait db
   openssl  -> preinstalled on macOS and most Linux distributions"
@@ -279,13 +293,72 @@ resolve_passphrase() {
   Without it the backups are unreadable — see .github/workflows/db-backup.yml."
 }
 
-check_gh_auth() {
-  if ! gh auth status >/dev/null 2>&1; then
-    die "$EX_GH_AUTH" "gh is not authenticated. Run: gh auth login
-  The nightly backups are private Actions artifacts; downloading one needs a
-  token with access to brandonperfetti/bp-portfolio."
+# Ensure the three R2_BACKUP_* values are set, from the environment or
+# .env.local — the same precedence as the passphrase. Names only are printed.
+resolve_r2_credentials() {
+  local var value missing='' from_env=0 from_file=0
+  for var in "${R2_VARS[@]}"; do
+    if [[ -n ${!var:-} ]]; then
+      from_env=1
+    elif value="$(read_env_file_value "$var" "$ENV_FILE")"; then
+      printf -v "$var" '%s' "$value"
+      from_file=1
+    else
+      missing="${missing}${missing:+ }${var}"
+    fi
+  done
+  if [[ -n $missing ]]; then
+    die "$EX_NO_R2_CREDS" "no value for: ${missing}.
+  The backups live in the private R2 bucket ${R2_BUCKET}. Add
+    R2_BACKUP_ACCESS_KEY_ID=<from the password manager>
+    R2_BACKUP_SECRET_ACCESS_KEY=<from the password manager>
+    R2_BACKUP_ENDPOINT=<from the password manager>
+  to ${ENV_FILE} (git-ignored), or export them in your shell. See .env.example."
   fi
-  note 'gh: authenticated'
+  if [[ $from_file -eq 1 && $from_env -eq 1 ]]; then
+    note "r2: ${R2_VARS[*]} (from the environment and .env.local)"
+  elif [[ $from_file -eq 1 ]]; then
+    note "r2: ${R2_VARS[*]} (from .env.local)"
+  else
+    note "r2: ${R2_VARS[*]} (from the environment)"
+  fi
+}
+
+# Run the AWS CLI against R2 with ONLY the R2 credentials: a subshell so the
+# AWS_* exports never leak into the rest of the script, credentials through
+# the environment rather than argv (argv is visible to every user in `ps`),
+# and the developer's own ~/.aws config and profile shut out so they cannot
+# redirect or re-sign the request.
+aws_r2() {
+  (
+    unset AWS_PROFILE AWS_DEFAULT_PROFILE AWS_SESSION_TOKEN
+    export AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null
+    export AWS_ACCESS_KEY_ID="$R2_BACKUP_ACCESS_KEY_ID"
+    export AWS_SECRET_ACCESS_KEY="$R2_BACKUP_SECRET_ACCESS_KEY"
+    export AWS_DEFAULT_REGION=auto AWS_REGION=auto AWS_EC2_METADATA_DISABLED=true
+    aws --endpoint-url "$R2_BACKUP_ENDPOINT" "$@"
+  )
+}
+
+# Find the newest backup for the target: the greatest key under <target>/
+# matching the workflow's layout. Runs at preflight, so --dry-run proves the
+# credentials work and names the object it would restore.
+locate_newest_backup() {
+  local listing
+  if ! listing="$(aws_r2 s3api list-objects-v2 --bucket "$R2_BUCKET" \
+    --prefix "${SOURCE}/" --query 'Contents[].Key' --output text 2>/dev/null)"; then
+    die "$EX_R2" "could not list s3://${R2_BUCKET}/${SOURCE}/ on R2.
+  Check R2_BACKUP_ACCESS_KEY_ID / R2_BACKUP_SECRET_ACCESS_KEY / R2_BACKUP_ENDPOINT
+  in ${ENV_FILE}: the token needs Object Read on ${R2_BUCKET}, and the endpoint
+  is https://<account-id>.r2.cloudflarestorage.com."
+  fi
+  BACKUP_KEY="$(printf '%s\n' "$listing" | tr '\t' '\n' \
+    | grep -E "$(backup_key_regex)" | sort | tail -n 1 || true)"
+  [[ -n $BACKUP_KEY ]] || die "$EX_ARTIFACT" "no '${SOURCE}' backup in s3://${R2_BUCKET}/${SOURCE}/.
+  ${BACKUP_WORKFLOW} writes one per target per run; the bucket's lifecycle rule
+  deletes them after 30 days. Check the Actions tab, or dispatch a fresh run,
+  then retry."
+  note "newest backup: ${BACKUP_KEY}"
 }
 
 psql_local() {
@@ -309,24 +382,20 @@ check_database_up() {
   note "postgres: ${DB_HOST}:${DB_PORT} answering, server_version ${server_version}"
 }
 
-newest_successful_run() {
-  gh run list --workflow "$BACKUP_WORKFLOW" --status success --limit 1 \
-    --json databaseId,createdAt,displayTitle \
-    --jq '.[0] | select(.databaseId) | "\(.databaseId)\t\(.createdAt)"'
-}
-
 print_plan() {
-  local pass_var artifact
+  local pass_var file
   pass_var="$(passphrase_var)"
-  artifact="$(artifact_pattern)"
+  file="$(basename -- "$BACKUP_KEY")"
 
   cat <<EOF
 
 Plan (source: ${SOURCE})
-  1. gh run list --workflow ${BACKUP_WORKFLOW} --status success --limit 1
-  2. gh run download <run-id> --dir <tmp> --pattern '${artifact}'
+  1. aws s3api list-objects-v2 --bucket ${R2_BUCKET} --prefix ${SOURCE}/
+       -> newest: ${BACKUP_KEY}
+  2. aws s3 cp s3://${R2_BUCKET}/${BACKUP_KEY} <tmp>/ \\
+       --endpoint-url \$R2_BACKUP_ENDPOINT
   3. openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \\
-       -in <tmp>/${artifact} -out <tmp>/db.dump -pass env:${pass_var}
+       -in <tmp>/${file} -out <tmp>/db.dump -pass env:${pass_var}
   4. psql -h ${DB_HOST} -p ${DB_PORT} -U ${DB_USER} -d postgres \\
        -c 'DROP DATABASE IF EXISTS "${DB_NAME}" WITH (FORCE)' \\
        -c 'CREATE DATABASE "${DB_NAME}"'
@@ -355,38 +424,18 @@ cleanup() {
   return "$status"
 }
 
-download_artifact() {
-  local run_line run_id run_created found found_count
-  step "Locating the newest successful ${BACKUP_WORKFLOW} run"
-  run_line="$(newest_successful_run 2>/dev/null || true)"
-  [[ -n $run_line ]] || die "$EX_ARTIFACT" "no successful ${BACKUP_WORKFLOW} run found.
-  The workflow runs both targets in one matrix with fail-fast disabled, so a run
-  where EITHER target failed is reported as a failure and skipped here. Check
-  the Actions tab, or dispatch a fresh run, then retry.
-  Artifacts also expire after 14 days (retention-days: 14)."
-  run_id="${run_line%%$'\t'*}"
-  run_created="${run_line#*$'\t'}"
-  note "run ${run_id} (${run_created})"
-
-  step "Downloading the '${SOURCE}' artifact"
-  gh run download "$run_id" --dir "$WORK_DIR" --pattern "$(artifact_pattern)" \
-    || die "$EX_ARTIFACT" "gh run download failed for run ${run_id}, pattern '$(artifact_pattern)'.
-  Run ${run_id} may predate the '${SOURCE}' target, or its artifact may have expired."
-
-  # gh nests each artifact in a directory named after it, so find rather than
-  # assume a layout. Newline-delimited text rather than `mapfile`, which is
-  # bash 4 only.
-  found="$(find "$WORK_DIR" -type f -name '*.dump.enc' | sort)"
-  found_count="$(printf '%s\n' "$found" | grep -c . || true)"
-  [[ $found_count -ne 0 ]] || die "$EX_ARTIFACT" "no *.dump.enc file in the downloaded artifact for '${SOURCE}'"
-  [[ $found_count -eq 1 ]] || die "$EX_ARTIFACT" "expected exactly one *.dump.enc for '${SOURCE}', found ${found_count}:
-${found}"
-
-  ENC_FILE="$(printf '%s\n' "$found" | head -n 1)"
-  note "artifact: $(basename -- "$ENC_FILE") ($(wc -c <"$ENC_FILE" | tr -d ' ') bytes)"
+download_backup() {
+  step "Downloading s3://${R2_BUCKET}/${BACKUP_KEY}"
+  ENC_FILE="${WORK_DIR}/$(basename -- "$BACKUP_KEY")"
+  aws_r2 s3 cp "s3://${R2_BUCKET}/${BACKUP_KEY}" "$ENC_FILE" \
+    --only-show-errors --no-progress \
+    || die "$EX_ARTIFACT" "download failed for s3://${R2_BUCKET}/${BACKUP_KEY}.
+  It may have expired between listing and download (30-day lifecycle rule)."
+  [[ -s $ENC_FILE ]] || die "$EX_ARTIFACT" "the downloaded backup is empty: ${BACKUP_KEY}"
+  note "backup: $(basename -- "$ENC_FILE") ($(wc -c <"$ENC_FILE" | tr -d ' ') bytes)"
 }
 
-decrypt_artifact() {
+decrypt_backup() {
   local pass_var
   pass_var="$(passphrase_var)"
   DUMP_FILE="${WORK_DIR}/db.dump"
@@ -396,8 +445,8 @@ decrypt_artifact() {
   # (matching its encrypt step: -aes-256-cbc -pbkdf2 -iter 200000 -salt).
   openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
     -in "$ENC_FILE" -out "$DUMP_FILE" -pass "env:${pass_var}" \
-    || die "$EX_ARTIFACT" "openssl could not decrypt the artifact.
-  The usual cause is the wrong passphrase: '${SOURCE}' artifacts are encrypted
+    || die "$EX_ARTIFACT" "openssl could not decrypt the backup.
+  The usual cause is the wrong passphrase: '${SOURCE}' backups are encrypted
   with ${pass_var}, and the staging and production values are deliberately different."
 
   # A custom-format dump starts with the literal PGDMP. Checking it turns a
@@ -477,11 +526,12 @@ main() {
 
   note "bp-portfolio local database refresh — source: ${SOURCE}"
   step 'Preflight'
-  require_commands gh docker psql pg_restore openssl
+  require_commands aws docker psql pg_restore openssl
   check_pg_client
   resolve_passphrase
-  check_gh_auth
+  resolve_r2_credentials
   check_database_up
+  locate_newest_backup
 
   if [[ $DRY_RUN -eq 1 ]]; then
     print_plan
@@ -496,8 +546,8 @@ main() {
   WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/bp-db-restore.XXXXXXXX")"
   chmod 700 "$WORK_DIR"
 
-  download_artifact
-  decrypt_artifact
+  download_backup
+  decrypt_backup
   recreate_database
   restore_dump
   verify_restore
