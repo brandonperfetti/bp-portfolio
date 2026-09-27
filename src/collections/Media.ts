@@ -31,11 +31,22 @@ export const MEDIA_CREATE_WITHOUT_UPLOAD_ERROR =
  *
  * @remarks Without this, the generated MCP `createMedia` called with `alt`,
  * `url`, `filename`, `mimeType`, `width`, `height` and `filesize` (and no
- * file) is accepted and mints a row with no bytes behind it: the
- * cloud-storage adapter uploads only `req.file` (`plugin-cloud-storage`
- * `getIncomingFiles`), so nothing reaches Blob while the stored `url` is
- * derived from `filename` and looks real (staging media 176, measured
- * 2026-09-23 on #237).
+ * file) is accepted (staging media 176, measured 2026-09-23 on #237).
+ *
+ * Corrected 2026-09-27: an earlier version of this remark said such a create
+ * "mints a row with no bytes behind it" because the storage adapter uploads
+ * only `req.file`; do not rely on that. What payload 3.88.0 does: given a
+ * `filename` + `url` and no file, `generateFileData` fetches the `url`
+ * server-side (`getExternalFile`, any public host — no allowlist), throws if
+ * the fetch fails, and on success puts the fetched bytes on `req.file`
+ * (`generateFileData.js:262,285`) under the caller's `filename`, with
+ * `overwriteExistingFiles` forced on so no safe-name suffix is added
+ * (`:68,76,190`). The storage adapter's `afterChange` then uploads `req.file`
+ * (`plugin-cloud-storage` `hooks/afterChange.js:10`). Measured on local disk
+ * (no Blob token), the create stored the fetched bytes at that filename. So
+ * the hazard is a server-side fetch of an arbitrary URL written to a
+ * caller-chosen path in the store, bypassing the ingest route's guard rails —
+ * not a row without bytes.
  *
  * Guarded on the presence of the file, not on the caller, so every path that
  * sends bytes — admin uploads, the ingest route's and the scripts' Local API

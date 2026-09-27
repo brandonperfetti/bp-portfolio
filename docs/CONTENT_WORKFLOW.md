@@ -191,16 +191,29 @@ a Media create that carries `url`, `filename`, `mimeType`, `filesize`,
 `POST /api/media/ingest` [source: `refuseCreateWithoutUpload` in
 `src/collections/Media.ts`; live on an environment only once that
 environment has deployed it]. **Corrected 2026-09-27:** "fetches nothing"
-above is not what the code does — do not rely on it. Given a `filename`
-and a `url` and no file, Payload's create fetches that `url` server-side
-(`generateFileData` → `getExternalFile`, payload 3.88.0) and then stores
-nothing, because the Blob adapter uploads only a file sent with the
-request [source; and measured locally 2026-09-27: with the guard removed,
-the pg-tier case in `evals/media-create-guard-integration.test.ts` fails
-with Payload's `FileRetrievalError`, i.e. the fetch was attempted]; the
-2026-09-23 measurement observed that nothing was stored, not that nothing
-was fetched. The guard refuses before that fetch. Never attach a cover
-with `createMedia`. Use the ingest route — a **media-creation** route
+and "no bytes behind it" above are not what the code does — do not rely
+on them. **Corrected again 2026-09-27 (same day):** the first correction
+said Payload fetches the `url` "and then stores nothing, because the Blob
+adapter uploads only a file sent with the request"; that is also wrong —
+do not rely on it either. What the code does, given a `filename` and a
+`url` and no file: Payload's create fetches the `url` server-side, from any
+public host (`generateFileData` → `getExternalFile`, payload 3.88.0 — none
+of the ingest route's guard rails apply); if the fetch fails the create
+throws (`FileRetrievalError`); if it succeeds the fetched bytes become the
+request's file under the caller's `filename`, with overwriting forced on,
+and the storage adapter uploads them [source: `generateFileData.js`
+`:68,76,190,262,285`; `plugin-cloud-storage` `hooks/afterChange.js:10`].
+`[measured, local disk, 2026-09-27]` with the guard removed and no Blob
+token, a fileless create carrying a Cloudinary `url` and a `filename`
+wrote a 109669-byte file at exactly that filename (the source's
+`content-length`); with the guard it was refused. That the Blob adapter
+does the same on staging or production is `[inference]` from the source —
+not measured, since a Blob write is a third-party write. For staging media
+176 this means the row rendering at a path production also uses is
+consistent with the fetched bytes having been written to that path in the
+shared store, rather than with a row that has nothing behind it; what
+actually happened there is not established. The guard refuses before the
+fetch. Never attach a cover with `createMedia`. Use the ingest route — a **media-creation** route
 (Cloudinary source → Media doc), not a cache-revalidation call; it only
 reuses the secret's name:
 

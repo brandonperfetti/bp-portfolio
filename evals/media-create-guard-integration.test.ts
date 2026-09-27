@@ -21,14 +21,21 @@ import { MEDIA_CREATE_WITHOUT_UPLOAD_ERROR } from '../src/collections/Media'
  * The refused case's `url` is on the reserved `.invalid` TLD: with the hook
  * removed, Payload tries to fetch it and fails with a `FileRetrievalError`,
  * so the assertion on the guard's own text is what distinguishes "refused by
- * the guard" from "refused because the fetch failed". Locally there is no
- * Blob token, so without the guard a FETCHABLE url would produce a row with a
- * real local file — the dead-row outcome needs the cloud-storage adapter and
- * is Brandon's staging check (#242 AC-2).
+ * the guard" from "refused because the fetch failed". (Without the guard, a
+ * FETCHABLE url is stored under the caller's `filename` — measured on local
+ * disk 2026-09-27; see the hook's remarks.)
+ *
+ * **Storage is wherever `BLOB_READ_WRITE_TOKEN` points.** The gate unsets it
+ * and CI has none, so uploads land on local disk (`media/`). But
+ * `docs/WORKFLOW.md` § Local database asks for that token to be set locally,
+ * and if it is exported when this file runs, the with-file case uploads to
+ * (and its cleanup deletes from) the shared Blob store that staging and
+ * production use. Run this tier without it.
  *
  * Runs in the pg tier (`vitest run --root evals`) with `DATABASE_URI` set.
- * Rows carry the `MARKER` in `alt` and are deleted in `afterAll` (deleting a
- * Media row also removes its local upload).
+ * Each case unwinds its own row in `try/finally` (deleting a Media row also
+ * removes its upload); the `afterAll` sweep by `MARKER` in `alt` is only the
+ * backstop for a run that died mid-case.
  */
 
 const connectionString = process.env.DATABASE_URI
@@ -136,23 +143,32 @@ describe.skipIf(!connectionString)(
         },
         overrideAccess: true,
       })
-      expect(created).toMatchObject({
-        mimeType: 'image/png',
-        width: 4,
-        height: 3,
-        filesize: png.byteLength,
-      })
-      expect(created.filename).toContain(MARKER)
+      try {
+        expect(created).toMatchObject({
+          mimeType: 'image/png',
+          width: 4,
+          height: 3,
+          filesize: png.byteLength,
+        })
+        expect(created.filename).toContain(MARKER)
 
-      const updated = await payload.update({
-        collection: 'media',
-        context,
-        id: created.id,
-        data: { alt: `${MARKER} with-file, alt edited` },
-        overrideAccess: true,
-      })
-      expect(updated.alt).toBe(`${MARKER} with-file, alt edited`)
-      expect(updated.filename).toBe(created.filename)
+        const updated = await payload.update({
+          collection: 'media',
+          context,
+          id: created.id,
+          data: { alt: `${MARKER} with-file, alt edited` },
+          overrideAccess: true,
+        })
+        expect(updated.alt).toBe(`${MARKER} with-file, alt edited`)
+        expect(updated.filename).toBe(created.filename)
+      } finally {
+        await payload.delete({
+          collection: 'media',
+          context,
+          id: created.id,
+          overrideAccess: true,
+        })
+      }
     })
   },
 )
