@@ -427,6 +427,7 @@ cleanup() {
   return "$status"
 }
 
+# Download the object locate_newest_backup chose into the private temp dir.
 download_backup() {
   step "Downloading s3://${R2_BUCKET}/${BACKUP_KEY}"
   ENC_FILE="${WORK_DIR}/$(basename -- "$BACKUP_KEY")"
