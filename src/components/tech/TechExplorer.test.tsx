@@ -204,3 +204,79 @@ describe('TechExplorer pagination (#88)', () => {
     })
   })
 })
+
+/**
+ * #249: `/tech` hit Safari's 100-writes-per-10s history throttle in production,
+ * and Next's `HistoryUpdater` throws that `SecurityError` in the commit phase —
+ * which takes down the whole app, not just the explorer. These pin how many URL
+ * writes the explorer itself issues for one burst of input.
+ *
+ * The URL is mocked, so `router.replace` never moves `searchParamsMock`: a test
+ * that wants the URL to move (Back/Forward, an in-app link) reassigns it and
+ * re-renders, exactly as a traversal would re-render the explorer.
+ */
+describe('TechExplorer URL writes per burst (#249)', () => {
+  it('never writes stale filter state over a URL that moved under a blurred input (Back/link)', () => {
+    const items = makeTech(3)
+    const { rerender } = render(<TechExplorer items={items} />)
+    expect(replaceMock).not.toHaveBeenCalled()
+
+    // Back to an entry the reader had filtered: the URL is now the source of truth.
+    searchParamsMock = new URLSearchParams('q=react&category=Tooling')
+    rerender(<TechExplorer items={items} />)
+    // And forward again.
+    searchParamsMock = new URLSearchParams('')
+    rerender(<TechExplorer items={items} />)
+
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+
+  it('issues zero writes for a burst of ten Back/Forward traversals', async () => {
+    const items = makeTech(3)
+    const { rerender } = render(<TechExplorer items={items} />)
+
+    for (let i = 0; i < 10; i++) {
+      searchParamsMock = new URLSearchParams('q=react')
+      rerender(<TechExplorer items={items} />)
+      searchParamsMock = new URLSearchParams('category=Tooling')
+      rerender(<TechExplorer items={items} />)
+    }
+    // Past the 350 ms debounce, so a pending write would have landed.
+    await new Promise((resolve) => setTimeout(resolve, 450))
+
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+
+  it('a chip tap inside the typing debounce writes once, not twice', async () => {
+    const user = userEvent.setup()
+    render(<TechExplorer items={makeTech(3)} />)
+
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Search technologies' }),
+      'tech',
+    )
+    await user.click(screen.getByRole('button', { name: 'Tooling' }))
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith(
+        '/tech?q=tech&category=Tooling',
+        { scroll: false },
+      )
+    })
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a type-and-clear burst on a clean URL issues no writes at all', async () => {
+    const user = userEvent.setup()
+    render(<TechExplorer items={makeTech(3)} />)
+    const box = screen.getByRole('searchbox', { name: 'Search technologies' })
+
+    for (let i = 0; i < 10; i++) {
+      await user.type(box, 're')
+      await user.clear(box)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 450))
+
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+})

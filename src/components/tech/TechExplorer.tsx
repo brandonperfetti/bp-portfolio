@@ -239,9 +239,36 @@ export function TechExplorer({
     [pathname, router, searchParams],
   )
 
+  /**
+   * The filter state this effect last acted on — the #249 write gate.
+   *
+   * @remarks Every URL write here costs a `history.replaceState` in Next's
+   * `HistoryUpdater`, and Safari throws past 100 of those in ten seconds —
+   * from the commit phase, which replaces the whole app with Next's error
+   * screen `[measured: Playwright WebKit on a production build]`. So the URL
+   * is written only when the READER changed the filters, never merely because
+   * the URL moved: `updateUrl` changes identity with `searchParams`, which
+   * used to re-run this effect on every Back/Forward or in-app link and write
+   * the still-stale state straight back over the URL the reader had just
+   * navigated to (two history writes per traversal, and the traversal undone).
+   */
+  const lastFilterStateRef = useRef<string | null>(null)
+
   useEffect(() => {
+    // A debounce is still pending, so `debouncedQuery` is stale: it is either
+    // the reader mid-word or a URL-driven `setQuery` catching up. Either way the
+    // write waits for the value to settle, which also folds a chip tap made
+    // inside the debounce window into the one write that follows it.
+    if (debouncedQuery !== query) {
+      return
+    }
+    const filterState = JSON.stringify([debouncedQuery.trim(), category, sort])
+    if (filterState === lastFilterStateRef.current) {
+      return
+    }
+    lastFilterStateRef.current = filterState
     updateUrl(debouncedQuery, category, sort)
-  }, [debouncedQuery, category, sort, updateUrl])
+  }, [query, debouncedQuery, category, sort, updateUrl])
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = debouncedQuery.trim().toLowerCase()
