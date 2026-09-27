@@ -699,7 +699,7 @@ shape `corvus-backfill.yml` uses for `pnpm corvus:backfill` — the script is th
 one place the entry point is spelled, so the workflow, these docs and an operator
 at a terminal cannot drift apart on it.
 
-**Live tool calls from the chat route:** `docs/SECURITY.md` § Corvus (AI
+**No live tool calls from the chat route:** `docs/SECURITY.md` § Corvus (AI
 chat). Reading a README at answer time would add per-turn latency, rate-limit exposure and a live prompt-injection
 surface — README text entering the prompt unreviewed, from a source the site
 does not control. Indexing at sync time keeps every passage inspectable in
