@@ -17,6 +17,12 @@ import type { User } from '@/payload-types'
  * no row and is refused (`Forbidden`). A lockout on another account expires
  * on its own after `lockTime` (Payload default 10 minutes) or is cleared with
  * `overrideAccess` from the Local API.
+ *
+ * Scope: this hardens only the lockout reset. `update` and `delete` below
+ * stay `authenticated`, so any Payload user can still edit or delete another
+ * user's account (tracked separately). The trade-off: an admin can no longer
+ * clear another admin's lockout from the admin UI — the lock expires after
+ * `lockTime`, or `overrideAccess` clears it.
  */
 const unlockOwnAccountOnly: Access<User> = ({ req: { user } }) => {
   if (!user) return false

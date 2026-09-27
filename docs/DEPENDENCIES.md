@@ -33,7 +33,7 @@ one set, version-locked.
   `5403381b` ("drop v3 openai routes"), and `git grep` for an `'openai'` or
   `'openai/…'` module specifier across the repo finds none. Corvus talks to
   OpenAI through `@ai-sdk/openai`, and the eval harness's `autoevals` carries
-  its own `openai@6`. The package is still declared; whether to remove it is
+  its own `openai@6` (`[measured 2026-09-26, pnpm why openai]`: `6.48.0`). The package is still declared; whether to remove it is
   open.
 - `streamdown`, `react-markdown`, `remark-gfm` — streaming markdown render.
 - `zod` — request validation (chat, webhooks, forms).
@@ -187,7 +187,9 @@ beside it had no effect. Verify with `pnpm config get minimumReleaseAge`
   security patch). The entries present on 2026-09-26 predate the gate —
   twelve name `next`/`@next/*`/`eslint-config-next` at `16.2.11`, which is no
   longer locked (the tree runs `next@16.3.4`), and all eighteen are older than
-  the gate's one day, so none of them is currently doing anything.
+  the gate's one day (`[measured 2026-09-26, npm registry publish times]`: the
+  newest was published 2026-07-22), so none of them is currently doing
+  anything.
 
 ### Known unmet peers
 

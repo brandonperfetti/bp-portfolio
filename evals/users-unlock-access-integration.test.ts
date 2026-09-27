@@ -16,7 +16,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
  *
  * Without the rule, Payload's default unlock access is `Boolean(user)`, so
  * the non-owner case below unlocks the account and that test fails — verified
- * by removing the rule and re-running (#232 lane report). The anonymous case
+ * by removing the rule and re-running (#232; the result is recorded in the
+ * body of the commit that added this file, `652a745`). The anonymous case
  * is refused by the default too; it is pinned so the rule never widens. Each
  * case locks its own account, so no case depends on another's state.
  *

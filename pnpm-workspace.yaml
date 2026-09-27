@@ -44,8 +44,9 @@ overrides:
   # only (@babel/helper-compilation-targets ^4.24.0, webpack ^4.24.0). Every
   # requester's range already admits the fix, but `pnpm update browserslist`
   # (and `pnpm update 'browserslist@^4.28.7'`) left 4.28.6 in the lockfile, so
-  # this override is the lever pnpm leaves us — lesson 20: pnpm will not move
-  # an in-range duplicate on its own. It stays inside every declared range.
+  # this override is the lever pnpm leaves us: pnpm will not move an in-range
+  # version on its own (the same behaviour #195 hit with lightningcss, above).
+  # It stays inside every declared range.
   # Drop it once a from-scratch resolve lands >=4.28.7 without it.
   browserslist: '^4.28.7'
   # better-sqlite3: evalite's results DB. v11 uses the NAN-style ObjectWrap
