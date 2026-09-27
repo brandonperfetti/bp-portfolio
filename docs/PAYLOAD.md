@@ -198,8 +198,17 @@ TSDoc, and the root-designation reasoning on `ROOT_PAGE_SLUG`.
 **`slugLock: true` means "I do not hand-edit this slug"**, and that resolves
 differently either side of first publish (#120):
 
-- **Before first publish** the slug is derived from the title on every edit.
-  Convenient, and safe — no public URL exists yet.
+- **Before first publish** the admin form derives the slug from the title on
+  every edit: `SlugComponent` follows the title while `slugLock` is `true`
+  and nothing is published [source: `src/fields/slug/SlugComponent.tsx`].
+  Convenient, and safe — no public URL exists yet. A REST or MCP write does
+  not re-derive it: Payload seeds an absent `slug` from the stored document
+  before the slug hooks run, so a title-only write keeps the stored slug, and
+  the title is used only when no slug is stored yet [source:
+  `src/fields/slug/formatSlug.ts`, payload 3.88 `getFallbackValue`].
+  Corrected 2026-09-27 (#250): this bullet used to say the slug "is derived
+  from the title on every edit", which is true of the admin form only — do
+  not rely on it for API or MCP writes.
 - **Once published** the slug is frozen at its published value. Editing the
   title can no longer move the URL.
 
@@ -223,7 +232,17 @@ migration, no schema change.
 **Enforcement is server-side.** `enforceSlugFreeze` (a `beforeValidate` field
 hook) reverts a frozen slug regardless of caller — admin form, REST `PATCH`, or
 MCP. A write that intends a rename must send `slugLock: false` in the same
-payload; omitting it is not consent. The admin component mirrors the rule (it
+payload; omitting it is not consent **while the stored `slugLock` is `true`**.
+The hook falls back to the stored value when a write omits `slugLock`, so a
+document that stores `false` is a standing unlock: a later write carrying a
+different `slug` keeps it, and the published URL moves (the old path
+redirects) [source: `src/fields/slug/enforceSlugFreeze.ts`, the `lock`
+resolution; pinned by `src/fields/slug/enforceSlugFreeze.test.ts`]. An MCP
+draft created with `slugLock: false` stores exactly that until a write sends
+`slugLock: true` back — `docs/CONTENT_WORKFLOW.md` step 4 says when. Corrected
+2026-09-27 (#250): the unqualified "omitting it is not consent" read as true
+of every published document; it is not true of one that stores `false`.
+The admin component mirrors the rule (it
 stops re-deriving once `hasPublishedDoc`) purely so the editor is never shown a
 value the server is about to revert.
 
@@ -614,10 +633,26 @@ cannot infer are the invariants below; encode those, not the mechanics.
   MediaBlock — an unknown or dropped node crashes every migrated article with
   minified Lexical #17. Prefer editing bodies in `/admin`; use `updatePosts`
   on `content` only with a known-valid tree.
-- **Locked slugs.** A published document's slug is frozen server-side (#120):
-  `enforceSlugFreeze` reverts it, so an `updatePosts` that changes `title` — or
-  that sends a new `slug` without `slugLock` — leaves the URL byte-identical.
-  That is the safe default, not an error you will see. To rename deliberately,
+- **Locked slugs.** A published document's slug is frozen server-side (#120)
+  while its stored `slugLock` is `true`: `enforceSlugFreeze` reverts it, so an
+  `updatePosts` that sends a new `slug` without `slugLock` leaves the URL
+  byte-identical [source: `src/fields/slug/enforceSlugFreeze.ts`]. An
+  `updatePosts` that changes only `title` moves nothing whatever `slugLock`
+  holds: Payload seeds the absent `slug` from the stored document, so
+  `formatSlugHook` keeps it [source: `src/fields/slug/formatSlug.ts`, payload
+  3.88 `getFallbackValue`; pinned by the "title-only PATCH with the unlock"
+  case in `evals/post-placement-integration.test.ts`]. That is the safe
+  default, not an error you will see. **The exception is a stored
+  `slugLock: false`** — an MCP draft created that way and published without
+  sending `slugLock: true` back. It is a standing unlock: a later write that
+  sends a different `slug` without `slugLock` keeps the new slug and moves the
+  live URL [source: `src/fields/slug/enforceSlugFreeze.ts`, the `lock`
+  resolution; pinned by `src/fields/slug/enforceSlugFreeze.test.ts`]. Send
+  `slugLock: true` in the publish write, per `docs/CONTENT_WORKFLOW.md`
+  step 4. Corrected 2026-09-27 (#250): this bullet used to promise that a new
+  `slug` sent without `slugLock` "leaves the URL byte-identical" with no
+  exception — do not rely on that for a document that stores `false`.
+  To rename deliberately,
   send `slugLock: false` alongside the new `slug` in the same write; the old
   path then redirects automatically and needs no hand-written redirect row.
   Prefer not renaming at all: the v3 slugs are the ones carrying external
