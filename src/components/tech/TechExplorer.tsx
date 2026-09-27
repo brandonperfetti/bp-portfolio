@@ -11,6 +11,7 @@ import {
 } from 'react'
 
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
+import { HistoryWriteGuard } from '@/components/tech/HistoryWriteGuard'
 import { TechCard } from '@/components/tech/TechCard'
 import {
   ListPagination,
@@ -337,6 +338,9 @@ export function TechExplorer({
 
   return (
     <div className="space-y-8">
+      {/* #249: contains Safari's history-write throttle for as long as the
+          explorer (the route's only URL writer) is mounted. */}
+      <HistoryWriteGuard />
       <div className="space-y-4 rounded-2xl border border-zinc-100 p-4 dark:border-zinc-700/40">
         <div className="relative">
           <input
