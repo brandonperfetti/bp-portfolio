@@ -27,7 +27,14 @@ one set, version-locked.
 
 - `ai` + `@ai-sdk/openai` + `@ai-sdk/anthropic` + `@ai-sdk/react` — Corvus
   chat, provider-switchable via env.
-- `openai` — image/audio endpoints retained from v3.
+- `openai` — **no importer in the tree** (corrected 2026-09-26, #224). This
+  line said "image/audio endpoints retained from v3"; that is not true of the
+  current tree and should not be relied on: those routes were dropped in
+  `5403381b` ("drop v3 openai routes"), and `git grep` for an `'openai'` or
+  `'openai/…'` module specifier across the repo finds none. Corvus talks to
+  OpenAI through `@ai-sdk/openai`, and the eval harness's `autoevals` carries
+  its own `openai@6`. The package is still declared; whether to remove it is
+  open.
 - `streamdown`, `react-markdown`, `remark-gfm` — streaming markdown render.
 - `zod` — request validation (chat, webhooks, forms).
 - `@upstash/ratelimit` + `@upstash/redis` — global rate limiting.
@@ -171,6 +178,25 @@ beside it had no effect. Verify with `pnpm config get minimumReleaseAge`
   twelve name `next`/`@next/*`/`eslint-config-next` at `16.2.11`, which is no
   longer locked (the tree runs `next@16.3.4`), and all eighteen are older than
   the gate's one day, so none of them is currently doing anything.
+
+### Known unmet peers
+
+`pnpm peers check` is the list. Each entry below is a decision, dated; a peer
+that appears there and not here has not been assessed.
+
+- **`openai@5.23.2` wants `zod ^3.23.8`; the tree runs `zod 4.x` — accepted
+  (2026-09-26, #224).** The peer is declared `optional` by the SDK and backs
+  only its zod helpers (`openai/helpers/zod`: `zodResponseFormat`,
+  `zodFunction`, `zodTextFormat`). Call sites checked: `git grep` for an
+  `'openai'` / `'openai/…'` specifier and for those three helpers across
+  `src`, `evals`, `scripts` and `tools` (and the whole repo) returns nothing
+  — no file imports the SDK at all, so the mismatch is inert. zod 4 is a
+  deliberate direct dependency and is not downgraded. Revisit if code ever
+  imports `openai` again: at that point either use a release whose peer
+  admits zod 4 or pin the interaction with a test.
+- **`mcp-handler@1.1.0` wants `@modelcontextprotocol/sdk` exactly `1.26.0`;
+  the tree runs `1.30.0` — not yet assessed** (seen 2026-09-26). Requester:
+  `@payloadcms/plugin-mcp` (so it moves with the Payload set).
 
 Residual advisories that cannot be fixed today are tracked in #100, not here:
 each is dev-only, non-exploitable in this usage, or has no published fix, and
