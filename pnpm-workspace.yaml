@@ -39,6 +39,16 @@ overrides:
   valibot: '^1.4.2' # Storybook MCP addon (dev)
   'brace-expansion@1': '^1.1.18'
   'brace-expansion@5': '^5.0.9'
+  # browserslist (#232, 2026-09-26): floor at the patched release for
+  # GHSA-c83g-rgw3-j3cx + GHSA-73wf-gq98-2v4g (High ×2, <4.28.7). Build-time
+  # only (@babel/helper-compilation-targets ^4.24.0, webpack ^4.24.0). Every
+  # requester's range already admits the fix, but `pnpm update browserslist`
+  # (and `pnpm update 'browserslist@^4.28.7'`) left 4.28.6 in the lockfile, so
+  # this override is the lever pnpm leaves us: pnpm will not move an in-range
+  # version on its own (the same behaviour #195 hit with lightningcss, above).
+  # It stays inside every declared range.
+  # Drop it once a from-scratch resolve lands >=4.28.7 without it.
+  browserslist: '^4.28.7'
   # better-sqlite3: evalite's results DB. v11 uses the NAN-style ObjectWrap
   # pattern, which aborts node at worker-thread teardown ("Assertion failed:
   # (env) != nullptr" in RemoveEnvironmentCleanupHook, exit 134) — measured
@@ -59,6 +69,14 @@ allowBuilds:
   esbuild: true
   sharp: true
   unrs-resolver: true
+# Release-age gate (#222, 2026-09-26): pnpm refuses to resolve any version
+# published less than this many MINUTES ago (1440 = 1 day). It applies when a
+# version is resolved (add/update/an install that re-resolves), not to a
+# frozen-lockfile install of versions already locked. Before 2026-09-26 the
+# key was absent and the exclude list below guarded nothing. An entry below is
+# a deliberate, documented exception — add one only with a reason (e.g. a
+# same-day security patch), never to silence the gate.
+minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@next/env@16.2.11'
   - '@next/swc-darwin-arm64@16.2.11'

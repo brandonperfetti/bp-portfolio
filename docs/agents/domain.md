@@ -11,9 +11,18 @@ neither of which exists yet — see "Where they would live" below.
 
 The setup skill lists `pnpm-workspace.yaml` as a monorepo signal. This repo has one, and it is a
 **false positive**. pnpm 11 reads its settings from `pnpm-workspace.yaml` rather than from
-`package.json`, so the file exists here purely to hold `overrides`, `allowBuilds` and
-`minimumReleaseAgeExclude`. Its `packages:` list is `['.']` — the repo root itself, not a set of
-sub-packages.
+`package.json`, so the file exists here purely to hold `overrides`, `allowBuilds`,
+`minimumReleaseAge` and `minimumReleaseAgeExclude`. Its `packages:` list is `['.']` — the repo root
+itself, not a set of sub-packages.
+
+**Release-age gate (corrected 2026-09-26, #222).** This paragraph previously listed only
+`minimumReleaseAgeExclude`, which read as though a release-age gate were in force; it was not — the
+`minimumReleaseAge` key was absent, so the exclude list guarded nothing. The key is now set to
+`1440` (minutes, i.e. one day): `pnpm config get minimumReleaseAge` returns `1440`, and pnpm refuses
+to resolve any version published less than a day ago. The gate applies when a version is
+_resolved_ (`pnpm add`, `pnpm update`, a re-resolving install); a `--frozen-lockfile` install of
+versions already in the lockfile is not re-checked. Before choosing a version, read the key; an
+exclude entry is a documented exception, see `docs/DEPENDENCIES.md` § "Release-age gate".
 
 The three checks that actually settle it, all negative:
 
