@@ -4,6 +4,17 @@
 # The nightly connection doubles as the free-tier keep-alive for BOTH
 # projects (a free Supabase project pauses after ~7 idle days).
 #
+# Where the dumps go: the PRIVATE Cloudflare R2 bucket bp-portfolio-db-backups,
+# kept off Supabase so a backup survives losing its source (#181). Never an
+# Actions artifact: artifacts on a public repo are downloadable by any
+# logged-in GitHub user, which left the passphrase as the only wall.
+# Object key: <target>/<YYYY-MM-DD>/db-<target>-<YYYY-MM-DDTHHMMSSZ>.dump.enc,
+# so the lexicographically greatest key under <target>/ is the newest backup
+# (scripts/dev-db-restore.sh relies on that).
+# Retention: the bucket's lifecycle rule `expire-backups-30d` deletes objects
+# after 30 days. It is the ONLY retention mechanism — this workflow never
+# deletes, so do not add one here.
+#
 # Required repo secrets (Settings → Secrets and variables → Actions):
 #   SUPABASE_DB_URL          — STAGING session-mode pooler string (port 5432,
 #                              username postgres.<project-ref>). Copy it whole
@@ -16,16 +27,23 @@
 #   SUPABASE_DB_URL_PROD     — PRODUCTION session-mode pooler string.
 #   BACKUP_PASSPHRASE_PROD   — production encryption key. Fresh value — never
 #                              reuse the staging passphrase.
+#   R2_BACKUP_ACCESS_KEY_ID      — R2 API token (Object Read & Write, scoped to
+#   R2_BACKUP_SECRET_ACCESS_KEY    the bucket only): its S3 access key pair.
+#   R2_BACKUP_ENDPOINT           — https://<account-id>.r2.cloudflarestorage.com
 #
-# Restore (locally — use the passphrase matching the artifact's target):
+# Restore: `pnpm db:local:refresh` (scripts/dev-db-restore.sh) fetches the
+# newest object from R2 and runs, with the passphrase matching the target:
 #   openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
-#     -in db-<target>-YYYY-MM-DD.dump.enc -out db.dump -pass env:BACKUP_PASSPHRASE
+#     -in db-<target>-<stamp>.dump.enc -out db.dump -pass env:BACKUP_PASSPHRASE
 #   pg_restore --clean --if-exists --no-owner --no-privileges \
 #     -d "$TARGET_DB_URL" db.dump
 #
 # Notes:
 # - This repo is public: dumps contain drafts, gated content, and contact
-#   emails, so the artifacts MUST stay encrypted. Never upload the plaintext.
+#   emails, so they MUST stay encrypted even in the private bucket. Never
+#   upload the plaintext.
+# - The upload uses the AWS CLI preinstalled on ubuntu-latest (R2 is
+#   S3-compatible; region `auto`), so there is no third-party action to pin.
 # - pg_dump major version must match the server (Postgres 17), hence the
 #   PGDG client install.
 # - GitHub disables cron workflows after 60 days without repo activity;
@@ -45,6 +63,10 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # A bucket name, not a secret. scripts/dev-db-restore.sh defaults to the same.
+  R2_BACKUP_BUCKET: bp-portfolio-db-backups
 
 jobs:
   dump:
@@ -94,18 +116,36 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$PASSPHRASE" || { echo "::error::${{ matrix.pass_secret }} secret is not set"; exit 1; }
-          stamp=$(date -u +%Y-%m-%d)
+          # A time in the name: a manual dispatch on the same day as the
+          # nightly run must not overwrite it.
+          stamp=$(date -u +%Y-%m-%dT%H%M%SZ)
           out="db-${{ matrix.target }}-${stamp}.dump.enc"
           openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
             -in db.dump -out "$out" -pass env:PASSPHRASE
           shred -u db.dump
-          echo "ARTIFACT_FILE=${out}" >> "$GITHUB_ENV"
-          echo "Encrypted backup: ${out} ($(stat -c%s "$out") bytes)" >> "$GITHUB_STEP_SUMMARY"
+          echo "BACKUP_FILE=${out}" >> "$GITHUB_ENV"
+          echo "BACKUP_KEY=${{ matrix.target }}/${stamp%%T*}/${out}" >> "$GITHUB_ENV"
 
-      - name: Upload encrypted artifact (14-day retention)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ARTIFACT_FILE }}
-          path: ${{ env.ARTIFACT_FILE }}
-          retention-days: 14
-          if-no-files-found: error
+      - name: Upload encrypted dump to R2 (${{ matrix.target }})
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
+          # The endpoint rides in the environment like the keys (AWS CLI >= 2.13
+          # reads AWS_ENDPOINT_URL), so no R2 value is ever on a command line.
+          AWS_ENDPOINT_URL: ${{ secrets.R2_BACKUP_ENDPOINT }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: 'true'
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ACCESS_KEY_ID" || { echo "::error::R2_BACKUP_ACCESS_KEY_ID secret is not set"; exit 1; }
+          test -n "$AWS_SECRET_ACCESS_KEY" || { echo "::error::R2_BACKUP_SECRET_ACCESS_KEY secret is not set"; exit 1; }
+          test -n "$AWS_ENDPOINT_URL" || { echo "::error::R2_BACKUP_ENDPOINT secret is not set"; exit 1; }
+          aws s3 cp "$BACKUP_FILE" "s3://${R2_BACKUP_BUCKET}/${BACKUP_KEY}" \
+            --only-show-errors --no-progress
+          # Read it back: a backup counts once the bucket holds all of it.
+          local_size=$(stat -c%s "$BACKUP_FILE")
+          remote_size=$(aws s3api head-object --bucket "$R2_BACKUP_BUCKET" \
+            --key "$BACKUP_KEY" --query ContentLength --output text)
+          test "$remote_size" = "$local_size" || { echo "::error::R2 object is ${remote_size} bytes, local file ${local_size}"; exit 1; }
+          rm -f "$BACKUP_FILE"
+          echo "Encrypted backup: r2://${R2_BACKUP_BUCKET}/${BACKUP_KEY} (${remote_size} bytes)" >> "$GITHUB_STEP_SUMMARY"

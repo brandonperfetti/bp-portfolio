@@ -42,6 +42,194 @@ export const BYPASS_TOKEN_ENV = 'VERCEL_AUTOMATION_BYPASS_SECRET'
 export const BYPASS_HEADER = 'x-vercel-protection-bypass'
 
 /**
+ * Whether a request goes to the same origin as the page being captured.
+ *
+ * @remarks Compares `URL#origin`, which folds scheme, host case and default
+ * ports, so `https://a.test` and `https://A.test:443/x` match while a subdomain,
+ * another port or `http` do not. An unparseable URL — or an opaque one such as
+ * `data:`, whose origin is the string `"null"` — is never the target.
+ *
+ * @param requestUrl - The URL the page is requesting.
+ * @param targetUrl - The URL being captured.
+ * @returns `true` only when both parse and their origins are equal.
+ */
+export function isTargetOrigin(requestUrl, targetUrl) {
+  try {
+    const target = new URL(targetUrl).origin
+    return target !== 'null' && new URL(requestUrl).origin === target
+  } catch {
+    return false
+  }
+}
+
+/** Most redirect hops followed for one request before it is aborted. */
+export const MAX_BYPASS_REDIRECTS = 10
+
+/**
+ * Request headers that must never follow a request to another origin: the
+ * bypass secret, and anything carrying the deployment's own credentials.
+ */
+const ORIGIN_BOUND_HEADERS = new Set([
+  BYPASS_HEADER,
+  'cookie',
+  'authorization',
+  'proxy-authorization',
+])
+
+/**
+ * The headers for one hop: the secret added on the captured page's origin,
+ * and the origin-bound headers stripped everywhere else.
+ *
+ * @param url - The hop's URL.
+ * @param targetUrl - The URL being captured.
+ * @param headers - The browser request's own headers.
+ * @param token - The bypass secret.
+ * @returns The headers to send on this hop.
+ */
+export function hopHeaders(url, targetUrl, headers, token) {
+  if (isTargetOrigin(url, targetUrl))
+    return { ...headers, [BYPASS_HEADER]: token }
+  return Object.fromEntries(
+    Object.entries(headers).filter(
+      ([name]) => !ORIGIN_BOUND_HEADERS.has(name.toLowerCase()),
+    ),
+  )
+}
+
+/**
+ * The absolute URL a response redirects to, or `null` when it is not a
+ * followable redirect.
+ *
+ * @param response - A Playwright `APIResponse` (duck-typed: `status()`,
+ * `headers()`).
+ * @param fromUrl - The URL that produced the response, for a relative
+ * `Location`.
+ * @returns The resolved `Location`, or `null`.
+ */
+export function redirectTarget(response, fromUrl) {
+  const status = response.status()
+  if (status < 300 || status > 399 || status === 304) return null
+  const location = response.headers().location
+  if (!location) return null
+  try {
+    return new URL(location, fromUrl).href
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Follow a redirect chain one hop at a time, deciding per hop whether the
+ * bypass secret goes with it.
+ *
+ * @remarks Why by hand, and why every hop — off-site ones included:
+ * Playwright never routes a redirect hop the browser follows itself (the
+ * route handler runs for the first URL only; measured, CodeRabbit on
+ * PR #259). So any hop the browser followed would reach the deployment
+ * without the secret: a same-origin destination directly, or the way back
+ * from an off-site hop such as Clerk's handshake, which goes to Clerk's own
+ * domain and returns to the page (a Clerk development instance does this on
+ * every first document request). Every hop here is fetched with
+ * `maxRedirects: 0`; {@link hopHeaders} attaches the secret only on the
+ * captured page's origin and strips it, cookies and authorization on every
+ * other origin. The chain stops at the first non-redirect (`final`) or after
+ * {@link MAX_BYPASS_REDIRECTS} hops (`cap`).
+ *
+ * @param fetchHop - `(url, { method, headers, postData }) => APIResponse`,
+ * fetching ONE hop with redirects off.
+ * @param start - `{ url, method, headers, postData }` of the browser's
+ * request; `headers` are its own, without the secret.
+ * @param targetUrl - The URL being captured.
+ * @param token - The bypass secret.
+ * @returns `{ response, url, stop }` — the last response, the URL it came
+ * from, and why the chain stopped.
+ */
+export async function followRedirects(fetchHop, start, targetUrl, token) {
+  let { url, method = 'GET', postData } = start
+  for (let hop = 0; ; hop += 1) {
+    const headers = hopHeaders(url, targetUrl, start.headers, token)
+    const response = await fetchHop(url, { method, headers, postData })
+    const next = redirectTarget(response, url)
+    if (!next) return { response, url, stop: 'final' }
+    if (hop >= MAX_BYPASS_REDIRECTS) return { response, url, stop: 'cap' }
+    // Browser semantics: 303, and 301/302 after a POST, re-issue as GET.
+    const status = response.status()
+    if (
+      status === 303 ||
+      (method === 'POST' && (status === 301 || status === 302))
+    ) {
+      method = 'GET'
+      postData = undefined
+    }
+    url = next
+  }
+}
+
+/**
+ * Playwright route handler that sends the bypass secret to the captured
+ * page's origin only — on every redirect hop, and never to another origin.
+ *
+ * @remarks Headers passed to `route.continue()` "apply to both the routed
+ * request and any redirects it initiates" (Playwright `Route` docs), so
+ * `continue({ headers })` would hand the secret to a third party whenever a
+ * same-origin URL redirects off-site. A request to the captured origin is
+ * instead walked hop by hop through {@link followRedirects}, with the
+ * browser's own request headers, and the last response fulfilled; a runaway
+ * chain is aborted. A request that starts on any other origin is continued
+ * with no overrides.
+ *
+ * A fulfilled body keeps the URL the browser asked for. For a main-frame
+ * navigation whose chain ended somewhere else, `onRedirectedNavigation`
+ * receives the final URL so the caller can navigate there directly — the
+ * document then has the URL the app's router and relative links read, as
+ * resolved with the browser's own navigation headers (not a separate probe,
+ * which a redirect keyed on `Accept` would answer differently).
+ *
+ * Kept free of a Playwright import: `route` is duck-typed, so the decision and
+ * the wiring are unit-tested with a stub (`page-diff.test.ts`).
+ *
+ * @param route - A Playwright `Route`.
+ * @param targetUrl - The URL being captured.
+ * @param token - The bypass secret.
+ * @param {(finalUrl: string) => void} [onRedirectedNavigation] - Optional;
+ * called with the final URL when a main-frame navigation was redirected.
+ * @returns Resolves once the request has been continued, fulfilled or
+ * aborted.
+ */
+export async function routeWithBypass(
+  route,
+  targetUrl,
+  token,
+  onRedirectedNavigation,
+) {
+  const request = route.request()
+  if (!token || !isTargetOrigin(request.url(), targetUrl)) {
+    return route.continue()
+  }
+  const { response, url, stop } = await followRedirects(
+    (hopUrl, init) => route.fetch({ ...init, url: hopUrl, maxRedirects: 0 }),
+    {
+      url: request.url(),
+      method: request.method(),
+      headers: request.headers(),
+      postData: request.postDataBuffer() ?? undefined,
+    },
+    targetUrl,
+    token,
+  )
+  if (stop === 'cap') return route.abort('failed')
+  if (
+    url !== request.url() &&
+    onRedirectedNavigation &&
+    request.isNavigationRequest() &&
+    !request.frame().parentFrame()
+  ) {
+    onRedirectedNavigation(url)
+  }
+  return route.fulfill({ response })
+}
+
+/**
  * CSS injected into both pages before capture.
  *
  * @remarks Reduced-motion emulation already makes this site's animated

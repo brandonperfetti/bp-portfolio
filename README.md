@@ -185,7 +185,8 @@ GitFlow: `master` → production ([brandonperfetti.com](https://brandonperfetti.
 builds with corepack-pinned pnpm; migrations run on deploy (`pnpm migrate &&
 pnpm build` — the committed chain is idempotent and tracked in
 `payload_migrations`, so re-runs no-op). The staging and production databases
-each get nightly encrypted `pg_dump` backups via GitHub Actions.
+each get nightly encrypted `pg_dump` backups via GitHub Actions, stored in a
+private Cloudflare R2 bucket.
 
 ## Documentation map
 

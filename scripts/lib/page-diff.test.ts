@@ -2,18 +2,25 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  BYPASS_HEADER,
   BYPASS_TOKEN_ENV,
   DEFAULT_OUT_DIR,
   DEFAULT_PIXEL_THRESHOLD,
   DEFAULT_THRESHOLD_PERCENT,
   DEFAULT_VIEWPORTS,
   FREEZE_CSS,
+  MAX_BYPASS_REDIRECTS,
   compareFrames,
+  followRedirects,
+  hopHeaders,
   formatSummary,
+  isTargetOrigin,
   parseArgs,
   parseMasks,
   parseViewports,
   redactUrl,
+  redirectTarget,
+  routeWithBypass,
   verdict,
 } from './page-diff.mjs'
 
@@ -153,6 +160,305 @@ describe('redactUrl', () => {
       'https://a.test/page?draft=true',
     )
     expect(redactUrl('not a url')).toBe('not a url')
+  })
+})
+
+describe('bypass header scoping (#252)', () => {
+  const target = 'https://staging.example.test/about?draft=true'
+  const token = 'test-bypass-token'
+
+  it('treats only the exact origin of the captured page as the target', () => {
+    expect(
+      isTargetOrigin('https://staging.example.test/_next/x.js', target),
+    ).toBe(true)
+    // URL#origin folds host case and the default port.
+    expect(
+      isTargetOrigin('https://STAGING.example.test:443/img.png', target),
+    ).toBe(true)
+    expect(isTargetOrigin('https://res.cloudinary.com/a.png', target)).toBe(
+      false,
+    )
+    expect(
+      isTargetOrigin('https://cdn.staging.example.test/a.png', target),
+    ).toBe(false)
+    expect(isTargetOrigin('https://example.test/a.png', target)).toBe(false)
+    expect(isTargetOrigin('http://staging.example.test/a.png', target)).toBe(
+      false,
+    )
+    expect(
+      isTargetOrigin('https://staging.example.test:8443/a.png', target),
+    ).toBe(false)
+    expect(isTargetOrigin('data:image/png;base64,AAAA', target)).toBe(false)
+    expect(isTargetOrigin('not a url', target)).toBe(false)
+    expect(isTargetOrigin('https://staging.example.test/', 'not a url')).toBe(
+      false,
+    )
+  })
+
+  it('adds the secret on the captured origin and keeps the request headers', () => {
+    expect(
+      hopHeaders(
+        'https://staging.example.test/api/x',
+        target,
+        { accept: 'text/html', cookie: 'c=1' },
+        token,
+      ),
+    ).toEqual({ accept: 'text/html', cookie: 'c=1', [BYPASS_HEADER]: token })
+  })
+
+  it('sends another origin neither the secret nor the deployment credentials', () => {
+    const headers = {
+      accept: 'text/html',
+      Cookie: 'c=1',
+      authorization: 'Bearer x',
+      'proxy-authorization': 'Basic y',
+      [BYPASS_HEADER]: token,
+    }
+    for (const url of [
+      'https://res.cloudinary.com/demo/image/upload/a.png',
+      'https://abc.public.blob.vercel-storage.com/a.webp',
+      'https://clerk.example.test/v1/client/handshake',
+    ]) {
+      expect(hopHeaders(url, target, headers, token)).toEqual({
+        accept: 'text/html',
+      })
+    }
+  })
+
+  /** A fake response: a status plus response headers. */
+  const res = (status: number, headers: Record<string, string> = {}) => ({
+    status: () => status,
+    headers: () => headers,
+  })
+  type FakeResponse = ReturnType<typeof res>
+
+  /**
+   * A fake same-origin site: a redirect map plus a protected destination that
+   * answers 401 without the secret — the shape of a Vercel-protected deploy.
+   */
+  const site =
+    (redirects: Record<string, [number, string]>) =>
+    (url: string, headers: Record<string, string>): FakeResponse => {
+      const hop = redirects[url]
+      if (hop) return res(hop[0], { location: hop[1] })
+      return headers[BYPASS_HEADER] === token ? res(200) : res(401)
+    }
+
+  /** A Playwright `Route` stand-in that records what the handler did. */
+  const stubRoute = (
+    url: string,
+    serve: (
+      url: string,
+      headers: Record<string, string>,
+    ) => FakeResponse = () => res(200),
+    kind: 'subresource' | 'main-frame' | 'iframe' = 'subresource',
+  ) => {
+    const calls: { method: string; args: unknown[] }[] = []
+    return {
+      calls,
+      route: {
+        request: () => ({
+          url: () => url,
+          method: () => 'GET',
+          headers: () => ({ accept: '*/*', cookie: 'session=deployment-only' }),
+          postDataBuffer: () => null,
+          isNavigationRequest: () => kind !== 'subresource',
+          frame: () => ({
+            parentFrame: () => (kind === 'iframe' ? {} : null),
+          }),
+        }),
+        continue: async (...args: unknown[]) => {
+          calls.push({ method: 'continue', args })
+        },
+        abort: async (...args: unknown[]) => {
+          calls.push({ method: 'abort', args })
+        },
+        fetch: async (init: {
+          url: string
+          headers: Record<string, string>
+        }) => {
+          calls.push({ method: 'fetch', args: [init] })
+          return serve(init.url, init.headers)
+        },
+        fulfill: async (init: { response: FakeResponse }) => {
+          calls.push({
+            method: 'fulfill',
+            args: [{ status: init.response.status() }],
+          })
+        },
+      },
+    }
+  }
+
+  /** The URLs a stub route fetched, in order, and whether each carried the secret. */
+  const fetched = (calls: { method: string; args: unknown[] }[]) =>
+    calls
+      .filter((c) => c.method === 'fetch')
+      .map((c) => {
+        const init = c.args[0] as {
+          url: string
+          headers: Record<string, string>
+          maxRedirects: number
+        }
+        expect(init.maxRedirects).toBe(0)
+        const secret = init.headers[BYPASS_HEADER] === token ? 'SECRET' : 'none'
+        const cookie = init.headers.cookie ? ' +cookie' : ''
+        return `${init.url} ${secret}${cookie}`
+      })
+
+  it('continues a cross-origin request with no header override', async () => {
+    const stub = stubRoute('https://res.cloudinary.com/a.png')
+    await routeWithBypass(stub.route, target, token)
+    expect(stub.calls).toEqual([{ method: 'continue', args: [] }])
+    expect(JSON.stringify(stub.calls)).not.toContain(token)
+  })
+
+  it('carries the secret through every same-origin redirect hop to a protected destination', async () => {
+    // Playwright never routes a hop the browser follows itself, so a
+    // fulfilled 302 would reach /dest headerless and capture the 401 page
+    // (measured, CodeRabbit on PR #259). Each hop is fetched here instead.
+    const base = 'https://staging.example.test'
+    const stub = stubRoute(
+      `${base}/articles/old-slug`,
+      site({
+        [`${base}/articles/old-slug`]: [308, '/topics/web/old-slug'],
+        [`${base}/topics/web/old-slug`]: [302, `${base}/topics/web/new-slug`],
+      }),
+    )
+    await routeWithBypass(stub.route, target, token)
+    expect(fetched(stub.calls)).toEqual([
+      `${base}/articles/old-slug SECRET +cookie`,
+      `${base}/topics/web/old-slug SECRET +cookie`,
+      `${base}/topics/web/new-slug SECRET +cookie`,
+    ])
+    expect(stub.calls.at(-1)).toEqual({
+      method: 'fulfill',
+      args: [{ status: 200 }],
+    })
+  })
+
+  it('walks an off-site round trip — the third party gets no secret or cookie, the way back gets the secret', async () => {
+    // Clerk's handshake shape: the page 307s to Clerk's domain, which 307s
+    // back. A browser-followed hop is never routed, so the way back would
+    // reach the deployment without the secret; every hop is fetched here.
+    const base = 'https://staging.example.test'
+    const clerk = 'https://clerk.example.test/v1/client/handshake'
+    const stub = stubRoute(
+      `${base}/page`,
+      site({
+        [`${base}/page`]: [307, `${clerk}?redirect_url=x`],
+        [`${clerk}?redirect_url=x`]: [307, `${base}/page?__clerk_db_jwt=j`],
+        [`${base}/page?__clerk_db_jwt=j`]: [307, `${base}/page-2`],
+      }),
+    )
+    await routeWithBypass(stub.route, target, token)
+    expect(fetched(stub.calls)).toEqual([
+      `${base}/page SECRET +cookie`,
+      `${clerk}?redirect_url=x none`,
+      `${base}/page?__clerk_db_jwt=j SECRET +cookie`,
+      `${base}/page-2 SECRET +cookie`,
+    ])
+    expect(stub.calls.at(-1)).toEqual({
+      method: 'fulfill',
+      args: [{ status: 200 }],
+    })
+  })
+
+  it('reports where a redirected main-frame navigation ended, and nothing else', async () => {
+    const base = 'https://staging.example.test'
+    const serve = site({ [`${base}/a/vary`]: [302, '/b/dest'] })
+    const seen: string[] = []
+    const record = (finalUrl: string) => seen.push(finalUrl)
+
+    await routeWithBypass(
+      stubRoute(`${base}/a/vary`, serve, 'main-frame').route,
+      target,
+      token,
+      record,
+    )
+    expect(seen).toEqual([`${base}/b/dest`])
+
+    // A redirected image or iframe keeps its URL; a direct hit reports nothing.
+    await routeWithBypass(
+      stubRoute(`${base}/a/vary`, serve).route,
+      target,
+      token,
+      record,
+    )
+    await routeWithBypass(
+      stubRoute(`${base}/a/vary`, serve, 'iframe').route,
+      target,
+      token,
+      record,
+    )
+    await routeWithBypass(
+      stubRoute(`${base}/b/dest`, serve, 'main-frame').route,
+      target,
+      token,
+      record,
+    )
+    expect(seen).toEqual([`${base}/b/dest`])
+  })
+
+  it('aborts a same-origin redirect loop after the hop cap', async () => {
+    const base = 'https://staging.example.test'
+    const stub = stubRoute(
+      `${base}/a`,
+      site({ [`${base}/a`]: [302, '/b'], [`${base}/b`]: [302, '/a'] }),
+    )
+    await routeWithBypass(stub.route, target, token)
+    expect(fetched(stub.calls)).toHaveLength(MAX_BYPASS_REDIRECTS + 1)
+    expect(stub.calls.at(-1)).toEqual({ method: 'abort', args: ['failed'] })
+  })
+})
+
+describe('redirect following (#252)', () => {
+  const target = 'https://staging.example.test/'
+  const token = 'test-bypass-token'
+
+  it('reads a followable Location, relative or absolute', () => {
+    const r = (status: number, location?: string) => ({
+      status: () => status,
+      headers: () => (location ? { location } : {}),
+    })
+    expect(redirectTarget(r(302, '/x?y=1'), 'https://a.test/p/q')).toBe(
+      'https://a.test/x?y=1',
+    )
+    expect(redirectTarget(r(308, 'https://b.test/'), 'https://a.test/')).toBe(
+      'https://b.test/',
+    )
+    expect(redirectTarget(r(304, '/x'), 'https://a.test/')).toBeNull()
+    expect(redirectTarget(r(200, '/x'), 'https://a.test/')).toBeNull()
+    expect(redirectTarget(r(302), 'https://a.test/')).toBeNull()
+  })
+
+  it('re-issues a 303 (and a 301/302 after POST) as a GET without a body', async () => {
+    const seen: string[] = []
+    const result = await followRedirects(
+      async (url: string, init: { method: string; postData?: unknown }) => {
+        seen.push(`${init.method} ${url} ${init.postData ? 'body' : 'nobody'}`)
+        if (url.endsWith('/form')) {
+          return { status: () => 303, headers: () => ({ location: '/done' }) }
+        }
+        return { status: () => 200, headers: () => ({}) }
+      },
+      {
+        url: 'https://staging.example.test/form',
+        method: 'POST',
+        headers: {},
+        postData: 'a=1',
+      },
+      target,
+      token,
+    )
+    expect(seen).toEqual([
+      'POST https://staging.example.test/form body',
+      'GET https://staging.example.test/done nobody',
+    ])
+    expect(result).toMatchObject({
+      url: 'https://staging.example.test/done',
+      stop: 'final',
+    })
   })
 })
 

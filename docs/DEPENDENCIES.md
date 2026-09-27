@@ -27,7 +27,14 @@ one set, version-locked.
 
 - `ai` + `@ai-sdk/openai` + `@ai-sdk/anthropic` + `@ai-sdk/react` — Corvus
   chat, provider-switchable via env.
-- `openai` — image/audio endpoints retained from v3.
+- `openai` — **no importer in the tree** (corrected 2026-09-26, #224). This
+  line said "image/audio endpoints retained from v3"; that is not true of the
+  current tree and should not be relied on: those routes were dropped in
+  `5403381b` ("drop v3 openai routes"), and `git grep` for an `'openai'` or
+  `'openai/…'` module specifier across the repo finds none. Corvus talks to
+  OpenAI through `@ai-sdk/openai`, and the eval harness's `autoevals` carries
+  its own `openai@6` (`[measured 2026-09-26, pnpm why openai]`: `6.48.0`). The package is still declared; whether to remove it is
+  open.
 - `streamdown`, `react-markdown`, `remark-gfm` — streaming markdown render.
 - `zod` — request validation (chat, webhooks, forms).
 - `@upstash/ratelimit` + `@upstash/redis` — global rate limiting.
@@ -80,6 +87,16 @@ one set, version-locked.
   (`@storybook/nextjs-vite`, addon-a11y, addon-mcp); `eslint` 9 +
   `eslint-config-next` + `eslint-plugin-tsdoc`; `prettier` +
   tailwind plugin; `husky` + lint-staged.
+- `esbuild` (**devDependency, exact `0.28.1`**, added 2026-09-26 for #229) —
+  no code imports it; it exists to **provide a peer**. `vite@8` declares
+  `esbuild` as an optional peer (`^0.27.0 || ^0.28.0`), and with no root
+  copy pnpm satisfied it with the `0.25.12` that `drizzle-kit` brings, so the
+  peer was unmet across the Vitest/Storybook toolchain (and webpack's
+  minimizer took the same `0.25.12`). A root copy is what peer resolution
+  reaches first. It is pinned to the `0.28.1` that `tsx` (`~0.28.0`) already
+  locks, so the tree still carries three `@esbuild/*` families (`0.18.20`,
+  `0.25.12`, `0.28.1`) — a caret range resolves `0.28.2` and would add a
+  fourth [measured]. Move it together with `tsx`'s copy.
 
 ## Observability
 
@@ -149,11 +166,58 @@ image-size --prod` returns nothing. `warn-only: true` stays in force on the
   every dependency, dev-only included, so it would otherwise still redden this
   check on a path that carries no runtime risk. #100 owns following up on the
   advisory itself; this entry only tracks why the check is warn-only.
-- **Not required/blocking.** Branch protection is a separate decision (#91,
-  out of scope) — tune first, require later.
+- **Required on `master`, where it passes; nothing required on `develop`.**
+  `[measured 2026-09-27, GitHub rules API]` `dependency-review` is one of
+  `master`'s four required status checks, and `warn-only` lets it pass there
+  whatever it finds; `develop` requires no status checks, so a red run on a
+  `develop` PR is held by review, not by branch protection. Corrected
+  2026-09-27 (#260): this bullet used to read "Not required/blocking. Branch
+  protection is a separate decision (#91, out of scope) — tune first, require
+  later." Do not rely on it; the requirement exists on `master`.
+
+### Release-age gate (#222)
+
+**Set 2026-09-26:** `minimumReleaseAge: 1440` in `pnpm-workspace.yaml` — pnpm
+refuses to resolve a version published less than one day (1440 minutes) ago.
+Before that date the key was absent and the `minimumReleaseAgeExclude` list
+beside it had no effect. Verify with `pnpm config get minimumReleaseAge`
+(`1440`).
+
+- **Where it bites:** resolution — `pnpm add`, `pnpm update`, and an install
+  that has to re-resolve. `[measured 2026-09-26, pnpm 11.24.0]` a
+  `--frozen-lockfile` install of a version that is already locked is **not**
+  re-checked, so the gate guards what enters the lockfile, not what is
+  already in it.
+- **Exceptions:** a `name@version` entry in `minimumReleaseAgeExclude`,
+  under the rule in `docs/SECURITY.md` § Dependency advisories (the case it
+  exists for: a same-day security patch). The entries present on 2026-09-26 predate the gate —
+  twelve name `next`/`@next/*`/`eslint-config-next` at `16.2.11`, which is no
+  longer locked (the tree runs `next@16.3.4`), and all eighteen are older than
+  the gate's one day (`[measured 2026-09-26, npm registry publish times]`: the
+  newest was published 2026-07-22), so none of them is currently doing
+  anything.
+
+### Known unmet peers
+
+`pnpm peers check` is the list. Each entry below is a decision, dated; a peer
+that appears there and not here has not been assessed.
+
+- **`openai@5.23.2` wants `zod ^3.23.8`; the tree runs `zod 4.x` — accepted
+  (2026-09-26, #224).** The peer is declared `optional` by the SDK and backs
+  only its zod helpers (`openai/helpers/zod`: `zodResponseFormat`,
+  `zodFunction`, `zodTextFormat`). Call sites checked: `git grep` for an
+  `'openai'` / `'openai/…'` specifier and for those three helpers across
+  `src`, `evals`, `scripts` and `tools` (and the whole repo) returns nothing
+  — no file imports the SDK at all, so the mismatch is inert. zod 4 is a
+  deliberate direct dependency and is not downgraded. Revisit if code ever
+  imports `openai` again: at that point either use a release whose peer
+  admits zod 4 or pin the interaction with a test.
+- **`mcp-handler@1.1.0` wants `@modelcontextprotocol/sdk` exactly `1.26.0`;
+  the tree runs `1.30.0` — not yet assessed** (seen 2026-09-26). Requester:
+  `@payloadcms/plugin-mcp` (so it moves with the Payload set).
 
 Residual advisories that cannot be fixed today are tracked in #100, not here:
-each is dev-only, non-exploitable in this usage, or has no published fix, and
-none should be force-overridden. `pnpm audit` / `pnpm audit --prod` is the
+each is dev-only, non-exploitable in this usage, or has no published fix; how
+they may be handled is `docs/SECURITY.md` § Dependency advisories. `pnpm audit` / `pnpm audit --prod` is the
 check; the wave-1 remediation (36 of 44 advisories) lives in the scoped
 `pnpm-workspace.yaml` overrides.

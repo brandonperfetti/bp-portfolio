@@ -271,6 +271,17 @@ export const getPageBySlugDraftAware = async (
  * produced — the route's static profile changes in the shape of the param, not
  * in kind.
  *
+ * **Every published page, by construction (#220).** `limit: 0`, not a large
+ * number: `limit: N` still caps a Payload `find` even with
+ * `pagination: false`, and `limit: 0` is the only unlimited form — the
+ * Gotcha in `.github/copilot-instructions.md` ("Payload `find`: `limit: N`
+ * still caps the result even with `pagination: false`"). This read used to
+ * carry `limit: 500`, so the sitemap's page half and `generateStaticParams`
+ * would have stopped at page 500 with no error and no log — the "one entry per
+ * published page" contract above broken at exactly the scale where nobody
+ * would look. The payload stays small at any realistic size: two varchar
+ * columns per row.
+ *
  * `'use cache: remote'` so a `pages` tag purge reaches every serverless
  * instance, not only the one that ran the hook (#118).
  */
@@ -282,7 +293,7 @@ export const getPublishedPagePaths = async (): Promise<string[]> => {
   const { docs } = await payload.find({
     collection: 'pages',
     draft: false,
-    limit: 500,
+    limit: 0,
     overrideAccess: false,
     pagination: false,
     select: { path: true, slug: true },
