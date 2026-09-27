@@ -23,9 +23,10 @@ import type { Post } from '../../../payload-types'
  *
  * **`/sitemap.xml` joins the group (#209).** The sitemap's cached assembly,
  * `getSitemapData` (`src/app/sitemap.ts`), carries the `posts` tag as well as
- * `pages`, so an article publish reaches it through the tag purge below — now
- * that it is a `'use cache: remote'` scope. It was a plain `'use cache'`, and
- * one per-instance copy starved articles and pages together:
+ * `pages`, so now that it is a `'use cache: remote'` scope an article publish
+ * is expected to reach it through the tag purge below — `[inference]`,
+ * verified only by #209's production check. It was a plain `'use cache'`, and
+ * `[inference]` one per-instance copy starved articles and pages together:
  * `[measured, prod, 2026-09-26]` two articles published between deploys never
  * reached the sitemap until a redeploy. The path purge expires the route's own
  * static prerender. See `revalidatePage.ts` for the full argument.
@@ -91,7 +92,8 @@ const POST_SURFACES =
  * revalidate": #209 replaced the aspirational `posts-sitemap` tag — fired here,
  * subscribed by nothing — with a `revalidatePath('/sitemap.xml')` in
  * `purgePostSurfaces` above, and moved the sitemap's cached assembly onto the
- * `:remote` tier so the `posts` purge reaches it on every instance.
+ * `:remote` tier so the `posts` purge is expected to reach it on every
+ * instance (`[inference]`, #209's production check).
  *
  * **Which transitions purge which path (#132), and why the rename purge is
  * NOT here.** #132 asked whether the published→published rename purge should

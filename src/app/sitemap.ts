@@ -29,22 +29,25 @@ import { getSiteUrl } from '@/lib/site'
  * `[measured, prod, 2026-09-26, #209]` a page and two articles published
  * after the `revalidatePath('/sitemap.xml')` fix stayed out of the sitemap
  * (61 URLs) for over an hour; a redeploy with no code change took it to 64.
- * One scope carries both tags, so one stale copy starved articles and pages
- * together.
+ * One scope carries both tags, so `[inference]` one stale copy starved
+ * articles and pages together.
  *
  * On `:remote` the entry is the platform's shared Runtime Cache — the tier
  * #118 measured fresh on the preview for the static detail route (5/5 timed
- * edit trials, 2026-08-28) — so the purge reaches the copy every instance
- * reads. The route stays `○` static
- * (`[measured, local next build, 2026-09-26]`: 6h revalidate / 1d expire,
+ * edit trials, 2026-08-28) — so the purge is expected to reach the copy every
+ * instance reads. `[inference]`: verified only by #209's production check; if
+ * it fails, the named fallback is to stop caching this assembly (the route
+ * goes dynamic). The route stays `○` static
+ * (`[measured, local next build, 2026-09-27]`: 6h revalidate / 1d expire,
  * `x-next-cache-tags` carrying `posts`, `pages` and `_N_T_/sitemap.xml`), so
  * the hooks' tag and path purges still expire the prerendered entry, and its
- * regeneration now reads a copy the purge could reach. Both inner reads were
- * already `:remote` (`getPublishedPagePaths`, `getPublishedPostSummaries`);
- * remote-in-remote is a supported nesting. The value is slugs and epoch-ms —
- * under 100 bytes an entry, so a few kilobytes at today's ~60 URLs and nowhere
- * near the 2 MB item ceiling that keeps the search index on the in-memory
- * tier.
+ * regeneration reads a copy the purge is expected to reach (`[inference]`, as
+ * above). Both inner reads were already `:remote` (`getPublishedPagePaths`,
+ * `getPublishedPostSummaries`); remote-in-remote is a supported nesting
+ * `[source, next 16.3.4 docs, use-cache-remote.md § Nesting rules]`. The
+ * value is slugs and epoch-ms — under 100 bytes an entry, so a few kilobytes
+ * at today's ~60 URLs and nowhere near the 2 MB item ceiling that keeps the
+ * search index on the in-memory tier.
  *
  * The future-dated publish gate reads `Date.now()`
  * (`isFuturePublicationDate`), which `cacheComponents` rejects during

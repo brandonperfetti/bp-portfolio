@@ -41,8 +41,10 @@ const DISALLOWED_PATHS = ['/admin$', '/admin/', '/api/']
  *   JSON-LD `image` (`articles/[slug]/ArticleView.tsx`,
  *   `resolvePageSocialImage` in `src/lib/cms/pageMetadata.ts`). Blocking it
  *   would stop Googlebot fetching the image a rich result shows, and a card
- *   crawler that honours robots (Twitterbot does) would render the link
- *   preview with no image.
+ *   crawler that honours robots would render the link preview with no
+ *   image. Twitterbot honours it: [stated, X developer docs, "Troubleshooting
+ *   Cards"; not re-read, the page answered HTTP 402 to a fetch on
+ *   2026-09-27].
  * - `/api/media/file/` — Payload's own media route. Production emits the
  *   public Blob origin as `media.url` (`src/lib/storage/mediaBlobUrl.ts`), so
  *   this is the fallback spelling rather than the live one — but it is where

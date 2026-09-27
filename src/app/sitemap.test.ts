@@ -197,18 +197,21 @@ describe('sitemap · placed articles (#153)', () => {
 })
 
 /**
- * Freshness without a redeploy (#209). Production kept a page and two articles
- * out of the sitemap for over an hour after they were published, while a
- * redeploy with no code change put them in: the cached assembly was on the
- * per-instance tier, so a hook's purge never reached the copy that was served.
+ * Freshness without a redeploy (#209). `[measured, prod, 2026-09-26]`
+ * production kept a page and two articles out of the sitemap for over an hour
+ * after they were published, while a redeploy with no code change put them in.
+ * `[inference]` the cached assembly was on the per-instance tier, so a hook's
+ * purge never reached the copy that was served — the diagnosis the shared tier
+ * below acts on, verified only by #209's production check.
  *
  * The fix is a property of the cache scope, not of the emit, so it is pinned
  * as one: the assembly lives on the shared `'use cache: remote'` tier and
  * carries BOTH collections' tags. A test over the emit alone would pass against
- * the broken tier, exactly as #209 predicted of the query-level test. The emit
- * tests below still cover both halves the ticket names — the article case and
- * the parent/child page case — because a fix that kept only one collection's
- * tag would starve the other.
+ * the broken tier, exactly as #209 predicted of the query-level test. The two
+ * emission tests below cover both halves the ticket names — the article case
+ * and the parent/child page case — but only as emission: `cacheTag` and
+ * `cacheLife` are mocked, so they pass on either tier and say nothing about
+ * freshness. The tier scan and the tag test are the fix-sensitive ones.
  */
 describe('sitemap freshness (#209)', () => {
   it('caches the assembly on the shared remote tier — one scope, never plain `use cache`', () => {
@@ -238,7 +241,7 @@ describe('sitemap freshness (#209)', () => {
     expect(tags).toContain('pages')
   })
 
-  it('lists an article published after an earlier read (article case)', async () => {
+  it('emits a newly listed article alongside the existing ones (article case)', async () => {
     mocks.getSiteUrl.mockReturnValue('https://example.com')
     mocks.getPublishedPagePaths.mockResolvedValue([])
     mocks.getAllArticles.mockResolvedValue([
@@ -257,7 +260,7 @@ describe('sitemap freshness (#209)', () => {
     expect(after).toContain('https://example.com/articles/older')
   })
 
-  it('lists a parent published after its children, alongside them (parent/child page case)', async () => {
+  it('emits a parent page alongside its children once it is listed (parent/child page case)', async () => {
     mocks.getSiteUrl.mockReturnValue('https://example.com')
     mocks.getAllArticles.mockResolvedValue([])
     // The production shape #209 was filed on: four children listed, the
