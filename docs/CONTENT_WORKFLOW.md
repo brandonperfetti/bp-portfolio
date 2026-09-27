@@ -248,6 +248,8 @@ wrong or missing bypass header fails at the Vercel edge _before_ the
 route runs (a non-JSON `401 Protected deployment`); a wrong secret
 reaches the route and returns `{"ok":false,"error":"Unauthorized"}`.
 
+The Media guard rule and the ingest route's rails: `docs/SECURITY.md` § Media uploads.
+
 Server-side fetch → Media doc in Blob via the Local API (dimensions,
 sizes, and the whole image pipeline apply); the stored filename is the
 source URL's last two path segments joined with `-`, i.e.
