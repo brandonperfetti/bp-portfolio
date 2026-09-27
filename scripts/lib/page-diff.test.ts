@@ -2,18 +2,22 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  BYPASS_HEADER,
   BYPASS_TOKEN_ENV,
   DEFAULT_OUT_DIR,
   DEFAULT_PIXEL_THRESHOLD,
   DEFAULT_THRESHOLD_PERCENT,
   DEFAULT_VIEWPORTS,
   FREEZE_CSS,
+  bypassHeadersFor,
   compareFrames,
   formatSummary,
+  isTargetOrigin,
   parseArgs,
   parseMasks,
   parseViewports,
   redactUrl,
+  routeWithBypass,
   verdict,
 } from './page-diff.mjs'
 
@@ -153,6 +157,116 @@ describe('redactUrl', () => {
       'https://a.test/page?draft=true',
     )
     expect(redactUrl('not a url')).toBe('not a url')
+  })
+})
+
+describe('bypass header scoping (#252)', () => {
+  const target = 'https://staging.example.test/about?draft=true'
+  const token = 'test-bypass-token'
+
+  it('treats only the exact origin of the captured page as the target', () => {
+    expect(
+      isTargetOrigin('https://staging.example.test/_next/x.js', target),
+    ).toBe(true)
+    // URL#origin folds host case and the default port.
+    expect(
+      isTargetOrigin('https://STAGING.example.test:443/img.png', target),
+    ).toBe(true)
+    expect(isTargetOrigin('https://res.cloudinary.com/a.png', target)).toBe(
+      false,
+    )
+    expect(
+      isTargetOrigin('https://cdn.staging.example.test/a.png', target),
+    ).toBe(false)
+    expect(isTargetOrigin('https://example.test/a.png', target)).toBe(false)
+    expect(isTargetOrigin('http://staging.example.test/a.png', target)).toBe(
+      false,
+    )
+    expect(
+      isTargetOrigin('https://staging.example.test:8443/a.png', target),
+    ).toBe(false)
+    expect(isTargetOrigin('data:image/png;base64,AAAA', target)).toBe(false)
+    expect(isTargetOrigin('not a url', target)).toBe(false)
+    expect(isTargetOrigin('https://staging.example.test/', 'not a url')).toBe(
+      false,
+    )
+  })
+
+  it('adds the header to a same-origin request and keeps its own headers', () => {
+    expect(
+      bypassHeadersFor(
+        'https://staging.example.test/api/x',
+        target,
+        { accept: 'text/html' },
+        token,
+      ),
+    ).toEqual({ accept: 'text/html', [BYPASS_HEADER]: token })
+  })
+
+  it('leaves a cross-origin request untouched', () => {
+    for (const url of [
+      'https://res.cloudinary.com/demo/image/upload/a.png',
+      'https://abc.public.blob.vercel-storage.com/a.webp',
+      'https://avatars.githubusercontent.com/u/1',
+    ]) {
+      expect(bypassHeadersFor(url, target, {}, token)).toBeNull()
+    }
+  })
+
+  it('sends nothing when there is no token', () => {
+    expect(
+      bypassHeadersFor('https://staging.example.test/', target, {}, ''),
+    ).toBeNull()
+  })
+
+  /** A Playwright `Route` stand-in that records what the handler did. */
+  const stubRoute = (url: string) => {
+    const calls: { method: string; args: unknown[] }[] = []
+    const response = { status: () => 302 }
+    return {
+      calls,
+      response,
+      route: {
+        request: () => ({ url: () => url, headers: () => ({ accept: '*/*' }) }),
+        continue: async (...args: unknown[]) => {
+          calls.push({ method: 'continue', args })
+        },
+        fetch: async (...args: unknown[]) => {
+          calls.push({ method: 'fetch', args })
+          return response
+        },
+        fulfill: async (...args: unknown[]) => {
+          calls.push({ method: 'fulfill', args })
+        },
+      },
+    }
+  }
+
+  it('continues a cross-origin request with no header override', async () => {
+    const stub = stubRoute('https://res.cloudinary.com/a.png')
+    await routeWithBypass(stub.route, target, token)
+    expect(stub.calls).toEqual([{ method: 'continue', args: [] }])
+    expect(JSON.stringify(stub.calls)).not.toContain(token)
+  })
+
+  it('fetches a same-origin request without following redirects, then fulfills it', async () => {
+    // `continue({ headers })` would carry the secret onto an off-site
+    // redirect; fetching with maxRedirects 0 hands the redirect back to the
+    // browser, whose next hop is routed — and judged — on its own origin.
+    const stub = stubRoute('https://staging.example.test/go-elsewhere')
+    await routeWithBypass(stub.route, target, token)
+    expect(stub.calls).toEqual([
+      {
+        method: 'fetch',
+        args: [
+          {
+            headers: { accept: '*/*', [BYPASS_HEADER]: token },
+            maxRedirects: 0,
+          },
+        ],
+      },
+      { method: 'fulfill', args: [{ response: stub.response }] },
+    ])
   })
 })
 
