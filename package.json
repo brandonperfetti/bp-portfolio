@@ -110,6 +110,7 @@
     "@vitest/browser-playwright": "4.1.11",
     "@vitest/coverage-v8": "^4.1.11",
     "autoevals": "^0.3.0",
+    "esbuild": "0.28.1",
     "eslint": "^9.32.0",
     "eslint-config-next": "16.3.0",
     "eslint-plugin-tsdoc": "^0.5.2",

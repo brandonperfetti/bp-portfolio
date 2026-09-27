@@ -87,6 +87,16 @@ one set, version-locked.
   (`@storybook/nextjs-vite`, addon-a11y, addon-mcp); `eslint` 9 +
   `eslint-config-next` + `eslint-plugin-tsdoc`; `prettier` +
   tailwind plugin; `husky` + lint-staged.
+- `esbuild` (**devDependency, exact `0.28.1`**, added 2026-09-26 for #229) —
+  no code imports it; it exists to **provide a peer**. `vite@8` declares
+  `esbuild` as an optional peer (`^0.27.0 || ^0.28.0`), and with no root
+  copy pnpm satisfied it with the `0.25.12` that `drizzle-kit` brings, so the
+  peer was unmet across the Vitest/Storybook toolchain (and webpack's
+  minimizer took the same `0.25.12`). A root copy is what peer resolution
+  reaches first. It is pinned to the `0.28.1` that `tsx` (`~0.28.0`) already
+  locks, so the tree still carries three `@esbuild/*` families (`0.18.20`,
+  `0.25.12`, `0.28.1`) — a caret range resolves `0.28.2` and would add a
+  fourth [measured]. Move it together with `tsx`'s copy.
 
 ## Observability
 
