@@ -98,8 +98,8 @@ export const refuseCreateWithoutUpload: CollectionBeforeOperationHook = ({
  * them. `url` is not listed because a caller-sent `url` is never stored: the
  * `url` field's own `beforeChange` hook recomputes it from `filename` on
  * every write. Corrected 2026-09-27 (CodeRabbit round 1 on #271): this said
- * "the storage adapter recomputes it", which is the mechanism only with a
- * Blob token (`plugin-cloud-storage` `hooks/beforeChange.js:7-13`, through
+ * "the storage adapter recomputes it" — do not rely on that wording; it is
+ * the mechanism only with a Blob token (`plugin-cloud-storage` `hooks/beforeChange.js:7-13`, through
  * `generateFileURL`; `[source]`, unmeasured). Without one the adapter is off
  * and payload's own upload `url` field recomputes it
  * (`uploads/getBaseFields.js:108-116` → `generateFilePathOrURL.js:11-24`;
@@ -169,9 +169,9 @@ const sameStoredValue = (incoming: unknown, stored: unknown): boolean =>
  * addendum 2; `updateByID.js:98-106` passes no `originalDoc` to
  * `generateFileData`) — unless the request carries an `uploadEdits` query.
  * Corrected 2026-09-27 (CodeRabbit round 1 on #271, #270): this said that path
- * was "unmeasured and not covered"; it is now measured and guarded one step
- * earlier by `refuseUploadEditsRefetch`, because that re-fetch sets `req.file`
- * and so passes this hook.
+ * was "unmeasured and not covered" — do not rely on that; it is now measured
+ * and guarded one step earlier by `refuseUploadEditsRefetch`, because that
+ * re-fetch sets `req.file` and so passes this hook.
  */
 export const refuseFilelessFileRewrite: CollectionBeforeValidateHook = ({
   context,
@@ -208,6 +208,14 @@ export const refuseFilelessFileRewrite: CollectionBeforeValidateHook = ({
 const REFETCH_SOURCE_FIELDS = ['url', 'filename'] as const
 
 /**
+ * The `uploadEdits` refusal text, exported so tests pin the exact wording. Its
+ * own text, not the update guard's: this refusal fires on a `url` too, and on a
+ * bulk update even when the values sent are the stored ones.
+ */
+export const MEDIA_UPLOAD_EDITS_REFETCH_ERROR =
+  "A crop, resize or focal-point edit re-reads the Media row's own file, so it may send only that row's own url and filename, and a bulk update may send neither. To change the image, upload a new file; to attach an image from a URL use POST /api/media/ingest."
+
+/**
  * Refuse a Media update whose `uploadEdits` query would make Payload re-fetch
  * the file from a body `url`/`filename` that is not the row's own (#270; found
  * by CodeRabbit round 1 on #271, 2026-09-27).
@@ -230,30 +238,34 @@ const REFETCH_SOURCE_FIELDS = ['url', 'filename'] as const
  * any `beforeValidate` hook (`updateByID.js:98`, `update.js:135`), so the
  * guard is a `beforeOperation` hook, like the create guard.
  *
- * Measured on local disk (no Blob token), 2026-09-27, lane M: with a body `url`
+ * Measured on local disk (no Blob token), 2026-09-27 (#270, #271): with a body `url`
  * of `http://127.0.0.1:9/…` the update failed only because `safeFetch` refused
  * the loopback address ("Failed to fetch from http://127.0.0.1:9/…") — Payload
  * had tried to fetch the body's URL. With a body `filename` naming ANOTHER
  * row's file (and `url` `/api/media/file/<that name>`), the other row's file on
  * disk was overwritten with the 3×2 crop, although the request then failed
  * `filename`'s unique check and neither row changed. A public-host fetch was
- * not measured (no network in the lane).
+ * not measured (no network was used).
  *
  * Refused, with an `uploadEdits` query and no file: a `url` or `filename` that
  * differs from the stored row's value as read (after `afterRead`); and a
- * `where` (bulk) update carrying either — Payload re-fetches once for every
- * matched row (`update.js:135`), and no admin bulk-edit view sends
+ * `where` (bulk) update carrying either — Payload runs `generateFileData` once
+ * per request, before its loop over the matched rows (`update.js:135-145`),
+ * and hands that one result to every row's update, so there is no single
+ * stored row to compare against; and no admin bulk-edit view sends
  * `uploadEdits` (in `@payloadcms/ui` only the document view, the upload field
- * and bulk UPLOAD reference it). Passed: the admin's own crop and focal-point
- * edits — its edit view loads the doc with `findByID` at depth 0
- * (`@payloadcms/next` `views/Document/getDocumentData.js:23-36`), so the form
- * holds the same as-read `url` and `filename`, and it posts them with
- * `uploadEdits` in the action URL (`@payloadcms/ui`
- * `providers/DocumentInfo/index.js:296-306`); `[inference]` that the hidden
- * `url`/`filename` are posted, since Payload's crop cannot re-fetch without
- * them (measured: a crop with neither in the body changes nothing). Also
- * passed: any update without `uploadEdits`, any with a real file, and one
- * that sends neither field.
+ * and bulk UPLOAD reference it). Passed: an update that sends the row's own
+ * `url` and `filename` as read — measured on local disk, an admin-SHAPED crop
+ * and focal-point edit (the doc as `findByID` returns it, plus `uploadEdits`)
+ * pass and apply, and a crop with neither field changes nothing. That the
+ * REAL admin form posts that shape is `[inference]`, unmeasured: its edit
+ * view loads the doc with `findByID` at depth 0 (`@payloadcms/next`
+ * `views/Document/getDocumentData.js:23-36`) and puts `uploadEdits` in the
+ * action URL (`@payloadcms/ui` `providers/DocumentInfo/index.js:296-306`)
+ * `[source]`; that it posts the hidden `url`/`filename` is inferred from
+ * Payload's crop being unable to re-fetch without them. Unmeasured on Blob.
+ * Also passed: any update without `uploadEdits`, any with a real file, and
+ * one that sends neither field.
  */
 export const refuseUploadEditsRefetch: CollectionBeforeOperationHook = async ({
   args,
@@ -301,7 +313,7 @@ export const refuseUploadEditsRefetch: CollectionBeforeOperationHook = async ({
     : sent
   if (changed.length > 0) {
     throw new APIError(
-      MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR,
+      MEDIA_UPLOAD_EDITS_REFETCH_ERROR,
       400,
       { changed, uploadEdits: true },
       true,

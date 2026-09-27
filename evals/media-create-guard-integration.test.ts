@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   MEDIA_CREATE_WITHOUT_UPLOAD_ERROR,
   MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR,
+  MEDIA_UPLOAD_EDITS_REFETCH_ERROR,
 } from '../src/collections/Media'
 
 /**
@@ -407,7 +408,7 @@ describe.skipIf(!connectionString)(
             req: await reqWithUploadEdits(CROP),
           }),
         ).rejects.toMatchObject({
-          message: MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR,
+          message: MEDIA_UPLOAD_EDITS_REFETCH_ERROR,
           status: 400,
         })
         expect(await reread(row.id)).toMatchObject({
@@ -447,7 +448,7 @@ describe.skipIf(!connectionString)(
         // `filename`'s unique check (measured 2026-09-27).
         expect(Buffer.compare(await fs.readFile(victimPath), before)).toBe(0)
         expect(refusal).toMatchObject({
-          message: MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR,
+          message: MEDIA_UPLOAD_EDITS_REFETCH_ERROR,
           status: 400,
         })
         expect((await reread(attacker.id)).filename).toBe(attacker.filename)
@@ -472,7 +473,7 @@ describe.skipIf(!connectionString)(
             overrideAccess: true,
             req: await reqWithUploadEdits(CROP),
           }),
-        ).rejects.toMatchObject({ message: MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR })
+        ).rejects.toMatchObject({ message: MEDIA_UPLOAD_EDITS_REFETCH_ERROR })
         expect(await reread(row.id)).toMatchObject({ width: 6, height: 4 })
       } finally {
         await deleteRow(row.id)

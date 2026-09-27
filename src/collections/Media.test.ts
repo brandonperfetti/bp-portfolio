@@ -11,6 +11,7 @@ vi.mock('@/hooks/revalidateCollection', () => ({
 import {
   MEDIA_CREATE_WITHOUT_UPLOAD_ERROR,
   MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR,
+  MEDIA_UPLOAD_EDITS_REFETCH_ERROR,
   Media,
   refuseCreateWithoutUpload,
   refuseFilelessFileRewrite,
@@ -285,7 +286,7 @@ describe('refuseUploadEditsRefetch (#270, update path under ?uploadEdits)', () =
       },
     })
     await expect(result).rejects.toMatchObject({
-      message: MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR,
+      message: MEDIA_UPLOAD_EDITS_REFETCH_ERROR,
       status: 400,
       isPublic: true,
     })
@@ -299,7 +300,7 @@ describe('refuseUploadEditsRefetch (#270, update path under ?uploadEdits)', () =
         filename: 'other-post-cover.png',
       },
     })
-    await expect(result).rejects.toThrow(MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR)
+    await expect(result).rejects.toThrow(MEDIA_UPLOAD_EDITS_REFETCH_ERROR)
   })
 
   it('refuses a focal-point-only uploadEdits carrying a foreign url (a changed focal point re-fetches too)', async () => {
@@ -307,7 +308,7 @@ describe('refuseUploadEditsRefetch (#270, update path under ?uploadEdits)', () =
       { id: 7, data: { url: 'https://attacker.example/x.png' } },
       { query: { uploadEdits: { focalPoint: { x: 10, y: 90 } } } },
     )
-    await expect(result).rejects.toThrow(MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR)
+    await expect(result).rejects.toThrow(MEDIA_UPLOAD_EDITS_REFETCH_ERROR)
   })
 
   it('refuses a where (bulk) update carrying url or filename under uploadEdits, without reading any row', async () => {
@@ -315,7 +316,7 @@ describe('refuseUploadEditsRefetch (#270, update path under ?uploadEdits)', () =
       where: { id: { in: [7, 8] } },
       data: { url: AS_READ.url, filename: AS_READ.filename },
     })
-    await expect(result).rejects.toThrow(MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR)
+    await expect(result).rejects.toThrow(MEDIA_UPLOAD_EDITS_REFETCH_ERROR)
     expect(findByID).not.toHaveBeenCalled()
   })
 
@@ -366,6 +367,14 @@ describe('refuseUploadEditsRefetch (#270, update path under ?uploadEdits)', () =
     const args = { id: 999, data: { url: 'https://attacker.example/x.png' } }
     const { result } = runRefetch(args, { stored: null })
     await expect(result).resolves.toBe(args)
+  })
+
+  it("names the ingest route and the upload path, in its own words (not the update guard's)", () => {
+    expect(MEDIA_UPLOAD_EDITS_REFETCH_ERROR).toContain('POST /api/media/ingest')
+    expect(MEDIA_UPLOAD_EDITS_REFETCH_ERROR).toContain('upload a new file')
+    expect(MEDIA_UPLOAD_EDITS_REFETCH_ERROR).not.toBe(
+      MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR,
+    )
   })
 
   it('is wired as a beforeOperation hook, which runs before generateFileData re-fetches', () => {
