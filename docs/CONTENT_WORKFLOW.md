@@ -185,8 +185,22 @@ metadata-only fields (`filename`, `mimeType`, `width`, `height`,
 Blob URL is derived from `filename` with no bytes behind it, a dead row
 that only appears to render if some other upload already put a file at
 that exact path (measured 2026-09-23, staging media 176; staging and
-production share one Blob store). Never attach a cover with
-`createMedia`. Use the ingest route — a **media-creation** route
+production share one Blob store). **Refused since #242 (2026-09-27):**
+a Media create that carries `url`, `filename`, `mimeType`, `filesize`,
+`width` or `height` with no file now fails with a 400 whose message names
+`POST /api/media/ingest` [source: `refuseCreateWithoutUpload` in
+`src/collections/Media.ts`; live on an environment only once that
+environment has deployed it]. **Corrected 2026-09-27:** "fetches nothing"
+above is not what the code does — do not rely on it. Given a `filename`
+and a `url` and no file, Payload's create fetches that `url` server-side
+(`generateFileData` → `getExternalFile`, payload 3.88.0) and then stores
+nothing, because the Blob adapter uploads only a file sent with the
+request [source; and measured locally 2026-09-27: with the guard removed,
+the pg-tier case in `evals/media-create-guard-integration.test.ts` fails
+with Payload's `FileRetrievalError`, i.e. the fetch was attempted]; the
+2026-09-23 measurement observed that nothing was stored, not that nothing
+was fetched. The guard refuses before that fetch. Never attach a cover
+with `createMedia`. Use the ingest route — a **media-creation** route
 (Cloudinary source → Media doc), not a cache-revalidation call; it only
 reuses the secret's name:
 
