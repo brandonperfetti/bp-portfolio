@@ -127,5 +127,4 @@ media, so `BLOB_READ_WRITE_TOKEN` must be set locally or every image 404s.
 
 ## Secrets
 
-`.env*` never enters git; `.env.example` documents every variable. Brandon
-populates Vercel/GitHub secrets as features land.
+The secret-handling rules live in `docs/SECURITY.md` § Secret handling.

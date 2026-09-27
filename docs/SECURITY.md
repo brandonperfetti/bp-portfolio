@@ -89,6 +89,46 @@ another doc carried in passing lives here instead, and that doc points back.
   non-secret `x-vercel-ip-country` geo header
   [source: `playwright.config.ts`].
 
+## Secret handling
+
+Rules another doc used to carry, moved here verbatim (#247). The first is
+measured below; the second is held by review (and by GitGuardian on PRs,
+`docs/WORKFLOW.md` § Review); the rest are **operational**.
+
+- `.env*` never enters git; `.env.example` documents every variable.
+  Brandon populates Vercel/GitHub secrets as features land. _Moved from
+  `docs/WORKFLOW.md` § Secrets._ `[measured 2026-09-27]` `.env.example` is
+  the only tracked env file. `.gitignore` ignores `.env` and `.env*.local`
+  only, so any other name (a `.env.production`, say) is kept out by review,
+  not by git.
+- Only the NAMES appear anywhere in this repo. _Moved from
+  `docs/MAINTENANCE.md` § Local database from backups, where it followed
+  "Values live in the password manager"._
+- **MCP API keys** (an admin-equivalent secret, `docs/PAYLOAD.md`
+  § Operating via MCP): Scope keys with the plugin's
+  per-collection/per-operation permission checkboxes (adding a collection
+  to the plugin config adds permission COLUMNS — a schema change requiring
+  `migrate:create`, and new permissions default to unchecked). Store keys
+  in project-scoped keychain entries, rotate on any suspicion, and never
+  grant delete where find+update suffices. _Moved from `docs/PAYLOAD.md`
+  § Operating via MCP, "Key posture (review m8)"._
+- `SENTRY_AUTH_TOKEN` is a build-only secret (source-map upload); rotate it
+  like Resend/Blob if exposed. _Moved from `docs/MAINTENANCE.md`
+  § Recurring, the Sentry entry._
+
+**Applied in place, not moved.** These procedure steps carry a secret rule
+inside an operational step, where lifting it out would break the step; they
+stay where they are:
+
+- `docs/CONTENT_STYLE.md` §9 — the Vercel protection-bypass header goes
+  only to the deployment's own origin; a Blob store id is read from the
+  token's middle segment without printing the token.
+- `docs/CONTENT_WORKFLOW.md` §0 and §4 — how a script sources and rotates
+  the revalidate secret, and never echoes it into output, handoffs or
+  receipts.
+- `docs/MAINTENANCE.md` § Promotion checklist — fresh production values for
+  `CMS_REVALIDATE_SECRET` and `PREVIEW_SECRET`, never the staging ones.
+
 ## Payload access control
 
 - **Every collection and global declares `access` explicitly.**
@@ -154,6 +194,10 @@ another doc carried in passing lives here instead, and that doc points back.
   predicate in `src/lib/ai/retrieval.ts`, `docs/AI.md` § What an anonymous
   visitor can retrieve); and `/llms-full.txt`, which emits each article's
   description, never its body (`src/app/(frontend)/llms-full.txt/route.ts`).
+  For the LLM discovery endpoints the rule is: per-article metadata +
+  summaries (deliberately NOT full bodies — full-corpus emission would leak
+  gated content; keep it that way). _Moved from `docs/SEO.md` § Indexing
+  surfaces (#247)._
 - **Identity is resolved server-side, never taken from the request body.**
   Rate limits, the anonymous free-message gate and retrieval grounding key
   on the Clerk session and the trusted IP (`docs/AI.md` § Guardrails).
@@ -210,3 +254,25 @@ another doc carried in passing lives here instead, and that doc points back.
   `pnpm-workspace.yaml` (#222); an exception in `minimumReleaseAgeExclude`
   needs a written reason beside it. Details: `docs/DEPENDENCIES.md`
   § Release-age gate.
+
+## Operational data and infrastructure
+
+**Operational** rules, moved here verbatim from `docs/MAINTENANCE.md` (#247);
+the procedures around them stay there.
+
+- **Database backups** (`.github/workflows/db-backup.yml`): It is never an
+  Actions artifact: this repo is PUBLIC, and a public repo's artifacts are
+  downloadable by any logged-in GitHub user. The dump stays encrypted in the
+  private bucket too — encryption is load-bearing, not optional. _Moved from
+  § Recurring, the database-backups entry._
+- **Restored data is real.** It holds live content and the users table.
+  Never commit it, never attach it to an issue, never upload it anywhere.
+  _Moved from § Local database from backups._
+- **Local database container:** keep the loopback prefix — the container
+  holds real content behind the well-known `postgres` password, so it must
+  never listen beyond the machine. _Moved from § Local database from
+  backups, the port-conflicts note._
+- **Supabase Data API:** Do NOT add `public` (or any schema containing real
+  tables) to the exposed-schemas list, and do NOT create tables in `api`;
+  re-check both on the production project at promotion. _Moved from
+  § Recurring, the Supabase entry._

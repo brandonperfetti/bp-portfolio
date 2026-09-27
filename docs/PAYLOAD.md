@@ -682,12 +682,8 @@ cannot infer are the invariants below; encode those, not the mechanics.
 
 **Key posture (review m8).** An MCP API key is an admin-equivalent
 secret: `find` reads run as the key's principal (drafts and gated bodies
-included) and write ops mutate live content. Scope keys with the plugin's
-per-collection/per-operation permission checkboxes (adding a collection to
-the plugin config adds permission COLUMNS — a schema change requiring
-`migrate:create`, and new permissions default to unchecked). Store keys in
-project-scoped keychain entries, rotate on any suspicion, and never grant
-delete where find+update suffices.
+included) and write ops mutate live content. How keys are scoped, stored
+and rotated: `docs/SECURITY.md` § Secret handling.
 
 **Connector-only agents.** An agent driving the MCP without a repo checkout
 never reads this file — the only channel that travels with the tools is the

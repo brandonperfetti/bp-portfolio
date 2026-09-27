@@ -103,8 +103,8 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
 - `/feed.xml` — RSS via `feed` from published posts.
 - `/llms.txt` + `/llms-full.txt` — LLM discovery endpoints
   (`src/lib/llms/helpers.ts`): site map summary, and per-article metadata +
-  summaries (deliberately NOT full bodies — full-corpus emission would leak
-  gated content; keep it that way).
+  summaries — what they must never carry: `docs/SECURITY.md` § End-user
+  authorization (Clerk).
 
 ## Paginated list views (`?page=N`)
 
