@@ -55,13 +55,29 @@ another doc carried in passing lives here instead, and that doc points back.
 
 ## Secrets and the server-only boundary
 
-- **Only `NEXT_PUBLIC_*` reaches the browser, so nothing secret carries that
-  prefix.** Next.js inlines `NEXT_PUBLIC_` variables into client bundles at
-  build time. `[measured 2026-09-27]` the names in use are all public by
-  design: the Clerk publishable key and sign-in/up paths, the GA4
-  measurement id, the Sentry DSN, environment and Spotlight flag, the site
-  name and URL, the Turnstile site key and chat-protection flag, and
-  Vercel's own `NEXT_PUBLIC_VERCEL_ENV`.
+- **Of the environment variables, only `NEXT_PUBLIC_*` reaches the browser,
+  so nothing secret carries that prefix — and no secret goes in
+  `next.config.mjs`'s `env` option or `compiler.define`, which Next.js
+  inlines into client bundles whatever the name.** Next.js inlines
+  `NEXT_PUBLIC_` variables into client bundles at build time.
+  `[measured 2026-09-27]` the names in use are all public by design: the
+  Clerk publishable key and sign-in/up paths, the GA4 measurement id, the
+  Sentry DSN, environment and Spotlight flag, the site name and URL, the
+  Turnstile site key and chat-protection flag, and Vercel's own
+  `NEXT_PUBLIC_VERCEL_ENV`. `[measured 2026-09-27, at 9120247]` the repo's
+  own config object (`next.config.mjs:4-111`) sets neither `env` nor
+  `compiler`: its top-level keys are `allowedDevOrigins`, `cacheComponents`,
+  `cacheLife`, `images` and `redirects` (the instrument: the file imported
+  with `withPayload` stubbed to the identity, then `Object.keys` on the
+  default export; an earlier line-grep for `key:` missed the `redirects()`
+  method). The wrappers add non-secret entries only:
+  `withPayload` sets `env.PAYLOAD_CACHE_COMPONENTS_ENABLED = 'true'`
+  [source: `@payloadcms/next` 3.88.0 `dist/withPayload/withPayload.js:26-28`],
+  the only `env` key in the resolved config when no Sentry DSN is set
+  (measured by importing the config); with a DSN, `withSentryConfig` adds
+  Sentry's build-time path and release variables
+  [source: `@sentry/nextjs` 10.70.0
+  `build/cjs/config/withSentryConfig/buildTime.js:12-48`].
 - **A secret is read on the server only** — route handlers, server
   components, Payload hooks and config, scripts. `[measured 2026-09-27]`
   none of the 47 modules whose directive is `'use client'` reads a variable

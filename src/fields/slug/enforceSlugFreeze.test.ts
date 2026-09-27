@@ -97,9 +97,10 @@ describe('enforceSlugFreeze', () => {
 
   /**
    * A STORED `slugLock: false` is a standing unlock (#250). The write below
-   * sends a new `slug` and no `slugLock` — exactly what `docs/PAYLOAD.md` says
-   * is frozen — but the hook falls back to the stored `false`, so the new slug
-   * is kept and the live URL moves. `slugField()` puts the slug before the
+   * sends a new `slug` and no `slugLock` — the case `docs/PAYLOAD.md` used to
+   * call frozen with no exception (it states the exception since #250) — and
+   * the hook falls back to the stored `false`, so the new slug is kept and
+   * the live URL moves. `slugField()` puts the slug before the
    * checkbox, so at this hook `siblingData.slugLock` is still unset for such a
    * write. Pinned through the whole chain `slugField()` installs, because
    * that is what a REST/MCP `update` runs.
