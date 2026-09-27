@@ -10,8 +10,8 @@ citation is a real same-tab anchor (see "Links in a reply" below).
 ## Server enforcement (`src/lib/ai/corvus.ts` + route)
 
 - `CORVUS_SYSTEM_PROMPT` is applied **server-side on every request**; client
-  system messages are ignored. Never trust or forward client roles other
-  than user/assistant history.
+  system messages are ignored. Which client roles may reach the model:
+  `docs/SECURITY.md` § Corvus (AI chat).
 - Request bodies are Zod-validated; oversize/malformed input is rejected.
 - Provider/model are env-selected: `AI_CHAT_PROVIDER` (`openai|anthropic`) +
   `AI_CHAT_MODEL`; `AI_MAX_COMPLETION_TOKENS` caps output.
@@ -21,8 +21,8 @@ citation is a real same-tab anchor (see "Links in a reply" below).
 - `limiter.ts`: Upstash Redis rate limits — per-minute and daily quota,
   keyed by (HMAC-hashed) IP for anonymous requests and by Clerk `userId`
   for signed-in ones (the route builds the key; see the chatGate bullet).
-  Without Upstash env, dev fails open (a state that must not reach
-  production: `docs/SECURITY.md` § Operational data and infrastructure).
+  Without Upstash env, dev fails open (`docs/SECURITY.md` § Operational
+  data and infrastructure).
 - `guardrails.ts`: shared quota/limit application; kill switches
   `CORVUS_DISABLE_CHAT` / `CORVUS_DISABLE_IMAGE` (renamed from `HERMES_*`,
   #77). The in-memory `applyRateLimit`/`applyDailyQuota` here are
@@ -699,14 +699,14 @@ shape `corvus-backfill.yml` uses for `pnpm corvus:backfill` — the script is th
 one place the entry point is spelled, so the workflow, these docs and an operator
 at a terminal cannot drift apart on it.
 
-**Never a live tool call from the chat route.** Reading a README at answer time
-would add per-turn latency, rate-limit exposure and a live prompt-injection
+**Live tool calls from the chat route:** `docs/SECURITY.md` § Corvus (AI
+chat). Reading a README at answer time would add per-turn latency, rate-limit exposure and a live prompt-injection
 surface — README text entering the prompt unreviewed, from a source the site
 does not control. Indexing at sync time keeps every passage inspectable in
 `corvus_embeddings` before a visitor can be answered from it. Staleness is
 bounded by the cadence, which is the trade #147 chose explicitly.
 
-Secrets the workflow needs (names only — this repo is public):
+Secrets the workflow needs (names only, `docs/SECURITY.md` § Secret handling):
 `SUPABASE_DB_URL_PROD` and `OPENAI_API_KEY`, both already used by
 `corvus-backfill.yml`, plus the OPTIONAL `CORVUS_GITHUB_SYNC_TOKEN`. The step
 reads `secrets.CORVUS_GITHUB_SYNC_TOKEN || secrets.GITHUB_TOKEN`, so the
@@ -717,8 +717,8 @@ wrote this had no egress to api.github.com — and the first dispatch settles it
 
 #### Never-leak
 
-A repository made private or deleted must stop being retrievable, and three
-mechanisms carry that:
+The rule is in `docs/SECURITY.md` § Corvus (AI chat); three mechanisms carry
+it:
 
 1. **The endpoint.** Listing is `/users/{owner}/repos`, which has no spelling
    that returns a private repository, rather than `/user/repos?visibility=public`
@@ -1077,7 +1077,7 @@ and before any database access, so it is a true one-flag revert to the pre-#82
 chat path rather than a more expensive way to reach the same answer. Retrieval
 shipped dark behind it.
 
-### Environment (names only — this repo is public)
+### Environment (names only, `docs/SECURITY.md` § Secret handling)
 
 `AI_EMBEDDING_PROVIDER`, `AI_EMBEDDING_MODEL`, `AI_EMBEDDING_DIMENSIONS`,
 `CORVUS_RETRIEVAL_TOP_K`, `CORVUS_DISABLE_RETRIEVAL`. See `.env.example` for

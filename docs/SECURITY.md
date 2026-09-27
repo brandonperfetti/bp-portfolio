@@ -207,7 +207,11 @@ stay where they are:
   For the LLM discovery endpoints the rule is: per-article metadata +
   summaries (deliberately NOT full bodies — full-corpus emission would leak
   gated content; keep it that way). _Moved from `docs/SEO.md` § Indexing
-  surfaces (#247)._
+  surfaces (#247)._ And across every public surface: Never index gated
+  bodies: teasers only in any public payload, feeds included. _Moved from
+  `docs/SEO.md` § Rules (#247 addendum 3)._ A feed item carries the
+  article's `description`, not its body
+  [source: `src/app/(frontend)/feed.xml/route.ts:54`].
 - **Identity is resolved server-side, never taken from the request body.**
   Rate limits, the anonymous free-message gate and retrieval grounding key
   on the Clerk session and the trusted IP [source:
@@ -221,6 +225,22 @@ stay where they are:
 - Until Clerk Billing is enabled, `gated` means signed in and nothing more:
   `requiredPlan` and `requiredFeature` are dormant fields `canAccess`
   ignores [source: `src/access/canAccess.ts`].
+
+## Corvus (AI chat)
+
+Rules moved verbatim from `docs/AI.md` (#247 addendum 3); the mechanisms
+stay there.
+
+- Never trust or forward client roles other than user/assistant history.
+  _Moved from § Server enforcement._ The route drops every `system` message
+  before the model call, and the system prompt is built server-side
+  [source: `src/app/api/ai/chat/route.ts:179-180`, `:241`].
+- **Never a live tool call from the chat route.** _Moved from § Public
+  GitHub repos as a collection._ `[measured 2026-09-27]` the route passes no
+  `tools` to the model (`git grep -n tool` on the route: no hits).
+- A repository made private or deleted must stop being retrievable.
+  _Moved from § Never-leak_, which describes the three mechanisms that carry
+  it (`assertIndexableRepo` in `src/lib/ai/githubRepos.ts:109`, among them).
 
 ## Consent and analytics data
 

@@ -154,8 +154,8 @@ The calls that follow from option (b):
 
 ## Rules
 
-- Never index gated bodies: teasers only in any public payload, feeds
-  included.
+- Gated bodies in public payloads and feeds: `docs/SECURITY.md` § End-user
+  authorization (Clerk).
 - New public routes must be added to the sitemap and, when content-bearing,
   to llms.txt.
 - Redirects for retired URLs go through plugin-redirects, not code.

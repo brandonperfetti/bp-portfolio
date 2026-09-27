@@ -220,7 +220,8 @@ restores the newest nightly encrypted backup into a local Docker Postgres, so
    backup workflow dumps with a pg17 client, and an older `pg_restore` cannot
    read the dump. The server being 16 while the client is 17 is fine and
    intended; the script refuses to run with an older client.
-4. Put the passphrase in `.env.local` (git-ignored, never committed):
+4. Put the passphrase in `.env.local` (git-ignored; `docs/SECURITY.md`
+   § Secret handling):
    `BACKUP_PASSPHRASE_PROD` for production backups (the default source) or
    `BACKUP_PASSPHRASE` for staging, plus the R2 read credentials
    `R2_BACKUP_ACCESS_KEY_ID`, `R2_BACKUP_SECRET_ACCESS_KEY` and
