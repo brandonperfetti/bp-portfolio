@@ -88,10 +88,25 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
 - `src/app/robots.ts` — **a recorded policy since 2026-09-27 (#221)**, pinned
   by `robots.test.ts`. One rule set for every crawler:
   `Disallow: /admin$`, `/admin/` and `/api/` — the Payload admin and the JSON
-  and POST endpoints serve nothing a search engine should index — with
-  `Allow: /api/og/` and `/api/media/file/` carved back out, because generated
-  social cards (`og:image`, article JSON-LD `image`) and media bytes are served
-  there. Precedence is the longest matching rule (RFC 9309), so the carve-outs
+  and POST endpoints serve nothing a search engine should index. The admin
+  renders `<meta name="robots" content="noindex, nofollow"/>` — Payload's
+  default `admin.meta.robots`, not overridden in `src/payload.config.ts`
+  (`[measured, 2026-09-27, local production build]`: `/admin/login` and
+  `/admin` both answer 200 with it). `Disallow` is a crawl exclusion, not an
+  index guarantee: while `/admin` is disallowed, crawlers never read that
+  `noindex`, and a disallowed admin URL linked elsewhere could still be listed
+  without content. The trade-off is kept on purpose (#221): there are no
+  public links to admin URLs and crawl budget is the reason for the rule,
+  whereas guaranteed deindexing would mean allowing `/admin` so the `noindex`
+  is read. **Corrected 2026-09-27:** this paragraph earlier said guaranteed
+  exclusion "would need a crawlable `noindex` response instead, which the
+  admin does not emit today (`[measured, 2026-09-27]`: no `noindex` or
+  `robots` in the `@payloadcms/next@3.88.0` dist)". Do not rely on it: the
+  grep had no hits, but it searched the wrong package; the default lives in
+  `payload`, and the rendered admin carries it. `Allow: /api/og/` and
+  `/api/media/file/` are carved back out, because generated social cards
+  (`og:image`, article JSON-LD `image`) and media bytes are served there.
+  Precedence is the longest matching rule (RFC 9309), so the carve-outs
   win for their own subtree only. `/_next/` is **not** disallowed: Google
   renders pages with their JS and CSS, and a chunk showing up in Search
   Console's "crawled, not indexed" bucket is noise, not a defect. The
