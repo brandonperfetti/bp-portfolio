@@ -47,7 +47,7 @@ const EXIT = {
   noPassphrase: 5,
   pgClient: 6,
   noDatabase: 7,
-  artifact: 8,
+  backup: 8,
   r2Credentials: 10,
 } as const
 
@@ -141,7 +141,7 @@ beforeAll(() => {
     [
       'if [ -n "${STUB_AWS_LOG:-}" ]; then',
       '  printf \'argv=%s\\n\' "$*" >> "$STUB_AWS_LOG"',
-      '  printf \'env=key:%s secret:%s region:%s profile:%s config:%s\\n\' "${AWS_ACCESS_KEY_ID:+set}" "${AWS_SECRET_ACCESS_KEY:+set}" "${AWS_REGION:-}" "${AWS_PROFILE:-unset}" "${AWS_CONFIG_FILE:-}" >> "$STUB_AWS_LOG"',
+      '  printf \'env=key:%s secret:%s endpoint:%s region:%s profile:%s s3endpoint:%s config:%s\\n\' "${AWS_ACCESS_KEY_ID:+set}" "${AWS_SECRET_ACCESS_KEY:+set}" "${AWS_ENDPOINT_URL:+set}" "${AWS_REGION:-}" "${AWS_PROFILE:-unset}" "${AWS_ENDPOINT_URL_S3:-unset}" "${AWS_CONFIG_FILE:-}" >> "$STUB_AWS_LOG"',
       'fi',
       'if [ -n "${STUB_AWS_EXIT:-}" ]; then exit "$STUB_AWS_EXIT"; fi',
       'prefix=""; prev=""',
@@ -259,7 +259,9 @@ describe('--dry-run plan', () => {
     for (const value of Object.values(R2_ENV)) {
       expect(result.output).not.toContain(value)
     }
-    expect(result.output).toContain('--endpoint-url $R2_BACKUP_ENDPOINT')
+    expect(result.output).toContain(
+      'endpoint: AWS_ENDPOINT_URL <- R2_BACKUP_ENDPOINT, never argv',
+    )
   })
 
   it('carries an alternate port through the plan and the DATABASE_URI hint', () => {
@@ -349,7 +351,7 @@ describe("pnpm's `--` separator", () => {
     const env = { ...passphrases, STUB_AWS_KEYS: 'None' }
     const withSeparator = run(['--'], { env })
     const withNothing = run([], { env })
-    expect(withSeparator.status).toBe(EXIT.artifact)
+    expect(withSeparator.status).toBe(EXIT.backup)
     expect(withSeparator.status).toBe(withNothing.status)
     expect(withSeparator.stderr).toBe(withNothing.stderr)
   })
@@ -469,7 +471,7 @@ describe('preflight failures', () => {
 
   it('fails when the target has no backup in the bucket', () => {
     const result = happyRun([], { STUB_AWS_KEYS: 'None' })
-    expect(result.status).toBe(EXIT.artifact)
+    expect(result.status).toBe(EXIT.backup)
     expect(result.stderr).toContain(
       "no 'prod' backup in s3://bp-portfolio-db-backups/prod/",
     )
@@ -513,19 +515,27 @@ describe('choosing the backup in R2', () => {
     )
   })
 
-  it('hands aws the R2 credentials through its environment only, with local AWS config shut out', () => {
+  it('hands aws every R2 value — keys and endpoint — through its environment only, with local AWS config shut out', () => {
     const log = path.join(sandbox, 'aws-calls.log')
-    const result = happyRun([], { STUB_AWS_LOG: log, AWS_PROFILE: 'work' })
+    const result = happyRun([], {
+      STUB_AWS_LOG: log,
+      AWS_PROFILE: 'work',
+      AWS_ENDPOINT_URL_S3: 'https://leftover-endpoint.test',
+    })
     expect(result.status).toBe(0)
     const calls = readFileSync(log, 'utf8')
     expect(calls).toContain(
-      'env=key:set secret:set region:auto profile:unset config:/dev/null',
+      'env=key:set secret:set endpoint:set region:auto profile:unset s3endpoint:unset config:/dev/null',
     )
-    expect(calls).toContain(
-      '--endpoint-url https://r2-endpoint-must-not-be-printed.test',
-    )
-    expect(calls).not.toContain(R2_ENV.R2_BACKUP_ACCESS_KEY_ID)
-    expect(calls).not.toContain(R2_ENV.R2_BACKUP_SECRET_ACCESS_KEY)
+    // argv is readable by every user through `ps`; no R2 value may be on it.
+    const argv = calls.split('\n').filter((line) => line.startsWith('argv='))
+    expect(argv.length).toBeGreaterThan(0)
+    for (const line of argv) {
+      for (const value of Object.values(R2_ENV)) {
+        expect(line).not.toContain(value)
+      }
+      expect(line).not.toContain('--endpoint-url')
+    }
     rmSync(log)
   })
 })
@@ -587,6 +597,16 @@ describe('drift guards against the sources of truth', () => {
       expect(workflow).toContain(`secrets.${name}`)
       expect(script).toContain(name)
     }
+  })
+
+  it('keeps the R2 endpoint off every command line, in the workflow and the script', () => {
+    // Both hand it to aws as AWS_ENDPOINT_URL (AWS CLI >= 2.13).
+    expect(workflow).toContain(
+      'AWS_ENDPOINT_URL: ${{ secrets.R2_BACKUP_ENDPOINT }}',
+    )
+    expect(script).toContain('export AWS_ENDPOINT_URL="$R2_BACKUP_ENDPOINT"')
+    expect(workflow).not.toContain('--endpoint-url')
+    expect(script).not.toContain('--endpoint-url')
   })
 
   it('never publishes the dump as an Actions artifact (#181)', () => {

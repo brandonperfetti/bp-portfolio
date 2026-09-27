@@ -130,7 +130,9 @@ const noUnsanitizedHtml = {
     type: 'problem',
     docs: {
       description:
-        'Require dangerouslySetInnerHTML.__html to come from an approved sanitizer (toSafeJsonLd).',
+        // Static metadata, read without the rule's options, so it names the
+        // option rather than a helper; the messages interpolate the helpers.
+        'Require dangerouslySetInnerHTML.__html to come from a sanitizer configured in the `sanitizers` option.',
     },
     schema: [
       {
@@ -156,7 +158,7 @@ const noUnsanitizedHtml = {
       unsanitized:
         '`__html` must be produced by {{names}} (or a `const` holding its result). Raw strings here are an XSS sink — see #248. If this truly cannot use a sanitizer, disable this rule with a reason after ` -- `.',
       notLiteral:
-        '`dangerouslySetInnerHTML` must be an inline object literal whose `__html` is a `toSafeJsonLd(...)` call, so its value can be checked.',
+        '`dangerouslySetInnerHTML` must be an inline object literal whose `__html` comes from {{names}}, so its value can be checked.',
     },
   },
   create(context) {
@@ -166,11 +168,19 @@ const noUnsanitizedHtml = {
     /** Check the value given to `dangerouslySetInnerHTML`. */
     const check = (value, reportNode) => {
       if (value?.type !== 'ObjectExpression') {
-        context.report({ node: reportNode, messageId: 'notLiteral' })
+        context.report({
+          node: reportNode,
+          messageId: 'notLiteral',
+          data: { names },
+        })
         return
       }
       if (value.properties.some((p) => p.type === 'SpreadElement')) {
-        context.report({ node: reportNode, messageId: 'notLiteral' })
+        context.report({
+          node: reportNode,
+          messageId: 'notLiteral',
+          data: { names },
+        })
         return
       }
       const html = value.properties.find((p) => keyName(p) === '__html')
@@ -194,6 +204,9 @@ const noUnsanitizedHtml = {
       },
       // `createElement('script', { dangerouslySetInnerHTML: ... })`.
       Property(node) {
+        // `function Foo({ dangerouslySetInnerHTML, ...rest })` reads the prop
+        // (a destructuring pattern), it does not pass one to a sink.
+        if (node.parent.type === 'ObjectPattern') return
         if (keyName(node) !== 'dangerouslySetInnerHTML') return
         check(node.value, node)
       },

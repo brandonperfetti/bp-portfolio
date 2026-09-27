@@ -50,6 +50,11 @@ ruleTester.run('no-unsanitized-html', safeHtml.rules['no-unsanitized-html'], {
       code: `${imp}createElement('script', { dangerouslySetInnerHTML: { __html: toSafeJsonLd(x) } })`,
       options,
     },
+    // Reading the prop in a destructuring pattern is not a sink.
+    {
+      code: `function Foo({ dangerouslySetInnerHTML, ...rest }) { return rest }\nconst { dangerouslySetInnerHTML: d = null } = props`,
+      options,
+    },
   ],
   invalid: [
     // The deliberately unsafe case #248 names.
@@ -95,7 +100,12 @@ ruleTester.run('no-unsanitized-html', safeHtml.rules['no-unsanitized-html'], {
     {
       code: `const a = <div dangerouslySetInnerHTML={props} />`,
       options,
-      errors: [{ messageId: 'notLiteral' }],
+      errors: [
+        {
+          message:
+            '`dangerouslySetInnerHTML` must be an inline object literal whose `__html` comes from `toSafeJsonLd`, so its value can be checked.',
+        },
+      ],
     },
     {
       code: `${imp}const a = <div dangerouslySetInnerHTML={{ ...rest, __html: toSafeJsonLd(x) }} />`,

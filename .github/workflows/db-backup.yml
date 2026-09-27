@@ -130,21 +130,22 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
-          R2_BACKUP_ENDPOINT: ${{ secrets.R2_BACKUP_ENDPOINT }}
+          # The endpoint rides in the environment like the keys (AWS CLI >= 2.13
+          # reads AWS_ENDPOINT_URL), so no R2 value is ever on a command line.
+          AWS_ENDPOINT_URL: ${{ secrets.R2_BACKUP_ENDPOINT }}
           AWS_DEFAULT_REGION: auto
           AWS_EC2_METADATA_DISABLED: 'true'
         run: |
           set -euo pipefail
           test -n "$AWS_ACCESS_KEY_ID" || { echo "::error::R2_BACKUP_ACCESS_KEY_ID secret is not set"; exit 1; }
           test -n "$AWS_SECRET_ACCESS_KEY" || { echo "::error::R2_BACKUP_SECRET_ACCESS_KEY secret is not set"; exit 1; }
-          test -n "$R2_BACKUP_ENDPOINT" || { echo "::error::R2_BACKUP_ENDPOINT secret is not set"; exit 1; }
+          test -n "$AWS_ENDPOINT_URL" || { echo "::error::R2_BACKUP_ENDPOINT secret is not set"; exit 1; }
           aws s3 cp "$BACKUP_FILE" "s3://${R2_BACKUP_BUCKET}/${BACKUP_KEY}" \
-            --endpoint-url "$R2_BACKUP_ENDPOINT" --only-show-errors --no-progress
+            --only-show-errors --no-progress
           # Read it back: a backup counts once the bucket holds all of it.
           local_size=$(stat -c%s "$BACKUP_FILE")
           remote_size=$(aws s3api head-object --bucket "$R2_BACKUP_BUCKET" \
-            --key "$BACKUP_KEY" --endpoint-url "$R2_BACKUP_ENDPOINT" \
-            --query ContentLength --output text)
+            --key "$BACKUP_KEY" --query ContentLength --output text)
           test "$remote_size" = "$local_size" || { echo "::error::R2 object is ${remote_size} bytes, local file ${local_size}"; exit 1; }
           rm -f "$BACKUP_FILE"
           echo "Encrypted backup: r2://${R2_BACKUP_BUCKET}/${BACKUP_KEY} (${remote_size} bytes)" >> "$GITHUB_STEP_SUMMARY"

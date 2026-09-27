@@ -45,7 +45,7 @@ readonly EX_R2=4           # the R2 bucket could not be listed (credentials, end
 readonly EX_NO_PASS=5      # passphrase absent from the environment and .env.local
 readonly EX_PG_CLIENT=6    # pg_restore older than the pg17 client the workflow dumps with
 readonly EX_NO_DB=7        # nothing answering on the target host:port
-readonly EX_ARTIFACT=8     # no backup object for the target, or download/decrypt failed
+readonly EX_BACKUP=8       # no backup object for the target, or download/decrypt failed
 readonly EX_VERIFY=9       # restore finished but the result does not look like the site DB
 readonly EX_NO_R2_CREDS=10 # an R2_BACKUP_* value absent from the environment and .env.local
 
@@ -325,18 +325,21 @@ resolve_r2_credentials() {
 }
 
 # Run the AWS CLI against R2 with ONLY the R2 credentials: a subshell so the
-# AWS_* exports never leak into the rest of the script, credentials through
-# the environment rather than argv (argv is visible to every user in `ps`),
-# and the developer's own ~/.aws config and profile shut out so they cannot
-# redirect or re-sign the request.
+# AWS_* exports never leak into the rest of the script, every R2 value —
+# keys AND endpoint — through the environment rather than argv (argv is
+# visible to every user in `ps`; the endpoint carries the account id), and
+# the developer's own ~/.aws config and profile shut out so they cannot
+# redirect or re-sign the request. AWS_ENDPOINT_URL needs AWS CLI >= 2.13.
 aws_r2() {
   (
-    unset AWS_PROFILE AWS_DEFAULT_PROFILE AWS_SESSION_TOKEN
+    unset AWS_PROFILE AWS_DEFAULT_PROFILE AWS_SESSION_TOKEN \
+      AWS_ENDPOINT_URL_S3 AWS_IGNORE_CONFIGURED_ENDPOINT_URLS
     export AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null
     export AWS_ACCESS_KEY_ID="$R2_BACKUP_ACCESS_KEY_ID"
     export AWS_SECRET_ACCESS_KEY="$R2_BACKUP_SECRET_ACCESS_KEY"
+    export AWS_ENDPOINT_URL="$R2_BACKUP_ENDPOINT"
     export AWS_DEFAULT_REGION=auto AWS_REGION=auto AWS_EC2_METADATA_DISABLED=true
-    aws --endpoint-url "$R2_BACKUP_ENDPOINT" "$@"
+    aws "$@"
   )
 }
 
@@ -354,7 +357,7 @@ locate_newest_backup() {
   fi
   BACKUP_KEY="$(printf '%s\n' "$listing" | tr '\t' '\n' \
     | grep -E "$(backup_key_regex)" | sort | tail -n 1 || true)"
-  [[ -n $BACKUP_KEY ]] || die "$EX_ARTIFACT" "no '${SOURCE}' backup in s3://${R2_BUCKET}/${SOURCE}/.
+  [[ -n $BACKUP_KEY ]] || die "$EX_BACKUP" "no '${SOURCE}' backup in s3://${R2_BUCKET}/${SOURCE}/.
   ${BACKUP_WORKFLOW} writes one per target per run; the bucket's lifecycle rule
   deletes them after 30 days. Check the Actions tab, or dispatch a fresh run,
   then retry."
@@ -392,8 +395,8 @@ print_plan() {
 Plan (source: ${SOURCE})
   1. aws s3api list-objects-v2 --bucket ${R2_BUCKET} --prefix ${SOURCE}/
        -> newest: ${BACKUP_KEY}
-  2. aws s3 cp s3://${R2_BUCKET}/${BACKUP_KEY} <tmp>/ \\
-       --endpoint-url \$R2_BACKUP_ENDPOINT
+  2. aws s3 cp s3://${R2_BUCKET}/${BACKUP_KEY} <tmp>/
+       (endpoint: AWS_ENDPOINT_URL <- R2_BACKUP_ENDPOINT, never argv)
   3. openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \\
        -in <tmp>/${file} -out <tmp>/db.dump -pass env:${pass_var}
   4. psql -h ${DB_HOST} -p ${DB_PORT} -U ${DB_USER} -d postgres \\
@@ -429,9 +432,9 @@ download_backup() {
   ENC_FILE="${WORK_DIR}/$(basename -- "$BACKUP_KEY")"
   aws_r2 s3 cp "s3://${R2_BUCKET}/${BACKUP_KEY}" "$ENC_FILE" \
     --only-show-errors --no-progress \
-    || die "$EX_ARTIFACT" "download failed for s3://${R2_BUCKET}/${BACKUP_KEY}.
+    || die "$EX_BACKUP" "download failed for s3://${R2_BUCKET}/${BACKUP_KEY}.
   It may have expired between listing and download (30-day lifecycle rule)."
-  [[ -s $ENC_FILE ]] || die "$EX_ARTIFACT" "the downloaded backup is empty: ${BACKUP_KEY}"
+  [[ -s $ENC_FILE ]] || die "$EX_BACKUP" "the downloaded backup is empty: ${BACKUP_KEY}"
   note "backup: $(basename -- "$ENC_FILE") ($(wc -c <"$ENC_FILE" | tr -d ' ') bytes)"
 }
 
@@ -445,7 +448,7 @@ decrypt_backup() {
   # (matching its encrypt step: -aes-256-cbc -pbkdf2 -iter 200000 -salt).
   openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
     -in "$ENC_FILE" -out "$DUMP_FILE" -pass "env:${pass_var}" \
-    || die "$EX_ARTIFACT" "openssl could not decrypt the backup.
+    || die "$EX_BACKUP" "openssl could not decrypt the backup.
   The usual cause is the wrong passphrase: '${SOURCE}' backups are encrypted
   with ${pass_var}, and the staging and production values are deliberately different."
 
@@ -453,7 +456,7 @@ decrypt_backup() {
   # silently-wrong passphrase into a clear message instead of a cryptic
   # pg_restore parse error.
   if [[ "$(head -c 5 "$DUMP_FILE")" != 'PGDMP' ]]; then
-    die "$EX_ARTIFACT" "the decrypted file is not a Postgres custom-format dump (no PGDMP header).
+    die "$EX_BACKUP" "the decrypted file is not a Postgres custom-format dump (no PGDMP header).
   Check that ${pass_var} holds the '${SOURCE}' passphrase."
   fi
   note "decrypted: $(wc -c <"$DUMP_FILE" | tr -d ' ') bytes"
