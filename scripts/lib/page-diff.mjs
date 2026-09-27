@@ -135,6 +135,15 @@ export function redirectTarget(response, fromUrl) {
  * other origin. The chain stops at the first non-redirect (`final`) or after
  * {@link MAX_BYPASS_REDIRECTS} hops (`cap`).
  *
+ * The browser's own `cookie` header goes on the first hop only. Playwright
+ * sends an explicit `cookie` header in place of the context's cookie jar,
+ * and a hop's `Set-Cookie` lands in that jar; so re-sending the first
+ * request's cookie would hide every cookie a hop sets from the next one, and
+ * a hop that sets a cookie and redirects back to be read with it (Clerk's
+ * handshake return) would loop to the cap. Later hops leave `cookie` to the
+ * jar, which is what the browser and Playwright's own redirect follower do
+ * (measured, CodeRabbit on PR #271).
+ *
  * @param fetchHop - `(url, { method, headers, postData }) => APIResponse`,
  * fetching ONE hop with redirects off.
  * @param start - `{ url, method, headers, postData }` of the browser's
@@ -146,8 +155,18 @@ export function redirectTarget(response, fromUrl) {
  */
 export async function followRedirects(fetchHop, start, targetUrl, token) {
   let { url, method = 'GET', postData } = start
+  const laterHeaders = Object.fromEntries(
+    Object.entries(start.headers).filter(
+      ([name]) => name.toLowerCase() !== 'cookie',
+    ),
+  )
   for (let hop = 0; ; hop += 1) {
-    const headers = hopHeaders(url, targetUrl, start.headers, token)
+    const headers = hopHeaders(
+      url,
+      targetUrl,
+      hop === 0 ? start.headers : laterHeaders,
+      token,
+    )
     const response = await fetchHop(url, { method, headers, postData })
     const next = redirectTarget(response, url)
     if (!next) return { response, url, stop: 'final' }

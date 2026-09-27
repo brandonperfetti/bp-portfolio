@@ -302,7 +302,11 @@ describe('bypass header scoping (#252)', () => {
         }
         expect(init.maxRedirects).toBe(0)
         const secret = init.headers[BYPASS_HEADER] === token ? 'SECRET' : 'none'
-        const cookie = init.headers.cookie ? ' +cookie' : ''
+        const cookie = Object.keys(init.headers).some(
+          (name) => name.toLowerCase() === 'cookie',
+        )
+          ? ' +cookie'
+          : ''
         return `${init.url} ${secret}${cookie}`
       })
 
@@ -326,10 +330,12 @@ describe('bypass header scoping (#252)', () => {
       }),
     )
     await routeWithBypass(stub.route, target, token)
+    // The browser's cookie rides the first hop only; later hops take the
+    // context's jar (see the Set-Cookie test under `redirect following`).
     expect(fetched(stub.calls)).toEqual([
       `${base}/articles/old-slug SECRET +cookie`,
-      `${base}/topics/web/old-slug SECRET +cookie`,
-      `${base}/topics/web/new-slug SECRET +cookie`,
+      `${base}/topics/web/old-slug SECRET`,
+      `${base}/topics/web/new-slug SECRET`,
     ])
     expect(stub.calls.at(-1)).toEqual({
       method: 'fulfill',
@@ -355,8 +361,8 @@ describe('bypass header scoping (#252)', () => {
     expect(fetched(stub.calls)).toEqual([
       `${base}/page SECRET +cookie`,
       `${clerk}?redirect_url=x none`,
-      `${base}/page?__clerk_db_jwt=j SECRET +cookie`,
-      `${base}/page-2 SECRET +cookie`,
+      `${base}/page?__clerk_db_jwt=j SECRET`,
+      `${base}/page-2 SECRET`,
     ])
     expect(stub.calls.at(-1)).toEqual({
       method: 'fulfill',
@@ -430,6 +436,42 @@ describe('redirect following (#252)', () => {
     expect(redirectTarget(r(304, '/x'), 'https://a.test/')).toBeNull()
     expect(redirectTarget(r(200, '/x'), 'https://a.test/')).toBeNull()
     expect(redirectTarget(r(302), 'https://a.test/')).toBeNull()
+  })
+
+  it('lets a cookie set on one hop reach the next, instead of re-sending the stale one', async () => {
+    // Playwright sends an explicit `cookie` header in place of the context's
+    // jar, and a hop's Set-Cookie lands in that jar (playwright-core 1.61.1;
+    // measured in Chromium, CodeRabbit on PR #271). This fake fetch models
+    // exactly that. The site sets `v=2` and redirects back to itself, like a
+    // Clerk handshake return: re-sending the browser's `v=1` looped it to the
+    // cap.
+    const jar = new Map([['v', '1']])
+    const seen: string[] = []
+    const result = await followRedirects(
+      async (url: string, init: { headers: Record<string, string> }) => {
+        const explicit = Object.entries(init.headers).find(
+          ([name]) => name.toLowerCase() === 'cookie',
+        )?.[1]
+        const cookie =
+          explicit ??
+          [...jar].map(([name, value]) => `${name}=${value}`).join('; ')
+        seen.push(`${url} ${cookie}`)
+        if (cookie === 'v=2') return { status: () => 200, headers: () => ({}) }
+        jar.set('v', '2')
+        return { status: () => 302, headers: () => ({ location: url }) }
+      },
+      {
+        url: 'https://staging.example.test/start',
+        headers: { accept: 'text/html', Cookie: 'v=1' },
+      },
+      target,
+      token,
+    )
+    expect(seen).toEqual([
+      'https://staging.example.test/start v=1',
+      'https://staging.example.test/start v=2',
+    ])
+    expect(result).toMatchObject({ stop: 'final' })
   })
 
   it('re-issues a 303 (and a 301/302 after POST) as a GET without a body', async () => {
