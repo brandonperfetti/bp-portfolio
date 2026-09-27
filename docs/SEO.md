@@ -57,12 +57,21 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
   `[measured, prod 2026-09-09]`. The `posts-sitemap`/`pages-sitemap` tags that
   used to be fired here were subscribed by nothing and are **deleted**, not
   waiting for a subscriber.
-- `src/app/robots.ts` — **corrected 2026-09-10 (#209):** it allows crawling
-  with no `Disallow` at all (`[measured, prod robots.txt 2026-09-09]`:
-  `User-Agent: *` / `Allow: /` / `Host:` / `Sitemap:`). The previous sentence
-  claimed `Disallow` entries for `/admin` and `/api` that the file does not
-  emit. Whether it SHOULD emit them is a separate decision, tracked on #210's
-  follow-ups; this line now describes what is served.
+- `src/app/robots.ts` — **a recorded policy since 2026-09-26 (#221)**, pinned
+  by `robots.test.ts`. One rule set for every crawler:
+  `Disallow: /admin$`, `/admin/` and `/api/` — the Payload admin and the JSON
+  and POST endpoints serve nothing a search engine should index — with
+  `Allow: /api/og/` and `/api/media/file/` carved back out, because generated
+  social cards (`og:image`, article JSON-LD `image`) and media bytes are served
+  there. Precedence is the longest matching rule (RFC 9309), so the carve-outs
+  win for their own subtree only. `/_next/` is **not** disallowed: Google
+  renders pages with their JS and CSS, and a chunk showing up in Search
+  Console's "crawled, not indexed" bucket is noise, not a defect. The
+  patterns end in `/` (or `$`) so a prefix never blocks a page such as
+  `/administration`. _Superseded 2026-09-26, kept for the trail:_ the
+  2026-09-10 (#209) line here read "it allows crawling with no `Disallow` at
+  all" — true of the code then (`[measured, prod robots.txt 2026-09-09]`), no
+  longer of this tree.
 - `/feed.xml` — RSS via `feed` from published posts.
 - `/llms.txt` + `/llms-full.txt` — LLM discovery endpoints
   (`src/lib/llms/helpers.ts`): site map summary, and per-article metadata +
