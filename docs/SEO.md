@@ -88,10 +88,15 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
 - `src/app/robots.ts` — **a recorded policy since 2026-09-27 (#221)**, pinned
   by `robots.test.ts`. One rule set for every crawler:
   `Disallow: /admin$`, `/admin/` and `/api/` — the Payload admin and the JSON
-  and POST endpoints serve nothing a search engine should index — with
-  `Allow: /api/og/` and `/api/media/file/` carved back out, because generated
-  social cards (`og:image`, article JSON-LD `image`) and media bytes are served
-  there. Precedence is the longest matching rule (RFC 9309), so the carve-outs
+  and POST endpoints serve nothing a search engine should index. `Disallow` is
+  a crawl exclusion, not an index guarantee: a disallowed URL linked elsewhere
+  can still be listed without its content. The policy accepts that for
+  `/admin` and `/api` (no public links, nothing to index); guaranteed
+  exclusion would need a crawlable `noindex` response instead, which the admin
+  does not emit today (`[measured, 2026-09-27]`: no `noindex` or `robots` in
+  the `@payloadcms/next@3.88.0` dist). `Allow: /api/og/` and
+  `/api/media/file/` are carved back out, because generated social cards
+  (`og:image`, article JSON-LD `image`) and media bytes are served there. Precedence is the longest matching rule (RFC 9309), so the carve-outs
   win for their own subtree only. `/_next/` is **not** disallowed: Google
   renders pages with their JS and CSS, and a chunk showing up in Search
   Console's "crawled, not indexed" bucket is noise, not a defect. The

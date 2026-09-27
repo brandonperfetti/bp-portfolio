@@ -8,10 +8,18 @@ import { getSiteUrl } from '@/lib/site'
  *
  * @remarks Neither serves anything a search engine should index — the admin is
  * a login-gated app shell (Payload's admin metadata carries no `noindex`, so
- * robots is the only signal it gets), and `/api` is JSON and POST endpoints:
- * the Payload REST surface, `/api/mcp`, `/api/ai/*`, `/api/search`,
- * `/api/contact`. Crawl budget on a low-authority domain is finite, and every
- * fetch spent there is one not spent on an article.
+ * robots is the only signal it gets — `[measured, 2026-09-27]` 0 files in the
+ * `@payloadcms/next@3.88.0` dist mention `noindex` or `robots`, against 46
+ * for `generateMetadata`), and `/api` is JSON and POST endpoints: the Payload
+ * REST surface, `/api/mcp`, `/api/ai/*`, `/api/search`, `/api/contact`. Crawl
+ * budget on a low-authority domain is finite, and every fetch spent there is
+ * one not spent on an article.
+ *
+ * `Disallow` is a crawl exclusion, not an index guarantee: a disallowed URL
+ * that is linked elsewhere can still be listed, without its content. This
+ * policy accepts that for `/admin` and `/api`, which have no public links and
+ * nothing to index; guaranteed exclusion would need a crawlable `noindex`
+ * response instead, which the admin does not emit today.
  *
  * Spelled so a prefix never swallows a page. `/admin$` + `/admin/` rather than
  * a bare `/admin`, and `/api/` rather than `/api`, because robots rules are
