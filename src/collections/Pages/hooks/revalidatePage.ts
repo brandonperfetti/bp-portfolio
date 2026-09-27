@@ -22,24 +22,29 @@ import type { Page } from '../../../payload-types'
  * cached assembly, `getSitemapData` (`src/app/sitemap.ts`), is a
  * `'use cache: remote'` scope tagged `posts` + `pages`, so the `pages` tag
  * purge here is expected to expire the one copy every instance reads —
- * `[inference]`, verified only by #209's production check. It used to be a plain
- * `'use cache'`, and that was the defect: a plain scope's purge reaches only
- * the instance that issued it, so the path purge below was added first and was
- * honest that it might not be enough — it was not.
- * `[measured, prod, 2026-09-26]` a page published after
- * `revalidatePath('/sitemap.xml')` shipped stayed out of the sitemap for over
- * an hour, and a redeploy with no code change put it in. Moving the scope to
- * the shared tier is the chosen fix — `[inference]` until that production
- * check passes, with "stop caching the assembly" as the named fallback; the
- * tier is pinned in `src/app/sitemap.test.ts`.
+ * `[inference]`, verified only by #209's production check. It used to be a
+ * plain `'use cache'`, whose purge reaches only the instance that issued it
+ * `[source, next 16.3.4 default cache handler: refreshTags is a no-op]`. The
+ * path purge below was added first and was honest that it might not be
+ * enough — it was not: `[measured, prod 2026-09-26, #209 comment]` a page
+ * published after `revalidatePath('/sitemap.xml')` shipped stayed out of the
+ * sitemap for over an hour, and only a redeploy with no code change put it in.
+ * That the per-instance scope was the stale layer is `[inference]`, and not
+ * the only candidate: a 2026-09-09 read stale past the 24 h `expire` is
+ * unreconciled (#209). Moving the scope to the shared tier is the chosen fix —
+ * `[inference]` until that production check passes. If it fails, diagnose
+ * first (the stale response's headers, the two inner `:remote` reads, whether
+ * this hook's purge ran), and only then fall back to not caching the assembly.
+ * The tier is pinned in `src/app/sitemap.test.ts`.
  *
  * `revalidatePath('/sitemap.xml')` stays, and unlike the deleted tag below it
  * has a subscriber: the route is a static prerender (`○`, 6h/1d) whose entry
  * is tagged `_N_T_/sitemap.xml` as well as `posts`/`pages`
- * `[measured, local next build, 2026-09-27]`. The tag purge expires that entry
- * too, so the path purge is the explicit spelling of the same expiry rather
- * than a second mechanism — kept because it names the route it means, and it
- * costs nothing.
+ * `[measured, local next build, 2026-09-27]`. Because the entry carries the
+ * tag, the tag purge should expire it too — `[inference]`; locally the
+ * combined purge set did (`[measured, local, 2026-09-27]`) — so the path
+ * purge is the explicit spelling of the same expiry rather than a second
+ * mechanism, kept because it names the route it means and costs nothing.
  *
  * **`pages-sitemap` is gone (#209).** It was fired here and subscribed by
  * nothing `[measured, grep across src, docs and .github]` — `docs/SEO.md`

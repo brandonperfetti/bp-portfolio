@@ -331,9 +331,10 @@ const EXPECTED_DIRECTIVE_KINDS: Record<string, DirectiveKind> = {
   'src/lib/content/posts.ts#getPublishedPostSummaries': 'remote',
   // A route-level assembly of CMS reads (#209): tagged `posts` + `pages` and
   // purged by both revalidation hooks, so it needs the shared tier as much as
-  // the reads it wraps. It sat in the "not CMS reads" group below until #209
-  // measured the cost: one per-instance copy kept new pages and articles out
-  // of /sitemap.xml until a redeploy.
+  // the reads it wraps. It sat in the "not CMS reads" group below until #209:
+  // [measured, prod 2026-09-26, #209 comment] new pages and articles reached
+  // /sitemap.xml only after a redeploy; [inference] this scope's per-instance
+  // copy is why, verified only by #209's production check.
   'src/app/sitemap.ts#getSitemapData': 'remote',
 
   // Documented exceptions — oversized payloads that the 2 MB Runtime Cache

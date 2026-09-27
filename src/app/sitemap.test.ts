@@ -197,21 +197,23 @@ describe('sitemap · placed articles (#153)', () => {
 })
 
 /**
- * Freshness without a redeploy (#209). `[measured, prod, 2026-09-26]`
- * production kept a page and two articles out of the sitemap for over an hour
- * after they were published, while a redeploy with no code change put them in.
+ * Freshness without a redeploy (#209).
+ * `[measured, prod 2026-09-26, #209 comment]` production kept a page and two
+ * articles out of the sitemap for over an hour after they were published,
+ * while only a redeploy with no code change put them in.
  * `[inference]` the cached assembly was on the per-instance tier, so a hook's
  * purge never reached the copy that was served — the diagnosis the shared tier
  * below acts on, verified only by #209's production check.
  *
- * The fix is a property of the cache scope, not of the emit, so it is pinned
- * as one: the assembly lives on the shared `'use cache: remote'` tier and
- * carries BOTH collections' tags. A test over the emit alone would pass against
- * the broken tier, exactly as #209 predicted of the query-level test. The two
- * emission tests below cover both halves the ticket names — the article case
- * and the parent/child page case — but only as emission: `cacheTag` and
- * `cacheLife` are mocked, so they pass on either tier and say nothing about
- * freshness. The tier scan and the tag test are the fix-sensitive ones.
+ * The chosen fix is a property of the cache scope, not of the emit, so it is
+ * pinned as one: the assembly lives on the shared `'use cache: remote'` tier
+ * and carries BOTH collections' tags. A test over the emit alone would pass
+ * against the old tier, exactly as #209 predicted of the query-level test.
+ * The two emission tests below cover both halves the ticket names — the
+ * article case and the parent/child page case — but only as emission:
+ * `cacheTag` and `cacheLife` are mocked, so they pass on either tier and say
+ * nothing about freshness. The tier scan and the tag test are the
+ * fix-sensitive ones.
  */
 describe('sitemap freshness (#209)', () => {
   it('caches the assembly on the shared remote tier — one scope, never plain `use cache`', () => {
@@ -226,7 +228,7 @@ describe('sitemap freshness (#209)', () => {
     expect(directives).toEqual(["'use cache: remote'"])
   })
 
-  it('tags the cached assembly with both posts and pages, so either hook purges it', async () => {
+  it('tags the cached assembly with both posts and pages — the tags the two hooks purge', async () => {
     mocks.cacheTag.mockClear()
     mocks.getSiteUrl.mockReturnValue('https://example.com')
     mocks.getAllArticles.mockResolvedValue([])

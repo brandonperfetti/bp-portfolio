@@ -59,10 +59,13 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
   a measurement of this route. `[measured, local, 2026-09-27]` in a single
   `next start` process a page and an article joined the sitemap on the first
   read after the hooks' purge set — which a single process shows on either
-  cache tier, so it does not discriminate. If the production check fails, the
-  fallback is to stop caching the assembly (the route goes dynamic, `ƒ`).
-  **Corrected 2026-09-27 (#209)** — the 2026-09-10 text here read, in full
-  (its inner double quotes shown as single):
+  cache tier, so it does not discriminate. If the production check fails,
+  diagnose first — the stale response's headers, the two inner `:remote`
+  reads, whether the hooks' purge ran — and only then fall back to not caching
+  the assembly (the route goes dynamic, `ƒ`).
+  **Corrected 2026-09-27 (#209)** — the 2026-09-10 correction here, after its
+  "**Corrected 2026-09-10 (#209):**" marker, read in full (its inner double
+  quotes shown as single):
   _"it has not regenerated 'hourly (`revalidate = 3600`)' since #76 removed
   that export — the data is prepared in a `getSitemapData` scope on
   `cacheLife('cmsContent')`, which is stale 300 s / revalidate 6 h / expire
@@ -71,16 +74,17 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
   unpublish and delete. That call is the mechanism — `getSitemapData` is a
   **plain** `'use cache'` scope, so its `posts`/`pages` tag purges reach only
   the instance that issued them, which is how a published page stayed out of a
-  freshly generated sitemap for 28.5 h `[measured, prod 2026-09-09]`."_ Do not
-  rely on "an edit no longer waits": `[measured, prod, 2026-09-26]` a page and
-  two articles published after that path purge shipped stayed out of the
-  sitemap for over an hour, and a redeploy with no code change put them in
-  (61 → 64 URLs). Also unreconciled: that 28.5 h read (`MISS`, `age: 0`) is
-  past the 24 h `expire`, which a per-instance copy of this scope should not
-  survive, so the stale layer may not be this scope alone. The
-  `posts-sitemap`/`pages-sitemap` tags the hooks used to fire were subscribed
-  by nothing and are **deleted** (#209, 2026-09-10), not waiting for a
-  subscriber.
+  freshly generated sitemap for 28.5 h `[measured, prod 2026-09-09]`. The
+  `posts-sitemap`/`pages-sitemap` tags that used to be fired here were
+  subscribed by nothing and are **deleted**, not waiting for a subscriber."_
+  Do not rely on "an edit no longer waits":
+  `[measured, prod 2026-09-26, #209 comment]` a page and two articles
+  published after that path purge shipped stayed out of the sitemap for over an
+  hour, and only a redeploy with no code change put them in (61 → 64 URLs).
+  Also unreconciled: that 28.5 h read (`MISS`, `age: 0`) is past the 24 h
+  `expire`, which a per-instance copy of this scope should not
+  survive, so the stale layer may not be this scope alone. The deleted tags
+  stay deleted.
 - `src/app/robots.ts` — **a recorded policy since 2026-09-27 (#221)**, pinned
   by `robots.test.ts`. One rule set for every crawler:
   `Disallow: /admin$`, `/admin/` and `/api/` — the Payload admin and the JSON

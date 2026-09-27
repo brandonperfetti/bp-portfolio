@@ -25,11 +25,13 @@ import type { Post } from '../../../payload-types'
  * `getSitemapData` (`src/app/sitemap.ts`), carries the `posts` tag as well as
  * `pages`, so now that it is a `'use cache: remote'` scope an article publish
  * is expected to reach it through the tag purge below — `[inference]`,
- * verified only by #209's production check. It was a plain `'use cache'`, and
- * `[inference]` one per-instance copy starved articles and pages together:
- * `[measured, prod, 2026-09-26]` two articles published between deploys never
- * reached the sitemap until a redeploy. The path purge expires the route's own
- * static prerender. See `revalidatePage.ts` for the full argument.
+ * verified only by #209's production check. It was a plain `'use cache'`.
+ * `[measured, prod 2026-09-26, #209 comment]` two articles published between
+ * deploys reached the sitemap only after a redeploy; `[inference]` one
+ * per-instance copy of that scope starved articles and pages together. The
+ * path purge targets the route's own static prerender. See
+ * `revalidatePage.ts` for the full argument, the unreconciled datum and the
+ * fallback order.
  *
  * **`posts-sitemap` is gone (#209).** Fired here, subscribed by nothing
  * `[measured, grep across src, docs and .github]`; the docblock below used to

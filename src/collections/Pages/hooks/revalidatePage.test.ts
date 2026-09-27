@@ -44,8 +44,9 @@ describe('revalidatePage (afterChange)', () => {
 
     expect(mocks.revalidateTag).toHaveBeenCalledWith('pages', { expire: 0 })
     // #209: `pages` is one of the two tags on the sitemap's `:remote` cached
-    // assembly, so this purge is what puts a new page in the sitemap; the path
-    // purge expires the route's own static prerender.
+    // assembly, so this purge is expected to put a new page in the sitemap
+    // on every instance ([inference], verified only by #209's production
+    // check); the path purge targets the route's own static prerender.
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/sitemap.xml')
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/about')
     // The dead tag is gone, not merely unasserted: firing it again would put
