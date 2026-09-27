@@ -212,17 +212,30 @@ stay where they are:
   `mimeType`, `filesize`, `width` or `height`, and a Media **update** with no
   uploaded file may not change `filename`, `mimeType`, `filesize`, `width`
   or `height` from the stored value (sending them back unchanged, and
-  `alt` or focal-point edits, pass). Both refusals are a 400 naming the
-  ingest route [source: `src/collections/Media.ts` — `beforeOperation`
-  hook `refuseCreateWithoutUpload` at `:72-93` over the fields at `:20-27`;
-  `beforeValidate` hook `refuseFilelessFileRewrite` at `:165-191` over the
+  `alt` or focal-point edits, pass). An update carrying an `uploadEdits`
+  query (crop, resize or focal point) and no file may not send a `url` or
+  `filename` that differs from the stored row's, and a `where` update under
+  `uploadEdits` may not send either: Payload re-crops by re-fetching the file
+  from those two body fields, from any public host or from another row's
+  path on local disk, and the fetched bytes set `req.file`, which would pass
+  the update guard. The admin's own crop and focal-point edits post the doc
+  as read, so they pass. All three refusals are a 400 naming the ingest
+  route [source: `src/collections/Media.ts` — `beforeOperation` hook
+  `refuseCreateWithoutUpload` at `:72-93` over the fields at `:20-27`;
+  `beforeValidate` hook `refuseFilelessFileRewrite` at `:166-192` over the
   fields at `:101-107`, compared by `sameStoredValue` at `:114-117`;
-  registered at `:229-231`; lane D, #242]. The update guard also passes
-  the storage adapter's own metadata write-back, which runs with the
-  server-only `context.skipCloudStorage`.
-  **Known gap, not a rule that holds:** a REST update carrying an
-  `?uploadEdits` query may make Payload fetch a body `url`. That fetch would
-  set `req.file` and so pass both guards. Unmeasured; tracked in #270.
+  `beforeOperation` hook `refuseUploadEditsRefetch` at `:248-301` over the
+  fields at `:198`; registered at `:339-341`; lane D, #242; #270]. The
+  update guard also passes the storage adapter's own metadata write-back,
+  which runs with the server-only `context.skipCloudStorage`.
+  _Corrected 2026-09-27 (CodeRabbit round 1 on #271):_ this bullet named the
+  `uploadEdits` path a "known gap, not a rule that holds … unmeasured"; it is
+  now measured and refused. `[measured, local disk, 2026-09-27]` without the
+  new hook, a crop with a body `url` of `http://127.0.0.1:9/…` failed only
+  because Payload's `safeFetch` refuses loopback addresses, and a crop whose
+  body `filename` named another row's file overwrote that file's bytes on
+  disk. A public-host fetch is `[source]` (`generateFileData.js:54-77`,
+  `getExternalFile.js`), not measured.
 - **Why.** Given a `filename` and a `url` and no file, Payload's create
   fetches the `url` server-side from any public host and stores the bytes
   under the caller's `filename` with overwriting forced on — a server-side
@@ -244,7 +257,7 @@ stay where they are:
   the declared length and on the bytes (`:13`, `:126`, `:137`).
 - SVG uploads through the admin stay allowed for legacy content, and SVG
   can carry scripts, so only trusted staff hold editor accounts
-  [source: `src/collections/Media.ts:197-198`, the collection's TSDoc].
+  [source: `src/collections/Media.ts:307-308`, the collection's TSDoc].
   **Operational.**
 
 ## End-user authorization (Clerk)
