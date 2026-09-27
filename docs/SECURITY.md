@@ -328,13 +328,22 @@ stay there.
   `sendDefaultPii` appears nowhere in the tree. Changing that
   is a change to `isSessionIdAllowed()` and to `docs/ANALYTICS.md`
   § Sessions in Sentry. The client-side Sentry **Logs** calls carry no
-  identity either `[measured 2026-09-27, at ee81049]`:
-  `HistoryWriteGuard` records a dropped history write as `{ method, path }`
-  only, and swallows only the browser's history-throttle `SecurityError` —
-  the cross-origin `SecurityError` still throws
-  [source: `src/components/tech/HistoryWriteGuard.tsx:16-27`, `:60`,
-  `:87-97`]; `clientTelemetry.ts` sends a speech-recognition error code and
-  a boolean [source: `src/lib/observability/clientTelemetry.ts:32-35`].
+  identity either `[measured 2026-09-27, at b4b596b]`:
+  - `HistoryWriteGuard` logs `tech.history.write_dropped` with
+    `{ method, outcome, path }` only, where `path` is
+    `window.location.pathname` (no query string, no user data) and
+    `outcome` is `dropped`, `retrying`, `gave_up` or `retry_failed`, once
+    per method-and-outcome pair per mount
+    [source: `src/components/tech/HistoryWriteGuard.tsx:42-43`, `:122-127`,
+    `:227-242`].
+  - It contains only the browser's history-throttle `SecurityError`
+    (matched on name and message, so the cross-origin `SecurityError` is not
+    mistaken for it) [source: `:20-28`]. Any other error from a call on the
+    caller's stack is rethrown untouched [source: `:189`]; one from a timer
+    retry has no caller to reach, so it is logged `retry_failed` and the
+    retry stops, not rethrown [source: `:148-154`].
+  - `clientTelemetry.ts` sends a speech-recognition error code and a
+    boolean [source: `src/lib/observability/clientTelemetry.ts:32-35`].
 - **A mailing-list contact is captured only with consent.** The contact
   form captures only when its unchecked-by-default opt-in is set and the
   message was delivered [source: `src/app/api/contact/route.ts`]; sign-up
