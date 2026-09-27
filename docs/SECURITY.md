@@ -145,11 +145,16 @@ stay where they are:
     Pages, which gives an anonymous reader only `_status: 'published'`; and
     `authenticated` for Users, whose `unlock` is restricted to the user's
     own account.
-  - **Plugin collections keep their plugins' defaults**
-    [source: payload 3.88 plugin dists]: `redirects` and `search` read
-    publicly, `search` refuses `create`, and the MCP plugin's API-key
-    collection lets a user manage only their own keys. An operation a
-    plugin leaves unset falls back to Payload's default, a signed-in user.
+  - **Plugin collections keep their plugins' defaults**: `redirects` and
+    `search` read publicly, `search` refuses `create`, and the MCP
+    plugin's API-key collection lets a user manage only their own keys
+    [source, `node_modules/@payloadcms/*` 3.88.0:
+    `plugin-redirects/dist/index.js:91-94`,
+    `plugin-search/dist/Search/index.js:54-58`,
+    `plugin-mcp/dist/collections/createApiKeysCollection.js:49-56`]. An
+    operation a plugin leaves unset falls back to Payload's default, a
+    signed-in user [source: `payload/dist/auth/defaultAccess.js:1`,
+    `payload/dist/collections/config/defaults.js:6-9`].
 - **Clerk identity never grants CMS access.** Payload Users are the only
   principals for `/admin`, REST, GraphQL and `/api/mcp`; Clerk guards none
   of them [source: `src/access/authenticated.ts`, `docs/AUTH.md` § Setup].
@@ -203,7 +208,14 @@ stay where they are:
   surfaces (#247)._
 - **Identity is resolved server-side, never taken from the request body.**
   Rate limits, the anonymous free-message gate and retrieval grounding key
-  on the Clerk session and the trusted IP (`docs/AI.md` § Guardrails).
+  on the Clerk session and the trusted IP [source:
+  `src/app/api/ai/chat/route.ts:74-75` (IP and viewer resolved from the
+  request headers and the Clerk session), `:85-87` (limiter key: Clerk
+  `userId`, else the HMAC of the IP), `:127` (free-message count by IP),
+  `:227` (retrieval gets `viewer.isAuthenticated`);
+  `src/lib/security/guardrails.ts:272` (`getRequestClientIp`: `x-real-ip`,
+  else the rightmost `x-forwarded-for` hop, never the leftmost)].
+  Mechanism: `docs/AI.md` § Guardrails.
 - Until Clerk Billing is enabled, `gated` means signed in and nothing more:
   `requiredPlan` and `requiredFeature` are dormant fields `canAccess`
   ignores [source: `src/access/canAccess.ts`].
