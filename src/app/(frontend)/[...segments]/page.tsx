@@ -56,6 +56,30 @@ const addressOf = (segments: string[] | undefined) => {
 }
 
 /**
+ * [block], deliberately (#172): a path outside the prerender set renders as one
+ * blocking response rather than a streamed shell.
+ *
+ * @remarks `await params` sits outside `<Suspense>` because everything this
+ * route decides from the path — `notFound()`, the #120/#130 `redirect` /
+ * `permanentRedirect`, the #153 placed-article hand-off — has to be decided
+ * BEFORE the response commits to a status. Streamed, the status is sent as 200
+ * with the shell, so a missing page becomes a soft 404 and a renamed page's 308
+ * becomes a client-side redirect. Source: Next's own streaming guide
+ * (`next/dist/docs`, "The HTTP contract"). Measured under `next dev` on a
+ * Suspense prototype of this route: `/lab-missing` answered 200 with a
+ * streamed not-found, where this file answers 404.
+ * Paths returned by `generateStaticParams` are unaffected: they still
+ * prerender whole (`pnpm build` route table). Per Next's `instant.md`,
+ * `false` does two things: it exempts this segment from Cache Components'
+ * dev-time instant validation, which otherwise logs `blocking-prerender-runtime`
+ * on every request-time render, and it opts the route out of the static-shell
+ * validation Cache Components runs at prerender time ("Disabling static shell
+ * validation"). Measured on this route: the `pnpm build` route table is
+ * identical with and without it, so the render mode does not change.
+ */
+export const instant = false
+
+/**
  * The catch-all's prerender set: one entry per published, non-reserved,
  * non-root page, each as its path split into segments.
  *

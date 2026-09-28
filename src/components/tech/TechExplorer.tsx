@@ -11,6 +11,7 @@ import {
 } from 'react'
 
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
+import { HistoryWriteGuard } from '@/components/tech/HistoryWriteGuard'
 import { TechCard } from '@/components/tech/TechCard'
 import {
   ListPagination,
@@ -74,6 +75,50 @@ function resolveCategory(item: CmsEntityItem) {
 }
 
 type SortMode = 'name' | 'active'
+
+/**
+ * The query string `updateUrl` writes for a filter state, from the current
+ * one: `q`/`category`/`sort` set or dropped to match, every other param kept.
+ *
+ * @remarks #88: any filter/sort change resets to page 1 by dropping `page`,
+ * inside the same skip-when-no-URL-change guard used for the filters.
+ */
+function buildFilterQueryString(
+  currentQueryString: string,
+  nextQuery: string,
+  nextCategory: string,
+  nextSort: SortMode,
+): string {
+  const params = new URLSearchParams(currentQueryString)
+
+  const filtersChanged =
+    (params.get('q') ?? '') !== nextQuery.trim() ||
+    (params.get('category') ?? 'All') !== nextCategory ||
+    (params.get('sort') === 'active' ? 'active' : 'name') !== nextSort
+  if (filtersChanged) {
+    params.delete(PAGE_PARAM)
+  }
+
+  if (nextQuery.trim()) {
+    params.set('q', nextQuery.trim())
+  } else {
+    params.delete('q')
+  }
+
+  if (nextCategory !== 'All') {
+    params.set('category', nextCategory)
+  } else {
+    params.delete('category')
+  }
+
+  if (nextSort === 'active') {
+    params.set('sort', 'active')
+  } else {
+    params.delete('sort')
+  }
+
+  return params.toString()
+}
 
 /**
  * Tech entries per page (#88).
@@ -197,37 +242,12 @@ export function TechExplorer({
   const updateUrl = useCallback(
     (nextQuery: string, nextCategory: string, nextSort: SortMode) => {
       const currentQueryString = searchParams.toString()
-      const params = new URLSearchParams(currentQueryString)
-
-      // #88: any filter/sort change resets to page 1 by dropping the param,
-      // inside the same skip-when-no-URL-change guard used for the filters.
-      const filtersChanged =
-        (searchParams.get('q') ?? '') !== nextQuery.trim() ||
-        (searchParams.get('category') ?? 'All') !== nextCategory ||
-        (searchParams.get('sort') === 'active' ? 'active' : 'name') !== nextSort
-      if (filtersChanged) {
-        params.delete(PAGE_PARAM)
-      }
-
-      if (nextQuery.trim()) {
-        params.set('q', nextQuery.trim())
-      } else {
-        params.delete('q')
-      }
-
-      if (nextCategory !== 'All') {
-        params.set('category', nextCategory)
-      } else {
-        params.delete('category')
-      }
-
-      if (nextSort === 'active') {
-        params.set('sort', 'active')
-      } else {
-        params.delete('sort')
-      }
-
-      const queryString = params.toString()
+      const queryString = buildFilterQueryString(
+        currentQueryString,
+        nextQuery,
+        nextCategory,
+        nextSort,
+      )
       if (queryString === currentQueryString) {
         return
       }
@@ -239,9 +259,64 @@ export function TechExplorer({
     [pathname, router, searchParams],
   )
 
+  /**
+   * The filter state this effect last acted on — the #249 write gate.
+   *
+   * @remarks Every URL write here costs a `history.replaceState` in Next's
+   * `HistoryUpdater`, and Safari throws past 100 of those in ten seconds —
+   * from the commit phase, which replaces the whole app with Next's error
+   * screen `[measured: Playwright WebKit on a production build]`. So the URL
+   * is written only when the READER changed the filters, never merely because
+   * the URL moved: `updateUrl` changes identity with `searchParams`, which
+   * used to re-run this effect on every Back/Forward or in-app link and write
+   * the still-stale state straight back over the URL the reader had just
+   * navigated to (two history writes per traversal, and the traversal undone).
+   */
+  const lastFilterStateRef = useRef<string | null>(null)
+
+  // Once the state has caught up with a URL the reader navigated to, that URL
+  // is what the gate compares against. Without this the gate still held the
+  // state from before the traversal, so a clear made inside the debounce
+  // after Back to `?q=react` matched it and was never written: an unfiltered
+  // list under `?q=react` (CodeRabbit on PR #271). Recorded only when the URL
+  // is exactly what `updateUrl` would write for the state, so nothing is
+  // recorded for a non-canonical URL (`?sort=name` on load is still rewritten
+  // once, as before); judged on the raw `query`, so it lands before the
+  // debounce settles; and never while the input is focused, where the sync
+  // above leaves `query` to the reader. Declared before the write effect so
+  // it runs first.
   useEffect(() => {
+    if (searchInputRef.current === document.activeElement) {
+      return
+    }
+    const currentQueryString = searchParams.toString()
+    if (
+      buildFilterQueryString(currentQueryString, query, category, sort) ===
+      currentQueryString
+    ) {
+      lastFilterStateRef.current = JSON.stringify([
+        query.trim(),
+        category,
+        sort,
+      ])
+    }
+  }, [query, category, sort, searchParams])
+
+  useEffect(() => {
+    // A debounce is still pending, so `debouncedQuery` is stale: it is either
+    // the reader mid-word or a URL-driven `setQuery` catching up. Either way the
+    // write waits for the value to settle, which also folds a chip tap made
+    // inside the debounce window into the one write that follows it.
+    if (debouncedQuery !== query) {
+      return
+    }
+    const filterState = JSON.stringify([debouncedQuery.trim(), category, sort])
+    if (filterState === lastFilterStateRef.current) {
+      return
+    }
+    lastFilterStateRef.current = filterState
     updateUrl(debouncedQuery, category, sort)
-  }, [debouncedQuery, category, sort, updateUrl])
+  }, [query, debouncedQuery, category, sort, updateUrl])
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = debouncedQuery.trim().toLowerCase()
@@ -310,6 +385,9 @@ export function TechExplorer({
 
   return (
     <div className="space-y-8">
+      {/* #249: contains Safari's history-write throttle for as long as the
+          explorer (the route's only URL writer) is mounted. */}
+      <HistoryWriteGuard />
       <div className="space-y-4 rounded-2xl border border-zinc-100 p-4 dark:border-zinc-700/40">
         <div className="relative">
           <input

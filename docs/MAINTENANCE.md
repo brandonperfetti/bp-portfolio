@@ -49,11 +49,9 @@
   (Drizzle-managed) remain unexposed — and, as of #72, additionally locked
   with default-deny RLS plus revoked `anon`/`authenticated` grants (see the
   new-table RLS convention in `docs/PAYLOAD.md`), so even adding `public` to
-  the exposed schemas could no longer leak rows on its own. Do NOT add
-  `public` (or
-  any schema containing real tables) to the exposed-schemas list, and do
-  NOT create tables in `api`; re-check both on the production project at
-  promotion.
+  the exposed schemas could no longer leak rows on its own. What must never
+  be exposed or created there: `docs/SECURITY.md` § Operational data and
+  infrastructure.
   Blob store `bp-portfolio-media` is public-read.
 - **Sentry (#73)**: env vars `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` /
   `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` (+ optional
@@ -66,21 +64,28 @@
   outright and `NEXT_PUBLIC_SENTRY_SPOTLIGHT` is the gate — armed, the SDK
   inits with _no_ DSN and forwards to a local Spotlight sidecar; unarmed, it
   stays inert as before. So **a DSN belongs in deployed environments only** —
-  see “Local errors go to Spotlight” below. `SENTRY_AUTH_TOKEN` is a
-  build-only secret (source-map upload); rotate it like Resend/Blob if
-  exposed.
+  see “Local errors go to Spotlight” below. `SENTRY_AUTH_TOKEN` rotation:
+  `docs/SECURITY.md` § Secret handling.
 - **Database backups (nightly, encrypted)**: Supabase free tier has NO
   automated backups, and the DB is the canonical copy of all content —
   `.github/workflows/db-backup.yml` runs a nightly `pg_dump` (session
-  pooler, pg17 client) at 09:17 UTC, encrypts with AES-256, and uploads a
-  14-day-retention Actions artifact. Repo is PUBLIC, so the plaintext dump
-  must never be uploaded — encryption is load-bearing, not optional.
+  pooler, pg17 client) at 09:17 UTC, encrypts with AES-256, and uploads it
+  to the **private Cloudflare R2 bucket `bp-portfolio-db-backups`** (#181),
+  kept off Supabase so a backup survives losing its source. Where the dump
+  may never go, and its encryption: `docs/SECURITY.md` § Operational data and
+  infrastructure. Retention is
+  the bucket's lifecycle rule `expire-backups-30d` (objects deleted after 30
+  days), the one retention mechanism; the workflow never deletes. The upload
+  uses the runner's AWS CLI against R2's S3 API with the Actions secrets
+  `R2_BACKUP_ACCESS_KEY_ID`, `R2_BACKUP_SECRET_ACCESS_KEY` and
+  `R2_BACKUP_ENDPOINT` (a bucket-scoped Object Read & Write token), and reads
+  the object's size back before the run counts as a backup.
   TWO targets on one schedule (a `fail-fast: false` matrix, so one
   target's failure never cancels the other's backup): **staging**
-  (`SUPABASE_DB_URL` + `BACKUP_PASSPHRASE`, artifact
-  `db-staging-YYYY-MM-DD.dump.enc`) and **production**
-  (`SUPABASE_DB_URL_PROD` + `BACKUP_PASSPHRASE_PROD`, artifact
-  `db-prod-YYYY-MM-DD.dump.enc`). The two passphrases are deliberately
+  (`SUPABASE_DB_URL` + `BACKUP_PASSPHRASE`, key
+  `staging/YYYY-MM-DD/db-staging-YYYY-MM-DDTHHMMSSZ.dump.enc`) and
+  **production** (`SUPABASE_DB_URL_PROD` + `BACKUP_PASSPHRASE_PROD`, key
+  `prod/YYYY-MM-DD/db-prod-YYYY-MM-DDTHHMMSSZ.dump.enc`). The two passphrases are deliberately
   different values; both are kept in the password manager — losing one
   makes that target's backups unreadable. The nightly connection doubles
   as the free-tier keep-alive for both projects. Restore commands are in
@@ -209,15 +214,22 @@ restores the newest nightly encrypted backup into a local Docker Postgres, so
    the same image as the CI e2e job's Postgres service — on 5432, database
    `bp_portfolio_dev`, user/password `postgres`/`postgres`, data in the named
    volume `bp_portfolio_pgdata`.
-2. `gh auth login` — the backups are private Actions artifacts.
+2. The AWS CLI on PATH (`brew install awscli`) — the backups live in the
+   private R2 bucket, which speaks the S3 API.
 3. Postgres client tools **>= 17** on PATH (`brew install postgresql@17`). The
    backup workflow dumps with a pg17 client, and an older `pg_restore` cannot
    read the dump. The server being 16 while the client is 17 is fine and
    intended; the script refuses to run with an older client.
-4. Put the passphrase in `.env.local` (git-ignored, never committed):
+4. Put the passphrase in `.env.local` (git-ignored; `docs/SECURITY.md`
+   § Secret handling):
    `BACKUP_PASSPHRASE_PROD` for production backups (the default source) or
-   `BACKUP_PASSPHRASE` for staging. Values live in the password manager; only
-   the NAMES appear anywhere in this repo.
+   `BACKUP_PASSPHRASE` for staging, plus the R2 read credentials
+   `R2_BACKUP_ACCESS_KEY_ID`, `R2_BACKUP_SECRET_ACCESS_KEY` and
+   `R2_BACKUP_ENDPOINT` (a token that can read `bp-portfolio-db-backups`).
+   Values live in the password manager (names only in the repo:
+   `docs/SECURITY.md` § Secret handling). The script hands the R2 values to
+   `aws` through its own environment, with your `~/.aws` config and profile
+   shut out.
 5. Point the app at the container:
    `DATABASE_URI=postgres://postgres:postgres@127.0.0.1:5432/bp_portfolio_dev`
    in `.env.local`. Swap back to the remote by editing that one string. Never
@@ -236,9 +248,10 @@ Pass the flags directly, with no `--` separator. pnpm forwards a `--` to the
 script verbatim (npm strips it), so the separator is not needed here; the
 script tolerates it either way.
 
-The script (`scripts/dev-db-restore.sh`) finds the newest **successful**
-`db-backup.yml` run, downloads that target's artifact
-(`db-prod-*.dump.enc` / `db-staging-*.dump.enc`), decrypts it with the
+The script (`scripts/dev-db-restore.sh`) lists the target's prefix in the R2
+bucket (`prod/` or `staging/`), takes the greatest key in the workflow's layout
+— the newest backup, since keys start with the UTC date and time — downloads
+it, decrypts it with the
 workflow header's exact `openssl` invocation, drops and recreates
 `bp_portfolio_dev`, restores with `--clean --if-exists --no-owner
 --no-privileges`, and prints `pages` / `posts` / `payload_migrations` row
@@ -266,20 +279,23 @@ counts. Then: `pnpm migrate` (expect nothing to run) and `pnpm dev`.
   content, contact emails, and the users table.
 - **Port conflicts.** If a system Postgres already owns 5432, change the
   published port in `docker-compose.yml` to `127.0.0.1:5433:5432` (keep the
-  loopback prefix — the container holds real content behind the well-known
-  `postgres` password, so it must never listen beyond the machine), pass
+  loopback prefix — `docs/SECURITY.md` § Operational data and
+  infrastructure), pass
   `--port 5433`, and update `DATABASE_URI`. Do not assume the remap took — a system cluster
   listening on 5433 has silently shadowed the container before. Confirm with
   `docker compose ps` and `psql -h 127.0.0.1 -p <port> -U postgres -l`.
-- **Artifacts expire after 14 days**, and because the workflow's matrix runs
-  both targets with `fail-fast: false`, a run where _either_ target failed is
-  reported as failed and skipped by the "newest successful run" lookup. If the
-  restore says it found no successful run, dispatch `db-backup.yml` by hand.
-- **Restored data is real.** It holds live content and the users table. Never
-  commit it, never attach it to an issue, never upload it anywhere.
-- Preflight failures are pinned by `scripts/dev-db-restore.test.ts` (stubbed
-  PATH, no network, no Docker); the real download/decrypt/restore is not
-  covered by any test and is verified by running the command above.
+- **Backups expire after 30 days** (the bucket's lifecycle rule). Each target
+  uploads its own object, so one target's failed run never hides the other
+  target's backup. If the restore finds no backup for a target, check the
+  Actions tab and dispatch `db-backup.yml` by hand. `--dry-run` lists the
+  bucket, so it also proves the R2 credentials work and names the object a
+  real run would restore.
+- **Restored data is real** — its handling rules are in `docs/SECURITY.md`
+  § Operational data and infrastructure.
+- Preflight failures, the newest-key choice and the R2 credential handling
+  are pinned by `scripts/dev-db-restore.test.ts` (stubbed PATH, no network, no
+  Docker); the real download/decrypt/restore is not covered by any test and is
+  verified by running the command above.
 
 ## Watchpoints
 

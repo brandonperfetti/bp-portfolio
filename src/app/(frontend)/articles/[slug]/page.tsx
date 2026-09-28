@@ -19,6 +19,22 @@ import {
 // the page still handles slugs that don't resolve. Piece 2 adds the empty-CMS
 // `generateStaticParams` guard + the `<Suspense>`/auth-gated-body split.
 
+/**
+ * [block], deliberately (#172) — the same decision, for the same reason, as
+ * the `[...segments]` catch-all's `instant` export.
+ *
+ * @remarks A slug outside the prerender set must be able to answer a real 404,
+ * a #120/#130 redirect, or the #153 placed-article 308 as an HTTP status, which
+ * is only possible before the response starts streaming, so `await params`
+ * stays outside `<Suspense>`. Prerendered slugs are unaffected, and the
+ * per-request member unlock keeps its own Suspense boundary inside
+ * `ArticleView`. Per Next's `instant.md`, `false` both silences Cache
+ * Components' dev-time `blocking-prerender-runtime` validation and opts the
+ * route out of the prerender-time static-shell validation. Measured: the
+ * `pnpm build` route table is identical with and without it.
+ */
+export const instant = false
+
 type Params = {
   slug: string
 }

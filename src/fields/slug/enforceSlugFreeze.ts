@@ -77,8 +77,12 @@ export const enforceSlugFreeze =
 
     // `originalDoc` is a draft. It may still be the draft of a document with a
     // live published version (autosave), so ask the database before allowing
-    // the move. A never-published draft falls through and keeps deriving from
-    // its title, which is the useful pre-publish behaviour.
+    // the move. A never-published draft falls through and keeps the slug this
+    // write resolved: the admin form re-derives it from the title
+    // (`SlugComponent`), while a REST/MCP write that omits `slug` keeps the
+    // stored one, because Payload seeds an absent field from the stored
+    // document before this hook runs. Either is the useful pre-publish
+    // behaviour.
     const id = originalDoc?.id
     if (id === undefined || id === null) return value
 

@@ -45,29 +45,81 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
 ## Indexing surfaces
 
 - `src/app/sitemap.ts` — static routes + published articles + published
-  page-builder pages. **Corrected 2026-09-10 (#209):** it has not regenerated
-  "hourly (`revalidate = 3600`)" since #76 removed that export — the data is
-  prepared in a `getSitemapData` scope on `cacheLife('cmsContent')`, which is
-  stale 300 s / revalidate 6 h / expire 24 h (`next.config.mjs`). And an edit no
-  longer waits for that cadence: the Pages and Posts hooks call
-  `revalidatePath('/sitemap.xml')` on publish, unpublish and delete. That call
-  is the mechanism — `getSitemapData` is a **plain** `'use cache'` scope, so its
-  `posts`/`pages` tag purges reach only the instance that issued them, which is
-  how a published page stayed out of a freshly generated sitemap for 28.5 h
-  `[measured, prod 2026-09-09]`. The `posts-sitemap`/`pages-sitemap` tags that
-  used to be fired here were subscribed by nothing and are **deleted**, not
-  waiting for a subscriber.
-- `src/app/robots.ts` — **corrected 2026-09-10 (#209):** it allows crawling
-  with no `Disallow` at all (`[measured, prod robots.txt 2026-09-09]`:
-  `User-Agent: *` / `Allow: /` / `Host:` / `Sitemap:`). The previous sentence
-  claimed `Disallow` entries for `/admin` and `/api` that the file does not
-  emit. Whether it SHOULD emit them is a separate decision, tracked on #210's
-  follow-ups; this line now describes what is served.
+  page-builder pages. The route is a static prerender (`○`, 6 h revalidate /
+  1 d expire; `[measured, local next build, 2026-09-27]`, its prerender tagged
+  `posts`, `pages` and `_N_T_/sitemap.xml`) built from `getSitemapData`, a
+  **`'use cache: remote'`** scope tagged `posts` + `pages` on
+  `cacheLife('cmsContent')` (stale 300 s / revalidate 6 h / expire 24 h,
+  `next.config.mjs`). On publish, unpublish and delete of a page or an article
+  the Pages and Posts hooks purge those tags and call
+  `revalidatePath('/sitemap.xml')`. `[inference]`, verified only by #209's
+  production check: the tag purge reaches the shared Runtime Cache entry every
+  instance reads, so the change should reach the sitemap without a deploy; the
+  basis is #118's measured preview result for the same static-route class, not
+  a measurement of this route. `[measured, local, 2026-09-27]` in a single
+  `next start` process a page and an article joined the sitemap on the first
+  read after the hooks' purge set — which a single process shows on either
+  cache tier, so it does not discriminate. If the production check fails,
+  diagnose first — the stale response's headers, the two inner `:remote`
+  reads, whether the hooks' purge ran — and only then fall back to not caching
+  the assembly (the route goes dynamic, `ƒ`).
+  **Corrected 2026-09-27 (#209)** — the 2026-09-10 correction here, after its
+  "**Corrected 2026-09-10 (#209):**" marker, read in full (its inner double
+  quotes shown as single):
+  _"it has not regenerated 'hourly (`revalidate = 3600`)' since #76 removed
+  that export — the data is prepared in a `getSitemapData` scope on
+  `cacheLife('cmsContent')`, which is stale 300 s / revalidate 6 h / expire
+  24 h (`next.config.mjs`). And an edit no longer waits for that cadence: the
+  Pages and Posts hooks call `revalidatePath('/sitemap.xml')` on publish,
+  unpublish and delete. That call is the mechanism — `getSitemapData` is a
+  **plain** `'use cache'` scope, so its `posts`/`pages` tag purges reach only
+  the instance that issued them, which is how a published page stayed out of a
+  freshly generated sitemap for 28.5 h `[measured, prod 2026-09-09]`. The
+  `posts-sitemap`/`pages-sitemap` tags that used to be fired here were
+  subscribed by nothing and are **deleted**, not waiting for a subscriber."_
+  Do not rely on "an edit no longer waits":
+  `[measured, prod 2026-09-26, #209 comment]` a page and two articles
+  published after that path purge shipped stayed out of the sitemap for over an
+  hour, and only a redeploy with no code change put them in (61 → 64 URLs).
+  Also unreconciled: that 28.5 h read (`MISS`, `age: 0`) is past the 24 h
+  `expire`, which a per-instance copy of this scope should not
+  survive, so the stale layer may not be this scope alone. The deleted tags
+  stay deleted.
+- `src/app/robots.ts` — **a recorded policy since 2026-09-27 (#221)**, pinned
+  by `robots.test.ts`. One rule set for every crawler:
+  `Disallow: /admin$`, `/admin/` and `/api/` — the Payload admin and the JSON
+  and POST endpoints serve nothing a search engine should index. The admin
+  renders `<meta name="robots" content="noindex, nofollow"/>` — Payload's
+  default `admin.meta.robots`, not overridden in `src/payload.config.ts`
+  (`[measured, 2026-09-27, local production build]`: `/admin/login` and
+  `/admin` both answer 200 with it). `Disallow` is a crawl exclusion, not an
+  index guarantee: while `/admin` is disallowed, crawlers never read that
+  `noindex`, and a disallowed admin URL linked elsewhere could still be listed
+  without content. The trade-off is kept on purpose (#221): there are no
+  public links to admin URLs and crawl budget is the reason for the rule,
+  whereas guaranteed deindexing would mean allowing `/admin` so the `noindex`
+  is read. **Corrected 2026-09-27:** this paragraph earlier said guaranteed
+  exclusion "would need a crawlable `noindex` response instead, which the
+  admin does not emit today (`[measured, 2026-09-27]`: no `noindex` or
+  `robots` in the `@payloadcms/next@3.88.0` dist)". Do not rely on it: the
+  grep had no hits, but it searched the wrong package; the default lives in
+  `payload`, and the rendered admin carries it. `Allow: /api/og/` and
+  `/api/media/file/` are carved back out, because generated social cards
+  (`og:image`, article JSON-LD `image`) and media bytes are served there.
+  Precedence is the longest matching rule (RFC 9309), so the carve-outs
+  win for their own subtree only. `/_next/` is **not** disallowed: Google
+  renders pages with their JS and CSS, and a chunk showing up in Search
+  Console's "crawled, not indexed" bucket is noise, not a defect. The
+  patterns end in `/` (or `$`) so a prefix never blocks a page such as
+  `/administration`. _Superseded 2026-09-27, kept for the trail:_ the
+  2026-09-10 (#209) line here read "it allows crawling with no `Disallow` at
+  all" — true of the code then (`[measured, prod robots.txt 2026-09-09]`), no
+  longer of this tree.
 - `/feed.xml` — RSS via `feed` from published posts.
 - `/llms.txt` + `/llms-full.txt` — LLM discovery endpoints
   (`src/lib/llms/helpers.ts`): site map summary, and per-article metadata +
-  summaries (deliberately NOT full bodies — full-corpus emission would leak
-  gated content; keep it that way).
+  summaries — what they must never carry: `docs/SECURITY.md` § End-user
+  authorization (Clerk).
 
 ## Paginated list views (`?page=N`)
 
@@ -117,8 +169,8 @@ The calls that follow from option (b):
 
 ## Rules
 
-- Never index gated bodies: teasers only in any public payload, feeds
-  included.
+- Gated bodies in public payloads and feeds: `docs/SECURITY.md` § End-user
+  authorization (Clerk).
 - New public routes must be added to the sitemap and, when content-bearing,
   to llms.txt.
 - Redirects for retired URLs go through plugin-redirects, not code.
