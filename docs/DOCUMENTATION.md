@@ -23,8 +23,14 @@
 ## docs/*.md
 
 - Progressive disclosure: the top-level agent instructions
-  (`.github/copilot-instructions.md`, symlinked as `CLAUDE.md`/`AGENTS.md`)
-  stay thin — invariants + index. Depth lives here in `docs/`.
+  (`AGENTS.md`, the canonical file; `CLAUDE.md` imports it via `@AGENTS.md`
+  and `.github/copilot-instructions.md` is a symlink to it) stay thin —
+  invariants + index. Depth lives here in `docs/`.
+- The local CI gate lives in one place: `AGENTS.md` § "CI gate". Run it
+  from there; don't copy its commands into other docs.
+  `.github/workflows/ci.yml` is authoritative for CI — the section mirrors
+  only its `quality` job. When a change adds, removes, or reorders a step in
+  that job, update the mirror in the same PR.
 - Each doc is a map, not a mirror: point at source files rather than
   duplicating them; record contracts and reasons that code can't express.
 - When a change invalidates a doc statement, update the doc in the same PR.

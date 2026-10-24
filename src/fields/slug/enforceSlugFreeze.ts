@@ -14,7 +14,7 @@ import { isSlugRoutedCollection } from './slugPaths'
  * published post silently moved `/articles/<old>` and 404'd every inbound
  * link. Fixing only the admin component would leave the URL contract enforced
  * by a convenience layer — the repo's standing rule is the opposite (see
- * `.github/copilot-instructions.md`: gating is server-side, UI is never the
+ * `AGENTS.md`: gating is server-side, UI is never the
  * enforcement point). This hook is that enforcement point, so a REST `PATCH`,
  * an MCP `updatePosts` call, and the admin form are all held to the same rule.
  *
