@@ -4,8 +4,6 @@ vignette, grain) + per-post motif extracted from the cover-NN.html files.
 Output: cover-NN.svg — a single portable file Cloudinary can rasterize."""
 import re, sys
 
-noise = open('noise.b64').read().strip()
-
 # per-post accent glows: (color rgba stops, cx, cy) in userSpace
 GLOWS = {
     '54': [('rgba(13,128,106,0.30)', 1188, 460, 1400, 900),
