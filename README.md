@@ -190,7 +190,8 @@ private Cloudflare R2 bucket.
 
 ## Documentation map
 
-`AGENTS.md` / `CLAUDE.md` symlink to `.github/copilot-instructions.md` — the thin
+`AGENTS.md` is the canonical agent-instructions file; `CLAUDE.md` imports it
+(`@AGENTS.md`) and `.github/copilot-instructions.md` is a symlink to it. It is the thin
 top layer (invariants + index) for AI agents and humans alike. Depth lives in
 `docs/`: `ARCHITECTURE`, `PAYLOAD` (collections/blocks/migrations/MCP), `FEATURES`,
 `NAVIGATION`, `STATE`, `STYLING`, `DESIGN`, `AI` (Corvus/guardrails/retrieval/evals),

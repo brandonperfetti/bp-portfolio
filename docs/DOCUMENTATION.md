@@ -23,8 +23,9 @@
 ## docs/*.md
 
 - Progressive disclosure: the top-level agent instructions
-  (`.github/copilot-instructions.md`, symlinked as `CLAUDE.md`/`AGENTS.md`)
-  stay thin — invariants + index. Depth lives here in `docs/`.
+  (`AGENTS.md`, the canonical file; `CLAUDE.md` imports it via `@AGENTS.md`
+  and `.github/copilot-instructions.md` is a symlink to it) stay thin —
+  invariants + index. Depth lives here in `docs/`.
 - Each doc is a map, not a mirror: point at source files rather than
   duplicating them; record contracts and reasons that code can't express.
 - When a change invalidates a doc statement, update the doc in the same PR.
