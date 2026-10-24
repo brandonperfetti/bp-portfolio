@@ -21,10 +21,13 @@ surface only** — it is not a CMS and has no runtime integration.
 
 ## CI gate
 
-The local equivalent of the CI "Lint · Types · Unit" job — run it in this order before
-calling a change done:
+A local mirror of the `quality` job ("Lint · Types · Unit") in
+`.github/workflows/ci.yml` — and only that job. Run it as a bash script (not
+pasted into an interactive shell) before calling a change done; it stops at the
+first failing step:
 
 ```sh
+set -euo pipefail
 export PAYLOAD_SECRET=ci-not-a-real-secret
 export NEXT_PUBLIC_SITE_URL=http://localhost:3000
 export NEXT_PUBLIC_SITE_NAME='BP Portfolio (CI)'
@@ -41,10 +44,14 @@ pnpm exec prettier --write "src/app/(payload)/admin/importMap.js"
 node scripts/check-importmap.mjs
 git diff --quiet -- "src/app/(payload)/admin/importMap.js"
 pnpm payload migrate:create --skip-empty < /dev/null
+test -z "$(git status --porcelain -- src/migrations/)" # untracked files count
 node scripts/check-migrations-rls.mjs
 pnpm test:coverage
 pnpm build-storybook
 ```
+
+The "Build · E2E" and "Evalite (Corvus)" jobs are not mirrored here; they need
+Postgres, Playwright or provider keys and remain gated by PR CI.
 
 ## Invariants (do not regress)
 
