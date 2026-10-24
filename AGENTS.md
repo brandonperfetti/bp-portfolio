@@ -38,11 +38,11 @@ pnpm format:check
 pnpm typecheck
 pnpm generate:types
 pnpm exec prettier --write src/payload-types.ts
-git diff --quiet -- src/payload-types.ts
+git diff --quiet HEAD -- src/payload-types.ts
 pnpm generate:importmap
 pnpm exec prettier --write "src/app/(payload)/admin/importMap.js"
 node scripts/check-importmap.mjs
-git diff --quiet -- "src/app/(payload)/admin/importMap.js"
+git diff --quiet HEAD -- "src/app/(payload)/admin/importMap.js"
 pnpm payload migrate:create --skip-empty < /dev/null
 test -z "$(git status --porcelain -- src/migrations/)" # untracked files count
 node scripts/check-migrations-rls.mjs
