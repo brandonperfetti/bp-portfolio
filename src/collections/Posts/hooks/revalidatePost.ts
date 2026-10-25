@@ -21,24 +21,23 @@ import type { Post } from '../../../payload-types'
  * reverse. Naming it also means the four literals exist once, so a route rename
  * cannot update two branches and miss the third.
  *
- * **`/sitemap.xml` joins the group (#209).** The sitemap's cached assembly,
- * `getSitemapData` (`src/app/sitemap.ts`), carries the `posts` tag as well as
- * `pages`, so now that it is a `'use cache: remote'` scope an article publish
- * is expected to reach it through the tag purge below — `[inference]`,
- * verified only by #209's production check. It was a plain `'use cache'`.
+ * **`/sitemap.xml` joins the group (#209).** The sitemap route
+ * (`src/app/sitemap.ts`) no longer caches its assembly — the
+ * `getSitemapData` scope is gone and the route builds per request — but its
+ * article read, `getPublishedPostSummaries`, is a `'use cache: remote'` scope
+ * tagged `posts`, so an article publish is expected to reach the next request
+ * through the tag purge below — `[inference]`, not yet verified: #209's
+ * post-deploy production check is still pending.
  * `[measured, prod 2026-09-26, #209 comment]` two articles published between
- * deploys reached the sitemap only after a redeploy; `[inference]` one
- * per-instance copy of that scope starved articles and pages together. The
- * path purge targets the route's own static prerender. See
- * `revalidatePage.ts` for the full argument, the unreconciled datum and the
- * fallback order.
+ * deploys reached the sitemap only after a redeploy. See
+ * `revalidatePage.ts` and `src/app/sitemap.ts` for the full argument.
  *
  * **`posts-sitemap` is gone (#209).** Fired here, subscribed by nothing
  * `[measured, grep across src, docs and .github]`; the docblock below used to
  * say so in as many words ("aspirational, nothing caches under it"). A tag
  * nothing reads is worse than no tag: it made this exact staleness look
- * already-covered. Deleted rather than given an invented subscriber —
- * `revalidatePath` is the honest mechanism for a route.
+ * already-covered. Deleted rather than given an invented subscriber — the
+ * `posts` tag purge already reaches the sitemap's article read.
  *
  * **Not widened past what can be cited.** `/feed.xml`, `/llms.txt` and
  * `/llms-full.txt` read the same articles data and are deliberately NOT purged
@@ -91,11 +90,15 @@ const POST_SURFACES =
  * converted reads. Still true and unchanged: the search index stays on the
  * in-memory tier (over the 2 MB Runtime Cache item ceiling) and converges on
  * its `cmsContent` cadence. The sitemap no longer merely "refreshes on its own
- * revalidate": #209 replaced the aspirational `posts-sitemap` tag — fired here,
- * subscribed by nothing — with a `revalidatePath('/sitemap.xml')` in
- * `purgePostSurfaces` above, and moved the sitemap's cached assembly onto the
- * `:remote` tier so the `posts` purge is expected to reach it on every
- * instance (`[inference]`, #209's production check).
+ * revalidate": #209 deleted the aspirational `posts-sitemap` tag — fired here,
+ * subscribed by nothing — and dropped the sitemap's cached assembly so the
+ * route reads its `:remote` inner reads per request. The `posts` tag purge in
+ * `purgePostSurfaces` above is what keeps the served sitemap fresh: it is
+ * expected to reach those reads on every instance (`[inference]`, pending
+ * #209's post-deploy production check). The `revalidatePath('/sitemap.xml')`
+ * beside it is retained hook behavior, not the freshness mechanism — with no
+ * cached route entry left to expire, `[inference]` it no longer changes what
+ * the route serves (`src/app/sitemap.ts`).
  *
  * **Which transitions purge which path (#132), and why the rename purge is
  * NOT here.** #132 asked whether the published→published rename purge should

@@ -21,9 +21,11 @@
    read as though that purge made the sitemap immediate; do not rely on it.
    `[measured, prod 2026-09-26, #209 comment]` pages and articles published
    after it shipped stayed out of the sitemap until a redeploy.
-   `getSitemapData` is now a `'use cache: remote'` scope, and the
-   `posts`/`pages` tag purge is expected to reach it on every instance —
-   `[inference]`, verified only by #209's production check. See
+   The sitemap route is now assembled per request with no route-level cache
+   (`getSitemapData` is gone); its two inner reads stay `'use cache: remote'`
+   scopes tagged `posts`/`pages`, and the hooks' tag purge is expected to
+   reach the next request on every instance — `[inference]`, not yet
+   verified: a post-deploy production check under #209 is still pending. See
    `docs/SEO.md` § Indexing surfaces.
 4. Slugs lock after creation (`slugLock`). Changing a published slug breaks
    the URL contract — add a redirect via plugin-redirects if truly needed.

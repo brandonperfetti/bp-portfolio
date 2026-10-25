@@ -11,48 +11,44 @@ import { containRevalidation } from '@/hooks/containRevalidation'
 import type { Page } from '../../../payload-types'
 
 /**
- * Expire the `pages` data-cache tag and regenerate `/sitemap.xml`.
+ * Expire the `pages` data-cache tag and purge the `/sitemap.xml` path.
  *
  * @remarks Named because all three branches below need this identical pair and
- * a branch that did one without the other would be a silent staleness bug, not
- * a visible one: the sitemap would regenerate against a fresh `pages` read
- * while its own route entry stayed put, or the reverse.
+ * a branch that dropped the tag purge would be a silent staleness bug, not a
+ * visible one: the request-time sitemap would keep reading a stale cached
+ * `pages` read, and the path purge alone would not refresh it (see below).
  *
- * **What reaches the sitemap, and why both calls stay (#209).** The route's
- * cached assembly, `getSitemapData` (`src/app/sitemap.ts`), is a
- * `'use cache: remote'` scope tagged `posts` + `pages`, so the `pages` tag
- * purge here is expected to expire the one copy every instance reads —
- * `[inference]`, verified only by #209's production check. It used to be a
- * plain `'use cache'`, whose purge reaches only the instance that issued it
- * `[source, next 16.3.4 default cache handler: refreshTags is a no-op]`. The
- * path purge below was added first and was honest that it might not be
- * enough — it was not: `[measured, prod 2026-09-26, #209 comment]` a page
- * published after `revalidatePath('/sitemap.xml')` shipped stayed out of the
- * sitemap for over an hour, and only a redeploy with no code change put it in.
- * That the per-instance scope was the stale layer is `[inference]`, and not
- * the only candidate: a 2026-09-09 read stale past the 24 h `expire` is
- * unreconciled (#209). Moving the scope to the shared tier is the chosen fix —
- * `[inference]` until that production check passes. If it fails, diagnose
- * first (the stale response's headers, the two inner `:remote` reads, whether
- * this hook's purge ran), and only then fall back to not caching the assembly.
- * The tier is pinned in `src/app/sitemap.test.ts`.
+ * **What reaches the sitemap, and why both calls stay (#209).** The route no
+ * longer caches its assembly: `src/app/sitemap.ts` awaits `connection()` and
+ * builds the sitemap per request, and the `getSitemapData`
+ * `'use cache: remote'` scope that used to sit beneath it is gone (#209
+ * fallback (b)). What stays cached is the two inner reads,
+ * `getPublishedPagePaths` and `getPublishedPostSummaries`, both
+ * `'use cache: remote'` scopes tagged `pages` / `posts`, so the `pages` tag
+ * purge here is expected to reach the next request — `[inference]`, not yet
+ * verified: #209's post-deploy production check is still pending. The path
+ * purge below was added first and was honest that it might not be enough — it
+ * was not:
+ * `[measured, prod 2026-09-26, #209 comment]` a page published after
+ * `revalidatePath('/sitemap.xml')` shipped stayed out of the sitemap for over
+ * an hour, and only a redeploy with no code change put it in. See
+ * `src/app/sitemap.ts` for the measurements that moved the fix from a cached
+ * assembly to a request-time route. The request-time shape is pinned in
+ * `src/app/sitemap.test.ts`.
  *
- * `revalidatePath('/sitemap.xml')` stays, and unlike the deleted tag below it
- * has a subscriber: the route is a static prerender (`○`, 6h/1d) whose entry
- * is tagged `_N_T_/sitemap.xml` as well as `posts`/`pages`
- * `[measured, local next build, 2026-09-27]`. Because the entry carries the
- * tag, the tag purge should expire it too — `[inference]`; locally the
- * combined purge set did (`[measured, local, 2026-09-27]`) — so the path
- * purge is the explicit spelling of the same expiry rather than a second
- * mechanism, kept because it names the route it means and costs nothing.
+ * `revalidatePath('/sitemap.xml')` stays, but `[inference]` it does not change
+ * the served sitemap: the route is request-time, so there is no prerendered
+ * route entry for it to expire, and each response is only as fresh as the two
+ * inner `pages` / `posts` reads above. It is not a second freshness mechanism;
+ * it is kept because it names the route it means and costs nothing.
  *
  * **`pages-sitemap` is gone (#209).** It was fired here and subscribed by
  * nothing `[measured, grep across src, docs and .github]` — `docs/SEO.md`
  * called it aspirational. A tag with no subscriber is not a cheap safety net:
  * it reads, in three docblocks and six assertions, as though a second surface
  * were covered, and it is exactly what made this bug look already-handled.
- * `revalidatePath` on the route is the honest mechanism, so the tag is deleted
- * rather than given an invented subscriber.
+ * The `pages` tag, which the sitemap's inner reads subscribe to, is the honest
+ * mechanism, so the tag is deleted rather than given an invented subscriber.
  *
  * `{ expire: 0 }`, never `'max'` (#118) — under cacheComponents `'max'` is
  * stale-while-revalidate with a one-year window, so an edit keeps serving old
@@ -69,7 +65,7 @@ const PAGE_SURFACES = 'the pages tag and /sitemap.xml'
 /**
  * afterChange hook that keeps published pages live without a redeploy:
  * pairs `revalidatePath` on the page's route with the `pages` tag purge and a
- * `/sitemap.xml` regeneration (#209).
+ * `/sitemap.xml` path purge (#209).
  *
  * @remarks The data layer (getCmsPageByPath / getPageLayout / CmsPageBlocks)
  * caches under the 'pages' tag — `revalidatePath` alone regenerates the
