@@ -1,0 +1,28 @@
+# .github/workflows/add-to-project.yml
+# Adds new issues in this repository to the GitHub Projects board.
+# The fleet uses this Action for intake: one mechanism, defined in each repository
+# and reviewable there, with no dependence on the board's workflow slots.
+# Needs the ADD_TO_PROJECT_PAT repository secret, set by the repository owner.
+
+name: Add issues to the project board
+
+on:
+  issues:
+    types: [opened, reopened, transferred]
+
+# Least privilege: the job authenticates with ADD_TO_PROJECT_PAT and never uses GITHUB_TOKEN.
+permissions: {}
+
+jobs:
+  add-to-project:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/add-to-project@5afcf98fcd03f1c2f92c3c83f58ae24323cc57fd # v2.0.0
+        with:
+          project-url: https://github.com/users/brandonperfetti/projects/2
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          # Optional — only add issues carrying the ready-for-agent label. To use it,
+          # add `labeled` to on.issues.types above (so post-creation labels trigger),
+          # then uncomment:
+          # labeled: ready-for-agent
+          # label-operator: AND
