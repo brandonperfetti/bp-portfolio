@@ -1,15 +1,22 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
-  cacheLife: vi.fn(),
-  cacheTag: vi.fn(),
-  getAllArticles: vi.fn(),
-  getPublishedPagePaths: vi.fn(async () => ['now']),
-  getSiteUrl: vi.fn(),
-}))
+const mocks = vi.hoisted(() => {
+  // One shared log, so a test can pin the order `connection()` and the two
+  // data reads run in.
+  const calls: string[] = []
+  return {
+    calls,
+    connection: vi.fn(async () => {
+      calls.push('connection')
+    }),
+    getAllArticles: vi.fn(async (): Promise<unknown[]> => []),
+    getPublishedPagePaths: vi.fn(async () => ['now']),
+    getSiteUrl: vi.fn(),
+  }
+})
 
 vi.mock('@/lib/articles', () => ({
   getAllArticles: mocks.getAllArticles,
@@ -23,12 +30,16 @@ vi.mock('@/lib/site', () => ({
   getSiteUrl: mocks.getSiteUrl,
 }))
 
-// #76 B3: sitemap prepares its data inside a `'use cache'` scope; stub the
-// primitives so the route runs under jsdom.
-vi.mock('next/cache', () => ({
-  cacheTag: mocks.cacheTag,
-  cacheLife: mocks.cacheLife,
+// #209 fallback (b): the route awaits `connection()` so it runs per request.
+// Stubbed so the route runs under jsdom; the call is recorded for the
+// ordering test.
+vi.mock('next/server', () => ({
+  connection: mocks.connection,
 }))
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 import sitemap from './sitemap'
 
@@ -197,54 +208,83 @@ describe('sitemap · placed articles (#153)', () => {
 })
 
 /**
- * Freshness without a redeploy (#209).
- * `[measured, prod 2026-09-26, #209 comment]` production kept a page and two
- * articles out of the sitemap for over an hour after they were published,
- * while only a redeploy with no code change put them in.
- * `[inference]` the cached assembly was on the per-instance tier, so a hook's
- * purge never reached the copy that was served — the diagnosis the shared tier
- * below acts on. #209's production check verifies the fix's effect; a pass is
- * only consistent with this cause, not proof of it.
+ * Freshness without a redeploy (#209, fallback (b)).
+ * `[measured, staging 2026-09-27 and prod 2026-09-28, #209 comments]` the
+ * route's cached response was the stale layer: after a publish, the edge kept
+ * serving a `HIT` with no function invocation, so the `'use cache: remote'`
+ * assembly beneath it was never reached. The fix makes the route
+ * request-time: it awaits `connection()` before any read and keeps no cache
+ * scope of its own. The inner `:remote` reads (`getPublishedPagePaths`,
+ * `getPublishedPostSummaries`) stay cached and tag-purged by the hooks.
  *
- * The chosen fix is a property of the cache scope, not of the emit, so it is
- * pinned as one: the assembly lives on the shared `'use cache: remote'` tier
- * and carries BOTH collections' tags. A test over the emit alone would pass
- * against the old tier, exactly as #209 predicted of the query-level test.
- * The two emission tests below cover both halves the ticket names — the
- * article case and the parent/child page case — but only as emission:
- * `cacheTag` and `cacheLife` are mocked, so they pass on either tier and say
- * nothing about freshness. The tier scan and the tag test are the
- * fix-sensitive ones.
+ * The route-mode tests are the fix-sensitive ones. The emission tests cover
+ * both cases the ticket names (a parent page with its children, a newly
+ * published article) and the per-request publish gate. The data reads are
+ * mocked, so the emission tests say nothing about the platform's edge cache.
+ * That is #209's production check.
  */
-describe('sitemap cache tier, tags and emission (#209)', () => {
-  it('caches the assembly on the shared remote tier — one scope, never plain `use cache`', () => {
-    const source = readFileSync(join(__dirname, 'sitemap.ts'), 'utf8')
-    // Directive lines only (a line holding nothing but the directive), so the
-    // docblock's prose about the old tier never counts.
-    const directives = source
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => /^'use cache(?:: ?\w+)?'$/.test(line))
-
-    expect(directives).toEqual(["'use cache: remote'"])
-  })
-
-  it('tags the cached assembly with both posts and pages — the tags the two hooks purge', async () => {
-    mocks.cacheTag.mockClear()
+describe('sitemap route mode and emission (#209)', () => {
+  it('awaits connection() before either data read', async () => {
+    mocks.calls.length = 0
     mocks.getSiteUrl.mockReturnValue('https://example.com')
-    mocks.getAllArticles.mockResolvedValue([])
-    mocks.getPublishedPagePaths.mockResolvedValue([])
+    mocks.getAllArticles.mockImplementation(async () => {
+      mocks.calls.push('getAllArticles')
+      return []
+    })
+    mocks.getPublishedPagePaths.mockImplementation(async () => {
+      mocks.calls.push('getPublishedPagePaths')
+      return []
+    })
 
     await sitemap()
 
-    // The literals, not CMS_TAGS: these are the strings `revalidatePost` and
-    // `revalidatePage` purge, and the coupling is what this pins.
-    const tags = mocks.cacheTag.mock.calls.flat()
-    expect(tags).toContain('posts')
-    expect(tags).toContain('pages')
+    expect(mocks.calls[0]).toBe('connection')
+    expect([...mocks.calls].sort()).toEqual([
+      'connection',
+      'getAllArticles',
+      'getPublishedPagePaths',
+    ])
   })
 
-  it('emits a newly listed article alongside the existing ones (article case)', async () => {
+  it('starts no data read until the request arrives (prerender stops at connection())', async () => {
+    mocks.getSiteUrl.mockReturnValue('https://example.com')
+    mocks.getAllArticles.mockClear()
+    mocks.getPublishedPagePaths.mockClear()
+    // During a prerender `connection()` never resolves. Model that, and the
+    // route must not have read anything.
+    let arrive: () => void = () => {}
+    mocks.connection.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (arrive = resolve)),
+    )
+
+    const pending = sitemap()
+    await Promise.resolve()
+    expect(mocks.getAllArticles).not.toHaveBeenCalled()
+    expect(mocks.getPublishedPagePaths).not.toHaveBeenCalled()
+
+    arrive()
+    await pending
+    expect(mocks.getAllArticles).toHaveBeenCalledTimes(1)
+    expect(mocks.getPublishedPagePaths).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps no cache scope of its own (the inner reads hold the only cache)', () => {
+    const source = readFileSync(join(__dirname, 'sitemap.ts'), 'utf8')
+    // Code lines only (comment lines dropped), so the docblock's prose about
+    // the removed scope never counts.
+    const code = source
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => !line.startsWith('*') && !line.startsWith('//'))
+
+    expect(
+      code.filter((line) => /^'use cache(?:: ?\w+)?'$/.test(line)),
+    ).toEqual([])
+    expect(code.some((line) => /\bcache(Tag|Life)\(/.test(line))).toBe(false)
+    expect(code).toContain('await connection()')
+  })
+
+  it('emits a newly published article alongside the existing ones (article case)', async () => {
     mocks.getSiteUrl.mockReturnValue('https://example.com')
     mocks.getPublishedPagePaths.mockResolvedValue([])
     mocks.getAllArticles.mockResolvedValue([
@@ -263,7 +303,7 @@ describe('sitemap cache tier, tags and emission (#209)', () => {
     expect(after).toContain('https://example.com/articles/older')
   })
 
-  it('emits a parent page alongside its children once it is listed (parent/child page case)', async () => {
+  it('emits a published parent page alongside its children (parent/child page case)', async () => {
     mocks.getSiteUrl.mockReturnValue('https://example.com')
     mocks.getAllArticles.mockResolvedValue([])
     // The production shape #209 was filed on: four children listed, the
@@ -285,5 +325,27 @@ describe('sitemap cache tier, tags and emission (#209)', () => {
     for (const child of children) {
       expect(after).toContain(`https://example.com/${child}`)
     }
+  })
+
+  it('excludes a future-dated article before its date and includes it at and after it', async () => {
+    const publishAt = '2026-07-01T12:00:00.000Z'
+    const url = 'https://example.com/articles/scheduled'
+    mocks.getSiteUrl.mockReturnValue('https://example.com')
+    mocks.getPublishedPagePaths.mockResolvedValue([])
+    // The same cached summaries on every request: only the clock moves, so
+    // the article joins without a purge.
+    mocks.getAllArticles.mockResolvedValue([
+      { slug: 'scheduled', date: publishAt, noindex: false },
+    ])
+    vi.useFakeTimers()
+
+    vi.setSystemTime(new Date(new Date(publishAt).getTime() - 1))
+    expect((await sitemap()).map((entry) => entry.url)).not.toContain(url)
+
+    vi.setSystemTime(new Date(publishAt))
+    expect((await sitemap()).map((entry) => entry.url)).toContain(url)
+
+    vi.setSystemTime(new Date('2026-08-01T00:00:00.000Z'))
+    expect((await sitemap()).map((entry) => entry.url)).toContain(url)
   })
 })

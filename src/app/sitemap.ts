@@ -1,134 +1,93 @@
-import { cacheLife, cacheTag } from 'next/cache'
 import { type MetadataRoute } from 'next'
+import { connection } from 'next/server'
 
 import { getAllArticles } from '@/lib/articles'
-import { CMS_TAGS } from '@/lib/cms/cache'
 import { publicPathFor } from '@/fields/slug/slugPaths'
 import { getPublishedPagePaths } from '@/lib/cms/pagesRepo'
 import { isFuturePublicationDate, toValidDate } from '@/lib/date'
 import { getSiteUrl } from '@/lib/site'
 
 /**
- * Sitemap data prepared inside a `'use cache: remote'` scope (#76 B3 restored
- * the caching Piece 1 removed with `revalidate = 3600`; #209 moved it to the
- * shared tier).
+ * The `/sitemap.xml` route: the static routes, every public article, and every
+ * published page-builder page, assembled per request.
  *
- * @remarks **Why `:remote` (#209).** This scope is tagged `posts` + `pages` and
- * both revalidation hooks purge those tags on every publish, unpublish and
- * delete — so it is a CMS read in every sense that matters, and it has to live
- * where a purge can reach it. On plain `'use cache'` it lived in each
- * instance's in-memory LRU, whose tag state is a module-level `Map`
- * (`refreshTags` is a no-op in `next/dist/server/lib/cache-handlers/default.js`
- * at 16.3.4), so `[source]` a plain scope's purge expires only the copy on the
- * instance that runs it. `[inference]` whichever instance regenerated
- * `/sitemap.xml` next rebuilt it from its own stale copy and re-cached the
- * result — the #118 failure mode, measured there on the detail route, on the
- * one scope #118's conversion skipped. Per-instance behaviour cannot be
- * observed off-platform: `[measured, local, 2026-09-27]` a single local
- * `next start` process refreshes correctly on both tiers.
- * `[measured, prod 2026-09-26, #209 comment]` a page and two articles
- * published after the `revalidatePath('/sitemap.xml')` fix stayed out of the
- * sitemap (61 URLs) for over an hour; only a redeploy with no code change took
- * it to 64. One scope carries both tags, so `[inference]` one stale copy
- * starved articles and pages together. That this scope was the stale layer is
- * itself `[inference]`: a 2026-09-09 read stale 28.5 h after publish is past
- * the 24 h `expire` below, which a per-instance copy should not survive, so it
- * may not be the only one (#209).
+ * @remarks **Request-time, with no route-level cache (#209, fallback (b)).**
+ * The function first awaits `connection()` from `next/server`, the Next 16.3
+ * call for output that "should wait for a real user request"
+ * (`[source, next 16.3.4 docs, connection.md]`: "prerendering stops here").
+ * So the build does not prerender this route, and no cached route response
+ * is left for a purge to miss. Every request runs this function. The build is
+ * expected to report the route as dynamic (`ƒ`): #209 measured `ƒ` locally for
+ * an uncached assembly, but that is `[inference]` for this exact change, which
+ * no `next build` has measured. Nothing in this file is a `'use cache'` scope,
+ * and the assembly is not cached anywhere.
  *
- * On `:remote` the entry is the platform's shared Runtime Cache
- * (`[source, next 16.3.4 docs, use-cache-remote.md]`: "shared across all
- * server instances"; the handler binding was measured on the preview under
- * #118, 2026-08-28) — the tier #118 measured fresh on the preview for the
- * static detail route (5/5 timed edit trials, 2026-08-28) — so the purge is
- * expected to reach the copy every instance reads. `[inference]`: this effect
- * is what #209's production check verifies. If that check fails, diagnose
- * first — the stale response's headers, the two
- * inner `:remote` reads, whether the hooks' purge ran — and only then fall
- * back to not caching this assembly (the route goes dynamic). The route
- * stays `○` static (`[measured, local next build, 2026-09-27]`: 6h
- * revalidate / 1d expire, `x-next-cache-tags` carrying `posts`, `pages` and
- * `_N_T_/sitemap.xml`), so
- * the hooks' tag and path purges are expected to expire the prerendered entry
- * and its regeneration to read a copy the purge reached (`[inference]` on
- * Vercel; `[measured, local, 2026-09-27]` a single `next start` process did
- * both, on either tier). Both inner reads were already `:remote`
- * (`getPublishedPagePaths`, `getPublishedPostSummaries`); remote-in-remote is
- * a supported nesting
- * `[source, next 16.3.4 docs, use-cache-remote.md § Nesting rules]`. The
- * value is slugs and epoch-ms — under 100 bytes an entry, so a few kilobytes
- * at today's ~60 URLs and nowhere near the 2 MB item ceiling that keeps the
- * search index on the in-memory tier.
+ * Why the cache went: `[inference, #209]` the route's cached response was the
+ * stale layer.
+ * `[measured, staging 2026-09-27 and prod 2026-09-28, #209 comments]` after a
+ * publish, `/sitemap.xml` kept serving an edge `HIT` whose `age` counted back
+ * to the first read after the deploy. That happened whether the write came
+ * from the admin UI or the MCP, the hooks logged their revalidation, and
+ * runtime logs showed no `/sitemap.xml` function invocation, so the old
+ * `'use cache: remote'` assembly beneath it was never reached. Only a
+ * redeploy cleared it.
  *
- * The future-dated publish gate reads `Date.now()`
- * (`isFuturePublicationDate`), which `cacheComponents` rejects during
- * prerender; running it here freezes `Date.now()` at cache generation and
- * refreshes it on the `cmsContent` cadence or the next purge, so
- * `/sitemap.xml` prerenders static. Returns only serializable primitives
- * (slugs + epoch-ms) — the `Date` objects the sitemap shape needs are rebuilt
- * from those fixed timestamps in {@link sitemap} (never `Date.now()`), which is
- * prerender-safe.
+ * **What stays cached is the two inner reads.** `getAllArticles` reads
+ * `getPublishedPostSummaries` (`src/lib/content/posts.ts`) and
+ * `getPublishedPagePaths` (`src/lib/cms/pagesRepo.ts`). Both are
+ * `'use cache: remote'` scopes, tagged `posts` and `pages` on
+ * `cacheLife('cmsContent')`, so a request does not query the database while
+ * their entries are fresh. The Pages and Posts revalidation hooks purge those
+ * tags on publish, unpublish and delete, with `expire: 0`. `[inference]` the
+ * next request after a purge reads fresh data, because no layer above those
+ * reads holds a copy. Whether the edge still caches the dynamic response is
+ * what #209's production check verifies: a post-publish read has to reach the
+ * function (a `MISS`, or a function log line). The hooks also call
+ * `revalidatePath('/sitemap.xml')`. With no cached route entry left to expire,
+ * `[inference]` that call no longer changes what this route serves.
+ *
+ * **The publish gate runs per request.** Because `connection()` resolves
+ * first, `isFuturePublicationDate` reads `Date.now()` at request time, which
+ * `cacheComponents` allows outside a prerender. A future-dated article joins
+ * the sitemap on the first request at or after its date. It does not wait for
+ * a purge or for the `cmsContent` cadence: the cached summaries carry the
+ * article, and the gate filters it here. `noindex` articles never appear.
+ *
+ * `lastModified` comes from content (`updatedAt`, else the publication date),
+ * never from the request time, so a crawler sees real freshness and not
+ * "changed on every fetch".
  */
-async function getSitemapData(): Promise<{
-  articles: Array<{
-    slug: string
-    /** A placed article's stored path (#153); absent for `/articles/<slug>`. */
-    path?: string
-    lastModifiedMs: number | null
-  }>
-  newestArticleMs: number | null
-  pagePaths: string[]
-}> {
-  'use cache: remote'
-  cacheTag(CMS_TAGS.articles, CMS_TAGS.pages)
-  cacheLife('cmsContent')
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // Before any read: everything below runs at request time only.
+  await connection()
 
+  const siteUrl = getSiteUrl()
   const [allArticles, pagePaths] = await Promise.all([
     getAllArticles(),
     getPublishedPagePaths(),
   ])
 
-  const publicArticles = allArticles.filter(
-    (article) => !article.noindex && !isFuturePublicationDate(article.date),
-  )
-
-  const articles = publicArticles.map((article) => {
-    const freshness =
-      toValidDate(article.updatedAt) || toValidDate(article.date)
-    return {
+  const articles = allArticles
+    .filter(
+      (article) => !article.noindex && !isFuturePublicationDate(article.date),
+    )
+    .map((article) => ({
       slug: article.slug,
-      // Carried through this deliberately-narrow projection because the URL is
-      // built from it below: without `path`, a placed article would be listed
-      // at `/articles/<slug>`, a URL that 308s (#153).
+      // Kept on the projection because the URL is built from it below:
+      // without `path`, a placed article would be listed at `/articles/<slug>`,
+      // a URL that 308s (#153).
       path: article.path,
-      lastModifiedMs: freshness?.getTime() ?? null,
-    }
-  })
+      lastModified: toValidDate(article.updatedAt) || toValidDate(article.date),
+    }))
 
-  const newestArticleMs = articles.reduce<number | null>((latest, article) => {
-    if (article.lastModifiedMs === null) return latest
-    return latest === null || article.lastModifiedMs > latest
-      ? article.lastModifiedMs
-      : latest
-  }, null)
-
-  return { articles, newestArticleMs, pagePaths }
-}
-
-/**
- * The `/sitemap.xml` route: assembles the static, article, and page-builder
- * URLs from the cached {@link getSitemapData} payload.
- *
- * @remarks
- * Kept outside the cache scope so it stays a cheap pure reshape: it
- * rebuilds the `Date` objects the `MetadataRoute.Sitemap` shape requires from
- * the fixed epoch-ms timestamps {@link getSitemapData} returns — never
- * `Date.now()`, which `cacheComponents` rejects during prerender — so
- * `lastModified` reflects real content freshness while the route prerenders
- * static.
- */
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const siteUrl = getSiteUrl()
-  const { articles, newestArticleMs, pagePaths } = await getSitemapData()
+  const newestArticle = articles.reduce<Date | undefined>(
+    (latest, article) =>
+      article.lastModified &&
+      (!latest || article.lastModified.getTime() > latest.getTime())
+        ? article.lastModified
+        : latest,
+    undefined,
+  )
 
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: siteUrl, changeFrequency: 'weekly', priority: 1 },
@@ -139,8 +98,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     {
       url: `${siteUrl}/articles`,
-      lastModified:
-        newestArticleMs === null ? undefined : new Date(newestArticleMs),
+      lastModified: newestArticle,
       changeFrequency: 'daily',
       priority: 0.9,
     },
@@ -168,10 +126,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const articleRoutes: MetadataRoute.Sitemap = articles.map((article) => ({
     url: `${siteUrl}${publicPathFor('posts', article)}`,
-    lastModified:
-      article.lastModifiedMs === null
-        ? undefined
-        : new Date(article.lastModifiedMs),
+    lastModified: article.lastModified,
     changeFrequency: 'monthly',
     priority: 0.7,
   }))

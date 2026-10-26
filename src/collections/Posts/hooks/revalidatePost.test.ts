@@ -43,10 +43,12 @@ describe('revalidatePost (afterChange)', () => {
     )
 
     expect(mocks.revalidateTag).toHaveBeenCalledWith('posts', { expire: 0 })
-    // #209: `posts` is one of the two tags on the sitemap's `:remote` cached
-    // assembly, so this purge is expected to put a new article in the sitemap
-    // on every instance ([inference], verified only by #209's production
-    // check); the path purge targets the route's own static prerender.
+    // #209: the sitemap is built per request, and its `getPublishedPostSummaries`
+    // read is a `:remote` scope tagged `posts`, so this purge is expected to
+    // put a new article in the next sitemap on every instance ([inference], not
+    // yet verified — #209's post-deploy production check is pending). With no
+    // cached route entry, the path purge is likewise expected not to change
+    // what the sitemap serves ([inference]).
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/sitemap.xml')
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/articles/hello')
     // The dead tag is deleted, not merely unasserted — firing it again would
@@ -69,8 +71,10 @@ describe('revalidatePost (afterChange)', () => {
     )
 
     expect(mocks.revalidateTag).toHaveBeenCalledWith('posts', { expire: 0 })
-    // An unpublish removes a URL from the sitemap; the route entry has to go
-    // too, or the sitemap keeps advertising a page that now 404s.
+    // An unpublish removes a URL from the sitemap; the `posts` purge is
+    // expected to drop it from the next request-time read, or the sitemap
+    // keeps advertising a page that now 404s ([inference], pending #209's
+    // post-deploy production check).
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/sitemap.xml')
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/articles/hello')
     expect(mocks.revalidateTag).not.toHaveBeenCalledWith(
@@ -125,8 +129,11 @@ describe('revalidatePost old-path purge matrix (#132)', () => {
    * every purging branch, so they are not part of a matrix about WHICH article
    * path a transition purges. That each of them fires is asserted in the
    * suites above and once below; folding them into every expected array here
-   * would make five assertions restate one constant and read as though the
-   * sitemap were transition-dependent.
+   * would make five assertions restate one constant. The `/sitemap.xml` purge
+   * is retained hook behavior, not the served sitemap's freshness mechanism —
+   * the sitemap renders per request, and the `posts` tag purge is expected to
+   * put a change in its next read (`[inference]`, pending #209's post-deploy
+   * production check).
    */
   const CONSTANT_SURFACES = ['/articles', '/api/search', '/sitemap.xml']
   const purgedPaths = () =>
@@ -160,13 +167,18 @@ describe('revalidatePost old-path purge matrix (#132)', () => {
           req: { context: {}, payload: { logger } },
         } as never),
     ],
-  ])('purges /sitemap.xml on the %s branch (#209)', (_name, run) => {
-    // Iterating rather than asserting once on publish: the defect #209 is about
-    // is a branch that forgets the sitemap, and a publish-only assertion is
-    // exactly the shape that would let one keep forgetting.
-    run()
-    expect(mocks.revalidatePath).toHaveBeenCalledWith('/sitemap.xml')
-  })
+  ])(
+    'keeps the retained /sitemap.xml path purge on the %s branch (#209)',
+    (_name, run) => {
+      // Sitemap freshness is expected to ride on the `posts` tag purge asserted
+      // in the suites above, not on this call ([inference], pending #209's
+      // post-deploy production check): the sitemap renders per request, so
+      // the path purge is retained hook behavior only. Iterating rather than asserting
+      // once on publish keeps that behavior pinned on every purging branch.
+      run()
+      expect(mocks.revalidatePath).toHaveBeenCalledWith('/sitemap.xml')
+    },
+  )
 
   it('first publish purges the new path and no old path', () => {
     revalidatePost(
@@ -311,7 +323,9 @@ describe('revalidateDelete (afterDelete)', () => {
     } as never)
 
     expect(mocks.revalidateTag).toHaveBeenCalledWith('posts', { expire: 0 })
-    // A deleted article must leave the sitemap too (#209).
+    // The `posts` tag purge is expected to drop a deleted article from the
+    // next request-time sitemap read ([inference], pending #209's post-deploy
+    // production check); the path purge is retained hook behavior (#209).
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/sitemap.xml')
     expect(mocks.revalidateTag).not.toHaveBeenCalledWith(
       'posts-sitemap',
