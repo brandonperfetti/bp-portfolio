@@ -73,12 +73,12 @@ lives in the applied migration
 programmatically — the supported automation path now that Notion sync is
 gone.
 
-**Until [#274](https://github.com/brandonperfetti/bp-portfolio/issues/274)
-ships, an MCP write to published content purges nothing.** After every
-publish, unpublish, or edit of published content through `/api/mcp`, send
-one `POST /api/revalidate` to that environment — see
+**An MCP write purges what the same write from `/admin` purges**
+([#274](https://github.com/brandonperfetti/bp-portfolio/issues/274), fixed
+by `src/plugins/bufferMcpResponses.ts`). A deployment built before that fix
+purges nothing on an MCP write; on one, send one `POST /api/revalidate` after
+each write — see
 [Stopgap: purge after every MCP write](#stopgap-purge-after-every-mcp-write-274).
-Temporary: removed when #274 ships.
 
 See `docs/PAYLOAD.md` → **Operating via MCP** for the invariants agents
 must respect (Lexical node set, locked slugs, live writes, home
@@ -285,36 +285,41 @@ Cloudinary = rasterization + archive of the source; Blob = serving copy.
 2. Publish now (`_status: "published"`) or schedule (future
    `publishedAt` — scheduled publish is native; no hidden-until-date
    conventions needed).
-3. **Purge by hand (temporary, until
-   [#274](https://github.com/brandonperfetti/bp-portfolio/issues/274)
-   ships).** See [Stopgap: purge after every MCP write](#stopgap-purge-after-every-mcp-write-274)
-   below. Send it after the publish write, before you verify.
+3. **No hand purge needed** on a deployment that carries the
+   [#274](https://github.com/brandonperfetti/bp-portfolio/issues/274) fix:
+   the publish write purges like `/admin` does. On a deployment built
+   before it, see [Stopgap: purge after every MCP write](#stopgap-purge-after-every-mcp-write-274)
+   below, and send the call after the publish write, before you verify.
 4. Verify the live article at `/articles/[slug]` and its entry in
    `/sitemap.xml`. Not verified = not done. _Corrected 2026-10-28 (#274):_
    this step said the revalidation hooks "make it live in seconds — no
    deploy". That holds for a write from `/admin` only. Through the MCP the
    hooks' purges are dropped, so without step 3 the article can stay out of
-   the sitemap and `/llms.txt` for up to about 6 h.
+   the sitemap and `/llms.txt` for up to about 6 h. _Fixed 2026-10-28
+   (#274):_ the MCP now purges like `/admin`, on deployments built with the
+   fix.
 
 ### Stopgap: purge after every MCP write (#274)
 
-**Temporary.** This step exists only until
-[#274](https://github.com/brandonperfetti/bp-portfolio/issues/274) ships.
-The PR that fixes #274 deletes this section and the cross-references to it
-(§5 step 3, the Payload MCP section above, and `docs/PAYLOAD.md` →
-Operating via MCP).
+**No longer needed on a deployment that carries the
+[#274](https://github.com/brandonperfetti/bp-portfolio/issues/274) fix**
+(`src/plugins/bufferMcpResponses.ts`). It stays here only for deployments
+built before that fix: production, until the release that carries it.
+Delete this section and its cross-references (§5 step 3, the Payload MCP
+section above, and `docs/PAYLOAD.md` → Operating via MCP) once production
+does.
 
 **Why.** `[source: mcp-handler 1.1.0, next 16.3.4, traced in #274]`
 `/api/mcp` returns its streaming response before the tool runs, so Next
-sends the route's pending purges before the hooks have queued theirs (the
-timing itself is still to be measured on a preview, #274 AC 1). The hooks
+sends the route's pending purges before the hooks have queued theirs
+`[measured, local production build, 2026-10-28, #274]`: the MCP handler
+resolved 279 ms before the page hook queued its purges. The hooks
 still log "Revalidating …", and nothing is purged. `[measured, production 2026-10-28, #274
 issuecomment-6474751173]` an article published through the MCP stayed out
 of `/sitemap.xml` and `/llms.txt`; a page and a post unpublished through
 it kept serving 200 from the edge. The same writes from `/admin` purge at
 once. `/api/revalidate` is a separate request that awaits its own purges,
-so it is not affected by that timing `[inference — #274's fix will
-confirm]`.
+so it is not affected by that timing.
 
 **When.** After every publish, unpublish, edit or delete of
 already-published content made through the CMS MCP —
