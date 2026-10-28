@@ -630,8 +630,10 @@ cannot infer are the invariants below; encode those, not the mechanics.
 **Until [#274](https://github.com/brandonperfetti/bp-portfolio/issues/274)
 ships, MCP writes purge no caches.** The hooks run and log their
 revalidation, but `/api/mcp` responds before the tool runs, so Next drops
-the purges. After every publish, unpublish, or edit of published content
-through the MCP, send one `POST /api/revalidate` to that environment:
+the purges. After every publish, unpublish, edit or delete of published
+content through the MCP, send one `POST /api/revalidate` to that
+environment, carrying the entry's old path too where the write moves,
+unpublishes or deletes it (read it before the write):
 `docs/CONTENT_WORKFLOW.md` → **Stopgap: purge after every MCP write**.
 Temporary: removed when #274 ships.
 

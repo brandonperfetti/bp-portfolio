@@ -316,12 +316,12 @@ once. `/api/revalidate` is a separate request that awaits its own purges,
 so it is not affected by that timing `[inference — #274's fix will
 confirm]`.
 
-**When.** After every publish, unpublish, or edit of already-published
-content made through the CMS MCP — `createPosts`/`updatePosts`/
-`createPages`/`updatePages` and their `delete*` siblings alike. One call
-per write, or one call after a batch of writes, covering every entry the
-batch touched.
-A draft-only write needs no call: nothing public changed.
+**When.** After every publish, unpublish, edit or delete of
+already-published content made through the CMS MCP —
+`createPosts`/`updatePosts`/`deletePosts` and
+`createPages`/`updatePages`/`deletePages` alike. One call per write, or one
+call after a batch of writes, covering every entry the batch touched. A
+draft-only write needs no call: nothing public changed.
 
 **The call.** `POST /api/revalidate` on the environment you wrote to
 [source: `src/app/api/revalidate/route.ts`]:
@@ -331,18 +331,23 @@ A draft-only write needs no call: nothing public changed.
     x-vercel-protection-bypass: <VERCEL_AUTOMATION_BYPASS_SECRET>   # any *.vercel.app host; omit on brandonperfetti.com
     { "secret": <that host's value: CMS_REVALIDATE_SECRET_STAGING or _PRODUCTION>,
       "tags": ["posts", "pages"],
-      "paths": ["/articles/<slug>", "/articles", "/api/search", "/sitemap.xml"] }
+      "paths": ["<public path>", "/articles", "/api/search", "/sitemap.xml"] }
     → 200 { "ok": true, "revalidated": { "tags": [...], "paths": [...] } }
 
 - **Secret.** The same rules as the ingest route (§0, §4): pick the
   environment once and derive both the host and the secret variable from
   it, auth in the JSON body only, fail fast if the variable is unset,
   build the body with `jq --arg`, and never echo the value.
-- **`paths`.** The entry's public path — `/articles/<slug>` for a post, the
-  page's served path for a page — plus `/articles` and `/sitemap.xml`.
+- **`paths`.** The entry's public path as `publicPathFor` computes it —
+  `/articles/<slug>` for an unplaced post, `/<path>` for a post placed under
+  a page (#153) and for a page (`/` for the home page) [source:
+  `src/fields/slug/slugPaths.ts`] — plus `/articles` and `/sitemap.xml`.
   `/api/search` mirrors what the post hook purges (`purgePostSurfaces`);
-  include it for a post. For an unpublish or a slug change, send the
-  **old** path too: it is the one still being served.
+  include it for a post. For an unpublish, a delete, a slug change or a
+  placement move, send the **old** path too: it is the one still being
+  served. Read it (`find` with `select: { slug: true, path: true }`)
+  _before_ the write — after a move or rename the document no longer
+  carries it, and after a delete there is no document to read.
 - **`tags`.** Always both `posts` and `pages`. Never send an empty or
   missing `tags`: the route then purges its whole fallback list, which
   works but hides a malformed body.
