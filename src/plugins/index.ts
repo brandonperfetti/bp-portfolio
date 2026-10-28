@@ -12,6 +12,8 @@ import { beforeSyncWithSearch } from '@/search/beforeSync'
 import { searchFields } from '@/search/fieldOverrides'
 import { getServerSideURL } from '@/utilities/getURL'
 
+import { bufferMcpResponses } from './bufferMcpResponses'
+
 const generateTitle: GenerateTitle<Post | Page> = ({ doc }) => {
   return doc?.title ? `${doc.title} - Brandon Perfetti` : 'Brandon Perfetti'
 }
@@ -210,4 +212,6 @@ export const plugins: Plugin[] = [
       media: { enabled: { create: true, find: true, update: true } },
     },
   }),
+  // Runs last, so the endpoint above exists to be wrapped: MCP writes purge (#274).
+  bufferMcpResponses(),
 ]
