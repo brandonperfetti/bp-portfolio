@@ -336,7 +336,7 @@ draft-only write needs no call: nothing public changed.
     Content-Type: application/json
     x-vercel-protection-bypass: <VERCEL_AUTOMATION_BYPASS_SECRET>   # any *.vercel.app host; omit on brandonperfetti.com
     { "secret": <that host's value: CMS_REVALIDATE_SECRET_STAGING or _PRODUCTION>,
-      "tags": ["posts", "pages"],
+      "tags": ["posts", "pages"],   # plus "redirects" when the write changed a published path
       "paths": ["<public path>", "/articles", "/api/search", "/sitemap.xml"] }
     → 200 { "ok": true, "revalidated": { "tags": [...], "paths": [...] } }
 
@@ -354,9 +354,16 @@ draft-only write needs no call: nothing public changed.
   served. Read it (`find` with `select: { slug: true, path: true }`)
   _before_ the write — after a move or rename the document no longer
   carries it, and after a delete there is no document to read.
-- **`tags`.** Always both `posts` and `pages`. Never send an empty or
-  missing `tags`: the route then purges its whole fallback list, which
-  works but hides a malformed body.
+- **`tags`.** Always both `posts` and `pages`. For a slug change or a
+  placement move of published content, add `redirects` too.
+  `createPathRedirect` writes a `redirects` row for the old path, and that
+  row's own `redirects` purge (`revalidateRedirects`) runs inside the same
+  MCP request, so it is lost the same way. Without it, the cached redirect
+  list (`src/lib/cms/redirectsRepo.ts`) can keep missing the new row
+  [source: `src/hooks/createPathRedirect.ts`,
+  `src/hooks/revalidateRedirects.ts`]. Never send an empty or missing
+  `tags`: the route then purges its whole fallback list, which works but
+  hides a malformed body.
 - **Read the response.** The route drops any entry that is not a non-empty
   string without saying so, so check that `revalidated.tags` and
   `revalidated.paths` echo what you sent.
