@@ -353,13 +353,19 @@ draft-only write needs no call: nothing public changed.
   placement move, send the **old** path too: it is the one still being
   served. Read it (`find` with `select: { slug: true, path: true }`)
   _before_ the write — after a move or rename the document no longer
-  carries it, and after a delete there is no document to read.
+  carries it, and after a delete there is no document to read. For a page
+  move or rename that has descendants, also send every descendant page's
+  and placed post's old and new path. Their purges are lost the same way:
+  the subtree cascade purges each vacated path, and each descendant's own
+  hook purges its new one [source:
+  `src/collections/Pages/hooks/pageHierarchy.ts`, `cascadePagePaths`]. Read
+  them before the write too (`find` on `path` under the old prefix).
 - **`tags`.** Always both `posts` and `pages`. For a slug change or a
   placement move of published content, add `redirects` too.
   `createPathRedirect` writes a `redirects` row for the old path, and that
   row's own `redirects` purge (`revalidateRedirects`) runs inside the same
   MCP request, so it is lost the same way. Without it, the cached redirect
-  list (`src/lib/cms/redirectsRepo.ts`) can keep missing the new row
+  list (`src/lib/cms/redirectsRepo.ts`) can keep missing or misrouting the row
   [source: `src/hooks/createPathRedirect.ts`,
   `src/hooks/revalidateRedirects.ts`]. Never send an empty or missing
   `tags`: the route then purges its whole fallback list, which works but
