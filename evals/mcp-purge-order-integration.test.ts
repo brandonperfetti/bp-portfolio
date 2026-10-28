@@ -115,11 +115,18 @@ describe.skipIf(!connectionString)(
         },
       })
       pageId = page.id
-    })
+    }, 120_000)
 
+    // Destroy the pool in a `finally`, as the siblings do: an open Postgres
+    // connection keeps vitest waiting, and a rejected cleanup must not hang
+    // the run on the failure worth reporting.
     afterAll(async () => {
-      await cleanup()
-    })
+      try {
+        await cleanup()
+      } finally {
+        await payload?.db?.destroy?.()
+      }
+    }, 60_000)
 
     it('queues the publish purges before the endpoint response resolves', async () => {
       const { handleEndpoints } = await import('payload')
@@ -159,6 +166,6 @@ describe.skipIf(!connectionString)(
         events.at(-1),
         `every purge must precede the response (#274); order was: ${events.join(' → ')}`,
       ).toBe('response resolved')
-    })
+    }, 60_000)
   },
 )

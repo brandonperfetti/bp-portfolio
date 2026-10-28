@@ -616,6 +616,9 @@ there would answer a permanent redirect to a dead URL.
 - `plugin-search` — synced search index over posts feeding `/api/search`.
 - `plugin-mcp` — Payload MCP endpoint at `/api/mcp` (API-key auth) so agents
   can operate the CMS. Collections opt in with `{ enabled: true }` objects.
+- `bufferMcpResponses` (ours, `src/plugins/bufferMcpResponses.ts`) — runs
+  last and wraps `plugin-mcp`'s `POST /mcp` endpoint so a tool call's hook
+  purges reach Next (#274); see **Operating via MCP** below.
 
 ## Operating via MCP (for agents)
 

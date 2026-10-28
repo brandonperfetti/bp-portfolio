@@ -297,7 +297,8 @@ Cloudinary = rasterization + archive of the source; Blob = serving copy.
    hooks' purges are dropped, so without step 3 the article can stay out of
    the sitemap and `/llms.txt` for up to about 6 h. _Fixed 2026-10-28
    (#274):_ the MCP now purges like `/admin`, on deployments built with the
-   fix.
+   fix `[measured on a local production build; the preview and production
+checks are #274's AC 3 and AC 4]`.
 
 ### Stopgap: purge after every MCP write (#274)
 
