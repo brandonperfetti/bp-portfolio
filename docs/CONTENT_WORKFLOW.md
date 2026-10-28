@@ -73,6 +73,13 @@ lives in the applied migration
 programmatically — the supported automation path now that Notion sync is
 gone.
 
+**Until [#274](https://github.com/brandonperfetti/bp-portfolio/issues/274)
+ships, an MCP write to published content purges nothing.** After every
+publish, unpublish, or edit of published content through `/api/mcp`, send
+one `POST /api/revalidate` to that environment — see
+[Stopgap: purge after every MCP write](#stopgap-purge-after-every-mcp-write-274).
+Temporary: removed when #274 ships.
+
 See `docs/PAYLOAD.md` → **Operating via MCP** for the invariants agents
 must respect (Lexical node set, locked slugs, live writes, home
 `photoStrip`) and the bulk-edit recipes.
@@ -278,8 +285,94 @@ Cloudinary = rasterization + archive of the source; Blob = serving copy.
 2. Publish now (`_status: "published"`) or schedule (future
    `publishedAt` — scheduled publish is native; no hidden-until-date
    conventions needed).
-3. Verify the live article at `/articles/[slug]` (revalidation hooks
-   make it live in seconds — no deploy). Not verified = not done.
+3. **Purge by hand (temporary, until
+   [#274](https://github.com/brandonperfetti/bp-portfolio/issues/274)
+   ships).** See [Stopgap: purge after every MCP write](#stopgap-purge-after-every-mcp-write-274)
+   below. Send it after the publish write, before you verify.
+4. Verify the live article at `/articles/[slug]` and its entry in
+   `/sitemap.xml`. Not verified = not done. _Corrected 2026-10-28 (#274):_
+   this step said the revalidation hooks "make it live in seconds — no
+   deploy". That holds for a write from `/admin` only. Through the MCP the
+   hooks' purges are dropped, so without step 3 the article can stay out of
+   the sitemap and `/llms.txt` for up to about 6 h.
+
+### Stopgap: purge after every MCP write (#274)
+
+**Temporary.** This step exists only until
+[#274](https://github.com/brandonperfetti/bp-portfolio/issues/274) ships.
+The PR that fixes #274 deletes this section and the cross-references to it
+(§5 step 3, the Payload MCP section above, and `docs/PAYLOAD.md` →
+Operating via MCP).
+
+**Why.** `[source: mcp-handler 1.1.0, next 16.3.4, traced in #274]`
+`/api/mcp` returns its streaming response before the tool runs, so Next
+sends the route's pending purges before the hooks have queued theirs (the
+timing itself is still to be measured on a preview, #274 AC 1). The hooks
+still log "Revalidating …", and nothing is purged. `[measured, production 2026-10-28, #274
+issuecomment-6474751173]` an article published through the MCP stayed out
+of `/sitemap.xml` and `/llms.txt`; a page and a post unpublished through
+it kept serving 200 from the edge. The same writes from `/admin` purge at
+once. `/api/revalidate` is a separate request that awaits its own purges,
+so it is not affected by that timing `[inference — #274's fix will
+confirm]`.
+
+**When.** After every publish, unpublish, edit or delete of
+already-published content made through the CMS MCP —
+`createPosts`/`updatePosts`/`deletePosts` and
+`createPages`/`updatePages`/`deletePages` alike. One call per write, or one
+call after a batch of writes, covering every entry the batch touched. A
+draft-only write needs no call: nothing public changed.
+
+**The call.** `POST /api/revalidate` on the environment you wrote to
+[source: `src/app/api/revalidate/route.ts`]:
+
+    POST https://<host>/api/revalidate
+    Content-Type: application/json
+    x-vercel-protection-bypass: <VERCEL_AUTOMATION_BYPASS_SECRET>   # any *.vercel.app host; omit on brandonperfetti.com
+    { "secret": <that host's value: CMS_REVALIDATE_SECRET_STAGING or _PRODUCTION>,
+      "tags": ["posts", "pages"],
+      "paths": ["<public path>", "/articles", "/api/search", "/sitemap.xml"] }
+    → 200 { "ok": true, "revalidated": { "tags": [...], "paths": [...] } }
+
+- **Secret.** The same rules as the ingest route (§0, §4): pick the
+  environment once and derive both the host and the secret variable from
+  it, auth in the JSON body only, fail fast if the variable is unset,
+  build the body with `jq --arg`, and never echo the value.
+- **`paths`.** The entry's public path as `publicPathFor` computes it —
+  `/articles/<slug>` for an unplaced post, `/<path>` for a post placed under
+  a page (#153) and for a page (`/` for the home page) [source:
+  `src/fields/slug/slugPaths.ts`] — plus `/articles` and `/sitemap.xml`.
+  `/api/search` mirrors what the post hook purges (`purgePostSurfaces`);
+  include it for a post. For an unpublish, a delete, a slug change or a
+  placement move, send the **old** path too: it is the one still being
+  served. Read it (`find` with `select: { slug: true, path: true }`)
+  _before_ the write — after a move or rename the document no longer
+  carries it, and after a delete there is no document to read.
+- **`tags`.** Always both `posts` and `pages`. Never send an empty or
+  missing `tags`: the route then purges its whole fallback list, which
+  works but hides a malformed body.
+- **Read the response.** The route drops any entry that is not a non-empty
+  string without saying so, so check that `revalidated.tags` and
+  `revalidated.paths` echo what you sent.
+- **A 401.** `{"ok":false,"error":"Unauthorized"}` comes from the route
+  itself: the `secret` did not match that environment's
+  `CMS_REVALIDATE_SECRET`, or the body did not parse as JSON (the route
+  reads an unparseable body as `{}`, so a `jq` mistake looks exactly like a
+  wrong secret). Usually the wrong environment's variable, an unset
+  variable, or a script copy left stale after a rotation (§0).
+  **Nothing was purged** — fix the secret and send the call again; the
+  write itself already landed. A non-JSON `401 Protected deployment` is
+  different: the bypass header was missing or wrong, and the request never
+  reached the route.
+- **Then verify** (§5 step 4). A 200 means the purges were sent, not that a
+  visitor sees the change. `/sitemap.xml` reads the `posts`/`pages` cached
+  reads per request, so it should show the entry on the next read
+  `[inference]`. The same purge from `/admin` put an entry in within 15 s
+  `[measured, prod 2026-10-28, #209 issuecomment-6473800226]`.
+  `/llms.txt` sends its own `s-maxage=3600, stale-while-revalidate=86400`,
+  a CDN TTL no purge reaches, so it can lag by about an hour more [source:
+  `src/app/(frontend)/llms.txt/route.ts`; the `purgePostSurfaces` docblock
+  in `src/collections/Posts/hooks/revalidatePost.ts`].
 
 ### Known limits (measured, dated)
 

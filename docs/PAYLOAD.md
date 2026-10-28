@@ -627,6 +627,16 @@ on deployed envs it also sits behind Vercel deployment protection, so pass
 self-describing — an agent discovers _how_ to call them for free. What it
 cannot infer are the invariants below; encode those, not the mechanics.
 
+**Until [#274](https://github.com/brandonperfetti/bp-portfolio/issues/274)
+ships, MCP writes purge no caches.** The hooks run and log their
+revalidation, but `/api/mcp` responds before the tool runs, so Next drops
+the purges. After every publish, unpublish, edit or delete of published
+content through the MCP, send one `POST /api/revalidate` to that
+environment, carrying the entry's old path too where the write moves,
+unpublishes or deletes it (read it before the write):
+`docs/CONTENT_WORKFLOW.md` → **Stopgap: purge after every MCP write**.
+Temporary: removed when #274 ships.
+
 **Guardrails (violating these breaks production):**
 
 - **Lexical node set.** Post `content` is Lexical JSON. Authoring or
@@ -673,8 +683,10 @@ cannot infer are the invariants below; encode those, not the mechanics.
 **Recipes:**
 
 - Bulk publish drafts: `updatePosts` with `where` `{"_status":{"equals":
-"draft"}}` and `_status:"published"` (`revalidatePost` fires per doc → live
-  immediately).
+"draft"}}` and `_status:"published"`, then one `/api/revalidate` call
+  covering every post published (the stopgap above). _Corrected 2026-10-28
+  (#274):_ this said "`revalidatePost` fires per doc → live immediately".
+  It fires, but through the MCP its purges are dropped.
 - Keep responses small: always `select` the fields you need and keep `depth`
   low (0–1); a naive `find` at high depth returns huge relationship trees.
 - Drafts vs live: `draft:true` reads the versions table; `_status` sets
