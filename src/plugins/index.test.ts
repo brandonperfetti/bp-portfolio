@@ -36,18 +36,21 @@ import { plugins } from '@/plugins'
 /** The two codes this repo offers. Permanent first — it is the default. */
 const EXPECTED_REDIRECT_TYPES = ['301', '302']
 
-/** Apply every plugin to a bare config and collect the `redirects` collections. */
+/**
+ * Apply every plugin to a bare config and collect the `redirects` collections.
+ *
+ * @remarks Plugins are applied as Payload's `buildConfig` applies them: sorted
+ * by `order`, each to the previous one's output. One of them,
+ * `bufferMcpResponses` (#274), wraps an endpoint another plugin adds, so it
+ * cannot be applied to a bare config on its own.
+ */
 const buildRedirectsCollections = async () => {
-  const found = []
-  for (const plugin of plugins) {
-    const applied = await (
-      plugin as (config: Config) => Config | Promise<Config>
-    )({ collections: [] } as unknown as Config)
-    for (const collection of applied.collections ?? []) {
-      if (collection.slug === 'redirects') found.push(collection)
-    }
-  }
-  return found
+  const sorted = [...plugins].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  let config = { collections: [] } as unknown as Config
+  for (const plugin of sorted) config = await plugin(config)
+  return (config.collections ?? []).filter(
+    (collection) => collection.slug === 'redirects',
+  )
 }
 
 const findField = (fields: Field[], name: string) =>

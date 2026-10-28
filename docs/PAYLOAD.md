@@ -616,6 +616,9 @@ there would answer a permanent redirect to a dead URL.
 - `plugin-search` — synced search index over posts feeding `/api/search`.
 - `plugin-mcp` — Payload MCP endpoint at `/api/mcp` (API-key auth) so agents
   can operate the CMS. Collections opt in with `{ enabled: true }` objects.
+- `bufferMcpResponses` (ours, `src/plugins/bufferMcpResponses.ts`) — runs
+  last and wraps `plugin-mcp`'s `POST /mcp` endpoint so a tool call's hook
+  purges reach Next (#274); see **Operating via MCP** below.
 
 ## Operating via MCP (for agents)
 
@@ -627,15 +630,18 @@ on deployed envs it also sits behind Vercel deployment protection, so pass
 self-describing — an agent discovers _how_ to call them for free. What it
 cannot infer are the invariants below; encode those, not the mechanics.
 
-**Until [#274](https://github.com/brandonperfetti/bp-portfolio/issues/274)
-ships, MCP writes purge no caches.** The hooks run and log their
-revalidation, but `/api/mcp` responds before the tool runs, so Next drops
-the purges. After every publish, unpublish, edit or delete of published
-content through the MCP, send one `POST /api/revalidate` to that
-environment, carrying the entry's old path too where the write moves,
-unpublishes or deletes it (read it before the write):
+**MCP writes purge what `/admin` writes purge**
+([#274](https://github.com/brandonperfetti/bp-portfolio/issues/274)).
+The MCP transport returns its streaming response before the tool runs, and
+Next sends a route handler's purges once, when its response resolves, so
+the hooks' purges used to be dropped. `bufferMcpResponses`
+(`src/plugins/bufferMcpResponses.ts`) wraps the plugin's `POST /mcp`
+endpoint and reads the response to the end before returning it, so the tool
+and its hooks finish inside the handler. It runs after every other plugin,
+and fails the config build if it finds no `POST /mcp` endpoint to wrap.
+`evals/mcp-purge-order-integration.test.ts` pins the order. A deployment
+built before the fix still needs a hand purge after each write:
 `docs/CONTENT_WORKFLOW.md` → **Stopgap: purge after every MCP write**.
-Temporary: removed when #274 ships.
 
 **Guardrails (violating these breaks production):**
 
@@ -684,9 +690,10 @@ Temporary: removed when #274 ships.
 
 - Bulk publish drafts: `updatePosts` with `where` `{"_status":{"equals":
 "draft"}}` and `_status:"published"`, then one `/api/revalidate` call
-  covering every post published (the stopgap above). _Corrected 2026-10-28
-  (#274):_ this said "`revalidatePost` fires per doc → live immediately".
-  It fires, but through the MCP its purges are dropped.
+  covering every post published only on a deployment built before the
+  #274 fix (the stopgap above). _Corrected 2026-10-28 (#274):_ this said
+  "`revalidatePost` fires per doc → live immediately". Through the MCP its
+  purges were dropped; with the fix, they land again.
 - Keep responses small: always `select` the fields you need and keep `depth`
   low (0–1); a naive `find` at high depth returns huge relationship trees.
 - Drafts vs live: `draft:true` reads the versions table; `_status` sets
