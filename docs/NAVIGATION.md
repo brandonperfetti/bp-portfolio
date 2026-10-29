@@ -353,8 +353,9 @@ All four list surfaces share one param, one primitive
 - **It composes with the surface's filters** — `q`/`topic` on `/articles`,
   `q`/`category`/`sort` on `/tech` — as an ordinary extra param.
 - **Any filter change resets to page 1** by dropping the param. That reset
-  happens inside each explorer's existing `updateUrl` mirror, so the
-  skip-when-no-URL-change guard still decides whether anything is written.
+  happens in each explorer's `buildFilterQueryString`, which
+  `useFilterUrlSync` calls, so the skip-when-no-URL-change guard still
+  decides whether anything is written.
 - **Invalid input clamps to page 1, never 404s.** Non-numeric, zero, negative,
   fractional and out-of-range values all render the first page; the clamp is
   derived at render time and never written back, so a shared link is not
@@ -364,6 +365,19 @@ All four list surfaces share one param, one primitive
   the history entry is what makes the back button return the reader to where
   they were. Refresh and share work because the page lives only in the URL, not
   in component state.
+- **The filter mirror treats the URL and its own writes differently (#302, F1
+  on #303).** `useFilterUrlSync` (shared by `/articles` and `/tech`) remembers
+  each `router.replace` it sends until that URL arrives. An arriving URL that
+  matches one is the echo of the explorer's own write: it never touches the
+  search input, focused or not, and the next write is judged against the newest
+  URL still in flight, so a clear made mid-flight still reaches the URL. Any
+  other URL (Back/Forward, an in-app link) is the destination and wins, focused
+  input included: the explorer copies it into its state and writes nothing over
+  it. A `popstate` forgets the pending writes; so does a 10 s expiry (at most 8
+  writes are kept). Known bound: an echo of the explorer's own write that
+  arrives more than 10 s late is treated as a destination, and overwrites
+  anything typed since. That is deliberate: an unbounded pending list is the
+  worse risk.
 - **The control renders only when `total > pageSize`.** Page sizes: `/articles`
   12 (five pages at the current 52-post corpus), `/projects` 24, `/tech` 48,
   `/uses` 48 over the flattened section entries. The last three sit above their

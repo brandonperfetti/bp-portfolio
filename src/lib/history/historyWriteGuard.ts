@@ -179,11 +179,12 @@ export function installHistoryWriteGuard(
   const onPopState = () => {
     if (active) clearPending()
   }
-  // Capture phase: Next's own `popstate` listener is a bubble-phase listener on
-  // `window`, registered whenever the app router mounted — before this guard
-  // when the reader navigated to `/tech` client-side. Registered in the bubble
-  // phase too, ours could run second, and Next's restore write would reach the
-  // guard with the push still pending and be sent as a push.
+  // Capture phase, so this listener runs ahead of Next's own bubble-phase
+  // `popstate` listener on `window`. The guard is installed before hydration
+  // (`instrumentation-client.ts`), so it always registers first; capture keeps
+  // the order whatever the registration order, and it must hold: were ours to
+  // run second, Next's restore write would reach the guard with the push still
+  // pending and be sent as a push.
   target.addEventListener('popstate', onPopState, { capture: true })
 
   const guard = (method: HistoryWriteMethod) =>
