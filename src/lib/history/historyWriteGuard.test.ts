@@ -271,6 +271,21 @@ describe('installHistoryWriteGuard · refused pushes are retried (CR round 6)', 
     expect(writes).toEqual([])
   })
 
+  it('gives a replace that supersedes a nearly-spent one a fresh retry budget (#272, CodeRabbit preflight)', () => {
+    vi.useFakeTimers()
+    const { history, writes, box } = throttledHistory()
+    installHistoryWriteGuard(history, vi.fn())
+
+    history.replaceState({}, '', '/tech?q=a')
+    vi.advanceTimersByTime(14_000) // 14 refused retries: one attempt left
+    history.replaceState({}, '', '/tech?q=ab') // refused, supersedes
+    vi.advanceTimersByTime(3000) // would be abandoned after 1 more with a spent budget
+    box.throttled = false
+    vi.advanceTimersByTime(1000)
+
+    expect(writes).toEqual([['replaceState', '/tech?q=ab']])
+  })
+
   it('gives up on a replace after the retry budget and logs it once (#272)', () => {
     vi.useFakeTimers()
     const { history, writes, box } = throttledHistory()

@@ -205,6 +205,10 @@ export function installHistoryWriteGuard(
         // The latest refused write supersedes the previous one; a refused push
         // always wins over a pending replace.
         pending = { method: effective, args }
+        // ...and gets a budget of its own: the one it replaced may have spent
+        // nearly all of its attempts, which would abandon the newer URL after
+        // one more refusal.
+        retries = 0
         scheduleRetry()
       }
     }
