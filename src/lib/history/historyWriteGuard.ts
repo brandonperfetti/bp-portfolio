@@ -72,22 +72,22 @@ const RETRY_LIMIT = 15
  * A refused `replaceState` leaves the address bar stale. It used to be dropped
  * on the reasoning that the next write re-syncs it, but a reader who stops
  * changing filters sends no next write, so the new list stayed under the old
- * URL (#272, decided as option (b) on #249 AC-2). The guard now keeps the latest
- * refused replace and re-sends it on the push's cadence and budget; a later
- * write that lands, a pending push, or a traversal supersedes it. A refused `pushState` is a
- * missing history ENTRY: Next has already committed the new page, so the page
- * runs ahead of the URL and Back skips it (measured in WebKit on a production
- * build: page 2 shown, URL still `/tech`, Back left `/tech` entirely). So the
- * push is kept pending and retried every second, and while it is pending every
- * later write is sent as that push instead: the latest intended state creates
- * the missing entry rather than overwriting the one before it. A later write
- * that lands clears the pending push.
+ * URL (#272, decided as option (b) on #249 AC-2). The guard now keeps the
+ * latest refused replace and re-sends it on the push's cadence and budget; a
+ * later write that lands, a pending push, or a traversal supersedes it. A
+ * refused `pushState` is a missing history ENTRY: Next has already committed
+ * the new page, so the page runs ahead of the URL and Back skips it (measured
+ * in WebKit on a production build: page 2 shown, URL still `/tech`, Back left
+ * `/tech` entirely). So the push is kept pending and retried every second,
+ * and while it is pending every later write is sent as that push instead: the
+ * latest intended state creates the missing entry rather than overwriting the
+ * one before it. A later write that lands clears the pending push.
  *
  * What this does not fix, stated so nobody relies on it:
  * - Until the window clears (up to one window, about ten seconds) the page
  *   still runs ahead of the address bar.
- * - Only the LATEST refused replace is kept; an earlier one is superseded, which
- *   is right for a replace (it overwrites the same entry).
+ * - Only the LATEST refused replace is kept; an earlier one is superseded,
+ *   which is right for a replace (it overwrites the same entry).
  * - A replace still refused after about fifteen seconds is given up (logged
  *   `gave_up`), leaving the pre-#272 stale address bar.
  * - Two pushes refused within one window merge into ONE entry (the later
@@ -97,14 +97,16 @@ const RETRY_LIMIT = 15
  * - A Back/Forward traversal while a write is pending cancels it
  *   (`popstate`), so Next's restore write for the traversed entry is not
  *   turned into a new push that would cut off forward history, and a pending
- *   replace is never re-sent over the entry the reader traversed to (#272). The listener
- *   is registered in the capture phase so it runs before Next's bubble-phase
- *   `popstate` listener (`next/dist/client/components/app-router.js`)
- *   whichever mounted first. That capture listeners on the event's own
- *   target fire before its bubble listeners is an inference recalled from the
- *   DOM spec's dispatch order, not re-read. The pending entry is abandoned: measured in WebKit on a production build, Back from a
- *   refused page 3 (shown over the page-2 entry) landed on page 1, no stray
- *   entry appeared after the window, and Forward still reached page 2.
+ *   replace is never re-sent over the entry the reader traversed to (#272).
+ *   The listener is registered in the capture phase so it runs before Next's
+ *   bubble-phase `popstate` listener
+ *   (`next/dist/client/components/app-router.js`) whichever mounted first.
+ *   That capture listeners on the event's own target fire before its bubble
+ *   listeners is an inference recalled from the DOM spec's dispatch order, not
+ *   re-read. The pending entry is abandoned: measured in WebKit on a
+ *   production build, Back from a refused page 3 (shown over the page-2 entry)
+ *   landed on page 1, no stray entry appeared after the window, and Forward
+ *   still reached page 2.
  *
  * A non-throttle error from a call made on the caller's stack is rethrown
  * untouched. One from a timer retry has no caller to reach, so it is logged

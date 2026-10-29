@@ -286,6 +286,41 @@ describe('installHistoryWriteGuard · refused pushes are retried (CR round 6)', 
     expect(writes).toEqual([['replaceState', '/tech?q=ab']])
   })
 
+  it('gives a pending push a fresh budget when a later refused write is folded into it, and only then (#272)', () => {
+    vi.useFakeTimers()
+    const { history, writes, box } = throttledHistory()
+    const onRefusal = vi.fn()
+    installHistoryWriteGuard(history, onRefusal)
+
+    history.pushState({}, '', '/tech?page=2')
+    vi.advanceTimersByTime(14_000) // 14 refused retries: one attempt left
+    history.replaceState({}, '', '/tech?page=2&q=ab') // refused, folded in
+    vi.advanceTimersByTime(14_000) // past the original budget; alive on the reset
+    box.throttled = false
+    vi.advanceTimersByTime(1000)
+
+    // The folded write inherited the push and the reset, so it still lands.
+    expect(writes).toEqual([['pushState', '/tech?page=2&q=ab']])
+    expect(onRefusal.mock.calls).not.toContainEqual(['pushState', 'gave_up'])
+  })
+
+  it('bounds that reset: with no further write the folded push gives up after one fresh budget (#272)', () => {
+    vi.useFakeTimers()
+    const { history, writes, box } = throttledHistory()
+    const onRefusal = vi.fn()
+    installHistoryWriteGuard(history, onRefusal)
+
+    history.pushState({}, '', '/tech?page=2')
+    vi.advanceTimersByTime(14_000)
+    history.replaceState({}, '', '/tech?page=2&q=ab') // the only reset
+    vi.advanceTimersByTime(60_000) // no new write: no new reset
+    box.throttled = false
+    vi.advanceTimersByTime(20_000)
+
+    expect(onRefusal.mock.calls).toContainEqual(['pushState', 'gave_up'])
+    expect(writes).toEqual([])
+  })
+
   it('gives up on a replace after the retry budget and logs it once (#272)', () => {
     vi.useFakeTimers()
     const { history, writes, box } = throttledHistory()
