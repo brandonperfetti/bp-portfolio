@@ -52,7 +52,7 @@ describe('instrumentation-client installs the history-write guard app-wide (#268
     window.history.pushState = nativePush
   })
 
-  it('drops a throttle SecurityError on a non-/tech route and logs it with the route', async () => {
+  it('contains a throttle SecurityError on a non-/tech route and logs it with the route', async () => {
     await import('@/instrumentation-client')
 
     refuse = webkitThrottle()
@@ -63,7 +63,7 @@ describe('instrumentation-client installs the history-write guard app-wide (#268
 
     expect(warn).toHaveBeenCalledWith('history.write_dropped', {
       method: 'replaceState',
-      outcome: 'dropped',
+      outcome: 'retrying',
       path: '/articles',
     })
   })

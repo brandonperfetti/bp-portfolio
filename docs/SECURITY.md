@@ -359,7 +359,8 @@ stay there.
     route (#268; it was `/tech` only, as `tech.history.write_dropped`, before),
     logs `history.write_dropped` with `{ method, outcome, path }` only, where
     `path` is `window.location.pathname` (no query string, no user data) and
-    `outcome` is `dropped`, `retrying`, `gave_up` or `retry_failed`, once
+    `outcome` is `retrying`, `gave_up` or `retry_failed` (a refused replace
+    is retried since #272, so `dropped` is no longer logged), once
     per method-and-outcome pair per page load.
   - The guard (`src/lib/history/historyWriteGuard.ts`) contains only the
     browser's history-throttle `SecurityError` (matched on name and message,
