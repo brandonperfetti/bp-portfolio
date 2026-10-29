@@ -1,3 +1,8 @@
+import type {
+  HistoryWriteMethod,
+  HistoryWriteOutcome,
+} from '@/lib/history/historyWriteGuard'
+
 /**
  * Best-effort client-side telemetry helpers that record to Sentry Logs (the
  * structured-logging view, `enableLogs: true` in `instrumentation-client.ts`)
@@ -32,6 +37,36 @@ export function reportSpeechRecognitionError(detail: {
       Sentry.logger?.warn?.('corvus.speech.recognition_error', {
         error: detail.error,
         had_transcript: detail.hadTranscript,
+      })
+    })
+    .catch(() => {
+      // Observability is best-effort; never surface a telemetry failure.
+    })
+}
+
+/**
+ * Record a refused history write to Sentry Logs (not an Issue).
+ *
+ * @remarks Installed app-wide from `instrumentation-client.ts` (#268), so it
+ * fires on any route. Carries the method, the {@link HistoryWriteOutcome} and
+ * the pathname only (`window.location.pathname`: no query string, no user
+ * data). Query Logs for `history.write_dropped` to see whether the throttle
+ * still fires, and on which route. The type-only import keeps this module free
+ * of a runtime dependency on the guard.
+ *
+ * @param method - The History method the caller used.
+ * @param outcome - What became of the write.
+ */
+export function reportHistoryWriteRefusal(
+  method: HistoryWriteMethod,
+  outcome: HistoryWriteOutcome,
+): void {
+  void import('@sentry/nextjs')
+    .then((Sentry) => {
+      Sentry.logger?.warn?.('history.write_dropped', {
+        method,
+        outcome,
+        path: window.location.pathname,
       })
     })
     .catch(() => {

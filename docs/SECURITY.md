@@ -82,7 +82,9 @@ another doc carried in passing lives here instead, and that doc points back.
   components, Payload hooks and config, scripts. `[measured 2026-09-27]`
   none of the 47 modules whose directive is `'use client'` reads a variable
   other than `NEXT_PUBLIC_*` or `NODE_ENV` (46 at `ef07dbd`; wave 9 added
-  `src/components/tech/HistoryWriteGuard.tsx`, which reads none). Passing a secret to a client
+  `src/components/tech/HistoryWriteGuard.tsx`, which read none; #268 moved
+  the guard to `src/lib/history/historyWriteGuard.ts`, which carries no
+  directive and reads none, so the count is 46 again). Passing a secret to a client
   component as a prop sends it to the browser just the same; that half is
   held by review.
 - **Shared-secret routes compare with `isValidSecret()`**
@@ -353,21 +355,22 @@ stay there.
   is a change to `isSessionIdAllowed()` and to `docs/ANALYTICS.md`
   § Sessions in Sentry. The client-side Sentry **Logs** calls carry no
   identity either `[measured 2026-09-27, at b4b596b]`:
-  - `HistoryWriteGuard` logs `tech.history.write_dropped` with
-    `{ method, outcome, path }` only, where `path` is
-    `window.location.pathname` (no query string, no user data) and
+  - `reportHistoryWriteRefusal` (`clientTelemetry.ts`), the logger for the
+    history-write guard that `src/instrumentation-client.ts` installs on every
+    route (#268; it was `/tech` only, as `tech.history.write_dropped`, before),
+    logs `history.write_dropped` with `{ method, outcome, path }` only, where
+    `path` is `window.location.pathname` (no query string, no user data) and
     `outcome` is `dropped`, `retrying`, `gave_up` or `retry_failed`, once
-    per method-and-outcome pair per mount
-    [source: `src/components/tech/HistoryWriteGuard.tsx:42-43`, `:122-127`,
-    `:227-242`].
-  - It contains only the browser's history-throttle `SecurityError`
-    (matched on name and message, so the cross-origin `SecurityError` is not
-    mistaken for it) [source: `:20-28`]. Any other error from a call on the
-    caller's stack is rethrown untouched [source: `:189`]; one from a timer
-    retry has no caller to reach, so it is logged `retry_failed` and the
-    retry stops, not rethrown [source: `:148-154`].
+    per method-and-outcome pair per page load.
+  - The guard (`src/lib/history/historyWriteGuard.ts`) contains only the
+    browser's history-throttle `SecurityError` (matched on name and message,
+    so the cross-origin `SecurityError` is not mistaken for it)
+    [source: `isHistoryThrottleError`]. Any other error from a call on the
+    caller's stack is rethrown untouched; one from a timer retry has no caller
+    to reach, so it is logged `retry_failed` and the retry stops, not
+    rethrown [source: `installHistoryWriteGuard`'s `scheduleRetry`].
   - `clientTelemetry.ts` sends a speech-recognition error code and a
-    boolean [source: `src/lib/observability/clientTelemetry.ts:32-35`].
+    boolean [source: `src/lib/observability/clientTelemetry.ts:36-39`].
 - **A mailing-list contact is captured only with consent.** The contact
   form captures only when its unchecked-by-default opt-in is set and the
   message was delivered [source: `src/app/api/contact/route.ts`]; sign-up
