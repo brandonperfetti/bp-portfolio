@@ -27,21 +27,23 @@ export function isHistoryThrottleError(error: unknown): boolean {
  * What became of a refused history write — the `outcome` field logged with
  * `history.write_dropped`.
  *
- * - `dropped`: a refused replace with no push pending; not retried.
- * - `retrying`: a refused push, or a refused write folded into a pending push;
- *   retried every second.
- * - `gave_up`: a pending push still refused after {@link PUSH_RETRY_LIMIT}
+ * - `retrying`: a refused push or replace, or a refused write folded into a
+ *   pending push; re-sent every second (#249 CR round 6 for a push, #272 for
+ *   a replace).
+ * - `gave_up`: a pending write still refused after {@link RETRY_LIMIT}
  *   attempts; abandoned.
  * - `retry_failed`: a retry threw something other than the throttle;
  *   abandoned (a timer has no caller to rethrow to).
+ *
+ * A refused replace used to be logged `dropped`; since #272 it is retried, so
+ * that outcome is no longer emitted.
  */
-export type HistoryWriteOutcome =
-  'dropped' | 'retrying' | 'gave_up' | 'retry_failed'
+export type HistoryWriteOutcome = 'retrying' | 'gave_up' | 'retry_failed'
 
-/** How often a refused push is retried (#249, CR round 6). */
-const PUSH_RETRY_INTERVAL_MS = 1000
+/** How often a refused write is retried (#249 CR round 6, #272). */
+const RETRY_INTERVAL_MS = 1000
 /**
- * Retry budget for one refused push: about fifteen seconds.
+ * Retry budget for one refused write: about fifteen seconds.
  *
  * @remarks Sized to outlast one WebKit window. That the window is ten seconds
  * from its first counted write and that a refused call does not count against
@@ -49,12 +51,12 @@ const PUSH_RETRY_INTERVAL_MS = 1000
  * `[measured]` a push refused right after exhausting the budget landed within
  * twelve seconds (Playwright WebKit 26.5, production build).
  */
-const PUSH_RETRY_LIMIT = 15
+const RETRY_LIMIT = 15
 
 /**
  * Wrap `history.pushState` / `replaceState` so a throttle refusal never throws:
- * a refused replace is dropped, and a refused push is retried for about fifteen
- * seconds, then given up.
+ * a refused write is retried every second for about fifteen seconds, then
+ * given up.
  *
  * @param history - The `History` to guard (`window.history` in the app).
  * @param onRefusal - Called with the method that was called and what became of
@@ -67,8 +69,12 @@ const PUSH_RETRY_LIMIT = 15
  *   every call and error straight through.
  *
  * @remarks The two methods fail differently, so they are contained differently.
- * A refused `replaceState` only leaves the address bar stale, and the next
- * successful write re-syncs it, so it is dropped. A refused `pushState` is a
+ * A refused `replaceState` leaves the address bar stale. It used to be dropped
+ * on the reasoning that the next write re-syncs it, but a reader who stops
+ * changing filters sends no next write, so the new list stayed under the old
+ * URL (#272, decided as option (b) on #249 AC-2). The guard now keeps the latest
+ * refused replace and re-sends it on the push's cadence and budget; a later
+ * write that lands, a pending push, or a traversal supersedes it. A refused `pushState` is a
  * missing history ENTRY: Next has already committed the new page, so the page
  * runs ahead of the URL and Back skips it (measured in WebKit on a production
  * build: page 2 shown, URL still `/tech`, Back left `/tech` entirely). So the
@@ -80,13 +86,18 @@ const PUSH_RETRY_LIMIT = 15
  * What this does not fix, stated so nobody relies on it:
  * - Until the window clears (up to one window, about ten seconds) the page
  *   still runs ahead of the address bar.
+ * - Only the LATEST refused replace is kept; an earlier one is superseded, which
+ *   is right for a replace (it overwrites the same entry).
+ * - A replace still refused after about fifteen seconds is given up (logged
+ *   `gave_up`), leaving the pre-#272 stale address bar.
  * - Two pushes refused within one window merge into ONE entry (the later
  *   state), so Back skips the first of them.
  * - A push still refused after about fifteen seconds is given up (logged
  *   `gave_up`), which leaves the pre-fix inconsistency.
- * - A Back/Forward traversal while a push is pending cancels the pending push
+ * - A Back/Forward traversal while a write is pending cancels it
  *   (`popstate`), so Next's restore write for the traversed entry is not
- *   turned into a new push that would cut off forward history. The listener
+ *   turned into a new push that would cut off forward history, and a pending
+ *   replace is never re-sent over the entry the reader traversed to (#272). The listener
  *   is registered in the capture phase so it runs before Next's bubble-phase
  *   `popstate` listener (`next/dist/client/components/app-router.js`)
  *   whichever mounted first. That capture listeners on the event's own
@@ -111,7 +122,10 @@ export function installHistoryWriteGuard(
   }
   let active = true
   const reported = new Set<string>()
-  let pendingPush: Parameters<History['pushState']> | null = null
+  let pending: {
+    method: HistoryWriteMethod
+    args: Parameters<History['pushState']>
+  } | null = null
   let retryTimer: ReturnType<typeof setTimeout> | null = null
   let retries = 0
 
@@ -128,7 +142,7 @@ export function installHistoryWriteGuard(
     Reflect.apply(previous[method], history, args)
   }
   const clearPending = () => {
-    pendingPush = null
+    pending = null
     retries = 0
     if (retryTimer !== null) clearTimeout(retryTimer)
     retryTimer = null
@@ -137,28 +151,29 @@ export function installHistoryWriteGuard(
     if (retryTimer !== null) return
     retryTimer = setTimeout(() => {
       retryTimer = null
-      if (!active || !pendingPush) return
+      if (!active || !pending) return
+      const { method, args } = pending
       try {
-        write('pushState', pendingPush)
+        write(method, args)
         clearPending()
       } catch (error) {
         retries += 1
         if (!isHistoryThrottleError(error)) {
-          report('pushState', 'retry_failed')
+          report(method, 'retry_failed')
           clearPending()
           return
         }
-        if (retries >= PUSH_RETRY_LIMIT) {
-          report('pushState', 'gave_up')
+        if (retries >= RETRY_LIMIT) {
+          report(method, 'gave_up')
           clearPending()
           return
         }
         scheduleRetry()
       }
-    }, PUSH_RETRY_INTERVAL_MS)
+    }, RETRY_INTERVAL_MS)
   }
-  // A traversal moves the browser to an existing entry; the pending push was
-  // for the entry the reader just left, so it must not be recreated on top.
+  // A traversal moves the browser to an existing entry; the pending write was
+  // for the entry the reader just left, so it must not be re-sent on top.
   const onPopState = () => {
     if (active) clearPending()
   }
@@ -177,19 +192,20 @@ export function installHistoryWriteGuard(
         write(method, args)
         return
       }
-      const effective: HistoryWriteMethod = pendingPush ? 'pushState' : method
+      // A pending PUSH turns every later write into that push; a pending
+      // replace does not, since a replace never owes the history a new entry.
+      const effective: HistoryWriteMethod =
+        pending?.method === 'pushState' ? 'pushState' : method
       try {
         write(effective, args)
-        if (pendingPush) clearPending()
+        if (pending) clearPending()
       } catch (error) {
         if (!isHistoryThrottleError(error)) throw error
-        if (effective === 'pushState') {
-          report(method, 'retrying')
-          pendingPush = args
-          scheduleRetry()
-        } else {
-          report(method, 'dropped')
-        }
+        report(method, 'retrying')
+        // The latest refused write supersedes the previous one; a refused push
+        // always wins over a pending replace.
+        pending = { method: effective, args }
+        scheduleRetry()
       }
     }
 

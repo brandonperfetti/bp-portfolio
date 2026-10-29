@@ -68,7 +68,7 @@ describe('isHistoryThrottleError (#249)', () => {
 })
 
 describe('installHistoryWriteGuard (#249)', () => {
-  it('drops a throttled write instead of throwing, and reports it once per method and outcome', () => {
+  it('contains a throttled write instead of throwing, and reports it once per method and outcome', () => {
     const { history, calls, throwNext } = fakeHistory()
     const onDrop = vi.fn()
     installHistoryWriteGuard(history, onDrop)
@@ -81,7 +81,7 @@ describe('installHistoryWriteGuard (#249)', () => {
     expect(() => history.pushState({}, '', '/tech?page=2')).not.toThrow()
 
     expect(onDrop.mock.calls).toEqual([
-      ['replaceState', 'dropped'],
+      ['replaceState', 'retrying'],
       ['pushState', 'retrying'],
     ])
     // Writes still reach the underlying method, with `history` as receiver.
@@ -199,15 +199,93 @@ describe('installHistoryWriteGuard · refused pushes are retried (CR round 6)', 
     expect(writes).toEqual([['pushState', '/tech?page=2&q=x']])
   })
 
-  it('still drops a throttled replace with nothing pending (no retry, no entry)', () => {
+  it('re-sends a refused replace as a replace, never a push, once the throttle clears with no further write (#272)', () => {
     vi.useFakeTimers()
     const { history, writes, box } = throttledHistory()
     installHistoryWriteGuard(history, vi.fn())
 
     expect(() => history.replaceState({}, '', '/tech?q=a')).not.toThrow()
+    expect(writes).toEqual([])
+
+    vi.advanceTimersByTime(1000) // still throttled: stays pending
+    expect(writes).toEqual([])
+
+    box.throttled = false
+    vi.advanceTimersByTime(1000)
+    expect(writes).toEqual([['replaceState', '/tech?q=a']])
+
+    vi.advanceTimersByTime(20_000) // sent once
+    expect(writes).toHaveLength(1)
+  })
+
+  it('re-sends only the LATEST refused replace (#272)', () => {
+    vi.useFakeTimers()
+    const { history, writes, box } = throttledHistory()
+    installHistoryWriteGuard(history, vi.fn())
+
+    history.replaceState({}, '', '/tech?q=a')
+    history.replaceState({}, '', '/tech?q=ab')
+    box.throttled = false
+    vi.advanceTimersByTime(1000)
+
+    expect(writes).toEqual([['replaceState', '/tech?q=ab']])
+  })
+
+  it('a later write that lands supersedes a pending replace (#272)', () => {
+    vi.useFakeTimers()
+    const { history, writes, box } = throttledHistory()
+    installHistoryWriteGuard(history, vi.fn())
+
+    history.replaceState({}, '', '/tech?q=a')
+    box.throttled = false
+    history.replaceState({}, '', '/tech?q=abc')
+    vi.advanceTimersByTime(20_000)
+
+    expect(writes).toEqual([['replaceState', '/tech?q=abc']])
+  })
+
+  it('a push refused while a replace is pending replaces it with the push (#272)', () => {
+    vi.useFakeTimers()
+    const { history, writes, box } = throttledHistory()
+    installHistoryWriteGuard(history, vi.fn())
+
+    history.replaceState({}, '', '/tech?q=a')
+    history.pushState({}, '', '/tech?page=2')
+    box.throttled = false
+    vi.advanceTimersByTime(1000)
+
+    expect(writes).toEqual([['pushState', '/tech?page=2']])
+  })
+
+  it('a Back/Forward traversal cancels a pending replace, so no replace lands over the traversed entry (#272)', () => {
+    vi.useFakeTimers()
+    const { history, writes, box } = throttledHistory()
+    const target = new EventTarget()
+    installHistoryWriteGuard(history, vi.fn(), target)
+
+    history.replaceState({}, '', '/tech?q=a')
+    target.dispatchEvent(new Event('popstate'))
     box.throttled = false
     vi.advanceTimersByTime(20_000)
 
+    expect(writes).toEqual([])
+  })
+
+  it('gives up on a replace after the retry budget and logs it once (#272)', () => {
+    vi.useFakeTimers()
+    const { history, writes, box } = throttledHistory()
+    const onRefusal = vi.fn()
+    installHistoryWriteGuard(history, onRefusal)
+
+    history.replaceState({}, '', '/tech?q=a')
+    vi.advanceTimersByTime(60_000)
+    box.throttled = false
+    vi.advanceTimersByTime(20_000)
+
+    expect(onRefusal.mock.calls).toEqual([
+      ['replaceState', 'retrying'],
+      ['replaceState', 'gave_up'],
+    ])
     expect(writes).toEqual([])
   })
 
