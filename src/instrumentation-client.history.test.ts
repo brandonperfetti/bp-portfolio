@@ -96,7 +96,7 @@ describe('instrumentation-client installs the history-write guard app-wide (#268
     expect(warn).not.toHaveBeenCalled()
   })
 
-  it('wraps window.history before any route renders', async () => {
+  it('wraps window.history when instrumentation-client loads', async () => {
     const before = window.history.replaceState
     await import('@/instrumentation-client')
     const guarded = window.history.replaceState
