@@ -577,3 +577,144 @@ describe('ArticlesExplorer section affordance (#154)', () => {
     })
   })
 })
+
+/**
+ * #249 / #267: `/articles` shares `/tech`'s write shape. Every URL write is a
+ * `history.replaceState` inside Next's `HistoryUpdater`, and Safari throws past
+ * 100 of them in ten seconds. These pin how many writes the explorer itself
+ * issues, and that none lands over a URL the reader moved to.
+ *
+ * The URL is mocked, so `router.replace` never moves `searchParamsMock`: a test
+ * that wants the URL to move (Back/Forward, an in-app link) reassigns it and
+ * re-renders, exactly as a traversal would re-render the explorer.
+ */
+describe('ArticlesExplorer URL writes per burst (#249, #267)', () => {
+  const taggedArticles: ArticleWithSlug[] = [
+    {
+      slug: 'react-observer-pattern',
+      title: 'Observer Pattern in React',
+      description: 'Practical observer pattern in component apps.',
+      author: 'Brandon Perfetti',
+      date: '2026-03-03',
+      topics: ['Leadership'],
+      tech: ['TypeScript'],
+      searchText: 'observer react typescript',
+    },
+    {
+      slug: 'postgresql-offset',
+      title: 'Pagination with PostgreSQL',
+      description: 'Offset versus cursor pagination.',
+      author: 'Brandon Perfetti',
+      date: '2026-03-02',
+      topics: ['Databases'],
+      tech: ['PostgreSQL'],
+      searchText: 'postgresql cursor pagination',
+    },
+  ]
+
+  it('never writes stale filter state over a URL that moved under a blurred input (Back/link)', () => {
+    const { rerender } = render(<ArticlesExplorer articles={taggedArticles} />)
+    expect(replaceMock).not.toHaveBeenCalled()
+
+    // Back to an entry the reader had filtered: the URL is now the source of truth.
+    searchParamsMock = new URLSearchParams('q=react&topic=Leadership')
+    rerender(<ArticlesExplorer articles={taggedArticles} />)
+    // And forward again.
+    searchParamsMock = new URLSearchParams('')
+    rerender(<ArticlesExplorer articles={taggedArticles} />)
+
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+
+  it('issues zero writes for a burst of ten Back/Forward traversals', async () => {
+    const { rerender } = render(<ArticlesExplorer articles={taggedArticles} />)
+
+    for (let i = 0; i < 10; i++) {
+      searchParamsMock = new URLSearchParams('q=react')
+      rerender(<ArticlesExplorer articles={taggedArticles} />)
+      searchParamsMock = new URLSearchParams('topic=Leadership')
+      rerender(<ArticlesExplorer articles={taggedArticles} />)
+    }
+    // Past the 500 ms debounce, so a pending write would have landed.
+    await new Promise((resolve) => setTimeout(resolve, 650))
+
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+
+  it('a chip tap inside the typing debounce writes once, not twice', async () => {
+    const user = userEvent.setup()
+    render(<ArticlesExplorer articles={taggedArticles} />)
+
+    await user.type(screen.getByPlaceholderText('Search articles'), 'react')
+    await user.click(screen.getByRole('button', { name: 'Leadership' }))
+
+    await waitFor(
+      () => {
+        expect(replaceMock).toHaveBeenCalledWith(
+          '/articles?q=react&topic=Leadership',
+          { scroll: false },
+        )
+      },
+      { timeout: 2000 },
+    )
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a clear made inside the debounce after a traversal still clears the URL', async () => {
+    // Back/Forward to `?q=react` syncs `query` while `debouncedQuery` is still ''
+    // for 500 ms. A clear inside that window returned the filters to the state
+    // the write gate last recorded (''), so the gate skipped the write: an
+    // unfiltered list under `?q=react` (#267's note on `94d1fcc`).
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      const { rerender } = render(
+        <ArticlesExplorer articles={taggedArticles} />,
+      )
+
+      searchParamsMock = new URLSearchParams('q=react')
+      rerender(<ArticlesExplorer articles={taggedArticles} />)
+      const box = screen.getByPlaceholderText('Search articles')
+      expect(box).toHaveValue('react')
+
+      await user.clear(box)
+      await vi.advanceTimersByTimeAsync(650)
+
+      expect(box).toHaveValue('')
+      expect(replaceMock).toHaveBeenCalledWith('/articles', { scroll: false })
+      expect(replaceMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still rewrites a non-canonical URL once on load', async () => {
+    // The gate records a URL only when it is exactly what the explorer would
+    // write, so a `?category=` alias (the explorer writes `topic`) is still
+    // rewritten once, as before the gate.
+    searchParamsMock = new URLSearchParams('category=Leadership')
+    render(<ArticlesExplorer articles={taggedArticles} />)
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledTimes(1)
+    })
+    const [href] = replaceMock.mock.calls[0] as [string]
+    expect(href).toContain('topic=Leadership')
+    await new Promise((resolve) => setTimeout(resolve, 650))
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a type-and-clear burst on a clean URL issues no writes at all', async () => {
+    const user = userEvent.setup()
+    render(<ArticlesExplorer articles={taggedArticles} />)
+    const box = screen.getByPlaceholderText('Search articles')
+
+    for (let i = 0; i < 10; i++) {
+      await user.type(box, 're')
+      await user.clear(box)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 650))
+
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+})

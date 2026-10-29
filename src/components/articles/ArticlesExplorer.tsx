@@ -90,6 +90,45 @@ function articleMatchesQuery(
 }
 
 /**
+ * The query string `updateUrl` writes for a filter state, from the current
+ * one: `q`/`topic` set or dropped to match, every other param kept.
+ *
+ * @remarks #88: any filter change resets to page 1 by dropping `page`, inside
+ * the same skip-when-no-URL-change guard that decides whether anything is
+ * written at all. Shared by `updateUrl` and the write gate (#267) so the two
+ * can never disagree on what the URL for a state looks like.
+ */
+function buildFilterQueryString(
+  currentQueryString: string,
+  nextQuery: string,
+  nextTopic: string,
+): string {
+  const params = new URLSearchParams(currentQueryString)
+
+  const filtersChanged =
+    (params.get('q') ?? '') !== nextQuery.trim() ||
+    (params.get('topic') ?? params.get('category') ?? 'All') !== nextTopic
+  if (filtersChanged) {
+    params.delete(PAGE_PARAM)
+  }
+
+  if (nextQuery.trim()) {
+    params.set('q', nextQuery.trim())
+  } else {
+    params.delete('q')
+  }
+
+  if (nextTopic !== 'All') {
+    params.set('topic', nextTopic)
+  } else {
+    params.delete('topic')
+    params.delete('category')
+  }
+
+  return params.toString()
+}
+
+/**
  * Client-side article browser for `/articles`: debounced free-text search
  * plus topic/tech filter chips over a pre-fetched article list — filtering
  * an in-memory list keeps the interaction instant with no server round-trip.
@@ -367,37 +406,11 @@ export function ArticlesExplorer({
   const updateUrl = useCallback(
     (nextQuery: string, nextTopic: string) => {
       const currentQueryString = searchParams.toString()
-      const params = new URLSearchParams(searchParams.toString())
-
-      // #88: any filter change resets to page 1 by dropping the param. This
-      // lives inside the existing mirror (rather than a second effect) so the
-      // skip-when-no-URL-change guard below still decides whether anything is
-      // written at all — a re-render that changes neither filter nor page
-      // stays a no-op.
-      const currentQueryParam = searchParams.get('q') ?? ''
-      const currentTopicParam =
-        searchParams.get('topic') ?? searchParams.get('category') ?? 'All'
-      const filtersChanged =
-        currentQueryParam !== nextQuery.trim() ||
-        currentTopicParam !== nextTopic
-      if (filtersChanged) {
-        params.delete(PAGE_PARAM)
-      }
-
-      if (nextQuery.trim()) {
-        params.set('q', nextQuery.trim())
-      } else {
-        params.delete('q')
-      }
-
-      if (nextTopic !== 'All') {
-        params.set('topic', nextTopic)
-      } else {
-        params.delete('topic')
-        params.delete('category')
-      }
-
-      const queryString = params.toString()
+      const queryString = buildFilterQueryString(
+        currentQueryString,
+        nextQuery,
+        nextTopic,
+      )
       if (queryString === currentQueryString) {
         if (isDev) {
           console.debug(
@@ -428,9 +441,60 @@ export function ArticlesExplorer({
     [isDev, pathname, router, searchParams],
   )
 
+  /**
+   * The filter state the write effect last acted on — the #249 write gate,
+   * ported from `TechExplorer` (#267).
+   *
+   * @remarks Every URL write here costs a `history.replaceState` in Next's
+   * `HistoryUpdater`, and Safari throws past 100 of those in ten seconds. So
+   * the URL is written only when the READER changed the filters, never merely
+   * because the URL moved: `updateUrl` changes identity with `searchParams`,
+   * which used to re-run the write effect on every Back/Forward or in-app link
+   * and write the still-stale debounced state straight back over the URL the
+   * reader had just navigated to — two history writes per traversal, and the
+   * traversal undone (`[measured]` in WebKit on a production build, #267).
+   */
+  const lastFilterStateRef = useRef<string | null>(null)
+
+  // Once the state has caught up with a URL the reader navigated to, that URL
+  // is what the gate compares against. Without this the gate still held the
+  // state from before the traversal, so a clear made inside the debounce after
+  // Back to `?q=react` matched it and was never written: an unfiltered list
+  // under `?q=react` (#267's note on `94d1fcc`). Recorded only when the URL is
+  // exactly what `updateUrl` would write for the state, so nothing is recorded
+  // for a non-canonical URL (a `?category=` alias on load is still rewritten
+  // once, as before); judged on the raw `query`, so it lands before the
+  // debounce settles; and never while the input is focused, where the sync
+  // above leaves `query` to the reader. Declared before the write effect so it
+  // runs first.
   useEffect(() => {
+    if (searchInputRef.current === document.activeElement) {
+      return
+    }
+    const currentQueryString = searchParams.toString()
+    if (
+      buildFilterQueryString(currentQueryString, query, topic) ===
+      currentQueryString
+    ) {
+      lastFilterStateRef.current = JSON.stringify([query.trim(), topic])
+    }
+  }, [query, topic, searchParams])
+
+  useEffect(() => {
+    // A debounce is still pending, so `debouncedQuery` is stale: it is either
+    // the reader mid-word or a URL-driven `setQuery` catching up. Either way the
+    // write waits for the value to settle, which also folds a chip tap made
+    // inside the debounce window into the one write that follows it.
+    if (debouncedQuery !== query) {
+      return
+    }
+    const filterState = JSON.stringify([debouncedQuery.trim(), topic])
+    if (filterState === lastFilterStateRef.current) {
+      return
+    }
+    lastFilterStateRef.current = filterState
     updateUrl(debouncedQuery, topic)
-  }, [topic, debouncedQuery, updateUrl])
+  }, [query, topic, debouncedQuery, updateUrl])
 
   const totalPages = getPageCount(filtered.length, ARTICLES_PAGE_SIZE)
   // Derived, never written back: an out-of-range or junk `?page` renders page 1
