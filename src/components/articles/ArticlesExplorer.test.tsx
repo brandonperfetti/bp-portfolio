@@ -916,4 +916,93 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
     await new Promise((resolve) => setTimeout(resolve, 700))
     expect(replaceMock).toHaveBeenCalledTimes(1)
   })
+  it('N1: a write Next dropped cannot swallow a later in-app navigation to the same URL', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
+    const box = screen.getByPlaceholderText('Search articles')
+
+    await user.type(box, 'react')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+      timeout: 2000,
+    })
+    await user.clear(box)
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(2))
+    // Next discards the earlier pending replace, and the second is a no-op
+    // navigation to the confirmed URL: neither ever lands.
+    inFlight = []
+
+    await user.type(box, 'react')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(3), {
+      timeout: 2000,
+    })
+    landNext(rerender)
+    expect(searchParamsMock.get('q')).toBe('react')
+
+    // An in-app link to the bare route: a destination, with no popstate.
+    act(() => box.blur())
+    traverseTo(rerender, '')
+
+    expect(box).toHaveValue('')
+    expect(
+      screen.queryByText('Observer Pattern in React') !== null &&
+        screen.queryByText('Pagination with PostgreSQL') !== null,
+    ).toBe(true)
+  })
+
+  it('pins the 10 s bound: an echo inside it is not a destination, one past it is (N3)', async () => {
+    const now = vi.spyOn(Date, 'now')
+    const base = Date.now()
+    try {
+      for (const [lateMs, expected] of [
+        [9_000, 'reactx'],
+        [11_000, 'react'],
+      ] as const) {
+        inFlight = []
+        replaceMock.mockClear()
+        searchParamsMock = new URLSearchParams('')
+        now.mockReturnValue(base)
+        const user = userEvent.setup()
+        const { rerender, unmount } = render(
+          <ArticlesExplorer articles={focusArticles} />,
+        )
+        const box = screen.getByPlaceholderText('Search articles')
+
+        await user.type(box, 'react')
+        await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+          timeout: 2000,
+        })
+        now.mockReturnValue(base + lateMs)
+        await user.type(box, 'x')
+        landNext(rerender)
+
+        expect(box).toHaveValue(expected)
+        unmount()
+      }
+    } finally {
+      now.mockRestore()
+    }
+  })
+
+  it('the popstate listener forgets pending writes, so a traversal to the in-flight URL is a destination (N2)', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
+    const box = screen.getByPlaceholderText('Search articles')
+
+    await user.type(box, 'react')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+      timeout: 2000,
+    })
+    // The reader types on (debounce pending), then goes Back to an entry whose
+    // URL is the one in flight; Next discards the in-flight replace.
+    await user.type(box, 'x')
+    inFlight = []
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+    traverseTo(rerender, 'q=react')
+
+    expect(box).toHaveValue('react')
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+  })
 })

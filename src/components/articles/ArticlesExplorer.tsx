@@ -94,12 +94,12 @@ function articleMatchesQuery(
 }
 
 /**
- * The query string `updateUrl` writes for a filter state, from the current
- * one: `q`/`topic` set or dropped to match, every other param kept.
+ * The query string `useFilterUrlSync` writes for a filter state, from the
+ * current one: `q`/`topic` set or dropped to match, every other param kept.
  *
  * @remarks #88: any filter change resets to page 1 by dropping `page`, inside
  * the same skip-when-no-URL-change guard that decides whether anything is
- * written at all. Shared by `updateUrl` and the write gate (#267) so the two
+ * written at all. Shared by the hook's write and its gate (#267) so the two
  * can never disagree on what the URL for a state looks like.
  */
 function buildFilterQueryString(
@@ -141,7 +141,8 @@ function buildFilterQueryString(
  * `router.replace` so filtered views are shareable and survive reload;
  * legacy `?category` links are honored on read. The local input is not
  * overwritten by the echo of its own write, so the debounce loop can't clobber
- * in-flight typing; a Back/Forward does sync it, focused or not (#302). `/` focuses search unless a typing target is active.
+ * in-flight typing; a Back/Forward does sync it, focused or not (#302). `/`
+ * focuses search unless a typing target is active.
  *
  * @remarks Pagination (#88) is `?page=N` over the same param bag, absent
  * meaning page 1. It is *client windowing*: the whole publish-safe set still
@@ -149,8 +150,9 @@ function buildFilterQueryString(
  * rendered, so `/articles` stays a fully static route with no server-side
  * `searchParams` read. The page lives only in the URL (no local state), which
  * is what makes refresh, share and the back button all restore position.
- * Changing `q` or `topic` drops `page` inside the same `updateUrl` guard that
- * mirrors the filters, so a filter change always lands on page 1.
+ * Changing `q` or `topic` drops `page` inside `buildFilterQueryString`, which
+ * `useFilterUrlSync` calls to mirror the filters, so a filter change always
+ * lands on page 1.
  *
  * @remarks **The filter chips here are not the topic chips on an article
  * page, and must never become links (#151, #136 Direction extended item 3).**

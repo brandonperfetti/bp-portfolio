@@ -80,8 +80,9 @@ function resolveCategory(item: CmsEntityItem) {
 type SortMode = 'name' | 'active'
 
 /**
- * The query string `updateUrl` writes for a filter state, from the current
- * one: `q`/`category`/`sort` set or dropped to match, every other param kept.
+ * The query string `useFilterUrlSync` writes for a filter state, from the
+ * current one: `q`/`category`/`sort` set or dropped to match, every other
+ * param kept.
  *
  * @remarks #88: any filter/sort change resets to page 1 by dropping `page`,
  * inside the same skip-when-no-URL-change guard used for the filters.

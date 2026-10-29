@@ -79,6 +79,13 @@ export type FilterUrlSyncOptions<
  * traversal to the same URL. Entries also expire after
  * {@link PENDING_WRITE_TTL_MS}.
  *
+ * **Known bound (N3 on #304, decided 2026-10-29).** The list holds at most
+ * {@link PENDING_WRITE_LIMIT} writes, each for 10 s. An echo of the hook's own
+ * write that arrives MORE than 10 s late is no longer recognised: it is
+ * treated as a destination and copied into the input, overwriting anything
+ * typed since. A navigation 10 s late is far outside normal behaviour, and an
+ * unbounded pending list is the worse risk, so the bound stays. A test pins it.
+ *
  * Effects are declared in the order they must run: read the URL, record it,
  * then write.
  */
@@ -130,9 +137,18 @@ export function useFilterUrlSync<Params extends FilterSearchParams>({
     urlRef.current = queryString
 
     const pending = livePending()
-    const arrived = pending.findIndex(
-      (write) => write.queryString === queryString,
-    )
+    // The NEWEST match: Next discards an earlier pending `replace` when a
+    // later one starts, so only the latest write to a URL can still be about to
+    // arrive. Earlier entries (this one's duplicates and everything before)
+    // are dead and are dropped with it, so they cannot swallow a later
+    // navigation to the same URL (N1 on #304).
+    let arrived = -1
+    for (let index = pending.length - 1; index >= 0; index -= 1) {
+      if (pending[index].queryString === queryString) {
+        arrived = index
+        break
+      }
+    }
     if (arrived !== -1) {
       // Our own write landed (Next may skip the ones before it). The state is
       // already at, or ahead of, this URL: leave it all alone.
