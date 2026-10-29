@@ -61,12 +61,16 @@ export function reportHistoryWriteRefusal(
   method: HistoryWriteMethod,
   outcome: HistoryWriteOutcome,
 ): void {
+  // Read the route now, not inside the `.then`: the guard reports each
+  // method-and-outcome pair once, and the dynamic import resolves later, so a
+  // navigation in between would attribute the refusal to the wrong route.
+  const path = window.location.pathname
   void import('@sentry/nextjs')
     .then((Sentry) => {
       Sentry.logger?.warn?.('history.write_dropped', {
         method,
         outcome,
-        path: window.location.pathname,
+        path,
       })
     })
     .catch(() => {

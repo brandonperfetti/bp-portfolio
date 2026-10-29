@@ -68,6 +68,21 @@ describe('instrumentation-client installs the history-write guard app-wide (#268
     })
   })
 
+  it('attributes a refusal to the route that triggered it, even if the page moves before the log lands', async () => {
+    await import('@/instrumentation-client')
+
+    refuse = webkitThrottle()
+    window.history.replaceState({}, '', '/articles?q=a')
+    // The reader navigates away before the dynamic import resolves.
+    nativePush.call(window.history, {}, '', '/work')
+    await flushTelemetry()
+
+    expect(warn).toHaveBeenCalledWith(
+      'history.write_dropped',
+      expect.objectContaining({ path: '/articles' }),
+    )
+  })
+
   it('still throws a SecurityError that is not the throttle', async () => {
     await import('@/instrumentation-client')
 
