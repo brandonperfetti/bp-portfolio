@@ -1,5 +1,7 @@
 import * as Sentry from '@sentry/nextjs'
 
+import { installHistoryWriteGuard } from '@/lib/history/historyWriteGuard'
+import { reportHistoryWriteRefusal } from '@/lib/observability/clientTelemetry'
 import {
   getSentryEnvironment,
   getSentryInitDecision,
@@ -46,6 +48,22 @@ import { getOrCreateSessionId } from '@/lib/observability/sessionId'
  * see {@link SENTRY_CONSOLE_LOG_LEVELS}).
  */
 const decision = getSentryInitDecision('client')
+
+/**
+ * Contain Safari's history-write throttle on every route (#249, #268).
+ *
+ * The throw comes from Next's own `HistoryUpdater`, which calls
+ * `replaceState` inside a `useInsertionEffect` ABOVE every app component, so
+ * no error boundary can catch it and it replaces the whole app with Next's
+ * default error screen `[measured: Playwright WebKit, production build]`. Any
+ * route that writes the URL can reach the cap, so the guard is installed once,
+ * here, before hydration, and for the page's lifetime. It is installed whether
+ * or not Sentry initialises: the guard is behaviour, the log is best-effort.
+ * Next captures the patched method as its "original" on mount, so the guard is
+ * never uninstalled. See {@link installHistoryWriteGuard} for what it does and
+ * does not fix.
+ */
+installHistoryWriteGuard(window.history, reportHistoryWriteRefusal)
 
 warnIfDevDsnIgnored(decision)
 

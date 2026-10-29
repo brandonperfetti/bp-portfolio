@@ -1,9 +1,5 @@
-'use client'
-
-import { useEffect } from 'react'
-
 /** The two History methods Safari's write throttle counts against. */
-type HistoryWriteMethod = 'pushState' | 'replaceState'
+export type HistoryWriteMethod = 'pushState' | 'replaceState'
 
 /**
  * Is this the browser refusing a history write because of its rate limit?
@@ -29,7 +25,7 @@ export function isHistoryThrottleError(error: unknown): boolean {
 
 /**
  * What became of a refused history write — the `outcome` field logged with
- * `tech.history.write_dropped`.
+ * `history.write_dropped`.
  *
  * - `dropped`: a refused replace with no push pending; not retried.
  * - `retrying`: a refused push, or a refused write folded into a pending push;
@@ -212,55 +208,4 @@ export function installHistoryWriteGuard(
         history[method] = previous[method]
     }
   }
-}
-
-/**
- * Record a refused history write to Sentry Logs (not an Issue).
- *
- * @remarks Same dynamic-import, never-throws shape as
- * `src/lib/observability/clientTelemetry.ts`: importing this module never pulls
- * `@sentry/nextjs` into a bundle or a test that does not hit the path, and
- * `Sentry.logger` no-ops when Sentry is not initialised. Carries the method,
- * the {@link HistoryWriteOutcome} and the pathname only. Query Logs for
- * `tech.history.write_dropped` to see whether the throttle still fires.
- */
-function reportRefusedHistoryWrite(
-  method: HistoryWriteMethod,
-  outcome: HistoryWriteOutcome,
-): void {
-  void import('@sentry/nextjs')
-    .then((Sentry) => {
-      Sentry.logger?.warn?.('tech.history.write_dropped', {
-        method,
-        outcome,
-        path: window.location.pathname,
-      })
-    })
-    .catch(() => {
-      // Observability is best-effort; never surface a telemetry failure.
-    })
-}
-
-/**
- * Contains Safari's history-write throttle on `/tech` (#249). Renders nothing.
- *
- * @remarks The throw this contains is not ours to catch at a call site: it
- * comes from Next's own `HistoryUpdater`, which calls `replaceState` inside a
- * `useInsertionEffect` that sits ABOVE every app component, so no error
- * boundary around the explorer can see it — Next's framework-level boundary
- * catches it and replaces the whole app with its default error screen
- * `[measured: Playwright WebKit, production build]`. Wrapping the History
- * method is the one seam that reaches it. The trade is deliberate: a refused
- * replace costs one URL update (the next successful write re-syncs the address
- * bar) and a refused push is retried for about fifteen seconds (see
- * {@link installHistoryWriteGuard} for what that does not fix), where the throw
- * costs the page. Scoped to the explorer's lifetime. Refusals are logged once
- * per method-and-outcome pair per mount, never silently ignored.
- */
-export function HistoryWriteGuard(): null {
-  useEffect(
-    () => installHistoryWriteGuard(window.history, reportRefusedHistoryWrite),
-    [],
-  )
-  return null
 }

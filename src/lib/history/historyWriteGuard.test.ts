@@ -1,11 +1,9 @@
-import { cleanup, render } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, afterEach } from 'vitest'
 
 import {
-  HistoryWriteGuard,
   installHistoryWriteGuard,
   isHistoryThrottleError,
-} from '@/components/tech/HistoryWriteGuard'
+} from '@/lib/history/historyWriteGuard'
 
 /** WebKit's exact refusal, as `BP-PORTFOLIO-M` recorded it (#249). */
 const webkitThrottle = () =>
@@ -38,10 +36,6 @@ function fakeHistory() {
     },
   }
 }
-
-afterEach(() => {
-  cleanup()
-})
 
 describe('isHistoryThrottleError (#249)', () => {
   it('matches the WebKit and Firefox throttle refusals', () => {
@@ -345,17 +339,5 @@ describe('installHistoryWriteGuard · refused pushes are retried (CR round 6)', 
     second.box.throttled = false
     vi.advanceTimersByTime(20_000)
     expect(second.writes).toEqual([])
-  })
-})
-
-describe('<HistoryWriteGuard /> (#249)', () => {
-  it('guards window.history while mounted and restores it on unmount', () => {
-    const original = window.history.replaceState
-    const { unmount } = render(<HistoryWriteGuard />)
-    expect(window.history.replaceState).not.toBe(original)
-
-    unmount()
-
-    expect(window.history.replaceState).toBe(original)
   })
 })
