@@ -11,6 +11,10 @@ import { dedupeArticlesBySlug } from '@/lib/articleUtils'
 import { formatDate } from '@/lib/formatDate'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
+import {
+  useFilterUrlSync,
+  type FilterSearchParams,
+} from '@/lib/useFilterUrlSync'
 import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import {
@@ -136,8 +140,8 @@ function buildFilterQueryString(
  * @remarks Query and topic mirror into the URL (`?q`/`?topic`) via
  * `router.replace` so filtered views are shareable and survive reload;
  * legacy `?category` links are honored on read. The local input is not
- * overwritten from the URL while focused, so the debounce loop can't clobber
- * in-flight typing. `/` focuses search unless a typing target is active.
+ * overwritten by the echo of its own write, so the debounce loop can't clobber
+ * in-flight typing; a Back/Forward does sync it, focused or not (#302). `/` focuses search unless a typing target is active.
  *
  * @remarks Pagination (#88) is `?page=N` over the same param bag, absent
  * meaning page 1. It is *client windowing*: the whole publish-safe set still
@@ -209,7 +213,6 @@ export function ArticlesExplorer({
   articles: ArticleWithSlug[]
   sectionPaths?: Record<string, string>
 }) {
-  const isDev = process.env.NODE_ENV !== 'production'
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -225,20 +228,6 @@ export function ArticlesExplorer({
     () => dedupeArticlesBySlug(articles),
     [articles],
   )
-
-  useEffect(() => {
-    const nextQuery = searchParams.get('q') ?? ''
-    const nextTopic =
-      searchParams.get('topic') ?? searchParams.get('category') ?? 'All'
-    const isInputFocused = searchInputRef.current === document.activeElement
-
-    // Keep typing stable: don't overwrite local input value while user is actively editing.
-    if (!isInputFocused) {
-      setQuery((current) => (current === nextQuery ? current : nextQuery))
-    }
-
-    setTopic((current) => (current === nextTopic ? current : nextTopic))
-  }, [searchParams])
 
   useEffect(() => {
     const isTypingTarget = (target: EventTarget | null) => {
@@ -403,98 +392,41 @@ export function ArticlesExplorer({
 
   const queryText = debouncedQuery.trim()
 
-  const updateUrl = useCallback(
-    (nextQuery: string, nextTopic: string) => {
-      const currentQueryString = searchParams.toString()
-      const queryString = buildFilterQueryString(
-        currentQueryString,
-        nextQuery,
-        nextTopic,
-      )
-      if (queryString === currentQueryString) {
-        if (isDev) {
-          console.debug(
-            '[articles:explorer] skip router.replace (no URL change)',
-            {
-              currentQueryString,
-              query: nextQuery.trim(),
-              topic: nextTopic,
-            },
-          )
-        }
-        return
+  const filterKey = JSON.stringify([topic])
+  const buildQueryString = useCallback(
+    (currentQueryString: string, nextQuery: string) =>
+      buildFilterQueryString(currentQueryString, nextQuery, topic),
+    [topic],
+  )
+  const applyUrl = useCallback(
+    (params: FilterSearchParams, { syncQuery }: { syncQuery: boolean }) => {
+      // The destination wins, focused input or not (#302). The echo of the
+      // explorer's own write never reaches here (see `useFilterUrlSync`), so
+      // typing is not overwritten.
+      if (syncQuery) {
+        const nextQuery = params.get('q') ?? ''
+        setQuery((current) => (current === nextQuery ? current : nextQuery))
       }
-
-      if (isDev) {
-        console.debug('[articles:explorer] apply router.replace', {
-          from: currentQueryString,
-          to: queryString,
-          query: nextQuery.trim(),
-          topic: nextTopic,
-        })
-      }
-
-      router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
-        scroll: false,
-      })
+      const nextTopic = params.get('topic') ?? params.get('category') ?? 'All'
+      setTopic((current) => (current === nextTopic ? current : nextTopic))
     },
-    [isDev, pathname, router, searchParams],
+    [],
   )
 
-  /**
-   * The filter state the write effect last acted on — the #249 write gate,
-   * ported from `TechExplorer` (#267).
-   *
-   * @remarks Every URL write here costs a `history.replaceState` in Next's
-   * `HistoryUpdater`, and Safari throws past 100 of those in ten seconds. So
-   * the URL is written only when the READER changed the filters, never merely
-   * because the URL moved: `updateUrl` changes identity with `searchParams`,
-   * which used to re-run the write effect on every Back/Forward or in-app link
-   * and write the still-stale debounced state straight back over the URL the
-   * reader had just navigated to — two history writes per traversal, and the
-   * traversal undone (`[measured]` in WebKit on a production build, #267).
-   */
-  const lastFilterStateRef = useRef<string | null>(null)
-
-  // Once the state has caught up with a URL the reader navigated to, that URL
-  // is what the gate compares against. Without this the gate still held the
-  // state from before the traversal, so a clear made inside the debounce after
-  // Back to `?q=react` matched it and was never written: an unfiltered list
-  // under `?q=react` (#267's note on `94d1fcc`). Recorded only when the URL is
-  // exactly what `updateUrl` would write for the state, so nothing is recorded
-  // for a non-canonical URL (a `?category=` alias on load is still rewritten
-  // once, as before); judged on the raw `query`, so it lands before the
-  // debounce settles; and never while the input is focused, where the sync
-  // above leaves `query` to the reader. Declared before the write effect so it
-  // runs first.
-  useEffect(() => {
-    if (searchInputRef.current === document.activeElement) {
-      return
-    }
-    const currentQueryString = searchParams.toString()
-    if (
-      buildFilterQueryString(currentQueryString, query, topic) ===
-      currentQueryString
-    ) {
-      lastFilterStateRef.current = JSON.stringify([query.trim(), topic])
-    }
-  }, [query, topic, searchParams])
-
-  useEffect(() => {
-    // A debounce is still pending, so `debouncedQuery` is stale: it is either
-    // the reader mid-word or a URL-driven `setQuery` catching up. Either way the
-    // write waits for the value to settle, which also folds a chip tap made
-    // inside the debounce window into the one write that follows it.
-    if (debouncedQuery !== query) {
-      return
-    }
-    const filterState = JSON.stringify([debouncedQuery.trim(), topic])
-    if (filterState === lastFilterStateRef.current) {
-      return
-    }
-    lastFilterStateRef.current = filterState
-    updateUrl(debouncedQuery, topic)
-  }, [query, topic, debouncedQuery, updateUrl])
+  // The URL reader, the #249/#267 write gate and the pending-write tracking
+  // (#302, release finding F1 on #303) live in one hook shared with
+  // `TechExplorer`.
+  useFilterUrlSync({
+    searchParams,
+    pathname,
+    router,
+    query,
+    debouncedQuery,
+    filterKey,
+    buildQueryString,
+    applyUrl,
+    debugLabel: 'articles:explorer',
+  })
 
   const totalPages = getPageCount(filtered.length, ARTICLES_PAGE_SIZE)
   // Derived, never written back: an out-of-range or junk `?page` renders page 1

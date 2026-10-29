@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -716,5 +717,203 @@ describe('ArticlesExplorer URL writes per burst (#249, #267)', () => {
     await new Promise((resolve) => setTimeout(resolve, 650))
 
     expect(replaceMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('ArticlesExplorer focused input and URL changes (#302, release finding F1)', () => {
+  const focusArticles: ArticleWithSlug[] = [
+    {
+      slug: 'react-observer-pattern',
+      title: 'Observer Pattern in React',
+      description: 'Practical observer pattern in component apps.',
+      author: 'Brandon Perfetti',
+      date: '2026-03-03',
+      topics: ['Leadership'],
+      tech: ['TypeScript'],
+      searchText: 'observer react typescript',
+    },
+    {
+      slug: 'postgresql-offset',
+      title: 'Pagination with PostgreSQL',
+      description: 'Offset versus cursor pagination.',
+      author: 'Brandon Perfetti',
+      date: '2026-03-02',
+      topics: ['Databases'],
+      tech: ['PostgreSQL'],
+      searchText: 'postgresql cursor pagination',
+    },
+  ]
+
+  /** The URL a mocked `router.replace` has been asked for, not yet landed. */
+  let inFlight: string[] = []
+
+  beforeEach(() => {
+    inFlight = []
+    replaceMock.mockImplementation((href: string) => {
+      inFlight.push(href)
+    })
+  })
+
+  afterEach(() => {
+    replaceMock.mockReset()
+  })
+
+  const queryOf = (href: string) =>
+    new URLSearchParams(href.split('?')[1] ?? '')
+
+  /** Lands the oldest in-flight write, as Next would after its navigation. */
+  function landNext(rerender: (ui: React.ReactElement) => void) {
+    const href = inFlight.shift()
+    if (href === undefined) throw new Error('nothing in flight')
+    searchParamsMock = queryOf(href)
+    act(() => rerender(<ArticlesExplorer articles={focusArticles} />))
+  }
+
+  function traverseTo(
+    rerender: (ui: React.ReactElement) => void,
+    search: string,
+  ) {
+    // Back/Forward moves the entry; the focused input does not blur.
+    searchParamsMock = new URLSearchParams(search)
+    act(() => rerender(<ArticlesExplorer articles={focusArticles} />))
+  }
+
+  it('a Back/Forward that changes only q syncs the focused input, the URL and the list (#302)', async () => {
+    searchParamsMock = new URLSearchParams('q=observer')
+    const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
+    const box = screen.getByPlaceholderText('Search articles')
+    await userEvent.setup().click(box)
+    expect(box).toHaveFocus()
+    expect(box).toHaveValue('observer')
+
+    traverseTo(rerender, 'q=postgresql')
+
+    expect(box).toHaveFocus()
+    expect(box).toHaveValue('postgresql')
+    await waitFor(
+      () => {
+        expect(
+          screen.getByText('Pagination with PostgreSQL'),
+        ).toBeInTheDocument()
+        expect(
+          screen.queryByText('Observer Pattern in React'),
+        ).not.toBeInTheDocument()
+      },
+      { timeout: 2000 },
+    )
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+
+  it('a Back/Forward that changes q and another filter writes nothing over the entry (#302)', async () => {
+    searchParamsMock = new URLSearchParams('q=observer')
+    const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
+    const box = screen.getByPlaceholderText('Search articles')
+    await userEvent.setup().click(box)
+
+    traverseTo(rerender, 'topic=Databases')
+
+    expect(box).toHaveFocus()
+    expect(box).toHaveValue('')
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+
+  it("typing is never overwritten by the echo of the explorer's own write (#302)", async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
+    const box = screen.getByPlaceholderText('Search articles')
+
+    await user.type(box, 'react')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+      timeout: 2000,
+    })
+    // The reader keeps typing while that write is still in flight.
+    await user.type(box, 'x')
+    landNext(rerender)
+
+    expect(box).toHaveFocus()
+    expect(box).toHaveValue('reactx')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(2), {
+      timeout: 2000,
+    })
+    expect(replaceMock).toHaveBeenLastCalledWith('/articles?q=reactx', {
+      scroll: false,
+    })
+    landNext(rerender)
+    expect(box).toHaveValue('reactx')
+  })
+
+  it("F1: a clear made while the explorer's own write is in flight converges the URL and the list", async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
+    const box = screen.getByPlaceholderText('Search articles')
+
+    await user.type(box, 'react')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+      timeout: 2000,
+    })
+    expect(replaceMock).toHaveBeenLastCalledWith('/articles?q=react', {
+      scroll: false,
+    })
+
+    // Still focused, the reader clears the box before the first write lands.
+    await user.clear(box)
+    expect(box).toHaveFocus()
+
+    // The delayed navigations now land, oldest first.
+    while (inFlight.length > 0) {
+      landNext(rerender)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    while (inFlight.length > 0) {
+      landNext(rerender)
+    }
+
+    expect(box).toHaveValue('')
+    expect(searchParamsMock.get('q') ?? '').toBe('')
+    expect(
+      screen.queryByText('Observer Pattern in React') !== null &&
+        screen.queryByText('Pagination with PostgreSQL') !== null,
+    ).toBe(true)
+  })
+
+  it('F1: the same holds when Next skips the first URL and lands only the last', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
+    const box = screen.getByPlaceholderText('Search articles')
+
+    await user.type(box, 'react')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+      timeout: 2000,
+    })
+    await user.clear(box)
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(2))
+
+    inFlight.shift()
+    landNext(rerender)
+    await new Promise((resolve) => setTimeout(resolve, 700))
+
+    expect(box).toHaveValue('')
+    expect(searchParamsMock.get('q') ?? '').toBe('')
+    expect(replaceMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('a traversal after the write has landed is not mistaken for its echo', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
+    const box = screen.getByPlaceholderText('Search articles')
+
+    await user.type(box, 'react')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+      timeout: 2000,
+    })
+    landNext(rerender)
+    traverseTo(rerender, '')
+    expect(box).toHaveValue('')
+    traverseTo(rerender, 'q=react')
+    expect(box).toHaveValue('react')
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    expect(replaceMock).toHaveBeenCalledTimes(1)
   })
 })
