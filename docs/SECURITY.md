@@ -80,13 +80,12 @@ another doc carried in passing lives here instead, and that doc points back.
   `build/cjs/config/withSentryConfig/buildTime.js:12-48`].
 - **A secret is read on the server only** — route handlers, server
   components, Payload hooks and config, scripts. `[measured 2026-09-27]`
-  none of the 47 modules whose directive is `'use client'` reads a variable
-  other than `NEXT_PUBLIC_*` or `NODE_ENV` (46 at `ef07dbd`; wave 9 added
+  none of the 46 modules whose directive is `'use client'` reads a variable
+  other than `NEXT_PUBLIC_*` or `NODE_ENV` (the count was 47 once wave 9 added
   `src/components/tech/HistoryWriteGuard.tsx`, which read none; #268 moved
   the guard to `src/lib/history/historyWriteGuard.ts`, which carries no
-  directive and reads none, so the count is 46 again). Passing a secret to a client
-  component as a prop sends it to the browser just the same; that half is
-  held by review.
+  directive and reads none, so the count is 46 again). Passing a secret to a client component as a prop
+  sends it to the browser just the same; that half is held by review.
 - **Shared-secret routes compare with `isValidSecret()`**
   (`src/lib/security/timingSafeSecret.ts`: SHA-256 of both sides, then
   `timingSafeEqual`), **and fail closed** — it returns `false` when the
