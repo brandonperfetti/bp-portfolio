@@ -11,6 +11,10 @@ import { dedupeArticlesBySlug } from '@/lib/articleUtils'
 import { formatDate } from '@/lib/formatDate'
 import { getOptimizedImageUrl } from '@/lib/image-utils'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
+import {
+  useFilterUrlSync,
+  type FilterSearchParams,
+} from '@/lib/useFilterUrlSync'
 import { HoverMotionCard } from '@/components/motion/HoverMotionCard'
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import {
@@ -90,6 +94,45 @@ function articleMatchesQuery(
 }
 
 /**
+ * The query string `useFilterUrlSync` writes for a filter state, from the
+ * current one: `q`/`topic` set or dropped to match, every other param kept.
+ *
+ * @remarks #88: any filter change resets to page 1 by dropping `page`, inside
+ * the same skip-when-no-URL-change guard that decides whether anything is
+ * written at all. Shared by the hook's write and its gate (#267) so the two
+ * can never disagree on what the URL for a state looks like.
+ */
+function buildFilterQueryString(
+  currentQueryString: string,
+  nextQuery: string,
+  nextTopic: string,
+): string {
+  const params = new URLSearchParams(currentQueryString)
+
+  const filtersChanged =
+    (params.get('q') ?? '') !== nextQuery.trim() ||
+    (params.get('topic') ?? params.get('category') ?? 'All') !== nextTopic
+  if (filtersChanged) {
+    params.delete(PAGE_PARAM)
+  }
+
+  if (nextQuery.trim()) {
+    params.set('q', nextQuery.trim())
+  } else {
+    params.delete('q')
+  }
+
+  if (nextTopic !== 'All') {
+    params.set('topic', nextTopic)
+  } else {
+    params.delete('topic')
+    params.delete('category')
+  }
+
+  return params.toString()
+}
+
+/**
  * Client-side article browser for `/articles`: debounced free-text search
  * plus topic/tech filter chips over a pre-fetched article list — filtering
  * an in-memory list keeps the interaction instant with no server round-trip.
@@ -97,8 +140,9 @@ function articleMatchesQuery(
  * @remarks Query and topic mirror into the URL (`?q`/`?topic`) via
  * `router.replace` so filtered views are shareable and survive reload;
  * legacy `?category` links are honored on read. The local input is not
- * overwritten from the URL while focused, so the debounce loop can't clobber
- * in-flight typing. `/` focuses search unless a typing target is active.
+ * overwritten by the echo of its own write, so the debounce loop can't clobber
+ * in-flight typing; a Back/Forward does sync it, focused or not (#302). `/`
+ * focuses search unless a typing target is active.
  *
  * @remarks Pagination (#88) is `?page=N` over the same param bag, absent
  * meaning page 1. It is *client windowing*: the whole publish-safe set still
@@ -106,8 +150,9 @@ function articleMatchesQuery(
  * rendered, so `/articles` stays a fully static route with no server-side
  * `searchParams` read. The page lives only in the URL (no local state), which
  * is what makes refresh, share and the back button all restore position.
- * Changing `q` or `topic` drops `page` inside the same `updateUrl` guard that
- * mirrors the filters, so a filter change always lands on page 1.
+ * Changing `q` or `topic` drops `page` inside `buildFilterQueryString`, which
+ * `useFilterUrlSync` calls to mirror the filters, so a filter change always
+ * lands on page 1.
  *
  * @remarks **The filter chips here are not the topic chips on an article
  * page, and must never become links (#151, #136 Direction extended item 3).**
@@ -170,7 +215,6 @@ export function ArticlesExplorer({
   articles: ArticleWithSlug[]
   sectionPaths?: Record<string, string>
 }) {
-  const isDev = process.env.NODE_ENV !== 'production'
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -186,20 +230,6 @@ export function ArticlesExplorer({
     () => dedupeArticlesBySlug(articles),
     [articles],
   )
-
-  useEffect(() => {
-    const nextQuery = searchParams.get('q') ?? ''
-    const nextTopic =
-      searchParams.get('topic') ?? searchParams.get('category') ?? 'All'
-    const isInputFocused = searchInputRef.current === document.activeElement
-
-    // Keep typing stable: don't overwrite local input value while user is actively editing.
-    if (!isInputFocused) {
-      setQuery((current) => (current === nextQuery ? current : nextQuery))
-    }
-
-    setTopic((current) => (current === nextTopic ? current : nextTopic))
-  }, [searchParams])
 
   useEffect(() => {
     const isTypingTarget = (target: EventTarget | null) => {
@@ -364,73 +394,41 @@ export function ArticlesExplorer({
 
   const queryText = debouncedQuery.trim()
 
-  const updateUrl = useCallback(
-    (nextQuery: string, nextTopic: string) => {
-      const currentQueryString = searchParams.toString()
-      const params = new URLSearchParams(searchParams.toString())
-
-      // #88: any filter change resets to page 1 by dropping the param. This
-      // lives inside the existing mirror (rather than a second effect) so the
-      // skip-when-no-URL-change guard below still decides whether anything is
-      // written at all — a re-render that changes neither filter nor page
-      // stays a no-op.
-      const currentQueryParam = searchParams.get('q') ?? ''
-      const currentTopicParam =
-        searchParams.get('topic') ?? searchParams.get('category') ?? 'All'
-      const filtersChanged =
-        currentQueryParam !== nextQuery.trim() ||
-        currentTopicParam !== nextTopic
-      if (filtersChanged) {
-        params.delete(PAGE_PARAM)
+  const filterKey = JSON.stringify([topic])
+  const buildQueryString = useCallback(
+    (currentQueryString: string, nextQuery: string) =>
+      buildFilterQueryString(currentQueryString, nextQuery, topic),
+    [topic],
+  )
+  const applyUrl = useCallback(
+    (params: FilterSearchParams, { syncQuery }: { syncQuery: boolean }) => {
+      // The destination wins, focused input or not (#302). The echo of the
+      // explorer's own write never reaches here (see `useFilterUrlSync`), so
+      // typing is not overwritten.
+      if (syncQuery) {
+        const nextQuery = params.get('q') ?? ''
+        setQuery((current) => (current === nextQuery ? current : nextQuery))
       }
-
-      if (nextQuery.trim()) {
-        params.set('q', nextQuery.trim())
-      } else {
-        params.delete('q')
-      }
-
-      if (nextTopic !== 'All') {
-        params.set('topic', nextTopic)
-      } else {
-        params.delete('topic')
-        params.delete('category')
-      }
-
-      const queryString = params.toString()
-      if (queryString === currentQueryString) {
-        if (isDev) {
-          console.debug(
-            '[articles:explorer] skip router.replace (no URL change)',
-            {
-              currentQueryString,
-              query: nextQuery.trim(),
-              topic: nextTopic,
-            },
-          )
-        }
-        return
-      }
-
-      if (isDev) {
-        console.debug('[articles:explorer] apply router.replace', {
-          from: currentQueryString,
-          to: queryString,
-          query: nextQuery.trim(),
-          topic: nextTopic,
-        })
-      }
-
-      router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
-        scroll: false,
-      })
+      const nextTopic = params.get('topic') ?? params.get('category') ?? 'All'
+      setTopic((current) => (current === nextTopic ? current : nextTopic))
     },
-    [isDev, pathname, router, searchParams],
+    [],
   )
 
-  useEffect(() => {
-    updateUrl(debouncedQuery, topic)
-  }, [topic, debouncedQuery, updateUrl])
+  // The URL reader, the #249/#267 write gate and the pending-write tracking
+  // (#302, release finding F1 on #303) live in one hook shared with
+  // `TechExplorer`.
+  useFilterUrlSync({
+    searchParams,
+    pathname,
+    router,
+    query,
+    debouncedQuery,
+    filterKey,
+    buildQueryString,
+    applyUrl,
+    debugLabel: 'articles:explorer',
+  })
 
   const totalPages = getPageCount(filtered.length, ARTICLES_PAGE_SIZE)
   // Derived, never written back: an out-of-range or junk `?page` renders page 1

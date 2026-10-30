@@ -11,7 +11,6 @@ import {
 } from 'react'
 
 import { ScrollReveal } from '@/components/motion/ScrollReveal'
-import { HistoryWriteGuard } from '@/components/tech/HistoryWriteGuard'
 import { TechCard } from '@/components/tech/TechCard'
 import {
   ListPagination,
@@ -24,6 +23,10 @@ import {
 import type { CmsEntityItem } from '@/lib/cms/types'
 import type { TechSignalSummary } from '@/lib/tech/githubSignals'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
+import {
+  useFilterUrlSync,
+  type FilterSearchParams,
+} from '@/lib/useFilterUrlSync'
 
 const CATEGORY_BY_NAME: Record<string, string> = {
   JavaScript: 'Language',
@@ -77,8 +80,9 @@ function resolveCategory(item: CmsEntityItem) {
 type SortMode = 'name' | 'active'
 
 /**
- * The query string `updateUrl` writes for a filter state, from the current
- * one: `q`/`category`/`sort` set or dropped to match, every other param kept.
+ * The query string `useFilterUrlSync` writes for a filter state, from the
+ * current one: `q`/`category`/`sort` set or dropped to match, every other
+ * param kept.
  *
  * @remarks #88: any filter/sort change resets to page 1 by dropping `page`,
  * inside the same skip-when-no-URL-change guard used for the filters.
@@ -192,25 +196,6 @@ export function TechExplorer({
   }, [normalizedItems])
 
   useEffect(() => {
-    const nextQuery = searchParams.get('q') ?? ''
-    const requestedCategory = searchParams.get('category') ?? 'All'
-    const nextCategory = categories.includes(requestedCategory)
-      ? requestedCategory
-      : 'All'
-    const nextSort: SortMode =
-      searchParams.get('sort') === 'active' ? 'active' : 'name'
-    const isInputFocused = searchInputRef.current === document.activeElement
-
-    if (!isInputFocused) {
-      setQuery((current) => (current === nextQuery ? current : nextQuery))
-    }
-    setCategory((current) =>
-      current === nextCategory ? current : nextCategory,
-    )
-    setSort((current) => (current === nextSort ? current : nextSort))
-  }, [searchParams, categories])
-
-  useEffect(() => {
     const isTypingTarget = (target: EventTarget | null) => {
       if (!(target instanceof HTMLElement)) {
         return false
@@ -239,84 +224,48 @@ export function TechExplorer({
     return () => document.body.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  const updateUrl = useCallback(
-    (nextQuery: string, nextCategory: string, nextSort: SortMode) => {
-      const currentQueryString = searchParams.toString()
-      const queryString = buildFilterQueryString(
-        currentQueryString,
-        nextQuery,
-        nextCategory,
-        nextSort,
-      )
-      if (queryString === currentQueryString) {
-        return
+  const filterKey = JSON.stringify([category, sort])
+  const buildQueryString = useCallback(
+    (currentQueryString: string, nextQuery: string) =>
+      buildFilterQueryString(currentQueryString, nextQuery, category, sort),
+    [category, sort],
+  )
+  const applyUrl = useCallback(
+    (params: FilterSearchParams, { syncQuery }: { syncQuery: boolean }) => {
+      // The destination wins, focused input or not (#302). The echo of the
+      // explorer's own write never reaches here (see `useFilterUrlSync`), so
+      // typing is not overwritten.
+      if (syncQuery) {
+        const nextQuery = params.get('q') ?? ''
+        setQuery((current) => (current === nextQuery ? current : nextQuery))
       }
-
-      router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
-        scroll: false,
-      })
+      const requestedCategory = params.get('category') ?? 'All'
+      const nextCategory = categories.includes(requestedCategory)
+        ? requestedCategory
+        : 'All'
+      const nextSort: SortMode =
+        params.get('sort') === 'active' ? 'active' : 'name'
+      setCategory((current) =>
+        current === nextCategory ? current : nextCategory,
+      )
+      setSort((current) => (current === nextSort ? current : nextSort))
     },
-    [pathname, router, searchParams],
+    [categories],
   )
 
-  /**
-   * The filter state this effect last acted on — the #249 write gate.
-   *
-   * @remarks Every URL write here costs a `history.replaceState` in Next's
-   * `HistoryUpdater`, and Safari throws past 100 of those in ten seconds —
-   * from the commit phase, which replaces the whole app with Next's error
-   * screen `[measured: Playwright WebKit on a production build]`. So the URL
-   * is written only when the READER changed the filters, never merely because
-   * the URL moved: `updateUrl` changes identity with `searchParams`, which
-   * used to re-run this effect on every Back/Forward or in-app link and write
-   * the still-stale state straight back over the URL the reader had just
-   * navigated to (two history writes per traversal, and the traversal undone).
-   */
-  const lastFilterStateRef = useRef<string | null>(null)
-
-  // Once the state has caught up with a URL the reader navigated to, that URL
-  // is what the gate compares against. Without this the gate still held the
-  // state from before the traversal, so a clear made inside the debounce
-  // after Back to `?q=react` matched it and was never written: an unfiltered
-  // list under `?q=react` (CodeRabbit on PR #271). Recorded only when the URL
-  // is exactly what `updateUrl` would write for the state, so nothing is
-  // recorded for a non-canonical URL (`?sort=name` on load is still rewritten
-  // once, as before); judged on the raw `query`, so it lands before the
-  // debounce settles; and never while the input is focused, where the sync
-  // above leaves `query` to the reader. Declared before the write effect so
-  // it runs first.
-  useEffect(() => {
-    if (searchInputRef.current === document.activeElement) {
-      return
-    }
-    const currentQueryString = searchParams.toString()
-    if (
-      buildFilterQueryString(currentQueryString, query, category, sort) ===
-      currentQueryString
-    ) {
-      lastFilterStateRef.current = JSON.stringify([
-        query.trim(),
-        category,
-        sort,
-      ])
-    }
-  }, [query, category, sort, searchParams])
-
-  useEffect(() => {
-    // A debounce is still pending, so `debouncedQuery` is stale: it is either
-    // the reader mid-word or a URL-driven `setQuery` catching up. Either way the
-    // write waits for the value to settle, which also folds a chip tap made
-    // inside the debounce window into the one write that follows it.
-    if (debouncedQuery !== query) {
-      return
-    }
-    const filterState = JSON.stringify([debouncedQuery.trim(), category, sort])
-    if (filterState === lastFilterStateRef.current) {
-      return
-    }
-    lastFilterStateRef.current = filterState
-    updateUrl(debouncedQuery, category, sort)
-  }, [query, debouncedQuery, category, sort, updateUrl])
+  // The URL reader, the #249/#267 write gate and the pending-write tracking
+  // (#302, release finding F1 on #303) live in one hook shared with
+  // `ArticlesExplorer`.
+  useFilterUrlSync({
+    searchParams,
+    pathname,
+    router,
+    query,
+    debouncedQuery,
+    filterKey,
+    buildQueryString,
+    applyUrl,
+  })
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = debouncedQuery.trim().toLowerCase()
@@ -385,9 +334,6 @@ export function TechExplorer({
 
   return (
     <div className="space-y-8">
-      {/* #249: contains Safari's history-write throttle for as long as the
-          explorer (the route's only URL writer) is mounted. */}
-      <HistoryWriteGuard />
       <div className="space-y-4 rounded-2xl border border-zinc-100 p-4 dark:border-zinc-700/40">
         <div className="relative">
           <input

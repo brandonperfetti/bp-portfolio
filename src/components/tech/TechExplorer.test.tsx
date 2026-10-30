@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   afterEach,
@@ -317,5 +317,269 @@ describe('TechExplorer URL writes per burst (#249)', () => {
     await new Promise((resolve) => setTimeout(resolve, 450))
 
     expect(replaceMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('TechExplorer focused input and URL changes (#302, release finding F1)', () => {
+  const focusItems = makeTech(3)
+
+  /** The URL a mocked `router.replace` has been asked for, not yet landed. */
+  let inFlight: string[] = []
+
+  beforeEach(() => {
+    inFlight = []
+    replaceMock.mockImplementation((href: string) => {
+      inFlight.push(href)
+    })
+  })
+
+  afterEach(() => {
+    replaceMock.mockReset()
+  })
+
+  const queryOf = (href: string) =>
+    new URLSearchParams(href.split('?')[1] ?? '')
+
+  /** Lands the oldest in-flight write, as Next would after its navigation. */
+  function landNext(rerender: (ui: React.ReactElement) => void) {
+    const href = inFlight.shift()
+    if (href === undefined) throw new Error('nothing in flight')
+    searchParamsMock = queryOf(href)
+    act(() => rerender(<TechExplorer items={focusItems} />))
+  }
+
+  function traverseTo(
+    rerender: (ui: React.ReactElement) => void,
+    search: string,
+  ) {
+    // Back/Forward moves the entry; the focused input does not blur.
+    searchParamsMock = new URLSearchParams(search)
+    act(() => rerender(<TechExplorer items={focusItems} />))
+  }
+
+  it('a Back/Forward that changes only q syncs the focused input, the URL and the list (#302)', async () => {
+    searchParamsMock = new URLSearchParams('q=Tech+2')
+    const { rerender } = render(<TechExplorer items={focusItems} />)
+    const box = screen.getByRole('searchbox', { name: 'Search technologies' })
+    await userEvent.setup().click(box)
+    expect(box).toHaveFocus()
+    expect(box).toHaveValue('Tech 2')
+
+    traverseTo(rerender, 'q=Tech+3')
+
+    expect(box).toHaveFocus()
+    expect(box).toHaveValue('Tech 3')
+    await waitFor(
+      () => {
+        expect(screen.getByText('Tech 3')).toBeInTheDocument()
+        expect(screen.queryByText('Tech 2')).not.toBeInTheDocument()
+      },
+      { timeout: 2000 },
+    )
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+
+  it('a Back/Forward that changes q and another filter writes nothing over the entry (#302)', async () => {
+    searchParamsMock = new URLSearchParams('q=Tech+2')
+    const { rerender } = render(<TechExplorer items={focusItems} />)
+    const box = screen.getByRole('searchbox', { name: 'Search technologies' })
+    await userEvent.setup().click(box)
+
+    traverseTo(rerender, 'sort=active')
+
+    expect(box).toHaveFocus()
+    expect(box).toHaveValue('')
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+
+  it("typing is never overwritten by the echo of the explorer's own write (#302)", async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<TechExplorer items={focusItems} />)
+    const box = screen.getByRole('searchbox', { name: 'Search technologies' })
+
+    await user.type(box, 'tech')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+      timeout: 2000,
+    })
+    // The reader keeps typing while that write is still in flight.
+    await user.type(box, 'x')
+    landNext(rerender)
+
+    expect(box).toHaveFocus()
+    expect(box).toHaveValue('techx')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(2), {
+      timeout: 2000,
+    })
+    expect(replaceMock).toHaveBeenLastCalledWith('/tech?q=techx', {
+      scroll: false,
+    })
+    landNext(rerender)
+    expect(box).toHaveValue('techx')
+  })
+
+  it("F1: a clear made while the explorer's own write is in flight converges the URL and the list", async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<TechExplorer items={focusItems} />)
+    const box = screen.getByRole('searchbox', { name: 'Search technologies' })
+
+    await user.type(box, 'tech')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+      timeout: 2000,
+    })
+    expect(replaceMock).toHaveBeenLastCalledWith('/tech?q=tech', {
+      scroll: false,
+    })
+
+    // Still focused, the reader clears the box before the first write lands.
+    await user.clear(box)
+    expect(box).toHaveFocus()
+
+    // The delayed navigations now land, oldest first.
+    while (inFlight.length > 0) {
+      landNext(rerender)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    while (inFlight.length > 0) {
+      landNext(rerender)
+    }
+
+    expect(box).toHaveValue('')
+    expect(searchParamsMock.get('q') ?? '').toBe('')
+    expect(
+      screen.queryByText('Tech 1') !== null &&
+        screen.queryByText('Tech 3') !== null,
+    ).toBe(true)
+  })
+
+  it('F1: the same holds when Next skips the first URL and lands only the last', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<TechExplorer items={focusItems} />)
+    const box = screen.getByRole('searchbox', { name: 'Search technologies' })
+
+    await user.type(box, 'tech')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+      timeout: 2000,
+    })
+    await user.clear(box)
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(2))
+
+    inFlight.shift()
+    landNext(rerender)
+    await new Promise((resolve) => setTimeout(resolve, 700))
+
+    expect(box).toHaveValue('')
+    expect(searchParamsMock.get('q') ?? '').toBe('')
+    expect(replaceMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('a traversal after the write has landed is not mistaken for its echo', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<TechExplorer items={focusItems} />)
+    const box = screen.getByRole('searchbox', { name: 'Search technologies' })
+
+    await user.type(box, 'tech')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+      timeout: 2000,
+    })
+    landNext(rerender)
+    traverseTo(rerender, '')
+    expect(box).toHaveValue('')
+    traverseTo(rerender, 'q=tech')
+    expect(box).toHaveValue('tech')
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+  })
+  it('N1: a write Next dropped cannot swallow a later in-app navigation to the same URL', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<TechExplorer items={focusItems} />)
+    const box = screen.getByRole('searchbox', { name: 'Search technologies' })
+
+    await user.type(box, 'Tech 1')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+      timeout: 2000,
+    })
+    await user.clear(box)
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(2))
+    // Next discards the earlier pending replace, and the second is a no-op
+    // navigation to the confirmed URL: neither ever lands.
+    inFlight = []
+
+    await user.type(box, 'Tech 1')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(3), {
+      timeout: 2000,
+    })
+    landNext(rerender)
+    expect(searchParamsMock.get('q')).toBe('Tech 1')
+
+    // An in-app link to the bare route: a destination, with no popstate.
+    act(() => box.blur())
+    traverseTo(rerender, '')
+
+    expect(box).toHaveValue('')
+    expect(
+      screen.queryByText('Tech 1') !== null &&
+        screen.queryByText('Tech 3') !== null,
+    ).toBe(true)
+  })
+
+  it('pins the 10 s bound: an echo inside it is not a destination, one past it is (N3)', async () => {
+    const now = vi.spyOn(Date, 'now')
+    const base = Date.now()
+    try {
+      for (const [lateMs, expected] of [
+        [9_000, 'Tech 1x'],
+        [11_000, 'Tech 1'],
+      ] as const) {
+        inFlight = []
+        replaceMock.mockClear()
+        searchParamsMock = new URLSearchParams('')
+        now.mockReturnValue(base)
+        const user = userEvent.setup()
+        const { rerender, unmount } = render(
+          <TechExplorer items={focusItems} />,
+        )
+        const box = screen.getByRole('searchbox', {
+          name: 'Search technologies',
+        })
+
+        await user.type(box, 'Tech 1')
+        await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+          timeout: 2000,
+        })
+        now.mockReturnValue(base + lateMs)
+        await user.type(box, 'x')
+        landNext(rerender)
+
+        expect(box).toHaveValue(expected)
+        unmount()
+      }
+    } finally {
+      now.mockRestore()
+    }
+  })
+
+  it('the popstate listener forgets pending writes, so a traversal to the in-flight URL is a destination (N2)', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<TechExplorer items={focusItems} />)
+    const box = screen.getByRole('searchbox', { name: 'Search technologies' })
+
+    await user.type(box, 'Tech 1')
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+      timeout: 2000,
+    })
+    // The reader types on (debounce pending), then goes Back to an entry whose
+    // URL is the one in flight; Next discards the in-flight replace.
+    await user.type(box, 'x')
+    inFlight = []
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+    traverseTo(rerender, 'q=Tech+1')
+
+    expect(box).toHaveValue('Tech 1')
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    expect(replaceMock).toHaveBeenCalledTimes(1)
   })
 })
