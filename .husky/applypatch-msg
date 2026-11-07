@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# RULE ZERO: the installed git hook refuses an attribution line or a wrong author; husky owns this
+# repository's hooks path, so run it from here. Absent on a machine without the install: allow.
+[ -x "$HOME/.config/git/hooks/commit-msg" ] && exec "$HOME/.config/git/hooks/commit-msg" "$@"
+exit 0
