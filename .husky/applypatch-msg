@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+# RULE ZERO under `git am`: the installed applypatch-msg link reads the patch author (the commit-msg
+# name would read the configured one); husky owns this repository's hooks path, so run it from here.
+# Absent on a machine without the install: allow.
+[ -x "$HOME/.config/git/hooks/applypatch-msg" ] && exec "$HOME/.config/git/hooks/applypatch-msg" "$@"
+exit 0
