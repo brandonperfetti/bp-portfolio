@@ -399,6 +399,21 @@ stay there.
 - **Residual advisories are tracked, never force-overridden** — #100 holds
   them; `pnpm audit` and `pnpm audit --prod` are the check
   (`docs/DEPENDENCIES.md`).
+- **A mitigation does not clear an advisory.** #312 tracks SDK advisories
+  against `@modelcontextprotocol/sdk` 1.30.0, which `@payloadcms/plugin-mcp`
+  pins exactly. It stays pinned with no override, and the advisories stay
+  open until an upstream release fixes them. In front of it,
+  `src/plugins/limitMcpRequests.ts` is a **partial** local mitigation for
+  authenticated `POST /api/mcp` bodies: 2 MiB, 100 messages a batch, 200,000
+  JSON values and depth 128, refused with a 413 before `mcp-handler` runs
+  (`docs/PAYLOAD.md` § Operating via MCP, "Request limits"). It reads the body
+  only inside the plugin's `overrideAuth`, after the plugin's own API-key
+  check, apart from a `Content-Length` header check that reads nothing. It
+  does **not** bound every request: Payload's method-override handling
+  (`X-HTTP-Method-Override: GET` or `X-Payload-HTTP-Method-Override: GET` on
+  a `POST`) reads the body with no limit before any endpoint or key check, on
+  every `/api` route, and that remains open. Behaviour through the deployed
+  Node adapter has not been measured.
 - **New versions wait a day.** `minimumReleaseAge: 1440` in
   `pnpm-workspace.yaml` (#222); an exception in `minimumReleaseAgeExclude`
   needs a written reason beside it. Details: `docs/DEPENDENCIES.md`
