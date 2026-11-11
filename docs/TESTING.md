@@ -240,6 +240,9 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
    jenv() {
      case "${NODE_ENV:-}" in '' | production) ;; *)
        echo "STOP: NODE_ENV=$NODE_ENV is not a mode the check below covers"; return 1 ;; esac
+     for a in "$@"; do case "$a" in
+       NODE_ENV=*) echo 'STOP: set NODE_ENV before jenv, not as an argument'; return 1 ;;
+       *=*) ;; *) break ;; esac; done
      env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 \
        CI="${CI:-}" NODE_ENV="${NODE_ENV:-}" "${PINS[@]}" \
        DATABASE_URI=postgres://postgres:postgres@127.0.0.1:55432/bp_journey \
