@@ -15,7 +15,15 @@ one set, version-locked.
   redirects, search index, agent MCP endpoint.
 - `@payloadcms/email-resend` — Resend transactional email (first-party
   adapter; replaced `@payloadcms/email-nodemailer` + SendGrid SMTP).
-- `sharp` — Payload image processing.
+- `sharp` — Payload image processing, and the encoder behind Next's
+  `/_next/image` optimizer, which takes it as an optional dependency. **One
+  copy, at `>=0.35.5`** (#313): the root range and Next's own
+  `optionalDependencies` (`^0.35.5` from `next@16.4.1`) resolve to the same
+  `sharp`, so the tree carries one `@img/sharp-libvips-*` build.
+  `pnpm why sharp` must print "Found 1 version of sharp". A second copy would
+  ship a second statically linked libvips, as the `lightningcss` duplicate
+  did (#195). 0.35.5 is the floor for GHSA-2464-fhr4-w9xw (Next's image
+  optimizer on glibc Linux) and GHSA-wq5f-xc86-pv6w (sharp's librsvg).
 
 ## App framework
 
@@ -192,7 +200,7 @@ beside it had no effect. Verify with `pnpm config get minimumReleaseAge`
   under the rule in `docs/SECURITY.md` § Dependency advisories (the case it
   exists for: a same-day security patch). The entries present on 2026-09-26 predate the gate —
   twelve name `next`/`@next/*`/`eslint-config-next` at `16.2.11`, which is no
-  longer locked (the tree runs `next@16.3.4`), and all eighteen are older than
+  longer locked (the tree ran `next@16.3.4` then; `16.4.6` since #313), and all eighteen are older than
   the gate's one day (`[measured 2026-09-26, npm registry publish times]`: the
   newest was published 2026-07-22), so none of them is currently doing
   anything.
