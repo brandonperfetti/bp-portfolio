@@ -186,11 +186,17 @@ Two related notes:
 ## Verifying a journey locally
 
 How to see a reader journey actually work on an instance you own, without
-production data or credentials. This is what the Build · E2E job does, run
-by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
+production data or credentials. This is the Playwright part of the
+Build · E2E job, run by hand; it is the recipe `docs/JOURNEYS.md` points at.
+It does **not** run that job's migration re-run check, its pg integration
+tier (`pnpm exec vitest run --root evals`) or its Storybook interaction tests
+(`pnpm test:storybook`). After a `next` or Storybook bump, run
+`pnpm test:storybook` too: the local gate only builds Storybook, and on #313
+a Next bump broke every story while the build passed. Run the blocks in
 **bash**, from the checkout root, in one shell.
-`[measured 2026-11-11: the full suite under this recipe was 31 passed,
-9 skipped (the content-dependent paths JOURNEYS.md lists), 0 failed]`
+`[measured 2026-11-11 at 4e48775: 31 passed, 9 skipped (the
+content-dependent paths JOURNEYS.md lists), 0 failed. Historical: #316 added
+six cases, and the suite was 37 passed, 9 skipped at fdd6ac3]`
 
 1. **Own the files and the database.** The run writes `media/` (seed
    uploads — untracked and _not_ git-ignored, never commit it),
