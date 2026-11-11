@@ -274,7 +274,7 @@ export const getPageBySlugDraftAware = async (
  * **Every published page, by construction (#220).** `limit: 0`, not a large
  * number: `limit: N` still caps a Payload `find` even with
  * `pagination: false`, and `limit: 0` is the only unlimited form — the
- * Gotcha in `AGENTS.md` ("Payload `find`: `limit: N`
+ * gotcha in `docs/PAYLOAD.md` § Local API gotchas ("Payload `find`: `limit: N`
  * still caps the result even with `pagination: false`"). This read used to
  * carry `limit: 500`, so the sitemap's page half and `generateStaticParams`
  * would have stopped at page 500 with no error and no log — the "one entry per

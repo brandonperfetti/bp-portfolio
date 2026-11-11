@@ -96,6 +96,42 @@ a hover story — prove the state engaged first. Note also that `tab()` from
 Chromium's last-interaction heuristic (a real pointer _press_ resets it; a
 hover does not), so assert `matches(':focus-visible')` rather than assuming it.
 
+## Local CI gate
+
+A local mirror of the `quality` job ("Lint · Types · Unit") in
+`.github/workflows/ci.yml` — and only that job. Run it as a bash script (not
+pasted into an interactive shell) before calling a change done; it stops at the
+first failing step:
+
+```sh
+set -euo pipefail
+export PAYLOAD_SECRET=ci-not-a-real-secret
+export NEXT_PUBLIC_SITE_URL=http://localhost:3000
+export NEXT_PUBLIC_SITE_NAME='BP Portfolio (CI)'
+corepack enable
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm format:check
+pnpm typecheck
+pnpm generate:types
+pnpm exec prettier --write src/payload-types.ts
+git diff --quiet -- src/payload-types.ts
+pnpm generate:importmap
+pnpm exec prettier --write "src/app/(payload)/admin/importMap.js"
+node scripts/check-importmap.mjs
+git diff --quiet -- "src/app/(payload)/admin/importMap.js"
+pnpm payload migrate:create --skip-empty < /dev/null
+test -z "$(git status --porcelain -- src/migrations/)" # untracked files count
+node scripts/check-migrations-rls.mjs
+pnpm test:coverage
+pnpm build-storybook
+```
+
+The "Build · E2E" and "Evalite (Corvus)" jobs are not mirrored here; they need
+Postgres, Playwright or provider keys and remain gated by PR CI. A green gate
+says nothing about whether a user journey works — that is
+§ Verifying a journey locally below.
+
 ## CI (`.github/workflows/ci.yml`)
 
 Quality job: lint (ESLint + tsdoc) → prettier check → typecheck → generated
@@ -146,6 +182,71 @@ Two related notes:
   breakpoint up. The one-line check: open Pages → `home` in the admin and
   confirm that checkbox is ticked on the rail column. Unticked is a content
   edit, not a bug — no code change will fix it.
+
+## Verifying a journey locally
+
+How to see a reader journey actually work on an instance you own, without
+production data or credentials. This is what the Build · E2E job does, run
+by hand; it is the recipe `docs/JOURNEYS.md` points at.
+`[measured 2026-11-11: the full suite under this recipe was 31 passed,
+9 skipped (the content-dependent paths JOURNEYS.md lists), 0 failed]`
+
+1. **Own the database.** A throwaway container on a free loopback port, not
+   the `bp-portfolio-db` compose container (that one holds a production
+   restore). `--rm` with no volume means stopping it deletes it.
+
+   ```sh
+   RUN=journey-$(date +%s)
+   docker run -d --rm --name "bp-$RUN" -p 127.0.0.1:55432:5432 \
+     -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+     -e POSTGRES_DB=bp_journey pgvector/pgvector:pg16
+   docker exec "bp-$RUN" pg_isready -U postgres -d bp_journey # retry until ready
+   ```
+
+2. **Control the environment.** Having no `.env.local` is not enough: Payload
+   turns on Blob storage from `BLOB_READ_WRITE_TOKEN`, Resend from
+   `RESEND_API_KEY`, and takes the first set of `DATABASE_URI` / `POSTGRES_URL` /
+   `DATABASE_URL`; Next turns on Sentry from either DSN — any of them
+   inherited from your shell would point the run at a real service. Run every
+   step through an allowlist instead:
+
+   ```sh
+   jenv() {
+     env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 CI="${CI:-}" \
+       DATABASE_URI=postgres://postgres:postgres@127.0.0.1:55432/bp_journey \
+       PAYLOAD_SECRET=ci-not-a-real-secret \
+       NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3000 \
+       NEXT_PUBLIC_SITE_NAME='BP Portfolio (journey)' \
+       NEXT_TELEMETRY_DISABLED=1 \
+       ${PLAYWRIGHT_EXECUTABLE_PATH:+PLAYWRIGHT_EXECUTABLE_PATH="$PLAYWRIGHT_EXECUTABLE_PATH"} \
+       "$@"
+   }
+   jenv env | cut -d= -f1   # names only: confirm nothing else came through
+   ```
+
+3. **Migrate, seed, build.** `jenv pnpm migrate`, `jenv pnpm seed:e2e`,
+   `CI=1 jenv pnpm build`. The seed reads public Cloudinary images and writes
+   them to an untracked `media/` directory in the checkout (not git-ignored —
+   delete it at cleanup, never commit it).
+
+4. **Drive it.** Make sure nothing else is listening on 3000 first
+   (`lsof -nP -iTCP:3000 -sTCP:LISTEN`) — Playwright and a browser would
+   otherwise test whatever server is there.
+   - _The codified journeys:_ `CI=1 jenv pnpm test:e2e` (boots its own
+     `pnpm start`). Without a matching managed browser, point
+     `PLAYWRIGHT_EXECUTABLE_PATH` at a cached Chromium headless shell under
+     `~/Library/Caches/ms-playwright/` — never `playwright install` in a
+     sandbox.
+   - _By hand or with an agent's browser:_
+     `NODE_ENV=production jenv pnpm exec next start -H 127.0.0.1 -p 3000`,
+     then first check the instance is yours: `/articles` lists exactly the
+     three seeded posts (`scripts/seed-e2e.ts`, `POSTS`).
+
+5. **Record what ran.** Count passed and skipped, and grep the output for
+   each skip string you care about — a skipped journey proved nothing.
+
+6. **Clean up only what you made:** stop the server you started,
+   `docker stop "bp-$RUN"`, `rm -rf media test-results playwright-report .next`.
 
 ## Policy
 

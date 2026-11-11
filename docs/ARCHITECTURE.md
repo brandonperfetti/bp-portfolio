@@ -18,6 +18,10 @@
 
 ## Layers
 
+This is the capability map: where each part of the system lives in code.
+What a reader or editor can do with it, and which tests prove it, is
+`docs/JOURNEYS.md`.
+
 - `src/app/(frontend)/` — public pages (RSC). Dynamic article route:
   `src/app/(frontend)/articles/[slug]/page.tsx` (v3 URL shape preserved).
 - `src/app/(payload)/` — Payload admin + generated API routes. Do not edit
@@ -29,7 +33,8 @@
   `src/access/` — Payload schema. `src/payload.config.ts` is the single
   config entry.
 - `src/lib/cms/*Repo.ts` — the content access layer. Each repo wraps the
-  Local API in `unstable_cache` with revalidation tags and maps Payload docs
+  Local API in a `'use cache'` scope (`cacheComponents: true` in
+  `next.config.mjs`) with revalidation tags and maps Payload docs
   to the stable Cms* shapes consumed by pages (`src/lib/cms/types.ts`).
 - `src/lib/content/lexicalToBlocks.ts` — converts Payload Lexical JSON into
   the block shape the article renderer (`src/components/cms/ArticleBody.tsx`)
@@ -44,6 +49,11 @@
 - Collection hooks (`revalidatePost`, `revalidateRedirects`) revalidate paths
   and tags on publish/change — publishing in admin is live on the site
   immediately.
+- Every purge is `revalidateTag(tag, { expire: 0 })` — immediate
+  expiration — never `'max'`. Under `cacheComponents`, `'max'` is
+  stale-while-revalidate with a one-year stale window, which silently breaks
+  "admin edits are live in seconds" (#118; pinned by
+  `src/app/api/revalidate/route.test.ts`).
 - `/api/revalidate` (secret `CMS_REVALIDATE_SECRET`) is the manual escape
   hatch.
 - GitHub tech signals cache 6h under tag `tech-signals`
@@ -51,7 +61,8 @@
 
 ## Environments
 
-- `master` = v3 production (do not touch until launch sign-off).
-- `rebuild/v4` = active branch → Vercel custom environment `staging`
-  (staging.brandonperfetti.com; Supabase Postgres + Blob store).
+- GitFlow since the v4 cutover: `master` → production
+  (brandonperfetti.com); `develop` → integration; the active QA branch serves
+  staging (staging.brandonperfetti.com; Supabase Postgres + Blob store).
+  Branching and release steps: `docs/WORKFLOW.md` § Branching & releases.
 - Env vars are documented exhaustively in `.env.example`.

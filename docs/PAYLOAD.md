@@ -150,6 +150,29 @@ feeds `buildPersonSchema` and the Resume card's Download CV button; empty
 fields fall back to the `src/lib/identity.ts` constants and the static
 `/assets` PDF).
 
+## Local API gotchas
+
+Traps that have already cost a session. `AGENTS.md` names both in its
+**Before you…** route for Local-API work, so read this before writing a script,
+seed, test or MCP write.
+
+- **Payload `find`: `limit: N` still caps the result even with
+  `pagination: false`.** `limit: 0` is the only unlimited form — it is the
+  value that clears the cap and forces `pagination = false` internally. A
+  `limit: 1000` meant as "everything" is a silent cap.
+  `[source: @payloadcms/drizzle findMany.js:16-18,117 @ 3.88.0]`
+- **Payload Local API: `draft: true` is not mirrored into `req.query`.**
+  `createLocalReq` only ever writes `req.query.depth`
+  (`createLocalReq.js:102-104`); `draft` and `autosave` travel in the
+  operation's args object instead. So any hook keyed on reading
+  `req.query.draft` / `req.query.autosave` **cannot see a Local-API draft
+  save** and will take its non-draft branch. The admin UI and REST both carry
+  `?draft=true` and are unaffected — this bites scripts, seeds, tests and MCP
+  writes. Worked cases: the `cascadePagePaths` docblock in
+  `src/collections/Pages/hooks/pageHierarchy.ts` and the `createLocalReq` note
+  in `src/collections/Pages/hooks/servedPrefix.ts`; #197 for the live defect.
+  `[source: payload 3.88.0]`
+
 ## Slugs and paths
 
 Pattern in `src/fields/slug/`: text field + `slugLock` checkbox + `formatSlug`
