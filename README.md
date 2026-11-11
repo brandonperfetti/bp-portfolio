@@ -192,11 +192,13 @@ private Cloudflare R2 bucket.
 
 `AGENTS.md` is the canonical agent-instructions file; `CLAUDE.md` imports it
 (`@AGENTS.md`) and `.github/copilot-instructions.md` is a symlink to it. It is the thin
-top layer (invariants + index) for AI agents and humans alike. Depth lives in
-`docs/`: `ARCHITECTURE`, `PAYLOAD` (collections/blocks/migrations/MCP), `FEATURES`,
+top layer (purpose, invariants, gate route, task triggers) for AI agents and humans
+alike. Depth lives in `docs/`: `PRODUCT` (intent, principles, decisions), `JOURNEYS`
+(user journeys and their proof), `ARCHITECTURE`, `PAYLOAD` (collections/blocks/migrations/MCP), `FEATURES`,
 `NAVIGATION`, `STATE`, `STYLING`, `DESIGN`, `AI` (Corvus/guardrails/retrieval/evals),
 `ANALYTICS` (consent + GA4), `AUTH`, `CONTENT_WORKFLOW` + `CONTENT_STYLE`, `SEO`,
-`DEPENDENCIES`, `WORKFLOW`, `ACCESSIBILITY`, `TESTING`, `MAINTENANCE` (upkeep +
+`DEPENDENCIES`, `WORKFLOW`, `ACCESSIBILITY`, `TESTING` (layers, the local CI gate,
+the owned-instance journey recipe), `MAINTENANCE` (upkeep +
 watchpoints + the production promotion checklist), and `DOCUMENTATION` (these
 standards).
 

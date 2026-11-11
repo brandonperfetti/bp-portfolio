@@ -55,7 +55,7 @@ If any of these files don't exist, **proceed silently**. Don't flag their absenc
 ```
 
 Note the neighbours: `docs/` already carries a set of subject-matter documents indexed from
-`AGENTS.md` under "Progressive disclosure". `GLOSSARY.md` is not one of those
+`AGENTS.md` under "Before you…". `GLOSSARY.md` is not one of those
 — it is a glossary of domain terms, and it belongs at the repo root, not in `docs/`.
 
 ## Use the glossary's vocabulary

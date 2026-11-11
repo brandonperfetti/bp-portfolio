@@ -96,6 +96,42 @@ a hover story — prove the state engaged first. Note also that `tab()` from
 Chromium's last-interaction heuristic (a real pointer _press_ resets it; a
 hover does not), so assert `matches(':focus-visible')` rather than assuming it.
 
+## Local CI gate
+
+A local mirror of the `quality` job ("Lint · Types · Unit") in
+`.github/workflows/ci.yml` — and only that job. Run it as a bash script (not
+pasted into an interactive shell) before calling a change done; it stops at the
+first failing step:
+
+```sh
+set -euo pipefail
+export PAYLOAD_SECRET=ci-not-a-real-secret
+export NEXT_PUBLIC_SITE_URL=http://localhost:3000
+export NEXT_PUBLIC_SITE_NAME='BP Portfolio (CI)'
+corepack enable
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm format:check
+pnpm typecheck
+pnpm generate:types
+pnpm exec prettier --write src/payload-types.ts
+git diff --quiet -- src/payload-types.ts
+pnpm generate:importmap
+pnpm exec prettier --write "src/app/(payload)/admin/importMap.js"
+node scripts/check-importmap.mjs
+git diff --quiet -- "src/app/(payload)/admin/importMap.js"
+pnpm payload migrate:create --skip-empty < /dev/null
+test -z "$(git status --porcelain -- src/migrations/)" # untracked files count
+node scripts/check-migrations-rls.mjs
+pnpm test:coverage
+pnpm build-storybook
+```
+
+The "Build · E2E" and "Evalite (Corvus)" jobs are not mirrored here; they need
+Postgres, Playwright or provider keys and remain gated by PR CI. A green gate
+says nothing about whether a user journey works — that is
+§ Verifying a journey locally below.
+
 ## CI (`.github/workflows/ci.yml`)
 
 Quality job: lint (ESLint + tsdoc) → prettier check → typecheck → generated
@@ -146,6 +182,150 @@ Two related notes:
   breakpoint up. The one-line check: open Pages → `home` in the admin and
   confirm that checkbox is ticked on the rail column. Unticked is a content
   edit, not a bug — no code change will fix it.
+
+## Verifying a journey locally
+
+How to see a reader journey actually work on an instance you own, without
+production data or credentials. This is what the Build · E2E job does, run
+by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
+**bash**, from the checkout root, in one shell.
+`[measured 2026-11-11: the full suite under this recipe was 31 passed,
+9 skipped (the content-dependent paths JOURNEYS.md lists), 0 failed]`
+
+1. **Own the files and the database.** The run writes `media/` (seed
+   uploads — untracked and _not_ git-ignored, never commit it),
+   `test-results/`, `.next/` and, when the configured HTML reporter runs (step
+   4's `--reporter` replaces it), `playwright-report/`. Record which already
+   exist so cleanup touches only what this run creates. Recording a path does
+   not keep its contents: the build replaces a pre-existing `.next/`,
+   Playwright empties `test-results/` when it starts, and its HTML reporter
+   replaces `playwright-report/` — copy out anything you need from any of
+   them first. If `media/` already holds uploads you care about,
+   use a fresh worktree instead. The database is
+   a throwaway container on a free loopback port — not the `bp-portfolio-db`
+   compose container, which holds a production restore. `--rm` with no volume
+   means stopping it deletes it.
+
+   ```sh
+   PRE_EXISTING=$(ls -d media test-results playwright-report .next 2>/dev/null)
+   RUN=journey-$(date +%s)
+   lsof -nP -iTCP:55432 -sTCP:LISTEN && echo 'STOP: 55432 is taken; something else would answer as the database'
+   docker run -d --rm --name "bp-$RUN" -p 127.0.0.1:55432:5432 \
+     -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+     -e POSTGRES_DB=bp_journey pgvector/pgvector:pg16 || echo 'STOP: the container did not start'
+   for i in $(seq 30); do docker exec "bp-$RUN" pg_isready -q -U postgres -d bp_journey && break; sleep 1; done
+   docker exec "bp-$RUN" pg_isready -U postgres -d bp_journey # must say "accepting connections"
+   ```
+
+   Go no further if a `STOP:` line printed or the last line does not say
+   _accepting connections_: every later step talks to `127.0.0.1:55432`, and
+   only a container this run started may be there.
+
+2. **Control the environment.** Clearing your shell is not enough: Next
+   (`@next/env` 16) and Payload's CLI (`payload migrate`, `payload run`, its
+   own `@next/env` 15) both load `.env*` files from the checkout — which files
+   depends on the mode, `.env.production*` only in production — and Payload's
+   source also has a parent-directory fallback. A real `BLOB_READ_WRITE_TOKEN`
+   there would send the seed's uploads to the real Blob store; a DSN or
+   `SENTRY_SPOTLIGHT` turns on Sentry; `RESEND_API_KEY` turns on mail. Both
+   loaders never overwrite a variable that is already set, even to an empty
+   string, and the app treats empty as off — so pin to empty every name
+   `.env.example` lists, active or commented out (that includes
+   `SENTRY_SPOTLIGHT` and the `R2_*` backup credentials), plus the database
+   fallbacks and the Vercel identity names, then set only the safe values:
+
+   ```sh
+   PINS=($(grep -oE '^(# ?)?[A-Z_][A-Z0-9_]*=' .env.example | sed 's/^# \{0,1\}//' | sort -u) \
+     POSTGRES_URL= DATABASE_URL= VERCEL_ENV= NEXT_PUBLIC_VERCEL_ENV= VERCEL_PROJECT_PRODUCTION_URL=)
+   jenv() {
+     case "${NODE_ENV:-}" in '' | production) ;; *)
+       echo "STOP: NODE_ENV=$NODE_ENV is not a mode the check below covers"; return 1 ;; esac
+     for a in "$@"; do case "$a" in
+       NODE_ENV=*) echo 'STOP: set NODE_ENV before jenv, not as an argument'; return 1 ;;
+       *=*) ;; *) break ;; esac; done
+     env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 \
+       CI="${CI:-}" NODE_ENV="${NODE_ENV:-}" "${PINS[@]}" \
+       DATABASE_URI=postgres://postgres:postgres@127.0.0.1:55432/bp_journey \
+       PAYLOAD_SECRET=ci-not-a-real-secret \
+       NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3000 \
+       NEXT_PUBLIC_SITE_NAME='BP Portfolio (journey)' \
+       NEXT_TELEMETRY_DISABLED=1 \
+       ${PLAYWRIGHT_EXECUTABLE_PATH:+PLAYWRIGHT_EXECUTABLE_PATH="$PLAYWRIGHT_EXECUTABLE_PATH"} \
+       "$@"
+   }
+   # Run each loader the recipe uses, in each mode it uses, and print the
+   # NAMES of every non-empty variable afterwards (never values). Expect only
+   # the safe set above plus HOME, PATH, LANG, __NEXT_PROCESSED_ENV and, on
+   # macOS, __CF_USER_TEXT_ENCODING — anything else came from an env file.
+   for mode in '' production; do
+     NODE_ENV=$mode jenv node --input-type=module -e "
+       const { createRequire } = await import('node:module')
+       const nextEnv = createRequire(createRequire(process.cwd() + '/').resolve('next/package.json'))('@next/env')
+       const { loadEnv } = await import('./node_modules/payload/dist/bin/loadEnv.js')
+       loadEnv()
+       nextEnv.loadEnvConfig(process.cwd(), process.env.NODE_ENV !== 'production', { info() {}, error() {} }, true)
+       console.log('mode=' + (process.env.NODE_ENV || 'dev') + ':',
+         Object.keys(process.env).filter(k => process.env[k] && k !== 'NODE_ENV').sort().join(' '))"
+   done
+   ```
+
+   The pins cover what `.env.example` documents. An app-read name it does not
+   document is a tuning knob (`CORVUS_*`, `GITHUB_TECH_*`), not a service
+   credential, as of 2026-11-11. If one appears in the check, add it to
+   `.env.example` and re-run the `PINS=` line (it is read once, when it runs),
+   or, for this shell only, `PINS+=(NAME=)` without re-running it — then
+   repeat the check until the name is gone.
+
+3. **Migrate, seed, build.** `jenv pnpm migrate`, `jenv pnpm seed:e2e`,
+   `CI=1 jenv pnpm build`. The seed reads public Cloudinary images.
+
+4. **Drive it.** Make sure nothing else is listening on 3000 first
+   (`lsof -nP -iTCP:3000 -sTCP:LISTEN`) — Playwright and a browser would
+   otherwise test whatever server is there.
+   - _The codified journeys:_
+     `CI=1 jenv PLAYWRIGHT_JSON_OUTPUT_NAME="${TMPDIR:-/tmp}/e2e-$RUN.json" pnpm test:e2e --reporter=list,json`
+     (boots its own `pnpm start`; the JSON report, kept outside the checkout,
+     is the record step 5 reads). Without a matching managed browser, point
+     `PLAYWRIGHT_EXECUTABLE_PATH` at a cached Chromium headless shell under
+     `~/Library/Caches/ms-playwright/` — never `playwright install` in a
+     sandbox.
+   - _By hand or with an agent's browser:_
+     `NODE_ENV=production jenv pnpm exec next start -H 127.0.0.1 -p 3000`,
+     then first check the instance is yours: `/articles` lists exactly the
+     three seeded posts (`scripts/seed-e2e.ts`, `POSTS`).
+
+5. **Record what ran, and keep it.** A skipped journey proved nothing, and
+   Playwright's terminal output never shows a skip's reason — a grep of it for
+   a skip string finds nothing whether the test skipped or not
+   `[measured 2026-11-11, Playwright 1.61.1, with and without CI]`. Read the
+   counts and every skip reason from the JSON report instead:
+
+   ```sh
+   node -e '
+   const r = require(process.argv[1])
+   const walk = (s) => [
+     ...(s.specs ?? []).flatMap((sp) => sp.tests.filter((t) => t.status === "skipped")
+       .map((t) => `${sp.file} › ${sp.title} — ${t.annotations.find((a) => a.type === "skip")?.description ?? "(no reason)"}`)),
+     ...(s.suites ?? []).flatMap(walk),
+   ]
+   const { expected, skipped, unexpected, flaky } = r.stats
+   console.log(`${expected} passed, ${skipped} skipped, ${unexpected} failed, ${flaky} flaky`)
+   r.suites.flatMap(walk).forEach((l) => console.log(`skipped: ${l}`))' "${TMPDIR:-/tmp}/e2e-$RUN.json"
+   ```
+
+   The summary counts tests only: a run that never reached them (a
+   `webServer` timeout, say) prints zeros, so keep step 4's exit status and
+   its terminal error beside it. Copy anything you need from `test-results/`
+   before cleanup or the next Playwright run.
+
+6. **Clean up only what you made:** stop the server you started,
+   `docker stop "bp-$RUN"`, then remove only the paths this run created:
+
+   ```sh
+   for d in media test-results playwright-report .next; do
+     case " $(echo $PRE_EXISTING) " in *" $d "*) ;; *) rm -rf "$d" ;; esac
+   done
+   ```
 
 ## Policy
 
