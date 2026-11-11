@@ -404,9 +404,10 @@ stay there.
   pins exactly. It stays pinned with no override, and the advisories stay
   open until an upstream release fixes them. In front of it,
   `src/plugins/limitMcpRequests.ts` is a **partial** local mitigation for
-  authenticated `POST /api/mcp` bodies: 2 MiB, 100 messages a batch, 200,000
-  JSON values and depth 128, refused with a 413 before `mcp-handler` runs
-  (`docs/PAYLOAD.md` § Operating via MCP, "Request limits"). It reads the body
+  authenticated `POST /api/mcp` bodies: it bounds body size, batch size, JSON
+  value count and nesting depth, refusing limit violations with a 413 before
+  `mcp-handler` runs. The named constants and their rationale are linked from
+  `docs/PAYLOAD.md` § Operating via MCP, "Request limits". It reads the body
   only inside the plugin's `overrideAuth`, after the plugin's own API-key
   check, apart from a `Content-Length` header check that reads nothing. It
   does **not** bound every request: Payload's method-override handling
