@@ -265,8 +265,9 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
    The pins cover what `.env.example` documents. An app-read name it does not
    document is a tuning knob (`CORVUS_*`, `GITHUB_TECH_*`), not a service
    credential, as of 2026-11-11. If one appears in the check, add it to
-   `.env.example` (or append `NAME=` to `PINS`), re-run the `PINS=` line —
-   it is read once, when it runs — and repeat the check until it is gone.
+   `.env.example` and re-run the `PINS=` line (it is read once, when it runs),
+   or, for this shell only, `PINS+=(NAME=)` without re-running it — then
+   repeat the check until the name is gone.
 
 3. **Migrate, seed, build.** `jenv pnpm migrate`, `jenv pnpm seed:e2e`,
    `CI=1 jenv pnpm build`. The seed reads public Cloudinary images.
