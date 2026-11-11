@@ -212,17 +212,21 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
    ```
 
 2. **Control the environment.** Clearing your shell is not enough: Next
-   (`@next/env`) loads `.env*` files from the checkout, and Payload's CLI
-   (`payload migrate`, `payload run`) searches **every parent directory** for
-   one. A real `BLOB_READ_WRITE_TOKEN` there would send the seed's uploads to
-   the real Blob store; a DSN turns on Sentry; `RESEND_API_KEY` turns on mail.
-   Those loaders never overwrite a variable that is already set, even to an
-   empty string, and the app treats empty as off — so pin every name
-   `.env.example` declares (plus the two database fallbacks) to empty, then
-   set only the safe values:
+   (`@next/env` 16) and Payload's CLI (`payload migrate`, `payload run`, its
+   own `@next/env` 15) both load `.env*` files from the checkout — which files
+   depends on the mode, `.env.production*` only in production — and Payload's
+   source also has a parent-directory fallback. A real `BLOB_READ_WRITE_TOKEN`
+   there would send the seed's uploads to the real Blob store; a DSN or
+   `SENTRY_SPOTLIGHT` turns on Sentry; `RESEND_API_KEY` turns on mail. Both
+   loaders never overwrite a variable that is already set, even to an empty
+   string, and the app treats empty as off — so pin to empty every name
+   `.env.example` lists, active or commented out (that includes
+   `SENTRY_SPOTLIGHT` and the `R2_*` backup credentials), plus the database
+   fallbacks and the Vercel identity names, then set only the safe values:
 
    ```sh
-   PINS=($(grep -o '^[A-Z_][A-Z0-9_]*=' .env.example) POSTGRES_URL= DATABASE_URL=)
+   PINS=($(grep -oE '^(# ?)?[A-Z_][A-Z0-9_]*=' .env.example | sed 's/^# \{0,1\}//' | sort -u) \
+     POSTGRES_URL= DATABASE_URL= VERCEL_ENV= NEXT_PUBLIC_VERCEL_ENV= VERCEL_PROJECT_PRODUCTION_URL=)
    jenv() {
      env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 \
        CI="${CI:-}" NODE_ENV="${NODE_ENV:-}" "${PINS[@]}" \
@@ -234,18 +238,26 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
        ${PLAYWRIGHT_EXECUTABLE_PATH:+PLAYWRIGHT_EXECUTABLE_PATH="$PLAYWRIGHT_EXECUTABLE_PATH"} \
        "$@"
    }
-   # After Payload's own loader has run: print the NAMES of every non-empty
-   # variable (never values). Expect only the safe set above plus HOME, PATH,
-   # LANG, __NEXT_PROCESSED_ENV and, on macOS, __CF_USER_TEXT_ENCODING.
-   jenv node --input-type=module -e "
-     const { loadEnv } = await import('./node_modules/payload/dist/bin/loadEnv.js')
-     loadEnv()
-     console.log(Object.keys(process.env).filter(k => process.env[k]).sort().join(' '))"
+   # Run each loader the recipe uses, in each mode it uses, and print the
+   # NAMES of every non-empty variable afterwards (never values). Expect only
+   # the safe set above plus HOME, PATH, LANG, __NEXT_PROCESSED_ENV and, on
+   # macOS, __CF_USER_TEXT_ENCODING — anything else came from an env file.
+   for mode in '' production; do
+     NODE_ENV=$mode jenv node --input-type=module -e "
+       const { createRequire } = await import('node:module')
+       const nextEnv = createRequire(createRequire(process.cwd() + '/').resolve('next/package.json'))('@next/env')
+       const { loadEnv } = await import('./node_modules/payload/dist/bin/loadEnv.js')
+       loadEnv()
+       nextEnv.loadEnvConfig(process.cwd(), process.env.NODE_ENV !== 'production', { info() {}, error() {} }, true)
+       console.log('mode=' + (process.env.NODE_ENV || 'dev') + ':',
+         Object.keys(process.env).filter(k => process.env[k] && k !== 'NODE_ENV').sort().join(' '))"
+   done
    ```
 
-   A name an env file sets that `.env.example` does not declare (e.g. the
-   `R2_*` backup credentials) still loads; the app does not read those, but
-   the check above shows it if one appears.
+   The pins cover what `.env.example` documents. An app-read name it does not
+   document is a tuning knob (`CORVUS_*`, `GITHUB_TECH_*`), not a service
+   credential, as of 2026-11-11; if one appears in the check, unset it and
+   add it to `.env.example`.
 
 3. **Migrate, seed, build.** `jenv pnpm migrate`, `jenv pnpm seed:e2e`,
    `CI=1 jenv pnpm build`. The seed reads public Cloudinary images.
