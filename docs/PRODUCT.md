@@ -51,9 +51,11 @@ Judgments that recur across features. Each links where it was argued.
   REST and MCP writes meet the same rule (`AGENTS.md` invariants;
   `src/fields/slug/enforceSlugFreeze.ts`).
 - **Refuse rather than tidy on the editor's behalf.** A save that would leave
-  the site inconsistent is refused with a message naming what to do first; one
-  gesture never changes documents the editor did not name
-  (`docs/FEATURES.md` § Pages and sections, #180).
+  the site inconsistent is refused with a message naming what to do first;
+  an unpublish never takes offline documents the editor did not name
+  (`docs/FEATURES.md` § Pages and sections, #180). A rename or re-parent is
+  the deliberate exception: it moves the page's subtree and leaves one
+  redirect (#150).
 - **Content changes are editorial, not deploys.** If a fix can be a CMS edit,
   it is one — e.g. the home sticky rail is a checkbox, not a bug
   (`docs/TESTING.md` § Running e2e locally).

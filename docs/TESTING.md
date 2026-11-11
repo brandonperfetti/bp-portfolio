@@ -195,9 +195,11 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
 1. **Own the files and the database.** The run writes `media/` (seed
    uploads — untracked and _not_ git-ignored, never commit it),
    `test-results/`, `playwright-report/` and `.next/`. Record which already
-   exist so cleanup touches only what this run creates (a pre-existing `.next/`
-   is kept, though the build replaces its contents); if `media/` already
-   holds uploads you care about, use a fresh worktree instead. The database is
+   exist so cleanup touches only what this run creates. Recording a path does
+   not keep its contents: the build replaces a pre-existing `.next/`, and
+   Playwright empties `test-results/` when it starts — copy out anything you
+   need from either first. If `media/` already holds uploads you care about,
+   use a fresh worktree instead. The database is
    a throwaway container on a free loopback port — not the `bp-portfolio-db`
    compose container, which holds a production restore. `--rm` with no volume
    means stopping it deletes it.
@@ -205,11 +207,17 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
    ```sh
    PRE_EXISTING=$(ls -d media test-results playwright-report .next 2>/dev/null)
    RUN=journey-$(date +%s)
+   lsof -nP -iTCP:55432 -sTCP:LISTEN && echo 'STOP: 55432 is taken; something else would answer as the database'
    docker run -d --rm --name "bp-$RUN" -p 127.0.0.1:55432:5432 \
      -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
-     -e POSTGRES_DB=bp_journey pgvector/pgvector:pg16
-   docker exec "bp-$RUN" pg_isready -U postgres -d bp_journey # retry until ready
+     -e POSTGRES_DB=bp_journey pgvector/pgvector:pg16 || echo 'STOP: the container did not start'
+   for i in $(seq 30); do docker exec "bp-$RUN" pg_isready -q -U postgres -d bp_journey && break; sleep 1; done
+   docker exec "bp-$RUN" pg_isready -U postgres -d bp_journey # must say "accepting connections"
    ```
+
+   Go no further if a `STOP:` line printed or the last line does not say
+   _accepting connections_: every later step talks to `127.0.0.1:55432`, and
+   only a container this run started may be there.
 
 2. **Control the environment.** Clearing your shell is not enough: Next
    (`@next/env` 16) and Payload's CLI (`payload migrate`, `payload run`, its
@@ -256,8 +264,9 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
 
    The pins cover what `.env.example` documents. An app-read name it does not
    document is a tuning knob (`CORVUS_*`, `GITHUB_TECH_*`), not a service
-   credential, as of 2026-11-11; if one appears in the check, unset it and
-   add it to `.env.example`.
+   credential, as of 2026-11-11. If one appears in the check, add it to
+   `.env.example` (or append `NAME=` to `PINS`), re-run the `PINS=` line —
+   it is read once, when it runs — and repeat the check until it is gone.
 
 3. **Migrate, seed, build.** `jenv pnpm migrate`, `jenv pnpm seed:e2e`,
    `CI=1 jenv pnpm build`. The seed reads public Cloudinary images.
@@ -278,7 +287,7 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
 5. **Record what ran, and keep it.** Count passed and skipped, grep the
    output for each skip string you care about — a skipped journey proved
    nothing — and copy anything you need from `playwright-report/` or
-   `test-results/` before cleanup.
+   `test-results/` before cleanup or the next Playwright run.
 
 6. **Clean up only what you made:** stop the server you started,
    `docker stop "bp-$RUN"`, then remove only the paths this run created:
