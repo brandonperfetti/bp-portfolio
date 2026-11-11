@@ -53,9 +53,12 @@ test('search finds an article, opening it and coming back keeps the search', asy
   // An empty corpus renders the empty state instead of the explorer.
   const emptyState = page.getByText('No published articles')
   await expect(searchInput.or(emptyState)).toBeVisible()
-  const seeded =
-    !(await emptyState.isVisible()) &&
-    (await cardLink(TARGET.title).count()) > 0
+  // Every fixture must be present: a partial corpus cannot prove the
+  // narrowing either, so it takes the same CI-fail / local-skip path.
+  let seeded = !(await emptyState.isVisible())
+  for (const title of [TARGET.title, ...OTHERS]) {
+    if (seeded) seeded = (await cardLink(title).count()) > 0
+  }
   if (!seeded) {
     if (process.env.CI) throw new Error(SKIP_REASON)
     test.skip(true, SKIP_REASON)

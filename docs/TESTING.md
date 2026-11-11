@@ -238,6 +238,8 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
    PINS=($(grep -oE '^(# ?)?[A-Z_][A-Z0-9_]*=' .env.example | sed 's/^# \{0,1\}//' | sort -u) \
      POSTGRES_URL= DATABASE_URL= VERCEL_ENV= NEXT_PUBLIC_VERCEL_ENV= VERCEL_PROJECT_PRODUCTION_URL=)
    jenv() {
+     case "${NODE_ENV:-}" in '' | production) ;; *)
+       echo "STOP: NODE_ENV=$NODE_ENV is not a mode the check below covers"; return 1 ;; esac
      env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 \
        CI="${CI:-}" NODE_ENV="${NODE_ENV:-}" "${PINS[@]}" \
        DATABASE_URI=postgres://postgres:postgres@127.0.0.1:55432/bp_journey \
