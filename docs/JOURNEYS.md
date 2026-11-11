@@ -35,11 +35,11 @@ A skip proves nothing. Those paths are marked _unproven in a browser_ below.
 
 ## Editor (Brandon, in `/admin`)
 
-| Journey                                 | Proven by                                                                                                  | Not proven                                                                           |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Publish an article, see it live         | component `revalidatePost.test.ts`, `revalidate/route.test.ts` (`expire: 0`)                               | list surfaces' real convergence time on Vercel (`docs/MAINTENANCE.md` § Watchpoints) |
-| Nest, publish, unpublish and move pages | pg `pages-hierarchy-integration.test.ts`; component `pageHierarchy.test.ts`, `servedPrefix.test.ts` (#180) | Local-API draft saves (#197)                                                         |
-| Build a page from blocks                | Storybook stories + `pnpm test:storybook`                                                                  | —                                                                                    |
+| Journey                                 | Proven by                                                                                                                                         | Not proven                                                                                                                                               |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Publish an article, see it live         | component `revalidatePost.test.ts`, `revalidate/route.test.ts` (`expire: 0`)                                                                      | list surfaces' real convergence time on Vercel (`docs/MAINTENANCE.md` § Watchpoints)                                                                     |
+| Nest, publish, unpublish and move pages | pg `pages-hierarchy-integration.test.ts`; component `pageHierarchy.test.ts`, `servedPrefix.test.ts` (#180)                                        | Local-API draft saves (#197)                                                                                                                             |
+| Build a page from blocks                | block rendering and interactions over supplied block data: Storybook stories + `pnpm test:storybook` (e.g. `src/blocks/RenderBlocks.stories.tsx`) | the admin side — picking, reordering and saving blocks in `/admin`, persistence, and the published-page round trip; nothing drives `/admin` in a browser |
 
 ## Keeping this map true
 

@@ -25,9 +25,11 @@ journeys are proven, and how, is `docs/JOURNEYS.md`.
 
 The outcomes the existing docs commit to: v3 article links keep working
 (`docs/NAVIGATION.md`), gated content is enforced on the server
-(`docs/AUTH.md`), consent is honored before analytics load
-(`docs/ANALYTICS.md`), motion never costs a reader who asked for less
-(`docs/DESIGN.md`), and Corvus's behavior is held by live CI evals
+(`docs/AUTH.md`), GA4 collects only once a visitor grants consent where
+consent is required, and by default where it is not — with the cookieless
+exceptions `docs/ANALYTICS.md` documents (Vercel Analytics always on; a
+Consent Mode ping before consent), motion never costs a reader who asked for
+less (`docs/DESIGN.md`), and Corvus's behavior is held by live CI evals
 (`docs/AI.md` § Evals).
 
 ### Open (not settled — do not invent)
@@ -89,10 +91,11 @@ source states none, it says so.
   cascading (`docs/FEATURES.md` § Pages and sections).
 - **Consequence:** a section rename carries its subtree with one prefix
   redirect.
-- **Revisit when:** a write path exists that bypasses the admin/API hooks
-  (the invariant is stated "for everything saved through the admin or the
-  API"); Local-API draft saves are the known gap (#197,
-  `docs/PAYLOAD.md` § Local API gotchas).
+- **Revisit when:** the source records no condition. Known defect, not a
+  bypass: a Local-API draft save of a published page with published children
+  is wrongly refused, because the guard cannot see `draft: true` and reads it
+  as an unpublish (#197; `docs/PAYLOAD.md` § Local API gotchas). The invariant
+  itself stands.
 
 ### Corvus answers about everything Brandon, grounded in site content (#166)
 

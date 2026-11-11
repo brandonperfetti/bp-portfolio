@@ -187,15 +187,23 @@ Two related notes:
 
 How to see a reader journey actually work on an instance you own, without
 production data or credentials. This is what the Build · E2E job does, run
-by hand; it is the recipe `docs/JOURNEYS.md` points at.
+by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
+**bash**, from the checkout root, in one shell.
 `[measured 2026-11-11: the full suite under this recipe was 31 passed,
 9 skipped (the content-dependent paths JOURNEYS.md lists), 0 failed]`
 
-1. **Own the database.** A throwaway container on a free loopback port, not
-   the `bp-portfolio-db` compose container (that one holds a production
-   restore). `--rm` with no volume means stopping it deletes it.
+1. **Own the files and the database.** The run writes `media/` (seed
+   uploads — untracked and _not_ git-ignored, never commit it),
+   `test-results/`, `playwright-report/` and `.next/`. Record which already
+   exist so cleanup touches only what this run creates (a pre-existing `.next/`
+   is kept, though the build replaces its contents); if `media/` already
+   holds uploads you care about, use a fresh worktree instead. The database is
+   a throwaway container on a free loopback port — not the `bp-portfolio-db`
+   compose container, which holds a production restore. `--rm` with no volume
+   means stopping it deletes it.
 
    ```sh
+   PRE_EXISTING=$(ls -d media test-results playwright-report .next 2>/dev/null)
    RUN=journey-$(date +%s)
    docker run -d --rm --name "bp-$RUN" -p 127.0.0.1:55432:5432 \
      -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
@@ -203,16 +211,21 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at.
    docker exec "bp-$RUN" pg_isready -U postgres -d bp_journey # retry until ready
    ```
 
-2. **Control the environment.** Having no `.env.local` is not enough: Payload
-   turns on Blob storage from `BLOB_READ_WRITE_TOKEN`, Resend from
-   `RESEND_API_KEY`, and takes the first set of `DATABASE_URI` / `POSTGRES_URL` /
-   `DATABASE_URL`; Next turns on Sentry from either DSN — any of them
-   inherited from your shell would point the run at a real service. Run every
-   step through an allowlist instead:
+2. **Control the environment.** Clearing your shell is not enough: Next
+   (`@next/env`) loads `.env*` files from the checkout, and Payload's CLI
+   (`payload migrate`, `payload run`) searches **every parent directory** for
+   one. A real `BLOB_READ_WRITE_TOKEN` there would send the seed's uploads to
+   the real Blob store; a DSN turns on Sentry; `RESEND_API_KEY` turns on mail.
+   Those loaders never overwrite a variable that is already set, even to an
+   empty string, and the app treats empty as off — so pin every name
+   `.env.example` declares (plus the two database fallbacks) to empty, then
+   set only the safe values:
 
    ```sh
+   PINS=($(grep -o '^[A-Z_][A-Z0-9_]*=' .env.example) POSTGRES_URL= DATABASE_URL=)
    jenv() {
-     env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 CI="${CI:-}" \
+     env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 \
+       CI="${CI:-}" NODE_ENV="${NODE_ENV:-}" "${PINS[@]}" \
        DATABASE_URI=postgres://postgres:postgres@127.0.0.1:55432/bp_journey \
        PAYLOAD_SECRET=ci-not-a-real-secret \
        NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3000 \
@@ -221,13 +234,21 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at.
        ${PLAYWRIGHT_EXECUTABLE_PATH:+PLAYWRIGHT_EXECUTABLE_PATH="$PLAYWRIGHT_EXECUTABLE_PATH"} \
        "$@"
    }
-   jenv env | cut -d= -f1   # names only: confirm nothing else came through
+   # After Payload's own loader has run: print the NAMES of every non-empty
+   # variable (never values). Expect only the safe set above plus HOME, PATH,
+   # LANG, __NEXT_PROCESSED_ENV and, on macOS, __CF_USER_TEXT_ENCODING.
+   jenv node --input-type=module -e "
+     const { loadEnv } = await import('./node_modules/payload/dist/bin/loadEnv.js')
+     loadEnv()
+     console.log(Object.keys(process.env).filter(k => process.env[k]).sort().join(' '))"
    ```
 
+   A name an env file sets that `.env.example` does not declare (e.g. the
+   `R2_*` backup credentials) still loads; the app does not read those, but
+   the check above shows it if one appears.
+
 3. **Migrate, seed, build.** `jenv pnpm migrate`, `jenv pnpm seed:e2e`,
-   `CI=1 jenv pnpm build`. The seed reads public Cloudinary images and writes
-   them to an untracked `media/` directory in the checkout (not git-ignored —
-   delete it at cleanup, never commit it).
+   `CI=1 jenv pnpm build`. The seed reads public Cloudinary images.
 
 4. **Drive it.** Make sure nothing else is listening on 3000 first
    (`lsof -nP -iTCP:3000 -sTCP:LISTEN`) — Playwright and a browser would
@@ -242,11 +263,19 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at.
      then first check the instance is yours: `/articles` lists exactly the
      three seeded posts (`scripts/seed-e2e.ts`, `POSTS`).
 
-5. **Record what ran.** Count passed and skipped, and grep the output for
-   each skip string you care about — a skipped journey proved nothing.
+5. **Record what ran, and keep it.** Count passed and skipped, grep the
+   output for each skip string you care about — a skipped journey proved
+   nothing — and copy anything you need from `playwright-report/` or
+   `test-results/` before cleanup.
 
 6. **Clean up only what you made:** stop the server you started,
-   `docker stop "bp-$RUN"`, `rm -rf media test-results playwright-report .next`.
+   `docker stop "bp-$RUN"`, then remove only the paths this run created:
+
+   ```sh
+   for d in media test-results playwright-report .next; do
+     case " $(echo $PRE_EXISTING) " in *" $d "*) ;; *) rm -rf "$d" ;; esac
+   done
+   ```
 
 ## Policy
 
