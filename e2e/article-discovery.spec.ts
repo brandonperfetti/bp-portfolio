@@ -17,8 +17,10 @@ import { interactUntil } from './support/hydration'
  * owned-instance recipe in `docs/TESTING.md`, both of which seed — a missing
  * fixture **fails** the test rather than skipping it, so a green CI run always
  * means these assertions ran. Without `CI` (e.g. a production restore with
- * other articles) it skips with {@link SKIP_REASON}; grep for that string and
- * expect zero hits before treating a local run as evidence.
+ * other articles, or an empty corpus) it skips with {@link SKIP_REASON}.
+ * Playwright's terminal output does not print skip reasons, so read them from
+ * the JSON report (`docs/TESTING.md` § Verifying a journey locally, step 5)
+ * before treating a local run as evidence.
  */
 
 /** The seeded article the query must find, and only it. */
@@ -48,8 +50,12 @@ test('search finds an article, opening it and coming back keeps the search', asy
   const cardLink = (title: string) =>
     results.getByRole('link', { name: `Read article: ${title}` })
 
-  await expect(searchInput).toBeVisible()
-  const seeded = (await cardLink(TARGET.title).count()) > 0
+  // An empty corpus renders the empty state instead of the explorer.
+  const emptyState = page.getByText('No published articles')
+  await expect(searchInput.or(emptyState)).toBeVisible()
+  const seeded =
+    !(await emptyState.isVisible()) &&
+    (await cardLink(TARGET.title).count()) > 0
   if (!seeded) {
     if (process.env.CI) throw new Error(SKIP_REASON)
     test.skip(true, SKIP_REASON)

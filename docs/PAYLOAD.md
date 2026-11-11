@@ -168,7 +168,8 @@ seed, test or MCP write.
   `req.query.draft` / `req.query.autosave` **cannot see a Local-API draft
   save** and will take its non-draft branch. The admin UI and REST both carry
   `?draft=true` and are unaffected — this bites scripts, seeds, tests and MCP
-  writes. Worked cases: the `cascadePagePaths` docblock in
+  writes. A Local-API caller that needs a hook to see the draft passes it
+  explicitly: `req: { query: { draft: 'true' } }`. Worked cases: the `cascadePagePaths` docblock in
   `src/collections/Pages/hooks/pageHierarchy.ts` and the `createLocalReq` note
   in `src/collections/Pages/hooks/servedPrefix.ts`; #197 for the live defect.
   `[source: payload 3.88.0]`

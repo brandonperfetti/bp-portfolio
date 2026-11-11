@@ -194,11 +194,13 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
 
 1. **Own the files and the database.** The run writes `media/` (seed
    uploads — untracked and _not_ git-ignored, never commit it),
-   `test-results/`, `playwright-report/` and `.next/`. Record which already
+   `test-results/`, `.next/` and, when the configured HTML reporter runs (step
+   4's `--reporter` replaces it), `playwright-report/`. Record which already
    exist so cleanup touches only what this run creates. Recording a path does
-   not keep its contents: the build replaces a pre-existing `.next/`, and
-   Playwright empties `test-results/` when it starts — copy out anything you
-   need from either first. If `media/` already holds uploads you care about,
+   not keep its contents: the build replaces a pre-existing `.next/`,
+   Playwright empties `test-results/` when it starts, and its HTML reporter
+   replaces `playwright-report/` — copy out anything you need from any of
+   them first. If `media/` already holds uploads you care about,
    use a fresh worktree instead. The database is
    a throwaway container on a free loopback port — not the `bp-portfolio-db`
    compose container, which holds a production restore. `--rm` with no volume
@@ -275,8 +277,10 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
 4. **Drive it.** Make sure nothing else is listening on 3000 first
    (`lsof -nP -iTCP:3000 -sTCP:LISTEN`) — Playwright and a browser would
    otherwise test whatever server is there.
-   - _The codified journeys:_ `CI=1 jenv pnpm test:e2e` (boots its own
-     `pnpm start`). Without a matching managed browser, point
+   - _The codified journeys:_
+     `CI=1 jenv PLAYWRIGHT_JSON_OUTPUT_NAME="${TMPDIR:-/tmp}/e2e-$RUN.json" pnpm test:e2e --reporter=list,json`
+     (boots its own `pnpm start`; the JSON report, kept outside the checkout,
+     is the record step 5 reads). Without a matching managed browser, point
      `PLAYWRIGHT_EXECUTABLE_PATH` at a cached Chromium headless shell under
      `~/Library/Caches/ms-playwright/` — never `playwright install` in a
      sandbox.
@@ -285,10 +289,29 @@ by hand; it is the recipe `docs/JOURNEYS.md` points at. Run the blocks in
      then first check the instance is yours: `/articles` lists exactly the
      three seeded posts (`scripts/seed-e2e.ts`, `POSTS`).
 
-5. **Record what ran, and keep it.** Count passed and skipped, grep the
-   output for each skip string you care about — a skipped journey proved
-   nothing — and copy anything you need from `playwright-report/` or
-   `test-results/` before cleanup or the next Playwright run.
+5. **Record what ran, and keep it.** A skipped journey proved nothing, and
+   Playwright's terminal output never shows a skip's reason — a grep of it for
+   a skip string finds nothing whether the test skipped or not
+   `[measured 2026-11-11, Playwright 1.61.1, with and without CI]`. Read the
+   counts and every skip reason from the JSON report instead:
+
+   ```sh
+   node -e '
+   const r = require(process.argv[1])
+   const walk = (s) => [
+     ...(s.specs ?? []).flatMap((sp) => sp.tests.filter((t) => t.status === "skipped")
+       .map((t) => `${sp.file} › ${sp.title} — ${t.annotations.find((a) => a.type === "skip")?.description ?? "(no reason)"}`)),
+     ...(s.suites ?? []).flatMap(walk),
+   ]
+   const { expected, skipped, unexpected, flaky } = r.stats
+   console.log(`${expected} passed, ${skipped} skipped, ${unexpected} failed, ${flaky} flaky`)
+   r.suites.flatMap(walk).forEach((l) => console.log(`skipped: ${l}`))' "${TMPDIR:-/tmp}/e2e-$RUN.json"
+   ```
+
+   The summary counts tests only: a run that never reached them (a
+   `webServer` timeout, say) prints zeros, so keep step 4's exit status and
+   its terminal error beside it. Copy anything you need from `test-results/`
+   before cleanup or the next Playwright run.
 
 6. **Clean up only what you made:** stop the server you started,
    `docker stop "bp-$RUN"`, then remove only the paths this run created:

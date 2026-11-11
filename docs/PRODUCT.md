@@ -20,8 +20,10 @@ journeys are proven, and how, is `docs/JOURNEYS.md`.
   site's own code — sourced from the pages here and his public repos"
   (`docs/AI.md` § What Corvus is, settled by Brandon 2026-09-04, #166).
 - **Brandon as editor** — "new pages and section rearrangements are editorial
-  acts, not deploys" (`README.md` § Overview): every page is buildable from CMS
-  blocks, and a publish is live in seconds.
+  acts, not deploys" (`README.md` § Overview): a CMS page is built from
+  blocks, and a publish is live in seconds. Fixed routes (`/articles` and
+  `/articles/[slug]`, `/sign-in`, `/account` and the like) are code, with CMS
+  copy and blocks only where the route reads them.
 
 The outcomes the existing docs commit to: v3 article links keep working
 (`docs/NAVIGATION.md`), gated content is enforced on the server
@@ -60,8 +62,9 @@ Judgments that recur across features. Each links where it was argued.
   it is one — e.g. the home sticky rail is a checkbox, not a bug
   (`docs/TESTING.md` § Running e2e locally).
 - **A result proves only the assertions that ran.** A green run with a skip is
-  not evidence for the skipped path; grep for the skip string
-  (`docs/TESTING.md` § Asserting CSS state). CI arbitrates over local signals
+  not evidence for the skipped path; read the skip reasons
+  (`docs/TESTING.md` § Asserting CSS state, and § Verifying a journey locally
+  for Playwright, which does not print them). CI arbitrates over local signals
   (`docs/WORKFLOW.md` § Pre-push).
 - **Fix the behavior or the harness, never the floor** — eval thresholds and
   coverage gates are not lowered to get green (`docs/AI.md` § Evals).
@@ -130,7 +133,7 @@ connected to the outcomes above yet; no tracking is added by documenting this.
 | -------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | GitHub issues        | `gh issue list`              | defects found by the owner and reviewers, e.g. `/articles` Back/Forward query staleness (#267, #302; follow-up #307 open) | read; the only reader-facing feedback on record is owner/reviewer-found |
 | Vercel Web Analytics | Vercel dashboard / connector | cookieless page views per route (`docs/ANALYTICS.md`)                                                                     | exists; production data not read in docs work                           |
-| GA4 (consent-gated)  | GA4 property                 | sessions where consent was given (`docs/ANALYTICS.md`)                                                                    | exists; not read                                                        |
+| GA4                  | GA4 property                 | sessions after consent where it is required, and by default where it is not (`docs/ANALYTICS.md`)                         | exists; not read                                                        |
 | Sentry               | Sentry project               | runtime errors on all three runtimes (`README.md` § Overview)                                                             | exists; not read                                                        |
 | Search Console       | owner's account              | indexing and crawl status (#210)                                                                                          | exists; owner-held                                                      |
 
