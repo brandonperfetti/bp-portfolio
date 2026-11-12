@@ -44,6 +44,8 @@ type State = {
   browser: string
   browserHash: string
   envHash: string
+  dockerHost: string
+  daemon: string
   container?: string
   pid?: number
   started?: string
@@ -100,7 +102,11 @@ function sameDirectory(file: string, expected: Identity) {
     `Directory replaced: ${file}`,
   )
 }
-function command(bin: string, args: string[], env = process.env) {
+function command(
+  bin: string,
+  args: string[],
+  env: NodeJS.ProcessEnv = process.env,
+) {
   const result = spawnSync(bin, args, {
     cwd: ROOT,
     env,
@@ -112,6 +118,55 @@ function command(bin: string, args: string[], env = process.env) {
     `Command failed: ${bin} ${args[0] ?? ''} (exit ${result.status}); ${result.error?.message ?? ''}`,
   )
   return result.stdout.trim()
+}
+/** Fixed loopback ports require a local Unix-socket Docker endpoint. */
+export function assertLocalDockerHost(host: string) {
+  must(
+    host.startsWith('unix://') &&
+      path.isAbsolute(host.slice(7)) &&
+      !/[?#\n\r]/.test(host),
+    'Docker must use a local Unix socket, not a remote or ambiguous endpoint',
+  )
+}
+function pinDockerHost() {
+  must(
+    !(process.env.DOCKER_HOST && process.env.DOCKER_CONTEXT),
+    'Ambiguous Docker selection: both DOCKER_HOST and DOCKER_CONTEXT are set',
+  )
+  const selected =
+    process.env.DOCKER_HOST ||
+    command('docker', [
+      'context',
+      'inspect',
+      '--format',
+      '{{.Endpoints.docker.Host}}',
+    ])
+  assertLocalDockerHost(selected)
+  const socket = realpathSync(selected.slice(7))
+  must(lstatSync(socket).isSocket(), 'Docker endpoint is not a socket')
+  return `unix://${socket}`
+}
+function dockerEnvironment() {
+  // Do not let later context/TLS environment drift override the saved endpoint.
+  return {
+    HOME: process.env.HOME,
+    PATH: process.env.PATH,
+    NODE_ENV: 'production' as const,
+  }
+}
+function docker(s: Pick<State, 'dockerHost'>, args: string[]) {
+  assertLocalDockerHost(s.dockerHost)
+  return command(
+    'docker',
+    ['--host', s.dockerHost, ...args],
+    dockerEnvironment(),
+  )
+}
+function verifyDaemon(s: State) {
+  must(
+    s.daemon && docker(s, ['info', '--format', '{{.ID}}']) === s.daemon,
+    'Docker daemon changed; no cleanup or runtime mutation is authorized',
+  )
 }
 function git(...args: string[]) {
   return command('git', args)
@@ -301,9 +356,7 @@ export function assertContainer(info: Container, id: string, token: string) {
 }
 function containerInfo(s: State) {
   must(s.container, 'Missing database prerequisite')
-  const [info] = JSON.parse(
-    command('docker', ['inspect', s.container]),
-  ) as Container[]
+  const [info] = JSON.parse(docker(s, ['inspect', s.container])) as Container[]
   assertContainer(info, s.container, s.token)
   return info
 }
@@ -359,6 +412,7 @@ async function waitFor(check: () => Promise<void> | void, seconds: number) {
 async function doctor(s: State) {
   must(s.phase === 'ready', 'Prepare did not reach ready; cleanup is required')
   lockMatches(s)
+  verifyDaemon(s)
   checkEnvironment(s)
   must(
     sourceSnapshot().digest === s.source,
@@ -383,7 +437,7 @@ async function doctor(s: State) {
   })
   must(response.ok, 'Fixture readiness request failed')
   const items = (await response.json()) as { title: string; url: string }[]
-  const slugs = command('docker', [
+  const slugs = docker(s, [
     'exec',
     s.container!,
     'psql',
@@ -526,7 +580,7 @@ async function drive(s: State) {
   mkdirSync(folder)
   json(path.join(folder, 'doctor.json'), before)
   json(path.join(folder, 'source.json'), sourceSnapshot())
-  const dump = command('docker', [
+  const dump = docker(s, [
     'exec',
     s.container!,
     'pg_dump',
@@ -603,6 +657,7 @@ export function removeOwnedDirectory(file: string, expected: Identity) {
 async function cleanup(s: State) {
   if (s.phase === 'cleaned') return
   lockMatches(s)
+  verifyDaemon(s)
   // Refuse mismatches before removing anything; an ambiguous resource needs
   // inspection, not a force option. Evidence and the original build survive.
   if (s.ownedBuild) sameDirectory(path.join(ROOT, '.next'), s.ownedBuild)
@@ -634,19 +689,24 @@ async function cleanup(s: State) {
     }
   }
   if (s.container) {
-    const probe = spawnSync('docker', ['inspect', s.container], {
-      encoding: 'utf8',
-    })
+    const probe = spawnSync(
+      'docker',
+      ['--host', s.dockerHost, 'inspect', s.container],
+      {
+        env: dockerEnvironment(),
+        encoding: 'utf8',
+      },
+    )
     if (probe.status === 0) {
       const [info] = JSON.parse(probe.stdout) as Container[]
       must(
         info.Id === s.container && info.Config.Labels[LABEL] === s.token,
         'Database ownership mismatch; refusing cleanup',
       )
-      command('docker', ['rm', '-f', s.container])
+      docker(s, ['rm', '-f', s.container])
     } else {
       // Distinguish a deleted container from an unavailable Docker daemon.
-      command('docker', ['info', '--format', '{{.ServerVersion}}'])
+      verifyDaemon(s)
       must(probe.stderr.includes('No such'), 'Cannot verify database cleanup')
     }
     s.container = undefined
@@ -702,7 +762,10 @@ async function prepare(run: string, browser: string) {
   command('pnpm', ['--version'])
   command('lsof', ['-v'])
   command('unzip', ['-v'])
-  command('docker', ['image', 'inspect', IMAGE])
+  const dockerHost = pinDockerHost()
+  const daemon = docker({ dockerHost }, ['info', '--format', '{{.ID}}'])
+  must(daemon, 'Docker daemon identity unavailable')
+  docker({ dockerHost }, ['image', 'inspect', IMAGE])
   must(
     existsSync(path.join(ROOT, 'node_modules/next/package.json')),
     'Missing installed dependencies',
@@ -717,6 +780,8 @@ async function prepare(run: string, browser: string) {
     created: new Date().toISOString(),
     source: sourceSnapshot().digest,
     browser,
+    dockerHost,
+    daemon,
     browserHash: hash(readFileSync(browser)),
     envHash: hash(JSON.stringify(envFiles())),
     phase: 'preparing',
@@ -732,18 +797,14 @@ async function prepare(run: string, browser: string) {
   try {
     json(path.join(run, 'source.json'), sourceSnapshot())
     json(path.join(run, 'environment.json'), {
+      dockerHost: s.dockerHost,
+      daemon: s.daemon,
       envFiles: envFiles(),
       nonemptyNames: Object.keys(environment(s))
         .filter((k) => environment(s)[k])
         .sort(),
       node: process.version,
-      image: command('docker', [
-        'image',
-        'inspect',
-        IMAGE,
-        '--format',
-        '{{.Id}}',
-      ]),
+      image: docker(s, ['image', 'inspect', IMAGE, '--format', '{{.Id}}']),
     })
     const next = path.join(ROOT, '.next')
     if (existsSync(next)) {
@@ -757,7 +818,7 @@ async function prepare(run: string, browser: string) {
     mkdirSync(path.join(ROOT, 'media'))
     s.media = identity(path.join(ROOT, 'media'))
     save(s)
-    s.container = command('docker', [
+    s.container = docker(s, [
       'create',
       '--pull=never',
       '--rm',
@@ -778,9 +839,9 @@ async function prepare(run: string, browser: string) {
       IMAGE,
     ])
     save(s)
-    command('docker', ['start', s.container])
+    docker(s, ['start', s.container])
     await waitFor(() => {
-      command('docker', [
+      docker(s, [
         'exec',
         s.container!,
         'pg_isready',

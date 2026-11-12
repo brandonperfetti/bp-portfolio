@@ -222,6 +222,10 @@ locks the checkout and serializes doctor/drive/cleanup operations; that lock
 is a coordination control, not protection against another shell ignoring it.
 Existing `test-results/` and `playwright-report/` are not used or replaced.
 
+The lab pins a local Unix-socket Docker endpoint and daemon identity before
+creating resources. Remote/ambiguous endpoint selection fails; later context
+changes cannot redirect its commands. Doctor and cleanup refuse a changed
+daemon rather than treating an absent container on another daemon as cleaned.
 The lab creates a uniquely labeled disposable Postgres container with tmpfs
 data, never the compose database or a production restore. It pins all active
 and commented names in `.env.example` to empty, then supplies only its local

@@ -17,6 +17,7 @@ import {
   assessReport,
   assertionEvidence,
   assertContainer,
+  assertLocalDockerHost,
   labEnvironment,
   removeOwnedDirectory,
 } from './verify-reader-journeys'
@@ -131,6 +132,20 @@ describe('assertion traces', () => {
   })
 })
 describe('resource boundaries', () => {
+  it('permits local Unix endpoints and refuses remote or ambiguous Docker endpoints', () => {
+    expect(() =>
+      assertLocalDockerHost('unix:///var/run/docker.sock'),
+    ).not.toThrow()
+    for (const host of [
+      'ssh://remote',
+      'tcp://127.0.0.1:2375',
+      'https://remote:2376',
+      'unix://relative',
+      'unix:///socket?context=other',
+    ]) {
+      expect(() => assertLocalDockerHost(host)).toThrow('local Unix socket')
+    }
+  })
   it('constructs its environment without inheriting credentials or a production database', () => {
     const env = labEnvironment(
       'BLOB_READ_WRITE_TOKEN=\n# SENTRY_SPOTLIGHT=\nRESEND_API_KEY=\n',
