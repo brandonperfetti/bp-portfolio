@@ -17,7 +17,7 @@
 
 - GitFlow since the v4 cutover: `master` → production
   ([brandonperfetti.com](https://brandonperfetti.com)); `develop` →
-  integration; the active QA branch serves
+  integration and staging at
   [staging.brandonperfetti.com](https://staging.brandonperfetti.com).
 - One branch per wave off `develop`, small conventional commits
   (`feat(scope): …`, `fix(scope): …`) with `Refs #n`, one PR into `develop`

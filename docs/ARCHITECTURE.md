@@ -62,7 +62,6 @@ What a reader or editor can do with it, and which tests prove it, is
 ## Environments
 
 - GitFlow since the v4 cutover: `master` → production
-  (brandonperfetti.com); `develop` → integration; the active QA branch serves
-  staging (staging.brandonperfetti.com; Supabase Postgres + Blob store).
+  (brandonperfetti.com); `develop` → integration and staging (staging.brandonperfetti.com; Supabase Postgres + Blob store).
   Branching and release steps: `docs/WORKFLOW.md` § Branching & releases.
 - Env vars are documented exhaustively in `.env.example`.

@@ -180,7 +180,7 @@ targeting `develop`/`master`; feature-branch pushes run the quality job only
 ## Branches & deployment
 
 GitFlow: `master` → production ([brandonperfetti.com](https://brandonperfetti.com));
-`develop` → integration; the active QA branch serves
+`develop` → integration and staging at
 [staging.brandonperfetti.com](https://staging.brandonperfetti.com). Vercel
 builds with corepack-pinned pnpm; migrations run on deploy (`pnpm migrate &&
 pnpm build` — the committed chain is idempotent and tracked in
