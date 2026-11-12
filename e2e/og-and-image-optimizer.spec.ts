@@ -49,12 +49,16 @@ function optimizerUrl(src: string, width: number) {
   return `/_next/image?url=${encodeURIComponent(src)}&w=${width}&q=75`
 }
 
-/** The seeded avatar's served URL, or null when the corpus lacks it. */
+/**
+ * The seeded avatar's served URL, or null when the corpus lacks it. A failed
+ * media lookup fails the test: only a successful lookup with no match counts
+ * as a missing fixture, so a backend error is never reported as a skip.
+ */
 async function avatarUrl(request: APIRequestContext) {
   const res = await request.get(
     `/api/media?depth=0&limit=1&where[filename][like]=${AVATAR_PREFIX}`,
   )
-  if (!res.ok()) return null
+  expect(res.ok(), `/api/media lookup returned ${res.status()}`).toBe(true)
   const body = (await res.json()) as { docs?: { url?: string }[] }
   return body.docs?.[0]?.url ?? null
 }

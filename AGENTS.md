@@ -78,7 +78,8 @@ already cost a session or broken production.
   migrated article breaks with Lexical error #17.
 - **write Payload `find` or Local-API code (scripts, seeds, tests, MCP
   writes)** → `docs/PAYLOAD.md` § Local API gotchas: **`limit: N` still caps
-  with `pagination: false`** (`limit: 0` is the only unlimited form), and
+  with `pagination: false`** (unlimited is `limit: 0`, or `pagination: false`
+  with no `limit`), and
   **Local-API `draft: true` never reaches `req.query`**.
 - **touch revalidation hooks or caching** → `docs/ARCHITECTURE.md` § Caching:
   **`revalidateTag(tag, { expire: 0 })`, never `'max'`** (#118).

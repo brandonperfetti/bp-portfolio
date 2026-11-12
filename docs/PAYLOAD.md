@@ -157,10 +157,13 @@ Traps that have already cost a session. `AGENTS.md` names both in its
 seed, test or MCP write.
 
 - **Payload `find`: `limit: N` still caps the result even with
-  `pagination: false`.** `limit: 0` is the only unlimited form — it is the
-  value that clears the cap and forces `pagination = false` internally. A
-  `limit: 1000` meant as "everything" is a silent cap.
-  `[source: @payloadcms/drizzle findMany.js:16-18,117 @ 3.88.0]`
+  `pagination: false`.** Only an effective limit of `0` is unlimited, and
+  there are two ways to get it: pass `limit: 0`, or set `pagination: false`
+  and leave `limit` out (the operation then defaults it to `0`; with
+  pagination on it defaults to `10`). The adapter treats `0` as "no cap" and
+  forces `pagination = false`. A `limit: 1000` meant as "everything" is a
+  silent cap.
+  `[source: payload collections/operations/find.js:71-72; @payloadcms/drizzle find/findMany.js:16-19,117 @ 3.88.0]`
 - **Payload Local API: `draft: true` is not mirrored into `req.query`.**
   `createLocalReq` only ever writes `req.query.depth`
   (`createLocalReq.js:102-104`); `draft` and `autosave` travel in the
