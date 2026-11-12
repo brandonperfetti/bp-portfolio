@@ -11,8 +11,10 @@ import {
   renameSync,
 } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { createServer } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
@@ -26,12 +28,112 @@ import {
   removeOwnedDirectory,
   preserveBuild,
   captureOwnedBuild,
+  failureDetails,
 } from './verify-reader-journeys'
 
 const temporary: string[] = []
 afterEach(() => {
   for (const dir of temporary.splice(0))
     rmSync(dir, { recursive: true, force: true })
+})
+
+describe('owned loopback transport', () => {
+  it('ignores environment proxies in a fresh Node process and retains failure causes', async () => {
+    const reservation = createServer()
+    await new Promise<void>((resolve) =>
+      reservation.listen(0, '127.0.0.1', resolve),
+    )
+    const address = reservation.address()
+    if (!address || typeof address === 'string')
+      throw new Error('Missing local port')
+    const deadProxy = `http://127.0.0.1:${address.port}`
+    await new Promise<void>((resolve, reject) =>
+      reservation.close((error) => (error ? reject(error) : resolve())),
+    )
+    const env = { ...process.env }
+    for (const key of Object.keys(env))
+      if (/proxy/i.test(key) || key === 'NODE_OPTIONS') delete env[key]
+    const helper = pathToFileURL(
+      path.resolve('scripts/verify-reader-journeys.ts'),
+    ).href
+    const child = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `
+      import assert from 'node:assert/strict';
+      import { createServer } from 'node:http';
+      import { readLoopback, failureDetails } from ${JSON.stringify(helper)};
+      let mode = 'ok';
+      let requests = 0;
+      const server = createServer((req, res) => {
+        requests++;
+        if (mode === 'redirect') { res.writeHead(302, {Location: '/api/search'}); res.end(); }
+        else if (mode === 'hang') { res.writeHead(200); res.write('incomplete'); }
+        else { res.end(JSON.stringify({route: req.url})); }
+      });
+      await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+      const port = server.address().port;
+      try {
+        let failure;
+        try { await fetch('http://127.0.0.1:' + port, {signal: AbortSignal.timeout(1500)}); }
+        catch (error) { failure = error; }
+        assert(failure, 'global fetch must exercise the dead environment proxy');
+        const details = failureDetails(failure);
+        assert.equal(details.cause.code, 'ECONNREFUSED');
+        assert.equal(requests, 0);
+        for (const route of ['/articles', '/api/search'])
+          assert.deepEqual(JSON.parse(await readLoopback(route, 1500, port)), {route});
+        assert.equal(requests, 2);
+        mode = 'redirect';
+        await assert.rejects(readLoopback('/articles', 1500, port), /302/);
+        assert.equal(requests, 3, 'redirect must not be followed');
+        mode = 'hang';
+        await assert.rejects(readLoopback('/articles', 50, port));
+        console.log(JSON.stringify({loopback: 'passed', proxyFetchCause: details.cause.code, redirect: 'refused', incompleteBody: 'timed out'}));
+      } finally {
+        server.closeAllConnections();
+        await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+      }
+    `,
+      ],
+      {
+        env: {
+          ...env,
+          HTTP_PROXY: deadProxy,
+          HTTPS_PROXY: deadProxy,
+          NODE_USE_ENV_PROXY: '1',
+        },
+        encoding: 'utf8',
+        timeout: 10_000,
+      },
+    )
+    expect(child.error).toBeUndefined()
+    expect(child.status, child.stderr).toBe(0)
+    expect(JSON.parse(child.stdout)).toEqual({
+      loopback: 'passed',
+      proxyFetchCause: 'ECONNREFUSED',
+      redirect: 'refused',
+      incompleteBody: 'timed out',
+    })
+  })
+  it('records primitive cause fields without unrelated properties or stacks', () => {
+    const cause = Object.assign(new Error('other side closed'), {
+      code: 'UND_ERR_SOCKET',
+      unrelated: 'omit',
+    })
+    const error = new Error('fetch failed', { cause })
+    expect(JSON.parse(JSON.stringify(failureDetails(error)))).toEqual({
+      error: 'Error: fetch failed',
+      cause: { code: 'UND_ERR_SOCKET', message: 'other side closed' },
+    })
+    expect(failureDetails('plain failure')).toEqual({
+      error: 'plain failure',
+      code: undefined,
+      cause: undefined,
+    })
+  })
 })
 
 function report() {

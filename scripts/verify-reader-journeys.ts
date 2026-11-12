@@ -18,6 +18,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import net from 'node:net'
+import { Agent, get } from 'node:http'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -479,6 +480,78 @@ async function logged(s: State, name: string, bin: string, args: string[]) {
     closeSync(log)
   }
 }
+/** Keep owned-loopback checks independent of the caller's fetch proxy setup. */
+export async function readLoopback(
+  route: '/articles' | '/api/search',
+  timeoutMs: number,
+  port = 3000,
+) {
+  // A fresh Agent receives no proxyEnv; never borrow a proxy-configured global agent.
+  const agent = new Agent()
+  try {
+    return await new Promise<string>((resolve, reject) => {
+      const request = get(
+        {
+          hostname: '127.0.0.1',
+          port,
+          path: route,
+          agent,
+          signal: AbortSignal.timeout(timeoutMs),
+        },
+        (response) => {
+          response.once('error', reject)
+          if (
+            !response.statusCode ||
+            response.statusCode < 200 ||
+            response.statusCode >= 300
+          ) {
+            response.resume()
+            reject(
+              new Error(
+                `Owned loopback request failed (${response.statusCode})`,
+              ),
+            )
+            return
+          }
+          response.setEncoding('utf8')
+          let body = ''
+          response.on('data', (chunk: string) => {
+            body += chunk
+          })
+          response.once('end', () => resolve(body))
+        },
+      )
+      request.once('error', reject)
+    })
+  } finally {
+    agent.destroy()
+  }
+}
+
+/** Retain useful failure causes without serializing arbitrary error properties. */
+export function failureDetails(error: unknown) {
+  const fields = (value: unknown) => {
+    if (!value || typeof value !== 'object') return undefined
+    const item = value as { code?: unknown; message?: unknown }
+    return {
+      code:
+        typeof item.code === 'string' || typeof item.code === 'number'
+          ? item.code
+          : undefined,
+      message: typeof item.message === 'string' ? item.message : undefined,
+    }
+  }
+  const cause =
+    error && typeof error === 'object' && 'cause' in error
+      ? error.cause
+      : undefined
+  return {
+    error: String(error),
+    code: fields(error)?.code,
+    cause: fields(cause),
+  }
+}
+
 async function waitFor(check: () => Promise<void> | void, seconds: number) {
   let last: unknown
   for (let i = 0; i < seconds; i++) {
@@ -518,12 +591,10 @@ async function doctor(s: State) {
   )
   containerInfo(s)
   assertServer(s)
-  const response = await fetch(`${ORIGIN}/api/search`, {
-    signal: AbortSignal.timeout(10_000),
-    redirect: 'error',
-  })
-  must(response.ok, 'Fixture readiness request failed')
-  const items = (await response.json()) as { title: string; url: string }[]
+  const items = JSON.parse(await readLoopback('/api/search', 10_000)) as {
+    title: string
+    url: string
+  }[]
   const slugs = docker(s, [
     'exec',
     s.container!,
@@ -1016,10 +1087,7 @@ async function prepare(run: string, browser: string) {
     server.unref()
     await waitFor(async () => {
       assertServer(s)
-      const r = await fetch(`${ORIGIN}/articles`, {
-        signal: AbortSignal.timeout(2000),
-      })
-      must(r.ok, 'App not ready')
+      await readLoopback('/articles', 2000)
     }, 60)
     s.phase = 'ready'
     save(s)
@@ -1028,7 +1096,7 @@ async function prepare(run: string, browser: string) {
   } catch (error) {
     json(path.join(run, 'failure.json'), {
       at: new Date().toISOString(),
-      error: String(error),
+      ...failureDetails(error),
     })
     await cleanup(s)
     throw error

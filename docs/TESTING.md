@@ -342,7 +342,10 @@ and then the same command with `evidence`. Do not drop the pnpm refusal option
 or install to make a lab invocation pass. Resolve prerequisites separately
 through the normal authorized setup before starting a new run.
 
-A prepare failure attempts owned cleanup and retains its failure/logs. After
+A prepare failure attempts owned cleanup and retains its failure/logs;
+`failure.json` includes available error and cause codes/messages.
+The helper's own readiness and fixture HTTP requests use a fresh direct
+loopback agent so the caller's environment proxy does not redirect them. After
 a drive failure, retain the evidence, clean up, diagnose, then prepare a new
 run and doctor before driving again. Do not retry assertions until green.
 After a killed shell/process or ownership mismatch, stop and inspect the
