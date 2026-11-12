@@ -19,6 +19,7 @@ import {
   assertContainer,
   assertLocalDockerHost,
   labEnvironment,
+  isMissingDockerObject,
   removeOwnedDirectory,
 } from './verify-reader-journeys'
 
@@ -132,6 +133,18 @@ describe('assertion traces', () => {
   })
 })
 describe('resource boundaries', () => {
+  it('recognizes the observed missing-container diagnostic without accepting connection failures', () => {
+    expect(isMissingDockerObject('error: no such object: 51c3d96d')).toBe(true)
+    expect(
+      isMissingDockerObject(
+        'Error response from daemon: No such container: owned',
+      ),
+    ).toBe(true)
+    expect(isMissingDockerObject('connect: no such file or directory')).toBe(
+      false,
+    )
+    expect(isMissingDockerObject('permission denied')).toBe(false)
+  })
   it('permits local Unix endpoints and refuses remote or ambiguous Docker endpoints', () => {
     expect(() =>
       assertLocalDockerHost('unix:///var/run/docker.sock'),

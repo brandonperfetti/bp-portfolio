@@ -654,6 +654,10 @@ export function removeOwnedDirectory(file: string, expected: Identity) {
   sameDirectory(file, expected)
   rmSync(file, { recursive: true })
 }
+/** Docker versions vary the case of missing-object diagnostics; other failures stay unknown. */
+export function isMissingDockerObject(stderr: string) {
+  return /no such (?:object|container):/i.test(stderr)
+}
 async function cleanup(s: State) {
   if (s.phase === 'cleaned') return
   lockMatches(s)
@@ -707,7 +711,10 @@ async function cleanup(s: State) {
     } else {
       // Distinguish a deleted container from an unavailable Docker daemon.
       verifyDaemon(s)
-      must(probe.stderr.includes('No such'), 'Cannot verify database cleanup')
+      must(
+        isMissingDockerObject(probe.stderr),
+        'Cannot verify database cleanup',
+      )
     }
     s.container = undefined
     save(s)
