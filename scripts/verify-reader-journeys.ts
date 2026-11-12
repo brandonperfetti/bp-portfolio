@@ -111,6 +111,48 @@ function sameDirectory(file: string, expected: Identity) {
     `Directory replaced: ${file}`,
   )
 }
+function assertBuildDestination(build: string, destinationParent: string) {
+  must(
+    identity(build).dev === identity(destinationParent).dev,
+    'Evidence must share the existing build filesystem for atomic backup',
+  )
+}
+/** A failed rename must not create a claim that cleanup has a saved build. */
+export function preserveBuild(build: string, destination: string) {
+  assertBuildDestination(build, path.dirname(destination))
+  must(!existsSync(destination), 'Build backup destination already exists')
+  const original = identity(build)
+  renameSync(build, destination)
+  return original
+}
+/**
+ * Reconcile only the output of the managed build, including a failed command.
+ * Substitutions outside that interval, symlinks and a changed owner still refuse.
+ */
+export async function captureOwnedBuild(
+  directory: string,
+  expected: Identity,
+  run: () => Promise<number>,
+  verifyOwner: () => void,
+  record: (current: Identity | undefined) => void,
+) {
+  sameDirectory(directory, expected)
+  const parent = path.dirname(directory)
+  const parentIdentity = identity(parent)
+  verifyOwner()
+  try {
+    return await run()
+  } finally {
+    sameDirectory(parent, parentIdentity)
+    verifyOwner()
+    // lstat also sees dangling symlinks, which identity deliberately rejects.
+    record(
+      lstatSync(directory, { throwIfNoEntry: false })
+        ? identity(directory)
+        : undefined,
+    )
+  }
+}
 function command(
   bin: string,
   args: string[],
@@ -362,6 +404,7 @@ type Container = {
   Config: { Labels: Record<string, string> }
   HostConfig: {
     Binds: unknown[] | null
+    Tmpfs?: Record<string, string> | null
     PortBindings: Record<string, { HostIp: string; HostPort: string }[]>
   }
   Mounts: { Type?: string; Destination?: string }[]
@@ -376,11 +419,14 @@ export function assertContainer(info: Container, id: string, token: string) {
   )
   must(info.State.Running, 'Owned database is not running')
   must(
-    info.Mounts.every(
-      (mount) =>
-        mount.Type === 'tmpfs' &&
-        mount.Destination === '/var/lib/postgresql/data',
-    ) && !info.HostConfig.Binds?.length,
+    info.HostConfig.Tmpfs?.['/var/lib/postgresql/data'] !== undefined &&
+      Object.keys(info.HostConfig.Tmpfs).length === 1 &&
+      info.Mounts.every(
+        (mount) =>
+          mount.Type === 'tmpfs' &&
+          mount.Destination === '/var/lib/postgresql/data',
+      ) &&
+      !info.HostConfig.Binds?.length,
     'Database has unexpected persistent mounts',
   )
   must(
@@ -805,6 +851,8 @@ async function prepare(run: string, browser: string) {
     !existsSync(path.join(ROOT, 'media')),
     'Pre-existing media must be preserved; use an empty owned checkout',
   )
+  const next = path.join(ROOT, '.next')
+  if (existsSync(next)) assertBuildDestination(next, path.dirname(run))
   must(
     browser && path.isAbsolute(browser),
     'Pass --browser with an existing Chromium executable; nothing is installed',
@@ -868,11 +916,9 @@ async function prepare(run: string, browser: string) {
       node: process.version,
       image: docker(s, ['image', 'inspect', IMAGE, '--format', '{{.Id}}']),
     })
-    const next = path.join(ROOT, '.next')
     if (existsSync(next)) {
-      s.originalBuild = identity(next)
+      s.originalBuild = preserveBuild(next, path.join(run, 'original.next'))
       save(s)
-      renameSync(next, path.join(run, 'original.next'))
     }
     mkdirSync(next)
     s.ownedBuild = identity(next)
@@ -915,7 +961,7 @@ async function prepare(run: string, browser: string) {
       ])
     }, 30)
     containerInfo(s)
-    for (const step of ['migrate', 'seed:e2e', 'build'])
+    for (const step of ['migrate', 'seed:e2e'])
       must(
         (await logged(s, step.replace(':', '-'), 'pnpm', [
           ...PNPM_NO_INSTALL,
@@ -923,8 +969,25 @@ async function prepare(run: string, browser: string) {
         ])) === 0,
         `${step} failed; inspect retained log`,
       )
-    // Next can recreate its build directory; record the directory it actually made.
-    s.ownedBuild = identity(next)
+    must(
+      (await captureOwnedBuild(
+        next,
+        s.ownedBuild,
+        () => logged(s, 'build', 'pnpm', [...PNPM_NO_INSTALL, 'build']),
+        () => {
+          lockMatches(s)
+          if (s.media) sameDirectory(path.join(ROOT, 'media'), s.media)
+          if (s.originalBuild)
+            sameDirectory(path.join(run, 'original.next'), s.originalBuild)
+        },
+        (current) => {
+          s.ownedBuild = current
+          save(s)
+        },
+      )) === 0,
+      'build failed; inspect retained log',
+    )
+    must(s.ownedBuild, 'Build left no output directory')
     s.build = readFileSync(path.join(next, 'BUILD_ID'), 'utf8').trim()
     save(s)
     const log = openSync(path.join(run, 'server.log'), 'wx', 0o600)

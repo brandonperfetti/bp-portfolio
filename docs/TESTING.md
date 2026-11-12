@@ -326,6 +326,15 @@ prior build, and releases the checkout lock. It retains reports, inputs,
 logs and `cleanup.json`. Never delete the run directory while it holds the
 original build. No kill-by-name, port takeover or force-cleanup mode exists.
 
+Evidence must share the existing build's filesystem: its backup is an atomic
+rename, and a different filesystem is refused before creating run resources.
+A failed rename leaves the original build in place without recording a backup.
+During the managed build command only, the helper reconciles a real output
+directory (or its absence) even when the command fails, checking the checkout,
+lock, media and original backup before recording it for cleanup. Symlinks and
+ownership mismatches still refuse. Doctor requires the database data path in
+Docker's tmpfs configuration, with no extra mounts or binds.
+
 If pnpm refuses because prerequisites changed after prepare, use the existing
 Node 24 directly for **cleanup and evidence only**, preserving the helper’s
 ownership checks: `node scripts/verify-reader-journeys.ts cleanup --run "$READER_RUN"`

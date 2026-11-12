@@ -8,7 +8,9 @@ import {
   rmSync,
   writeFileSync,
   readFileSync,
+  renameSync,
 } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -22,6 +24,8 @@ import {
   labEnvironment,
   isMissingDockerObject,
   removeOwnedDirectory,
+  preserveBuild,
+  captureOwnedBuild,
 } from './verify-reader-journeys'
 
 const temporary: string[] = []
@@ -134,6 +138,128 @@ describe('assertion traces', () => {
   })
 })
 describe('resource boundaries', () => {
+  it('records a backup only after a successful move and preserves a refused destination', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'bp-lab-backup-'))
+    temporary.push(dir)
+    const build = path.join(dir, 'build')
+    const backup = path.join(dir, 'backup')
+    mkdirSync(build)
+    writeFileSync(path.join(build, 'BUILD_ID'), 'original')
+    mkdirSync(backup)
+    writeFileSync(path.join(backup, 'keep'), 'unrelated')
+    expect(() => preserveBuild(build, backup)).toThrow('already exists')
+    expect(readFileSync(path.join(build, 'BUILD_ID'), 'utf8')).toBe('original')
+    expect(readFileSync(path.join(backup, 'keep'), 'utf8')).toBe('unrelated')
+    const saved = preserveBuild(build, path.join(dir, 'saved'))
+    expect(existsSync(build)).toBe(false)
+    expect(lstatSync(path.join(dir, 'saved')).ino).toBe(saved.ino)
+    renameSync(path.join(dir, 'saved'), build)
+    expect(lstatSync(build).ino).toBe(saved.ino)
+  })
+  it('captures a failed child build replacement so owned cleanup can restore the backup', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'bp-lab-build-'))
+    temporary.push(dir)
+    const build = path.join(dir, '.next')
+    const backup = path.join(dir, 'original.next')
+    mkdirSync(build)
+    writeFileSync(path.join(build, 'BUILD_ID'), 'original')
+    const original = preserveBuild(build, backup)
+    mkdirSync(build)
+    let owned = { dev: lstatSync(build).dev, ino: lstatSync(build).ino }
+    const before = owned
+    const exit = await captureOwnedBuild(
+      build,
+      owned,
+      async () => {
+        const child = spawnSync(process.execPath, [
+          '-e',
+          `
+          const fs = require('node:fs');
+          const p = process.argv[1];
+          fs.renameSync(p, p + '.old');
+          fs.mkdirSync(p);
+          fs.writeFileSync(p + '/partial', 'failed output');
+          process.exit(7);
+        `,
+          build,
+        ])
+        return child.status!
+      },
+      () => expect(lstatSync(backup).ino).toBe(original.ino),
+      (current) => {
+        owned = current!
+      },
+    )
+    expect(exit).toBe(7)
+    expect(owned.ino).not.toBe(before.ino)
+    removeOwnedDirectory(build, owned)
+    renameSync(backup, build)
+    expect(lstatSync(build).ino).toBe(original.ino)
+    expect(readFileSync(path.join(build, 'BUILD_ID'), 'utf8')).toBe('original')
+  })
+  it('records absent build output but refuses symlinks or an invalidated owner', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'bp-lab-build-refusal-'))
+    temporary.push(dir)
+    const build = path.join(dir, '.next')
+    mkdirSync(build)
+    const expected = () => ({
+      dev: lstatSync(build).dev,
+      ino: lstatSync(build).ino,
+    })
+    let recorded = false
+    await captureOwnedBuild(
+      build,
+      expected(),
+      async () => {
+        rmSync(build, { recursive: true })
+        return 7
+      },
+      () => {},
+      (current) => {
+        expect(current).toBeUndefined()
+        recorded = true
+      },
+    )
+    expect(recorded).toBe(true)
+    mkdirSync(build)
+    recorded = false
+    await expect(
+      captureOwnedBuild(
+        build,
+        expected(),
+        async () => {
+          rmSync(build, { recursive: true })
+          symlinkSync(path.join(dir, 'absent'), build)
+          return 7
+        },
+        () => {},
+        () => {
+          recorded = true
+        },
+      ),
+    ).rejects.toThrow('Not a real directory')
+    expect(recorded).toBe(false)
+    rmSync(build)
+    mkdirSync(build)
+    let ownerValid = true
+    await expect(
+      captureOwnedBuild(
+        build,
+        expected(),
+        async () => {
+          ownerValid = false
+          return 7
+        },
+        () => {
+          if (!ownerValid) throw new Error('owner changed')
+        },
+        () => {
+          recorded = true
+        },
+      ),
+    ).rejects.toThrow('owner changed')
+    expect(recorded).toBe(false)
+  })
   it('identifies installed metadata and resolved packages, and refuses missing inputs', () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), 'bp-lab-dependencies-'))
     temporary.push(dir)
@@ -232,6 +358,7 @@ describe('resource boundaries', () => {
       Config: { Labels: { 'bp.reader-lab': 'token' } },
       HostConfig: {
         Binds: null,
+        Tmpfs: { '/var/lib/postgresql/data': '' },
         PortBindings: {
           '5432/tcp': [{ HostIp: '127.0.0.1', HostPort: '55432' }],
         },
@@ -242,6 +369,20 @@ describe('resource boundaries', () => {
     expect(() => assertContainer(info, 'owned', 'token')).not.toThrow()
     expect(() => assertContainer(info, 'other', 'token')).toThrow('ownership')
     expect(() => assertContainer(info, 'owned', 'other')).toThrow('ownership')
+    const invalidTmpfs: (Record<string, string> | undefined)[] = [
+      undefined,
+      {},
+      { '/elsewhere': '' },
+      { ...info.HostConfig.Tmpfs, '/extra': '' },
+    ]
+    for (const Tmpfs of invalidTmpfs)
+      expect(() =>
+        assertContainer(
+          { ...info, HostConfig: { ...info.HostConfig, Tmpfs } },
+          'owned',
+          'token',
+        ),
+      ).toThrow('mounts')
     expect(() =>
       assertContainer({ ...info, State: { Running: false } }, 'owned', 'token'),
     ).toThrow('not running')
