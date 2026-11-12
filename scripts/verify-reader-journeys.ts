@@ -30,6 +30,7 @@ const LABEL = 'bp.reader-lab'
 // pnpm 11 otherwise installs stale dependencies before both run and exec.
 const PNPM_NO_INSTALL = [
   '--config.verify-deps-before-run=error',
+  '--config.pm-on-fail=error',
   // Validate the existing local install; CI's pnpm defaults describe another
   // virtual-store layout. This option leaves the child's CI=1 unchanged.
   '--config.ci=false',
@@ -224,6 +225,9 @@ export function labEnvironment(
     PLAYWRIGHT_EXECUTABLE_PATH: browser,
     COREPACK_ENABLE_NETWORK: '0',
     COREPACK_ENABLE_AUTO_PIN: '0',
+    // pnpm's environment override is applied after its CLI options.
+    pnpm_config_verify_deps_before_run: 'error',
+    pnpm_config_pm_on_fail: 'error',
   })
 }
 function environment(s: State) {

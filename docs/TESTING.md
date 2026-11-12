@@ -209,7 +209,10 @@ execution), the pinned pnpm already cached by Corepack, existing dependencies, D
 `git`, `ps`, `lsof`, `unzip`, and an existing Chromium executable compatible with the
 installed Playwright. The invocation and its nested commands refuse stale or
 missing dependencies rather than installing them. Corepack network access and
-auto-pinning are disabled; missing manager cache is also a refusal. Bare
+auto-pinning are disabled; missing manager cache is also a refusal. A
+standalone pnpm of the wrong version refuses rather than fetching the pin.
+The explicit lowercase pnpm environment pins prevent inherited settings from
+overriding the refusal flags; keep the entire prefix on every invocation. Bare
 `pnpm verify:readers` is not this recipe: pnpm 11 may automatically install and
 run the Husky prepare lifecycle before the helper starts. Use Playwright's installed
 browser or a cached Chromium headless shell; a cached browser is not CI's
@@ -221,9 +224,11 @@ path. The shell variables below are your selected paths, not defaults:
 
 ```sh
 COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
-  pnpm --config.verify-deps-before-run=error --config.ci=false verify:readers prepare --run "$READER_RUN" --browser "$READER_BROWSER"
+pnpm_config_verify_deps_before_run=error pnpm_config_pm_on_fail=error \
+  pnpm --config.verify-deps-before-run=error --config.pm-on-fail=error --config.ci=false verify:readers prepare --run "$READER_RUN" --browser "$READER_BROWSER"
 COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
-  pnpm --config.verify-deps-before-run=error --config.ci=false verify:readers doctor --run "$READER_RUN"
+pnpm_config_verify_deps_before_run=error pnpm_config_pm_on_fail=error \
+  pnpm --config.verify-deps-before-run=error --config.pm-on-fail=error --config.ci=false verify:readers doctor --run "$READER_RUN"
 ```
 
 `prepare` repeats pnpm dependency admission in its isolated environment before
@@ -271,9 +276,11 @@ owner; this is not a sandbox for hostile code or deliberate state-file edits.
 
 ```sh
 COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
-  pnpm --config.verify-deps-before-run=error --config.ci=false verify:readers drive --run "$READER_RUN"
+pnpm_config_verify_deps_before_run=error pnpm_config_pm_on_fail=error \
+  pnpm --config.verify-deps-before-run=error --config.pm-on-fail=error --config.ci=false verify:readers drive --run "$READER_RUN"
 COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
-  pnpm --config.verify-deps-before-run=error --config.ci=false verify:readers evidence --run "$READER_RUN"
+pnpm_config_verify_deps_before_run=error pnpm_config_pm_on_fail=error \
+  pnpm --config.verify-deps-before-run=error --config.pm-on-fail=error --config.ci=false verify:readers evidence --run "$READER_RUN"
 ```
 
 Drive doctors the instance again and imports the real Playwright config into
@@ -306,9 +313,11 @@ successful invocation does not establish another client's capabilities.
 
 ```sh
 COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
-  pnpm --config.verify-deps-before-run=error --config.ci=false verify:readers cleanup --run "$READER_RUN"
+pnpm_config_verify_deps_before_run=error pnpm_config_pm_on_fail=error \
+  pnpm --config.verify-deps-before-run=error --config.pm-on-fail=error --config.ci=false verify:readers cleanup --run "$READER_RUN"
 COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
-  pnpm --config.verify-deps-before-run=error --config.ci=false verify:readers evidence --run "$READER_RUN"
+pnpm_config_verify_deps_before_run=error pnpm_config_pm_on_fail=error \
+  pnpm --config.verify-deps-before-run=error --config.pm-on-fail=error --config.ci=false verify:readers evidence --run "$READER_RUN"
 ```
 
 Cleanup checks resource identities, stops only the recorded server, removes

@@ -207,6 +207,8 @@ describe('resource boundaries', () => {
         COREPACK_ENABLE_NETWORK: '1',
         COREPACK_ENABLE_AUTO_PIN: '1',
         npm_config_verify_deps_before_run: 'install',
+        pnpm_config_verify_deps_before_run: 'install',
+        pnpm_config_pm_on_fail: 'download',
       },
     )
     expect(env.DATABASE_URI).toBe(
@@ -219,6 +221,8 @@ describe('resource boundaries', () => {
     expect(env.COREPACK_ENABLE_NETWORK).toBe('0')
     expect(env.COREPACK_ENABLE_AUTO_PIN).toBe('0')
     expect(env.npm_config_verify_deps_before_run).toBeUndefined()
+    expect(env.pnpm_config_verify_deps_before_run).toBe('error')
+    expect(env.pnpm_config_pm_on_fail).toBe('error')
     expect(env.CI).toBe('1')
     expect(env.NODE_ENV).toBe('production')
   })
