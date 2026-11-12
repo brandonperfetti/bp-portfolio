@@ -197,8 +197,8 @@ check: building Storybook alone does not exercise its stories.
 
 ### Prepare and identify the instance
 
-Prerequisites: Node in the repository's supported range, existing pnpm
-dependencies, Docker running with `pgvector/pgvector:pg16` already available,
+Prerequisites: Node 24 from `.nvmrc` (the helper uses native TypeScript
+execution), existing pnpm dependencies, Docker running with `pgvector/pgvector:pg16` already available,
 `git`, `ps`, `lsof`, `unzip`, and an existing Chromium executable compatible with the
 installed Playwright. The helper installs nothing. Use Playwright's installed
 browser or a cached Chromium headless shell; a cached browser is not CI's
