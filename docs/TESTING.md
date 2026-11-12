@@ -189,7 +189,8 @@ The project-owned reader lab runs the two bold reader journeys in
 [JOURNEYS.md](JOURNEYS.md) against an isolated, seeded production build:
 article search → read → Back/reload, and command palette → exact article/body
 → real clipboard (light and dark). Its implementation is
-`scripts/verify-reader-journeys.ts`; its invocation is `pnpm verify:readers`.
+`scripts/verify-reader-journeys.ts`; use the no-install invocation below for
+`verify:readers`, including its environment and pnpm option.
 Use this recipe from the checkout root. It is a focused acceptance run,
 not the full Build · E2E job, pg tier, Evalite or Storybook interactions.
 After a Next or Storybook bump, `pnpm test:storybook` remains a separate
@@ -198,9 +199,13 @@ check: building Storybook alone does not exercise its stories.
 ### Prepare and identify the instance
 
 Prerequisites: Node 24 from `.nvmrc` (the helper uses native TypeScript
-execution), existing pnpm dependencies, Docker running with `pgvector/pgvector:pg16` already available,
+execution), the pinned pnpm already cached by Corepack, existing dependencies, Docker running with `pgvector/pgvector:pg16` already available,
 `git`, `ps`, `lsof`, `unzip`, and an existing Chromium executable compatible with the
-installed Playwright. The helper installs nothing. Use Playwright's installed
+installed Playwright. The invocation and its nested commands refuse stale or
+missing dependencies rather than installing them. Corepack network access and
+auto-pinning are disabled; missing manager cache is also a refusal. Bare
+`pnpm verify:readers` is not this recipe: pnpm 11 may automatically install and
+run the Husky prepare lifecycle before the helper starts. Use Playwright's installed
 browser or a cached Chromium headless shell; a cached browser is not CI's
 managed browser. The existing seed reads public Cloudinary images.
 
@@ -209,11 +214,15 @@ private artifact directory, outside this checkout, and the actual browser
 path. The shell variables below are your selected paths, not defaults:
 
 ```sh
-pnpm verify:readers prepare --run "$READER_RUN" --browser "$READER_BROWSER"
-pnpm verify:readers doctor --run "$READER_RUN"
+COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
+  pnpm --config.verify-deps-before-run=error verify:readers prepare --run "$READER_RUN" --browser "$READER_BROWSER"
+COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
+  pnpm --config.verify-deps-before-run=error verify:readers doctor --run "$READER_RUN"
 ```
 
-`prepare` refuses occupied loopback ports 3000/55432, missing dependencies,
+`prepare` repeats pnpm dependency admission in its isolated environment before
+creating resources; migration, seed, build and Playwright calls each retain
+the same refusal setting. It refuses occupied loopback ports 3000/55432, missing dependencies,
 pre-existing `media/`, and another lab's checkout lock. It preserves an
 existing `.next/` by moving it to `original.next` in the run directory and
 restores it during cleanup. Do not edit source, change environment files,
@@ -245,8 +254,10 @@ owner; this is not a sandbox for hostile code or deliberate state-file edits.
 ### Drive and read the proof
 
 ```sh
-pnpm verify:readers drive --run "$READER_RUN"
-pnpm verify:readers evidence --run "$READER_RUN"
+COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
+  pnpm --config.verify-deps-before-run=error verify:readers drive --run "$READER_RUN"
+COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
+  pnpm --config.verify-deps-before-run=error verify:readers evidence --run "$READER_RUN"
 ```
 
 Drive doctors the instance again and imports the real Playwright config into
@@ -277,8 +288,10 @@ successful invocation does not establish another client's capabilities.
 ### Cleanup and failed attempts
 
 ```sh
-pnpm verify:readers cleanup --run "$READER_RUN"
-pnpm verify:readers evidence --run "$READER_RUN"
+COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
+  pnpm --config.verify-deps-before-run=error verify:readers cleanup --run "$READER_RUN"
+COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
+  pnpm --config.verify-deps-before-run=error verify:readers evidence --run "$READER_RUN"
 ```
 
 Cleanup checks resource identities, stops only the recorded server, removes
@@ -286,6 +299,13 @@ only the labeled container and owned build/media directories, restores the
 prior build, and releases the checkout lock. It retains reports, inputs,
 logs and `cleanup.json`. Never delete the run directory while it holds the
 original build. No kill-by-name, port takeover or force-cleanup mode exists.
+
+If pnpm refuses because prerequisites changed after prepare, use the existing
+Node 24 directly for **cleanup and evidence only**, preserving the helper’s
+ownership checks: `node scripts/verify-reader-journeys.ts cleanup --run "$READER_RUN"`
+and then the same command with `evidence`. Do not drop the pnpm refusal option
+or install to make a lab invocation pass. Resolve prerequisites separately
+through the normal authorized setup before starting a new run.
 
 A prepare failure attempts owned cleanup and retains its failure/logs. After
 a drive failure, retain the evidence, clean up, diagnose, then prepare a new

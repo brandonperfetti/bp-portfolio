@@ -170,6 +170,9 @@ describe('resource boundaries', () => {
         BLOB_READ_WRITE_TOKEN: 'live',
         RESEND_API_KEY: 'live',
         NODE_OPTIONS: '--require unsafe',
+        COREPACK_ENABLE_NETWORK: '1',
+        COREPACK_ENABLE_AUTO_PIN: '1',
+        npm_config_verify_deps_before_run: 'install',
       },
     )
     expect(env.DATABASE_URI).toBe(
@@ -179,6 +182,9 @@ describe('resource boundaries', () => {
     expect(env.SENTRY_SPOTLIGHT).toBe('')
     expect(env.RESEND_API_KEY).toBe('')
     expect(env.NODE_OPTIONS).toBeUndefined()
+    expect(env.COREPACK_ENABLE_NETWORK).toBe('0')
+    expect(env.COREPACK_ENABLE_AUTO_PIN).toBe('0')
+    expect(env.npm_config_verify_deps_before_run).toBeUndefined()
     expect(env.CI).toBe('1')
     expect(env.NODE_ENV).toBe('production')
   })

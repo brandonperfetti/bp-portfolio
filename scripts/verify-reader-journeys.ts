@@ -27,6 +27,8 @@ const ROOT = realpathSync(
 const ORIGIN = 'http://127.0.0.1:3000'
 const IMAGE = 'pgvector/pgvector:pg16'
 const LABEL = 'bp.reader-lab'
+// pnpm 11 otherwise installs stale dependencies before both run and exec.
+const PNPM_NO_INSTALL = ['--config.verify-deps-before-run=error']
 const SPECS = ['article-discovery.spec.ts', 'command-palette-discovery.spec.ts']
 const EXPECTED = [
   `${SPECS[0]}:search finds an article, opening it and coming back keeps the search`,
@@ -214,6 +216,8 @@ export function labEnvironment(
     NEXT_PUBLIC_SITE_NAME: 'BP Portfolio (journey)',
     NEXT_TELEMETRY_DISABLED: '1',
     PLAYWRIGHT_EXECUTABLE_PATH: browser,
+    COREPACK_ENABLE_NETWORK: '0',
+    COREPACK_ENABLE_AUTO_PIN: '0',
   })
 }
 function environment(s: State) {
@@ -610,6 +614,7 @@ async function drive(s: State) {
   )
   const started = new Date().toISOString()
   const exit = await logged(s, `drive-${attempt}`, 'pnpm', [
+    ...PNPM_NO_INSTALL,
     'exec',
     'playwright',
     'test',
@@ -766,7 +771,16 @@ async function prepare(run: string, browser: string) {
     'Pass --browser with an existing Chromium executable; nothing is installed',
   )
   command(browser, ['--version'])
-  command('pnpm', ['--version'])
+  // Exercise the real dependency admission before creating any owned resources.
+  // Corepack must use the existing cached manager, never fetch or pin one.
+  command(
+    'pnpm',
+    [...PNPM_NO_INSTALL, 'exec', 'node', '--version'],
+    labEnvironment(
+      readFileSync(path.join(ROOT, '.env.example'), 'utf8'),
+      browser,
+    ),
+  )
   command('lsof', ['-v'])
   command('unzip', ['-v'])
   const dockerHost = pinDockerHost()
@@ -862,7 +876,10 @@ async function prepare(run: string, browser: string) {
     containerInfo(s)
     for (const step of ['migrate', 'seed:e2e', 'build'])
       must(
-        (await logged(s, step.replace(':', '-'), 'pnpm', [step])) === 0,
+        (await logged(s, step.replace(':', '-'), 'pnpm', [
+          ...PNPM_NO_INSTALL,
+          step,
+        ])) === 0,
         `${step} failed; inspect retained log`,
       )
     // Next can recreate its build directory; record the directory it actually made.
@@ -917,7 +934,7 @@ async function main() {
   const [action, ...args] = process.argv.slice(2)
   must(
     ['prepare', 'doctor', 'drive', 'evidence', 'cleanup'].includes(action),
-    'Usage: pnpm verify:readers <prepare|doctor|drive|evidence|cleanup> --run /absolute/new/evidence-dir [--browser /existing/chromium]',
+    'Use the no-install invocation in docs/TESTING.md: verify:readers <prepare|doctor|drive|evidence|cleanup> --run /absolute/new/evidence-dir [--browser /existing/chromium]',
   )
   const options: Record<string, string> = {}
   for (let i = 0; i < args.length; i += 2) {
