@@ -243,7 +243,8 @@ pre-existing `media/`, and another lab's checkout lock. It preserves an
 existing `.next/` by moving it to `original.next` in the run directory and
 restores it during cleanup. Do not edit source, change environment files,
 run another build/gate, or drive the same instance concurrently. The helper
-locks the checkout and serializes doctor/drive/cleanup operations; that lock
+locks the checkout and serializes prepare/doctor/drive/cleanup operations,
+including automatic failure cleanup; that lock
 is a coordination control, not protection against another shell ignoring it.
 Existing `test-results/` and `playwright-report/` are not used or replaced.
 

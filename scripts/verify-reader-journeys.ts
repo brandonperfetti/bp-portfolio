@@ -909,6 +909,20 @@ async function cleanup(s: State) {
   })
   console.log(`Cleaned owned resources; retained ${s.run}`)
 }
+/** Keep every mutating operation exclusive, including preparation and its cleanup. */
+export async function withOperationLock<T>(
+  run: string,
+  operation: () => Promise<T>,
+) {
+  const busy = path.join(run, 'operation.lock')
+  const fd = openSync(busy, 'wx', 0o600)
+  closeSync(fd)
+  try {
+    return await operation()
+  } finally {
+    rmSync(busy)
+  }
+}
 async function prepare(run: string, browser: string) {
   must(
     !existsSync(run),
@@ -969,138 +983,144 @@ async function prepare(run: string, browser: string) {
   }
   checkEnvironment(s)
   mkdirSync(run, { recursive: false, mode: 0o700 })
-  save(s)
-  writeFileSync(lockPath(), JSON.stringify({ token: s.token, run }), {
-    flag: 'wx',
-    mode: 0o600,
-  })
-  try {
-    json(path.join(run, 'source.json'), sourceSnapshot())
-    json(path.join(run, 'dependencies.json'), dependencySnapshot())
-    json(path.join(run, 'environment.json'), {
-      dockerHost: s.dockerHost,
-      daemon: s.daemon,
-      envFiles: envFiles(),
-      nonemptyNames: Object.keys(environment(s))
-        .filter((k) => environment(s)[k])
-        .sort(),
-      node: process.version,
-      image: docker(s, ['image', 'inspect', IMAGE, '--format', '{{.Id}}']),
+  await withOperationLock(run, async () => {
+    save(s)
+    writeFileSync(lockPath(), JSON.stringify({ token: s.token, run }), {
+      flag: 'wx',
+      mode: 0o600,
     })
-    if (existsSync(next)) {
-      s.originalBuild = preserveBuild(next, path.join(run, 'original.next'))
+    try {
+      json(path.join(run, 'source.json'), sourceSnapshot())
+      json(path.join(run, 'dependencies.json'), dependencySnapshot())
+      json(path.join(run, 'environment.json'), {
+        dockerHost: s.dockerHost,
+        daemon: s.daemon,
+        envFiles: envFiles(),
+        nonemptyNames: Object.keys(environment(s))
+          .filter((k) => environment(s)[k])
+          .sort(),
+        node: process.version,
+        image: docker(s, ['image', 'inspect', IMAGE, '--format', '{{.Id}}']),
+      })
+      if (existsSync(next)) {
+        s.originalBuild = preserveBuild(next, path.join(run, 'original.next'))
+        save(s)
+      }
+      mkdirSync(next)
+      s.ownedBuild = identity(next)
       save(s)
-    }
-    mkdirSync(next)
-    s.ownedBuild = identity(next)
-    save(s)
-    mkdirSync(path.join(ROOT, 'media'))
-    s.media = identity(path.join(ROOT, 'media'))
-    save(s)
-    s.container = docker(s, [
-      'create',
-      '--pull=never',
-      '--rm',
-      '--name',
-      `bp-reader-${s.token}`,
-      '--label',
-      `${LABEL}=${s.token}`,
-      '--tmpfs',
-      '/var/lib/postgresql/data',
-      '-p',
-      '127.0.0.1:55432:5432',
-      '-e',
-      'POSTGRES_USER=postgres',
-      '-e',
-      'POSTGRES_PASSWORD=postgres',
-      '-e',
-      'POSTGRES_DB=bp_journey',
-      IMAGE,
-    ])
-    save(s)
-    docker(s, ['start', s.container])
-    await waitFor(() => {
-      docker(s, [
-        'exec',
-        s.container!,
-        'pg_isready',
-        '-q',
-        '-U',
-        'postgres',
-        '-d',
-        'bp_journey',
-      ])
-    }, 30)
-    containerInfo(s)
-    for (const step of ['migrate', 'seed:e2e'])
-      must(
-        (await logged(s, step.replace(':', '-'), 'pnpm', [
-          ...PNPM_NO_INSTALL,
-          step,
-        ])) === 0,
-        `${step} failed; inspect retained log`,
-      )
-    must(
-      (await captureOwnedBuild(
-        next,
-        s.ownedBuild,
-        () => logged(s, 'build', 'pnpm', [...PNPM_NO_INSTALL, 'build']),
-        () => {
-          lockMatches(s)
-          if (s.media) sameDirectory(path.join(ROOT, 'media'), s.media)
-          if (s.originalBuild)
-            sameDirectory(path.join(run, 'original.next'), s.originalBuild)
-        },
-        (current) => {
-          s.ownedBuild = current
-          save(s)
-        },
-      )) === 0,
-      'build failed; inspect retained log',
-    )
-    must(s.ownedBuild, 'Build left no output directory')
-    s.build = readFileSync(path.join(next, 'BUILD_ID'), 'utf8').trim()
-    save(s)
-    const log = openSync(path.join(run, 'server.log'), 'wx', 0o600)
-    const server = spawn(
-      process.execPath,
-      [
-        path.join(ROOT, 'node_modules/next/dist/bin/next'),
-        'start',
-        '-H',
-        '127.0.0.1',
+      mkdirSync(path.join(ROOT, 'media'))
+      s.media = identity(path.join(ROOT, 'media'))
+      save(s)
+      s.container = docker(s, [
+        'create',
+        '--pull=never',
+        '--rm',
+        '--name',
+        `bp-reader-${s.token}`,
+        '--label',
+        `${LABEL}=${s.token}`,
+        '--tmpfs',
+        '/var/lib/postgresql/data',
         '-p',
-        '3000',
-      ],
-      {
-        cwd: ROOT,
-        env: environment(s),
-        detached: true,
-        stdio: ['ignore', log, log],
-      },
-    )
-    closeSync(log)
-    must(server.pid, 'Server failed to spawn')
-    s.pid = server.pid
-    s.started = processStart(s.pid)
-    save(s)
-    server.unref()
-    await waitFor(async () => {
-      assertServer(s)
-      await readLoopback('/articles', 2000)
-    }, 60)
-    s.phase = 'ready'
-    save(s)
-    json(path.join(run, 'doctor.json'), await doctor(s))
-    console.log(`Ready: ${ORIGIN}\nRun: ${run}`)
-  } catch (error) {
-    json(path.join(run, 'failure.json'), {
-      at: new Date().toISOString(),
-      ...failureDetails(error),
-    })
-    await cleanup(s)
-    throw error
-  }
+        '127.0.0.1:55432:5432',
+        '-e',
+        'POSTGRES_USER=postgres',
+        '-e',
+        'POSTGRES_PASSWORD=postgres',
+        '-e',
+        'POSTGRES_DB=bp_journey',
+        IMAGE,
+      ])
+      save(s)
+      docker(s, ['start', s.container])
+      await waitFor(() => {
+        docker(s, [
+          'exec',
+          s.container!,
+          'pg_isready',
+          '-h',
+          '127.0.0.1',
+          '-p',
+          '5432',
+          '-q',
+          '-U',
+          'postgres',
+          '-d',
+          'bp_journey',
+        ])
+      }, 30)
+      containerInfo(s)
+      for (const step of ['migrate', 'seed:e2e'])
+        must(
+          (await logged(s, step.replace(':', '-'), 'pnpm', [
+            ...PNPM_NO_INSTALL,
+            step,
+          ])) === 0,
+          `${step} failed; inspect retained log`,
+        )
+      must(
+        (await captureOwnedBuild(
+          next,
+          s.ownedBuild,
+          () => logged(s, 'build', 'pnpm', [...PNPM_NO_INSTALL, 'build']),
+          () => {
+            lockMatches(s)
+            if (s.media) sameDirectory(path.join(ROOT, 'media'), s.media)
+            if (s.originalBuild)
+              sameDirectory(path.join(run, 'original.next'), s.originalBuild)
+          },
+          (current) => {
+            s.ownedBuild = current
+            save(s)
+          },
+        )) === 0,
+        'build failed; inspect retained log',
+      )
+      must(s.ownedBuild, 'Build left no output directory')
+      s.build = readFileSync(path.join(next, 'BUILD_ID'), 'utf8').trim()
+      save(s)
+      const log = openSync(path.join(run, 'server.log'), 'wx', 0o600)
+      const server = spawn(
+        process.execPath,
+        [
+          path.join(ROOT, 'node_modules/next/dist/bin/next'),
+          'start',
+          '-H',
+          '127.0.0.1',
+          '-p',
+          '3000',
+        ],
+        {
+          cwd: ROOT,
+          env: environment(s),
+          detached: true,
+          stdio: ['ignore', log, log],
+        },
+      )
+      closeSync(log)
+      must(server.pid, 'Server failed to spawn')
+      s.pid = server.pid
+      s.started = processStart(s.pid)
+      save(s)
+      server.unref()
+      await waitFor(async () => {
+        assertServer(s)
+        await readLoopback('/articles', 2000)
+      }, 60)
+      s.phase = 'ready'
+      save(s)
+      json(path.join(run, 'doctor.json'), await doctor(s))
+      console.log(`Ready: ${ORIGIN}\nRun: ${run}`)
+    } catch (error) {
+      json(path.join(run, 'failure.json'), {
+        at: new Date().toISOString(),
+        ...failureDetails(error),
+      })
+      await cleanup(s)
+      throw error
+    }
+  })
 }
 async function main() {
   const [action, ...args] = process.argv.slice(2)
@@ -1140,13 +1160,18 @@ async function main() {
     return
   }
   identity(run)
-  const s = JSON.parse(
-    readFileSync(path.join(run, 'state.json'), 'utf8'),
-  ) as State
-  must(
-    s.version === 1 && s.root === ROOT && s.run === run,
-    'Run belongs to a different checkout or unsupported schema',
-  )
+  const readState = () => {
+    const state = JSON.parse(
+      readFileSync(path.join(run, 'state.json'), 'utf8'),
+    ) as State
+    must(
+      state.version === 1 && state.root === ROOT && state.run === run,
+      'Run belongs to a different checkout or unsupported schema',
+    )
+    return state
+  }
+  // Admit ownership before creating a lock in the supplied directory.
+  const admitted = readState()
   if (action === 'evidence') {
     const files = readdirSync(run)
       .filter((name) => /^drive-\d+$/.test(name))
@@ -1154,7 +1179,7 @@ async function main() {
     console.log(
       JSON.stringify(
         {
-          state: s.phase,
+          state: admitted.phase,
           runs: files.map((name) => {
             const f = path.join(run, name, 'verdict.json')
             return {
@@ -1171,17 +1196,14 @@ async function main() {
     )
     return
   }
-  const busy = path.join(run, 'operation.lock')
-  const fd = openSync(busy, 'wx', 0o600)
-  closeSync(fd)
-  try {
+  await withOperationLock(run, async () => {
+    // A prior operation may have finished between admission and acquisition.
+    const s = readState()
     if (action === 'doctor')
       console.log(JSON.stringify(await doctor(s), null, 2))
     if (action === 'drive') await drive(s)
     if (action === 'cleanup') await cleanup(s)
-  } finally {
-    rmSync(busy)
-  }
+  })
 }
 
 if (

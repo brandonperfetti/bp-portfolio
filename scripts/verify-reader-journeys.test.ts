@@ -29,6 +29,8 @@ import {
   preserveBuild,
   captureOwnedBuild,
   failureDetails,
+  withOperationLock,
+  readLoopback,
 } from './verify-reader-journeys'
 
 const temporary: string[] = []
@@ -37,31 +39,38 @@ afterEach(() => {
     rmSync(dir, { recursive: true, force: true })
 })
 
+// NODE_USE_ENV_PROXY was added in Node 24.0 and backported to 22.21.
+const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number)
+const supportsEnvProxy =
+  nodeMajor >= 24 || (nodeMajor === 22 && nodeMinor >= 21)
+
 describe('owned loopback transport', () => {
-  it('ignores environment proxies in a fresh Node process and retains failure causes', async () => {
-    const reservation = createServer()
-    await new Promise<void>((resolve) =>
-      reservation.listen(0, '127.0.0.1', resolve),
-    )
-    const address = reservation.address()
-    if (!address || typeof address === 'string')
-      throw new Error('Missing local port')
-    const deadProxy = `http://127.0.0.1:${address.port}`
-    await new Promise<void>((resolve, reject) =>
-      reservation.close((error) => (error ? reject(error) : resolve())),
-    )
-    const env = { ...process.env }
-    for (const key of Object.keys(env))
-      if (/proxy/i.test(key) || key === 'NODE_OPTIONS') delete env[key]
-    const helper = pathToFileURL(
-      path.resolve('scripts/verify-reader-journeys.ts'),
-    ).href
-    const child = spawnSync(
-      process.execPath,
-      [
-        '--input-type=module',
-        '-e',
-        `
+  it.runIf(supportsEnvProxy)(
+    'ignores environment proxies in a fresh Node process and retains failure causes',
+    async () => {
+      const reservation = createServer()
+      await new Promise<void>((resolve) =>
+        reservation.listen(0, '127.0.0.1', resolve),
+      )
+      const address = reservation.address()
+      if (!address || typeof address === 'string')
+        throw new Error('Missing local port')
+      const deadProxy = `http://127.0.0.1:${address.port}`
+      await new Promise<void>((resolve, reject) =>
+        reservation.close((error) => (error ? reject(error) : resolve())),
+      )
+      const env = { ...process.env }
+      for (const key of Object.keys(env))
+        if (/proxy/i.test(key) || key === 'NODE_OPTIONS') delete env[key]
+      const helper = pathToFileURL(
+        path.resolve('scripts/verify-reader-journeys.ts'),
+      ).href
+      const child = spawnSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `
       import assert from 'node:assert/strict';
       import { createServer } from 'node:http';
       import { readLoopback, failureDetails } from ${JSON.stringify(helper)};
@@ -97,26 +106,44 @@ describe('owned loopback transport', () => {
         await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
       }
     `,
-      ],
-      {
-        env: {
-          ...env,
-          HTTP_PROXY: deadProxy,
-          HTTPS_PROXY: deadProxy,
-          NODE_USE_ENV_PROXY: '1',
+        ],
+        {
+          env: {
+            ...env,
+            HTTP_PROXY: deadProxy,
+            HTTPS_PROXY: deadProxy,
+            NODE_USE_ENV_PROXY: '1',
+          },
+          encoding: 'utf8',
+          timeout: 10_000,
         },
-        encoding: 'utf8',
-        timeout: 10_000,
-      },
-    )
-    expect(child.error).toBeUndefined()
-    expect(child.status, child.stderr).toBe(0)
-    expect(JSON.parse(child.stdout)).toEqual({
-      loopback: 'passed',
-      proxyFetchCause: 'ECONNREFUSED',
-      redirect: 'refused',
-      incompleteBody: 'timed out',
-    })
+      )
+      expect(child.error).toBeUndefined()
+      expect(child.status, child.stderr).toBe(0)
+      expect(JSON.parse(child.stdout)).toEqual({
+        loopback: 'passed',
+        proxyFetchCause: 'ECONNREFUSED',
+        redirect: 'refused',
+        incompleteBody: 'timed out',
+      })
+    },
+  )
+  it('reaches loopback and reports connection refusal on every supported runtime', async () => {
+    const server = createServer((_request, response) => response.end('owned'))
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string')
+      throw new Error('Missing local port')
+    try {
+      expect(await readLoopback('/articles', 1500, address.port)).toBe('owned')
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      )
+    }
+    await expect(
+      readLoopback('/articles', 1500, address.port),
+    ).rejects.toMatchObject({ code: 'ECONNREFUSED' })
   })
   it('records primitive cause fields without unrelated properties or stacks', () => {
     const cause = Object.assign(new Error('other side closed'), {
@@ -133,6 +160,39 @@ describe('owned loopback transport', () => {
       code: undefined,
       cause: undefined,
     })
+  })
+})
+
+describe('operation ownership', () => {
+  it('refuses overlapping operations and releases after success or failure', async () => {
+    const run = mkdtempSync(path.join(os.tmpdir(), 'reader-operation-'))
+    temporary.push(run)
+    let release!: () => void
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const first = withOperationLock(run, () => pending)
+    try {
+      await expect(
+        withOperationLock(run, async () => {
+          throw new Error('Concurrent operation entered')
+        }),
+      ).rejects.toMatchObject({ code: 'EEXIST' })
+      expect(existsSync(path.join(run, 'operation.lock'))).toBe(true)
+    } finally {
+      release()
+      await first
+    }
+    expect(existsSync(path.join(run, 'operation.lock'))).toBe(false)
+    await expect(
+      withOperationLock(run, async () => {
+        throw new Error('controlled failure')
+      }),
+    ).rejects.toThrow('controlled failure')
+    expect(existsSync(path.join(run, 'operation.lock'))).toBe(false)
+    await expect(
+      withOperationLock(run, async () => 'next operation'),
+    ).resolves.toBe('next operation')
   })
 })
 
