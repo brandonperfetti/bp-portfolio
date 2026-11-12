@@ -87,7 +87,7 @@ export const workHistoryCardPaths: SurfacePathResolver = async ({
         overrideAccess: true,
         pagination: false,
         // `limit: 0` is the only unlimited form — `pagination: false` alone
-        // still leaves the default cap in place (CLAUDE.md §Gotchas,
+        // still leaves the default cap in place (docs/PAYLOAD.md § Local API gotchas,
         // `@payloadcms/drizzle findMany.js` @ 3.88.0). A capped purge list is
         // the #207 bug with a higher threshold.
         limit: 0,

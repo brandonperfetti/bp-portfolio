@@ -15,7 +15,15 @@ one set, version-locked.
   redirects, search index, agent MCP endpoint.
 - `@payloadcms/email-resend` — Resend transactional email (first-party
   adapter; replaced `@payloadcms/email-nodemailer` + SendGrid SMTP).
-- `sharp` — Payload image processing.
+- `sharp` — Payload image processing, and the encoder behind Next's
+  `/_next/image` optimizer, which takes it as an optional dependency. **One
+  copy, at `>=0.35.5`** (#313): the root range and Next's own
+  `optionalDependencies` (`^0.35.5` from `next@16.4.1`) resolve to the same
+  `sharp`, so the tree carries one `@img/sharp-libvips-*` build.
+  `pnpm why sharp` must print "Found 1 version of sharp". A second copy would
+  ship a second statically linked libvips, as the `lightningcss` duplicate
+  did (#195). 0.35.5 is the floor for GHSA-2464-fhr4-w9xw (Next's image
+  optimizer on glibc Linux) and GHSA-wq5f-xc86-pv6w (sharp's librsvg).
 
 ## App framework
 
@@ -84,7 +92,13 @@ one set, version-locked.
 ## Dev/test
 
 - `vitest` + Testing Library + `jsdom`; `@playwright/test`; Storybook 10
-  (`@storybook/nextjs-vite`, addon-a11y, addon-mcp); `eslint` 9 +
+  (`@storybook/nextjs-vite`, addon-a11y, addon-mcp). **Storybook moves with
+  `next`:** its Next router mock must supply the context shape the installed
+  `next` reads. Next 16.4's `useRouter` reads
+  `LayoutRouterContext.parentRenderTree`, which `@storybook/nextjs-vite`
+  supplies from 10.6.3 on; with 10.5.7 every story threw in
+  `test:storybook` (#313). `storybook`, `@storybook/nextjs-vite`, addon-a11y
+  and addon-vitest share one version; `eslint` 9 +
   `eslint-config-next` + `eslint-plugin-tsdoc`; `prettier` +
   tailwind plugin; `husky` + lint-staged.
 - `esbuild` (**devDependency, exact `0.28.1`**, added 2026-09-26 for #229) —
@@ -158,10 +172,10 @@ the dependencies that PR actually adds.
   `image-dimensions` (`pnpm why image-dimensions` resolves `image-dimensions@2.5.1`
   through every `@payloadcms/*` package at 3.88.0), so the two high-severity
   `image-size@2.0.2` advisories (#100) are no longer in the runtime scope.
-  The only surviving `image-size@2.0.2` edge is dev-only —
-  `pnpm why image-size` resolves it solely through
-  `@storybook/nextjs-vite → vite-plugin-storybook-nextjs`, and `pnpm why
-image-size --prod` returns nothing. `warn-only: true` stays in force on the
+  The last `image-size@2.0.2` edge was dev-only, through
+  `@storybook/nextjs-vite → vite-plugin-storybook-nextjs`; since Storybook
+  10.6.7 (#313) that plugin uses `probe-image-size` instead, and
+  `pnpm why image-size` returns nothing. `warn-only: true` stays in force on the
   same rationale as before: a whole-tree `develop → master` diff re-evaluates
   every dependency, dev-only included, so it would otherwise still redden this
   check on a path that carries no runtime risk. #100 owns following up on the
@@ -192,7 +206,7 @@ beside it had no effect. Verify with `pnpm config get minimumReleaseAge`
   under the rule in `docs/SECURITY.md` § Dependency advisories (the case it
   exists for: a same-day security patch). The entries present on 2026-09-26 predate the gate —
   twelve name `next`/`@next/*`/`eslint-config-next` at `16.2.11`, which is no
-  longer locked (the tree runs `next@16.3.4`), and all eighteen are older than
+  longer locked (the tree ran `next@16.3.4` then; `16.4.6` since #313), and all eighteen are older than
   the gate's one day (`[measured 2026-09-26, npm registry publish times]`: the
   newest was published 2026-07-22), so none of them is currently doing
   anything.

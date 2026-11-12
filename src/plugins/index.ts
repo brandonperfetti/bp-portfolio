@@ -13,6 +13,11 @@ import { searchFields } from '@/search/fieldOverrides'
 import { getServerSideURL } from '@/utilities/getURL'
 
 import { bufferMcpResponses } from './bufferMcpResponses'
+import { createMcpRequestLimits } from './limitMcpRequests'
+
+// #312: one kit, two halves. `overrideAuth` bounds the body after the
+// plugin's own key check; the plugin maps a refusal to 413 and must be listed.
+const mcpRequestLimits = createMcpRequestLimits()
 
 const generateTitle: GenerateTitle<Post | Page> = ({ doc }) => {
   return doc?.title ? `${doc.title} - Brandon Perfetti` : 'Brandon Perfetti'
@@ -211,7 +216,13 @@ export const plugins: Plugin[] = [
       },
       media: { enabled: { create: true, find: true, update: true } },
     },
+    // Calls the plugin's default API-key resolver unchanged, then bounds the
+    // body before mcp-handler is created (#312).
+    overrideAuth: mcpRequestLimits.overrideAuth,
   }),
+  // Runs after mcpPlugin and before the buffer (by `order`): answers 413 for
+  // a refused body (#312).
+  mcpRequestLimits.plugin,
   // Runs last, so the endpoint above exists to be wrapped: MCP writes purge (#274).
   bufferMcpResponses(),
 ]

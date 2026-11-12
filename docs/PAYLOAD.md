@@ -150,6 +150,33 @@ feeds `buildPersonSchema` and the Resume card's Download CV button; empty
 fields fall back to the `src/lib/identity.ts` constants and the static
 `/assets` PDF).
 
+## Local API gotchas
+
+Traps that have already cost a session. `AGENTS.md` names both in its
+**Before you…** route for Local-API work, so read this before writing a script,
+seed, test or MCP write.
+
+- **Payload `find`: `limit: N` still caps the result even with
+  `pagination: false`.** Only an effective limit of `0` is unlimited, and
+  there are two ways to get it: pass `limit: 0`, or set `pagination: false`
+  and leave `limit` out (the operation then defaults it to `0`; with
+  pagination on it defaults to `10`). The adapter treats `0` as "no cap" and
+  forces `pagination = false`. A `limit: 1000` meant as "everything" is a
+  silent cap.
+  `[source: payload collections/operations/find.js:71-72; @payloadcms/drizzle find/findMany.js:16-19,117 @ 3.88.0]`
+- **Payload Local API: `draft: true` is not mirrored into `req.query`.**
+  `createLocalReq` only ever writes `req.query.depth`
+  (`createLocalReq.js:102-104`); `draft` and `autosave` travel in the
+  operation's args object instead. So any hook keyed on reading
+  `req.query.draft` / `req.query.autosave` **cannot see a Local-API draft
+  save** and will take its non-draft branch. The admin UI and REST both carry
+  `?draft=true` and are unaffected — this bites scripts, seeds, tests and MCP
+  writes. A Local-API caller that needs a hook to see the draft passes it
+  explicitly: `req: { query: { draft: 'true' } }`. Worked cases: the `cascadePagePaths` docblock in
+  `src/collections/Pages/hooks/pageHierarchy.ts` and the `createLocalReq` note
+  in `src/collections/Pages/hooks/servedPrefix.ts`; #197 for the live defect.
+  `[source: payload 3.88.0]`
+
 ## Slugs and paths
 
 Pattern in `src/fields/slug/`: text field + `slugLock` checkbox + `formatSlug`
@@ -619,6 +646,12 @@ there would answer a permanent redirect to a dead URL.
 - `bufferMcpResponses` (ours, `src/plugins/bufferMcpResponses.ts`) — runs
   last and wraps `plugin-mcp`'s `POST /mcp` endpoint so a tool call's hook
   purges reach Next (#274); see **Operating via MCP** below.
+- `createMcpRequestLimits` (ours, `src/plugins/limitMcpRequests.ts`) — two
+  halves that must both be installed: an `overrideAuth` passed to `mcpPlugin`
+  that bounds an authenticated `POST /mcp` body before `mcp-handler` exists,
+  and a plugin, run after `plugin-mcp` and before `bufferMcpResponses`, that
+  answers the refusal (#312, a partial mitigation); see **Request limits**
+  below.
 
 ## Operating via MCP (for agents)
 
@@ -642,6 +675,68 @@ and fails the config build if it finds no `POST /mcp` endpoint to wrap.
 `evals/mcp-purge-order-integration.test.ts` pins the order. A deployment
 built before the fix still needs a hand purge after each write:
 `docs/CONTENT_WORKFLOW.md` → **Stopgap: purge after every MCP write**.
+
+**Request limits**
+([#312](https://github.com/brandonperfetti/bp-portfolio/issues/312)).
+This is a **partial local mitigation**, not a fix: the SDK advisories in
+#312 stay open. `mcp-handler` 1.1.0 reads the whole request with `req.json()`
+before the SDK applies any limit, and it does not await its own request
+handler, so a failure inside it is an unhandled rejection and a reply that
+never comes. The limits are therefore enforced before `mcp-handler` exists,
+through the plugin's supported `overrideAuth(req, getDefaultMcpAccessSettings)`
+option (`src/plugins/limitMcpRequests.ts`, `createMcpRequestLimits`):
+
+1. `overrideAuth` first awaits the plugin's own default API-key resolver,
+   unchanged and with no argument. A missing or unknown key is refused by it
+   exactly as before, with no body byte read.
+2. It then reads the body, counting bytes as they arrive (chunked or not) and
+   cancelling the sender at the cap, and checks the parsed structure.
+3. Within the limits, `req.body` is replaced with a replay of the same bytes
+   and the plugin builds `mcp-handler` over it as before. Over a limit, it
+   throws a `McpRequestLimitError`; the plugin awaits `overrideAuth`, so this
+   rejects the endpoint handler normally, and the endpoint wrapper answers a
+   JSON-RPC error with status **413** (or **400**, code -32700, for a declared
+   JSON body that does not parse, which `mcp-handler` would otherwise reject
+   unhandled). No tool runs.
+
+The wrapper also refuses a `Content-Length` over the cap from the header
+alone, before the key check, reading nothing. It fails the config build if
+it finds no `POST /mcp` endpoint or more than one, and `overrideAuth` refuses
+to read a body the wrapper did not see. The real-chain regression test also
+pins that `overrideAuth` remains wired: the wrapper alone cannot detect its
+omission. The limits are named constants, each with its reasoning:
+
+- **Body: 2 MiB.** No MCP tool takes file bytes. The sizes behind it come
+  from a synthetic Lexical fixture in the test (about 450 bytes a paragraph),
+  not from measured production rows.
+- **Batch: 100 messages.** The upstream sample; clients send one message per
+  POST.
+- **JSON values: 200,000.** The upstream sample of 10,000 would refuse the
+  synthetic fixture well under 2 MiB; at 200,000 the byte cap binds first for
+  that fixture.
+- **JSON depth: 128.** `mcp-handler` re-serialises the body recursively.
+
+**What it leaves open** (also `docs/SECURITY.md` § Dependency advisories):
+
+- **Method-override pre-parse.** Payload's `handleEndpoints` (payload 3.88.0,
+  `utilities/handleEndpoints.js`) turns a `POST` carrying
+  `X-HTTP-Method-Override: GET` or `X-Payload-HTTP-Method-Override: GET` into
+  a `GET`, and first reads the body with `request.json()` (for
+  `Content-Type: application/json`) or `request.text()` (for
+  `application/x-www-form-urlencoded`), with no size limit,
+  before any endpoint, wrapper or key check runs. That path is outside the
+  endpoint and is not bounded by this change; it applies to every `/api`
+  route, not only `/api/mcp`.
+- **Accepted bodies are still buffered and parsed twice**, here and in
+  `mcp-handler`, up to the 2 MiB cap; the key lookup still runs for every
+  request that carries a bearer token.
+- **Not measured against the deployed Node adapter.** The tests drive the
+  real plugin chain with native `Request` streams; how Next's Node server
+  adapter delivers a refused oversized upload to a real client has not been
+  measured.
+
+A write over 2 MiB must be split into smaller updates; raise a constant only
+with a measured reason.
 
 **Guardrails (violating these breaks production):**
 

@@ -15,10 +15,10 @@ overrides:
   js-yaml: '^4.3.1'
   'fast-uri@3': '^3.1.5'
   'fast-uri@4': '^4.1.2'
-  # image-size: advisory (ICNS/JXL/HEIF parser DoS) has NO released fix — latest
-  # is 2.0.2; revisit when >=2.0.3 ships. Reachable via payload (prod) for media
-  # dimension detection, but only exploitable by an authenticated admin uploading
-  # a crafted ICNS/JXL/HEIF file — low practical risk. Tracked, not yet fixable.
+  # image-size (#100): no override needed, and none is set — the package is no
+  # longer in the tree (Payload 3.87 moved to image-dimensions, Storybook
+  # 10.6.7 to probe-image-size; docs/DEPENDENCIES.md). This says nothing about
+  # the advisory records' state, which is read from GitHub.
   ip-address: '^10.3.1'
   dompurify: '^3.4.13'
   postcss: '^8.5.23'

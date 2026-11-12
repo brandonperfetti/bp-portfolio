@@ -4,10 +4,16 @@ This `AGENTS.md` is the canonical agent-instructions file for the repo — edit
 it here and only here. `CLAUDE.md` imports it (`@AGENTS.md`), and
 `.github/copilot-instructions.md` is a symlink to it.
 
-Next.js 16 App Router portfolio with **Payload CMS** (Postgres/Drizzle) as the
-single content source, Clerk auth + server-side gating, Corvus AI chat
-(Vercel AI SDK), and a shaders.com animated hero. Notion is a **planning
-surface only** — it is not a CMS and has no runtime integration.
+**What this is:** brandonperfetti.com — Brandon Perfetti's personal portfolio
+and content platform. Readers find and read articles, browse his work and
+stack, and ask Corvus (the site's AI assistant); Brandon publishes and
+rearranges everything from the CMS without a deploy. Intent, principles and
+settled decisions: `docs/PRODUCT.md`.
+
+Next.js 16 App Router with **Payload CMS** (Postgres/Drizzle) as the single
+content source, Clerk auth + server-side gating, Corvus AI chat (Vercel AI
+SDK), and a shaders.com animated hero. Notion is a **planning surface only** —
+it is not a CMS and has no runtime integration.
 
 ## Essentials
 
@@ -21,135 +27,89 @@ surface only** — it is not a CMS and has no runtime integration.
 
 ## CI gate
 
-A local mirror of the `quality` job ("Lint · Types · Unit") in
-`.github/workflows/ci.yml` — and only that job. Run it as a bash script (not
-pasted into an interactive shell) before calling a change done; it stops at the
-first failing step:
-
-```sh
-set -euo pipefail
-export PAYLOAD_SECRET=ci-not-a-real-secret
-export NEXT_PUBLIC_SITE_URL=http://localhost:3000
-export NEXT_PUBLIC_SITE_NAME='BP Portfolio (CI)'
-corepack enable
-pnpm install --frozen-lockfile
-pnpm lint
-pnpm format:check
-pnpm typecheck
-pnpm generate:types
-pnpm exec prettier --write src/payload-types.ts
-git diff --quiet -- src/payload-types.ts
-pnpm generate:importmap
-pnpm exec prettier --write "src/app/(payload)/admin/importMap.js"
-node scripts/check-importmap.mjs
-git diff --quiet -- "src/app/(payload)/admin/importMap.js"
-pnpm payload migrate:create --skip-empty < /dev/null
-test -z "$(git status --porcelain -- src/migrations/)" # untracked files count
-node scripts/check-migrations-rls.mjs
-pnpm test:coverage
-pnpm build-storybook
-```
-
-The "Build · E2E" and "Evalite (Corvus)" jobs are not mirrored here; they need
-Postgres, Playwright or provider keys and remain gated by PR CI.
+Run the local mirror of CI's `quality` job ("Lint · Types · Unit") — and only
+that job — as a bash script before calling a change done:
+[`docs/TESTING.md` § Local CI gate](docs/TESTING.md#local-ci-gate). The
+"Build · E2E" and "Evalite (Corvus)" jobs are not mirrored; to see a user
+journey actually work, use the owned-instance recipe in
+[`docs/TESTING.md` § Verifying a journey locally](docs/TESTING.md#verifying-a-journey-locally)
+and the journey/proof map in `docs/JOURNEYS.md`.
 
 ## Invariants (do not regress)
 
-- **URLs:** `/articles/[slug]` shape and existing slugs are preserved from v3.
+These hold for every change, whatever the task. Hazards that bite only one kind
+of work are named in **Before you…** below, at the point that work starts.
+
 - **Payload is the only CMS.** Content flows Payload → repo modules
   (`src/lib/cms/*Repo.ts`) → RSC pages. Never reintroduce Notion runtime code.
-- **Corvus system prompt is server-enforced** (`src/lib/ai/corvus.ts`); client
-  system messages are never trusted. Rate limiting via Upstash Redis.
-- **Gating is server-side** (`src/access/canAccess.ts` + `getViewer()`); UI
-  components like `<Protect>` are conveniences, never the enforcement point.
-- **Reduced motion is honored by every animated surface** — static, functional
-  DOM when `prefers-reduced-motion` is set.
-- **Light/dark parity** is an acceptance criterion; audit both themes.
-- Generated artifacts (`src/payload-types.ts`,
-  `src/app/(payload)/admin/importMap.js`) are committed and CI-gated — run
-  `pnpm generate:types` / `pnpm generate:importmap` after schema/plugin
-  changes.
-- **A Payload schema change requires a committed migration in the same
-  change.** Any change to a collection, global, or field must include a
-  migration created with `pnpm migrate:create` (CI regenerates it and fails the
-  PR if one is missing). For a new table, add the RLS follow-up
-  (`ALTER TABLE "<table>" ENABLE ROW LEVEL SECURITY;` for the table and any
-  paired `_v` / `_rels` table) in that **same** migration — `docs/PAYLOAD.md`.
-  Call the migration out explicitly in the change summary.
-- **Cache revalidation is read-your-writes:** the revalidation hooks call
-  `revalidateTag(tag, { expire: 0 })` — never `'max'`, which under
-  cacheComponents is stale-while-revalidate with a one-year stale window and
-  silently breaks the admin-edits-live-in-seconds invariant (#118).
-- **The Corvus eval gates are live in CI** (`pnpm eval:ci` and
-  `pnpm eval:facts`, thresholds that fail the build). Fix the behavior or the
-  harness — never lower a floor to get green. Empty/whitespace model outputs
-  score 0 by design (`evals/empty-output.ts`); eval turns run at production's
-  completion-token budget (drift-guarded by test).
-- **Embeddings are their own provider axis** (`AI_EMBEDDING_PROVIDER`,
-  OpenAI-only): switching the chat provider must never touch the pgvector
-  index, and the vector width (1536) is baked into DDL — a model with a
-  different width needs a migration, not an env change.
-- Dependency majors are pinned; `@payloadcms/*` + `payload` upgrade as one set.
-- The rich-text editor for Posts must keep every node type the migration
-  emits registered (lists, blockquote, upload) — removing a feature breaks
-  every migrated article (Lexical error #17).
+- **Gating and the Corvus system prompt are server-enforced.** Access is
+  decided in `src/access/canAccess.ts` + `getViewer()`; UI components like
+  `<Protect>` are conveniences, never the enforcement point. Corvus's prompt
+  lives in `src/lib/ai/corvus.ts`; client system messages are never trusted.
+- **URLs:** `/articles/[slug]` shape and existing slugs are preserved from v3.
+- **Reduced motion is honored by every animated surface** (static, functional
+  DOM under `prefers-reduced-motion`), and **light/dark parity** is an
+  acceptance criterion — audit both themes.
 
 ## Conventions
 
-- Conventional commits; small, focused commits; draft PR per phase.
+- Conventional commits with `Refs #n`; small, focused commits; one PR into
+  `develop` per piece of work (`docs/WORKFLOW.md`). The PR template is
+  `.github/pull_request_template.md`.
 - TSDoc on every exported function/component/collection (enforced by
-  `eslint-plugin-tsdoc`); document _why_, not _what_.
+  `eslint-plugin-tsdoc`); document _why_, not _what_ (`docs/DOCUMENTATION.md`).
 - New UI starts from shadcn/ui primitives (`src/components/ui`) and gets a
   Storybook story; serious a11y violations fail the story.
-- **shadcn primitives are themed at the token layer**, never repainted per
-  call site, and every token pair that renders text or a fill edge is AA-pinned
-  by test (`--destructive`, the dark `--border`/`--input` alphas, and
-  `--primary-hover`'s own dark fill edge are the documented exceptions) —
-  `docs/STYLING.md` §shadcn primitives are themed at the token layer.
 - Tests accompany behavior changes: Vitest unit/component, Playwright e2e,
-  Evalite for Corvus behavior.
+  Evalite for Corvus behavior (`docs/TESTING.md`).
 
-## Gotchas (traps that have already cost us a session)
+## Before you… (task routes)
 
-- **Payload `find`: `limit: N` still caps the result even with
-  `pagination: false`.** `limit: 0` is the only unlimited form — it is the
-  value that clears the cap and forces `pagination = false` internally. A
-  `limit: 1000` meant as "everything" is a silent cap.
-  `[source: @payloadcms/drizzle findMany.js:16-18,117 @ 3.88.0]`
-- **Payload Local API: `draft: true` is not mirrored into `req.query`.**
-  `createLocalReq` only ever writes `req.query.depth`
-  (`createLocalReq.js:102-104`); `draft` and `autosave` travel in the
-  operation's args object instead. So any hook keyed on reading
-  `req.query.draft` / `req.query.autosave` **cannot see a Local-API draft
-  save** and will take its non-draft branch. The admin UI and REST both carry
-  `?draft=true` and are unaffected — this bites scripts, seeds, tests and MCP
-  writes. See the `cascadePagePaths` docblock in
-  `src/collections/Pages/hooks/servedPrefix.ts` for the worked case, and #197
-  for the live defect. `[source: payload 3.88.0]`
+Read the named doc before you start; the bold hazard is the one that has
+already cost a session or broken production.
 
-## Progressive disclosure (read the doc that matches the task)
-
-- Architecture and app map: `docs/ARCHITECTURE.md`
-- Payload CMS (collections, blocks, plugins, migrations, MCP): `docs/PAYLOAD.md`
-- Feature inventory and behavior: `docs/FEATURES.md`
-- Navigation and route responsibilities: `docs/NAVIGATION.md`
-- State and data flow: `docs/STATE.md`
-- Styling and component conventions: `docs/STYLING.md`
-- Design system (shadcn, shader hero, motion, Storybook): `docs/DESIGN.md`
-- AI (Corvus, guardrails, retrieval grounding, evals, providers): `docs/AI.md`
-- Analytics and consent (c15t, GA4 Consent Mode v2, geo-gating): `docs/ANALYTICS.md`
-- Auth, gating, and email capture (Clerk): `docs/AUTH.md`
-- Security standard (HTML injection, secrets, access control, gating,
-  consent, advisories): `docs/SECURITY.md`
-- Content workflow (Notion planning → Payload publishing): `docs/CONTENT_WORKFLOW.md`
-- Content voice, article types, and revision gates: `docs/CONTENT_STYLE.md`
-- SEO and indexing routes: `docs/SEO.md`
-- Dependencies and why they exist: `docs/DEPENDENCIES.md`
-- Workflow and contribution rules: `docs/WORKFLOW.md`
-- Accessibility expectations: `docs/ACCESSIBILITY.md`
-- Testing strategy: `docs/TESTING.md`
-- Ongoing upkeep tasks: `docs/MAINTENANCE.md`
-- Documentation standards: `docs/DOCUMENTATION.md`
+- **change a collection, global, field, block or plugin** → `docs/PAYLOAD.md`.
+  **The same change must commit a migration** (`pnpm migrate:create`; CI fails
+  without it), with `ENABLE ROW LEVEL SECURITY` for any new table and its
+  `_v`/`_rels` companions in that same migration (§ Migrations) — call it out
+  in the PR; then regenerate and commit `src/payload-types.ts` and
+  `src/app/(payload)/admin/importMap.js` (§ Generated artifacts). **Never
+  unregister a Posts rich-text node type** (lists, blockquote, upload): every
+  migrated article breaks with Lexical error #17.
+- **write Payload `find` or Local-API code (scripts, seeds, tests, MCP
+  writes)** → `docs/PAYLOAD.md` § Local API gotchas: **`limit: N` still caps
+  with `pagination: false`** (unlimited is `limit: 0`, or `pagination: false`
+  with no `limit`), and
+  **Local-API `draft: true` never reaches `req.query`**.
+- **touch revalidation hooks or caching** → `docs/ARCHITECTURE.md` § Caching:
+  **`revalidateTag(tag, { expire: 0 })`, never `'max'`** (#118).
+- **touch Corvus, guardrails, retrieval or evals** → `docs/AI.md`. **The eval
+  gates (`pnpm eval:ci`, `pnpm eval:facts`) fail the build: fix the behavior or
+  the harness, never lower a floor.** Embeddings are their own provider axis
+  (`AI_EMBEDDING_PROVIDER`, OpenAI-only) and the 1536 vector width is baked
+  into DDL — a different width needs a migration.
+- **add or upgrade a dependency** → `docs/DEPENDENCIES.md`. **Majors are
+  pinned; `payload` + `@payloadcms/*` move as one set.**
+- **touch auth, gating or email capture** → `docs/AUTH.md`; **secrets, HTML
+  injection or access control** → `docs/SECURITY.md`.
+- **touch analytics or consent** → `docs/ANALYTICS.md`.
+- **change UI, tokens or motion** → `docs/STYLING.md`, `docs/DESIGN.md`,
+  `docs/ACCESSIBILITY.md`. **shadcn primitives are themed at the token layer,
+  never repainted per call site**, and every text/fill-edge token pair is
+  AA-pinned by test (documented exceptions in `docs/STYLING.md` § shadcn
+  primitives are themed at the token layer).
+- **change routes, redirects or SEO surfaces** → `docs/NAVIGATION.md`,
+  `docs/SEO.md`.
+- **write or run tests** → `docs/TESTING.md`; which journeys are proven where,
+  and what is not → `docs/JOURNEYS.md`.
+- **decide whether a change fits the product** → `docs/PRODUCT.md`.
+- **write or publish content** → `docs/CONTENT_WORKFLOW.md`,
+  `docs/CONTENT_STYLE.md`.
+- **branch, hook, review or release** → `docs/WORKFLOW.md`.
+- **find where code lives** → `docs/ARCHITECTURE.md` (capability map),
+  `docs/FEATURES.md` (behavior), `docs/STATE.md` (data flow).
+- **upkeep or production promotion** → `docs/MAINTENANCE.md`.
+- **edit these docs** → `docs/DOCUMENTATION.md`.
 
 ## Agent skills
 
