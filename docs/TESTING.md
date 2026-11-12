@@ -221,14 +221,19 @@ path. The shell variables below are your selected paths, not defaults:
 
 ```sh
 COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
-  pnpm --config.verify-deps-before-run=error verify:readers prepare --run "$READER_RUN" --browser "$READER_BROWSER"
+  pnpm --config.verify-deps-before-run=error --config.ci=false verify:readers prepare --run "$READER_RUN" --browser "$READER_BROWSER"
 COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
-  pnpm --config.verify-deps-before-run=error verify:readers doctor --run "$READER_RUN"
+  pnpm --config.verify-deps-before-run=error --config.ci=false verify:readers doctor --run "$READER_RUN"
 ```
 
 `prepare` repeats pnpm dependency admission in its isolated environment before
 creating resources; migration, seed, build and Playwright calls each retain
-the same refusal setting. It refuses occupied loopback ports 3000/55432, missing dependencies,
+the same refusal setting. `--config.ci=false` keeps pnpm’s own dependency
+checks on the existing local installation layout instead of switching its
+virtual-store default. The application and tests still receive `CI=1` and
+`NODE_ENV=production`; this does not disable their CI behavior. A different
+installation layout must satisfy admission or stop, not reinstall.
+It refuses occupied loopback ports 3000/55432, missing dependencies,
 pre-existing `media/`, and another lab's checkout lock. It preserves an
 existing `.next/` by moving it to `original.next` in the run directory and
 restores it during cleanup. Do not edit source, change environment files,
@@ -266,9 +271,9 @@ owner; this is not a sandbox for hostile code or deliberate state-file edits.
 
 ```sh
 COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
-  pnpm --config.verify-deps-before-run=error verify:readers drive --run "$READER_RUN"
+  pnpm --config.verify-deps-before-run=error --config.ci=false verify:readers drive --run "$READER_RUN"
 COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
-  pnpm --config.verify-deps-before-run=error verify:readers evidence --run "$READER_RUN"
+  pnpm --config.verify-deps-before-run=error --config.ci=false verify:readers evidence --run "$READER_RUN"
 ```
 
 Drive doctors the instance again and imports the real Playwright config into
@@ -301,9 +306,9 @@ successful invocation does not establish another client's capabilities.
 
 ```sh
 COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
-  pnpm --config.verify-deps-before-run=error verify:readers cleanup --run "$READER_RUN"
+  pnpm --config.verify-deps-before-run=error --config.ci=false verify:readers cleanup --run "$READER_RUN"
 COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_AUTO_PIN=0 \
-  pnpm --config.verify-deps-before-run=error verify:readers evidence --run "$READER_RUN"
+  pnpm --config.verify-deps-before-run=error --config.ci=false verify:readers evidence --run "$READER_RUN"
 ```
 
 Cleanup checks resource identities, stops only the recorded server, removes

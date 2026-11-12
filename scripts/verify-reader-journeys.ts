@@ -28,7 +28,12 @@ const ORIGIN = 'http://127.0.0.1:3000'
 const IMAGE = 'pgvector/pgvector:pg16'
 const LABEL = 'bp.reader-lab'
 // pnpm 11 otherwise installs stale dependencies before both run and exec.
-const PNPM_NO_INSTALL = ['--config.verify-deps-before-run=error']
+const PNPM_NO_INSTALL = [
+  '--config.verify-deps-before-run=error',
+  // Validate the existing local install; CI's pnpm defaults describe another
+  // virtual-store layout. This option leaves the child's CI=1 unchanged.
+  '--config.ci=false',
+]
 const SPECS = ['article-discovery.spec.ts', 'command-palette-discovery.spec.ts']
 const EXPECTED = [
   `${SPECS[0]}:search finds an article, opening it and coming back keeps the search`,
