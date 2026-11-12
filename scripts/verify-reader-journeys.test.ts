@@ -18,6 +18,7 @@ import {
   assertionEvidence,
   assertContainer,
   assertLocalDockerHost,
+  dependencySnapshot,
   labEnvironment,
   isMissingDockerObject,
   removeOwnedDirectory,
@@ -133,6 +134,39 @@ describe('assertion traces', () => {
   })
 })
 describe('resource boundaries', () => {
+  it('identifies installed metadata and resolved packages, and refuses missing inputs', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'bp-lab-dependencies-'))
+    temporary.push(dir)
+    mkdirSync(path.join(dir, 'node_modules/.pnpm'), { recursive: true })
+    writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({ dependencies: { example: '1' } }),
+    )
+    for (const file of [
+      '.modules.yaml',
+      '.pnpm/lock.yaml',
+      '.pnpm-workspace-state-v1.json',
+    ])
+      writeFileSync(path.join(dir, 'node_modules', file), 'original')
+    const first = path.join(dir, 'first')
+    const second = path.join(dir, 'second')
+    for (const target of [first, second]) {
+      mkdirSync(target)
+      writeFileSync(path.join(target, 'package.json'), '{"version":"1"}')
+    }
+    const link = path.join(dir, 'node_modules/example')
+    symlinkSync(first, link)
+    const before = dependencySnapshot(dir)
+    expect(dependencySnapshot(dir)).toEqual(before)
+    writeFileSync(path.join(dir, 'node_modules/.pnpm/lock.yaml'), 'changed')
+    expect(dependencySnapshot(dir).digest).not.toBe(before.digest)
+    writeFileSync(path.join(dir, 'node_modules/.pnpm/lock.yaml'), 'original')
+    rmSync(link)
+    symlinkSync(second, link)
+    expect(dependencySnapshot(dir).digest).not.toBe(before.digest)
+    rmSync(link)
+    expect(() => dependencySnapshot(dir)).toThrow()
+  })
   it('recognizes the observed missing-container diagnostic without accepting connection failures', () => {
     expect(isMissingDockerObject('error: no such object: 51c3d96d')).toBe(true)
     expect(

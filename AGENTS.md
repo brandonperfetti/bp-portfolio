@@ -30,8 +30,8 @@ it is not a CMS and has no runtime integration.
 Run the local mirror of CI's `quality` job ("Lint · Types · Unit") — and only
 that job — as a bash script before calling a change done:
 [`docs/TESTING.md` § Local CI gate](docs/TESTING.md#local-ci-gate). The
-"Build · E2E" and "Evalite (Corvus)" jobs are not mirrored; to see a user
-journey actually work, use the owned-instance recipe in
+"Build · E2E" and "Evalite (Corvus)" jobs are not mirrored; to exercise the two
+reader discovery journeys, use the owned-instance recipe in
 [`docs/TESTING.md` § Verifying a journey locally](docs/TESTING.md#verifying-a-journey-locally)
 and the journey/proof map in `docs/JOURNEYS.md`.
 

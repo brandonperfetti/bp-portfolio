@@ -129,8 +129,9 @@ pnpm build-storybook
 
 The "Build · E2E" and "Evalite (Corvus)" jobs are not mirrored here; they need
 Postgres, Playwright or provider keys and remain gated by PR CI. A green gate
-says nothing about whether a user journey works — that is
-§ Verifying a journey locally below.
+says nothing about whether a user journey works. The two reader discovery
+journeys have an owned recipe in § Verifying a journey locally below; see
+JOURNEYS for the proof and remaining gaps of other journeys.
 
 ## CI (`.github/workflows/ci.yml`)
 
@@ -193,6 +194,11 @@ article search → read → Back/reload, and command palette → exact article/b
 `verify:readers`, including its environment and pnpm option.
 Use this recipe from the checkout root. It is a focused acceptance run,
 not the full Build · E2E job, pg tier, Evalite or Storybook interactions.
+This entry supplies isolation only for the two named journeys.
+A full-suite owned local recipe is not provided by this entry;
+other journeys still require their own authorized instance/environment and
+their mapped proof. The CI-shaped commands above describe the runner, not
+instance isolation.
 After a Next or Storybook bump, `pnpm test:storybook` remains a separate
 check: building Storybook alone does not exercise its stories.
 
@@ -245,9 +251,14 @@ Unexpected names fail with names only; do not copy secret values into logs.
 Fix environment documentation through its normal scope before retrying.
 
 `doctor` checks the current source snapshot, environment-file identities,
-browser, build ID/directory, labeled container and loopback binding, owning
+browser, installed dependency metadata and direct-package resolutions,
+build ID/directory, labeled container and loopback binding, owning
 server PID/start time/listener, and required seeded posts/search results.
-A listening server alone is not ready. A changed source or build requires
+The retained dependency snapshot includes pnpm installation metadata and
+lockfile, resolved direct-package manifest paths/hashes, and Node identity.
+It detects installation/resolution drift, not arbitrary edits to every
+transitive package byte. A listening server alone is not ready. A changed source,
+dependency snapshot or build requires
 cleanup and a new prepare. Keep this source and run under one trusted local
 owner; this is not a sandbox for hostile code or deliberate state-file edits.
 
@@ -268,7 +279,8 @@ Chromium, reduced motion and the existing consent geo remain in effect.
 A missing seed fails in CI mode; it cannot become a local skip.
 
 Each `drive-N/` retains source identities (tracked, dirty and untracked),
-ignored environment-file hashes, browser and seed identities, actual seeded
+ignored environment-file hashes, installed dependency snapshot, browser and
+seed identities, actual seeded
 database data/hash and uploaded-file hashes, pre-drive doctor, runner exit
 status/times, full JSON report and traces. `assertions.json` extracts the paired assertion
 starts/ends from each trace; Playwright JSON itself omits these automatic steps. No production data belongs here.

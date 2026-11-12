@@ -43,6 +43,7 @@ type State = {
   token: string
   created: string
   source: string
+  dependencies: string
   browser: string
   browserHash: string
   envHash: string
@@ -297,6 +298,29 @@ function sourceSnapshot() {
     digest: hash(JSON.stringify(files)),
   }
 }
+
+/** Identify the installed dependency graph and direct resolutions across phases. */
+export function dependencySnapshot(root = ROOT) {
+  const manifest = JSON.parse(
+    readFileSync(path.join(root, 'package.json'), 'utf8'),
+  )
+  const names = [
+    'node_modules/.modules.yaml',
+    'node_modules/.pnpm/lock.yaml',
+    'node_modules/.pnpm-workspace-state-v1.json',
+    ...Object.keys({ ...manifest.dependencies, ...manifest.devDependencies })
+      .sort()
+      .map((name) => `node_modules/${name}/package.json`),
+  ]
+  const files = Object.fromEntries(
+    names.map((name) => {
+      const file = realpathSync(path.join(root, name))
+      return [name, { path: file, sha256: hash(readFileSync(file)) }]
+    }),
+  )
+  const inputs = { node: process.version, executable: process.execPath, files }
+  return { ...inputs, digest: hash(JSON.stringify(inputs)) }
+}
 function inputFiles(dir: string): Record<string, string> {
   const result: Record<string, string> = {}
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -417,6 +441,10 @@ async function doctor(s: State) {
   must(s.phase === 'ready', 'Prepare did not reach ready; cleanup is required')
   lockMatches(s)
   verifyDaemon(s)
+  must(
+    dependencySnapshot().digest === s.dependencies,
+    'Installed dependencies changed since prepare; cleanup and a new run are required',
+  )
   checkEnvironment(s)
   must(
     sourceSnapshot().digest === s.source,
@@ -475,6 +503,7 @@ async function doctor(s: State) {
   return {
     checkedAt: new Date().toISOString(),
     source: s.source,
+    dependencies: s.dependencies,
     build: s.build,
     pid: s.pid,
     container: s.container,
@@ -599,6 +628,7 @@ async function drive(s: State) {
   writeFileSync(path.join(folder, 'seed.sql'), dump, { mode: 0o600 })
   json(path.join(folder, 'inputs.json'), {
     database: hash(dump),
+    dependencies: dependencySnapshot(),
     media: inputFiles(path.join(ROOT, 'media')),
     envFiles: envFiles(),
     browser: { path: s.browser, sha256: s.browserHash },
@@ -800,6 +830,7 @@ async function prepare(run: string, browser: string) {
     token: randomUUID(),
     created: new Date().toISOString(),
     source: sourceSnapshot().digest,
+    dependencies: dependencySnapshot().digest,
     browser,
     dockerHost,
     daemon,
@@ -817,6 +848,7 @@ async function prepare(run: string, browser: string) {
   })
   try {
     json(path.join(run, 'source.json'), sourceSnapshot())
+    json(path.join(run, 'dependencies.json'), dependencySnapshot())
     json(path.join(run, 'environment.json'), {
       dockerHost: s.dockerHost,
       daemon: s.daemon,
