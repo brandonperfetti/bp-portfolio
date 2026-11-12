@@ -102,6 +102,8 @@ already cost a session or broken production.
   `docs/SEO.md`.
 - **write or run tests** → `docs/TESTING.md`; which journeys are proven where,
   and what is not → `docs/JOURNEYS.md`.
+  **Own the instance before claiming browser proof:** use the reader-lab
+  entry in TESTING for the two discovery journeys; a skipped case is not proof.
 - **decide whether a change fits the product** → `docs/PRODUCT.md`.
 - **write or publish content** → `docs/CONTENT_WORKFLOW.md`,
   `docs/CONTENT_STYLE.md`.

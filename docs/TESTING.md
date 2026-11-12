@@ -185,153 +185,119 @@ Two related notes:
 
 ## Verifying a journey locally
 
-How to see a reader journey actually work on an instance you own, without
-production data or credentials. This is the Playwright part of the
-Build · E2E job, run by hand; it is the recipe `docs/JOURNEYS.md` points at.
-It does **not** run that job's migration re-run check, its pg integration
-tier (`pnpm exec vitest run --root evals`) or its Storybook interaction tests
-(`pnpm test:storybook`). After a `next` or Storybook bump, run
-`pnpm test:storybook` too: the local gate only builds Storybook, and on #313
-a Next bump broke every story while the build passed. Run the blocks in
-**bash**, from the checkout root, in one shell.
-`[measured 2026-11-11 at 4e48775: 31 passed, 9 skipped (the
-content-dependent paths JOURNEYS.md lists), 0 failed. Historical: #316 added
-six cases, and the suite was 37 passed, 9 skipped at fdd6ac3]`
+The project-owned reader lab runs the two bold reader journeys in
+[JOURNEYS.md](JOURNEYS.md) against an isolated, seeded production build:
+article search → read → Back/reload, and command palette → exact article/body
+→ real clipboard (light and dark). Its implementation is
+`scripts/verify-reader-journeys.ts`; its invocation is `pnpm verify:readers`.
+Use this recipe from the checkout root. It is a focused acceptance run,
+not the full Build · E2E job, pg tier, Evalite or Storybook interactions.
+After a Next or Storybook bump, `pnpm test:storybook` remains a separate
+check: building Storybook alone does not exercise its stories.
 
-1. **Own the files and the database.** The run writes `media/` (seed
-   uploads — untracked and _not_ git-ignored, never commit it),
-   `test-results/`, `.next/` and, when the configured HTML reporter runs (step
-   4's `--reporter` replaces it), `playwright-report/`. Record which already
-   exist so cleanup touches only what this run creates. Recording a path does
-   not keep its contents: the build replaces a pre-existing `.next/`,
-   Playwright empties `test-results/` when it starts, and its HTML reporter
-   replaces `playwright-report/` — copy out anything you need from any of
-   them first. If `media/` already holds uploads you care about,
-   use a fresh worktree instead. The database is
-   a throwaway container on a free loopback port — not the `bp-portfolio-db`
-   compose container, which holds a production restore. `--rm` with no volume
-   means stopping it deletes it.
+### Prepare and identify the instance
 
-   ```sh
-   PRE_EXISTING=$(ls -d media test-results playwright-report .next 2>/dev/null)
-   RUN=journey-$(date +%s)
-   lsof -nP -iTCP:55432 -sTCP:LISTEN && echo 'STOP: 55432 is taken; something else would answer as the database'
-   docker run -d --rm --name "bp-$RUN" -p 127.0.0.1:55432:5432 \
-     -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
-     -e POSTGRES_DB=bp_journey pgvector/pgvector:pg16 || echo 'STOP: the container did not start'
-   for i in $(seq 30); do docker exec "bp-$RUN" pg_isready -q -U postgres -d bp_journey && break; sleep 1; done
-   docker exec "bp-$RUN" pg_isready -U postgres -d bp_journey # must say "accepting connections"
-   ```
+Prerequisites: Node in the repository's supported range, existing pnpm
+dependencies, Docker running with `pgvector/pgvector:pg16` already available,
+`git`, `ps`, `lsof`, `unzip`, and an existing Chromium executable compatible with the
+installed Playwright. The helper installs nothing. Use Playwright's installed
+browser or a cached Chromium headless shell; a cached browser is not CI's
+managed browser. The existing seed reads public Cloudinary images.
 
-   Go no further if a `STOP:` line printed or the last line does not say
-   _accepting connections_: every later step talks to `127.0.0.1:55432`, and
-   only a container this run started may be there.
+Select a **new absolute evidence directory** beneath an existing approved
+private artifact directory, outside this checkout, and the actual browser
+path. The shell variables below are your selected paths, not defaults:
 
-2. **Control the environment.** Clearing your shell is not enough: Next
-   (`@next/env` 16) and Payload's CLI (`payload migrate`, `payload run`, its
-   own `@next/env` 15) both load `.env*` files from the checkout — which files
-   depends on the mode, `.env.production*` only in production — and Payload's
-   source also has a parent-directory fallback. A real `BLOB_READ_WRITE_TOKEN`
-   there would send the seed's uploads to the real Blob store; a DSN or
-   `SENTRY_SPOTLIGHT` turns on Sentry; `RESEND_API_KEY` turns on mail. Both
-   loaders never overwrite a variable that is already set, even to an empty
-   string, and the app treats empty as off — so pin to empty every name
-   `.env.example` lists, active or commented out (that includes
-   `SENTRY_SPOTLIGHT` and the `R2_*` backup credentials), plus the database
-   fallbacks and the Vercel identity names, then set only the safe values:
+```sh
+pnpm verify:readers prepare --run "$READER_RUN" --browser "$READER_BROWSER"
+pnpm verify:readers doctor --run "$READER_RUN"
+```
 
-   ```sh
-   PINS=($(grep -oE '^(# ?)?[A-Z_][A-Z0-9_]*=' .env.example | sed 's/^# \{0,1\}//' | sort -u) \
-     POSTGRES_URL= DATABASE_URL= VERCEL_ENV= NEXT_PUBLIC_VERCEL_ENV= VERCEL_PROJECT_PRODUCTION_URL=)
-   jenv() {
-     case "${NODE_ENV:-}" in '' | production) ;; *)
-       echo "STOP: NODE_ENV=$NODE_ENV is not a mode the check below covers"; return 1 ;; esac
-     for a in "$@"; do case "$a" in
-       NODE_ENV=*) echo 'STOP: set NODE_ENV before jenv, not as an argument'; return 1 ;;
-       *=*) ;; *) break ;; esac; done
-     env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 \
-       CI="${CI:-}" NODE_ENV="${NODE_ENV:-}" "${PINS[@]}" \
-       DATABASE_URI=postgres://postgres:postgres@127.0.0.1:55432/bp_journey \
-       PAYLOAD_SECRET=ci-not-a-real-secret \
-       NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3000 \
-       NEXT_PUBLIC_SITE_NAME='BP Portfolio (journey)' \
-       NEXT_TELEMETRY_DISABLED=1 \
-       ${PLAYWRIGHT_EXECUTABLE_PATH:+PLAYWRIGHT_EXECUTABLE_PATH="$PLAYWRIGHT_EXECUTABLE_PATH"} \
-       "$@"
-   }
-   # Run each loader the recipe uses, in each mode it uses, and print the
-   # NAMES of every non-empty variable afterwards (never values). Expect only
-   # the safe set above plus HOME, PATH, LANG, __NEXT_PROCESSED_ENV and, on
-   # macOS, __CF_USER_TEXT_ENCODING — anything else came from an env file.
-   for mode in '' production; do
-     NODE_ENV=$mode jenv node --input-type=module -e "
-       const { createRequire } = await import('node:module')
-       const nextEnv = createRequire(createRequire(process.cwd() + '/').resolve('next/package.json'))('@next/env')
-       const { loadEnv } = await import('./node_modules/payload/dist/bin/loadEnv.js')
-       loadEnv()
-       nextEnv.loadEnvConfig(process.cwd(), process.env.NODE_ENV !== 'production', { info() {}, error() {} }, true)
-       console.log('mode=' + (process.env.NODE_ENV || 'dev') + ':',
-         Object.keys(process.env).filter(k => process.env[k] && k !== 'NODE_ENV').sort().join(' '))"
-   done
-   ```
+`prepare` refuses occupied loopback ports 3000/55432, missing dependencies,
+pre-existing `media/`, and another lab's checkout lock. It preserves an
+existing `.next/` by moving it to `original.next` in the run directory and
+restores it during cleanup. Do not edit source, change environment files,
+run another build/gate, or drive the same instance concurrently. The helper
+locks the checkout and serializes doctor/drive/cleanup operations; that lock
+is a coordination control, not protection against another shell ignoring it.
+Existing `test-results/` and `playwright-report/` are not used or replaced.
 
-   The pins cover what `.env.example` documents. An app-read name it does not
-   document is a tuning knob (`CORVUS_*`, `GITHUB_TECH_*`), not a service
-   credential, as of 2026-11-11. If one appears in the check, add it to
-   `.env.example` and re-run the `PINS=` line (it is read once, when it runs),
-   or, for this shell only, `PINS+=(NAME=)` without re-running it — then
-   repeat the check until the name is gone.
+The lab creates a uniquely labeled disposable Postgres container with tmpfs
+data, never the compose database or a production restore. It pins all active
+and commented names in `.env.example` to empty, then supplies only its local
+DB/site values. It does not inherit shell credentials. Both real Next and
+Payload environment loaders must leave no unexpected nonempty names in
+both modes, including Payload's parent fallback, before migration/seed/build.
+Unexpected names fail with names only; do not copy secret values into logs.
+Fix environment documentation through its normal scope before retrying.
 
-3. **Migrate, seed, build.** `jenv pnpm migrate`, `jenv pnpm seed:e2e`,
-   `CI=1 jenv pnpm build`. The seed reads public Cloudinary images.
+`doctor` checks the current source snapshot, environment-file identities,
+browser, build ID/directory, labeled container and loopback binding, owning
+server PID/start time/listener, and required seeded posts/search results.
+A listening server alone is not ready. A changed source or build requires
+cleanup and a new prepare. Keep this source and run under one trusted local
+owner; this is not a sandbox for hostile code or deliberate state-file edits.
 
-4. **Drive it.** Make sure nothing else is listening on 3000 first
-   (`lsof -nP -iTCP:3000 -sTCP:LISTEN`) — Playwright and a browser would
-   otherwise test whatever server is there.
-   - _The codified journeys:_
-     `CI=1 jenv PLAYWRIGHT_JSON_OUTPUT_NAME="${TMPDIR:-/tmp}/e2e-$RUN.json" pnpm test:e2e --reporter=list,json`
-     (boots its own `pnpm start`; the JSON report, kept outside the checkout,
-     is the record step 5 reads). Without a matching managed browser, point
-     `PLAYWRIGHT_EXECUTABLE_PATH` at a cached Chromium headless shell under
-     `~/Library/Caches/ms-playwright/` — never `playwright install` in a
-     sandbox.
-   - _By hand or with an agent's browser:_
-     `NODE_ENV=production jenv pnpm exec next start -H 127.0.0.1 -p 3000`,
-     then first check the instance is yours: `/articles` lists exactly the
-     three seeded posts (`scripts/seed-e2e.ts`, `POSTS`).
+### Drive and read the proof
 
-5. **Record what ran, and keep it.** A skipped journey proved nothing, and
-   Playwright's terminal output never shows a skip's reason — a grep of it for
-   a skip string finds nothing whether the test skipped or not
-   `[measured 2026-11-11, Playwright 1.61.1, with and without CI]`. Read the
-   counts and every skip reason from the JSON report instead:
+```sh
+pnpm verify:readers drive --run "$READER_RUN"
+pnpm verify:readers evidence --run "$READER_RUN"
+```
 
-   ```sh
-   node -e '
-   const r = require(process.argv[1])
-   const walk = (s) => [
-     ...(s.specs ?? []).flatMap((sp) => sp.tests.filter((t) => t.status === "skipped")
-       .map((t) => `${sp.file} › ${sp.title} — ${t.annotations.find((a) => a.type === "skip")?.description ?? "(no reason)"}`)),
-     ...(s.suites ?? []).flatMap(walk),
-   ]
-   const { expected, skipped, unexpected, flaky } = r.stats
-   console.log(`${expected} passed, ${skipped} skipped, ${unexpected} failed, ${flaky} flaky`)
-   r.suites.flatMap(walk).forEach((l) => console.log(`skipped: ${l}`))' "${TMPDIR:-/tmp}/e2e-$RUN.json"
-   ```
+Drive doctors the instance again and imports the real Playwright config into
+a run-local config. It changes only lifecycle/output settings: uses the owned
+server, selects the two unchanged specs, retains traces/steps and failure
+screenshots outside the checkout, and disables retries. CI mode, one worker,
+Chromium, reduced motion and the existing consent geo remain in effect.
+A missing seed fails in CI mode; it cannot become a local skip.
 
-   The summary counts tests only: a run that never reached them (a
-   `webServer` timeout, say) prints zeros, so keep step 4's exit status and
-   its terminal error beside it. Copy anything you need from `test-results/`
-   before cleanup or the next Playwright run.
+Each `drive-N/` retains source identities (tracked, dirty and untracked),
+ignored environment-file hashes, browser and seed identities, actual seeded
+database data/hash and uploaded-file hashes, pre-drive doctor, runner exit
+status/times, full JSON report and traces. `assertions.json` extracts the paired assertion
+starts/ends from each trace; Playwright JSON itself omits these automatic steps. No production data belongs here.
+The verdict requires the exact three case identities, successful execution
+with recorded steps, zero skips/failures/flaky results/retries, and a passing
+post-drive doctor. The existing palette test reads the actual clipboard and
+compares the exact article URL; the wrapper does not replace that assertion.
+A green total, zero tests, expected failure or skipped required case is not
+proof. Read the full report/trace for assertions and any skip annotations.
 
-6. **Clean up only what you made:** stop the server you started,
-   `docker stop "bp-$RUN"`, then remove only the paths this run created:
+For authorized interactive browser checks, use the prepared
+`http://127.0.0.1:3000` instance after doctor, as the sole driver. Do not change
+fixtures. Keep interactive observations separate from the codified verdict.
+The evidence command also works after cleanup. Source review or one client's
+successful invocation does not establish another client's capabilities.
 
-   ```sh
-   for d in media test-results playwright-report .next; do
-     case " $(echo $PRE_EXISTING) " in *" $d "*) ;; *) rm -rf "$d" ;; esac
-   done
-   ```
+### Cleanup and failed attempts
+
+```sh
+pnpm verify:readers cleanup --run "$READER_RUN"
+pnpm verify:readers evidence --run "$READER_RUN"
+```
+
+Cleanup checks resource identities, stops only the recorded server, removes
+only the labeled container and owned build/media directories, restores the
+prior build, and releases the checkout lock. It retains reports, inputs,
+logs and `cleanup.json`. Never delete the run directory while it holds the
+original build. No kill-by-name, port takeover or force-cleanup mode exists.
+
+A prepare failure attempts owned cleanup and retains its failure/logs. After
+a drive failure, retain the evidence, clean up, diagnose, then prepare a new
+run and doctor before driving again. Do not retry assertions until green.
+After a killed shell/process or ownership mismatch, stop and inspect the
+recorded state and any live process before recovery; do not erase a lock or
+substitute identities to bypass refusal. An unresolved cleanup is an explicit
+restoration task, not a successful lab. Cleanup completion does not erase an
+earlier failed result.
+
+The lab proves these navigation/clipboard mechanics on a synthetic corpus.
+It does not prove reader usefulness, ranking on real content, animation,
+clipboard denial/share targets, staging behavior or production health. The
+other journey-map gaps remain unassessed. Helper controls are covered by
+`scripts/verify-reader-journeys.test.ts`; actual end-to-end lab proof remains
+separate from those unit controls.
 
 ## Policy
 
