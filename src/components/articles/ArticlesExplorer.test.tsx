@@ -116,6 +116,7 @@ describe('ArticlesExplorer', () => {
               slug: 'reader-search-example',
               title,
               description: 'A practical engineering guide.',
+              searchText: '',
               author: 'Brandon Perfetti',
               date: '2026-03-01',
             },
