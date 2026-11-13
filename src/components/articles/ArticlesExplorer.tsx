@@ -731,7 +731,8 @@ export function ArticlesExplorer({
                 : 'No articles found.'}
           {queryText && (
             <span className="mt-2 block">
-              Try fewer words, a technology name, or browse topics.
+              Try fewer words, a technology name, or clear your search to browse
+              topics.
             </span>
           )}
         </p>

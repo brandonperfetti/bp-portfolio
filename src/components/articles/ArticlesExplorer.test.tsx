@@ -117,6 +117,7 @@ describe('ArticlesExplorer', () => {
               title,
               description: 'A practical engineering guide.',
               searchText: '',
+              topics: ['Engineering'],
               author: 'Brandon Perfetti',
               date: '2026-03-01',
             },
@@ -124,11 +125,17 @@ describe('ArticlesExplorer', () => {
         />,
       )
       const search = screen.getByPlaceholderText('Search articles')
+      expect(
+        screen.getByRole('button', { name: 'Engineering' }),
+      ).toBeInTheDocument()
       await user.type(search, miss)
       await screen.findByText(
         `No articles found for the search term "${miss}".`,
       )
       expect(search).toHaveValue(miss)
+      expect(
+        screen.queryByRole('button', { name: 'Engineering' }),
+      ).not.toBeInTheDocument()
       expect(
         screen.queryByRole('link', { name: `Read article: ${title}` }),
       ).not.toBeInTheDocument()
@@ -138,7 +145,7 @@ describe('ArticlesExplorer', () => {
       await screen.findByRole('link', { name: `Read article: ${title}` })
       expect(
         screen.queryByText(
-          'Try fewer words, a technology name, or browse topics.',
+          'Try fewer words, a technology name, or clear your search to browse topics.',
         ),
       ).not.toBeInTheDocument()
 
@@ -149,8 +156,17 @@ describe('ArticlesExplorer', () => {
       )
       expect(
         screen.getByText(
-          'Try fewer words, a technology name, or browse topics.',
+          'Try fewer words, a technology name, or clear your search to browse topics.',
         ),
+      ).toBeInTheDocument()
+
+      await user.clear(search)
+      await user.click(
+        await screen.findByRole('button', { name: 'Engineering' }),
+      )
+      expect(search).toHaveValue('')
+      expect(
+        screen.getByRole('link', { name: `Read article: ${title}` }),
       ).toBeInTheDocument()
     },
   )

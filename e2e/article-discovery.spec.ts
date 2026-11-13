@@ -78,7 +78,7 @@ test('search finds an article, opening it and coming back keeps the search', asy
     page.getByText(`No articles found for the search term "${miss}".`),
   ).toBeVisible()
   const recovery = page.getByText(
-    'Try fewer words, a technology name, or browse topics.',
+    'Try fewer words, a technology name, or clear your search to browse topics.',
   )
   await expect(recovery).toBeVisible()
 
