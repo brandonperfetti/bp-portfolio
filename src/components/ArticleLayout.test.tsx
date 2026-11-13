@@ -3,6 +3,7 @@ import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ArticleLayout } from '@/components/ArticleLayout'
+import { AppContext } from '@/app/(frontend)/providers'
 
 /**
  * #92 regression coverage: on iOS Safari the priority hero image is
@@ -26,8 +27,9 @@ vi.mock('next/image', () => ({
 }))
 /* eslint-enable @next/next/no-img-element, jsx-a11y/alt-text */
 
+const backMock = vi.hoisted(() => vi.fn())
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ back: vi.fn() }),
+  useRouter: () => ({ back: backMock }),
 }))
 
 vi.mock('@/components/motion/ScrollReveal', () => ({
@@ -71,6 +73,7 @@ function stubImageComplete(value: boolean) {
 
 afterEach(() => {
   cleanup()
+  backMock.mockClear()
   if (originalCompleteDescriptor) {
     Object.defineProperty(
       HTMLImageElement.prototype,
@@ -80,6 +83,22 @@ afterEach(() => {
   } else {
     Reflect.deleteProperty(HTMLImageElement.prototype, 'complete')
   }
+})
+
+describe('ArticleLayout history navigation', () => {
+  it.each(['/about', '/articles'])(
+    'names the history action Back after arriving from %s',
+    (previousPathname) => {
+      render(
+        <AppContext.Provider value={{ previousPathname }}>
+          <ArticleLayout article={article}>body</ArticleLayout>
+        </AppContext.Provider>,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+      expect(backMock).toHaveBeenCalledOnce()
+    },
+  )
 })
 
 describe('ArticleLayout hero image reveal', () => {

@@ -721,7 +721,7 @@ export function ArticlesExplorer({
       />
 
       {filtered.length === 0 && (
-        <p className="mt-8 mb-12 text-sm text-zinc-500">
+        <p className="mt-8 mb-12 text-sm text-zinc-500 dark:text-zinc-400">
           {queryText && topic !== 'All'
             ? `No articles found for the search term "${queryText}" in the "${topic}" topic.`
             : queryText
@@ -729,6 +729,12 @@ export function ArticlesExplorer({
               : topic !== 'All'
                 ? `No articles found in the "${topic}" topic.`
                 : 'No articles found.'}
+          {queryText && (
+            <span className="mt-2 block">
+              Try fewer words, a technology name, or clear your search to browse
+              topics.
+            </span>
+          )}
         </p>
       )}
     </div>

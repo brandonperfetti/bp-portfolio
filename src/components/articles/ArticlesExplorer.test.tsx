@@ -92,6 +92,85 @@ afterEach(() => {
 })
 
 describe('ArticlesExplorer', () => {
+  it.each([
+    [
+      'vector search',
+      'pgvector',
+      'pgvector + PostgreSQL: Production-Ready Semantic Search Without a Vector DB',
+    ],
+    [
+      'command line tool',
+      'CLI tool',
+      'Building a CLI Tool in Node.js: From Script to Publishable Package',
+    ],
+  ])(
+    'offers recovery for "%s" while preserving the substring search contract',
+    async (miss, match, title) => {
+      const user = userEvent.setup()
+      // Observed titles, controlled metadata: this checks the search contract,
+      // not the production corpus or whether a human finds the article useful.
+      render(
+        <ArticlesExplorer
+          articles={[
+            {
+              slug: 'reader-search-example',
+              title,
+              description: 'A practical engineering guide.',
+              searchText: '',
+              topics: ['Engineering'],
+              author: 'Brandon Perfetti',
+              date: '2026-03-01',
+            },
+          ]}
+        />,
+      )
+      const search = screen.getByPlaceholderText('Search articles')
+      expect(
+        screen.getByRole('button', { name: 'Engineering' }),
+      ).toBeInTheDocument()
+      await user.type(search, miss)
+      await screen.findByText(
+        `No articles found for the search term "${miss}".`,
+      )
+      expect(search).toHaveValue(miss)
+      expect(
+        screen.queryByRole('button', { name: 'Engineering' }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('link', { name: `Read article: ${title}` }),
+      ).not.toBeInTheDocument()
+
+      await user.clear(search)
+      await user.type(search, match)
+      await screen.findByRole('link', { name: `Read article: ${title}` })
+      expect(
+        screen.queryByText(
+          'Try fewer words, a technology name, or clear your search to browse topics.',
+        ),
+      ).not.toBeInTheDocument()
+
+      await user.clear(search)
+      await user.type(search, miss)
+      await screen.findByText(
+        `No articles found for the search term "${miss}".`,
+      )
+      expect(
+        screen.getByText(
+          'Try fewer words, a technology name, or clear your search to browse topics.',
+        ),
+      ).toBeInTheDocument()
+
+      await user.clear(search)
+      await user.click(
+        await screen.findByRole('button', { name: 'Engineering' }),
+      )
+      expect(search).toHaveValue('')
+      expect(
+        screen.getByRole('link', { name: `Read article: ${title}` }),
+      ).toBeInTheDocument()
+    },
+  )
+
   it('renders empty state copy when no articles are available', () => {
     render(<ArticlesExplorer articles={[]} />)
 
