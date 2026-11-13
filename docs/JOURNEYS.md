@@ -10,7 +10,11 @@ How to read the proof column: **e2e** is a real browser on a production build
 mocked; **pg** is the real-Payload/real-Postgres tier (`evals/*.test.ts`);
 **eval** is Evalite. A component test proves the logic, not that the browser
 does it. To watch a journey yourself on an instance you own, use
-`docs/TESTING.md` § Verifying a journey locally.
+`docs/TESTING.md` § Verifying a journey locally. Its no-install
+`verify:readers` invocation owns
+only the two bold reader journeys below (three Chromium cases), retaining
+executed steps, source/input identity and a verdict that refuses required
+skips or retries. It adds no proof for the other rows.
 
 **Content-dependent paths.** The CI seed (`scripts/seed-e2e.ts`) creates three
 public posts with no topics, plus a small tech/uses set — so anything needing
