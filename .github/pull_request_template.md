@@ -10,6 +10,26 @@ Cleanup, Changes and Verification. Delete an optional section rather than writin
 <!-- Who benefits, and what becomes possible or better. One or two sentences. -->
 
 **Door:** <!-- two-way or one-way, and why; the recovery or migration consequence -->
+**Class:** <!-- composes | extends | one-way door; choose one and explain why -->
+<!--
+Class adds evidence; it never lowers the working agreements' requirements. A4
+independent review always runs. If a requirement feels excessive, record it in
+_agent/friction; do not amend the requirement or the agreements.
+
+List the chosen class's evidence below, saying for each item whether it was
+captured from the real build:
+- composes — copy, styles, docs, a new test, or use of existing capabilities:
+  full A5 gate; before/after evidence when the change is visual.
+- extends — changes to existing behavior (routes, components, search, auth,
+  webhooks): full gate; a test exercising the changed behavior; the matching
+  docs/JOURNEYS.md journey run against a real build; a separate reviewer.
+- one-way door — Payload schemas or migrations, RLS, production CMS writes
+  through Kody, deleting data, env or hosting changes, or money: all evidence
+  above; when the change includes a migration, migration up and down on a
+  branch database with row counts; a
+  rollback plan actually tried; Brandon's explicit sign-off before merge.
+-->
+
 **Cleanup:** <!-- none, done or needed; what remains and when it can be removed -->
 
 ## Why
