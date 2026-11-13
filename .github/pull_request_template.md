@@ -25,7 +25,8 @@ captured from the real build:
   docs/JOURNEYS.md journey run against a real build; a separate reviewer.
 - one-way door — Payload schemas or migrations, RLS, production CMS writes
   through Kody, deleting data, env or hosting changes, or money: all evidence
-  above; migration up and down on a branch database with row counts; a
+  above; when the change includes a migration, migration up and down on a
+  branch database with row counts; a
   rollback plan actually tried; Brandon's explicit sign-off before merge.
 -->
 
