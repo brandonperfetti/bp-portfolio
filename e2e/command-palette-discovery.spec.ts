@@ -101,5 +101,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(articleUrl)
+
+    // History returns to the actual entry page, so the control promises Back.
+    await page.getByRole('button', { name: 'Back', exact: true }).click()
+    await expect(page).toHaveURL(new URL('/about', baseURL).href)
   })
 }

@@ -729,6 +729,11 @@ export function ArticlesExplorer({
               : topic !== 'All'
                 ? `No articles found in the "${topic}" topic.`
                 : 'No articles found.'}
+          {queryText && (
+            <span className="mt-2 block">
+              Try fewer words, a technology name, or browse topics.
+            </span>
+          )}
         </p>
       )}
     </div>

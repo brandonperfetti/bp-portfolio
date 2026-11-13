@@ -65,6 +65,23 @@ test('search finds an article, opening it and coming back keeps the search', asy
   }
   for (const title of OTHERS) await expect(cardLink(title)).toBeVisible()
 
+  // A miss retains the query and offers a way forward without changing search.
+  const miss = 'no matching reader article'
+  await interactUntil(async () => {
+    await searchInput.fill(miss)
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('q'), { timeout: 2000 })
+      .toBe(miss)
+  })
+  await expect(searchInput).toHaveValue(miss)
+  await expect(
+    page.getByText(`No articles found for the search term "${miss}".`),
+  ).toBeVisible()
+  const recovery = page.getByText(
+    'Try fewer words, a technology name, or browse topics.',
+  )
+  await expect(recovery).toBeVisible()
+
   // Search: the URL carries the query and the list narrows to the target.
   await interactUntil(async () => {
     await searchInput.fill(QUERY)
@@ -73,6 +90,7 @@ test('search finds an article, opening it and coming back keeps the search', asy
       .toBe(QUERY)
   })
   await expect(cardLink(TARGET.title)).toBeVisible()
+  await expect(recovery).toHaveCount(0)
   for (const title of OTHERS) await expect(cardLink(title)).toHaveCount(0)
 
   // Open it: a real navigation to that article's page.
@@ -83,7 +101,7 @@ test('search finds an article, opening it and coming back keeps the search', asy
   ).toBeVisible()
 
   // Back: same query in the box, same narrowed list.
-  await page.goBack()
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
   await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe(QUERY)
   await expect(searchInput).toHaveValue(QUERY)
   await expect(cardLink(TARGET.title)).toBeVisible()
