@@ -32,10 +32,14 @@
 # Media objects have NO expiry until a pruning rule is decided. This workflow
 # never deletes, so do not add one here.
 #
-# The check: after the copy, every pathname a live (non-history) table
-# references must be in the newest manifest with its object in R2 at the
-# recorded size, and the manifest must be under 36 hours old. A reference
-# from a version-history table (`_posts_v…`) is reported, not failed.
+# The check: after the copy, every referenced pathname must be in the newest
+# manifest with its object in R2 at the recorded size, and the manifest must
+# be under 36 hours old. Each database must name at least one file, so an
+# empty production read cannot hide behind staging's. The one excused case: a
+# pathname named only by a version-history table (`_posts_v…`) that the store
+# itself answers 404 for, which no backup can copy; it is reported, not
+# failed. History tables also hold current drafts, so any other gap there
+# fails.
 # Exit codes follow audit-served-prefix.yml: 0 clean, 1 a finding, 2 the run
 # did not complete.
 #
@@ -89,6 +93,10 @@ concurrency:
   cancel-in-progress: false # never cut a copy off halfway
 
 env:
+  # Pinned to a full patch version for the same reason ci.yml pins it: a Node
+  # patch release must not change behaviour underneath a scheduled run. Keep in
+  # step with ci.yml's NODE_VERSION when that moves.
+  NODE_VERSION: '24.18.0'
   # Names, not secrets.
   R2_MEDIA_BACKUP_BUCKET: bp-portfolio-media-backups
   MEDIA_BLOB_ORIGIN: https://t8wdoiziaix3go2s.public.blob.vercel-storage.com
@@ -105,7 +113,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Check the AWS CLI can make create-only writes
         run: |

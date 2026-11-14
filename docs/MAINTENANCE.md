@@ -102,7 +102,10 @@
   SQL asserts itself, since the Supabase pooler drops `PGOPTIONS`), copies
   the new and changed ones from their **public** Blob URLs into the **private
   R2 bucket `bp-portfolio-media-backups`**, writes a dated manifest, then
-  checks that every live reference is in that manifest with its bytes in R2.
+  checks that every reference is in that manifest with its bytes in R2 (each
+  database must name at least one file; a version-history reference the store
+  itself answers 404 for is reported, not failed). It copies **referenced**
+  media only: a store object no database names is not backed up.
   It holds **no Blob credential**: Vercel Blob has no read-only token, and the
   read-write one can overwrite or delete the store. Keys mirror the Blob
   layout: `objects/<pathname>` for the first copy,

@@ -32,6 +32,20 @@ const code = workflow
   .join('\n')
 
 describe('media-backup.yml (#328)', () => {
+  it('runs on the Node patch version CI validates against', () => {
+    const ci = readFileSync(
+      path.join(repoRoot, '.github/workflows/ci.yml'),
+      'utf8',
+    )
+    const ciNode = /NODE_VERSION:\s*'([^']+)'/.exec(ci)?.[1]
+    const ownNode = /NODE_VERSION:\s*'([^']+)'/.exec(code)?.[1]
+    expect(ciNode, 'ci.yml must still pin a full patch version').toMatch(
+      /^\d+\.\d+\.\d+$/,
+    )
+    expect(ownNode).toBe(ciNode)
+    expect(code).toContain('node-version: ${{ env.NODE_VERSION }}')
+  })
+
   it('holds no Blob credential: it reads public URLs only', () => {
     expect(code).not.toMatch(
       /BLOB_READ_WRITE_TOKEN|VERCEL_OIDC_TOKEN|VERCEL_TOKEN/,

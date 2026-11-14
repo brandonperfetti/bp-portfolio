@@ -12,6 +12,7 @@ import {
   backup,
   candidateKeys,
   check,
+  combineSources,
   manifestKey,
   normalizeEtag,
   PUBLIC_FETCH_HEADERS,
@@ -477,16 +478,60 @@ describe('check', () => {
     ])
   })
 
-  it('reports a history-only reference without failing on it', async () => {
+  it('reports, without failing, a history-only file the store answers 404 for', async () => {
     const result = await check({
       deps: r2({}),
-      manifest: manifestOf([]),
+      manifest: manifestOf([
+        { ...entry('old.png', null), status: 'missing' as const },
+      ]),
       now,
       references: [{ pathname: 'old.png', table: '_posts_v_blocks_media' }],
     })
     expect(result.failures).toEqual([])
     expect(result.history).toEqual([
-      { pathname: 'old.png', reason: 'not in the manifest' },
+      { pathname: 'old.png', reason: 'gone from the store (404)' },
+    ])
+  })
+
+  it('fails a history-only file that is in the store but not backed up: it may be a current draft', async () => {
+    const result = await check({
+      deps: r2({}),
+      manifest: manifestOf([
+        { ...entry('draft-error.png', null), status: 'error' as const },
+        entry('draft-gone.png', 'objects/draft-gone.png'),
+      ]),
+      now,
+      references: [
+        { pathname: 'draft-absent.png', table: '_posts_v_blocks_media' },
+        { pathname: 'draft-error.png', table: '_pages_v_version_hero_slides' },
+        { pathname: 'draft-gone.png', table: '_posts_v' },
+      ],
+    })
+    expect(result.history).toEqual([])
+    expect(result.failures).toEqual([
+      { pathname: 'draft-absent.png', reason: 'not in the manifest' },
+      { pathname: 'draft-error.png', reason: 'error in the manifest' },
+      {
+        pathname: 'draft-gone.png',
+        reason: 'its object is not in R2 at 2 bytes',
+      },
+    ])
+  })
+
+  it('fails a live reference the store answers 404 for', async () => {
+    const result = await check({
+      deps: r2({}),
+      manifest: manifestOf([
+        { ...entry('a.png', null), status: 'missing' as const },
+      ]),
+      now,
+      references: [
+        { pathname: 'a.png', table: 'media' },
+        { pathname: 'a.png', table: '_posts_v' },
+      ],
+    })
+    expect(result.failures).toEqual([
+      { pathname: 'a.png', reason: 'missing in the manifest' },
     ])
   })
 
@@ -504,5 +549,26 @@ describe('check', () => {
       pathname: '',
       reason: expect.stringMatching(/hours old/),
     })
+  })
+})
+
+describe('combineSources', () => {
+  const ref = (pathname: string) => ({ pathname, table: 'media' })
+
+  it('joins every source', () => {
+    expect(combineSources([[ref('a.png')], [ref('b.png')]])).toEqual([
+      ref('a.png'),
+      ref('b.png'),
+    ])
+  })
+
+  it('refuses one empty source even when the other has rows', () => {
+    expect(() => combineSources([[ref('a.png')], []])).toThrow(
+      'reference source 2 of 2 names no media at all',
+    )
+  })
+
+  it('refuses no sources', () => {
+    expect(() => combineSources([])).toThrow('at least one --refs file')
   })
 })

@@ -94,8 +94,10 @@ export type Deps = {
 }
 
 /**
- * Payload's version-history tables (`_posts_v`, `_posts_v_blocks_…`): their
- * references are reported but never fail the check.
+ * Payload's version-history tables (`_posts_v`, `_posts_v_blocks_…`). They
+ * hold current drafts as well as old versions, so a history reference fails
+ * the check like any other; only one gone from the store itself is excused
+ * (see {@link check}).
  */
 const HISTORY_TABLE = /^_.+_v($|_)/
 
@@ -474,8 +476,13 @@ export function referenceId(pathname: string): string {
 /**
  * Check that every referenced pathname is in the manifest with its bytes in R2.
  *
- * @remarks A reference from a version-history table (`*_v`) that is not backed
- * up is reported but does not fail: history can name a file deleted long ago.
+ * @remarks Every reference fails when it is not backed up, with one
+ * exception: a pathname named only by a version-history table (`*_v`) whose
+ * manifest entry is `missing` — the store itself answered 404, so no backup
+ * could copy it, and old versions can name a file deleted long ago. That is
+ * reported, not failed. A history-only pathname that IS in the store but did
+ * not copy, or whose object is gone from R2, fails: those tables also hold
+ * current drafts, and a table name cannot tell a draft from an old version.
  * A manifest older than `maxAgeHours` fails, so a backup that stopped running
  * cannot keep passing on an old manifest.
  */
@@ -509,22 +516,25 @@ export async function check(options: {
 
   let verified = 0
   for (const pathname of [...live, ...historyOnly]) {
-    const target = live.has(pathname) ? failures : history
     const entry = entries.get(pathname)
     if (!entry) {
-      target.push({ pathname, reason: 'not in the manifest' })
+      failures.push({ pathname, reason: 'not in the manifest' })
+      continue
+    }
+    if (entry.status === 'missing' && !live.has(pathname)) {
+      history.push({ pathname, reason: 'gone from the store (404)' })
       continue
     }
     if (
       (entry.status !== 'copied' && entry.status !== 'unchanged') ||
       !entry.key
     ) {
-      target.push({ pathname, reason: `${entry.status} in the manifest` })
+      failures.push({ pathname, reason: `${entry.status} in the manifest` })
       continue
     }
     const stored = await options.deps.r2Head(entry.key)
     if (!stored || stored.size !== entry.size) {
-      target.push({
+      failures.push({
         pathname,
         reason: `its object is not in R2 at ${entry.size} bytes`,
       })
@@ -700,6 +710,29 @@ async function latestManifest(
   return { key, manifest: JSON.parse(await deps.getObject(key)) as Manifest }
 }
 
+/**
+ * Join the references read from each database, refusing any source that
+ * names no media.
+ *
+ * @remarks Each source is checked on its own, not only their union: an empty
+ * production read (a secret pointing at an empty restore, a role that sees
+ * no rows) would otherwise hide behind staging's rows, and production-only
+ * files would never be backed up while the check passed. Sources are named by
+ * position, never by connection string.
+ */
+export function combineSources(perSource: Reference[][]): Reference[] {
+  if (perSource.length === 0)
+    throw new Error('at least one --refs file is required')
+  perSource.forEach((list, index) => {
+    if (list.length === 0) {
+      throw new Error(
+        `reference source ${index + 1} of ${perSource.length} names no media at all: refusing to call that clean`,
+      )
+    }
+  })
+  return perSource.flat()
+}
+
 /** Parse `--name value` pairs; `--refs` may repeat. */
 function parseArgs(argv: string[]): {
   command: string
@@ -724,15 +757,11 @@ async function main(argv: string[]): Promise<number> {
   if (!origin || !bucket) {
     throw new Error('MEDIA_BLOB_ORIGIN and R2_MEDIA_BACKUP_BUCKET must be set')
   }
-  if (refs.length === 0) throw new Error('at least one --refs file is required')
-  const references = (
-    await Promise.all(refs.map((file) => readFile(file, 'utf8')))
-  ).flatMap((text) => parseReferences(text, origin))
-  if (references.length === 0) {
-    throw new Error(
-      'the database names no media at all: refusing to call that clean',
-    )
-  }
+  const references = combineSources(
+    (await Promise.all(refs.map((file) => readFile(file, 'utf8')))).map(
+      (text) => parseReferences(text, origin),
+    ),
+  )
   const deps = realDeps(bucket)
   const summary = process.env.GITHUB_STEP_SUMMARY
 
@@ -783,7 +812,7 @@ async function main(argv: string[]): Promise<number> {
       now: new Date(),
       references,
     })
-    const line = `Media check against ${prior.key}: ${result.verified} verified, ${result.failures.length} failing, ${result.history.length} history-only not backed up.`
+    const line = `Media check against ${prior.key}: ${result.verified} verified, ${result.failures.length} failing, ${result.history.length} history-only gone from the store.`
     console.log(line)
     // Ids and fixed reasons only: this log and the summary are public.
     const print = (issue: CheckIssue) =>
