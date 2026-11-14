@@ -113,7 +113,15 @@ describe.skipIf(!connectionString)(
         })
       ).totalDocs
 
+    /**
+     * A developer's read-only media origin (#328, docs/WORKFLOW.md), cleared
+     * for the run: with it set, this tier's fixture uploads are refused.
+     */
+    let ambientOrigin: string | undefined
+
     beforeAll(async () => {
+      ambientOrigin = process.env.STORAGE_VERCEL_BLOB_BASE_URL
+      delete process.env.STORAGE_VERCEL_BLOB_BASE_URL
       const payloadModule = await import('payload')
       createLocalReq = payloadModule.createLocalReq
       const { default: config } = await import('../src/payload.config')
@@ -127,6 +135,9 @@ describe.skipIf(!connectionString)(
         await cleanup()
       } finally {
         await payload?.db?.destroy?.()
+        if (ambientOrigin !== undefined) {
+          process.env.STORAGE_VERCEL_BLOB_BASE_URL = ambientOrigin
+        }
       }
     }, 60_000)
 

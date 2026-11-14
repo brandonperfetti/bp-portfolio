@@ -1,7 +1,7 @@
 import type {
   CollectionAfterReadHook,
-  CollectionBeforeChangeHook,
   CollectionBeforeOperationHook,
+  CollectionBeforeValidateHook,
 } from 'payload'
 
 import { APIError } from 'payload'
@@ -68,21 +68,26 @@ export const pointMediaUrlAtReadOnlyOrigin: CollectionAfterReadHook = ({
 }
 
 /**
- * Refuse an upload while read-only mode is on, before Payload fetches anything.
+ * Refuse an upload or an image edit while read-only mode is on, before
+ * Payload fetches anything.
  *
- * @remarks Guarded on `req.file`, so alt-text edits and deletes still work: a
- * delete without the plugin only removes the local row and its local file.
- * This is the early refusal for a request that arrives with a file; files
- * Payload makes later are caught by {@link refuseFileWriteInReadOnlyMedia}.
+ * @remarks Refuses a request that arrives with a file, and an update carrying
+ * `uploadEdits` (a crop, resize or focal-point change), which would make
+ * Payload fetch the image and write new bytes. Alt-text edits and deletes
+ * still work: a delete without the plugin only removes the local row and its
+ * local file. A file Payload makes on its own later, as a duplicate does, is
+ * caught by {@link refuseFileWriteInReadOnlyMedia}.
  */
 export const refuseUploadInReadOnlyMedia: CollectionBeforeOperationHook = ({
   args,
   operation,
   req,
 }) => {
+  const uploadEdits = (req.query as { uploadEdits?: unknown } | undefined)
+    ?.uploadEdits
   if (
     (operation === 'create' || operation === 'update') &&
-    req.file &&
+    (req.file || (operation === 'update' && uploadEdits)) &&
     getReadOnlyMediaBaseUrl()
   ) {
     throw new APIError(READ_ONLY_MEDIA_UPLOAD_ERROR, 400, undefined, true)
@@ -93,16 +98,16 @@ export const refuseUploadInReadOnlyMedia: CollectionBeforeOperationHook = ({
 /**
  * Refuse any file Payload is about to write while read-only mode is on.
  *
- * @remarks A crop or resize (`?uploadEdits`), a changed focal point, and a
- * duplicate reach the collection with no file: Payload's `generateFileData`
- * fetches or copies the bytes after `beforeOperation` and only then sets
- * `req.file` (payload 3.88.0 `uploads/generateFileData.js`). Collection
- * `beforeChange` runs after that step and before `uploadFiles` writes to
- * disk, in create and update alike, so this is the last point that sees every
- * file before it is written. Without it, a crop would save new bytes locally
- * while `media.url` still served the original from the shared store.
+ * @remarks A duplicate reaches the collection with no file: Payload's
+ * `generateFileData` copies the source row's bytes after `beforeOperation`
+ * and only then sets `req.file` (payload 3.88.0 `uploads/generateFileData.js`).
+ * Collection `beforeValidate` is the last hook before the local write: in an
+ * update `uploadFiles` runs after it and BEFORE `beforeChange`
+ * (`collections/operations/utilities/update.js:102-123`), in a create after
+ * both (`create.js:106-170`). So this is the one hook that sees every file
+ * before it reaches disk, in either operation.
  */
-export const refuseFileWriteInReadOnlyMedia: CollectionBeforeChangeHook = ({
+export const refuseFileWriteInReadOnlyMedia: CollectionBeforeValidateHook = ({
   data,
   req,
 }) => {

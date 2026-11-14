@@ -34,11 +34,15 @@ const aFile = {
 const read = (doc: Record<string, unknown>) =>
   pointMediaUrlAtReadOnlyOrigin({ doc } as unknown as ReadArgs)
 
-const op = (operation: string, file?: PayloadRequest['file']) =>
+const op = (
+  operation: string,
+  file?: PayloadRequest['file'],
+  query?: Record<string, unknown>,
+) =>
   refuseUploadInReadOnlyMedia({
     args: { data: {} },
     operation,
-    req: { file } as PayloadRequest,
+    req: { file, query } as unknown as PayloadRequest,
   } as unknown as OpArgs)
 
 // The hooks read process.env; start every case from a blank blob env so a
@@ -109,6 +113,13 @@ describe('refuseUploadInReadOnlyMedia (#328)', () => {
     )
   })
 
+  it('refuses a crop or focal-point edit (uploadEdits) before Payload fetches the image', () => {
+    vi.stubEnv('STORAGE_VERCEL_BLOB_BASE_URL', ORIGIN)
+    expect(() =>
+      op('update', undefined, { uploadEdits: { focalPoint: { x: 1, y: 1 } } }),
+    ).toThrow(READ_ONLY_MEDIA_UPLOAD_ERROR)
+  })
+
   it('lets fileless edits and deletes through', () => {
     vi.stubEnv('STORAGE_VERCEL_BLOB_BASE_URL', ORIGIN)
     expect(op('update')).toEqual({ data: {} })
@@ -123,14 +134,14 @@ describe('refuseUploadInReadOnlyMedia (#328)', () => {
   })
 })
 
-type ChangeArgs = Parameters<typeof refuseFileWriteInReadOnlyMedia>[0]
+type ValidateArgs = Parameters<typeof refuseFileWriteInReadOnlyMedia>[0]
 
 const change = (file?: PayloadRequest['file']) =>
   refuseFileWriteInReadOnlyMedia({
     data: { alt: 'x' },
     operation: 'update',
     req: { file } as PayloadRequest,
-  } as unknown as ChangeArgs)
+  } as unknown as ValidateArgs)
 
 describe('refuseFileWriteInReadOnlyMedia (#328, files Payload makes late)', () => {
   it('refuses a file set after beforeOperation (a crop, focal re-upload or duplicate)', () => {
@@ -151,10 +162,10 @@ describe('Media wiring (#328)', () => {
     expect(Media.hooks?.beforeOperation?.[0]).toBe(refuseUploadInReadOnlyMedia)
   })
 
-  it('guards file writes in beforeChange, after generateFileData', () => {
-    expect(
-      Media.hooks?.beforeChange?.includes(refuseFileWriteInReadOnlyMedia),
-    ).toBe(true)
+  it('guards file writes in beforeValidate, the last hook before uploadFiles in update', () => {
+    expect(Media.hooks?.beforeValidate?.[0]).toBe(
+      refuseFileWriteInReadOnlyMedia,
+    )
   })
 
   it('rewrites the url in a collection afterRead hook, after the field hooks', () => {

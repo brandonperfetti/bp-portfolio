@@ -13,10 +13,10 @@ import { READ_ONLY_MEDIA_UPLOAD_ERROR } from '../src/lib/storage/readOnlyMedia'
  * storage plugin off and only `STORAGE_VERCEL_BLOB_BASE_URL` set, comes back
  * with its `url` on that origin rather than Payload's local-disk route, and
  * that a real upload is refused before any row is written, and so is a file
- * Payload makes itself after `beforeOperation` (a duplicate). A crop takes
- * the same late path but needs a fetchable image URL, which this tier cannot
- * host (Payload's `safeFetch` refuses loopback); the unit suite pins that
- * shape.
+ * Payload makes itself after `beforeOperation` (a duplicate), and a crop under
+ * `?uploadEdits`, which is refused before Payload fetches the image. The
+ * developer's own `STORAGE_VERCEL_BLOB_BASE_URL` is cleared for the run, so
+ * fixtures always upload to local disk.
  *
  * The mode reads the environment on each call, so each case sets the origin
  * itself and restores it in `finally`. The plugin's `enabled` flag is fixed at
@@ -88,7 +88,12 @@ describe.skipIf(!connectionString)(
         .png()
         .toBuffer()
 
+    /** The developer's own setting, cleared so fixtures upload to local disk. */
+    let ambientOrigin: string | undefined
+
     beforeAll(async () => {
+      ambientOrigin = process.env.STORAGE_VERCEL_BLOB_BASE_URL
+      delete process.env.STORAGE_VERCEL_BLOB_BASE_URL
       expect(
         process.env.BLOB_READ_WRITE_TOKEN,
         'run this tier without a Blob token, or the fixture lands in the shared store',
@@ -104,6 +109,9 @@ describe.skipIf(!connectionString)(
         await cleanup()
       } finally {
         await payload?.db?.destroy?.()
+        if (ambientOrigin !== undefined) {
+          process.env.STORAGE_VERCEL_BLOB_BASE_URL = ambientOrigin
+        }
       }
     }, 60_000)
 
@@ -154,7 +162,7 @@ describe.skipIf(!connectionString)(
 
     it('refuses a duplicate, whose file Payload makes after beforeOperation', async () => {
       // Duplicate enters create with no file; generateFileData copies the
-      // source row's bytes and sets req.file later, so only the beforeChange
+      // source row's bytes and sets req.file later, so only the beforeValidate
       // guard sees it. The source row is written with the mode off, so its
       // bytes are on local disk and the copy would otherwise succeed.
       const bytes = await png()
@@ -191,6 +199,78 @@ describe.skipIf(!connectionString)(
           collection: 'media',
           context,
           id: source.id,
+          overrideAccess: true,
+        })
+      }
+    })
+
+    it('refuses a crop of a stored row and leaves its file as it was', async () => {
+      // A crop under ?uploadEdits makes Payload fetch the image and, in an
+      // update, write the new bytes BEFORE beforeChange runs, so it must be
+      // refused before generateFileData. The Local API has no query string;
+      // the request carries uploadEdits as REST would parse it.
+      const bytes = await png()
+      const row = await payload.create({
+        collection: 'media',
+        context,
+        data: { alt: `${MARKER} crop` },
+        file: {
+          data: bytes,
+          mimetype: 'image/png',
+          name: `${MARKER}-crop.png`,
+          size: bytes.byteLength,
+        },
+        overrideAccess: true,
+      })
+      try {
+        const { createLocalReq } = await import('payload')
+        const req = await createLocalReq({ context }, payload)
+        ;(req as { query: Record<string, unknown> }).query = {
+          uploadEdits: {
+            crop: { x: 0, y: 0, width: 50, height: 50, unit: '%' },
+            heightInPixels: 1,
+            widthInPixels: 2,
+          },
+        }
+        await withReadOnlyOrigin(async () => {
+          const { createdAt, id, updatedAt, ...asRead } =
+            await payload.findByID({
+              collection: 'media',
+              id: row.id,
+              overrideAccess: true,
+            })
+          void createdAt
+          void id
+          void updatedAt
+          await expect(
+            payload.update({
+              collection: 'media',
+              context,
+              data: asRead as never,
+              id: row.id,
+              overrideAccess: true,
+              req,
+            }),
+          ).rejects.toMatchObject({
+            message: READ_ONLY_MEDIA_UPLOAD_ERROR,
+            status: 400,
+          })
+        })
+        const after = await payload.findByID({
+          collection: 'media',
+          id: row.id,
+          overrideAccess: true,
+        })
+        expect(after).toMatchObject({
+          filesize: row.filesize,
+          height: row.height,
+          width: row.width,
+        })
+      } finally {
+        await payload.delete({
+          collection: 'media',
+          context,
+          id: row.id,
           overrideAccess: true,
         })
       }

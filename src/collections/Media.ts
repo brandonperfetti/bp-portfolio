@@ -372,8 +372,7 @@ export const Media: CollectionConfig = {
       refuseCreateWithoutUpload,
       refuseUploadEditsRefetch,
     ],
-    beforeValidate: [refuseFilelessFileRewrite],
-    beforeChange: [refuseFileWriteInReadOnlyMedia],
+    beforeValidate: [refuseFileWriteInReadOnlyMedia, refuseFilelessFileRewrite],
     afterRead: [pointMediaUrlAtReadOnlyOrigin],
     afterChange: [
       revalidateCollectionTag('posts', ['/articles']),
