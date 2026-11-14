@@ -978,4 +978,34 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
     expect(occurrences(text, awkward)).toBe(0)
     expect(JSON.parse(text).baselineUrl).toBe(summary.baselineUrl)
   })
+
+  it('redacts a whole token that holds a quote, even inside a bypass header', () => {
+    // The header pass stops at `"`. Run before the literal pass, it turned
+    // `tok"en\with-escapes` into `REDACTED"en\with-escapes` (CodeRabbit, PR #336).
+    const awkward = 'tok"en\\with-escapes'
+    const lines: string[] = []
+    const reporter = createSafeReporter(
+      ['other-known-value', awkward],
+      (line) => lines.push(line),
+    )
+
+    expect(reporter.scrub(`${BYPASS_HEADER}: ${awkward}`)).toBe(
+      `${BYPASS_HEADER}: ${REDACTED}`,
+    )
+
+    const error = new Error(`call log:\n  - ${BYPASS_HEADER}: ${awkward}\n`)
+    reporter.fail(error)
+    expect(lines).toEqual([
+      `diff-pages: Error: call log:\n  - ${BYPASS_HEADER}: ${REDACTED}\n`,
+    ])
+    expect(describeErrorSafely(error, [awkward])).toBe(
+      `Error: call log:\n  - ${BYPASS_HEADER}: ${REDACTED}\n`,
+    )
+  })
+
+  it('redacts the longer of two overlapping tokens whole', () => {
+    expect(redactSecret('a abc-long b', ['abc', 'abc-long'])).toBe(
+      `a ${REDACTED} b`,
+    )
+  })
 })

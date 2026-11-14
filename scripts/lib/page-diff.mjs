@@ -343,13 +343,22 @@ export const REDACTED = 'REDACTED'
  * `redactUrl` covers URLs only; Playwright's error call log prints request
  * headers raw (#273).
  *
+ * Every known literal goes first, longest first, and the header pass runs
+ * once, last. The header pass stops at `"`, `'`, `,` and the like, so run
+ * before a literal it would rewrite part of a token holding one, and leave
+ * the rest of the token for no later pass to match.
+ *
  * @param text - Text to clean.
- * @param token - The bypass secret, when one is configured.
+ * @param {string | undefined | Array<string | undefined>} token - The bypass
+ * secret, or every value the run could hold.
  * @returns The text with every occurrence replaced by {@link REDACTED}.
  */
 export function redactSecret(text, token) {
+  const tokens = (Array.isArray(token) ? token : [token])
+    .filter((value) => typeof value === 'string' && value.length > 0)
+    .sort((a, b) => b.length - a.length)
   let out = String(text)
-  if (token) out = out.split(token).join(REDACTED)
+  for (const value of tokens) out = out.split(value).join(REDACTED)
   return out.replace(
     new RegExp(`(${BYPASS_HEADER}["']?\\s*[:=]\\s*["']?)[^\\s"',}\\]]+`, 'gi'),
     `$1${REDACTED}`,
@@ -365,7 +374,8 @@ export function redactSecret(text, token) {
  * first line repeats the message and the frames say nothing a run needs.
  *
  * @param error - Whatever was thrown.
- * @param token - The bypass secret, when one is configured.
+ * @param {string | undefined | Array<string | undefined>} token - The bypass
+ * secret, or every value the run could hold (see {@link redactSecret}).
  * @returns One printable, redacted string.
  */
 export function describeErrorSafely(error, token) {
@@ -446,20 +456,17 @@ export function scrubStrings(value, scrub) {
  * @returns `{ scrub, fail, exitCode }`.
  */
 export function createSafeReporter(tokens, print = console.error) {
-  const known = /** @type {string[]} */ (tokens.filter(Boolean))
   let fatal = false
+  // One redactSecret call over every token, never a header pass before a
+  // literal one: that pass can cut a token holding `"` and leave its tail.
   /**
    * @param {string} text - Text about to be printed or written.
    * @returns {string} The text with every known token redacted.
    */
-  const scrub = (text) =>
-    known.reduce(
-      (out, token) => redactSecret(out, token),
-      redactSecret(text, undefined),
-    )
+  const scrub = (text) => redactSecret(text, tokens)
   const fail = (error) => {
     fatal = true
-    print(`diff-pages: ${scrub(describeErrorSafely(error))}`)
+    print(`diff-pages: ${describeErrorSafely(error, tokens)}`)
   }
   const exitCode = (computed) => (fatal ? 2 : computed)
   return { scrub, fail, exitCode }
