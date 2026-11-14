@@ -19,8 +19,11 @@ import { MCP_ENDPOINT_PATH } from './bufferMcpResponses'
  * transport. Since `@modelcontextprotocol/sdk` 1.32.2 (#312's override) that
  * transport caps the body it reads at 4 MiB
  * (`DEFAULT_MAX_REQUEST_BODY_SIZE`, `server/requestBody.js`). That is too late
- * to protect the first read, and above this cap, so nothing this cap admits
- * is refused there. On 1.30.0 the transport had no size check. A tool call here is
+ * to protect the first read. It can still refuse a body this cap admitted:
+ * re-serialising expands some JSON. A number like `1e20` comes back as 21
+ * digits, so 195,000 of them grow from 975 KB to 4.29 MB, measured. The
+ * transport answers that with its own JSON-RPC 413 (`-32000`), and no tool
+ * runs. On 1.30.0 the transport had no size check. A tool call here is
  * JSON-RPC carrying CMS document data. The synthetic Lexical paragraph in the
  * test is about 450 bytes, so a 300-paragraph article would be about 135 KB.
  * That is an estimate from a synthetic fixture, not a measurement of
