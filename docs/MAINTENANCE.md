@@ -357,7 +357,10 @@ counts. Then: `pnpm migrate` (expect nothing to run) and `pnpm dev`.
    needs it for live preview. Deleting retires the value rather than
    rotating it, because nothing reads it any more. A Vercel deployment
    keeps the variables it was built with, so an older deployment still
-   accepts the old value at its own URL until it is deleted.
+   accepts the old value at its own URL until it is deleted. Brandon
+   decided both on 2026-11-14 (#275): retire rather than rotate, and
+   leave the pre-fix deployments as they are. That route also required a
+   Payload login.
 3. Delete legacy v3 vars: all `NOTION_*`, Cloudinary vars, `CRON_SECRET`,
    Notion webhook secrets — only at promotion, not before.
 4. Run migration against production DB; verify `/articles/[slug]` URLs and

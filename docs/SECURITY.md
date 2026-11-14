@@ -160,7 +160,9 @@ stay where they are:
 - `docs/MAINTENANCE.md` § Promotion checklist — fresh production values for
   `CMS_REVALIDATE_SECRET`, never the staging ones. (`PREVIEW_SECRET` is no
   longer read, since #275. Delete it from each environment once that
-  environment runs the fix; the checklist has the step.)
+  environment runs the fix; the checklist has the step. Retiring rather
+  than rotating, and leaving pre-fix deployments as they are, is
+  Brandon's decision of 2026-11-14.)
 
 ## Payload access control
 
