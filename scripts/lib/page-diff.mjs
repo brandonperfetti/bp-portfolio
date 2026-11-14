@@ -210,8 +210,21 @@ export async function followRedirects(fetchHop, start, targetUrl, token) {
  * @param route - A Playwright `Route`.
  * @param targetUrl - The URL being captured.
  * @param token - The bypass secret.
+ * A failed fetch is never printed and never escapes: its error's call log
+ * lists the request headers, the bypass secret among them (#273). The
+ * request is aborted instead, which the page sees as a network error. When a
+ * `state` from {@link createRouteState} is passed, a fetch that fails while
+ * the capture is still running is recorded there, redacted, so the caller
+ * can fail the run rather than compare a frame missing a same-origin
+ * request. Once {@link closeCapture} has marked the state closing, a failed
+ * fetch is the teardown race and is dropped. A `fulfill` that fails because
+ * the browser already discarded the request (a navigation moved on) is
+ * ignored either way: the response has nowhere to go.
+ *
  * @param {(finalUrl: string) => void} [onRedirectedNavigation] - Optional;
  * called with the final URL when a main-frame navigation was redirected.
+ * @param {{ closing: boolean, failures: string[] }} [state] - Optional; the
+ * capture's route state, from {@link createRouteState}.
  * @returns Resolves once the request has been continued, fulfilled or
  * aborted.
  */
@@ -220,13 +233,19 @@ export async function routeWithBypass(
   targetUrl,
   token,
   onRedirectedNavigation,
+  state,
 ) {
   const request = route.request()
   if (!token || !isTargetOrigin(request.url(), targetUrl)) {
     return route.continue()
   }
+  // Aborting a request whose context is already gone throws too; ignored.
+  const abortQuietly = () =>
+    Promise.resolve(route.abort('failed')).catch(() => {})
+
+  let followed
   try {
-    const { response, url, stop } = await followRedirects(
+    followed = await followRedirects(
       (hopUrl, init) => route.fetch({ ...init, url: hopUrl, maxRedirects: 0 }),
       {
         url: request.url(),
@@ -237,42 +256,62 @@ export async function routeWithBypass(
       targetUrl,
       token,
     )
-    if (stop === 'cap') return await route.abort('failed')
-    if (
-      url !== request.url() &&
-      onRedirectedNavigation &&
-      request.isNavigationRequest() &&
-      !request.frame().parentFrame()
-    ) {
-      onRedirectedNavigation(url)
+  } catch (error) {
+    // Never printed here, never rethrown (#273). Recorded, redacted, only
+    // while the capture is still running.
+    if (state && !state.closing) {
+      state.failures.push(describeErrorSafely(error, token))
     }
-    return await route.fulfill({ response })
-  } catch {
-    // Deliberately silent (#273). A hop that fails here, most often a
-    // prefetch still in flight when the context closes, rejects with a
-    // Playwright error whose call log lists the request headers, the bypass
-    // secret among them. Printing that error, or letting it escape as an
-    // unhandled rejection, prints the secret. The request is failed instead,
-    // which the page sees as an ordinary network error; aborting a request
-    // whose context is already gone throws too, and that is ignored.
-    await Promise.resolve(route.abort('failed')).catch(() => {})
+    return abortQuietly()
   }
+
+  const { response, url, stop } = followed
+  if (stop === 'cap') return abortQuietly()
+  if (
+    url !== request.url() &&
+    onRedirectedNavigation &&
+    request.isNavigationRequest() &&
+    !request.frame().parentFrame()
+  ) {
+    onRedirectedNavigation(url)
+  }
+  try {
+    await route.fulfill({ response })
+  } catch {
+    // The browser discarded the request (closed, or navigated on); the
+    // response has nowhere to go, and the error's call log is not printed.
+  }
+}
+
+/**
+ * Fresh route state for one capture, shared by {@link routeWithBypass} and
+ * {@link closeCapture}.
+ *
+ * @returns `closing` (set by `closeCapture`) and the redacted `failures` of
+ * fetches that failed while the capture was running.
+ */
+export function createRouteState() {
+  return { closing: false, failures: [] }
 }
 
 /**
  * Close a capture's browser context without racing its routes.
  *
- * @remarks Routes are removed first, with `behavior: 'ignoreErrors'`, so a
- * route handler still waiting on `route.fetch` when the capture finishes
- * settles quietly instead of rejecting into a closed context (#273: the
- * teardown race that crashed every staging run). Only then is the context
- * closed.
+ * @remarks The route state is marked closing first, so a fetch that fails
+ * from here on is the teardown race, not a capture failure. Routes are then
+ * removed with `behavior: 'ignoreErrors'`, so a route handler still waiting
+ * on `route.fetch` settles quietly instead of rejecting into a closed context
+ * (#273: the teardown race that crashed every staging run). Only then is the
+ * context closed.
  *
  * @param context - A Playwright `BrowserContext` (duck-typed:
  * `unrouteAll` and `close`).
+ * @param {{ closing: boolean }} [state] - Optional; the capture's route
+ * state, from {@link createRouteState}.
  * @returns Resolves once the context is closed.
  */
-export async function closeCapture(context) {
+export async function closeCapture(context, state) {
+  if (state) state.closing = true
   await context.unrouteAll({ behavior: 'ignoreErrors' })
   await context.close()
 }
@@ -325,6 +364,61 @@ export function describeErrorSafely(error, token) {
       ? error.message
       : error
   return redactSecret(`${name}: ${message}`, token)
+}
+
+/**
+ * Every bypass value a run could hold.
+ *
+ * @remarks Both sources, not the one `parseArgs` would pick: a usage error
+ * happens before it picks, and the value can sit in either (#273).
+ *
+ * @param {string[]} argv - CLI arguments, without `node` and the script.
+ * @param {Record<string, string | undefined>} [env] - The environment.
+ * @returns The non-empty values of {@link BYPASS_TOKEN_ENV} and of every
+ * `--bypass-token=` flag.
+ */
+export function knownBypassTokens(argv, env = {}) {
+  const flag = '--bypass-token='
+  return [
+    env[BYPASS_TOKEN_ENV],
+    ...argv
+      .filter((arg) => arg.startsWith(flag))
+      .map((arg) => arg.slice(flag.length)),
+  ].filter(Boolean)
+}
+
+/**
+ * Build the CLI's printing and exit-status helpers around every bypass value
+ * a run could hold.
+ *
+ * @remarks All three exist so that nothing the CLI prints can carry the
+ * secret and no fatal error can end in a passing exit (#273):
+ * `scrub` redacts every known token and any bypass header value, `fail`
+ * prints an error through `describeErrorSafely` and makes the failure
+ * sticky, and `exitCode` returns 2 once anything was fatal, whatever the
+ * run computed after it.
+ *
+ * @param {Array<string | undefined>} tokens - Every value the run could use:
+ * the environment variable and any `--bypass-token=` flag, since a usage
+ * error happens before `parseArgs` picks one.
+ * @param {(line: string) => void} [print] - Where errors go (default
+ * `console.error`).
+ * @returns `{ scrub, fail, exitCode }`.
+ */
+export function createSafeReporter(tokens, print = console.error) {
+  const known = tokens.filter(Boolean)
+  let fatal = false
+  const scrub = (text) =>
+    known.reduce(
+      (out, token) => redactSecret(out, token),
+      redactSecret(text, undefined),
+    )
+  const fail = (error) => {
+    fatal = true
+    print(`diff-pages: ${scrub(describeErrorSafely(error))}`)
+  }
+  const exitCode = (computed) => (fatal ? 2 : computed)
+  return { scrub, fail, exitCode }
 }
 
 /**

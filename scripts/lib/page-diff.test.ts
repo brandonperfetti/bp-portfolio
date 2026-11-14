@@ -1,4 +1,7 @@
 // @vitest-environment node
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -13,11 +16,14 @@ import {
   REDACTED,
   closeCapture,
   compareFrames,
+  createRouteState,
+  createSafeReporter,
   describeErrorSafely,
   followRedirects,
   hopHeaders,
   formatSummary,
   isTargetOrigin,
+  knownBypassTokens,
   parseArgs,
   parseMasks,
   parseViewports,
@@ -797,4 +803,135 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
       'close',
     ])
   })
+
+  it('records a fetch that fails while the capture runs, redacted', async () => {
+    const printed = captureConsole()
+    const { calls, route } = closedRoute()
+    const state = createRouteState()
+
+    await routeWithBypass(route as never, target, token, undefined, state)
+
+    expect(calls).toEqual(['fetch', 'abort'])
+    expect(state.failures).toHaveLength(1)
+    expect(occurrences(state.failures[0], token)).toBe(0)
+    expect(state.failures[0]).toContain(`${BYPASS_HEADER}: ${REDACTED}`)
+    expect(printed()).toBe('')
+  })
+
+  it('drops a fetch that fails once the capture is closing', async () => {
+    const { calls, route } = closedRoute()
+    const state = createRouteState()
+    state.closing = true
+
+    await routeWithBypass(route as never, target, token, undefined, state)
+
+    expect(calls).toEqual(['fetch', 'abort'])
+    expect(state.failures).toEqual([])
+  })
+
+  it('ignores a fulfill the browser has already discarded', async () => {
+    const printed = captureConsole()
+    const calls: string[] = []
+    const { route } = closedRoute()
+    const state = createRouteState()
+    const live = {
+      ...route,
+      fetch: async () => {
+        calls.push('fetch')
+        return { status: () => 200, headers: () => ({}) }
+      },
+      fulfill: async () => {
+        calls.push('fulfill')
+        throw playwrightError()
+      },
+    }
+
+    await expect(
+      routeWithBypass(live as never, target, token, undefined, state),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual(['fetch', 'fulfill'])
+    expect(state.failures).toEqual([])
+    expect(printed()).toBe('')
+  })
+
+  it('marks the route state closing before it unroutes', async () => {
+    const state = createRouteState()
+    const seen: boolean[] = []
+    await closeCapture(
+      {
+        unrouteAll: async () => {
+          seen.push(state.closing)
+        },
+        close: async () => {},
+      },
+      state,
+    )
+    expect(seen).toEqual([true])
+  })
+
+  it('knows the token from the environment and from every flag', () => {
+    expect(
+      knownBypassTokens(['a', `--bypass-token=${token}`, '--bypass-token='], {
+        [BYPASS_TOKEN_ENV]: 'from-env',
+      }),
+    ).toEqual(['from-env', token])
+    expect(knownBypassTokens([], {})).toEqual([])
+  })
+
+  it('reports a fatal error redacted, and keeps the exit failed after it', () => {
+    const lines: string[] = []
+    const reporter = createSafeReporter(
+      [token, 'second-value', undefined],
+      (line) => lines.push(line),
+    )
+
+    expect(reporter.exitCode(0)).toBe(0)
+    expect(
+      reporter.scrub(`a ${token} b second-value c ${BYPASS_HEADER}: other`),
+    ).toBe(`a ${REDACTED} b ${REDACTED} c ${BYPASS_HEADER}: ${REDACTED}`)
+
+    reporter.fail(playwrightError())
+    reporter.fail(new Error('second-value leaked'))
+
+    expect(lines).toHaveLength(2)
+    expect(lines.every((line) => line.startsWith('diff-pages: '))).toBe(true)
+    expect(occurrences(lines.join('\n'), token)).toBe(0)
+    expect(occurrences(lines.join('\n'), 'second-value')).toBe(0)
+    // Sticky: a passing verdict computed after a fatal error is not a pass.
+    expect(reporter.exitCode(0)).toBe(2)
+    expect(reporter.exitCode(1)).toBe(2)
+  })
+
+  it.each([
+    [
+      'the environment',
+      (env: NodeJS.ProcessEnv) => ({ ...env, [BYPASS_TOKEN_ENV]: token }),
+      [],
+    ],
+    ['the flag', (env: NodeJS.ProcessEnv) => env, [`--bypass-token=${token}`]],
+  ])(
+    'prints no token in a usage error when it comes from %s',
+    (_label, withToken, extraArgs) => {
+      // The reviewer's repro: the token pasted into a flag that echoes its
+      // value. Loopback URLs; parsing fails before any browser starts.
+      const { [BYPASS_TOKEN_ENV]: _drop, ...env } = process.env
+      const child = spawnSync(
+        process.execPath,
+        [
+          fileURLToPath(new URL('../diff-pages.mjs', import.meta.url)),
+          'http://127.0.0.1:9/',
+          'http://127.0.0.1:9/',
+          `--widths=${token}`,
+          ...extraArgs,
+        ],
+        { env: withToken(env), encoding: 'utf8', timeout: 30_000 },
+      )
+
+      expect(child.status).toBe(2)
+      expect(child.stderr).toContain('diff-pages: ')
+      expect(occurrences(`${child.stdout}${child.stderr}`, token)).toBe(0)
+    },
+    30_000,
+  )
 })
