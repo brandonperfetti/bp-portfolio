@@ -343,10 +343,15 @@ export const REDACTED = 'REDACTED'
  * `redactUrl` covers URLs only; Playwright's error call log prints request
  * headers raw (#273).
  *
- * Each literal is matched in its URL-encoded forms too (`urlEncodedForms`):
- * a URL the CLI prints has been through `new URL`, which percent-encodes a
- * token holding `"` or a space, differently in a path, a query and a
- * fragment, and an encoded form would pass a literal match.
+ * The match ignores case, and a literal match is enough inside a URL
+ * because `parseArgs` refuses any bypass value that fails
+ * {@link isUrlSafeToken}. Every URL serializer (userinfo, host, path, query,
+ * fragment, `URLSearchParams`, `encodeURIComponent`) writes those characters
+ * unchanged, except that a host lowercases them. Listing each serializer's
+ * escaped forms instead never closed: two independent reviews of PR #336
+ * each found one more component it missed. Any other string given here is
+ * still redacted wherever it appears verbatim, such as in a usage error
+ * raised before that check.
  *
  * Every known literal goes first, longest first, and the header pass runs
  * once, last. The header pass stops at `"`, `'`, `,` and the like, so run
@@ -361,13 +366,16 @@ export const REDACTED = 'REDACTED'
 export function redactSecret(text, token) {
   const tokens = [
     ...new Set(
-      (Array.isArray(token) ? token : [token])
-        .filter((value) => typeof value === 'string' && value.length > 0)
-        .flatMap(urlEncodedForms),
+      (Array.isArray(token) ? token : [token]).filter(
+        (value) => typeof value === 'string' && value.length > 0,
+      ),
     ),
   ].sort((a, b) => b.length - a.length)
   let out = String(text)
-  for (const value of tokens) out = out.split(value).join(REDACTED)
+  for (const value of tokens) {
+    const literal = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    out = out.replace(new RegExp(literal, 'gi'), REDACTED)
+  }
   return out.replace(
     new RegExp(`(${BYPASS_HEADER}["']?\\s*[:=]\\s*["']?)[^\\s"',}\\]]+`, 'gi'),
     `$1${REDACTED}`,
@@ -375,57 +383,24 @@ export function redactSecret(text, token) {
 }
 
 /**
- * The forms a token can take once it is inside a printed URL.
+ * Whether a bypass value is one the scrub can always find.
  *
- * @remarks Every form is produced by the serializer that writes it, never by
- * hand-written escape rules, since each URL component encodes a different
- * set:
- * - the literal;
- * - `encodeURIComponent`'s form;
- * - the form `URLSearchParams` writes, which `redactUrl` emits when it
- *   rewrites a query (a space becomes `+`);
- * - the WHATWG path, query and fragment forms an `http(s)` URL keeps when
- *   `redactUrl` leaves it alone. An `http(s)` query keeps `?` raw and
- *   encodes `'` as `%27`, the reverse of `encodeURIComponent`, and a path
- *   cannot hold `?` at all.
+ * @remarks Only `A-Z a-z 0-9 . _ -`, as a Vercel-generated secret is: the
+ * characters that are RFC 3986 unreserved and that form encoding also leaves
+ * alone (`URLSearchParams` writes `~` as `%7E`, so `~` is out). Every URL
+ * serializer writes those unchanged in every component, so the literal,
+ * case-insensitive match in
+ * {@link redactSecret} finds the value wherever a printed URL carries it.
+ * Any other character is escaped differently in a userinfo, host, path,
+ * query or fragment, and can be dropped by URL whitespace trimming (#273,
+ * PR #336). At least one letter or digit is required too: a value of dots
+ * alone is a `.` or `..` path segment, which `new URL` removes.
  *
- * A form is kept only when it decodes back to the whole token. A token
- * holding `?` cannot sit whole in a path, for example, and a shortened form
- * would match unrelated text. A derivation that throws, such as
- * `encodeURIComponent` on a lone surrogate, adds nothing. For a plain
- * alphanumeric token, such as a Vercel-generated secret, every form is the
- * literal.
- *
- * @param {string} value - A known token.
- * @returns {string[]} The token and its distinct encoded forms.
+ * @param {string} value - A bypass value from the environment or the flag.
+ * @returns {boolean} True when the value holds only unreserved characters.
  */
-function urlEncodedForms(value) {
-  const decodesTo = (form, decode) => {
-    try {
-      return decode(form) === value
-    } catch {
-      return false
-    }
-  }
-  const percent = (form) => decodeURIComponent(form)
-  const formQuery = (form) => new URLSearchParams(`v=${form}`).get('v')
-  const candidates = [
-    [() => encodeURIComponent(value), percent],
-    [() => new URLSearchParams({ v: value }).toString().slice(2), formQuery],
-    [() => new URL(`http://h/${value}`).pathname.slice(1), percent],
-    [() => new URL(`http://h/?${value}`).search.slice(1), percent],
-    [() => new URL(`http://h/#${value}`).hash.slice(1), percent],
-  ]
-  const forms = new Set([value])
-  for (const [derive, decode] of candidates) {
-    try {
-      const form = derive()
-      if (form && decodesTo(form, decode)) forms.add(form)
-    } catch {
-      // This component cannot carry the token whole; nothing to add.
-    }
-  }
-  return [...forms]
+export function isUrlSafeToken(value) {
+  return /^[A-Za-z0-9._-]+$/.test(value) && /[A-Za-z0-9]/.test(value)
 }
 
 /**
@@ -564,9 +539,17 @@ html { scroll-behavior: auto !important; }
  * @param env - Process environment, read only for the bypass secret.
  * @returns The resolved options.
  * @throws Error when the two URLs are missing or an option is malformed —
- * the caller turns that into a usage message and a nonzero exit.
+ * the caller turns that into a usage message and a nonzero exit. Also when
+ * any bypass value the run could hold fails {@link isUrlSafeToken}; that
+ * message never quotes the value.
  */
 export function parseArgs(argv, env = {}) {
+  if (!knownBypassTokens(argv, env).every(isUrlSafeToken)) {
+    throw new Error(
+      `the bypass secret (${BYPASS_TOKEN_ENV} or --bypass-token) holds a character other than A-Z, a-z, 0-9, ".", "_" or "-", or has no letter or digit. It is refused: such a value prints differently in each part of a URL, and redaction could miss it. Regenerate it in the Vercel project's Deployment Protection settings.`,
+    )
+  }
+
   const positional = []
   const flags = new Map()
 

@@ -1003,55 +1003,107 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
     )
   })
 
-  it('redacts a token that a printed URL carries percent-encoded', () => {
-    // `new URL` encodes `"` as %22 and a space as %20 (+ in a rewritten
-    // query), so the literal alone never matches the printed URL
-    // (CodeRabbit CLI stand-in, PR #336).
-    const awkward = 'tok"en with space'
-    const { scrub } = createSafeReporter([awkward], () => {})
-    const inPath = redactUrl(`https://staging.example.test/${awkward}/`)
-    const inQuery = redactUrl(
-      `https://staging.example.test/?page=${encodeURIComponent(awkward)}&api_key=x`,
-    )
-    expect(inPath).toBe('https://staging.example.test/tok%22en%20with%20space/')
-    expect(inQuery).toContain('page=tok%22en+with+space')
+  // Every value a reviewer or CodeRabbit used to slip an encoded token past
+  // the scrub on PR #336: a quote, space, `?`, `'`, `$`, `;`, `:`, non-ASCII
+  // (a punycode host), a trailing space, `/`, `%`, a lone surrogate.
+  const refusedTokens = [
+    'tok"en with space',
+    'tok"en?with space',
+    "tok'! with space",
+    'tok$en;space',
+    'tok$en:space',
+    'töken',
+    'tok?en ',
+    'tok/en',
+    'tok%22en',
+    'tok\uD800en',
+    // `~` is unreserved, but URLSearchParams writes it as %7E.
+    'tok~en',
+    // Dots alone are a path segment `new URL` removes.
+    '..',
+  ]
 
-    expect(scrub(inPath)).toBe(`https://staging.example.test/${REDACTED}/`)
-    expect(scrub(inQuery)).toBe(
-      `https://staging.example.test/?page=${REDACTED}&api_key=REDACTED`,
-    )
-    expect(scrub(`?q=${encodeURIComponent(awkward)}`)).toBe(`?q=${REDACTED}`)
+  it.each(refusedTokens)(
+    'refuses the bypass value %j before anything runs, without quoting it',
+    (bad) => {
+      const urls = ['https://a.example.test/', 'https://b.example.test/']
+      for (const [argv, env] of [
+        [urls, { [BYPASS_TOKEN_ENV]: bad }],
+        [[...urls, `--bypass-token=${bad}`], {}],
+      ] as const) {
+        let message = ''
+        try {
+          parseArgs([...argv], env)
+        } catch (error) {
+          message = (error as Error).message
+        }
+        expect(message).toContain('is refused')
+        expect(occurrences(message, bad)).toBe(0)
+      }
+    },
+  )
 
-    const report = JSON.stringify(
-      scrubStrings({ baselineUrl: inPath, candidateUrl: inQuery }, scrub),
+  it('accepts a bypass value of unreserved characters only', () => {
+    const good = 'AbC123._-xyz'
+    const options = parseArgs(
+      ['https://a.example.test/', 'https://b.example.test/'],
+      {
+        [BYPASS_TOKEN_ENV]: good,
+      },
     )
-    for (const form of [awkward, 'tok%22en', 'tok%22en+with']) {
-      expect(occurrences(report, form)).toBe(0)
+    expect(options.bypassToken).toBe(good)
+  })
+
+  it('redacts an accepted token in every URL component a printed URL can carry it', () => {
+    // Unreserved characters print unchanged in every component; a host
+    // lowercases them, which the case-insensitive match covers.
+    const good = 'Tok.en_-9Z'
+    const { scrub } = createSafeReporter([good], () => {})
+    const inputs = [
+      `https://${good}@example.test/`,
+      `https://user:${good}@example.test/`,
+      `https://${good}.example.test/`,
+      `https://example.test/${good}/tail`,
+      `https://example.test/?page=${good}&other=1`,
+      `https://example.test/?page=${good}&api_key=x`,
+      `https://example.test/#${good}/tail`,
+    ]
+    for (const input of inputs) {
+      const printed = redactUrl(input)
+      for (const out of [
+        scrub(printed),
+        JSON.parse(JSON.stringify(scrubStrings({ url: printed }, scrub))).url,
+      ]) {
+        expect(out).toContain(REDACTED)
+        expect(decodeURIComponent(out).toLowerCase()).not.toContain(
+          good.toLowerCase(),
+        )
+      }
     }
   })
 
-  it('redacts a token in a query redactUrl leaves raw, and in a fragment', () => {
-    // No sensitive parameter, so redactUrl does not rewrite the query and the
-    // WHATWG query serialization stays: for http(s), `?` raw and `'`, `"` and
-    // space percent-encoded. encodeURIComponent encodes `?` and leaves `'`
-    // raw, and URLSearchParams writes a space as `+`, so neither writes that
-    // form (independent re-review 4 and CodeRabbit, PR #336).
-    for (const awkward of ['tok"en?with space', "tok'! with space"]) {
-      const { scrub } = createSafeReporter([awkward], () => {})
-      const url = redactUrl(`https://example.test/?page=${awkward}#${awkward}`)
-      expect(url).not.toContain(awkward)
-      const scrubbed = scrub(url)
-      expect(scrubbed).toBe(
-        `https://example.test/?page=${REDACTED}#${REDACTED}`,
-      )
-      expect(new URL(scrubbed).searchParams.get('page')).toBe(REDACTED)
+  it('refuses a bad bypass value at the CLI with exit 2 and no output of it', () => {
+    const bad = 'tok"en?with space'
+    const { [BYPASS_TOKEN_ENV]: _drop, ...env } = process.env
+    const child = spawnSync(
+      process.execPath,
+      [
+        fileURLToPath(new URL('../diff-pages.mjs', import.meta.url)),
+        'http://127.0.0.1:9/',
+        `http://127.0.0.1:9/?page=${bad}`,
+      ],
+      {
+        env: { ...env, [BYPASS_TOKEN_ENV]: bad },
+        encoding: 'utf8',
+        timeout: 30_000,
+      },
+    )
+    expect(child.status).toBe(2)
+    expect(child.stderr).toContain('is refused')
+    expect(occurrences(`${child.stdout}${child.stderr}`, bad)).toBe(0)
+  }, 30_000)
 
-      const report = JSON.stringify(scrubStrings({ baselineUrl: url }, scrub))
-      expect(JSON.parse(report).baselineUrl).toBe(scrubbed)
-    }
-  })
-
-  it('does not throw on a token no URL serializer can encode', () => {
+  it('redacts a lone-surrogate value given to the reporter without throwing', () => {
     const loneSurrogate = 'tok\uD800en'
     expect(redactSecret(`x ${loneSurrogate} y`, loneSurrogate)).toBe(
       `x ${REDACTED} y`,

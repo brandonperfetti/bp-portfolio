@@ -54,11 +54,15 @@
  * The script prints no secret it knows of (#273). URLs pass through
  * `redactUrl`, and everything it prints or writes to `report.json`, usage
  * errors included, passes through `createSafeReporter`'s scrub, which
- * replaces every bypass value from the environment or the flag (also in its
- * URL-encoded forms, as a printed URL carries it), and any
+ * replaces every bypass value from the environment or the flag, matched
+ * case-insensitively, and any
  * `x-vercel-protection-bypass` header value, with `REDACTED`. Errors are
  * described by `describeErrorSafely`, which drops the error object: a
- * Playwright error's call log lists request headers.
+ * Playwright error's call log lists request headers. A bypass value with a
+ * character other than `A-Z a-z 0-9 . _ -` is refused before anything
+ * runs (exit 2, the value never printed): URLs escape such a character
+ * differently in each component, so no literal match could be relied on.
+ * Vercel's generated secrets use only those characters.
  *
  * A same-origin bypass request that fails while a page is being captured
  * fails the run (exit 2) with its redacted error, since the frame may be
