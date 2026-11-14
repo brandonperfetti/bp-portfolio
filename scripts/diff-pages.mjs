@@ -99,7 +99,6 @@ import { chromium } from '@playwright/test'
 import sharp from 'sharp'
 
 import {
-  BYPASS_TOKEN_ENV,
   FREEZE_CSS,
   closeCapture,
   compareFrames,
