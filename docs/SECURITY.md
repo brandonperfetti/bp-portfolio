@@ -157,7 +157,8 @@ stay where they are:
   the revalidate secret, and never echoes it into output, handoffs or
   receipts.
 - `docs/MAINTENANCE.md` § Promotion checklist — fresh production values for
-  `CMS_REVALIDATE_SECRET` and `PREVIEW_SECRET`, never the staging ones.
+  `CMS_REVALIDATE_SECRET`, never the staging ones. (`PREVIEW_SECRET` is no
+  longer read, since #275; delete it from every environment.)
 
 ## Payload access control
 
@@ -199,8 +200,8 @@ stay where they are:
   published read in `articlesRepo`, `pagesRepo` and `content/posts` passes
   `false`. The deliberate `true` reads are Payload hooks and sync jobs that
   must see every row; the draft readers, reached only in Next draft mode,
-  which `/next/preview` enables only after `PREVIEW_SECRET` **and** a
-  Payload user check; and `getGatedPostContent()`, called only after
+  which `/next/preview` enables only for a signed-in Payload user (the
+  admin's session; no URL secret since #275); and `getGatedPostContent()`, called only after
   `canAccess()` passes (next section).
 - **Database: default-deny RLS on every table in `public`.** A migration
   that creates a table enables Row Level Security on it and on its `_v` /
