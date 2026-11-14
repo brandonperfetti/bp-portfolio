@@ -146,7 +146,11 @@ one set, version-locked.
   desktop app. Its own Next.js docs page still describes a browser
   `Spotlight.init()`; in 4.x the package's `exports` map resolves to a Node
   sidecar server (`node:http`) and that browser entry is deprecated and
-  unreachable — do not import it from client code.
+  unreachable — do not import it from client code. Its `dist` bundles its
+  own copy of `@modelcontextprotocol/sdk`, which no `pnpm-workspace.yaml`
+  override reaches: 4.11.8 bundled 1.27.1, affected by the #312 advisories;
+  4.12.1 bundles 1.32.0 (2026-11-14, #312). Check the bundled version after
+  a Spotlight bump: the path under `dist/node_modules/.pnpm/` names it.
 
 ## Supply-chain policy (#91)
 
@@ -229,7 +233,8 @@ that appears there and not here has not been assessed.
 - **`mcp-handler@1.1.0` wants `@modelcontextprotocol/sdk` exactly `1.26.0`,
   and `@payloadcms/plugin-mcp@3.90.2` pins it at exactly `1.30.0`; the tree
   runs `1.32.2` through an override — accepted (2026-11-14, #258, #312).**
-  Every version from 1.26.0 through 1.31.0 carries six advisories, so neither
+  Both exact-pinned versions carry all six open advisories (GHSA-f897, -6qxp,
+  -46jr, -rvq5, -6prh, -22jm); the last of them is fixed in 1.32.0, so neither
   peer can be met safely. The override in `pnpm-workspace.yaml` is the one
   entry there that crosses an exact pin. It is Brandon's exception to
   `docs/SECURITY.md`'s "never force-overridden" rule, granted 2026-11-14 for

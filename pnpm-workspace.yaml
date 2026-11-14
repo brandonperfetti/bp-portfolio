@@ -46,6 +46,8 @@ overrides:
   # POST /api/mcp test pass on it. Exit: drop this entry as soon as a
   # Payload release pins 1.32.x or later. Check with
   #   pnpm view @payloadcms/plugin-mcp@<version> dependencies
+  # @spotlightjs/spotlight bundles its own SDK copy, out of this override's
+  # reach; 4.12.1 bundles 1.32.0 (docs/DEPENDENCIES.md, Spotlight entry).
   '@modelcontextprotocol/sdk': 1.32.2
   '@hono/node-server': '^1.19.15'
   valibot: '^1.4.2' # Storybook MCP addon (dev)
