@@ -473,6 +473,50 @@ describe('backup', () => {
     )
   })
 
+  it('keeps the newest copy mapped through a failed run, so a later 404 restores it, not the first copy', async () => {
+    // CodeRabbit preflight, push 1 of PR 2: A1 under objects/, A2 under
+    // versions/, a failed HEAD, then a 404.
+    const blob = new Map([['a.png', png('A1')]])
+    const { deps } = fakes(blob)
+    const run = (previous: Manifest | null) =>
+      backup({
+        deps,
+        now,
+        origin: ORIGIN,
+        previous,
+        references: refs.slice(0, 1),
+        workDir,
+      })
+    const first = await run(null)
+    blob.set('a.png', png('A2-longer'))
+    const second = await run(first)
+    const newest = second.entries[0].key
+    expect(newest).toMatch(/^versions\/a\.png\//)
+
+    const realHead = deps.headPublic
+    deps.headPublic = async () => {
+      throw new Error('socket hang up')
+    }
+    const failed = await run(second)
+    expect(failed.entries[0]).toMatchObject({ key: newest, status: 'error' })
+    // Still a failure for the check: only the mapping survives.
+    expect(
+      (
+        await check({
+          deps,
+          manifest: failed,
+          now,
+          references: refs.slice(0, 1),
+        })
+      ).failures,
+    ).toHaveLength(1)
+
+    deps.headPublic = realHead
+    blob.delete('a.png')
+    const gone = await run(failed)
+    expect(gone.entries[0]).toMatchObject({ key: newest, status: 'retained' })
+  })
+
   it('keeps an earlier R2 copy of a file the store now answers 404 for', async () => {
     const blob = new Map([['a.png', png('A1')]])
     const { bucket, deps } = fakes(blob)

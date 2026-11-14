@@ -494,13 +494,16 @@ export async function backup(options: {
   const entries = await mapPool(
     uniquePathnames(options.references),
     options.concurrency ?? 4,
-    (pathname) =>
-      backupOne(pathname, {
-        deps: options.deps,
-        origin: options.origin,
-        previous,
-        workDir: options.workDir,
-      }),
+    async (pathname) =>
+      keepLastGood(
+        await backupOne(pathname, {
+          deps: options.deps,
+          origin: options.origin,
+          previous,
+          workDir: options.workDir,
+        }),
+        previous.get(pathname),
+      ),
   )
   return {
     entries,
@@ -537,6 +540,48 @@ export function referenceId(pathname: string): string {
   return createHash('sha256').update(pathname).digest('hex').slice(0, 12)
 }
 
+/** The detail of an entry whose last good R2 copy was found gone. */
+const LOST_COPY_DETAIL =
+  'public URL answers 404 and its last good R2 copy is gone'
+
+/**
+ * The prior entry that still names the pathname's last good R2 copy: a backed
+ * up entry, or an `error` entry that carried that key forward.
+ */
+function lastGood(prior: ManifestEntry | undefined): ManifestEntry | null {
+  if (!prior?.key) return null
+  return isBackedUp(prior.status) || prior.status === 'error' ? prior : null
+}
+
+/**
+ * Carry the last good R2 mapping through a failed run.
+ *
+ * @remarks An `error` entry would otherwise record `key: null`, and the
+ * newest manifest would forget where the pathname's newest bytes are (say
+ * `versions/<pathname>/<etag>`). A later 404 would then fall back to the
+ * first copy under `objects/`, an older version, and a restore would follow
+ * it. The entry stays `error`, so {@link check} still fails it; only the
+ * mapping survives, for the next run and for a person restoring by hand. Not
+ * for an entry that found that copy gone.
+ */
+function keepLastGood(
+  entry: ManifestEntry,
+  prior: ManifestEntry | undefined,
+): ManifestEntry {
+  const good = lastGood(prior)
+  if (entry.status !== 'error' || entry.key || !good) return entry
+  if (entry.detail === LOST_COPY_DETAIL) return entry
+  return {
+    ...entry,
+    contentType: good.contentType,
+    etag: good.etag,
+    key: good.key,
+    sha256: good.sha256,
+    size: good.size,
+    uploadedAt: good.uploadedAt,
+  }
+}
+
 /** Statuses whose entry names an R2 key holding the pathname's bytes. */
 function isBackedUp(status: ManifestEntry['status']): boolean {
   return status === 'copied' || status === 'unchanged' || status === 'retained'
@@ -546,7 +591,8 @@ function isBackedUp(status: ManifestEntry['status']): boolean {
  * The entry for a pathname whose public URL answers 404.
  *
  * @remarks A 404 alone is not proof nothing can be restored: an earlier run
- * may hold its bytes. The prior manifest's key, or the first-copy key
+ * may hold its bytes. The prior manifest's last good key (carried through a
+ * failed run by {@link keepLastGood}), or, with none, the first-copy key
  * `objects/<pathname>`, is checked in R2, and a copy found there is kept as
  * `retained`, so the newest manifest still maps the pathname to its bytes when
  * older manifests expire. With no copy at either key it is `missing`, which
@@ -559,8 +605,8 @@ async function goneFromStore(
   base: Omit<ManifestEntry, 'status'>,
   context: { deps: Deps; previous: Map<string, ManifestEntry> },
 ): Promise<ManifestEntry> {
-  const prior = context.previous.get(pathname)
-  if (prior?.key && isBackedUp(prior.status)) {
+  const prior = lastGood(context.previous.get(pathname))
+  if (prior?.key) {
     const stored = await context.deps.r2Head(prior.key)
     if (stored && stored.size === prior.size) {
       return {
@@ -571,7 +617,7 @@ async function goneFromStore(
     }
     return {
       ...base,
-      detail: `public URL answers 404 and its earlier R2 copy ${prior.key} is gone`,
+      detail: LOST_COPY_DETAIL,
       status: 'error',
     }
   }
