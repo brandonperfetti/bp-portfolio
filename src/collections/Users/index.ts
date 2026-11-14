@@ -12,7 +12,14 @@ import type { User } from '@/payload-types'
  * same test `authenticated` makes) lets ANY authenticated user reset any other
  * account's `loginAttempts`/`lockUntil`, which turns the brute-force lockout
  * into a speed bump. Reusing `authenticated` would therefore change nothing;
- * this rule is stricter. Payload's unlock operation ANDs the returned `Where`
+ * this rule is stricter.
+ *
+ * **Keep it after the 3.90 bump (#257).** Upstream's fix in 3.90.0
+ * (`c3e4d01f3`; `payload/dist/auth/defaultUnlockAccess.js` at 3.90.2) changes
+ * the default to `user.collection === admin.user`. This
+ * collection IS `admin.user`, so for every signed-in admin that default is
+ * still `Boolean(user)` here: removing this rule would reopen the hole.
+ * `evals/users-unlock-access-integration.test.ts` pins it. Payload's unlock operation ANDs the returned `Where`
  * with the email being unlocked, so a request for someone else's email finds
  * no row and is refused (`Forbidden`). A lockout on another account expires
  * on its own after `lockTime` (Payload default 10 minutes) or is cleared with

@@ -719,7 +719,8 @@ omission. The limits are named constants, each with its reasoning:
 **What it leaves open** (also `docs/SECURITY.md` § Dependency advisories):
 
 - **Method-override pre-parse.** Payload's `handleEndpoints` (payload 3.88.0,
-  `utilities/handleEndpoints.js`) turns a `POST` carrying
+  `utilities/handleEndpoints.js`; re-read 2026-11-14 at 3.90.2, unchanged,
+  #257) turns a `POST` carrying
   `X-HTTP-Method-Override: GET` or `X-Payload-HTTP-Method-Override: GET` into
   a `GET`, and first reads the body with `request.json()` (for
   `Content-Type: application/json`) or `request.text()` (for

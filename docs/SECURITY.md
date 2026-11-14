@@ -143,6 +143,12 @@ measured below; the second is held by review (and by GitGuardian on PRs,
   in project-scoped keychain entries, rotate on any suspicion, and never
   grant delete where find+update suffices. _Moved from `docs/PAYLOAD.md`
   § Operating via MCP, "Key posture (review m8)"._
+  **Since Payload 3.90 (#257) a key is shown once, when it is generated**:
+  the admin and Payload operations no longer return a stored key (the
+  generated types gained `hasAPIKey` in its place). Copy a new key into the
+  keychain entry at creation; a lost key is rotated, not recovered.
+  `[source: Payload v3.90.0 release notes, "API keys are no longer readable
+after initial generation"]`
 - `SENTRY_AUTH_TOKEN` is a build-only secret (source-map upload); rotate it
   like Resend/Blob if exposed. _Moved from `docs/MAINTENANCE.md`
   § Recurring, the Sentry entry._
