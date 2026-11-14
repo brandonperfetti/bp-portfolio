@@ -19,7 +19,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
  * result is recorded in the body of the commit that added this file.
  *
  * Runs in the pg tier (`vitest run --root evals`) with `DATABASE_URI` set.
- * Rows carry the `MARKER` in their email and are deleted in `afterAll`.
+ * Each case deletes the rows it created in its own `try/finally`
+ * (`withUsers`); rows carry the `MARKER` in their email, and the `afterAll`
+ * sweep by it is only the backstop for a run that died mid-case.
  */
 
 const connectionString = process.env.DATABASE_URI
@@ -90,7 +92,7 @@ describe.skipIf(!connectionString)(
       await cleanup()
     }, 120_000)
 
-    // `finally`, so a REJECTED cleanup still destroys the pool.
+    // Backstop sweep; `finally`, so a REJECTED cleanup still destroys the pool.
     afterAll(async () => {
       try {
         await cleanup()
@@ -99,112 +101,135 @@ describe.skipIf(!connectionString)(
       }
     }, 60_000)
 
-    it("refuses a non-owner changing another account's password or email", async () => {
-      const caller = await createUser('pw-caller')
-      const target = await createUser('pw-target')
+    type Fixture = Awaited<ReturnType<typeof createUser>>
 
-      await expect(
-        payload.update({
+    /**
+     * Run `fn` with fresh users and delete exactly those rows afterwards, in
+     * this test's own `try/finally` (docs/WORKFLOW.md); the `afterAll` marker
+     * sweep is only the backstop for a run that died mid-case.
+     */
+    const withUsers = async (
+      labels: string[],
+      fn: (users: Fixture[]) => Promise<void>,
+    ) => {
+      const created: number[] = []
+      try {
+        const users: Fixture[] = []
+        for (const label of labels) {
+          const user = await createUser(label)
+          created.push(user.id)
+          users.push(user)
+        }
+        await fn(users)
+      } finally {
+        if (created.length > 0) {
+          await payload.delete({
+            collection: 'users',
+            where: { id: { in: created } },
+            overrideAccess: true,
+          })
+        }
+      }
+    }
+
+    it("refuses a non-owner changing another account's password or email", () =>
+      withUsers(['pw-caller', 'pw-target'], async ([caller, target]) => {
+        await expect(
+          payload.update({
+            collection: 'users',
+            data: {
+              email: `${MARKER}-hijacked@example.test`,
+              password: NEW_PASSWORD,
+            },
+            id: target.id,
+            overrideAccess: false,
+            user: caller,
+          }),
+        ).rejects.toMatchObject({ name: 'Forbidden', status: 403 })
+
+        expect((await readRow(target.id))?.email).toBe(target.email)
+        await expect(login(target.email, PASSWORD)).resolves.toMatchObject({
+          user: { email: target.email },
+        })
+        await expect(login(target.email, NEW_PASSWORD)).rejects.toThrow()
+      }))
+
+    it('refuses a non-owner deleting another account', () =>
+      withUsers(['del-caller', 'del-target'], async ([caller, target]) => {
+        await expect(
+          payload.delete({
+            collection: 'users',
+            id: target.id,
+            overrideAccess: false,
+            user: caller,
+          }),
+        ).rejects.toMatchObject({ name: 'Forbidden', status: 403 })
+
+        expect(await readRow(target.id)).toMatchObject({ id: target.id })
+      }))
+
+    it("limits a non-owner's bulk update to their own row", () =>
+      withUsers(['bulk-caller', 'bulk-target'], async ([caller, target]) => {
+        const result = await payload.update({
           collection: 'users',
-          data: {
-            email: `${MARKER}-hijacked@example.test`,
-            password: NEW_PASSWORD,
-          },
-          id: target.id,
+          data: { name: 'renamed-by-bulk' },
           overrideAccess: false,
           user: caller,
-        }),
-      ).rejects.toMatchObject({ name: 'Forbidden', status: 403 })
+          where: { email: { like: `%${MARKER}-bulk-%` } },
+        })
 
-      expect((await readRow(target.id))?.email).toBe(target.email)
-      await expect(login(target.email, PASSWORD)).resolves.toMatchObject({
-        user: { email: target.email },
-      })
-      await expect(login(target.email, NEW_PASSWORD)).rejects.toThrow()
-    })
+        expect(result.docs.map((doc) => doc.id)).toEqual([caller.id])
+        expect((await readRow(target.id))?.name).toBe('bulk-target')
+        expect((await readRow(caller.id))?.name).toBe('renamed-by-bulk')
+      }))
 
-    it('refuses a non-owner deleting another account', async () => {
-      const caller = await createUser('del-caller')
-      const target = await createUser('del-target')
-
-      await expect(
-        payload.delete({
-          collection: 'users',
-          id: target.id,
-          overrideAccess: false,
-          user: caller,
-        }),
-      ).rejects.toMatchObject({ name: 'Forbidden', status: 403 })
-
-      expect(await readRow(target.id)).toMatchObject({ id: target.id })
-    })
-
-    it("limits a non-owner's bulk update to their own row", async () => {
-      const caller = await createUser('bulk-caller')
-      const target = await createUser('bulk-target')
-
-      const result = await payload.update({
-        collection: 'users',
-        data: { name: 'renamed-by-bulk' },
-        overrideAccess: false,
-        user: caller,
-        where: { email: { like: `%${MARKER}-bulk-%` } },
-      })
-
-      expect(result.docs.map((doc) => doc.id)).toEqual([caller.id])
-      expect((await readRow(target.id))?.name).toBe('bulk-target')
-      expect((await readRow(caller.id))?.name).toBe('renamed-by-bulk')
-    })
-
-    it('lets an account change its own password and delete itself', async () => {
+    it('lets an account change its own password and delete itself', () =>
       // Positive control: the refusals above are the rule, not a broken
       // update or delete operation.
-      const self = await createUser('self')
+      withUsers(['self'], async ([self]) => {
+        await expect(
+          payload.update({
+            collection: 'users',
+            data: { password: NEW_PASSWORD },
+            id: self.id,
+            overrideAccess: false,
+            user: self,
+          }),
+        ).resolves.toMatchObject({ id: self.id })
+        await expect(login(self.email, NEW_PASSWORD)).resolves.toMatchObject({
+          user: { email: self.email },
+        })
 
-      await expect(
-        payload.update({
-          collection: 'users',
-          data: { password: NEW_PASSWORD },
-          id: self.id,
-          overrideAccess: false,
-          user: self,
-        }),
-      ).resolves.toMatchObject({ id: self.id })
-      await expect(login(self.email, NEW_PASSWORD)).resolves.toMatchObject({
-        user: { email: self.email },
-      })
+        await expect(
+          payload.delete({
+            collection: 'users',
+            id: self.id,
+            overrideAccess: false,
+            user: self,
+          }),
+        ).resolves.toMatchObject({ id: self.id })
+        expect(await readRow(self.id)).toBeNull()
+      }))
 
-      await expect(
-        payload.delete({
-          collection: 'users',
-          id: self.id,
-          overrideAccess: false,
-          user: self,
-        }),
-      ).resolves.toMatchObject({ id: self.id })
-      expect(await readRow(self.id)).toBeNull()
-    })
+    it('refuses an anonymous update and delete', () =>
+      withUsers(['anon-target'], async ([target]) => {
+        await expect(
+          payload.update({
+            collection: 'users',
+            data: { name: 'anon' },
+            id: target.id,
+            overrideAccess: false,
+          }),
+        ).rejects.toMatchObject({ name: 'Forbidden', status: 403 })
+        await expect(
+          payload.delete({
+            collection: 'users',
+            id: target.id,
+            overrideAccess: false,
+          }),
+        ).rejects.toMatchObject({ name: 'Forbidden', status: 403 })
 
-    it('refuses an anonymous update and delete', async () => {
-      const target = await createUser('anon-target')
-
-      await expect(
-        payload.update({
-          collection: 'users',
-          data: { name: 'anon' },
-          id: target.id,
-          overrideAccess: false,
-        }),
-      ).rejects.toMatchObject({ name: 'Forbidden', status: 403 })
-      await expect(
-        payload.delete({
-          collection: 'users',
-          id: target.id,
-          overrideAccess: false,
-        }),
-      ).rejects.toMatchObject({ name: 'Forbidden', status: 403 })
-
-      expect(await readRow(target.id)).toMatchObject({ name: 'anon-target' })
-    })
+        expect(await readRow(target.id)).toMatchObject({ name: 'anon-target' })
+      }))
   },
 )

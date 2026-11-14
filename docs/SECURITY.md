@@ -171,7 +171,10 @@ stay where they are:
   `[measured 2026-09-27]` all 11 collections in `src/collections/` and all
   5 globals in `src/globals/` do. The posture (helpers in `src/access/`):
   - **Writes** — `create`, `update`, `delete`, and a global's `update` —
-    are `authenticated`: a signed-in Payload admin user.
+    are `authenticated`: a signed-in Payload admin user. The one exception
+    is Users: `update` and `delete` are restricted to the caller's own
+    account (#255), so one staff account cannot change another's email or
+    password, or delete it.
   - **Reads** are `anyone` for public reference content (Authors,
     Categories, Media, Projects, Tags, TechStack, Uses, WorkHistory, every
     global); `authenticatedOrPublished` for the drafts-enabled Posts and
