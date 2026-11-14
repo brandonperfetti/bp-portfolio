@@ -343,6 +343,11 @@ export const REDACTED = 'REDACTED'
  * `redactUrl` covers URLs only; Playwright's error call log prints request
  * headers raw (#273).
  *
+ * Each literal is matched in its URL-encoded forms too (`urlEncodedForms`):
+ * a URL the CLI prints has been through `new URL`, which percent-encodes a
+ * token holding `"` or a space, and the encoded form would pass a literal
+ * match.
+ *
  * Every known literal goes first, longest first, and the header pass runs
  * once, last. The header pass stops at `"`, `'`, `,` and the like, so run
  * before a literal it would rewrite part of a token holding one, and leave
@@ -354,15 +359,44 @@ export const REDACTED = 'REDACTED'
  * @returns The text with every occurrence replaced by {@link REDACTED}.
  */
 export function redactSecret(text, token) {
-  const tokens = (Array.isArray(token) ? token : [token])
-    .filter((value) => typeof value === 'string' && value.length > 0)
-    .sort((a, b) => b.length - a.length)
+  const tokens = [
+    ...new Set(
+      (Array.isArray(token) ? token : [token])
+        .filter((value) => typeof value === 'string' && value.length > 0)
+        .flatMap(urlEncodedForms),
+    ),
+  ].sort((a, b) => b.length - a.length)
   let out = String(text)
   for (const value of tokens) out = out.split(value).join(REDACTED)
   return out.replace(
     new RegExp(`(${BYPASS_HEADER}["']?\\s*[:=]\\s*["']?)[^\\s"',}\\]]+`, 'gi'),
     `$1${REDACTED}`,
   )
+}
+
+/**
+ * The forms a token can take once it is inside a printed URL.
+ *
+ * @remarks The literal; `encodeURIComponent`'s form; the query form
+ * `URLSearchParams` writes, which `redactUrl` emits when it rewrites a query
+ * (a space becomes `+`); and the WHATWG path form, kept only when it decodes
+ * back to the token: a token holding `?`, `#` or `\` never sits whole in a
+ * path. For a plain alphanumeric token, such as a Vercel-generated secret,
+ * every form is the literal.
+ *
+ * @param {string} value - A known token.
+ * @returns {string[]} The token and its distinct encoded forms.
+ */
+function urlEncodedForms(value) {
+  const forms = new Set([value, encodeURIComponent(value)])
+  forms.add(new URLSearchParams({ v: value }).toString().slice(2))
+  try {
+    const path = new URL(`http://h/${value}`).pathname.slice(1)
+    if (decodeURIComponent(path) === value) forms.add(path)
+  } catch {
+    // Not a path segment that decodes back to the token; nothing to add.
+  }
+  return [...forms]
 }
 
 /**

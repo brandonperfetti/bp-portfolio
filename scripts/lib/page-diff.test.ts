@@ -1003,6 +1003,38 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
     )
   })
 
+  it('redacts a token that a printed URL carries percent-encoded', () => {
+    // `new URL` encodes `"` as %22 and a space as %20 (+ in a rewritten
+    // query), so the literal alone never matches the printed URL
+    // (CodeRabbit CLI stand-in, PR #336).
+    const awkward = 'tok"en with space'
+    const { scrub } = createSafeReporter([awkward], () => {})
+    const inPath = redactUrl(`https://staging.example.test/${awkward}/`)
+    const inQuery = redactUrl(
+      `https://staging.example.test/?page=${encodeURIComponent(awkward)}&api_key=x`,
+    )
+    expect(inPath).toBe('https://staging.example.test/tok%22en%20with%20space/')
+    expect(inQuery).toContain('page=tok%22en+with+space')
+
+    expect(scrub(inPath)).toBe(`https://staging.example.test/${REDACTED}/`)
+    expect(scrub(inQuery)).toBe(
+      `https://staging.example.test/?page=${REDACTED}&api_key=REDACTED`,
+    )
+    expect(scrub(`?q=${encodeURIComponent(awkward)}`)).toBe(`?q=${REDACTED}`)
+
+    const report = JSON.stringify(
+      scrubStrings({ baselineUrl: inPath, candidateUrl: inQuery }, scrub),
+    )
+    for (const form of [awkward, 'tok%22en', 'tok%22en+with']) {
+      expect(occurrences(report, form)).toBe(0)
+    }
+  })
+
+  it('leaves a plain alphanumeric token to the literal match alone', () => {
+    expect(redactSecret('x AbC123 y', 'AbC123')).toBe(`x ${REDACTED} y`)
+    expect(redactSecret('nothing here', 'AbC123')).toBe('nothing here')
+  })
+
   it('redacts the longer of two overlapping tokens whole', () => {
     expect(redactSecret('a abc-long b', ['abc', 'abc-long'])).toBe(
       `a ${REDACTED} b`,
