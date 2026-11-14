@@ -34,6 +34,8 @@ import {
   routeWithBypass,
   scrubStrings,
   verdict,
+  WITHHELD,
+  withholdUnsafe,
 } from './page-diff.mjs'
 
 /** Build a solid RGBA frame. */
@@ -1219,6 +1221,86 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
     expect(child.stderr).toContain('carries the bypass secret')
     expect(occurrences(`${child.stdout}${child.stderr}`, bad)).toBe(0)
   }, 30_000)
+
+  it('withholds a line where replacing one value completes another (re-review 8, F6)', () => {
+    // Invented values: the first holds REDACTED, so redacting the second
+    // inside the message rebuilds the first.
+    const env = 'c7eQ2mREDACTEDp4V8zR5nT9yK3uW6bH1a'
+    const flag = 'K4dP9nH6rT2yV8mQ3zF5sW1bG7cJ0uXe'
+    const message = `fetch failed c7eQ2m${flag}p4V8zR5nT9yK3uW6bH1a`
+    const lines: string[] = []
+    const reporter = createSafeReporter([env, flag], (line) => lines.push(line))
+    reporter.fail(new Error(message))
+    // The message is withheld; the fixed prefix around it holds no value.
+    expect(lines).toEqual([`diff-pages: ${WITHHELD}`])
+    expect(reporter.scrub(message)).toBe(WITHHELD)
+    for (const out of [...lines, reporter.scrub(message)]) {
+      for (const value of [env, flag]) {
+        expect(occurrences(out.toLowerCase(), value.toLowerCase())).toBe(0)
+      }
+    }
+  })
+
+  it('falls back past WITHHELD, to empty text, when a value is inside the marker', () => {
+    expect(withholdUnsafe('nothing', ['dacte'])).toBe('nothing')
+    expect(withholdUnsafe(`x ${REDACTED} y`, ['dacte'])).toBe('')
+    expect(withholdUnsafe('x withheld y', ['withheld'], ['{}'])).toBe('{}')
+    expect(redactSecret('a dacte b', 'dacte')).toBe('')
+  })
+
+  it('redacts a bypass header value whatever it starts with (re-review 8, F7)', () => {
+    for (const other of [
+      ',OtherDummy9Z',
+      ']OtherDummy9Z',
+      '}OtherDummy9Z',
+      '"OtherDummy9Z"',
+      "'Other Dummy9Z'",
+      ' , OtherDummy9Z',
+    ]) {
+      const lines: string[] = []
+      const reporter = createSafeReporter(['KnownDummy9Z'], (line) =>
+        lines.push(line),
+      )
+      reporter.fail(new Error(`call log:\n  - ${BYPASS_HEADER}: ${other}\n`))
+      expect(lines).toEqual([
+        `diff-pages: Error: call log:\n  - ${BYPASS_HEADER}: ${REDACTED}\n`,
+      ])
+      expect(occurrences(lines[0], 'OtherDummy9Z')).toBe(0)
+    }
+    // A value that starts on the next line, as some serializers print it.
+    expect(
+      occurrences(
+        redactSecret(`"${BYPASS_HEADER}":\n  "OtherDummy9Z"`, 'KnownDummy9Z'),
+        'OtherDummy9Z',
+      ),
+    ).toBe(0)
+  })
+
+  it('serializes the report scrubbed, and withholds one whose JSON would hold a value', () => {
+    const { json } = createSafeReporter(['Dummy9Z-fixture'], () => {})
+    expect(
+      JSON.parse(json({ url: 'https://example.test/Dummy9Z-fixture' })),
+    ).toEqual({
+      url: `https://example.test/${REDACTED}`,
+    })
+    // A value spanning two strings appears only once they are serialized.
+    const spanning = '"a",\n  "b": "'
+    const withheld = createSafeReporter([spanning], () => {}).json({
+      a: 'a',
+      b: 'b',
+    })
+    expect(occurrences(withheld, spanning)).toBe(0)
+    expect(JSON.parse(withheld)).toEqual({ withheld: WITHHELD })
+  })
+
+  it('scrubs the whole printed line, prefix included', () => {
+    const lines: string[] = []
+    const reporter = createSafeReporter(['pages: Err'], (line) =>
+      lines.push(line),
+    )
+    reporter.fail(new Error('boom'))
+    expect(occurrences(lines[0].toLowerCase(), 'pages: err')).toBe(0)
+  })
 
   it('redacts a lone-surrogate value given to the reporter without throwing', () => {
     const loneSurrogate = 'tok\uD800en'

@@ -334,6 +334,68 @@ export async function closeCapture(context, state) {
 export const REDACTED = 'REDACTED'
 
 /**
+ * What stands in for text that still held a known value after redaction.
+ *
+ * @remarks See {@link withholdUnsafe}: replacing one value can complete
+ * another, so the redacted text is checked once more before it is used.
+ */
+export const WITHHELD = `${REDACTED} (withheld: this text would have carried the bypass secret)`
+
+/**
+ * The non-empty, distinct values of a token argument, longest first.
+ *
+ * @param {string | undefined | Array<string | undefined>} token - One value
+ * or several.
+ * @returns {string[]} The values to match.
+ */
+function knownValues(token) {
+  return [
+    ...new Set(
+      (Array.isArray(token) ? token : [token]).filter(
+        (value) => typeof value === 'string' && value.length > 0,
+      ),
+    ),
+  ].sort((a, b) => b.length - a.length)
+}
+
+/**
+ * Whether text holds any of the values, ignoring case.
+ *
+ * @param {string} text - Text about to be printed or written.
+ * @param {string[]} values - Known bypass values, all non-empty.
+ * @returns {boolean} True when one of them occurs in the text.
+ */
+function holdsValue(text, values) {
+  const lower = text.toLowerCase()
+  return values.some((value) => lower.includes(value.toLowerCase()))
+}
+
+/**
+ * Return text only once it holds no known value; otherwise a fallback.
+ *
+ * @remarks The last check before anything is printed or written (#273,
+ * re-review 8, F6). Replacing one value with {@link REDACTED} can complete a
+ * different known value from the text around it, and a value can itself
+ * hold `REDACTED`. So the result is tested, not trusted: when it still holds
+ * a value it is dropped for the first fallback that holds none (by default
+ * {@link WITHHELD}), and finally for the empty string, which holds no value.
+ *
+ * @param {string} text - Redacted text.
+ * @param {string | undefined | Array<string | undefined>} token - Every
+ * known bypass value.
+ * @param {string[]} [fallbacks] - Replacements to try, in order (default
+ * `[WITHHELD]`).
+ * @returns {string} The first candidate that holds no known value.
+ */
+export function withholdUnsafe(text, token, fallbacks = [WITHHELD]) {
+  const values = knownValues(token)
+  for (const candidate of [text, ...fallbacks]) {
+    if (!holdsValue(candidate, values)) return candidate
+  }
+  return ''
+}
+
+/**
  * Remove the bypass secret from text that is about to be printed.
  *
  * @remarks Two passes, because neither alone is enough: the literal value
@@ -352,33 +414,37 @@ export const REDACTED = 'REDACTED'
  * that chasing every encoded form does not close: four rounds each found
  * another.
  *
- * Every known literal goes first, longest first, and the header pass runs
- * once, last. The header pass stops at `"`, `'`, `,` and the like, so run
- * before a literal it would rewrite part of a token holding one, and leave
- * the rest of the token for no later pass to match.
+ * Every known literal goes first, longest first, then the header pass. The
+ * header pass replaces everything after the header's `:` or `=` to the end
+ * of the line (the next line too, when the value starts there): a value
+ * can begin with `,`, `}` or a quote, and a pattern for the value's own
+ * shape let such a value through whole (re-review 8, F7). It can also take
+ * other text on that line; redacting too much is the safe side.
+ *
+ * Last, {@link withholdUnsafe} tests the result: replacing one value can
+ * complete another (re-review 8, F6).
  *
  * @param text - Text to clean.
  * @param {string | undefined | Array<string | undefined>} token - The bypass
  * secret, or every value the run could hold.
- * @returns The text with every occurrence replaced by {@link REDACTED}.
+ * @returns The text with every occurrence replaced by {@link REDACTED}, or
+ * {@link WITHHELD} when that still left a known value in it.
  */
 export function redactSecret(text, token) {
-  const tokens = [
-    ...new Set(
-      (Array.isArray(token) ? token : [token]).filter(
-        (value) => typeof value === 'string' && value.length > 0,
-      ),
-    ),
-  ].sort((a, b) => b.length - a.length)
+  const tokens = knownValues(token)
   let out = String(text)
   for (const value of tokens) {
     const literal = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     out = out.replace(new RegExp(literal, 'gi'), REDACTED)
   }
-  return out.replace(
-    new RegExp(`(${BYPASS_HEADER}["']?\\s*[:=]\\s*["']?)[^\\s"',}\\]]+`, 'gi'),
-    `$1${REDACTED}`,
+  out = out.replace(
+    new RegExp(
+      `(${BYPASS_HEADER}["']?\\s*[:=])(?:[^\\S\\r\\n]*\\r?\\n)?[^\\r\\n]*`,
+      'gi',
+    ),
+    `$1 ${REDACTED}`,
   )
+  return withholdUnsafe(out, tokens)
 }
 
 /**
@@ -481,17 +547,18 @@ export function scrubStrings(value, scrub) {
  *
  * @remarks All three exist so that nothing the CLI prints can carry the
  * secret and no fatal error can end in a passing exit (#273):
- * `scrub` redacts every known token and any bypass header value, `fail`
- * prints an error through `describeErrorSafely` and makes the failure
- * sticky, and `exitCode` returns 2 once anything was fatal, whatever the
- * run computed after it.
+ * `scrub` redacts every known token and any bypass header value, then
+ * withholds text that still holds a known value; `fail` prints an error
+ * through `describeErrorSafely`, scrubbing the whole line, and makes the
+ * failure sticky; `json` serializes the report the same way; and `exitCode`
+ * returns 2 once anything was fatal, whatever the run computed after it.
  *
  * @param {Array<string | undefined>} tokens - Every value the run could use:
  * the environment variable and any `--bypass-token=` flag, since a usage
  * error happens before `parseArgs` picks one.
  * @param {(line: string) => void} [print] - Where errors go (default
  * `console.error`).
- * @returns `{ scrub, fail, exitCode }`.
+ * @returns `{ scrub, fail, json, exitCode }`.
  */
 export function createSafeReporter(tokens, print = console.error) {
   let fatal = false
@@ -504,10 +571,21 @@ export function createSafeReporter(tokens, print = console.error) {
   const scrub = (text) => redactSecret(text, tokens)
   const fail = (error) => {
     fatal = true
-    print(`diff-pages: ${describeErrorSafely(error, tokens)}`)
+    print(scrub(`diff-pages: ${describeErrorSafely(error, tokens)}`))
   }
+  /**
+   * @param {unknown} value - The JSON-shaped report.
+   * @returns {string} Its serialized text, scrubbed per string and then
+   * checked whole, since serializing joins strings a value could span.
+   */
+  const json = (value) =>
+    withholdUnsafe(
+      `${JSON.stringify(scrubStrings(value, scrub), null, 2)}\n`,
+      tokens,
+      [`${JSON.stringify({ withheld: WITHHELD })}\n`, '{}\n'],
+    )
   const exitCode = (computed) => (fatal ? 2 : computed)
-  return { scrub, fail, exitCode }
+  return { scrub, fail, json, exitCode }
 }
 
 /**

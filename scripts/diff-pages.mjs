@@ -55,9 +55,12 @@
  * What the script guarantees about the secret (#273):
  * - It never prints or writes the bypass value it holds, from the
  *   environment or the flag, matched ignoring case. That covers the
- *   console, `report.json` and usage errors, and any
- *   `x-vercel-protection-bypass` header value. All output passes through
- *   `createSafeReporter`'s scrub, after URLs pass through `redactUrl`.
+ *   console, `report.json` and usage errors. It also never prints any
+ *   `x-vercel-protection-bypass` header value: everything after that
+ *   header's `:` or `=` to the end of the line is redacted. All output
+ *   passes through `createSafeReporter`, after URLs pass through
+ *   `redactUrl`. Each whole line, and the serialized report, is checked
+ *   last; one that would still hold a known value is withheld.
  *   Errors are described by `describeErrorSafely`, which drops the error
  *   object: a Playwright error's call log lists request headers.
  * - It refuses to run (exit 2, the value never quoted) when any argument
@@ -121,7 +124,6 @@ import {
   parseArgs,
   redactUrl,
   routeWithBypass,
-  scrubStrings,
   verdict,
 } from './lib/page-diff.mjs'
 
@@ -246,9 +248,11 @@ async function main() {
   } catch (error) {
     // A usage error can quote an argument verbatim, and a token pasted into
     // the wrong flag is still a token (#273).
-    console.error(`diff-pages: ${reporter.scrub(error.message)}`)
+    console.error(reporter.scrub(`diff-pages: ${error.message}`))
     console.error(
-      'usage: pnpm diff:pages <baseline-url> <candidate-url> [--threshold=0.1] [--mask="canvas"] [--out=dir]',
+      reporter.scrub(
+        'usage: pnpm diff:pages <baseline-url> <candidate-url> [--threshold=0.1] [--mask="canvas"] [--out=dir]',
+      ),
     )
     return 2
   }
@@ -316,7 +320,8 @@ async function main() {
     path.join(options.outDir, 'report.json'),
     // Scrubbed per string value, before serializing: JSON escapes `"` and `\`,
     // so a token holding either would no longer match in the serialized text.
-    `${JSON.stringify(scrubStrings(summary, reporter.scrub), null, 2)}\n`,
+    // The serialized text is then checked whole.
+    reporter.json(summary),
   )
   console.log(reporter.scrub(formatSummary(summary)))
   console.log(reporter.scrub(`\ndiff images: ${options.outDir}`))
