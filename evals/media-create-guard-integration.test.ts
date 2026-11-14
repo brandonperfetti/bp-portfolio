@@ -59,9 +59,9 @@ import {
  * disk 2026-09-27; see the hook's remarks.)
  *
  * **Storage is wherever `BLOB_READ_WRITE_TOKEN` points.** The gate unsets it
- * and CI has none, so uploads land on local disk (`media/`). But
- * `docs/WORKFLOW.md` § Local database asks for that token to be set locally,
- * and if it is exported when this file runs, the with-file case uploads to
+ * and CI has none, so uploads land on local disk (`media/`). `docs/WORKFLOW.md`
+ * § Local database now says to keep that token out of `.env.local` (#328),
+ * but if it is exported when this file runs, the with-file case uploads to
  * (and its cleanup deletes from) the shared Blob store that staging and
  * production use. Run this tier without it.
  *

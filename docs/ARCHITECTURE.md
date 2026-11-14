@@ -12,7 +12,10 @@
   as committed migrations (`pnpm migrate`); `PAYLOAD_DB_PUSH=true` enables dev
   push mode locally only.
 - Media uploads live in Vercel Blob (`@payloadcms/storage-vercel-blob`),
-  enabled only when `BLOB_READ_WRITE_TOKEN` is set.
+  enabled only when `BLOB_READ_WRITE_TOKEN` is set. Local work runs without
+  it: on local disk, or read-only from the store's public origin when only
+  `STORAGE_VERCEL_BLOB_BASE_URL` is set (`src/lib/storage/readOnlyMedia.ts`,
+  #328).
 - Clerk middleware runs from `src/proxy.ts` (Next 16 proxy convention), gated
   on `isClerkEnabled()` so the app boots without Clerk keys.
 
