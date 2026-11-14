@@ -385,8 +385,9 @@ export function redactSecret(text, token) {
  * - the form `URLSearchParams` writes, which `redactUrl` emits when it
  *   rewrites a query (a space becomes `+`);
  * - the WHATWG path, query and fragment forms an `http(s)` URL keeps when
- *   `redactUrl` leaves it alone (a query keeps `?` and `'` raw, a path does
- *   not).
+ *   `redactUrl` leaves it alone. An `http(s)` query keeps `?` raw and
+ *   encodes `'` as `%27`, the reverse of `encodeURIComponent`, and a path
+ *   cannot hold `?` at all.
  *
  * A form is kept only when it decodes back to the whole token. A token
  * holding `?` cannot sit whole in a path, for example, and a shortened form

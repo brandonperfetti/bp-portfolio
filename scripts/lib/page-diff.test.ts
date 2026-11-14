@@ -1032,9 +1032,10 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
 
   it('redacts a token in a query redactUrl leaves raw, and in a fragment', () => {
     // No sensitive parameter, so redactUrl does not rewrite the query and the
-    // WHATWG query serialization stays: `?` and `'` raw, `"` and space
-    // percent-encoded. Neither encodeURIComponent nor URLSearchParams writes
-    // that form (independent re-review 4, PR #336).
+    // WHATWG query serialization stays: for http(s), `?` raw and `'`, `"` and
+    // space percent-encoded. encodeURIComponent encodes `?` and leaves `'`
+    // raw, and URLSearchParams writes a space as `+`, so neither writes that
+    // form (independent re-review 4 and CodeRabbit, PR #336).
     for (const awkward of ['tok"en?with space', "tok'! with space"]) {
       const { scrub } = createSafeReporter([awkward], () => {})
       const url = redactUrl(`https://example.test/?page=${awkward}#${awkward}`)
