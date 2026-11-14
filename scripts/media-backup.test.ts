@@ -10,9 +10,11 @@ import {
   type Deps,
   type Manifest,
   backup,
+  backupReport,
   CANONICAL_MANIFEST_KEY,
   candidateKeys,
   check,
+  checkReport,
   combineSources,
   manifestKey,
   normalizeEtag,
@@ -20,16 +22,14 @@ import {
   referenceId,
   unsafePathname,
   parseReferences,
-  pathnameFromUrl,
   publicFailureLine,
   PublicError,
   publicUrl,
-  urlCandidates,
 } from './media-backup'
 
 /**
- * The media backup's decisions (#328): which references it finds, what it
- * copies, where, and that it never replaces bytes already in R2.
+ * The media backup's decisions (#328): which files it reads, what it copies,
+ * where, and that it never replaces bytes already in R2.
  *
  * @remarks Blob and R2 are in-memory fakes with the semantics the script
  * relies on: a public HEAD and GET per pathname, and an R2 whose create-only
@@ -120,102 +120,42 @@ afterEach(async () => {
 const now = new Date('2026-11-14T09:30:12.345Z')
 
 describe('parseReferences', () => {
-  it('takes media filenames and every store URL inside text, unescaping XML', () => {
+  it('takes each media filename as its pathname, exactly', () => {
     const refs = parseReferences(
       jsonl(
-        { kind: 'filename', table: 'media', value: 'cover A.png' },
-        {
-          kind: 'text',
-          table: 'posts',
-          value: `see ${ORIGIN}/covers/x%20y.png?w=2 and {&quot;src&quot;:&quot;${ORIGIN}/b.svg&quot;} https://other.public.blob.vercel-storage.com/z.png`,
-        },
+        { column: 'filename', kind: 'filename', value: 'cover A.png' },
+        { column: 'sizes_card_filename', kind: 'filename', value: "a'b c.png" },
       ),
-      ORIGIN,
     )
-    // Inside larger text a URL's end is a guess: those readings are uncertain.
     expect(refs).toEqual([
-      { pathname: 'cover A.png', table: 'media' },
-      { pathname: 'covers/x y.png', table: 'posts', uncertain: true },
-      { pathname: 'b.svg', table: 'posts', uncertain: true },
+      { pathname: 'cover A.png' },
+      { pathname: "a'b c.png" },
     ])
   })
 
-  it('takes a whole-value URL, and a JSON string value, as exact', () => {
-    const refs = parseReferences(
-      jsonl(
-        { kind: 'text', table: 'media', value: ` ${ORIGIN}/stored.png ` },
-        {
-          kind: 'json',
-          table: '_posts_v',
-          value: JSON.stringify({
-            hero: { src: publicUrl(ORIGIN, "a'b.png") },
-            alt: `cover ${ORIGIN}/inline.png here`,
-          }),
-        },
-      ),
-      ORIGIN,
-    )
-    expect(refs).toEqual([
-      { pathname: 'stored.png', table: 'media' },
-      { pathname: "a'b.png", table: '_posts_v' },
-      { pathname: 'inline.png', table: '_posts_v', uncertain: true },
-    ])
-  })
-
-  it('refuses a row of a kind it does not know', () => {
-    expect(() =>
-      parseReferences(
-        jsonl({ kind: 'blob', table: 'media', value: 'x' }),
-        ORIGIN,
-      ),
-    ).toThrow('unknown kind')
-  })
-
-  it('reads a matched URL every way it could end, the full match always among them', () => {
-    const own = publicUrl(ORIGIN, 'release(1).png')
-    const refs = parseReferences(
-      jsonl(
-        { kind: 'text', table: '_posts_v', value: `{"src":"${own}"}` },
-        { kind: 'text', table: 'posts', value: `(see ${ORIGIN}/a.png).` },
-        { kind: 'text', table: 'posts', value: `[x](${ORIGIN}/b[2].png)` },
-      ),
-      ORIGIN,
-    )
-    expect(new Set(refs.map((ref) => ref.pathname))).toEqual(
-      new Set([
-        'release(1).png',
-        'a.png).',
-        'a.png)',
-        'a.png',
-        'b[2].png)',
-        'b[2].png',
-      ]),
-    )
-    // The review's cases: a whole pathname ending in punctuation, CSS url().
-    expect(urlCandidates(publicUrl(ORIGIN, 'release!'))).toContain(
-      publicUrl(ORIGIN, 'release!'),
-    )
-    expect(urlCandidates(`${ORIGIN}/a.png);color:red`)).toContain(
-      `${ORIGIN}/a.png`,
-    )
-    expect(urlCandidates(`${ORIGIN}/a.png).Next`)).toContain(`${ORIGIN}/a.png`)
+  it('refuses a row of any other kind, so no URL is ever read out of text', () => {
+    for (const row of [
+      { kind: 'text', value: `${ORIGIN}/a.png` },
+      { kind: 'json', value: '{}' },
+      { kind: 'filename', value: '' },
+      { kind: 'filename', value: 3 },
+    ]) {
+      expect(() => parseReferences(jsonl(row))).toThrow('unknown kind')
+    }
   })
 
   it('refuses output with no end line, so a failed query is never "no references"', () => {
     expect(() =>
-      parseReferences(
-        JSON.stringify({ kind: 'filename', table: 'media', value: 'a.png' }),
-        ORIGIN,
-      ),
+      parseReferences(JSON.stringify({ kind: 'filename', value: 'a.png' })),
     ).toThrow('did not complete')
   })
 
   it('refuses output whose row count disagrees with its end line', () => {
     const truncated = [
-      JSON.stringify({ kind: 'filename', table: 'media', value: 'a.png' }),
+      JSON.stringify({ kind: 'filename', value: 'a.png' }),
       JSON.stringify({ count: 2, kind: 'end' }),
     ].join('\n')
-    expect(() => parseReferences(truncated, ORIGIN)).toThrow('2 rows but 1')
+    expect(() => parseReferences(truncated)).toThrow('2 rows but 1')
   })
 })
 
@@ -227,10 +167,10 @@ describe('keys and URLs', () => {
     ])
   })
 
-  it('encodes each pathname segment the way Blob serves it, and decodes back', () => {
-    const url = publicUrl(ORIGIN, 'covers/a b.png')
-    expect(url).toBe(`${ORIGIN}/covers/a%20b.png`)
-    expect(pathnameFromUrl(url)).toBe('covers/a b.png')
+  it('encodes each pathname segment the way Blob serves it', () => {
+    expect(publicUrl(ORIGIN, 'covers/a b.png')).toBe(
+      `${ORIGIN}/covers/a%20b.png`,
+    )
   })
 
   it('asks Blob for uncompressed bytes, so size and etag survive the CDN', () => {
@@ -315,14 +255,68 @@ describe('what public output may carry (#328 security review F2)', () => {
         version: 1,
       },
       now,
-      references: [
-        { pathname, table: 'posts' },
-        { pathname: 'gone.png', table: 'posts' },
-      ],
+      references: [{ pathname }, { pathname: 'gone.png' }],
     })
     for (const issue of result.failures) {
       expect(issue.reason).not.toContain('unannounced')
       expect(issue.reason).not.toContain('gone')
+    }
+  })
+})
+
+describe('public report lines (#328 re-review of b0ab4b7, finding 5)', () => {
+  const marker = 'SYNTHETIC_PRIVATE_MARKER'
+  const key = `manifests/2026-11-14/media-manifest-2026-11-14T093012Z.json`
+  const entryOf = (status: 'copied' | 'error' | 'missing' | 'retained') => ({
+    contentType: null,
+    detail: `GET https://x/${marker}.png answered 500`,
+    etag: null,
+    key: `objects/${marker}-${status}.png`,
+    pathname: `${marker}-${status}.png`,
+    sha256: null,
+    size: 1,
+    status,
+    uploadedAt: null,
+  })
+
+  it('names files and manifests by id only, never a pathname, key or detail', () => {
+    const manifest: Manifest = {
+      entries: [
+        entryOf('copied'),
+        entryOf('error'),
+        entryOf('missing'),
+        entryOf('retained'),
+      ],
+      generatedAt: now.toISOString(),
+      origin: ORIGIN,
+      references: 4,
+      unreferenced: [entryOf('copied')],
+      version: 1,
+    }
+    const lines = [
+      ...backupReport(manifest, key),
+      ...checkReport(
+        {
+          failures: [
+            { pathname: `${marker}.png`, reason: 'not in the manifest' },
+            {
+              pathname: '',
+              reason: 'the newest manifest is older than 36 hours, or undated',
+            },
+          ],
+          verified: 1,
+        },
+        key,
+      ),
+    ]
+    expect(lines[0]).toContain('1 no longer named, carried forward')
+    expect(lines.join('\n')).toContain(referenceId(key))
+    for (const line of lines) {
+      expect(line).not.toContain(marker)
+      expect(line).not.toContain('manifests/')
+      expect(line).not.toContain('objects/')
+      expect(line).not.toContain('r2://')
+      expect(line).not.toContain(ORIGIN)
     }
   })
 })
@@ -356,7 +350,7 @@ describe('unsafePathname', () => {
       now,
       origin: ORIGIN,
       previous: null,
-      references: [{ pathname: 'a/../b.png', table: 'posts' }],
+      references: [{ pathname: 'a/../b.png' }],
       workDir,
     })
     expect(manifest.entries[0]).toMatchObject({ status: 'error' })
@@ -367,9 +361,9 @@ describe('unsafePathname', () => {
 
 describe('backup', () => {
   const refs = [
-    { pathname: 'a.png', table: 'media' },
-    { pathname: 'a.png', table: 'posts' },
-    { pathname: 'b.png', table: 'media' },
+    { pathname: 'a.png' },
+    { pathname: 'a.png' },
+    { pathname: 'b.png' },
   ]
 
   it('copies each referenced pathname once, to objects/<pathname>', async () => {
@@ -477,91 +471,29 @@ describe('backup', () => {
     expect(puts).toHaveLength(1)
   })
 
-  for (const table of ['posts', '_posts_v']) {
-    it(`never lets another existing object stand in for the referenced one (${table})`, async () => {
-      // The review's collision: `release` exists too, with other bytes.
-      const blob = new Map([
-        ['release!', png('ACTUAL')],
-        ['release', png('OTHER')],
-      ])
-      const { bucket, deps } = fakes(blob)
-      const references = parseReferences(
-        jsonl({
-          kind: 'json',
-          table,
-          value: `{"src":"${publicUrl(ORIGIN, 'release!')}"}`,
-        }),
-        ORIGIN,
-      )
-      const manifest = await backup({
-        deps,
-        now,
-        origin: ORIGIN,
-        previous: null,
-        references,
-        workDir,
-      })
-      expect(bucket.get('objects/release!')?.bytes.toString()).toBe('ACTUAL')
-      const result = await check({ deps, manifest, now, references })
-      expect(result.failures).toEqual([])
-
-      // Only an old R2 copy of the wrong reading: the real one still counts.
-      const cold = fakes(new Map([['release!', png('ACTUAL')]]))
-      cold.bucket.set('objects/release', {
-        bytes: Buffer.from('OLD'),
-        metadata: {},
-      })
-      const coldManifest = await backup({
-        deps: cold.deps,
-        now,
-        origin: ORIGIN,
-        previous: null,
-        references,
-        workDir,
-      })
-      expect(cold.bucket.get('objects/release!')?.bytes.toString()).toBe(
-        'ACTUAL',
-      )
-      const entry = coldManifest.entries.find((e) => e.pathname === 'release!')
-      expect(entry?.status).toBe('copied')
+  it('never lets another existing object stand in for the named one', async () => {
+    // A filename is the pathname exactly: `release` existing changes nothing.
+    const blob = new Map([
+      ['release!', png('ACTUAL')],
+      ['release', png('OTHER')],
+    ])
+    const { bucket, deps, puts } = fakes(blob)
+    const references = parseReferences(
+      jsonl({ column: 'filename', kind: 'filename', value: 'release!' }),
+    )
+    const manifest = await backup({
+      deps,
+      now,
+      origin: ORIGIN,
+      previous: null,
+      references,
+      workDir,
     })
-  }
-
-  // The review at e17ce2b: forms where no reading is the real URL. Inside
-  // other text they are uncertain, so even with the wrong object present the
-  // check fails, for live and history alike.
-  for (const table of ['posts', '_posts_v']) {
-    for (const [label, value, wrong] of [
-      ['Markdown inline code', `\`${ORIGIN}/a.png\``, 'a.png`'],
-      ['an HTML entity', `<img src="${ORIGIN}/a.png&#63;width=2">`, 'a.png&'],
-      ['an apostrophe in text', `src='${ORIGIN}/a'b.png'`, 'a'],
-    ] as const) {
-      it(`fails ${label} inside text even when the wrong object exists (${table})`, async () => {
-        const blob = new Map([
-          ['a.png', png('ACTUAL')],
-          ["a'b.png", png('ACTUAL')],
-          [wrong, png('OTHER')],
-        ])
-        const { deps } = fakes(blob)
-        const references = parseReferences(
-          jsonl({ kind: 'text', table, value }),
-          ORIGIN,
-        )
-        expect(references.every((ref) => ref.uncertain)).toBe(true)
-        const manifest = await backup({
-          deps,
-          now,
-          origin: ORIGIN,
-          previous: null,
-          references,
-          workDir,
-        })
-        const result = await check({ deps, manifest, now, references })
-        expect(result.failures.length).toBeGreaterThan(0)
-        expect(result.failures[0].reason).toContain('uncertain')
-      })
-    }
-  }
+    expect(puts).toEqual(['objects/release!'])
+    expect(bucket.get('objects/release!')?.bytes.toString()).toBe('ACTUAL')
+    const result = await check({ deps, manifest, now, references })
+    expect(result).toEqual({ failures: [], verified: 1 })
+  })
 
   it('keeps a lost newest copy an error on every later run, never falling back to an older first copy', async () => {
     const blob = new Map([['a.png', png('A1')]])
@@ -601,49 +533,120 @@ describe('backup', () => {
       deps,
       manifest: previous,
       now,
-      references: [{ pathname: 'a.png', table: '_posts_v' }],
+      references: [{ pathname: 'a.png' }],
     })
     expect(result.failures).toHaveLength(1)
   })
 
-  it('fails closed when a URL read from markup is cut wrong (extract, back up, check)', async () => {
-    // The review's counterexamples: a valid final `!`, and CSS `url(...)`.
+  it('keeps a recorded loss through runs that do not name the file, so its return is never clean on older bytes', async () => {
+    // Re-review of b0ab4b7, finding 3: a run without the row dropped the loss.
     const blob = new Map([
-      ['release!', png('R1')],
       ['a.png', png('A1')],
+      ['b.png', png('B1')],
     ])
+    const { bucket, deps } = fakes(blob)
+    const run = (previous: Manifest | null, names: string[]) =>
+      backup({
+        deps,
+        now,
+        origin: ORIGIN,
+        previous,
+        references: names.map((pathname) => ({ pathname })),
+        workDir,
+      })
+    const first = await run(null, ['a.png', 'b.png'])
+    blob.set('a.png', png('A2-newest'))
+    const second = await run(first, ['a.png', 'b.png'])
+    const newest = second.entries[0].key as string
+    expect(newest).toMatch(/^versions\//)
+    bucket.delete(newest)
+    blob.delete('a.png')
+    const lost = await run(second, ['a.png', 'b.png'])
+    expect(lost.entries[0]).toMatchObject({ key: null, status: 'error' })
+
+    // The row goes away for a run (deleted, or a restore to an earlier day)...
+    const without = await run(lost, ['b.png'])
+    expect(without.entries.map((e) => e.pathname)).toEqual(['b.png'])
+    expect(without.unreferenced).toEqual([lost.entries[0]])
+    const still = await run(without, ['b.png'])
+    expect(still.unreferenced).toEqual([lost.entries[0]])
+
+    // ...and comes back: still lost, never `retained` on objects/a.png (A1).
+    const back = await run(still, ['a.png', 'b.png'])
+    expect(back.entries[0]).toMatchObject({ key: null, status: 'error' })
+    expect(back.unreferenced).toBeUndefined()
+    const result = await check({
+      deps,
+      manifest: back,
+      now,
+      references: [{ pathname: 'a.png' }, { pathname: 'b.png' }],
+    })
+    expect(result.failures).toEqual([
+      { pathname: 'a.png', reason: 'not backed up in the manifest' },
+    ])
+  })
+
+  it('carries a file no longer named with its last good mapping, for a restore by hand', async () => {
+    const blob = new Map([['a.png', png('A1')]])
     const { deps } = fakes(blob)
-    const references = parseReferences(
-      jsonl(
-        {
-          kind: 'text',
-          table: '_posts_v',
-          value: `{"src":"${publicUrl(ORIGIN, 'release!')}"}`,
-        },
-        {
-          kind: 'text',
-          table: '_posts_v',
-          value: `<div style="background-image:url(${ORIGIN}/a.png);color:red">x</div>`,
-        },
-      ),
-      ORIGIN,
-    )
-    const manifest = await backup({
+    const first = await backup({
       deps,
       now,
       origin: ORIGIN,
       previous: null,
-      references,
+      references: [{ pathname: 'a.png' }],
       workDir,
     })
-    const result = await check({ deps, manifest, now, references })
-    // Whatever extraction guessed, a derived URL that 404s is never clean.
-    const derived404 = manifest.entries.filter((e) => e.status === 'missing')
-    expect(result.failures.length).toBeGreaterThanOrEqual(derived404.length)
-    expect(result.history).toEqual([])
-    expect(result.failures.length + result.verified).toBe(
-      new Set(references.map((r) => r.pathname)).size,
-    )
+    const next = await backup({
+      deps,
+      now,
+      origin: ORIGIN,
+      previous: first,
+      references: [{ pathname: 'b.png' }],
+      workDir,
+    })
+    expect(next.unreferenced).toEqual([first.entries[0]])
+    expect(next.unreferenced?.[0]).toMatchObject({ key: 'objects/a.png' })
+  })
+
+  it('keeps the mapping when R2 cannot be asked, rather than recording a loss', async () => {
+    // Re-review of b0ab4b7, finding 4: a transient R2 error became permanent.
+    const blob = new Map([['a.png', png('A1')]])
+    const { deps } = fakes(blob)
+    const run = (previous: Manifest | null) =>
+      backup({
+        deps,
+        now,
+        origin: ORIGIN,
+        previous,
+        references: [{ pathname: 'a.png' }],
+        workDir,
+      })
+    const first = await run(null)
+    const realHead = deps.headPublic
+    const realR2Head = deps.r2Head
+    deps.headPublic = async () => {
+      throw new Error('socket hang up')
+    }
+    deps.r2Head = async () => {
+      throw new Error('503 Service Unavailable')
+    }
+    const outage = await run(first)
+    expect(outage.entries[0]).toMatchObject({
+      key: 'objects/a.png',
+      status: 'error',
+    })
+    expect(outage.entries[0].detail).toContain('next run retries')
+
+    // R2 recovers and the store answers 404: the intact copy is kept.
+    deps.headPublic = realHead
+    deps.r2Head = realR2Head
+    blob.delete('a.png')
+    const recovered = await run(outage)
+    expect(recovered.entries[0]).toMatchObject({
+      key: 'objects/a.png',
+      status: 'retained',
+    })
   })
 
   it('keeps the newest copy mapped through a failed run, so a later 404 restores it, not the first copy', async () => {
@@ -754,9 +757,9 @@ describe('backup', () => {
       origin: ORIGIN,
       previous: null,
       references: [
-        { pathname: 'a.png', table: 'media' },
-        { pathname: 'c.png', table: 'media' },
-        { pathname: 'b.png', table: 'media' },
+        { pathname: 'a.png' },
+        { pathname: 'c.png' },
+        { pathname: 'b.png' },
       ],
       workDir,
     })
@@ -818,9 +821,9 @@ describe('check', () => {
       deps: r2({ 'objects/a.png': 2 }),
       manifest: manifestOf([entry('a.png', 'objects/a.png')]),
       now,
-      references: [{ pathname: 'a.png', table: 'media' }],
+      references: [{ pathname: 'a.png' }],
     })
-    expect(result).toEqual({ failures: [], history: [], verified: 1 })
+    expect(result).toEqual({ failures: [], verified: 1 })
   })
 
   it('fails a reference absent from the manifest, or whose object is gone', async () => {
@@ -828,10 +831,7 @@ describe('check', () => {
       deps: r2({}),
       manifest: manifestOf([entry('a.png', 'objects/a.png')]),
       now,
-      references: [
-        { pathname: 'a.png', table: 'media' },
-        { pathname: 'b.png', table: 'posts' },
-      ],
+      references: [{ pathname: 'a.png' }, { pathname: 'b.png' }],
     })
     expect(result.failures).toEqual([
       {
@@ -839,26 +839,6 @@ describe('check', () => {
         reason: 'its object is not in R2 at the recorded size',
       },
       { pathname: 'b.png', reason: 'not in the manifest' },
-    ])
-  })
-
-  it('fails, never excuses, a history-only file the store answers 404 for', async () => {
-    // A 404 proves only that the derived URL is gone: the URL may have been
-    // cut wrong from prose, or a copy may sit under versions/.
-    const result = await check({
-      deps: r2({}),
-      manifest: manifestOf([
-        { ...entry('old.png', null), status: 'missing' as const },
-      ]),
-      now,
-      references: [{ pathname: 'old.png', table: '_posts_v_blocks_media' }],
-    })
-    expect(result.history).toEqual([])
-    expect(result.failures).toEqual([
-      {
-        pathname: 'old.png',
-        reason: 'gone from the store (404) and no R2 copy found',
-      },
     ])
   })
 
@@ -871,10 +851,7 @@ describe('check', () => {
         { ...entry('b.png', 'objects/b.png'), size: marker as never },
       ]),
       now,
-      references: [
-        { pathname: 'a.png', table: 'media' },
-        { pathname: 'b.png', table: 'media' },
-      ],
+      references: [{ pathname: 'a.png' }, { pathname: 'b.png' }],
     })
     expect(result.failures).toHaveLength(2)
     for (const issue of result.failures) {
@@ -882,77 +859,34 @@ describe('check', () => {
     }
   })
 
-  it('fails a history-only file that is in the store but not backed up: it may be a current draft', async () => {
+  it('fails a kept copy: its bytes are safe, but a media row names a 404', async () => {
     const result = await check({
-      deps: r2({}),
+      deps: r2({ 'objects/a.png': 2 }),
       manifest: manifestOf([
-        { ...entry('draft-error.png', null), status: 'error' as const },
-        entry('draft-gone.png', 'objects/draft-gone.png'),
+        { ...entry('a.png', 'objects/a.png'), status: 'retained' as const },
       ]),
       now,
-      references: [
-        { pathname: 'draft-absent.png', table: '_posts_v_blocks_media' },
-        { pathname: 'draft-error.png', table: '_pages_v_version_hero_slides' },
-        { pathname: 'draft-gone.png', table: '_posts_v' },
-      ],
+      references: [{ pathname: 'a.png' }],
     })
-    expect(result.history).toEqual([])
-    expect(result.failures).toEqual([
-      { pathname: 'draft-absent.png', reason: 'not in the manifest' },
-      { pathname: 'draft-error.png', reason: 'not backed up in the manifest' },
-      {
-        pathname: 'draft-gone.png',
-        reason: 'its object is not in R2 at the recorded size',
-      },
-    ])
-  })
-
-  it('verifies a kept copy for history, and fails it for a live page', async () => {
-    const kept = {
-      ...entry('a.png', 'objects/a.png'),
-      status: 'retained' as const,
-    }
-    const history = await check({
-      deps: r2({ 'objects/a.png': 2 }),
-      manifest: manifestOf([kept]),
-      now,
-      references: [{ pathname: 'a.png', table: '_posts_v' }],
-    })
-    expect(history).toEqual({
-      failures: [],
-      history: [
+    expect(result).toEqual({
+      failures: [
         {
           pathname: 'a.png',
           reason: 'gone from the store (404); an R2 copy is kept',
         },
       ],
-      verified: 1,
+      verified: 0,
     })
-    const live = await check({
-      deps: r2({ 'objects/a.png': 2 }),
-      manifest: manifestOf([kept]),
-      now,
-      references: [{ pathname: 'a.png', table: 'posts' }],
-    })
-    expect(live.failures).toEqual([
-      {
-        pathname: 'a.png',
-        reason: 'gone from the store (404); an R2 copy is kept',
-      },
-    ])
   })
 
-  it('fails a live reference the store answers 404 for', async () => {
+  it('fails a file the store answers 404 for, once however often it is named', async () => {
     const result = await check({
       deps: r2({}),
       manifest: manifestOf([
         { ...entry('a.png', null), status: 'missing' as const },
       ]),
       now,
-      references: [
-        { pathname: 'a.png', table: 'media' },
-        { pathname: 'a.png', table: '_posts_v' },
-      ],
+      references: [{ pathname: 'a.png' }, { pathname: 'a.png' }],
     })
     expect(result.failures).toEqual([
       {
@@ -970,7 +904,7 @@ describe('check', () => {
         '2026-11-12T09:00:00.000Z',
       ),
       now,
-      references: [{ pathname: 'a.png', table: 'media' }],
+      references: [{ pathname: 'a.png' }],
     })
     expect(result.failures[0]).toMatchObject({
       pathname: '',
@@ -980,7 +914,7 @@ describe('check', () => {
 })
 
 describe('combineSources', () => {
-  const ref = (pathname: string) => ({ pathname, table: 'media' })
+  const ref = (pathname: string) => ({ pathname })
 
   it('joins every source', () => {
     expect(combineSources([[ref('a.png')], [ref('b.png')]])).toEqual([

@@ -96,23 +96,23 @@
 - **Media backups (daily, incremental)**: the dumps above keep the rows,
   and rows name media by Blob pathname, so a restored database whose media
   is gone renders broken pages (#328). `.github/workflows/media-backup.yml`
-  runs daily at 10:23 UTC, after the dumps: it reads every media pathname the
-  staging and production databases reference
-  (`scripts/media-backup-references.sql`, in a `READ ONLY` transaction the
-  SQL asserts itself, since the Supabase pooler drops `PGOPTIONS`), copies
-  the new and changed ones from their **public** Blob URLs into the **private
-  R2 bucket `bp-portfolio-media-backups`**, writes a dated manifest, then
-  checks that every reference is in that manifest with its bytes in R2 (each
-  database must name at least one file). A file the store now answers 404 for
-  keeps its earlier R2 copy in the manifest (`retained`): that fails for a
-  live page and is a note for version history. With no copy found it fails,
-  history or not: the check fails closed, and a person decides whether an old
-  version's lost file matters; a last good copy found gone stays an error
-  until a new copy is made. The check vouches for **exact** references only (a
-  media filename, or a text or JSON string value that is wholly one store
-  URL); a store URL inside larger text is copied best effort and always fails,
-  since its end is a guess. It copies **referenced**
-  media only: a store object no database names is not backed up.
+  runs daily at 10:23 UTC, after the dumps: it reads the media table's files
+  in the staging and production databases (each row's filename, which is its
+  Blob pathname, and any size variant's; `scripts/media-backup-references.sql`,
+  in a `READ ONLY` transaction the SQL asserts itself, since the Supabase
+  pooler drops `PGOPTIONS`), copies the new and changed ones from their
+  **public** Blob URLs into the **private R2 bucket
+  `bp-portfolio-media-backups`**, writes a dated manifest, then checks that
+  every media file is in that manifest with its bytes in R2 (each database
+  must name at least one file). It fails closed: a file the store now answers
+  404 for fails, even when its earlier R2 copy is kept (`retained`), since a
+  media row points at it and a person decides. A last good copy found gone
+  stays an error until a new copy is made, including runs where no media row
+  names the file (each manifest carries such files in `unreferenced`, with
+  their last entry); R2 failing to answer is not recorded as a loss. Scope,
+  the owner's decision (#328): **the media table's files only**. Store URLs
+  typed into text or JSON columns are not read, and a store object no media
+  row names is not backed up.
   It holds **no Blob credential**: Vercel Blob has no read-only token, and the
   read-write one can overwrite or delete the store. Keys mirror the Blob
   layout: `objects/<pathname>` for the first copy,
@@ -126,9 +126,11 @@
   `SUPABASE_DB_URL_PROD`. A failed scheduled run opens or comments on one
   issue labelled `media-backup-failed`. The repository and its Actions logs
   are public, so the job prints counts and opaque ids (the first 12 hex of
-  the pathname's sha256) only; pathnames and error detail are in the
-  manifest, in the private bucket. To restore a file, read its key from the
-  newest manifest and copy that object back to its pathname.
+  the sha256 of a pathname, or of a manifest's key) only; pathnames, keys and
+  error detail are in the manifest, in the private bucket. To restore a file,
+  read its key from the newest manifest (`entries`, or `unreferenced` for a
+  file whose media row is gone) and copy that object back to its pathname; an
+  entry whose `key` is `null` has no verified copy.
 - **Served-prefix audit (weekly, #206)**:
   `.github/workflows/audit-served-prefix.yml` runs
   `scripts/audit-served-prefix.sql` against production every Monday 06:41 UTC

@@ -147,6 +147,14 @@ describe('scripts/media-backup-references.sql (#328 security review F1)', () => 
     expect(statements).toContain("set local statement_timeout = '120s';")
     expect(statements).toContain("set local lock_timeout = '5s';")
   })
+  it("reads the media table's filenames only, never text or JSON columns (#328 scope)", () => {
+    expect(statements).toContain('from public.media m')
+    expect(statements).toContain(
+      "(f.key = 'filename' or f.key ~ '^sizes_.+_filename$')",
+    )
+    expect(statements).not.toMatch(/query_to_xml|information_schema|like/i)
+    expect(statements).not.toMatch(/'text'|'json'/)
+  })
 })
 
 describe('scripts/media-backup.ts writes (#328)', () => {
@@ -154,5 +162,10 @@ describe('scripts/media-backup.ts writes (#328)', () => {
     expect(script).toContain("'--if-none-match',\n        '*',")
     expect(script.match(/'put-object'/g)).toHaveLength(1)
     expect(script).not.toMatch(/delete-object|'rm'|s3 rm|copy-object/)
+  })
+
+  it('never prints a bucket URI or a manifest key (re-review of b0ab4b7, finding 5)', () => {
+    expect(script).not.toContain('r2://')
+    expect(script).not.toMatch(/\$\{(prior\.)?key\}/)
   })
 })

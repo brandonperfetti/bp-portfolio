@@ -59,7 +59,7 @@ describe('backup cleanup (#328)', () => {
       now: new Date('2026-11-14T09:30:12.345Z'),
       origin: 'https://store.public.blob.vercel-storage.com',
       previous: null,
-      references: [{ pathname: 'a.png', table: 'media' }],
+      references: [{ pathname: 'a.png' }],
       workDir,
     })
     expect(puts).toEqual(['objects/a.png'])

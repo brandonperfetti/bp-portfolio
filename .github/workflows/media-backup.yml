@@ -3,14 +3,16 @@
 # rows name media by Blob pathname, so a restored database whose media is gone
 # renders broken pages. This keeps the bytes.
 #
-# What it copies: every media pathname the staging and production databases
-# reference (scripts/media-backup-references.sql: each media row's filename,
-# and every public Blob URL in any text or json column). It reads the bytes
-# from their PUBLIC Blob URLs and holds no Blob credential: Vercel Blob has no
-# read-only token, and the read-write token can overwrite and delete the whole
-# store, which is the failure this backup exists to survive. An object no
-# database references is not copied; `vercel storage inspect` gives the
-# store's total count for comparison.
+# What it copies: the media table's files in the staging and production
+# databases (scripts/media-backup-references.sql: each media row's filename,
+# which is its Blob pathname, and any size variant's filename). Store URLs
+# typed into text or JSON columns are not read (owner's decision, #328): where
+# a URL inside prose ends is a guess, and on the local restore every such URL
+# named a file the media table lists. It reads the bytes from their PUBLIC
+# Blob URLs and holds no Blob credential: Vercel Blob has no read-only token,
+# and the read-write token can overwrite and delete the whole store, which is
+# the failure this backup exists to survive. An object no media row names is
+# not copied; `vercel storage inspect` gives the store's total for comparison.
 #
 # Where it goes: the PRIVATE Cloudflare R2 bucket bp-portfolio-media-backups,
 # off Vercel, under its own token, so losing the Blob store, the Vercel account
@@ -20,7 +22,9 @@
 #   versions/<blob pathname>/<etag>   a later, changed copy of the same pathname
 #   manifests/<YYYY-MM-DD>/media-manifest-<stamp>.json
 #                                     each run's record: pathname → key, etag,
-#                                     size, uploadedAt, sha256, status
+#                                     size, uploadedAt, sha256, status; plus
+#                                     `unreferenced`, the last entry of every
+#                                     file no media row names now, carried on
 # Every write is create-only (`If-None-Match: *`): the job never overwrites or
 # deletes an object, and a changed file lands under a new key.
 #
@@ -32,20 +36,16 @@
 # Media objects have NO expiry until a pruning rule is decided. This workflow
 # never deletes, so do not add one here.
 #
-# The check: after the copy, every referenced pathname must be in the newest
-# manifest with its object in R2 at the recorded size, and the manifest must
-# be under 36 hours old. Each database must name at least one file, so an
-# empty production read cannot hide behind staging's. It fails closed: a
-# reference the store answers 404 for fails too, history or not, since a 404
-# proves only that the URL this job derived is gone; a person decides. A file
-# gone from the store whose earlier R2 copy is verified (`retained`) fails for
-# a live page and is a note for version history (`_posts_v…`), which also
-# holds current drafts. A last good copy found gone stays an error on every
-# later run until a new copy is made. What the check can vouch for is an
-# EXACT reference: a media filename, or a text or JSON string value that is
-# wholly one store URL. A store URL inside larger text (Markdown, HTML,
-# prose) has a guessed end; its readings are copied best effort, and the
-# check always fails them, since the file it means may be none of them.
+# The check: after the copy, every media file must be in the newest manifest
+# with its object in R2 at the recorded size, and the manifest must be under
+# 36 hours old. Each database must name at least one file, so an empty
+# production read cannot hide behind staging's. It fails closed: a file the
+# store answers 404 for fails, even when its earlier R2 copy is verified
+# (`retained`: the bytes are safe, but a media row points at a 404), and a
+# person decides. A last good copy found gone (R2 answers 404) stays an error
+# on every later run until a new copy is made, including runs where no media
+# row names the file; R2 failing to answer is not a loss, and the mapping is
+# kept for the next run to verify.
 # Exit codes follow audit-served-prefix.yml: 0 clean, 1 a finding, 2 the run
 # did not complete.
 #
@@ -69,10 +69,10 @@
 # - Secrets are declared on the steps that use them, never on the job, the
 #   repo's posture (audit-served-prefix.yml's header).
 # - This repository is public, and so are its Actions logs. References come
-#   from drafts, gated posts and version history too, and a pathname can name
-#   unannounced work, so logs and the summary print counts and opaque ids
-#   (sha256 of the pathname, 12 hex) only. Pathnames and error detail live in
-#   the manifest, in the private bucket. psql's messages go to a runner-local
+#   from drafts and gated posts too, and a pathname can name unannounced
+#   work, so logs and the summary print counts and opaque ids (the first 12
+#   hex of the sha256 of a pathname, or of a manifest's key) only. Pathnames,
+#   keys and error detail live in the manifest, in the private bucket. psql's messages go to a runner-local
 #   file, never printed, since they can quote part of a connection string; a
 #   run that fails prints only a message the script composed itself
 #   (`PublicError`), otherwise one fixed line that reads nothing from the
@@ -181,7 +181,7 @@ jobs:
             --refs "$RUNNER_TEMP/refs-prod.jsonl" \
             --out "$RUNNER_TEMP/media-backup"
 
-      - name: Check every referenced media file is in the newest manifest
+      - name: Check every media file is in the newest manifest
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_MEDIA_BACKUP_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_MEDIA_BACKUP_SECRET_ACCESS_KEY }}

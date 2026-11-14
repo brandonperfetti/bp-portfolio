@@ -1,17 +1,18 @@
 /**
- * Daily incremental backup of the media the database references, from Vercel
- * Blob's public URLs into a private R2 bucket, with a dated manifest and a
- * check that every reference is in it (#328).
+ * Daily incremental backup of the media table's files, from Vercel Blob's
+ * public URLs into a private R2 bucket, with a dated manifest and a check that
+ * every file is in it (#328).
  *
  * @remarks **Why public URLs, not the Blob API.** Vercel Blob has no read-only
  * token: listing the store takes `BLOB_READ_WRITE_TOKEN`, which can also
  * overwrite and delete every object in it — the failure this backup exists to
  * survive. Every object is public to read, so this job holds no Blob
- * credential at all. What it cannot see is an object nothing in the database
- * references, so the backup covers referenced media only: an object named only
- * by an older database dump, or by nothing, is not copied. Whether that
- * narrower recovery scope is acceptable is the owner's call (#328); the store
- * listing (`vercel storage inspect`) gives the total for comparison.
+ * credential at all. What it cannot see is an object no media row names, so the
+ * backup covers the media table's files only (each row's filename and any size
+ * variant's): an object named only by an older database dump, by a URL typed
+ * into text, or by nothing, is not copied. That scope is the owner's decision
+ * (#328); the store listing (`vercel storage inspect`) gives the total for
+ * comparison.
  *
  * **Never overwrite, never delete.** The first copy of a pathname goes to
  * `objects/<pathname>`, which mirrors the Blob pathname under one prefix, so
@@ -30,7 +31,7 @@
  * `node scripts/media-backup.ts check --refs FILE...`.
  *
  * Exit codes follow `audit-served-prefix.yml`: 0 clean, 1 a finding (a missing
- * or uncopied reference), 2 the run did not complete (bad input, no manifest,
+ * or uncopied file), 2 the run did not complete (bad input, no manifest,
  * an R2 or network error).
  */
 
@@ -43,17 +44,8 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 
-/** One media reference: the Blob pathname and where in the database it is. */
-export type Reference = {
-  pathname: string
-  table: string
-  /**
-   * Set when the pathname is one reading of a store URL found inside larger
-   * text (Markdown, HTML, prose), where its end is a guess. The check fails
-   * every such reference: see {@link check}.
-   */
-  uncertain?: true
-}
+/** One media file a database names: its Blob pathname (the stored filename). */
+export type Reference = { pathname: string }
 
 /** What a HEAD on a public Blob URL tells us. */
 export type PublicHead = {
@@ -106,10 +98,20 @@ export type ManifestEntry = {
 
 /** A dated manifest, written once per run under `manifests/`. */
 export type Manifest = {
+  /** One entry per pathname the databases name in this run. */
   entries: ManifestEntry[]
   generatedAt: string
   origin: string
   references: number
+  /**
+   * The last entry of every pathname an earlier run backed up or saw lost and
+   * no database names now (a deleted media row, a database restored to an
+   * earlier day). Carried forward unchanged on every run, so the newest
+   * manifest still maps the file to its last good copy, and a loss once
+   * recorded survives the row's absence: a returning row never falls back to
+   * an older first copy. Absent from a manifest with nothing to carry.
+   */
+  unreferenced?: ManifestEntry[]
   version: 1
 }
 
@@ -131,118 +133,21 @@ export type Deps = {
   ) => Promise<'created' | 'exists'>
 }
 
-/**
- * Payload's version-history tables (`_posts_v`, `_posts_v_blocks_…`). They
- * hold current drafts as well as old versions, so nothing a history reference
- * lacks is excused; the table only decides whether a file kept in R2 after it
- * left the store is a failure (a live page) or a note (see {@link check}).
- */
-const HISTORY_TABLE = /^_.+_v($|_)/
-
 /** Key prefixes. A pathname's first copy mirrors the Blob pathname. */
 export const OBJECTS_PREFIX = 'objects/'
 export const VERSIONS_PREFIX = 'versions/'
 export const MANIFESTS_PREFIX = 'manifests/'
 
-const XML_ENTITIES: Record<string, string> = {
-  amp: '&',
-  apos: "'",
-  gt: '>',
-  lt: '<',
-  quot: '"',
-}
-
-/** Undo the XML escaping `query_to_xml` applies to text values. */
-function unescapeXml(value: string): string {
-  return value.replace(
-    /&(amp|apos|gt|lt|quot|#x[\da-f]+|#\d+);/gi,
-    (_, entity: string) => {
-      if (entity[0] === '#') {
-        const code =
-          entity[1].toLowerCase() === 'x'
-            ? Number.parseInt(entity.slice(2), 16)
-            : Number.parseInt(entity.slice(1), 10)
-        return String.fromCodePoint(code)
-      }
-      return XML_ENTITIES[entity.toLowerCase()] ?? `&${entity};`
-    },
-  )
-}
-
-/**
- * Every reading of a URL matched in prose or markup, the full match first.
- *
- * @remarks A match runs to the first whitespace, quote, `<`, `>` or backslash,
- * so the URL a row actually holds is the match or a prefix of it: `release!`
- * and `release(1).png` are whole pathnames {@link publicUrl} makes, while in
- * `(see URL).`, Markdown `[x](URL)` or CSS `url(URL);` the tail belongs to the
- * text around it. It returns the full match, each step of trimming trailing
- * `.,;:!?` and unmatched `)`/`]`, and the cut before every unmatched closing
- * bracket. That covers the common shapes, not every one: an entity, a
- * backtick or a quote inside the URL can still put the real URL outside the
- * set. So these readings are only ever `uncertain` references, copied best
- * effort and always failed by the check; coverage rests on exact references.
- */
-export function urlCandidates(url: string): string[] {
-  const out = new Set<string>()
-  const pairs: Record<string, string> = { ')': '(', ']': '[' }
-  const unmatched = (text: string, closer: string) =>
-    text.split(closer).length - 1 > text.split(pairs[closer]).length - 1
-  const trimSteps = (start: string) => {
-    let current = start
-    for (;;) {
-      out.add(current)
-      const last = current.at(-1)
-      if (last && '.,;:!?'.includes(last)) current = current.slice(0, -1)
-      else if (last && last in pairs && unmatched(current, last))
-        current = current.slice(0, -1)
-      else return
-    }
-  }
-  trimSteps(url)
-  for (
-    let index = url.indexOf('/', url.indexOf('//') + 2);
-    index < url.length;
-    index += 1
-  ) {
-    const char = url[index]
-    if (char in pairs && unmatched(url.slice(0, index + 1), char)) {
-      trimSteps(url.slice(0, index))
-    }
-  }
-  return [...out].filter((candidate) => pathnameFromUrl(candidate))
-}
-
-/** Every string inside a parsed JSON value, keys excluded. */
-function* stringLeaves(value: unknown): Generator<string> {
-  if (typeof value === 'string') yield value
-  else if (Array.isArray(value))
-    for (const item of value) yield* stringLeaves(item)
-  else if (value && typeof value === 'object')
-    for (const item of Object.values(value)) yield* stringLeaves(item)
-}
-
 /**
  * Parse the reference query's output (`scripts/media-backup-references.sql`).
  *
- * @remarks Throws when the closing `end` line is absent or its count disagrees,
- * so a failed or truncated query can never pass as "no references". Only
- * URLs on `origin`'s host count. A reference is **exact** when its boundary is
- * known: a media filename, a text value that is wholly one store URL, or a
- * JSON string value (`json` rows are parsed) that is wholly one. A store URL
- * inside larger text (Markdown, HTML, prose, a JSON string with other text)
- * has a guessed end, so each of its readings ({@link urlCandidates}) is
- * marked `uncertain`; they are still copied, best effort, and the check fails
- * them. On the local-restore corpus every text reference is exact.
+ * @remarks Every row is a media file's stored filename, which is its Blob
+ * pathname exactly: nothing is read out of URLs or text, so there is no
+ * boundary to guess (owner's decision, #328). Throws on a row of any other
+ * kind, and when the closing `end` line is absent or its count disagrees, so
+ * a failed or truncated query can never pass as "no references".
  */
-export function parseReferences(jsonl: string, origin: string): Reference[] {
-  const host = new URL(origin).host
-  const urlPattern = new RegExp(
-    `https?://${host.replace(/\./g, '\\.')}/[^\\s"'<>\\\\]+`,
-    'g',
-  )
-  // A whole value that is one store URL: its boundary is exact.
-  const exactUrl = new RegExp(`^https?://${host.replace(/\./g, '\\.')}/\\S+$`)
+export function parseReferences(jsonl: string): Reference[] {
   const references: Reference[] = []
   let rows = 0
   let endCount: number | null = null
@@ -251,50 +156,21 @@ export function parseReferences(jsonl: string, origin: string): Reference[] {
     const row = JSON.parse(line) as {
       count?: number
       kind: string
-      table?: string
-      value?: string
+      value?: unknown
     }
     if (row.kind === 'end') {
       endCount = Number(row.count)
       continue
     }
     rows += 1
-    const table = row.table ?? 'unknown'
-    const exact = (text: string): boolean => {
-      const value = text.trim()
-      if (!exactUrl.test(value)) return false
-      const pathname = pathnameFromUrl(value)
-      if (pathname) references.push({ pathname, table })
-      return Boolean(pathname)
-    }
-    const embedded = (text: string) => {
-      for (const match of text.matchAll(urlPattern)) {
-        for (const candidate of urlCandidates(match[0])) {
-          const pathname = pathnameFromUrl(candidate)
-          if (pathname) references.push({ pathname, table, uncertain: true })
-        }
-      }
-    }
-    if (row.kind === 'filename' && row.value) {
-      references.push({ pathname: row.value, table })
-    } else if (row.kind === 'text' && row.value) {
-      const text = unescapeXml(row.value)
-      if (!exact(text)) embedded(text)
-    } else if (row.kind === 'json' && row.value) {
-      const text = unescapeXml(row.value)
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(text)
-      } catch {
-        embedded(text)
-        continue
-      }
-      for (const leaf of stringLeaves(parsed)) {
-        if (leaf.includes(host) && !exact(leaf)) embedded(leaf)
-      }
-    } else {
+    if (
+      row.kind !== 'filename' ||
+      typeof row.value !== 'string' ||
+      !row.value
+    ) {
       throw new PublicError('reference query output has a row of unknown kind')
     }
+    references.push({ pathname: row.value })
   }
   if (endCount === null) {
     throw new PublicError(
@@ -307,17 +183,6 @@ export function parseReferences(jsonl: string, origin: string): Reference[] {
     )
   }
   return references
-}
-
-/** The Blob pathname a public URL names, or `null` when it names none. */
-export function pathnameFromUrl(url: string): string | null {
-  try {
-    const { pathname } = new URL(url)
-    const decoded = decodeURIComponent(pathname.replace(/^\/+/, ''))
-    return decoded || null
-  } catch {
-    return null
-  }
 }
 
 /**
@@ -497,7 +362,7 @@ export async function backupOne(
         if (put === 'exists') {
           return {
             ...found,
-            detail: `${key} was created by another writer during this run`,
+            detail: 'its key was created by another writer during this run',
             status: 'error',
           }
         }
@@ -543,7 +408,14 @@ async function mapPool<T, R>(
   return results
 }
 
-/** Back up every referenced pathname and return the run's manifest. */
+/**
+ * Back up every pathname the databases name and return the run's manifest.
+ *
+ * @remarks The previous manifest's entries and its `unreferenced` list are
+ * both read, so a pathname that comes back after a run without it resumes
+ * from its last recorded state; every pathname not named now is carried into
+ * this manifest's `unreferenced` list unchanged.
+ */
 export async function backup(options: {
   concurrency?: number
   deps: Deps
@@ -554,11 +426,19 @@ export async function backup(options: {
   workDir: string
 }): Promise<Manifest> {
   const previous = new Map(
-    (options.previous?.entries ?? []).map((entry) => [entry.pathname, entry]),
+    [
+      ...(options.previous?.unreferenced ?? []),
+      ...(options.previous?.entries ?? []),
+    ].map((entry) => [entry.pathname, entry]),
   )
   await mkdir(options.workDir, { recursive: true })
+  const pathnames = uniquePathnames(options.references)
+  const named = new Set(pathnames)
+  const unreferenced = [...previous.values()].filter(
+    (entry) => !named.has(entry.pathname),
+  )
   const entries = await mapPool(
-    uniquePathnames(options.references),
+    pathnames,
     options.concurrency ?? 4,
     async (pathname) =>
       keepLastGood(
@@ -577,6 +457,7 @@ export async function backup(options: {
     generatedAt: options.now.toISOString(),
     origin: options.origin,
     references: options.references.length,
+    ...(unreferenced.length > 0 ? { unreferenced } : {}),
     version: 1,
   }
 }
@@ -590,25 +471,71 @@ export type CheckIssue = { pathname: string; reason: string }
 /** The outcome of checking references against a manifest. */
 export type CheckResult = {
   failures: CheckIssue[]
-  history: CheckIssue[]
   verified: number
 }
 
 /**
  * An opaque id for a pathname, safe to print in a public log.
  *
- * @remarks References come from drafts, gated posts and version history as
- * well as published pages, and this repository's Actions logs are public. A
- * pathname can name unannounced work even when its bytes are public by URL,
- * so logs and summaries carry this id; the private manifest carries the
- * pathname, and `sha256(pathname)` finds it there.
+ * @remarks Media rows include files only drafts and gated posts use, and this
+ * repository's Actions logs are public. A pathname can name unannounced work
+ * even when its bytes are public by URL, so logs and summaries carry this id;
+ * the private manifest carries the pathname, and `sha256(pathname)` finds it
+ * there. A manifest is named the same way, by the id of its key.
  */
 export function referenceId(pathname: string): string {
   return createHash('sha256').update(pathname).digest('hex').slice(0, 12)
 }
 
+/**
+ * The lines a backup run prints to the public log, the first also to the run
+ * summary: counts and opaque ids only, never a pathname, key, bucket or
+ * error detail.
+ */
+export function backupReport(
+  manifest: Manifest,
+  manifestKeyWritten: string,
+): string[] {
+  const count = (status: ManifestEntry['status']) =>
+    manifest.entries.filter((entry) => entry.status === status).length
+  const lines = [
+    `Media backup: ${manifest.entries.length} files from ${manifest.references} media filenames — ${count('copied')} copied, ${count('unchanged')} unchanged, ${count('retained')} kept though gone from the store, ${count('missing')} missing, ${count('error')} errors; ${manifest.unreferenced?.length ?? 0} no longer named, carried forward. Manifest ${referenceId(manifestKeyWritten)}.`,
+  ]
+  for (const entry of manifest.entries) {
+    if (
+      entry.status === 'missing' ||
+      entry.status === 'error' ||
+      entry.status === 'retained'
+    ) {
+      lines.push(`  ${entry.status}: ${referenceId(entry.pathname)}`)
+    }
+  }
+  return lines
+}
+
+/**
+ * The lines a check run prints to the public log, the first also to the run
+ * summary: counts, opaque ids and fixed reasons only.
+ */
+export function checkReport(
+  result: CheckResult,
+  manifestKeyRead: string,
+): string[] {
+  return [
+    `Media check against manifest ${referenceId(manifestKeyRead)}: ${result.verified} verified, ${result.failures.length} failing.`,
+    ...result.failures.map(
+      (issue) =>
+        `  FAIL ${issue.pathname ? `${referenceId(issue.pathname)} ` : ''}${issue.reason}`,
+    ),
+  ]
+}
+
 /** The detail of an entry whose last good R2 copy was found gone. */
 const LOST_COPY_DETAIL = 'its last good R2 copy is gone'
+
+/** The detail of an entry whose last good R2 copy could not be looked up. */
+const UNVERIFIED_COPY_DETAIL =
+  'R2 did not answer for its last good copy; the next run retries'
 
 /**
  * The prior entry that still names the pathname's last good R2 copy: a backed
@@ -628,10 +555,12 @@ function lastGood(prior: ManifestEntry | undefined): ManifestEntry | null {
  * first copy under `objects/`, an older version, and a restore would follow
  * it. The entry stays `error`, so {@link check} still fails it; only the
  * mapping survives, for the next run and for a person restoring by hand. The
- * carried key is re-checked in R2 first: a copy found gone is recorded as
- * lost ({@link LOST_COPY_DETAIL}, key `null`), and a loss once recorded stays
- * an error on every later run until a new copy is made, never silently
- * replaced by an older first copy.
+ * carried key is re-checked in R2 first: a copy found gone (R2 answers 404, or
+ * another size) is recorded as lost ({@link LOST_COPY_DETAIL}, key `null`),
+ * and a loss once recorded stays an error on every later run until a new copy
+ * is made, never silently replaced by an older first copy. A lookup that
+ * fails (an outage, a refused token) proves nothing either way, so the
+ * mapping is kept for the next run to verify.
  */
 async function keepLastGood(
   entry: ManifestEntry,
@@ -646,12 +575,23 @@ async function keepLastGood(
   }
   const good = lastGood(prior)
   if (!good?.key) return entry
-  const stored = await deps.r2Head(good.key).catch(() => null)
-  if (!stored || stored.size !== good.size) {
+  let stored: StoredObject | null
+  let detail = entry.detail
+  try {
+    stored = await deps.r2Head(good.key)
+  } catch {
+    stored = null
+    detail = UNVERIFIED_COPY_DETAIL
+  }
+  if (
+    detail !== UNVERIFIED_COPY_DETAIL &&
+    (!stored || stored.size !== good.size)
+  ) {
     return { ...entry, detail: LOST_COPY_DETAIL }
   }
   return {
     ...entry,
+    detail,
     contentType: good.contentType,
     etag: good.etag,
     key: good.key,
@@ -671,7 +611,8 @@ function isBackedUp(status: ManifestEntry['status']): boolean {
  *
  * @remarks A 404 alone is not proof nothing can be restored: an earlier run
  * may hold its bytes. The prior manifest's last good key (carried through a
- * failed run by {@link keepLastGood}), or, with none, the first-copy key
+ * failed run by {@link keepLastGood}, and through runs that did not name the
+ * file in `unreferenced`), or, with no prior entry at all, the first-copy key
  * `objects/<pathname>`, is checked in R2, and a copy found there is kept as
  * `retained`, so the newest manifest still maps the pathname to its bytes when
  * older manifests expire. With no copy at either key it is `missing`, which
@@ -722,19 +663,16 @@ async function goneFromStore(
 }
 
 /**
- * Check that every referenced pathname is in the manifest with its bytes in R2.
+ * Check that every media file is in the manifest with its bytes in R2.
  *
- * @remarks Fails closed: every reference fails unless its manifest entry
- * names an R2 object that answers at the recorded size, whatever table it
- * came from. A `missing` entry fails too, history or not: a 404 proves only
- * that the URL this job derived is gone, not that no copy exists (a URL read
- * out of prose can be cut wrong, and a copy can sit under a key this job did
- * not look up), so it is left to a person, not excused. The one table
- * distinction: a `retained` file (gone from the store, its R2 copy verified)
- * fails for a live page, which is broken, and is a note for version history.
+ * @remarks Fails closed: every file fails unless its manifest entry names an
+ * R2 object that answers at the recorded size. A `missing` entry fails, and so
+ * does a `retained` one: its bytes are safe in R2, but a media row points at a
+ * file the store answers 404 for, so a page is broken and a person decides.
  * Reasons are fixed text: manifest fields are never quoted into them, since
- * they are printed in the public log. A manifest older than `maxAgeHours` fails, so a backup that stopped running
- * cannot keep passing on an old manifest.
+ * they are printed in the public log. A manifest older than `maxAgeHours`
+ * fails, so a backup that stopped running cannot keep passing on an old
+ * manifest.
  */
 export async function check(options: {
   deps: Pick<Deps, 'r2Head'>
@@ -744,7 +682,6 @@ export async function check(options: {
   references: Reference[]
 }): Promise<CheckResult> {
   const failures: CheckIssue[] = []
-  const history: CheckIssue[] = []
   const ageHours =
     (options.now.getTime() - Date.parse(options.manifest.generatedAt)) / 3.6e6
   if (!(ageHours <= (options.maxAgeHours ?? 36))) {
@@ -756,35 +693,15 @@ export async function check(options: {
   const entries = new Map(
     options.manifest.entries.map((entry) => [entry.pathname, entry]),
   )
-  const live = new Set<string>()
-  const historyOnly = new Set<string>()
-  const uncertain = new Set<string>()
-  for (const reference of options.references) {
-    if (reference.uncertain) uncertain.add(reference.pathname)
-    if (HISTORY_TABLE.test(reference.table)) historyOnly.add(reference.pathname)
-    else live.add(reference.pathname)
-  }
-  for (const pathname of live) historyOnly.delete(pathname)
 
   let verified = 0
-  for (const pathname of [...live, ...historyOnly]) {
-    if (uncertain.has(pathname)) {
-      // Backed up or not, this pathname is a guess at a URL inside other
-      // text, and the file the text means may be another one.
-      failures.push({
-        pathname,
-        reason:
-          'read from a store URL inside other text: which file it names is uncertain',
-      })
-      continue
-    }
+  for (const pathname of uniquePathnames(options.references)) {
     const entry = entries.get(pathname)
     if (!entry) {
       failures.push({ pathname, reason: 'not in the manifest' })
       continue
     }
-    if (entry.status === 'retained' && live.has(pathname)) {
-      // Its bytes are safe in R2, but a live page points at a URL that 404s.
+    if (entry.status === 'retained') {
       failures.push({
         pathname,
         reason: 'gone from the store (404); an R2 copy is kept',
@@ -817,15 +734,9 @@ export async function check(options: {
       })
       continue
     }
-    if (entry.status === 'retained') {
-      history.push({
-        pathname,
-        reason: 'gone from the store (404); an R2 copy is kept',
-      })
-    }
     verified += 1
   }
-  return { failures, history, verified }
+  return { failures, verified }
 }
 
 // ---------------------------------------------------------------------------
@@ -990,8 +901,7 @@ async function latestManifest(
   const keys = (await deps.listKeys(MANIFESTS_PREFIX)).sort()
   const key = keys.at(-1)
   if (!key) return null
-  // The key is printed in the public log and summary: only this job's own
-  // shape, never whatever else sits under the prefix.
+  // Only this job's own shape, never whatever else sits under the prefix.
   if (!CANONICAL_MANIFEST_KEY.test(key)) {
     throw new PublicError(
       'the newest object under manifests/ is not one this job wrote',
@@ -1051,7 +961,7 @@ async function main(argv: string[]): Promise<number> {
   }
   const references = combineSources(
     (await Promise.all(refs.map((file) => readFile(file, 'utf8')))).map(
-      (text) => parseReferences(text, origin),
+      (text) => parseReferences(text),
     ),
   )
   const deps = realDeps(bucket)
@@ -1078,23 +988,13 @@ async function main(argv: string[]): Promise<number> {
         metadata: {},
       })) === 'exists'
     ) {
-      throw new PublicError(`manifest ${key} already exists`)
+      throw new PublicError(
+        "a manifest with this run's timestamp already exists",
+      )
     }
-    const count = (status: ManifestEntry['status']) =>
-      manifest.entries.filter((entry) => entry.status === status).length
-    const line = `Media backup: ${manifest.entries.length} pathnames from ${references.length} references — ${count('copied')} copied, ${count('unchanged')} unchanged, ${count('retained')} kept though gone from the store, ${count('missing')} missing, ${count('error')} errors. Manifest r2://${bucket}/${key}`
-    console.log(line)
-    for (const entry of manifest.entries) {
-      if (
-        entry.status === 'missing' ||
-        entry.status === 'error' ||
-        entry.status === 'retained'
-      ) {
-        // An id, never the pathname or the detail: this log is public.
-        console.log(`  ${entry.status}: ${referenceId(entry.pathname)}`)
-      }
-    }
-    if (summary) await writeFile(summary, `${line}\n`, { flag: 'a' })
+    const lines = backupReport(manifest, key)
+    for (const line of lines) console.log(line)
+    if (summary) await writeFile(summary, `${lines[0]}\n`, { flag: 'a' })
     return 0 // the check step decides pass or fail, from the manifest in R2
   }
 
@@ -1110,17 +1010,9 @@ async function main(argv: string[]): Promise<number> {
       now: new Date(),
       references,
     })
-    const line = `Media check against ${prior.key}: ${result.verified} verified, ${result.failures.length} failing, ${result.history.length} history-only kept in R2 though gone from the store.`
-    console.log(line)
-    // Ids and fixed reasons only: this log and the summary are public.
-    const print = (issue: CheckIssue) =>
-      issue.pathname
-        ? `${referenceId(issue.pathname)} ${issue.reason}`
-        : issue.reason
-    for (const failure of result.failures)
-      console.log(`  FAIL ${print(failure)}`)
-    for (const note of result.history) console.log(`  history ${print(note)}`)
-    if (summary) await writeFile(summary, `${line}\n`, { flag: 'a' })
+    const lines = checkReport(result, prior.key)
+    for (const line of lines) console.log(line)
+    if (summary) await writeFile(summary, `${lines[0]}\n`, { flag: 'a' })
     return result.failures.length === 0 ? 0 : 1
   }
 
