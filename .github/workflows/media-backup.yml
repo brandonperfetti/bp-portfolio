@@ -46,8 +46,9 @@
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
 #   SUPABASE_DB_URL              — STAGING session-mode pooler string (exists,
-#   SUPABASE_DB_URL_PROD           db-backup.yml); read only, in a read-only
-#                                  transaction
+#   SUPABASE_DB_URL_PROD           db-backup.yml); read only: the SQL opens a
+#                                  READ ONLY transaction and asserts it (the
+#                                  pooler drops PGOPTIONS, so that is not used)
 #   R2_MEDIA_BACKUP_ACCESS_KEY_ID      — R2 API token, Object Read & Write,
 #   R2_MEDIA_BACKUP_SECRET_ACCESS_KEY    scoped to bp-portfolio-media-backups
 #                                        only: its S3 access key pair
@@ -57,8 +58,11 @@
 # Notes:
 # - Secrets are declared on the steps that use them, never on the job, the
 #   repo's posture (audit-served-prefix.yml's header).
-# - The media is already public; the manifest holds pathnames, sizes and
-#   hashes, nothing private. The summary never prints a connection string.
+# - This repository is public, and so are its Actions logs. References come
+#   from drafts, gated posts and version history too, and a pathname can name
+#   unannounced work, so logs and the summary print counts and opaque ids
+#   (sha256 of the pathname, 12 hex) only. Pathnames and error detail live in
+#   the manifest, in the private bucket. Nothing prints a connection string.
 # - Cost: 238 objects, 323,414,426 bytes in the store [measured 2026-11-14,
 #   `vercel storage inspect`], inside R2's free tier (10 GB-month storage,
 #   1M Class A, 10M Class B per month). A daily run is ~2 HEADs per object
@@ -96,6 +100,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -111,21 +117,19 @@ jobs:
       - name: Read media references (staging)
         env:
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          PGOPTIONS: -c default_transaction_read_only=on
         run: |
           set -euo pipefail
           test -n "$DB_URL" || { echo "::error::SUPABASE_DB_URL secret is not set"; exit 2; }
-          psql "$DB_URL" -v ON_ERROR_STOP=1 -At \
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -q -At \
             -f scripts/media-backup-references.sql > "$RUNNER_TEMP/refs-staging.jsonl"
 
       - name: Read media references (production)
         env:
           DB_URL: ${{ secrets.SUPABASE_DB_URL_PROD }}
-          PGOPTIONS: -c default_transaction_read_only=on
         run: |
           set -euo pipefail
           test -n "$DB_URL" || { echo "::error::SUPABASE_DB_URL_PROD secret is not set"; exit 2; }
-          psql "$DB_URL" -v ON_ERROR_STOP=1 -At \
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -q -At \
             -f scripts/media-backup-references.sql > "$RUNNER_TEMP/refs-prod.jsonl"
 
       - name: Copy new and changed media to R2

@@ -98,7 +98,8 @@
   is gone renders broken pages (#328). `.github/workflows/media-backup.yml`
   runs daily at 10:23 UTC, after the dumps: it reads every media pathname the
   staging and production databases reference
-  (`scripts/media-backup-references.sql`, in a read-only transaction), copies
+  (`scripts/media-backup-references.sql`, in a `READ ONLY` transaction the
+  SQL asserts itself, since the Supabase pooler drops `PGOPTIONS`), copies
   the new and changed ones from their **public** Blob URLs into the **private
   R2 bucket `bp-portfolio-media-backups`**, writes a dated manifest, then
   checks that every live reference is in that manifest with its bytes in R2.
@@ -113,8 +114,11 @@
   `R2_MEDIA_BACKUP_SECRET_ACCESS_KEY` (a token scoped to that bucket), plus
   the existing `R2_BACKUP_ENDPOINT`, `SUPABASE_DB_URL` and
   `SUPABASE_DB_URL_PROD`. A failed scheduled run opens or comments on one
-  issue labelled `media-backup-failed`. To restore a file, read its key from
-  the newest manifest and copy that object back to its pathname.
+  issue labelled `media-backup-failed`. The repository and its Actions logs
+  are public, so the job prints counts and opaque ids (the first 12 hex of
+  the pathname's sha256) only; pathnames and error detail are in the
+  manifest, in the private bucket. To restore a file, read its key from the
+  newest manifest and copy that object back to its pathname.
 - **Served-prefix audit (weekly, #206)**:
   `.github/workflows/audit-served-prefix.yml` runs
   `scripts/audit-served-prefix.sql` against production every Monday 06:41 UTC

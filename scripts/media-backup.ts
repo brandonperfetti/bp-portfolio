@@ -193,6 +193,29 @@ export function pathnameFromUrl(url: string): string | null {
   }
 }
 
+/**
+ * Why a pathname cannot be backed up safely, or `null` when it can.
+ *
+ * @remarks Pathnames come from editor-written rows. URL parsing folds `.` and
+ * `..` segments, so `a/../b` would fetch `b` and store it as `a/../b`; control
+ * characters and empty segments make keys no tool round-trips; R2 caps a key
+ * at 1,024 bytes, and the `versions/` key adds the prefix and an etag. Such a
+ * pathname is recorded as an error, which fails the check, never copied.
+ */
+export function unsafePathname(pathname: string): string | null {
+  if (/[\u0000-\u001f\u007f]/.test(pathname)) return 'control character'
+  const segments = pathname.split('/')
+  if (
+    segments.some(
+      (segment) => segment === '' || segment === '.' || segment === '..',
+    )
+  ) {
+    return 'empty, . or .. path segment'
+  }
+  if (Buffer.byteLength(pathname) > 900) return 'longer than 900 bytes'
+  return null
+}
+
 /** The public URL for a pathname: each segment percent-encoded, as Blob serves it. */
 export function publicUrl(origin: string, pathname: string): string {
   return `${origin.replace(/\/+$/, '')}/${pathname
@@ -246,7 +269,6 @@ export async function backupOne(
   },
 ): Promise<ManifestEntry> {
   const { deps, origin, previous, workDir } = context
-  const url = publicUrl(origin, pathname)
   const base = {
     contentType: null,
     etag: null,
@@ -256,6 +278,9 @@ export async function backupOne(
     size: null,
     uploadedAt: null,
   }
+  const unsafe = unsafePathname(pathname)
+  if (unsafe) return { ...base, detail: unsafe, status: 'error' }
+  const url = publicUrl(origin, pathname)
   try {
     const head = await deps.headPublic(url)
     if (head.status === 404) {
@@ -356,9 +381,11 @@ export async function backupOne(
       status: 'error',
     }
   } catch (error) {
+    const stderr = (error as { stderr?: string }).stderr?.trim()
+    const message = error instanceof Error ? error.message : String(error)
     return {
       ...base,
-      detail: error instanceof Error ? error.message : String(error),
+      detail: stderr ? `${message}: ${stderr.slice(0, 500)}` : message,
       status: 'error',
     }
   }
@@ -418,11 +445,30 @@ export async function backup(options: {
   }
 }
 
+/**
+ * One check problem. `reason` never contains the pathname or a key: output
+ * names a problem by {@link referenceId} only.
+ */
+export type CheckIssue = { pathname: string; reason: string }
+
 /** The outcome of checking references against a manifest. */
 export type CheckResult = {
-  failures: string[]
-  history: string[]
+  failures: CheckIssue[]
+  history: CheckIssue[]
   verified: number
+}
+
+/**
+ * An opaque id for a pathname, safe to print in a public log.
+ *
+ * @remarks References come from drafts, gated posts and version history as
+ * well as published pages, and this repository's Actions logs are public. A
+ * pathname can name unannounced work even when its bytes are public by URL,
+ * so logs and summaries carry this id; the private manifest carries the
+ * pathname, and `sha256(pathname)` finds it there.
+ */
+export function referenceId(pathname: string): string {
+  return createHash('sha256').update(pathname).digest('hex').slice(0, 12)
 }
 
 /**
@@ -440,14 +486,15 @@ export async function check(options: {
   now: Date
   references: Reference[]
 }): Promise<CheckResult> {
-  const failures: string[] = []
-  const history: string[] = []
+  const failures: CheckIssue[] = []
+  const history: CheckIssue[] = []
   const ageHours =
     (options.now.getTime() - Date.parse(options.manifest.generatedAt)) / 3.6e6
   if (!(ageHours <= (options.maxAgeHours ?? 36))) {
-    failures.push(
-      `the newest manifest is ${Number.isFinite(ageHours) ? ageHours.toFixed(1) : '?'} hours old`,
-    )
+    failures.push({
+      pathname: '',
+      reason: `the newest manifest is ${Number.isFinite(ageHours) ? ageHours.toFixed(1) : '?'} hours old`,
+    })
   }
   const entries = new Map(
     options.manifest.entries.map((entry) => [entry.pathname, entry]),
@@ -465,23 +512,22 @@ export async function check(options: {
     const target = live.has(pathname) ? failures : history
     const entry = entries.get(pathname)
     if (!entry) {
-      target.push(`${pathname}: not in the manifest`)
+      target.push({ pathname, reason: 'not in the manifest' })
       continue
     }
     if (
       (entry.status !== 'copied' && entry.status !== 'unchanged') ||
       !entry.key
     ) {
-      target.push(
-        `${pathname}: ${entry.status}${entry.detail ? ` (${entry.detail})` : ''}`,
-      )
+      target.push({ pathname, reason: `${entry.status} in the manifest` })
       continue
     }
     const stored = await options.deps.r2Head(entry.key)
     if (!stored || stored.size !== entry.size) {
-      target.push(
-        `${pathname}: ${entry.key} is not in R2 at ${entry.size} bytes`,
-      )
+      target.push({
+        pathname,
+        reason: `its object is not in R2 at ${entry.size} bytes`,
+      })
       continue
     }
     verified += 1
@@ -509,7 +555,15 @@ function aws(args: string[]): Promise<{ stdout: string }> {
       { maxBuffer: 64 * 1024 * 1024 },
       (error, stdout, stderr) => {
         if (error) {
-          reject(Object.assign(error, { stderr: String(stderr) }))
+          // Not execFile's own error: its message repeats the command line,
+          // which holds the object key and so the pathname. The stderr rides
+          // along for the 404/412 tests and the private manifest only.
+          reject(
+            Object.assign(
+              new Error(`aws ${args.slice(0, 2).join(' ')} failed`),
+              { stderr: String(stderr) },
+            ),
+          )
         } else {
           resolve({ stdout: String(stdout) })
         }
@@ -525,7 +579,10 @@ export function realDeps(bucket: string): Deps & {
 } {
   return {
     async downloadPublic(url, dest) {
-      const response = await fetch(url, { headers: PUBLIC_FETCH_HEADERS })
+      const response = await fetch(url, {
+        headers: PUBLIC_FETCH_HEADERS,
+        redirect: 'error',
+      })
       if (!response.ok || !response.body) {
         throw new Error(`GET ${url} answered ${response.status}`)
       }
@@ -551,6 +608,7 @@ export function realDeps(bucket: string): Deps & {
       const response = await fetch(url, {
         headers: PUBLIC_FETCH_HEADERS,
         method: 'HEAD',
+        redirect: 'error',
       })
       const length = response.headers.get('content-length')
       return {
@@ -707,9 +765,8 @@ async function main(argv: string[]): Promise<number> {
     console.log(line)
     for (const entry of manifest.entries) {
       if (entry.status === 'missing' || entry.status === 'error') {
-        console.log(
-          `  ${entry.status}: ${entry.pathname} — ${entry.detail ?? ''}`,
-        )
+        // An id, never the pathname or the detail: this log is public.
+        console.log(`  ${entry.status}: ${referenceId(entry.pathname)}`)
       }
     }
     if (summary) await writeFile(summary, `${line}\n`, { flag: 'a' })
@@ -728,15 +785,15 @@ async function main(argv: string[]): Promise<number> {
     })
     const line = `Media check against ${prior.key}: ${result.verified} verified, ${result.failures.length} failing, ${result.history.length} history-only not backed up.`
     console.log(line)
-    for (const failure of result.failures) console.log(`  FAIL ${failure}`)
-    for (const note of result.history) console.log(`  history ${note}`)
-    if (summary) {
-      await writeFile(
-        summary,
-        `${line}\n${result.failures.map((failure) => `- ${failure}`).join('\n')}\n`,
-        { flag: 'a' },
-      )
-    }
+    // Ids and fixed reasons only: this log and the summary are public.
+    const print = (issue: CheckIssue) =>
+      issue.pathname
+        ? `${referenceId(issue.pathname)} ${issue.reason}`
+        : issue.reason
+    for (const failure of result.failures)
+      console.log(`  FAIL ${print(failure)}`)
+    for (const note of result.history) console.log(`  history ${print(note)}`)
+    if (summary) await writeFile(summary, `${line}\n`, { flag: 'a' })
     return result.failures.length === 0 ? 0 : 1
   }
 

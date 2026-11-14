@@ -15,6 +15,8 @@ import {
   manifestKey,
   normalizeEtag,
   PUBLIC_FETCH_HEADERS,
+  referenceId,
+  unsafePathname,
   parseReferences,
   pathnameFromUrl,
   publicUrl,
@@ -183,6 +185,88 @@ describe('keys and URLs', () => {
   })
 })
 
+describe('what public output may carry (#328 security review F2)', () => {
+  it('names a pathname by an opaque, stable id', () => {
+    const id = referenceId('unannounced-project.png')
+    expect(id).toMatch(/^[0-9a-f]{12}$/)
+    expect(id).toBe(referenceId('unannounced-project.png'))
+    expect(id).not.toContain('unannounced')
+  })
+
+  it('keeps pathnames and keys out of every check reason', async () => {
+    const pathname = 'unannounced-project.png'
+    const result = await check({
+      deps: { r2Head: async () => null },
+      manifest: {
+        entries: [
+          {
+            contentType: null,
+            detail: `GET https://x/${pathname} answered 500`,
+            etag: 'e',
+            key: `objects/${pathname}`,
+            pathname,
+            sha256: null,
+            size: 1,
+            status: 'error',
+            uploadedAt: null,
+          },
+        ],
+        generatedAt: now.toISOString(),
+        origin: ORIGIN,
+        references: 1,
+        version: 1,
+      },
+      now,
+      references: [
+        { pathname, table: 'posts' },
+        { pathname: 'gone.png', table: 'posts' },
+      ],
+    })
+    for (const issue of result.failures) {
+      expect(issue.reason).not.toContain('unannounced')
+      expect(issue.reason).not.toContain('gone')
+    }
+  })
+})
+
+describe('unsafePathname', () => {
+  it('passes an ordinary pathname, folders included', () => {
+    expect(unsafePathname('covers/my post-cover A.png')).toBeNull()
+  })
+
+  it('refuses dot segments, empty segments and control characters', () => {
+    expect(unsafePathname('a/../manifests/x.json')).toMatch(/segment/)
+    expect(unsafePathname('./a.png')).toMatch(/segment/)
+    expect(unsafePathname('/a.png')).toMatch(/segment/)
+    expect(unsafePathname('a//b.png')).toMatch(/segment/)
+    expect(unsafePathname('a\nb.png')).toBe('control character')
+  })
+
+  it("refuses a pathname whose key would pass R2's 1,024-byte limit", () => {
+    expect(unsafePathname('é'.repeat(451))).toMatch(/900 bytes/)
+  })
+
+  it('records an unsafe pathname as an error without fetching it', async () => {
+    const { deps, downloads } = fakes(new Map())
+    let heads = 0
+    deps.headPublic = async () => {
+      heads += 1
+      throw new Error('must not be called')
+    }
+    const manifest = await backup({
+      deps,
+      now,
+      origin: ORIGIN,
+      previous: null,
+      references: [{ pathname: 'a/../b.png', table: 'posts' }],
+      workDir,
+    })
+    expect(manifest.entries[0]).toMatchObject({ status: 'error' })
+    expect(heads).toBe(0)
+    expect(downloads).toHaveLength(0)
+  })
+})
+
 describe('backup', () => {
   const refs = [
     { pathname: 'a.png', table: 'media' },
@@ -204,7 +288,7 @@ describe('backup', () => {
       references: refs,
       workDir,
     })
-    expect(puts).toEqual(['objects/a.png', 'objects/b.png'])
+    expect([...puts].sort()).toEqual(['objects/a.png', 'objects/b.png'])
     expect(manifest.entries.map((entry) => entry.status)).toEqual([
       'copied',
       'copied',
@@ -388,8 +472,8 @@ describe('check', () => {
       ],
     })
     expect(result.failures).toEqual([
-      'a.png: objects/a.png is not in R2 at 2 bytes',
-      'b.png: not in the manifest',
+      { pathname: 'a.png', reason: 'its object is not in R2 at 2 bytes' },
+      { pathname: 'b.png', reason: 'not in the manifest' },
     ])
   })
 
@@ -401,7 +485,9 @@ describe('check', () => {
       references: [{ pathname: 'old.png', table: '_posts_v_blocks_media' }],
     })
     expect(result.failures).toEqual([])
-    expect(result.history).toEqual(['old.png: not in the manifest'])
+    expect(result.history).toEqual([
+      { pathname: 'old.png', reason: 'not in the manifest' },
+    ])
   })
 
   it('fails a stale manifest, so a stopped backup cannot keep passing', async () => {
@@ -414,6 +500,9 @@ describe('check', () => {
       now,
       references: [{ pathname: 'a.png', table: 'media' }],
     })
-    expect(result.failures[0]).toMatch(/hours old/)
+    expect(result.failures[0]).toMatchObject({
+      pathname: '',
+      reason: expect.stringMatching(/hours old/),
+    })
   })
 })

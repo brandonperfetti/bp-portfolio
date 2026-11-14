@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
  * @remarks A scheduled workflow runs where nobody watches, so what is pinned
  * here is what would fail silently: a Blob credential creeping in (the job is
  * meant to hold none), a write that is no longer create-only, a database read
- * outside a read-only transaction, a secret scoped to the whole job, or the
+ * outside an asserted read-only transaction, a secret scoped to the whole job, or the
  * check step dropped. String matching, as `corvus-backfill-workflow.test.ts`
  * does, because `yaml` is not a dependency.
  */
@@ -43,11 +43,24 @@ describe('media-backup.yml (#328)', () => {
     expect(code).toContain('workflow_dispatch:')
   })
 
-  it('reads both databases inside a read-only transaction', () => {
-    const reads = code.match(/PGOPTIONS: -c default_transaction_read_only=on/g)
-    expect(reads).toHaveLength(2)
+  it('reads both databases quietly, so command tags stay out of the JSONL', () => {
+    expect(
+      code.match(
+        /psql "\$DB_URL" -v ON_ERROR_STOP=1 -q -At \\\n\s+-f scripts\/media-backup-references\.sql/g,
+      ),
+    ).toHaveLength(2)
     expect(code).toContain('${{ secrets.SUPABASE_DB_URL }}')
     expect(code).toContain('${{ secrets.SUPABASE_DB_URL_PROD }}')
+  })
+
+  it('does not rely on PGOPTIONS, which the Supabase pooler drops', () => {
+    expect(code).not.toContain('PGOPTIONS')
+  })
+
+  it('keeps the repository token out of the checkout', () => {
+    expect(code).toMatch(
+      /actions\/checkout@v4\n\s+with:\n\s+persist-credentials: false/,
+    )
   })
 
   it('declares no secret at job scope', () => {
@@ -77,6 +90,36 @@ describe('media-backup.yml (#328)', () => {
     expect(code).toMatch(/^permissions:\n {2}contents: read$/m)
     expect(code.match(/issues: write/g)).toHaveLength(1)
     expect(code).toContain("if: failure() && github.event_name == 'schedule'")
+  })
+})
+
+const sql = readFileSync(
+  path.join(repoRoot, 'scripts/media-backup-references.sql'),
+  'utf8',
+)
+
+describe('scripts/media-backup-references.sql (#328 security review F1)', () => {
+  /** The SQL without comment lines, so prose cannot satisfy a check. */
+  const statements = sql
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('--'))
+    .join('\n')
+
+  it('reads inside a READ ONLY transaction it asserts before the query', () => {
+    const begin = statements.indexOf('begin transaction read only;')
+    const assertion = statements.indexOf(
+      "current_setting('transaction_read_only') <> 'on'",
+    )
+    const query = statements.indexOf('with refs as (')
+    expect(begin).toBeGreaterThanOrEqual(0)
+    expect(assertion).toBeGreaterThan(begin)
+    expect(query).toBeGreaterThan(assertion)
+    expect(statements.trimEnd().endsWith('commit;')).toBe(true)
+  })
+
+  it('bounds its cost on production with local timeouts', () => {
+    expect(statements).toContain("set local statement_timeout = '120s';")
+    expect(statements).toContain("set local lock_timeout = '5s';")
   })
 })
 
