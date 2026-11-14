@@ -14,11 +14,16 @@
     run proves it still does.
   - **Do every upgrade action in the release notes on staging and
     production.** For 3.90.0, a queued scheduled publish or unpublish from
-    before the upgrade fails when it runs. Before the deploy, list the pending
-    ones: `select id, input, wait_until from payload_jobs where task_slug =
-'schedulePublish' and completed_at is null;`. After the deploy, re-create
-    each one in the admin (the document's schedule menu); no migration is
-    involved.
+    before the upgrade fails when it runs. Before the deploy, list the
+    pending ones in each database:
+
+    ```sql
+    select id, input, wait_until from payload_jobs
+    where task_slug = 'schedulePublish' and completed_at is null;
+    ```
+
+    After the deploy, re-create each one in the admin (the document's
+    schedule menu); no migration is involved.
 - **Next/React upgrades**: majors are deliberate events; check Payload's
   supported Next range first (Payload pins minimums).
 - **Node version policy (#69)**: `engines` stays broad (`>=22 <25`) so a
