@@ -1,0 +1,223 @@
+# Daily incremental backup of uploaded media into a private R2 bucket, with a
+# manifest check (#328). The database backups (db-backup.yml) keep the rows;
+# rows name media by Blob pathname, so a restored database whose media is gone
+# renders broken pages. This keeps the bytes.
+#
+# What it copies: the media table's files in the staging and production
+# databases (scripts/media-backup-references.sql: each media row's filename,
+# which is its Blob pathname, and any size variant's filename). Store URLs
+# typed into text or JSON columns are not read (owner's decision, #328): where
+# a URL inside prose ends is a guess, and on the local restore every such URL
+# named a file the media table lists. It reads the bytes from their PUBLIC
+# Blob URLs and holds no Blob credential: Vercel Blob has no read-only token,
+# and the read-write token can overwrite and delete the whole store, which is
+# the failure this backup exists to survive. An object no media row names is
+# not copied; `vercel storage inspect` gives the store's total for comparison.
+#
+# Where it goes: the PRIVATE Cloudflare R2 bucket bp-portfolio-media-backups,
+# off Vercel, under its own token, so losing the Blob store, the Vercel account
+# or the Blob credential leaves the copy intact.
+#   objects/<blob pathname>           the first copy, mirroring the Blob layout
+#                                     (so it can seed an R2-primary store)
+#   versions/<blob pathname>/<etag>   a later, changed copy of the same pathname
+#   manifests/<YYYY-MM-DD>/media-manifest-<stamp>.json
+#                                     each run's record: pathname → key, etag,
+#                                     size, uploadedAt, sha256, status; plus
+#                                     `unreferenced`, the last entry of every
+#                                     file no media row names now, carried on
+# Every write is create-only (`If-None-Match: *`): the job never overwrites or
+# deletes an object, and a changed file lands under a new key.
+#
+# Incremental: a pathname whose etag and size match the newest manifest, and
+# whose object still answers in R2, is carried forward without a download.
+#
+# Retention: the bucket's lifecycle rule `expire-manifests-30d` (prefix
+# `manifests/`) deletes manifests after 30 days, matching the database dumps.
+# Media objects have NO expiry until a pruning rule is decided. This workflow
+# never deletes, so do not add one here.
+#
+# The check: after the copy, every media file must be in the newest manifest
+# with its object in R2 at the recorded size, and the manifest must be under
+# 36 hours old. Each database must name at least one file, so an empty
+# production read cannot hide behind staging's. It fails closed: a file the
+# store answers 404 for fails, even when its earlier R2 copy is verified
+# (`retained`: the bytes are safe, but a media row points at a 404), and a
+# person decides. A last good copy found gone (R2 answers 404) stays an error
+# on every later run until a new copy is made, including runs where no media
+# row names the file; R2 failing to answer is not a loss, and the mapping is
+# kept for the next run to verify.
+# Exit codes follow audit-served-prefix.yml: 0 clean, 1 a finding, 2 the run
+# did not complete.
+#
+# Failure alert: a failed scheduled run opens (or comments on) one issue
+# labelled `media-backup-failed`, so a red run is seen without opening the
+# Actions tab. The database backup has no alert today; the same job would fit
+# there.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL              — STAGING session-mode pooler string (exists,
+#   SUPABASE_DB_URL_PROD           db-backup.yml); read only: the SQL opens a
+#                                  READ ONLY transaction and asserts it (the
+#                                  pooler drops PGOPTIONS, so that is not used)
+#   R2_MEDIA_BACKUP_ACCESS_KEY_ID      — R2 API token, Object Read & Write,
+#   R2_MEDIA_BACKUP_SECRET_ACCESS_KEY    scoped to bp-portfolio-media-backups
+#                                        only: its S3 access key pair
+#   R2_BACKUP_ENDPOINT           — https://<account-id>.r2.cloudflarestorage.com
+#                                  (exists, db-backup.yml; same account)
+#
+# Notes:
+# - Secrets are declared on the steps that use them, never on the job, the
+#   repo's posture (audit-served-prefix.yml's header).
+# - This repository is public, and so are its Actions logs. References come
+#   from drafts and gated posts too, and a pathname can name unannounced
+#   work, so logs and the summary print counts and opaque ids (the first 12
+#   hex of the sha256 of a pathname, or of a manifest's key) only. Pathnames,
+#   keys and error detail live in the manifest, in the private bucket. psql's messages go to a runner-local
+#   file, never printed, since they can quote part of a connection string; a
+#   run that fails prints only a message the script composed itself
+#   (`PublicError`), otherwise one fixed line that reads nothing from the
+#   error.
+# - Cost: 238 objects, 323,414,426 bytes in the store [measured 2026-11-14,
+#   `vercel storage inspect`], inside R2's free tier (10 GB-month storage,
+#   1M Class A, 10M Class B per month). A daily run is ~2 HEADs per object
+#   (Class B) and one PUT per new or changed object plus the manifest (Class A).
+# - The public URLs are served through Vercel's CDN (max-age one year). A
+#   pathname overwritten in Blob is seen once the CDN serves the new bytes.
+# - GitHub disables cron workflows after 60 days without repo activity; the
+#   run-summary line makes a silent stall visible.
+
+name: media-backup
+
+on:
+  schedule:
+    # Daily 10:23 UTC: after db-backup.yml (09:17), so the newest dump and the
+    # newest media manifest describe nearly the same moment; not on :00.
+    - cron: '23 10 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: media-backup
+  cancel-in-progress: false # never cut a copy off halfway
+
+env:
+  # Pinned to a full patch version for the same reason ci.yml pins it: a Node
+  # patch release must not change behaviour underneath a scheduled run. Keep in
+  # step with ci.yml's NODE_VERSION when that moves.
+  NODE_VERSION: '24.18.0'
+  # Names, not secrets.
+  R2_MEDIA_BACKUP_BUCKET: bp-portfolio-media-backups
+  MEDIA_BLOB_ORIGIN: https://t8wdoiziaix3go2s.public.blob.vercel-storage.com
+
+jobs:
+  backup:
+    name: Back up and check media
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Check the AWS CLI can make create-only writes
+        run: |
+          set -euo pipefail
+          aws --version
+          aws s3api put-object help | grep -q -- '--if-none-match' \
+            || { echo "::error::this AWS CLI has no --if-none-match; refusing to write without it"; exit 2; }
+
+      - name: Read media references (staging)
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$DB_URL" || { echo "::error::SUPABASE_DB_URL secret is not set"; exit 2; }
+          # psql's own messages can quote part of the connection string (a
+          # malformed password is echoed back), and this log is public: they
+          # go to a runner-local file that is never printed or uploaded.
+          if ! psql "$DB_URL" -v ON_ERROR_STOP=1 -q -At \
+            -f scripts/media-backup-references.sql \
+            > "$RUNNER_TEMP/refs-staging.jsonl" 2> "$RUNNER_TEMP/psql-staging.err"; then
+            echo "::error::reading staging media references failed (psql's message is withheld from the public log)"
+            exit 2
+          fi
+
+      - name: Read media references (production)
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL_PROD }}
+        run: |
+          set -euo pipefail
+          test -n "$DB_URL" || { echo "::error::SUPABASE_DB_URL_PROD secret is not set"; exit 2; }
+          # psql's own messages can quote part of the connection string (a
+          # malformed password is echoed back), and this log is public: they
+          # go to a runner-local file that is never printed or uploaded.
+          if ! psql "$DB_URL" -v ON_ERROR_STOP=1 -q -At \
+            -f scripts/media-backup-references.sql \
+            > "$RUNNER_TEMP/refs-prod.jsonl" 2> "$RUNNER_TEMP/psql-prod.err"; then
+            echo "::error::reading production media references failed (psql's message is withheld from the public log)"
+            exit 2
+          fi
+
+      - name: Copy new and changed media to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_MEDIA_BACKUP_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_MEDIA_BACKUP_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: ${{ secrets.R2_BACKUP_ENDPOINT }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: 'true'
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ACCESS_KEY_ID" || { echo "::error::R2_MEDIA_BACKUP_ACCESS_KEY_ID secret is not set"; exit 2; }
+          test -n "$AWS_SECRET_ACCESS_KEY" || { echo "::error::R2_MEDIA_BACKUP_SECRET_ACCESS_KEY secret is not set"; exit 2; }
+          test -n "$AWS_ENDPOINT_URL" || { echo "::error::R2_BACKUP_ENDPOINT secret is not set"; exit 2; }
+          node scripts/media-backup.ts backup \
+            --refs "$RUNNER_TEMP/refs-staging.jsonl" \
+            --refs "$RUNNER_TEMP/refs-prod.jsonl" \
+            --out "$RUNNER_TEMP/media-backup"
+
+      - name: Check every media file is in the newest manifest
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_MEDIA_BACKUP_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_MEDIA_BACKUP_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: ${{ secrets.R2_BACKUP_ENDPOINT }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: 'true'
+        run: |
+          set -euo pipefail
+          node scripts/media-backup.ts check \
+            --refs "$RUNNER_TEMP/refs-staging.jsonl" \
+            --refs "$RUNNER_TEMP/refs-prod.jsonl"
+
+  alert:
+    name: Open an issue when the backup fails
+    needs: backup
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or comment on the media-backup-failed issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create media-backup-failed --color B60205 \
+            --description 'The scheduled media backup failed' 2>/dev/null || true
+          open=$(gh issue list --label media-backup-failed --state open \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "Failed again: $RUN_URL"
+          else
+            gh issue create --label media-backup-failed \
+              --title 'Scheduled media backup failed' \
+              --body "The daily media backup or its manifest check failed: $RUN_URL. Close this issue once a run passes."
+          fi
