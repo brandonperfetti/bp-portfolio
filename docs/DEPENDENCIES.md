@@ -146,7 +146,11 @@ one set, version-locked.
   desktop app. Its own Next.js docs page still describes a browser
   `Spotlight.init()`; in 4.x the package's `exports` map resolves to a Node
   sidecar server (`node:http`) and that browser entry is deprecated and
-  unreachable — do not import it from client code.
+  unreachable — do not import it from client code. Its `dist` bundles its
+  own copy of `@modelcontextprotocol/sdk`, which no `pnpm-workspace.yaml`
+  override reaches: 4.11.8 bundled 1.27.1, affected by the #312 advisories;
+  4.12.1 bundles 1.32.0 (2026-11-14, #312). Check the bundled version after
+  a Spotlight bump: the path under `dist/node_modules/.pnpm/` names it.
 
 ## Supply-chain policy (#91)
 
@@ -226,9 +230,24 @@ that appears there and not here has not been assessed.
   deliberate direct dependency and is not downgraded. Revisit if code ever
   imports `openai` again: at that point either use a release whose peer
   admits zod 4 or pin the interaction with a test.
-- **`mcp-handler@1.1.0` wants `@modelcontextprotocol/sdk` exactly `1.26.0`;
-  the tree runs `1.30.0` — not yet assessed** (seen 2026-09-26). Requester:
-  `@payloadcms/plugin-mcp` (so it moves with the Payload set).
+- **`mcp-handler@1.1.0` wants `@modelcontextprotocol/sdk` exactly `1.26.0`,
+  and `@payloadcms/plugin-mcp@3.90.2` pins it at exactly `1.30.0`; the tree
+  runs `1.32.2` through an override — accepted (2026-11-14, #258, #312).**
+  Both exact-pinned versions carry all six open advisories (GHSA-f897, -6qxp,
+  -46jr, -rvq5, -6prh, -22jm); the last of them is fixed in 1.32.0, so neither
+  peer can be met safely. The override in `pnpm-workspace.yaml` is the one
+  entry there that crosses an exact pin. It is Brandon's exception to
+  `docs/SECURITY.md`'s "never force-overridden" rule, granted 2026-11-14 for
+  this entry only. Compatibility, measured on 1.32.2 `[measured 2026-11-14]`:
+  `pnpm typecheck`, the MCP plugin tests (`src/plugins`, 47 cases) and
+  `evals/mcp-purge-order-integration.test.ts`, which drives real
+  `POST /api/mcp` `tools/call` writes through `mcp-handler` 1.1.0 on Postgres,
+  all pass. The plugin uses the SDK's types only; at runtime it reaches it
+  through `mcp-handler`. 1.32's new `McpServer` option `maxToolInputElements`
+  cannot be set, because the plugin passes only `instructions` and
+  `serverInfo` to `McpServer` (`dist/mcp/getMcpHandler.js`). The
+  `limitMcpRequests` guard stays the control on tool input. **Exit:** drop the
+  override as soon as a Payload release pins the SDK at 1.32.x or later.
 
 Residual advisories that cannot be fixed today are tracked in #100, not here:
 each is dev-only, non-exploitable in this usage, or has no published fix; how

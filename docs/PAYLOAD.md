@@ -678,9 +678,11 @@ built before the fix still needs a hand purge after each write:
 
 **Request limits**
 ([#312](https://github.com/brandonperfetti/bp-portfolio/issues/312)).
-This is a **partial local mitigation**, not a fix: the SDK advisories in
-#312 stay open. `mcp-handler` 1.1.0 reads the whole request with `req.json()`
-before the SDK applies any limit, and it does not await its own request
+These limits stay the control on MCP input after #312's SDK override to
+1.32.2, which cleared the SDK advisories: 1.32's own tool-input limit
+(`maxToolInputElements`) cannot be set through the plugin
+(`docs/DEPENDENCIES.md` § Known unmet peers). `mcp-handler` 1.1.0 reads the
+whole request with `req.json()` before the SDK applies any limit, and it does not await its own request
 handler, so a failure inside it is an unhandled rejection and a reply that
 never comes. The limits are therefore enforced before `mcp-handler` exists,
 through the plugin's supported `overrideAuth(req, getDefaultMcpAccessSettings)`
