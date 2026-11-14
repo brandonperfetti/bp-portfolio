@@ -1,4 +1,7 @@
 // @vitest-environment node
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -223,6 +226,15 @@ describe.skipIf(!connectionString)(
         overrideAccess: true,
       })
       try {
+        // The bytes on local disk, which a crop would overwrite before any
+        // later hook could refuse it.
+        const staticDir = payload.collections.media.config.upload.staticDir
+        expect(
+          staticDir,
+          'Media must store files on local disk here',
+        ).toBeTruthy()
+        const filePath = path.resolve(String(staticDir), row.filename ?? '')
+        const original = await readFile(filePath)
         const { createLocalReq } = await import('payload')
         const req = await createLocalReq({ context }, payload)
         ;(req as { query: Record<string, unknown> }).query = {
@@ -266,6 +278,7 @@ describe.skipIf(!connectionString)(
           height: row.height,
           width: row.width,
         })
+        expect((await readFile(filePath)).equals(original)).toBe(true)
       } finally {
         await payload.delete({
           collection: 'media',
