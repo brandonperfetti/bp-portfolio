@@ -14,6 +14,7 @@ import {
   READ_ONLY_MEDIA_UPLOAD_ERROR,
   getReadOnlyMediaBaseUrl,
   pointMediaUrlAtReadOnlyOrigin,
+  refuseFileWriteInReadOnlyMedia,
   refuseUploadInReadOnlyMedia,
 } from './readOnlyMedia'
 
@@ -122,9 +123,38 @@ describe('refuseUploadInReadOnlyMedia (#328)', () => {
   })
 })
 
+type ChangeArgs = Parameters<typeof refuseFileWriteInReadOnlyMedia>[0]
+
+const change = (file?: PayloadRequest['file']) =>
+  refuseFileWriteInReadOnlyMedia({
+    data: { alt: 'x' },
+    operation: 'update',
+    req: { file } as PayloadRequest,
+  } as unknown as ChangeArgs)
+
+describe('refuseFileWriteInReadOnlyMedia (#328, files Payload makes late)', () => {
+  it('refuses a file set after beforeOperation (a crop, focal re-upload or duplicate)', () => {
+    vi.stubEnv('STORAGE_VERCEL_BLOB_BASE_URL', ORIGIN)
+    expect(() => change(aFile)).toThrow(READ_ONLY_MEDIA_UPLOAD_ERROR)
+  })
+
+  it('lets a fileless change through, and every change when the mode is off', () => {
+    vi.stubEnv('STORAGE_VERCEL_BLOB_BASE_URL', ORIGIN)
+    expect(change()).toEqual({ alt: 'x' })
+    vi.stubEnv('STORAGE_VERCEL_BLOB_BASE_URL', '')
+    expect(change(aFile)).toEqual({ alt: 'x' })
+  })
+})
+
 describe('Media wiring (#328)', () => {
   it('runs the upload refusal first among beforeOperation hooks', () => {
     expect(Media.hooks?.beforeOperation?.[0]).toBe(refuseUploadInReadOnlyMedia)
+  })
+
+  it('guards file writes in beforeChange, after generateFileData', () => {
+    expect(
+      Media.hooks?.beforeChange?.includes(refuseFileWriteInReadOnlyMedia),
+    ).toBe(true)
   })
 
   it('rewrites the url in a collection afterRead hook, after the field hooks', () => {

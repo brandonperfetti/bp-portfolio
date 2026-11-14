@@ -100,8 +100,9 @@ staging and production share one Blob store, so that token lets any local
 upload write to production media (#328). Set only the store's public origin
 instead — `STORAGE_VERCEL_BLOB_BASE_URL=https://<storeId>.public.blob.vercel-storage.com`,
 the host of any image on the live site. Blob objects are public to read, so
-images resolve with no token, and uploads are refused while it is set
-(`src/lib/storage/readOnlyMedia.ts`). Clear it to upload to local disk.
+images resolve with no token, and uploads, crops and duplicates are refused
+while it is set (`src/lib/storage/readOnlyMedia.ts`). Clear it to upload or
+edit files on local disk.
 
 ## Review
 

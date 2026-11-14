@@ -12,7 +12,11 @@ import { READ_ONLY_MEDIA_UPLOAD_ERROR } from '../src/lib/storage/readOnlyMedia'
  * a local developer relies on: that a row read through Payload, with the
  * storage plugin off and only `STORAGE_VERCEL_BLOB_BASE_URL` set, comes back
  * with its `url` on that origin rather than Payload's local-disk route, and
- * that a real upload is refused before any row is written.
+ * that a real upload is refused before any row is written, and so is a file
+ * Payload makes itself after `beforeOperation` (a duplicate). A crop takes
+ * the same late path but needs a fetchable image URL, which this tier cannot
+ * host (Payload's `safeFetch` refuses loopback); the unit suite pins that
+ * shape.
  *
  * The mode reads the environment on each call, so each case sets the origin
  * itself and restores it in `finally`. The plugin's `enabled` flag is fixed at
@@ -143,6 +147,50 @@ describe.skipIf(!connectionString)(
           collection: 'media',
           context,
           id: created.id,
+          overrideAccess: true,
+        })
+      }
+    })
+
+    it('refuses a duplicate, whose file Payload makes after beforeOperation', async () => {
+      // Duplicate enters create with no file; generateFileData copies the
+      // source row's bytes and sets req.file later, so only the beforeChange
+      // guard sees it. The source row is written with the mode off, so its
+      // bytes are on local disk and the copy would otherwise succeed.
+      const bytes = await png()
+      const source = await payload.create({
+        collection: 'media',
+        context,
+        data: { alt: `${MARKER} duplicate-source` },
+        file: {
+          data: bytes,
+          mimetype: 'image/png',
+          name: `${MARKER}-duplicate.png`,
+          size: bytes.byteLength,
+        },
+        overrideAccess: true,
+      })
+      try {
+        const before = await countMarked()
+        await withReadOnlyOrigin(() =>
+          expect(
+            payload.duplicate({
+              collection: 'media',
+              context,
+              id: source.id,
+              overrideAccess: true,
+            }),
+          ).rejects.toMatchObject({
+            message: READ_ONLY_MEDIA_UPLOAD_ERROR,
+            status: 400,
+          }),
+        )
+        expect(await countMarked()).toBe(before)
+      } finally {
+        await payload.delete({
+          collection: 'media',
+          context,
+          id: source.id,
           overrideAccess: true,
         })
       }

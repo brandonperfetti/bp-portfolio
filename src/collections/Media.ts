@@ -14,6 +14,7 @@ import {
 } from '@/hooks/revalidateCollection'
 import {
   pointMediaUrlAtReadOnlyOrigin,
+  refuseFileWriteInReadOnlyMedia,
   refuseUploadInReadOnlyMedia,
 } from '@/lib/storage/readOnlyMedia'
 
@@ -372,6 +373,7 @@ export const Media: CollectionConfig = {
       refuseUploadEditsRefetch,
     ],
     beforeValidate: [refuseFilelessFileRewrite],
+    beforeChange: [refuseFileWriteInReadOnlyMedia],
     afterRead: [pointMediaUrlAtReadOnlyOrigin],
     afterChange: [
       revalidateCollectionTag('posts', ['/articles']),
