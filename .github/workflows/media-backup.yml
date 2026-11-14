@@ -70,7 +70,8 @@
 #   the manifest, in the private bucket. psql's messages go to a runner-local
 #   file, never printed, since they can quote part of a connection string; a
 #   run that fails prints only a message the script composed itself
-#   (`PublicError`), otherwise the error's class name.
+#   (`PublicError`), otherwise one fixed line that reads nothing from the
+#   error.
 # - Cost: 238 objects, 323,414,426 bytes in the store [measured 2026-11-14,
 #   `vercel storage inspect`], inside R2's free tier (10 GB-month storage,
 #   1M Class A, 10M Class B per month). A daily run is ~2 HEADs per object

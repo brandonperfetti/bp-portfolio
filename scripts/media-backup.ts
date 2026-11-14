@@ -169,34 +169,47 @@ function unescapeXml(value: string): string {
  * ignored, since they are not this store's.
  */
 /**
- * Trim what surrounds a URL in prose or markup from the end of a match.
+ * Every reading of a URL matched in prose or markup, the full match first.
  *
- * @remarks A pathname may hold `(`, `)`, `[` and `]` (`release(1).png` is what
- * {@link publicUrl} makes of one), so the match takes them; a closing bracket
- * with no opener in the match belongs to the text around it (`(see URL)`,
- * Markdown `[x](URL)`), as does trailing sentence punctuation. Cutting a real
- * pathname short would look up the wrong URL, and its 404 would be read as a
- * file gone from the store.
+ * @remarks A match runs to the first whitespace, quote, `<`, `>` or backslash,
+ * so the URL a row actually holds is the match or a prefix of it: `release!`
+ * and `release(1).png` are whole pathnames {@link publicUrl} makes, while in
+ * `(see URL).`, Markdown `[x](URL)` or CSS `url(URL);` the tail belongs to the
+ * text around it. This does not guess which: it returns the full match, each
+ * step of trimming trailing `.,;:!?` and unmatched `)`/`]`, and the cut before
+ * every unmatched closing bracket, and each becomes a reference. The real one
+ * is always among them, so it is always backed up or fails the check; a wrong
+ * reading that 404s fails the check too (a false failure, for a person to
+ * look at), and one that happens to exist is an extra copy, never a stand-in.
  */
-export function trimUrlTail(url: string): string {
-  let out = url
-  for (;;) {
-    const last = out.at(-1)
-    if (last && '.,;:!?'.includes(last)) {
-      out = out.slice(0, -1)
-      continue
+export function urlCandidates(url: string): string[] {
+  const out = new Set<string>()
+  const pairs: Record<string, string> = { ')': '(', ']': '[' }
+  const unmatched = (text: string, closer: string) =>
+    text.split(closer).length - 1 > text.split(pairs[closer]).length - 1
+  const trimSteps = (start: string) => {
+    let current = start
+    for (;;) {
+      out.add(current)
+      const last = current.at(-1)
+      if (last && '.,;:!?'.includes(last)) current = current.slice(0, -1)
+      else if (last && last in pairs && unmatched(current, last))
+        current = current.slice(0, -1)
+      else return
     }
-    const pairs: Record<string, string> = { ')': '(', ']': '[' }
-    if (last && last in pairs) {
-      const opens = out.split(pairs[last]).length - 1
-      const closes = out.split(last).length - 1
-      if (closes > opens) {
-        out = out.slice(0, -1)
-        continue
-      }
-    }
-    return out
   }
+  trimSteps(url)
+  for (
+    let index = url.indexOf('/', url.indexOf('//') + 2);
+    index < url.length;
+    index += 1
+  ) {
+    const char = url[index]
+    if (char in pairs && unmatched(url.slice(0, index + 1), char)) {
+      trimSteps(url.slice(0, index))
+    }
+  }
+  return [...out].filter((candidate) => pathnameFromUrl(candidate))
 }
 
 export function parseReferences(jsonl: string, origin: string): Reference[] {
@@ -226,8 +239,10 @@ export function parseReferences(jsonl: string, origin: string): Reference[] {
       references.push({ pathname: row.value, table })
     } else if (row.kind === 'text' && row.value) {
       for (const match of unescapeXml(row.value).matchAll(urlPattern)) {
-        const pathname = pathnameFromUrl(trimUrlTail(match[0]))
-        if (pathname) references.push({ pathname, table })
+        for (const candidate of urlCandidates(match[0])) {
+          const pathname = pathnameFromUrl(candidate)
+          if (pathname) references.push({ pathname, table })
+        }
       }
     }
   }

@@ -24,7 +24,7 @@ import {
   publicFailureLine,
   PublicError,
   publicUrl,
-  trimUrlTail,
+  urlCandidates,
 } from './media-backup'
 
 /**
@@ -139,7 +139,7 @@ describe('parseReferences', () => {
     ])
   })
 
-  it('keeps brackets a pathname holds, and drops those of the text around it', () => {
+  it('reads a matched URL every way it could end, the full match always among them', () => {
     const own = publicUrl(ORIGIN, 'release(1).png')
     const refs = parseReferences(
       jsonl(
@@ -149,12 +149,24 @@ describe('parseReferences', () => {
       ),
       ORIGIN,
     )
-    expect(refs.map((ref) => ref.pathname)).toEqual([
-      'release(1).png',
-      'a.png',
-      'b[2].png',
-    ])
-    expect(trimUrlTail(`${own}),`)).toBe(own)
+    expect(new Set(refs.map((ref) => ref.pathname))).toEqual(
+      new Set([
+        'release(1).png',
+        'a.png).',
+        'a.png)',
+        'a.png',
+        'b[2].png)',
+        'b[2].png',
+      ]),
+    )
+    // The review's cases: a whole pathname ending in punctuation, CSS url().
+    expect(urlCandidates(publicUrl(ORIGIN, 'release!'))).toContain(
+      publicUrl(ORIGIN, 'release!'),
+    )
+    expect(urlCandidates(`${ORIGIN}/a.png);color:red`)).toContain(
+      `${ORIGIN}/a.png`,
+    )
+    expect(urlCandidates(`${ORIGIN}/a.png).Next`)).toContain(`${ORIGIN}/a.png`)
   })
 
   it('refuses output with no end line, so a failed query is never "no references"', () => {
@@ -432,6 +444,56 @@ describe('backup', () => {
     expect(again.entries[0].status).toBe('unchanged')
     expect(puts).toHaveLength(1)
   })
+
+  for (const table of ['posts', '_posts_v']) {
+    it(`never lets another existing object stand in for the referenced one (${table})`, async () => {
+      // The review's collision: `release` exists too, with other bytes.
+      const blob = new Map([
+        ['release!', png('ACTUAL')],
+        ['release', png('OTHER')],
+      ])
+      const { bucket, deps } = fakes(blob)
+      const references = parseReferences(
+        jsonl({
+          kind: 'text',
+          table,
+          value: `{"src":"${publicUrl(ORIGIN, 'release!')}"}`,
+        }),
+        ORIGIN,
+      )
+      const manifest = await backup({
+        deps,
+        now,
+        origin: ORIGIN,
+        previous: null,
+        references,
+        workDir,
+      })
+      expect(bucket.get('objects/release!')?.bytes.toString()).toBe('ACTUAL')
+      const result = await check({ deps, manifest, now, references })
+      expect(result.failures).toEqual([])
+
+      // Only an old R2 copy of the wrong reading: the real one still counts.
+      const cold = fakes(new Map([['release!', png('ACTUAL')]]))
+      cold.bucket.set('objects/release', {
+        bytes: Buffer.from('OLD'),
+        metadata: {},
+      })
+      const coldManifest = await backup({
+        deps: cold.deps,
+        now,
+        origin: ORIGIN,
+        previous: null,
+        references,
+        workDir,
+      })
+      expect(cold.bucket.get('objects/release!')?.bytes.toString()).toBe(
+        'ACTUAL',
+      )
+      const entry = coldManifest.entries.find((e) => e.pathname === 'release!')
+      expect(entry?.status).toBe('copied')
+    })
+  }
 
   it('fails closed when a URL read from markup is cut wrong (extract, back up, check)', async () => {
     // The review's counterexamples: a valid final `!`, and CSS `url(...)`.
