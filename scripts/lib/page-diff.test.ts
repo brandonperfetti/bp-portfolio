@@ -1030,6 +1030,33 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
     }
   })
 
+  it('redacts a token in a query redactUrl leaves raw, and in a fragment', () => {
+    // No sensitive parameter, so redactUrl does not rewrite the query and the
+    // WHATWG query serialization stays: `?` and `'` raw, `"` and space
+    // percent-encoded. Neither encodeURIComponent nor URLSearchParams writes
+    // that form (independent re-review 4, PR #336).
+    for (const awkward of ['tok"en?with space', "tok'! with space"]) {
+      const { scrub } = createSafeReporter([awkward], () => {})
+      const url = redactUrl(`https://example.test/?page=${awkward}#${awkward}`)
+      expect(url).not.toContain(awkward)
+      const scrubbed = scrub(url)
+      expect(scrubbed).toBe(
+        `https://example.test/?page=${REDACTED}#${REDACTED}`,
+      )
+      expect(new URL(scrubbed).searchParams.get('page')).toBe(REDACTED)
+
+      const report = JSON.stringify(scrubStrings({ baselineUrl: url }, scrub))
+      expect(JSON.parse(report).baselineUrl).toBe(scrubbed)
+    }
+  })
+
+  it('does not throw on a token no URL serializer can encode', () => {
+    const loneSurrogate = 'tok\uD800en'
+    expect(redactSecret(`x ${loneSurrogate} y`, loneSurrogate)).toBe(
+      `x ${REDACTED} y`,
+    )
+  })
+
   it('leaves a plain alphanumeric token to the literal match alone', () => {
     expect(redactSecret('x AbC123 y', 'AbC123')).toBe(`x ${REDACTED} y`)
     expect(redactSecret('nothing here', 'AbC123')).toBe('nothing here')

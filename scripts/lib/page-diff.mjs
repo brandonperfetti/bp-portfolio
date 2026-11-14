@@ -345,8 +345,8 @@ export const REDACTED = 'REDACTED'
  *
  * Each literal is matched in its URL-encoded forms too (`urlEncodedForms`):
  * a URL the CLI prints has been through `new URL`, which percent-encodes a
- * token holding `"` or a space, and the encoded form would pass a literal
- * match.
+ * token holding `"` or a space, differently in a path, a query and a
+ * fragment, and an encoded form would pass a literal match.
  *
  * Every known literal goes first, longest first, and the header pass runs
  * once, last. The header pass stops at `"`, `'`, `,` and the like, so run
@@ -377,24 +377,52 @@ export function redactSecret(text, token) {
 /**
  * The forms a token can take once it is inside a printed URL.
  *
- * @remarks The literal; `encodeURIComponent`'s form; the query form
- * `URLSearchParams` writes, which `redactUrl` emits when it rewrites a query
- * (a space becomes `+`); and the WHATWG path form, kept only when it decodes
- * back to the token: a token holding `?`, `#` or `\` never sits whole in a
- * path. For a plain alphanumeric token, such as a Vercel-generated secret,
- * every form is the literal.
+ * @remarks Every form is produced by the serializer that writes it, never by
+ * hand-written escape rules, since each URL component encodes a different
+ * set:
+ * - the literal;
+ * - `encodeURIComponent`'s form;
+ * - the form `URLSearchParams` writes, which `redactUrl` emits when it
+ *   rewrites a query (a space becomes `+`);
+ * - the WHATWG path, query and fragment forms an `http(s)` URL keeps when
+ *   `redactUrl` leaves it alone (a query keeps `?` and `'` raw, a path does
+ *   not).
+ *
+ * A form is kept only when it decodes back to the whole token. A token
+ * holding `?` cannot sit whole in a path, for example, and a shortened form
+ * would match unrelated text. A derivation that throws, such as
+ * `encodeURIComponent` on a lone surrogate, adds nothing. For a plain
+ * alphanumeric token, such as a Vercel-generated secret, every form is the
+ * literal.
  *
  * @param {string} value - A known token.
  * @returns {string[]} The token and its distinct encoded forms.
  */
 function urlEncodedForms(value) {
-  const forms = new Set([value, encodeURIComponent(value)])
-  forms.add(new URLSearchParams({ v: value }).toString().slice(2))
-  try {
-    const path = new URL(`http://h/${value}`).pathname.slice(1)
-    if (decodeURIComponent(path) === value) forms.add(path)
-  } catch {
-    // Not a path segment that decodes back to the token; nothing to add.
+  const decodesTo = (form, decode) => {
+    try {
+      return decode(form) === value
+    } catch {
+      return false
+    }
+  }
+  const percent = (form) => decodeURIComponent(form)
+  const formQuery = (form) => new URLSearchParams(`v=${form}`).get('v')
+  const candidates = [
+    [() => encodeURIComponent(value), percent],
+    [() => new URLSearchParams({ v: value }).toString().slice(2), formQuery],
+    [() => new URL(`http://h/${value}`).pathname.slice(1), percent],
+    [() => new URL(`http://h/?${value}`).search.slice(1), percent],
+    [() => new URL(`http://h/#${value}`).hash.slice(1), percent],
+  ]
+  const forms = new Set([value])
+  for (const [derive, decode] of candidates) {
+    try {
+      const form = derive()
+      if (form && decodesTo(form, decode)) forms.add(form)
+    } catch {
+      // This component cannot carry the token whole; nothing to add.
+    }
   }
   return [...forms]
 }
