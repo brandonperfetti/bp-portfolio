@@ -407,11 +407,17 @@ stay there.
   policy.
 - **Residual advisories are tracked, never force-overridden** — #100 holds
   them; `pnpm audit` and `pnpm audit --prod` are the check
-  (`docs/DEPENDENCIES.md`).
-- **A mitigation does not clear an advisory.** #312 tracks SDK advisories
-  against `@modelcontextprotocol/sdk` 1.30.0, which `@payloadcms/plugin-mcp`
-  pins exactly. It stays pinned with no override, and the advisories stay
-  open until an upstream release fixes them. In front of it,
+  (`docs/DEPENDENCIES.md`). **One exception, Brandon's, 2026-11-14 (#312):**
+  `@modelcontextprotocol/sdk` is overridden to 1.32.2 past
+  `@payloadcms/plugin-mcp`'s exact 1.30.0 pin. That clears the six SDK
+  advisories (GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h, -46jr-4wx8-v453,
+  -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw). Its compatibility
+  evidence and exit condition are in `docs/DEPENDENCIES.md` § Known unmet
+  peers. No other entry may cross a pin without the same explicit decision.
+- **A mitigation does not clear an advisory.** Before #312's override, the
+  MCP SDK's advisories stayed open behind a local mitigation, and the
+  mitigation stays in place after it: 1.32's own tool-input limit
+  (`maxToolInputElements`) cannot be turned on through the Payload plugin.
   `src/plugins/limitMcpRequests.ts` is a **partial** local mitigation for
   authenticated `POST /api/mcp` bodies: it bounds body size, batch size, JSON
   value count and nesting depth, refusing limit violations with a 413 before
