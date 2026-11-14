@@ -1,0 +1,67 @@
+name: Friction
+description: >-
+  One piece of workflow friction from a delivery that meets the bar: durable or
+  recurring, owned by this repo, reproducible and actionable without the session
+  (one confirmed defect is enough). Search open `friction` issues first and
+  comment on a match instead of filing.
+title: 'Friction: '
+labels:
+  - friction
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        One item per issue. File at delivery close, never mid-task. Agents add
+        `agent-filed` too (`gh issue create --label friction --label agent-filed`).
+  - type: input
+    id: delivery-step
+    attributes:
+      label: Delivery/step
+      description: The delivery (PR, issue or initiative lane) and the step where it happened.
+      placeholder: 'PR #123, CodeRabbit preflight'
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you observed, as it happened.
+    validations:
+      required: true
+  - type: textarea
+    id: what-you-wanted
+    attributes:
+      label: What you wanted
+      description: The outcome you were trying to reach.
+    validations:
+      required: true
+  - type: textarea
+    id: how-to-reproduce
+    attributes:
+      label: How to reproduce
+      description: Commands, inputs or steps that show the gap again.
+    validations:
+      required: true
+  - type: textarea
+    id: cost
+    attributes:
+      label: Cost
+      description: Time lost, retries, how often it happens, and the workaround used.
+    validations:
+      required: true
+  - type: textarea
+    id: preliminary-investigation
+    attributes:
+      label: Preliminary investigation
+      description: >-
+        Label each finding [measured], [source] or [inference]. Do not invent a
+        root cause. Mark any proposed fix as a suggestion.
+    validations:
+      required: true
+  - type: textarea
+    id: relevant-files
+    attributes:
+      label: Relevant files
+      description: Optional. Paths, links or line references.
+    validations:
+      required: false
