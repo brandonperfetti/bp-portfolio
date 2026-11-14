@@ -446,8 +446,12 @@ export function scrubStrings(value, scrub) {
  * @returns `{ scrub, fail, exitCode }`.
  */
 export function createSafeReporter(tokens, print = console.error) {
-  const known = tokens.filter(Boolean)
+  const known = /** @type {string[]} */ (tokens.filter(Boolean))
   let fatal = false
+  /**
+   * @param {string} text - Text about to be printed or written.
+   * @returns {string} The text with every known token redacted.
+   */
   const scrub = (text) =>
     known.reduce(
       (out, token) => redactSecret(out, token),
