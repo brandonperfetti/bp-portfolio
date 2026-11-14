@@ -266,7 +266,21 @@ export async function routeWithBypass(
   }
 
   const { response, url, stop } = followed
-  if (stop === 'cap') return abortQuietly()
+  if (stop === 'cap') {
+    // A same-origin request lost to a redirect loop is as missing from the
+    // frame as one whose fetch failed.
+    if (state && !state.closing) {
+      state.failures.push(
+        describeErrorSafely(
+          new Error(
+            `redirect chain passed ${MAX_BYPASS_REDIRECTS} hops: ${redactUrl(request.url())}`,
+          ),
+          token,
+        ),
+      )
+    }
+    return abortQuietly()
+  }
   if (
     url !== request.url() &&
     onRedirectedNavigation &&
@@ -385,6 +399,32 @@ export function knownBypassTokens(argv, env = {}) {
       .filter((arg) => arg.startsWith(flag))
       .map((arg) => arg.slice(flag.length)),
   ].filter(Boolean)
+}
+
+/**
+ * Apply a scrub to every string in a JSON-shaped value.
+ *
+ * @remarks For `report.json`: scrubbing the serialized text misses a token
+ * holding `"` or `\`, because `JSON.stringify` escapes them first, and a
+ * reader that parses the file gets the token back (#273).
+ *
+ * @param {unknown} value - The value to clean.
+ * @param {(text: string) => string} scrub - The reporter's scrub function.
+ * @returns A copy with every string value, and every key, scrubbed.
+ */
+export function scrubStrings(value, scrub) {
+  if (typeof value === 'string') return scrub(value)
+  if (Array.isArray(value))
+    return value.map((item) => scrubStrings(item, scrub))
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        scrub(key),
+        scrubStrings(item, scrub),
+      ]),
+    )
+  }
+  return value
 }
 
 /**

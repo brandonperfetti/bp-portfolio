@@ -109,6 +109,7 @@ import {
   parseArgs,
   redactUrl,
   routeWithBypass,
+  scrubStrings,
   verdict,
 } from './lib/page-diff.mjs'
 
@@ -197,19 +198,20 @@ async function capture(browser, url, viewport, options) {
       mask: options.masks.map((selector) => page.locator(selector)),
     })
 
+    const { data, info } = await sharp(png)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+
     // A same-origin request that failed mid-capture means the frame may be
     // missing what it fetched; comparing it could pass parity on a broken
-    // page. Each entry is already redacted.
+    // page. Checked after the last await, so a failure recorded at any point
+    // before teardown begins is seen. Each entry is already redacted.
     if (state.failures.length > 0) {
       throw new Error(
         `${state.failures.length} same-origin request(s) failed while capturing ${redactUrl(url)}; first: ${state.failures[0]}`,
       )
     }
-
-    const { data, info } = await sharp(png)
-      .ensureAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true })
 
     return { data, width: info.width, height: info.height, png }
   } finally {
@@ -300,7 +302,9 @@ async function main() {
   // URL path or the output directory.
   await writeFile(
     path.join(options.outDir, 'report.json'),
-    reporter.scrub(`${JSON.stringify(summary, null, 2)}\n`),
+    // Scrubbed per string value, before serializing: JSON escapes `"` and `\`,
+    // so a token holding either would no longer match in the serialized text.
+    `${JSON.stringify(scrubStrings(summary, reporter.scrub), null, 2)}\n`,
   )
   console.log(reporter.scrub(formatSummary(summary)))
   console.log(reporter.scrub(`\ndiff images: ${options.outDir}`))

@@ -31,6 +31,7 @@ import {
   redactUrl,
   redirectTarget,
   routeWithBypass,
+  scrubStrings,
   verdict,
 } from './page-diff.mjs'
 
@@ -425,6 +426,28 @@ describe('bypass header scoping (#252)', () => {
     await routeWithBypass(stub.route, target, token)
     expect(fetched(stub.calls)).toHaveLength(MAX_BYPASS_REDIRECTS + 1)
     expect(stub.calls.at(-1)).toEqual({ method: 'abort', args: ['failed'] })
+  })
+
+  it('records a redirect-loop abort as a capture failure, redacted, unless closing', async () => {
+    const base = 'https://staging.example.test'
+    const loop = () =>
+      stubRoute(
+        `${base}/a`,
+        site({ [`${base}/a`]: [302, '/b'], [`${base}/b`]: [302, '/a'] }),
+      )
+
+    const running = createRouteState()
+    await routeWithBypass(loop().route, target, token, undefined, running)
+    expect(running.failures).toHaveLength(1)
+    expect(running.failures[0]).toContain(
+      `passed ${MAX_BYPASS_REDIRECTS} hops: ${base}/a`,
+    )
+    expect(running.failures[0]).not.toContain(token)
+
+    const closing = createRouteState()
+    closing.closing = true
+    await routeWithBypass(loop().route, target, token, undefined, closing)
+    expect(closing.failures).toEqual([])
   })
 })
 
@@ -934,4 +957,25 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
     },
     30_000,
   )
+
+  it('scrubs report values before serializing, so JSON escaping cannot hide a token', () => {
+    // A token holding the two characters JSON escapes.
+    const awkward = 'tok"en\\with-escapes'
+    const { scrub } = createSafeReporter([awkward], () => {})
+    const summary = {
+      baselineUrl: 'https://staging.example.test/',
+      comparisons: [{ diffImage: `/tmp/${awkward}/desktop-diff.png` }],
+    }
+
+    // The defect: scrubbing the serialized text misses the escaped form.
+    const naive = scrub(JSON.stringify(summary))
+    expect(JSON.parse(naive).comparisons[0].diffImage).toContain(awkward)
+
+    const text = JSON.stringify(scrubStrings(summary, scrub))
+    expect(JSON.parse(text).comparisons[0].diffImage).toBe(
+      `/tmp/${REDACTED}/desktop-diff.png`,
+    )
+    expect(occurrences(text, awkward)).toBe(0)
+    expect(JSON.parse(text).baselineUrl).toBe(summary.baselineUrl)
+  })
 })
