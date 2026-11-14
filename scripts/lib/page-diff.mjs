@@ -10,8 +10,6 @@
  * @module
  */
 
-import { domainToUnicode } from 'node:url'
-
 /** Default share of pixels allowed to differ before the run fails, in percent. */
 export const DEFAULT_THRESHOLD_PERCENT = 0.1
 
@@ -345,15 +343,14 @@ export const REDACTED = 'REDACTED'
  * `redactUrl` covers URLs only; Playwright's error call log prints request
  * headers raw (#273).
  *
- * The match ignores case. It is the last line of defence, not the one a
- * printed URL relies on: URL parsing rewrites what surrounds a value (a
- * numeric host becomes an IPv4 address, a label holding a non-ASCII
- * character becomes punycode, a `%XX` decodes), and no literal survives
- * that. So `parseArgs` refuses, before any URL is parsed, a bypass value that
- * fails {@link isUrlSafeToken} and a URL argument that
- * {@link carriesToken}. The URL arguments are the one place an operator can
- * put the secret into a URL; the harness itself sends it only as a header. Listing each serializer's escaped forms instead never closed:
- * independent reviews of PR #336 found a missed form three times.
+ * The match ignores case, since a URL host lowercases. It covers the
+ * value as the run holds it, not encoded or rewritten forms: URL parsing
+ * can rewrite text around a value (a numeric host, punycode, a preceding
+ * `%`) past any literal match. So `parseArgs` refuses a run whose arguments
+ * carry a known value at all ({@link argumentCarriesToken}). The harness
+ * itself sends the value only as a request header. Review of PR #336 showed
+ * that chasing every encoded form does not close: four rounds each found
+ * another.
  *
  * Every known literal goes first, longest first, and the header pass runs
  * once, last. The header pass stops at `"`, `'`, `,` and the like, so run
@@ -385,87 +382,25 @@ export function redactSecret(text, token) {
 }
 
 /**
- * Whether a bypass value is one this script will carry.
+ * Whether a CLI argument holds a known bypass value.
  *
- * @remarks Two rules, both about how a URL could rewrite the value
- * (#273, PR #336):
- * - Only `A-Z a-z 0-9 . _ -`: the characters that are RFC 3986 unreserved
- *   and that form encoding also leaves alone (`URLSearchParams` writes `~`
- *   as `%7E`). No component escapes them, so the literal match finds them.
- * - At least one letter other than `a-f` and `x`. A host label, port or
- *   IPv6 piece holding such a letter is never read as a number, so the
- *   value cannot be turned into an IP address or a port. A value of dots
- *   alone, which `new URL` would drop as a path segment, fails it too.
+ * @remarks Ignores case. The `--bypass-token=` flag, which exists to carry
+ * the value, is not checked. Every other argument flows into something the
+ * run prints, writes or parses: the URLs, the output directory and file
+ * paths, mask selectors and width errors. `parseArgs` refuses the run when
+ * this holds, because no scrub can follow a value through URL parsing or a
+ * file path. A value the operator encodes on purpose, such as `%44` for
+ * `D`, is not detected. That is a documented limit, not a guarantee (#273,
+ * PR #336).
  *
- * The project's real secret (32 letters and digits, checked 2026-11-14
- * without printing it) passes. A random 32-character alphanumeric value
- * fails the second rule with odds of about one in 10^13.
- *
- * @param {string} value - A bypass value from the environment or the flag.
- * @returns {boolean} True when the value meets both rules.
+ * @param {string} arg - One CLI argument.
+ * @param {string[]} tokens - Every known bypass value.
+ * @returns {boolean} True when the argument holds one of them.
  */
-export function isUrlSafeToken(value) {
-  return /^[A-Za-z0-9._-]+$/.test(value) && /[g-wyz]/i.test(value)
-}
-
-/**
- * Whether text carries a bypass value in a form URL parsing could reveal.
- *
- * @remarks Searches every form the text reaches through the rewrites a URL
- * parser and a reader could apply, in any order and repeated:
- * percent-decoding one round (`%2544` is `%44` is `D`); NFKC normalization
- * (a host's IDNA mapping turns full-width characters into ASCII); removing
- * tabs and newlines, which the URL parser drops anywhere; and parsing it as
- * a URL, taking the serialized `href` and the Unicode form of the host
- * (`domainToUnicode`, which undoes punycode and shows what IDNA mapping
- * dropped, such as a soft hyphen). The comparison ignores case, as a host
- * lowercases. `parseArgs` refuses a URL argument for which this holds,
- * before any URL is parsed. The search is bounded; hitting the bound counts
- * as carrying the value, so the check fails closed. Decoding is byte-wise,
- * which is exact for the ASCII values {@link isUrlSafeToken} admits.
- *
- * @param {string} text - A CLI argument.
- * @param {string} token - A known bypass value.
- * @returns {boolean} True when some reachable form contains the value.
- */
-export function carriesToken(text, token) {
-  const needle = token.toLowerCase()
-  const seen = new Set()
-  const queue = [String(text)]
-  while (queue.length > 0) {
-    if (seen.size >= 256) return true
-    const form = queue.shift()
-    if (seen.has(form)) continue
-    seen.add(form)
-    if (form.toLowerCase().includes(needle)) return true
-    for (const next of urlRewrites(form)) {
-      if (!seen.has(next)) queue.push(next)
-    }
-  }
-  return false
-}
-
-/**
- * One step of each rewrite {@link carriesToken} follows.
- *
- * @param {string} form - The text so far.
- * @returns {string[]} The text after each rewrite.
- */
-function urlRewrites(form) {
-  const next = [
-    form.replace(/%([0-9a-f]{2})/gi, (_, hex) =>
-      String.fromCharCode(parseInt(hex, 16)),
-    ),
-    form.normalize('NFKC'),
-    form.replace(/[\t\n\r]/g, ''),
-  ]
-  try {
-    const url = new URL(form)
-    next.push(url.href, domainToUnicode(url.hostname))
-  } catch {
-    // Not a URL in this form; the other rewrites still apply.
-  }
-  return next
+export function argumentCarriesToken(arg, tokens) {
+  if (arg.startsWith('--bypass-token=')) return false
+  const text = arg.toLowerCase()
+  return tokens.some((token) => text.includes(token.toLowerCase()))
 }
 
 /**
@@ -605,14 +540,14 @@ html { scroll-behavior: auto !important; }
  * @returns The resolved options.
  * @throws Error when the two URLs are missing or an option is malformed —
  * the caller turns that into a usage message and a nonzero exit. Also when
- * any bypass value the run could hold fails {@link isUrlSafeToken}, or a URL
- * argument {@link carriesToken}; those messages never quote the value.
+ * any argument carries a known bypass value ({@link argumentCarriesToken});
+ * that message never quotes the value.
  */
 export function parseArgs(argv, env = {}) {
   const tokens = knownBypassTokens(argv, env)
-  if (!tokens.every(isUrlSafeToken)) {
+  if (argv.some((arg) => argumentCarriesToken(arg, tokens))) {
     throw new Error(
-      `the bypass secret (${BYPASS_TOKEN_ENV} or --bypass-token) is refused: it must hold only A-Z, a-z, 0-9, ".", "_" or "-", and at least one letter other than a-f and x. Any other value can be rewritten by URL parsing past redaction. Regenerate it in the Vercel project's Deployment Protection settings.`,
+      `an argument carries the bypass secret (${BYPASS_TOKEN_ENV} or --bypass-token). It is refused: URLs, file paths and messages built from it could print it. Pass the secret only through ${BYPASS_TOKEN_ENV}; it is sent as a header.`,
     )
   }
 
@@ -632,11 +567,6 @@ export function parseArgs(argv, env = {}) {
   if (!baselineUrl || !candidateUrl) {
     throw new Error(
       'Two URLs are required: diff-pages.mjs <baseline-url> <candidate-url>',
-    )
-  }
-  if (positional.some((arg) => tokens.some((t) => carriesToken(arg, t)))) {
-    throw new Error(
-      `a URL argument carries the bypass secret (${BYPASS_TOKEN_ENV} or --bypass-token), as given or encoded. It is refused: URL parsing can rewrite it past redaction. Pass the secret only through ${BYPASS_TOKEN_ENV}; it is sent as a header.`,
     )
   }
 

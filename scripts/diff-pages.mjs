@@ -51,28 +51,33 @@
  * them (`routeWithBypass` in `lib/page-diff.mjs`). `--bypass-token=` exists
  * for one-off runs but puts the secret in your shell history; prefer the
  * environment.
- * The script prints no secret it knows of (#273). URLs pass through
- * `redactUrl`, and everything it prints or writes to `report.json`, usage
- * errors included, passes through `createSafeReporter`'s scrub, which
- * replaces every bypass value from the environment or the flag, matched
- * case-insensitively, and any
- * `x-vercel-protection-bypass` header value, with `REDACTED`. Errors are
- * described by `describeErrorSafely`, which drops the error object: a
- * Playwright error's call log lists request headers. Two inputs are refused
- * before anything runs (exit 2, the value never printed), because URL
- * parsing can rewrite a value past any literal match: a bypass value that
- * holds anything but `A-Z a-z 0-9 . _ -` or has no letter other than `a-f`
- * and `x`; and a URL argument that carries a bypass value, as given, percent-
- * encoded or in full-width form. Pass the secret only through the
- * environment.
+ *
+ * What the script guarantees about the secret (#273):
+ * - It never prints or writes the bypass value it holds, from the
+ *   environment or the flag, matched ignoring case. That covers the
+ *   console, `report.json` and usage errors, and any
+ *   `x-vercel-protection-bypass` header value. All output passes through
+ *   `createSafeReporter`'s scrub, after URLs pass through `redactUrl`.
+ *   Errors are described by `describeErrorSafely`, which drops the error
+ *   object: a Playwright error's call log lists request headers.
+ * - It refuses to run (exit 2, the value never quoted) when any argument
+ *   other than `--bypass-token=` contains that value, ignoring case: a URL,
+ *   `--out`, `--mask` or `--widths`. URL parsing and file paths could carry
+ *   it past the scrub. Pass the secret only through the environment.
+ *
+ * Not guaranteed:
+ * - a value the operator encodes into an argument on purpose (`%44` for `D`,
+ *   full-width letters);
+ * - a page or server that puts the value into its own request URLs;
+ * - output from Chromium itself, or from a library writing straight to the
+ *   terminal.
  *
  * A same-origin bypass request that fails while a page is being captured
  * fails the run (exit 2) with its redacted error, since the frame may be
  * missing what it fetched. One that fails once the capture is closing is the
  * teardown race and is dropped. Any fatal error, including one Node reports
  * as an unhandled rejection or uncaught exception, ends the run with exit 2
- * whatever the comparison found. Not covered: output from Chromium itself,
- * or from a library writing straight to the terminal.
+ * whatever the comparison found.
  *
  * ## Running it
  *

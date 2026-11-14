@@ -23,9 +23,8 @@ import {
   hopHeaders,
   formatSummary,
   isTargetOrigin,
+  argumentCarriesToken,
   knownBypassTokens,
-  carriesToken,
-  isUrlSafeToken,
   parseArgs,
   parseMasks,
   parseViewports,
@@ -1005,106 +1004,150 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
     )
   })
 
-  // Every value a reviewer or CodeRabbit used to slip an encoded token past
-  // the scrub on PR #336: a quote, space, `?`, `'`, `$`, `;`, `:`, non-ASCII
-  // (a punycode host), a trailing space, `/`, `%`, a lone surrogate.
-  const refusedTokens = [
-    'tok"en with space',
-    'tok"en?with space',
-    "tok'! with space",
-    'tok$en;space',
-    'tok$en:space',
-    'töken',
-    'tok?en ',
-    'tok/en',
-    'tok%22en',
-    'tok\uD800en',
-    // `~` is unreserved, but URLSearchParams writes it as %7E.
-    'tok~en',
-    // Dots alone are a path segment `new URL` removes.
-    '..',
-    // No letter outside a-f and x: a host reads these as IPv4 addresses
-    // (`2130706433` prints as 127.0.0.1, re-review 6).
-    '2130706433',
-    '0x7f000001',
-    '127.0.0.1',
-    'abcdef0123',
-  ]
+  const refusalOf = (argv: string[], env: Record<string, string>) => {
+    try {
+      parseArgs(argv, env)
+    } catch (error) {
+      return (error as Error).message
+    }
+    return ''
+  }
 
-  it.each(refusedTokens)(
-    'refuses the bypass value %j before anything runs, without quoting it',
-    (bad) => {
-      const urls = ['https://a.example.test/', 'https://b.example.test/']
-      for (const [argv, env] of [
-        [urls, { [BYPASS_TOKEN_ENV]: bad }],
-        [[...urls, `--bypass-token=${bad}`], {}],
-      ] as const) {
-        let message = ''
-        try {
-          parseArgs([...argv], env)
-        } catch (error) {
-          message = (error as Error).message
+  // Every argument but `--bypass-token=` flows into a URL, a file path or a
+  // message, so a value held literally in any of them is refused (#273).
+  it.each([
+    [
+      'the baseline URL',
+      (t: string) => [
+        `https://example.test/?page=${t}`,
+        'https://b.example.test/',
+      ],
+    ],
+    [
+      'the candidate URL',
+      (t: string) => ['https://a.example.test/', `https://${t}.example.test/`],
+    ],
+    [
+      'URL userinfo',
+      (t: string) => [
+        `https://user:${t}@example.test/`,
+        'https://b.example.test/',
+      ],
+    ],
+    [
+      '--out',
+      (t: string) => [
+        'https://a.example.test/',
+        'https://b.example.test/',
+        `--out=results/${t}`,
+      ],
+    ],
+    [
+      '--mask',
+      (t: string) => [
+        'https://a.example.test/',
+        'https://b.example.test/',
+        `--mask=.${t}`,
+      ],
+    ],
+    [
+      '--widths',
+      (t: string) => [
+        'https://a.example.test/',
+        'https://b.example.test/',
+        `--widths=${t}`,
+      ],
+    ],
+    [
+      '--threshold',
+      (t: string) => [
+        'https://a.example.test/',
+        'https://b.example.test/',
+        `--threshold=${t}`,
+      ],
+    ],
+  ])(
+    'refuses %s holding the bypass value, in any case, without quoting it',
+    (_where, build) => {
+      const good = 'Dummy9Z-fixture'
+      for (const form of [good, good.toUpperCase(), good.toLowerCase()]) {
+        for (const [argv, env] of [
+          [build(form), { [BYPASS_TOKEN_ENV]: good }],
+          [[...build(form), `--bypass-token=${good}`], {}],
+        ] as const) {
+          const message = refusalOf([...argv], env)
+          expect(message).toContain('carries the bypass secret')
+          expect(occurrences(message.toLowerCase(), good.toLowerCase())).toBe(0)
         }
-        expect(message).toContain('is refused')
-        expect(occurrences(message, bad)).toBe(0)
       }
     },
   )
 
-  it('accepts a bypass value of unreserved characters only', () => {
-    const good = 'AbC123._-xyz'
-    const options = parseArgs(
-      ['https://a.example.test/', 'https://b.example.test/'],
+  it('refuses an argument holding a value with quotes or spaces, literally', () => {
+    // No alphabet rule any more: such a value is accepted from the
+    // environment, and refused only where an argument holds it.
+    const awkward = 'tok"en?with space'
+    const urls = ['https://a.example.test/', 'https://b.example.test/']
+    expect(parseArgs(urls, { [BYPASS_TOKEN_ENV]: awkward }).bypassToken).toBe(
+      awkward,
+    )
+    const message = refusalOf(
+      [urls[0], `https://b.example.test/?q=${awkward}`],
       {
-        [BYPASS_TOKEN_ENV]: good,
+        [BYPASS_TOKEN_ENV]: awkward,
       },
     )
-    expect(options.bypassToken).toBe(good)
+    expect(message).toContain('carries the bypass secret')
+    expect(occurrences(message, awkward)).toBe(0)
   })
 
-  it.each([
-    // Re-review 6's rows: URL parsing rewrites what surrounds the value.
-    ['tok.en9z', 'https://tok.en9z\u00f6.example.test/'],
-    ['65cretdummy9z', 'https://%65cretdummy9z.example.test/'],
-    ['65cretdummy9z', 'https://example.test/?page=%65cretdummy9z&api_key=x'],
-    ['Dummy9Z', 'https://example.test/%44ummy9Z/'],
-    ['Dummy9Z', 'https://example.test/%2544ummy9Z/'],
-    // Full-width letters, which a host's IDNA mapping turns into ASCII.
-    [
-      'Dummy9Z',
-      'https://\uff44\uff55\uff4d\uff4d\uff59\uff19\uff5a.example.test/',
-    ],
-    ['Dummy9Z', 'https://user:DUMMY9z@example.test/'],
-    // The URL parser drops a tab, completing `%44` only after parsing.
-    ['Dummy9Z', 'https://example.test/%4\t4ummy9Z/'],
-    // IDNA mapping drops a soft hyphen; punycode then splits the label.
-    ['tok.en9z', 'https://tok.en\u00ad9z\u00f6.example.test/'],
-  ])(
-    'refuses a URL argument that carries the bypass value %j, without quoting it',
-    (good, url) => {
-      expect(isUrlSafeToken(good)).toBe(true)
-      expect(carriesToken(url, good)).toBe(true)
-      let message = ''
-      try {
-        parseArgs([url, 'https://b.example.test/'], {
-          [BYPASS_TOKEN_ENV]: good,
-        })
-      } catch (error) {
-        message = (error as Error).message
-      }
-      expect(message).toContain('carries the bypass secret')
-      expect(occurrences(message.toLowerCase(), good.toLowerCase())).toBe(0)
-    },
-  )
-
-  it('accepts URL arguments that do not carry the bypass value', () => {
-    const good = 'Dummy9Z'
-    expect(carriesToken('https://example.test/?page=%44ummy', good)).toBe(false)
+  it('reads the value from --bypass-token= without refusing that flag', () => {
+    const good = 'Dummy9Z-fixture'
     const options = parseArgs(
-      ['https://a.example.test/', 'https://b.example.test/?q=dummy'],
-      { [BYPASS_TOKEN_ENV]: good },
+      [
+        'https://a.example.test/',
+        'https://b.example.test/',
+        `--bypass-token=${good}`,
+      ],
+      {},
     )
-    expect(options.baselineUrl).toBe('https://a.example.test/')
+    expect(options.bypassToken).toBe(good)
+    expect(argumentCarriesToken(`--bypass-token=${good}`, [good])).toBe(false)
+  })
+
+  it('accepts arguments without the value, Unicode and long ones included, quickly', () => {
+    // Re-review 7 (F4): the earlier search over rewritten forms grew without
+    // bound on Unicode input and refused URLs that held no token. A literal
+    // test is linear in the argument.
+    const good = 'Dummy9Z-fixture'
+    const accepted = [
+      'https://example.test/?q=caf%C3%A9',
+      'https://bücher.example.test/',
+      `https://example.test/?q=${'ö'.repeat(20_000)}`,
+      `https://example.test/${'\uFF44'.repeat(20_000)}`,
+    ]
+    const started = performance.now()
+    for (const url of accepted) {
+      expect(argumentCarriesToken(url, [good])).toBe(false)
+      const options = parseArgs([url, 'https://b.example.test/?q=dummy'], {
+        [BYPASS_TOKEN_ENV]: good,
+      })
+      expect(options.baselineUrl).toBe(url)
+    }
+    expect(performance.now() - started).toBeLessThan(1_000)
+  })
+
+  it('does not detect a value the operator encodes on purpose (documented limit)', () => {
+    // Not covered by the guarantee: `%44` for `D`, full-width letters. The
+    // scrub then sees only what the run prints, and URL parsing may rewrite
+    // it into the plain value (diff-pages.mjs header, "Not guaranteed").
+    const good = 'Dummy9Z'
+    for (const url of [
+      'https://example.test/%44ummy9Z/',
+      'https://\uff44\uff55\uff4d\uff4d\uff59\uff19\uff5a.example.test/',
+    ]) {
+      expect(argumentCarriesToken(url, [good])).toBe(false)
+    }
   })
 
   it('redacts an accepted token in every URL component a printed URL can carry it', () => {
@@ -1156,7 +1199,7 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
     expect(occurrences(`${child.stdout}${child.stderr}`, good)).toBe(0)
   }, 30_000)
 
-  it('refuses a bad bypass value at the CLI with exit 2 and no output of it', () => {
+  it('refuses an argument holding a value with quotes or spaces at the CLI with exit 2', () => {
     const bad = 'tok"en?with space'
     const { [BYPASS_TOKEN_ENV]: _drop, ...env } = process.env
     const child = spawnSync(
@@ -1173,7 +1216,7 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
       },
     )
     expect(child.status).toBe(2)
-    expect(child.stderr).toContain('is refused')
+    expect(child.stderr).toContain('carries the bypass secret')
     expect(occurrences(`${child.stdout}${child.stderr}`, bad)).toBe(0)
   }, 30_000)
 
