@@ -20,7 +20,10 @@ import {
   unsafePathname,
   parseReferences,
   pathnameFromUrl,
+  publicFailureLine,
+  PublicError,
   publicUrl,
+  trimUrlTail,
 } from './media-backup'
 
 /**
@@ -135,6 +138,24 @@ describe('parseReferences', () => {
     ])
   })
 
+  it('keeps brackets a pathname holds, and drops those of the text around it', () => {
+    const own = publicUrl(ORIGIN, 'release(1).png')
+    const refs = parseReferences(
+      jsonl(
+        { kind: 'text', table: '_posts_v', value: `{"src":"${own}"}` },
+        { kind: 'text', table: 'posts', value: `(see ${ORIGIN}/a.png).` },
+        { kind: 'text', table: 'posts', value: `[x](${ORIGIN}/b[2].png)` },
+      ),
+      ORIGIN,
+    )
+    expect(refs.map((ref) => ref.pathname)).toEqual([
+      'release(1).png',
+      'a.png',
+      'b[2].png',
+    ])
+    expect(trimUrlTail(`${own}),`)).toBe(own)
+  })
+
   it('refuses output with no end line, so a failed query is never "no references"', () => {
     expect(() =>
       parseReferences(
@@ -187,6 +208,27 @@ describe('keys and URLs', () => {
 })
 
 describe('what public output may carry (#328 security review F2)', () => {
+  it('prints only messages this module composed when a run does not complete', () => {
+    let parseError: unknown
+    try {
+      JSON.parse('{"entries":unannounced-project.png}')
+    } catch (error) {
+      parseError = error
+    }
+    const line = publicFailureLine(parseError)
+    expect(line).not.toContain('unannounced')
+    expect(line).toContain('SyntaxError')
+    expect(
+      publicFailureLine(new Error('postgresql://u:secret-marker@h/db')),
+    ).not.toContain('secret-marker')
+    expect(publicFailureLine('secret-marker')).not.toContain('secret-marker')
+    expect(
+      publicFailureLine(new PublicError('aws s3api head-object failed')),
+    ).toBe(
+      '::error::media backup did not complete: aws s3api head-object failed',
+    )
+  })
+
   it('names a pathname by an opaque, stable id', () => {
     const id = referenceId('unannounced-project.png')
     expect(id).toMatch(/^[0-9a-f]{12}$/)
@@ -380,6 +422,57 @@ describe('backup', () => {
     expect(puts).toHaveLength(1)
   })
 
+  it('keeps an earlier R2 copy of a file the store now answers 404 for', async () => {
+    const blob = new Map([['a.png', png('A1')]])
+    const { bucket, deps } = fakes(blob)
+    const first = await backup({
+      deps,
+      now,
+      origin: ORIGIN,
+      previous: null,
+      references: refs.slice(0, 1),
+      workDir,
+    })
+    blob.delete('a.png')
+    const second = await backup({
+      deps,
+      now,
+      origin: ORIGIN,
+      previous: first,
+      references: refs.slice(0, 1),
+      workDir,
+    })
+    expect(second.entries[0]).toMatchObject({
+      key: 'objects/a.png',
+      size: first.entries[0].size,
+      status: 'retained',
+    })
+    // With no manifest at all, the first-copy key is found in R2 directly.
+    const cold = await backup({
+      deps,
+      now,
+      origin: ORIGIN,
+      previous: null,
+      references: refs.slice(0, 1),
+      workDir,
+    })
+    expect(cold.entries[0]).toMatchObject({
+      key: 'objects/a.png',
+      status: 'retained',
+    })
+    // A prior key whose object has gone is an error, never a clean "missing".
+    bucket.delete('objects/a.png')
+    const lost = await backup({
+      deps,
+      now,
+      origin: ORIGIN,
+      previous: first,
+      references: refs.slice(0, 1),
+      workDir,
+    })
+    expect(lost.entries[0]).toMatchObject({ key: null, status: 'error' })
+  })
+
   it('records a 404 as missing and a failure as error, and keeps going', async () => {
     const blob = new Map([['b.png', png('B1')]])
     const { deps } = fakes(blob)
@@ -514,6 +607,41 @@ describe('check', () => {
       {
         pathname: 'draft-gone.png',
         reason: 'its object is not in R2 at 2 bytes',
+      },
+    ])
+  })
+
+  it('verifies a kept copy for history, and fails it for a live page', async () => {
+    const kept = {
+      ...entry('a.png', 'objects/a.png'),
+      status: 'retained' as const,
+    }
+    const history = await check({
+      deps: r2({ 'objects/a.png': 2 }),
+      manifest: manifestOf([kept]),
+      now,
+      references: [{ pathname: 'a.png', table: '_posts_v' }],
+    })
+    expect(history).toEqual({
+      failures: [],
+      history: [
+        {
+          pathname: 'a.png',
+          reason: 'gone from the store (404); an R2 copy is kept',
+        },
+      ],
+      verified: 1,
+    })
+    const live = await check({
+      deps: r2({ 'objects/a.png': 2 }),
+      manifest: manifestOf([kept]),
+      now,
+      references: [{ pathname: 'a.png', table: 'posts' }],
+    })
+    expect(live.failures).toEqual([
+      {
+        pathname: 'a.png',
+        reason: 'gone from the store (404); an R2 copy is kept',
       },
     ])
   })

@@ -32,6 +32,18 @@ const code = workflow
   .join('\n')
 
 describe('media-backup.yml (#328)', () => {
+  it("keeps psql's messages, which can quote a connection string, off the public log", () => {
+    const reads = code.match(/psql "\$DB_URL"[^]*?fi\n/g) ?? []
+    expect(reads).toHaveLength(2)
+    for (const read of reads) {
+      expect(read).toMatch(/2> "\$RUNNER_TEMP\/psql-[a-z]+\.err"/)
+      expect(read).not.toContain('2>&1')
+      expect(read).toContain('exit 2')
+    }
+    expect(code).not.toMatch(/cat "?\$RUNNER_TEMP\/psql/)
+    expect(code).not.toContain('upload-artifact')
+  })
+
   it('runs on the Node patch version CI validates against', () => {
     const ci = readFileSync(
       path.join(repoRoot, '.github/workflows/ci.yml'),

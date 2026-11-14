@@ -8,8 +8,10 @@
  * overwrite and delete every object in it — the failure this backup exists to
  * survive. Every object is public to read, so this job holds no Blob
  * credential at all. What it cannot see is an object nothing in the database
- * references; such an object is not needed to restore the site, and the store
- * listing (`vercel storage inspect`) gives its count for comparison.
+ * references, so the backup covers referenced media only: an object named only
+ * by an older database dump, or by nothing, is not copied. Whether that
+ * narrower recovery scope is acceptable is the owner's call (#328); the store
+ * listing (`vercel storage inspect`) gives the total for comparison.
  *
  * **Never overwrite, never delete.** The first copy of a pathname goes to
  * `objects/<pathname>`, which mirrors the Blob pathname under one prefix, so
@@ -53,6 +55,32 @@ export type PublicHead = {
   status: number
 }
 
+/**
+ * An error whose message this module composed from fixed text, counts and
+ * key names only, so it is safe to print in the public Actions log.
+ *
+ * @remarks Every other error reaching the top-level handler prints its class
+ * name only: a parse error quotes its input, which can be a private pathname,
+ * and a library error can quote a connection string or a URL.
+ */
+export class PublicError extends Error {
+  override name = 'PublicError'
+}
+
+/**
+ * The one line the CLI prints when a run does not complete.
+ *
+ * @remarks Exported so tests pin the terminal boundary with a sensitive marker:
+ * only a {@link PublicError}'s message passes through.
+ */
+export function publicFailureLine(error: unknown): string {
+  if (error instanceof PublicError) {
+    return `::error::media backup did not complete: ${error.message}`
+  }
+  const kind = error instanceof Error ? error.name : typeof error
+  return `::error::media backup did not complete: ${kind} (detail withheld from the public log)`
+}
+
 /** One pathname's line in a manifest. */
 export type ManifestEntry = {
   contentType: string | null
@@ -62,7 +90,7 @@ export type ManifestEntry = {
   pathname: string
   sha256: string | null
   size: number | null
-  status: 'copied' | 'unchanged' | 'missing' | 'error'
+  status: 'copied' | 'unchanged' | 'retained' | 'missing' | 'error'
   uploadedAt: string | null
 }
 
@@ -139,10 +167,41 @@ function unescapeXml(value: string): string {
  * values contribute every URL on `origin`'s host; URLs on other hosts are
  * ignored, since they are not this store's.
  */
+/**
+ * Trim what surrounds a URL in prose or markup from the end of a match.
+ *
+ * @remarks A pathname may hold `(`, `)`, `[` and `]` (`release(1).png` is what
+ * {@link publicUrl} makes of one), so the match takes them; a closing bracket
+ * with no opener in the match belongs to the text around it (`(see URL)`,
+ * Markdown `[x](URL)`), as does trailing sentence punctuation. Cutting a real
+ * pathname short would look up the wrong URL, and its 404 would be read as a
+ * file gone from the store.
+ */
+export function trimUrlTail(url: string): string {
+  let out = url
+  for (;;) {
+    const last = out.at(-1)
+    if (last && '.,;:!?'.includes(last)) {
+      out = out.slice(0, -1)
+      continue
+    }
+    const pairs: Record<string, string> = { ')': '(', ']': '[' }
+    if (last && last in pairs) {
+      const opens = out.split(pairs[last]).length - 1
+      const closes = out.split(last).length - 1
+      if (closes > opens) {
+        out = out.slice(0, -1)
+        continue
+      }
+    }
+    return out
+  }
+}
+
 export function parseReferences(jsonl: string, origin: string): Reference[] {
   const host = new URL(origin).host
   const urlPattern = new RegExp(
-    `https?://${host.replace(/\./g, '\\.')}/[^\\s"'<>\\\\)\\]]+`,
+    `https?://${host.replace(/\./g, '\\.')}/[^\\s"'<>\\\\]+`,
     'g',
   )
   const references: Reference[] = []
@@ -166,18 +225,18 @@ export function parseReferences(jsonl: string, origin: string): Reference[] {
       references.push({ pathname: row.value, table })
     } else if (row.kind === 'text' && row.value) {
       for (const match of unescapeXml(row.value).matchAll(urlPattern)) {
-        const pathname = pathnameFromUrl(match[0])
+        const pathname = pathnameFromUrl(trimUrlTail(match[0]))
         if (pathname) references.push({ pathname, table })
       }
     }
   }
   if (endCount === null) {
-    throw new Error(
+    throw new PublicError(
       'reference query output has no end line: it did not complete',
     )
   }
   if (endCount !== rows) {
-    throw new Error(
+    throw new PublicError(
       `reference query reported ${endCount} rows but ${rows} arrived`,
     )
   }
@@ -286,7 +345,7 @@ export async function backupOne(
   try {
     const head = await deps.headPublic(url)
     if (head.status === 404) {
-      return { ...base, detail: 'public URL answers 404', status: 'missing' }
+      return await goneFromStore(pathname, base, context)
     }
     const etag = normalizeEtag(head.etag)
     if (head.status !== 200 || !etag || head.size === null) {
@@ -309,7 +368,7 @@ export async function backupOne(
     const prior = previous.get(pathname)
     if (
       prior?.key &&
-      (prior.status === 'copied' || prior.status === 'unchanged') &&
+      isBackedUp(prior.status) &&
       prior.etag === etag &&
       prior.size === head.size
     ) {
@@ -473,6 +532,58 @@ export function referenceId(pathname: string): string {
   return createHash('sha256').update(pathname).digest('hex').slice(0, 12)
 }
 
+/** Statuses whose entry names an R2 key holding the pathname's bytes. */
+function isBackedUp(status: ManifestEntry['status']): boolean {
+  return status === 'copied' || status === 'unchanged' || status === 'retained'
+}
+
+/**
+ * The entry for a pathname whose public URL answers 404.
+ *
+ * @remarks A 404 alone is not proof nothing can be restored: an earlier run
+ * may hold its bytes. The prior manifest's key, or the first-copy key
+ * `objects/<pathname>`, is checked in R2, and a copy found there is kept as
+ * `retained`, so the newest manifest still maps the pathname to its bytes when
+ * older manifests expire. Only with no copy anywhere is it `missing`; a prior
+ * successful key whose object has gone is an `error`.
+ */
+async function goneFromStore(
+  pathname: string,
+  base: Omit<ManifestEntry, 'status'>,
+  context: { deps: Deps; previous: Map<string, ManifestEntry> },
+): Promise<ManifestEntry> {
+  const prior = context.previous.get(pathname)
+  if (prior?.key && isBackedUp(prior.status)) {
+    const stored = await context.deps.r2Head(prior.key)
+    if (stored && stored.size === prior.size) {
+      return {
+        ...prior,
+        detail: 'public URL answers 404; earlier R2 copy kept',
+        status: 'retained',
+      }
+    }
+    return {
+      ...base,
+      detail: `public URL answers 404 and its earlier R2 copy ${prior.key} is gone`,
+      status: 'error',
+    }
+  }
+  const firstKey = `${OBJECTS_PREFIX}${pathname}`
+  const stored = await context.deps.r2Head(firstKey)
+  if (stored) {
+    return {
+      ...base,
+      detail: 'public URL answers 404; earlier R2 copy kept',
+      etag: stored.metadata['blob-etag'] ?? null,
+      key: firstKey,
+      sha256: stored.metadata.sha256 ?? null,
+      size: stored.size,
+      status: 'retained',
+    }
+  }
+  return { ...base, detail: 'public URL answers 404', status: 'missing' }
+}
+
 /**
  * Check that every referenced pathname is in the manifest with its bytes in R2.
  *
@@ -525,10 +636,15 @@ export async function check(options: {
       history.push({ pathname, reason: 'gone from the store (404)' })
       continue
     }
-    if (
-      (entry.status !== 'copied' && entry.status !== 'unchanged') ||
-      !entry.key
-    ) {
+    if (entry.status === 'retained' && live.has(pathname)) {
+      // Its bytes are safe in R2, but a live page points at a URL that 404s.
+      failures.push({
+        pathname,
+        reason: 'gone from the store (404); an R2 copy is kept',
+      })
+      continue
+    }
+    if (!isBackedUp(entry.status) || !entry.key) {
       failures.push({ pathname, reason: `${entry.status} in the manifest` })
       continue
     }
@@ -539,6 +655,12 @@ export async function check(options: {
         reason: `its object is not in R2 at ${entry.size} bytes`,
       })
       continue
+    }
+    if (entry.status === 'retained') {
+      history.push({
+        pathname,
+        reason: 'gone from the store (404); an R2 copy is kept',
+      })
     }
     verified += 1
   }
@@ -570,7 +692,7 @@ function aws(args: string[]): Promise<{ stdout: string }> {
           // along for the 404/412 tests and the private manifest only.
           reject(
             Object.assign(
-              new Error(`aws ${args.slice(0, 2).join(' ')} failed`),
+              new PublicError(`aws ${args.slice(0, 2).join(' ')} failed`),
               { stderr: String(stderr) },
             ),
           )
@@ -722,10 +844,10 @@ async function latestManifest(
  */
 export function combineSources(perSource: Reference[][]): Reference[] {
   if (perSource.length === 0)
-    throw new Error('at least one --refs file is required')
+    throw new PublicError('at least one --refs file is required')
   perSource.forEach((list, index) => {
     if (list.length === 0) {
-      throw new Error(
+      throw new PublicError(
         `reference source ${index + 1} of ${perSource.length} names no media at all: refusing to call that clean`,
       )
     }
@@ -745,7 +867,7 @@ function parseArgs(argv: string[]): {
   for (let index = 0; index < rest.length; index += 2) {
     if (rest[index] === '--refs') refs.push(rest[index + 1])
     else if (rest[index] === '--out') out = rest[index + 1]
-    else throw new Error(`unknown argument ${rest[index]}`)
+    else throw new PublicError('unknown argument (see the usage in this file)')
   }
   return { command, out, refs }
 }
@@ -755,7 +877,9 @@ async function main(argv: string[]): Promise<number> {
   const origin = process.env.MEDIA_BLOB_ORIGIN
   const bucket = process.env.R2_MEDIA_BACKUP_BUCKET
   if (!origin || !bucket) {
-    throw new Error('MEDIA_BLOB_ORIGIN and R2_MEDIA_BACKUP_BUCKET must be set')
+    throw new PublicError(
+      'MEDIA_BLOB_ORIGIN and R2_MEDIA_BACKUP_BUCKET must be set',
+    )
   }
   const references = combineSources(
     (await Promise.all(refs.map((file) => readFile(file, 'utf8')))).map(
@@ -766,7 +890,7 @@ async function main(argv: string[]): Promise<number> {
   const summary = process.env.GITHUB_STEP_SUMMARY
 
   if (command === 'backup') {
-    if (!out) throw new Error('backup needs --out <dir>')
+    if (!out) throw new PublicError('backup needs --out <dir>')
     const now = new Date()
     const prior = await latestManifest(deps)
     const manifest = await backup({
@@ -786,14 +910,18 @@ async function main(argv: string[]): Promise<number> {
         metadata: {},
       })) === 'exists'
     ) {
-      throw new Error(`manifest ${key} already exists`)
+      throw new PublicError(`manifest ${key} already exists`)
     }
     const count = (status: ManifestEntry['status']) =>
       manifest.entries.filter((entry) => entry.status === status).length
-    const line = `Media backup: ${manifest.entries.length} pathnames from ${references.length} references — ${count('copied')} copied, ${count('unchanged')} unchanged, ${count('missing')} missing, ${count('error')} errors. Manifest r2://${bucket}/${key}`
+    const line = `Media backup: ${manifest.entries.length} pathnames from ${references.length} references — ${count('copied')} copied, ${count('unchanged')} unchanged, ${count('retained')} kept though gone from the store, ${count('missing')} missing, ${count('error')} errors. Manifest r2://${bucket}/${key}`
     console.log(line)
     for (const entry of manifest.entries) {
-      if (entry.status === 'missing' || entry.status === 'error') {
+      if (
+        entry.status === 'missing' ||
+        entry.status === 'error' ||
+        entry.status === 'retained'
+      ) {
         // An id, never the pathname or the detail: this log is public.
         console.log(`  ${entry.status}: ${referenceId(entry.pathname)}`)
       }
@@ -805,7 +933,9 @@ async function main(argv: string[]): Promise<number> {
   if (command === 'check') {
     const prior = await latestManifest(deps)
     if (!prior)
-      throw new Error('no manifest in the bucket: the backup has never run')
+      throw new PublicError(
+        'no manifest in the bucket: the backup has never run',
+      )
     const result = await check({
       deps,
       manifest: prior.manifest,
@@ -826,16 +956,14 @@ async function main(argv: string[]): Promise<number> {
     return result.failures.length === 0 ? 0 : 1
   }
 
-  throw new Error(`unknown command "${command}" (backup | check)`)
+  throw new PublicError('unknown command (backup | check)')
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (error: unknown) => {
-      console.error(
-        `::error::media backup did not complete: ${error instanceof Error ? error.message : String(error)}`,
-      )
+      console.error(publicFailureLine(error))
       process.exit(2)
     },
   )

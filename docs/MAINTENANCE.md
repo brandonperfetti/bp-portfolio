@@ -103,8 +103,10 @@
   the new and changed ones from their **public** Blob URLs into the **private
   R2 bucket `bp-portfolio-media-backups`**, writes a dated manifest, then
   checks that every reference is in that manifest with its bytes in R2 (each
-  database must name at least one file; a version-history reference the store
-  itself answers 404 for is reported, not failed). It copies **referenced**
+  database must name at least one file). A file the store now answers 404 for
+  keeps its earlier R2 copy in the manifest (`retained`): that still fails for
+  a live page and is only reported for version history, which is also
+  reported, not failed, when no copy ever existed. It copies **referenced**
   media only: a store object no database names is not backed up.
   It holds **no Blob credential**: Vercel Blob has no read-only token, and the
   read-write one can overwrite or delete the store. Keys mirror the Blob

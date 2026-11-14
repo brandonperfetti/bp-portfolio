@@ -66,7 +66,10 @@
 #   from drafts, gated posts and version history too, and a pathname can name
 #   unannounced work, so logs and the summary print counts and opaque ids
 #   (sha256 of the pathname, 12 hex) only. Pathnames and error detail live in
-#   the manifest, in the private bucket. Nothing prints a connection string.
+#   the manifest, in the private bucket. psql's messages go to a runner-local
+#   file, never printed, since they can quote part of a connection string; a
+#   run that fails prints only a message the script composed itself
+#   (`PublicError`), otherwise the error's class name.
 # - Cost: 238 objects, 323,414,426 bytes in the store [measured 2026-11-14,
 #   `vercel storage inspect`], inside R2's free tier (10 GB-month storage,
 #   1M Class A, 10M Class B per month). A daily run is ~2 HEADs per object
@@ -128,8 +131,15 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$DB_URL" || { echo "::error::SUPABASE_DB_URL secret is not set"; exit 2; }
-          psql "$DB_URL" -v ON_ERROR_STOP=1 -q -At \
-            -f scripts/media-backup-references.sql > "$RUNNER_TEMP/refs-staging.jsonl"
+          # psql's own messages can quote part of the connection string (a
+          # malformed password is echoed back), and this log is public: they
+          # go to a runner-local file that is never printed or uploaded.
+          if ! psql "$DB_URL" -v ON_ERROR_STOP=1 -q -At \
+            -f scripts/media-backup-references.sql \
+            > "$RUNNER_TEMP/refs-staging.jsonl" 2> "$RUNNER_TEMP/psql-staging.err"; then
+            echo "::error::reading staging media references failed (psql's message is withheld from the public log)"
+            exit 2
+          fi
 
       - name: Read media references (production)
         env:
@@ -137,8 +147,15 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$DB_URL" || { echo "::error::SUPABASE_DB_URL_PROD secret is not set"; exit 2; }
-          psql "$DB_URL" -v ON_ERROR_STOP=1 -q -At \
-            -f scripts/media-backup-references.sql > "$RUNNER_TEMP/refs-prod.jsonl"
+          # psql's own messages can quote part of the connection string (a
+          # malformed password is echoed back), and this log is public: they
+          # go to a runner-local file that is never printed or uploaded.
+          if ! psql "$DB_URL" -v ON_ERROR_STOP=1 -q -At \
+            -f scripts/media-backup-references.sql \
+            > "$RUNNER_TEMP/refs-prod.jsonl" 2> "$RUNNER_TEMP/psql-prod.err"; then
+            echo "::error::reading production media references failed (psql's message is withheld from the public log)"
+            exit 2
+          fi
 
       - name: Copy new and changed media to R2
         env:
