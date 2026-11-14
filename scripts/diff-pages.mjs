@@ -58,11 +58,13 @@
  * case-insensitively, and any
  * `x-vercel-protection-bypass` header value, with `REDACTED`. Errors are
  * described by `describeErrorSafely`, which drops the error object: a
- * Playwright error's call log lists request headers. A bypass value with a
- * character other than `A-Z a-z 0-9 . _ -` is refused before anything
- * runs (exit 2, the value never printed): URLs escape such a character
- * differently in each component, so no literal match could be relied on.
- * Vercel's generated secrets use only those characters.
+ * Playwright error's call log lists request headers. Two inputs are refused
+ * before anything runs (exit 2, the value never printed), because URL
+ * parsing can rewrite a value past any literal match: a bypass value that
+ * holds anything but `A-Z a-z 0-9 . _ -` or has no letter other than `a-f`
+ * and `x`; and a URL argument that carries a bypass value, as given, percent-
+ * encoded or in full-width form. Pass the secret only through the
+ * environment.
  *
  * A same-origin bypass request that fails while a page is being captured
  * fails the run (exit 2) with its redacted error, since the frame may be

@@ -24,6 +24,8 @@ import {
   formatSummary,
   isTargetOrigin,
   knownBypassTokens,
+  carriesToken,
+  isUrlSafeToken,
   parseArgs,
   parseMasks,
   parseViewports,
@@ -1021,6 +1023,12 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
     'tok~en',
     // Dots alone are a path segment `new URL` removes.
     '..',
+    // No letter outside a-f and x: a host reads these as IPv4 addresses
+    // (`2130706433` prints as 127.0.0.1, re-review 6).
+    '2130706433',
+    '0x7f000001',
+    '127.0.0.1',
+    'abcdef0123',
   ]
 
   it.each(refusedTokens)(
@@ -1054,6 +1062,51 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
     expect(options.bypassToken).toBe(good)
   })
 
+  it.each([
+    // Re-review 6's rows: URL parsing rewrites what surrounds the value.
+    ['tok.en9z', 'https://tok.en9z\u00f6.example.test/'],
+    ['65cretdummy9z', 'https://%65cretdummy9z.example.test/'],
+    ['65cretdummy9z', 'https://example.test/?page=%65cretdummy9z&api_key=x'],
+    ['Dummy9Z', 'https://example.test/%44ummy9Z/'],
+    ['Dummy9Z', 'https://example.test/%2544ummy9Z/'],
+    // Full-width letters, which a host's IDNA mapping turns into ASCII.
+    [
+      'Dummy9Z',
+      'https://\uff44\uff55\uff4d\uff4d\uff59\uff19\uff5a.example.test/',
+    ],
+    ['Dummy9Z', 'https://user:DUMMY9z@example.test/'],
+    // The URL parser drops a tab, completing `%44` only after parsing.
+    ['Dummy9Z', 'https://example.test/%4\t4ummy9Z/'],
+    // IDNA mapping drops a soft hyphen; punycode then splits the label.
+    ['tok.en9z', 'https://tok.en\u00ad9z\u00f6.example.test/'],
+  ])(
+    'refuses a URL argument that carries the bypass value %j, without quoting it',
+    (good, url) => {
+      expect(isUrlSafeToken(good)).toBe(true)
+      expect(carriesToken(url, good)).toBe(true)
+      let message = ''
+      try {
+        parseArgs([url, 'https://b.example.test/'], {
+          [BYPASS_TOKEN_ENV]: good,
+        })
+      } catch (error) {
+        message = (error as Error).message
+      }
+      expect(message).toContain('carries the bypass secret')
+      expect(occurrences(message.toLowerCase(), good.toLowerCase())).toBe(0)
+    },
+  )
+
+  it('accepts URL arguments that do not carry the bypass value', () => {
+    const good = 'Dummy9Z'
+    expect(carriesToken('https://example.test/?page=%44ummy', good)).toBe(false)
+    const options = parseArgs(
+      ['https://a.example.test/', 'https://b.example.test/?q=dummy'],
+      { [BYPASS_TOKEN_ENV]: good },
+    )
+    expect(options.baselineUrl).toBe('https://a.example.test/')
+  })
+
   it('redacts an accepted token in every URL component a printed URL can carry it', () => {
     // Unreserved characters print unchanged in every component; a host
     // lowercases them, which the case-insensitive match covers.
@@ -1081,6 +1134,27 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
       }
     }
   })
+
+  it('refuses a URL argument carrying the secret at the CLI with exit 2', () => {
+    const good = 'Dummy9Z-fixture'
+    const { [BYPASS_TOKEN_ENV]: _drop, ...env } = process.env
+    const child = spawnSync(
+      process.execPath,
+      [
+        fileURLToPath(new URL('../diff-pages.mjs', import.meta.url)),
+        'http://127.0.0.1:9/',
+        `http://127.0.0.1:9/?page=${good}`,
+      ],
+      {
+        env: { ...env, [BYPASS_TOKEN_ENV]: good },
+        encoding: 'utf8',
+        timeout: 30_000,
+      },
+    )
+    expect(child.status).toBe(2)
+    expect(child.stderr).toContain('carries the bypass secret')
+    expect(occurrences(`${child.stdout}${child.stderr}`, good)).toBe(0)
+  }, 30_000)
 
   it('refuses a bad bypass value at the CLI with exit 2 and no output of it', () => {
     const bad = 'tok"en?with space'

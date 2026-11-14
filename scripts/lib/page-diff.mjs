@@ -10,6 +10,8 @@
  * @module
  */
 
+import { domainToUnicode } from 'node:url'
+
 /** Default share of pixels allowed to differ before the run fails, in percent. */
 export const DEFAULT_THRESHOLD_PERCENT = 0.1
 
@@ -343,15 +345,15 @@ export const REDACTED = 'REDACTED'
  * `redactUrl` covers URLs only; Playwright's error call log prints request
  * headers raw (#273).
  *
- * The match ignores case, and a literal match is enough inside a URL
- * because `parseArgs` refuses any bypass value that fails
- * {@link isUrlSafeToken}. Every URL serializer (userinfo, host, path, query,
- * fragment, `URLSearchParams`, `encodeURIComponent`) writes those characters
- * unchanged, except that a host lowercases them. Listing each serializer's
- * escaped forms instead never closed: two independent reviews of PR #336
- * each found one more component it missed. Any other string given here is
- * still redacted wherever it appears verbatim, such as in a usage error
- * raised before that check.
+ * The match ignores case. It is the last line of defence, not the one a
+ * printed URL relies on: URL parsing rewrites what surrounds a value (a
+ * numeric host becomes an IPv4 address, a label holding a non-ASCII
+ * character becomes punycode, a `%XX` decodes), and no literal survives
+ * that. So `parseArgs` refuses, before any URL is parsed, a bypass value that
+ * fails {@link isUrlSafeToken} and a URL argument that
+ * {@link carriesToken}. The URL arguments are the one place an operator can
+ * put the secret into a URL; the harness itself sends it only as a header. Listing each serializer's escaped forms instead never closed:
+ * independent reviews of PR #336 found a missed form three times.
  *
  * Every known literal goes first, longest first, and the header pass runs
  * once, last. The header pass stops at `"`, `'`, `,` and the like, so run
@@ -383,24 +385,87 @@ export function redactSecret(text, token) {
 }
 
 /**
- * Whether a bypass value is one the scrub can always find.
+ * Whether a bypass value is one this script will carry.
  *
- * @remarks Only `A-Z a-z 0-9 . _ -`, as a Vercel-generated secret is: the
- * characters that are RFC 3986 unreserved and that form encoding also leaves
- * alone (`URLSearchParams` writes `~` as `%7E`, so `~` is out). Every URL
- * serializer writes those unchanged in every component, so the literal,
- * case-insensitive match in
- * {@link redactSecret} finds the value wherever a printed URL carries it.
- * Any other character is escaped differently in a userinfo, host, path,
- * query or fragment, and can be dropped by URL whitespace trimming (#273,
- * PR #336). At least one letter or digit is required too: a value of dots
- * alone is a `.` or `..` path segment, which `new URL` removes.
+ * @remarks Two rules, both about how a URL could rewrite the value
+ * (#273, PR #336):
+ * - Only `A-Z a-z 0-9 . _ -`: the characters that are RFC 3986 unreserved
+ *   and that form encoding also leaves alone (`URLSearchParams` writes `~`
+ *   as `%7E`). No component escapes them, so the literal match finds them.
+ * - At least one letter other than `a-f` and `x`. A host label, port or
+ *   IPv6 piece holding such a letter is never read as a number, so the
+ *   value cannot be turned into an IP address or a port. A value of dots
+ *   alone, which `new URL` would drop as a path segment, fails it too.
+ *
+ * The project's real secret (32 letters and digits, checked 2026-11-14
+ * without printing it) passes. A random 32-character alphanumeric value
+ * fails the second rule with odds of about one in 10^13.
  *
  * @param {string} value - A bypass value from the environment or the flag.
- * @returns {boolean} True when the value holds only unreserved characters.
+ * @returns {boolean} True when the value meets both rules.
  */
 export function isUrlSafeToken(value) {
-  return /^[A-Za-z0-9._-]+$/.test(value) && /[A-Za-z0-9]/.test(value)
+  return /^[A-Za-z0-9._-]+$/.test(value) && /[g-wyz]/i.test(value)
+}
+
+/**
+ * Whether text carries a bypass value in a form URL parsing could reveal.
+ *
+ * @remarks Searches every form the text reaches through the rewrites a URL
+ * parser and a reader could apply, in any order and repeated:
+ * percent-decoding one round (`%2544` is `%44` is `D`); NFKC normalization
+ * (a host's IDNA mapping turns full-width characters into ASCII); removing
+ * tabs and newlines, which the URL parser drops anywhere; and parsing it as
+ * a URL, taking the serialized `href` and the Unicode form of the host
+ * (`domainToUnicode`, which undoes punycode and shows what IDNA mapping
+ * dropped, such as a soft hyphen). The comparison ignores case, as a host
+ * lowercases. `parseArgs` refuses a URL argument for which this holds,
+ * before any URL is parsed. The search is bounded; hitting the bound counts
+ * as carrying the value, so the check fails closed. Decoding is byte-wise,
+ * which is exact for the ASCII values {@link isUrlSafeToken} admits.
+ *
+ * @param {string} text - A CLI argument.
+ * @param {string} token - A known bypass value.
+ * @returns {boolean} True when some reachable form contains the value.
+ */
+export function carriesToken(text, token) {
+  const needle = token.toLowerCase()
+  const seen = new Set()
+  const queue = [String(text)]
+  while (queue.length > 0) {
+    if (seen.size >= 256) return true
+    const form = queue.shift()
+    if (seen.has(form)) continue
+    seen.add(form)
+    if (form.toLowerCase().includes(needle)) return true
+    for (const next of urlRewrites(form)) {
+      if (!seen.has(next)) queue.push(next)
+    }
+  }
+  return false
+}
+
+/**
+ * One step of each rewrite {@link carriesToken} follows.
+ *
+ * @param {string} form - The text so far.
+ * @returns {string[]} The text after each rewrite.
+ */
+function urlRewrites(form) {
+  const next = [
+    form.replace(/%([0-9a-f]{2})/gi, (_, hex) =>
+      String.fromCharCode(parseInt(hex, 16)),
+    ),
+    form.normalize('NFKC'),
+    form.replace(/[\t\n\r]/g, ''),
+  ]
+  try {
+    const url = new URL(form)
+    next.push(url.href, domainToUnicode(url.hostname))
+  } catch {
+    // Not a URL in this form; the other rewrites still apply.
+  }
+  return next
 }
 
 /**
@@ -540,13 +605,14 @@ html { scroll-behavior: auto !important; }
  * @returns The resolved options.
  * @throws Error when the two URLs are missing or an option is malformed —
  * the caller turns that into a usage message and a nonzero exit. Also when
- * any bypass value the run could hold fails {@link isUrlSafeToken}; that
- * message never quotes the value.
+ * any bypass value the run could hold fails {@link isUrlSafeToken}, or a URL
+ * argument {@link carriesToken}; those messages never quote the value.
  */
 export function parseArgs(argv, env = {}) {
-  if (!knownBypassTokens(argv, env).every(isUrlSafeToken)) {
+  const tokens = knownBypassTokens(argv, env)
+  if (!tokens.every(isUrlSafeToken)) {
     throw new Error(
-      `the bypass secret (${BYPASS_TOKEN_ENV} or --bypass-token) holds a character other than A-Z, a-z, 0-9, ".", "_" or "-", or has no letter or digit. It is refused: such a value prints differently in each part of a URL, and redaction could miss it. Regenerate it in the Vercel project's Deployment Protection settings.`,
+      `the bypass secret (${BYPASS_TOKEN_ENV} or --bypass-token) is refused: it must hold only A-Z, a-z, 0-9, ".", "_" or "-", and at least one letter other than a-f and x. Any other value can be rewritten by URL parsing past redaction. Regenerate it in the Vercel project's Deployment Protection settings.`,
     )
   }
 
@@ -566,6 +632,11 @@ export function parseArgs(argv, env = {}) {
   if (!baselineUrl || !candidateUrl) {
     throw new Error(
       'Two URLs are required: diff-pages.mjs <baseline-url> <candidate-url>',
+    )
+  }
+  if (positional.some((arg) => tokens.some((t) => carriesToken(arg, t)))) {
+    throw new Error(
+      `a URL argument carries the bypass secret (${BYPASS_TOKEN_ENV} or --bypass-token), as given or encoded. It is refused: URL parsing can rewrite it past redaction. Pass the secret only through ${BYPASS_TOKEN_ENV}; it is sent as a header.`,
     )
   }
 
