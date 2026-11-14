@@ -9,12 +9,6 @@ const req = {} as PayloadRequest
 const previewedPath = (url: string | null) =>
   url === null ? null : new URLSearchParams(url.split('?')[1]).get('path')
 
-/** The `previewSecret` search param the preview route will authenticate on. */
-const previewSecret = (url: string | null) =>
-  url === null
-    ? null
-    : new URLSearchParams(url.split('?')[1]).get('previewSecret')
-
 describe('generatePreviewPath', () => {
   afterEach(() => vi.unstubAllEnvs())
 
@@ -105,43 +99,24 @@ describe('generatePreviewPath', () => {
     ).toBe('/work/a%20b')
   })
 
-  it('carries the preview secret', () => {
-    // `has()` alone is not a test: `PREVIEW_SECRET || ''` always writes the
-    // key, so an unset secret — a preview button that can never authenticate
-    // — reads as a pass. Assert the VALUE.
-    vi.stubEnv('PREVIEW_SECRET', 'shh-preview')
+  it('carries only the path: no secret or other credential (#275)', () => {
+    // The admin's preview URL is written to request logs and browser history,
+    // so it must hold nothing a reader could replay. Set a secret in the
+    // environment to prove the URL ignores it rather than happening to lack it.
+    const secret = 'fixture-preview-secret-0123456789'
+    vi.stubEnv('PREVIEW_SECRET', secret)
+    vi.stubEnv('PAYLOAD_SECRET', 'fixture-payload-secret')
     const url = generatePreviewPath({
       collection: 'pages',
-      doc: { slug: 'now' },
+      doc: { slug: 'now', path: 'work/now' },
       req,
     })
     expect(url).toMatch(/^\/next\/preview\?/)
-    expect(previewSecret(url)).toBe('shh-preview')
+    const params = new URLSearchParams(String(url).split('?')[1])
+    expect([...params.keys()]).toEqual(['path'])
+    expect(String(url)).not.toContain(secret)
+    expect(String(url)).not.toContain('fixture-payload-secret')
   })
-
-  it.each([
-    ['unset', undefined],
-    ['set but empty', ''],
-  ])(
-    'carries an empty secret when PREVIEW_SECRET is %s',
-    (_label, value: string | undefined) => {
-      // The `|| ''` fallback, pinned in BOTH shapes it has to survive.
-      // `vi.stubEnv(key, undefined)` deletes the key outright, so this is the
-      // genuinely-unset case; `''` is the set-but-empty one, which `||` also
-      // folds to `''`. Either way the param is present, so a route that
-      // authenticates on it fails closed rather than reading `undefined`.
-      vi.stubEnv('PREVIEW_SECRET', value)
-      expect(
-        previewSecret(
-          generatePreviewPath({
-            collection: 'pages',
-            doc: { slug: 'now' },
-            req,
-          }),
-        ),
-      ).toBe('')
-    },
-  )
 
   it('returns null when the document has no public path yet', () => {
     expect(

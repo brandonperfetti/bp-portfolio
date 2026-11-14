@@ -92,9 +92,10 @@ another doc carried in passing lives here instead, and that doc points back.
 - **Shared-secret routes compare with `isValidSecret()`**
   (`src/lib/security/timingSafeSecret.ts`: SHA-256 of both sides, then
   `timingSafeEqual`), **and fail closed** — it returns `false` when the
-  expected secret is unset or empty. `[measured 2026-09-27]` the three
-  shared-secret routes use it (`/api/revalidate`, `/api/media/ingest`,
-  `/next/preview`), and nothing in `src` or `scripts` compares a
+  expected secret is unset or empty. `[measured 2026-09-27]` the
+  shared-secret routes use it (`/api/revalidate`, `/api/media/ingest`;
+  `/next/preview` was the third until #275 moved it to the admin's Payload
+  session), and nothing in `src` or `scripts` compares a
   `*SECRET`/`*TOKEN`/`*KEY` variable with `===` or `!==`.
 - **Inbound webhooks verify before they act.** `/api/clerk/webhook`
   verifies the svix signature over the raw body with
@@ -163,7 +164,11 @@ stay where they are:
   the revalidate secret, and never echoes it into output, handoffs or
   receipts.
 - `docs/MAINTENANCE.md` § Promotion checklist — fresh production values for
-  `CMS_REVALIDATE_SECRET` and `PREVIEW_SECRET`, never the staging ones.
+  `CMS_REVALIDATE_SECRET`, never the staging ones. (`PREVIEW_SECRET` is no
+  longer read, since #275. Delete it from each environment once that
+  environment runs the fix; the checklist has the step. Retiring rather
+  than rotating, and leaving pre-fix deployments as they are, is
+  Brandon's decision of 2026-11-14.)
 
 ## Payload access control
 
@@ -208,8 +213,8 @@ stay where they are:
   published read in `articlesRepo`, `pagesRepo` and `content/posts` passes
   `false`. The deliberate `true` reads are Payload hooks and sync jobs that
   must see every row; the draft readers, reached only in Next draft mode,
-  which `/next/preview` enables only after `PREVIEW_SECRET` **and** a
-  Payload user check; and `getGatedPostContent()`, called only after
+  which `/next/preview` enables only for a signed-in Payload user (the
+  admin's session; no URL secret since #275); and `getGatedPostContent()`, called only after
   `canAccess()` passes (next section).
 - **Database: default-deny RLS on every table in `public`.** A migration
   that creates a table enables Row Level Security on it and on its `_v` /

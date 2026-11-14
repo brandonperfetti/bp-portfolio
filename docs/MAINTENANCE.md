@@ -403,10 +403,20 @@ counts. Then: `pnpm migrate` (expect nothing to run) and `pnpm dev`.
    `.env.example` production
    vars in Vercel (Payload, Clerk, AI, Upstash, Resend, GitHub signals).
    Generate FRESH production values (`openssl rand -hex 32`) for
-   `CMS_REVALIDATE_SECRET` and `PREVIEW_SECRET` — never reuse the
-   staging values, and remember both are scoped per-environment (a var
-   unscoped from an environment silently 401s/403s its route — the
-   staging preview incident of 2026-08-10).
+   `CMS_REVALIDATE_SECRET` — never reuse the staging values, and remember
+   it is scoped per-environment (a var unscoped from an environment
+   silently 401s/403s its route — the staging preview incident of
+   2026-08-10). `PREVIEW_SECRET` was the second such value until #275
+   removed it. **Post-deploy, per environment (#275):** once that
+   environment's live deployment includes the #275 fix, delete
+   `PREVIEW_SECRET` there. Not before: a deployment built earlier still
+   needs it for live preview. Deleting retires the value rather than
+   rotating it, because nothing reads it any more. A Vercel deployment
+   keeps the variables it was built with, so an older deployment still
+   accepts the old value at its own URL until it is deleted. Brandon
+   decided both on 2026-11-14 (#275): retire rather than rotate, and
+   leave the pre-fix deployments as they are. That route also required a
+   Payload login.
 3. Delete legacy v3 vars: all `NOTION_*`, Cloudinary vars, `CRON_SECRET`,
    Notion webhook secrets — only at promotion, not before.
 4. Run migration against production DB; verify `/articles/[slug]` URLs and

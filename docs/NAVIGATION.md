@@ -17,7 +17,7 @@ with hard-coded fallbacks. The command palette mirrors primary nav.
 | `/corvus`                                  | —                             | AI chat surface                      |
 | `/thank-you`                               | —                             | Post-contact landing                 |
 | `/sign-in`, `/sign-up`, `/account`         | Clerk                         | Render only when Clerk enabled       |
-| `/next/preview`, `/next/exit-preview`      | —                             | Draft preview (secret-gated)         |
+| `/next/preview`, `/next/exit-preview`      | —                             | Draft preview (admin session)        |
 | `/feed.xml`, `/llms.txt`, `/llms-full.txt` | route handlers                |                                      |
 | `/[...segments]`                           | Pages, then Posts, by `path`  | Page-builder catch-all — see below   |
 
