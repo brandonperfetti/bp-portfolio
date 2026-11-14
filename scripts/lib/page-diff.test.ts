@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   BYPASS_HEADER,
@@ -10,7 +10,10 @@ import {
   DEFAULT_VIEWPORTS,
   FREEZE_CSS,
   MAX_BYPASS_REDIRECTS,
+  REDACTED,
+  closeCapture,
   compareFrames,
+  describeErrorSafely,
   followRedirects,
   hopHeaders,
   formatSummary,
@@ -18,6 +21,7 @@ import {
   parseArgs,
   parseMasks,
   parseViewports,
+  redactSecret,
   redactUrl,
   redirectTarget,
   routeWithBypass,
@@ -640,5 +644,157 @@ describe('formatSummary', () => {
   it('never prints a secret it was handed', () => {
     expect(formatSummary(summary)).not.toContain('token=abc')
     expect(formatSummary(summary)).toContain('token=REDACTED')
+  })
+})
+
+describe('teardown and error output never print the bypass secret (#273)', () => {
+  // A fixture value, never the real secret.
+  const token = 'fixture-bypass-0123456789abcdef'
+  const target = 'https://staging.example.test/'
+
+  /** Count fixed-string occurrences without printing the haystack. */
+  const occurrences = (haystack: string, needle: string) =>
+    haystack.split(needle).length - 1
+
+  /**
+   * The shape Playwright rejects `route.fetch` with once its context is
+   * closed: the message carries a call log that prints request headers raw,
+   * and the same lines sit in a `log` array that Node's inspector prints.
+   */
+  const playwrightError = () => {
+    const log = [
+      `→ GET ${target}_next/static/chunk.js`,
+      `  ${BYPASS_HEADER}: ${token}`,
+      '  accept: */*',
+    ]
+    const error = new Error(
+      `apiRequestContext._wrapApiCall: Target page, context or browser has been closed\nCall log:\n${log.map((line) => `  - ${line}`).join('\n')}`,
+    ) as Error & { log: string[] }
+    error.name = 'Error'
+    error.log = log
+    return error
+  }
+
+  /** Everything printed through `console`, joined. */
+  const captureConsole = () => {
+    const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map(
+      (method) => vi.spyOn(console, method).mockImplementation(() => {}),
+    )
+    return () =>
+      spies
+        .flatMap((spy) => spy.mock.calls.flat())
+        .map((arg) =>
+          typeof arg === 'string' ? arg : JSON.stringify(arg, null, 0),
+        )
+        .join('\n')
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  /** A same-origin route whose fetch rejects as it does after close. */
+  const closedRoute = (abortThrows = false) => {
+    const calls: string[] = []
+    return {
+      calls,
+      route: {
+        request: () => ({
+          url: () => `${target}_next/static/chunk.js`,
+          method: () => 'GET',
+          headers: () => ({ accept: '*/*' }),
+          postDataBuffer: () => null,
+          isNavigationRequest: () => false,
+          frame: () => ({ parentFrame: () => null }),
+        }),
+        continue: async () => {
+          calls.push('continue')
+        },
+        fetch: async () => {
+          calls.push('fetch')
+          throw playwrightError()
+        },
+        fulfill: async () => {
+          calls.push('fulfill')
+        },
+        abort: async () => {
+          calls.push('abort')
+          if (abortThrows) throw playwrightError()
+        },
+      },
+    }
+  }
+
+  it('settles a route whose fetch rejects after close, printing nothing', async () => {
+    const printed = captureConsole()
+    const { calls, route } = closedRoute()
+
+    await expect(
+      routeWithBypass(route as never, target, token),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual(['fetch', 'abort'])
+    expect(occurrences(printed(), token)).toBe(0)
+    expect(printed()).toBe('')
+  })
+
+  it('also settles when aborting the closed request throws', async () => {
+    const printed = captureConsole()
+    const { calls, route } = closedRoute(true)
+
+    await expect(
+      routeWithBypass(route as never, target, token),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual(['fetch', 'abort'])
+    expect(printed()).toBe('')
+  })
+
+  it('describes a Playwright-shaped error with zero occurrences of the token', () => {
+    const text = describeErrorSafely(playwrightError(), token)
+
+    expect(occurrences(text, token)).toBe(0)
+    expect(text).toContain(`${BYPASS_HEADER}: ${REDACTED}`)
+    // The useful part survives.
+    expect(text).toContain('Target page, context or browser has been closed')
+    // The `log` array and stack are not part of the description.
+    expect(occurrences(text, 'accept: */*')).toBe(1)
+  })
+
+  it('redacts a bypass header value it was not told about', () => {
+    const other = 'some-other-bypass-value'
+    for (const line of [
+      `${BYPASS_HEADER}: ${other}`,
+      `"${BYPASS_HEADER}":"${other}"`,
+      `${BYPASS_HEADER.toUpperCase()}=${other}`,
+    ]) {
+      expect(occurrences(redactSecret(line, token), other)).toBe(0)
+    }
+    expect(redactSecret('nothing secret here', token)).toBe(
+      'nothing secret here',
+    )
+  })
+
+  it('describes thrown non-errors without crashing', () => {
+    expect(describeErrorSafely(`bad ${token}`, token)).toBe(
+      `Error: bad ${REDACTED}`,
+    )
+    expect(describeErrorSafely(undefined, token)).toBe('Error: undefined')
+  })
+
+  it('unroutes, ignoring errors, before it closes the context', async () => {
+    const order: unknown[] = []
+    await closeCapture({
+      unrouteAll: async (options: unknown) => {
+        order.push(['unrouteAll', options])
+      },
+      close: async () => {
+        order.push('close')
+      },
+    })
+    expect(order).toEqual([
+      ['unrouteAll', { behavior: 'ignoreErrors' }],
+      'close',
+    ])
   })
 })

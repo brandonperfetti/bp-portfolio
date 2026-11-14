@@ -51,8 +51,14 @@
  * them (`routeWithBypass` in `lib/page-diff.mjs`). `--bypass-token=` exists
  * for one-off runs but puts the secret in your shell history; prefer the
  * environment.
- * No secret is ever printed: URLs pass through `redactUrl` before they reach
- * the console or `report.json`.
+ * The script prints no secret it knows of: URLs pass through `redactUrl`
+ * before they reach the console or `report.json`, and every error it prints
+ * passes through `describeErrorSafely`, which drops the error object (a
+ * Playwright error's call log lists request headers) and replaces the bypass
+ * value and any `x-vercel-protection-bypass` header value with `REDACTED`.
+ * A failed bypass request is aborted silently rather than logged (#273). Not
+ * covered: output from Chromium itself, or from a library writing straight
+ * to the terminal.
  *
  * ## Running it
  *
@@ -86,8 +92,11 @@ import { chromium } from '@playwright/test'
 import sharp from 'sharp'
 
 import {
+  BYPASS_TOKEN_ENV,
   FREEZE_CSS,
+  closeCapture,
   compareFrames,
+  describeErrorSafely,
   formatSummary,
   parseArgs,
   redactUrl,
@@ -176,7 +185,9 @@ async function capture(browser, url, viewport, options) {
 
     return { data, width: info.width, height: info.height, png }
   } finally {
-    await context.close()
+    // Unroute (ignoring errors) before closing, or a prefetch still in
+    // `route.fetch` rejects into the closed context (#273).
+    await closeCapture(context)
   }
 }
 
@@ -265,4 +276,36 @@ async function main() {
   return verdict(comparisons, options.threshold).exitCode
 }
 
-process.exitCode = await main()
+/**
+ * Every bypass value this run could hold, for redacting error output: the
+ * environment variable and the `--bypass-token=` flag, both, since
+ * `parseArgs` picks one and a usage error happens before it does.
+ */
+const knownTokens = [
+  process.env[BYPASS_TOKEN_ENV],
+  ...process.argv
+    .slice(2)
+    .filter((arg) => arg.startsWith('--bypass-token='))
+    .map((arg) => arg.slice('--bypass-token='.length)),
+].filter(Boolean)
+
+/** Print a fatal error with no secret in it and fail the run. */
+const fail = (error) => {
+  const text = knownTokens.reduce(
+    (out, token) => out.split(token).join('REDACTED'),
+    describeErrorSafely(error, knownTokens[0]),
+  )
+  console.error(`diff-pages: ${text}`)
+  process.exitCode = 2
+}
+
+// Anything that escapes `main` would otherwise reach Node's default
+// handler, which prints the whole error object, call log and all (#273).
+process.on('unhandledRejection', fail)
+process.on('uncaughtException', fail)
+
+try {
+  process.exitCode = await main()
+} catch (error) {
+  fail(error)
+}

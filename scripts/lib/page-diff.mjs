@@ -225,27 +225,106 @@ export async function routeWithBypass(
   if (!token || !isTargetOrigin(request.url(), targetUrl)) {
     return route.continue()
   }
-  const { response, url, stop } = await followRedirects(
-    (hopUrl, init) => route.fetch({ ...init, url: hopUrl, maxRedirects: 0 }),
-    {
-      url: request.url(),
-      method: request.method(),
-      headers: request.headers(),
-      postData: request.postDataBuffer() ?? undefined,
-    },
-    targetUrl,
-    token,
-  )
-  if (stop === 'cap') return route.abort('failed')
-  if (
-    url !== request.url() &&
-    onRedirectedNavigation &&
-    request.isNavigationRequest() &&
-    !request.frame().parentFrame()
-  ) {
-    onRedirectedNavigation(url)
+  try {
+    const { response, url, stop } = await followRedirects(
+      (hopUrl, init) => route.fetch({ ...init, url: hopUrl, maxRedirects: 0 }),
+      {
+        url: request.url(),
+        method: request.method(),
+        headers: request.headers(),
+        postData: request.postDataBuffer() ?? undefined,
+      },
+      targetUrl,
+      token,
+    )
+    if (stop === 'cap') return await route.abort('failed')
+    if (
+      url !== request.url() &&
+      onRedirectedNavigation &&
+      request.isNavigationRequest() &&
+      !request.frame().parentFrame()
+    ) {
+      onRedirectedNavigation(url)
+    }
+    return await route.fulfill({ response })
+  } catch {
+    // Deliberately silent (#273). A hop that fails here, most often a
+    // prefetch still in flight when the context closes, rejects with a
+    // Playwright error whose call log lists the request headers, the bypass
+    // secret among them. Printing that error, or letting it escape as an
+    // unhandled rejection, prints the secret. The request is failed instead,
+    // which the page sees as an ordinary network error; aborting a request
+    // whose context is already gone throws too, and that is ignored.
+    await Promise.resolve(route.abort('failed')).catch(() => {})
   }
-  return route.fulfill({ response })
+}
+
+/**
+ * Close a capture's browser context without racing its routes.
+ *
+ * @remarks Routes are removed first, with `behavior: 'ignoreErrors'`, so a
+ * route handler still waiting on `route.fetch` when the capture finishes
+ * settles quietly instead of rejecting into a closed context (#273: the
+ * teardown race that crashed every staging run). Only then is the context
+ * closed.
+ *
+ * @param context - A Playwright `BrowserContext` (duck-typed:
+ * `unrouteAll` and `close`).
+ * @returns Resolves once the context is closed.
+ */
+export async function closeCapture(context) {
+  await context.unrouteAll({ behavior: 'ignoreErrors' })
+  await context.close()
+}
+
+/** What a redacted secret or header value is replaced with. */
+export const REDACTED = 'REDACTED'
+
+/**
+ * Remove the bypass secret from text that is about to be printed.
+ *
+ * @remarks Two passes, because neither alone is enough: the literal value
+ * wherever it appears (an error message quoting a header), and the value of
+ * any `x-vercel-protection-bypass` header line whatever it holds (a call log
+ * printing a header we did not expect, or a token set by another process).
+ * `redactUrl` covers URLs only; Playwright's error call log prints request
+ * headers raw (#273).
+ *
+ * @param text - Text to clean.
+ * @param token - The bypass secret, when one is configured.
+ * @returns The text with every occurrence replaced by {@link REDACTED}.
+ */
+export function redactSecret(text, token) {
+  let out = String(text)
+  if (token) out = out.split(token).join(REDACTED)
+  return out.replace(
+    new RegExp(`(${BYPASS_HEADER}["']?\\s*[:=]\\s*["']?)[^\\s"',}\\]]+`, 'gi'),
+    `$1${REDACTED}`,
+  )
+}
+
+/**
+ * Describe an error for the console with no secret in it.
+ *
+ * @remarks Prints the error's name and message only, redacted, never the
+ * error object: Node's inspection of a Playwright error also prints its
+ * `log` array, which carries the request headers. The stack is left out; its
+ * first line repeats the message and the frames say nothing a run needs.
+ *
+ * @param error - Whatever was thrown.
+ * @param token - The bypass secret, when one is configured.
+ * @returns One printable, redacted string.
+ */
+export function describeErrorSafely(error, token) {
+  const name =
+    error && typeof error === 'object' && typeof error.name === 'string'
+      ? error.name
+      : 'Error'
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? error.message
+      : error
+  return redactSecret(`${name}: ${message}`, token)
 }
 
 /**
