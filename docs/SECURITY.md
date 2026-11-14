@@ -143,6 +143,12 @@ measured below; the second is held by review (and by GitGuardian on PRs,
   in project-scoped keychain entries, rotate on any suspicion, and never
   grant delete where find+update suffices. _Moved from `docs/PAYLOAD.md`
   § Operating via MCP, "Key posture (review m8)"._
+  **Since Payload 3.90 (#257) a key is shown once, when it is generated**:
+  the admin and Payload operations no longer return a stored key (the
+  generated types gained `hasAPIKey` in its place). Copy a new key into the
+  keychain entry at creation; a lost key is rotated, not recovered.
+  `[source: Payload v3.90.0 release notes, "API keys are no longer readable
+after initial generation"]`
 - `SENTRY_AUTH_TOKEN` is a build-only secret (source-map upload); rotate it
   like Resend/Blob if exposed. _Moved from `docs/MAINTENANCE.md`
   § Recurring, the Sentry entry._
@@ -165,7 +171,10 @@ stay where they are:
   `[measured 2026-09-27]` all 11 collections in `src/collections/` and all
   5 globals in `src/globals/` do. The posture (helpers in `src/access/`):
   - **Writes** — `create`, `update`, `delete`, and a global's `update` —
-    are `authenticated`: a signed-in Payload admin user.
+    are `authenticated`: a signed-in Payload admin user. The one exception
+    is Users: `update` and `delete` are restricted to the caller's own
+    account (#255), so one staff account cannot change another's email or
+    password, or delete it.
   - **Reads** are `anyone` for public reference content (Authors,
     Categories, Media, Projects, Tags, TechStack, Uses, WorkHistory, every
     global); `authenticatedOrPublished` for the drafts-enabled Posts and

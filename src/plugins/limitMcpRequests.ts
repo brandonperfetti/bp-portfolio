@@ -319,7 +319,8 @@ const limitPlugin = (
  * @remarks **Where the body is read.** `@payloadcms/plugin-mcp` 3.88.0 awaits
  * `resolveAccessSettings` (which calls `overrideAuth`) and only then builds
  * the `mcp-handler` request over `req.body`
- * (`plugin-mcp/dist/endpoints/mcp.js`). `overrideAuth` first awaits the
+ * (`plugin-mcp/dist/endpoints/mcp.js`; byte-identical at 3.90.2, #257,
+ * measured 2026-11-14 by checksum). `overrideAuth` first awaits the
  * plugin's own default resolver, unchanged and with no argument, so the key
  * check is the plugin's: a missing or unknown key throws before one byte is
  * read. Only then does it read the body, bounded, and check its structure.

@@ -63,6 +63,14 @@ describe('buildMediaBlobUrl', () => {
     ).toBe(`${BASE}/covers/a%20b.jpg`)
   })
 
+  it('builds the same URL for the stored empty prefix as for none (#257)', () => {
+    // Every Media row carries `prefix: ''` since the Blob adapter's
+    // `alwaysInsertFields`; an existing file's URL must not move.
+    expect(
+      buildMediaBlobUrl({ filename: 'a b.jpg', prefix: '', baseUrl: BASE }),
+    ).toBe(buildMediaBlobUrl({ filename: 'a b.jpg', baseUrl: BASE }))
+  })
+
   it('falls back to the Payload-served route when no origin resolves', () => {
     expect(buildMediaBlobUrl({ filename: 'x y.png', baseUrl: null })).toBe(
       '/api/media/file/x%20y.png',

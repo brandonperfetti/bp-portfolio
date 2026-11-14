@@ -49,8 +49,10 @@ export function getMediaBlobBaseUrl(
 /**
  * Build the absolute public blob URL for a media file — byte-identical to the
  * adapter's own `generateURL` (origin + key, with only the filename segment
- * percent-encoded). `media` has no image sizes and no prefix today; `prefix` is
- * handled defensively so this stays correct if one is ever introduced.
+ * percent-encoded). `media` has no image sizes, and its `prefix` column is
+ * always `''` today (added by the Blob adapter's `alwaysInsertFields`, #257),
+ * which builds the same key as no prefix; a non-empty `prefix` is handled so
+ * this stays correct if one is ever introduced.
  *
  * @returns the absolute blob URL, or Payload's default relative route
  *   (`/api/media/file/<name>`) when no blob origin resolves.
