@@ -40,7 +40,12 @@
 # proves only that the URL this job derived is gone; a person decides. A file
 # gone from the store whose earlier R2 copy is verified (`retained`) fails for
 # a live page and is a note for version history (`_posts_v…`), which also
-# holds current drafts.
+# holds current drafts. A last good copy found gone stays an error on every
+# later run until a new copy is made. What the check can vouch for is an
+# EXACT reference: a media filename, or a text or JSON string value that is
+# wholly one store URL. A store URL inside larger text (Markdown, HTML,
+# prose) has a guessed end; its readings are copied best effort, and the
+# check always fails them, since the file it means may be none of them.
 # Exit codes follow audit-served-prefix.yml: 0 clean, 1 a finding, 2 the run
 # did not complete.
 #

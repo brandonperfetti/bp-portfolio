@@ -44,7 +44,16 @@ import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 
 /** One media reference: the Blob pathname and where in the database it is. */
-export type Reference = { pathname: string; table: string }
+export type Reference = {
+  pathname: string
+  table: string
+  /**
+   * Set when the pathname is one reading of a store URL found inside larger
+   * text (Markdown, HTML, prose), where its end is a guess. The check fails
+   * every such reference: see {@link check}.
+   */
+  uncertain?: true
+}
 
 /** What a HEAD on a public Blob URL tells us. */
 export type PublicHead = {
@@ -161,26 +170,18 @@ function unescapeXml(value: string): string {
 }
 
 /**
- * Parse the reference query's output (`scripts/media-backup-references.sql`).
- *
- * @remarks Throws when the closing `end` line is absent or its count disagrees,
- * so a failed or truncated query can never pass as "no references". Text
- * values contribute every URL on `origin`'s host; URLs on other hosts are
- * ignored, since they are not this store's.
- */
-/**
  * Every reading of a URL matched in prose or markup, the full match first.
  *
  * @remarks A match runs to the first whitespace, quote, `<`, `>` or backslash,
  * so the URL a row actually holds is the match or a prefix of it: `release!`
  * and `release(1).png` are whole pathnames {@link publicUrl} makes, while in
  * `(see URL).`, Markdown `[x](URL)` or CSS `url(URL);` the tail belongs to the
- * text around it. This does not guess which: it returns the full match, each
- * step of trimming trailing `.,;:!?` and unmatched `)`/`]`, and the cut before
- * every unmatched closing bracket, and each becomes a reference. The real one
- * is always among them, so it is always backed up or fails the check; a wrong
- * reading that 404s fails the check too (a false failure, for a person to
- * look at), and one that happens to exist is an extra copy, never a stand-in.
+ * text around it. It returns the full match, each step of trimming trailing
+ * `.,;:!?` and unmatched `)`/`]`, and the cut before every unmatched closing
+ * bracket. That covers the common shapes, not every one: an entity, a
+ * backtick or a quote inside the URL can still put the real URL outside the
+ * set. So these readings are only ever `uncertain` references, copied best
+ * effort and always failed by the check; coverage rests on exact references.
  */
 export function urlCandidates(url: string): string[] {
   const out = new Set<string>()
@@ -212,12 +213,36 @@ export function urlCandidates(url: string): string[] {
   return [...out].filter((candidate) => pathnameFromUrl(candidate))
 }
 
+/** Every string inside a parsed JSON value, keys excluded. */
+function* stringLeaves(value: unknown): Generator<string> {
+  if (typeof value === 'string') yield value
+  else if (Array.isArray(value))
+    for (const item of value) yield* stringLeaves(item)
+  else if (value && typeof value === 'object')
+    for (const item of Object.values(value)) yield* stringLeaves(item)
+}
+
+/**
+ * Parse the reference query's output (`scripts/media-backup-references.sql`).
+ *
+ * @remarks Throws when the closing `end` line is absent or its count disagrees,
+ * so a failed or truncated query can never pass as "no references". Only
+ * URLs on `origin`'s host count. A reference is **exact** when its boundary is
+ * known: a media filename, a text value that is wholly one store URL, or a
+ * JSON string value (`json` rows are parsed) that is wholly one. A store URL
+ * inside larger text (Markdown, HTML, prose, a JSON string with other text)
+ * has a guessed end, so each of its readings ({@link urlCandidates}) is
+ * marked `uncertain`; they are still copied, best effort, and the check fails
+ * them. On the local-restore corpus every text reference is exact.
+ */
 export function parseReferences(jsonl: string, origin: string): Reference[] {
   const host = new URL(origin).host
   const urlPattern = new RegExp(
     `https?://${host.replace(/\./g, '\\.')}/[^\\s"'<>\\\\]+`,
     'g',
   )
+  // A whole value that is one store URL: its boundary is exact.
+  const exactUrl = new RegExp(`^https?://${host.replace(/\./g, '\\.')}/\\S+$`)
   const references: Reference[] = []
   let rows = 0
   let endCount: number | null = null
@@ -235,15 +260,40 @@ export function parseReferences(jsonl: string, origin: string): Reference[] {
     }
     rows += 1
     const table = row.table ?? 'unknown'
+    const exact = (text: string): boolean => {
+      const value = text.trim()
+      if (!exactUrl.test(value)) return false
+      const pathname = pathnameFromUrl(value)
+      if (pathname) references.push({ pathname, table })
+      return Boolean(pathname)
+    }
+    const embedded = (text: string) => {
+      for (const match of text.matchAll(urlPattern)) {
+        for (const candidate of urlCandidates(match[0])) {
+          const pathname = pathnameFromUrl(candidate)
+          if (pathname) references.push({ pathname, table, uncertain: true })
+        }
+      }
+    }
     if (row.kind === 'filename' && row.value) {
       references.push({ pathname: row.value, table })
     } else if (row.kind === 'text' && row.value) {
-      for (const match of unescapeXml(row.value).matchAll(urlPattern)) {
-        for (const candidate of urlCandidates(match[0])) {
-          const pathname = pathnameFromUrl(candidate)
-          if (pathname) references.push({ pathname, table })
-        }
+      const text = unescapeXml(row.value)
+      if (!exact(text)) embedded(text)
+    } else if (row.kind === 'json' && row.value) {
+      const text = unescapeXml(row.value)
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(text)
+      } catch {
+        embedded(text)
+        continue
       }
+      for (const leaf of stringLeaves(parsed)) {
+        if (leaf.includes(host) && !exact(leaf)) embedded(leaf)
+      }
+    } else {
+      throw new PublicError('reference query output has a row of unknown kind')
     }
   }
   if (endCount === null) {
@@ -453,7 +503,8 @@ export async function backupOne(
         }
         return { ...found, key, sha256: downloaded.sha256, status: 'copied' }
       } finally {
-        await rm(file, { force: true })
+        // A temporary file left behind must not discard a copy already made.
+        await rm(file, { force: true }).catch(() => undefined)
       }
     }
     return {
@@ -518,6 +569,7 @@ export async function backup(options: {
           workDir: options.workDir,
         }),
         previous.get(pathname),
+        options.deps,
       ),
   )
   return {
@@ -556,8 +608,7 @@ export function referenceId(pathname: string): string {
 }
 
 /** The detail of an entry whose last good R2 copy was found gone. */
-const LOST_COPY_DETAIL =
-  'public URL answers 404 and its last good R2 copy is gone'
+const LOST_COPY_DETAIL = 'its last good R2 copy is gone'
 
 /**
  * The prior entry that still names the pathname's last good R2 copy: a backed
@@ -576,16 +627,29 @@ function lastGood(prior: ManifestEntry | undefined): ManifestEntry | null {
  * `versions/<pathname>/<etag>`). A later 404 would then fall back to the
  * first copy under `objects/`, an older version, and a restore would follow
  * it. The entry stays `error`, so {@link check} still fails it; only the
- * mapping survives, for the next run and for a person restoring by hand. Not
- * for an entry that found that copy gone.
+ * mapping survives, for the next run and for a person restoring by hand. The
+ * carried key is re-checked in R2 first: a copy found gone is recorded as
+ * lost ({@link LOST_COPY_DETAIL}, key `null`), and a loss once recorded stays
+ * an error on every later run until a new copy is made, never silently
+ * replaced by an older first copy.
  */
-function keepLastGood(
+async function keepLastGood(
   entry: ManifestEntry,
   prior: ManifestEntry | undefined,
-): ManifestEntry {
-  const good = lastGood(prior)
-  if (entry.status !== 'error' || entry.key || !good) return entry
+  deps: Pick<Deps, 'r2Head'>,
+): Promise<ManifestEntry> {
+  if (entry.status !== 'error' || entry.key) return entry
   if (entry.detail === LOST_COPY_DETAIL) return entry
+  if (prior?.detail === LOST_COPY_DETAIL && !prior.key) {
+    // A loss once seen stays an error until a new copy is made.
+    return { ...entry, detail: LOST_COPY_DETAIL }
+  }
+  const good = lastGood(prior)
+  if (!good?.key) return entry
+  const stored = await deps.r2Head(good.key).catch(() => null)
+  if (!stored || stored.size !== good.size) {
+    return { ...entry, detail: LOST_COPY_DETAIL }
+  }
   return {
     ...entry,
     contentType: good.contentType,
@@ -620,7 +684,12 @@ async function goneFromStore(
   base: Omit<ManifestEntry, 'status'>,
   context: { deps: Deps; previous: Map<string, ManifestEntry> },
 ): Promise<ManifestEntry> {
-  const prior = lastGood(context.previous.get(pathname))
+  const before = context.previous.get(pathname)
+  if (before?.detail === LOST_COPY_DETAIL && !before.key) {
+    // Seen lost before: never fall back to an older first copy silently.
+    return { ...base, detail: LOST_COPY_DETAIL, status: 'error' }
+  }
+  const prior = lastGood(before)
   if (prior?.key) {
     const stored = await context.deps.r2Head(prior.key)
     if (stored && stored.size === prior.size) {
@@ -689,7 +758,9 @@ export async function check(options: {
   )
   const live = new Set<string>()
   const historyOnly = new Set<string>()
+  const uncertain = new Set<string>()
   for (const reference of options.references) {
+    if (reference.uncertain) uncertain.add(reference.pathname)
     if (HISTORY_TABLE.test(reference.table)) historyOnly.add(reference.pathname)
     else live.add(reference.pathname)
   }
@@ -697,6 +768,16 @@ export async function check(options: {
 
   let verified = 0
   for (const pathname of [...live, ...historyOnly]) {
+    if (uncertain.has(pathname)) {
+      // Backed up or not, this pathname is a guess at a URL inside other
+      // text, and the file the text means may be another one.
+      failures.push({
+        pathname,
+        reason:
+          'read from a store URL inside other text: which file it names is uncertain',
+      })
+      continue
+    }
     const entry = entries.get(pathname)
     if (!entry) {
       failures.push({ pathname, reason: 'not in the manifest' })

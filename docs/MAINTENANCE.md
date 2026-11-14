@@ -107,7 +107,11 @@
   keeps its earlier R2 copy in the manifest (`retained`): that fails for a
   live page and is a note for version history. With no copy found it fails,
   history or not: the check fails closed, and a person decides whether an old
-  version's lost file matters. It copies **referenced**
+  version's lost file matters; a last good copy found gone stays an error
+  until a new copy is made. The check vouches for **exact** references only (a
+  media filename, or a text or JSON string value that is wholly one store
+  URL); a store URL inside larger text is copied best effort and always fails,
+  since its end is a guess. It copies **referenced**
   media only: a store object no database names is not backed up.
   It holds **no Blob credential**: Vercel Blob has no read-only token, and the
   read-write one can overwrite or delete the store. Keys mirror the Blob

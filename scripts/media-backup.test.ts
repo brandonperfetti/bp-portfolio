@@ -132,11 +132,43 @@ describe('parseReferences', () => {
       ),
       ORIGIN,
     )
+    // Inside larger text a URL's end is a guess: those readings are uncertain.
     expect(refs).toEqual([
       { pathname: 'cover A.png', table: 'media' },
-      { pathname: 'covers/x y.png', table: 'posts' },
-      { pathname: 'b.svg', table: 'posts' },
+      { pathname: 'covers/x y.png', table: 'posts', uncertain: true },
+      { pathname: 'b.svg', table: 'posts', uncertain: true },
     ])
+  })
+
+  it('takes a whole-value URL, and a JSON string value, as exact', () => {
+    const refs = parseReferences(
+      jsonl(
+        { kind: 'text', table: 'media', value: ` ${ORIGIN}/stored.png ` },
+        {
+          kind: 'json',
+          table: '_posts_v',
+          value: JSON.stringify({
+            hero: { src: publicUrl(ORIGIN, "a'b.png") },
+            alt: `cover ${ORIGIN}/inline.png here`,
+          }),
+        },
+      ),
+      ORIGIN,
+    )
+    expect(refs).toEqual([
+      { pathname: 'stored.png', table: 'media' },
+      { pathname: "a'b.png", table: '_posts_v' },
+      { pathname: 'inline.png', table: '_posts_v', uncertain: true },
+    ])
+  })
+
+  it('refuses a row of a kind it does not know', () => {
+    expect(() =>
+      parseReferences(
+        jsonl({ kind: 'blob', table: 'media', value: 'x' }),
+        ORIGIN,
+      ),
+    ).toThrow('unknown kind')
   })
 
   it('reads a matched URL every way it could end, the full match always among them', () => {
@@ -455,7 +487,7 @@ describe('backup', () => {
       const { bucket, deps } = fakes(blob)
       const references = parseReferences(
         jsonl({
-          kind: 'text',
+          kind: 'json',
           table,
           value: `{"src":"${publicUrl(ORIGIN, 'release!')}"}`,
         }),
@@ -494,6 +526,85 @@ describe('backup', () => {
       expect(entry?.status).toBe('copied')
     })
   }
+
+  // The review at e17ce2b: forms where no reading is the real URL. Inside
+  // other text they are uncertain, so even with the wrong object present the
+  // check fails, for live and history alike.
+  for (const table of ['posts', '_posts_v']) {
+    for (const [label, value, wrong] of [
+      ['Markdown inline code', `\`${ORIGIN}/a.png\``, 'a.png`'],
+      ['an HTML entity', `<img src="${ORIGIN}/a.png&#63;width=2">`, 'a.png&'],
+      ['an apostrophe in text', `src='${ORIGIN}/a'b.png'`, 'a'],
+    ] as const) {
+      it(`fails ${label} inside text even when the wrong object exists (${table})`, async () => {
+        const blob = new Map([
+          ['a.png', png('ACTUAL')],
+          ["a'b.png", png('ACTUAL')],
+          [wrong, png('OTHER')],
+        ])
+        const { deps } = fakes(blob)
+        const references = parseReferences(
+          jsonl({ kind: 'text', table, value }),
+          ORIGIN,
+        )
+        expect(references.every((ref) => ref.uncertain)).toBe(true)
+        const manifest = await backup({
+          deps,
+          now,
+          origin: ORIGIN,
+          previous: null,
+          references,
+          workDir,
+        })
+        const result = await check({ deps, manifest, now, references })
+        expect(result.failures.length).toBeGreaterThan(0)
+        expect(result.failures[0].reason).toContain('uncertain')
+      })
+    }
+  }
+
+  it('keeps a lost newest copy an error on every later run, never falling back to an older first copy', async () => {
+    const blob = new Map([['a.png', png('A1')]])
+    const { bucket, deps } = fakes(blob)
+    const run = (previous: Manifest | null) =>
+      backup({
+        deps,
+        now,
+        origin: ORIGIN,
+        previous,
+        references: refs.slice(0, 1),
+        workDir,
+      })
+    const first = await run(null)
+    blob.set('a.png', png('A2-newest'))
+    const second = await run(first)
+    const newest = second.entries[0].key as string
+    expect(newest).toMatch(/^versions\//)
+    bucket.delete(newest)
+    // Source still answers with A2, but the download fails: the carried key
+    // is re-checked and found gone.
+    const realDownload = deps.downloadPublic
+    deps.downloadPublic = async () => {
+      throw new Error('socket hang up')
+    }
+    const third = await run(second)
+    expect(third.entries[0]).toMatchObject({ key: null, status: 'error' })
+    deps.downloadPublic = realDownload
+    blob.delete('a.png')
+    let previous = third
+    for (let round = 0; round < 3; round += 1) {
+      const next = await run(previous)
+      expect(next.entries[0]).toMatchObject({ key: null, status: 'error' })
+      previous = next
+    }
+    const result = await check({
+      deps,
+      manifest: previous,
+      now,
+      references: [{ pathname: 'a.png', table: '_posts_v' }],
+    })
+    expect(result.failures).toHaveLength(1)
+  })
 
   it('fails closed when a URL read from markup is cut wrong (extract, back up, check)', async () => {
     // The review's counterexamples: a valid final `!`, and CSS `url(...)`.

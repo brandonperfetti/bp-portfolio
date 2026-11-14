@@ -10,9 +10,11 @@
 -- One JSON object per row, so values carrying newlines or tabs stay one line:
 --   {"kind":"filename","table":"media","value":"<filename>"}
 --     every media row's stored filename (its Blob pathname: media has no prefix)
---   {"kind":"text","table":"<table>","value":"<column text>"}
---     every text/json value, in any public table, that embeds a public Blob
---     URL (rich text, SEO fields, version history); the script extracts them
+--   {"kind":"text"|"json","table":"<table>","value":"<column text>"}
+--     every text (`text`) or json/jsonb (`json`) value, in any public table,
+--     that holds a public Blob URL (stored urls, rich text, SEO fields,
+--     version history); the kind tells the script whether it can parse the
+--     value as JSON, which gives each URL its exact boundary
 --   {"kind":"end","count":<n>}
 --     printed last, only by a statement that completed, so an empty or
 --     truncated result is never read as "no references"
@@ -42,7 +44,10 @@ with refs as (
 
   union all
 
-  select 'text', c.table_name, x.v::text
+  select
+    case when c.data_type in ('json', 'jsonb') then 'json' else 'text' end,
+    c.table_name,
+    x.v::text
   from information_schema.columns c
   join information_schema.tables t
     on t.table_schema = c.table_schema
