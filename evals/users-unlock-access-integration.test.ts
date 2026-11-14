@@ -44,8 +44,18 @@ describe('users unlock integration requires a database', () => {
   })
 })
 
+/**
+ * Per-test budget for cases that hash passwords. Payload 3.90 raised the
+ * PBKDF2 iteration count (GHSA-q6mq-ch85-c8mm), so every create and login
+ * here costs real CPU: measured 2026-11-14 (#257), a lockout case took about
+ * 0.5 s on 3.88.0 and 1.0-3.5 s on 3.90.2 alone, and exceeded Vitest's 5 s
+ * default when it shared the CPU with the rest of the tier.
+ */
+const AUTH_TEST_TIMEOUT_MS = 30_000
+
 describe.skipIf(!connectionString)(
   'Users.access.unlock (real Payload, real Postgres)',
+  { timeout: AUTH_TEST_TIMEOUT_MS },
   () => {
     let payload: Awaited<ReturnType<typeof import('payload').getPayload>>
 
