@@ -351,7 +351,13 @@ counts. Then: `pnpm migrate` (expect nothing to run) and `pnpm dev`.
    it is scoped per-environment (a var unscoped from an environment
    silently 401s/403s its route — the staging preview incident of
    2026-08-10). `PREVIEW_SECRET` was the second such value until #275
-   removed it.
+   removed it. **Post-deploy, per environment (#275):** once that
+   environment's live deployment includes the #275 fix, delete
+   `PREVIEW_SECRET` there. Not before: a deployment built earlier still
+   needs it for live preview. Deleting retires the value rather than
+   rotating it, because nothing reads it any more. A Vercel deployment
+   keeps the variables it was built with, so an older deployment still
+   accepts the old value at its own URL until it is deleted.
 3. Delete legacy v3 vars: all `NOTION_*`, Cloudinary vars, `CRON_SECRET`,
    Notion webhook secrets — only at promotion, not before.
 4. Run migration against production DB; verify `/articles/[slug]` URLs and
