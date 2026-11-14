@@ -10,6 +10,7 @@ import {
   type Deps,
   type Manifest,
   backup,
+  CANONICAL_MANIFEST_KEY,
   candidateKeys,
   check,
   combineSources,
@@ -217,7 +218,17 @@ describe('what public output may carry (#328 security review F2)', () => {
     }
     const line = publicFailureLine(parseError)
     expect(line).not.toContain('unannounced')
-    expect(line).toContain('SyntaxError')
+    expect(line).toContain('detail withheld')
+    // An error's name is data too, and reading it can throw.
+    const named = Object.assign(new Error('x'), { name: 'secret-marker' })
+    expect(publicFailureLine(named)).not.toContain('secret-marker')
+    const hostile = new Error('x')
+    Object.defineProperty(hostile, 'name', {
+      get() {
+        throw new Error('secret-marker')
+      },
+    })
+    expect(() => publicFailureLine(hostile)).not.toThrow()
     expect(
       publicFailureLine(new Error('postgresql://u:secret-marker@h/db')),
     ).not.toContain('secret-marker')
@@ -422,6 +433,46 @@ describe('backup', () => {
     expect(puts).toHaveLength(1)
   })
 
+  it('fails closed when a URL read from markup is cut wrong (extract, back up, check)', async () => {
+    // The review's counterexamples: a valid final `!`, and CSS `url(...)`.
+    const blob = new Map([
+      ['release!', png('R1')],
+      ['a.png', png('A1')],
+    ])
+    const { deps } = fakes(blob)
+    const references = parseReferences(
+      jsonl(
+        {
+          kind: 'text',
+          table: '_posts_v',
+          value: `{"src":"${publicUrl(ORIGIN, 'release!')}"}`,
+        },
+        {
+          kind: 'text',
+          table: '_posts_v',
+          value: `<div style="background-image:url(${ORIGIN}/a.png);color:red">x</div>`,
+        },
+      ),
+      ORIGIN,
+    )
+    const manifest = await backup({
+      deps,
+      now,
+      origin: ORIGIN,
+      previous: null,
+      references,
+      workDir,
+    })
+    const result = await check({ deps, manifest, now, references })
+    // Whatever extraction guessed, a derived URL that 404s is never clean.
+    const derived404 = manifest.entries.filter((e) => e.status === 'missing')
+    expect(result.failures.length).toBeGreaterThanOrEqual(derived404.length)
+    expect(result.history).toEqual([])
+    expect(result.failures.length + result.verified).toBe(
+      new Set(references.map((r) => r.pathname)).size,
+    )
+  })
+
   it('keeps an earlier R2 copy of a file the store now answers 404 for', async () => {
     const blob = new Map([['a.png', png('A1')]])
     const { bucket, deps } = fakes(blob)
@@ -566,12 +617,17 @@ describe('check', () => {
       ],
     })
     expect(result.failures).toEqual([
-      { pathname: 'a.png', reason: 'its object is not in R2 at 2 bytes' },
+      {
+        pathname: 'a.png',
+        reason: 'its object is not in R2 at the recorded size',
+      },
       { pathname: 'b.png', reason: 'not in the manifest' },
     ])
   })
 
-  it('reports, without failing, a history-only file the store answers 404 for', async () => {
+  it('fails, never excuses, a history-only file the store answers 404 for', async () => {
+    // A 404 proves only that the derived URL is gone: the URL may have been
+    // cut wrong from prose, or a copy may sit under versions/.
     const result = await check({
       deps: r2({}),
       manifest: manifestOf([
@@ -580,10 +636,33 @@ describe('check', () => {
       now,
       references: [{ pathname: 'old.png', table: '_posts_v_blocks_media' }],
     })
-    expect(result.failures).toEqual([])
-    expect(result.history).toEqual([
-      { pathname: 'old.png', reason: 'gone from the store (404)' },
+    expect(result.history).toEqual([])
+    expect(result.failures).toEqual([
+      {
+        pathname: 'old.png',
+        reason: 'gone from the store (404) and no R2 copy found',
+      },
     ])
+  })
+
+  it('never quotes manifest fields into a reason, since reasons are public', async () => {
+    const marker = 'SYNTHETIC_PRIVATE_MARKER'
+    const result = await check({
+      deps: r2({ 'objects/a.png': 3, 'objects/b.png': 3 }),
+      manifest: manifestOf([
+        { ...entry('a.png', 'objects/a.png'), status: marker as never },
+        { ...entry('b.png', 'objects/b.png'), size: marker as never },
+      ]),
+      now,
+      references: [
+        { pathname: 'a.png', table: 'media' },
+        { pathname: 'b.png', table: 'media' },
+      ],
+    })
+    expect(result.failures).toHaveLength(2)
+    for (const issue of result.failures) {
+      expect(issue.reason).not.toContain(marker)
+    }
   })
 
   it('fails a history-only file that is in the store but not backed up: it may be a current draft', async () => {
@@ -603,10 +682,10 @@ describe('check', () => {
     expect(result.history).toEqual([])
     expect(result.failures).toEqual([
       { pathname: 'draft-absent.png', reason: 'not in the manifest' },
-      { pathname: 'draft-error.png', reason: 'error in the manifest' },
+      { pathname: 'draft-error.png', reason: 'not backed up in the manifest' },
       {
         pathname: 'draft-gone.png',
-        reason: 'its object is not in R2 at 2 bytes',
+        reason: 'its object is not in R2 at the recorded size',
       },
     ])
   })
@@ -659,7 +738,10 @@ describe('check', () => {
       ],
     })
     expect(result.failures).toEqual([
-      { pathname: 'a.png', reason: 'missing in the manifest' },
+      {
+        pathname: 'a.png',
+        reason: 'gone from the store (404) and no R2 copy found',
+      },
     ])
   })
 
@@ -675,7 +757,7 @@ describe('check', () => {
     })
     expect(result.failures[0]).toMatchObject({
       pathname: '',
-      reason: expect.stringMatching(/hours old/),
+      reason: expect.stringMatching(/older than 36 hours/),
     })
   })
 })
@@ -698,5 +780,17 @@ describe('combineSources', () => {
 
   it('refuses no sources', () => {
     expect(() => combineSources([])).toThrow('at least one --refs file')
+  })
+})
+
+describe('CANONICAL_MANIFEST_KEY', () => {
+  it('accepts every key this job makes, and nothing else under manifests/', () => {
+    expect(CANONICAL_MANIFEST_KEY.test(manifestKey(now))).toBe(true)
+    expect(
+      CANONICAL_MANIFEST_KEY.test('manifests/SYNTHETIC_PRIVATE_MARKER.json'),
+    ).toBe(false)
+    expect(
+      CANONICAL_MANIFEST_KEY.test(`${manifestKey(now)}/../private.json`),
+    ).toBe(false)
   })
 })

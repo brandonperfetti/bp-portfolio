@@ -59,8 +59,8 @@ export type PublicHead = {
  * An error whose message this module composed from fixed text, counts and
  * key names only, so it is safe to print in the public Actions log.
  *
- * @remarks Every other error reaching the top-level handler prints its class
- * name only: a parse error quotes its input, which can be a private pathname,
+ * @remarks Every other error reaching the top-level handler prints a fixed
+ * line: a parse error quotes its input, which can be a private pathname,
  * and a library error can quote a connection string or a URL.
  */
 export class PublicError extends Error {
@@ -71,14 +71,15 @@ export class PublicError extends Error {
  * The one line the CLI prints when a run does not complete.
  *
  * @remarks Exported so tests pin the terminal boundary with a sensitive marker:
- * only a {@link PublicError}'s message passes through.
+ * only a {@link PublicError}'s message passes through. Anything else prints a
+ * fixed line: an error's `name` is data too, and reading it can throw.
  */
 export function publicFailureLine(error: unknown): string {
   if (error instanceof PublicError) {
     return `::error::media backup did not complete: ${error.message}`
   }
-  const kind = error instanceof Error ? error.name : typeof error
-  return `::error::media backup did not complete: ${kind} (detail withheld from the public log)`
+  void error
+  return '::error::media backup did not complete: an unexpected error (detail withheld from the public log)'
 }
 
 /** One pathname's line in a manifest. */
@@ -123,9 +124,9 @@ export type Deps = {
 
 /**
  * Payload's version-history tables (`_posts_v`, `_posts_v_blocks_…`). They
- * hold current drafts as well as old versions, so a history reference fails
- * the check like any other; only one gone from the store itself is excused
- * (see {@link check}).
+ * hold current drafts as well as old versions, so nothing a history reference
+ * lacks is excused; the table only decides whether a file kept in R2 after it
+ * left the store is a failure (a live page) or a note (see {@link check}).
  */
 const HISTORY_TABLE = /^_.+_v($|_)/
 
@@ -308,6 +309,10 @@ export function manifestKey(now: Date): string {
     .replace(/\d{3}Z$/, 'Z')
   return `${MANIFESTS_PREFIX}${stamp.slice(0, 10)}/media-manifest-${stamp}.json`
 }
+
+/** The shape of every key {@link manifestKey} makes. */
+export const CANONICAL_MANIFEST_KEY =
+  /^manifests\/\d{4}-\d{2}-\d{2}\/media-manifest-\d{4}-\d{2}-\d{2}T\d{6}Z\.json$/
 
 /** Unique pathnames, in first-seen order. */
 export function uniquePathnames(references: Reference[]): string[] {
@@ -544,8 +549,10 @@ function isBackedUp(status: ManifestEntry['status']): boolean {
  * may hold its bytes. The prior manifest's key, or the first-copy key
  * `objects/<pathname>`, is checked in R2, and a copy found there is kept as
  * `retained`, so the newest manifest still maps the pathname to its bytes when
- * older manifests expire. Only with no copy anywhere is it `missing`; a prior
- * successful key whose object has gone is an `error`.
+ * older manifests expire. With no copy at either key it is `missing`, which
+ * means only "none found there" (a `versions/` copy is not searched for), so
+ * {@link check} fails it rather than excusing it; a prior successful key whose
+ * object has gone is an `error`.
  */
 async function goneFromStore(
   pathname: string,
@@ -587,14 +594,16 @@ async function goneFromStore(
 /**
  * Check that every referenced pathname is in the manifest with its bytes in R2.
  *
- * @remarks Every reference fails when it is not backed up, with one
- * exception: a pathname named only by a version-history table (`*_v`) whose
- * manifest entry is `missing` — the store itself answered 404, so no backup
- * could copy it, and old versions can name a file deleted long ago. That is
- * reported, not failed. A history-only pathname that IS in the store but did
- * not copy, or whose object is gone from R2, fails: those tables also hold
- * current drafts, and a table name cannot tell a draft from an old version.
- * A manifest older than `maxAgeHours` fails, so a backup that stopped running
+ * @remarks Fails closed: every reference fails unless its manifest entry
+ * names an R2 object that answers at the recorded size, whatever table it
+ * came from. A `missing` entry fails too, history or not: a 404 proves only
+ * that the URL this job derived is gone, not that no copy exists (a URL read
+ * out of prose can be cut wrong, and a copy can sit under a key this job did
+ * not look up), so it is left to a person, not excused. The one table
+ * distinction: a `retained` file (gone from the store, its R2 copy verified)
+ * fails for a live page, which is broken, and is a note for version history.
+ * Reasons are fixed text: manifest fields are never quoted into them, since
+ * they are printed in the public log. A manifest older than `maxAgeHours` fails, so a backup that stopped running
  * cannot keep passing on an old manifest.
  */
 export async function check(options: {
@@ -611,7 +620,7 @@ export async function check(options: {
   if (!(ageHours <= (options.maxAgeHours ?? 36))) {
     failures.push({
       pathname: '',
-      reason: `the newest manifest is ${Number.isFinite(ageHours) ? ageHours.toFixed(1) : '?'} hours old`,
+      reason: `the newest manifest is older than ${options.maxAgeHours ?? 36} hours, or undated`,
     })
   }
   const entries = new Map(
@@ -632,10 +641,6 @@ export async function check(options: {
       failures.push({ pathname, reason: 'not in the manifest' })
       continue
     }
-    if (entry.status === 'missing' && !live.has(pathname)) {
-      history.push({ pathname, reason: 'gone from the store (404)' })
-      continue
-    }
     if (entry.status === 'retained' && live.has(pathname)) {
       // Its bytes are safe in R2, but a live page points at a URL that 404s.
       failures.push({
@@ -644,15 +649,29 @@ export async function check(options: {
       })
       continue
     }
-    if (!isBackedUp(entry.status) || !entry.key) {
-      failures.push({ pathname, reason: `${entry.status} in the manifest` })
+    if (
+      !isBackedUp(entry.status) ||
+      typeof entry.key !== 'string' ||
+      !entry.key
+    ) {
+      failures.push({
+        pathname,
+        reason:
+          entry.status === 'missing'
+            ? 'gone from the store (404) and no R2 copy found'
+            : 'not backed up in the manifest',
+      })
       continue
     }
     const stored = await options.deps.r2Head(entry.key)
-    if (!stored || stored.size !== entry.size) {
+    if (
+      !stored ||
+      typeof entry.size !== 'number' ||
+      stored.size !== entry.size
+    ) {
       failures.push({
         pathname,
-        reason: `its object is not in R2 at ${entry.size} bytes`,
+        reason: 'its object is not in R2 at the recorded size',
       })
       continue
     }
@@ -829,6 +848,13 @@ async function latestManifest(
   const keys = (await deps.listKeys(MANIFESTS_PREFIX)).sort()
   const key = keys.at(-1)
   if (!key) return null
+  // The key is printed in the public log and summary: only this job's own
+  // shape, never whatever else sits under the prefix.
+  if (!CANONICAL_MANIFEST_KEY.test(key)) {
+    throw new PublicError(
+      'the newest object under manifests/ is not one this job wrote',
+    )
+  }
   return { key, manifest: JSON.parse(await deps.getObject(key)) as Manifest }
 }
 
@@ -942,7 +968,7 @@ async function main(argv: string[]): Promise<number> {
       now: new Date(),
       references,
     })
-    const line = `Media check against ${prior.key}: ${result.verified} verified, ${result.failures.length} failing, ${result.history.length} history-only gone from the store.`
+    const line = `Media check against ${prior.key}: ${result.verified} verified, ${result.failures.length} failing, ${result.history.length} history-only kept in R2 though gone from the store.`
     console.log(line)
     // Ids and fixed reasons only: this log and the summary are public.
     const print = (issue: CheckIssue) =>

@@ -35,11 +35,12 @@
 # The check: after the copy, every referenced pathname must be in the newest
 # manifest with its object in R2 at the recorded size, and the manifest must
 # be under 36 hours old. Each database must name at least one file, so an
-# empty production read cannot hide behind staging's. The one excused case: a
-# pathname named only by a version-history table (`_posts_v…`) that the store
-# itself answers 404 for, which no backup can copy; it is reported, not
-# failed. History tables also hold current drafts, so any other gap there
-# fails.
+# empty production read cannot hide behind staging's. It fails closed: a
+# reference the store answers 404 for fails too, history or not, since a 404
+# proves only that the URL this job derived is gone; a person decides. A file
+# gone from the store whose earlier R2 copy is verified (`retained`) fails for
+# a live page and is a note for version history (`_posts_v…`), which also
+# holds current drafts.
 # Exit codes follow audit-served-prefix.yml: 0 clean, 1 a finding, 2 the run
 # did not complete.
 #
