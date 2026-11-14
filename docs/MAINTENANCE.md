@@ -5,7 +5,20 @@
 - **Payload upgrades**: bump `payload` + every `@payloadcms/*` to the same
   version in one commit; run `pnpm generate:types` + `pnpm generate:importmap`;
   run migrations locally; smoke the admin (editor renders a migrated post,
-  SEO tab populated) before pushing.
+  SEO tab populated) before pushing. Two checks the 3.90 bump (#257) showed
+  are needed:
+  - **Run `migrate:create --skip-empty` with a dummy `BLOB_READ_WRITE_TOKEN`
+    as well as without one.** CI's drift check runs tokenless, so a field a
+    storage adapter adds only when enabled is invisible to it; the Blob
+    adapter's `alwaysInsertFields` keeps the two the same, and the tokened
+    run proves it still does.
+  - **Do every upgrade action in the release notes on staging and
+    production.** For 3.90.0, a queued scheduled publish or unpublish from
+    before the upgrade fails when it runs. Before the deploy, list the pending
+    ones: `select id, input, wait_until from payload_jobs where task_slug =
+'schedulePublish' and completed_at is null;`. After the deploy, re-create
+    each one in the admin (the document's schedule menu); no migration is
+    involved.
 - **Next/React upgrades**: majors are deliberate events; check Payload's
   supported Next range first (Payload pins minimums).
 - **Node version policy (#69)**: `engines` stays broad (`>=22 <25`) so a
