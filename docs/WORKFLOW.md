@@ -94,8 +94,15 @@ staging — all documented in `.env.example`, values in 1Password) and restores
 it locally. Anything that touches content shape, metadata or media is tried
 there first; staging is for verifying the deploy, not for discovering the bug.
 
-One consequence worth stating: a restored database references blob-hosted
-media, so `BLOB_READ_WRITE_TOKEN` must be set locally or every image 404s.
+A restored database references blob-hosted media, so without help every
+image 404s locally. **Do not put `BLOB_READ_WRITE_TOKEN` in `.env.local`:**
+staging and production share one Blob store, so that token lets any local
+upload write to production media (#328). Set only the store's public origin
+instead — `STORAGE_VERCEL_BLOB_BASE_URL=https://<storeId>.public.blob.vercel-storage.com`,
+the host of any image on the live site. Blob objects are public to read, so
+images resolve with no token, and uploads, crops and duplicates are refused
+while it is set (`src/lib/storage/readOnlyMedia.ts`). Clear it to upload or
+edit files on local disk.
 
 ## Review
 

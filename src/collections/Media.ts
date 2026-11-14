@@ -12,6 +12,11 @@ import {
   revalidateCollectionTag,
   revalidateCollectionTagDelete,
 } from '@/hooks/revalidateCollection'
+import {
+  pointMediaUrlAtReadOnlyOrigin,
+  refuseFileWriteInReadOnlyMedia,
+  refuseUploadInReadOnlyMedia,
+} from '@/lib/storage/readOnlyMedia'
 
 /**
  * The upload-derived fields a caller can put in `data` without sending a file.
@@ -324,7 +329,10 @@ export const refuseUploadEditsRefetch: CollectionBeforeOperationHook = async ({
 
 /**
  * Uploaded media (article covers, page images). Stored in Vercel Blob via
- * `@payloadcms/storage-vercel-blob` when `BLOB_READ_WRITE_TOKEN` is set.
+ * `@payloadcms/storage-vercel-blob` when `BLOB_READ_WRITE_TOKEN` is set;
+ * without it, on local disk, or read-only from the shared store's public
+ * origin when only `STORAGE_VERCEL_BLOB_BASE_URL` is set
+ * (`src/lib/storage/readOnlyMedia.ts`, #328).
  *
  * @remarks SVG is allowed because legacy content uses it; SVGs can carry
  * scripts, so only trusted staff should hold editor accounts. PDF is
@@ -359,8 +367,13 @@ export const Media: CollectionConfig = {
   // Media (alt text, refreshed uploads) renders through both the posts and
   // pages caches (fresh-eyes review 2026-08, m1).
   hooks: {
-    beforeOperation: [refuseCreateWithoutUpload, refuseUploadEditsRefetch],
-    beforeValidate: [refuseFilelessFileRewrite],
+    beforeOperation: [
+      refuseUploadInReadOnlyMedia,
+      refuseCreateWithoutUpload,
+      refuseUploadEditsRefetch,
+    ],
+    beforeValidate: [refuseFileWriteInReadOnlyMedia, refuseFilelessFileRewrite],
+    afterRead: [pointMediaUrlAtReadOnlyOrigin],
     afterChange: [
       revalidateCollectionTag('posts', ['/articles']),
       revalidateCollectionTag('pages', ['/']),

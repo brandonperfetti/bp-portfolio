@@ -59,9 +59,9 @@ import {
  * disk 2026-09-27; see the hook's remarks.)
  *
  * **Storage is wherever `BLOB_READ_WRITE_TOKEN` points.** The gate unsets it
- * and CI has none, so uploads land on local disk (`media/`). But
- * `docs/WORKFLOW.md` § Local database asks for that token to be set locally,
- * and if it is exported when this file runs, the with-file case uploads to
+ * and CI has none, so uploads land on local disk (`media/`). `docs/WORKFLOW.md`
+ * § Local database now says to keep that token out of `.env.local` (#328),
+ * but if it is exported when this file runs, the with-file case uploads to
  * (and its cleanup deletes from) the shared Blob store that staging and
  * production use. Run this tier without it.
  *
@@ -113,7 +113,15 @@ describe.skipIf(!connectionString)(
         })
       ).totalDocs
 
+    /**
+     * A developer's read-only media origin (#328, docs/WORKFLOW.md), cleared
+     * for the run: with it set, this tier's fixture uploads are refused.
+     */
+    let ambientOrigin: string | undefined
+
     beforeAll(async () => {
+      ambientOrigin = process.env.STORAGE_VERCEL_BLOB_BASE_URL
+      delete process.env.STORAGE_VERCEL_BLOB_BASE_URL
       const payloadModule = await import('payload')
       createLocalReq = payloadModule.createLocalReq
       const { default: config } = await import('../src/payload.config')
@@ -127,6 +135,9 @@ describe.skipIf(!connectionString)(
         await cleanup()
       } finally {
         await payload?.db?.destroy?.()
+        if (ambientOrigin !== undefined) {
+          process.env.STORAGE_VERCEL_BLOB_BASE_URL = ambientOrigin
+        }
       }
     }, 60_000)
 
