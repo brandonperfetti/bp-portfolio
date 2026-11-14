@@ -49,7 +49,7 @@ import * as migration_20260905_221622_m5_post_rollup_block from './20260905_2216
 import * as migration_20260907_153737_issue_178_to_path_at_capture from './20260907_153737_issue_178_to_path_at_capture'
 import * as migration_20260909_221759_issue_201_capture_identity from './20260909_221759_issue_201_capture_identity'
 import * as migration_20260911_152336_issue_217_corvus_chat_block from './20260911_152336_issue_217_corvus_chat_block'
-import * as migration_20261114_181417_issue_257_payload_3_90 from './20261114_181417_issue_257_payload_3_90'
+import * as migration_20261114_194612_issue_257_payload_3_90 from './20261114_194612_issue_257_payload_3_90'
 
 export const migrations = [
   {
@@ -308,8 +308,8 @@ export const migrations = [
     name: '20260911_152336_issue_217_corvus_chat_block',
   },
   {
-    up: migration_20261114_181417_issue_257_payload_3_90.up,
-    down: migration_20261114_181417_issue_257_payload_3_90.down,
-    name: '20261114_181417_issue_257_payload_3_90',
+    up: migration_20261114_194612_issue_257_payload_3_90.up,
+    down: migration_20261114_194612_issue_257_payload_3_90.down,
+    name: '20261114_194612_issue_257_payload_3_90',
   },
 ]
