@@ -472,8 +472,12 @@ stay there.
     `Object` properties. It is safe to cross because the pins it crosses
     belong to dev tooling: `@storybook/addon-mcp` is a devDependency.
     Production also resolves valibot, through `@c15t/react` →
-    `@c15t/schema` 2.2.0, but that package declares exactly 1.4.2, so the
-    override does not cross a production pin. Exit: drop the entry once the
+    `@c15t/schema` 2.2.0, which declares exactly 1.4.2. The override crosses
+    no production pin only while the lockfile resolves 1.4.2. The override is
+    global, and valibot 1.5.0 is already published, so a fresh resolve
+    (`pnpm update`, or a deleted lockfile) would cross `@c15t/schema`'s pin
+    in production. Review that pin whenever valibot's resolved version
+    changes. Exit: drop the entry once the
     Storybook MCP packages the tree resolves declare `valibot` ≥1.4.2.
     `@storybook/addon-mcp` 10.6.7, the latest, declares `^1.4.0` and no longer depends on
     `@storybook/mcp`. That range admits 1.4.2, so moving to it ends the
