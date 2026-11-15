@@ -52,9 +52,11 @@ overrides:
   # fixed in 1.32.0. Brandon decided it on 2026-11-14; its row is in
   # docs/SECURITY.md § Dependency advisories. 1.32.2 is
   # same-major; typecheck, the MCP plugin tests and the real-Postgres
-  # POST /api/mcp test pass on it. Exit: drop this entry as soon as a
-  # Payload release pins 1.32.x or later. Check with
+  # POST /api/mcp test pass on it. Exit: drop this entry once a Payload
+  # release pins 1.32.x or later and the mcp-handler it resolves no longer
+  # pins 1.26.0. Check with
   #   pnpm view @payloadcms/plugin-mcp@<version> dependencies
+  #   pnpm view mcp-handler@<version> peerDependencies
   # @spotlightjs/spotlight bundles its own SDK copy, out of this override's
   # reach; 4.12.1 bundles 1.32.0 (docs/DEPENDENCIES.md, Spotlight entry).
   '@modelcontextprotocol/sdk': 1.32.2

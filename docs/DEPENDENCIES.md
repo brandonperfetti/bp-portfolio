@@ -247,7 +247,8 @@ that appears there and not here has not been assessed.
   cannot be set, because the plugin passes only `instructions` and
   `serverInfo` to `McpServer` (`dist/mcp/getMcpHandler.js`). The
   `limitMcpRequests` guard stays the control on tool input. **Exit:** drop the
-  override as soon as a Payload release pins the SDK at 1.32.x or later.
+  override once a Payload release pins the SDK at 1.32.x or later and the
+  `mcp-handler` it resolves no longer pins 1.26.0.
 
 Residual advisories that cannot be fixed today are tracked in #100, not here:
 each is dev-only, non-exploitable in this usage, or has no published fix; how
