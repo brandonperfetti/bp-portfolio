@@ -6,13 +6,16 @@ overrides:
   '@types/react': 19.2.14
   '@types/react-dom': 19.2.3
   # Security advisories (wave-1 post-launch prod-health, #4) — patch/minor
-  # bumps only, no major jumps. Version-scoped where two majors coexist so a
-  # bump can't cross a major boundary and break the consumer.
+  # bumps only, no major jumps, with one exception: @hono/node-server moved
+  # 1.x -> 2.x on 2026-11-15, inside every requester's declared range (its
+  # comment below). Version-scoped where two majors coexist so a bump can't
+  # cross a major boundary and break the consumer.
   'undici@6': '^6.29.1' # @vercel/blob path (prod)
-  # undici@7: payload 3.90.2 pins exactly 7.29.0, so this floor stays there;
-  # raising it would cross that pin. The 7.30.1 fixes (Dependabot 2026-11-15
-  # lane) arrive with Payload >=3.92, which pins 7.30.1 itself.
-  'undici@7': '^7.29.0' # payload path (prod)
+  # undici@7: exactly payload's own pin. Payload 3.91.0 pins exactly 7.29.1,
+  # so this entry names that version and no range: a caret here would resolve
+  # past the pin on a fresh resolve. The 7.30.1 fixes arrive with Payload
+  # >=3.92, which pins 7.30.1 itself but needs Node >=24.22.1 (CI: 24.18.0).
+  'undici@7': '7.29.1' # payload path (prod)
   nanoid: '^3.3.18'
   mermaid: '^11.16.1' # streamdown (prod)
   js-yaml: '^4.3.1'
