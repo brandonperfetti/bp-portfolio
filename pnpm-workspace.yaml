@@ -9,7 +9,9 @@ overrides:
   # bumps only, no major jumps. Version-scoped where two majors coexist so a
   # bump can't cross a major boundary and break the consumer.
   'undici@6': '^6.28.0' # @vercel/blob path (prod)
-  'undici@7': '^7.29.0' # payload path (prod)
+  # undici@7: exactly payload's own pin (3.93.0 pins exactly 7.30.1), with no
+  # range: a caret here would resolve past the pin on a fresh resolve (#342).
+  'undici@7': '7.30.1' # payload path (prod)
   nanoid: '^3.3.18'
   mermaid: '^11.16.1' # streamdown (prod)
   js-yaml: '^4.3.1'

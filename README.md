@@ -63,7 +63,7 @@ The active codebase for [brandonperfetti.com](https://brandonperfetti.com):
 - [c15t](https://c15t.com/) headless consent management + GA4 (Consent Mode v2) · [Vercel Analytics](https://vercel.com/analytics) cookieless baseline
 - [Upstash Redis](https://upstash.com/) rate limiting + chat quotas · [Resend](https://resend.com/) email · [Sentry](https://sentry.io/) monitoring · [Vercel Blob](https://vercel.com/storage/blob) media
 - [Vitest](https://vitest.dev/) unit/component · [Storybook 10](https://storybook.js.org/) with interaction + a11y tests · [Playwright](https://playwright.dev/) e2e · [Evalite](https://evalite.dev/) AI evals
-- **pnpm only** (`only-allow` + `packageManager` pin) · Node 24 (`.nvmrc`; engines `>=22 <25`)
+- **pnpm only** (`only-allow` + `packageManager` pin) · Node 24.22.3 (`.nvmrc`; engines `^22.23.4 || >=24.22.1 <25`)
 
 ## Getting started
 
