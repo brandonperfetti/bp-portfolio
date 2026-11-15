@@ -62,6 +62,39 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
+/** A search miss keeps the reader's words and explains how to try again. */
+export const EmptySearchRecovery: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const search = canvas.getByPlaceholderText('Search articles')
+    await expect(
+      canvas.getByRole('button', { name: 'Databases' }),
+    ).toBeVisible()
+    await userEvent.type(search, 'no matching reader article')
+    await expect(
+      await canvas.findByText(
+        'Try fewer words, a technology name, or clear your search to browse topics.',
+      ),
+    ).toBeVisible()
+    await expect(search).toHaveValue('no matching reader article')
+    await expect(canvas.queryByRole('button', { name: 'Databases' })).toBeNull()
+    await userEvent.clear(search)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Databases' }),
+    )
+    await expect(
+      await canvas.findByRole('link', {
+        name: 'Read article: Row level security, without the footguns',
+      }),
+    ).toBeVisible()
+    await expect(
+      canvas.queryByText(
+        'Try fewer words, a technology name, or clear your search to browse topics.',
+      ),
+    ).toBeNull()
+  },
+}
+
 /** No filter active: no affordance, and every chip is still a button. */
 export const NoFilterActive: Story = {
   play: async ({ canvasElement }) => {

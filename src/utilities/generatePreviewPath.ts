@@ -47,8 +47,10 @@ type Props = PreviewTarget & {
  * at its placed path through the same catch-all pages use (#153), and previews
  * there: a slug-only preview would resolve to the archive URL and reach the
  * placed path only by riding the article route's 308, having fetched a URL that
- * is not the document's. The `/next/preview` route handler is added with the
- * frontend port (Phase 2).
+ * is not the document's.
+ *
+ * The URL carries no credential (#275): `/next/preview` checks the admin's
+ * Payload session cookie instead of a `previewSecret` query parameter.
  */
 export const generatePreviewPath = ({ collection, doc, slug }: Props) => {
   const path = publicPathFor(collection, doc ?? { slug })
@@ -61,9 +63,11 @@ export const generatePreviewPath = ({ collection, doc, slug }: Props) => {
     .map((segment) => encodeURIComponent(segment))
     .join('/')
 
+  // Only the path. The route authenticates on the admin's Payload session;
+  // a credential in this URL would land in request logs, browser history
+  // and any `Referer` (#275).
   const encodedParams = new URLSearchParams({
     path: encodedPath,
-    previewSecret: process.env.PREVIEW_SECRET || '',
   } satisfies Record<string, string>)
 
   return `/next/preview?${encodedParams.toString()}`

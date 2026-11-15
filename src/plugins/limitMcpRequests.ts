@@ -13,10 +13,17 @@ import { MCP_ENDPOINT_PATH } from './bufferMcpResponses'
  * Largest `POST /api/mcp` body accepted, in bytes: 2 MiB (#312).
  *
  * @remarks Half the 4 MiB cap the SDK puts on its own SSE transport
- * (`MAXIMUM_MESSAGE_SIZE`, `@modelcontextprotocol/sdk` 1.30.0
- * `server/sse.js`), which this endpoint does not use: `mcp-handler` 1.1.0
- * reads the whole body with `req.json()` and hands the parsed message to the
- * web-standard transport, which has no size check. A tool call here is
+ * (`MAXIMUM_MESSAGE_SIZE`, `server/sse.js`), which this endpoint does not
+ * use. `mcp-handler` 1.1.0 reads the whole body with `req.json()` first, with
+ * no limit, then re-serialises it into a new `Request` for the web-standard
+ * transport. Since `@modelcontextprotocol/sdk` 1.32.2 (#312's override) that
+ * transport caps the body it reads at 4 MiB
+ * (`DEFAULT_MAX_REQUEST_BODY_SIZE`, `server/requestBody.js`). That is too late
+ * to protect the first read. It can still refuse a body this cap admitted:
+ * re-serialising expands some JSON. A number like `1e20` comes back as 21
+ * digits, so 195,000 of them grow from 975 KB to 4.29 MB, measured. The
+ * transport answers that with its own JSON-RPC 413 (`-32000`), and no tool
+ * runs. On 1.30.0 the transport had no size check. A tool call here is
  * JSON-RPC carrying CMS document data. The synthetic Lexical paragraph in the
  * test is about 450 bytes, so a 300-paragraph article would be about 135 KB.
  * That is an estimate from a synthetic fixture, not a measurement of
@@ -319,7 +326,8 @@ const limitPlugin = (
  * @remarks **Where the body is read.** `@payloadcms/plugin-mcp` 3.88.0 awaits
  * `resolveAccessSettings` (which calls `overrideAuth`) and only then builds
  * the `mcp-handler` request over `req.body`
- * (`plugin-mcp/dist/endpoints/mcp.js`). `overrideAuth` first awaits the
+ * (`plugin-mcp/dist/endpoints/mcp.js`; byte-identical at 3.90.2, #257,
+ * measured 2026-11-14 by checksum). `overrideAuth` first awaits the
  * plugin's own default resolver, unchanged and with no argument, so the key
  * check is the plugin's: a missing or unknown key throws before one byte is
  * read. Only then does it read the body, bounded, and check its structure.

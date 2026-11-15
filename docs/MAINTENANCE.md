@@ -5,7 +5,25 @@
 - **Payload upgrades**: bump `payload` + every `@payloadcms/*` to the same
   version in one commit; run `pnpm generate:types` + `pnpm generate:importmap`;
   run migrations locally; smoke the admin (editor renders a migrated post,
-  SEO tab populated) before pushing.
+  SEO tab populated) before pushing. Two checks the 3.90 bump (#257) showed
+  are needed:
+  - **Run `migrate:create --skip-empty` with a dummy `BLOB_READ_WRITE_TOKEN`
+    as well as without one.** CI's drift check runs tokenless, so a field a
+    storage adapter adds only when enabled is invisible to it; the Blob
+    adapter's `alwaysInsertFields` keeps the two the same, and the tokened
+    run proves it still does.
+  - **Do every upgrade action in the release notes on staging and
+    production.** For 3.90.0, a queued scheduled publish or unpublish from
+    before the upgrade fails when it runs. Before the deploy, list the
+    pending ones in each database:
+
+    ```sql
+    select id, input, wait_until from payload_jobs
+    where task_slug = 'schedulePublish' and completed_at is null;
+    ```
+
+    After the deploy, re-create each one in the admin (the document's
+    schedule menu); no migration is involved.
 - **Next/React upgrades**: majors are deliberate events; check Payload's
   supported Next range first (Payload pins minimums).
 - **Node version policy (#69)**: `engines` stays broad (`>=22 <25`) so a
@@ -93,6 +111,58 @@
   (see § Local database from backups). Watch for GitHub's
   60-days-of-repo-inactivity cron disable; re-enable from the Actions
   tab if it trips.
+- **Media backups (daily, incremental)**: the dumps above keep the rows,
+  and rows name media by Blob pathname, so a restored database whose media
+  is gone renders broken pages (#328). `.github/workflows/media-backup.yml`
+  runs daily at 10:23 UTC, after the dumps: it reads the media table's files
+  in the staging and production databases (each row's filename and any size
+  variant's; `scripts/media-backup-references.sql`, in a `READ ONLY`
+  transaction the SQL asserts itself, since the Supabase pooler drops
+  `PGOPTIONS`), copies the new and changed ones from their
+  **public** Blob URLs into the **private R2 bucket
+  `bp-portfolio-media-backups`**, writes a dated manifest, then checks that
+  every media file is in that manifest with its bytes in R2 (each database
+  must name at least one file). It fails closed: a file the store now answers
+  404 for fails, even when its earlier R2 copy is kept (`retained`), since a
+  media row points at it and a person decides. A last good copy found gone
+  stays an error until a new copy is made, including runs where no media row
+  names the file (each manifest carries such files in `unreferenced`, with
+  their last entry); R2 failing to answer is not recorded as a loss. Scope,
+  the owner's decision (#328): **the media table's files only**. Store URLs
+  typed into text or JSON columns are not read, and a store object no media
+  row names is not backed up.
+  **Media storage is flat, and the backup depends on it (#339).** Since
+  Payload 3.90 (#334) the Blob adapter stores and serves a file at
+  `prefix/_objectKey/filename`, so a filename is the Blob pathname only while
+  both are empty. Media keeps them empty: `refuseStorageCoordinateWrite`
+  (`src/collections/Media.ts`) refuses any create or update that sets or
+  changes either, and no collection prefix or client upload is configured.
+  The backup does not derive the longer path; instead the references query
+  reports any media row with a non-empty `prefix` or a set `_objectkey`, and
+  the job then stops with exit 2 (backup and check both) rather than copy or
+  vouch for the wrong object. If that fires, a row was written around the
+  guard (SQL, a restore of a non-flat dump); find it with
+  `select id from media where prefix <> '' or _objectkey is not null`.
+  Adopting a prefix or client uploads means teaching the backup the full
+  path first.
+  It holds **no Blob credential**: Vercel Blob has no read-only token, and the
+  read-write one can overwrite or delete the store. Keys mirror the Blob
+  layout: `objects/<pathname>` for the first copy,
+  `versions/<pathname>/<etag>` for a changed one, `manifests/YYYY-MM-DD/…`
+  for the run record. Every write is create-only (`If-None-Match: *`), so the
+  job never overwrites or deletes. Retention: the lifecycle rule
+  `expire-manifests-30d` on `manifests/` only; media objects are kept until a
+  pruning rule is decided. Secrets `R2_MEDIA_BACKUP_ACCESS_KEY_ID` and
+  `R2_MEDIA_BACKUP_SECRET_ACCESS_KEY` (a token scoped to that bucket), plus
+  the existing `R2_BACKUP_ENDPOINT`, `SUPABASE_DB_URL` and
+  `SUPABASE_DB_URL_PROD`. A failed scheduled run opens or comments on one
+  issue labelled `media-backup-failed`. The repository and its Actions logs
+  are public, so the job prints counts and opaque ids (the first 12 hex of
+  the sha256 of a pathname, or of a manifest's key) only; pathnames, keys and
+  error detail are in the manifest, in the private bucket. To restore a file,
+  read its key from the newest manifest (`entries`, or `unreferenced` for a
+  file whose media row is gone) and copy that object back to its pathname; an
+  entry whose `key` is `null` has no verified copy.
 - **Served-prefix audit (weekly, #206)**:
   `.github/workflows/audit-served-prefix.yml` runs
   `scripts/audit-served-prefix.sql` against production every Monday 06:41 UTC
@@ -347,10 +417,20 @@ counts. Then: `pnpm migrate` (expect nothing to run) and `pnpm dev`.
    `.env.example` production
    vars in Vercel (Payload, Clerk, AI, Upstash, Resend, GitHub signals).
    Generate FRESH production values (`openssl rand -hex 32`) for
-   `CMS_REVALIDATE_SECRET` and `PREVIEW_SECRET` — never reuse the
-   staging values, and remember both are scoped per-environment (a var
-   unscoped from an environment silently 401s/403s its route — the
-   staging preview incident of 2026-08-10).
+   `CMS_REVALIDATE_SECRET` — never reuse the staging values, and remember
+   it is scoped per-environment (a var unscoped from an environment
+   silently 401s/403s its route — the staging preview incident of
+   2026-08-10). `PREVIEW_SECRET` was the second such value until #275
+   removed it. **Post-deploy, per environment (#275):** once that
+   environment's live deployment includes the #275 fix, delete
+   `PREVIEW_SECRET` there. Not before: a deployment built earlier still
+   needs it for live preview. Deleting retires the value rather than
+   rotating it, because nothing reads it any more. A Vercel deployment
+   keeps the variables it was built with, so an older deployment still
+   accepts the old value at its own URL until it is deleted. Brandon
+   decided both on 2026-11-14 (#275): retire rather than rotate, and
+   leave the pre-fix deployments as they are. That route also required a
+   Payload login.
 3. Delete legacy v3 vars: all `NOTION_*`, Cloudinary vars, `CRON_SECRET`,
    Notion webhook secrets — only at promotion, not before.
 4. Run migration against production DB; verify `/articles/[slug]` URLs and

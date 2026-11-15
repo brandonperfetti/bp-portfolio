@@ -35,6 +35,20 @@ overrides:
   # Drop it once @tailwindcss/postcss ships a release that moves off 1.32.0.
   lightningcss: 1.32.0
   hono: '^4.12.34' # @payloadcms/plugin-mcp path (prod)
+  # @modelcontextprotocol/sdk (#312, #258): the one override here that
+  # crosses an exact pin. @payloadcms/plugin-mcp 3.90.2 pins the SDK at
+  # exactly 1.30.0, and mcp-handler 1.1.0 wants exactly 1.26.0; both are
+  # affected by six advisories (GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h,
+  # -46jr-4wx8-v453, -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw),
+  # fixed in 1.32.0. docs/SECURITY.md's "never force-overridden" rule is
+  # waived for this entry only, by Brandon on 2026-11-14. 1.32.2 is
+  # same-major; typecheck, the MCP plugin tests and the real-Postgres
+  # POST /api/mcp test pass on it. Exit: drop this entry as soon as a
+  # Payload release pins 1.32.x or later. Check with
+  #   pnpm view @payloadcms/plugin-mcp@<version> dependencies
+  # @spotlightjs/spotlight bundles its own SDK copy, out of this override's
+  # reach; 4.12.1 bundles 1.32.0 (docs/DEPENDENCIES.md, Spotlight entry).
+  '@modelcontextprotocol/sdk': 1.32.2
   '@hono/node-server': '^1.19.15'
   valibot: '^1.4.2' # Storybook MCP addon (dev)
   'brace-expansion@1': '^1.1.18'

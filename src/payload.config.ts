@@ -126,6 +126,15 @@ export default buildConfig({
   plugins: [
     ...plugins,
     vercelBlobStorage({
+      // Insert the adapter's Media fields (`prefix`, `_objectKey`) whether or
+      // not a token is set, so the schema is the same everywhere (#257).
+      // Since 3.90 an enabled adapter always adds `_objectKey`; without this,
+      // the tokenless `migrate:create` (CI's drift check, local dev) never
+      // sees the column, the migration omits it, and every Media read on a
+      // tokened deploy fails with Postgres 42703
+      // [source: plugin-cloud-storage 3.90.2 dist/fields/getFields.js;
+      // storage-vercel-blob 3.90.2 dist/index.js].
+      alwaysInsertFields: true,
       enabled: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
       collections: {
         media: {

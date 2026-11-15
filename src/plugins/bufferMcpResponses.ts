@@ -36,7 +36,9 @@ export const bufferResponse = async (response: Response): Promise<Response> => {
  * `revalidateTag` calls once, as soon as the handler's `Response` resolves
  * (`resolvePendingRevalidations()`, next 16.3.4
  * `dist/server/route-modules/app-route/module.js`). The MCP transport
- * (`mcp-handler` 1.1.0 over `@modelcontextprotocol/sdk` 1.30.0, SSE mode)
+ * (`mcp-handler` 1.1.0 over `@modelcontextprotocol/sdk` 1.30.0, SSE mode;
+ * still buffered over 1.32.2, where `evals/mcp-purge-order-integration.test.ts`
+ * passes)
  * returns its streaming `Response` before it runs the tool, so the purges the
  * write's `afterChange`/`afterDelete` hooks queue land after that flush and are
  * dropped without an error. Measured on a local production build: the MCP

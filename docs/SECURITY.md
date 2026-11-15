@@ -92,9 +92,10 @@ another doc carried in passing lives here instead, and that doc points back.
 - **Shared-secret routes compare with `isValidSecret()`**
   (`src/lib/security/timingSafeSecret.ts`: SHA-256 of both sides, then
   `timingSafeEqual`), **and fail closed** — it returns `false` when the
-  expected secret is unset or empty. `[measured 2026-09-27]` the three
-  shared-secret routes use it (`/api/revalidate`, `/api/media/ingest`,
-  `/next/preview`), and nothing in `src` or `scripts` compares a
+  expected secret is unset or empty. `[measured 2026-09-27]` the
+  shared-secret routes use it (`/api/revalidate`, `/api/media/ingest`;
+  `/next/preview` was the third until #275 moved it to the admin's Payload
+  session), and nothing in `src` or `scripts` compares a
   `*SECRET`/`*TOKEN`/`*KEY` variable with `===` or `!==`.
 - **Inbound webhooks verify before they act.** `/api/clerk/webhook`
   verifies the svix signature over the raw body with
@@ -143,6 +144,12 @@ measured below; the second is held by review (and by GitGuardian on PRs,
   in project-scoped keychain entries, rotate on any suspicion, and never
   grant delete where find+update suffices. _Moved from `docs/PAYLOAD.md`
   § Operating via MCP, "Key posture (review m8)"._
+  **Since Payload 3.90 (#257) a key is shown once, when it is generated**:
+  the admin and Payload operations no longer return a stored key (the
+  generated types gained `hasAPIKey` in its place). Copy a new key into the
+  keychain entry at creation; a lost key is rotated, not recovered.
+  `[source: Payload v3.90.0 release notes, "API keys are no longer readable
+after initial generation"]`
 - `SENTRY_AUTH_TOKEN` is a build-only secret (source-map upload); rotate it
   like Resend/Blob if exposed. _Moved from `docs/MAINTENANCE.md`
   § Recurring, the Sentry entry._
@@ -157,7 +164,11 @@ stay where they are:
   the revalidate secret, and never echoes it into output, handoffs or
   receipts.
 - `docs/MAINTENANCE.md` § Promotion checklist — fresh production values for
-  `CMS_REVALIDATE_SECRET` and `PREVIEW_SECRET`, never the staging ones.
+  `CMS_REVALIDATE_SECRET`, never the staging ones. (`PREVIEW_SECRET` is no
+  longer read, since #275. Delete it from each environment once that
+  environment runs the fix; the checklist has the step. Retiring rather
+  than rotating, and leaving pre-fix deployments as they are, is
+  Brandon's decision of 2026-11-14.)
 
 ## Payload access control
 
@@ -165,7 +176,10 @@ stay where they are:
   `[measured 2026-09-27]` all 11 collections in `src/collections/` and all
   5 globals in `src/globals/` do. The posture (helpers in `src/access/`):
   - **Writes** — `create`, `update`, `delete`, and a global's `update` —
-    are `authenticated`: a signed-in Payload admin user.
+    are `authenticated`: a signed-in Payload admin user. The one exception
+    is Users: `update` and `delete` are restricted to the caller's own
+    account (#255), so one staff account cannot change another's email or
+    password, or delete it.
   - **Reads** are `anyone` for public reference content (Authors,
     Categories, Media, Projects, Tags, TechStack, Uses, WorkHistory, every
     global); `authenticatedOrPublished` for the drafts-enabled Posts and
@@ -199,8 +213,8 @@ stay where they are:
   published read in `articlesRepo`, `pagesRepo` and `content/posts` passes
   `false`. The deliberate `true` reads are Payload hooks and sync jobs that
   must see every row; the draft readers, reached only in Next draft mode,
-  which `/next/preview` enables only after `PREVIEW_SECRET` **and** a
-  Payload user check; and `getGatedPostContent()`, called only after
+  which `/next/preview` enables only for a signed-in Payload user (the
+  admin's session; no URL secret since #275); and `getGatedPostContent()`, called only after
   `canAccess()` passes (next section).
 - **Database: default-deny RLS on every table in `public`.** A migration
   that creates a table enables Row Level Security on it and on its `_v` /
@@ -236,13 +250,49 @@ stay where they are:
   hidden `url`/`filename`, since Payload's crop cannot re-fetch without
   them. **Unmeasured on Blob.** All three refusals are a 400 naming the
   ingest route [source: `src/collections/Media.ts` — `beforeOperation` hook
-  `refuseCreateWithoutUpload` at `:72-93` over the fields at `:20-27`;
-  `beforeValidate` hook `refuseFilelessFileRewrite` at `:176-202` over the
-  fields at `:111-117`, compared by `sameStoredValue` at `:124-127`;
-  `beforeOperation` hook `refuseUploadEditsRefetch` at `:270-323` over the
-  fields at `:208`; registered at `:361-363`; lane D, #242; #270]. The
+  `refuseCreateWithoutUpload` at `:77-98` over the fields at `:25-32`;
+  `beforeValidate` hook `refuseFilelessFileRewrite` at `:185-211` over the
+  fields at `:119-125`, compared by `sameStoredValue` at `:132-135`;
+  `beforeOperation` hook `refuseUploadEditsRefetch` at `:461-514` over the
+  fields at `:399`; registered at `:556-566`; lane D, #242; #270; line
+  numbers corrected 2026-11-15 with #339]. The
   update guard also passes the storage adapter's own metadata write-back,
   which runs with the server-only `context.skipCloudStorage`.
+- **Media storage is flat: no write sets or changes `prefix` or
+  `_objectKey` (#339).** Since Payload 3.90 (#334) the Blob adapter builds a
+  file's object path and served URL as `prefix/_objectKey/filename`, and both
+  fields are only `admin.hidden`/`readOnly`, with no field access
+  [source: plugin-cloud-storage 3.90.2 `fields/getFields.js:15-31`]. The
+  release review (2026-11-15, F1) measured with the real adapter hooks in
+  memory that a privileged fileless update of either one alone passed the
+  guard above and moved the row's URL to `/<value>/<filename>`. **Two layers,
+  by trust path** (corrected 2026-11-15, independent re-review 4 on #340):
+  with access enforced — REST, the MCP media tools, any Local API call
+  with `overrideAccess: false` — Payload 3.90.2 sanitizes upload data before any
+  collection hook (`uploads/sanitizeUploadData.js`): it drops `_objectKey`
+  always and `prefix` on update, keeping a submitted `prefix` only with a
+  file or on create. A dropped coordinate is **ignored, not refused**: the
+  write succeeds and the row stays flat. Everything that survives that step,
+  and every coordinate on the privileged Local API (`overrideAccess: true`, the
+  Local API's default:
+  scripts, seeds, server code), reaches the app's hooks, where a create may not
+  carry a non-empty value of either, file or no file; an update may not
+  change either to a non-empty value and, without a file, may not change
+  either at all; sending them back as stored, `alt` edits and a normal
+  upload (`prefix: ''`, no `_objectKey`) pass. A 400, by id and per document
+  in a `where` update. An update that carries a file, or an `uploadEdits`
+  query, is checked one step earlier, because Payload deletes the stored file
+  before `beforeValidate` runs: a refusal there would leave the row naming a
+  deleted file on local disk (measured 2026-11-15, CodeRabbit round 1 on
+  #340); a `where` update with a file is refused for any non-empty coordinate
+  [source: `src/collections/Media.ts` — `beforeValidate` hook
+  `refuseStorageCoordinateWrite` at `:295-320` and `beforeOperation` hook
+  `refuseStorageCoordinateUpload` at `:347-393`, over the fields at `:219`;
+  pinned on the pg tier, including with the adapter enabled,
+  `evals/media-storage-coordinates-integration.test.ts`,
+  `evals/media-storage-schema-integration.test.ts`]. The media backup relies
+  on the same invariant and fails closed on a row that breaks it
+  (`docs/MAINTENANCE.md` § Media backups).
   _Corrected 2026-09-27 (CodeRabbit round 1 on #271):_ this bullet named the
   `uploadEdits` path a "known gap, not a rule that holds … unmeasured"; do
   not rely on that text — the path is now measured and refused. `[measured, local disk, 2026-09-27]` without the
@@ -272,7 +322,7 @@ stay where they are:
   the declared length and on the bytes (`:13`, `:126`, `:137`).
 - SVG uploads through the admin stay allowed for legacy content, and SVG
   can carry scripts, so only trusted staff hold editor accounts
-  [source: `src/collections/Media.ts:329-330`, the collection's TSDoc].
+  [source: `src/collections/Media.ts:523-524`, the collection's TSDoc].
   **Operational.**
 
 ## End-user authorization (Clerk)
@@ -398,11 +448,17 @@ stay there.
   policy.
 - **Residual advisories are tracked, never force-overridden** — #100 holds
   them; `pnpm audit` and `pnpm audit --prod` are the check
-  (`docs/DEPENDENCIES.md`).
-- **A mitigation does not clear an advisory.** #312 tracks SDK advisories
-  against `@modelcontextprotocol/sdk` 1.30.0, which `@payloadcms/plugin-mcp`
-  pins exactly. It stays pinned with no override, and the advisories stay
-  open until an upstream release fixes them. In front of it,
+  (`docs/DEPENDENCIES.md`). **One exception, Brandon's, 2026-11-14 (#312):**
+  `@modelcontextprotocol/sdk` is overridden to 1.32.2 past
+  `@payloadcms/plugin-mcp`'s exact 1.30.0 pin. That clears the six SDK
+  advisories (GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h, -46jr-4wx8-v453,
+  -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw). Its compatibility
+  evidence and exit condition are in `docs/DEPENDENCIES.md` § Known unmet
+  peers. No other entry may cross a pin without the same explicit decision.
+- **A mitigation does not clear an advisory.** Before #312's override, the
+  MCP SDK's advisories stayed open behind a local mitigation, and the
+  mitigation stays in place after it: 1.32's own tool-input limit
+  (`maxToolInputElements`) cannot be turned on through the Payload plugin.
   `src/plugins/limitMcpRequests.ts` is a **partial** local mitigation for
   authenticated `POST /api/mcp` bodies: it bounds body size, batch size, JSON
   value count and nesting depth, refusing limit violations with a 413 before

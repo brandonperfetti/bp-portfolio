@@ -32,3 +32,34 @@ Applied to open issues as of 2026-09-09: `ready-for-agent`, `type:task`, `type:b
   `needs-triage`, `needs-info` and `ready-for-human` **do not**. Create those three
   (`gh label create <name>`) before `/triage` first applies one — `gh issue edit --add-label`
   fails on a label that does not exist.
+
+## Labels beyond the five roles
+
+These four, plus `agent-filed`, sit beside the five roles. They were created on 2026-11-14
+under Brandon's approval, for the friction intake and the daily sweep.
+
+| Label              | Meaning                                                                   |
+| ------------------ | ------------------------------------------------------------------------- |
+| `quick-win`        | One small PR closes it; no decision needed                                |
+| `needs-brandon`    | Waiting on a decision only Brandon can make; the sweep skips it           |
+| `friction`         | One item of workflow friction an agent recorded; the daily sweep reads it |
+| `friction-skipped` | The daily sweep will not re-investigate it until this label is removed    |
+
+- **`needs-brandon` is not `ready-for-human`.** `needs-brandon` means the next move is a
+  _decision_ only Brandon makes: scope, product direction, a trade-off or an authority call. Once
+  he decides, the issue moves on to whatever state fits, often `ready-for-agent`.
+  `ready-for-human` means the work is decided and specified, but a _person must implement it_
+  (an agent cannot do it). Don't use either one in place of the other.
+- **`friction`** issues come from the friction form (`.github/ISSUE_TEMPLATE/friction.yml`), one
+  item per issue, filed at delivery close and titled `Friction: …`. An agent files with
+  `gh issue create --label friction --label agent-filed` so neither label can be dropped. Search
+  open `friction` issues first and comment on a match instead of filing a duplicate.
+- **`friction-skipped`** and **`needs-brandon`** both take an issue out of the sweep.
+  `friction-skipped` parks it with no decision pending; `needs-brandon` parks it until Brandon
+  decides.
+- **`quick-win`** is a size marker, orthogonal to the role labels: an issue can be `quick-win`
+  and `ready-for-agent` at once.
+
+**Live labels, queried 2026-11-14:** `ready-for-agent`, `wontfix`, `agent-filed`, `friction`,
+`needs-brandon`, `friction-skipped` and `quick-win` exist. `needs-triage`, `needs-info` and
+`ready-for-human` still **do not**, so the note above still applies to those three.

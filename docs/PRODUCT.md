@@ -1,9 +1,9 @@
 # Product
 
 What the site is for, the judgments that keep recurring, and the decisions
-already settled. Every statement here is taken from a document or issue it
-links; where the owner has not settled something, it is listed under **Open**
-rather than guessed. Behavior detail lives in `docs/FEATURES.md`; which
+already settled. Statements link to governing documents, issues or dated public
+observations; unsettled choices stay under **Open** as hypotheses rather than
+settled facts. Behavior detail lives in `docs/FEATURES.md`; which
 journeys are proven, and how, is `docs/JOURNEYS.md`.
 
 ## Intent
@@ -43,6 +43,61 @@ less (`docs/DESIGN.md`), and Corvus's behavior is held by live CI evals
   § 3).
 - Product signals exist but are not wired to any of these outcomes — see
   § Signals.
+
+### Working priority: reader usefulness (#320)
+
+For the bounded November 2026 investigation, prioritize a reader finding a
+relevant article, understanding its advice and choosing a useful next action.
+This is the delegated product hypothesis, not a measured audience preference
+or a conversion target. Technical journey proof is in `docs/JOURNEYS.md`.
+
+**Keep** archive and global-palette discovery, readable article bodies, and
+existing copy/share actions. **Change** the evidence behind the next product
+choice: use a reader task before adding another continuation surface.
+**Remove** the blanket assumption that articles offer no onward links; remove
+no UI on the available evidence.
+
+The public [runbooks-to-agent-skills article](https://brandonperfetti.com/articles/runbooks-to-agent-skills), inspected on 2026-11-12, already
+had an inline link to another article, copy/share controls, an appended
+archive and an actionable closing exercise. Source still confirms #219's
+narrower gap: Posts has `relatedPosts`, but no component consumes it
+(`src/collections/Posts/index.ts`, `ArticleView.tsx`). That field's existence
+does not establish demand for another section, and one article does not
+establish corpus-wide quality.
+
+Comparison behind the choice:
+
+- **Reader usefulness:** discovery, reading and retaining a link can be
+  checked with the existing synthetic seed (`docs/JOURNEYS.md`). That makes
+  this a bounded first verification task; usefulness still needs reader
+  feedback. Pageviews cannot establish that advice helped.
+- **Qualified inquiries:** no qualified-inquiry outcome signal was obtained.
+  The contact route/delivery proof gap remains in `docs/JOURNEYS.md`; it is
+  not evidence of failed inquiries. A live send was outside this pass.
+- **Editorial efficiency:** #197's confirmed source gap concerns Local-API
+  draft saves, not the normal admin path (`docs/PAYLOAD.md` § Local API
+  gotchas). No observed publishing delay or repeated editor rework in this
+  pass outweighs the reader hypothesis. These comparisons are not effort or
+  revenue estimates.
+
+**Next recommendation:** a focused reader task using an existing article:
+find advice for a real problem, explain what to try, then retain the exact
+link. Acceptance is that the reader can name a concrete next action and its
+limitation without coaching; the synthetic test proves only finding,
+rendering and copying. Brandon can collect a short de-identified
+“what I tried / where I got stuck / what was missing” note during an existing
+feedback conversation, then put the actionable gap in an issue. This is a
+proposed signal, not collected feedback or authorization to send messages.
+It needs no new tracking, schema or feature. If the advice itself is unclear,
+improve that article's closing action through the content workflow; if readers
+understand it but cannot choose a relevant follow-on, reconsider #219's
+editor-curated links with its server/access tests. Neither change is part of
+#320.
+
+Revisit this priority when a relevant prospect hits a confirmed contact
+blocker, publishing is demonstrably blocked or costly, or reader feedback
+shows discovery and next actions already work well. A pageview increase alone
+does not satisfy acceptance or justify changing the priority.
 
 ## Principles
 
@@ -129,13 +184,13 @@ source states none, it says so.
 What exists that could tell whether a journey works for real people. None is
 connected to the outcomes above yet; no tracking is added by documenting this.
 
-| Signal               | Route                        | What it can show                                                                                                          | Status                                                                  |
-| -------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| GitHub issues        | `gh issue list`              | defects found by the owner and reviewers, e.g. `/articles` Back/Forward query staleness (#267, #302; follow-up #307 open) | read; the only reader-facing feedback on record is owner/reviewer-found |
-| Vercel Web Analytics | Vercel dashboard / connector | cookieless page views per route (`docs/ANALYTICS.md`)                                                                     | exists; production data not read in docs work                           |
-| GA4                  | GA4 property                 | sessions after consent where it is required, and by default where it is not (`docs/ANALYTICS.md`)                         | exists; not read                                                        |
-| Sentry               | Sentry project               | runtime errors on all three runtimes (`README.md` § Overview)                                                             | exists; not read                                                        |
-| Search Console       | owner's account              | indexing and crawl status (#210)                                                                                          | exists; owner-held                                                      |
+| Signal               | Route                        | What it can show                                                                                                          | Status                                                                                              |
+| -------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| GitHub issues        | `gh issue list`              | defects found by the owner and reviewers, e.g. `/articles` Back/Forward query staleness (#267, #302; follow-up #307 open) | read; the only reader-facing feedback on record is owner/reviewer-found                             |
+| Vercel Web Analytics | Vercel dashboard / connector | cookieless page views per route (`docs/ANALYTICS.md`), not usefulness                                                     | Aggregate inspection informs the #320 investigation; private traffic evidence is not published here |
+| GA4                  | GA4 property                 | sessions after consent where it is required, and by default where it is not (`docs/ANALYTICS.md`)                         | exists; not read                                                                                    |
+| Sentry               | Sentry project               | runtime errors on all three runtimes (`README.md` § Overview)                                                             | exists; not read                                                                                    |
+| Search Console       | owner's account              | indexing and crawl status (#210)                                                                                          | exists; owner-held                                                                                  |
 
 There is no in-product feedback route (no survey, no feedback widget).
 Reading production analytics is an owner-authorized act, not part of routine

@@ -47,7 +47,9 @@
   - `docs/JOURNEYS.md` — reader/editor journeys and the tests that prove
     them, including what is _not_ proven (content-dependent skips).
   - `docs/TESTING.md` — test layers, the local gate, and the owned-instance
-    journey recipe.
+    journey recipe. `scripts/verify-reader-journeys.ts` owns the executable
+    reader-lab lifecycle; link its invocation here rather than copying its
+    setup commands into client-specific skills.
 - Each doc is a map, not a mirror: point at source files rather than
   duplicating them; record contracts and reasons that code can't express.
 - When a change invalidates a doc statement, update the doc in the same PR.

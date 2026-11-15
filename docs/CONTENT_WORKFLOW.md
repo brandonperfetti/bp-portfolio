@@ -53,8 +53,11 @@
 
 ## Draft preview
 
-Admin Live Preview / Preview buttons hit `/next/preview` (secret:
-`PREVIEW_SECRET`) and render draft content; `/next/exit-preview` clears.
+Admin Live Preview / Preview buttons hit `/next/preview?path=…` and render
+draft content; `/next/exit-preview` clears. The route turns draft mode on only
+for a signed-in Payload user (the admin's session cookie), and only for a path
+on this site. The URL carries no secret: it used to carry `PREVIEW_SECRET`,
+which put it in request logs and browser history (#275).
 
 ## Migration provenance
 
