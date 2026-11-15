@@ -97,8 +97,8 @@ one set, version-locked.
   `next` reads. Next 16.4's `useRouter` reads
   `LayoutRouterContext.parentRenderTree`, which `@storybook/nextjs-vite`
   supplies from 10.6.3 on; with 10.5.7 every story threw in
-  `test:storybook` (#313). `storybook`, `@storybook/nextjs-vite`, addon-a11y
-  and addon-vitest share one version; `eslint` 9 +
+  `test:storybook` (#313). `storybook`, `@storybook/nextjs-vite`, addon-a11y,
+  addon-vitest and (since 10.6.7, #347) addon-mcp share one version; `eslint` 9 +
   `eslint-config-next` + `eslint-plugin-tsdoc`; `prettier` +
   tailwind plugin; `husky` + lint-staged.
 - `esbuild` (**devDependency, exact `0.28.1`**, added 2026-09-26 for #229) —
@@ -235,15 +235,9 @@ that appears there and not here has not been assessed.
   runs `1.32.2` through an override — accepted (2026-11-14, #258, #312).**
   Both exact-pinned versions carry all six open advisories (GHSA-f897, -6qxp,
   -46jr, -rvq5, -6prh, -22jm); the last of them is fixed in 1.32.0, so neither
-  peer can be met safely. The override in `pnpm-workspace.yaml` is one of
-  three entries there that cross an exact pin by decision. The others are
-  `dompurify` (`monaco-editor` 0.56.0 declares exactly 3.4.8, and the
-  override sets `^3.4.17`) and `valibot` (the Storybook MCP packages declare
-  exactly 1.2.0, and the override sets `^1.4.2`). Both are Brandon's
-  exceptions of 2026-11-15, recorded with their exits in `docs/SECURITY.md`
-  § Dependency advisories. The SDK
-  entry is Brandon's exception to `docs/SECURITY.md`'s "never force-overridden" rule, granted 2026-11-14 for
-  this entry only. Compatibility, measured on 1.32.2 `[measured 2026-11-14]`:
+  peer can be met safely. The override is recorded with its exit in
+  `docs/SECURITY.md` § Dependency advisories; Brandon decided it on
+  2026-11-14. Compatibility, measured on 1.32.2 `[measured 2026-11-14]`:
   `pnpm typecheck`, the MCP plugin tests (`src/plugins`, 47 cases) and
   `evals/mcp-purge-order-integration.test.ts`, which drives real
   `POST /api/mcp` `tools/call` writes through `mcp-handler` 1.1.0 on Postgres,

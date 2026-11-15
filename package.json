@@ -98,7 +98,7 @@
     "@playwright/test": "^1.58.2",
     "@spotlightjs/spotlight": "^4.12.1",
     "@storybook/addon-a11y": "^10.6.7",
-    "@storybook/addon-mcp": "^0.7.0",
+    "@storybook/addon-mcp": "^10.6.7",
     "@storybook/addon-vitest": "10.6.7",
     "@storybook/nextjs-vite": "^10.6.7",
     "@testing-library/jest-dom": "^6.9.1",
