@@ -236,8 +236,10 @@ that appears there and not here has not been assessed.
   Both exact-pinned versions carry all six open advisories (GHSA-f897, -6qxp,
   -46jr, -rvq5, -6prh, -22jm); the last of them is fixed in 1.32.0, so neither
   peer can be met safely. The override in `pnpm-workspace.yaml` is the one
-  entry there that crosses an exact pin. It is Brandon's exception to
-  `docs/SECURITY.md`'s "never force-overridden" rule, granted 2026-11-14 for
+  entry there that crosses an exact pin by decision. `[measured 2026-11-15]`
+  `dompurify` crosses one too, with no recorded decision: `monaco-editor`
+  0.56.0 declares exactly 3.4.8, and the override sets `^3.4.17`. The SDK
+  entry is Brandon's exception to `docs/SECURITY.md`'s "never force-overridden" rule, granted 2026-11-14 for
   this entry only. Compatibility, measured on 1.32.2 `[measured 2026-11-14]`:
   `pnpm typecheck`, the MCP plugin tests (`src/plugins`, 47 cases) and
   `evals/mcp-purge-order-integration.test.ts`, which drives real
