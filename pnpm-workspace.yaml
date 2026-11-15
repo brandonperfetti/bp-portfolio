@@ -53,8 +53,8 @@ overrides:
   # docs/SECURITY.md § Dependency advisories. 1.32.2 is
   # same-major; typecheck, the MCP plugin tests and the real-Postgres
   # POST /api/mcp test pass on it. Exit: drop this entry once a Payload
-  # release pins 1.32.x or later and the mcp-handler it resolves no longer
-  # pins 1.26.0. Check with
+  # release pins 1.32.x or later and the mcp-handler it resolves declares
+  # an SDK range that admits >=1.32.0. Check with
   #   pnpm view @payloadcms/plugin-mcp@<version> dependencies
   #   pnpm view mcp-handler@<version> peerDependencies
   # @spotlightjs/spotlight bundles its own SDK copy, out of this override's
