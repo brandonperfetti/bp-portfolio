@@ -235,10 +235,9 @@ that appears there and not here has not been assessed.
   runs `1.32.2` through an override — accepted (2026-11-14, #258, #312).**
   Both exact-pinned versions carry all six open advisories (GHSA-f897, -6qxp,
   -46jr, -rvq5, -6prh, -22jm); the last of them is fixed in 1.32.0, so neither
-  peer can be met safely. The override has a row in `docs/SECURITY.md`
-  § Dependency advisories, which sets the rule for every override that
-  crosses a declared range; Brandon decided this one on 2026-11-14.
-  Compatibility, measured on 1.32.2 `[measured 2026-11-14]`:
+  peer can be met safely. The override is recorded with its exit in
+  `docs/SECURITY.md` § Dependency advisories; Brandon decided it on
+  2026-11-14. Compatibility, measured on 1.32.2 `[measured 2026-11-14]`:
   `pnpm typecheck`, the MCP plugin tests (`src/plugins`, 47 cases) and
   `evals/mcp-purge-order-integration.test.ts`, which drives real
   `POST /api/mcp` `tools/call` writes through `mcp-handler` 1.1.0 on Postgres,
