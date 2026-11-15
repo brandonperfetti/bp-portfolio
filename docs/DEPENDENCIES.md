@@ -97,8 +97,8 @@ one set, version-locked.
   `next` reads. Next 16.4's `useRouter` reads
   `LayoutRouterContext.parentRenderTree`, which `@storybook/nextjs-vite`
   supplies from 10.6.3 on; with 10.5.7 every story threw in
-  `test:storybook` (#313). `storybook`, `@storybook/nextjs-vite`, addon-a11y
-  and addon-vitest share one version; `eslint` 9 +
+  `test:storybook` (#313). `storybook`, `@storybook/nextjs-vite`, addon-a11y,
+  addon-vitest and (since 10.6.7, #347) addon-mcp share one version; `eslint` 9 +
   `eslint-config-next` + `eslint-plugin-tsdoc`; `prettier` +
   tailwind plugin; `husky` + lint-staged.
 - `esbuild` (**devDependency, exact `0.28.1`**, added 2026-09-26 for #229) —
