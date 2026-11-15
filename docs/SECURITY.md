@@ -449,7 +449,7 @@ stay there.
   policy.
 - **Residual advisories are tracked, never force-overridden** — #100 holds
   them; `pnpm audit` and `pnpm audit --prod` are the check
-  (`docs/DEPENDENCIES.md`). **Two exceptions, both Brandon's.** No other
+  (`docs/DEPENDENCIES.md`). **Three exceptions, all Brandon's.** No other
   entry may cross a pin without the same explicit decision.
   - **2026-11-14 (#312):** `@modelcontextprotocol/sdk` is overridden to 1.32.2
     past `@payloadcms/plugin-mcp`'s exact 1.30.0 pin. That clears the six SDK
@@ -463,6 +463,25 @@ stay there.
     compliant route exists: `monaco-editor` 0.57.0 pins 3.4.15, still
     affected. Exit: drop the entry once a `monaco-editor` release that the
     tree resolves pins `dompurify` ≥3.4.17.
+  - **2026-11-15 (#347):** `valibot` is overridden to `^1.4.2` past the
+    exact 1.2.0 that `@storybook/addon-mcp` 0.7.0 and `@storybook/mcp` 0.8.0
+    declare. The override has been in place since b2c0929 (2026-08-24); the
+    decision is recorded here. Removing it would put valibot 1.2.0 back in
+    the tree, which GHSA-5qjj-4xww-7phc affects (moderate, ≤1.4.1, fixed in
+    1.4.2): `flatten()` throws on `record()` issue paths that name inherited
+    `Object` properties. It is safe to cross because the pins it crosses
+    belong to dev tooling: `@storybook/addon-mcp` is a devDependency.
+    Production also resolves valibot, through `@c15t/react` →
+    `@c15t/schema` 2.2.0, which declares exactly 1.4.2. The override crosses
+    no production pin only while the lockfile resolves 1.4.2. The override is
+    global, and valibot 1.5.0 is already published, so a fresh resolve
+    (`pnpm update`, or a deleted lockfile) would cross `@c15t/schema`'s pin
+    in production. Review that pin whenever valibot's resolved version
+    changes. Exit: drop the entry once the
+    Storybook MCP packages the tree resolves declare `valibot` ≥1.4.2.
+    `@storybook/addon-mcp` 10.6.7, the latest, declares `^1.4.0` and no longer depends on
+    `@storybook/mcp`. That range admits 1.4.2, so moving to it ends the
+    crossing, but its floor is still below 1.4.2.
 - **A mitigation does not clear an advisory.** Before #312's override, the
   MCP SDK's advisories stayed open behind a local mitigation, and the
   mitigation stays in place after it: 1.32's own tool-input limit
