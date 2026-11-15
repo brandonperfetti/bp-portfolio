@@ -23,7 +23,8 @@ it is not a CMS and has no runtime integration.
   `pnpm test:e2e` · `pnpm storybook` · `pnpm payload` · `pnpm migrate`
 - Runtime baseline: Next.js 16 (Turbopack), React 19, TypeScript 5,
   Payload 3.x (all `@payloadcms/*` packages version-locked together),
-  Tailwind v4 (CSS-first), Node >=22 <25.
+  Tailwind v4 (CSS-first), Node `^22.23.4 || >=24.22.1 <25` (CI and
+  `.nvmrc`: 24.22.3).
 
 ## CI gate
 

@@ -100,7 +100,7 @@ concurrency:
 env:
   # Pinned to a full patch version for the same reason ci.yml pins it. Keep in
   # step with ci.yml's NODE_VERSION when that moves.
-  NODE_VERSION: '24.18.0'
+  NODE_VERSION: '24.22.3'
 
 jobs:
   sync:

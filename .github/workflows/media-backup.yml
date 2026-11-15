@@ -106,7 +106,7 @@ env:
   # Pinned to a full patch version for the same reason ci.yml pins it: a Node
   # patch release must not change behaviour underneath a scheduled run. Keep in
   # step with ci.yml's NODE_VERSION when that moves.
-  NODE_VERSION: '24.18.0'
+  NODE_VERSION: '24.22.3'
   # Names, not secrets.
   R2_MEDIA_BACKUP_BUCKET: bp-portfolio-media-backups
   MEDIA_BLOB_ORIGIN: https://t8wdoiziaix3go2s.public.blob.vercel-storage.com

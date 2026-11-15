@@ -11,11 +11,9 @@ overrides:
   # comment below). Version-scoped where two majors coexist so a bump can't
   # cross a major boundary and break the consumer.
   'undici@6': '^6.29.1' # @vercel/blob path (prod)
-  # undici@7: exactly payload's own pin. Payload 3.91.0 pins exactly 7.29.1,
-  # so this entry names that version and no range: a caret here would resolve
-  # past the pin on a fresh resolve. The 7.30.1 fixes arrive with Payload
-  # >=3.92, which pins 7.30.1 itself but needs Node >=24.22.1 (CI: 24.18.0).
-  'undici@7': '7.29.1' # payload path (prod)
+  # undici@7: exactly payload's own pin (3.93.0 pins exactly 7.30.1), with no
+  # range: a caret here would resolve past the pin on a fresh resolve (#342).
+  'undici@7': '7.30.1' # payload path (prod)
   nanoid: '^3.3.18'
   mermaid: '^11.16.1' # streamdown (prod)
   js-yaml: '^4.3.1'
@@ -47,7 +45,7 @@ overrides:
   hono: '^4.13.16' # @payloadcms/plugin-mcp path (prod)
   # @modelcontextprotocol/sdk (#312, #258): one of the two overrides here that
   # cross an exact pin by Brandon's decision (dompurify, above, is the
-  # other). @payloadcms/plugin-mcp 3.91.0 (as 3.90.2) pins the SDK at
+  # other). @payloadcms/plugin-mcp 3.93.0 (as 3.90.2) pins the SDK at
   # exactly 1.30.0, and mcp-handler 1.1.0 wants exactly 1.26.0; both are
   # affected by six advisories (GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h,
   # -46jr-4wx8-v453, -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw),

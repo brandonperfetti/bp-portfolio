@@ -268,7 +268,8 @@ stay where they are:
   guard above and moved the row's URL to `/<value>/<filename>`. **Two layers,
   by trust path** (corrected 2026-11-15, independent re-review 4 on #340):
   with access enforced — REST, the MCP media tools, any Local API call
-  with `overrideAccess: false` — Payload 3.90.2 sanitizes upload data before any
+  with `overrideAccess: false` — Payload 3.90.2 (re-read 2026-11-15 at 3.93.0,
+  #342: byte-identical) sanitizes upload data before any
   collection hook (`uploads/sanitizeUploadData.js`): it drops `_objectKey`
   always and `prefix` on update, keeping a submitted `prefix` only with a
   file or on create. A dropped coordinate is **ignored, not refused**: the
