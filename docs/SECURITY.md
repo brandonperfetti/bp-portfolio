@@ -469,11 +469,13 @@ stay there.
     decision is recorded here. Removing it would put valibot 1.2.0 back in
     the tree, which GHSA-5qjj-4xww-7phc affects (moderate, ≤1.4.1, fixed in
     1.4.2): `flatten()` throws on `record()` issue paths that name inherited
-    `Object` properties. It is safe to cross because the path is dev tooling
-    only: `@storybook/addon-mcp` is a devDependency, and no production
-    package resolves valibot. Exit: drop the entry once the Storybook MCP
-    packages the tree resolves declare `valibot` ≥1.4.2. `@storybook/addon-mcp`
-    10.6.7, the latest, declares `^1.4.0` and no longer depends on
+    `Object` properties. It is safe to cross because the pins it crosses
+    belong to dev tooling: `@storybook/addon-mcp` is a devDependency.
+    Production also resolves valibot, through `@c15t/react` →
+    `@c15t/schema` 2.2.0, but that package declares exactly 1.4.2, so the
+    override does not cross a production pin. Exit: drop the entry once the
+    Storybook MCP packages the tree resolves declare `valibot` ≥1.4.2.
+    `@storybook/addon-mcp` 10.6.7, the latest, declares `^1.4.0` and no longer depends on
     `@storybook/mcp`. That range admits 1.4.2, so moving to it ends the
     crossing, but its floor is still below 1.4.2.
 - **A mitigation does not clear an advisory.** Before #312's override, the
