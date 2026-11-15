@@ -253,20 +253,28 @@ stay where they are:
   `refuseCreateWithoutUpload` at `:77-98` over the fields at `:25-32`;
   `beforeValidate` hook `refuseFilelessFileRewrite` at `:185-211` over the
   fields at `:119-125`, compared by `sameStoredValue` at `:132-135`;
-  `beforeOperation` hook `refuseUploadEditsRefetch` at `:448-501` over the
-  fields at `:386`; registered at `:543-553`; lane D, #242; #270; line
+  `beforeOperation` hook `refuseUploadEditsRefetch` at `:460-513` over the
+  fields at `:398`; registered at `:555-565`; lane D, #242; #270; line
   numbers corrected 2026-11-15 with #339]. The
   update guard also passes the storage adapter's own metadata write-back,
   which runs with the server-only `context.skipCloudStorage`.
 - **Media storage is flat: no write sets or changes `prefix` or
   `_objectKey` (#339).** Since Payload 3.90 (#334) the Blob adapter builds a
   file's object path and served URL as `prefix/_objectKey/filename`, and both
-  fields are only `admin.hidden`/`readOnly`, with no field access, so REST,
-  the Local API and the MCP media tools can write them
+  fields are only `admin.hidden`/`readOnly`, with no field access
   [source: plugin-cloud-storage 3.90.2 `fields/getFields.js:15-31`]. The
   release review (2026-11-15, F1) measured with the real adapter hooks in
-  memory that a fileless update of either one alone passed the guard above
-  and moved the row's URL to `/<value>/<filename>`. Now a create may not
+  memory that a privileged fileless update of either one alone passed the
+  guard above and moved the row's URL to `/<value>/<filename>`. **Two layers,
+  by trust path** (corrected 2026-11-15, independent re-review 4 on #340):
+  with access enforced — REST, the MCP media tools, any Local API call
+  without `overrideAccess` — Payload 3.90.2 sanitizes upload data before any
+  collection hook (`uploads/sanitizeUploadData.js`): it drops `_objectKey`
+  always and `prefix` on update, keeping a submitted `prefix` only with a
+  file or on create. A dropped coordinate is **ignored, not refused**: the
+  write succeeds and the row stays flat. Everything that survives that step,
+  and every coordinate on the privileged Local API (`overrideAccess: true`:
+  scripts, seeds, server code), reaches the app's hooks, where a create may not
   carry a non-empty value of either, file or no file; an update may not
   change either to a non-empty value and, without a file, may not change
   either at all; sending them back as stored, `alt` edits and a normal
@@ -277,8 +285,8 @@ stay where they are:
   deleted file on local disk (measured 2026-11-15, CodeRabbit round 1 on
   #340); a `where` update with a file is refused for any non-empty coordinate
   [source: `src/collections/Media.ts` — `beforeValidate` hook
-  `refuseStorageCoordinateWrite` at `:282-307` and `beforeOperation` hook
-  `refuseStorageCoordinateUpload` at `:334-381`, over the fields at `:219`;
+  `refuseStorageCoordinateWrite` at `:294-319` and `beforeOperation` hook
+  `refuseStorageCoordinateUpload` at `:346-392`, over the fields at `:219`;
   pinned on the pg tier, including with the adapter enabled,
   `evals/media-storage-coordinates-integration.test.ts`,
   `evals/media-storage-schema-integration.test.ts`]. The media backup relies
@@ -313,7 +321,7 @@ stay where they are:
   the declared length and on the bytes (`:13`, `:126`, `:137`).
 - SVG uploads through the admin stay allowed for legacy content, and SVG
   can carry scripts, so only trusted staff hold editor accounts
-  [source: `src/collections/Media.ts:510-511`, the collection's TSDoc].
+  [source: `src/collections/Media.ts:522-523`, the collection's TSDoc].
   **Operational.**
 
 ## End-user authorization (Clerk)

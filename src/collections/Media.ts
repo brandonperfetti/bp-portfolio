@@ -238,11 +238,23 @@ const sameCoordinate = (incoming: unknown, stored: unknown): boolean =>
  *
  * @remarks Payload 3.90 put both fields on Media (#334, `alwaysInsertFields`)
  * and the adapter builds every object path, upload and served URL from them.
- * They are only `admin.hidden`/`readOnly` — no field access — so REST, the
- * Local API and the MCP `createMedia`/`updateMedia` tools can write them
- * [source: plugin-cloud-storage 3.90.2 `fields/getFields.js:15-31`]. Measured
- * by the release review (2026-11-15, F1) with the real adapter hooks in
- * memory: a fileless update of either field alone passed
+ * They are only `admin.hidden`/`readOnly`, with no field access
+ * [source: plugin-cloud-storage 3.90.2 `fields/getFields.js:15-31`].
+ *
+ * Which callers reach this hook with a coordinate depends on the trust path
+ * (corrected 2026-11-15, independent re-review 4 on #340). With access
+ * enforced — REST, the MCP `createMedia`/`updateMedia` tools, any Local API
+ * call without `overrideAccess` — payload 3.90.2 sanitizes upload data
+ * before any collection hook runs (`uploads/sanitizeUploadData.js`, first
+ * step of the create, update and updateByID operations): it drops
+ * `_objectKey` always, drops `prefix` on update, and keeps a submitted
+ * `prefix` only with a file or on create. A dropped coordinate is ignored,
+ * not refused: the write succeeds and the row keeps its stored, flat
+ * coordinates (pinned on the pg tier). What survives that step, and every
+ * coordinate on the privileged Local API (`overrideAccess: true`: scripts,
+ * seeds, server code), reaches this hook and is refused. Measured by the
+ * release review (2026-11-15, F1) with the real adapter hooks in memory: a
+ * privileged fileless update of either field alone passed
  * `refuseFilelessFileRewrite` and moved the row's URL to
  * `/<coordinate>/<filename>`, where no bytes of its own were. And an upload
  * carrying them stores the bytes at `prefix/_objectKey/filename`, which the

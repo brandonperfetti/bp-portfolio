@@ -365,6 +365,119 @@ describe.skipIf(!connectionString)(
       }
     })
 
+    // Independent re-review 4 (S1, D1): with access enforced — REST, MCP,
+    // any Local API call without `overrideAccess` — Payload 3.90.2 sanitizes
+    // upload data before any collection hook runs
+    // (`uploads/sanitizeUploadData.js`, called first in the create, update and
+    // updateByID operations). It drops `_objectKey` always and `prefix` on
+    // update, and keeps a submitted `prefix` only with a file (or on create).
+    // These cases pin what that path actually does: a dropped coordinate is
+    // ignored and the row stays flat; one that survives is refused.
+    const editor = {
+      id: 1,
+      collection: 'users',
+      email: 'zz-editor@example.invalid',
+    }
+
+    it('access-enforced fileless updates: Payload drops the coordinates, the row stays flat', async () => {
+      const row = await upload('enforced-fileless')
+      try {
+        for (const data of [
+          { prefix: 'other-folder' },
+          { _objectKey: 'other-key' },
+        ]) {
+          await payload.update({
+            collection: 'media',
+            context,
+            id: row.id,
+            data: data as never,
+            overrideAccess: false,
+            user: editor as never,
+          })
+          const bulk = await payload.update({
+            collection: 'media',
+            context,
+            where: { id: { equals: row.id } },
+            data: data as never,
+            overrideAccess: false,
+            user: editor as never,
+          })
+          expect(bulk.errors).toEqual([])
+        }
+        expect(await storedCoordinates(row.id)).toEqual({
+          filename: row.filename,
+          prefix: '',
+          _objectkey: null,
+        })
+      } finally {
+        await deleteRow(row.id)
+      }
+    })
+
+    it('access-enforced writes that keep a prefix are refused: a create, and a replacement upload', async () => {
+      const before = await countMarked()
+      const file = await replacement()
+      await expect(
+        payload.create({
+          collection: 'media',
+          context,
+          data: { alt: `${MARKER} enforced-create`, prefix: 'folder' } as never,
+          file,
+          overrideAccess: false,
+          user: editor as never,
+        }),
+      ).rejects.toMatchObject({
+        message: MEDIA_STORAGE_COORDINATES_ERROR,
+        status: 400,
+      })
+      expect(await countMarked()).toBe(before)
+
+      const row = await upload('enforced-replace')
+      const stored = storedFile(row.filename!)
+      const bytes = await fs.readFile(stored)
+      try {
+        await expect(
+          payload.update({
+            collection: 'media',
+            context,
+            id: row.id,
+            data: { prefix: 'folder' } as never,
+            file: await replacement(),
+            overrideAccess: false,
+            user: editor as never,
+          }),
+        ).rejects.toMatchObject({ message: MEDIA_STORAGE_COORDINATES_ERROR })
+        expect(Buffer.compare(await fs.readFile(stored), bytes)).toBe(0)
+      } finally {
+        await deleteRow(row.id)
+      }
+    })
+
+    it('access-enforced create: a submitted _objectKey is dropped, and the upload stays flat', async () => {
+      const data = await png()
+      const created = await payload.create({
+        collection: 'media',
+        context,
+        data: { alt: `${MARKER} enforced-key`, _objectKey: 'key' } as never,
+        file: {
+          data,
+          mimetype: 'image/png',
+          name: `${MARKER}-enforced-key.png`,
+          size: data.byteLength,
+        },
+        overrideAccess: false,
+        user: editor as never,
+      })
+      try {
+        expect(await storedCoordinates(created.id)).toMatchObject({
+          prefix: '',
+          _objectkey: null,
+        })
+      } finally {
+        await deleteRow(created.id)
+      }
+    })
+
     it('passes an alt edit and the doc round-tripped as read', async () => {
       const row = await upload('round-trip')
       try {
