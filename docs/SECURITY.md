@@ -268,7 +268,8 @@ stay where they are:
   guard above and moved the row's URL to `/<value>/<filename>`. **Two layers,
   by trust path** (corrected 2026-11-15, independent re-review 4 on #340):
   with access enforced — REST, the MCP media tools, any Local API call
-  with `overrideAccess: false` — Payload 3.90.2 sanitizes upload data before any
+  with `overrideAccess: false` — Payload 3.90.2 (re-read 2026-11-15 at 3.93.0,
+  #342: byte-identical) sanitizes upload data before any
   collection hook (`uploads/sanitizeUploadData.js`): it drops `_objectKey`
   always and `prefix` on update, keeping a submitted `prefix` only with a
   file or on create. A dropped coordinate is **ignored, not refused**: the
@@ -448,13 +449,20 @@ stay there.
   policy.
 - **Residual advisories are tracked, never force-overridden** — #100 holds
   them; `pnpm audit` and `pnpm audit --prod` are the check
-  (`docs/DEPENDENCIES.md`). **One exception, Brandon's, 2026-11-14 (#312):**
-  `@modelcontextprotocol/sdk` is overridden to 1.32.2 past
-  `@payloadcms/plugin-mcp`'s exact 1.30.0 pin. That clears the six SDK
-  advisories (GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h, -46jr-4wx8-v453,
-  -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw). Its compatibility
-  evidence and exit condition are in `docs/DEPENDENCIES.md` § Known unmet
-  peers. No other entry may cross a pin without the same explicit decision.
+  (`docs/DEPENDENCIES.md`). **Two exceptions, both Brandon's.** No other
+  entry may cross a pin without the same explicit decision.
+  - **2026-11-14 (#312):** `@modelcontextprotocol/sdk` is overridden to 1.32.2
+    past `@payloadcms/plugin-mcp`'s exact 1.30.0 pin. That clears the six SDK
+    advisories (GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h, -46jr-4wx8-v453,
+    -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw). Its compatibility
+    evidence and exit condition are in `docs/DEPENDENCIES.md` § Known unmet
+    peers.
+  - **2026-11-15 (#345):** `dompurify` is overridden to `^3.4.17` past
+    `monaco-editor` 0.56.0's exact 3.4.8 pin (Payload's admin code field).
+    That clears Dependabot alerts #289, #371, #391, #392 and #393. No
+    compliant route exists: `monaco-editor` 0.57.0 pins 3.4.15, still
+    affected. Exit: drop the entry once a `monaco-editor` release that the
+    tree resolves pins `dompurify` ≥3.4.17.
 - **A mitigation does not clear an advisory.** Before #312's override, the
   MCP SDK's advisories stayed open behind a local mitigation, and the
   mitigation stays in place after it: 1.32's own tool-input limit

@@ -6,21 +6,29 @@ overrides:
   '@types/react': 19.2.14
   '@types/react-dom': 19.2.3
   # Security advisories (wave-1 post-launch prod-health, #4) — patch/minor
-  # bumps only, no major jumps. Version-scoped where two majors coexist so a
-  # bump can't cross a major boundary and break the consumer.
-  'undici@6': '^6.28.0' # @vercel/blob path (prod)
-  'undici@7': '^7.29.0' # payload path (prod)
+  # bumps only, no major jumps, with one exception: @hono/node-server moved
+  # 1.x -> 2.x on 2026-11-15, inside every requester's declared range (its
+  # comment below). Version-scoped where two majors coexist so a bump can't
+  # cross a major boundary and break the consumer.
+  'undici@6': '^6.29.1' # @vercel/blob path (prod)
+  # undici@7: exactly payload's own pin (3.93.0 pins exactly 7.30.1), with no
+  # range: a caret here would resolve past the pin on a fresh resolve (#342).
+  'undici@7': '7.30.1' # payload path (prod)
   nanoid: '^3.3.18'
   mermaid: '^11.16.1' # streamdown (prod)
   js-yaml: '^4.3.1'
-  'fast-uri@3': '^3.1.5'
-  'fast-uri@4': '^4.1.2'
+  'fast-uri@3': '^3.1.9'
+  'fast-uri@4': '^4.2.3'
   # image-size (#100): no override needed, and none is set — the package is no
   # longer in the tree (Payload 3.87 moved to image-dimensions, Storybook
   # 10.6.7 to probe-image-size; docs/DEPENDENCIES.md). This says nothing about
   # the advisory records' state, which is read from GitHub.
-  ip-address: '^10.3.1'
-  dompurify: '^3.4.13'
+  ip-address: '^10.7.4'
+  # dompurify crosses an exact pin by Brandon's decision (2026-11-15, #345):
+  # monaco-editor 0.56.0 (Payload's code field) declares exactly 3.4.8.
+  # Exit: drop this entry once a monaco-editor release the tree resolves pins
+  # dompurify >=3.4.17 (docs/SECURITY.md § Dependency advisories).
+  dompurify: '^3.4.17'
   postcss: '^8.5.23'
   # lightningcss: pinned DOWN to the version @tailwindcss/node@4.3.3 hard-pins
   # (exactly 1.32.0). vite@8.1.5 declares `lightningcss: ^1.32.0`, and the
@@ -34,9 +42,10 @@ overrides:
   # this entry by re-running install will make it look inert — it is not.
   # Drop it once @tailwindcss/postcss ships a release that moves off 1.32.0.
   lightningcss: 1.32.0
-  hono: '^4.12.34' # @payloadcms/plugin-mcp path (prod)
-  # @modelcontextprotocol/sdk (#312, #258): the one override here that
-  # crosses an exact pin. @payloadcms/plugin-mcp 3.90.2 pins the SDK at
+  hono: '^4.13.16' # @payloadcms/plugin-mcp path (prod)
+  # @modelcontextprotocol/sdk (#312, #258): one of the two overrides here that
+  # cross an exact pin by Brandon's decision (dompurify, above, is the
+  # other). @payloadcms/plugin-mcp 3.93.0 (as 3.90.2) pins the SDK at
   # exactly 1.30.0, and mcp-handler 1.1.0 wants exactly 1.26.0; both are
   # affected by six advisories (GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h,
   # -46jr-4wx8-v453, -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw),
@@ -49,10 +58,23 @@ overrides:
   # @spotlightjs/spotlight bundles its own SDK copy, out of this override's
   # reach; 4.12.1 bundles 1.32.0 (docs/DEPENDENCIES.md, Spotlight entry).
   '@modelcontextprotocol/sdk': 1.32.2
-  '@hono/node-server': '^1.19.15'
+  # @hono/node-server: 2.x since the 2026-11-15 Dependabot lane. The SDK
+  # declares `^1.19.9 || ^2.0.5` and Spotlight 4.12.1 `^2.0.10`, so 2.1.3+
+  # sits inside both; the old ^1.19.15 floor forced Spotlight below its range.
+  '@hono/node-server': '^2.1.3'
   valibot: '^1.4.2' # Storybook MCP addon (dev)
-  'brace-expansion@1': '^1.1.18'
-  'brace-expansion@5': '^5.0.9'
+  'brace-expansion@1': '^1.1.21'
+  'brace-expansion@5': '^5.0.12'
+  # Dependabot lane, 2026-11-15: patch/minor floors, each inside every
+  # requester's declared range (read from node_modules at 3.90.2).
+  fastify: '^5.12.2' # evalite (dev)
+  body-parser: '^2.4.0' # express via plugin-mcp (prod)
+  proxy-addr: '^2.0.8' # express via plugin-mcp (prod)
+  qs: '^6.16.1' # express, body-parser (prod)
+  shell-quote: '^1.11.0' # launch-editor via Spotlight (dev)
+  source-map-js: '^1.2.2' # postcss, tailwind (build)
+  fast-copy: '^3.1.0' # pino-pretty via payload (prod)
+  'vite@8': '~8.1.6' # vitest, storybook (dev); ~ keeps lightningcss 1.32.0 valid
   # browserslist (#232, 2026-09-26): floor at the patched release for
   # GHSA-c83g-rgw3-j3cx + GHSA-73wf-gq98-2v4g (High ×2, <4.28.7). Build-time
   # only (@babel/helper-compilation-targets ^4.24.0, webpack ^4.24.0). Every

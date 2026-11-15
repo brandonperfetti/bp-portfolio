@@ -662,6 +662,11 @@ on deployed envs it also sits behind Vercel deployment protection, so pass
 `x-vercel-protection-bypass` alongside the Bearer token). Tool schemas are
 self-describing — an agent discovers _how_ to call them for free. What it
 cannot infer are the invariants below; encode those, not the mechanics.
+A client that cached the schemas must refresh them after a Payload bump:
+since 3.91 (#342 took 3.93.0) `select` is an object (`{"title": true}`), not a
+JSON string, on find, create and update; find also takes `populate`, `joins`,
+`trash` and `pagination`; and the auth tool's `headers` is an object
+[source: plugin-mcp 3.93.0 `dist/mcp/tools/`].
 
 **MCP writes purge what `/admin` writes purge**
 ([#274](https://github.com/brandonperfetti/bp-portfolio/issues/274)).
@@ -721,7 +726,7 @@ omission. The limits are named constants, each with its reasoning:
 **What it leaves open** (also `docs/SECURITY.md` § Dependency advisories):
 
 - **Method-override pre-parse.** Payload's `handleEndpoints` (payload 3.88.0,
-  `utilities/handleEndpoints.js`; re-read 2026-11-14 at 3.90.2, unchanged,
+  `utilities/handleEndpoints.js`; re-read 2026-11-14 at 3.90.2 and 2026-11-15 at 3.93.0, unchanged,
   #257) turns a `POST` carrying
   `X-HTTP-Method-Override: GET` or `X-Payload-HTTP-Method-Override: GET` into
   a `GET`, and first reads the body with `request.json()` (for

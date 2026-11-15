@@ -231,13 +231,16 @@ that appears there and not here has not been assessed.
   imports `openai` again: at that point either use a release whose peer
   admits zod 4 or pin the interaction with a test.
 - **`mcp-handler@1.1.0` wants `@modelcontextprotocol/sdk` exactly `1.26.0`,
-  and `@payloadcms/plugin-mcp@3.90.2` pins it at exactly `1.30.0`; the tree
+  and `@payloadcms/plugin-mcp@3.93.0` (as 3.90.2) pins it at exactly `1.30.0`; the tree
   runs `1.32.2` through an override — accepted (2026-11-14, #258, #312).**
   Both exact-pinned versions carry all six open advisories (GHSA-f897, -6qxp,
   -46jr, -rvq5, -6prh, -22jm); the last of them is fixed in 1.32.0, so neither
-  peer can be met safely. The override in `pnpm-workspace.yaml` is the one
-  entry there that crosses an exact pin. It is Brandon's exception to
-  `docs/SECURITY.md`'s "never force-overridden" rule, granted 2026-11-14 for
+  peer can be met safely. The override in `pnpm-workspace.yaml` is one of
+  two entries there that cross an exact pin by decision; the other is
+  `dompurify` (`monaco-editor` 0.56.0 declares exactly 3.4.8, and the
+  override sets `^3.4.17`), Brandon's exception of 2026-11-15, recorded with
+  its exit in `docs/SECURITY.md` § Dependency advisories. The SDK
+  entry is Brandon's exception to `docs/SECURITY.md`'s "never force-overridden" rule, granted 2026-11-14 for
   this entry only. Compatibility, measured on 1.32.2 `[measured 2026-11-14]`:
   `pnpm typecheck`, the MCP plugin tests (`src/plugins`, 47 cases) and
   `evals/mcp-purge-order-integration.test.ts`, which drives real
