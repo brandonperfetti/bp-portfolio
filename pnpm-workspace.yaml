@@ -26,9 +26,10 @@ overrides:
   # 10.6.7 to probe-image-size; docs/DEPENDENCIES.md). This says nothing about
   # the advisory records' state, which is read from GitHub.
   ip-address: '^10.7.4'
-  # dompurify also crosses an exact pin: monaco-editor 0.56.0 (Payload's code
-  # field) declares exactly 3.4.8. That crossing predates the 2026-11-15
-  # Dependabot lane, which only raised the floor from ^3.4.13.
+  # dompurify crosses an exact pin by Brandon's decision (2026-11-15, #345):
+  # monaco-editor 0.56.0 (Payload's code field) declares exactly 3.4.8.
+  # Exit: drop this entry once a monaco-editor release the tree resolves pins
+  # dompurify >=3.4.17 (docs/SECURITY.md § Dependency advisories).
   dompurify: '^3.4.17'
   postcss: '^8.5.23'
   # lightningcss: pinned DOWN to the version @tailwindcss/node@4.3.3 hard-pins
@@ -44,9 +45,9 @@ overrides:
   # Drop it once @tailwindcss/postcss ships a release that moves off 1.32.0.
   lightningcss: 1.32.0
   hono: '^4.13.16' # @payloadcms/plugin-mcp path (prod)
-  # @modelcontextprotocol/sdk (#312, #258): the one override here that
-  # crosses an exact pin by Brandon's decision (dompurify, above, crosses
-  # one too, with no recorded decision). @payloadcms/plugin-mcp 3.91.0 (as 3.90.2) pins the SDK at
+  # @modelcontextprotocol/sdk (#312, #258): one of the two overrides here that
+  # cross an exact pin by Brandon's decision (dompurify, above, is the
+  # other). @payloadcms/plugin-mcp 3.91.0 (as 3.90.2) pins the SDK at
   # exactly 1.30.0, and mcp-handler 1.1.0 wants exactly 1.26.0; both are
   # affected by six advisories (GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h,
   # -46jr-4wx8-v453, -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw),
