@@ -57,10 +57,13 @@
  *   environment or the flag, matched ignoring case. That covers the
  *   console, `report.json` and usage errors. It also never prints any
  *   `x-vercel-protection-bypass` header value: everything after that
- *   header's `:` or `=` to the end of the line is redacted. All output
- *   passes through `createSafeReporter`, after URLs pass through
- *   `redactUrl`. Each whole line, and the serialized report, is checked
- *   last; one that would still hold a known value is withheld.
+ *   header's `:` or `=` to the end of the line is redacted. Everything
+ *   printed, and `report.json`, passes through `createSafeReporter`, after
+ *   URLs pass through `redactUrl`. Each whole line is checked last, and one
+ *   that would still hold a known value is withheld. A `report.json` that
+ *   would still hold one is not written, and the run exits 2. File paths
+ *   and PNG bytes are not scrubbed: paths come from `--out` and `--widths`,
+ *   which the next rule covers.
  *   Errors are described by `describeErrorSafely`, which drops the error
  *   object: a Playwright error's call log lists request headers.
  * - It refuses to run (exit 2, the value never quoted) when any argument

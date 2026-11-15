@@ -1257,15 +1257,20 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
       "'Other Dummy9Z'",
       ' , OtherDummy9Z',
     ]) {
-      const lines: string[] = []
-      const reporter = createSafeReporter(['KnownDummy9Z'], (line) =>
-        lines.push(line),
-      )
-      reporter.fail(new Error(`call log:\n  - ${BYPASS_HEADER}: ${other}\n`))
-      expect(lines).toEqual([
-        `diff-pages: Error: call log:\n  - ${BYPASS_HEADER}: ${REDACTED}\n`,
-      ])
-      expect(occurrences(lines[0], 'OtherDummy9Z')).toBe(0)
+      for (const eol of ['\n', '\r\n']) {
+        const lines: string[] = []
+        const reporter = createSafeReporter(['KnownDummy9Z'], (line) =>
+          lines.push(line),
+        )
+        reporter.fail(
+          new Error(`call log:${eol}  - ${BYPASS_HEADER}: ${other}${eol}next`),
+        )
+        expect(lines).toHaveLength(1)
+        expect(lines[0]).toMatch(
+          new RegExp(`- ${BYPASS_HEADER}: +${REDACTED}\r?\nnext$`),
+        )
+        expect(occurrences(lines[0], 'OtherDummy9Z')).toBe(0)
+      }
     }
     // A value that starts on the next line, as some serializers print it.
     expect(
@@ -1276,21 +1281,60 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
     ).toBe(0)
   })
 
-  it('serializes the report scrubbed, and withholds one whose JSON would hold a value', () => {
+  it.each(['x-vercel-protection-bypass', 'protection', 'x', 'BYPASS: '])(
+    'redacts a header value when the known value %j overlaps the header (re-review 9, F7)',
+    (known) => {
+      const lines: string[] = []
+      const reporter = createSafeReporter([known], (line) => lines.push(line))
+      reporter.fail(
+        new Error(`call log:\r\n  - ${BYPASS_HEADER}: ,OtherDummy9Z\r\n`),
+      )
+      expect(lines).toHaveLength(1)
+      expect(occurrences(lines[0], 'OtherDummy9Z')).toBe(0)
+      expect(occurrences(lines[0].toLowerCase(), known.toLowerCase())).toBe(0)
+    },
+  )
+
+  it('redacts every occurrence of a value, overlapping ones included', () => {
+    expect(redactSecret('x abab ababab y', 'abab')).toBe(
+      `x ${REDACTED} ${REDACTED} y`,
+    )
+    // A quoted value beside a header is gone whole, whichever pass finds it.
+    const quoted = 'tok"en with'
+    const out = redactSecret(`${BYPASS_HEADER}: "${quoted}" tail`, quoted)
+    expect(occurrences(out, quoted)).toBe(0)
+    expect(occurrences(out, 'en with')).toBe(0)
+  })
+
+  it('serializes the report scrubbed, and refuses to write one whose JSON would hold a value (re-review 9, F8)', () => {
     const { json } = createSafeReporter(['Dummy9Z-fixture'], () => {})
     expect(
       JSON.parse(json({ url: 'https://example.test/Dummy9Z-fixture' })),
     ).toEqual({
       url: `https://example.test/${REDACTED}`,
     })
-    // A value spanning two strings appears only once they are serialized.
-    const spanning = '"a",\n  "b": "'
-    const withheld = createSafeReporter([spanning], () => {}).json({
-      a: 'a',
-      b: 'b',
-    })
-    expect(occurrences(withheld, spanning)).toBe(0)
-    expect(JSON.parse(withheld)).toEqual({ withheld: WITHHELD })
+    // A value spanning two strings appears only once they are serialized;
+    // `{` is in every JSON object. Neither yields an empty or stand-in file.
+    for (const [value, report] of [
+      ['"a",\n  "b": "', { a: 'a', b: 'b' }],
+      ['{', { threshold: 0.1, a: 'ok' }],
+      ['}', { threshold: 0.1 }],
+    ] as const) {
+      const lines: string[] = []
+      const reporter = createSafeReporter([value], (line) => lines.push(line))
+      let thrown: unknown
+      try {
+        reporter.json(report)
+      } catch (error) {
+        thrown = error
+      }
+      expect(thrown).toBeInstanceOf(Error)
+      // diff-pages.mjs sends what `main` throws to `fail`: exit 2, whatever
+      // the comparison computed.
+      reporter.fail(thrown)
+      expect(reporter.exitCode(0)).toBe(2)
+      expect(occurrences(lines[0], value)).toBe(0)
+    }
   })
 
   it('scrubs the whole printed line, prefix included', () => {

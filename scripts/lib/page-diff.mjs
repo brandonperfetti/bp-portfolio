@@ -414,12 +414,17 @@ export function withholdUnsafe(text, token, fallbacks = [WITHHELD]) {
  * that chasing every encoded form does not close: four rounds each found
  * another.
  *
- * Every known literal goes first, longest first, then the header pass. The
- * header pass replaces everything after the header's `:` or `=` to the end
- * of the line (the next line too, when the value starts there): a value
- * can begin with `,`, `}` or a quote, and a pattern for the value's own
- * shape let such a value through whole (re-review 8, F7). It can also take
- * other text on that line; redacting too much is the safe side.
+ * Both passes find their spans in the original text, and the spans are
+ * merged before anything is replaced. A pass run on the other's output can
+ * miss what it should match: a value replaced inside a header name hides
+ * the header (re-review 9, F7), and a header pass run first can cut a value
+ * holding `"`. Every occurrence of every value is a span, overlapping ones
+ * included. A header's span is everything after its `:` or `=` and any
+ * blank space, to the end of the line, or the next line when the value
+ * starts there: a value can begin with `,`, `}` or a quote, and a pattern
+ * for the value's own shape let such a value through whole (re-review 8,
+ * F7). That can take other text on the line; redacting too much is the
+ * safe side.
  *
  * Last, {@link withholdUnsafe} tests the result: replacing one value can
  * complete another (re-review 8, F6).
@@ -432,18 +437,42 @@ export function withholdUnsafe(text, token, fallbacks = [WITHHELD]) {
  */
 export function redactSecret(text, token) {
   const tokens = knownValues(token)
-  let out = String(text)
+  const source = String(text)
+  const spans = []
   for (const value of tokens) {
     const literal = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    out = out.replace(new RegExp(literal, 'gi'), REDACTED)
+    const pattern = new RegExp(literal, 'gi')
+    for (
+      let match = pattern.exec(source);
+      match;
+      match = pattern.exec(source)
+    ) {
+      spans.push([match.index, match.index + match[0].length])
+      // Step one character, not past the match, so overlaps are found too.
+      pattern.lastIndex = match.index + 1
+    }
   }
-  out = out.replace(
-    new RegExp(
-      `(${BYPASS_HEADER}["']?\\s*[:=])(?:[^\\S\\r\\n]*\\r?\\n)?[^\\r\\n]*`,
-      'gi',
-    ),
-    `$1 ${REDACTED}`,
+  const header = new RegExp(
+    `(${BYPASS_HEADER}["']?\\s*[:=][^\\S\\r\\n]*(?:\\r?\\n[^\\S\\r\\n]*)?)([^\\r\\n]*)`,
+    'gi',
   )
+  for (const match of source.matchAll(header)) {
+    if (match[2].length === 0) continue
+    const start = match.index + match[1].length
+    spans.push([start, start + match[2].length])
+  }
+  spans.sort((a, b) => a[0] - b[0])
+  let out = ''
+  let cursor = 0
+  for (let i = 0; i < spans.length;) {
+    let [start, end] = spans[i]
+    for (i += 1; i < spans.length && spans[i][0] <= end; i += 1) {
+      end = Math.max(end, spans[i][1])
+    }
+    out += source.slice(cursor, start) + REDACTED
+    cursor = end
+  }
+  out += source.slice(cursor)
   return withholdUnsafe(out, tokens)
 }
 
@@ -550,7 +579,8 @@ export function scrubStrings(value, scrub) {
  * `scrub` redacts every known token and any bypass header value, then
  * withholds text that still holds a known value; `fail` prints an error
  * through `describeErrorSafely`, scrubbing the whole line, and makes the
- * failure sticky; `json` serializes the report the same way; and `exitCode`
+ * failure sticky; `json` serializes the report the same way, or throws
+ * rather than write one that would hold a value; and `exitCode`
  * returns 2 once anything was fatal, whatever the run computed after it.
  *
  * @param {Array<string | undefined>} tokens - Every value the run could use:
@@ -562,8 +592,8 @@ export function scrubStrings(value, scrub) {
  */
 export function createSafeReporter(tokens, print = console.error) {
   let fatal = false
-  // One redactSecret call over every token, never a header pass before a
-  // literal one: that pass can cut a token holding `"` and leave its tail.
+  // One redactSecret call over every token: its passes find their spans
+  // together, so neither can hide what the other must match.
   /**
    * @param {string} text - Text about to be printed or written.
    * @returns {string} The text with every known token redacted.
@@ -577,13 +607,17 @@ export function createSafeReporter(tokens, print = console.error) {
    * @param {unknown} value - The JSON-shaped report.
    * @returns {string} Its serialized text, scrubbed per string and then
    * checked whole, since serializing joins strings a value could span.
+   * @throws Error when that text would still hold a known value. No
+   * substitute is written: an empty or placeholder report would read as a
+   * run that completed (re-review 9, F8), so the caller fails the run.
    */
-  const json = (value) =>
-    withholdUnsafe(
-      `${JSON.stringify(scrubStrings(value, scrub), null, 2)}\n`,
-      tokens,
-      [`${JSON.stringify({ withheld: WITHHELD })}\n`, '{}\n'],
+  const json = (value) => {
+    const text = `${JSON.stringify(scrubStrings(value, scrub), null, 2)}\n`
+    if (withholdUnsafe(text, tokens, []) === text) return text
+    throw new Error(
+      'report.json was not written: its text would still hold the bypass secret',
     )
+  }
   const exitCode = (computed) => (fatal ? 2 : computed)
   return { scrub, fail, json, exitCode }
 }
