@@ -244,15 +244,16 @@ const sameCoordinate = (incoming: unknown, stored: unknown): boolean =>
  * Which callers reach this hook with a coordinate depends on the trust path
  * (corrected 2026-11-15, independent re-review 4 on #340). With access
  * enforced — REST, the MCP `createMedia`/`updateMedia` tools, any Local API
- * call without `overrideAccess` — payload 3.90.2 sanitizes upload data
+ * call with `overrideAccess: false` — payload 3.90.2 sanitizes upload data
  * before any collection hook runs (`uploads/sanitizeUploadData.js`, first
  * step of the create, update and updateByID operations): it drops
  * `_objectKey` always, drops `prefix` on update, and keeps a submitted
  * `prefix` only with a file or on create. A dropped coordinate is ignored,
  * not refused: the write succeeds and the row keeps its stored, flat
  * coordinates (pinned on the pg tier). What survives that step, and every
- * coordinate on the privileged Local API (`overrideAccess: true`: scripts,
- * seeds, server code), reaches this hook and is refused. Measured by the
+ * coordinate on the privileged Local API (`overrideAccess: true`, the Local
+ * API's default: scripts, seeds, server code), reaches this hook and is
+ * refused. Measured by the
  * release review (2026-11-15, F1) with the real adapter hooks in memory: a
  * privileged fileless update of either field alone passed
  * `refuseFilelessFileRewrite` and moved the row's URL to

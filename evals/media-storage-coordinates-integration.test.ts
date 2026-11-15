@@ -366,7 +366,7 @@ describe.skipIf(!connectionString)(
     })
 
     // Independent re-review 4 (S1, D1): with access enforced — REST, MCP,
-    // any Local API call without `overrideAccess` — Payload 3.90.2 sanitizes
+    // any Local API call with `overrideAccess: false` — Payload 3.90.2 sanitizes
     // upload data before any collection hook runs
     // (`uploads/sanitizeUploadData.js`, called first in the create, update and
     // updateByID operations). It drops `_objectKey` always and `prefix` on
