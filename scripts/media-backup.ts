@@ -44,7 +44,11 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 
-/** One media file a database names: its Blob pathname (the stored filename). */
+/**
+ * One media file a database names: its Blob pathname, which is its stored
+ * filename because Media is kept flat (no `prefix`, no `_objectKey`; #339,
+ * enforced by {@link parseReferences}).
+ */
 export type Reference = { pathname: string }
 
 /** What a HEAD on a public Blob URL tells us. */
@@ -141,16 +145,28 @@ export const MANIFESTS_PREFIX = 'manifests/'
 /**
  * Parse the reference query's output (`scripts/media-backup-references.sql`).
  *
- * @remarks Every row is a media file's stored filename, which is its Blob
- * pathname exactly: nothing is read out of URLs or text, so there is no
- * boundary to guess (owner's decision, #328). Throws on a row of any other
- * kind, and when the closing `end` line is absent or its count disagrees, so
- * a failed or truncated query can never pass as "no references".
+ * @remarks Every `filename` row is a media file's stored filename, which is
+ * its Blob pathname exactly while Media is flat: nothing is read out of URLs
+ * or text, so there is no boundary to guess (owner's decision, #328).
+ * Throws on a row of any other kind, and when the closing `end` line is
+ * absent or its count disagrees, so a failed or truncated query can never
+ * pass as "no references".
+ *
+ * Also throws, after those checks, when any `coordinates` row arrived: a
+ * media row with a non-empty `prefix` or `_objectKey` (#339). Since Payload
+ * 3.90 the adapter stores such a file at `prefix/_objectKey/filename`, so
+ * backing up or checking `filename` could copy nothing and vouch for an
+ * older object at the root (release review 2026-11-15, F2). The app refuses
+ * those writes (`refuseStorageCoordinateWrite`); this is the backup's own
+ * fail-closed side, so a row that got one anyway stops the job (exit 2)
+ * instead of reporting clean. The full path is deliberately not derived
+ * here: that is for the day a prefix or client uploads are adopted.
  */
 export function parseReferences(jsonl: string): Reference[] {
   const references: Reference[] = []
   let rows = 0
   let endCount: number | null = null
+  let withCoordinates = 0
   for (const line of jsonl.split('\n')) {
     if (!line.trim()) continue
     const row = JSON.parse(line) as {
@@ -163,6 +179,10 @@ export function parseReferences(jsonl: string): Reference[] {
       continue
     }
     rows += 1
+    if (row.kind === 'coordinates') {
+      withCoordinates += 1
+      continue
+    }
     if (
       row.kind !== 'filename' ||
       typeof row.value !== 'string' ||
@@ -180,6 +200,11 @@ export function parseReferences(jsonl: string): Reference[] {
   if (endCount !== rows) {
     throw new PublicError(
       `reference query reported ${endCount} rows but ${rows} arrived`,
+    )
+  }
+  if (withCoordinates > 0) {
+    throw new PublicError(
+      `${withCoordinates} storage coordinate${withCoordinates === 1 ? '' : 's'} (prefix or _objectKey) set on media rows: the backup assumes flat media storage, where a filename is the Blob pathname, and cannot vouch for such a row`,
     )
   }
   return references

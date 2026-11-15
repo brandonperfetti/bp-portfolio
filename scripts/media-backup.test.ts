@@ -159,6 +159,82 @@ describe('parseReferences', () => {
   })
 })
 
+describe('storage coordinates fail closed (#339)', () => {
+  it('refuses output naming a row with a prefix or object key, without quoting it', () => {
+    for (const column of ['prefix', '_objectkey']) {
+      let error: unknown
+      try {
+        parseReferences(
+          jsonl(
+            { column: 'filename', kind: 'filename', value: 'a.png' },
+            { column, kind: 'coordinates' },
+          ),
+        )
+      } catch (caught) {
+        error = caught
+      }
+      expect(error).toBeInstanceOf(PublicError)
+      expect((error as Error).message).toMatch(/flat/)
+      expect(publicFailureLine(error)).toContain('1 storage coordinate ')
+      expect((error as Error).message).not.toContain('a.png')
+    }
+  })
+
+  it('counts coordinate rows against the end line, so truncation still fails', () => {
+    const truncated = [
+      JSON.stringify({ column: 'prefix', kind: 'coordinates' }),
+      JSON.stringify({ count: 2, kind: 'end' }),
+    ].join('\n')
+    expect(() => parseReferences(truncated)).toThrow('2 rows but 1')
+  })
+
+  it('never reports clean for the release review F2 root-object collision', async () => {
+    // The row the adapter stored at `folder/key/fixture.png` (release review
+    // 2026-11-15, F2), as the references query now projects it: its filename
+    // and that it has coordinates. A manifest still maps the root-level
+    // `fixture.png` to an older object; before #339 the check vouched for it.
+    const projected = jsonl(
+      { column: 'filename', kind: 'filename', value: 'fixture.png' },
+      { column: 'prefix', kind: 'coordinates' },
+      { column: '_objectkey', kind: 'coordinates' },
+    )
+    const seen: string[] = []
+    const run = async () =>
+      check({
+        deps: {
+          r2Head: async (key: string) => {
+            seen.push(key)
+            return key === 'objects/fixture.png'
+              ? { metadata: {}, size: 4 }
+              : null
+          },
+        },
+        manifest: {
+          entries: [
+            {
+              contentType: 'image/png',
+              etag: 'old',
+              key: 'objects/fixture.png',
+              pathname: 'fixture.png',
+              sha256: 'fixture',
+              size: 4,
+              status: 'copied',
+              uploadedAt: now.toISOString(),
+            },
+          ],
+          generatedAt: now.toISOString(),
+          origin: ORIGIN,
+          references: 1,
+          version: 1,
+        },
+        now,
+        references: parseReferences(projected),
+      })
+    await expect(run()).rejects.toThrow(PublicError)
+    expect(seen).toEqual([])
+  })
+})
+
 describe('keys and URLs', () => {
   it('mirrors the Blob pathname under objects/, and a changed file under versions/', () => {
     expect(candidateKeys('covers/a.png', 'abc123')).toEqual([

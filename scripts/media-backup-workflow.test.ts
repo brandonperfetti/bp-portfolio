@@ -157,6 +157,28 @@ describe('scripts/media-backup-references.sql (#328 security review F1)', () => 
   })
 })
 
+describe('scripts/media-backup-references.sql storage coordinates (#339)', () => {
+  const statements = sql
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('--'))
+    .join('\n')
+
+  it('emits a coordinates row for any media row with a prefix or object key', () => {
+    expect(statements).toContain("f.key in ('prefix', '_objectkey')")
+    expect(statements).toContain("'kind', 'coordinates'")
+  })
+
+  it('never projects a coordinate value into the output', () => {
+    const start = statements.indexOf('coords as (')
+    expect(start).toBeGreaterThanOrEqual(0)
+    const coordinates = statements.slice(
+      start,
+      statements.indexOf('select line'),
+    )
+    expect(coordinates).not.toMatch(/'value', value/)
+  })
+})
+
 describe('scripts/media-backup.ts writes (#328)', () => {
   it('makes every R2 write create-only and never deletes', () => {
     expect(script).toContain("'--if-none-match',\n        '*',")
