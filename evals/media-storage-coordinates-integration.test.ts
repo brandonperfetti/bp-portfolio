@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -94,6 +95,7 @@ describe.skipIf(!connectionString)(
   'Media storage coordinates (real Payload, real Postgres)',
   () => {
     let payload: Awaited<ReturnType<typeof import('payload').getPayload>>
+    let createLocalReq: typeof import('payload').createLocalReq
     let ambientOrigin: string | undefined
     const pool = () => (payload.db as unknown as { pool: Pool }).pool
 
@@ -110,7 +112,9 @@ describe.skipIf(!connectionString)(
     beforeAll(async () => {
       ambientOrigin = process.env.STORAGE_VERCEL_BLOB_BASE_URL
       delete process.env.STORAGE_VERCEL_BLOB_BASE_URL
-      const { getPayload } = await import('payload')
+      const payloadModule = await import('payload')
+      const { getPayload } = payloadModule
+      createLocalReq = payloadModule.createLocalReq
       const { default: config } = await import('../src/payload.config')
       payload = await getPayload({ config })
       await cleanup()
@@ -263,6 +267,103 @@ describe.skipIf(!connectionString)(
         }
       },
     )
+
+    /** The stored file on local disk, where this tier uploads. */
+    const storedFile = (filename: string) =>
+      path.resolve(
+        (payload.collections.media.config.upload as { staticDir: string })
+          .staticDir,
+        filename,
+      )
+
+    const replacement = async () => {
+      const data = await png()
+      return {
+        data,
+        mimetype: 'image/png',
+        name: `${MARKER}-replacement.png`,
+        size: data.byteLength,
+      }
+    }
+
+    // CodeRabbit round 1 on #340: Payload unlinks the stored file
+    // (`deleteAssociatedFiles`) before collection beforeValidate hooks run
+    // whenever an update carries a file, so a refusal made there would leave
+    // the row naming a deleted file on local disk.
+    it('refuses a replacement upload that sets a prefix, by id and by where, and keeps the original file', async () => {
+      const row = await upload('replace-prefix')
+      const file = storedFile(row.filename!)
+      const before = await fs.readFile(file)
+      try {
+        await expect(
+          payload.update({
+            collection: 'media',
+            context,
+            id: row.id,
+            data: { prefix: 'folder' } as never,
+            file: await replacement(),
+            overrideAccess: true,
+          }),
+        ).rejects.toMatchObject({
+          message: MEDIA_STORAGE_COORDINATES_ERROR,
+          status: 400,
+        })
+        expect(Buffer.compare(await fs.readFile(file), before)).toBe(0)
+        await expect(
+          payload.update({
+            collection: 'media',
+            context,
+            where: { id: { equals: row.id } },
+            data: { _objectKey: 'key' } as never,
+            file: await replacement(),
+            overrideAccess: true,
+          }),
+        ).rejects.toMatchObject({ message: MEDIA_STORAGE_COORDINATES_ERROR })
+        expect(Buffer.compare(await fs.readFile(file), before)).toBe(0)
+        expect(await storedCoordinates(row.id)).toEqual({
+          filename: row.filename,
+          prefix: '',
+          _objectkey: null,
+        })
+      } finally {
+        await deleteRow(row.id)
+      }
+    })
+
+    it('refuses an uploadEdits crop that sets a prefix, and keeps the original file', async () => {
+      const row = await upload('crop-prefix')
+      const file = storedFile(row.filename!)
+      const before = await fs.readFile(file)
+      try {
+        const asRead = await payload.findByID({
+          collection: 'media',
+          depth: 0,
+          id: row.id,
+          overrideAccess: true,
+        })
+        const req = await createLocalReq({ context }, payload)
+        ;(req as { query: Record<string, unknown> }).query = {
+          uploadEdits: {
+            crop: { x: 0, y: 0, width: 50, height: 50, unit: '%' },
+            widthInPixels: 2,
+            heightInPixels: 1,
+          },
+        }
+        await expect(
+          payload.update({
+            collection: 'media',
+            context,
+            id: row.id,
+            data: { ...asRead, prefix: 'folder' } as never,
+            overrideAccess: true,
+            req,
+          }),
+        ).rejects.toMatchObject({ message: MEDIA_STORAGE_COORDINATES_ERROR })
+        expect(Buffer.compare(await fs.readFile(file), before)).toBe(0)
+      } finally {
+        await deleteRow(row.id)
+      }
+    })
 
     it('passes an alt edit and the doc round-tripped as read', async () => {
       const row = await upload('round-trip')

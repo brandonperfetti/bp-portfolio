@@ -253,8 +253,8 @@ stay where they are:
   `refuseCreateWithoutUpload` at `:77-98` over the fields at `:25-32`;
   `beforeValidate` hook `refuseFilelessFileRewrite` at `:185-211` over the
   fields at `:119-125`, compared by `sameStoredValue` at `:132-135`;
-  `beforeOperation` hook `refuseUploadEditsRefetch` at `:373-426` over the
-  fields at `:311`; registered at `:468-477`; lane D, #242; #270; line
+  `beforeOperation` hook `refuseUploadEditsRefetch` at `:448-501` over the
+  fields at `:386`; registered at `:543-553`; lane D, #242; #270; line
   numbers corrected 2026-11-15 with #339]. The
   update guard also passes the storage adapter's own metadata write-back,
   which runs with the server-only `context.skipCloudStorage`.
@@ -271,9 +271,15 @@ stay where they are:
   change either to a non-empty value and, without a file, may not change
   either at all; sending them back as stored, `alt` edits and a normal
   upload (`prefix: ''`, no `_objectKey`) pass. A 400, by id and per document
-  in a `where` update [source: `src/collections/Media.ts` — `beforeValidate`
-  hook `refuseStorageCoordinateWrite` at `:280-305` over the fields at
-  `:219`; pinned on the pg tier, including with the adapter enabled,
+  in a `where` update. An update that carries a file, or an `uploadEdits`
+  query, is checked one step earlier, because Payload deletes the stored file
+  before `beforeValidate` runs: a refusal there would leave the row naming a
+  deleted file on local disk (measured 2026-11-15, CodeRabbit round 1 on
+  #340); a `where` update with a file is refused for any non-empty coordinate
+  [source: `src/collections/Media.ts` — `beforeValidate` hook
+  `refuseStorageCoordinateWrite` at `:282-307` and `beforeOperation` hook
+  `refuseStorageCoordinateUpload` at `:334-381`, over the fields at `:219`;
+  pinned on the pg tier, including with the adapter enabled,
   `evals/media-storage-coordinates-integration.test.ts`,
   `evals/media-storage-schema-integration.test.ts`]. The media backup relies
   on the same invariant and fails closed on a row that breaks it
@@ -307,7 +313,7 @@ stay where they are:
   the declared length and on the bytes (`:13`, `:126`, `:137`).
 - SVG uploads through the admin stay allowed for legacy content, and SVG
   can carry scripts, so only trusted staff hold editor accounts
-  [source: `src/collections/Media.ts:435-437`, the collection's TSDoc].
+  [source: `src/collections/Media.ts:510-511`, the collection's TSDoc].
   **Operational.**
 
 ## End-user authorization (Clerk)

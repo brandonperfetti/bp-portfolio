@@ -275,7 +275,9 @@ const sameCoordinate = (incoming: unknown, stored: unknown): boolean =>
  * comparison needs the stored doc, which Payload hands it per document for
  * id and `where` updates alike. It runs before the adapter's prefix
  * normalization (`beforeChange`) and its upload (`afterChange`), so a refused
- * write stores and uploads nothing.
+ * write stores and uploads nothing. It is NOT early enough for an update that
+ * carries a file: Payload deletes the stored file before `beforeValidate`, so
+ * `refuseStorageCoordinateUpload` refuses those first.
  */
 export const refuseStorageCoordinateWrite: CollectionBeforeValidateHook = ({
   data,
@@ -303,6 +305,79 @@ export const refuseStorageCoordinateWrite: CollectionBeforeValidateHook = ({
   }
   return data
 }
+
+/**
+ * Refuse a file-carrying Media update that sets a coordinate, before Payload
+ * deletes the stored file (#339; found by CodeRabbit round 1 on #340).
+ *
+ * @remarks `refuseStorageCoordinateWrite` alone is too late for these. When an
+ * update carries a file, payload 3.90.2's `updateDocument` unlinks the row's
+ * stored file from `staticDir` (`deleteAssociatedFiles`) BEFORE the
+ * collection `beforeValidate` hooks run
+ * (`collections/operations/utilities/update.js:90` vs `:137`). A refusal there
+ * left the row naming a deleted file — measured on local disk, 2026-11-15:
+ * the original was gone (ENOENT) after the 400. The same holds when an
+ * `uploadEdits` query makes Payload re-fetch the row's own file, which sets
+ * `req.file` inside the operation. On Blob the adapter disables local
+ * storage, so the unlink finds nothing there; the hook still runs.
+ *
+ * So for an update that carries a file or an `uploadEdits` query, this
+ * `beforeOperation` hook applies the same rule one step earlier: an incoming
+ * non-empty `prefix` or `_objectKey` that differs from the stored row is
+ * refused. By id it reads the stored row, so an unchanged value and a
+ * re-upload that flattens one still pass; a `where` (bulk) update has no
+ * single stored row to compare, so it refuses any non-empty coordinate, as
+ * `refuseUploadEditsRefetch` does for its fields. Fileless updates and every
+ * create are left to `refuseStorageCoordinateWrite` (no deletion happens on
+ * those paths before it runs), which keeps their per-document bulk errors.
+ */
+export const refuseStorageCoordinateUpload: CollectionBeforeOperationHook =
+  async ({ args, collection, operation, req }) => {
+    const edits = req.query?.uploadEdits
+    const carriesFile =
+      Boolean(req.file) || (typeof edits === 'object' && edits !== null)
+    if (operation !== 'update' || !carriesFile) {
+      return args
+    }
+    const { data, id } = args as {
+      data?: Record<string, unknown>
+      id?: number | string
+    }
+    const incoming = data ?? {}
+    const sent = STORAGE_COORDINATE_FIELDS.filter(
+      (field) => !isEmptyCoordinate(incoming[field]),
+    )
+    if (sent.length === 0) {
+      return args
+    }
+    const stored =
+      id === undefined
+        ? null
+        : ((await req.payload.findByID({
+            collection: collection.slug as 'media',
+            depth: 0,
+            disableErrors: true,
+            id,
+            overrideAccess: true,
+            req,
+          })) as Record<string, unknown> | null)
+    // An id that finds nothing: Payload 404s before it would delete.
+    if (id !== undefined && stored === null) {
+      return args
+    }
+    const changed = stored
+      ? sent.filter((field) => !sameCoordinate(incoming[field], stored[field]))
+      : sent
+    if (changed.length > 0) {
+      throw new APIError(
+        MEDIA_STORAGE_COORDINATES_ERROR,
+        400,
+        { changed },
+        true,
+      )
+    }
+    return args
+  }
 
 /**
  * The two body fields Payload's re-fetch reads to find the bytes it re-crops
@@ -469,6 +544,7 @@ export const Media: CollectionConfig = {
       refuseUploadInReadOnlyMedia,
       refuseCreateWithoutUpload,
       refuseUploadEditsRefetch,
+      refuseStorageCoordinateUpload,
     ],
     beforeValidate: [
       refuseFileWriteInReadOnlyMedia,
