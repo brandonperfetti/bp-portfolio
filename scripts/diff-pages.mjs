@@ -61,7 +61,11 @@
  *   printed, and `report.json`, passes through `createSafeReporter`, after
  *   URLs pass through `redactUrl`. Each whole line is checked last, and one
  *   that would still hold a known value is withheld. A `report.json` that
- *   would still hold one is not written, and the run exits 2. File paths
+ *   would still hold one is not written, and the run exits 2; that
+ *   includes a value equal to one of its keys, such as `comparisons`. A
+ *   value that matches fixed text the script prints, such as `PASS`, is
+ *   redacted there too: the printed summary then reads differently, while
+ *   the exit code still reports the comparison. File paths
  *   and PNG bytes are not scrubbed: paths come from `--out` and `--widths`,
  *   which the next rule covers.
  *   Errors are described by `describeErrorSafely`, which drops the error

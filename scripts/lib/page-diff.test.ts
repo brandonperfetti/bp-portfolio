@@ -1337,6 +1337,28 @@ describe('teardown and error output never print the bypass secret (#273)', () =>
     }
   })
 
+  it.each(['comparisons', 'baselineUrl', 'viewport', 'percent', 'diffImage'])(
+    'keeps report keys, and refuses the report when the known value %j is one (re-review 10, F9)',
+    (known) => {
+      const report = {
+        baselineUrl: 'https://a.test/',
+        candidateUrl: 'https://b.test/',
+        threshold: 0.1,
+        comparisons: [{ viewport: 'desktop', percent: 0, diffImage: 'x.png' }],
+      }
+      expect(scrubStrings(report, (text) => text.replace(known, 'R'))).toEqual(
+        expect.objectContaining({ comparisons: expect.any(Array) }),
+      )
+      const lines: string[] = []
+      const reporter = createSafeReporter([known], (line) => lines.push(line))
+      expect(() => reporter.json(report)).toThrow(
+        /report\.json was not written/,
+      )
+      reporter.fail(new Error('report.json was not written'))
+      expect(reporter.exitCode(0)).toBe(2)
+    },
+  )
+
   it('scrubs the whole printed line, prefix included', () => {
     const lines: string[] = []
     const reporter = createSafeReporter(['pages: Err'], (line) =>

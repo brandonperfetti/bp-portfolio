@@ -551,9 +551,15 @@ export function knownBypassTokens(argv, env = {}) {
  * holding `"` or `\`, because `JSON.stringify` escapes them first, and a
  * reader that parses the file gets the token back (#273).
  *
+ * Keys are left as they are. The report's keys are fixed by the script, so
+ * a key holding a known value is a collision, not a leak, and renaming it
+ * would write a report missing a field it promises (re-review 10, F9). The
+ * reporter's `json` checks the serialized text whole, so such a key fails
+ * the run instead.
+ *
  * @param {unknown} value - The value to clean.
  * @param {(text: string) => string} scrub - The reporter's scrub function.
- * @returns A copy with every string value, and every key, scrubbed.
+ * @returns A copy with every string value scrubbed and every key kept.
  */
 export function scrubStrings(value, scrub) {
   if (typeof value === 'string') return scrub(value)
@@ -562,7 +568,7 @@ export function scrubStrings(value, scrub) {
   if (value && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value).map(([key, item]) => [
-        scrub(key),
+        key,
         scrubStrings(item, scrub),
       ]),
     )
