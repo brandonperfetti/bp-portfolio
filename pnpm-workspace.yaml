@@ -74,7 +74,6 @@ overrides:
   shell-quote: '^1.11.0' # launch-editor via Spotlight (dev)
   source-map-js: '^1.2.2' # postcss, tailwind (build)
   fast-copy: '^3.1.0' # pino-pretty via payload (prod)
-  'happy-dom@20': '^20.14.6' # @lexical/headless, vitest peer (#427)
   'vite@8': '~8.1.6' # vitest, storybook (dev); ~ keeps lightningcss 1.32.0 valid
   # browserslist (#232, 2026-09-26): floor at the patched release for
   # GHSA-c83g-rgw3-j3cx + GHSA-73wf-gq98-2v4g (High ×2, <4.28.7). Build-time
