@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import { MEDIA_STORAGE_COORDINATES_ERROR } from '../src/collections/Media'
+
 /**
  * Media reads with Blob storage ENABLED, against the schema the committed
  * migrations build (#257).
@@ -17,9 +19,14 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  * migrations only.
  *
  * The token is a syntactically valid dummy, set before the config is
- * imported. Nothing here writes or fetches: Media reads never contact the
- * store, so no real Blob store is touched even when a real token is exported
- * in the shell (it is overridden for this file).
+ * imported. Nothing here uploads, deletes or fetches: Media reads and fileless
+ * updates never contact the store, so no real Blob store is touched even when
+ * a real token is exported in the shell (it is overridden for this file).
+ *
+ * The coordinate case (#339) checks the storage-coordinate guard with the
+ * adapter ENABLED, the shape the release review measured (F1): its fixture row
+ * is inserted and removed with SQL, because a Local API create would upload
+ * and a Local API delete would call the store.
  *
  * Runs in the pg tier (`vitest run --root evals`) with `DATABASE_URI` set.
  */
@@ -66,6 +73,59 @@ describe.skipIf(!connectionString)(
         'name' in field ? [field.name] : [],
       )
       expect(names).toEqual(expect.arrayContaining(['_objectKey', 'prefix']))
+    })
+
+    it('refuses a fileless prefix or _objectKey update with the adapter enabled (#339)', async () => {
+      const { pool } = payload.db as unknown as {
+        pool: {
+          query: (
+            text: string,
+            values?: unknown[],
+          ) => Promise<{ rows: Record<string, unknown>[] }>
+        }
+      }
+      const filename = 'zz-media-storage-schema-coordinates.png'
+      const { rows } = await pool.query(
+        `insert into media (alt, filename, mime_type, filesize, width, height)
+         values ('zz-media-storage-schema coordinates', $1, 'image/png', 4, 1, 1)
+         returning id`,
+        [filename],
+      )
+      const id = rows[0].id as number
+      try {
+        for (const data of [
+          { prefix: 'other-folder' },
+          { _objectKey: 'other-key' },
+        ]) {
+          await expect(
+            payload.update({
+              collection: 'media',
+              context: { disableRevalidate: true },
+              id,
+              data: data as never,
+              overrideAccess: true,
+            }),
+          ).rejects.toMatchObject({
+            message: MEDIA_STORAGE_COORDINATES_ERROR,
+            status: 400,
+          })
+        }
+        const updated = await payload.update({
+          collection: 'media',
+          context: { disableRevalidate: true },
+          id,
+          data: { alt: 'zz-media-storage-schema coordinates, edited' },
+          overrideAccess: true,
+        })
+        expect(updated.alt).toBe('zz-media-storage-schema coordinates, edited')
+        const stored = await pool.query(
+          'select prefix, _objectkey from media where id = $1',
+          [id],
+        )
+        expect(stored.rows[0]).toEqual({ prefix: '', _objectkey: null })
+      } finally {
+        await pool.query('delete from media where id = $1', [id])
+      }
     })
 
     it('reads Media without a missing-column error', async () => {

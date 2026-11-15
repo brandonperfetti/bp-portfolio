@@ -250,13 +250,34 @@ stay where they are:
   hidden `url`/`filename`, since Payload's crop cannot re-fetch without
   them. **Unmeasured on Blob.** All three refusals are a 400 naming the
   ingest route [source: `src/collections/Media.ts` — `beforeOperation` hook
-  `refuseCreateWithoutUpload` at `:72-93` over the fields at `:20-27`;
-  `beforeValidate` hook `refuseFilelessFileRewrite` at `:176-202` over the
-  fields at `:111-117`, compared by `sameStoredValue` at `:124-127`;
-  `beforeOperation` hook `refuseUploadEditsRefetch` at `:270-323` over the
-  fields at `:208`; registered at `:361-363`; lane D, #242; #270]. The
+  `refuseCreateWithoutUpload` at `:77-98` over the fields at `:25-32`;
+  `beforeValidate` hook `refuseFilelessFileRewrite` at `:185-211` over the
+  fields at `:119-125`, compared by `sameStoredValue` at `:132-135`;
+  `beforeOperation` hook `refuseUploadEditsRefetch` at `:378-431` over the
+  fields at `:316`; registered at `:473-482`; lane D, #242; #270; line
+  numbers corrected 2026-11-15 with #339]. The
   update guard also passes the storage adapter's own metadata write-back,
   which runs with the server-only `context.skipCloudStorage`.
+- **Media storage is flat: no write sets or changes `prefix` or
+  `_objectKey` (#339).** Since Payload 3.90 (#334) the Blob adapter builds a
+  file's object path and served URL as `prefix/_objectKey/filename`, and both
+  fields are only `admin.hidden`/`readOnly`, with no field access, so REST,
+  the Local API and the MCP media tools can write them
+  [source: plugin-cloud-storage 3.90.2 `fields/getFields.js:15-31`]. The
+  release review (2026-11-15, F1) measured with the real adapter hooks in
+  memory that a fileless update of either one alone passed the guard above
+  and moved the row's URL to `/<value>/<filename>`. Now a create may not
+  carry a non-empty value of either, file or no file; an update may not
+  change either to a non-empty value and, without a file, may not change
+  either at all; sending them back as stored, `alt` edits and a normal
+  upload (`prefix: ''`, no `_objectKey`) pass. A 400, by id and per document
+  in a `where` update [source: `src/collections/Media.ts` — `beforeValidate`
+  hook `refuseStorageCoordinateWrite` at `:280-310` over the fields at
+  `:219`; pinned on the pg tier, including with the adapter enabled,
+  `evals/media-storage-coordinates-integration.test.ts`,
+  `evals/media-storage-schema-integration.test.ts`]. The media backup relies
+  on the same invariant and fails closed on a row that breaks it
+  (`docs/MAINTENANCE.md` § Media backups).
   _Corrected 2026-09-27 (CodeRabbit round 1 on #271):_ this bullet named the
   `uploadEdits` path a "known gap, not a rule that holds … unmeasured"; do
   not rely on that text — the path is now measured and refused. `[measured, local disk, 2026-09-27]` without the

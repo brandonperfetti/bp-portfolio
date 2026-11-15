@@ -112,6 +112,9 @@ export const refuseCreateWithoutUpload: CollectionBeforeOperationHook = ({
  * disk: a fileless `url`-only update, by id and by `where`, leaves the column
  * at `/api/media/file/<filename>`. What a body `url` can do is drive a
  * re-fetch under `uploadEdits`; `refuseUploadEditsRefetch` owns that.
+ * `prefix` and `_objectKey` (Payload 3.90) also decide where the bytes are,
+ * but they are not listed either: Media is kept flat, so they are refused by
+ * a stricter rule of their own, `refuseStorageCoordinateWrite` (#339).
  */
 const FILE_IDENTITY_FIELDS = [
   'filename',
@@ -152,7 +155,8 @@ const sameStoredValue = (incoming: unknown, stored: unknown): boolean =>
  * (`generateFileData`, which runs with `req.file` set), and a fileless write
  * can only make them disagree with the bytes that are served — width and
  * height feed image layout and OG metadata. Passed: `alt`, focal point and
- * every other field; any of the five sent back UNCHANGED (a client
+ * every other field but the storage coordinates `prefix` and `_objectKey`,
+ * which `refuseStorageCoordinateWrite` refuses (#339); any of the five sent back UNCHANGED (a client
  * round-tripping the doc — and Payload itself: measured 2026-09-27, the
  * `data` this hook sees on an alt-only or focal-only Local API update already
  * carries the stored file fields, so a presence check here would refuse every
@@ -202,6 +206,100 @@ export const refuseFilelessFileRewrite: CollectionBeforeValidateHook = ({
       { changed },
       true,
     )
+  }
+  return data
+}
+
+/**
+ * The storage coordinates the cloud-storage adapter folds into an object's
+ * path since Payload 3.90 (#257): `prefix/_objectKey/filename`
+ * [source: plugin-cloud-storage 3.90.2 `utilities/buildPrefixWithObjectKey.js`,
+ * `hooks/afterChange.js`, `hooks/beforeChange.js`].
+ */
+const STORAGE_COORDINATE_FIELDS = ['prefix', '_objectKey'] as const
+
+/** The coordinate refusal text, exported so tests pin the exact wording. */
+export const MEDIA_STORAGE_COORDINATES_ERROR =
+  "Media files are stored flat: a write may not set or change a Media row's prefix or _objectKey. Upload the file without them."
+
+/** `''`, `null` and absent are one value: no coordinate. */
+const isEmptyCoordinate = (value: unknown): boolean =>
+  value === undefined || value === null || value === ''
+
+/** Same coordinate: both empty, or equal once stringified. */
+const sameCoordinate = (incoming: unknown, stored: unknown): boolean =>
+  isEmptyCoordinate(incoming)
+    ? isEmptyCoordinate(stored)
+    : !isEmptyCoordinate(stored) && String(incoming) === String(stored)
+
+/**
+ * Keep Media storage flat: refuse a write that sets or changes `prefix` or
+ * `_objectKey` (#339).
+ *
+ * @remarks Payload 3.90 put both fields on Media (#334, `alwaysInsertFields`)
+ * and the adapter builds every object path, upload and served URL from them.
+ * They are only `admin.hidden`/`readOnly` — no field access — so REST, the
+ * Local API and the MCP `createMedia`/`updateMedia` tools can write them
+ * [source: plugin-cloud-storage 3.90.2 `fields/getFields.js:15-31`]. Measured
+ * by the release review (2026-11-15, F1) with the real adapter hooks in
+ * memory: a fileless update of either field alone passed
+ * `refuseFilelessFileRewrite` and moved the row's URL to
+ * `/<coordinate>/<filename>`, where no bytes of its own were. And an upload
+ * carrying them stores the bytes at `prefix/_objectKey/filename`, which the
+ * media backup, built on filename-is-the-pathname, would not copy (F2).
+ *
+ * This app never needs either: no collection prefix is configured and client
+ * uploads, the only path where the adapter itself sets `_objectKey`
+ * [source: `utilities/resolveSignedURLKey.js:33`], are off
+ * (`src/payload.config.ts`). So the rule is the flat invariant, not a
+ * per-write identity check:
+ *
+ * - a create may not carry a non-empty value of either, file or no file;
+ * - an update may not change either to a non-empty value, and without a file
+ *   may not change either at all (clearing a stored one re-points the URL
+ *   just as setting one does);
+ * - an update that sends them back as stored passes (a client round-tripping
+ *   the doc, and Payload itself, whose `data` here already carries the stored
+ *   fields — see `refuseFilelessFileRewrite`), as do alt edits, a normal
+ *   upload (`prefix: ''`, no `_objectKey`) and a re-upload that flattens a
+ *   stored coordinate.
+ *
+ * The adapter's own metadata write-back is not exempted: it deletes both
+ * fields from what it writes (`hooks/afterChange.js`), so it never needs to.
+ * The backup refuses a non-flat row on its own side too
+ * (`scripts/media-backup-references.sql`), so a row written before this hook,
+ * or by SQL, cannot pass its check either. Adopting a prefix or client
+ * uploads means replacing this hook and teaching the backup the full path.
+ *
+ * A `beforeValidate` hook for the reason `refuseFilelessFileRewrite` is: the
+ * comparison needs the stored doc, which Payload hands it per document for
+ * id and `where` updates alike. It runs before the adapter's prefix
+ * normalization (`beforeChange`) and its upload (`afterChange`), so a refused
+ * write stores and uploads nothing.
+ */
+export const refuseStorageCoordinateWrite: CollectionBeforeValidateHook = ({
+  data,
+  operation,
+  originalDoc,
+  req,
+}) => {
+  if (operation !== 'create' && operation !== 'update') {
+    return data
+  }
+  const incoming = (data ?? {}) as Record<string, unknown>
+  const stored = (operation === 'update' ? (originalDoc ?? {}) : {}) as Record<
+    string,
+    unknown
+  >
+  const changed = STORAGE_COORDINATE_FIELDS.filter((field) => {
+    const value = incoming[field]
+    if (value === undefined || sameCoordinate(value, stored[field])) {
+      return false
+    }
+    return !req.file || !isEmptyCoordinate(value)
+  })
+  if (changed.length > 0) {
+    throw new APIError(MEDIA_STORAGE_COORDINATES_ERROR, 400, { changed }, true)
   }
   return data
 }
@@ -372,7 +470,11 @@ export const Media: CollectionConfig = {
       refuseCreateWithoutUpload,
       refuseUploadEditsRefetch,
     ],
-    beforeValidate: [refuseFileWriteInReadOnlyMedia, refuseFilelessFileRewrite],
+    beforeValidate: [
+      refuseFileWriteInReadOnlyMedia,
+      refuseFilelessFileRewrite,
+      refuseStorageCoordinateWrite,
+    ],
     afterRead: [pointMediaUrlAtReadOnlyOrigin],
     afterChange: [
       revalidateCollectionTag('posts', ['/articles']),
