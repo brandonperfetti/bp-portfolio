@@ -12,10 +12,22 @@
 --     every media row's stored filename and, should the collection ever
 --     define image sizes, each size variant's filename (`sizes_<name>_filename`
 --     columns, found by name, so a size added later needs no edit here). A
---     filename is the file's Blob pathname: media has no prefix.
+--     filename is the file's Blob pathname only while the row is flat (below).
+--   {"kind":"coordinates","column":"prefix"|"_objectkey"}
+--     one per media row whose `prefix` is non-empty or whose `_objectkey` is
+--     set (#339). Since Payload 3.90 the storage adapter stores and serves a
+--     file at `prefix/_objectKey/filename`, so for such a row the filename
+--     is NOT the pathname, and a check at the filename can vouch for another
+--     object. Media is kept flat (`refuseStorageCoordinateWrite` in
+--     src/collections/Media.ts), so any such row is a broken invariant:
+--     scripts/media-backup.ts refuses the whole output and the job exits
+--     non-zero. The value is not printed: only that the row has one. The
+--     columns are read through to_jsonb, so a database not yet migrated to
+--     them simply has none.
 --   {"kind":"end","count":<n>}
 --     printed last, only by a statement that completed, so an empty or
---     truncated result is never read as "no references"
+--     truncated result is never read as "no references"; <n> counts every
+--     row above it, of both kinds
 --
 -- Scope (owner's decision, #328): the media table's files only. Store URLs
 -- written into text or JSON columns are not read: deciding where a URL
@@ -43,12 +55,24 @@ with refs as (
   where (f.key = 'filename' or f.key ~ '^sizes_.+_filename$')
     and f.value is not null
     and f.value <> ''
+),
+coords as (
+  select f.key as col
+  from public.media m
+  cross join lateral jsonb_each_text(to_jsonb(m)) as f(key, value)
+  where f.key in ('prefix', '_objectkey')
+    and f.value is not null
+    and f.value <> ''
 )
 select line from (
   select 0 as ord, json_build_object('kind', 'filename', 'column', col, 'value', value)::text as line
   from refs
   union all
-  select 1, json_build_object('kind', 'end', 'count', (select count(*) from refs))::text
+  select 0, json_build_object('kind', 'coordinates', 'column', col)::text
+  from coords
+  union all
+  select 1, json_build_object('kind', 'end', 'count',
+    (select count(*) from refs) + (select count(*) from coords))::text
 ) lines
 order by ord;
 

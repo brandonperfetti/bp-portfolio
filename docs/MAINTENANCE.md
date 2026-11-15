@@ -115,10 +115,10 @@
   and rows name media by Blob pathname, so a restored database whose media
   is gone renders broken pages (#328). `.github/workflows/media-backup.yml`
   runs daily at 10:23 UTC, after the dumps: it reads the media table's files
-  in the staging and production databases (each row's filename, which is its
-  Blob pathname, and any size variant's; `scripts/media-backup-references.sql`,
-  in a `READ ONLY` transaction the SQL asserts itself, since the Supabase
-  pooler drops `PGOPTIONS`), copies the new and changed ones from their
+  in the staging and production databases (each row's filename and any size
+  variant's; `scripts/media-backup-references.sql`, in a `READ ONLY`
+  transaction the SQL asserts itself, since the Supabase pooler drops
+  `PGOPTIONS`), copies the new and changed ones from their
   **public** Blob URLs into the **private R2 bucket
   `bp-portfolio-media-backups`**, writes a dated manifest, then checks that
   every media file is in that manifest with its bytes in R2 (each database
@@ -131,6 +131,20 @@
   the owner's decision (#328): **the media table's files only**. Store URLs
   typed into text or JSON columns are not read, and a store object no media
   row names is not backed up.
+  **Media storage is flat, and the backup depends on it (#339).** Since
+  Payload 3.90 (#334) the Blob adapter stores and serves a file at
+  `prefix/_objectKey/filename`, so a filename is the Blob pathname only while
+  both are empty. Media keeps them empty: `refuseStorageCoordinateWrite`
+  (`src/collections/Media.ts`) refuses any create or update that sets or
+  changes either, and no collection prefix or client upload is configured.
+  The backup does not derive the longer path; instead the references query
+  reports any media row with a non-empty `prefix` or a set `_objectkey`, and
+  the job then stops with exit 2 (backup and check both) rather than copy or
+  vouch for the wrong object. If that fires, a row was written around the
+  guard (SQL, a restore of a non-flat dump); find it with
+  `select id from media where prefix <> '' or _objectkey is not null`.
+  Adopting a prefix or client uploads means teaching the backup the full
+  path first.
   It holds **no Blob credential**: Vercel Blob has no read-only token, and the
   read-write one can overwrite or delete the store. Keys mirror the Blob
   layout: `objects/<pathname>` for the first copy,

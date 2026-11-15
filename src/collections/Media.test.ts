@@ -10,11 +10,14 @@ vi.mock('@/hooks/revalidateCollection', () => ({
 
 import {
   MEDIA_CREATE_WITHOUT_UPLOAD_ERROR,
+  MEDIA_STORAGE_COORDINATES_ERROR,
   MEDIA_UPDATE_WITHOUT_UPLOAD_ERROR,
   MEDIA_UPLOAD_EDITS_REFETCH_ERROR,
   Media,
   refuseCreateWithoutUpload,
   refuseFilelessFileRewrite,
+  refuseStorageCoordinateUpload,
+  refuseStorageCoordinateWrite,
   refuseUploadEditsRefetch,
 } from '@/collections/Media'
 
@@ -380,6 +383,255 @@ describe('refuseUploadEditsRefetch (#270, update path under ?uploadEdits)', () =
   it('is wired as a beforeOperation hook, which runs before generateFileData re-fetches', () => {
     expect(
       Media.hooks?.beforeOperation?.includes(refuseUploadEditsRefetch),
+    ).toBe(true)
+  })
+})
+
+type CoordinateHookArgs = Parameters<typeof refuseStorageCoordinateWrite>[0]
+
+/** A flat row as Payload stores it since 3.90 (#257, #339). */
+const FLAT = { ...STORED, prefix: '', _objectKey: null }
+
+const runCoordinates = (
+  data: Record<string, unknown>,
+  {
+    file,
+    operation = 'update',
+    context = {},
+    originalDoc = FLAT,
+  }: {
+    file?: PayloadRequest['file']
+    operation?: string
+    context?: Record<string, unknown>
+    originalDoc?: Record<string, unknown> | undefined
+  } = {},
+) =>
+  refuseStorageCoordinateWrite({
+    context,
+    data,
+    operation,
+    originalDoc: operation === 'create' ? undefined : originalDoc,
+    req: { file } as PayloadRequest,
+  } as unknown as CoordinateHookArgs)
+
+describe('refuseStorageCoordinateWrite (#339, Media stays flat)', () => {
+  it.each([
+    ['prefix', 'other-folder'],
+    ['_objectKey', 'other-key'],
+  ])(
+    'refuses a fileless update that sets `%s` — the release review F1 shape',
+    (field, value) => {
+      expect(() => runCoordinates({ [field]: value })).toThrow(
+        expect.objectContaining({
+          message: MEDIA_STORAGE_COORDINATES_ERROR,
+          status: 400,
+          isPublic: true,
+        }),
+      )
+    },
+  )
+
+  it('refuses the round-trip shape with one coordinate changed', () => {
+    const { id: _id, ...roundTrip } = FLAT
+    expect(() =>
+      runCoordinates({ ...roundTrip, alt: 'edited', prefix: 'elsewhere' }),
+    ).toThrow(MEDIA_STORAGE_COORDINATES_ERROR)
+  })
+
+  it('refuses a re-upload that moves the row under a prefix or object key', () => {
+    for (const data of [{ prefix: 'folder' }, { _objectKey: 'key' }]) {
+      expect(() => runCoordinates(data, { file: aFile })).toThrow(
+        MEDIA_STORAGE_COORDINATES_ERROR,
+      )
+    }
+  })
+
+  it.each([
+    ['prefix', 'folder'],
+    ['_objectKey', 'key'],
+  ])(
+    'refuses a create that supplies a non-empty `%s`, with or without a file',
+    (field, value) => {
+      for (const file of [aFile, undefined]) {
+        expect(() =>
+          runCoordinates(
+            { alt: 'a', [field]: value },
+            { file, operation: 'create' },
+          ),
+        ).toThrow(MEDIA_STORAGE_COORDINATES_ERROR)
+      }
+    },
+  )
+
+  it('refuses a fileless update that clears a stored coordinate — that re-points the url too', () => {
+    expect(() =>
+      runCoordinates(
+        { prefix: '' },
+        { originalDoc: { ...FLAT, prefix: 'legacy' } },
+      ),
+    ).toThrow(MEDIA_STORAGE_COORDINATES_ERROR)
+  })
+
+  it('passes a normal upload: empty prefix, no object key', () => {
+    for (const data of [
+      { alt: 'a' },
+      { alt: 'a', prefix: '' },
+      { alt: 'a', prefix: '', _objectKey: null },
+    ]) {
+      expect(
+        runCoordinates(data, { file: aFile, operation: 'create' }),
+      ).toEqual(data)
+    }
+  })
+
+  it('passes alt edits and an unchanged round-trip, flat or not', () => {
+    const { id: _id, ...roundTrip } = FLAT
+    expect(runCoordinates({ alt: 'edited' })).toEqual({ alt: 'edited' })
+    expect(runCoordinates({ ...roundTrip, alt: 'edited' })).toEqual({
+      ...roundTrip,
+      alt: 'edited',
+    })
+    // `''`, null and absent are one value: a flat row.
+    expect(runCoordinates({ prefix: null, _objectKey: '' })).toEqual({
+      prefix: null,
+      _objectKey: '',
+    })
+    const legacy = { ...FLAT, prefix: 'legacy', _objectKey: 'k' }
+    expect(
+      runCoordinates(
+        { prefix: 'legacy', _objectKey: 'k', alt: 'x' },
+        { originalDoc: legacy },
+      ),
+    ).toEqual({ prefix: 'legacy', _objectKey: 'k', alt: 'x' })
+  })
+
+  it('passes a re-upload that flattens a stored coordinate', () => {
+    expect(
+      runCoordinates(
+        { prefix: '' },
+        { file: aFile, originalDoc: { ...FLAT, prefix: 'legacy' } },
+      ),
+    ).toEqual({ prefix: '' })
+  })
+
+  it("does not exempt the adapter's write-back: it never carries coordinates", () => {
+    expect(() =>
+      runCoordinates(
+        { prefix: 'folder' },
+        { context: { skipCloudStorage: true } },
+      ),
+    ).toThrow(MEDIA_STORAGE_COORDINATES_ERROR)
+  })
+
+  it('names the upload path and the flat-storage rule', () => {
+    expect(MEDIA_STORAGE_COORDINATES_ERROR).toMatch(/prefix/)
+    expect(MEDIA_STORAGE_COORDINATES_ERROR).toMatch(/_objectKey/)
+  })
+
+  it('is wired as a beforeValidate hook, where Payload hands it the stored doc', () => {
+    expect(
+      Media.hooks?.beforeValidate?.includes(refuseStorageCoordinateWrite),
+    ).toBe(true)
+  })
+})
+
+type CoordinateUploadArgs = Parameters<typeof refuseStorageCoordinateUpload>[0]
+
+const runCoordinateUpload = (
+  args: Record<string, unknown>,
+  {
+    file,
+    operation = 'update',
+    query = {},
+    stored = FLAT,
+  }: {
+    file?: PayloadRequest['file']
+    operation?: string
+    query?: Record<string, unknown>
+    stored?: Record<string, unknown> | null
+  } = {},
+) => {
+  const findByID = vi.fn(async () => stored)
+  const result = refuseStorageCoordinateUpload({
+    args,
+    collection: { slug: 'media' },
+    operation,
+    req: { file, query, payload: { findByID } } as unknown as PayloadRequest,
+  } as unknown as CoordinateUploadArgs)
+  return { result, findByID }
+}
+
+describe('refuseStorageCoordinateUpload (#339, CodeRabbit round 1 on #340)', () => {
+  it.each([
+    ['prefix', 'folder'],
+    ['_objectKey', 'key'],
+  ])(
+    'refuses a replacement upload by id that sets `%s`, before Payload deletes the stored file',
+    async (field, value) => {
+      const { result } = runCoordinateUpload(
+        { id: 7, data: { [field]: value } },
+        { file: aFile },
+      )
+      await expect(result).rejects.toMatchObject({
+        message: MEDIA_STORAGE_COORDINATES_ERROR,
+        status: 400,
+      })
+    },
+  )
+
+  it('refuses the same under an uploadEdits query, whose re-fetch also deletes the stored file', async () => {
+    const { result } = runCoordinateUpload(
+      { id: 7, data: { prefix: 'folder' } },
+      { query: { uploadEdits: { crop: {} } } },
+    )
+    await expect(result).rejects.toThrow(MEDIA_STORAGE_COORDINATES_ERROR)
+  })
+
+  it('refuses any non-empty coordinate on a bulk update with a file, without reading a row', async () => {
+    const { result, findByID } = runCoordinateUpload(
+      { where: { id: { equals: 7 } }, data: { _objectKey: 'k' } },
+      { file: aFile },
+    )
+    await expect(result).rejects.toThrow(MEDIA_STORAGE_COORDINATES_ERROR)
+    expect(findByID).not.toHaveBeenCalled()
+  })
+
+  it('passes a replacement upload that sends the stored coordinates back, or flattens them', async () => {
+    const legacy = { ...FLAT, prefix: 'legacy' }
+    for (const data of [{ prefix: 'legacy', alt: 'x' }, { prefix: '' }, {}]) {
+      const args = { id: 7, data }
+      const { result } = runCoordinateUpload(args, {
+        file: aFile,
+        stored: legacy,
+      })
+      await expect(result).resolves.toBe(args)
+    }
+  })
+
+  it('leaves fileless updates and creates to refuseStorageCoordinateWrite, without reading a row', async () => {
+    for (const [operation, file] of [
+      ['update', undefined],
+      ['create', aFile],
+    ] as const) {
+      const args = { id: 7, data: { prefix: 'folder' } }
+      const { result, findByID } = runCoordinateUpload(args, {
+        file,
+        operation,
+      })
+      await expect(result).resolves.toBe(args)
+      expect(findByID).not.toHaveBeenCalled()
+    }
+  })
+
+  it('leaves an id that finds no row to Payload, which 404s before it deletes', async () => {
+    const args = { id: 999, data: { prefix: 'folder' } }
+    const { result } = runCoordinateUpload(args, { file: aFile, stored: null })
+    await expect(result).resolves.toBe(args)
+  })
+
+  it('is wired as a beforeOperation hook, which runs before Payload deletes the stored file', () => {
+    expect(
+      Media.hooks?.beforeOperation?.includes(refuseStorageCoordinateUpload),
     ).toBe(true)
   })
 })
