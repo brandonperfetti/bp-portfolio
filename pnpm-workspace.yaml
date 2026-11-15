@@ -46,7 +46,7 @@ overrides:
   hono: '^4.13.16' # @payloadcms/plugin-mcp path (prod)
   # @modelcontextprotocol/sdk (#312, #258): the one override here that
   # crosses an exact pin by Brandon's decision (dompurify, above, crosses
-  # one too, with no recorded decision). @payloadcms/plugin-mcp 3.90.2 pins the SDK at
+  # one too, with no recorded decision). @payloadcms/plugin-mcp 3.91.0 (as 3.90.2) pins the SDK at
   # exactly 1.30.0, and mcp-handler 1.1.0 wants exactly 1.26.0; both are
   # affected by six advisories (GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h,
   # -46jr-4wx8-v453, -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw),
