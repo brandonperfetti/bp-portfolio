@@ -26,11 +26,17 @@
     schedule menu); no migration is involved.
 - **Next/React upgrades**: majors are deliberate events; check Payload's
   supported Next range first (Payload pins minimums).
-- **Node version policy (#69)**: `engines` stays broad (`>=22 <25`) so a
-  current Node never trips the unsupported-engine warning; `.nvmrc` pins 24
-  for local dev; CI runs Node 24 (part-2 Batch 0). Vercel's project-level
-  Node setting is overridden by `engines` — keep it on 24.x anyway so the
-  build cache stays warm. Bump all three together at the next Node major.
+- **Node version policy (#69, #342)**: `engines` is
+  `^22.23.4 || >=24.22.1 <25`, Payload's own floor (3.92+) inside the 22/24
+  majors, so a current Node never trips the unsupported-engine warning and
+  an older patch does.
+  `.nvmrc` and CI's `NODE_VERSION` (ci.yml plus the three workflows that copy
+  it) pin the same full patch, 24.22.3 since #342. Vercel's project-level
+  Node setting (`24.x`, dashboard) only chooses the major and is overridden
+  by `engines`; Vercel picks the newest 24.x patch it ships, which no setting
+  pins. `vercel.json`'s build command starts with `node --version`, so each
+  build log records the patch it ran on. Bump all of these together, and read
+  that log line after a floor change.
 - **GitHub tech-signal token**: fine-grained PAT (Contents: read) expires on
   the schedule chosen at creation — rotate in Vercel env
   (`GITHUB_TOKEN`). Scan knobs: `GITHUB_TECH_*` in `.env.example`.

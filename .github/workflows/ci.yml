@@ -32,8 +32,10 @@ env:
   # on this pinned 24.18.0, falsifying that. The real fix is the
   # better-sqlite3 v13 override in pnpm-workspace.yaml (N-API port; 13.0.2
   # "fixed process aborting from terminating worker threads"). The pin stays
-  # for determinism only; bump it deliberately.
-  NODE_VERSION: '24.18.0'
+  # for determinism only; bump it deliberately. 24.22.3 since #342: Payload
+  # >=3.92 declares `^22.23.4 || >=24.22.1`. Move it together with .nvmrc,
+  # package.json `engines` and the three other workflows that copy it.
+  NODE_VERSION: '24.22.3'
   PAYLOAD_SECRET: 'ci-not-a-real-secret'
   NEXT_PUBLIC_SITE_URL: 'http://localhost:3000'
   NEXT_PUBLIC_SITE_NAME: 'BP Portfolio (CI)'
