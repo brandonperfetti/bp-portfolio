@@ -210,8 +210,21 @@ export async function followRedirects(fetchHop, start, targetUrl, token) {
  * @param route - A Playwright `Route`.
  * @param targetUrl - The URL being captured.
  * @param token - The bypass secret.
+ * A failed fetch is never printed and never escapes: its error's call log
+ * lists the request headers, the bypass secret among them (#273). The
+ * request is aborted instead, which the page sees as a network error. When a
+ * `state` from {@link createRouteState} is passed, a fetch that fails while
+ * the capture is still running is recorded there, redacted, so the caller
+ * can fail the run rather than compare a frame missing a same-origin
+ * request. Once {@link closeCapture} has marked the state closing, a failed
+ * fetch is the teardown race and is dropped. A `fulfill` that fails because
+ * the browser already discarded the request (a navigation moved on) is
+ * ignored either way: the response has nowhere to go.
+ *
  * @param {(finalUrl: string) => void} [onRedirectedNavigation] - Optional;
  * called with the final URL when a main-frame navigation was redirected.
+ * @param {{ closing: boolean, failures: string[] }} [state] - Optional; the
+ * capture's route state, from {@link createRouteState}.
  * @returns Resolves once the request has been continued, fulfilled or
  * aborted.
  */
@@ -220,23 +233,54 @@ export async function routeWithBypass(
   targetUrl,
   token,
   onRedirectedNavigation,
+  state,
 ) {
   const request = route.request()
   if (!token || !isTargetOrigin(request.url(), targetUrl)) {
     return route.continue()
   }
-  const { response, url, stop } = await followRedirects(
-    (hopUrl, init) => route.fetch({ ...init, url: hopUrl, maxRedirects: 0 }),
-    {
-      url: request.url(),
-      method: request.method(),
-      headers: request.headers(),
-      postData: request.postDataBuffer() ?? undefined,
-    },
-    targetUrl,
-    token,
-  )
-  if (stop === 'cap') return route.abort('failed')
+  // Aborting a request whose context is already gone throws too; ignored.
+  const abortQuietly = () =>
+    Promise.resolve(route.abort('failed')).catch(() => {})
+
+  let followed
+  try {
+    followed = await followRedirects(
+      (hopUrl, init) => route.fetch({ ...init, url: hopUrl, maxRedirects: 0 }),
+      {
+        url: request.url(),
+        method: request.method(),
+        headers: request.headers(),
+        postData: request.postDataBuffer() ?? undefined,
+      },
+      targetUrl,
+      token,
+    )
+  } catch (error) {
+    // Never printed here, never rethrown (#273). Recorded, redacted, only
+    // while the capture is still running.
+    if (state && !state.closing) {
+      state.failures.push(describeErrorSafely(error, token))
+    }
+    return abortQuietly()
+  }
+
+  const { response, url, stop } = followed
+  if (stop === 'cap') {
+    // A same-origin request lost to a redirect loop is as missing from the
+    // frame as one whose fetch failed.
+    if (state && !state.closing) {
+      state.failures.push(
+        describeErrorSafely(
+          new Error(
+            `redirect chain passed ${MAX_BYPASS_REDIRECTS} hops: ${redactUrl(request.url())}`,
+          ),
+          token,
+        ),
+      )
+    }
+    return abortQuietly()
+  }
   if (
     url !== request.url() &&
     onRedirectedNavigation &&
@@ -245,7 +289,343 @@ export async function routeWithBypass(
   ) {
     onRedirectedNavigation(url)
   }
-  return route.fulfill({ response })
+  try {
+    await route.fulfill({ response })
+  } catch {
+    // The browser discarded the request (closed, or navigated on); the
+    // response has nowhere to go, and the error's call log is not printed.
+  }
+}
+
+/**
+ * Fresh route state for one capture, shared by {@link routeWithBypass} and
+ * {@link closeCapture}.
+ *
+ * @returns `closing` (set by `closeCapture`) and the redacted `failures` of
+ * fetches that failed while the capture was running.
+ */
+export function createRouteState() {
+  return { closing: false, failures: [] }
+}
+
+/**
+ * Close a capture's browser context without racing its routes.
+ *
+ * @remarks The route state is marked closing first, so a fetch that fails
+ * from here on is the teardown race, not a capture failure. Routes are then
+ * removed with `behavior: 'ignoreErrors'`, so a route handler still waiting
+ * on `route.fetch` settles quietly instead of rejecting into a closed context
+ * (#273: the teardown race that crashed every staging run). Only then is the
+ * context closed.
+ *
+ * @param context - A Playwright `BrowserContext` (duck-typed:
+ * `unrouteAll` and `close`).
+ * @param {{ closing: boolean }} [state] - Optional; the capture's route
+ * state, from {@link createRouteState}.
+ * @returns Resolves once the context is closed.
+ */
+export async function closeCapture(context, state) {
+  if (state) state.closing = true
+  await context.unrouteAll({ behavior: 'ignoreErrors' })
+  await context.close()
+}
+
+/** What a redacted secret or header value is replaced with. */
+export const REDACTED = 'REDACTED'
+
+/**
+ * What stands in for text that still held a known value after redaction.
+ *
+ * @remarks See {@link withholdUnsafe}: replacing one value can complete
+ * another, so the redacted text is checked once more before it is used.
+ */
+export const WITHHELD = `${REDACTED} (withheld: this text would have carried the bypass secret)`
+
+/**
+ * The non-empty, distinct values of a token argument, longest first.
+ *
+ * @param {string | undefined | Array<string | undefined>} token - One value
+ * or several.
+ * @returns {string[]} The values to match.
+ */
+function knownValues(token) {
+  return [
+    ...new Set(
+      (Array.isArray(token) ? token : [token]).filter(
+        (value) => typeof value === 'string' && value.length > 0,
+      ),
+    ),
+  ].sort((a, b) => b.length - a.length)
+}
+
+/**
+ * Whether text holds any of the values, ignoring case.
+ *
+ * @param {string} text - Text about to be printed or written.
+ * @param {string[]} values - Known bypass values, all non-empty.
+ * @returns {boolean} True when one of them occurs in the text.
+ */
+function holdsValue(text, values) {
+  const lower = text.toLowerCase()
+  return values.some((value) => lower.includes(value.toLowerCase()))
+}
+
+/**
+ * Return text only once it holds no known value; otherwise a fallback.
+ *
+ * @remarks The last check before anything is printed or written (#273,
+ * re-review 8, F6). Replacing one value with {@link REDACTED} can complete a
+ * different known value from the text around it, and a value can itself
+ * hold `REDACTED`. So the result is tested, not trusted: when it still holds
+ * a value it is dropped for the first fallback that holds none (by default
+ * {@link WITHHELD}), and finally for the empty string, which holds no value.
+ *
+ * @param {string} text - Redacted text.
+ * @param {string | undefined | Array<string | undefined>} token - Every
+ * known bypass value.
+ * @param {string[]} [fallbacks] - Replacements to try, in order (default
+ * `[WITHHELD]`).
+ * @returns {string} The first candidate that holds no known value.
+ */
+export function withholdUnsafe(text, token, fallbacks = [WITHHELD]) {
+  const values = knownValues(token)
+  for (const candidate of [text, ...fallbacks]) {
+    if (!holdsValue(candidate, values)) return candidate
+  }
+  return ''
+}
+
+/**
+ * Remove the bypass secret from text that is about to be printed.
+ *
+ * @remarks Two passes, because neither alone is enough: the literal value
+ * wherever it appears (an error message quoting a header), and the value of
+ * any `x-vercel-protection-bypass` header line whatever it holds (a call log
+ * printing a header we did not expect, or a token set by another process).
+ * `redactUrl` covers URLs only; Playwright's error call log prints request
+ * headers raw (#273).
+ *
+ * The match ignores case, since a URL host lowercases. It covers the
+ * value as the run holds it, not encoded or rewritten forms: URL parsing
+ * can rewrite text around a value (a numeric host, punycode, a preceding
+ * `%`) past any literal match. So `parseArgs` refuses a run whose arguments
+ * carry a known value at all ({@link argumentCarriesToken}). The harness
+ * itself sends the value only as a request header. Review of PR #336 showed
+ * that chasing every encoded form does not close: four rounds each found
+ * another.
+ *
+ * Both passes find their spans in the original text, and the spans are
+ * merged before anything is replaced. A pass run on the other's output can
+ * miss what it should match: a value replaced inside a header name hides
+ * the header (re-review 9, F7), and a header pass run first can cut a value
+ * holding `"`. Every occurrence of every value is a span, overlapping ones
+ * included. A header's span is everything after its `:` or `=` and any
+ * blank space, to the end of the line, or the next line when the value
+ * starts there: a value can begin with `,`, `}` or a quote, and a pattern
+ * for the value's own shape let such a value through whole (re-review 8,
+ * F7). That can take other text on the line; redacting too much is the
+ * safe side.
+ *
+ * Last, {@link withholdUnsafe} tests the result: replacing one value can
+ * complete another (re-review 8, F6).
+ *
+ * @param text - Text to clean.
+ * @param {string | undefined | Array<string | undefined>} token - The bypass
+ * secret, or every value the run could hold.
+ * @returns The text with every occurrence replaced by {@link REDACTED}, or
+ * {@link WITHHELD} when that still left a known value in it.
+ */
+export function redactSecret(text, token) {
+  const tokens = knownValues(token)
+  const source = String(text)
+  const spans = []
+  for (const value of tokens) {
+    const literal = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const pattern = new RegExp(literal, 'gi')
+    for (
+      let match = pattern.exec(source);
+      match;
+      match = pattern.exec(source)
+    ) {
+      spans.push([match.index, match.index + match[0].length])
+      // Step one character, not past the match, so overlaps are found too.
+      pattern.lastIndex = match.index + 1
+    }
+  }
+  const header = new RegExp(
+    `(${BYPASS_HEADER}["']?\\s*[:=][^\\S\\r\\n]*(?:\\r?\\n[^\\S\\r\\n]*)?)([^\\r\\n]*)`,
+    'gi',
+  )
+  for (const match of source.matchAll(header)) {
+    if (match[2].length === 0) continue
+    const start = match.index + match[1].length
+    spans.push([start, start + match[2].length])
+  }
+  spans.sort((a, b) => a[0] - b[0])
+  let out = ''
+  let cursor = 0
+  for (let i = 0; i < spans.length;) {
+    let [start, end] = spans[i]
+    for (i += 1; i < spans.length && spans[i][0] <= end; i += 1) {
+      end = Math.max(end, spans[i][1])
+    }
+    out += source.slice(cursor, start) + REDACTED
+    cursor = end
+  }
+  out += source.slice(cursor)
+  return withholdUnsafe(out, tokens)
+}
+
+/**
+ * Whether a CLI argument holds a known bypass value.
+ *
+ * @remarks Ignores case. The `--bypass-token=` flag, which exists to carry
+ * the value, is not checked. Every other argument flows into something the
+ * run prints, writes or parses: the URLs, the output directory and file
+ * paths, mask selectors and width errors. `parseArgs` refuses the run when
+ * this holds, because no scrub can follow a value through URL parsing or a
+ * file path. A value the operator encodes on purpose, such as `%44` for
+ * `D`, is not detected. That is a documented limit, not a guarantee (#273,
+ * PR #336).
+ *
+ * @param {string} arg - One CLI argument.
+ * @param {string[]} tokens - Every known bypass value.
+ * @returns {boolean} True when the argument holds one of them.
+ */
+export function argumentCarriesToken(arg, tokens) {
+  if (arg.startsWith('--bypass-token=')) return false
+  const text = arg.toLowerCase()
+  return tokens.some((token) => text.includes(token.toLowerCase()))
+}
+
+/**
+ * Describe an error for the console with no secret in it.
+ *
+ * @remarks Prints the error's name and message only, redacted, never the
+ * error object: Node's inspection of a Playwright error also prints its
+ * `log` array, which carries the request headers. The stack is left out; its
+ * first line repeats the message and the frames say nothing a run needs.
+ *
+ * @param error - Whatever was thrown.
+ * @param {string | undefined | Array<string | undefined>} token - The bypass
+ * secret, or every value the run could hold (see {@link redactSecret}).
+ * @returns One printable, redacted string.
+ */
+export function describeErrorSafely(error, token) {
+  const name =
+    error && typeof error === 'object' && typeof error.name === 'string'
+      ? error.name
+      : 'Error'
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? error.message
+      : error
+  return redactSecret(`${name}: ${message}`, token)
+}
+
+/**
+ * Every bypass value a run could hold.
+ *
+ * @remarks Both sources, not the one `parseArgs` would pick: a usage error
+ * happens before it picks, and the value can sit in either (#273).
+ *
+ * @param {string[]} argv - CLI arguments, without `node` and the script.
+ * @param {Record<string, string | undefined>} [env] - The environment.
+ * @returns The non-empty values of {@link BYPASS_TOKEN_ENV} and of every
+ * `--bypass-token=` flag.
+ */
+export function knownBypassTokens(argv, env = {}) {
+  const flag = '--bypass-token='
+  return [
+    env[BYPASS_TOKEN_ENV],
+    ...argv
+      .filter((arg) => arg.startsWith(flag))
+      .map((arg) => arg.slice(flag.length)),
+  ].filter(Boolean)
+}
+
+/**
+ * Apply a scrub to every string in a JSON-shaped value.
+ *
+ * @remarks For `report.json`: scrubbing the serialized text misses a token
+ * holding `"` or `\`, because `JSON.stringify` escapes them first, and a
+ * reader that parses the file gets the token back (#273).
+ *
+ * Keys are left as they are. The report's keys are fixed by the script, so
+ * a key holding a known value is a collision, not a leak, and renaming it
+ * would write a report missing a field it promises (re-review 10, F9). The
+ * reporter's `json` checks the serialized text whole, so such a key fails
+ * the run instead.
+ *
+ * @param {unknown} value - The value to clean.
+ * @param {(text: string) => string} scrub - The reporter's scrub function.
+ * @returns A copy with every string value scrubbed and every key kept.
+ */
+export function scrubStrings(value, scrub) {
+  if (typeof value === 'string') return scrub(value)
+  if (Array.isArray(value))
+    return value.map((item) => scrubStrings(item, scrub))
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        scrubStrings(item, scrub),
+      ]),
+    )
+  }
+  return value
+}
+
+/**
+ * Build the CLI's printing and exit-status helpers around every bypass value
+ * a run could hold.
+ *
+ * @remarks All three exist so that nothing the CLI prints can carry the
+ * secret and no fatal error can end in a passing exit (#273):
+ * `scrub` redacts every known token and any bypass header value, then
+ * withholds text that still holds a known value; `fail` prints an error
+ * through `describeErrorSafely`, scrubbing the whole line, and makes the
+ * failure sticky; `json` serializes the report the same way, or throws
+ * rather than write one that would hold a value; and `exitCode`
+ * returns 2 once anything was fatal, whatever the run computed after it.
+ *
+ * @param {Array<string | undefined>} tokens - Every value the run could use:
+ * the environment variable and any `--bypass-token=` flag, since a usage
+ * error happens before `parseArgs` picks one.
+ * @param {(line: string) => void} [print] - Where errors go (default
+ * `console.error`).
+ * @returns `{ scrub, fail, json, exitCode }`.
+ */
+export function createSafeReporter(tokens, print = console.error) {
+  let fatal = false
+  // One redactSecret call over every token: its passes find their spans
+  // together, so neither can hide what the other must match.
+  /**
+   * @param {string} text - Text about to be printed or written.
+   * @returns {string} The text with every known token redacted.
+   */
+  const scrub = (text) => redactSecret(text, tokens)
+  const fail = (error) => {
+    fatal = true
+    print(scrub(`diff-pages: ${describeErrorSafely(error, tokens)}`))
+  }
+  /**
+   * @param {unknown} value - The JSON-shaped report.
+   * @returns {string} Its serialized text, scrubbed per string and then
+   * checked whole, since serializing joins strings a value could span.
+   * @throws Error when that text would still hold a known value. No
+   * substitute is written: an empty or placeholder report would read as a
+   * run that completed (re-review 9, F8), so the caller fails the run.
+   */
+  const json = (value) => {
+    const text = `${JSON.stringify(scrubStrings(value, scrub), null, 2)}\n`
+    if (withholdUnsafe(text, tokens, []) === text) return text
+    throw new Error(
+      'report.json was not written: its text would still hold the bypass secret',
+    )
+  }
+  const exitCode = (computed) => (fatal ? 2 : computed)
+  return { scrub, fail, json, exitCode }
 }
 
 /**
@@ -277,9 +657,18 @@ html { scroll-behavior: auto !important; }
  * @param env - Process environment, read only for the bypass secret.
  * @returns The resolved options.
  * @throws Error when the two URLs are missing or an option is malformed —
- * the caller turns that into a usage message and a nonzero exit.
+ * the caller turns that into a usage message and a nonzero exit. Also when
+ * any argument carries a known bypass value ({@link argumentCarriesToken});
+ * that message never quotes the value.
  */
 export function parseArgs(argv, env = {}) {
+  const tokens = knownBypassTokens(argv, env)
+  if (argv.some((arg) => argumentCarriesToken(arg, tokens))) {
+    throw new Error(
+      `an argument carries the bypass secret (${BYPASS_TOKEN_ENV} or --bypass-token). It is refused: URLs, file paths and messages built from it could print it. Pass the secret only through ${BYPASS_TOKEN_ENV}; it is sent as a header.`,
+    )
+  }
+
   const positional = []
   const flags = new Map()
 

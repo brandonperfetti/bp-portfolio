@@ -1,5 +1,8 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   BYPASS_HEADER,
@@ -10,18 +13,29 @@ import {
   DEFAULT_VIEWPORTS,
   FREEZE_CSS,
   MAX_BYPASS_REDIRECTS,
+  REDACTED,
+  closeCapture,
   compareFrames,
+  createRouteState,
+  createSafeReporter,
+  describeErrorSafely,
   followRedirects,
   hopHeaders,
   formatSummary,
   isTargetOrigin,
+  argumentCarriesToken,
+  knownBypassTokens,
   parseArgs,
   parseMasks,
   parseViewports,
+  redactSecret,
   redactUrl,
   redirectTarget,
   routeWithBypass,
+  scrubStrings,
   verdict,
+  WITHHELD,
+  withholdUnsafe,
 } from './page-diff.mjs'
 
 /** Build a solid RGBA frame. */
@@ -416,6 +430,28 @@ describe('bypass header scoping (#252)', () => {
     expect(fetched(stub.calls)).toHaveLength(MAX_BYPASS_REDIRECTS + 1)
     expect(stub.calls.at(-1)).toEqual({ method: 'abort', args: ['failed'] })
   })
+
+  it('records a redirect-loop abort as a capture failure, redacted, unless closing', async () => {
+    const base = 'https://staging.example.test'
+    const loop = () =>
+      stubRoute(
+        `${base}/a`,
+        site({ [`${base}/a`]: [302, '/b'], [`${base}/b`]: [302, '/a'] }),
+      )
+
+    const running = createRouteState()
+    await routeWithBypass(loop().route, target, token, undefined, running)
+    expect(running.failures).toHaveLength(1)
+    expect(running.failures[0]).toContain(
+      `passed ${MAX_BYPASS_REDIRECTS} hops: ${base}/a`,
+    )
+    expect(running.failures[0]).not.toContain(token)
+
+    const closing = createRouteState()
+    closing.closing = true
+    await routeWithBypass(loop().route, target, token, undefined, closing)
+    expect(closing.failures).toEqual([])
+  })
 })
 
 describe('redirect following (#252)', () => {
@@ -640,5 +676,713 @@ describe('formatSummary', () => {
   it('never prints a secret it was handed', () => {
     expect(formatSummary(summary)).not.toContain('token=abc')
     expect(formatSummary(summary)).toContain('token=REDACTED')
+  })
+})
+
+describe('teardown and error output never print the bypass secret (#273)', () => {
+  // A fixture value, never the real secret.
+  const token = 'fixture-bypass-0123456789abcdef'
+  const target = 'https://staging.example.test/'
+
+  /** Count fixed-string occurrences without printing the haystack. */
+  const occurrences = (haystack: string, needle: string) =>
+    haystack.split(needle).length - 1
+
+  /**
+   * The shape Playwright rejects `route.fetch` with once its context is
+   * closed: the message carries a call log that prints request headers raw,
+   * and the same lines sit in a `log` array that Node's inspector prints.
+   */
+  const playwrightError = () => {
+    const log = [
+      `→ GET ${target}_next/static/chunk.js`,
+      `  ${BYPASS_HEADER}: ${token}`,
+      '  accept: */*',
+    ]
+    const error = new Error(
+      `apiRequestContext._wrapApiCall: Target page, context or browser has been closed\nCall log:\n${log.map((line) => `  - ${line}`).join('\n')}`,
+    ) as Error & { log: string[] }
+    error.name = 'Error'
+    error.log = log
+    return error
+  }
+
+  /** Everything printed through `console`, joined. */
+  const captureConsole = () => {
+    const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map(
+      (method) => vi.spyOn(console, method).mockImplementation(() => {}),
+    )
+    return () =>
+      spies
+        .flatMap((spy) => spy.mock.calls.flat())
+        .map((arg) =>
+          typeof arg === 'string' ? arg : JSON.stringify(arg, null, 0),
+        )
+        .join('\n')
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  /** A same-origin route whose fetch rejects as it does after close. */
+  const closedRoute = (abortThrows = false) => {
+    const calls: string[] = []
+    return {
+      calls,
+      route: {
+        request: () => ({
+          url: () => `${target}_next/static/chunk.js`,
+          method: () => 'GET',
+          headers: () => ({ accept: '*/*' }),
+          postDataBuffer: () => null,
+          isNavigationRequest: () => false,
+          frame: () => ({ parentFrame: () => null }),
+        }),
+        continue: async () => {
+          calls.push('continue')
+        },
+        fetch: async () => {
+          calls.push('fetch')
+          throw playwrightError()
+        },
+        fulfill: async () => {
+          calls.push('fulfill')
+        },
+        abort: async () => {
+          calls.push('abort')
+          if (abortThrows) throw playwrightError()
+        },
+      },
+    }
+  }
+
+  it('settles a route whose fetch rejects after close, printing nothing', async () => {
+    const printed = captureConsole()
+    const { calls, route } = closedRoute()
+
+    await expect(
+      routeWithBypass(route as never, target, token),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual(['fetch', 'abort'])
+    expect(occurrences(printed(), token)).toBe(0)
+    expect(printed()).toBe('')
+  })
+
+  it('also settles when aborting the closed request throws', async () => {
+    const printed = captureConsole()
+    const { calls, route } = closedRoute(true)
+
+    await expect(
+      routeWithBypass(route as never, target, token),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual(['fetch', 'abort'])
+    expect(printed()).toBe('')
+  })
+
+  it('describes a Playwright-shaped error with zero occurrences of the token', () => {
+    const text = describeErrorSafely(playwrightError(), token)
+
+    expect(occurrences(text, token)).toBe(0)
+    expect(text).toContain(`${BYPASS_HEADER}: ${REDACTED}`)
+    // The useful part survives.
+    expect(text).toContain('Target page, context or browser has been closed')
+    // The `log` array and stack are not part of the description.
+    expect(occurrences(text, 'accept: */*')).toBe(1)
+  })
+
+  it('redacts a bypass header value it was not told about', () => {
+    const other = 'some-other-bypass-value'
+    for (const line of [
+      `${BYPASS_HEADER}: ${other}`,
+      `"${BYPASS_HEADER}":"${other}"`,
+      `${BYPASS_HEADER.toUpperCase()}=${other}`,
+    ]) {
+      expect(occurrences(redactSecret(line, token), other)).toBe(0)
+    }
+    expect(redactSecret('nothing secret here', token)).toBe(
+      'nothing secret here',
+    )
+  })
+
+  it('describes thrown non-errors without crashing', () => {
+    expect(describeErrorSafely(`bad ${token}`, token)).toBe(
+      `Error: bad ${REDACTED}`,
+    )
+    expect(describeErrorSafely(undefined, token)).toBe('Error: undefined')
+  })
+
+  it('unroutes, ignoring errors, before it closes the context', async () => {
+    const order: unknown[] = []
+    await closeCapture({
+      unrouteAll: async (options: unknown) => {
+        order.push(['unrouteAll', options])
+      },
+      close: async () => {
+        order.push('close')
+      },
+    })
+    expect(order).toEqual([
+      ['unrouteAll', { behavior: 'ignoreErrors' }],
+      'close',
+    ])
+  })
+
+  it('records a fetch that fails while the capture runs, redacted', async () => {
+    const printed = captureConsole()
+    const { calls, route } = closedRoute()
+    const state = createRouteState()
+
+    await routeWithBypass(route as never, target, token, undefined, state)
+
+    expect(calls).toEqual(['fetch', 'abort'])
+    expect(state.failures).toHaveLength(1)
+    expect(occurrences(state.failures[0], token)).toBe(0)
+    expect(state.failures[0]).toContain(`${BYPASS_HEADER}: ${REDACTED}`)
+    expect(printed()).toBe('')
+  })
+
+  it('drops a fetch that fails once the capture is closing', async () => {
+    const { calls, route } = closedRoute()
+    const state = createRouteState()
+    state.closing = true
+
+    await routeWithBypass(route as never, target, token, undefined, state)
+
+    expect(calls).toEqual(['fetch', 'abort'])
+    expect(state.failures).toEqual([])
+  })
+
+  it('ignores a fulfill the browser has already discarded', async () => {
+    const printed = captureConsole()
+    const calls: string[] = []
+    const { route } = closedRoute()
+    const state = createRouteState()
+    const live = {
+      ...route,
+      fetch: async () => {
+        calls.push('fetch')
+        return { status: () => 200, headers: () => ({}) }
+      },
+      fulfill: async () => {
+        calls.push('fulfill')
+        throw playwrightError()
+      },
+    }
+
+    await expect(
+      routeWithBypass(live as never, target, token, undefined, state),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual(['fetch', 'fulfill'])
+    expect(state.failures).toEqual([])
+    expect(printed()).toBe('')
+  })
+
+  it('marks the route state closing before it unroutes', async () => {
+    const state = createRouteState()
+    const seen: boolean[] = []
+    await closeCapture(
+      {
+        unrouteAll: async () => {
+          seen.push(state.closing)
+        },
+        close: async () => {},
+      },
+      state,
+    )
+    expect(seen).toEqual([true])
+  })
+
+  it('knows the token from the environment and from every flag', () => {
+    expect(
+      knownBypassTokens(['a', `--bypass-token=${token}`, '--bypass-token='], {
+        [BYPASS_TOKEN_ENV]: 'from-env',
+      }),
+    ).toEqual(['from-env', token])
+    expect(knownBypassTokens([], {})).toEqual([])
+  })
+
+  it('reports a fatal error redacted, and keeps the exit failed after it', () => {
+    const lines: string[] = []
+    const reporter = createSafeReporter(
+      [token, 'second-value', undefined],
+      (line) => lines.push(line),
+    )
+
+    expect(reporter.exitCode(0)).toBe(0)
+    expect(
+      reporter.scrub(`a ${token} b second-value c ${BYPASS_HEADER}: other`),
+    ).toBe(`a ${REDACTED} b ${REDACTED} c ${BYPASS_HEADER}: ${REDACTED}`)
+
+    reporter.fail(playwrightError())
+    reporter.fail(new Error('second-value leaked'))
+
+    expect(lines).toHaveLength(2)
+    expect(lines.every((line) => line.startsWith('diff-pages: '))).toBe(true)
+    expect(occurrences(lines.join('\n'), token)).toBe(0)
+    expect(occurrences(lines.join('\n'), 'second-value')).toBe(0)
+    // Sticky: a passing verdict computed after a fatal error is not a pass.
+    expect(reporter.exitCode(0)).toBe(2)
+    expect(reporter.exitCode(1)).toBe(2)
+  })
+
+  it.each([
+    [
+      'the environment',
+      (env: NodeJS.ProcessEnv) => ({ ...env, [BYPASS_TOKEN_ENV]: token }),
+      [],
+    ],
+    ['the flag', (env: NodeJS.ProcessEnv) => env, [`--bypass-token=${token}`]],
+  ])(
+    'prints no token in a usage error when it comes from %s',
+    (_label, withToken, extraArgs) => {
+      // The reviewer's repro: the token pasted into a flag that echoes its
+      // value. Loopback URLs; parsing fails before any browser starts.
+      const { [BYPASS_TOKEN_ENV]: _drop, ...env } = process.env
+      const child = spawnSync(
+        process.execPath,
+        [
+          fileURLToPath(new URL('../diff-pages.mjs', import.meta.url)),
+          'http://127.0.0.1:9/',
+          'http://127.0.0.1:9/',
+          `--widths=${token}`,
+          ...extraArgs,
+        ],
+        { env: withToken(env), encoding: 'utf8', timeout: 30_000 },
+      )
+
+      expect(child.status).toBe(2)
+      expect(child.stderr).toContain('diff-pages: ')
+      expect(occurrences(`${child.stdout}${child.stderr}`, token)).toBe(0)
+    },
+    30_000,
+  )
+
+  it('scrubs report values before serializing, so JSON escaping cannot hide a token', () => {
+    // A token holding the two characters JSON escapes.
+    const awkward = 'tok"en\\with-escapes'
+    const { scrub } = createSafeReporter([awkward], () => {})
+    const summary = {
+      baselineUrl: 'https://staging.example.test/',
+      comparisons: [{ diffImage: `/tmp/${awkward}/desktop-diff.png` }],
+    }
+
+    // The defect: scrubbing the serialized text misses the escaped form.
+    const naive = scrub(JSON.stringify(summary))
+    expect(JSON.parse(naive).comparisons[0].diffImage).toContain(awkward)
+
+    const text = JSON.stringify(scrubStrings(summary, scrub))
+    expect(JSON.parse(text).comparisons[0].diffImage).toBe(
+      `/tmp/${REDACTED}/desktop-diff.png`,
+    )
+    expect(occurrences(text, awkward)).toBe(0)
+    expect(JSON.parse(text).baselineUrl).toBe(summary.baselineUrl)
+  })
+
+  it('redacts a whole token that holds a quote, even inside a bypass header', () => {
+    // The header pass stops at `"`. Run before the literal pass, it turned
+    // `tok"en\with-escapes` into `REDACTED"en\with-escapes` (CodeRabbit, PR #336).
+    const awkward = 'tok"en\\with-escapes'
+    const lines: string[] = []
+    const reporter = createSafeReporter(
+      ['other-known-value', awkward],
+      (line) => lines.push(line),
+    )
+
+    expect(reporter.scrub(`${BYPASS_HEADER}: ${awkward}`)).toBe(
+      `${BYPASS_HEADER}: ${REDACTED}`,
+    )
+
+    const error = new Error(`call log:\n  - ${BYPASS_HEADER}: ${awkward}\n`)
+    reporter.fail(error)
+    expect(lines).toEqual([
+      `diff-pages: Error: call log:\n  - ${BYPASS_HEADER}: ${REDACTED}\n`,
+    ])
+    expect(describeErrorSafely(error, [awkward])).toBe(
+      `Error: call log:\n  - ${BYPASS_HEADER}: ${REDACTED}\n`,
+    )
+  })
+
+  const refusalOf = (argv: string[], env: Record<string, string>) => {
+    try {
+      parseArgs(argv, env)
+    } catch (error) {
+      return (error as Error).message
+    }
+    return ''
+  }
+
+  // Every argument but `--bypass-token=` flows into a URL, a file path or a
+  // message, so a value held literally in any of them is refused (#273).
+  it.each([
+    [
+      'the baseline URL',
+      (t: string) => [
+        `https://example.test/?page=${t}`,
+        'https://b.example.test/',
+      ],
+    ],
+    [
+      'the candidate URL',
+      (t: string) => ['https://a.example.test/', `https://${t}.example.test/`],
+    ],
+    [
+      'URL userinfo',
+      (t: string) => [
+        `https://user:${t}@example.test/`,
+        'https://b.example.test/',
+      ],
+    ],
+    [
+      '--out',
+      (t: string) => [
+        'https://a.example.test/',
+        'https://b.example.test/',
+        `--out=results/${t}`,
+      ],
+    ],
+    [
+      '--mask',
+      (t: string) => [
+        'https://a.example.test/',
+        'https://b.example.test/',
+        `--mask=.${t}`,
+      ],
+    ],
+    [
+      '--widths',
+      (t: string) => [
+        'https://a.example.test/',
+        'https://b.example.test/',
+        `--widths=${t}`,
+      ],
+    ],
+    [
+      '--threshold',
+      (t: string) => [
+        'https://a.example.test/',
+        'https://b.example.test/',
+        `--threshold=${t}`,
+      ],
+    ],
+  ])(
+    'refuses %s holding the bypass value, in any case, without quoting it',
+    (_where, build) => {
+      const good = 'Dummy9Z-fixture'
+      for (const form of [good, good.toUpperCase(), good.toLowerCase()]) {
+        for (const [argv, env] of [
+          [build(form), { [BYPASS_TOKEN_ENV]: good }],
+          [[...build(form), `--bypass-token=${good}`], {}],
+        ] as const) {
+          const message = refusalOf([...argv], env)
+          expect(message).toContain('carries the bypass secret')
+          expect(occurrences(message.toLowerCase(), good.toLowerCase())).toBe(0)
+        }
+      }
+    },
+  )
+
+  it('refuses an argument holding a value with quotes or spaces, literally', () => {
+    // No alphabet rule any more: such a value is accepted from the
+    // environment, and refused only where an argument holds it.
+    const awkward = 'tok"en?with space'
+    const urls = ['https://a.example.test/', 'https://b.example.test/']
+    expect(parseArgs(urls, { [BYPASS_TOKEN_ENV]: awkward }).bypassToken).toBe(
+      awkward,
+    )
+    const message = refusalOf(
+      [urls[0], `https://b.example.test/?q=${awkward}`],
+      {
+        [BYPASS_TOKEN_ENV]: awkward,
+      },
+    )
+    expect(message).toContain('carries the bypass secret')
+    expect(occurrences(message, awkward)).toBe(0)
+  })
+
+  it('reads the value from --bypass-token= without refusing that flag', () => {
+    const good = 'Dummy9Z-fixture'
+    const options = parseArgs(
+      [
+        'https://a.example.test/',
+        'https://b.example.test/',
+        `--bypass-token=${good}`,
+      ],
+      {},
+    )
+    expect(options.bypassToken).toBe(good)
+    expect(argumentCarriesToken(`--bypass-token=${good}`, [good])).toBe(false)
+  })
+
+  it('accepts arguments without the value, Unicode and long ones included, quickly', () => {
+    // Re-review 7 (F4): the earlier search over rewritten forms grew without
+    // bound on Unicode input and refused URLs that held no token. A literal
+    // test is linear in the argument.
+    const good = 'Dummy9Z-fixture'
+    const accepted = [
+      'https://example.test/?q=caf%C3%A9',
+      'https://bücher.example.test/',
+      `https://example.test/?q=${'ö'.repeat(20_000)}`,
+      `https://example.test/${'\uFF44'.repeat(20_000)}`,
+    ]
+    const started = performance.now()
+    for (const url of accepted) {
+      expect(argumentCarriesToken(url, [good])).toBe(false)
+      const options = parseArgs([url, 'https://b.example.test/?q=dummy'], {
+        [BYPASS_TOKEN_ENV]: good,
+      })
+      expect(options.baselineUrl).toBe(url)
+    }
+    expect(performance.now() - started).toBeLessThan(1_000)
+  })
+
+  it('does not detect a value the operator encodes on purpose (documented limit)', () => {
+    // Not covered by the guarantee: `%44` for `D`, full-width letters. The
+    // scrub then sees only what the run prints, and URL parsing may rewrite
+    // it into the plain value (diff-pages.mjs header, "Not guaranteed").
+    const good = 'Dummy9Z'
+    for (const url of [
+      'https://example.test/%44ummy9Z/',
+      'https://\uff44\uff55\uff4d\uff4d\uff59\uff19\uff5a.example.test/',
+    ]) {
+      expect(argumentCarriesToken(url, [good])).toBe(false)
+    }
+  })
+
+  it('redacts an accepted token in every URL component a printed URL can carry it', () => {
+    // Unreserved characters print unchanged in every component; a host
+    // lowercases them, which the case-insensitive match covers.
+    const good = 'Tok.en_-9Z'
+    const { scrub } = createSafeReporter([good], () => {})
+    const inputs = [
+      `https://${good}@example.test/`,
+      `https://user:${good}@example.test/`,
+      `https://${good}.example.test/`,
+      `https://example.test/${good}/tail`,
+      `https://example.test/?page=${good}&other=1`,
+      `https://example.test/?page=${good}&api_key=x`,
+      `https://example.test/#${good}/tail`,
+    ]
+    for (const input of inputs) {
+      const printed = redactUrl(input)
+      for (const out of [
+        scrub(printed),
+        JSON.parse(JSON.stringify(scrubStrings({ url: printed }, scrub))).url,
+      ]) {
+        expect(out).toContain(REDACTED)
+        expect(decodeURIComponent(out).toLowerCase()).not.toContain(
+          good.toLowerCase(),
+        )
+      }
+    }
+  })
+
+  it('refuses a URL argument carrying the secret at the CLI with exit 2', () => {
+    const good = 'Dummy9Z-fixture'
+    const { [BYPASS_TOKEN_ENV]: _drop, ...env } = process.env
+    const child = spawnSync(
+      process.execPath,
+      [
+        fileURLToPath(new URL('../diff-pages.mjs', import.meta.url)),
+        'http://127.0.0.1:9/',
+        `http://127.0.0.1:9/?page=${good}`,
+      ],
+      {
+        env: { ...env, [BYPASS_TOKEN_ENV]: good },
+        encoding: 'utf8',
+        timeout: 30_000,
+      },
+    )
+    expect(child.status).toBe(2)
+    expect(child.stderr).toContain('carries the bypass secret')
+    expect(occurrences(`${child.stdout}${child.stderr}`, good)).toBe(0)
+  }, 30_000)
+
+  it('refuses an argument holding a value with quotes or spaces at the CLI with exit 2', () => {
+    const bad = 'tok"en?with space'
+    const { [BYPASS_TOKEN_ENV]: _drop, ...env } = process.env
+    const child = spawnSync(
+      process.execPath,
+      [
+        fileURLToPath(new URL('../diff-pages.mjs', import.meta.url)),
+        'http://127.0.0.1:9/',
+        `http://127.0.0.1:9/?page=${bad}`,
+      ],
+      {
+        env: { ...env, [BYPASS_TOKEN_ENV]: bad },
+        encoding: 'utf8',
+        timeout: 30_000,
+      },
+    )
+    expect(child.status).toBe(2)
+    expect(child.stderr).toContain('carries the bypass secret')
+    expect(occurrences(`${child.stdout}${child.stderr}`, bad)).toBe(0)
+  }, 30_000)
+
+  it('withholds a line where replacing one value completes another (re-review 8, F6)', () => {
+    // Invented values: the first holds REDACTED, so redacting the second
+    // inside the message rebuilds the first.
+    const env = 'c7eQ2mREDACTEDp4V8zR5nT9yK3uW6bH1a'
+    const flag = 'K4dP9nH6rT2yV8mQ3zF5sW1bG7cJ0uXe'
+    const message = `fetch failed c7eQ2m${flag}p4V8zR5nT9yK3uW6bH1a`
+    const lines: string[] = []
+    const reporter = createSafeReporter([env, flag], (line) => lines.push(line))
+    reporter.fail(new Error(message))
+    // The message is withheld; the fixed prefix around it holds no value.
+    expect(lines).toEqual([`diff-pages: ${WITHHELD}`])
+    expect(reporter.scrub(message)).toBe(WITHHELD)
+    for (const out of [...lines, reporter.scrub(message)]) {
+      for (const value of [env, flag]) {
+        expect(occurrences(out.toLowerCase(), value.toLowerCase())).toBe(0)
+      }
+    }
+  })
+
+  it('falls back past WITHHELD, to empty text, when a value is inside the marker', () => {
+    expect(withholdUnsafe('nothing', ['dacte'])).toBe('nothing')
+    expect(withholdUnsafe(`x ${REDACTED} y`, ['dacte'])).toBe('')
+    expect(withholdUnsafe('x withheld y', ['withheld'], ['{}'])).toBe('{}')
+    expect(redactSecret('a dacte b', 'dacte')).toBe('')
+  })
+
+  it('redacts a bypass header value whatever it starts with (re-review 8, F7)', () => {
+    for (const other of [
+      ',OtherDummy9Z',
+      ']OtherDummy9Z',
+      '}OtherDummy9Z',
+      '"OtherDummy9Z"',
+      "'Other Dummy9Z'",
+      ' , OtherDummy9Z',
+    ]) {
+      for (const eol of ['\n', '\r\n']) {
+        const lines: string[] = []
+        const reporter = createSafeReporter(['KnownDummy9Z'], (line) =>
+          lines.push(line),
+        )
+        reporter.fail(
+          new Error(`call log:${eol}  - ${BYPASS_HEADER}: ${other}${eol}next`),
+        )
+        expect(lines).toHaveLength(1)
+        expect(lines[0]).toMatch(
+          new RegExp(`- ${BYPASS_HEADER}: +${REDACTED}\r?\nnext$`),
+        )
+        expect(occurrences(lines[0], 'OtherDummy9Z')).toBe(0)
+      }
+    }
+    // A value that starts on the next line, as some serializers print it.
+    expect(
+      occurrences(
+        redactSecret(`"${BYPASS_HEADER}":\n  "OtherDummy9Z"`, 'KnownDummy9Z'),
+        'OtherDummy9Z',
+      ),
+    ).toBe(0)
+  })
+
+  it.each(['x-vercel-protection-bypass', 'protection', 'x', 'BYPASS: '])(
+    'redacts a header value when the known value %j overlaps the header (re-review 9, F7)',
+    (known) => {
+      const lines: string[] = []
+      const reporter = createSafeReporter([known], (line) => lines.push(line))
+      reporter.fail(
+        new Error(`call log:\r\n  - ${BYPASS_HEADER}: ,OtherDummy9Z\r\n`),
+      )
+      expect(lines).toHaveLength(1)
+      expect(occurrences(lines[0], 'OtherDummy9Z')).toBe(0)
+      expect(occurrences(lines[0].toLowerCase(), known.toLowerCase())).toBe(0)
+    },
+  )
+
+  it('redacts every occurrence of a value, overlapping ones included', () => {
+    expect(redactSecret('x abab ababab y', 'abab')).toBe(
+      `x ${REDACTED} ${REDACTED} y`,
+    )
+    // A quoted value beside a header is gone whole, whichever pass finds it.
+    const quoted = 'tok"en with'
+    const out = redactSecret(`${BYPASS_HEADER}: "${quoted}" tail`, quoted)
+    expect(occurrences(out, quoted)).toBe(0)
+    expect(occurrences(out, 'en with')).toBe(0)
+  })
+
+  it('serializes the report scrubbed, and refuses to write one whose JSON would hold a value (re-review 9, F8)', () => {
+    const { json } = createSafeReporter(['Dummy9Z-fixture'], () => {})
+    expect(
+      JSON.parse(json({ url: 'https://example.test/Dummy9Z-fixture' })),
+    ).toEqual({
+      url: `https://example.test/${REDACTED}`,
+    })
+    // A value spanning two strings appears only once they are serialized;
+    // `{` is in every JSON object. Neither yields an empty or stand-in file.
+    for (const [value, report] of [
+      ['"a",\n  "b": "', { a: 'a', b: 'b' }],
+      ['{', { threshold: 0.1, a: 'ok' }],
+      ['}', { threshold: 0.1 }],
+    ] as const) {
+      const lines: string[] = []
+      const reporter = createSafeReporter([value], (line) => lines.push(line))
+      let thrown: unknown
+      try {
+        reporter.json(report)
+      } catch (error) {
+        thrown = error
+      }
+      expect(thrown).toBeInstanceOf(Error)
+      // diff-pages.mjs sends what `main` throws to `fail`: exit 2, whatever
+      // the comparison computed.
+      reporter.fail(thrown)
+      expect(reporter.exitCode(0)).toBe(2)
+      expect(occurrences(lines[0], value)).toBe(0)
+    }
+  })
+
+  it.each(['comparisons', 'baselineUrl', 'viewport', 'percent', 'diffImage'])(
+    'keeps report keys, and refuses the report when the known value %j is one (re-review 10, F9)',
+    (known) => {
+      const report = {
+        baselineUrl: 'https://a.test/',
+        candidateUrl: 'https://b.test/',
+        threshold: 0.1,
+        comparisons: [{ viewport: 'desktop', percent: 0, diffImage: 'x.png' }],
+      }
+      expect(scrubStrings(report, (text) => text.replace(known, 'R'))).toEqual(
+        expect.objectContaining({ comparisons: expect.any(Array) }),
+      )
+      const lines: string[] = []
+      const reporter = createSafeReporter([known], (line) => lines.push(line))
+      expect(() => reporter.json(report)).toThrow(
+        /report\.json was not written/,
+      )
+      reporter.fail(new Error('report.json was not written'))
+      expect(reporter.exitCode(0)).toBe(2)
+    },
+  )
+
+  it('scrubs the whole printed line, prefix included', () => {
+    const lines: string[] = []
+    const reporter = createSafeReporter(['pages: Err'], (line) =>
+      lines.push(line),
+    )
+    reporter.fail(new Error('boom'))
+    expect(occurrences(lines[0].toLowerCase(), 'pages: err')).toBe(0)
+  })
+
+  it('redacts a lone-surrogate value given to the reporter without throwing', () => {
+    const loneSurrogate = 'tok\uD800en'
+    expect(redactSecret(`x ${loneSurrogate} y`, loneSurrogate)).toBe(
+      `x ${REDACTED} y`,
+    )
+  })
+
+  it('leaves a plain alphanumeric token to the literal match alone', () => {
+    expect(redactSecret('x AbC123 y', 'AbC123')).toBe(`x ${REDACTED} y`)
+    expect(redactSecret('nothing here', 'AbC123')).toBe('nothing here')
+  })
+
+  it('redacts the longer of two overlapping tokens whole', () => {
+    expect(redactSecret('a abc-long b', ['abc', 'abc-long'])).toBe(
+      `a ${REDACTED} b`,
+    )
   })
 })

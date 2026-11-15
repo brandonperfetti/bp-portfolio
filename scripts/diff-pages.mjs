@@ -51,8 +51,43 @@
  * them (`routeWithBypass` in `lib/page-diff.mjs`). `--bypass-token=` exists
  * for one-off runs but puts the secret in your shell history; prefer the
  * environment.
- * No secret is ever printed: URLs pass through `redactUrl` before they reach
- * the console or `report.json`.
+ *
+ * What the script guarantees about the secret (#273):
+ * - It never prints or writes the bypass value it holds, from the
+ *   environment or the flag, matched ignoring case. That covers the
+ *   console, `report.json` and usage errors. It also never prints any
+ *   `x-vercel-protection-bypass` header value: everything after that
+ *   header's `:` or `=` to the end of the line is redacted. Everything
+ *   printed, and `report.json`, passes through `createSafeReporter`, after
+ *   URLs pass through `redactUrl`. Each whole line is checked last, and one
+ *   that would still hold a known value is withheld. A `report.json` that
+ *   would still hold one is not written, and the run exits 2; that
+ *   includes a value equal to one of its keys, such as `comparisons`. A
+ *   value that matches fixed text the script prints, such as `PASS`, is
+ *   redacted there too: the printed summary then reads differently, while
+ *   the exit code still reports the comparison. File paths
+ *   and PNG bytes are not scrubbed: paths come from `--out` and `--widths`,
+ *   which the next rule covers.
+ *   Errors are described by `describeErrorSafely`, which drops the error
+ *   object: a Playwright error's call log lists request headers.
+ * - It refuses to run (exit 2, the value never quoted) when any argument
+ *   other than `--bypass-token=` contains that value, ignoring case: a URL,
+ *   `--out`, `--mask` or `--widths`. URL parsing and file paths could carry
+ *   it past the scrub. Pass the secret only through the environment.
+ *
+ * Not guaranteed:
+ * - a value the operator encodes into an argument on purpose (`%44` for `D`,
+ *   full-width letters);
+ * - a page or server that puts the value into its own request URLs;
+ * - output from Chromium itself, or from a library writing straight to the
+ *   terminal.
+ *
+ * A same-origin bypass request that fails while a page is being captured
+ * fails the run (exit 2) with its redacted error, since the frame may be
+ * missing what it fetched. One that fails once the capture is closing is the
+ * teardown race and is dropped. Any fatal error, including one Node reports
+ * as an unhandled rejection or uncaught exception, ends the run with exit 2
+ * whatever the comparison found.
  *
  * ## Running it
  *
@@ -87,8 +122,12 @@ import sharp from 'sharp'
 
 import {
   FREEZE_CSS,
+  closeCapture,
   compareFrames,
+  createRouteState,
+  createSafeReporter,
   formatSummary,
+  knownBypassTokens,
   parseArgs,
   redactUrl,
   routeWithBypass,
@@ -114,6 +153,11 @@ async function capture(browser, url, viewport, options) {
     colorScheme: 'light',
   })
 
+  // Shared with `routeWithBypass` and `closeCapture`: a bypass fetch that
+  // fails while the capture runs is recorded here and fails the capture; one
+  // that fails once teardown has begun is dropped (#273).
+  const state = createRouteState()
+
   try {
     // Never a context-wide `extraHTTPHeaders`: that sends the secret to every
     // origin the page loads from. `routeWithBypass` scopes it to `url`'s own
@@ -122,9 +166,15 @@ async function capture(browser, url, viewport, options) {
     let redirectedTo = null // the navigation's destination, when redirected
     if (options.bypassToken) {
       await context.route('**/*', (route) =>
-        routeWithBypass(route, url, options.bypassToken, (finalUrl) => {
-          redirectedTo = finalUrl
-        }),
+        routeWithBypass(
+          route,
+          url,
+          options.bypassToken,
+          (finalUrl) => {
+            redirectedTo = finalUrl
+          },
+          state,
+        ),
       )
     }
 
@@ -174,9 +224,21 @@ async function capture(browser, url, viewport, options) {
       .raw()
       .toBuffer({ resolveWithObject: true })
 
+    // A same-origin request that failed mid-capture means the frame may be
+    // missing what it fetched; comparing it could pass parity on a broken
+    // page. Checked after the last await, so a failure recorded at any point
+    // before teardown begins is seen. Each entry is already redacted.
+    if (state.failures.length > 0) {
+      throw new Error(
+        `${state.failures.length} same-origin request(s) failed while capturing ${redactUrl(url)}; first: ${state.failures[0]}`,
+      )
+    }
+
     return { data, width: info.width, height: info.height, png }
   } finally {
-    await context.close()
+    // Unroute (ignoring errors) before closing, or a prefetch still in
+    // `route.fetch` rejects into the closed context (#273).
+    await closeCapture(context, state)
   }
 }
 
@@ -191,9 +253,13 @@ async function main() {
   try {
     options = parseArgs(process.argv.slice(2), process.env)
   } catch (error) {
-    console.error(`diff-pages: ${error.message}`)
+    // A usage error can quote an argument verbatim, and a token pasted into
+    // the wrong flag is still a token (#273).
+    console.error(reporter.scrub(`diff-pages: ${error.message}`))
     console.error(
-      'usage: pnpm diff:pages <baseline-url> <candidate-url> [--threshold=0.1] [--mask="canvas"] [--out=dir]',
+      reporter.scrub(
+        'usage: pnpm diff:pages <baseline-url> <candidate-url> [--threshold=0.1] [--mask="canvas"] [--out=dir]',
+      ),
     )
     return 2
   }
@@ -255,14 +321,41 @@ async function main() {
     comparisons,
   }
 
+  // URLs are already redacted; the scrub also catches a token that reached a
+  // URL path or the output directory.
   await writeFile(
     path.join(options.outDir, 'report.json'),
-    `${JSON.stringify(summary, null, 2)}\n`,
+    // Scrubbed per string value, before serializing: JSON escapes `"` and `\`,
+    // so a token holding either would no longer match in the serialized text.
+    // The serialized text is then checked whole.
+    reporter.json(summary),
   )
-  console.log(formatSummary(summary))
-  console.log(`\ndiff images: ${options.outDir}`)
+  console.log(reporter.scrub(formatSummary(summary)))
+  console.log(reporter.scrub(`\ndiff images: ${options.outDir}`))
 
   return verdict(comparisons, options.threshold).exitCode
 }
 
-process.exitCode = await main()
+// Every bypass value this run could hold, from the environment and the flag,
+// so nothing printed carries one and no fatal error ends in a pass (#273).
+const reporter = createSafeReporter(
+  knownBypassTokens(process.argv.slice(2), process.env),
+)
+
+// Anything that escapes `main` would otherwise reach Node's default
+// handler, which prints the whole error object, call log and all (#273).
+// The failure is sticky: the verdict `main` computes after it cannot turn
+// the exit back to 0, and one that lands after `main` has returned still
+// sets it.
+const onFatal = (error) => {
+  reporter.fail(error)
+  process.exitCode = 2
+}
+process.on('unhandledRejection', onFatal)
+process.on('uncaughtException', onFatal)
+
+try {
+  process.exitCode = reporter.exitCode(await main())
+} catch (error) {
+  onFatal(error)
+}
