@@ -253,8 +253,8 @@ stay where they are:
   `refuseCreateWithoutUpload` at `:77-98` over the fields at `:25-32`;
   `beforeValidate` hook `refuseFilelessFileRewrite` at `:185-211` over the
   fields at `:119-125`, compared by `sameStoredValue` at `:132-135`;
-  `beforeOperation` hook `refuseUploadEditsRefetch` at `:378-431` over the
-  fields at `:316`; registered at `:473-482`; lane D, #242; #270; line
+  `beforeOperation` hook `refuseUploadEditsRefetch` at `:373-426` over the
+  fields at `:311`; registered at `:468-477`; lane D, #242; #270; line
   numbers corrected 2026-11-15 with #339]. The
   update guard also passes the storage adapter's own metadata write-back,
   which runs with the server-only `context.skipCloudStorage`.
@@ -272,7 +272,7 @@ stay where they are:
   either at all; sending them back as stored, `alt` edits and a normal
   upload (`prefix: ''`, no `_objectKey`) pass. A 400, by id and per document
   in a `where` update [source: `src/collections/Media.ts` — `beforeValidate`
-  hook `refuseStorageCoordinateWrite` at `:280-310` over the fields at
+  hook `refuseStorageCoordinateWrite` at `:280-305` over the fields at
   `:219`; pinned on the pg tier, including with the adapter enabled,
   `evals/media-storage-coordinates-integration.test.ts`,
   `evals/media-storage-schema-integration.test.ts`]. The media backup relies
@@ -307,7 +307,7 @@ stay where they are:
   the declared length and on the bytes (`:13`, `:126`, `:137`).
 - SVG uploads through the admin stay allowed for legacy content, and SVG
   can carry scripts, so only trusted staff hold editor accounts
-  [source: `src/collections/Media.ts:329-330`, the collection's TSDoc].
+  [source: `src/collections/Media.ts:435-437`, the collection's TSDoc].
   **Operational.**
 
 ## End-user authorization (Clerk)
