@@ -49,8 +49,8 @@ overrides:
   # exactly 1.30.0, and mcp-handler 1.1.0 wants exactly 1.26.0; both are
   # affected by six advisories (GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h,
   # -46jr-4wx8-v453, -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw),
-  # fixed in 1.32.0. docs/SECURITY.md's "never force-overridden" rule is
-  # waived for this entry only, by Brandon on 2026-11-14. 1.32.2 is
+  # fixed in 1.32.0. Brandon decided it on 2026-11-14; its row is in
+  # docs/SECURITY.md § Dependency advisories. 1.32.2 is
   # same-major; typecheck, the MCP plugin tests and the real-Postgres
   # POST /api/mcp test pass on it. Exit: drop this entry as soon as a
   # Payload release pins 1.32.x or later. Check with

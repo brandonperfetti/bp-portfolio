@@ -447,41 +447,31 @@ stay there.
   requires no checks, so a red run on a `develop` PR is held by review, not
   by branch protection. Rationale: `docs/DEPENDENCIES.md` § Supply-chain
   policy.
-- **Residual advisories are tracked, never force-overridden** — #100 holds
-  them; `pnpm audit` and `pnpm audit --prod` are the check
-  (`docs/DEPENDENCIES.md`). **Three exceptions, all Brandon's.** No other
-  entry may cross a pin without the same explicit decision.
-  - **2026-11-14 (#312):** `@modelcontextprotocol/sdk` is overridden to 1.32.2
-    past `@payloadcms/plugin-mcp`'s exact 1.30.0 pin. That clears the six SDK
-    advisories (GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h, -46jr-4wx8-v453,
-    -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw). Its compatibility
-    evidence and exit condition are in `docs/DEPENDENCIES.md` § Known unmet
-    peers.
-  - **2026-11-15 (#345):** `dompurify` is overridden to `^3.4.17` past
-    `monaco-editor` 0.56.0's exact 3.4.8 pin (Payload's admin code field).
-    That clears Dependabot alerts #289, #371, #391, #392 and #393. No
-    compliant route exists: `monaco-editor` 0.57.0 pins 3.4.15, still
-    affected. Exit: drop the entry once a `monaco-editor` release that the
-    tree resolves pins `dompurify` ≥3.4.17.
-  - **2026-11-15 (#347):** `valibot` is overridden to `^1.4.2` past the
-    exact 1.2.0 that `@storybook/addon-mcp` 0.7.0 and `@storybook/mcp` 0.8.0
-    declare. The override has been in place since b2c0929 (2026-08-24); the
-    decision is recorded here. Removing it would put valibot 1.2.0 back in
-    the tree, which GHSA-5qjj-4xww-7phc affects (moderate, ≤1.4.1, fixed in
-    1.4.2): `flatten()` throws on `record()` issue paths that name inherited
-    `Object` properties. It is safe to cross because the pins it crosses
-    belong to dev tooling: `@storybook/addon-mcp` is a devDependency.
-    Production also resolves valibot, through `@c15t/react` →
-    `@c15t/schema` 2.2.0, which declares exactly 1.4.2. The override crosses
-    no production pin only while the lockfile resolves 1.4.2. The override is
-    global, and valibot 1.5.0 is already published, so a fresh resolve
-    (`pnpm update`, or a deleted lockfile) would cross `@c15t/schema`'s pin
-    in production. Review that pin whenever valibot's resolved version
-    changes. Exit: drop the entry once the
-    Storybook MCP packages the tree resolves declare `valibot` ≥1.4.2.
-    `@storybook/addon-mcp` 10.6.7, the latest, declares `^1.4.0` and no longer depends on
-    `@storybook/mcp`. That range admits 1.4.2, so moving to it ends the
-    crossing, but its floor is still below 1.4.2.
+- **Residual advisories are tracked in #100**; `pnpm audit` and
+  `pnpm audit --prod` are the check (`docs/DEPENDENCIES.md`). Fix one with an
+  in-range bump where one exists. An override is the lever when none does.
+- **An agent may add an override that crosses a declared range, without
+  asking Brandon, when all of these hold** (Brandon, 2026-11-15, #347):
+  - it clears a known advisory or a documented bug;
+  - it is capped at the fixing version within the same major: an exact
+    version, `~`, or a bounded range, never an open `^` that keeps floating;
+  - the build and tests pass;
+  - one row in the table below records it.
+- **Brandon decides** an override that crosses a major version, one with no
+  advisory or bug behind it, and anything the dependency-review check or
+  `pnpm audit` flags.
+- **An override is dropped once its parent catches up.** The Dependabot
+  cleanup (the agent sweep of open Dependabot alerts, as in #345) checks
+  each row's exit, and so does any bump of a row's parent package.
+
+| Override                           | Advisory or bug                                                                                          | Parent and declared range                                                            | Path                 | Exit                                                                                | Decided                    |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------- | ----------------------------------------------------------------------------------- | -------------------------- |
+| `@modelcontextprotocol/sdk` 1.32.2 | GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h, -46jr-4wx8-v453, -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw | `@payloadcms/plugin-mcp` 3.93.0: exactly 1.30.0; `mcp-handler` 1.1.0: exactly 1.26.0 | prod                 | a Payload release pins ≥1.32 (evidence: `docs/DEPENDENCIES.md` § Known unmet peers) | Brandon, 2026-11-14 (#312) |
+| `dompurify` `^3.4.17`              | Dependabot alerts #289, #371, #391, #392, #393                                                           | `monaco-editor` 0.56.0 (Payload's admin code field): exactly 3.4.8                   | prod (admin)         | a `monaco-editor` release the tree resolves pins ≥3.4.17                            | Brandon, 2026-11-15 (#345) |
+| `valibot` `^1.4.2`                 | GHSA-5qjj-4xww-7phc                                                                                      | `@storybook/addon-mcp` 0.7.0, `@storybook/mcp` 0.8.0: exactly 1.2.0                  | dev                  | `@storybook/addon-mcp` 10.6.7 (`^1.4.0`); the #347 follow-up PR                     | Brandon, 2026-11-15 (#347) |
+| `prismjs` 1.30.0                   | GHSA-x7hr-w5r2-h6wg                                                                                      | `refractor` 3.6.0, via `@mapbox/rehype-prism` 0.9.0: `~1.27.0`                       | prod (client bundle) | #350: a rehype plugin on `refractor` ≥4, which has no `prismjs` dependency          | Brandon, 2026-11-15 (#347) |
+| `better-sqlite3` `^13.0.3`         | v11 aborts the Evalite job at worker teardown (exit 134; `pnpm-workspace.yaml` comment)                  | `evalite` 0.19.0: `^11.6.0` (crosses a major)                                        | dev and CI           | an `evalite` release declares `^13`                                                 | Brandon, 2026-11-15 (#347) |
+
 - **A mitigation does not clear an advisory.** Before #312's override, the
   MCP SDK's advisories stayed open behind a local mitigation, and the
   mitigation stays in place after it: 1.32's own tool-input limit
