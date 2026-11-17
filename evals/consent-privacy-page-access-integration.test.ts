@@ -21,8 +21,9 @@ import { createFixturePage } from './fixtures/payload-fixtures'
  * **Shared state.** Unlike a fixture row, the `cookie-consent` global is one
  * document every worker shares. No other file in this tier reads or writes it
  * `[measured 2026-11-17: grep of evals/]`. The banner group is snapshotted by
- * value in `beforeAll` and written back in `afterAll`, and each test unwinds
- * its own pages in `try/finally`.
+ * value in `beforeAll` and written back in `afterAll`. Each test clears the
+ * relation and deletes its own page in `try/finally`; the marker sweep in
+ * `beforeAll`/`afterAll` is only the backstop for an interrupted run.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -72,6 +73,11 @@ describe.skipIf(!connectionString)(
         where: { slug: { like: `%${MARKER}%` } },
         overrideAccess: true,
       })
+    }
+
+    /** Deletes one fixture page; each test calls it from its own `finally`. */
+    const deletePage = async (id: number | string) => {
+      await payload.delete({ collection: 'pages', id, overrideAccess: true })
     }
 
     /** Points the consent banner's privacy-policy relation at `pageId`. */
@@ -140,11 +146,22 @@ describe.skipIf(!connectionString)(
           slug: `${MARKER}-draft`,
         })
 
+        // With access enforced and no user, the same read leaves the relation
+        // a bare id. This is the mechanism, asserted directly, so the reader's
+        // missing link below cannot be its catch-and-default path instead.
+        const enforced = await payload.findGlobal({
+          slug: 'cookie-consent',
+          depth: 1,
+          overrideAccess: false,
+        })
+        expect(enforced.banner?.privacyPolicyPage).toBe(draft.id)
+
         const config = await getCmsConsentConfig()
 
         expect(config.dialog.privacyPolicyHref).toBeUndefined()
       } finally {
         await pointPrivacyPolicyAt(null)
+        await deletePage(draft.id)
       }
     }, 60_000)
 
@@ -165,6 +182,7 @@ describe.skipIf(!connectionString)(
         expect(config.dialog.privacyPolicyHref).toBe(`/${MARKER}-published`)
       } finally {
         await pointPrivacyPolicyAt(null)
+        await deletePage(published.id)
       }
     }, 60_000)
   },
