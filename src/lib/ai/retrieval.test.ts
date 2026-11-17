@@ -221,6 +221,8 @@ describe('toRows', () => {
 
 describe('configuration', () => {
   it('defaults topK to 5', () => {
+    // Unset on purpose: a filled `.env.local` reaches the unit tier (#298).
+    vi.stubEnv('CORVUS_RETRIEVAL_TOP_K', undefined)
     expect(getRetrievalTopK()).toBe(DEFAULT_RETRIEVAL_TOP_K)
   })
 

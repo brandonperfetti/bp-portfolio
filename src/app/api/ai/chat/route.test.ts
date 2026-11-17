@@ -197,6 +197,17 @@ const validBody = {
 }
 
 beforeEach(() => {
+  // The route reads these straight from `process.env`, and a filled
+  // `.env.local` (or a shell export) reaches the unit tier. Start every test
+  // from "unset" so none of them depends on the developer's environment
+  // (#298): the anon daily quota, the two request gates, and the chat model
+  // and provider that decide whether a reasoning effort is sent. A test that
+  // needs one stubs it; `afterEach` restores them with `vi.unstubAllEnvs()`.
+  vi.stubEnv('CORVUS_CHAT_DAILY_QUOTA', undefined)
+  vi.stubEnv('CORVUS_DISABLE_CHAT', undefined)
+  vi.stubEnv('TURNSTILE_PROTECT_CHAT', undefined)
+  vi.stubEnv('AI_CHAT_MODEL', undefined)
+  vi.stubEnv('AI_CHAT_PROVIDER', undefined)
   isAllowedRequestSourceMock.mockReturnValue(true)
   getRequestClientIpMock.mockReturnValue(ANON_IP)
   getSecurityLimitsMock.mockReturnValue({
@@ -334,6 +345,18 @@ describe('POST /api/ai/chat — anon abuse limiter stays IP-keyed and runs first
       `ip:digest(${ANON_IP})`,
       10,
       0,
+    )
+  })
+
+  it('passes a configured CORVUS_CHAT_DAILY_QUOTA to the anon limiter as its daily quota', async () => {
+    vi.stubEnv('CORVUS_CHAT_DAILY_QUOTA', '200')
+
+    await POST(makeRequest(validBody))
+
+    expect(checkChatLimitsMock).toHaveBeenCalledWith(
+      `ip:digest(${ANON_IP})`,
+      10,
+      200,
     )
   })
 
