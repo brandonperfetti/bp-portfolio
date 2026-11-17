@@ -203,6 +203,9 @@ describe.skipIf(!connectionString)(
         { collection: 'posts', doc_id: bpPortfolio.id },
       ]
       try {
+        await db.execute(
+          sql`DELETE FROM "corvus_embeddings" WHERE ${foreignPredicate}`,
+        )
         for (const row of expectedForeign) {
           await db.execute(sql`
             INSERT INTO "corvus_embeddings"
