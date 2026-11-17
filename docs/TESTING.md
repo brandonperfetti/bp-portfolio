@@ -378,7 +378,9 @@ separate from those unit controls.
   removed (#265). A string argument makes the same call fail; a function does
   not. Write `expect(list).toEqual(expect.arrayContaining([hook]))`, or
   `expect(list?.includes(hook)).toBe(true)` as `src/collections/Media.test.ts`
-  does, or assert `toBeDefined()` first; then remove the wiring once and watch
-  the test fail before trusting it. [measured 2026-09-27, vitest 4.1.x, wave-9
+  does, or assert `expect(Array.isArray(list)).toBe(true)` first
+  (`toBeDefined()` is not enough: it accepts `null`, which `toContain` also
+  passes); then remove the wiring once and watch the test fail before trusting
+  it. [measured 2026-09-27, vitest 4.1.x, wave-9
   lane D; re-measured 2026-11-17 on vitest 4.1.12: both calls pass, the
   `arrayContaining` form fails and `toContainEqual(fn)` throws]
