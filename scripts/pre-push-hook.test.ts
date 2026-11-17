@@ -74,6 +74,8 @@ function runHook(stdin: string, env: Record<string, string> = {}) {
         ...process.env,
         PATH: `${binDir}:${process.env.PATH ?? ''}`,
         PNPM_CALL_LOG: callLog,
+        // Pinned, so a value inherited from outside cannot fail the stub.
+        PNPM_STUB_EXIT: '0',
         ...env,
       },
     },
