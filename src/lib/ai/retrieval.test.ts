@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * Retrieval: the SQL the visibility filter lives in, the similarity floor that
@@ -87,6 +87,14 @@ const row = (over: Record<string, unknown> = {}) => ({
   source_url: '/articles/t',
   score: 0.9,
   ...over,
+})
+
+beforeEach(() => {
+  // A filled `.env.local` (or a shell export) reaches the unit tier, so every
+  // test starts with the two retrieval settings unset and stubs what it needs
+  // (#298); `afterEach` restores them.
+  vi.stubEnv('CORVUS_DISABLE_RETRIEVAL', undefined)
+  vi.stubEnv('CORVUS_RETRIEVAL_TOP_K', undefined)
 })
 
 afterEach(() => {
@@ -221,8 +229,6 @@ describe('toRows', () => {
 
 describe('configuration', () => {
   it('defaults topK to 5', () => {
-    // Unset on purpose: a filled `.env.local` reaches the unit tier (#298).
-    vi.stubEnv('CORVUS_RETRIEVAL_TOP_K', undefined)
     expect(getRetrievalTopK()).toBe(DEFAULT_RETRIEVAL_TOP_K)
   })
 

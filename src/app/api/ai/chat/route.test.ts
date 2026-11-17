@@ -200,11 +200,13 @@ beforeEach(() => {
   // The route reads these straight from `process.env`, and a filled
   // `.env.local` (or a shell export) reaches the unit tier. Start every test
   // from "unset" so none of them depends on the developer's environment
-  // (#298): the anon daily quota, the two request gates, and the chat model
-  // and provider that decide whether a reasoning effort is sent. A test that
-  // needs one stubs it; `afterEach` restores them with `vi.unstubAllEnvs()`.
+  // (#298): the anon daily quota, the two request gates, the retrieval kill
+  // switch, and the chat model and provider that decide whether a reasoning
+  // effort is sent. A test that needs one stubs it; `afterEach` restores them
+  // with `vi.unstubAllEnvs()`.
   vi.stubEnv('CORVUS_CHAT_DAILY_QUOTA', undefined)
   vi.stubEnv('CORVUS_DISABLE_CHAT', undefined)
+  vi.stubEnv('CORVUS_DISABLE_RETRIEVAL', undefined)
   vi.stubEnv('TURNSTILE_PROTECT_CHAT', undefined)
   vi.stubEnv('AI_CHAT_MODEL', undefined)
   vi.stubEnv('AI_CHAT_PROVIDER', undefined)
