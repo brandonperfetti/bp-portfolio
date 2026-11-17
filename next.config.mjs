@@ -13,6 +13,15 @@ const nextConfig = {
   // compares `parseUrl(origin).hostname`). Dev-only: this key has no effect on
   // `next build` / `next start`, so it cannot loosen anything in production.
   allowedDevOrigins: ['127.0.0.1'],
+  // #276: stop `next dev` writing its managed agent-rules block. When it
+  // detects a coding agent and finds no such block, Next appends one to the
+  // project-root `AGENTS.md`, which is this repo's tracked, canonical
+  // agent-instructions file (and the target of the
+  // `.github/copilot-instructions.md` symlink), so every dev start left the
+  // tree dirty with text telling agents to commit it. `AGENTS.md` already
+  // routes agents to the repo's own docs, so the block is not wanted.
+  // [source: next 16.4.6 `NextConfig.agentRules`, config-shared.d.ts]
+  agentRules: false,
   // #76 Piece 1: enable Cache Components (top-level flag in Next 16.3 — the
   // experimental location is deprecated). Piece 1 only flips the flag and adds
   // the minimum Suspense/sync-IO scaffolding for a behavior-preserving build;
