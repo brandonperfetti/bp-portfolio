@@ -26,6 +26,15 @@ import type { CookieConsent } from '@/payload-types'
  * site behavior-preserving until the migration lands. `depth: 1` resolves the
  * optional privacy-policy page relation.
  *
+ * `overrideAccess: false` (#262): the Local API defaults it to `true`, and
+ * that default travels into relationship population. This reader runs with no
+ * user, so with access enforced a privacy-policy relation to a page that was
+ * never published stays an id and the dialog shows no link; left at the
+ * default it was populated anyway, and every visitor got a link to the draft
+ * page's path (a 404 that also disclosed its slug). Pinned by
+ * `globalReaders.access.test.ts` and, against a real Payload, by
+ * `evals/consent-privacy-page-access-integration.test.ts`.
+ *
  * `'use cache: remote'` so a `global_cookie-consent` tag purge reaches every
  * serverless instance, not only the one that ran the hook (#118).
  */
@@ -37,7 +46,11 @@ export const getCmsConsentConfig = async (): Promise<ConsentConfig> => {
   let global: CookieConsent | null = null
   try {
     const payload = await getPayload({ config: configPromise })
-    global = await payload.findGlobal({ slug: 'cookie-consent', depth: 1 })
+    global = await payload.findGlobal({
+      slug: 'cookie-consent',
+      depth: 1,
+      overrideAccess: false,
+    })
   } catch {
     return DEFAULT_CONSENT_CONFIG
   }

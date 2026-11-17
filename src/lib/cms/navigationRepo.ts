@@ -28,7 +28,14 @@ export const getCmsNavigation = async (): Promise<CmsNavigationItem[]> => {
   cacheTag(CMS_TAGS.navigation)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
-  const nav = await payload.findGlobal({ slug: 'navigation', depth: 0 })
+  // `overrideAccess: false`: the Local API default is `true`, which would
+  // skip the global's `read` rule. It is `anyone` today, so the result is the
+  // same; stated so a later, narrower rule is honoured, not bypassed (#262).
+  const nav = await payload.findGlobal({
+    slug: 'navigation',
+    depth: 0,
+    overrideAccess: false,
+  })
   const links = nav?.headerLinks || []
   if (!links.length) return DEFAULT_NAVIGATION
   return links.map((link, index) => ({
