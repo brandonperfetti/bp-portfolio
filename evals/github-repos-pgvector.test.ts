@@ -24,8 +24,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  * provider key. `embedQuery` is mocked to THROW, so a path that quietly started
  * embedding at query time fails the build rather than billing for it.
  *
- * Every row written carries a `doc_id` at or above {@link DOC_ID_OFFSET} and
- * `afterAll` deletes exactly those.
+ * Ownership is exact (collection, doc_id): github-repos at the shifted
+ * fixture repo IDs (currently 911001–911003), plus posts sentinel 1009000
+ * (offset +99000). Cleanup includes that sentinel without sweeping a band.
+ * The peer pgvector file owns its captured corpus keys and posts 900900–
+ * 900902/900999; neither file deletes or counts the other's keys.
  */
 
 /** Keeps every row this file writes in its own id range, for exact cleanup. */
@@ -110,6 +113,26 @@ const repos = GITHUB_REPO_FIXTURES.map((repo) => ({
   id: repo.id + DOC_ID_OFFSET,
 }))
 
+/** Deliberately outside a 10000-wide repo band; still an owned posts key. */
+const sentinelId = DOC_ID_OFFSET + 99_000
+const repoIds = repos.map(({ id }) => id)
+
+/** Only the repo fixtures are a listing/count baseline, never unrelated repos. */
+async function repoPredicate() {
+  const { sql } = await import('@payloadcms/db-postgres')
+  return sql`"collection" = 'github-repos' AND "doc_id" IN (${sql.join(
+    repoIds.map((id) => sql`${id}`),
+    sql`, `,
+  )})`
+}
+
+/** Include the cross-collection sentinel explicitly without widening ownership. */
+async function clean() {
+  const { sql } = await import('@payloadcms/db-postgres')
+  await db.execute(sql`DELETE FROM "corvus_embeddings"
+    WHERE (${await repoPredicate()}) OR ("collection" = 'posts' AND "doc_id" = ${sentinelId})`)
+}
+
 const bpPortfolio = repos.find((repo) => repo.name === 'bp-portfolio')!
 const macos = repos.find((repo) => repo.name === 'macos-portfolio')!
 
@@ -151,45 +174,85 @@ describe.skipIf(!connectionString)(
     beforeAll(async () => {
       pool = new Pool({ connectionString })
       db = drizzle(pool)
-      const { sql } = await import('@payloadcms/db-postgres')
-      await db.execute(
-        sql`DELETE FROM "corvus_embeddings" WHERE "doc_id" >= ${DOC_ID_OFFSET}`,
-      )
+      await clean()
     })
 
     afterAll(async () => {
       if (!pool) return
-      const { sql } = await import('@payloadcms/db-postgres')
-      await db.execute(
-        sql`DELETE FROM "corvus_embeddings" WHERE "doc_id" >= ${DOC_ID_OFFSET}`,
-      )
-      await pool.end()
+      try {
+        await clean()
+      } finally {
+        await pool.end()
+      }
     })
 
     it('indexes every fixture repo under collection github-repos', async () => {
       const { sql } = await import('@payloadcms/db-postgres')
-      embedChunksStub.mockClear()
+      const foreignRepoId = DOC_ID_OFFSET + 50_000
+      const foreignPredicate = sql`("collection" = 'github-repos' AND "doc_id" = ${foreignRepoId})
+        OR ("collection" = 'posts' AND "doc_id" = ${bpPortfolio.id})`
+      const readForeign = async () =>
+        toRows(
+          await db.execute(sql`
+        SELECT "collection", "doc_id" FROM "corvus_embeddings"
+        WHERE ${foreignPredicate} ORDER BY "collection"
+      `),
+        )
+      const expectedForeign = [
+        { collection: 'github-repos', doc_id: foreignRepoId },
+        { collection: 'posts', doc_id: bpPortfolio.id },
+      ]
+      try {
+        for (const row of expectedForeign) {
+          await db.execute(sql`
+            INSERT INTO "corvus_embeddings"
+              ("collection", "doc_id", "chunk_index", "content", "content_hash",
+               "visibility", "embedding", "model")
+            VALUES (${row.collection}, ${row.doc_id}, 0, 'FOREIGN_REPO_FIXTURE', 'foreign',
+                    'gated', ${toVectorLiteral(stubVector('FOREIGN_REPO_FIXTURE'))}::vector,
+                    'text-embedding-3-small')
+          `)
+        }
+        expect(await readForeign()).toEqual(expectedForeign)
+        await syncGithubRepoEmbeddings({ db, repo: bpPortfolio })
+        await clean()
+        expect(await readForeign()).toEqual(expectedForeign)
+        embedChunksStub.mockClear()
 
-      for (const repo of repos) {
-        const outcome = await syncGithubRepoEmbeddings({ db, repo })
-        expect(outcome.written).toBeGreaterThan(0)
-      }
+        for (const repo of repos) {
+          const outcome = await syncGithubRepoEmbeddings({ db, repo })
+          expect(outcome.written).toBeGreaterThan(0)
+        }
 
-      const rows = toRows(
-        await db.execute(sql`
+        const rows = toRows(
+          await db.execute(sql`
           SELECT "collection", "doc_id", "source_url", "visibility"
-          FROM "corvus_embeddings" WHERE "doc_id" >= ${DOC_ID_OFFSET}
+          FROM "corvus_embeddings" WHERE ${await repoPredicate()}
         `),
-      )
-      expect(rows.length).toBeGreaterThanOrEqual(repos.length)
-      for (const row of rows) {
-        expect(row.collection).toBe('github-repos')
-        expect(row.visibility).toBe('public')
-        expect(String(row.source_url)).toMatch(
-          /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/,
+        )
+        expect(rows.length).toBe(
+          repos.reduce((n, repo) => n + chunkGithubRepo(repo).length, 0),
+        )
+        for (const repo of repos) {
+          expect(
+            rows.some((row) => row.doc_id === repo.id),
+            repo.fullName,
+          ).toBe(true)
+        }
+        for (const row of rows) {
+          expect(row.collection).toBe('github-repos')
+          expect(row.visibility).toBe('public')
+          expect(String(row.source_url)).toMatch(
+            /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/,
+          )
+        }
+        expect(embedQueryStub).not.toHaveBeenCalled()
+        expect(await readForeign()).toEqual(expectedForeign)
+      } finally {
+        await db.execute(
+          sql`DELETE FROM "corvus_embeddings" WHERE ${foreignPredicate}`,
         )
       }
-      expect(embedQueryStub).not.toHaveBeenCalled()
     })
 
     it('re-syncing an unchanged repo makes ZERO provider calls', async () => {
@@ -231,8 +294,8 @@ describe.skipIf(!connectionString)(
         'the fixture must be retrievable before the sweep, or this proves nothing',
       ).toBe(true)
 
-      const indexed = (await readIndexedRepoDocIds(db)).filter(
-        (id) => id >= DOC_ID_OFFSET,
+      const indexed = (await readIndexedRepoDocIds(db)).filter((id) =>
+        repoIds.includes(id),
       )
       const stillListed = repos
         .filter((repo) => repo.id !== macos.id)
@@ -263,8 +326,8 @@ describe.skipIf(!connectionString)(
 
       // A row that is NOT a repo, sharing this file's id range, written
       // directly so its survival is a statement about the DELETE's scoping.
-      const sentinelId = DOC_ID_OFFSET + 99_000
-      await db.execute(sql`
+      try {
+        await db.execute(sql`
         INSERT INTO "corvus_embeddings"
           ("collection", "doc_id", "chunk_index", "title", "content",
            "content_hash", "source_url", "visibility", "published_at",
@@ -276,17 +339,33 @@ describe.skipIf(!connectionString)(
            'text-embedding-3-small', now())
       `)
 
-      await deleteGithubRepoDocuments(db, [sentinelId])
+        await deleteGithubRepoDocuments(db, [sentinelId])
 
-      const [{ n }] = toRows(
+        const [{ n }] = toRows(
+          await db.execute(
+            sql`SELECT count(*)::int AS n FROM "corvus_embeddings" WHERE "collection" = 'posts' AND "doc_id" = ${sentinelId}`,
+          ),
+        ) as Array<{ n: number }>
+        expect(
+          n,
+          'deleting a repo doc_id must not remove a posts row that shares it',
+        ).toBe(1)
+        await clean()
+        const remaining = toRows(
+          await db.execute(sql`
+          SELECT "doc_id" FROM "corvus_embeddings"
+          WHERE "collection" = 'posts' AND "doc_id" = ${sentinelId}
+        `),
+        )
+        expect(
+          remaining,
+          'fixture cleanup must include the +99000 sentinel',
+        ).toEqual([])
+      } finally {
         await db.execute(
-          sql`SELECT count(*)::int AS n FROM "corvus_embeddings" WHERE "doc_id" = ${sentinelId}`,
-        ),
-      ) as Array<{ n: number }>
-      expect(
-        n,
-        'deleting a repo doc_id must not remove a posts row that shares it',
-      ).toBe(1)
+          sql`DELETE FROM "corvus_embeddings" WHERE "collection" = 'posts' AND "doc_id" = ${sentinelId}`,
+        )
+      }
     })
   },
 )

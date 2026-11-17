@@ -31,12 +31,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  * no gated post in production to copy, and inventing one and calling it real
  * content would be worse than labelling it.
  *
- * Every row written carries a `doc_id` at or above {@link DOC_ID_OFFSET}, and
- * `afterAll` deletes exactly those, so the job's later Playwright steps see the
- * database they would have seen anyway.
+ * Ownership is exact (collection, doc_id): the shifted SITE_FIXTURE_DOCS,
+ * posts 900900–900902 and the rejected dimension probe 900999. Cleanup and
+ * counts use those keys, never an open-ended offset band. The peer GitHub
+ * file owns its shifted repo keys and posts sentinel 1009000, independently.
  */
 
-/** Keeps every row this test writes in its own id range, for exact cleanup. */
+/** Shifts captured IDs away from Payload rows; ownership also pins collection. */
 const DOC_ID_OFFSET = 900_000
 
 /**
@@ -227,6 +228,41 @@ const SYNTHETIC_FUTURE = {
   excerpt: 'SYNTHETIC_FUTURE_BODY, not due for another month.',
 }
 
+/** Exact corpus keys, shared by the backfill count and fixture cleanup. */
+const corpusDocuments = SITE_FIXTURE_DOCS.map(({ collection, doc }) => ({
+  collection,
+  docId: Number(doc.id) + DOC_ID_OFFSET,
+}))
+
+const ownedDocuments = [
+  ...corpusDocuments,
+  ...[SYNTHETIC_PUBLIC, SYNTHETIC_GATED, SYNTHETIC_FUTURE].map(({ id }) => ({
+    collection: 'posts',
+    docId: id,
+  })),
+  { collection: 'posts', docId: DOC_ID_OFFSET + 999 },
+]
+
+/** Match only declared document keys, including every chunk of each document. */
+async function documentPredicate(documents = ownedDocuments) {
+  const { sql } = await import('@payloadcms/db-postgres')
+  return sql.join(
+    documents.map(
+      ({ collection, docId }) =>
+        sql`("collection" = ${collection} AND "doc_id" = ${docId})`,
+    ),
+    sql` OR `,
+  )
+}
+
+/** Interrupted runs and teardown may remove only this file's exact keys. */
+async function clean() {
+  const { sql } = await import('@payloadcms/db-postgres')
+  await db.execute(
+    sql`DELETE FROM "corvus_embeddings" WHERE ${await documentPredicate()}`,
+  )
+}
+
 /** The single chunk a synthetic post produces, for building its query vector. */
 const chunkTextOf = (doc: Record<string, unknown>): string =>
   chunkDocument('posts', doc)[0].content
@@ -238,19 +274,16 @@ describe.skipIf(!connectionString)(
       pool = new Pool({ connectionString })
       db = drizzle(pool)
       // Leave nothing behind from a previous interrupted run.
-      await db.execute(
-        (await import('@payloadcms/db-postgres'))
-          .sql`DELETE FROM "corvus_embeddings" WHERE "doc_id" >= ${DOC_ID_OFFSET}`,
-      )
+      await clean()
     })
 
     afterAll(async () => {
       if (!pool) return
-      const { sql } = await import('@payloadcms/db-postgres')
-      await db.execute(
-        sql`DELETE FROM "corvus_embeddings" WHERE "doc_id" >= ${DOC_ID_OFFSET}`,
-      )
-      await pool.end()
+      try {
+        await clean()
+      } finally {
+        await pool.end()
+      }
     })
 
     it('the migration created the table retrieval expects', async () => {
@@ -304,40 +337,79 @@ describe.skipIf(!connectionString)(
 
     it('a stub-embedded backfill of the fixture corpus writes rows', async () => {
       const { sql } = await import('@payloadcms/db-postgres')
-      embedChunksStub.mockClear()
+      const foreignDocuments = [
+        { collection: 'github-repos', docId: SYNTHETIC_PUBLIC.id },
+        { collection: 'posts', docId: DOC_ID_OFFSET + 100_000 },
+      ]
+      const foreignPredicate = await documentPredicate(foreignDocuments)
+      const readForeign = async () =>
+        toRows(
+          await db.execute(sql`
+        SELECT "collection", "doc_id" AS "docId" FROM "corvus_embeddings"
+        WHERE ${foreignPredicate} ORDER BY "collection"
+      `),
+        )
+      try {
+        for (const { collection, docId } of foreignDocuments) {
+          await db.execute(sql`
+            INSERT INTO "corvus_embeddings"
+              ("collection", "doc_id", "chunk_index", "content", "content_hash",
+               "visibility", "embedding", "model")
+            VALUES (${collection}, ${docId}, 0, 'FOREIGN_PG_FIXTURE', 'foreign',
+                    'gated', ${toVectorLiteral(stubVector('FOREIGN_PG_FIXTURE'))}::vector,
+                    'text-embedding-3-small')
+          `)
+        }
+        expect(await readForeign()).toEqual(foreignDocuments)
+        await runAfterChange('posts', SYNTHETIC_PUBLIC)
+        expect(
+          (await readStoredChunks(db, 'posts', SYNTHETIC_PUBLIC.id)).size,
+        ).toBeGreaterThan(0)
+        await clean()
+        expect(
+          (await readStoredChunks(db, 'posts', SYNTHETIC_PUBLIC.id)).size,
+        ).toBe(0)
+        expect(await readForeign()).toEqual(foreignDocuments)
+        embedChunksStub.mockClear()
 
-      // The captured site corpus, id-shifted into this test's range. Every
-      // document goes through the same `syncDocumentEmbeddings` the hooks and
-      // `scripts/backfill-corvus-embeddings.ts` use, so "the backfill works"
-      // is being asserted about the real write path.
-      for (const { collection, doc } of SITE_FIXTURE_DOCS) {
-        await runAfterChange(collection as 'posts' | 'work-history', {
-          ...doc,
-          id: Number(doc.id) + DOC_ID_OFFSET,
-        })
-      }
+        // The captured site corpus, id-shifted into this test's range. Every
+        // document goes through the same `syncDocumentEmbeddings` the hooks and
+        // `scripts/backfill-corvus-embeddings.ts` use, so "the backfill works"
+        // is being asserted about the real write path.
+        for (const { collection, doc } of SITE_FIXTURE_DOCS) {
+          await runAfterChange(collection as 'posts' | 'work-history', {
+            ...doc,
+            id: Number(doc.id) + DOC_ID_OFFSET,
+          })
+        }
 
-      const [{ n }] = toRows(
+        const [{ n }] = toRows(
+          await db.execute(
+            sql`SELECT count(*)::int AS n FROM "corvus_embeddings" WHERE ${await documentPredicate(corpusDocuments)}`,
+          ),
+        ) as Array<{ n: number }>
+        expect(n).toBe(SITE_FIXTURE_DOCS.length)
+        expect(embedChunksStub).toHaveBeenCalled()
+        expect(embedQueryStub).not.toHaveBeenCalled()
+
+        // Re-running is a no-op: the content hash matches, so nothing embeds.
+        embedChunksStub.mockClear()
+        for (const { collection, doc } of SITE_FIXTURE_DOCS) {
+          await runAfterChange(collection as 'posts' | 'work-history', {
+            ...doc,
+            id: Number(doc.id) + DOC_ID_OFFSET,
+          })
+        }
+        expect(
+          embedChunksStub,
+          'an unchanged document must not be re-embedded',
+        ).not.toHaveBeenCalled()
+        expect(await readForeign()).toEqual(foreignDocuments)
+      } finally {
         await db.execute(
-          sql`SELECT count(*)::int AS n FROM "corvus_embeddings" WHERE "doc_id" >= ${DOC_ID_OFFSET}`,
-        ),
-      ) as Array<{ n: number }>
-      expect(n).toBe(SITE_FIXTURE_DOCS.length)
-      expect(embedChunksStub).toHaveBeenCalled()
-      expect(embedQueryStub).not.toHaveBeenCalled()
-
-      // Re-running is a no-op: the content hash matches, so nothing embeds.
-      embedChunksStub.mockClear()
-      for (const { collection, doc } of SITE_FIXTURE_DOCS) {
-        await runAfterChange(collection as 'posts' | 'work-history', {
-          ...doc,
-          id: Number(doc.id) + DOC_ID_OFFSET,
-        })
+          sql`DELETE FROM "corvus_embeddings" WHERE ${foreignPredicate}`,
+        )
       }
-      expect(
-        embedChunksStub,
-        'an unchanged document must not be re-embedded',
-      ).not.toHaveBeenCalled()
     })
 
     it('an anonymous query never returns a gated row, and a signed-in one does', async () => {
