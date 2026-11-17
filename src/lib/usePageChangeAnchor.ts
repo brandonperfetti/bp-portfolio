@@ -55,9 +55,10 @@ export interface PageChangeAnchor {
  *   and it makes the initial mount a no-op for free.
  * - **Armed with the target, not with a boolean.** A bare flag says "a page
  *   change is coming" but nothing about *which*, and the push it was armed for
- *   is not guaranteed to land: the surfaces' debounced filter `updateUrl`
- *   fires a `router.replace` that drops `?page`, so a click inside the debounce
- *   window is superseded and `page` never moves — as does a Back before the
+ *   is not guaranteed to land: the surfaces' debounced filter write
+ *   (`useFilterUrlSync`) fires a `router.replace` that drops `?page`, so a
+ *   click inside the debounce window is superseded and `page` never moves — as
+ *   does a Back before the
  *   push commits. A flag nothing cleared then survives to the *next* page
  *   change, which is typically the filter reset that arrives mid-keystroke:
  *   stolen focus, from a click that navigated nothing. This is the same bug

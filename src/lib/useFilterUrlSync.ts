@@ -84,7 +84,9 @@ export type FilterUrlSyncOptions<
  * write that arrives MORE than 10 s late is no longer recognised: it is
  * treated as a destination and copied into the input, overwriting anything
  * typed since. A navigation 10 s late is far outside normal behaviour, and an
- * unbounded pending list is the worse risk, so the bound stays. A test pins it.
+ * unbounded pending list is the worse risk, so the bound stays. Tests pin both
+ * halves: the 10 s TTL in the explorer tests, the list size in
+ * `useFilterUrlSync.test.ts`.
  *
  * Effects are declared in the order they must run: read the URL, record it,
  * then write.

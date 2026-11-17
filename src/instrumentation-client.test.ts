@@ -18,6 +18,19 @@ vi.mock('@sentry/nextjs', () => ({
   captureRouterTransitionStart: () => undefined,
 }))
 
+// Every test here re-imports the entrypoint, and the entrypoint wraps
+// `window.history` for the page's lifetime with nothing to unwrap it. Left
+// real, each import would stack another guard layer (and another `popstate`
+// listener) on the one before (#305). The guard is not this file's subject —
+// `instrumentation-client.history.test.ts` covers it against a real
+// `History` — so it is replaced with a spy and `window.history` stays native.
+const installHistoryWriteGuard = vi.fn()
+
+vi.mock('@/lib/history/historyWriteGuard', () => ({
+  installHistoryWriteGuard: (...args: unknown[]) =>
+    installHistoryWriteGuard(...args),
+}))
+
 const DSN = 'https://public@o1.ingest.sentry.io/1'
 const UUID_V4 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -43,6 +56,7 @@ beforeEach(() => {
   vi.resetModules()
   init.mockClear()
   setUser.mockClear()
+  installHistoryWriteGuard.mockClear()
   sessionStorage.clear()
 })
 

@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const warn = vi.fn()
+const init = vi.fn()
 
 vi.mock('@sentry/nextjs', () => ({
-  init: vi.fn(),
+  init: (...args: unknown[]) => init(...args),
   setUser: vi.fn(),
   captureRouterTransitionStart: vi.fn(),
   consoleLoggingIntegration: vi.fn(),
@@ -36,6 +37,7 @@ describe('instrumentation-client installs the history-write guard app-wide (#268
   beforeEach(() => {
     vi.resetModules()
     warn.mockClear()
+    init.mockClear()
     refuse = null
     window.history.pushState({}, '', '/articles')
     // A `History` that refuses what the test queues, standing in for WebKit.
@@ -50,6 +52,7 @@ describe('instrumentation-client installs the history-write guard app-wide (#268
   afterEach(() => {
     window.history.replaceState = nativeReplace
     window.history.pushState = nativePush
+    vi.unstubAllEnvs()
   })
 
   it('contains a throttle SecurityError on a non-/tech route and logs it with the route', async () => {
@@ -94,6 +97,31 @@ describe('instrumentation-client installs the history-write guard app-wide (#268
     await flushTelemetry()
 
     expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('installs the guard when Sentry is off: no DSN, no Spotlight, nothing initialised (#305)', async () => {
+    // The guard is behaviour and the log is best-effort, so the install sits
+    // outside the `decision.init` block. Every input to that decision is
+    // emptied here so the test does not depend on the developer's env.
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('VERCEL_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('SENTRY_ENVIRONMENT', '')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', '')
+    vi.stubEnv('SENTRY_DSN', '')
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_SPOTLIGHT', '')
+    vi.stubEnv('SENTRY_SPOTLIGHT', '')
+    const before = window.history.replaceState
+    await import('@/instrumentation-client')
+
+    expect(init).not.toHaveBeenCalled()
+    expect(window.history.replaceState).not.toBe(before)
+    // And it is the working guard, not only a different function.
+    refuse = webkitThrottle()
+    expect(() =>
+      window.history.replaceState({}, '', '/articles?q=a'),
+    ).not.toThrow()
   })
 
   it('wraps window.history when instrumentation-client loads', async () => {
