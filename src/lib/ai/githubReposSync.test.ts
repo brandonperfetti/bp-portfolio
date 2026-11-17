@@ -112,6 +112,11 @@ const repo = (overrides: Partial<GithubRepoSource> = {}): GithubRepoSource => ({
 })
 
 beforeEach(() => {
+  // Embedding settings unset, so a filled `.env.local` cannot change what
+  // these tests embed with (#298); `afterEach` restores them.
+  vi.stubEnv('AI_EMBEDDING_MODEL', undefined)
+  vi.stubEnv('AI_EMBEDDING_DIMENSIONS', undefined)
+  vi.stubEnv('AI_EMBEDDING_PROVIDER', undefined)
   embedChunksMock.mockClear()
 })
 
