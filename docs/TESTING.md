@@ -370,3 +370,15 @@ separate from those unit controls.
 - Motion/a11y changes validate the keyboard path and reduced-motion
   rendering.
 - If no test accompanies a change, say why in the PR notes.
+- **A wiring test asserts the container before its contents, and is proven
+  red once.** `expect(undefined).toContain(fn)` and
+  `expect(null).toContain(fn)` **pass** when `fn` is a function, so
+  `expect(Media.hooks?.beforeOperation).toContain(hook)` stays green when that
+  array is gone — the `beforeOperation` key, or the whole `hooks` object,
+  removed (#265). A string argument makes the same call fail; a function does
+  not. Write `expect(list).toEqual(expect.arrayContaining([hook]))`, or
+  `expect(list?.includes(hook)).toBe(true)` as `src/collections/Media.test.ts`
+  does, or assert `toBeDefined()` first; then remove the wiring once and watch
+  the test fail before trusting it. [measured 2026-09-27, vitest 4.1.x, wave-9
+  lane D; re-measured 2026-11-17 on vitest 4.1.12: both calls pass, the
+  `arrayContaining` form fails and `toContainEqual(fn)` throws]
