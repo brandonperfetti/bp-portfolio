@@ -22,8 +22,10 @@ import { isSlugRoutedCollection } from './slugPaths'
  * seeded document (`scripts/migrate-notion-to-payload.ts`,
  * `seed-cms-from-notion.ts`, `seed-e2e.ts`). Rather than flipping those values,
  * the *meaning* of the stored `true` is narrowed: `slugLock: true` now reads
- * "I do not hand-edit this slug", which resolves to *derived from the title*
- * before first publish and *frozen at the published value* afterwards. Every
+ * "I do not hand-edit this slug", which resolves to *derived from the title
+ * by the admin form* before first publish (a REST or MCP write that omits
+ * `slug` keeps the stored one, #250) and *frozen at the published value*
+ * afterwards. Every
  * existing published document is therefore frozen by rule on day one, with no
  * migration and no schema change.
  *
@@ -59,9 +61,11 @@ export const enforceSlugFreeze =
     if (!isSlugRoutedCollection(collection.slug)) return value
 
     // An explicit unlock is the ONE way a published URL is allowed to move.
-    // Falling back to the stored value matters: a REST/MCP payload that sends a
-    // new `slug` but omits `slugLock` must still be frozen, not treated as an
-    // unlock by omission.
+    // Falling back to the stored value matters: while the stored `slugLock`
+    // is `true`, a REST/MCP payload that sends a new `slug` but omits
+    // `slugLock` must still be frozen, not treated as an unlock by omission.
+    // A stored `false` is a standing unlock: the same write then keeps its
+    // new slug (#250).
     const lock =
       siblingData?.slugLock ?? data?.slugLock ?? originalDoc?.slugLock
     if (lock === false) return value

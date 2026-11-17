@@ -357,7 +357,7 @@ export interface Page {
    */
   path?: string | null;
   /**
-   * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
+   * slugLock true means this slug is not hand-edited. Before first publish the admin form fills it from the title; an API or MCP write that omits slug keeps the stored one. Once published it freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
    */
   slug?: string | null;
   slugLock?: boolean | null;
@@ -479,7 +479,7 @@ export interface Post {
    */
   path?: string | null;
   /**
-   * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
+   * slugLock true means this slug is not hand-edited. Before first publish the admin form fills it from the title; an API or MCP write that omits slug keeps the stored one. Once published it freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
    */
   slug?: string | null;
   slugLock?: boolean | null;
@@ -1114,7 +1114,7 @@ export interface Category {
   id: number;
   title: string;
   /**
-   * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
+   * slugLock true means this slug is not hand-edited. Before first publish the admin form fills it from the title; an API or MCP write that omits slug keeps the stored one. Once published it freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
    */
   slug?: string | null;
   slugLock?: boolean | null;
@@ -1409,7 +1409,7 @@ export interface Tag {
   id: number;
   title: string;
   /**
-   * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
+   * slugLock true means this slug is not hand-edited. Before first publish the admin form fills it from the title; an API or MCP write that omits slug keeps the stored one. Once published it freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
    */
   slug?: string | null;
   slugLock?: boolean | null;
@@ -1440,7 +1440,7 @@ export interface Author {
       }[]
     | null;
   /**
-   * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
+   * slugLock true means this slug is not hand-edited. Before first publish the admin form fills it from the title; an API or MCP write that omits slug keeps the stored one. Once published it freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
    */
   slug?: string | null;
   slugLock?: boolean | null;
@@ -1472,7 +1472,7 @@ export interface Project {
    */
   sortOrder?: number | null;
   /**
-   * slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
+   * slugLock true means this slug is not hand-edited. Before first publish the admin form fills it from the title; an API or MCP write that omits slug keeps the stored one. Once published it freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.
    */
   slug?: string | null;
   slugLock?: boolean | null;
