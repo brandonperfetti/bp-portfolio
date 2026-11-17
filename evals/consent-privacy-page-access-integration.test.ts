@@ -91,6 +91,18 @@ describe.skipIf(!connectionString)(
       })
     }
 
+    /**
+     * One test's cleanup: clear the relation, then delete the page. Nested so
+     * a failed relation reset still deletes the page.
+     */
+    const unwind = async (pageId: number | string) => {
+      try {
+        await pointPrivacyPolicyAt(null)
+      } finally {
+        await deletePage(pageId)
+      }
+    }
+
     beforeAll(async () => {
       const { getPayload } = await import('payload')
       const { default: config } = await import('../src/payload.config')
@@ -160,8 +172,7 @@ describe.skipIf(!connectionString)(
 
         expect(config.dialog.privacyPolicyHref).toBeUndefined()
       } finally {
-        await pointPrivacyPolicyAt(null)
-        await deletePage(draft.id)
+        await unwind(draft.id)
       }
     }, 60_000)
 
@@ -181,8 +192,7 @@ describe.skipIf(!connectionString)(
 
         expect(config.dialog.privacyPolicyHref).toBe(`/${MARKER}-published`)
       } finally {
-        await pointPrivacyPolicyAt(null)
-        await deletePage(published.id)
+        await unwind(published.id)
       }
     }, 60_000)
   },
