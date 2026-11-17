@@ -71,6 +71,7 @@ function runHook(stdin: string, env: Record<string, string> = {}) {
       input: stdin,
       encoding: 'utf8',
       env: {
+        ...process.env,
         PATH: `${binDir}:${process.env.PATH ?? ''}`,
         PNPM_CALL_LOG: callLog,
         ...env,
