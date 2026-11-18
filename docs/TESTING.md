@@ -159,7 +159,10 @@ never taken for a pass. Two consequences:
   interaction-test step: stories mount components without a
   `<ClerkProvider>`, and with the publishable key present `CorvusChat` takes
   Clerk to be on and its stories throw (14 failed on the first run with the
-  keys).
+  keys). That step runs with Clerk off on purpose; the blanking goes when
+  #381 (make those stories pass with the key set) is fixed, not before. The
+  same failure is expected locally from `pnpm test:storybook` when
+  `.env.local` holds the Clerk keys; that is unmeasured (#381).
 - Every page of every spec now loads clerk-js from that development instance.
   The sign-up spec is the only one that submits anything, and it intercepts
   every write to Clerk before it leaves the browser (`docs/JOURNEYS.md`,

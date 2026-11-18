@@ -258,6 +258,11 @@ jobs:
       # stories failed here (run 44377185413). The stories were written for,
       # and until 2026-11-18 always ran in, an environment without the keys,
       # so this step keeps that environment. An empty value reads as unset.
+      #
+      # This step runs with Clerk OFF ON PURPOSE. Do not remove the two
+      # empty values below as a leftover: without them the CorvusChat stories
+      # fail. They go when issue #381 (make those stories pass with the key
+      # set) is fixed, and not before.
       - name: Storybook interaction tests (Vitest browser mode)
         run: pnpm test:storybook
         env:
