@@ -40,8 +40,8 @@ import type { CookieConsent } from '@/payload-types'
  * depends on that page's publish state, and publishing or unpublishing a page
  * purges `pages`, not this global's tag. Without the second tag a relation set
  * while the page was a draft stayed cached as "no link" after the publish, for
- * up to the `cmsContent` lifetime. The cost is that any page write refreshes
- * this one global read.
+ * up to the `cmsContent` lifetime. The cost is that a page publish, unpublish
+ * or delete makes this one global read run again on its next request.
  *
  * `'use cache: remote'` so a `global_cookie-consent` tag purge reaches every
  * serverless instance, not only the one that ran the hook (#118).

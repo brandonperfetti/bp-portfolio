@@ -168,7 +168,8 @@ describe('CMS repo cacheTag / cacheLife wiring', () => {
 })
 
 /**
- * The consent reader depends on a second collection (#262, PR #357 preflight).
+ * Readers whose result depends on a page's publish state (#262, PR #357
+ * preflight).
  *
  * `getCmsConsentConfig` reads the `cookie-consent` global with access control
  * enforced and populates its privacy-policy relation to `pages`. A relation to
@@ -177,13 +178,16 @@ describe('CMS repo cacheTag / cacheLife wiring', () => {
  * subscribed to its own tag only kept serving "no link" until the `cmsContent`
  * lifetime lapsed or someone re-saved the global. Unpublishing is the mirror
  * case: a link to a page that now 404s.
+ *
+ * `getPostLayoutBySlug` has the same dependency through its layout blocks'
+ * link fields (independent review of this fix, 2026-11-17).
  */
-describe('consent reader ↔ pages purge pairing (#262)', () => {
+describe('readers that populate a Pages relation ↔ pages purge pairing (#262)', () => {
   beforeEach(() => {
     rec.tags = []
   })
 
-  it('subscribes to both its own tag and the pages tag', async () => {
+  it('getCmsConsentConfig subscribes to both its own tag and the pages tag', async () => {
     await getCmsConsentConfig()
 
     expect(rec.tags).toEqual(
@@ -191,7 +195,19 @@ describe('consent reader ↔ pages purge pairing (#262)', () => {
     )
   })
 
-  it('subscribes to the literal tag a page write purges', async () => {
+  it('getPostLayoutBySlug subscribes to the pages tag too', async () => {
+    // Same dependency, one reader over: a post's layout blocks carry links
+    // that can point at a page, populated with access control enforced, and
+    // `resolveCmsHref` renders an unpopulated one as `'#'`.
+    await getPostLayoutBySlug('x')
+
+    expect(rec.tags).toEqual(
+      expect.arrayContaining([CMS_TAGS.articles, CMS_TAGS.pages]),
+    )
+    expect(rec.tags).toContain('pages')
+  })
+
+  it('getCmsConsentConfig subscribes to the literal tag a page write purges', async () => {
     // `revalidatePage` purges the literal `'pages'` (it does not import
     // CMS_TAGS), so pin the string itself: a rename of `CMS_TAGS.pages` that
     // left the hook behind would otherwise keep the test above green.
