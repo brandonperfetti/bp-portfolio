@@ -109,8 +109,16 @@ joins, with the same wording as the contact form
   the original event (which carried A) could re-link it. Now it is a manual
   repair: find the contact at A in Resend, confirm it is that person's (the
   Clerk user's previous address), then set the Clerk user's `external_id` to
-  the contact id in the Clerk dashboard and re-run the backfill, which writes
-  the mirror for the now-mapped user.
+  the contact id in the Clerk dashboard. That edit fires `user.updated`, and
+  the webhook then does its own sync: it finds the contact at A, sees the
+  account's address is B, creates the contact at B, removes the one at A, and
+  writes the new id to `external_id` and the mirror. **Wait for that delivery
+  to finish** (the `[clerk-webhook]` log lines for the user), then check that
+  the Clerk user's `external_id` and the Redis key
+  `clerk:resend-contact:<clerk user id>` hold the same contact id. Only if
+  they do not, re-run the backfill, and not while that delivery is still in
+  flight: it writes the mirror from the mapping it read when it planned, and
+  would put the old id back.
 - **Not proven in a browser:** that Clerk's hosted form sends the prop's
   current value with the sign-up request. The component test pins what the
   prop holds for each state of the box, and the webhook tests pin what each

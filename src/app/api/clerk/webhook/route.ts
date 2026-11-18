@@ -57,11 +57,14 @@ import { boundedErrorMessage } from '@/lib/observability/boundedErrorMessage'
  * visible, and what the backfill and `user.updated` read).
  *
  * - `user.created` — for a sign-up that opted in (#362): capture, then map.
- *   The `external_id` write is skipped when the payload already carries one,
- *   so a Clerk redelivery never rewrites it; the mirror is written on BOTH
- *   paths, so a delivery whose payload carries `external_id` reconciles the
- *   mirror. A replay carries the user as it was when the event fired, so a
- *   user mapped afterwards is not repaired by one; the backfill does that.
+ *   The `external_id` write is skipped when the PAYLOAD already carries one;
+ *   the mirror is written on BOTH paths, so a delivery whose payload carries
+ *   `external_id` reconciles the mirror. A replay carries the user as it was
+ *   when the event fired, not the live user: for a user mapped after the
+ *   event it holds no `external_id`, so it does not repair their mirror (the
+ *   backfill does that), and an opted-in replay looks the contact up and
+ *   writes `external_id` again, with the same id while the contact is the
+ *   same.
  *   Every mapping write is best-effort and never fails the ack.
  * - `user.deleted` — resolve the contact from the mirror by `data.id`, then
  *   REMOVE it and drop the mirror key. Deliberately not a Resend suppression:
@@ -306,18 +309,17 @@ async function writeExternalId(
  * inferred from an address. `scripts/backfill-clerk-resend-mapping.ts` is the
  * repair for a legacy member left unmapped (`docs/AUTH.md`).
  *
- * The `external_id` write is skipped when one is already set, so a redelivery
- * cannot rewrite an established link. **The mirror write is not skipped**: it
- * is the reconcile path. An already-set `external_id` is exactly the state of
- * every user the backfill mapped before the mirror existed, and of any user
- * whose mirror write failed on a previous delivery. This path repairs the
- * mirror only for a delivery whose PAYLOAD carries `external_id`. A replay
- * resends the original message, which holds the user as it was when the
- * event fired: a user mapped later (by this handler's own write, or by the
- * backfill) has the id on the live Clerk user and not in that payload, so a
- * replay does not reach here for them. Their mirror is repaired by re-running
- * the backfill, which reads each user's `external_id` from Clerk when it
- * plans (`docs/AUTH.md`).
+ * The `external_id` write is skipped when the payload carries one. That says
+ * nothing about the live user: an opted-in replay of an event that predates
+ * the mapping has none in its payload and writes `external_id` again.
+ * **The mirror write is not skipped**: it is the reconcile path, and it
+ * repairs the mirror only for a delivery whose PAYLOAD carries `external_id`.
+ * A replay resends the original message, which holds the user as it was when
+ * the event fired: a user mapped later (by this handler's own write, or by
+ * the backfill) has the id on the live Clerk user and not in that payload, so
+ * a replay does not reach this path for them. Their mirror is repaired by
+ * re-running the backfill, which reads each user's `external_id` from Clerk
+ * when it plans (`docs/AUTH.md`).
  */
 async function handleUserCreated(data: ClerkUserData): Promise<void> {
   const email = primaryEmail(data)
