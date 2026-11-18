@@ -147,6 +147,24 @@ migrations, production build, Playwright e2e, then Storybook interaction
 tests (reuses the job's installed Chromium). Evalite job runs when a
 provider key secret is present.
 
+**The E2E job builds with Clerk on, from two repository secrets**
+(`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`: the Clerk
+development instance's keys, added 2026-11-18 for #377). Before that date the
+workflow read those secrets but the repository had neither, so every e2e run
+built the site with Clerk off. `e2e/sign-up-opt-in.spec.ts` **fails** in CI
+when they are missing, so a run that could not exercise the sign-up form is
+never taken for a pass. Two consequences:
+
+- Every page of every spec now loads clerk-js from that development instance.
+  The sign-up spec is the only one that submits anything, and it intercepts
+  every write to Clerk before it leaves the browser (`docs/JOURNEYS.md`,
+  "Sign up").
+- **A pull request that gets no Actions secrets fails that spec.** Dependabot
+  pull requests and pull requests from forks are run without them. Today the
+  repository has no Dependabot configuration, Dependabot security updates are
+  off, and it takes no fork PRs, so nothing is needed. If Dependabot is turned
+  on, add the same two keys as **Dependabot** secrets first.
+
 ## Running e2e locally (the only trustworthy local signal)
 
 `playwright.config.ts` branches on `CI`. Reproduce what CI actually runs:
