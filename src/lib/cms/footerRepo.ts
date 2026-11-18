@@ -20,14 +20,28 @@ import type { CmsFooterLink } from '@/lib/cms/types'
  * - No backslash or control character anywhere, for the same reason (a tab or
  *   newline is stripped by the URL parser, which can turn a harmless-looking
  *   value into one of the forms above).
+ * - No `/`-separated piece that starts with `[` and ends with `]`, in any
+ *   kind of link. That is the exact test Next's app-router `<Link>` applies
+ *   to the whole `href` (query string and off-site URLs included) before it
+ *   throws "Dynamic href … is not supported" in development, which would take
+ *   down every page that renders the footer. Percent-encode them (`%5B`,
+ *   `%5D`). Brackets elsewhere in a piece (`?b=[c]`) are fine.
+ * - A `mailto:` link names a recipient; the bare scheme does not.
  * - An `http(s)` URL must parse and name a host; `https://` alone does not.
  * - Any other scheme (`javascript:`, `data:`) and any bare word, which would
  *   resolve relative to whichever page is open.
  */
 const isRenderableHref = (href: string): boolean => {
   if (/[\\\u0000-\u001f\u007f]/.test(href)) return false
+  if (
+    href
+      .split('/')
+      .some((piece) => piece.startsWith('[') && piece.endsWith(']'))
+  ) {
+    return false
+  }
   if (/^\/(?!\/)/.test(href)) return true
-  if (/^mailto:/i.test(href)) return true
+  if (/^mailto:/i.test(href)) return /^mailto:[^?#]+/i.test(href)
   if (/^https?:\/\//i.test(href)) {
     try {
       return new URL(href).hostname !== ''

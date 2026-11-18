@@ -87,6 +87,18 @@ describe('getCmsFooterLinks (#363)', () => {
         { label: 'Backslash in URL', href: 'https:\\\\evil.example' },
         { label: 'Tab inside', href: '/\t/evil.example' },
         { label: 'Newline inside', href: '/pri\nvacy' },
+        { label: 'Bracket piece in query', href: '/about?ref=/[campaign]' },
+        { label: 'Bracket piece in path', href: '/articles/[slug]' },
+        {
+          label: 'Bracket piece off-site',
+          href: 'https://example.test/[campaign]',
+        },
+        {
+          label: 'Bracket piece in off-site query',
+          href: 'https://example.test/a?ref=/[campaign]',
+        },
+        { label: 'Bare mailto', href: 'mailto:' },
+        { label: 'Mailto with only a subject', href: 'mailto:?subject=Hi' },
       ],
     })
 
@@ -98,6 +110,54 @@ describe('getCmsFooterLinks (#363)', () => {
       'Http',
       'Mail',
     ])
+  })
+
+  it('keeps ordinary links with queries, fragments, encoded brackets and mail subjects', async () => {
+    const kept = [
+      { label: 'Query', href: '/articles?topic=react&page=2' },
+      { label: 'Fragment', href: '/about#contact' },
+      { label: 'Encoded brackets', href: '/about?ref=%5Bcampaign%5D' },
+      { label: 'Unicode path', href: '/über-mich' },
+      {
+        label: 'Mail with subject',
+        href: 'mailto:hello@example.test?subject=Hello',
+      },
+      { label: 'External with brackets', href: 'https://example.test/a?b=[c]' },
+      { label: 'Site path with brackets', href: '/about?ref=[campaign]' },
+    ]
+    findGlobal.mockResolvedValue({ links: kept })
+
+    await expect(getCmsFooterLinks()).resolves.toEqual(kept)
+  })
+
+  it('agrees with Next’s own <Link> check on every href it lets through or drops', async () => {
+    // The reader's bracket rule exists only because Next's app-router Link
+    // throws on some hrefs in development. This is that check, as written in
+    // next/dist/client/app-dir/link.js: if the two ever disagree, a saved
+    // link can take the footer down again.
+    const nextLinkWouldThrow = (href: string) =>
+      href
+        .split('/')
+        .some((segment) => segment.startsWith('[') && segment.endsWith(']'))
+    const candidates = [
+      '/privacy',
+      '/about?ref=[campaign]',
+      '/about?ref=/[campaign]',
+      '/articles/[slug]',
+      '/[...segments]',
+      'https://example.test/[campaign]',
+      'https://example.test/a?ref=/[campaign]',
+      'https://example.test/a?b=[c]',
+      'mailto:hello@example.test?subject=[hi]',
+    ]
+    findGlobal.mockResolvedValue({
+      links: candidates.map((href) => ({ label: href, href })),
+    })
+
+    const rendered = (await getCmsFooterLinks()).map((link) => link.href)
+
+    expect(rendered).toEqual(candidates.filter((h) => !nextLinkWouldThrow(h)))
+    expect(rendered.some(nextLinkWouldThrow)).toBe(false)
   })
 
   it('getCmsFooterLinksOrNone renders no links, and says so, when the read fails', async () => {
