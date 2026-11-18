@@ -556,6 +556,48 @@ describe('SignUpForm: the rest of the flow', () => {
     expect(clerk.password).not.toHaveBeenCalled()
   })
 
+  it('a retried sign-in that fails again leaves the visitor able to retry or go to sign-in, never to sign up again', async () => {
+    // Clerk's sign-up is already complete when the page loads (a reload
+    // after the first failure, say), and the sign-in keeps failing.
+    const user = userEvent.setup()
+    clerk.state.status = 'complete'
+    clerk.finalize.mockResolvedValue({
+      error: { message: 'Could not start your session.' },
+    })
+    render(<SignUpForm />)
+
+    await screen.findByRole('heading', { name: 'Your account is ready' })
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(clerk.finalize).toHaveBeenCalledTimes(1))
+
+    // Still the same step, unlocked, with the reason and both ways out.
+    const retry = await screen.findByRole('button', { name: 'Try again' })
+    expect(retry).toBeEnabled()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not start your session.',
+    )
+    expect(
+      new URL(
+        screen.getByRole<HTMLAnchorElement>('link', { name: 'sign in' }).href,
+      ).pathname,
+    ).toMatch(/^\/sign-in\/?$/)
+
+    await user.click(retry)
+    await waitFor(() => expect(clerk.finalize).toHaveBeenCalledTimes(2))
+    expect(
+      screen.getByRole('heading', { name: 'Your account is ready' }),
+    ).toBeInTheDocument()
+
+    // Nothing on this step can start a sign-up: no fields, no Google, no box.
+    expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Continue with Google' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(clerk.password).not.toHaveBeenCalled()
+    expect(clerk.sso).not.toHaveBeenCalled()
+  })
+
   it("shows Clerk's field and global errors in the form", async () => {
     clerk.state.errors.fields.emailAddress = {
       message: 'taken',
