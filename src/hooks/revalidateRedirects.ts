@@ -11,8 +11,8 @@ import { containRevalidation } from '@/hooks/containRevalidation'
  *
  * @remarks The tag comes from `CMS_TAGS` (#133), not from a literal: the
  * reader this purge has to reach — `getCmsRedirects` in
- * `src/lib/cms/redirectsRepo.ts` — subscribes via `cacheTag(CMS_TAGS.redirects)`,
- * so sharing the constant is what makes a rename of the tag move both sides at
+ * `src/lib/cms/redirectsRepo.ts` — subscribes to `CMS_TAGS.redirects` (among
+ * the tags it passes to `cacheTag`), so sharing the constant is what makes a rename of the tag move both sides at
  * once. A literal here would survive such a rename unchanged and leave the
  * purge aimed at a tag nothing caches under (the orphaned-purge pattern of
  * #104); `cacheTags.test.ts` pins the pair.
