@@ -409,8 +409,12 @@ stay there.
   `src/lib/consent/jurisdiction.ts`), `measurement` stays denied until the
   visitor grants it, and until then nothing is loaded from or sent to a
   Google host (#361; before it, the always-loaded tag sent a cookieless
-  consent-mode ping). Mechanism: `docs/ANALYTICS.md`; browser proof:
-  `e2e/consent-google-analytics.spec.ts`.
+  consent-mode ping). **One exception, open in #375:** a visitor whose
+  `measurement` was granted automatically in a region that does not ask, and
+  who then loads the site from one that does or from an unknown one, has that
+  stored grant restored as the page starts, so the tag loads on that page
+  (`docs/ANALYTICS.md`, "What is not covered"). Mechanism:
+  `docs/ANALYTICS.md`; browser proof: `e2e/consent-google-analytics.spec.ts`.
 - **No other script that sets non-essential cookies or identifies a visitor
   loads.** `[measured 2026-09-27]` the frontend's third-party scripts are
   Vercel Analytics and Speed Insights (cookieless), Cloudflare Turnstile

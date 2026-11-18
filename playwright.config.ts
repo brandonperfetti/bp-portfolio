@@ -21,9 +21,12 @@ const isCi = Boolean(process.env.CI)
  * `GA_E2E_LIVE=1`, the hand-run mode that observes the real tag
  * (`docs/ANALYTICS.md`), keeps every rule and adds one exception: the exact
  * host gtag.js is served from. The rest of that domain and the measurement
- * hosts stay unresolvable there too, so a hit the consent spec's interceptor
- * somehow missed still has nowhere to go, and running the whole suite in that
- * mode by mistake loads the tag but delivers no measurement hit.
+ * hosts stay unresolvable there too, so a hit to a listed host that the
+ * consent spec's interceptor somehow missed still has nowhere to go, and
+ * running the whole suite in that mode by mistake loads the tag but delivers
+ * no measurement hit. Google's country domains are not in the list and are
+ * neither blocked nor recorded (`e2e/support/google-hosts.ts`), which is why
+ * that mode is run by hand with a placeholder or test id only.
  *
  * `^NOTFOUND` is the value Chromium's resolver treats as "fail this lookup"
  * (`net/dns/mapped_host_resolver.cc`): the request fails with
