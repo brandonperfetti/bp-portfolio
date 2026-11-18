@@ -90,9 +90,13 @@ your consent".
   (`window['ga-disable-<id>']`) and tells an installed tag storage is denied.
   It is called from c15t's `onBeforeConsentRevocationReload` callback, which
   runs synchronously just before that reload, and from an effect for a revoke
-  that does not reload. What the browser proof measures is the outcome: no
-  request to a Google host from the Reject click onwards, the departing
-  document included. It does not read the switch in that document.
+  that does not reload. The stop is not made at the click itself: c15t
+  awaits a digest before it commits the choice and calls that callback, so
+  for those few milliseconds the installed tag is still enabled. What the
+  browser proof measures is the outcome, in the runs it made: no request to a
+  Google host from the Reject click onwards, the departing document
+  included. It does not read the switch in that document, and it is not a
+  guarantee that the tag cannot send inside that interval.
 - **A stored auto-grant is not carried into a region that asks.** c15t restores
   the stored record as its store is created and makes its first script pass on
   it. An auto-grant written where consent is not required would load the tag
