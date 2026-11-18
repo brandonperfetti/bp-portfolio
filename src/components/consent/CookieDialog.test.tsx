@@ -108,7 +108,10 @@ describe('CookieDialog open focus (Fix 2 — no scroll jump)', () => {
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toBeInTheDocument()
     // The disclosure copy is in the dialog (resolves the review Sp-2 gap).
-    expect(screen.getByText(/consent mode v2/i)).toBeInTheDocument()
+    // #361: the Analytics row says the tag loads only on a grant.
+    expect(
+      screen.getByText(/nothing is requested from or sent to Google/i),
+    ).toBeInTheDocument()
     // Default (empty-CMS) categories: Essential + Analytics render; Social and
     // Advertising are OFF by default and must NOT render.
     expect(screen.getByText(/strictly necessary/i)).toBeInTheDocument()

@@ -21,6 +21,7 @@ import {
   setAutoGrantMarker,
   shouldAutoGrantMeasurement,
   shouldRepromptOnRegionChange,
+  stopGoogleAnalytics,
 } from './consent-config'
 import { CookieBanner } from './CookieBanner'
 import { CookieDialog } from './CookieDialog'
@@ -72,8 +73,17 @@ function ConsentGeoCookieSignal({
 }
 
 function ConsentSurface() {
-  const { hasConsented, setConsent } = useConsentManager()
+  const { hasConsented, setConsent, consents } = useConsentManager()
   const [consentRequired, setConsentRequired] = useState<boolean | null>(null)
+
+  // #361: a withdrawal has to reach gtag.js from here. c15t drops a
+  // consent-gated script from its bookkeeping when the category is revoked and
+  // runs no callback for it, so nothing else would tell the tag to stop. Runs
+  // on mount too, where it is a no-op unless the tag is somehow present.
+  const measurementGranted = consents?.measurement === true
+  useEffect(() => {
+    if (!measurementGranted) stopGoogleAnalytics(readGaEnv())
+  }, [measurementGranted])
 
   useEffect(() => {
     if (consentRequired === null) return

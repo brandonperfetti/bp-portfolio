@@ -393,14 +393,15 @@ stay there.
 ## Consent and analytics data
 
 - **Nothing that needs consent runs before it where consent is required.**
-  GA4 is the only consent-gated vendor. It loads only on production with a
-  measurement id, through c15t's Google tag with Consent Mode v2 defaults
-  denied [source: `src/components/consent/consent-config.ts`]. Where the
+  GA4 is the only consent-gated vendor. It is registered only on production
+  with a measurement id, through c15t's Google tag with its always-load flag
+  turned off [source: `src/components/consent/consent-config.ts`]. Where the
   geo cookie says consent is required, or geo is unknown (fail-closed,
   `src/lib/consent/jurisdiction.ts`), `measurement` stays denied until the
-  visitor grants it: GA4 sets no cookies, and Google receives only the
-  cookieless consent-mode ping disclosed in the dialog. Mechanism:
-  `docs/ANALYTICS.md`.
+  visitor grants it, and until then nothing is loaded from or sent to a
+  Google host (#361; before it, the always-loaded tag sent a cookieless
+  consent-mode ping). Mechanism: `docs/ANALYTICS.md`; browser proof:
+  `e2e/consent-google-analytics.spec.ts`.
 - **No other script that sets non-essential cookies or identifies a visitor
   loads.** `[measured 2026-09-27]` the frontend's third-party scripts are
   Vercel Analytics and Speed Insights (cookieless), Cloudflare Turnstile

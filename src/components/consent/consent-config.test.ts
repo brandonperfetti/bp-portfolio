@@ -5,10 +5,12 @@ import {
   buildConsentScripts,
   CONSENT_CATEGORIES,
   CONSENT_STORAGE_KEY,
+  gaDisableKey,
   readGaEnv,
   shouldAutoGrantMeasurement,
   shouldRepromptOnRegionChange,
   shouldShowBanner,
+  stopGoogleAnalytics,
 } from './consent-config'
 
 describe('buildConsentScripts (GA4 gating)', () => {
@@ -38,9 +40,98 @@ describe('buildConsentScripts (GA4 gating)', () => {
     expect(scripts).toHaveLength(1)
     const [script] = scripts
     expect(script.category).toBe('measurement')
-    expect(script.alwaysLoad).toBe(true)
     expect(script.src).toContain('G-TEST12345')
     expect(script.src).toContain('googletagmanager.com/gtag/js')
+  })
+
+  it('gates the tag on the measurement category instead of always loading it (#361)', () => {
+    // c15t's prebuilt Google tag is `alwaysLoad: true`: installed for every
+    // visitor, it sends Google a cookieless page_view while consent is denied.
+    // With the flag off, c15t skips the script (setup steps included) until
+    // `measurement` is granted.
+    const [script] = buildConsentScripts({
+      measurementId: 'G-TEST12345',
+      isProduction: true,
+    })
+    expect(script.alwaysLoad).toBe(false)
+    // Kept: a re-grant must reuse the element, not run gtag.js a second time.
+    expect(script.persistAfterConsentRevoked).toBe(true)
+  })
+})
+
+describe('the gtag opt-out switch (#361)', () => {
+  const ID = 'G-TEST12345'
+  const win = window as unknown as Record<string, unknown>
+  const info = (hasConsent: boolean) => ({
+    id: 'gtag',
+    elementId: 'x',
+    hasConsent,
+    consents: { measurement: hasConsent } as never,
+  })
+
+  afterEach(() => {
+    delete win[gaDisableKey(ID)]
+    delete win.gtag
+    delete win.dataLayer
+  })
+
+  it('names the property gtag.js documents for opting out', () => {
+    expect(gaDisableKey(ID)).toBe('ga-disable-G-TEST12345')
+  })
+
+  it('lifts the switch before the tag is installed with consent', () => {
+    win[gaDisableKey(ID)] = true
+    const [script] = buildConsentScripts({
+      measurementId: ID,
+      isProduction: true,
+    })
+    script.onBeforeLoad?.(info(true))
+    expect(win[gaDisableKey(ID)]).toBe(false)
+    // The prebuilt tag's own setup still ran: consent default, then config.
+    const calls = (win.dataLayer as ArrayLike<unknown>[]).map((args) =>
+      Array.from(args),
+    )
+    expect(calls[0]).toEqual([
+      'consent',
+      'default',
+      expect.objectContaining({ analytics_storage: 'granted' }),
+    ])
+    expect(calls).toContainEqual(['config', ID])
+  })
+
+  it('lifts the switch when c15t re-syncs a re-granted tag, and sets it when consent is gone', () => {
+    const [script] = buildConsentScripts({
+      measurementId: ID,
+      isProduction: true,
+    })
+    win[gaDisableKey(ID)] = true
+    script.onConsentChange?.(info(true))
+    expect(win[gaDisableKey(ID)]).toBe(false)
+    script.onConsentChange?.(info(false))
+    expect(win[gaDisableKey(ID)]).toBe(true)
+  })
+
+  it('stopGoogleAnalytics sets the switch and tells an installed tag storage is denied', () => {
+    const gtagSpy = vi.fn()
+    win.gtag = gtagSpy
+    stopGoogleAnalytics({ measurementId: ID, isProduction: true })
+    expect(win[gaDisableKey(ID)]).toBe(true)
+    expect(gtagSpy).toHaveBeenCalledWith('consent', 'update', {
+      analytics_storage: 'denied',
+    })
+  })
+
+  it('stopGoogleAnalytics sets the switch without creating a tag that never loaded', () => {
+    stopGoogleAnalytics({ measurementId: ID, isProduction: true })
+    expect(win[gaDisableKey(ID)]).toBe(true)
+    expect(win.gtag).toBeUndefined()
+    expect(win.dataLayer).toBeUndefined()
+  })
+
+  it('stopGoogleAnalytics does nothing where no Google code is registered', () => {
+    stopGoogleAnalytics({ measurementId: undefined, isProduction: true })
+    stopGoogleAnalytics({ measurementId: ID, isProduction: false })
+    expect(gaDisableKey(ID) in win).toBe(false)
   })
 })
 
