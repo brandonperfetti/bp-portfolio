@@ -56,11 +56,13 @@ import { boundedErrorMessage } from '@/lib/observability/boundedErrorMessage'
  * truth; `external_id` stays the mapping for the *live* user (dashboard
  * visible, and what the backfill and `user.updated` read).
  *
- * - `user.created` — capture, then map. The `external_id` write is skipped
- *   when one is already set, so a Clerk redelivery never rewrites it; the
- *   mirror is written on BOTH paths, so a redelivery or a user mapped by the
- *   backfill before the mirror existed converges instead of staying
- *   half-mapped. Every mapping write is best-effort and never fails the ack.
+ * - `user.created` — for a sign-up that opted in (#362): capture, then map.
+ *   The `external_id` write is skipped when the payload already carries one,
+ *   so a Clerk redelivery never rewrites it; the mirror is written on BOTH
+ *   paths, so a delivery whose payload carries `external_id` reconciles the
+ *   mirror. A replay carries the user as it was when the event fired, so a
+ *   user mapped afterwards is not repaired by one; the backfill does that.
+ *   Every mapping write is best-effort and never fails the ack.
  * - `user.deleted` — resolve the contact from the mirror by `data.id`, then
  *   REMOVE it and drop the mirror key. Deliberately not a Resend suppression:
  *   a suppression blocks *all* mail to that address including transactional
@@ -314,7 +316,8 @@ async function writeExternalId(
  * event fired: a user mapped later (by this handler's own write, or by the
  * backfill) has the id on the live Clerk user and not in that payload, so a
  * replay does not reach here for them. Their mirror is repaired by re-running
- * the backfill, which reads the live mapping (`docs/AUTH.md`).
+ * the backfill, which reads each user's `external_id` from Clerk when it
+ * plans (`docs/AUTH.md`).
  */
 async function handleUserCreated(data: ClerkUserData): Promise<void> {
   const email = primaryEmail(data)
@@ -372,7 +375,8 @@ async function handleUserCreated(data: ClerkUserData): Promise<void> {
  * @remarks Never throws and never affects the response. A user with an
  * `external_id` but no mirror is still fully functional today — only their
  * eventual `user.deleted` degrades to the logged no-op — and re-running the
- * backfill rewrites the mirror from the live mapping, so a failure here is
+ * backfill rewrites the mirror from the mapping it read when it planned (run
+ * it when no primary email is changing mid-run), so a failure here is
  * recoverable noise rather than a reason to make Clerk retry.
  */
 async function mirrorContact(

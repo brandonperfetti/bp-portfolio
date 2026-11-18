@@ -98,7 +98,9 @@ joins, with the same wording as the contact form
   by the backfill): the id is on the live Clerk user, not in the replayed
   payload, so replaying does not repair their mirror. **The repair for both
   is the backfill** (`scripts/backfill-clerk-resend-mapping.ts`, below): it
-  reads the live mapping and rewrites the mirror, and maps an unmapped user
+  reads each user's `external_id` from Clerk when it plans, rewrites the
+  mirror from that plan (so run it when no primary email is changing mid-run),
+  and maps an unmapped user
   to the one Resend contact at their current primary address.
 - **What the backfill cannot repair.** It matches on the account's current
   primary email. A legacy member captured at address A whose mapping writes
