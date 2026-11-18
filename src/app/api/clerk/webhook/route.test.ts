@@ -415,11 +415,12 @@ describe('POST /api/clerk/webhook — user.created', () => {
   })
 
   it('still mirrors on the already-mapped skip path (reconcile)', async () => {
-    // This is the convergence path for every user the backfill mapped before
-    // the mirror existed, and for any user whose mirror write failed earlier:
-    // the contact id is right there in the payload, so a redelivery repairs
-    // them with no second Clerk write. Skipping the mirror here would leave
-    // them permanently undeletable.
+    // The reconcile path for a delivery whose PAYLOAD carries external_id:
+    // the contact id is right there, so the mirror is written with no second
+    // Clerk write. It is not a repair for a user mapped after the event
+    // fired: a replay resends the original payload, which has no external_id
+    // (the backfill repairs those). Skipping the mirror here would leave a
+    // user whose payload does carry the id undeletable.
     const event = userEvent('user.created', {
       ...OPTED_IN,
       id: 'user_1',
@@ -660,11 +661,12 @@ describe('POST /api/clerk/webhook — user.created without the mailing-list opt-
   })
 
   it('leaves an existing member alone: an already-mapped user is reconciled, not re-captured', async () => {
-    // Every account created before #362 has no opt-in flag. One that is on the
-    // list carries its contact id as external_id; a redelivery of its
-    // user.created must still repair the mirror (the delete path depends on
-    // it) and must not add the address to the list again, which would undo a
-    // removal made by hand.
+    // Every account created before #362 has no opt-in flag. A user.created
+    // whose payload carries the contact id as external_id must still write
+    // the mirror (the delete path depends on it) and must not add the address
+    // to the list again, which would undo a removal made by hand. The payload
+    // here supplies external_id; a replay of an event that predates the
+    // mapping would not, and is the no-opt-in, no-mapping case above.
     const event = userEvent('user.created', {
       ...base,
       external_id: 'con_existing',
