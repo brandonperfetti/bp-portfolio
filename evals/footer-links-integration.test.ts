@@ -42,6 +42,9 @@ const connectionString = process.env.DATABASE_URI
 /** Marks every link this file writes. */
 const MARKER = 'zz-footer-links'
 
+/** The one link this file writes, and the only row it may ever remove. */
+const FIXTURE_HREF = `/${MARKER}-privacy`
+
 describe('footer links integration requires a database', () => {
   it('has DATABASE_URI set, or this whole tier silently skips', () => {
     expect(
@@ -92,7 +95,15 @@ describe.skipIf(!connectionString)(
         depth: 0,
         overrideAccess: true,
       })
-      rowsBefore = (stored.links ?? []).map((row) => ({ ...row }))
+      // A run killed between its save and its restore leaves this file's own
+      // link stored. Taken into the baseline, it would be written back by
+      // every later cleanup and the test could never pass again, so the
+      // baseline is everything except the one row this file owns, matched by
+      // its exact href (a row that merely contains the marker is somebody
+      // else's and stays), and a leftover is removed before anything is read.
+      const rows = (stored.links ?? []).map((row) => ({ ...row }))
+      rowsBefore = rows.filter((row) => row.href !== FIXTURE_HREF)
+      if (rowsBefore.length !== rows.length) await saveLinks(rowsBefore)
       readBefore = await getCmsFooterLinks()
     }, 180_000)
 
@@ -102,7 +113,7 @@ describe.skipIf(!connectionString)(
     }, 60_000)
 
     it('a saved link reaches an anonymous, access-enforced read; the save purges the reader’s tag; a removed link is gone', async () => {
-      const added = { label: 'Privacy', href: `/${MARKER}-privacy` }
+      const added = { label: 'Privacy', href: FIXTURE_HREF }
       try {
         mocks.revalidateTag.mockClear()
 
@@ -131,7 +142,7 @@ describe.skipIf(!connectionString)(
         // is the stored state, not a cache eviction.)
         await saveLinks(rowsBefore!)
         const after = await getCmsFooterLinks()
-        expect(after.some((link) => link.href.includes(MARKER))).toBe(false)
+        expect(after.some((link) => link.href === FIXTURE_HREF)).toBe(false)
         expect(after).toEqual(readBefore)
       } finally {
         await saveLinks(rowsBefore!)

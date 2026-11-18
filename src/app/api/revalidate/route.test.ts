@@ -64,6 +64,11 @@ describe('POST /api/revalidate', () => {
 
     expect(res.status).toBe(200)
     expect(mocks.revalidateTag).toHaveBeenCalledWith('posts', { expire: 0 })
+    // #363: the footer's reader has its own tag, so the manual recovery path
+    // must purge it too.
+    expect(mocks.revalidateTag).toHaveBeenCalledWith('global_footer', {
+      expire: 0,
+    })
     expect(mocks.revalidateTag).toHaveBeenCalledWith('global_site-settings', {
       expire: 0,
     })
