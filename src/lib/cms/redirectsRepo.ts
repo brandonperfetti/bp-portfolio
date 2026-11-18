@@ -846,7 +846,8 @@ const collectReferenceIds = (
  * **Also tagged `pages` and `posts` (#262).** The join runs with access control
  * enforced, so a target the anonymous read cannot see (a draft) is dropped the
  * same way, and that shorter list is what gets cached. Publishing the target
- * purges `pages` or `posts`, not `redirects`; without those tags the old URL
+ * purges `pages` or `posts`, and `redirects` only when the publish also moves
+ * the path and writes a redirect row; without those two tags the old URL
  * kept returning 404 until the `cmsContent` lifetime lapsed or any redirect was
  * saved, and an unpublished target kept being redirected to. The cost is one
  * re-read of this list, on its next request, after any page or post is

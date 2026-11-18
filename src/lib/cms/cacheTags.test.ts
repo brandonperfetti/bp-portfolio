@@ -239,8 +239,10 @@ const REPO_ROOT = process.cwd()
  * `CMS_TAGS.redirects`. A tag only does work when the WRITE side names the same
  * string, so these two tests pin the pair itself:
  *
- * 1. a runtime comparison — whatever `revalidateRedirects` purges must be
- *    exactly what `getCmsRedirects` subscribed to in the same run. A hook that
+ * 1. a runtime comparison — `revalidateRedirects` must purge exactly
+ *    `CMS_TAGS.redirects`, and `getCmsRedirects` must have subscribed to it in
+ *    the same run (among the `pages` and `posts` tags it also carries since
+ *    #262, which a redirect write does not purge). A hook that
  *    purges some other string fails here rather than in production, where the
  *    only symptom is an edited redirect resolving to its old destination until
  *    the `cmsContent` TTL lapses;

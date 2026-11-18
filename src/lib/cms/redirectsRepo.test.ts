@@ -1103,9 +1103,10 @@ describe('getCmsRedirects', () => {
    * #262 follow-up. The join runs with access control enforced, so a target
    * the anonymous read cannot see (a draft) returns no row and its redirect is
    * left out of the list. That list is what gets cached. Publishing the target
-   * purges `pages` or `posts`, never `redirects`, so the reader has to be
-   * subscribed to those tags for the next read to run at all; once it does,
-   * the redirect resolves.
+   * purges `pages` or `posts`; it purges `redirects` only when the publish
+   * also moves the path and so writes a redirect row. A same-path publish
+   * writes none, so the reader has to be subscribed to those two tags for the
+   * next read to run at all; once it does, the redirect resolves.
    */
   it('drops a redirect to a target it cannot see, resolves it once the target is readable, and is tagged so that publish refreshes it', async () => {
     mocks.cacheTag.mockClear()
