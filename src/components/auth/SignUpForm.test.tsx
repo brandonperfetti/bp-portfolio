@@ -627,6 +627,16 @@ describe('SignUpForm: the rest of the flow', () => {
     expect(
       screen.getByRole('heading', { name: 'Your account is ready' }),
     ).toBeInTheDocument()
+    // Unlocked again after the second failure, and a third try goes out:
+    // the step never locks for good.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled(),
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not start your session.',
+    )
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    await waitFor(() => expect(clerk.finalize).toHaveBeenCalledTimes(3))
 
     // Nothing on this step can start a sign-up: no fields, no Google, no box.
     expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument()
