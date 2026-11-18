@@ -83,7 +83,7 @@ jobs:
           - target: prod
             url_secret: SUPABASE_DB_URL_PROD
             pass_secret: BACKUP_PASSPHRASE_PROD
-            min_bytes: 1000000 # post-promotion: real content present (~2.4MB dumps); 1MB floor asserts content arrived, above the ~210KB empty-schema baseline
+            min_bytes: 1000000 # post-promotion: real content present; 1MB floor asserts content arrived, above the ~210KB empty-schema baseline
     name: dump (${{ matrix.target }})
     steps:
       - name: Install postgresql-client-17 (matches server 17.6)

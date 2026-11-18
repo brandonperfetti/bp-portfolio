@@ -94,6 +94,12 @@ export default buildConfig({
       }
     : {}),
   secret: process.env.PAYLOAD_SECRET || '',
+  // #331: no usage telemetry. Payload posts an event to
+  // telemetry.payloadcms.com on every server start and build unless this is
+  // `false`; the 2026-11-14 restore drill saw that call while it was keeping
+  // all traffic on the local machine. Nobody chose it, so it is off in every
+  // environment.
+  telemetry: false,
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },

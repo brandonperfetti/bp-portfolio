@@ -136,6 +136,12 @@ measured below; the second is held by review (and by GitGuardian on PRs,
   "Values live in the password manager"; `docs/ANALYTICS.md` § Sessions in
   Sentry restated it ("no DSN or id value belongs in this repo") and now
   points here._
+- Real secret values live in Vercel (per environment) and GitHub Actions,
+  and **staging and production never share values**. _Moved from
+  `README.md` § Environment variables (#269)._ One known exception, not yet
+  closed: staging and production use one Vercel Blob store, so a
+  `BLOB_READ_WRITE_TOKEN` for it writes to production media from either
+  (#328; `docs/WORKFLOW.md` § Local database).
 - **MCP API keys** (an admin-equivalent secret, `docs/PAYLOAD.md`
   § Operating via MCP): Scope keys with the plugin's
   per-collection/per-operation permission checkboxes (adding a collection

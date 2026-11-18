@@ -31,7 +31,10 @@
   `eslint . --max-warnings=0`, so a single ESLint or tsdoc warning fails the
   push and CI alike — one gate, defined in one place (`package.json`). Stale
   `.next` types can false-fail the push — remove `.next` and retry before
-  suspecting real breakage.
+  suspecting real breakage. A push that only deletes refs
+  (`git push --delete origin <branch>`) sends no code and skips the gate;
+  any other ref in the same push runs all of it (#308, pinned by
+  `scripts/pre-push-hook.test.ts`).
 
 ## Pre-push: the pg integration tier
 

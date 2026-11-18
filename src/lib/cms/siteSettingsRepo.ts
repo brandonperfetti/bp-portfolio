@@ -35,9 +35,14 @@ export const getCmsSiteSettings = async (): Promise<CmsSiteSettings> => {
   cacheTag(CMS_TAGS.settings)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
+  // `overrideAccess: false`: the Local API default is `true`, which would
+  // skip the global's `read` rule and the populated `ogImage`'s. Both are
+  // `anyone` today, so the result is the same; stated so a later, narrower
+  // rule is honoured, not bypassed (#262).
   const settings = await payload.findGlobal({
     slug: 'site-settings',
     depth: 1,
+    overrideAccess: false,
   })
 
   const ogImage =

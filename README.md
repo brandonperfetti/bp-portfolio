@@ -112,8 +112,8 @@ shape of the config:
 - **Removed in v4** (do not re-add): the Notion, Cloudinary, SendGrid, and Neon
   families — `.env.example` lists them explicitly as tombstones.
 
-Real secrets live in Vercel (per-environment) and GitHub Actions — never in the
-repo. Staging and production never share values.
+Secret handling — where real values live and what never enters the repo — is
+in [`docs/SECURITY.md` § Secret handling](docs/SECURITY.md#secret-handling).
 
 ## Scripts
 

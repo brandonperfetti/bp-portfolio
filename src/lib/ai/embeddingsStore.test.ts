@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * The shared write path. The property that matters most here is the
@@ -61,6 +61,15 @@ const fakeDb = (results: unknown[] = []) => {
 }
 
 const project = { id: 42, title: 'Portfolio', description: 'This site.' }
+
+beforeEach(() => {
+  // A filled `.env.local` (or a shell export) reaches the unit tier, so every
+  // test starts with the embedding settings unset and stubs what it needs
+  // (#298); `afterEach` restores them.
+  vi.stubEnv('AI_EMBEDDING_MODEL', undefined)
+  vi.stubEnv('AI_EMBEDDING_DIMENSIONS', undefined)
+  vi.stubEnv('AI_EMBEDDING_PROVIDER', undefined)
+})
 
 afterEach(() => {
   vi.clearAllMocks()

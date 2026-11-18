@@ -286,7 +286,7 @@ describe('installHistoryWriteGuard · refused pushes are retried (CR round 6)', 
     expect(writes).toEqual([['replaceState', '/tech?q=ab']])
   })
 
-  it('gives a pending push a fresh budget when a later refused write is folded into it, and only then (#272)', () => {
+  it('gives a pending push a fresh budget when a later refused write is folded into it (#272)', () => {
     vi.useFakeTimers()
     const { history, writes, box } = throttledHistory()
     const onRefusal = vi.fn()
