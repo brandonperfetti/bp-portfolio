@@ -61,9 +61,10 @@ import { boundedErrorMessage } from '@/lib/observability/boundedErrorMessage'
  *   the mirror is written on BOTH paths, so a delivery whose payload carries
  *   `external_id` reconciles the mirror. A replay carries the user as it was
  *   when the event fired, not the live user: for a user mapped after the
- *   event it holds no `external_id`, so it does not repair their mirror (the
- *   backfill does that), and an opted-in replay looks the contact up and
- *   writes `external_id` again, with the same id while the contact is the
+ *   event it holds no `external_id`. Without the opt-in such a replay is a
+ *   no-op and repairs nothing (the backfill does that). With the opt-in it
+ *   takes the capture path again: it looks the contact up and writes
+ *   `external_id` and the mirror, with the same id while the contact is the
  *   same.
  *   Every mapping write is best-effort and never fails the ack.
  * - `user.deleted` — resolve the contact from the mirror by `data.id`, then
