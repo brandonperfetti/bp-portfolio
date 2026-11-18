@@ -370,6 +370,15 @@ stay where they are:
   `src/lib/security/guardrails.ts:272` (`getRequestClientIp`: `x-real-ip`,
   else the rightmost `x-forwarded-for` hop, never the leftmost)].
   Mechanism: `docs/AI.md` § Guardrails.
+- **`redirect_url` after sign-up is followed only to this site.** The custom
+  sign-up form (#377) sends a new member on to `redirect_url` itself, where
+  Clerk's prebuilt form used to. The value is parsed the way a browser parses
+  it and accepted only as a path on this origin, on the form and again on the
+  Google callback page; anything else (another origin, `//host`, `/\host`,
+  `javascript:`, a same-origin URL whose path is `//host`) falls back to the
+  home page [source: `safeRedirectPath`, `src/lib/auth/safeRedirect.ts`;
+  cases pinned in `safeRedirect.test.ts`]. A new surface that follows a
+  `redirect_url` uses the same function.
 - Until Clerk Billing is enabled, `gated` means signed in and nothing more:
   `requiredPlan` and `requiredFeature` are dormant fields `canAccess`
   ignores [source: `src/access/canAccess.ts`].

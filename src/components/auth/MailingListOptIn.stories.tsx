@@ -8,8 +8,8 @@ import { MAILING_LIST_OPT_IN_LABEL } from '@/lib/email/mailingListOptIn'
 import { MailingListOptIn } from './MailingListOptIn'
 
 /**
- * The sign-up screen's mailing-list opt-in (#362), without the Clerk form it
- * sits under: Clerk's `<SignUp>` needs a live instance and cannot mount here.
+ * The mailing-list opt-in (#362) on its own. On the sign-up screen it is a
+ * field of the form: see `Auth/SignUpForm` (#377).
  */
 const meta = {
   title: 'Auth/MailingListOptIn',

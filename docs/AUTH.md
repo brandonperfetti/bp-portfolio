@@ -5,7 +5,9 @@
 - `@clerk/nextjs`; middleware lives in `src/proxy.ts` (Next 16 proxy
   convention), wrapped by `isClerkEnabled()` so missing keys never break
   boot. `<ClerkProvider>` mounts in the frontend layout under the same gate.
-- Routes: `/sign-in`, `/sign-up` (catch-all Clerk components), `/account`.
+- Routes: `/sign-in` (Clerk's prebuilt `<SignIn>`, catch-all), `/sign-up`
+  (the site's own form on Clerk's `useSignUp()` hooks, #377, below),
+  `/sign-up/sso-callback` (where Google returns to), `/account`.
 - Header shows a signed-in-only `UserButton` chip (`HeaderUserButton`,
   mounted only when `isClerkEnabled()` — anonymous visitors and keys-off
   environments get the pre-auth header byte-identical). Sign-IN has no
@@ -37,8 +39,8 @@
 - Two capture paths, one shared helper (`src/lib/email/captureContact.ts`
   — logs and swallows every failure; capture is never the caller's
   primary job):
-  1. Sign-up → explicit opt-in checkbox (unchecked by default) beside the
-     Clerk form, then the Clerk webhook `POST /api/clerk/webhook` (svix
+  1. Sign-up → explicit opt-in checkbox (unchecked by default) inside the
+     sign-up form, then the Clerk webhook `POST /api/clerk/webhook` (svix
      signature verified with `CLERK_WEBHOOK_SIGNING_SECRET`), which captures
      only a sign-up that ticked it (#362, below).
   2. Contact form → explicit opt-in checkbox (unchecked by default) on
@@ -60,13 +62,14 @@ Until #362 every new account was added to the list. Now only a ticked box
 joins, with the same wording as the contact form
 (`MAILING_LIST_OPT_IN_LABEL`, `src/lib/email/mailingListOptIn.ts`).
 
-- **Where the box is.** `src/components/auth/SignUpWithOptIn.tsx` renders
-  Clerk's `<SignUp>` with the checkbox above it, so it is reached before the
-  form's Continue button. Clerk's prebuilt component
-  takes no custom fields, so the answer travels as
-  `unsafeMetadata={{ mailingListOptIn: <boolean> }}`: Clerk sends it with the
-  sign-up and copies it onto the created user. **No Clerk dashboard setting
-  is involved**, on any instance.
+- **Where the box is.** Inside the sign-up form
+  (`src/components/auth/SignUpFormView.tsx`), under the heading and before
+  both ways of signing up, so someone using Google meets it before the
+  Google button. The form reads it at the moment of submit and sends it as
+  `unsafeMetadata: { mailingListOptIn: <boolean> }` on the request that
+  starts the sign-up; Clerk copies it onto the created user. **No Clerk
+  dashboard setting is involved**, on any instance. How the form does that:
+  "The custom sign-up form" below.
 - **Where it is read.** `user.created` arrives with `unsafe_metadata`, and
   `hasMailingListOptIn` accepts only a literal `true`. Without it, and with no
   `external_id` mapping in the payload, the handler returns before any Resend,
@@ -76,6 +79,8 @@ joins, with the same wording as the contact form
 - **Fail-closed by construction.** A sign-up that never passes the box is not
   opted in: a social sign-in started on `/sign-in` that creates the account,
   an account made in the Clerk dashboard, a client that sends no metadata.
+  A Google sign-up on `/sign-up` that turns out to be an existing account is
+  signed in, and the list is not touched for it.
   The box shows on the first step only, because the metadata goes out with
   the request that starts the sign-up; on the email-code step it could be
   ticked to no effect.
@@ -149,11 +154,97 @@ joins, with the same wording as the contact form
   means a later account deletion removes nothing and leaves B in the
   audience.
 
-- **Not proven in a browser:** that Clerk's hosted form sends the prop's
-  current value with the sign-up request. The component test pins what the
-  prop holds for each state of the box, and the webhook tests pin what each
-  payload does; the hop between them is Clerk's
-  (`docs/JOURNEYS.md`, "Sign up").
+- **Proven where.** Unit tests pin what the form hands to Clerk's hooks for
+  each state of the box, and the webhook tests pin what each payload does.
+  The hop between them, clerk-js putting the value in the request, is
+  observed in a browser by `e2e/sign-up-opt-in.spec.ts`, which intercepts the
+  request and creates no account. **Not proven by any test:** that Clerk
+  stores the value across the trip to Google and delivers it on a real
+  `user.created` (`docs/JOURNEYS.md`, "Sign up").
+
+### The custom sign-up form (#377)
+
+`/sign-up` is the site's own markup on Clerk's hooks, so the opt-in is a
+field of the form and not a box beside Clerk's card. Clerk still owns the
+password, the email code, the session and the bot check.
+
+- **Pieces.** `SignUpFormView` is the markup, free of Clerk (so every state
+  has a Storybook story, `Auth/SignUpForm`). `SignUpForm` drives it from
+  `useSignUp()`. `SignUpSsoCallback` is the page Google returns to and mounts
+  Clerk's `<HandleSSOCallback />`.
+- **Email and password.** `signUp.password({ emailAddress, password,
+unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
+  six-digit code step in the same card, `verifyEmailCode()`, `finalize()`.
+- **Google.** `signUp.sso({ strategy: 'oauth_google', unsafeMetadata, … })`
+  with `/sign-up/sso-callback` as the return page.
+- **The tick is read at submit, and the form locks.** The view reads the
+  checkbox from the form's own data in the click or submit event and hands
+  it up as a boolean; the same event disables the whole `<fieldset>`, the box
+  included, until Clerk answers, and a second request cannot start beside the
+  first. On an error the form unlocks and the next submit reads the box
+  again. This closes the limit #373 recorded for Clerk's prebuilt form, which
+  reported no submit event. "Use a different email" calls `signUp.reset()`,
+  so an abandoned attempt's tick does not carry into the next one.
+- **A second submit updates the same attempt.** When a sign-up attempt
+  already exists in the browser (an earlier submit that Clerk accepted but
+  that was not finished), clerk-js sends `signUp.password()` as an update to
+  it, not a new attempt [source: clerk-js `SignUp.ts`, read 2026-11-18;
+  Clerk's docs do not say]. The update carries `unsafeMetadata` too, so the
+  box as it is at the latest submit is what clerk-js sends. That Clerk's
+  server then replaces the earlier answer with it is not observed by any
+  test. If Clerk refuses such an update, or it leaves the attempt somewhere
+  the form cannot take it, the form discards the attempt (`signUp.reset()`)
+  and keeps the reason on screen, so the next submit is a new attempt and not
+  another update to a stuck one.
+- **The card holds its step while a request is in flight.** Clerk's sign-up
+  passes through other states on the way (it needs a code while the code is
+  still being sent; it is complete a moment before the page changes), and the
+  card does not follow them until the request settles. After a successful
+  sign-in, and after Clerk accepts a Google sign-up, the form stays locked
+  for the navigation; if the page is still there ten seconds later it unlocks
+  and says it is taking longer than expected (nothing is known to have
+  failed).
+- **No state is a dead end.** The form unlocks on every Clerk error. If Clerk
+  has created the account but the visitor is not signed in yet (the sign-in
+  failed, or never navigated, or the page was reloaded in between), the card
+  says "Your account is ready" and offers "Continue" (which calls the sign-in
+  only) and the sign-in page; it does not show the first step, which would
+  start a second sign-up for an address that now has an account. If the visitor
+  comes back from Google and Clerk's callback handler sends them nowhere
+  (it calls none of its handlers for a sign-up that still needs a field this
+  form does not have), the callback page says after ten seconds that it is
+  taking longer than expected and offers "Start again" and "Sign in" (Clerk
+  may still be finishing a bot check or a transfer, so it neither claims
+  failure nor redirects); it logs
+  `[sign-up] sso callback unresolved` with the missing field names.
+- **`redirect_url` is ours to honour now.** Gated articles and Corvus link to
+  `/sign-in?redirect_url=…`, and the target follows the visitor to
+  `/sign-up`. Clerk's prebuilt form checked it; this form does, with
+  `safeRedirectPath` (`src/lib/auth/safeRedirect.ts`): a path on this site,
+  or a same-origin URL reduced to its path, and the home page for anything
+  else. The callback page checks it again.
+- **Bot check.** The form carries Clerk's `<div id="clerk-captcha" />` slot;
+  clerk-js runs the check inside `signUp.password()` and `signUp.sso()`.
+  `<HandleSSOCallback />` shows a challenge raised on the way back from
+  Google. **Do not press "update" to "Challenge suspicious sign-ups" in the
+  Clerk dashboard without re-testing both sign-up paths; Clerk says that
+  update cannot be reversed.**
+- **The password hint is a constant.** "At least 15 characters" comes from
+  `PASSWORD_MIN_LENGTH` in `SignUpForm.tsx`, because Clerk's hooks expose no
+  instance settings. 15 is production's value (measured 2026-11-18). If the
+  dashboard value changes, change the constant; a too-short password is
+  refused by Clerk either way, and its message shows under the field.
+- **A dashboard change can outrun the form.** It has fields for email and
+  password only. If a sign-up requirement is switched on in the Clerk
+  dashboard (names, phone, legal consent), the form says it could not finish
+  and logs `[sign-up] unsupported requirement` with the missing fields; the
+  field has to be built before the setting goes live.
+- **Sign-in is still Clerk's prebuilt `<SignIn>`** by Brandon's decision
+  (2026-11-18); making it custom is its own issue. The optional catch-all
+  under `/sign-up` stays so the prebuilt sign-in's links into `/sign-up/…`
+  land on the form.
+- **`@clerk/nextjs` must stay at 7.9.13 or later**: that is the first release
+  exporting `<HandleSSOCallback />`.
 
 ## Contact hygiene: the Clerk↔Resend mapping (#86)
 

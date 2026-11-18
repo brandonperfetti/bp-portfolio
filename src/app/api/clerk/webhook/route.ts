@@ -97,9 +97,10 @@ import { boundedErrorMessage } from '@/lib/observability/boundedErrorMessage'
  *
  * ## Consent: only a ticked box joins the list (#362)
  *
- * The sign-up screen carries an unticked mailing-list checkbox
- * (`@/components/auth/SignUpWithOptIn`) whose state travels through Clerk as
- * `unsafeMetadata` and arrives here as the created user's `unsafe_metadata`.
+ * The sign-up form carries an unticked mailing-list checkbox
+ * (`@/components/auth/SignUpForm`, #377) whose state, read at the moment of
+ * submit, travels through Clerk as `unsafeMetadata` and arrives here as the
+ * created user's `unsafe_metadata`.
  * `user.created` captures a contact only when it reads a literal `true` there
  * (`hasMailingListOptIn`). Until #362 every sign-up was captured.
  *
