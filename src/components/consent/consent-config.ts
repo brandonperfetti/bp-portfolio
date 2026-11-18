@@ -347,19 +347,63 @@ export function discardStoredAutoGrantOncePerDocument(): void {
  */
 export const CONSENT_AUTOGRANT_MARKER_KEY = 'bp-consent-autogrant'
 
-/** Reads the auto-grant marker; `false` when absent or storage is unavailable. */
-export function readAutoGrantMarker(): boolean {
-  if (typeof window === 'undefined') return false
+/**
+ * Whether THIS document made the automatic grant it is running on (#361).
+ *
+ * @remarks
+ * The stored marker is shared by every tab, but a grant in a running tab
+ * lives in that tab's memory. Another tab that loads fresh in a
+ * consent-required region drops the shared record and marker
+ * ({@link discardStoredAutoGrantOncePerDocument}); without this flag the
+ * first tab's next region check would find its own live grant unmarked, take
+ * it for an explicit choice, and not revoke it. Set and cleared only by
+ * {@link setAutoGrantMarker}, so an explicit choice made in this document
+ * clears it like the stored marker. The minimum that keeps the origin of a
+ * grant with the document that holds it; a design that carries it in the
+ * live consent state may replace it (#375).
+ */
+let autoGrantedInThisDocument = false
+
+/** Whether a consent record is stored. Unreadable storage reads as none. */
+function hasStoredConsentRecord(): boolean {
   try {
-    return window.localStorage.getItem(CONSENT_AUTOGRANT_MARKER_KEY) === '1'
+    return window.localStorage.getItem(CONSENT_STORAGE_KEY) !== null
   } catch {
     return false
   }
 }
 
-/** Sets or clears the auto-grant marker; a no-op where storage is unavailable. */
+/**
+ * Whether the grant this document is running on is an automatic one.
+ *
+ * @remarks
+ * True when the stored marker says so. Also true when this document made the
+ * automatic grant itself and no consent record is stored any more: that is
+ * the state another tab's fresh-load discard leaves behind, and the grant in
+ * this document's memory is still the automatic one. When a record IS stored
+ * without a marker, somebody made an explicit choice (in this tab or another)
+ * and that choice stands, so this reads `false`, as it did before the flag
+ * existed. `false` on the server.
+ */
+export function readAutoGrantMarker(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    if (window.localStorage.getItem(CONSENT_AUTOGRANT_MARKER_KEY) === '1') {
+      return true
+    }
+  } catch {
+    // Storage unavailable: fall through to this document's own memory.
+  }
+  return autoGrantedInThisDocument && !hasStoredConsentRecord()
+}
+
+/**
+ * Sets or clears the auto-grant marker, in storage and in this document's
+ * memory; the storage half is a no-op where storage is unavailable.
+ */
 export function setAutoGrantMarker(value: boolean): void {
   if (typeof window === 'undefined') return
+  autoGrantedInThisDocument = value
   try {
     if (value) {
       window.localStorage.setItem(CONSENT_AUTOGRANT_MARKER_KEY, '1')
@@ -367,9 +411,9 @@ export function setAutoGrantMarker(value: boolean): void {
       window.localStorage.removeItem(CONSENT_AUTOGRANT_MARKER_KEY)
     }
   } catch {
-    // Storage unavailable (private mode, quota) — the marker degrades to
-    // "no auto-grant recorded", which fails safe: the banner still shows via
-    // the normal required-region path when no grant persists.
+    // Storage unavailable (private mode, quota) — the stored marker degrades
+    // to "no auto-grant recorded", which fails safe: the banner still shows
+    // via the normal required-region path when no grant persists.
   }
 }
 

@@ -109,7 +109,13 @@ your consent".
   document: run again after the store exists (the root layout re-rendering
   on a router refresh, say) it would clear the record and the marker under a
   live grant, and the region check that follows would mistake that grant for
-  a choice. **It recognises an automatic grant by
+  a choice. The marker also has a memory in the document that made the
+  grant: storage is shared by every tab, so a second tab's fresh-load check
+  clears the stored marker and record under a first tab that is still
+  running on the automatic grant. That tab keeps treating its own grant as
+  automatic while no record is stored, so its next region check still revokes
+  it; a record stored without a marker is an explicit choice, from any tab,
+  and stands. **On a fresh load it recognises an automatic grant by
   that marker, and by nothing else.** One history gets past it: during a
   region change inside a visit (below), the save that revokes an automatic
   grant can finish before the automatic grant's own save, which then lands

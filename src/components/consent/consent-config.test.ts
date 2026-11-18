@@ -8,7 +8,9 @@ import {
   CONSENT_STORAGE_KEY,
   discardStoredConsent,
   gaDisableKey,
+  readAutoGrantMarker,
   readGaEnv,
+  setAutoGrantMarker,
   shouldAutoGrantMeasurement,
   shouldDiscardStoredAutoGrant,
   shouldRepromptOnRegionChange,
@@ -430,5 +432,48 @@ describe('buildConsentManagerOptions — the pre-reload revocation hook (#361)',
     expect(
       buildConsentManagerOptions({ scripts: [] }).callbacks,
     ).toBeUndefined()
+  })
+})
+
+describe('readAutoGrantMarker — the origin of a grant stays with the document that made it (#361)', () => {
+  afterEach(() => {
+    setAutoGrantMarker(false)
+    window.localStorage.clear()
+  })
+
+  it('is true while the stored marker is set', () => {
+    setAutoGrantMarker(true)
+    expect(readAutoGrantMarker()).toBe(true)
+  })
+
+  it('stays true after another tab’s fresh-load discard removed the shared marker and record', () => {
+    setAutoGrantMarker(true)
+    window.localStorage.setItem(CONSENT_STORAGE_KEY, '{"consents":{}}')
+    // What a second tab does when it loads fresh in a consent-required
+    // region: it has its own memory, and clears the storage both tabs share.
+    window.localStorage.removeItem(CONSENT_AUTOGRANT_MARKER_KEY)
+    window.localStorage.removeItem(CONSENT_STORAGE_KEY)
+
+    expect(readAutoGrantMarker()).toBe(true)
+  })
+
+  it('is false when a record is stored without a marker: an explicit choice, from any tab, stands', () => {
+    setAutoGrantMarker(true)
+    // Another tab's explicit choice: the marker is cleared and a record kept.
+    window.localStorage.removeItem(CONSENT_AUTOGRANT_MARKER_KEY)
+    window.localStorage.setItem(CONSENT_STORAGE_KEY, '{"consents":{}}')
+
+    expect(readAutoGrantMarker()).toBe(false)
+  })
+
+  it('is false once this document clears it, as an explicit choice here does', () => {
+    setAutoGrantMarker(true)
+    setAutoGrantMarker(false)
+
+    expect(readAutoGrantMarker()).toBe(false)
+  })
+
+  it('is false in a document that never auto-granted and has no stored marker', () => {
+    expect(readAutoGrantMarker()).toBe(false)
   })
 })
