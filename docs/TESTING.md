@@ -153,25 +153,29 @@ development instance's keys, added 2026-11-18 for #377). Before that date the
 workflow read those secrets but the repository had neither, so every e2e run
 built the site with Clerk off. `e2e/sign-up-opt-in.spec.ts` **fails** in CI
 when they are missing, so a run that could not exercise the sign-up form is
-never taken for a pass. Three consequences:
+never taken for a pass. Three things follow:
 
-- The keys are set for the whole job and blanked on the Storybook
-  interaction-test step: stories mount components without a
-  `<ClerkProvider>`, and with the publishable key present `CorvusChat` takes
-  Clerk to be on and its stories throw (14 failed on the first run with the
-  keys). That step runs with Clerk off on purpose; the blanking goes when
-  #381 (make those stories pass with the key set) is fixed, not before. The
-  same failure is expected locally from `pnpm test:storybook` when
+- **The keys are set on the Build and E2E steps only**, beside the Google
+  Analytics variables, not for the whole job: a secret key has no business in
+  the environment of the install, the migrations, the seed or a third-party
+  action.
+- **The Storybook interaction-test step runs with Clerk off on purpose.**
+  Stories mount components without a `<ClerkProvider>`, and with the
+  publishable key present `CorvusChat` takes Clerk to be on and its stories
+  throw (14 failed on the one run that had the keys job-wide). Do not give
+  that step the keys until #381 (make those stories pass with the key set) is
+  fixed. The same failure is expected locally from `pnpm test:storybook` when
   `.env.local` holds the Clerk keys; that is unmeasured (#381).
-- Every page of every spec now loads clerk-js from that development instance.
-  The sign-up spec is the only one that submits anything, and it intercepts
-  every write to Clerk before it leaves the browser (`docs/JOURNEYS.md`,
-  "Sign up").
-- **A pull request that gets no Actions secrets fails that spec.** Dependabot
-  pull requests and pull requests from forks are run without them. Today the
-  repository has no Dependabot configuration, Dependabot security updates are
-  off, and it takes no fork PRs, so nothing is needed. If Dependabot is turned
-  on, add the same two keys as **Dependabot** secrets first.
+- Every page of every e2e spec now loads clerk-js from that development
+  instance. The sign-up spec is the only one that submits anything, and it
+  intercepts every write to Clerk before it leaves the browser
+  (`docs/JOURNEYS.md`, "Sign up").
+
+**A pull request that gets no Actions secrets fails that spec.** Dependabot
+pull requests and pull requests from forks are run without them. Today the
+repository has no Dependabot configuration, Dependabot security updates are
+off, and it takes no fork PRs, so nothing is needed. If Dependabot is turned
+on, add the same two keys as **Dependabot** secrets first.
 
 ## Running e2e locally (the only trustworthy local signal)
 
