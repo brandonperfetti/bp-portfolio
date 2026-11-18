@@ -24,6 +24,50 @@
   (CodeRabbit + full CI), staging QA, then a develop→master release PR
   worked to review-clean before merge.
 
+## Releases
+
+A release is the `develop` → `master` PR. Vercel deploys production when
+Brandon merges it; there is no release branch and no version bump
+(`package.json` stays at `4.0.0`). The release lane (the session that opens
+the release PR) does steps 1 to 3; steps 4 and 5 are Brandon's.
+
+1. **Open the release PR** from `develop` into `master`, in the shape of the
+   last one: what it carries, what the merge deploys and triggers, the Door
+   and Class with their evidence, and an "After the merge" list.
+2. **Write the release's `CHANGELOG.md` section, at the cut, from the PRs the
+   release carries.** Feature PRs add nothing to the changelog, and the PR
+   template has no changelog check (Brandon, 2026-11-18, #369). The section
+   goes on top, under a `## vYYYY.MM.DD` heading, and links the release PR
+   and the tag. It says what a visitor, the CMS admin, an MCP client and a
+   developer will notice, and what the release knowingly leaves, in the
+   constituent PRs' own words where those are already plain. Push it to
+   `develop`, which is the release PR's head, so it is reviewed on that PR
+   with the rest of the release.
+3. **The version is the date Brandon merges, in Pacific time:**
+   `vYYYY.MM.DD`; a later release on the same day adds `.1`, then `.2`. The
+   section is written with the expected date. If the merge slips past
+   midnight Pacific, the heading and the tag link are corrected by one more
+   commit to `develop` before the merge.
+4. **Brandon merges** the release PR, by hand.
+5. **The release is tagged on its merge commit on `master`**, after the
+   merge, with an annotated tag named for the version:
+
+   ```sh
+   git tag -a v2026.11.18 <merge commit on master> -F <message file>
+   git push origin v2026.11.18
+   ```
+
+   The message is one line in Brandon's voice: the word `Release`, the
+   date as `YYYY-MM-DD`, an em dash, then what it ships. The first tag,
+   `v2026.11.17`, is the model. A tag an agent creates adds a blank line and
+   its one `Agent:` line; the tagger is Brandon's identity either way. **An
+   agent creates a release tag only on Brandon's explicit word for that
+   tag**: a word given for one release's tag does not cover the next. A tag
+   is never moved or deleted once pushed; a wrong one is reported to Brandon.
+
+The changelog starts at `v2026.11.17` (release #357), the first tag. Earlier
+releases are recorded in their release PR bodies only.
+
 ## Local hooks
 
 - Husky pre-commit: lint-staged (prettier + eslint on staged files).
@@ -31,10 +75,14 @@
   `eslint . --max-warnings=0`, so a single ESLint or tsdoc warning fails the
   push and CI alike — one gate, defined in one place (`package.json`). Stale
   `.next` types can false-fail the push — remove `.next` and retry before
-  suspecting real breakage. A push that only deletes refs
-  (`git push --delete origin <branch>`) sends no code and skips the gate;
-  any other ref in the same push runs all of it (#308, pinned by
-  `scripts/pre-push-hook.test.ts`).
+  suspecting real breakage. Two kinds of push skip the gate: one that only
+  deletes refs (`git push --delete origin <branch>`), which sends no code
+  (#308), and one that only pushes tags (`git push origin v2026.11.18`),
+  which moves no branch (#369). A branch anywhere in the same push runs all
+  of it (pinned by `scripts/pre-push-hook.test.ts`). The tag skip rests on
+  three facts, so re-read it if one changes: no workflow here runs on a tag,
+  nothing deploys from one, and a release tag names a commit already on
+  `master`.
 
 ## Pre-push: the pg integration tier
 

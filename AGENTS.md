@@ -108,7 +108,9 @@ already cost a session or broken production.
 - **decide whether a change fits the product** → `docs/PRODUCT.md`.
 - **write or publish content** → `docs/CONTENT_WORKFLOW.md`,
   `docs/CONTENT_STYLE.md`.
-- **branch, hook, review or release** → `docs/WORKFLOW.md`.
+- **branch, hook, review or release** → `docs/WORKFLOW.md`. **The release
+  lane writes the `CHANGELOG.md` section at the cut; an agent creates a
+  release tag only on Brandon's explicit word for that tag** (§ Releases).
 - **find where code lives** → `docs/ARCHITECTURE.md` (capability map),
   `docs/FEATURES.md` (behavior), `docs/STATE.md` (data flow).
 - **upkeep or production promotion** → `docs/MAINTENANCE.md`.
