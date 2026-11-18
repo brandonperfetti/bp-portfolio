@@ -28,7 +28,8 @@ import { interactUntil } from './support/hydration'
  * `example.com`'s.
  *
  * **The interception is fail-closed.** A second rule, on the whole browser
- * context, aborts every non-GET request to a Clerk Frontend API path
+ * context, aborts every request that is not a read (GET, or an OPTIONS
+ * preflight) to a Clerk Frontend API path
  * (`/v1/…` on any host but the site's) that a test's own interceptor did not
  * take, and fails the test that caused it. It does not share the
  * interceptor's pattern, so it also covers that pattern going stale: a
@@ -52,9 +53,9 @@ import { interactUntil } from './support/hydration'
  *
  * The Clerk instance behind the build has Clerk's Turnstile bot check on, and
  * clerk-js waits for a Turnstile token before it sends the sign-up request.
- * In an automated browser the real widget never issues one (measured
- * 2026-11-18: the first run of this spec sat in the challenge until the test
- * timed out, the form correctly locked). So Cloudflare's Turnstile script is
+ * On this spec's first run (2026-11-18) the automated browser was not
+ * issued one: the Google cases sat in the challenge, the form correctly
+ * locked, until they timed out. So Cloudflare's Turnstile script is
  * answered with a stand-in that hands clerk-js a placeholder token at once.
  * The token goes no further than the intercepted request. What this spec
  * proves is therefore what the form and clerk-js put in the request; that

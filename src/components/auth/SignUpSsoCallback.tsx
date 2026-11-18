@@ -42,10 +42,12 @@ export const SSO_CALLBACK_STALL_MS = 10_000
  *   Clerk's prebuilt form, which continues it.
  * - **The sign-up could not finish and Clerk says so** (the bot check
  *   failed): back to `/sign-up`, where Clerk's error shows in the form.
- * - **Clerk says nothing** (`SSO_CALLBACK_STALL_MS`): the page stops
- *   claiming progress and offers "Start again" and "Sign in". It does not
- *   redirect by itself, which could cut across a bot check or an account
- *   transfer Clerk is still working through.
+ * - **Clerk says nothing** (`SSO_CALLBACK_STALL_MS`): the page says it is
+ *   taking longer than expected and offers "Start again" and "Sign in". It
+ *   does not say the sign-up failed and does not redirect by itself: Clerk
+ *   may still be working through a bot check or an account transfer, and
+ *   finishes if left alone (measured by the review of #377). Following a
+ *   link is the visitor's choice to leave that.
  *
  * @param assignLocation - How to leave for an absolute URL; a seam for tests.
  * @param stallMs - See {@link SSO_CALLBACK_STALL_MS}; a seam for tests.
@@ -113,7 +115,7 @@ export function SignUpSsoCallback({
     <div className="w-full max-w-[25rem] rounded-2xl border border-border bg-card p-6 text-center text-card-foreground shadow-sm sm:p-8">
       <p role="status" className="text-sm text-muted-foreground">
         {stalled
-          ? "We couldn't finish signing you up with Google."
+          ? 'This is taking longer than expected.'
           : 'Finishing sign-up…'}
       </p>
       {stalledLinks}

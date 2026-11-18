@@ -106,7 +106,7 @@ describe('SignUpSsoCallback', () => {
     // came back still needing something (measured against the installed
     // @clerk/react by the independent review of #377). The page must not
     // say "Finishing sign-up…" for ever.
-    it('stops claiming progress and offers a way out, without redirecting', async () => {
+    it('says it is taking long and offers a way out, without redirecting or claiming failure', async () => {
       vi.useFakeTimers()
       const error = vi.spyOn(console, 'error').mockImplementation(() => {})
       try {
@@ -117,7 +117,7 @@ describe('SignUpSsoCallback', () => {
         await act(async () => vi.advanceTimersByTime(5000))
 
         expect(screen.getByRole('status')).toHaveTextContent(
-          /couldn.t finish signing you up with Google/i,
+          /taking longer than expected/i,
         )
         const again = screen.getByRole<HTMLAnchorElement>('link', {
           name: 'Start again',
