@@ -164,8 +164,11 @@ never taken for a pass. Three things follow:
   publishable key present `CorvusChat` takes Clerk to be on and its stories
   throw (14 failed on the one run that had the keys job-wide). Do not give
   that step the keys until #381 (make those stories pass with the key set) is
-  fixed. The same failure is expected locally from `pnpm test:storybook` when
-  `.env.local` holds the Clerk keys; that is unmeasured (#381).
+  fixed. The same failure is expected locally from `pnpm test:storybook`
+  whenever the publishable key is in the environment the story build sees: a
+  shell export, or `.env`. Probably not from `.env.local`, which Next's env
+  loading leaves out under `NODE_ENV=test`, the mode Vitest runs in. None of
+  that is measured (#381).
 - Every page of every e2e spec now loads clerk-js from that development
   instance. The sign-up spec is the only one that submits anything, and it
   intercepts every write to Clerk before it leaves the browser
