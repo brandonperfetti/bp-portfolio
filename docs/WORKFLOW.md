@@ -53,8 +53,8 @@ the release PR) does steps 1 to 3; steps 4 and 5 are Brandon's.
    merge, with an annotated tag named for the version:
 
    ```sh
-   git tag -a v2026.11.18 <merge commit on master> -F <message file>
-   git push origin v2026.11.18
+   git tag -a vYYYY.MM.DD <merge commit on master> -F <message file>
+   git push origin vYYYY.MM.DD
    ```
 
    The message is one line in Brandon's voice: the word `Release`, the
@@ -77,7 +77,7 @@ releases are recorded in their release PR bodies only.
   `.next` types can false-fail the push — remove `.next` and retry before
   suspecting real breakage. Two kinds of push skip the gate: one that only
   deletes refs (`git push --delete origin <branch>`), which sends no code
-  (#308), and one that only pushes tags (`git push origin v2026.11.18`),
+  (#308), and one that only pushes tags (`git push origin v2026.11.17`),
   which moves no branch (#369). A branch anywhere in the same push runs all
   of it (pinned by `scripts/pre-push-hook.test.ts`). The tag skip rests on
   three facts, so re-read it if one changes: no workflow here runs on a tag,
