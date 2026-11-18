@@ -42,6 +42,19 @@ import { interactUntil } from './support/hydration'
  * Frontend API path (`clerk-non-get-requests`), so what clerk-js did beyond
  * reading can be read from the report.
  *
+ * ## The bot check is a stand-in
+ *
+ * The Clerk instance behind the build has Clerk's Turnstile bot check on, and
+ * clerk-js waits for a Turnstile token before it sends the sign-up request.
+ * In an automated browser the real widget never issues one (measured
+ * 2026-11-18: the first run of this spec sat in the challenge until the test
+ * timed out, the form correctly locked). So Cloudflare's Turnstile script is
+ * answered with a stand-in that hands clerk-js a placeholder token at once.
+ * The token goes no further than the intercepted request. What this spec
+ * proves is therefore what the form and clerk-js put in the request; that
+ * the real bot check lets a person through is checked by hand on staging
+ * (`docs/JOURNEYS.md`).
+ *
  * ## The build must have Clerk configured
  *
  * Without both Clerk keys the page renders a "not configured" notice and
@@ -58,6 +71,30 @@ const CLERK_CONFIGURED =
 const NEGATIVE_CONTROL = process.env.SIGN_UP_E2E_NEGATIVE_CONTROL === '1'
 
 const SIGN_UP_PATH = /\/v1\/client\/sign_ups(\/|$)/
+
+/**
+ * The stand-in for Cloudflare's Turnstile script; see the file comment. It
+ * implements the calls clerk-js makes (`render`, `remove`, `reset`) and
+ * answers `render` with a token on the next tick.
+ */
+const TURNSTILE_STAND_IN = `
+window.turnstile = {
+  render: function (_container, options) {
+    setTimeout(function () {
+      if (options && typeof options.callback === 'function') {
+        options.callback('e2e-placeholder-turnstile-token')
+      }
+    }, 0)
+    return 'e2e-widget'
+  },
+  execute: function () {},
+  reset: function () {},
+  remove: function () {},
+  getResponse: function () { return 'e2e-placeholder-turnstile-token' },
+  isExpired: function () { return false },
+  ready: function (callback) { callback() },
+}
+`
 
 const OPT_IN_LABEL =
   'Keep me posted when new articles are published. Unsubscribe anytime.'
@@ -104,10 +141,10 @@ async function interceptSignUpWrites(
     resolveFirst = resolve
     // If the guard takes a write instead of this interceptor, fail at once
     // with the reason, instead of waiting out the test's timeout.
-    onUnintercepted.set(page, (url) =>
+    onUnintercepted.set(page, (where) =>
       reject(
         new Error(
-          `a sign-up write was not intercepted and was aborted: ${url}`,
+          `a sign-up write was not intercepted and was aborted: ${where}`,
         ),
       ),
     )
@@ -172,7 +209,7 @@ async function openForm(page: Page) {
 }
 
 /** Per page: what to do when the guard, not the interceptor, takes a write. */
-const onUnintercepted = new WeakMap<Page, (url: string) => void>()
+const onUnintercepted = new WeakMap<Page, (where: string) => void>()
 
 /** Per test: sign-up writes the guard aborted, and every non-GET Clerk call. */
 let unintercepted: string[] = []
@@ -197,10 +234,25 @@ test.beforeEach(async ({ context, page }) => {
     async (route: Route) => {
       const request = route.request()
       if (!isSignUpWrite(request)) return route.continue()
-      unintercepted.push(`${request.method()} ${request.url()}`)
+      // Path only: the query carries the browser's Clerk dev token, which
+      // does not belong in a report.
+      const where = `${request.method()} ${new URL(request.url()).pathname}`
+      unintercepted.push(where)
       await route.abort('blockedbyclient')
-      onUnintercepted.get(page)?.(request.url())
+      onUnintercepted.get(page)?.(where)
     },
+  )
+
+  // Nothing is requested from Cloudflare: its script is the stand-in.
+  await context.route(
+    (url) => url.hostname.endsWith('challenges.cloudflare.com'),
+    (route: Route) =>
+      /\/turnstile\/v0\/api\.js$/.test(new URL(route.request().url()).pathname)
+        ? route.fulfill({
+            contentType: 'application/javascript',
+            body: TURNSTILE_STAND_IN,
+          })
+        : route.abort('blockedbyclient'),
   )
 
   page.on('request', (request) => {
@@ -266,7 +318,9 @@ test.describe('sign-up: the mailing-list tick travels with the request', () => {
     await openForm(page)
 
     await page.getByLabel('Email address').fill('ticked-reader@example.com')
-    await page.getByLabel('Password').fill('a long enough e2e password')
+    await page
+      .getByLabel('Password', { exact: true })
+      .fill('a long enough e2e password')
     await optIn(page).check()
     await page.getByRole('button', { name: 'Continue', exact: true }).click()
 
@@ -307,7 +361,9 @@ test.describe('sign-up: the mailing-list tick travels with the request', () => {
     await openForm(page)
 
     await page.getByLabel('Email address').fill('unticked-reader@example.com')
-    await page.getByLabel('Password').fill('a long enough e2e password')
+    await page
+      .getByLabel('Password', { exact: true })
+      .fill('a long enough e2e password')
     await page.getByRole('button', { name: 'Continue', exact: true }).click()
 
     const request = await intercepted.first
