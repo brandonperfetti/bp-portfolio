@@ -131,11 +131,14 @@ function StartStep({
   const emailRef = useRef<HTMLInputElement>(null)
   const passwordRef = useRef<HTMLInputElement>(null)
 
-  // A rejected submit puts the visitor back on the first field to fix.
+  // A rejected submit puts the visitor back on the first field to fix. Not
+  // while `pending`: a disabled field cannot take focus, and Clerk's error
+  // can arrive a render before the form unlocks.
   useEffect(() => {
+    if (pending) return
     if (errors.emailAddress) emailRef.current?.focus()
     else if (errors.password) passwordRef.current?.focus()
-  }, [errors.emailAddress, errors.password])
+  }, [pending, errors.emailAddress, errors.password])
 
   const passwordDescribedBy = [
     `${id}-password-hint`,
@@ -306,9 +309,12 @@ function VerifyStep({
   const codeRef = useRef<HTMLInputElement>(null)
 
   // Arriving on this step, and every rejected code, lands on the code field.
+  // The step first renders while the code is still being sent (`pending`),
+  // when the disabled field cannot take focus, so this runs again when the
+  // form unlocks.
   useEffect(() => {
-    codeRef.current?.focus()
-  }, [errors.code])
+    if (!pending) codeRef.current?.focus()
+  }, [pending, errors.code])
 
   return (
     <form

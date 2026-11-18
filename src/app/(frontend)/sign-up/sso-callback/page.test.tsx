@@ -6,7 +6,7 @@ import SignUpSsoCallbackPage from './page'
 /** #377: the Google callback page is gated on Clerk like its siblings. */
 vi.mock('@clerk/nextjs', () => ({
   HandleSSOCallback: () => <div data-testid="clerk-callback" />,
-  useSignUp: () => ({}),
+  useSignUp: () => ({ signUp: {} }),
 }))
 
 vi.mock('next/navigation', () => ({

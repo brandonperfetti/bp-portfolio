@@ -35,6 +35,16 @@ export const SIGN_IN_PATH = '/sign-in'
  */
 export const PASSWORD_MIN_LENGTH = 15
 
+/**
+ * How long the form stays locked after Clerk accepts a Google sign-up without
+ * the browser having left for Google.
+ *
+ * @remarks Leaving normally takes well under a second. If the page is still
+ * here after this long, the hand-off did not happen, and a form locked for
+ * good would be a dead end; it unlocks so the visitor can try again.
+ */
+export const SSO_HAND_OFF_TIMEOUT_MS = 10_000
+
 const UNFINISHED_MESSAGE =
   "We couldn't finish creating your account here. Please try again, or sign up with Google."
 const UNEXPECTED_MESSAGE = 'Something went wrong. Please try again.'
@@ -80,11 +90,15 @@ const text = (error: Message): string | undefined =>
  * (`safeRedirectPath`); anything else falls back to the home page.
  *
  * @param assignLocation - How to leave for an absolute URL; a seam for tests.
+ * @param ssoHandOffTimeoutMs - See {@link SSO_HAND_OFF_TIMEOUT_MS}; a seam for
+ *   tests.
  */
 export function SignUpForm({
   assignLocation = (url: string) => window.location.assign(url),
+  ssoHandOffTimeoutMs = SSO_HAND_OFF_TIMEOUT_MS,
 }: {
   assignLocation?: (url: string) => void
+  ssoHandOffTimeoutMs?: number
 } = {}) {
   const { signUp, errors } = useSignUp()
   const router = useRouter()
@@ -93,6 +107,8 @@ export function SignUpForm({
 
   const [busy, setBusy] = useState(false)
   const inFlight = useRef(false)
+  const handOffTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(handOffTimer.current), [])
   const [localErrors, setLocalErrors] = useState<string[]>([])
   const [notice, setNotice] = useState<string>()
   // Unknown until mounted: the server render accepts a path only, and a
@@ -106,6 +122,7 @@ export function SignUpForm({
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return
+      clearTimeout(handOffTimer.current)
       inFlight.current = false
       setBusy(false)
     }
@@ -202,8 +219,17 @@ export function SignUpForm({
         redirectUrl: destination,
         unsafeMetadata: { [MAILING_LIST_OPT_IN_KEY]: mailingListOptIn },
       })
-      // No error means the browser is on its way to Google.
-      return { stayLocked: !error }
+      if (error) return
+      // No error means the browser is on its way to Google: stay locked, so
+      // nothing can be changed or sent again behind the redirect. If the page
+      // is somehow still here after the timeout, unlock instead of stranding
+      // the visitor on a disabled form.
+      handOffTimer.current = setTimeout(() => {
+        inFlight.current = false
+        setBusy(false)
+        setLocalErrors([UNEXPECTED_MESSAGE])
+      }, ssoHandOffTimeoutMs)
+      return { stayLocked: true }
     })
 
   const onVerify = (code: string) =>

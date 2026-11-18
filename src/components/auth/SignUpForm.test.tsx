@@ -317,6 +317,40 @@ describe("SignUpForm: #373's mid-submit limit is closed", () => {
   })
 })
 
+describe('SignUpForm: no state leaves the form locked for good', () => {
+  it('Google: unlocks and says so if Clerk accepted the request but the browser never left', async () => {
+    const user = userEvent.setup()
+    render(<SignUpForm ssoHandOffTimeoutMs={30} />)
+    await user.click(google())
+    expect(optIn()).toBeDisabled()
+
+    await waitFor(() => expect(optIn()).toBeEnabled())
+    expect(screen.getByRole('alert')).toHaveTextContent(/something went wrong/i)
+  })
+
+  it('email: focuses the code field once the code has been sent', async () => {
+    // The code step appears while the code is still being sent, so it first
+    // renders locked; focus has to land when it unlocks.
+    const user = userEvent.setup()
+    const sending = deferred()
+    clerk.password.mockImplementationOnce(async () => {
+      awaitingCode()
+      return ok
+    })
+    clerk.sendEmailCode.mockReturnValueOnce(sending.promise)
+    render(<SignUpForm />)
+    await fill(user)
+    await user.click(submit())
+
+    const code = await screen.findByLabelText('Verification code')
+    expect(code).toBeDisabled()
+    await act(async () => sending.resolve(ok))
+    await waitFor(() =>
+      expect(screen.getByLabelText('Verification code')).toHaveFocus(),
+    )
+  })
+})
+
 describe('SignUpForm: the rest of the flow', () => {
   it('asks Clerk to email a code once the sign-up is started, then shows the code step', async () => {
     const user = userEvent.setup()

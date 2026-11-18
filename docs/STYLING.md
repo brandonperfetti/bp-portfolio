@@ -77,7 +77,8 @@ are already described — so the doctrine lives here rather than in
   `focus-visible` outline. Add a themed token, add its pair. Three documented
   exceptions: `--border`/`--input` are named steps in light but an alpha white
   in dark, so identity is not assertable there; `--destructive*` is the
-  generator's red, unused by any component and deliberately unpinned; and
+  generator's red, pinned as ink (error text and invalid-field borders, on the
+  page and on a card, #377) but not as a fill, which nothing renders; and
   `--primary-hover` is pinned on identity, label ratio and hover direction but
   not on its own fill edge, which is 2.64:1 against the dark page — recorded in
   the token's comment and left to the `default`/`teal` ticket. Its

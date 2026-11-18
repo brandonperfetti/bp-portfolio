@@ -190,7 +190,17 @@ unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
   that was not finished), clerk-js sends `signUp.password()` as an update to
   it, not a new attempt [source: clerk-js `SignUp.ts`, read 2026-11-18;
   Clerk's docs do not say]. The update carries `unsafeMetadata` too, so the
-  box as it is at the latest submit replaces the earlier answer.
+  box as it is at the latest submit is what clerk-js sends. That Clerk's
+  server then replaces the earlier answer with it is not observed by any
+  test.
+- **No state is a dead end.** The form unlocks on every Clerk error. If
+  Clerk accepts a Google sign-up but the browser has not left for Google after
+  ten seconds, the form unlocks and says something went wrong. If the visitor
+  comes back from Google and Clerk's callback handler sends them nowhere
+  (it calls none of its handlers for a sign-up that still needs a field this
+  form does not have), the callback page stops saying "Finishing sign-up…"
+  after ten seconds and offers "Start again" and "Sign in"; it logs
+  `[sign-up] sso callback unresolved` with the missing field names.
 - **`redirect_url` is ours to honour now.** Gated articles and Corvus link to
   `/sign-in?redirect_url=…`, and the target follows the visitor to
   `/sign-up`. Clerk's prebuilt form checked it; this form does, with

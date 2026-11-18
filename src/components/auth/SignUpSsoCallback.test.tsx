@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SignUpSsoCallback } from './SignUpSsoCallback'
@@ -26,7 +26,13 @@ vi.mock('@clerk/nextjs', () => ({
     mocks.handlers = props
     return <div data-testid="clerk-callback" />
   },
-  useSignUp: () => ({}),
+  useSignUp: () => ({
+    signUp: {
+      status: 'missing_requirements',
+      missingFields: ['phone_number'],
+      unverifiedFields: [],
+    },
+  }),
 }))
 
 vi.mock('next/navigation', () => ({
@@ -93,5 +99,63 @@ describe('SignUpSsoCallback', () => {
       ['/sign-in?redirect_url=%2Farticles%2Fsome-post'],
       ['/sign-up?redirect_url=%2Farticles%2Fsome-post'],
     ])
+  })
+
+  describe('when Clerk sends the visitor nowhere', () => {
+    // Clerk's handler calls none of its three handlers for a sign-up that
+    // came back still needing something (measured against the installed
+    // @clerk/react by the independent review of #377). The page must not
+    // say "Finishing sign-up…" for ever.
+    it('stops claiming progress and offers a way out, without redirecting', async () => {
+      vi.useFakeTimers()
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        mocks.search.value = 'redirect_url=%2Farticles%2Fsome-post'
+        render(<SignUpSsoCallback stallMs={5000} />)
+        expect(screen.queryByRole('link')).not.toBeInTheDocument()
+
+        await act(async () => vi.advanceTimersByTime(5000))
+
+        expect(screen.getByRole('status')).toHaveTextContent(
+          /couldn.t finish signing you up with Google/i,
+        )
+        const again = screen.getByRole<HTMLAnchorElement>('link', {
+          name: 'Start again',
+        })
+        const signIn = screen.getByRole<HTMLAnchorElement>('link', {
+          name: 'Sign in',
+        })
+        expect(new URL(again.href).pathname).toMatch(/^\/sign-up\/?$/)
+        expect(new URL(again.href).searchParams.get('redirect_url')).toBe(
+          '/articles/some-post',
+        )
+        expect(new URL(signIn.href).pathname).toMatch(/^\/sign-in\/?$/)
+        expect(mocks.push).not.toHaveBeenCalled()
+        // The log names the missing fields, nothing the visitor typed.
+        expect(error).toHaveBeenCalledWith(
+          '[sign-up] sso callback unresolved',
+          expect.objectContaining({ missingFields: ['phone_number'] }),
+        )
+      } finally {
+        error.mockRestore()
+        vi.useRealTimers()
+      }
+    })
+
+    it('says nothing of the kind once Clerk has navigated', async () => {
+      vi.useFakeTimers()
+      try {
+        render(<SignUpSsoCallback stallMs={5000} />)
+        mocks.handlers?.navigateToApp(plain)
+        await act(async () => vi.advanceTimersByTime(5000))
+
+        expect(screen.getByRole('status')).toHaveTextContent(
+          'Finishing sign-up',
+        )
+        expect(screen.queryByRole('link')).not.toBeInTheDocument()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 })

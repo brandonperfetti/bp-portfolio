@@ -197,6 +197,25 @@ describe('SignUpFormView, first step', () => {
     expect(screen.getByLabelText('Email address')).toHaveFocus()
   })
 
+  it('waits for the form to unlock before moving focus to a field with an error', () => {
+    // Clerk's error can land while the request is still marked in flight; a
+    // disabled field cannot take focus, so the move must happen on unlock.
+    const { rerender, props } = setup({ pending: true })
+    rerender(
+      <SignUpFormView {...props} pending errors={{ emailAddress: 'Taken.' }} />,
+    )
+    expect(screen.getByLabelText('Email address')).not.toHaveFocus()
+
+    rerender(
+      <SignUpFormView
+        {...props}
+        pending={false}
+        errors={{ emailAddress: 'Taken.' }}
+      />,
+    )
+    expect(screen.getByLabelText('Email address')).toHaveFocus()
+  })
+
   it('announces errors that belong to no field', () => {
     setup({ errors: { global: ['Too many requests. Try again in a bit.'] } })
     expect(screen.getByRole('alert')).toHaveTextContent(
@@ -237,6 +256,18 @@ describe('SignUpFormView, email-code step', () => {
     expect(code).toHaveFocus()
     expect(code).toHaveAttribute('autocomplete', 'one-time-code')
     expect(code).toHaveAttribute('inputmode', 'numeric')
+  })
+
+  it('focuses the code field when the step unlocks, having first rendered locked', () => {
+    // How the step really arrives: Clerk reports "needs a code" while the
+    // code is still being sent, so the first render is disabled.
+    const { rerender, props } = verify({ pending: true })
+    const code = screen.getByLabelText('Verification code')
+    expect(code).toBeDisabled()
+    expect(code).not.toHaveFocus()
+
+    rerender(<SignUpFormView {...props} pending={false} />)
+    expect(screen.getByLabelText('Verification code')).toHaveFocus()
   })
 
   it('no longer shows the opt-in: the answer has already been sent', () => {

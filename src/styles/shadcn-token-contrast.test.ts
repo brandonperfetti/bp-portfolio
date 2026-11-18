@@ -441,6 +441,24 @@ describe('shadcn token layer — WCAG floors in both themes (#190)', () => {
         }
       })
 
+      it('destructive: error ink on the page and on a card (#377)', () => {
+        // `--destructive` became a rendered TEXT role with the sign-up form:
+        // its field and form errors are `text-destructive` on a card, and an
+        // `aria-invalid` Input takes it as its border. So 1.4.3's 4.5:1 for
+        // the ink, which also clears 1.4.11's 3:1 for the border. Light is
+        // 4.76:1 on white; dark is 6.13:1 on the zinc-900 card. The FILL pair
+        // (`--destructive-foreground` on `--destructive`, the `destructive`
+        // Button variant) is still rendered by nothing and still unpinned.
+        for (const surface of ['background', 'card'] as const) {
+          expectRatio(
+            token(sel, 'destructive'),
+            token(sel, surface),
+            TEXT_AA,
+            `[${theme}] --destructive ink on --${surface}`,
+          )
+        }
+      })
+
       it('secondary and accent: label on the surface', () => {
         expectRatio(
           token(sel, 'secondary-foreground'),

@@ -28,12 +28,18 @@ import { interactUntil } from './support/hydration'
  * `example.com`'s.
  *
  * **The interception is fail-closed.** A second rule, on the whole browser
- * context, aborts any write to that endpoint the per-test interceptor did not
- * take, and fails the test that caused it. So a mistake in this spec (a
- * pattern that stops matching after a Clerk change, a test that forgets its
- * interceptor) costs a red test, not an account. `SIGN_UP_E2E_NEGATIVE_CONTROL=1`
- * is the hand-run proof of that: it leaves the interceptor out, and every
- * test that submits must then fail with the write aborted.
+ * context, aborts every non-GET request to a Clerk Frontend API path
+ * (`/v1/…` on any host but the site's) that a test's own interceptor did not
+ * take, and fails the test that caused it. It does not share the
+ * interceptor's pattern, so it also covers that pattern going stale: a
+ * sign-up write under a path the interceptor no longer matches is still
+ * aborted. One call is allowed through, by exact path:
+ * `POST /v1/environment`, which is how clerk-js fetches the instance settings
+ * when a page loads; it creates nothing. What the guard cannot cover is a Clerk
+ * release that moves its API off `/v1/`; the spec would then fail for want
+ * of a request to read, not pass. `SIGN_UP_E2E_NEGATIVE_CONTROL=1` is the
+ * hand-run proof: it leaves the interceptor out, and every test that submits
+ * must then fail with the write aborted.
  *
  * clerk-js itself, and its read-only calls (the instance settings, the
  * browser's client record), do reach the Clerk instance the build is
@@ -66,6 +72,17 @@ import { interactUntil } from './support/hydration'
 const CLERK_CONFIGURED =
   Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) &&
   Boolean(process.env.CLERK_SECRET_KEY)
+
+/** The site under test (`use.baseURL`); every other host is third-party. */
+const isSiteHost = (hostname: string): boolean =>
+  hostname === '127.0.0.1' || hostname === 'localhost'
+
+/**
+ * The non-GET Clerk calls the guard lets through, by exact method and path.
+ * `POST /v1/environment` is clerk-js fetching the instance settings at page
+ * load; it creates nothing.
+ */
+const ALLOWED_CLERK_WRITES = new Set(['POST /v1/environment'])
 
 /** Hand-run only: drop the per-test interceptor to prove the guard catches it. */
 const NEGATIVE_CONTROL = process.env.SIGN_UP_E2E_NEGATIVE_CONTROL === '1'
@@ -228,15 +245,24 @@ test.beforeEach(async ({ context, page }) => {
   clerkNonGet = []
 
   // The fail-closed guard. Context routes run after page routes, so this
-  // sees only what a test's own interceptor did not take.
+  // sees only what a test's own interceptor did not take. Its rule is its
+  // own, not the interceptor's pattern: any write to a Clerk API path.
   await context.route(
-    (url) => SIGN_UP_PATH.test(url.pathname),
+    (url) => url.pathname.startsWith('/v1/') && !isSiteHost(url.hostname),
     async (route: Route) => {
       const request = route.request()
-      if (!isSignUpWrite(request)) return route.continue()
+      const { pathname } = new URL(request.url())
+      const isRead =
+        request.method() === 'GET' || request.method() === 'OPTIONS'
+      if (
+        isRead ||
+        ALLOWED_CLERK_WRITES.has(`${request.method()} ${pathname}`)
+      ) {
+        return route.continue()
+      }
       // Path only: the query carries the browser's Clerk dev token, which
       // does not belong in a report.
-      const where = `${request.method()} ${new URL(request.url()).pathname}`
+      const where = `${request.method()} ${pathname}`
       unintercepted.push(where)
       await route.abort('blockedbyclient')
       onUnintercepted.get(page)?.(where)
