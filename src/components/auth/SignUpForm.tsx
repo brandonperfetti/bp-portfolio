@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 import { useSignUp } from '@clerk/nextjs'
@@ -13,6 +13,7 @@ import {
   SignUpFormView,
   type SignUpFormErrors,
   type SignUpFormValues,
+  type SignUpFormViewProps,
 } from './SignUpFormView'
 
 /** The sign-up route. */
@@ -36,14 +37,15 @@ export const SIGN_IN_PATH = '/sign-in'
 export const PASSWORD_MIN_LENGTH = 15
 
 /**
- * How long the form stays locked after Clerk accepts a Google sign-up without
- * the browser having left for Google.
+ * How long the form stays locked after a step that should end by leaving the
+ * page (the redirect to Google, the navigation after sign-in) without the
+ * page having gone.
  *
  * @remarks Leaving normally takes well under a second. If the page is still
- * here after this long, the hand-off did not happen, and a form locked for
- * good would be a dead end; it unlocks so the visitor can try again.
+ * here after this long, it did not happen, and a form locked for good would
+ * be a dead end; it unlocks so the visitor can try again.
  */
-export const SSO_HAND_OFF_TIMEOUT_MS = 10_000
+export const LEAVE_TIMEOUT_MS = 10_000
 
 const UNFINISHED_MESSAGE =
   "We couldn't finish creating your account here. Please try again, or sign up with Google."
@@ -80,7 +82,11 @@ const text = (error: Message): string | undefined =>
  * tick does not outlive it.
  *
  * **Which step shows** is read from Clerk's sign-up, not kept here, so a
- * reload on the code step stays on the code step.
+ * reload on the code step stays on the code step. A sign-up Clerk has
+ * completed but whose sign-in failed (`finalize()` returned an error) shows
+ * the `finish` step, which retries `finalize()` and nothing else; the first
+ * step there would start a second sign-up for an address that now has an
+ * account.
  *
  * **Still fail-closed:** a Google sign-up that turns out to be an existing
  * account is signed in by the callback page and the list is not touched; an
@@ -92,15 +98,15 @@ const text = (error: Message): string | undefined =>
  * (`safeRedirectPath`); anything else falls back to the home page.
  *
  * @param assignLocation - How to leave for an absolute URL; a seam for tests.
- * @param ssoHandOffTimeoutMs - See {@link SSO_HAND_OFF_TIMEOUT_MS}; a seam for
+ * @param leaveTimeoutMs - See {@link LEAVE_TIMEOUT_MS}; a seam for
  *   tests.
  */
 export function SignUpForm({
   assignLocation = (url: string) => window.location.assign(url),
-  ssoHandOffTimeoutMs = SSO_HAND_OFF_TIMEOUT_MS,
+  leaveTimeoutMs = LEAVE_TIMEOUT_MS,
 }: {
   assignLocation?: (url: string) => void
-  ssoHandOffTimeoutMs?: number
+  leaveTimeoutMs?: number
 } = {}) {
   const { signUp, errors } = useSignUp()
   const router = useRouter()
@@ -109,8 +115,8 @@ export function SignUpForm({
 
   const [busy, setBusy] = useState(false)
   const inFlight = useRef(false)
-  const handOffTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  useEffect(() => () => clearTimeout(handOffTimer.current), [])
+  const leaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(leaveTimer.current), [])
   const [localErrors, setLocalErrors] = useState<string[]>([])
   const [notice, setNotice] = useState<string>()
   // Unknown until mounted: the server render accepts a path only, and a
@@ -124,7 +130,7 @@ export function SignUpForm({
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return
-      clearTimeout(handOffTimer.current)
+      clearTimeout(leaveTimer.current)
       inFlight.current = false
       setBusy(false)
     }
@@ -138,34 +144,59 @@ export function SignUpForm({
   )
   const destination = redirectTarget ?? '/'
 
+  const needsEmailCode = () =>
+    signUp.status === 'missing_requirements' &&
+    signUp.unverifiedFields.includes('email_address') &&
+    signUp.missingFields.length === 0
+
+  /** The step Clerk's sign-up calls for right now. */
+  const currentStep = (): SignUpFormViewProps['step'] => {
+    if (needsEmailCode()) return 'verify'
+    // The account exists and only the sign-in is left.
+    if (signUp.status === 'complete') return 'finish'
+    return 'start'
+  }
+  // While a request is in flight the card keeps showing the step it was
+  // sent from: Clerk's sign-up passes through other states on the way (the
+  // code step while the code is still being sent, `complete` before the
+  // navigation), and none of them should flash by.
+  const [heldStep, setHeldStep] = useState<SignUpFormViewProps['step']>('start')
+
   /**
-   * Runs one Clerk step with the form locked. `stayLocked` is for the step
-   * that ends by leaving the page.
+   * Runs one Clerk step with the form locked. `stayLocked` is for a step
+   * that ends by leaving the page: the lock holds so nothing can be changed
+   * or sent again behind the navigation, and is released after
+   * `leaveTimeoutMs` if the page is somehow still here.
    */
-  const run = useCallback(
-    async (step: () => Promise<{ stayLocked?: boolean } | void>) => {
-      if (inFlight.current) return
-      inFlight.current = true
-      setBusy(true)
-      setLocalErrors([])
-      setNotice(undefined)
-      let stayLocked = false
-      try {
-        stayLocked = (await step())?.stayLocked ?? false
-      } catch (error) {
-        console.error('[sign-up] unexpected failure', error)
-        setLocalErrors([UNEXPECTED_MESSAGE])
-      } finally {
-        if (!stayLocked) {
+  const run = async (step: () => Promise<{ stayLocked?: boolean } | void>) => {
+    if (inFlight.current) return
+    inFlight.current = true
+    setHeldStep(currentStep())
+    setBusy(true)
+    setLocalErrors([])
+    setNotice(undefined)
+    let stayLocked = false
+    try {
+      stayLocked = (await step())?.stayLocked ?? false
+    } catch (error) {
+      console.error('[sign-up] unexpected failure', error)
+      setLocalErrors([UNEXPECTED_MESSAGE])
+    } finally {
+      if (stayLocked) {
+        leaveTimer.current = setTimeout(() => {
           inFlight.current = false
           setBusy(false)
-        }
+          setLocalErrors([UNEXPECTED_MESSAGE])
+        }, leaveTimeoutMs)
+      } else {
+        inFlight.current = false
+        setBusy(false)
       }
-    },
-    [],
-  )
+    }
+  }
 
-  const finish = useCallback(async () => {
+  /** Signs the visitor in to the account Clerk has just created. */
+  const finish = async () => {
     const { error } = await signUp.finalize({
       navigate: ({ decorateUrl }) => {
         const url = decorateUrl(destination)
@@ -173,8 +204,13 @@ export function SignUpForm({
         else router.push(url)
       },
     })
-    if (error) setLocalErrors([text(error) ?? UNEXPECTED_MESSAGE])
-  }, [assignLocation, destination, router, signUp])
+    if (error) {
+      setLocalErrors([text(error) ?? UNEXPECTED_MESSAGE])
+      return
+    }
+    // Signed in, and on the way to the destination.
+    return { stayLocked: true }
+  }
 
   /**
    * Discards Clerk's current attempt, keeping `message` on screen.
@@ -190,11 +226,6 @@ export function SignUpForm({
     setLocalErrors([message])
     await signUp.reset()
   }
-
-  const needsEmailCode = () =>
-    signUp.status === 'missing_requirements' &&
-    signUp.unverifiedFields.includes('email_address') &&
-    signUp.missingFields.length === 0
 
   const onSubmit = ({
     emailAddress,
@@ -245,15 +276,7 @@ export function SignUpForm({
         if (hadAttempt) await discardAttempt(text(error) ?? UNEXPECTED_MESSAGE)
         return
       }
-      // No error means the browser is on its way to Google: stay locked, so
-      // nothing can be changed or sent again behind the redirect. If the page
-      // is somehow still here after the timeout, unlock instead of stranding
-      // the visitor on a disabled form.
-      handOffTimer.current = setTimeout(() => {
-        inFlight.current = false
-        setBusy(false)
-        setLocalErrors([UNEXPECTED_MESSAGE])
-      }, ssoHandOffTimeoutMs)
+      // No error means the browser is on its way to Google.
       return { stayLocked: true }
     })
 
@@ -270,6 +293,8 @@ export function SignUpForm({
       const { error } = await signUp.verifications.sendEmailCode()
       if (!error) setNotice('A new code is on its way.')
     })
+
+  const onFinish = () => run(finish)
 
   const onUseDifferentEmail = () =>
     run(async () => {
@@ -291,7 +316,7 @@ export function SignUpForm({
 
   return (
     <SignUpFormView
-      step={needsEmailCode() ? 'verify' : 'start'}
+      step={busy ? heldStep : currentStep()}
       pending={busy}
       errors={formErrors}
       passwordMinLength={PASSWORD_MIN_LENGTH}
@@ -308,6 +333,7 @@ export function SignUpForm({
       onVerify={onVerify}
       onResend={onResend}
       onUseDifferentEmail={onUseDifferentEmail}
+      onFinish={onFinish}
     />
   )
 }

@@ -28,6 +28,7 @@ const meta = {
     onVerify: fn(),
     onResend: fn(),
     onUseDifferentEmail: fn(),
+    onFinish: fn(),
   },
   decorators: [
     (Story) => (
@@ -180,5 +181,27 @@ export const VerifyEmailError: Story = {
 
 export const VerifyEmailErrorDark: Story = {
   ...VerifyEmailError,
+  globals: { theme: 'dark' },
+}
+
+/**
+ * Rare: Clerk created the account but the sign-in that follows failed. The
+ * card offers a retry, not the first step, which would start a second
+ * sign-up for an address that now has an account.
+ */
+export const FinishSignIn: Story = {
+  args: {
+    step: 'finish',
+    errors: { global: ['We could not start your session. Please try again.'] },
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Try again' }))
+    await expect(args.onFinish).toHaveBeenCalled()
+  },
+}
+
+export const FinishSignInDark: Story = {
+  args: FinishSignIn.args,
   globals: { theme: 'dark' },
 }

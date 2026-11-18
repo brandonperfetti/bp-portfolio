@@ -31,8 +31,11 @@ export type SignUpFormValues = {
 
 /** Props of {@link SignUpFormView}. */
 export type SignUpFormViewProps = {
-  /** `start`: opt-in, Google, email and password. `verify`: the email code. */
-  step: 'start' | 'verify'
+  /**
+   * `start`: opt-in, Google, email and password. `verify`: the email code.
+   * `finish`: the account exists but signing in to it did not complete.
+   */
+  step: 'start' | 'verify' | 'finish'
   /** A request is in flight: every control is disabled until it settles. */
   pending: boolean
   errors: SignUpFormErrors
@@ -51,6 +54,8 @@ export type SignUpFormViewProps = {
   onVerify: (code: string) => void
   onResend: () => void
   onUseDifferentEmail: () => void
+  /** Try again to sign in to the account just created (`finish` step). */
+  onFinish: () => void
 }
 
 const CARD_CLASS =
@@ -88,6 +93,11 @@ function readOptIn(form: HTMLFormElement | null): boolean {
  * that starts the sign-up; on the email-code step a box could be ticked to no
  * effect.
  *
+ * **The `finish` step** is for one rare state: Clerk has created the account
+ * but the last call, the one that signs the visitor in, failed. Showing the
+ * first step again there would invite a second sign-up for an address that
+ * now has an account, so the card offers the one thing left to do.
+ *
  * `#clerk-captcha` is where clerk-js mounts its bot check when the instance
  * asks for a visible one; it stays empty otherwise.
  */
@@ -96,6 +106,8 @@ export function SignUpFormView(props: SignUpFormViewProps) {
     <div className={CARD_CLASS}>
       {props.step === 'verify' ? (
         <VerifyStep {...props} />
+      ) : props.step === 'finish' ? (
+        <FinishStep {...props} />
       ) : (
         <StartStep {...props} />
       )}
@@ -390,6 +402,53 @@ function VerifyStep({
           </Button>
         </div>
       </fieldset>
+    </form>
+  )
+}
+
+function FinishStep({
+  pending,
+  errors,
+  signInHref,
+  onFinish,
+}: SignUpFormViewProps) {
+  const id = useId()
+  return (
+    <form
+      aria-labelledby={`${id}-title`}
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (pending) return
+        onFinish()
+      }}
+    >
+      <div className="text-center">
+        <h1 id={`${id}-title`} className="text-lg font-semibold">
+          Your account is ready
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          We created your account but couldn&apos;t sign you in.
+        </p>
+      </div>
+
+      <fieldset disabled={pending} className="mt-6 flex min-w-0 flex-col gap-5">
+        <GlobalErrors messages={errors.global} />
+        <Button type="submit" className="w-full">
+          {pending ? 'Signing in…' : 'Try again'}
+        </Button>
+      </fieldset>
+
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        Or{' '}
+        <Link
+          href={signInHref}
+          className="font-medium text-link-accent underline-offset-4 hover:underline"
+        >
+          sign in
+        </Link>{' '}
+        with the account you just made.
+      </p>
     </form>
   )
 }

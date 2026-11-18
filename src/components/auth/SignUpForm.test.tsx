@@ -325,7 +325,7 @@ describe("SignUpForm: #373's mid-submit limit is closed", () => {
 describe('SignUpForm: no state leaves the form locked for good', () => {
   it('Google: unlocks and says so if Clerk accepted the request but the browser never left', async () => {
     const user = userEvent.setup()
-    render(<SignUpForm ssoHandOffTimeoutMs={30} />)
+    render(<SignUpForm leaveTimeoutMs={30} />)
     await user.click(google())
     expect(optIn()).toBeDisabled()
 
@@ -333,9 +333,11 @@ describe('SignUpForm: no state leaves the form locked for good', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/something went wrong/i)
   })
 
-  it('email: focuses the code field once the code has been sent', async () => {
-    // The code step appears while the code is still being sent, so it first
-    // renders locked; focus has to land when it unlocks.
+  it('email: keeps showing the locked first step while the code is sent, then the code step with its field focused', async () => {
+    // Clerk reports "needs a code" as soon as the sign-up is created, while
+    // the code is still being sent. The card must not switch to a disabled
+    // code step (whose field could not take focus); it holds the first step
+    // until the request settles.
     const user = userEvent.setup()
     const sending = deferred()
     clerk.password.mockImplementationOnce(async () => {
@@ -347,12 +349,43 @@ describe('SignUpForm: no state leaves the form locked for good', () => {
     await fill(user)
     await user.click(submit())
 
-    const code = await screen.findByLabelText('Verification code')
-    expect(code).toBeDisabled()
+    await waitFor(() => expect(clerk.sendEmailCode).toHaveBeenCalledOnce())
+    expect(screen.queryByLabelText('Verification code')).not.toBeInTheDocument()
+    expect(optIn()).toBeDisabled()
+
     await act(async () => sending.resolve(ok))
-    await waitFor(() =>
-      expect(screen.getByLabelText('Verification code')).toHaveFocus(),
+    expect(await screen.findByLabelText('Verification code')).toHaveFocus()
+  })
+
+  it('stays locked on the code step through the navigation after a successful sign-in', async () => {
+    // `finalize()` leaves the sign-up `complete` a moment before the page
+    // changes. Neither the first step nor the "couldn't sign you in" step
+    // may flash by in that moment.
+    const user = userEvent.setup()
+    awaitingCode()
+    clerk.verifyEmailCode.mockImplementationOnce(async () => {
+      clerk.state.status = 'complete'
+      clerk.state.unverifiedFields = []
+      return ok
+    })
+    clerk.finalize.mockImplementationOnce(
+      async ({ navigate }: { navigate: (p: unknown) => void }) => {
+        navigate({ session: {}, decorateUrl: (url: string) => url })
+        return ok
+      },
     )
+    render(<SignUpForm />)
+    await user.type(screen.getByLabelText('Verification code'), '424242')
+    await user.click(screen.getByRole('button', { name: 'Verify' }))
+
+    await waitFor(() => expect(clerk.push).toHaveBeenCalledWith('/'))
+    expect(
+      screen.getByRole('heading', { name: 'Check your email' }),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('Verification code')).toBeDisabled()
+    expect(
+      screen.queryByRole('heading', { name: 'Your account is ready' }),
+    ).not.toBeInTheDocument()
   })
 })
 
@@ -484,6 +517,43 @@ describe('SignUpForm: the rest of the flow', () => {
       expect(assign).toHaveBeenCalledWith('https://accounts.example/sync?to=/'),
     )
     expect(clerk.push).not.toHaveBeenCalled()
+  })
+
+  it('a failed sign-in after the account is created can be retried without signing up again', async () => {
+    // `finalize()` fails once (the account exists, the session did not
+    // start). Showing the first step would invite a second sign-up for an
+    // address that now has an account.
+    const user = userEvent.setup()
+    awaitingCode()
+    clerk.verifyEmailCode.mockImplementationOnce(async () => {
+      clerk.state.status = 'complete'
+      clerk.state.unverifiedFields = []
+      return ok
+    })
+    clerk.finalize.mockResolvedValueOnce({
+      error: { message: 'Could not start your session.' },
+    })
+    render(<SignUpForm />)
+    await user.type(screen.getByLabelText('Verification code'), '424242')
+    await user.click(screen.getByRole('button', { name: 'Verify' }))
+
+    await screen.findByRole('heading', { name: 'Your account is ready' })
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not start your session.',
+    )
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+
+    clerk.finalize.mockImplementationOnce(
+      async ({ navigate }: { navigate: (p: unknown) => void }) => {
+        navigate({ session: {}, decorateUrl: (url: string) => url })
+        return ok
+      },
+    )
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+
+    await waitFor(() => expect(clerk.push).toHaveBeenCalledWith('/'))
+    expect(clerk.finalize).toHaveBeenCalledTimes(2)
+    expect(clerk.password).not.toHaveBeenCalled()
   })
 
   it("shows Clerk's field and global errors in the form", async () => {

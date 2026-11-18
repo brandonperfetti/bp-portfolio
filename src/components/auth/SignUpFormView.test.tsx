@@ -23,6 +23,7 @@ function setup(overrides: Partial<SignUpFormViewProps> = {}) {
     onVerify: vi.fn(),
     onResend: vi.fn(),
     onUseDifferentEmail: vi.fn(),
+    onFinish: vi.fn(),
     ...overrides,
   }
   const view = render(<SignUpFormView {...props} />)
@@ -313,5 +314,37 @@ describe('SignUpFormView, email-code step', () => {
       expect(control).toBeDisabled()
     }
     expect(screen.getByLabelText('Verification code')).toBeDisabled()
+  })
+})
+
+describe('SignUpFormView, finish step', () => {
+  it('offers one thing: to try signing in again, or the sign-in page', async () => {
+    const { user, props } = setup({
+      step: 'finish',
+      signInHref: '/sign-in',
+      errors: { global: ['Could not start your session.'] },
+    })
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Your account is ready' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not start your session.',
+    )
+    // No way to start a second sign-up for an address that has an account.
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(props.onFinish).toHaveBeenCalledOnce()
+    expect(
+      new URL(
+        screen.getByRole<HTMLAnchorElement>('link', { name: 'sign in' }).href,
+      ).pathname,
+    ).toMatch(/^\/sign-in\/?$/)
+  })
+
+  it('disables the button while the retry is pending', () => {
+    setup({ step: 'finish', pending: true })
+    expect(screen.getByRole('button', { name: /signing in/i })).toBeDisabled()
   })
 })

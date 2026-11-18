@@ -196,7 +196,16 @@ unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
   the form cannot take it, the form discards the attempt (`signUp.reset()`)
   and keeps the reason on screen, so the next submit is a new attempt and not
   another update to a stuck one.
-- **No state is a dead end.** The form unlocks on every Clerk error. If
+- **The card holds its step while a request is in flight.** Clerk's sign-up
+  passes through other states on the way (it needs a code while the code is
+  still being sent; it is complete a moment before the page changes), and the
+  card does not follow them until the request settles. After a successful
+  sign-in the form stays locked until the navigation.
+- **No state is a dead end.** The form unlocks on every Clerk error. If Clerk
+  has created the account but the sign-in that follows fails, the card says
+  "Your account is ready" and offers "Try again" (which retries the sign-in
+  only) and the sign-in page; it does not show the first step, which would
+  start a second sign-up for an address that now has an account. If
   Clerk accepts a Google sign-up but the browser has not left for Google after
   ten seconds, the form unlocks and says something went wrong. If the visitor
   comes back from Google and Clerk's callback handler sends them nowhere
