@@ -82,17 +82,31 @@ your consent".
   already granted for `analytics_storage`, loads gtag.js, and GA4 collects.
   Where consent is not required the grant is automatic (below), so GA4 loads
   on the first page as before.
-- **On a withdrawal:** c15t reloads the page when a choice revokes a category
-  it had granted (`reloadOnConsentRevoked`, its default), and the fresh page
-  loads nothing from Google. That covers the dialog's buttons and also the
-  #103 region-change reprompt, whose `setConsent` goes through the same save.
-  `stopGoogleAnalytics` sets gtag's own opt-out switch
-  (`window['ga-disable-<id>']`) and tells an installed tag storage is denied.
-  It is called from c15t's `onBeforeConsentRevocationReload` callback, which
-  runs synchronously just before that reload, and from an effect for a revoke
-  that does not reload. What the browser proof measures is the outcome: no
-  request to a Google host from the Reject click onwards, the departing
-  document included. It does not read the switch in that document.
+- **On a withdrawal:** c15t reloads the page when a saved choice revokes a
+  category it had granted (`reloadOnConsentRevoked`, its default), and the
+  fresh page loads nothing from Google. `stopGoogleAnalytics` sets gtag's own
+  opt-out switch (`window['ga-disable-<id>']`) and tells an installed tag
+  storage is denied. It is called from c15t's
+  `onBeforeConsentRevocationReload` callback, which runs synchronously just
+  before that reload, and from an effect for a revoke that does not reload.
+  What the browser proof measures is the outcome: no request to a Google host
+  from the Reject click onwards, the departing document included. It does not
+  read the switch in that document.
+- **A region change inside one visit** (#103: a client-side navigation after
+  which the geo cookie says consent is required, for a visitor whose grant
+  was an auto-grant). The tag is stopped and the auto-grant is forgotten with
+  c15t's `resetConsents`, so the visitor is undecided again and the banner
+  comes back. If the auto-grant's own save is still in flight, the reset
+  waits for it, so a late save cannot restore the grant. Nothing is saved on their behalf and the page does not reload.
+  (Until #361's review this saved a denial instead, which c15t counts as a
+  choice, so the banner never returned.) **Known limit:** the cookie is
+  re-read in an effect after the navigation, so a tag the auto-grant already
+  loaded can report the route the visitor lands on before it is stopped. It
+  needs the region to change before a client-side navigation in a document
+  that was already auto-granted; a fresh page load is covered by the next
+  point (#375). If the cookie is
+  missing at that moment (it lives an hour and is refreshed per request), the
+  state is left as it was.
 - **A stored auto-grant is not carried into a region that asks.** c15t restores
   the stored record as its store is created and makes its first script pass on
   it. An auto-grant written where consent is not required would load the tag

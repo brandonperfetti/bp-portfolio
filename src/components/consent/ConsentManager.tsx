@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 
 import { ConsentManagerProvider, useConsentManager } from '@c15t/react'
@@ -75,7 +75,15 @@ function ConsentGeoCookieSignal({
 }
 
 function ConsentSurface() {
-  const { hasConsented, setConsent, consents } = useConsentManager()
+  const {
+    hasConsented,
+    setSelectedConsent,
+    saveConsents,
+    resetConsents,
+    consents,
+  } = useConsentManager()
+  // The auto-grant save still in flight, if any; see the reprompt below.
+  const pendingAutoGrant = useRef<Promise<unknown> | null>(null)
   const [consentRequired, setConsentRequired] = useState<boolean | null>(null)
 
   // #361: a withdrawal has to reach gtag.js from this app. c15t drops a
@@ -98,8 +106,13 @@ function ConsentSurface() {
     const hasExplicitChoice = hasConsented() && !wasAutoGranted
 
     // #103: a visitor auto-granted in an opt-out region who moved into a
-    // required region must be re-prompted — revoke the auto-grant so the banner
-    // reappears (hasConsented() → false).
+    // required region must be re-prompted. The auto-grant is forgotten, not
+    // answered: `resetConsents` clears the record (`consentInfo` → null), so
+    // `hasConsented()` is false again and the banner comes back. Saving a
+    // denial with `setConsent('measurement', false)`, as this did until #361's
+    // review, records a choice the visitor never made: c15t then reports
+    // `hasConsented()` true and the banner stays hidden for good. The tag that
+    // the auto-grant loaded is still in this document, so it is stopped first.
     if (
       shouldRepromptOnRegionChange({
         wasAutoGranted,
@@ -107,8 +120,21 @@ function ConsentSurface() {
         hasExplicitChoice,
       })
     ) {
-      setConsent('measurement', false)
-      setAutoGrantMarker(false)
+      const forgetAutoGrant = () => {
+        stopGoogleAnalytics(readGaEnv())
+        resetConsents()
+        setAutoGrantMarker(false)
+      }
+      // An auto-grant is a save, and c15t commits a save asynchronously (it
+      // awaits a digest first). One still in flight would land AFTER a reset
+      // made now, restore the grant, load the tag and hide the banner, with no
+      // marker left to say it was automatic. So the reset waits for it.
+      const pending = pendingAutoGrant.current
+      if (pending) {
+        void pending.then(forgetAutoGrant, forgetAutoGrant)
+      } else {
+        forgetAutoGrant()
+      }
       return
     }
 
@@ -120,11 +146,18 @@ function ConsentSurface() {
     ) {
       // Persisted opt-out grant, flagged as an auto-grant so a later region
       // change (above) can tell it apart from an explicit choice.
-      setConsent('measurement', true)
+      // `setSelectedConsent` + `saveConsents('custom')` is what c15t's own
+      // `setConsent` does; done by hand because only `saveConsents` returns
+      // the promise the reprompt above has to wait on.
+      setSelectedConsent('measurement', true)
       setAutoGrantMarker(true)
+      const save = Promise.resolve(saveConsents('custom')).finally(() => {
+        if (pendingAutoGrant.current === save) pendingAutoGrant.current = null
+      })
+      pendingAutoGrant.current = save
     }
-    // Runs once the cookie resolves and on every region change; hasConsented/
-    // setConsent are stable store methods, intentionally not in the dep array.
+    // Runs once the cookie resolves and on every region change; the store
+    // methods are stable, intentionally not in the dep array.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consentRequired])
 

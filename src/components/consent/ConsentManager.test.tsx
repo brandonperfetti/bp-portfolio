@@ -3,7 +3,10 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { CONSENT_REQUIRED_COOKIE } from '@/lib/consent/cookie'
 
-import { CONSENT_AUTOGRANT_MARKER_KEY } from './consent-config'
+import {
+  CONSENT_AUTOGRANT_MARKER_KEY,
+  CONSENT_STORAGE_KEY,
+} from './consent-config'
 import { ConsentManager } from './ConsentManager'
 
 // `usePathname` is the client-navigation signal ConsentSurface re-reads the geo
@@ -77,6 +80,12 @@ describe('ConsentManager — region change across a client navigation (#111)', (
         '1',
       )
     })
+    // The auto-grant is a save, and c15t finishes a save asynchronously: the
+    // marker above is written at once, the record a moment later. Wait for
+    // the record, or the navigation below would race the save it revokes.
+    await waitFor(() => {
+      expect(window.localStorage.getItem(CONSENT_STORAGE_KEY)).not.toBeNull()
+    })
     expect(
       screen.queryByRole('region', { name: /cookie consent/i }),
     ).not.toBeInTheDocument()
@@ -98,5 +107,87 @@ describe('ConsentManager — region change across a client navigation (#111)', (
         window.localStorage.getItem(CONSENT_AUTOGRANT_MARKER_KEY),
       ).toBeNull()
     })
+    // And the visitor is actually asked. Clearing the marker was all this
+    // test checked until #361's review, and it passed while the banner stayed
+    // hidden: the revoke used to SAVE a denial, which c15t counts as a choice.
+    expect(
+      await screen.findByRole('region', { name: /cookie consent/i }),
+    ).toBeInTheDocument()
+    // Nothing is stored as the visitor's decision.
+    expect(window.localStorage.getItem(CONSENT_STORAGE_KEY)).toBeNull()
+  })
+
+  it('still asks when the region changes while the auto-grant is being saved', async () => {
+    // c15t commits a save only after awaiting a WebCrypto digest, so a save
+    // can be in flight when the region changes. A reset made then used to be
+    // overwritten when the save landed: the grant came back, the tag with it,
+    // and the banner hid, with no marker left to say it was automatic. The
+    // digest is held here so the save is in flight for certain; the real one
+    // finishes in a few milliseconds, which is why this cannot be left to
+    // timing.
+    const realDigest = crypto.subtle.digest.bind(crypto.subtle)
+    let release = () => {}
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const digest = vi
+      .spyOn(crypto.subtle, 'digest')
+      .mockImplementation(async (...args) => {
+        await held
+        return realDigest(...args)
+      })
+
+    try {
+      setConsentCookie('false')
+      setMockPathname('/start')
+      const { rerender } = render(
+        <ConsentManager>
+          <div data-testid="app" />
+        </ConsentManager>,
+      )
+      await waitFor(() => {
+        expect(window.localStorage.getItem(CONSENT_AUTOGRANT_MARKER_KEY)).toBe(
+          '1',
+        )
+      })
+      await waitFor(() => expect(digest).toHaveBeenCalled())
+      // The premise: the save is in flight and has stored nothing.
+      expect(window.localStorage.getItem(CONSENT_STORAGE_KEY)).toBeNull()
+
+      // The region changes on a client-side navigation.
+      setConsentCookie('true')
+      setMockPathname('/next')
+      rerender(
+        <ConsentManager>
+          <div data-testid="app" />
+        </ConsentManager>,
+      )
+      // Let the reprompt effect run while the save is still held.
+      await new Promise((resolve) => setTimeout(resolve, 20))
+
+      // Now the save lands. It cannot be cancelled, so for a moment the
+      // grant exists; the reprompt, which waited for it, then forgets it.
+      // What is asserted is where things come to rest.
+      release()
+
+      await waitFor(() => {
+        expect(
+          window.localStorage.getItem(CONSENT_AUTOGRANT_MARKER_KEY),
+        ).toBeNull()
+        expect(window.localStorage.getItem(CONSENT_STORAGE_KEY)).toBeNull()
+        expect(
+          screen.getByRole('region', { name: /cookie consent/i }),
+        ).toBeInTheDocument()
+      })
+      // And it stays that way once everything has settled.
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(window.localStorage.getItem(CONSENT_STORAGE_KEY)).toBeNull()
+      expect(
+        screen.getByRole('region', { name: /cookie consent/i }),
+      ).toBeInTheDocument()
+    } finally {
+      release()
+      digest.mockRestore()
+    }
   })
 })
