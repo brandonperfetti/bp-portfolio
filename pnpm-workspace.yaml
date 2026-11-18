@@ -43,18 +43,20 @@ overrides:
   # Drop it once @tailwindcss/postcss ships a release that moves off 1.32.0.
   lightningcss: 1.32.0
   hono: '^4.13.16' # @payloadcms/plugin-mcp path (prod)
-  # @modelcontextprotocol/sdk (#312, #258): one of the two overrides here that
-  # cross an exact pin by Brandon's decision (dompurify, above, is the
+  # @modelcontextprotocol/sdk (#312, #258): one of the two overrides here
+  # that cross an exact pin by Brandon's decision (dompurify, above, is the
   # other). @payloadcms/plugin-mcp 3.93.0 (as 3.90.2) pins the SDK at
   # exactly 1.30.0, and mcp-handler 1.1.0 wants exactly 1.26.0; both are
   # affected by six advisories (GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h,
   # -46jr-4wx8-v453, -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw),
-  # fixed in 1.32.0. docs/SECURITY.md's "never force-overridden" rule is
-  # waived for this entry only, by Brandon on 2026-11-14. 1.32.2 is
+  # fixed in 1.32.0. Brandon decided it on 2026-11-14; its row is in
+  # docs/SECURITY.md § Dependency advisories. 1.32.2 is
   # same-major; typecheck, the MCP plugin tests and the real-Postgres
-  # POST /api/mcp test pass on it. Exit: drop this entry as soon as a
-  # Payload release pins 1.32.x or later. Check with
+  # POST /api/mcp test pass on it. Exit: drop this entry once a Payload
+  # release pins 1.32.x or later and the mcp-handler it resolves declares
+  # an SDK range that admits >=1.32.0. Check with
   #   pnpm view @payloadcms/plugin-mcp@<version> dependencies
+  #   pnpm view mcp-handler@<version> peerDependencies
   # @spotlightjs/spotlight bundles its own SDK copy, out of this override's
   # reach; 4.12.1 bundles 1.32.0 (docs/DEPENDENCIES.md, Spotlight entry).
   '@modelcontextprotocol/sdk': 1.32.2
@@ -62,7 +64,6 @@ overrides:
   # declares `^1.19.9 || ^2.0.5` and Spotlight 4.12.1 `^2.0.10`, so 2.1.3+
   # sits inside both; the old ^1.19.15 floor forced Spotlight below its range.
   '@hono/node-server': '^2.1.3'
-  valibot: '^1.4.2' # Storybook MCP addon (dev)
   'brace-expansion@1': '^1.1.21'
   'brace-expansion@5': '^5.0.12'
   # Dependabot lane, 2026-11-15: patch/minor floors, each inside every

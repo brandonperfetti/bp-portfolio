@@ -136,6 +136,12 @@ measured below; the second is held by review (and by GitGuardian on PRs,
   "Values live in the password manager"; `docs/ANALYTICS.md` § Sessions in
   Sentry restated it ("no DSN or id value belongs in this repo") and now
   points here._
+- Real secret values live in Vercel (per environment) and GitHub Actions,
+  and **staging and production never share values**. _Moved from
+  `README.md` § Environment variables (#269)._ One known exception, not yet
+  closed: staging and production use one Vercel Blob store, so a
+  `BLOB_READ_WRITE_TOKEN` for it writes to production media from either
+  (#328; `docs/WORKFLOW.md` § Local database).
 - **MCP API keys** (an admin-equivalent secret, `docs/PAYLOAD.md`
   § Operating via MCP): Scope keys with the plugin's
   per-collection/per-operation permission checkboxes (adding a collection
@@ -447,22 +453,30 @@ stay there.
   requires no checks, so a red run on a `develop` PR is held by review, not
   by branch protection. Rationale: `docs/DEPENDENCIES.md` § Supply-chain
   policy.
-- **Residual advisories are tracked, never force-overridden** — #100 holds
-  them; `pnpm audit` and `pnpm audit --prod` are the check
-  (`docs/DEPENDENCIES.md`). **Two exceptions, both Brandon's.** No other
-  entry may cross a pin without the same explicit decision.
-  - **2026-11-14 (#312):** `@modelcontextprotocol/sdk` is overridden to 1.32.2
-    past `@payloadcms/plugin-mcp`'s exact 1.30.0 pin. That clears the six SDK
-    advisories (GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h, -46jr-4wx8-v453,
-    -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw). Its compatibility
-    evidence and exit condition are in `docs/DEPENDENCIES.md` § Known unmet
-    peers.
-  - **2026-11-15 (#345):** `dompurify` is overridden to `^3.4.17` past
-    `monaco-editor` 0.56.0's exact 3.4.8 pin (Payload's admin code field).
-    That clears Dependabot alerts #289, #371, #391, #392 and #393. No
-    compliant route exists: `monaco-editor` 0.57.0 pins 3.4.15, still
-    affected. Exit: drop the entry once a `monaco-editor` release that the
-    tree resolves pins `dompurify` ≥3.4.17.
+- **Residual advisories are tracked in #100**; `pnpm audit` and
+  `pnpm audit --prod` are the check (`docs/DEPENDENCIES.md`). Fix one with an
+  in-range bump where one exists. An override is the lever when none does.
+- **An agent may add an override that crosses a declared range, without
+  asking Brandon, when all of these hold** (Brandon, 2026-11-15, #347):
+  - it clears a known advisory or a documented bug;
+  - it is capped at the fixing version within the same major: an exact
+    version, `~`, or a bounded range, never an open `^` that keeps floating;
+  - the build and tests pass;
+  - one row in the table below records it.
+- **Brandon decides** an override that crosses a major version, one with no
+  advisory or bug behind it, and anything the dependency-review check or
+  `pnpm audit` flags.
+- **An override is dropped once its parent catches up.** The Dependabot
+  cleanup (the agent sweep of open Dependabot alerts, as in #345) checks
+  each row's exit, and so does any bump of a row's parent package.
+
+| Override                           | Advisory or bug                                                                                          | Parent and declared range                                                            | Crossed path                                                                                       | Exit                                                                                                                                                       | Decided                    |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `@modelcontextprotocol/sdk` 1.32.2 | GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h, -46jr-4wx8-v453, -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw | `@payloadcms/plugin-mcp` 3.93.0: exactly 1.30.0; `mcp-handler` 1.1.0: exactly 1.26.0 | prod                                                                                               | a Payload release pins ≥1.32 and the `mcp-handler` it resolves declares a range that admits ≥1.32.0 (evidence: `docs/DEPENDENCIES.md` § Known unmet peers) | Brandon, 2026-11-14 (#312) |
+| `dompurify` `^3.4.17`              | Dependabot alerts #289, #371, #391, #392, #393                                                           | `monaco-editor` 0.56.0 (Payload's admin code field): exactly 3.4.8                   | prod (admin)                                                                                       | a `monaco-editor` release the tree resolves pins ≥3.4.17                                                                                                   | Brandon, 2026-11-15 (#345) |
+| `prismjs` 1.30.0                   | GHSA-x7hr-w5r2-h6wg                                                                                      | `refractor` 3.6.0, via `@mapbox/rehype-prism` 0.9.0: `~1.27.0`                       | prod (client bundle)                                                                               | #350: a rehype plugin on `refractor` ≥4.7.0 (4.0–4.6 still depend on `prismjs` <1.30), and `pnpm why prismjs` shows nothing below 1.30.0                   | Brandon, 2026-11-15 (#347) |
+| `better-sqlite3` `^13.0.3`         | v11 aborts the Evalite job at worker teardown (exit 134; `pnpm-workspace.yaml` comment)                  | `evalite` 0.19.0: `^11.6.0` (crosses a major)                                        | dev and CI; the prod graph also holds it as `drizzle-orm`'s optional peer, never loaded (Postgres) | an `evalite` release declares `^13`                                                                                                                        | Brandon, 2026-11-15 (#347) |
+
 - **A mitigation does not clear an advisory.** Before #312's override, the
   MCP SDK's advisories stayed open behind a local mitigation, and the
   mitigation stays in place after it: 1.32's own tool-input limit

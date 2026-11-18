@@ -21,14 +21,18 @@ type Slug = (
  * @remarks `slugLock: true` means **"I do not hand-edit this slug"**, and that
  * resolves differently either side of first publish (#120):
  *
- * - **Before a document is published** it is derived from `fieldToUse` — the
- *   convenient drafting behaviour, safe because no public URL exists yet.
+ * - **Before a document is published** the admin form derives it from
+ *   `fieldToUse` on every edit — the convenient drafting behaviour, safe
+ *   because no public URL exists yet. A REST or MCP write does not re-derive
+ *   it: Payload seeds an absent `slug` from the stored document before the
+ *   slug hooks run, so such a write keeps the stored slug, and `fieldToUse` is
+ *   used only when no slug is stored yet (#250, `docs/PAYLOAD.md`).
  * - **Once the document is published** it is frozen at the published value.
  *   A title edit can no longer move the URL; only an explicit unlock
  *   (`slugLock: false`) can, and that rename creates a redirect from the old
  *   path (`src/hooks/createPathRedirect.ts`).
  *
- * Both halves are server-enforced by {@link enforceSlugFreeze}; the admin
+ * The freeze is server-enforced by {@link enforceSlugFreeze}; the admin
  * component is a convenience that mirrors the same rule, never the gate. This
  * narrowing is why migrated v3 slugs — all stored `slugLock: true` — are frozen
  * without a data migration.
@@ -68,7 +72,7 @@ export const slugField: Slug = (fieldToUse = 'title', overrides = {}) => {
       // stay true on all six collections that use this field — only Posts and
       // Pages have a publish step and a public URL to freeze.
       description:
-        'slugLock true means this slug is not hand-edited: it follows the title until first publish, then freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.',
+        'slugLock true means this slug is not hand-edited. Before first publish the admin form fills it from the title; an API or MCP write that omits slug keeps the stored one. Once published it freezes. Freezing applies to Posts and Pages, whose slugs are public URLs. To rename a published one, send slugLock false with the new slug in the same write — the old path then redirects automatically.',
       ...(slugOverrides?.admin || {}),
       components: {
         Field: {

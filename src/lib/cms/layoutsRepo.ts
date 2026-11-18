@@ -67,7 +67,8 @@ export const getPageLayoutBySlug = async (
 }
 
 /**
- * Post counterpart of {@link getPageLayoutBySlug}, tagged `'posts'`.
+ * Post counterpart of {@link getPageLayoutBySlug}, tagged `'posts'` and
+ * `'pages'`.
  *
  * @param slug - Post slug.
  * @returns The post's id and layout, or `null` when no published post has that
@@ -75,12 +76,19 @@ export const getPageLayoutBySlug = async (
  *
  * @remarks `'use cache: remote'` so a `posts` tag purge reaches every
  * serverless instance, not only the one that ran the hook (#118).
+ *
+ * Also tagged `pages` (#262): layout blocks carry links that can point at a
+ * page, and this read populates them with access control enforced. A link to
+ * a draft page comes back unpopulated and renders as `'#'`
+ * (`resolveCmsHref`); publishing, unpublishing or deleting that page purges
+ * `pages`, not `posts`. The cost is that a page publish, unpublish or delete
+ * makes each cached post layout re-read on its next request.
  */
 export const getPostLayoutBySlug = async (
   slug: string,
 ): Promise<HostedLayout<Post> | null> => {
   'use cache: remote'
-  cacheTag(CMS_TAGS.articles)
+  cacheTag(CMS_TAGS.articles, CMS_TAGS.pages)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
   const { docs } = await payload.find({

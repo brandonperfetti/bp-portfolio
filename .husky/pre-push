@@ -1,3 +1,26 @@
+# A push that only deletes refs sends no code, so there is nothing to gate
+# (#308). Git lists each pushed ref on stdin as
+# "<local ref> <local sha> <remote ref> <remote sha>", and a deletion has an
+# all-zero local sha. Skip only when at least one ref was listed and every one
+# is a deletion; an empty list or any other ref runs the full gate below.
+# Pinned by scripts/pre-push-hook.test.ts.
+only_deletions() {
+  listed=0
+  while read -r _local_ref local_sha _rest || [ -n "$local_sha" ]; do
+    [ -z "$local_sha" ] && continue
+    listed=1
+    case "$local_sha" in
+      *[!0]*) return 1 ;;
+    esac
+  done
+  [ "$listed" -eq 1 ]
+}
+
+if only_deletions; then
+  echo "pre-push: this push only deletes refs, so the gate is skipped."
+  exit 0
+fi
+
 pnpm format:check
 pnpm lint
 pnpm typecheck

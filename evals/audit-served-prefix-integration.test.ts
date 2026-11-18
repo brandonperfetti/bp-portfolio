@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -19,8 +20,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
  * cost it the "read-only, safe against production" property its docblock
  * claims). Restated predicates drift. This file is what makes drift a build
  * failure: seed one page violation and one post violation, then assert that
- * query 1 returns exactly the page, query 2 exactly the post, and query 3 a
- * total equal to their combined row count.
+ * each seeded page/post is positively present and query 3 agrees with the
+ * detail counts over the same owned IDs. CTEs scope the input relations for
+ * ALL THREE unchanged statements, so total-predicate drift still fails.
+ * Foreign violations are positively observed by the unscoped statements but
+ * never enter the owned assertions. Cleanup uses captured IDs only.
  *
  * **Why the rows are seeded by raw SQL and not through Payload.** The #180
  * `beforeChange` guards refuse to publish a page under an unpublished parent —
@@ -67,6 +71,7 @@ const SQL_PATH = path.resolve(
 
 /** Marks every row this file writes, for exact cleanup. */
 const MARKER = 'zz-audit-served-prefix'
+const runMarker = `${MARKER}-${randomUUID()}`
 
 /**
  * The file's executable statements, in order, with psql meta-commands and
@@ -109,169 +114,276 @@ describe.skipIf(!connectionString)(
   'audit-served-prefix.sql finds a seeded violation (real Postgres)',
   () => {
     let client: InstanceType<typeof Client>
-    /**
-     * The tagged total before this file seeds anything.
-     *
-     * @remarks Baseline-by-value, for the same reason wave 6 moved this tier's
-     * other cross-file assertion to baseline-by-id: the query counts the WHOLE
-     * database, the tier runs its files in parallel workers against one
-     * database, and asserting a bare `=0` would make this file's result depend
-     * on what a sibling happened to have in flight. Nothing else in the tier
-     * can create a violation — the #180 guards refuse it through Payload — so
-     * the baseline is expected to be 0 in practice and is read rather than
-     * assumed.
-     */
-    let baseline = 0
+    const pageIds: number[] = []
+    const postIds: number[] = []
+    const foreignPageIds: number[] = []
+    const foreignPostIds: number[] = []
+
+    /** Preserve the script's predicates while limiting every relation to owned IDs. */
+    const audit = (query: string) =>
+      client.query(
+        `WITH pages AS (SELECT * FROM public.pages WHERE id = ANY($1::int[])),
+            posts AS (SELECT * FROM public.posts WHERE id = ANY($2::int[]))
+       ${query}`,
+        [pageIds, postIds],
+      )
 
     const total = async () => {
-      const [, , totalQuery] = statements()
-      const result = await client.query(totalQuery)
+      const result = await audit(statements()[2])
       return Number(String(result.rows[0].audit_total).split('=')[1])
     }
 
+    /** Capture every inserted key before another statement or assertion can fail. */
+    const insert = async (
+      table: 'pages' | 'posts',
+      query: string,
+      values: unknown[],
+    ) => {
+      const result = await client.query(`${query} RETURNING id`, values)
+      const id = Number(result.rows[0].id)
+      ;(table === 'pages' ? pageIds : postIds).push(id)
+      return result
+    }
+
     const clean = async () => {
-      await client.query(`DELETE FROM posts WHERE slug LIKE '${MARKER}%'`)
-      await client.query(`DELETE FROM pages WHERE slug LIKE '${MARKER}%'`)
+      if (!client) return
+      await client.query('DELETE FROM posts WHERE id = ANY($1::int[])', [
+        postIds,
+      ])
+      postIds.length = 0
+      await client.query('DELETE FROM pages WHERE id = ANY($1::int[])', [
+        pageIds,
+      ])
+      pageIds.length = 0
     }
 
     beforeAll(async () => {
       client = new Client({ connectionString })
       await client.connect()
       await clean()
-      baseline = await total()
+      // A sibling can leave violations in flight for the entire audit run.
+      // Capture their IDs separately so neither cleanup nor assertions adopt them.
+      const parent = await client.query(
+        `INSERT INTO pages (title, slug, path, _status, updated_at, created_at)
+         VALUES ($1, $1, $1, 'draft', now(), now()) RETURNING id`,
+        [`${runMarker}-foreign-parent`],
+      )
+      foreignPageIds.push(Number(parent.rows[0].id))
+      for (const table of ['pages', 'posts'] as const) {
+        const result = await client.query(
+          `INSERT INTO ${table} (title, slug, path, parent_id, _status, updated_at, created_at)
+           VALUES ($1, $1, $2, $3, 'published', now(), now()) RETURNING id`,
+          [
+            `${runMarker}-foreign-${table}`,
+            `${runMarker}-foreign-parent/${table}`,
+            foreignPageIds[0],
+          ],
+        )
+        ;(table === 'pages' ? foreignPageIds : foreignPostIds).push(
+          Number(result.rows[0].id),
+        )
+      }
+      const [pagesQuery, postsQuery] = statements()
+      expect((await client.query(pagesQuery)).rows).toContainEqual(
+        expect.objectContaining({ page_id: foreignPageIds[1] }),
+      )
+      expect((await client.query(postsQuery)).rows).toContainEqual(
+        expect.objectContaining({ post_id: foreignPostIds[0] }),
+      )
     }, 60_000)
 
     afterAll(async () => {
       try {
         await clean()
       } finally {
-        // Optional-call: when `beforeAll` failed before `new Client`, an
-        // unguarded `client.end()` throws a TypeError here and REPLACES the
-        // real setup error in the report.
-        await client?.end()
+        try {
+          if (client) {
+            await client.query('DELETE FROM posts WHERE id = ANY($1::int[])', [
+              foreignPostIds,
+            ])
+            await client.query('DELETE FROM pages WHERE id = ANY($1::int[])', [
+              foreignPageIds,
+            ])
+          }
+        } finally {
+          // Optional-call: when `beforeAll` failed before `new Client`, an
+          // unguarded `client.end()` throws a TypeError here and REPLACES the
+          // real setup error in the report.
+          await client?.end()
+        }
       }
     })
 
     it('reports the page, the post and a total of 2, all in agreement', async () => {
-      const parent = await client.query(
-        `INSERT INTO pages (title, slug, path, _status, updated_at, created_at)
-         VALUES ($1, $1, $1, 'draft', now(), now()) RETURNING id`,
-        [`${MARKER}-parent`],
-      )
-      const parentId = parent.rows[0].id as number
+      try {
+        const parent = await insert(
+          'pages',
+          `INSERT INTO pages (title, slug, path, _status, updated_at, created_at)
+         VALUES ($1, $1, $1, 'draft', now(), now())`,
+          [`${runMarker}-parent`],
+        )
+        const parentId = parent.rows[0].id as number
 
-      await client.query(
-        `INSERT INTO pages (title, slug, path, parent_id, _status, updated_at, created_at)
+        await insert(
+          'pages',
+          `INSERT INTO pages (title, slug, path, parent_id, _status, updated_at, created_at)
          VALUES ($1, $1, $2, $3, 'published', now(), now())`,
-        [`${MARKER}-child`, `${MARKER}-parent/${MARKER}-child`, parentId],
-      )
-      await client.query(
-        `INSERT INTO posts (title, slug, path, parent_id, _status, updated_at, created_at)
+          [
+            `${runMarker}-child`,
+            `${runMarker}-parent/${runMarker}-child`,
+            parentId,
+          ],
+        )
+        await insert(
+          'posts',
+          `INSERT INTO posts (title, slug, path, parent_id, _status, updated_at, created_at)
          VALUES ($1, $1, $2, $3, 'published', now(), now())`,
-        [`${MARKER}-post`, `${MARKER}-parent/${MARKER}-post`, parentId],
-      )
+          [
+            `${runMarker}-post`,
+            `${runMarker}-parent/${runMarker}-post`,
+            parentId,
+          ],
+        )
 
-      const [pagesQuery, postsQuery] = statements()
+        const [pagesQuery, postsQuery] = statements()
 
-      const pages = await client.query(pagesQuery)
-      const posts = await client.query(postsQuery)
-      const tagged = await total()
+        const pages = await audit(pagesQuery)
+        const posts = await audit(postsQuery)
+        const tagged = await total()
 
-      // A live URL under a prefix the site 404s — named, with the parent that
-      // makes it one, so the editorial decision can be made from the summary.
-      expect(pages.rows).toEqual([
-        expect.objectContaining({
-          page_slug: `${MARKER}-child`,
-          served_path: `${MARKER}-parent/${MARKER}-child`,
-          parent_slug: `${MARKER}-parent`,
-          parent_status: 'draft',
-        }),
-      ])
-      expect(posts.rows).toEqual([
-        expect.objectContaining({
-          post_slug: `${MARKER}-post`,
-          parent_status: 'draft',
-        }),
-      ])
+        // A live URL under a prefix the site 404s — named, with the parent that
+        // makes it one, so the editorial decision can be made from the summary.
+        expect(pages.rows).toEqual([
+          expect.objectContaining({
+            page_id: pageIds[1],
+            parent_id: pageIds[0],
+            page_slug: `${runMarker}-child`,
+            served_path: `${runMarker}-parent/${runMarker}-child`,
+            parent_slug: `${runMarker}-parent`,
+            parent_status: 'draft',
+          }),
+        ])
+        expect(posts.rows).toEqual([
+          expect.objectContaining({
+            post_id: postIds[0],
+            parent_id: pageIds[0],
+            post_slug: `${runMarker}-post`,
+            parent_status: 'draft',
+          }),
+        ])
 
-      // The agreement that keeps the restated predicates honest: the tagged
-      // total is the sum of the two detail queries, not an independent count
-      // that happens to look right today.
-      expect(tagged).toBe(pages.rowCount! + posts.rowCount!)
-      expect(tagged).toBe(baseline + 2)
+        // The agreement that keeps the restated predicates honest: the tagged
+        // total is the sum of the two detail queries, not an independent count
+        // that happens to look right today.
+        expect(tagged).toBe(pages.rowCount! + posts.rowCount!)
+        expect(tagged).toBe(2)
+        // The owned read did not delete or adopt either foreign violation.
+        expect((await client.query(pagesQuery)).rows).toContainEqual(
+          expect.objectContaining({ page_id: foreignPageIds[1] }),
+        )
+        expect((await client.query(postsQuery)).rows).toContainEqual(
+          expect.objectContaining({ post_id: foreignPostIds[0] }),
+        )
+      } finally {
+        await clean()
+      }
     }, 60_000)
 
     it('finds a child under a parent whose _status is NULL (the IS DISTINCT FROM guard)', async () => {
-      // The regression guard `scripts/audit-served-prefix.sql` argues for in
-      // prose: `_status` is nullable (`DEFAULT 'draft'`, no NOT NULL), so
-      // `parent._status <> 'published'` evaluates to NULL for these rows and
-      // drops them — the audit would answer "0 rows" for a database that has
-      // the defect. `IS DISTINCT FROM` is what keeps them. A NULL gets in only
-      // by a write that went around the publish guards, which is exactly how
-      // the production violations arose, so this is the shape that matters
-      // most and the one a `<>` would hide.
-      await clean()
+      try {
+        // The regression guard `scripts/audit-served-prefix.sql` argues for in
+        // prose: `_status` is nullable (`DEFAULT 'draft'`, no NOT NULL), so
+        // `parent._status <> 'published'` evaluates to NULL for these rows and
+        // drops them — the audit would answer "0 rows" for a database that has
+        // the defect. `IS DISTINCT FROM` is what keeps them. A NULL gets in only
+        // by a write that went around the publish guards, which is exactly how
+        // the production violations arose, so this is the shape that matters
+        // most and the one a `<>` would hide.
+        await clean()
 
-      const parent = await client.query(
-        `INSERT INTO pages (title, slug, path, _status, updated_at, created_at)
-         VALUES ($1, $1, $1, NULL, now(), now()) RETURNING id`,
-        [`${MARKER}-null-parent`],
-      )
-      const parentId = parent.rows[0].id as number
+        const parent = await insert(
+          'pages',
+          `INSERT INTO pages (title, slug, path, _status, updated_at, created_at)
+         VALUES ($1, $1, $1, NULL, now(), now())`,
+          [`${runMarker}-null-parent`],
+        )
+        const parentId = parent.rows[0].id as number
 
-      await client.query(
-        `INSERT INTO pages (title, slug, path, parent_id, _status, updated_at, created_at)
+        await insert(
+          'pages',
+          `INSERT INTO pages (title, slug, path, parent_id, _status, updated_at, created_at)
          VALUES ($1, $1, $2, $3, 'published', now(), now())`,
-        [
-          `${MARKER}-null-child`,
-          `${MARKER}-null-parent/${MARKER}-null-child`,
-          parentId,
-        ],
-      )
-      await client.query(
-        `INSERT INTO posts (title, slug, path, parent_id, _status, updated_at, created_at)
+          [
+            `${runMarker}-null-child`,
+            `${runMarker}-null-parent/${runMarker}-null-child`,
+            parentId,
+          ],
+        )
+        await insert(
+          'posts',
+          `INSERT INTO posts (title, slug, path, parent_id, _status, updated_at, created_at)
          VALUES ($1, $1, $2, $3, 'published', now(), now())`,
-        [
-          `${MARKER}-null-post`,
-          `${MARKER}-null-parent/${MARKER}-null-post`,
-          parentId,
-        ],
-      )
+          [
+            `${runMarker}-null-post`,
+            `${runMarker}-null-parent/${runMarker}-null-post`,
+            parentId,
+          ],
+        )
 
-      const [pagesQuery, postsQuery] = statements()
-      const pages = await client.query(pagesQuery)
-      const posts = await client.query(postsQuery)
-      const tagged = await total()
+        const [pagesQuery, postsQuery] = statements()
+        const pages = await audit(pagesQuery)
+        const posts = await audit(postsQuery)
+        const tagged = await total()
 
-      expect(pages.rows).toEqual([
-        expect.objectContaining({
-          page_slug: `${MARKER}-null-child`,
-          served_path: `${MARKER}-null-parent/${MARKER}-null-child`,
-          parent_slug: `${MARKER}-null-parent`,
-          parent_status: null,
-        }),
-      ])
-      expect(posts.rows).toEqual([
-        expect.objectContaining({
-          post_slug: `${MARKER}-null-post`,
-          parent_status: null,
-        }),
-      ])
-      // And the tagged total COUNTS them — the third statement restates the
-      // predicates, so it is its own place for the `<>` to creep back in.
-      expect(tagged).toBe(pages.rowCount! + posts.rowCount!)
-      expect(tagged).toBe(baseline + 2)
+        expect(pages.rows).toEqual([
+          expect.objectContaining({
+            page_id: pageIds[1],
+            parent_id: pageIds[0],
+            page_slug: `${runMarker}-null-child`,
+            served_path: `${runMarker}-null-parent/${runMarker}-null-child`,
+            parent_slug: `${runMarker}-null-parent`,
+            parent_status: null,
+          }),
+        ])
+        expect(posts.rows).toEqual([
+          expect.objectContaining({
+            post_id: postIds[0],
+            parent_id: pageIds[0],
+            post_slug: `${runMarker}-null-post`,
+            parent_status: null,
+          }),
+        ])
+        // And the tagged total COUNTS them — the third statement restates the
+        // predicates, so it is its own place for the `<>` to creep back in.
+        expect(tagged).toBe(pages.rowCount! + posts.rowCount!)
+        expect(tagged).toBe(2)
+        // The owned read did not delete or adopt either foreign violation.
+        expect((await client.query(pagesQuery)).rows).toContainEqual(
+          expect.objectContaining({ page_id: foreignPageIds[1] }),
+        )
+        expect((await client.query(postsQuery)).rows).toContainEqual(
+          expect.objectContaining({ post_id: foreignPostIds[0] }),
+        )
+      } finally {
+        await clean()
+      }
     }, 60_000)
 
-    it('returns to the baseline once the violation is cleared', async () => {
+    it('returns an owned total of zero once the violation is cleared', async () => {
       // The clean case has to be POSITIVELY expressed — a tagged line printed
       // by a statement that ran — because the runner treats a MISSING line as a
       // failure, not as a pass.
       await clean()
-      const [, , totalQuery] = statements()
-      const result = await client.query(totalQuery)
+      const [pagesQuery, postsQuery, totalQuery] = statements()
+      const result = await audit(totalQuery)
       expect(String(result.rows[0].audit_total)).toBe(
-        `AUDIT_SERVED_PREFIX_VIOLATIONS=${baseline}`,
+        'AUDIT_SERVED_PREFIX_VIOLATIONS=0',
+      )
+      expect((await client.query(pagesQuery)).rows).toContainEqual(
+        expect.objectContaining({ page_id: foreignPageIds[1] }),
+      )
+      expect((await client.query(postsQuery)).rows).toContainEqual(
+        expect.objectContaining({ post_id: foreignPostIds[0] }),
       )
     }, 60_000)
   },

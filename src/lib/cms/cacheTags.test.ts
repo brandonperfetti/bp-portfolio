@@ -167,6 +167,67 @@ describe('CMS repo cacheTag / cacheLife wiring', () => {
   }
 })
 
+/**
+ * Readers whose result depends on a page's publish state (#262, PR #357
+ * preflight).
+ *
+ * `getCmsConsentConfig` reads the `cookie-consent` global with access control
+ * enforced and populates its privacy-policy relation to `pages`. A relation to
+ * a draft page comes back unpopulated and is cached as "no link". Publishing
+ * that page purges `pages`, not `global_cookie-consent`, so a reader that
+ * subscribed to its own tag only kept serving "no link" until the `cmsContent`
+ * lifetime lapsed or someone re-saved the global. Unpublishing is the mirror
+ * case: a link to a page that now 404s.
+ *
+ * `getPostLayoutBySlug` has the same dependency through its layout blocks'
+ * link fields, and `getCmsRedirects` through its hand-written reference join,
+ * which reads `posts` as well (independent review of this fix, 2026-11-17).
+ */
+describe('readers that populate a Pages relation ↔ pages purge pairing (#262)', () => {
+  beforeEach(() => {
+    rec.tags = []
+  })
+
+  it('getCmsConsentConfig subscribes to both its own tag and the pages tag', async () => {
+    await getCmsConsentConfig()
+
+    expect(rec.tags).toEqual(
+      expect.arrayContaining([CMS_TAGS.consent, CMS_TAGS.pages]),
+    )
+  })
+
+  it('getPostLayoutBySlug subscribes to the pages tag too', async () => {
+    // Same dependency, one reader over: a post's layout blocks carry links
+    // that can point at a page, populated with access control enforced, and
+    // `resolveCmsHref` renders an unpopulated one as `'#'`.
+    await getPostLayoutBySlug('x')
+
+    expect(rec.tags).toEqual(
+      expect.arrayContaining([CMS_TAGS.articles, CMS_TAGS.pages]),
+    )
+    expect(rec.tags).toContain('pages')
+  })
+
+  it('getCmsRedirects subscribes to the literal tags a page write and a post write purge', async () => {
+    // Its reference join reads `pages` and `posts` with access control
+    // enforced and drops a row whose target it cannot see, so a redirect to a
+    // draft is cached as absent. `revalidatePage` purges the literal `'pages'`
+    // and `revalidatePost` the literal `'posts'`.
+    await getCmsRedirects().catch(() => {})
+
+    expect(rec.tags).toEqual(expect.arrayContaining(['pages', 'posts']))
+  })
+
+  it('getCmsConsentConfig subscribes to the literal tag a page write purges', async () => {
+    // `revalidatePage` purges the literal `'pages'` (it does not import
+    // CMS_TAGS), so pin the string itself: a rename of `CMS_TAGS.pages` that
+    // left the hook behind would otherwise keep the test above green.
+    await getCmsConsentConfig()
+
+    expect(rec.tags).toContain('pages')
+  })
+})
+
 // Vitest runs with the repo root as its working directory (vitest.config.ts).
 // Declared here because both source-scanning blocks below read from it.
 const REPO_ROOT = process.cwd()
@@ -178,8 +239,10 @@ const REPO_ROOT = process.cwd()
  * `CMS_TAGS.redirects`. A tag only does work when the WRITE side names the same
  * string, so these two tests pin the pair itself:
  *
- * 1. a runtime comparison — whatever `revalidateRedirects` purges must be
- *    exactly what `getCmsRedirects` subscribed to in the same run. A hook that
+ * 1. a runtime comparison — `revalidateRedirects` must purge exactly
+ *    `CMS_TAGS.redirects`, and `getCmsRedirects` must have subscribed to it in
+ *    the same run (among the `pages` and `posts` tags it also carries since
+ *    #262, which a redirect write does not purge). A hook that
  *    purges some other string fails here rather than in production, where the
  *    only symptom is an edited redirect resolving to its old destination until
  *    the `cmsContent` TTL lapses;
@@ -206,8 +269,14 @@ describe('redirects purge ↔ reader tag pairing (#133)', () => {
       req: { payload: { logger: { info: vi.fn() } } },
     } as never)
 
-    expect(readerTags).toEqual([CMS_TAGS.redirects])
-    expect(rec.purged).toEqual(readerTags)
+    // The reader also subscribes to `pages` and `posts`, the collections its
+    // reference join reads (#262); a redirect write purges its own tag only.
+    expect(readerTags).toEqual([
+      CMS_TAGS.redirects,
+      CMS_TAGS.pages,
+      CMS_TAGS.articles,
+    ])
+    expect(rec.purged).toEqual([CMS_TAGS.redirects])
   })
 
   it('takes that tag from CMS_TAGS rather than a matching literal', () => {
