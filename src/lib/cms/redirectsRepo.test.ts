@@ -2,11 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   find: vi.fn(),
+  cacheTag: vi.fn(),
 }))
 
 vi.mock('next/cache', () => ({
   cacheLife: vi.fn(),
-  cacheTag: vi.fn(),
+  cacheTag: mocks.cacheTag,
 }))
 
 vi.mock('payload', () => ({
@@ -1095,6 +1096,39 @@ describe('getCmsRedirects', () => {
 
     await expect(getCmsRedirects()).resolves.toEqual([
       { from: '/work/brytecore', to: '/experience/brytecore', type: '301' },
+    ])
+  })
+
+  /**
+   * #262 follow-up. The join runs with access control enforced, so a target
+   * the anonymous read cannot see (a draft) returns no row and its redirect is
+   * left out of the list. That list is what gets cached. Publishing the target
+   * purges `pages` or `posts`, never `redirects`, so the reader has to be
+   * subscribed to those tags for the next read to run at all; once it does,
+   * the redirect resolves.
+   */
+  it('drops a redirect to a target it cannot see, resolves it once the target is readable, and is tagged so that publish refreshes it', async () => {
+    mocks.cacheTag.mockClear()
+    // The target is a draft: the access-enforced join returns nothing for it.
+    stubFind({
+      redirects: [referenceRow('/old-privacy', 'pages', 7)],
+      pages: [],
+    })
+
+    await expect(getCmsRedirects()).resolves.toEqual([])
+    // This is the value that is cached, under these tags.
+    expect(mocks.cacheTag.mock.calls.flat()).toEqual(
+      expect.arrayContaining(['redirects', 'pages', 'posts']),
+    )
+
+    // The target is published: the same join now returns it.
+    stubFind({
+      redirects: [referenceRow('/old-privacy', 'pages', 7)],
+      pages: [{ id: 7, path: 'privacy', slug: 'privacy' }],
+    })
+
+    await expect(getCmsRedirects()).resolves.toEqual([
+      { from: '/old-privacy', to: '/privacy', type: '301' },
     ])
   })
 

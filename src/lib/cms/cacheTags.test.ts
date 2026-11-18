@@ -180,7 +180,8 @@ describe('CMS repo cacheTag / cacheLife wiring', () => {
  * case: a link to a page that now 404s.
  *
  * `getPostLayoutBySlug` has the same dependency through its layout blocks'
- * link fields (independent review of this fix, 2026-11-17).
+ * link fields, and `getCmsRedirects` through its hand-written reference join,
+ * which reads `posts` as well (independent review of this fix, 2026-11-17).
  */
 describe('readers that populate a Pages relation ↔ pages purge pairing (#262)', () => {
   beforeEach(() => {
@@ -205,6 +206,16 @@ describe('readers that populate a Pages relation ↔ pages purge pairing (#262)'
       expect.arrayContaining([CMS_TAGS.articles, CMS_TAGS.pages]),
     )
     expect(rec.tags).toContain('pages')
+  })
+
+  it('getCmsRedirects subscribes to the literal tags a page write and a post write purge', async () => {
+    // Its reference join reads `pages` and `posts` with access control
+    // enforced and drops a row whose target it cannot see, so a redirect to a
+    // draft is cached as absent. `revalidatePage` purges the literal `'pages'`
+    // and `revalidatePost` the literal `'posts'`.
+    await getCmsRedirects().catch(() => {})
+
+    expect(rec.tags).toEqual(expect.arrayContaining(['pages', 'posts']))
   })
 
   it('getCmsConsentConfig subscribes to the literal tag a page write purges', async () => {
@@ -256,8 +267,14 @@ describe('redirects purge ↔ reader tag pairing (#133)', () => {
       req: { payload: { logger: { info: vi.fn() } } },
     } as never)
 
-    expect(readerTags).toEqual([CMS_TAGS.redirects])
-    expect(rec.purged).toEqual(readerTags)
+    // The reader also subscribes to `pages` and `posts`, the collections its
+    // reference join reads (#262); a redirect write purges its own tag only.
+    expect(readerTags).toEqual([
+      CMS_TAGS.redirects,
+      CMS_TAGS.pages,
+      CMS_TAGS.articles,
+    ])
+    expect(rec.purged).toEqual([CMS_TAGS.redirects])
   })
 
   it('takes that tag from CMS_TAGS rather than a matching literal', () => {
