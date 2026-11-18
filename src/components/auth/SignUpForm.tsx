@@ -72,7 +72,9 @@ const text = (error: Message): string | undefined =>
  * the call's arguments in the same event as the click. `busy` is set in that
  * same event, which disables the whole form until Clerk answers, and
  * `inFlight` refuses a second request beside the first. On an error the form
- * unlocks and the next submit reads the box again. On success the box is gone:
+ * unlocks and the next submit reads the box again (and if the failed request
+ * was an update to an earlier attempt, that attempt is discarded, so the
+ * retry is a new one: `discardAttempt`). On success the box is gone:
  * the email path moves to the code step, the Google path leaves the page.
  * "Use a different email" discards the attempt (`signUp.reset()`), so its
  * tick does not outlive it.
@@ -174,6 +176,21 @@ export function SignUpForm({
     if (error) setLocalErrors([text(error) ?? UNEXPECTED_MESSAGE])
   }, [assignLocation, destination, router, signUp])
 
+  /**
+   * Discards Clerk's current attempt, keeping `message` on screen.
+   *
+   * clerk-js sends a submit as an UPDATE to an attempt that already exists
+   * (an earlier submit, or a trip to Google that was abandoned). When such an
+   * update fails, or leaves the attempt somewhere this form cannot take it,
+   * every retry would update the same stuck attempt. Discarding it makes the
+   * next submit a new attempt. `reset()` is local and also clears Clerk's
+   * own error state, which is why the message is kept here instead.
+   */
+  const discardAttempt = async (message: string) => {
+    setLocalErrors([message])
+    await signUp.reset()
+  }
+
   const needsEmailCode = () =>
     signUp.status === 'missing_requirements' &&
     signUp.unverifiedFields.includes('email_address') &&
@@ -185,12 +202,16 @@ export function SignUpForm({
     mailingListOptIn,
   }: SignUpFormValues) =>
     run(async () => {
+      const hadAttempt = Boolean(signUp.id)
       const { error } = await signUp.password({
         emailAddress,
         password,
         unsafeMetadata: { [MAILING_LIST_OPT_IN_KEY]: mailingListOptIn },
       })
-      if (error) return
+      if (error) {
+        if (hadAttempt) await discardAttempt(text(error) ?? UNEXPECTED_MESSAGE)
+        return
+      }
       if (signUp.status === 'complete') return finish()
       if (!needsEmailCode()) {
         // The instance asks for something this form has no field for (a
@@ -200,7 +221,7 @@ export function SignUpForm({
           missingFields: signUp.missingFields,
           unverifiedFields: signUp.unverifiedFields,
         })
-        setLocalErrors([UNFINISHED_MESSAGE])
+        await discardAttempt(UNFINISHED_MESSAGE)
         return
       }
       await signUp.verifications.sendEmailCode()
@@ -210,6 +231,7 @@ export function SignUpForm({
     mailingListOptIn,
   }: Pick<SignUpFormValues, 'mailingListOptIn'>) =>
     run(async () => {
+      const hadAttempt = Boolean(signUp.id)
       const { error } = await signUp.sso({
         strategy: 'oauth_google',
         redirectCallbackUrl: withRedirect(
@@ -219,7 +241,10 @@ export function SignUpForm({
         redirectUrl: destination,
         unsafeMetadata: { [MAILING_LIST_OPT_IN_KEY]: mailingListOptIn },
       })
-      if (error) return
+      if (error) {
+        if (hadAttempt) await discardAttempt(text(error) ?? UNEXPECTED_MESSAGE)
+        return
+      }
       // No error means the browser is on its way to Google: stay locked, so
       // nothing can be changed or sent again behind the redirect. If the page
       // is somehow still here after the timeout, unlock instead of stranding
@@ -237,7 +262,7 @@ export function SignUpForm({
       const { error } = await signUp.verifications.verifyEmailCode({ code })
       if (error) return
       if (signUp.status === 'complete') return finish()
-      setLocalErrors([UNFINISHED_MESSAGE])
+      await discardAttempt(UNFINISHED_MESSAGE)
     })
 
   const onResend = () =>

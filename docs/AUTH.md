@@ -192,7 +192,10 @@ unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
   Clerk's docs do not say]. The update carries `unsafeMetadata` too, so the
   box as it is at the latest submit is what clerk-js sends. That Clerk's
   server then replaces the earlier answer with it is not observed by any
-  test.
+  test. If Clerk refuses such an update, or it leaves the attempt somewhere
+  the form cannot take it, the form discards the attempt (`signUp.reset()`)
+  and keeps the reason on screen, so the next submit is a new attempt and not
+  another update to a stuck one.
 - **No state is a dead end.** The form unlocks on every Clerk error. If
   Clerk accepts a Google sign-up but the browser has not left for Google after
   ten seconds, the form unlocks and says something went wrong. If the visitor

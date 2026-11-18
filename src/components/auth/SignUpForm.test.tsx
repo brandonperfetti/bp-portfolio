@@ -31,6 +31,7 @@ function deferred() {
 
 const clerk = vi.hoisted(() => {
   const state = {
+    id: undefined as string | undefined,
     status: 'missing_requirements' as string,
     unverifiedFields: [] as string[],
     missingFields: [] as string[],
@@ -64,6 +65,9 @@ vi.mock('@clerk/nextjs', () => ({
     fetchStatus: 'idle',
     errors: clerk.state.errors,
     signUp: {
+      get id() {
+        return clerk.state.id
+      },
       get status() {
         return clerk.state.status
       },
@@ -110,6 +114,7 @@ function awaitingCode(email = 'a@example.com') {
 beforeEach(() => {
   vi.clearAllMocks()
   clerk.search.value = ''
+  clerk.state.id = undefined
   clerk.state.status = 'missing_requirements'
   clerk.state.unverifiedFields = []
   clerk.state.missingFields = []
@@ -241,8 +246,8 @@ describe("SignUpForm: #373's mid-submit limit is closed", () => {
     // clerk-js updates an existing sign-up attempt instead of creating a new
     // one when `signUp.password()` is called again (read from its source,
     // 2026-11-18). The form's part is the same either way: each call carries
-    // the box as it is at that submit, so the latest answer is the one Clerk
-    // holds.
+    // the box as it is at that submit, so the latest answer is the one
+    // clerk-js sends.
     const user = userEvent.setup()
     clerk.password.mockResolvedValue({ error: { message: 'Taken.' } })
     render(<SignUpForm />)
@@ -515,6 +520,51 @@ describe('SignUpForm: the rest of the flow', () => {
     )
     expect(clerk.sendEmailCode).not.toHaveBeenCalled()
     expect(optIn()).toBeEnabled()
+    // The stuck attempt is discarded, so "try again" starts a new one
+    // instead of updating the one that cannot be finished.
+    expect(clerk.reset).toHaveBeenCalledOnce()
+  })
+
+  it('discards an earlier attempt when updating it fails, and keeps the reason on screen', async () => {
+    // An attempt already exists (an abandoned trip to Google, say), so
+    // clerk-js sends this submit as an update to it. If Clerk refuses the
+    // update, retrying would update the same attempt again.
+    const user = userEvent.setup()
+    clerk.state.id = 'sua_existing'
+    clerk.password.mockResolvedValueOnce({
+      error: { message: 'This sign-up cannot be changed.' },
+    })
+    render(<SignUpForm />)
+    await fill(user)
+    await user.click(submit())
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This sign-up cannot be changed.',
+    )
+    expect(clerk.reset).toHaveBeenCalledOnce()
+    expect(optIn()).toBeEnabled()
+  })
+
+  it('does not discard anything when a first attempt is refused', async () => {
+    const user = userEvent.setup()
+    clerk.password.mockResolvedValueOnce({ error: { message: 'Taken.' } })
+    render(<SignUpForm />)
+    await fill(user)
+    await user.click(submit())
+
+    await waitFor(() => expect(optIn()).toBeEnabled())
+    expect(clerk.reset).not.toHaveBeenCalled()
+  })
+
+  it('Google: discards an earlier attempt when updating it fails', async () => {
+    const user = userEvent.setup()
+    clerk.state.id = 'sua_existing'
+    clerk.sso.mockResolvedValueOnce({ error: { message: 'Refused.' } })
+    render(<SignUpForm />)
+    await user.click(google())
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Refused.')
+    expect(clerk.reset).toHaveBeenCalledOnce()
   })
 
   it('unlocks and says so when Clerk throws instead of answering', async () => {
