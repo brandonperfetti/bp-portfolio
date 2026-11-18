@@ -97,11 +97,15 @@ your consent".
   the stored record as its store is created and makes its first script pass on
   it. An auto-grant written where consent is not required would load the tag
   on the first page served to that browser in a consent-required region,
-  before any effect could revoke it. So before the provider is built,
-  `ConsentManager` drops a stored record that is an auto-grant
+  before any effect could revoke it. So before the provider is built, once
+  per document, `ConsentManager` drops a stored record that is an auto-grant
   (`bp-consent-autogrant`) unless the geo cookie says consent is confidently
   not required (`shouldDiscardStoredAutoGrant`), and the visitor is asked. An
-  explicit choice is never dropped. **It recognises an automatic grant by
+  explicit choice is never dropped. The check is never repeated in the same
+  document: run again after the store exists (the root layout re-rendering
+  on a router refresh, say) it would clear the record and the marker under a
+  live grant, and the region check that follows would mistake that grant for
+  a choice. **It recognises an automatic grant by
   that marker, and by nothing else.** One history gets past it: during a
   region change inside a visit (below), the save that revokes an automatic
   grant can finish before the automatic grant's own save, which then lands
