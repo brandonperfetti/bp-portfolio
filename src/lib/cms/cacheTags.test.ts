@@ -167,6 +167,40 @@ describe('CMS repo cacheTag / cacheLife wiring', () => {
   }
 })
 
+/**
+ * The consent reader depends on a second collection (#262, PR #357 preflight).
+ *
+ * `getCmsConsentConfig` reads the `cookie-consent` global with access control
+ * enforced and populates its privacy-policy relation to `pages`. A relation to
+ * a draft page comes back unpopulated and is cached as "no link". Publishing
+ * that page purges `pages`, not `global_cookie-consent`, so a reader that
+ * subscribed to its own tag only kept serving "no link" until the `cmsContent`
+ * lifetime lapsed or someone re-saved the global. Unpublishing is the mirror
+ * case: a link to a page that now 404s.
+ */
+describe('consent reader ↔ pages purge pairing (#262)', () => {
+  beforeEach(() => {
+    rec.tags = []
+  })
+
+  it('subscribes to both its own tag and the pages tag', async () => {
+    await getCmsConsentConfig()
+
+    expect(rec.tags).toEqual(
+      expect.arrayContaining([CMS_TAGS.consent, CMS_TAGS.pages]),
+    )
+  })
+
+  it('subscribes to the literal tag a page write purges', async () => {
+    // `revalidatePage` purges the literal `'pages'` (it does not import
+    // CMS_TAGS), so pin the string itself: a rename of `CMS_TAGS.pages` that
+    // left the hook behind would otherwise keep the test above green.
+    await getCmsConsentConfig()
+
+    expect(rec.tags).toContain('pages')
+  })
+})
+
 // Vitest runs with the repo root as its working directory (vitest.config.ts).
 // Declared here because both source-scanning blocks below read from it.
 const REPO_ROOT = process.cwd()
