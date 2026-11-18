@@ -330,7 +330,47 @@ describe('SignUpForm: no state leaves the form locked for good', () => {
     expect(optIn()).toBeDisabled()
 
     await waitFor(() => expect(optIn()).toBeEnabled())
-    expect(screen.getByRole('alert')).toHaveTextContent(/something went wrong/i)
+    // Nothing is known to have failed, so it does not say so.
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /taking longer than expected/i,
+    )
+  })
+
+  it('a successful sign-in whose navigation never happens unlocks to the finish step, without claiming failure', async () => {
+    const user = userEvent.setup()
+    awaitingCode()
+    clerk.verifyEmailCode.mockImplementationOnce(async () => {
+      clerk.state.status = 'complete'
+      clerk.state.unverifiedFields = []
+      return ok
+    })
+    render(<SignUpForm leaveTimeoutMs={30} />)
+    await user.type(screen.getByLabelText('Verification code'), '424242')
+    await user.click(screen.getByRole('button', { name: 'Verify' }))
+
+    await screen.findByRole('heading', { name: 'Your account is ready' })
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /taking longer than expected/i,
+    )
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
+  })
+
+  it('arms no timer when Clerk answers after the page has gone', async () => {
+    const user = userEvent.setup()
+    const inFlight = deferred()
+    clerk.sso.mockReturnValueOnce(inFlight.promise)
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+    try {
+      const { unmount } = render(<SignUpForm leaveTimeoutMs={12_345} />)
+      await user.click(google())
+      unmount()
+      await act(async () => inFlight.resolve(ok))
+      expect(
+        setTimeoutSpy.mock.calls.filter(([, ms]) => ms === 12_345),
+      ).toHaveLength(0)
+    } finally {
+      setTimeoutSpy.mockRestore()
+    }
   })
 
   it('email: keeps showing the locked first step while the code is sent, then the code step with its field focused', async () => {
@@ -359,7 +399,7 @@ describe('SignUpForm: no state leaves the form locked for good', () => {
 
   it('stays locked on the code step through the navigation after a successful sign-in', async () => {
     // `finalize()` leaves the sign-up `complete` a moment before the page
-    // changes. Neither the first step nor the "couldn't sign you in" step
+    // changes. Neither the first step nor the "account is ready" step
     // may flash by in that moment.
     const user = userEvent.setup()
     awaitingCode()
@@ -549,7 +589,7 @@ describe('SignUpForm: the rest of the flow', () => {
         return ok
       },
     )
-    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
 
     await waitFor(() => expect(clerk.push).toHaveBeenCalledWith('/'))
     expect(clerk.finalize).toHaveBeenCalledTimes(2)
@@ -567,11 +607,11 @@ describe('SignUpForm: the rest of the flow', () => {
     render(<SignUpForm />)
 
     await screen.findByRole('heading', { name: 'Your account is ready' })
-    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
     await waitFor(() => expect(clerk.finalize).toHaveBeenCalledTimes(1))
 
     // Still the same step, unlocked, with the reason and both ways out.
-    const retry = await screen.findByRole('button', { name: 'Try again' })
+    const retry = await screen.findByRole('button', { name: 'Continue' })
     expect(retry).toBeEnabled()
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Could not start your session.',

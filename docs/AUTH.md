@@ -200,14 +200,16 @@ unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
   passes through other states on the way (it needs a code while the code is
   still being sent; it is complete a moment before the page changes), and the
   card does not follow them until the request settles. After a successful
-  sign-in the form stays locked until the navigation.
+  sign-in, and after Clerk accepts a Google sign-up, the form stays locked
+  for the navigation; if the page is still there ten seconds later it unlocks
+  and says it is taking longer than expected (nothing is known to have
+  failed).
 - **No state is a dead end.** The form unlocks on every Clerk error. If Clerk
-  has created the account but the sign-in that follows fails, the card says
-  "Your account is ready" and offers "Try again" (which retries the sign-in
+  has created the account but the visitor is not signed in yet (the sign-in
+  failed, or never navigated, or the page was reloaded in between), the card
+  says "Your account is ready" and offers "Continue" (which calls the sign-in
   only) and the sign-in page; it does not show the first step, which would
-  start a second sign-up for an address that now has an account. If
-  Clerk accepts a Google sign-up but the browser has not left for Google after
-  ten seconds, the form unlocks and says something went wrong. If the visitor
+  start a second sign-up for an address that now has an account. If the visitor
   comes back from Google and Clerk's callback handler sends them nowhere
   (it calls none of its handlers for a sign-up that still needs a field this
   form does not have), the callback page says after ten seconds that it is

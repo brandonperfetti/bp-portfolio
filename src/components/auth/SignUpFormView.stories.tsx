@@ -185,8 +185,8 @@ export const VerifyEmailErrorDark: Story = {
 }
 
 /**
- * Rare: Clerk created the account but the sign-in that follows failed. The
- * card offers a retry, not the first step, which would start a second
+ * Rare: Clerk created the account but the visitor is not signed in yet. The
+ * card offers the sign-in, not the first step, which would start a second
  * sign-up for an address that now has an account.
  */
 export const FinishSignIn: Story = {
@@ -196,7 +196,7 @@ export const FinishSignIn: Story = {
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
-    await userEvent.click(canvas.getByRole('button', { name: 'Try again' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Continue' }))
     await expect(args.onFinish).toHaveBeenCalled()
   },
 }

@@ -260,8 +260,8 @@ describe('SignUpFormView, email-code step', () => {
   })
 
   it('focuses the code field when the step unlocks, having first rendered locked', () => {
-    // How the step really arrives: Clerk reports "needs a code" while the
-    // code is still being sent, so the first render is disabled.
+    // A transition the view supports, though `SignUpForm` now holds the
+    // first step until the code is sent: the step rendered locked.
     const { rerender, props } = verify({ pending: true })
     const code = screen.getByLabelText('Verification code')
     expect(code).toBeDisabled()
@@ -334,7 +334,7 @@ describe('SignUpFormView, finish step', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
     expect(props.onFinish).toHaveBeenCalledOnce()
     expect(
       new URL(

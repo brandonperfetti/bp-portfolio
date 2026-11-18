@@ -42,14 +42,17 @@ export const PASSWORD_MIN_LENGTH = 15
  * page having gone.
  *
  * @remarks Leaving normally takes well under a second. If the page is still
- * here after this long, it did not happen, and a form locked for good would
- * be a dead end; it unlocks so the visitor can try again.
+ * here after this long, a form locked for good would be a dead end; it
+ * unlocks and says it is taking long, so the visitor can act. It does not
+ * say anything failed: the timer only knows the page is still here.
  */
 export const LEAVE_TIMEOUT_MS = 10_000
 
 const UNFINISHED_MESSAGE =
   "We couldn't finish creating your account here. Please try again, or sign up with Google."
 const UNEXPECTED_MESSAGE = 'Something went wrong. Please try again.'
+/** For a navigation that has not happened yet: nothing is known to have failed. */
+const SLOW_MESSAGE = 'This is taking longer than expected.'
 
 type Message = { message: string; longMessage?: string } | null | undefined
 
@@ -81,12 +84,14 @@ const text = (error: Message): string | undefined =>
  * "Use a different email" discards the attempt (`signUp.reset()`), so its
  * tick does not outlive it.
  *
- * **Which step shows** is read from Clerk's sign-up, not kept here, so a
- * reload on the code step stays on the code step. A sign-up Clerk has
- * completed but whose sign-in failed (`finalize()` returned an error) shows
- * the `finish` step, which retries `finalize()` and nothing else; the first
- * step there would start a second sign-up for an address that now has an
- * account.
+ * **Which step shows** is read from Clerk's sign-up, so a reload on the
+ * code step stays on the code step. The one thing kept here is `heldStep`:
+ * while a request is in flight the card shows the step it was sent from. A
+ * sign-up Clerk has completed without the visitor being signed in yet
+ * (`finalize()` returned an error, the navigation after it never happened,
+ * or the page was reloaded in between) shows the `finish` step, which calls
+ * `finalize()` and nothing else; the first step there would start a second
+ * sign-up for an address that now has an account.
  *
  * **Still fail-closed:** a Google sign-up that turns out to be an existing
  * account is signed in by the callback page and the list is not touched; an
@@ -116,7 +121,16 @@ export function SignUpForm({
   const [busy, setBusy] = useState(false)
   const inFlight = useRef(false)
   const leaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  useEffect(() => () => clearTimeout(leaveTimer.current), [])
+  // A Clerk call can settle after the page has gone; `run` must not arm a
+  // timer then, since this cleanup has already run.
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      clearTimeout(leaveTimer.current)
+    }
+  }, [])
   const [localErrors, setLocalErrors] = useState<string[]>([])
   const [notice, setNotice] = useState<string>()
   // Unknown until mounted: the server render accepts a path only, and a
@@ -183,11 +197,13 @@ export function SignUpForm({
       setLocalErrors([UNEXPECTED_MESSAGE])
     } finally {
       if (stayLocked) {
-        leaveTimer.current = setTimeout(() => {
-          inFlight.current = false
-          setBusy(false)
-          setLocalErrors([UNEXPECTED_MESSAGE])
-        }, leaveTimeoutMs)
+        if (mounted.current) {
+          leaveTimer.current = setTimeout(() => {
+            inFlight.current = false
+            setBusy(false)
+            setLocalErrors([SLOW_MESSAGE])
+          }, leaveTimeoutMs)
+        }
       } else {
         inFlight.current = false
         setBusy(false)

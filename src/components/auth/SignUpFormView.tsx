@@ -54,7 +54,7 @@ export type SignUpFormViewProps = {
   onVerify: (code: string) => void
   onResend: () => void
   onUseDifferentEmail: () => void
-  /** Try again to sign in to the account just created (`finish` step). */
+  /** Sign in to the account just created (`finish` step). */
   onFinish: () => void
 }
 
@@ -94,9 +94,11 @@ function readOptIn(form: HTMLFormElement | null): boolean {
  * effect.
  *
  * **The `finish` step** is for one rare state: Clerk has created the account
- * but the last call, the one that signs the visitor in, failed. Showing the
- * first step again there would invite a second sign-up for an address that
- * now has an account, so the card offers the one thing left to do.
+ * but the visitor is not signed in yet (the last call failed, or the page
+ * was reloaded before it). Showing the first step again there would invite a
+ * second sign-up for an address that now has an account, so the card offers
+ * the one thing left to do. Its copy claims no failure; a known reason shows
+ * as an error above the button.
  *
  * `#clerk-captcha` is where clerk-js mounts its bot check when the instance
  * asks for a visible one; it stays empty otherwise.
@@ -321,9 +323,8 @@ function VerifyStep({
   const codeRef = useRef<HTMLInputElement>(null)
 
   // Arriving on this step, and every rejected code, lands on the code field.
-  // The step first renders while the code is still being sent (`pending`),
-  // when the disabled field cannot take focus, so this runs again when the
-  // form unlocks.
+  // A disabled field cannot take focus, so this also runs when the step
+  // unlocks after a request made from it (a rejected code, a new code).
   useEffect(() => {
     if (!pending) codeRef.current?.focus()
   }, [pending, errors.code])
@@ -428,14 +429,14 @@ function FinishStep({
           Your account is ready
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          We created your account but couldn&apos;t sign you in.
+          One more step to sign you in.
         </p>
       </div>
 
       <fieldset disabled={pending} className="mt-6 flex min-w-0 flex-col gap-5">
         <GlobalErrors messages={errors.global} />
         <Button type="submit" className="w-full">
-          {pending ? 'Signing in…' : 'Try again'}
+          {pending ? 'Signing in…' : 'Continue'}
         </Button>
       </fieldset>
 
