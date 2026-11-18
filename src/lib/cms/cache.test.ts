@@ -26,16 +26,18 @@ describe('CMS_TAGS vocabulary', () => {
       navigation: 'global_navigation', // src/lib/cms/navigationRepo.ts
       identity: 'global_identity', // src/lib/cms/identityRepo.ts
       consent: 'global_cookie-consent', // src/lib/cms/consentRepo.ts
+      footer: 'global_footer', // src/lib/cms/footerRepo.ts
     })
   })
 
-  it('has no dead footer tag (#104): the footer global carries no cached reader', () => {
-    // src/components/Footer.tsx renders the static nav fallback and nothing
-    // reads the `footer` global via a cached reader, so no tag caches under
-    // `global_footer`. The dead `revalidateGlobal('footer')` hook was removed
-    // in src/globals/Footer.ts; if the footer is ever wired to a cached reader,
-    // add `footer: 'global_footer'` here and restore the hook.
-    expect('footer' in CMS_TAGS).toBe(false)
+  it('has a footer tag again, now that the footer global has a cached reader (#363)', () => {
+    // #104 removed a `revalidateGlobal('footer')` hook that purged a tag no
+    // reader subscribed to, and pinned here that no such tag existed. #363
+    // wired the footer to `getCmsFooterLinks`, which caches under this tag,
+    // and restored the hook: `revalidateGlobal(slug)` purges `global_<slug>`,
+    // so the value must stay exactly this. Reader and hook are compared
+    // against each other in cacheTags.test.ts and Footer.test.ts.
+    expect(CMS_TAGS.footer).toBe('global_footer')
   })
 
   it('redirects reader subscribes to the tag revalidateRedirects purges', () => {

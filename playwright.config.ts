@@ -1,6 +1,47 @@
 import { defineConfig, devices } from '@playwright/test'
 
+import { GOOGLE_HOSTS, TAG_SCRIPT_HOST } from './e2e/support/google-hosts'
+
 const isCi = Boolean(process.env.CI)
+
+/**
+ * Hosts Google's tag and its measurement endpoints are served from, made
+ * unresolvable for every browser this suite launches (#361).
+ *
+ * @remarks CI builds the e2e target with Google Analytics configured, so the
+ * consent proof (`e2e/consent-google-analytics.spec.ts`) runs against a build
+ * that really registers the tag. That same build serves every other spec, and
+ * the suite's default geo is one where consent is not required, so the app
+ * would ask Google for gtag.js on their pages too. A per-spec request
+ * interceptor cannot cover specs that never install one; a resolver rule on
+ * the browser does, before any connection is attempted. Playwright's own
+ * `route` handlers run ahead of DNS, so the consent spec can still answer
+ * these requests itself.
+ *
+ * `GA_E2E_LIVE=1`, the hand-run mode that observes the real tag
+ * (`docs/ANALYTICS.md`), keeps every rule and adds one exception: the exact
+ * host gtag.js is served from. The rest of that domain and the measurement
+ * hosts stay unresolvable there too, so a hit the consent spec's interceptor
+ * somehow missed still has nowhere to go, and running the whole suite in that
+ * mode by mistake loads the tag but delivers no measurement hit.
+ *
+ * `^NOTFOUND` is the value Chromium's resolver treats as "fail this lookup"
+ * (`net/dns/mapped_host_resolver.cc`): the request fails with
+ * `ERR_NAME_NOT_RESOLVED` without a DNS query being made. The list of hosts is
+ * shared with the consent spec's interceptor (`e2e/support/google-hosts.ts`).
+ *
+ * Chromium-only: a Firefox or WebKit project would need its own block, and
+ * this argument would have to move into the `chromium` project.
+ */
+const blockGoogleHosts = [
+  `--host-resolver-rules=${[
+    ...GOOGLE_HOSTS.flatMap((host) => [
+      `MAP ${host} ^NOTFOUND`,
+      `MAP *.${host} ^NOTFOUND`,
+    ]),
+    ...(process.env.GA_E2E_LIVE === '1' ? [`EXCLUDE ${TAG_SCRIPT_HOST}`] : []),
+  ].join(', ')}`,
+]
 
 export default defineConfig({
   testDir: './e2e',
@@ -35,13 +76,12 @@ export default defineConfig({
     contextOptions: { reducedMotion: 'reduce' },
     // Sandboxed/cloud agents pin a preinstalled Chromium via env; CI and
     // local runs resolve Playwright's own managed browser when unset.
-    ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH
-      ? {
-          launchOptions: {
-            executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH,
-          },
-        }
-      : {}),
+    launchOptions: {
+      args: blockGoogleHosts,
+      ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH
+        ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH }
+        : {}),
+    },
   },
   projects: [
     {

@@ -3,6 +3,7 @@ import { Webhook } from 'svix'
 
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
 import { captureContact } from '@/lib/email/captureContact'
+import { hasMailingListOptIn } from '@/lib/email/mailingListOptIn'
 import {
   forgetResendContact,
   recallResendContact,
@@ -55,11 +56,17 @@ import { boundedErrorMessage } from '@/lib/observability/boundedErrorMessage'
  * truth; `external_id` stays the mapping for the *live* user (dashboard
  * visible, and what the backfill and `user.updated` read).
  *
- * - `user.created` — capture, then map. The `external_id` write is skipped
- *   when one is already set, so a Clerk redelivery never rewrites it; the
- *   mirror is written on BOTH paths, so a redelivery or a user mapped by the
- *   backfill before the mirror existed converges instead of staying
- *   half-mapped. Every mapping write is best-effort and never fails the ack.
+ * - `user.created` — for a sign-up that opted in (#362): capture, then map.
+ *   The `external_id` write is skipped when the PAYLOAD already carries one;
+ *   the mirror is written on BOTH paths, so a delivery whose payload carries
+ *   `external_id` reconciles the mirror. A replay carries the user as it was
+ *   when the event fired, not the live user: for a user mapped after the
+ *   event it holds no `external_id`. Without the opt-in such a replay is a
+ *   no-op and repairs nothing (the backfill does that). With the opt-in it
+ *   takes the capture path again: it looks the contact up and writes
+ *   `external_id` and the mirror, with the same id while the contact is the
+ *   same.
+ *   Every mapping write is best-effort and never fails the ack.
  * - `user.deleted` — resolve the contact from the mirror by `data.id`, then
  *   REMOVE it and drop the mirror key. Deliberately not a Resend suppression:
  *   a suppression blocks *all* mail to that address including transactional
@@ -88,9 +95,18 @@ import { boundedErrorMessage } from '@/lib/observability/boundedErrorMessage'
  * `@/lib/email/resendContactMirror`; both are usable, and testable, without
  * constructing a signed webhook delivery.
  *
- * @remarks Consent: the sign-up flow presents Clerk's legal/marketing consent;
- * TODO(brandon): if you enable a granular marketing opt-in field in Clerk,
- * read it from `public_metadata` here and skip non-consenting users.
+ * ## Consent: only a ticked box joins the list (#362)
+ *
+ * The sign-up screen carries an unticked mailing-list checkbox
+ * (`@/components/auth/SignUpWithOptIn`) whose state travels through Clerk as
+ * `unsafeMetadata` and arrives here as the created user's `unsafe_metadata`.
+ * `user.created` captures a contact only when it reads a literal `true` there
+ * (`hasMailingListOptIn`). Until #362 every sign-up was captured.
+ *
+ * Nothing here removes anyone. An account already on the list is recognised
+ * by its `external_id` mapping, not by the opt-in flag it predates, so
+ * `user.updated` and `user.deleted` behave for it exactly as before; an
+ * account that never joined has no mapping and those two events no-op.
  */
 export async function POST(req: Request) {
   if (!isClerkEnabled()) {
@@ -114,6 +130,20 @@ export async function POST(req: Request) {
     event = new Webhook(secret).verify(payload, headers) as typeof event
   } catch {
     return Response.json({ error: 'Invalid signature' }, { status: 400 })
+  }
+
+  // A signed delivery whose `data` is not an object (`null`, a string) has
+  // nothing any handler can read, and never will: acknowledge it. Left to the
+  // handlers it throws on the first property read, the route answers 500, and
+  // Clerk redelivers the same malformed message indefinitely.
+  if (
+    event === null ||
+    typeof event !== 'object' ||
+    event.data === null ||
+    typeof event.data !== 'object'
+  ) {
+    console.warn('[clerk-webhook] delivery carried no data object; ignored')
+    return Response.json({ received: true })
   }
 
   switch (event.type) {
@@ -263,29 +293,62 @@ async function writeExternalId(
  * @remarks The `captureContact` call shape is unchanged from #74 — capture
  * still owns segment assignment, duplicate-swallowing and the no-key warning.
  *
- * The `external_id` write is skipped when one is already set, so a redelivery
- * cannot rewrite an established link. **The mirror write is not skipped**: it
- * is the reconcile path. An already-set `external_id` is exactly the state of
- * every user the backfill mapped before the mirror existed, and of any user
- * whose mirror write failed on a previous delivery — for them the contact id
- * is right there in the payload, so redelivering `user.created` (or any Clerk
- * dashboard resend) is enough to converge, with no second Clerk write.
+ * **Capture happens only for a sign-up that opted in (#362).** Without the
+ * opt-in and without an existing mapping there is nothing to do, and the
+ * handler returns before any Resend, Clerk or Redis call: no contact, no
+ * `external_id`, no mirror key, on the first delivery and on every
+ * redelivery. Without the opt-in but WITH a mapping, the user is an existing
+ * member (every account older than #362 lacks the flag): the reconcile below
+ * still runs, because their eventual `user.deleted` depends on the mirror,
+ * and capture does not, because re-adding the address would undo a removal
+ * made by hand.
+ *
+ * One recovery path closed with this, on purpose: a replay of a pre-#362
+ * `user.created` carries the original payload, with neither the flag nor an
+ * `external_id`, and is now a no-op where it used to re-capture and re-map.
+ * It cannot be told from a new sign-up that declined, and consent is not
+ * inferred from an address. `scripts/backfill-clerk-resend-mapping.ts` is the
+ * repair for a legacy member left unmapped (`docs/AUTH.md`).
+ *
+ * The `external_id` write is skipped when the payload carries one. That says
+ * nothing about the live user: an opted-in replay of an event that predates
+ * the mapping has none in its payload and writes `external_id` again.
+ * **The mirror write is not skipped**: it is the reconcile path, and it
+ * repairs the mirror only for a delivery whose PAYLOAD carries `external_id`.
+ * A replay resends the original message, which holds the user as it was when
+ * the event fired: a user mapped later (by this handler's own write, or by
+ * the backfill) has the id on the live Clerk user and not in that payload, so
+ * a replay does not reach this path for them. Their mirror is repaired by
+ * re-running the backfill, which reads each user's `external_id` from Clerk
+ * when it plans (`docs/AUTH.md`).
  */
 async function handleUserCreated(data: ClerkUserData): Promise<void> {
   const email = primaryEmail(data)
   if (!email) return
 
-  const { firstName, lastName } = nameParts(data)
-
-  // captureContact logs + swallows every failure, so this always 200s:
-  // Clerk retries are not useful for a bad Resend config, and a
-  // duplicate-contact error on webhook redelivery is expected noise.
-  await captureContact({ email, firstName, lastName })
-
   const userId = nonEmptyStringField(data, 'id')
+  const mappedContactId = nonEmptyStringField(data, 'external_id')
+  const optedIn = hasMailingListOptIn(data.unsafe_metadata)
+
+  if (!optedIn && !mappedContactId) {
+    console.info(
+      '[clerk-webhook] user.created without the mailing-list opt-in; no contact captured',
+      { userId },
+    )
+    return
+  }
+
+  if (optedIn) {
+    const { firstName, lastName } = nameParts(data)
+
+    // captureContact logs + swallows every failure, so this always 200s:
+    // Clerk retries are not useful for a bad Resend config, and a
+    // duplicate-contact error on webhook redelivery is expected noise.
+    await captureContact({ email, firstName, lastName })
+  }
+
   if (!userId) return
 
-  const mappedContactId = nonEmptyStringField(data, 'external_id')
   if (mappedContactId) {
     console.info('[clerk-webhook] external_id already set; mapping skipped', {
       userId,
@@ -314,9 +377,10 @@ async function handleUserCreated(data: ClerkUserData): Promise<void> {
  *
  * @remarks Never throws and never affects the response. A user with an
  * `external_id` but no mirror is still fully functional today — only their
- * eventual `user.deleted` degrades to the logged no-op — and the next
- * `user.created` redelivery reconciles them, so a failure here is recoverable
- * noise rather than a reason to make Clerk retry.
+ * eventual `user.deleted` degrades to the logged no-op — and re-running the
+ * backfill rewrites the mirror from the mapping it read when it planned (run
+ * it when no primary email is changing mid-run), so a failure here is
+ * recoverable noise rather than a reason to make Clerk retry.
  */
 async function mirrorContact(
   userId: string,

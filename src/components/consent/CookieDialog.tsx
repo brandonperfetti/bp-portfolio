@@ -26,7 +26,7 @@ import {
  * Copy and the offered categories are CMS-driven ({@link useConsentConfig});
  * only enabled categories render, each bound to its c15t consent name. Defaults
  * reproduce today's two-row (Essential always-on + Analytics) dialog and its
- * disclosure copy (the Consent Mode v2 cookieless-ping caveat, the
+ * disclosure copy (Google Analytics loading only on a grant, #361, and the
  * Clerk/Turnstile essential-cookie note) — resolving the code-review disclosure
  * gap (Sp-2). Reject/Save/Accept are explicit choices, so they clear the #103
  * auto-grant marker ({@link markExplicitConsentChoice}). See docs/ANALYTICS.md.

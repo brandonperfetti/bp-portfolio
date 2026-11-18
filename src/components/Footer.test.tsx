@@ -61,6 +61,93 @@ describe('FooterWithNavigation', () => {
     ).toBeInTheDocument()
   })
 
+  it('renders exactly the same markup with no footer links as with the prop left out (#363)', () => {
+    const without = render(
+      <FooterWithNavigation navigationItems={navigationItems} />,
+    )
+    const withoutHtml = without.container.innerHTML
+    without.unmount()
+
+    const empty = render(
+      <FooterWithNavigation
+        navigationItems={navigationItems}
+        footerLinks={[]}
+      />,
+    )
+
+    expect(empty.container.innerHTML).toBe(withoutHtml)
+  })
+
+  it('renders the CMS footer links after the nav items and before the consent entry point (#363)', () => {
+    render(
+      <FooterWithNavigation
+        navigationItems={navigationItems}
+        footerLinks={[
+          { href: '/privacy', label: 'Privacy' },
+          { href: 'https://example.test/elsewhere', label: 'Elsewhere' },
+        ]}
+      />,
+    )
+
+    const row = screen.getByRole('link', { name: 'About' }).parentElement!
+    expect(Array.from(row.children).map((child) => child.textContent)).toEqual([
+      'About',
+      'Articles',
+      'Privacy',
+      'Elsewhere',
+      'Manage cookies',
+    ])
+    expect(screen.getByRole('link', { name: 'Privacy' })).toHaveAttribute(
+      'href',
+      '/privacy',
+    )
+    // An off-site link opens the way every other external link here does.
+    const external = screen.getByRole('link', { name: 'Elsewhere' })
+    expect(external).toHaveAttribute('target', '_blank')
+    expect(external.getAttribute('rel')).toContain('noopener')
+  })
+
+  it('does not repeat a footer link that points where a nav item already does', () => {
+    render(
+      <FooterWithNavigation
+        navigationItems={navigationItems}
+        footerLinks={[
+          { href: '/about', label: 'About me' },
+          { href: '/privacy', label: 'Privacy' },
+          { href: '/privacy', label: 'Privacy again' },
+        ]}
+      />,
+    )
+
+    // The navigation item is the one that stays.
+    expect(screen.getByRole('link', { name: 'About' })).toHaveAttribute(
+      'href',
+      '/about',
+    )
+    expect(
+      screen.queryByRole('link', { name: 'About me' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Privacy' })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Privacy again' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('renders nothing on the /corvus chat surface, footer links included', () => {
+    mockPathname = '/corvus'
+    const { container } = render(
+      <FooterWithNavigation
+        navigationItems={navigationItems}
+        footerLinks={[{ href: '/privacy', label: 'Privacy' }]}
+      />,
+    )
+
+    expect(container.querySelector('footer')).toBeNull()
+    expect(
+      screen.queryByRole('link', { name: 'Privacy' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('renders nothing on the /corvus chat surface', () => {
     mockPathname = '/corvus'
     const { container } = render(

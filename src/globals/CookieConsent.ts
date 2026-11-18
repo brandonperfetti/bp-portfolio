@@ -2,7 +2,10 @@ import type { GlobalConfig } from 'payload'
 
 import { anyone } from '@/access/anyone'
 import { authenticated } from '@/access/authenticated'
-import { DEFAULT_CONSENT_CONFIG } from '@/components/consent/consent-content'
+import {
+  DEFAULT_CONSENT_CONFIG,
+  SUPERSEDED_ANALYTICS_SUBTITLE,
+} from '@/components/consent/consent-content'
 import { revalidateGlobal } from '@/hooks/revalidateGlobal'
 
 const D = DEFAULT_CONSENT_CONFIG
@@ -256,7 +259,14 @@ export const CookieConsent: GlobalConfig = {
             {
               name: 'subtitle',
               type: 'textarea',
-              defaultValue: cat('analytics').subtitle,
+              // The pre-#361 sentence on purpose: this value is the column
+              // default in the database, so changing it is a migration. The
+              // reader swaps it for the current default; see the constant.
+              defaultValue: SUPERSEDED_ANALYTICS_SUBTITLE,
+              admin: {
+                description:
+                  'If this still reads "Google Analytics 4 via Consent Mode v2. Before you grant it…", the site does not show it: that sentence stopped being true when Google Analytics became consent-gated, so the dialog shows the current default instead. Any other text you save here is shown exactly as written.',
+              },
             },
           ],
         },

@@ -24,4 +24,5 @@ export const CMS_TAGS = {
   navigation: 'global_navigation',
   identity: 'global_identity',
   consent: 'global_cookie-consent',
+  footer: 'global_footer',
 } as const

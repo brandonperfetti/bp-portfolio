@@ -228,10 +228,28 @@ jobs:
         run: pnpm exec vitest run --root evals
       - name: Install Playwright browser (Chromium)
         run: pnpm exec playwright install --with-deps chromium
+      # #361: Google Analytics is registered only on a production-target build
+      # with a measurement id, and both values are inlined at build time. With
+      # neither set the build holds no Google code, and the spec proving that
+      # nothing reaches Google before consent
+      # (e2e/consent-google-analytics.spec.ts) would pass for the wrong reason,
+      # so it fails instead. The id is a placeholder. This build serves every
+      # e2e spec, not only that one, so what keeps CI from contacting Google
+      # is suite-wide: playwright.config.ts makes Google's tag and measurement
+      # hosts unresolvable in every browser it launches, and the consent spec
+      # answers its own requests to them. Scoped to these two steps so
+      # migrations, the seed and the pg tier keep running with no deployment
+      # target named.
       - name: Build
         run: pnpm build
+        env:
+          NEXT_PUBLIC_VERCEL_ENV: production
+          NEXT_PUBLIC_GA_MEASUREMENT_ID: G-E2E0000000
       - name: E2E tests (Playwright)
         run: pnpm test:e2e
+        env:
+          NEXT_PUBLIC_VERCEL_ENV: production
+          NEXT_PUBLIC_GA_MEASUREMENT_ID: G-E2E0000000
       - name: Storybook interaction tests (Vitest browser mode)
         run: pnpm test:storybook
       - name: Upload Playwright report

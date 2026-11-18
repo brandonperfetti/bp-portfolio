@@ -1,7 +1,19 @@
 # Navigation & routes
 
-Header/footer links come from the `Navigation` and `Footer` globals (Payload),
-with hard-coded fallbacks. The command palette mirrors primary nav.
+Header links come from the `Navigation` global (Payload), with a hard-coded
+fallback. The command palette mirrors primary nav.
+
+**The footer shows two lists in one row** (#363): the header navigation items,
+then the footer-only links from the `Footer` global's `links` array, then the
+"Manage Cookies" button. A footer link is added after the navigation, never
+in place of it, and a link whose `href` is already in the row is not repeated.
+With `links` empty the footer is the navigation items and "Manage Cookies",
+as it was before the array was read. A link's `href` must be a site path
+(`/privacy`), an `http(s)` URL or a `mailto:` address; anything else is not
+rendered. Reader: `getCmsFooterLinks` (`src/lib/cms/footerRepo.ts`), cached
+under `global_footer` and purged when the global is saved, so a new link
+shows without a deploy. The global's `copyrightName` is not read; the
+copyright line is hard-coded.
 
 ## Route table (`src/app/(frontend)/`)
 

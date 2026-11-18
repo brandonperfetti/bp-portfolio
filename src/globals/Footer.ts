@@ -2,19 +2,24 @@ import type { GlobalConfig } from 'payload'
 
 import { anyone } from '@/access/anyone'
 import { authenticated } from '@/access/authenticated'
+import { revalidateGlobal } from '@/hooks/revalidateGlobal'
 
 /**
- * Footer navigation + copyright line.
+ * Footer-only links + copyright line.
  *
  * @remarks
- * No `afterChange` revalidation hook (#104): the footer is rendered from the
- * static nav fallback (`src/components/Footer.tsx` → `PRIMARY_NAV_LINKS`) and
- * this global is not read through any cached reader, so nothing caches under a
- * `global_footer` tag. The previous `revalidateGlobal('footer')` hook purged a
- * tag no reader subscribed to (a dead purge, and `CMS_TAGS` has no `footer`
- * entry). If the footer is ever wired to a cached reader, add
- * `CMS_TAGS.footer = 'global_footer'`, cache the reader under it, and restore
- * the hook.
+ * `links` is read by `getCmsFooterLinks` (`src/lib/cms/footerRepo.ts`), cached
+ * under `CMS_TAGS.footer` (`global_footer`), and rendered by the site footer
+ * after the header navigation items (#363). The `afterChange` hook purges that
+ * tag, so a saved link shows without a deploy.
+ *
+ * History: #104 removed this hook when nothing read the global, because it
+ * purged a tag no reader subscribed to. #363 added the reader and restored
+ * it; the two belong together, and `Footer.test.ts` and `cacheTags.test.ts`
+ * pin that the hook purges the tag the reader caches under.
+ *
+ * `copyrightName` is still read by nothing: the footer's copyright line is
+ * hard-coded in `src/components/Footer.tsx`.
  */
 export const Footer: GlobalConfig = {
   slug: 'footer',
@@ -37,4 +42,7 @@ export const Footer: GlobalConfig = {
       defaultValue: 'Brandon Perfetti',
     },
   ],
+  hooks: {
+    afterChange: [revalidateGlobal('footer')],
+  },
 }
