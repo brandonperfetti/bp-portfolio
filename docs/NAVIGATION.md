@@ -29,6 +29,7 @@ copyright line is hard-coded.
 | `/corvus`                                  | —                             | AI chat surface                      |
 | `/thank-you`                               | —                             | Post-contact landing                 |
 | `/sign-in`, `/sign-up`, `/account`         | Clerk                         | Render only when Clerk enabled       |
+| `/sign-up/sso-callback`                    | Clerk                         | Where Google returns to (#377)       |
 | `/next/preview`, `/next/exit-preview`      | —                             | Draft preview (admin session)        |
 | `/feed.xml`, `/llms.txt`, `/llms-full.txt` | route handlers                |                                      |
 | `/[...segments]`                           | Pages, then Posts, by `path`  | Page-builder catch-all — see below   |

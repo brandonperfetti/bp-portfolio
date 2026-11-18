@@ -1,0 +1,292 @@
+import {
+  expect,
+  test,
+  type Page,
+  type Request,
+  type Route,
+} from '@playwright/test'
+
+import { interactUntil } from './support/hydration'
+
+/**
+ * #377 — the mailing-list tick reaches Clerk with the request that starts the
+ * sign-up, for email and password and for Google, and cannot be changed once
+ * that request is in flight.
+ *
+ * The unit tests pin what the form hands to Clerk's hooks. This is the hop
+ * after that, which only a browser can show: the real clerk-js, loaded on the
+ * built site, putting that value in the request it sends. #373 left that hop
+ * unproven for Clerk's prebuilt form.
+ *
+ * ## Nothing reaches Clerk's sign-up endpoint: no account, no email
+ *
+ * Every write to `/v1/client/sign_ups` (the create, and anything under it) is
+ * intercepted before it leaves the browser. The spec reads the request body,
+ * then answers it itself with a Clerk-shaped error, so the form is seen to
+ * unlock and show the error too. No sign-up attempt, no user, no verification
+ * email and no Resend contact can come of it. The addresses typed are
+ * `example.com`'s.
+ *
+ * clerk-js itself, and its read-only calls (the instance settings, the
+ * browser's client record), do reach the Clerk instance the build is
+ * configured with, as they do on every page of every other spec.
+ *
+ * ## The build must have Clerk configured
+ *
+ * Without both Clerk keys the page renders a "not configured" notice and
+ * there is no form to drive. CI sets them from secrets on the e2e job; this
+ * spec **fails** there when they are missing, and skips locally with the
+ * reason. A skip is not proof.
+ */
+
+const CLERK_CONFIGURED =
+  Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) &&
+  Boolean(process.env.CLERK_SECRET_KEY)
+
+const OPT_IN_LABEL =
+  'Keep me posted when new articles are published. Unsubscribe anytime.'
+
+const isSignUpWrite = (request: Request): boolean => {
+  if (request.method() === 'GET' || request.method() === 'OPTIONS') return false
+  try {
+    return /\/v1\/client\/sign_ups(\/|$)/.test(new URL(request.url()).pathname)
+  } catch {
+    return false
+  }
+}
+
+/** The form-encoded body of an intercepted sign-up request. */
+const bodyOf = (request: Request): URLSearchParams =>
+  new URLSearchParams(request.postData() ?? '')
+
+/** What the request carries as `unsafe_metadata`, parsed. */
+const unsafeMetadataOf = (request: Request): unknown => {
+  const raw = bodyOf(request).get('unsafe_metadata')
+  return raw === null ? undefined : JSON.parse(raw)
+}
+
+type Intercepted = {
+  /** Every sign-up write the page attempted, in order. */
+  requests: Request[]
+  /** Resolves with the first one. */
+  first: Promise<Request>
+  /** Lets the held request be answered. */
+  release: () => void
+}
+
+/**
+ * Catches every sign-up write, holds it "in flight" until `release()`, then
+ * answers it with an error clerk-js understands. Nothing is forwarded.
+ */
+async function interceptSignUpWrites(
+  page: Page,
+  error: { code: string; message: string; param?: string },
+): Promise<Intercepted> {
+  const requests: Request[] = []
+  let resolveFirst!: (request: Request) => void
+  const first = new Promise<Request>((resolve) => {
+    resolveFirst = resolve
+  })
+  let release!: () => void
+  const released = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  await page.route(
+    (url) => /\/v1\/client\/sign_ups(\/|$)/.test(url.pathname),
+    async (route: Route) => {
+      const request = route.request()
+      if (!isSignUpWrite(request)) return route.continue()
+      requests.push(request)
+      resolveFirst(request)
+      await released
+      await route.fulfill({
+        status: 422,
+        contentType: 'application/json',
+        headers: {
+          'access-control-allow-origin': new URL(page.url()).origin,
+          'access-control-allow-credentials': 'true',
+        },
+        body: JSON.stringify({
+          errors: [
+            {
+              code: error.code,
+              message: error.message,
+              long_message: error.message,
+              ...(error.param ? { meta: { param_name: error.param } } : {}),
+            },
+          ],
+          clerk_trace_id: 'e2e-intercepted',
+        }),
+      })
+    },
+  )
+  return { requests, first, release }
+}
+
+const optIn = (page: Page) => page.getByRole('checkbox', { name: OPT_IN_LABEL })
+
+/** Opens `/sign-up` and waits until the form's handlers are attached. */
+async function openForm(page: Page) {
+  await page.goto('/sign-up')
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Create your account' }),
+  ).toBeVisible()
+  // Ticking and unticking is idempotent, and only a hydrated form reacts.
+  await interactUntil(async () => {
+    await optIn(page).check()
+    await expect(optIn(page)).toBeChecked()
+  })
+  await optIn(page).uncheck()
+  await expect(optIn(page)).not.toBeChecked()
+}
+
+test.beforeEach(() => {
+  if (CLERK_CONFIGURED) return
+  const reason =
+    'this build has no Clerk: set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY for both the build and this run'
+  if (process.env.CI) throw new Error(`#377 proof cannot run: ${reason}`)
+  test.skip(true, reason)
+})
+
+test.describe('sign-up: the mailing-list tick travels with the request', () => {
+  test('the opt-in is inside the form, unticked, before both ways of signing up', async ({
+    page,
+  }) => {
+    await openForm(page)
+    const form = page.getByRole('form', { name: 'Create your account' })
+    await expect(
+      form.getByRole('checkbox', { name: OPT_IN_LABEL }),
+    ).toBeVisible()
+
+    const order = await form.evaluate((el) =>
+      Array.from(el.querySelectorAll('input, button, a')).map(
+        (control) =>
+          control.getAttribute('name') ??
+          control.getAttribute('aria-label') ??
+          control.textContent?.trim() ??
+          '',
+      ),
+    )
+    expect(order.slice(0, 4)).toEqual([
+      'mailingListOptIn',
+      'Continue with Google',
+      'emailAddress',
+      'password',
+    ])
+  })
+
+  test('email and password, ticked: the request carries a literal true, and the box is locked while it is in flight', async ({
+    page,
+  }) => {
+    const intercepted = await interceptSignUpWrites(page, {
+      code: 'form_param_format_invalid',
+      message: 'Intercepted by the e2e spec: nothing was sent to Clerk.',
+      param: 'email_address',
+    })
+    await openForm(page)
+
+    await page.getByLabel('Email address').fill('ticked-reader@example.com')
+    await page.getByLabel('Password').fill('a long enough e2e password')
+    await optIn(page).check()
+    await page.getByRole('button', { name: 'Continue', exact: true }).click()
+
+    const request = await intercepted.first
+    expect(request.method()).toBe('POST')
+    expect(bodyOf(request).get('email_address')).toBe(
+      'ticked-reader@example.com',
+    )
+    expect(unsafeMetadataOf(request)).toEqual({ mailingListOptIn: true })
+
+    // The request is still in flight. The visitor tries to untick: the box
+    // is disabled, so it stays as it was sent.
+    await expect(optIn(page)).toBeDisabled()
+    await optIn(page).click({ force: true })
+    await expect(optIn(page)).toBeChecked()
+    await expect(
+      page.getByRole('button', { name: 'Continue with Google' }),
+    ).toBeDisabled()
+
+    // Answered with an error: the form unlocks and shows it under the field.
+    intercepted.release()
+    await expect(optIn(page)).toBeEnabled()
+    await expect(
+      page.getByText('Intercepted by the e2e spec: nothing was sent to Clerk.'),
+    ).toBeVisible()
+    expect(intercepted.requests).toHaveLength(1)
+    await expect(page).toHaveURL(/\/sign-up\/?$/)
+  })
+
+  test('email and password, unticked: the request carries an explicit false', async ({
+    page,
+  }) => {
+    const intercepted = await interceptSignUpWrites(page, {
+      code: 'form_param_format_invalid',
+      message: 'Intercepted by the e2e spec: nothing was sent to Clerk.',
+      param: 'email_address',
+    })
+    await openForm(page)
+
+    await page.getByLabel('Email address').fill('unticked-reader@example.com')
+    await page.getByLabel('Password').fill('a long enough e2e password')
+    await page.getByRole('button', { name: 'Continue', exact: true }).click()
+
+    const request = await intercepted.first
+    expect(unsafeMetadataOf(request)).toEqual({ mailingListOptIn: false })
+    intercepted.release()
+    await expect(optIn(page)).toBeEnabled()
+    expect(intercepted.requests).toHaveLength(1)
+  })
+
+  test('Google, ticked: the request that starts it carries a literal true, and the box is locked while it is in flight', async ({
+    page,
+  }) => {
+    const intercepted = await interceptSignUpWrites(page, {
+      code: 'e2e_intercepted',
+      message: 'Intercepted by the e2e spec: nothing was sent to Clerk.',
+    })
+    await openForm(page)
+
+    await optIn(page).check()
+    await page.getByRole('button', { name: 'Continue with Google' }).click()
+
+    const request = await intercepted.first
+    expect(request.method()).toBe('POST')
+    const body = bodyOf(request)
+    expect(body.get('strategy')).toBe('oauth_google')
+    expect(unsafeMetadataOf(request)).toEqual({ mailingListOptIn: true })
+    // Google is told to come back to this site's callback page.
+    expect(new URL(body.get('redirect_url') ?? '').pathname).toBe(
+      '/sign-up/sso-callback',
+    )
+
+    await expect(optIn(page)).toBeDisabled()
+    await optIn(page).click({ force: true })
+    await expect(optIn(page)).toBeChecked()
+
+    intercepted.release()
+    await expect(optIn(page)).toBeEnabled()
+    expect(intercepted.requests).toHaveLength(1)
+    // The browser never left for Google.
+    await expect(page).toHaveURL(/\/sign-up\/?$/)
+  })
+
+  test('Google, unticked: the request carries an explicit false', async ({
+    page,
+  }) => {
+    const intercepted = await interceptSignUpWrites(page, {
+      code: 'e2e_intercepted',
+      message: 'Intercepted by the e2e spec: nothing was sent to Clerk.',
+    })
+    await openForm(page)
+
+    await page.getByRole('button', { name: 'Continue with Google' }).click()
+
+    const request = await intercepted.first
+    expect(bodyOf(request).get('strategy')).toBe('oauth_google')
+    expect(unsafeMetadataOf(request)).toEqual({ mailingListOptIn: false })
+    intercepted.release()
+    await expect(optIn(page)).toBeEnabled()
+    expect(intercepted.requests).toHaveLength(1)
+  })
+})
