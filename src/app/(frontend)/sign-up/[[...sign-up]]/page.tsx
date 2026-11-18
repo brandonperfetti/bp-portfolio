@@ -1,25 +1,25 @@
-import { SignUpWithOptIn } from '@/components/auth/SignUpWithOptIn'
+import { Suspense } from 'react'
+
+import { SignUpForm } from '@/components/auth/SignUpForm'
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
 
 export const metadata = { title: 'Sign up', robots: { index: false } }
 
-// #76 B3: Clerk's <SignUp> reads `usePathname()` (a client hook that blocks
-// prerender), and the route is noindex — opt out of prerender. Request-time
-// render; no SEO/static value lost.
+// #76 B3: the form reads the URL on the client (`useSearchParams`, which
+// blocks prerender), and the route is noindex — opt out of prerender.
+// Request-time render; no SEO/static value lost.
 export const instant = false
 
 /**
- * In-app, site-themed sign-up. An account joins the mailing list only when the
- * visitor ticks the opt-in beside the form (#362; `SignUpWithOptIn` carries
- * how that reaches the webhook). The email-code verification step is
- * part of the same `<SignUp>` flow, so it renders in-app and on-theme too —
- * it isn't a separate route.
+ * In-app sign-up, in the site's own markup (#377). An account joins the
+ * mailing list only when the visitor ticks the opt-in inside the form (#362;
+ * `SignUpForm` carries how that reaches the webhook). The email-code step is
+ * part of the same form, so it is not a separate route.
  *
- * @remarks `path`/`routing="path"` (set in `SignUpWithOptIn`) pin the component to this route's
- * optional catch-all segment (`[[...sign-up]]`), and `signInUrl` keeps its
- * "Sign in" cross-link on the app route. Both are explicit so routing stays
- * correct even if `NEXT_PUBLIC_CLERK_SIGN_IN_URL` is left unset — without
- * either, Clerk falls back to the unstyled hosted Account Portal (#96).
+ * @remarks The optional catch-all (`[[...sign-up]]`) stays although the form
+ * no longer routes by path: Clerk's prebuilt sign-in, which this release
+ * keeps, links and redirects to paths under `/sign-up/…`, and those must land
+ * on the form, not a 404. `/sign-up/sso-callback` is its own page.
  */
 export default function SignUpPage() {
   if (!isClerkEnabled()) {
@@ -30,8 +30,10 @@ export default function SignUpPage() {
     )
   }
   return (
-    <div className="flex justify-center py-16">
-      <SignUpWithOptIn />
+    <div className="flex justify-center px-4 py-16">
+      <Suspense fallback={null}>
+        <SignUpForm />
+      </Suspense>
     </div>
   )
 }

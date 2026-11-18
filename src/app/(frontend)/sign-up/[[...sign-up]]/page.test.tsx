@@ -1,49 +1,62 @@
 import { render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { MAILING_LIST_OPT_IN_LABEL } from '@/lib/email/mailingListOptIn'
+
 import SignUpPage from './page'
 
 /**
- * #96: sign-up (and its email-code verification step, part of the same
- * `<SignUp>` flow) must route in-app and on-theme instead of falling back
- * to Clerk's unstyled hosted Account Portal.
+ * The sign-up page mounts the site's own form (#377) when Clerk is
+ * configured, and a notice when it is not.
  *
- * `@clerk/nextjs` is mocked entirely — mounting the real `<SignUp>` needs a
- * live `ClerkProvider` plus a network round-trip
- * (`useEnforceCatchAllRoute`), neither of which exist in jsdom — matching
- * the existing mocking pattern for this module (see
- * `CorvusChat.test.tsx`). The mock renders the props it received so the
- * assertions below pin the actual routing contract this fix depends on:
- * `path`/`routing="path"` (this route's `[[...sign-up]]` catch-all) and
- * `signInUrl` (keeps the "Sign in" cross-link in-app regardless of whether
- * `NEXT_PUBLIC_CLERK_SIGN_IN_URL` is set).
+ * `@clerk/nextjs` is mocked: the real hook needs a live `ClerkProvider`. The
+ * form's behaviour is `SignUpForm.test.tsx`'s subject; this pins only that
+ * the page shows it, with the opt-in in it and unticked (#362), and that
+ * Clerk's prebuilt `<SignUp>` is no longer what renders.
  */
 vi.mock('@clerk/nextjs', () => ({
-  SignUp: (props: Record<string, unknown>) => (
-    <div data-testid="sign-up" data-props={JSON.stringify(props)} />
-  ),
+  useSignUp: () => ({
+    fetchStatus: 'idle',
+    errors: {
+      fields: { emailAddress: null, password: null, code: null, captcha: null },
+      global: null,
+      raw: null,
+    },
+    signUp: {
+      status: 'missing_requirements',
+      unverifiedFields: [],
+      missingFields: [],
+      emailAddress: null,
+    },
+  }),
+  SignUp: () => <div data-testid="clerk-prebuilt-sign-up" />,
 }))
 
-// `SignUpWithOptIn` reads the pathname to show its checkbox on the first step
-// only; that behaviour is its own suite's subject (`SignUpWithOptIn.test.tsx`).
-vi.mock('next/navigation', () => ({ usePathname: () => '/sign-up' }))
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}))
+
+vi.mock('next-themes', () => ({ useTheme: () => ({}) }))
 
 afterEach(() => {
   vi.unstubAllEnvs()
 })
 
 describe('SignUpPage', () => {
-  it('shows the "not configured" notice — not the Clerk component — when Clerk keys are absent', () => {
+  it('shows the "not configured" notice, not the form, when Clerk keys are absent', () => {
     vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', '')
     vi.stubEnv('CLERK_SECRET_KEY', '')
 
     render(<SignUpPage />)
 
     expect(screen.getByText(/sign-up isn.t configured/i)).toBeInTheDocument()
-    expect(screen.queryByTestId('sign-up')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Create your account' }),
+    ).not.toBeInTheDocument()
   })
 
-  it('renders the in-app <SignUp> pinned to /sign-up with the sign-in cross-link kept in-app, when Clerk is configured', () => {
+  it("renders the site's own form, with the opt-in inside it and unticked, when Clerk is configured", () => {
     vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_x')
     vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_x')
 
@@ -52,24 +65,14 @@ describe('SignUpPage', () => {
     expect(
       screen.queryByText(/sign-up isn.t configured/i),
     ).not.toBeInTheDocument()
-    const props = JSON.parse(
-      screen.getByTestId('sign-up').dataset.props ?? '{}',
-    )
-    expect(props).toMatchObject({
-      path: '/sign-up',
-      routing: 'path',
-      signInUrl: '/sign-in',
+    const form = screen.getByRole('form', { name: 'Create your account' })
+    const box = screen.getByRole('checkbox', {
+      name: MAILING_LIST_OPT_IN_LABEL,
     })
-  })
-
-  it('offers the mailing-list opt-in beside the form, unticked (#362)', () => {
-    vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_x')
-    vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_x')
-
-    render(<SignUpPage />)
-
+    expect(form).toContainElement(box)
+    expect(box).not.toBeChecked()
     expect(
-      screen.getByRole('checkbox', { name: /keep me posted/i }),
-    ).not.toBeChecked()
+      screen.queryByTestId('clerk-prebuilt-sign-up'),
+    ).not.toBeInTheDocument()
   })
 })
