@@ -160,8 +160,10 @@ function StartStep({
   // Back on this step from another one: start at the email field.
   useEffect(() => {
     if (focusOnArrival && !pending) emailRef.current?.focus()
-    // Only on arrival and on unlock; `pending` alone must not steal focus
-    // from a field the visitor is in.
+    // On arrival only. `pending` is read but is not a dependency: a later
+    // unlock must not pull focus out of a field the visitor is in. The card
+    // arrives here unlocked, because it holds the step it came from until
+    // the request that leaves it has settled.
   }, [focusOnArrival]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A rejected submit puts the visitor back on the first field to fix. Not
