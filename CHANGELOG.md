@@ -85,7 +85,7 @@ changed in the moment after Continue could have been sent as it was at the
 click, adding someone whose box read unticked. That version (#373) never
 reached production; the site's own form (#380) replaces it, with the box
 inside the form and locked from the click. The lock is proven in a browser
-for the email route and in component tests for both routes.
+and in component tests, for the email route and the Google route.
 
 **Not proven before release:** anything on production. The form, the bot
 check, and what a ticked and an unticked sign-up each do to the mailing list
