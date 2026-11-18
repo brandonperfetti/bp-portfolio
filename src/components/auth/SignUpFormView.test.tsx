@@ -317,6 +317,35 @@ describe('SignUpFormView, email-code step', () => {
   })
 })
 
+describe('SignUpFormView, moving between steps', () => {
+  it('takes no focus when the first step is what the page loads with', () => {
+    setup()
+    expect(document.body).toHaveFocus()
+  })
+
+  it('focuses the email field when the card comes back to the first step', () => {
+    // "Use a different email": the button that was pressed is gone with the
+    // code step, so focus has to be put somewhere on the new one.
+    const { rerender, props } = setup()
+    rerender(
+      <SignUpFormView {...props} step="verify" verifyEmail="a@example.com" />,
+    )
+    expect(screen.getByLabelText('Verification code')).toHaveFocus()
+
+    rerender(<SignUpFormView {...props} step="start" />)
+    expect(screen.getByLabelText('Email address')).toHaveFocus()
+  })
+
+  it('does the same when the page loaded on the code step', () => {
+    const { rerender, props } = setup({
+      step: 'verify',
+      verifyEmail: 'a@example.com',
+    })
+    rerender(<SignUpFormView {...props} step="start" />)
+    expect(screen.getByLabelText('Email address')).toHaveFocus()
+  })
+})
+
 describe('SignUpFormView, finish step', () => {
   it('offers one thing: to try signing in again, or the sign-in page', async () => {
     const { user, props } = setup({

@@ -104,6 +104,17 @@ function readOptIn(form: HTMLFormElement | null): boolean {
  * asks for a visible one; it stays empty otherwise.
  */
 export function SignUpFormView(props: SignUpFormViewProps) {
+  // Whether the card has shown another step before this one. The first step
+  // takes no focus when the page loads (the visitor has not asked for
+  // anything yet), but coming back to it from the code step ("Use a different
+  // email") must not leave keyboard and screen-reader users at the top of
+  // the document: the control they pressed is gone.
+  const firstStep = useRef(props.step)
+  const [cameFromAnotherStep, setCameFromAnotherStep] = useState(false)
+  useEffect(() => {
+    if (props.step !== firstStep.current) setCameFromAnotherStep(true)
+  }, [props.step])
+
   return (
     <div className={CARD_CLASS}>
       {props.step === 'verify' ? (
@@ -111,7 +122,7 @@ export function SignUpFormView(props: SignUpFormViewProps) {
       ) : props.step === 'finish' ? (
         <FinishStep {...props} />
       ) : (
-        <StartStep {...props} />
+        <StartStep {...props} focusOnArrival={cameFromAnotherStep} />
       )}
     </div>
   )
@@ -136,7 +147,8 @@ function StartStep({
   captchaTheme,
   onSubmit,
   onGoogle,
-}: SignUpFormViewProps) {
+  focusOnArrival,
+}: SignUpFormViewProps & { focusOnArrival: boolean }) {
   const id = useId()
   const [optIn, setOptIn] = useState(false)
   const [emailAddress, setEmailAddress] = useState('')
@@ -144,6 +156,13 @@ function StartStep({
   const [showPassword, setShowPassword] = useState(false)
   const emailRef = useRef<HTMLInputElement>(null)
   const passwordRef = useRef<HTMLInputElement>(null)
+
+  // Back on this step from another one: start at the email field.
+  useEffect(() => {
+    if (focusOnArrival && !pending) emailRef.current?.focus()
+    // Only on arrival and on unlock; `pending` alone must not steal focus
+    // from a field the visitor is in.
+  }, [focusOnArrival]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A rejected submit puts the visitor back on the first field to fix. Not
   // while `pending`: a disabled field cannot take focus, and Clerk's error

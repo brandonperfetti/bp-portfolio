@@ -769,6 +769,10 @@ describe('SignUpForm: the rest of the flow', () => {
     await screen.findByRole('heading', { name: 'Create your account' })
     // A fresh form: the question is asked again, unticked.
     expect(optIn()).not.toBeChecked()
+    // And focus lands in it, not at the top of the document.
+    await waitFor(() =>
+      expect(screen.getByLabelText('Email address')).toHaveFocus(),
+    )
   })
 
   it("themes Clerk's bot check with the site", () => {

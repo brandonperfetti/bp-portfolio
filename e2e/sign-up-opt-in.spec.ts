@@ -217,6 +217,10 @@ async function openForm(page: Page) {
   await expect(
     page.getByRole('heading', { level: 1, name: 'Create your account' }),
   ).toBeVisible()
+  // The default, read before anything touches the box: the opt-in is
+  // unticked as served. The hydration probe below would hide a ticked
+  // default, since it ends by unticking.
+  await expect(optIn(page)).not.toBeChecked()
   // Ticking and unticking is idempotent, and only a hydrated form reacts.
   await interactUntil(async () => {
     await optIn(page).check()
