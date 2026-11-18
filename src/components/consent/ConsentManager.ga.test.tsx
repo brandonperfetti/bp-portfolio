@@ -37,10 +37,15 @@ beforeAll(() => {
 const GA_ID = 'G-TEST12345'
 const win = window as unknown as Record<string, unknown>
 
+const TAG_HOST = 'googletagmanager.com'
+/** A script counts when its `src` is served from Google's tag host. */
+const isTagScript = (el: HTMLScriptElement) => {
+  if (!el.src) return false
+  const { hostname } = new URL(el.src)
+  return hostname === TAG_HOST || hostname.endsWith(`.${TAG_HOST}`)
+}
 const googleScripts = () =>
-  Array.from(document.querySelectorAll('script')).filter((el) =>
-    el.src.includes('googletagmanager.com'),
-  )
+  Array.from(document.querySelectorAll('script')).filter(isTagScript)
 
 /**
  * Stands in for the dialog's "Reject non-essential" on a later visit, and

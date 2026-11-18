@@ -90,6 +90,9 @@ const NEGATIVE_CONTROL = process.env.SIGN_UP_E2E_NEGATIVE_CONTROL === '1'
 
 const SIGN_UP_PATH = /\/v1\/client\/sign_ups(\/|$)/
 
+/** The host Cloudflare's Turnstile script is served from. */
+const TURNSTILE_HOST = 'challenges.cloudflare.com'
+
 /**
  * The stand-in for Cloudflare's Turnstile script; see the file comment. It
  * implements the calls clerk-js makes (`render`, `remove`, `reset`) and
@@ -285,7 +288,9 @@ test.beforeEach(async ({ context, page }) => {
 
   // Nothing is requested from Cloudflare: its script is the stand-in.
   await context.route(
-    (url) => url.hostname.endsWith('challenges.cloudflare.com'),
+    (url) =>
+      url.hostname === TURNSTILE_HOST ||
+      url.hostname.endsWith(`.${TURNSTILE_HOST}`),
     (route: Route) =>
       /\/turnstile\/v0\/api\.js$/.test(new URL(route.request().url()).pathname)
         ? route.fulfill({

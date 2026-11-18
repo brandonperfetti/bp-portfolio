@@ -6,7 +6,7 @@ import {
   type TestInfo,
 } from '@playwright/test'
 
-import { GOOGLE_HOST_PATTERN } from './support/google-hosts'
+import { isGoogleHost } from './support/google-hosts'
 import { interactUntil } from './support/hydration'
 
 /**
@@ -64,7 +64,7 @@ const LIVE = process.env.GA_E2E_LIVE === '1'
 
 const isGoogle = (url: string): boolean => {
   try {
-    return GOOGLE_HOST_PATTERN.test(new URL(url).hostname)
+    return isGoogleHost(new URL(url).hostname)
   } catch {
     return false
   }
@@ -127,7 +127,7 @@ async function watchGoogle(context: BrowserContext): Promise<string[]> {
     if (isGoogle(request.url())) seen.push(request.url())
   })
   await context.route(
-    (url) => GOOGLE_HOST_PATTERN.test(url.hostname),
+    (url) => isGoogleHost(url.hostname),
     async (route) => {
       const url = route.request().url()
       if (isTagScript(url)) {

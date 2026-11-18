@@ -25,7 +25,18 @@ export const GOOGLE_HOSTS = [
 /** The one host gtag.js itself is served from. */
 export const TAG_SCRIPT_HOST = 'www.googletagmanager.com'
 
-/** Matches a hostname that is one of {@link GOOGLE_HOSTS} or a subdomain. */
-export const GOOGLE_HOST_PATTERN = new RegExp(
-  `(^|\\.)(${GOOGLE_HOSTS.map((host) => host.replace(/\./g, '\\.')).join('|')})$`,
-)
+/**
+ * Whether a hostname is one of {@link GOOGLE_HOSTS} or a subdomain of one.
+ *
+ * @param hostname - A URL's `hostname`, already lower-cased by the URL parser.
+ * @returns `true` for an exact match or a name that ends with `.` plus a
+ *   listed domain.
+ *
+ * @remarks String comparison on purpose, not a pattern built from the list:
+ * a name such as `notgoogle.com` must not match, and nothing here has to be
+ * escaped to make that so.
+ */
+export const isGoogleHost = (hostname: string): boolean =>
+  GOOGLE_HOSTS.some(
+    (host) => hostname === host || hostname.endsWith(`.${host}`),
+  )
