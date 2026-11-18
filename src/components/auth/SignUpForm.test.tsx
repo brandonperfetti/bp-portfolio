@@ -237,6 +237,29 @@ describe("SignUpForm: #373's mid-submit limit is closed", () => {
     })
   })
 
+  it('two submits with the tick changed between them: the second value is what is sent', async () => {
+    // clerk-js updates an existing sign-up attempt instead of creating a new
+    // one when `signUp.password()` is called again (read from its source,
+    // 2026-11-18). The form's part is the same either way: each call carries
+    // the box as it is at that submit, so the latest answer is the one Clerk
+    // holds.
+    const user = userEvent.setup()
+    clerk.password.mockResolvedValue({ error: { message: 'Taken.' } })
+    render(<SignUpForm />)
+    await fill(user)
+    await user.click(optIn())
+    await user.click(submit())
+    await waitFor(() => expect(optIn()).toBeEnabled())
+
+    await user.click(optIn())
+    await user.click(submit())
+    await waitFor(() => expect(clerk.password).toHaveBeenCalledTimes(2))
+
+    expect(
+      clerk.password.mock.calls.map(([params]) => params.unsafeMetadata),
+    ).toEqual([{ mailingListOptIn: true }, { mailingListOptIn: false }])
+  })
+
   it('email: the other direction, a box ticked after Continue does not opt anyone in', async () => {
     const user = userEvent.setup()
     const inFlight = deferred()

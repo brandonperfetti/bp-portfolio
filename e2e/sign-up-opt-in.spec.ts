@@ -27,9 +27,20 @@ import { interactUntil } from './support/hydration'
  * email and no Resend contact can come of it. The addresses typed are
  * `example.com`'s.
  *
+ * **The interception is fail-closed.** A second rule, on the whole browser
+ * context, aborts any write to that endpoint the per-test interceptor did not
+ * take, and fails the test that caused it. So a mistake in this spec (a
+ * pattern that stops matching after a Clerk change, a test that forgets its
+ * interceptor) costs a red test, not an account. `SIGN_UP_E2E_NEGATIVE_CONTROL=1`
+ * is the hand-run proof of that: it leaves the interceptor out, and every
+ * test that submits must then fail with the write aborted.
+ *
  * clerk-js itself, and its read-only calls (the instance settings, the
  * browser's client record), do reach the Clerk instance the build is
- * configured with, as they do on every page of every other spec.
+ * configured with, as they do on every page of every other spec. Each test
+ * attaches the list of every non-GET request the page made to a Clerk
+ * Frontend API path (`clerk-non-get-requests`), so what clerk-js did beyond
+ * reading can be read from the report.
  *
  * ## The build must have Clerk configured
  *
@@ -43,13 +54,18 @@ const CLERK_CONFIGURED =
   Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) &&
   Boolean(process.env.CLERK_SECRET_KEY)
 
+/** Hand-run only: drop the per-test interceptor to prove the guard catches it. */
+const NEGATIVE_CONTROL = process.env.SIGN_UP_E2E_NEGATIVE_CONTROL === '1'
+
+const SIGN_UP_PATH = /\/v1\/client\/sign_ups(\/|$)/
+
 const OPT_IN_LABEL =
   'Keep me posted when new articles are published. Unsubscribe anytime.'
 
 const isSignUpWrite = (request: Request): boolean => {
   if (request.method() === 'GET' || request.method() === 'OPTIONS') return false
   try {
-    return /\/v1\/client\/sign_ups(\/|$)/.test(new URL(request.url()).pathname)
+    return SIGN_UP_PATH.test(new URL(request.url()).pathname)
   } catch {
     return false
   }
@@ -84,16 +100,30 @@ async function interceptSignUpWrites(
 ): Promise<Intercepted> {
   const requests: Request[] = []
   let resolveFirst!: (request: Request) => void
-  const first = new Promise<Request>((resolve) => {
+  const first = new Promise<Request>((resolve, reject) => {
     resolveFirst = resolve
+    // If the guard takes a write instead of this interceptor, fail at once
+    // with the reason, instead of waiting out the test's timeout.
+    onUnintercepted.set(page, (url) =>
+      reject(
+        new Error(
+          `a sign-up write was not intercepted and was aborted: ${url}`,
+        ),
+      ),
+    )
   })
+  // The page may close before a rejection is awaited; it is still reported
+  // by the guard's own check after the test.
+  first.catch(() => {})
   let release!: () => void
   const released = new Promise<void>((resolve) => {
     release = resolve
   })
 
+  if (NEGATIVE_CONTROL) return { requests, first, release }
+
   await page.route(
-    (url) => /\/v1\/client\/sign_ups(\/|$)/.test(url.pathname),
+    (url) => SIGN_UP_PATH.test(url.pathname),
     async (route: Route) => {
       const request = route.request()
       if (!isSignUpWrite(request)) return route.continue()
@@ -141,12 +171,61 @@ async function openForm(page: Page) {
   await expect(optIn(page)).not.toBeChecked()
 }
 
-test.beforeEach(() => {
-  if (CLERK_CONFIGURED) return
-  const reason =
-    'this build has no Clerk: set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY for both the build and this run'
-  if (process.env.CI) throw new Error(`#377 proof cannot run: ${reason}`)
-  test.skip(true, reason)
+/** Per page: what to do when the guard, not the interceptor, takes a write. */
+const onUnintercepted = new WeakMap<Page, (url: string) => void>()
+
+/** Per test: sign-up writes the guard aborted, and every non-GET Clerk call. */
+let unintercepted: string[] = []
+let clerkNonGet: string[] = []
+
+test.beforeEach(async ({ context, page }) => {
+  if (!CLERK_CONFIGURED) {
+    const reason =
+      'this build has no Clerk: set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY for both the build and this run'
+    if (process.env.CI) throw new Error(`#377 proof cannot run: ${reason}`)
+    test.skip(true, reason)
+    return
+  }
+
+  unintercepted = []
+  clerkNonGet = []
+
+  // The fail-closed guard. Context routes run after page routes, so this
+  // sees only what a test's own interceptor did not take.
+  await context.route(
+    (url) => SIGN_UP_PATH.test(url.pathname),
+    async (route: Route) => {
+      const request = route.request()
+      if (!isSignUpWrite(request)) return route.continue()
+      unintercepted.push(`${request.method()} ${request.url()}`)
+      await route.abort('blockedbyclient')
+      onUnintercepted.get(page)?.(request.url())
+    },
+  )
+
+  page.on('request', (request) => {
+    if (request.method() === 'GET') return
+    try {
+      const url = new URL(request.url())
+      if (url.pathname.startsWith('/v1/')) {
+        clerkNonGet.push(`${request.method()} ${url.pathname}`)
+      }
+    } catch {
+      // Not a URL we can read; not a Clerk call.
+    }
+  })
+})
+
+test.afterEach(async ({}, testInfo) => {
+  if (!CLERK_CONFIGURED) return
+  await testInfo.attach('clerk-non-get-requests', {
+    body: JSON.stringify(clerkNonGet, null, 2),
+    contentType: 'application/json',
+  })
+  expect(
+    unintercepted,
+    "every write to Clerk's sign-up endpoint must be intercepted by the test; these were aborted by the guard instead",
+  ).toEqual([])
 })
 
 test.describe('sign-up: the mailing-list tick travels with the request', () => {

@@ -185,6 +185,12 @@ unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
   again. This closes the limit #373 recorded for Clerk's prebuilt form, which
   reported no submit event. "Use a different email" calls `signUp.reset()`,
   so an abandoned attempt's tick does not carry into the next one.
+- **A second submit updates the same attempt.** When a sign-up attempt
+  already exists in the browser (an earlier submit that Clerk accepted but
+  that was not finished), clerk-js sends `signUp.password()` as an update to
+  it, not a new attempt [source: clerk-js `SignUp.ts`, read 2026-11-18;
+  Clerk's docs do not say]. The update carries `unsafeMetadata` too, so the
+  box as it is at the latest submit replaces the earlier answer.
 - **`redirect_url` is ours to honour now.** Gated articles and Corvus link to
   `/sign-in?redirect_url=…`, and the target follows the visitor to
   `/sign-up`. Clerk's prebuilt form checked it; this form does, with
