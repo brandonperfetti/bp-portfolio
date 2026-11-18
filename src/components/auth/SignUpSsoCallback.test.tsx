@@ -169,19 +169,15 @@ describe('SignUpSsoCallback', () => {
       }
     })
 
-    it('says nothing of the kind when the page is left before the deadline', async () => {
+    it('cancels its timer when the page is left before the deadline', async () => {
       vi.useFakeTimers()
       try {
         const { unmount } = render(<SignUpSsoCallback stallMs={5000} />)
         mocks.handlers?.navigateToApp(plain)
-        const setStateAfterUnmount = vi
-          .spyOn(console, 'error')
-          .mockImplementation(() => {})
+        expect(vi.getTimerCount()).toBe(1)
+
         unmount()
-        await act(async () => vi.advanceTimersByTime(5000))
-        // The timer was cancelled with the page: nothing ran, nothing logged.
-        expect(setStateAfterUnmount).not.toHaveBeenCalled()
-        setStateAfterUnmount.mockRestore()
+        expect(vi.getTimerCount()).toBe(0)
       } finally {
         vi.useRealTimers()
       }

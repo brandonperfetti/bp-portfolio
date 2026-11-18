@@ -218,8 +218,7 @@ async function openForm(page: Page) {
     page.getByRole('heading', { level: 1, name: 'Create your account' }),
   ).toBeVisible()
   // The default, read before anything touches the box: the opt-in is
-  // unticked as served. The hydration probe below would hide a ticked
-  // default, since it ends by unticking.
+  // unticked as served.
   await expect(optIn(page)).not.toBeChecked()
   // Wait for React's handlers, on a control only React can change: the
   // show/hide button's `aria-pressed`. The checkbox would not do. It is a
