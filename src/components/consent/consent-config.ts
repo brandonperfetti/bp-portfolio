@@ -42,9 +42,13 @@ function setGaDisabled(measurementId: string, disabled: boolean): void {
  * c15t stops managing a consent-gated script the moment its category is
  * revoked: it runs no callback on unload, and it calls `onConsentChange` only
  * for scripts that still have consent. So a withdrawal reaches gtag.js through
- * here, not through c15t. (c15t also reloads the page when a choice revokes a
- * granted category, its `reloadOnConsentRevoked` default; this does not rest
- * on that.) Two things happen, and the first is the one that
+ * here, not through c15t. It is called from two places: c15t's
+ * `onBeforeConsentRevocationReload` callback, which runs synchronously just
+ * before c15t reloads the page on a revoking save (its
+ * `reloadOnConsentRevoked` default), and an effect in `ConsentSurface`, for
+ * any revoke that does not reload. The effect alone would be too late for the
+ * reloading case: c15t reloads in the same task as the save. Two things
+ * happen, and the first is the one that
  * matters: gtag's own opt-out switch ({@link gaDisableKey}) is set, which
  * stops every hit, including the cookieless ping Consent Mode sends while
  * storage is denied; then, if the tag was ever installed on this page, it is
@@ -163,8 +167,23 @@ export function buildConsentManagerOptions(input: {
   scripts: ConsentScripts
   categories?: readonly C15tCategory[]
   disableAutomaticBlocking?: boolean
+  /**
+   * Runs synchronously when a saved choice revokes a category c15t had
+   * granted, immediately before c15t reloads the page. Receives the
+   * preferences being saved.
+   */
+  onBeforeRevocationReload?: (preferences: Record<string, boolean>) => void
 }): ConsentManagerOptions {
+  const { onBeforeRevocationReload } = input
   return {
+    ...(onBeforeRevocationReload
+      ? {
+          callbacks: {
+            onBeforeConsentRevocationReload: ({ preferences }) =>
+              onBeforeRevocationReload(preferences as Record<string, boolean>),
+          },
+        }
+      : {}),
     mode: 'offline',
     // Emit no c15t CSS or built-in component chrome — we render our own UI.
     noStyle: true,
@@ -233,6 +252,54 @@ export function shouldRepromptOnRegionChange(input: {
     input.consentRequired === true &&
     !input.hasExplicitChoice
   )
+}
+
+/**
+ * Whether a stored consent record must be discarded before c15t reads it
+ * (#361): it is an opt-out auto-grant, and this page is not being served to a
+ * region where consent is confidently not required.
+ *
+ * @remarks
+ * c15t restores the stored record when its store is created and makes its
+ * first script pass on it, with no idea where the visitor is. An auto-grant
+ * written where consent is not required would therefore load Google's tag on
+ * the first page served to that browser in a consent-required region, before
+ * the #103 reprompt in `ConsentSurface` (an effect, so later) could revoke it.
+ * The grant was never the visitor's choice, so it is dropped up front and the
+ * visitor is asked like anyone arriving fresh.
+ *
+ * Fail-closed, like the banner ({@link shouldShowBanner}): an unknown region
+ * (`null`) discards too. An explicit choice is never touched; it carries no
+ * auto-grant marker. Region logic stays in these predicates: this is the
+ * inverse reading of {@link shouldAutoGrantMeasurement}'s condition.
+ */
+export function shouldDiscardStoredAutoGrant(input: {
+  wasAutoGranted: boolean
+  consentRequired: boolean | null
+}): boolean {
+  return input.wasAutoGranted && input.consentRequired !== false
+}
+
+/**
+ * Removes the stored consent record and the auto-grant marker, in both places
+ * c15t keeps the record: localStorage and a path-wide cookie of the same name.
+ *
+ * @remarks Must run before `ConsentManagerProvider` creates its store, which
+ * reads both. c15t's own `deleteConsentFromStorage` does this for the
+ * configured key (and also clears its legacy default key, which this app has
+ * never written), but
+ * `c15t` is not a direct dependency of this app and `@c15t/react` does not
+ * re-export it. A no-op on the server and where storage is unavailable.
+ */
+export function discardStoredConsent(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(CONSENT_STORAGE_KEY)
+  } catch {
+    // Storage unavailable: nothing was restorable from it either.
+  }
+  document.cookie = `${CONSENT_STORAGE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+  setAutoGrantMarker(false)
 }
 
 /**

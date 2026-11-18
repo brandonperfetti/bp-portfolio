@@ -16,10 +16,12 @@ import { ConsentConfigProvider } from './consent-context'
 import {
   buildConsentManagerOptions,
   buildConsentScripts,
+  discardStoredConsent,
   readAutoGrantMarker,
   readGaEnv,
   setAutoGrantMarker,
   shouldAutoGrantMeasurement,
+  shouldDiscardStoredAutoGrant,
   shouldRepromptOnRegionChange,
   stopGoogleAnalytics,
 } from './consent-config'
@@ -76,10 +78,12 @@ function ConsentSurface() {
   const { hasConsented, setConsent, consents } = useConsentManager()
   const [consentRequired, setConsentRequired] = useState<boolean | null>(null)
 
-  // #361: a withdrawal has to reach gtag.js from here. c15t drops a
+  // #361: a withdrawal has to reach gtag.js from this app. c15t drops a
   // consent-gated script from its bookkeeping when the category is revoked and
-  // runs no callback for it, so nothing else would tell the tag to stop. Runs
-  // on mount too, where it is a no-op unless the tag is somehow present.
+  // runs no callback for it. A revoking save reloads the page, and the stop
+  // for that case is made synchronously in `onBeforeRevocationReload`; this
+  // effect covers a revoke that does not reload. Runs on mount too, where it
+  // is a no-op unless the tag is somehow present.
   const measurementGranted = consents?.measurement === true
   useEffect(() => {
     if (!measurementGranted) stopGoogleAnalytics(readGaEnv())
@@ -163,8 +167,26 @@ export function ConsentManager({
   consentConfig?: ConsentConfig
 }) {
   const options = useMemo(() => {
+    // #361: before c15t's store exists (it reads storage as it is created,
+    // further down this render), drop an auto-grant that was written where
+    // consent is not required if this page is not being served there. In the
+    // browser only; the server has neither storage nor the cookie.
+    if (
+      typeof document !== 'undefined' &&
+      shouldDiscardStoredAutoGrant({
+        wasAutoGranted: readAutoGrantMarker(),
+        consentRequired: readConsentRequiredCookie(document.cookie),
+      })
+    ) {
+      discardStoredConsent()
+    }
     const { measurementId, isProduction } = readGaEnv()
     return buildConsentManagerOptions({
+      // Synchronous, just before c15t reloads on a revoking save: the effect
+      // in ConsentSurface would not get to run first.
+      onBeforeRevocationReload: (preferences) => {
+        if (preferences.measurement !== true) stopGoogleAnalytics(readGaEnv())
+      },
       scripts: buildConsentScripts({ measurementId, isProduction }),
       categories: enabledC15tCategories(consentConfig),
       disableAutomaticBlocking: consentConfig.features.disableAutomaticBlocking,

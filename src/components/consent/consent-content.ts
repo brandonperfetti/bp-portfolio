@@ -187,7 +187,7 @@ export const DEFAULT_CONSENT_CONFIG: ConsentConfig = {
       alwaysOn: false,
       title: 'Analytics (measurement)',
       subtitle:
-        'Google Analytics 4. It loads only while this is on; while it is off, nothing is requested from or sent to Google. A cookieless Vercel Analytics baseline runs regardless of this choice.',
+        'Google Analytics 4. It loads only while Analytics is allowed; while it is not, nothing is requested from or sent to Google. A change takes effect when you save it. A cookieless Vercel Analytics baseline runs regardless of this choice.',
     },
     {
       key: 'social',
