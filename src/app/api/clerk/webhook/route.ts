@@ -126,6 +126,20 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
+  // A signed delivery whose `data` is not an object (`null`, a string) has
+  // nothing any handler can read, and never will: acknowledge it. Left to the
+  // handlers it throws on the first property read, the route answers 500, and
+  // Clerk redelivers the same malformed message indefinitely.
+  if (
+    event === null ||
+    typeof event !== 'object' ||
+    event.data === null ||
+    typeof event.data !== 'object'
+  ) {
+    console.warn('[clerk-webhook] delivery carried no data object; ignored')
+    return Response.json({ received: true })
+  }
+
   switch (event.type) {
     case 'user.created':
       await handleUserCreated(event.data)
@@ -294,9 +308,13 @@ async function writeExternalId(
  * cannot rewrite an established link. **The mirror write is not skipped**: it
  * is the reconcile path. An already-set `external_id` is exactly the state of
  * every user the backfill mapped before the mirror existed, and of any user
- * whose mirror write failed on a previous delivery — for them the contact id
- * is right there in the payload, so redelivering `user.created` (or any Clerk
- * dashboard resend) is enough to converge, with no second Clerk write.
+ * whose mirror write failed on a previous delivery. This path repairs the
+ * mirror only for a delivery whose PAYLOAD carries `external_id`. A replay
+ * resends the original message, which holds the user as it was when the
+ * event fired: a user mapped later (by this handler's own write, or by the
+ * backfill) has the id on the live Clerk user and not in that payload, so a
+ * replay does not reach here for them. Their mirror is repaired by re-running
+ * the backfill, which reads the live mapping (`docs/AUTH.md`).
  */
 async function handleUserCreated(data: ClerkUserData): Promise<void> {
   const email = primaryEmail(data)
@@ -353,9 +371,9 @@ async function handleUserCreated(data: ClerkUserData): Promise<void> {
  *
  * @remarks Never throws and never affects the response. A user with an
  * `external_id` but no mirror is still fully functional today — only their
- * eventual `user.deleted` degrades to the logged no-op — and the next
- * `user.created` redelivery reconciles them, so a failure here is recoverable
- * noise rather than a reason to make Clerk retry.
+ * eventual `user.deleted` degrades to the logged no-op — and re-running the
+ * backfill rewrites the mirror from the live mapping, so a failure here is
+ * recoverable noise rather than a reason to make Clerk retry.
  */
 async function mirrorContact(
   userId: string,

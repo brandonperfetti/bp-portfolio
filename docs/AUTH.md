@@ -87,16 +87,28 @@ joins, with the same wording as the contact form
 - **Existing members are untouched.** Nothing in #362 removes or re-asks
   anyone. An account already on the list is recognised by its `external_id`
   mapping, not by a flag it predates, so its `user.updated` and
-  `user.deleted` behave as before, and a redelivered `user.created` for it
-  reconciles the mirror without capturing again.
+  `user.deleted` behave as before, and a `user.created` delivery whose payload
+  carries its `external_id` reconciles the mirror without capturing again.
 - **A replayed pre-#362 `user.created` no longer repairs anything.** A webhook
   replay resends the original payload, which for an account created before
   the opt-in has neither the flag nor an `external_id`, so it is a no-op: the
   handler cannot tell it from a new sign-up that declined, and it must not
-  infer consent from an address. A legacy member whose mapping or mirror
-  write failed is repaired by the backfill
-  (`scripts/backfill-clerk-resend-mapping.ts`, below), which writes both
-  stores from the existing Resend contact.
+  infer consent from an address. The same goes for a member whose
+  `external_id` was written after the event fired (by the handler itself, or
+  by the backfill): the id is on the live Clerk user, not in the replayed
+  payload, so replaying does not repair their mirror. **The repair for both
+  is the backfill** (`scripts/backfill-clerk-resend-mapping.ts`, below): it
+  reads the live mapping and rewrites the mirror, and maps an unmapped user
+  to the one Resend contact at their current primary address.
+- **What the backfill cannot repair.** It matches on the account's current
+  primary email. A legacy member captured at address A whose mapping writes
+  both failed, and who has since changed to address B, has a contact at A the
+  backfill reports as `no-match` and leaves alone. Before #362 a replay of
+  the original event (which carried A) could re-link it. Now it is a manual
+  repair: find the contact at A in Resend, confirm it is that person's (the
+  Clerk user's previous address), then set the Clerk user's `external_id` to
+  the contact id in the Clerk dashboard and re-run the backfill, which writes
+  the mirror for the now-mapped user.
 - **Not proven in a browser:** that Clerk's hosted form sends the prop's
   current value with the sign-up request. The component test pins what the
   prop holds for each state of the box, and the webhook tests pin what each

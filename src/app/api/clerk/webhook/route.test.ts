@@ -1044,6 +1044,28 @@ describe('POST /api/clerk/webhook — user.updated', () => {
   })
 })
 
+describe('POST /api/clerk/webhook — malformed signed deliveries', () => {
+  it.each([
+    ['null data', { type: 'user.created', data: null }],
+    ['string data', { type: 'user.deleted', data: 'nope' }],
+    ['no data key', { type: 'user.updated' }],
+    ['a null event', null],
+  ])(
+    '2xx-ignores %s instead of throwing into a retry loop',
+    async (_l, event) => {
+      verifyMock.mockReturnValue(event)
+
+      const res = await POST(makeRequest({ any: 'body' }))
+
+      expect(res.status).toBe(200)
+      await expect(res.json()).resolves.toEqual({ received: true })
+      expect(captureContactMock).not.toHaveBeenCalled()
+      expect(resendCtor).not.toHaveBeenCalled()
+      expect(redisSet).not.toHaveBeenCalled()
+    },
+  )
+})
+
 describe('POST /api/clerk/webhook — unhandled events', () => {
   it.each(['session.created', 'organization.created', 'email.created'])(
     '2xx-ignores %s',
