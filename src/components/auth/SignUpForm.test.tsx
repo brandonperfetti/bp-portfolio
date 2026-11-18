@@ -324,11 +324,16 @@ describe("SignUpForm: #373's mid-submit limit is closed", () => {
 
 describe('SignUpForm: no state leaves the form locked for good', () => {
   it('Google: unlocks and says so if Clerk accepted the request but the browser never left', async () => {
+    // Clerk's answer is held until the lock has been checked, so the short
+    // timeout cannot run out before the assertion that precedes it.
     const user = userEvent.setup()
+    const inFlight = deferred()
+    clerk.sso.mockReturnValueOnce(inFlight.promise)
     render(<SignUpForm leaveTimeoutMs={30} />)
     await user.click(google())
     expect(optIn()).toBeDisabled()
 
+    await act(async () => inFlight.resolve(ok))
     await waitFor(() => expect(optIn()).toBeEnabled())
     // Nothing is known to have failed, so it does not say so.
     expect(screen.getByRole('alert')).toHaveTextContent(

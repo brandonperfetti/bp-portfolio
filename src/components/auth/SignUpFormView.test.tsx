@@ -372,6 +372,18 @@ describe('SignUpFormView, finish step', () => {
     ).toMatch(/^\/sign-in\/?$/)
   })
 
+  it('puts focus on Continue when the card arrives on this step', () => {
+    // From the code step, whose field has gone with it.
+    const { rerender, props } = setup({
+      step: 'verify',
+      verifyEmail: 'a@example.com',
+    })
+    expect(screen.getByLabelText('Verification code')).toHaveFocus()
+
+    rerender(<SignUpFormView {...props} step="finish" />)
+    expect(screen.getByRole('button', { name: 'Continue' })).toHaveFocus()
+  })
+
   it('disables the button while the retry is pending', () => {
     setup({ step: 'finish', pending: true })
     expect(screen.getByRole('button', { name: /signing in/i })).toBeDisabled()

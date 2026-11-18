@@ -435,6 +435,15 @@ function FinishStep({
   onFinish,
 }: SignUpFormViewProps) {
   const id = useId()
+  const continueRef = useRef<HTMLButtonElement>(null)
+
+  // The card arrives here from the code step, whose field is gone; put focus
+  // on the one thing left to do. Once, on arrival: a retry that fails keeps
+  // focus where the visitor has it (the button they pressed).
+  useEffect(() => {
+    continueRef.current?.focus()
+  }, [])
+
   return (
     <form
       aria-labelledby={`${id}-title`}
@@ -456,7 +465,7 @@ function FinishStep({
 
       <fieldset disabled={pending} className="mt-6 flex min-w-0 flex-col gap-5">
         <GlobalErrors messages={errors.global} />
-        <Button type="submit" className="w-full">
+        <Button ref={continueRef} type="submit" className="w-full">
           {pending ? 'Signing in…' : 'Continue'}
         </Button>
       </fieldset>

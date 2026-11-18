@@ -42,7 +42,8 @@ export const SSO_CALLBACK_STALL_MS = 10_000
  *   Clerk's prebuilt form, which continues it.
  * - **The sign-up could not finish and Clerk says so** (the bot check
  *   failed): back to `/sign-up`, where Clerk's error shows in the form.
- * - **Clerk says nothing** (`SSO_CALLBACK_STALL_MS`): the page says it is
+ * - **Still here after `SSO_CALLBACK_STALL_MS`**, because Clerk said nothing
+ *   or because the navigation it asked for has not happened: the page says it is
  *   taking longer than expected and offers "Start again" and "Sign in". It
  *   does not say the sign-up failed and does not redirect by itself: Clerk
  *   may still be working through a bot check or an account transfer, and
@@ -78,15 +79,20 @@ export function SignUpSsoCallback({
 
   useEffect(() => {
     const timer = setTimeout(() => {
+      // Still on this page at the deadline, whatever the reason: offer the
+      // way out. A navigation that was requested is not one that happened;
+      // the destination can be slow, and "Finishing sign-up…" with nothing
+      // to press would be the same dead end. The cleanup below cancels this
+      // for a navigation that does complete.
+      setStalled(true)
       if (navigated.current) return
       const current = latestSignUp.current
-      // Field names only: nothing the visitor typed.
+      // Clerk sent the visitor nowhere. Field names only: nothing they typed.
       console.error('[sign-up] sso callback unresolved', {
         status: current?.status,
         missingFields: current?.missingFields,
         unverifiedFields: current?.unverifiedFields,
       })
-      setStalled(true)
     }, stallMs)
     return () => clearTimeout(timer)
   }, [stallMs])

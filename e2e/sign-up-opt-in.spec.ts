@@ -221,12 +221,22 @@ async function openForm(page: Page) {
   // unticked as served. The hydration probe below would hide a ticked
   // default, since it ends by unticking.
   await expect(optIn(page)).not.toBeChecked()
-  // Ticking and unticking is idempotent, and only a hydrated form reacts.
+  // Wait for React's handlers, on a control only React can change: the
+  // show/hide button's `aria-pressed`. The checkbox would not do. It is a
+  // native input, so it ticks in the server-rendered page before hydration,
+  // and a probe on it could pass with no handler attached; the click that
+  // follows would then send nothing. Pressing only while it reads "false"
+  // keeps the retried step idempotent.
+  const reveal = page.getByRole('button', { name: /^(Show|Hide) password$/ })
   await interactUntil(async () => {
-    await optIn(page).check()
-    await expect(optIn(page)).toBeChecked()
+    if ((await reveal.getAttribute('aria-pressed')) !== 'true') {
+      await reveal.click()
+    }
+    await expect(reveal).toHaveAttribute('aria-pressed', 'true')
   })
-  await optIn(page).uncheck()
+  await reveal.click()
+  await expect(reveal).toHaveAttribute('aria-pressed', 'false')
+  // Hydration left the box as served.
   await expect(optIn(page)).not.toBeChecked()
 }
 

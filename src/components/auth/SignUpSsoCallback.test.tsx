@@ -142,17 +142,46 @@ describe('SignUpSsoCallback', () => {
       }
     })
 
-    it('says nothing of the kind once Clerk has navigated', async () => {
+    it('offers the way out when a navigation Clerk asked for has not happened either, without logging a Clerk failure', async () => {
+      // `router.push` was called, but the page is still here at the
+      // deadline (a slow destination). Requested is not happened.
       vi.useFakeTimers()
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
       try {
         render(<SignUpSsoCallback stallMs={5000} />)
         mocks.handlers?.navigateToApp(plain)
+        expect(mocks.push).toHaveBeenCalledExactlyOnceWith('/')
         await act(async () => vi.advanceTimersByTime(5000))
 
         expect(screen.getByRole('status')).toHaveTextContent(
-          'Finishing sign-up',
+          /taking longer than expected/i,
         )
-        expect(screen.queryByRole('link')).not.toBeInTheDocument()
+        expect(
+          screen.getByRole('link', { name: 'Start again' }),
+        ).toBeInTheDocument()
+        expect(
+          screen.getByRole('link', { name: 'Sign in' }),
+        ).toBeInTheDocument()
+        expect(error).not.toHaveBeenCalled()
+      } finally {
+        error.mockRestore()
+        vi.useRealTimers()
+      }
+    })
+
+    it('says nothing of the kind when the page is left before the deadline', async () => {
+      vi.useFakeTimers()
+      try {
+        const { unmount } = render(<SignUpSsoCallback stallMs={5000} />)
+        mocks.handlers?.navigateToApp(plain)
+        const setStateAfterUnmount = vi
+          .spyOn(console, 'error')
+          .mockImplementation(() => {})
+        unmount()
+        await act(async () => vi.advanceTimersByTime(5000))
+        // The timer was cancelled with the page: nothing ran, nothing logged.
+        expect(setStateAfterUnmount).not.toHaveBeenCalled()
+        setStateAfterUnmount.mockRestore()
       } finally {
         vi.useRealTimers()
       }
