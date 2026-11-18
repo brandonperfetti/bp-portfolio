@@ -171,6 +171,45 @@ describe('.husky/pre-push', () => {
     expect(calls).toEqual(FULL_GATE)
   })
 
+  it('runs the full gate when a spaced revision shifts the fields of a branch push', () => {
+    // Measured, git 2.54.0: `git push origin 'HEAD^{/x b refs/tags/q}:refs/heads/spacey'`
+    // creates the branch and sends this line; read by position, its third
+    // word is a tag ref.
+    const asTag = runHook(
+      `HEAD^{/x b refs/tags/q} ${SHA_B} refs/heads/spacey ${ZERO}\n`,
+    )
+    expect(asTag.calls).toEqual(FULL_GATE)
+
+    // The same shift with an all-zero second word reads as a deletion.
+    rmSync(callLog, { force: true })
+    const asDeletion = runHook(
+      `HEAD^{/x ${ZERO} y} ${SHA_B} refs/heads/spacey ${ZERO}\n`,
+    )
+    expect(asDeletion.calls).toEqual(FULL_GATE)
+  })
+
+  it('runs the full gate for a ref outside branches and tags', () => {
+    const { calls } = runHook(
+      `refs/notes/commits ${SHA_B} refs/notes/commits ${SHA_A}\n`,
+    )
+
+    expect(calls).toEqual(FULL_GATE)
+  })
+
+  it('runs no gate step for a tag line with no trailing newline, a tag deletion, or a branch pushed to a tag ref', () => {
+    // Deliberate: what decides is that the push lands only on tag refs.
+    for (const line of [
+      tagLine().trimEnd(),
+      `(delete) ${ZERO} refs/tags/v2026.11.17 ${SHA_A}\n`,
+      `refs/heads/side ${SHA_B} refs/tags/fromside ${ZERO}\n`,
+    ]) {
+      rmSync(callLog, { force: true })
+      const { status, calls } = runHook(line)
+      expect(status).toBe(0)
+      expect(calls).toEqual([])
+    }
+  })
+
   it('runs the full gate for an ordinary push', () => {
     const { status, calls } = runHook(refLine(SHA_B, SHA_A))
 
