@@ -37,8 +37,10 @@
 - Two capture paths, one shared helper (`src/lib/email/captureContact.ts`
   — logs and swallows every failure; capture is never the caller's
   primary job):
-  1. Clerk webhook → `POST /api/clerk/webhook` (svix signature verified
-     with `CLERK_WEBHOOK_SIGNING_SECRET`) on sign-up.
+  1. Sign-up → explicit opt-in checkbox (unchecked by default) beside the
+     Clerk form, then the Clerk webhook `POST /api/clerk/webhook` (svix
+     signature verified with `CLERK_WEBHOOK_SIGNING_SECRET`), which captures
+     only a sign-up that ticked it (#362, below).
   2. Contact form → explicit opt-in checkbox (unchecked by default) on
      the Messenger form; `/api/contact` captures only when the flag is
      set AND the message delivered. The capture rule:
@@ -51,6 +53,55 @@
 - Payload transactional email (forgot-password etc.) rides the
   `@payloadcms/email-resend` adapter configured in `payload.config.ts`
   (active when `RESEND_API_KEY` is set).
+
+### The sign-up opt-in (#362)
+
+Until #362 every new account was added to the list. Now only a ticked box
+joins, with the same wording as the contact form
+(`MAILING_LIST_OPT_IN_LABEL`, `src/lib/email/mailingListOptIn.ts`).
+
+- **Where the box is.** `src/components/auth/SignUpWithOptIn.tsx` renders
+  Clerk's `<SignUp>` with the checkbox above it, so it is reached before the
+  form's Continue button. Clerk's prebuilt component
+  takes no custom fields, so the answer travels as
+  `unsafeMetadata={{ mailingListOptIn: <boolean> }}`: Clerk sends it with the
+  sign-up and copies it onto the created user. **No Clerk dashboard setting
+  is involved**, on any instance.
+- **Where it is read.** `user.created` arrives with `unsafe_metadata`, and
+  `hasMailingListOptIn` accepts only a literal `true`. Without it, and with no
+  `external_id` mapping in the payload, the handler returns before any Resend,
+  Clerk or Redis call: no contact, no `external_id`, no mirror key, on the
+  first delivery and on a redelivery. (With a mapping and no opt-in it writes
+  the Redis mirror only; see "Existing members" below.)
+- **Fail-closed by construction.** A sign-up that never passes the box is not
+  opted in: a social sign-in started on `/sign-in` that creates the account,
+  an account made in the Clerk dashboard, a client that sends no metadata.
+  The box shows on the first step only, because the metadata goes out with
+  the request that starts the sign-up; on the email-code step it could be
+  ticked to no effect.
+- **Why `unsafe_metadata` is acceptable here.** The signed-in user can write
+  it from the browser, so it must never carry an entitlement. For this flag
+  that is the point: the only thing a visitor can do with it is opt
+  themselves in or out. A later change to it does nothing by itself, because
+  `user.updated` acts only on accounts that already have a mapping.
+- **Existing members are untouched.** Nothing in #362 removes or re-asks
+  anyone. An account already on the list is recognised by its `external_id`
+  mapping, not by a flag it predates, so its `user.updated` and
+  `user.deleted` behave as before, and a redelivered `user.created` for it
+  reconciles the mirror without capturing again.
+- **A replayed pre-#362 `user.created` no longer repairs anything.** A webhook
+  replay resends the original payload, which for an account created before
+  the opt-in has neither the flag nor an `external_id`, so it is a no-op: the
+  handler cannot tell it from a new sign-up that declined, and it must not
+  infer consent from an address. A legacy member whose mapping or mirror
+  write failed is repaired by the backfill
+  (`scripts/backfill-clerk-resend-mapping.ts`, below), which writes both
+  stores from the existing Resend contact.
+- **Not proven in a browser:** that Clerk's hosted form sends the prop's
+  current value with the sign-up request. The component test pins what the
+  prop holds for each state of the box, and the webhook tests pin what each
+  payload does; the hop between them is Clerk's
+  (`docs/JOURNEYS.md`, "Sign up").
 
 ## Contact hygiene: the Clerk↔Resend mapping (#86)
 
@@ -88,11 +139,11 @@ unit test passed only because it fabricated `external_id` onto the delete
 event.) The mirror outlives the Clerk user and is keyed by `data.id`, the one
 field the delete payload does carry.
 
-| Event          | Behavior                                                                                                                                                                              |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `user.created` | `captureContact`, then write the contact id to `external_id` **and** the mirror. The `external_id` write is skipped when one is already set; the mirror write is not (it reconciles). |
-| `user.deleted` | Resolve the contact from the **mirror** by `data.id`, remove it, then drop the mirror key. Payload `external_id` is a documented fallback. Unresolvable → 2xx no-op, distinct log.    |
-| `user.updated` | If the primary email changed, create the new contact, then remove the old, then write the new id back to `external_id` **and** the mirror.                                            |
+| Event          | Behavior                                                                                                                                                                                                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user.created` | Only for a sign-up that opted in (#362): `captureContact`, then write the contact id to `external_id` **and** the mirror. The `external_id` write is skipped when one is already set; the mirror write is not (it reconciles, opt-in or not). No opt-in and no mapping → 2xx no-op. |
+| `user.deleted` | Resolve the contact from the **mirror** by `data.id`, remove it, then drop the mirror key. Payload `external_id` is a documented fallback. Unresolvable → 2xx no-op, distinct log.                                                                                                  |
+| `user.updated` | If the primary email changed, create the new contact, then remove the old, then write the new id back to `external_id` **and** the mirror.                                                                                                                                          |
 
 Every mapping write is best-effort: a failure logs and still acks, because
 Clerk redelivers every non-2xx and a redelivery would re-run `captureContact`

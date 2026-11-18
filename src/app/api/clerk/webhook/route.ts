@@ -3,6 +3,7 @@ import { Webhook } from 'svix'
 
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
 import { captureContact } from '@/lib/email/captureContact'
+import { hasMailingListOptIn } from '@/lib/email/mailingListOptIn'
 import {
   forgetResendContact,
   recallResendContact,
@@ -88,9 +89,18 @@ import { boundedErrorMessage } from '@/lib/observability/boundedErrorMessage'
  * `@/lib/email/resendContactMirror`; both are usable, and testable, without
  * constructing a signed webhook delivery.
  *
- * @remarks Consent: the sign-up flow presents Clerk's legal/marketing consent;
- * TODO(brandon): if you enable a granular marketing opt-in field in Clerk,
- * read it from `public_metadata` here and skip non-consenting users.
+ * ## Consent: only a ticked box joins the list (#362)
+ *
+ * The sign-up screen carries an unticked mailing-list checkbox
+ * (`@/components/auth/SignUpWithOptIn`) whose state travels through Clerk as
+ * `unsafeMetadata` and arrives here as the created user's `unsafe_metadata`.
+ * `user.created` captures a contact only when it reads a literal `true` there
+ * (`hasMailingListOptIn`). Until #362 every sign-up was captured.
+ *
+ * Nothing here removes anyone. An account already on the list is recognised
+ * by its `external_id` mapping, not by the opt-in flag it predates, so
+ * `user.updated` and `user.deleted` behave for it exactly as before; an
+ * account that never joined has no mapping and those two events no-op.
  */
 export async function POST(req: Request) {
   if (!isClerkEnabled()) {
@@ -263,6 +273,23 @@ async function writeExternalId(
  * @remarks The `captureContact` call shape is unchanged from #74 — capture
  * still owns segment assignment, duplicate-swallowing and the no-key warning.
  *
+ * **Capture happens only for a sign-up that opted in (#362).** Without the
+ * opt-in and without an existing mapping there is nothing to do, and the
+ * handler returns before any Resend, Clerk or Redis call: no contact, no
+ * `external_id`, no mirror key, on the first delivery and on every
+ * redelivery. Without the opt-in but WITH a mapping, the user is an existing
+ * member (every account older than #362 lacks the flag): the reconcile below
+ * still runs, because their eventual `user.deleted` depends on the mirror,
+ * and capture does not, because re-adding the address would undo a removal
+ * made by hand.
+ *
+ * One recovery path closed with this, on purpose: a replay of a pre-#362
+ * `user.created` carries the original payload, with neither the flag nor an
+ * `external_id`, and is now a no-op where it used to re-capture and re-map.
+ * It cannot be told from a new sign-up that declined, and consent is not
+ * inferred from an address. `scripts/backfill-clerk-resend-mapping.ts` is the
+ * repair for a legacy member left unmapped (`docs/AUTH.md`).
+ *
  * The `external_id` write is skipped when one is already set, so a redelivery
  * cannot rewrite an established link. **The mirror write is not skipped**: it
  * is the reconcile path. An already-set `external_id` is exactly the state of
@@ -275,17 +302,29 @@ async function handleUserCreated(data: ClerkUserData): Promise<void> {
   const email = primaryEmail(data)
   if (!email) return
 
-  const { firstName, lastName } = nameParts(data)
-
-  // captureContact logs + swallows every failure, so this always 200s:
-  // Clerk retries are not useful for a bad Resend config, and a
-  // duplicate-contact error on webhook redelivery is expected noise.
-  await captureContact({ email, firstName, lastName })
-
   const userId = nonEmptyStringField(data, 'id')
+  const mappedContactId = nonEmptyStringField(data, 'external_id')
+  const optedIn = hasMailingListOptIn(data.unsafe_metadata)
+
+  if (!optedIn && !mappedContactId) {
+    console.info(
+      '[clerk-webhook] user.created without the mailing-list opt-in; no contact captured',
+      { userId },
+    )
+    return
+  }
+
+  if (optedIn) {
+    const { firstName, lastName } = nameParts(data)
+
+    // captureContact logs + swallows every failure, so this always 200s:
+    // Clerk retries are not useful for a bad Resend config, and a
+    // duplicate-contact error on webhook redelivery is expected noise.
+    await captureContact({ email, firstName, lastName })
+  }
+
   if (!userId) return
 
-  const mappedContactId = nonEmptyStringField(data, 'external_id')
   if (mappedContactId) {
     console.info('[clerk-webhook] external_id already set; mapping skipped', {
       userId,

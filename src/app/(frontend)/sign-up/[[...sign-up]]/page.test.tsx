@@ -24,6 +24,10 @@ vi.mock('@clerk/nextjs', () => ({
   ),
 }))
 
+// `SignUpWithOptIn` reads the pathname to show its checkbox on the first step
+// only; that behaviour is its own suite's subject (`SignUpWithOptIn.test.tsx`).
+vi.mock('next/navigation', () => ({ usePathname: () => '/sign-up' }))
+
 afterEach(() => {
   vi.unstubAllEnvs()
 })
@@ -56,5 +60,16 @@ describe('SignUpPage', () => {
       routing: 'path',
       signInUrl: '/sign-in',
     })
+  })
+
+  it('offers the mailing-list opt-in beside the form, unticked (#362)', () => {
+    vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_x')
+    vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_x')
+
+    render(<SignUpPage />)
+
+    expect(
+      screen.getByRole('checkbox', { name: /keep me posted/i }),
+    ).not.toBeChecked()
   })
 })

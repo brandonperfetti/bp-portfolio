@@ -435,7 +435,9 @@ stay there.
 - **A mailing-list contact is captured only with consent.** The contact
   form captures only when its unchecked-by-default opt-in is set and the
   message was delivered [source: `src/app/api/contact/route.ts`]; sign-up
-  capture comes through the verified Clerk webhook. Mechanism:
+  capture comes through the verified Clerk webhook, and only for an account
+  whose sign-up ticked the same unchecked-by-default opt-in (#362) [source:
+  `src/app/api/clerk/webhook/route.ts`, `hasMailingListOptIn`]. Mechanism:
   `docs/AUTH.md` § Email capture.
 - **Broadcasts:** Respect the marketing consent field, and honor
   per-contact unsubscribe state before any broadcast ever sends. _Moved from

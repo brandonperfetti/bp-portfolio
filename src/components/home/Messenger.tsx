@@ -4,6 +4,7 @@ import { useState } from 'react'
 
 import { Button } from '@/components/Button'
 import { MailIcon } from '@/icons'
+import { MAILING_LIST_OPT_IN_LABEL } from '@/lib/email/mailingListOptIn'
 import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
 
 export function Messenger() {
@@ -124,9 +125,7 @@ export function Messenger() {
           onChange={(event) => setSubscribe(event.target.checked)}
           className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-zinc-300 accent-teal-700 dark:border-zinc-600"
         />
-        <span>
-          Keep me posted when new articles are published. Unsubscribe anytime.
-        </span>
+        <span>{MAILING_LIST_OPT_IN_LABEL}</span>
       </label>
       {/* Turnstile mount point — empty unless Cloudflare escalates to an
           interactive challenge, so it costs no layout otherwise. */}

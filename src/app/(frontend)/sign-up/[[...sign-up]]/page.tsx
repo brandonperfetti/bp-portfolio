@@ -1,5 +1,4 @@
-import { SignUp } from '@clerk/nextjs'
-
+import { SignUpWithOptIn } from '@/components/auth/SignUpWithOptIn'
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
 
 export const metadata = { title: 'Sign up', robots: { index: false } }
@@ -10,12 +9,13 @@ export const metadata = { title: 'Sign up', robots: { index: false } }
 export const instant = false
 
 /**
- * In-app, site-themed sign-up (email capture entry point; consent handled
- * by Clerk legal/consent settings). The email-code verification step is
+ * In-app, site-themed sign-up. An account joins the mailing list only when the
+ * visitor ticks the opt-in beside the form (#362; `SignUpWithOptIn` carries
+ * how that reaches the webhook). The email-code verification step is
  * part of the same `<SignUp>` flow, so it renders in-app and on-theme too —
  * it isn't a separate route.
  *
- * @remarks `path`/`routing="path"` pin the component to this route's
+ * @remarks `path`/`routing="path"` (set in `SignUpWithOptIn`) pin the component to this route's
  * optional catch-all segment (`[[...sign-up]]`), and `signInUrl` keeps its
  * "Sign in" cross-link on the app route. Both are explicit so routing stays
  * correct even if `NEXT_PUBLIC_CLERK_SIGN_IN_URL` is left unset — without
@@ -31,7 +31,7 @@ export default function SignUpPage() {
   }
   return (
     <div className="flex justify-center py-16">
-      <SignUp path="/sign-up" routing="path" signInUrl="/sign-in" />
+      <SignUpWithOptIn />
     </div>
   )
 }

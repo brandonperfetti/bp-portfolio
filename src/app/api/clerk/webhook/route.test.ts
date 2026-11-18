@@ -134,6 +134,15 @@ const makeRequest = (
     headers: { 'content-type': 'application/json', ...headers },
   })
 
+/**
+ * What a sign-up carries when the visitor ticked the mailing-list box (#362):
+ * `<SignUp unsafeMetadata>` lands on the created user as `unsafe_metadata`.
+ * The default `userEvent` payload includes it, so the capture and mapping
+ * cases below all describe a visitor who opted in; the cases that leave it
+ * out say so.
+ */
+const OPTED_IN = { unsafe_metadata: { mailingListOptIn: true } }
+
 /** Minimal `user.*` payload shaped like Clerk's UserJSON. */
 const userEvent = (
   type: string,
@@ -142,6 +151,7 @@ const userEvent = (
     email_addresses: [{ email_address: 'ada@example.test' }],
     first_name: 'Ada',
     last_name: 'Lovelace',
+    ...OPTED_IN,
   },
 ) => ({ type, data })
 
@@ -287,6 +297,7 @@ describe('POST /api/clerk/webhook — user.created', () => {
 
   it('threads undefined (never null/empty) for absent name parts', async () => {
     const event = userEvent('user.created', {
+      ...OPTED_IN,
       id: 'user_2',
       email_addresses: [{ email_address: 'noname@example.test' }],
       first_name: null,
@@ -311,6 +322,7 @@ describe('POST /api/clerk/webhook — user.created', () => {
     // semantics, so the route now resolves the marked address; the first-entry
     // fallback survives only for payloads with no primary id.
     const event = userEvent('user.created', {
+      ...OPTED_IN,
       id: 'user_5',
       email_addresses: [
         { email_address: 'old@example.test', id: 'idn_old' },
@@ -336,6 +348,7 @@ describe('POST /api/clerk/webhook — user.created', () => {
     // A primary id that matches nothing is malformed input, not a reason to
     // drop the capture: the pre-#86 behavior is the safe floor here.
     const event = userEvent('user.created', {
+      ...OPTED_IN,
       id: 'user_6',
       email_addresses: [{ email_address: 'first@example.test', id: 'idn_a' }],
       primary_email_address_id: 'idn_missing',
@@ -387,6 +400,7 @@ describe('POST /api/clerk/webhook — user.created', () => {
 
   it('skips the external_id write when one is already set (redelivery-safe)', async () => {
     const event = userEvent('user.created', {
+      ...OPTED_IN,
       id: 'user_1',
       email_addresses: [{ email_address: 'ada@example.test' }],
       external_id: 'con_existing',
@@ -407,6 +421,7 @@ describe('POST /api/clerk/webhook — user.created', () => {
     // them with no second Clerk write. Skipping the mirror here would leave
     // them permanently undeletable.
     const event = userEvent('user.created', {
+      ...OPTED_IN,
       id: 'user_1',
       email_addresses: [{ email_address: 'ada@example.test' }],
       external_id: 'con_existing',
@@ -493,6 +508,7 @@ describe('POST /api/clerk/webhook — user.created', () => {
 
   it('2xx-ignores a user.created that carries no email address', async () => {
     const event = userEvent('user.created', {
+      ...OPTED_IN,
       id: 'user_3',
       email_addresses: [],
     })
@@ -505,7 +521,10 @@ describe('POST /api/clerk/webhook — user.created', () => {
   })
 
   it('2xx-ignores a user.created whose email_addresses key is absent entirely', async () => {
-    const event = userEvent('user.created', { id: 'user_4' })
+    const event = userEvent('user.created', {
+      ...OPTED_IN,
+      id: 'user_4',
+    })
     verifyMock.mockReturnValue(event)
 
     const res = await POST(makeRequest(event))
@@ -547,6 +566,120 @@ describe('POST /api/clerk/webhook — user.created', () => {
     expect(updateUserMock).toHaveBeenNthCalledWith(2, 'user_1', {
       externalId: 'con_1',
     })
+  })
+})
+
+describe('POST /api/clerk/webhook — user.created without the mailing-list opt-in (#362)', () => {
+  const base = {
+    id: 'user_9',
+    email_addresses: [{ email_address: 'grace@example.test' }],
+    first_name: 'Grace',
+    last_name: 'Hopper',
+  }
+
+  const expectNothingWritten = () => {
+    expect(captureContactMock).not.toHaveBeenCalled()
+    expect(resendCtor).not.toHaveBeenCalled()
+    expect(contactsGet).not.toHaveBeenCalled()
+    expect(updateUserMock).not.toHaveBeenCalled()
+    expect(redisSet).not.toHaveBeenCalled()
+  }
+
+  it('creates no contact, no external_id and no mirror key when the box was left unticked', async () => {
+    const event = userEvent('user.created', {
+      ...base,
+      unsafe_metadata: { mailingListOptIn: false },
+    })
+    verifyMock.mockReturnValue(event)
+
+    const res = await POST(makeRequest(event))
+
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({ received: true })
+    expectNothingWritten()
+  })
+
+  it('treats a sign-up that never saw the box as not opted in', async () => {
+    // A social sign-in from /sign-in that creates the account, an account made
+    // in the Clerk dashboard, or any client that sends no metadata at all.
+    const event = userEvent('user.created', base)
+    verifyMock.mockReturnValue(event)
+
+    const res = await POST(makeRequest(event))
+
+    expect(res.status).toBe(200)
+    expectNothingWritten()
+  })
+
+  it.each([
+    ['the string "true"', { mailingListOptIn: 'true' }],
+    ['the number 1', { mailingListOptIn: 1 }],
+    ['a differently named key', { subscribe: true }],
+    ['null metadata', null],
+    ['metadata that is not an object', 'mailingListOptIn'],
+    ['an array', [true]],
+  ])(
+    'reads only a literal true as consent: %s is not',
+    async (_label, meta) => {
+      const event = userEvent('user.created', {
+        ...base,
+        unsafe_metadata: meta,
+      })
+      verifyMock.mockReturnValue(event)
+
+      const res = await POST(makeRequest(event))
+
+      expect(res.status).toBe(200)
+      expectNothingWritten()
+    },
+  )
+
+  it('does not read consent from public_metadata or private_metadata', async () => {
+    // Only the field the sign-up form writes counts. The other two are set by
+    // the backend, never by the visitor ticking a box.
+    const event = userEvent('user.created', {
+      ...base,
+      public_metadata: { mailingListOptIn: true },
+      private_metadata: { mailingListOptIn: true },
+    })
+    verifyMock.mockReturnValue(event)
+
+    await POST(makeRequest(event))
+
+    expectNothingWritten()
+  })
+
+  it('gives the same outcome on redelivery', async () => {
+    const event = userEvent('user.created', base)
+    verifyMock.mockReturnValue(event)
+
+    await POST(makeRequest(event))
+    await POST(makeRequest(event))
+
+    expectNothingWritten()
+  })
+
+  it('leaves an existing member alone: an already-mapped user is reconciled, not re-captured', async () => {
+    // Every account created before #362 has no opt-in flag. One that is on the
+    // list carries its contact id as external_id; a redelivery of its
+    // user.created must still repair the mirror (the delete path depends on
+    // it) and must not add the address to the list again, which would undo a
+    // removal made by hand.
+    const event = userEvent('user.created', {
+      ...base,
+      external_id: 'con_existing',
+    })
+    verifyMock.mockReturnValue(event)
+
+    const res = await POST(makeRequest(event))
+
+    expect(res.status).toBe(200)
+    expect(captureContactMock).not.toHaveBeenCalled()
+    expect(updateUserMock).not.toHaveBeenCalled()
+    expect(redisSet).toHaveBeenCalledWith(
+      'clerk:resend-contact:user_9',
+      'con_existing',
+    )
   })
 })
 
