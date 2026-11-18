@@ -144,7 +144,8 @@ admin, UI and prose say topics.
 
 ## Globals
 
-`SiteSettings` (canonical URL, metadata defaults), `Navigation`, `Footer`,
+`SiteSettings` (canonical URL, metadata defaults), `Navigation`, `Footer`
+(footer-only links, rendered after the navigation: `docs/NAVIGATION.md`),
 `Identity` (author/JSON-LD identity + the uploaded CV: `getCmsIdentity`
 feeds `buildPersonSchema` and the Resume card's Download CV button; empty
 fields fall back to the `src/lib/identity.ts` constants and the static

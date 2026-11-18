@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// #262: the three global readers must read with access control enforced. The
+// #262: the global readers (four since the footer's, #363) must read with access control enforced. The
 // Payload Local API defaults `overrideAccess` to `true`, so an omitted option
 // silently skips the global's `read` rule and, at `depth: 1`, the rule of
 // every relation it populates. `getPayload` returns a fake `findGlobal` and
@@ -17,6 +17,7 @@ vi.mock('next/cache', () => ({
 }))
 
 import { getCmsConsentConfig } from '@/lib/cms/consentRepo'
+import { getCmsFooterLinks } from '@/lib/cms/footerRepo'
 import { getCmsNavigation } from '@/lib/cms/navigationRepo'
 import { getCmsSiteSettings } from '@/lib/cms/siteSettingsRepo'
 
@@ -31,12 +32,21 @@ const findGlobalOptions = () => {
   return findGlobal.mock.calls[0]![0] as Record<string, unknown>
 }
 
-describe('global readers enforce access control (#262)', () => {
+describe('global readers enforce access control (#262, #363)', () => {
   it('getCmsNavigation reads `navigation` with overrideAccess: false', async () => {
     await getCmsNavigation()
 
     expect(findGlobalOptions()).toMatchObject({
       slug: 'navigation',
+      overrideAccess: false,
+    })
+  })
+
+  it('getCmsFooterLinks reads `footer` with overrideAccess: false (#363)', async () => {
+    await getCmsFooterLinks()
+
+    expect(findGlobalOptions()).toMatchObject({
+      slug: 'footer',
       overrideAccess: false,
     })
   })

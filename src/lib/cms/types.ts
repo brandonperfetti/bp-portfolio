@@ -194,6 +194,12 @@ export interface CmsNavigationItem {
   showInNav: boolean
 }
 
+/** One footer-only link from the `footer` global (#363). */
+export interface CmsFooterLink {
+  href: string
+  label: string
+}
+
 export interface CmsWorkHistoryItem {
   company: string
   title: string

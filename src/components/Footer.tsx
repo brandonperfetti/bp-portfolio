@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 
 import { ManageCookiesLink } from '@/components/consent/ManageCookiesLink'
 import { ContainerInner, ContainerOuter } from '@/components/Container'
-import type { CmsNavigationItem } from '@/lib/cms/types'
+import type { CmsFooterLink, CmsNavigationItem } from '@/lib/cms/types'
 import { getExternalLinkProps } from '@/lib/link-utils'
 import { PRIMARY_NAV_LINKS } from '@/lib/navigation'
 
@@ -56,15 +56,48 @@ const AGENT_LINKS = [
   { href: '/feed.xml', label: 'rss.xml' },
 ] as const
 
+type FooterProps = {
+  navigationItems: Array<Pick<CmsNavigationItem, 'href' | 'label'>>
+  /**
+   * Footer-only links from the `footer` global (#363). Optional so the static
+   * fallback {@link Footer} and existing callers render as before.
+   */
+  footerLinks?: CmsFooterLink[]
+}
+
 /**
- * Footer with caller-supplied (CMS-driven) navigation items.
+ * The footer links that are not already in the row: one whose `href` matches a
+ * navigation item, or an earlier footer link, is left out.
+ *
+ * @remarks The footer shows the header navigation first and the footer global's
+ * links after it (#363). An editor who lists "About" in both would otherwise
+ * get the same destination twice in one row.
+ */
+function distinctFooterLinks(
+  navigationItems: FooterProps['navigationItems'],
+  footerLinks: CmsFooterLink[],
+): CmsFooterLink[] {
+  const seen = new Set(navigationItems.map((item) => item.href))
+  return footerLinks.filter((link) => {
+    if (seen.has(link.href)) return false
+    seen.add(link.href)
+    return true
+  })
+}
+
+/**
+ * Footer with caller-supplied (CMS-driven) navigation items, followed by the
+ * footer-only links from the `footer` global.
  *
  * @remarks Renders nothing on `/corvus` — the chat surface owns its full
  * viewport and a footer would push the composer off-screen.
+ *
+ * With no footer links the markup is what it was before #363: the navigation
+ * items, then the consent entry point. The links are added to that row, never
+ * substituted for the navigation, so the first link an editor adds cannot
+ * empty the footer of everything else.
  */
-export function FooterWithNavigation(props: {
-  navigationItems: Array<Pick<CmsNavigationItem, 'href' | 'label'>>
-}) {
+export function FooterWithNavigation(props: FooterProps) {
   // #76 Piece 1: `usePathname` suspends during the static-shell prerender of
   // dynamic-param routes (`/articles/[slug]`, `/[slug]`) under cacheComponents.
   // Isolate the read behind a Suspense boundary so those shells prerender; the
@@ -77,11 +110,7 @@ export function FooterWithNavigation(props: {
   )
 }
 
-function FooterInner({
-  navigationItems,
-}: {
-  navigationItems: Array<Pick<CmsNavigationItem, 'href' | 'label'>>
-}) {
+function FooterInner({ navigationItems, footerLinks = [] }: FooterProps) {
   const pathname = usePathname()
 
   if (pathname === '/corvus') {
@@ -100,6 +129,13 @@ function FooterInner({
                     {item.label}
                   </NavLink>
                 ))}
+                {distinctFooterLinks(navigationItems, footerLinks).map(
+                  (link) => (
+                    <NavLink key={`footer:${link.href}`} href={link.href}>
+                      {link.label}
+                    </NavLink>
+                  ),
+                )}
                 {/* Persistent consent entry point (#83) — reachable even where
                     the banner is suppressed (e.g. opt-out jurisdictions). */}
                 <ManageCookiesLink />

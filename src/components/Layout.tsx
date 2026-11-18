@@ -1,12 +1,16 @@
 import { FooterWithNavigation } from '@/components/Footer'
 import { Header } from '@/components/Header'
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
+import { getCmsFooterLinksOrNone } from '@/lib/cms/footerRepo'
 import { getCmsNavigation } from '@/lib/cms/navigationRepo'
 
 export async function Layout({ children }: { children: React.ReactNode }) {
-  const navigationItems = (await getCmsNavigation()).filter(
-    (item) => item.showInNav,
-  )
+  // Read together: both are cached globals, and neither waits on the other.
+  const [navigation, footerLinks] = await Promise.all([
+    getCmsNavigation(),
+    getCmsFooterLinksOrNone(),
+  ])
+  const navigationItems = navigation.filter((item) => item.showInNav)
 
   return (
     <>
@@ -21,7 +25,10 @@ export async function Layout({ children }: { children: React.ReactNode }) {
           showUserButton={isClerkEnabled()}
         />
         <main className="flex-auto">{children}</main>
-        <FooterWithNavigation navigationItems={navigationItems} />
+        <FooterWithNavigation
+          navigationItems={navigationItems}
+          footerLinks={footerLinks}
+        />
       </div>
     </>
   )
