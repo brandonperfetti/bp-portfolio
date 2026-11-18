@@ -86,16 +86,42 @@ your consent".
   it had granted (`reloadOnConsentRevoked`, its default), and the fresh page
   loads nothing from Google. That covers the dialog's buttons and also the
   #103 region-change reprompt, whose `setConsent` goes through the same save.
-  Independently of the reload, `stopGoogleAnalytics` sets gtag's own opt-out
-  switch (`window['ga-disable-<id>']`) and tells an installed tag storage is
-  denied, so the stop does not rest on the reload alone: it holds in the
-  moment before it, and if that default is ever turned off. The script that
-  already ran stays in memory until the next page load; it has nothing it may
-  send.
+  `stopGoogleAnalytics` sets gtag's own opt-out switch
+  (`window['ga-disable-<id>']`) and tells an installed tag storage is denied.
+  It is called from c15t's `onBeforeConsentRevocationReload` callback, which
+  runs synchronously just before that reload, and from an effect for a revoke
+  that does not reload. What the browser proof measures is the outcome: no
+  request to a Google host from the Reject click onwards, the departing
+  document included. It does not read the switch in that document.
+- **A stored auto-grant is not carried into a region that asks.** c15t restores
+  the stored record as its store is created and makes its first script pass on
+  it. An auto-grant written where consent is not required would load the tag
+  on the first page served to that browser in a consent-required region,
+  before any effect could revoke it. So before the provider is built,
+  `ConsentManager` drops a stored record that is an auto-grant
+  (`bp-consent-autogrant`) unless the geo cookie says consent is confidently
+  not required (`shouldDiscardStoredAutoGrant`), and the visitor is asked. An
+  explicit choice is never dropped. **It recognises an automatic grant by
+  that marker, and by nothing else.** One history gets past it: during a
+  region change inside a visit (below), the save that revokes an automatic
+  grant can finish before the automatic grant's own save, which then lands
+  last and stores a grant with the marker already cleared. A later fresh load
+  takes that record for an explicit choice and keeps it. The race is older
+  than this protection and is not changed by it (#375).
+- **A region change inside one visit is not handled well, and is open work
+  (#375).** On a client-side navigation after which the geo cookie says
+  consent is required, an automatic grant is revoked by saving a denial:
+  Analytics goes off and c15t reloads the page, but the banner does not come
+  back, because c15t counts that save as a choice. The tag that was already
+  loaded can also report the route the visitor lands on before it is
+  stopped.
 
-Which visitors are granted without being asked is decided in one function,
-`shouldAutoGrantMeasurement`. The script registration knows nothing about
-regions, so changing who is asked is a change to that predicate alone.
+Which visitors are granted without being asked is decided by the region
+predicates in `consent-config.ts` and nowhere else:
+`shouldAutoGrantMeasurement` (who is granted), `shouldDiscardStoredAutoGrant`
+and `shouldRepromptOnRegionChange` (when such a grant stops counting). The
+script registration knows nothing about regions, so changing who is asked is
+a change to those predicates alone.
 
 **The dialog's Analytics sentence.** The default copy now says the tag loads
 only while the category is on. The sentence shipped before #361 ("Google still

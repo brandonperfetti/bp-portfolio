@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
+import { GOOGLE_HOSTS, TAG_SCRIPT_HOST } from './e2e/support/google-hosts'
+
 const isCi = Boolean(process.env.CI)
 
 /**
@@ -23,21 +25,19 @@ const isCi = Boolean(process.env.CI)
  * somehow missed still has nowhere to go, and running the whole suite in that
  * mode by mistake loads the tag but delivers no measurement hit.
  *
+ * `^NOTFOUND` is the value Chromium's resolver treats as "fail this lookup"
+ * (`net/dns/mapped_host_resolver.cc`): the request fails with
+ * `ERR_NAME_NOT_RESOLVED` without a DNS query being made. The list of hosts is
+ * shared with the consent spec's interceptor (`e2e/support/google-hosts.ts`).
+ *
  * Chromium-only: a Firefox or WebKit project would need its own block, and
  * this argument would have to move into the `chromium` project.
  */
-const GOOGLE_HOSTS = [
-  'googletagmanager.com',
-  'google-analytics.com',
-  'analytics.google.com',
-  'doubleclick.net',
-]
-const TAG_SCRIPT_HOST = 'www.googletagmanager.com'
 const blockGoogleHosts = [
   `--host-resolver-rules=${[
     ...GOOGLE_HOSTS.flatMap((host) => [
-      `MAP ${host} ~NOTFOUND`,
-      `MAP *.${host} ~NOTFOUND`,
+      `MAP ${host} ^NOTFOUND`,
+      `MAP *.${host} ^NOTFOUND`,
     ]),
     ...(process.env.GA_E2E_LIVE === '1' ? [`EXCLUDE ${TAG_SCRIPT_HOST}`] : []),
   ].join(', ')}`,

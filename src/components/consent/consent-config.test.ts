@@ -4,10 +4,13 @@ import {
   buildConsentManagerOptions,
   buildConsentScripts,
   CONSENT_CATEGORIES,
+  CONSENT_AUTOGRANT_MARKER_KEY,
   CONSENT_STORAGE_KEY,
+  discardStoredConsent,
   gaDisableKey,
   readGaEnv,
   shouldAutoGrantMeasurement,
+  shouldDiscardStoredAutoGrant,
   shouldRepromptOnRegionChange,
   shouldShowBanner,
   stopGoogleAnalytics,
@@ -339,5 +342,93 @@ describe('shouldAutoGrantMeasurement (opt-out-aware analytics)', () => {
         hasConsented: true,
       }),
     ).toBe(false)
+  })
+})
+
+describe('shouldDiscardStoredAutoGrant (#361: a stored auto-grant must not load the tag where consent is required)', () => {
+  it('discards an auto-grant in a consent-required region', () => {
+    expect(
+      shouldDiscardStoredAutoGrant({
+        wasAutoGranted: true,
+        consentRequired: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('discards an auto-grant when the region is unknown (fail-closed)', () => {
+    expect(
+      shouldDiscardStoredAutoGrant({
+        wasAutoGranted: true,
+        consentRequired: null,
+      }),
+    ).toBe(true)
+  })
+
+  it('keeps an auto-grant where consent is confidently not required', () => {
+    expect(
+      shouldDiscardStoredAutoGrant({
+        wasAutoGranted: true,
+        consentRequired: false,
+      }),
+    ).toBe(false)
+  })
+
+  it.each([true, false, null])(
+    'never discards an explicit choice (consentRequired=%s)',
+    (consentRequired) => {
+      expect(
+        shouldDiscardStoredAutoGrant({
+          wasAutoGranted: false,
+          consentRequired,
+        }),
+      ).toBe(false)
+    },
+  )
+})
+
+describe('discardStoredConsent', () => {
+  afterEach(() => {
+    window.localStorage.clear()
+    document.cookie = `${CONSENT_STORAGE_KEY}=; max-age=0; path=/`
+  })
+
+  it('removes the record from localStorage and from the cookie, and clears the marker', () => {
+    window.localStorage.setItem(CONSENT_STORAGE_KEY, '{"consents":{}}')
+    window.localStorage.setItem(CONSENT_AUTOGRANT_MARKER_KEY, '1')
+    document.cookie = `${CONSENT_STORAGE_KEY}=c.measurement:1; path=/`
+    window.localStorage.setItem('theme', 'dark')
+
+    discardStoredConsent()
+
+    expect(window.localStorage.getItem(CONSENT_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(CONSENT_AUTOGRANT_MARKER_KEY)).toBeNull()
+    expect(document.cookie).not.toContain(`${CONSENT_STORAGE_KEY}=`)
+    // Nothing else in storage is its to remove.
+    expect(window.localStorage.getItem('theme')).toBe('dark')
+  })
+})
+
+describe('buildConsentManagerOptions — the pre-reload revocation hook (#361)', () => {
+  it('wires c15t’s synchronous before-reload callback to the given handler', () => {
+    const handler = vi.fn()
+    const options = buildConsentManagerOptions({
+      scripts: [],
+      onBeforeRevocationReload: handler,
+    })
+
+    options.callbacks?.onBeforeConsentRevocationReload?.({
+      preferences: { necessary: true, measurement: false },
+    } as never)
+
+    expect(handler).toHaveBeenCalledWith({
+      necessary: true,
+      measurement: false,
+    })
+  })
+
+  it('adds no callbacks when no handler is given', () => {
+    expect(
+      buildConsentManagerOptions({ scripts: [] }).callbacks,
+    ).toBeUndefined()
   })
 })
