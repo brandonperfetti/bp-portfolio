@@ -38,11 +38,18 @@ const GA_ID = 'G-TEST12345'
 const win = window as unknown as Record<string, unknown>
 
 const TAG_HOST = 'googletagmanager.com'
-/** A script counts when its `src` is served from Google's tag host. */
+/**
+ * A script counts when its `src` is served from Google's tag host or a
+ * subdomain of it. A script with no `src`, or one that is not a URL, is not
+ * a Google script and is skipped, never an error.
+ */
 const isTagScript = (el: HTMLScriptElement) => {
-  if (!el.src) return false
-  const { hostname } = new URL(el.src)
-  return hostname === TAG_HOST || hostname.endsWith(`.${TAG_HOST}`)
+  try {
+    const { hostname } = new URL(el.src)
+    return hostname === TAG_HOST || hostname.endsWith(`.${TAG_HOST}`)
+  } catch {
+    return false
+  }
 }
 const googleScripts = () =>
   Array.from(document.querySelectorAll('script')).filter(isTagScript)
