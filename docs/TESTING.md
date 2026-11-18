@@ -155,6 +155,11 @@ built the site with Clerk off. `e2e/sign-up-opt-in.spec.ts` **fails** in CI
 when they are missing, so a run that could not exercise the sign-up form is
 never taken for a pass. Two consequences:
 
+- The keys are set for the whole job and blanked on the Storybook
+  interaction-test step: stories mount components without a
+  `<ClerkProvider>`, and with the publishable key present `CorvusChat` takes
+  Clerk to be on and its stories throw (14 failed on the first run with the
+  keys).
 - Every page of every spec now loads clerk-js from that development instance.
   The sign-up spec is the only one that submits anything, and it intercepts
   every write to Clerk before it leaves the browser (`docs/JOURNEYS.md`,

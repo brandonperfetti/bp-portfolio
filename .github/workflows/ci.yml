@@ -250,8 +250,19 @@ jobs:
         env:
           NEXT_PUBLIC_VERCEL_ENV: production
           NEXT_PUBLIC_GA_MEASUREMENT_ID: G-E2E0000000
+      # #377: this job's Clerk keys are for the Build and E2E steps above,
+      # which need the site built with Clerk on. Stories mount components
+      # with no <ClerkProvider>, and a component that reads the publishable
+      # key to decide whether Clerk is on (CorvusChat's CLERK_ENABLED_CLIENT)
+      # then calls a Clerk hook that throws: with the keys set, 14 CorvusChat
+      # stories failed here (run 44377185413). The stories were written for,
+      # and until 2026-11-18 always ran in, an environment without the keys,
+      # so this step keeps that environment. An empty value reads as unset.
       - name: Storybook interaction tests (Vitest browser mode)
         run: pnpm test:storybook
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ''
+          CLERK_SECRET_KEY: ''
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
