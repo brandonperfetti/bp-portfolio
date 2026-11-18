@@ -16,7 +16,6 @@ import { ConsentConfigProvider } from './consent-context'
 import {
   buildConsentManagerOptions,
   buildConsentScripts,
-  discardStoredAutoGrantOncePerDocument,
   readAutoGrantMarker,
   readGaEnv,
   setAutoGrantMarker,
@@ -169,12 +168,6 @@ export function ConsentManager({
   consentConfig?: ConsentConfig
 }) {
   const options = useMemo(() => {
-    // #361: before c15t's store exists (it reads storage as it is created,
-    // further down this render), drop an auto-grant that was written where
-    // consent is not required if this page is not being served there. In the
-    // browser only; the server has neither storage nor the cookie. Once per
-    // document: see the helper.
-    discardStoredAutoGrantOncePerDocument()
     const { measurementId, isProduction } = readGaEnv()
     return buildConsentManagerOptions({
       // Synchronous, just before c15t reloads on a revoking save: the effect

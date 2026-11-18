@@ -97,39 +97,41 @@ your consent".
   Google host from the Reject click onwards, the departing document
   included. It does not read the switch in that document, and it is not a
   guarantee that the tag cannot send inside that interval.
-- **A stored auto-grant is not carried into a region that asks.** c15t restores
-  the stored record as its store is created and makes its first script pass on
-  it. An auto-grant written where consent is not required would load the tag
-  on the first page served to that browser in a consent-required region,
-  before any effect could revoke it. So before the provider is built, once
-  per document, `ConsentManager` drops a stored record that is an auto-grant
-  (`bp-consent-autogrant`) unless the geo cookie says consent is confidently
-  not required (`shouldDiscardStoredAutoGrant`), and the visitor is asked. An
-  explicit choice is never dropped. The check is never repeated in the same
-  document: run again after the store exists (the root layout re-rendering
-  on a router refresh, say) it would clear the record and the marker under a
-  live grant, and the region check that follows would mistake that grant for
-  a choice. **It recognises an automatic grant by
-  that marker, and by nothing else.** One history gets past it: during a
-  region change inside a visit (below), the save that revokes an automatic
-  grant can finish before the automatic grant's own save, which then lands
-  last and stores a grant with the marker already cleared. A later fresh load
-  takes that record for an explicit choice and keeps it. The race is older
-  than this protection and is not changed by it (#375).
-- **A region change inside one visit is not handled well, and is open work
-  (#375).** On a client-side navigation after which the geo cookie says
-  consent is required, an automatic grant is revoked by saving a denial:
-  Analytics goes off and c15t reloads the page, but the banner does not come
-  back, because c15t counts that save as a choice. The tag that was already
-  loaded can also report the route the visitor lands on before it is
-  stopped.
+- **What is not covered: an automatic grant meeting a region that asks
+  (#375).** Where consent is not required, `measurement` is granted
+  automatically and the grant is stored. The consent-state logic that follows
+  is unchanged by #361; only what the tag does with that state changed. Two
+  cases are left as they were, by decision (Brandon, 2026-11-18):
+  - **A returning visitor.** c15t restores the stored grant as its store is
+    created and makes its first script pass on it, so a visitor granted
+    automatically where consent is not required, who next loads the site from
+    a region that requires it, gets the tag on that first page. The region
+    check (an effect) then revokes the grant by saving a denial, and c15t
+    reloads; later pages load nothing. Before #361 every visitor got the tag
+    on every page.
+  - **A region change inside one visit.** On a client-side navigation after
+    which the geo cookie says consent is required, the automatic grant is
+    revoked the same way: Analytics goes off and c15t reloads the page, but
+    the banner does not come back, because c15t counts that save as a choice.
+    The tag that was already loaded can also report the route the visitor
+    lands on before it is stopped. And c15t neither orders nor cancels saves:
+    if the automatic grant's save is still in flight when the denial is saved,
+    the older grant can land last, or its second storage write can overwrite
+    the stored denial, leaving a grant stored with nothing marking it as
+    automatic.
+
+  A check that dropped a stored automatic grant before c15t read it was built
+  for the first case during #361 and taken out again: each version of it left
+  some visitor worse off than production in a history involving a second tab
+  or an unfinished save. The design that replaces it, and the histories it
+  must pass, are in #375.
 
 Which visitors are granted without being asked is decided by the region
 predicates in `consent-config.ts` and nowhere else:
-`shouldAutoGrantMeasurement` (who is granted), `shouldDiscardStoredAutoGrant`
-and `shouldRepromptOnRegionChange` (when such a grant stops counting). The
-script registration knows nothing about regions, so changing who is asked is
-a change to those predicates alone.
+`shouldAutoGrantMeasurement` (who is granted) and
+`shouldRepromptOnRegionChange` (when such a grant stops counting). The script
+registration knows nothing about regions, so changing who is asked is a
+change to those predicates alone.
 
 **The dialog's Analytics sentence.** The default copy now says the tag loads
 only while the category is on. The sentence shipped before #361 ("Google still

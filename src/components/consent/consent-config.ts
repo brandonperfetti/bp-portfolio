@@ -1,8 +1,6 @@
 import type { ConsentManagerOptions } from '@c15t/react'
 import { gtag } from '@c15t/scripts/google-tag'
 
-import { readConsentRequiredCookie } from '@/lib/consent/cookie'
-
 import type { C15tCategory } from './consent-content'
 
 /**
@@ -254,89 +252,6 @@ export function shouldRepromptOnRegionChange(input: {
     input.consentRequired === true &&
     !input.hasExplicitChoice
   )
-}
-
-/**
- * Whether a stored consent record must be discarded before c15t reads it
- * (#361): it is an opt-out auto-grant, and this page is not being served to a
- * region where consent is confidently not required.
- *
- * @remarks
- * c15t restores the stored record when its store is created and makes its
- * first script pass on it, with no idea where the visitor is. An auto-grant
- * written where consent is not required would therefore load Google's tag on
- * the first page served to that browser in a consent-required region, before
- * the #103 reprompt in `ConsentSurface` (an effect, so later) could revoke it.
- * The grant was never the visitor's choice, so it is dropped up front and the
- * visitor is asked like anyone arriving fresh.
- *
- * Fail-closed, like the banner ({@link shouldShowBanner}): an unknown region
- * (`null`) discards too. An explicit choice is never touched; it carries no
- * auto-grant marker. Region logic stays in these predicates: this is the
- * inverse reading of {@link shouldAutoGrantMeasurement}'s condition.
- */
-export function shouldDiscardStoredAutoGrant(input: {
-  wasAutoGranted: boolean
-  consentRequired: boolean | null
-}): boolean {
-  return input.wasAutoGranted && input.consentRequired !== false
-}
-
-/**
- * Removes the stored consent record and the auto-grant marker, in both places
- * c15t keeps the record: localStorage and a path-wide cookie of the same name.
- *
- * @remarks Must run before `ConsentManagerProvider` creates its store, which
- * reads both. c15t's own `deleteConsentFromStorage` does this for the
- * configured key (and also clears its legacy default key, which this app has
- * never written), but
- * `c15t` is not a direct dependency of this app and `@c15t/react` does not
- * re-export it. A no-op on the server and where storage is unavailable.
- */
-export function discardStoredConsent(): void {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.removeItem(CONSENT_STORAGE_KEY)
-  } catch {
-    // Storage unavailable: nothing was restorable from it either.
-  }
-  document.cookie = `${CONSENT_STORAGE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
-  setAutoGrantMarker(false)
-}
-
-let storedAutoGrantChecked = false
-
-/**
- * Makes this document's one check for a stored auto-grant to drop (#361), and
- * does nothing on every later call.
- *
- * @remarks
- * Called from `ConsentManager` while it builds the provider's options, which
- * is before c15t's store exists the first time and not afterwards: that memo
- * runs again whenever `consentConfig` gets a new identity (the root layout
- * re-rendering; Clerk refreshes the router on sign-in and sign-out), while
- * c15t keeps its store in a module-level cache keyed by settings, not by the
- * options object. A second check would wipe the stored record and the marker
- * underneath a live store that still holds the grant; the next region check
- * would then find a grant with no marker, take it for an explicit choice, and
- * leave Analytics on in a consent-required region.
- *
- * The flag is module state, like c15t's own cache, so a remount cannot re-arm
- * it. A region change inside a visit is the effect's job in `ConsentSurface`,
- * not this check's. A no-op on the server, which has neither storage nor the
- * cookie and does not spend the document's one check.
- */
-export function discardStoredAutoGrantOncePerDocument(): void {
-  if (typeof document === 'undefined' || storedAutoGrantChecked) return
-  storedAutoGrantChecked = true
-  if (
-    shouldDiscardStoredAutoGrant({
-      wasAutoGranted: readAutoGrantMarker(),
-      consentRequired: readConsentRequiredCookie(document.cookie),
-    })
-  ) {
-    discardStoredConsent()
-  }
 }
 
 /**

@@ -328,46 +328,6 @@ test.describe('region where consent is not required (AU, the suite default)', ()
   })
 })
 
-test.describe('a visitor auto-granted where consent is not required, arriving where it is', () => {
-  test('loads nothing from Google on the consent-required page, and is asked', async ({
-    context,
-    page,
-  }) => {
-    const seen = await watchGoogle(context)
-
-    // First visit, from a region where consent is not required: measurement
-    // is granted without asking, the grant is stored, and the tag loads.
-    await page.goto('/articles', { waitUntil: 'networkidle' })
-    await consentRuntimeReady(page)
-    await expect.poll(() => seen.filter(isTagScript).length).toBe(1)
-    // Wait for the first page's own page_view too, so it cannot arrive after
-    // the baseline below and be counted against the second page.
-    await expect.poll(() => seen.filter(isPageView).length).toBeGreaterThan(0)
-
-    // The same browser, now seen from a consent-required region (travel, a
-    // VPN, a corrected geo lookup). The stored grant was never the visitor's
-    // choice, so it must not load the tag here, not even once before the
-    // banner comes back.
-    await context.setExtraHTTPHeaders({ 'x-vercel-ip-country': 'FR' })
-    const atArrival = seen.length
-    await page.goto('/about', { waitUntil: 'networkidle' })
-    await consentRuntimeReady(page)
-
-    // The requests first: this is the leak, and the assertion that must fail
-    // if a stored auto-grant is ever restored here again.
-    expect(
-      seen.slice(atArrival),
-      'requests to Google hosts on the consent-required page',
-    ).toEqual([])
-    expect(
-      await page.evaluate(() =>
-        document.querySelector('script[src*="googletagmanager.com"]'),
-      ),
-    ).toBeNull()
-    await expect(banner(page)).toBeVisible()
-  })
-})
-
 test.describe('every other spec in this suite', () => {
   test.skip(LIVE, 'the live mode lets the tag host resolve on purpose')
 
