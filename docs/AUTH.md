@@ -112,13 +112,43 @@ joins, with the same wording as the contact form
   the contact id in the Clerk dashboard. That edit fires `user.updated`, and
   the webhook then does its own sync: it finds the contact at A, sees the
   account's address is B, creates the contact at B, removes the one at A, and
-  writes the new id to `external_id` and the mirror. **Wait for that delivery
-  to finish** (the `[clerk-webhook]` log lines for the user), then check that
-  the Clerk user's `external_id` and the Redis key
-  `clerk:resend-contact:<clerk user id>` hold the same contact id. Only if
-  they do not, re-run the backfill, and not while that delivery is still in
-  flight: it writes the mirror from the mapping it read when it planned, and
-  would put the old id back.
+  writes the new id to `external_id` and the mirror. Each of those steps is
+  best-effort: a failure is logged (`[clerk-webhook]`, `[captureContact]` or
+  `[resend-contacts]`) and the handler carries on or returns early, so any of
+  them may not have happened. Do not assume the result; work towards this end
+  state, in this order:
+
+  **End state:** exactly one contact for this person in Resend, at B; the
+  Clerk user's `external_id` is that contact's id; the Redis key
+  `clerk:resend-contact:<clerk user id>` is that same id.
+
+  1. **Wait for the `user.updated` delivery to finish.** Do nothing below, and
+     do not run the backfill, while it is in flight.
+  2. **Confirm the contact at B exists in Resend, and note its id.** If it
+     does not, or you cannot tell (creating it was not attempted or failed,
+     and the handler returned without touching anything else), **leave the
+     contact at A alone**: it is the only
+     one, and the mapping still points at it. Get B created first, by saving
+     the Clerk user again so `user.updated` re-runs, and start again from
+     step 1.
+  3. **Only once B exists, check A.** If the contact at A is still in Resend
+     (its removal was not attempted or failed), remove it by hand.
+  4. **Make `external_id` B's id.** Whatever it holds now, and whether or not
+     it agrees with the Redis key: both can hold A's deleted id if both writes
+     failed. If it is not B's id, set it in the Clerk dashboard and confirm
+     the edit took. That edit fires `user.updated` once more; the contact's
+     address now matches the account's, so the handler changes nothing.
+  5. **Make the Redis key B's id.** If it is not, run the backfill now, after
+     step 4 and not before: it writes the mirror from the `external_id` it
+     reads when it plans, so run on a stale `external_id` it would copy a
+     deleted contact's id over the mirror. Then read the key again and
+     confirm it is B's id.
+
+  Skipping the order has a cost in each direction: removing A before B
+  exists deletes the person's only contact, and a mirror left on A's id
+  means a later account deletion removes nothing and leaves B in the
+  audience.
+
 - **Not proven in a browser:** that Clerk's hosted form sends the prop's
   current value with the sign-up request. The component test pins what the
   prop holds for each state of the box, and the webhook tests pin what each
