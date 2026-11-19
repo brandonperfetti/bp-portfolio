@@ -159,9 +159,12 @@ which was not done.
   name and the fresh server rendered it under another, so React dropped the
   shell and rendered the whole page in the browser (Sentry BP-PORTFOLIO-S,
   seen once on staging at `c5e86f2`; whether production does it today is
-  not known). Nothing a visitor sees or can do changes; a cold request now
-  uses the prerendered shell. The cause is `@clerk/nextjs` renaming the provider as one of its
-  modules loads, still so in 7.10.4; `ClerkClientProvider.resume.test.tsx`
+  not known). The provider now has the same name in the build's shell and
+  on a cold server, which is what the resume check compares; that is proven
+  by a test over React's real prerender and resume, not on a deployment.
+  Nothing a visitor sees or can do is meant to change. The cause is
+  `@clerk/nextjs` renaming the provider as one of its modules loads, still
+  so in 7.10.4; `ClerkClientProvider.resume.test.tsx`
   fails when a release drops the rename and the wrapper can go. It was not
   reproduced end to end locally and no resume has been watched on staging
   since the fix.

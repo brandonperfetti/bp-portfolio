@@ -18,15 +18,24 @@ import type { ReactNode } from 'react'
  * recorded. When the server `ClerkProvider`
  * from `@clerk/nextjs` was rendered from the layout directly, the provider's
  * name depended on whether some other client module had already loaded that
- * file in the same process: a build worker always had (its shell recorded
- * `ReactClerkProvider`), a cold server often had not (it rendered
- * `ClerkProvider`), and React gave up on the shell and rendered the whole
- * page on the client. Here the import that renames it is this module's own,
+ * file in the same process: the build that was looked at had (its shell
+ * recorded `ReactClerkProvider`), the cold first render that was looked at
+ * had not (it rendered `ClerkProvider`), and React gave up on the shell and
+ * rendered the whole page on the client. Here the import that renames it is this module's own,
  * so it runs before the provider ever renders, in every process.
  *
- * The server provider rendered this same client provider, with the same
- * props: Clerk merges only `NEXT_PUBLIC_*` variables into them, and this
- * site does not use its `dynamic` or keyless modes.
+ * The server provider rendered this same client provider, and this site does
+ * not use its `dynamic` or keyless modes. One thing it did that this does
+ * not: it merged Clerk's environment into the props on the server and sent
+ * the result to the browser. Every variable that merge reads is a
+ * `NEXT_PUBLIC_*` one, which the browser has for itself, with one
+ * exception: Clerk's auto-proxy (`getAutoProxyUrlFromEnvironment` in
+ * `@clerk/shared`), which reads the server-only `VERCEL_TARGET_ENV`,
+ * `VERCEL_PROJECT_PRODUCTION_URL` and `CLERK_DISABLE_AUTO_PROXY` and so
+ * would now resolve on the server and not in the browser. It is off here: it
+ * needs a live key and a project whose production URL ends in `.vercel.app`,
+ * and this project's production domain is a custom one. If the custom
+ * domain is ever removed, set `proxyUrl` or `domain` explicitly.
  *
  * @param props - `appearance`, Clerk's theming for every Clerk surface, and
  *   `children`, the site.
