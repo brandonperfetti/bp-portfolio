@@ -18,7 +18,7 @@ Three privacy fixes and a sign-up form of the site's own, so the site does
 what its consent banner and its sign-up screen say. Release PR
 [#382](https://github.com/brandonperfetti/bp-portfolio/pull/382) ·
 [tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.18) ·
-carries #373, #378 and #380.
+carries #373, #378, #380 and #385.
 
 **Visitors**
 
@@ -49,6 +49,17 @@ carries #373, #378 and #380.
   this site. Sign-in and the account page are still Clerk's own screens; a
   matching sign-in form is
   [#379](https://github.com/brandonperfetti/bp-portfolio/issues/379) (#377).
+- **The form says where you stand** (#384):
+  - Already signed in, `/sign-up` sends you on instead of showing the form:
+    to the page that sent you there when that is a path on this site,
+    otherwise to the home page.
+  - If a Google sign-up comes back needing something the form has no field
+    for, the form says it could not finish with Google and offers email and
+    a password instead of showing the first step again with no message.
+  - The code step says "Enter the code we sent" only when this page sent
+    one. If the send failed it says so, and if the page cannot know (a
+    reload, a return from Google) it asks for the code and points to "Send
+    a new code".
 - **The footer can carry extra links** after the navigation items and before
   "Manage Cookies". None is set today, so the footer looks the same (#363).
 
@@ -90,7 +101,11 @@ and in component tests, for the email route and the Google route.
 **Not proven before release:** anything on production. The form, the bot
 check, and what a ticked and an unticked sign-up each do to the mailing list
 were run by hand by Brandon on staging, whose Clerk instance is a
-development one.
+development one, before the #384 fixes were added. Of those fixes, the
+signed-in redirect is proven by tests with the session mocked, not on a
+served page, and a real return from Google with a missing field has never
+been seen: it needs a sign-up field switched on in the Clerk dashboard,
+which was not done.
 
 **The CMS admin**
 
@@ -109,8 +124,8 @@ development one.
   list.**
 - **Turning on a sign-up field in the Clerk dashboard can outrun the form,**
   which has fields for email and password only. With names, phone or legal
-  consent required, the form says it could not finish; the field has to be
-  built first.
+  consent required, the form says it could not finish, on the email route
+  and on the return from Google; the field has to be built first.
 - No collection, global or field changes shape; there is no migration.
 
 **MCP clients**
@@ -125,6 +140,11 @@ development one.
   `redirect_url` on those two pages (`docs/SECURITY.md`). The password hint
   is a constant, `PASSWORD_MIN_LENGTH`, to keep equal to the Clerk
   dashboard's minimum.
+- The sign-up page redirects a signed-in visitor on the server, through
+  `getViewer()` and `safeRedirectPath` with no origin, so there an absolute
+  `redirect_url` goes to the home page even when it is this site's.
+  `SignUpFormView` takes `codeDelivery` (`sent`, `failed` or `unknown`) for
+  the code step's line (#384).
 - `@clerk/nextjs` 7.5.22 to 7.10.2, which brings `@clerk/backend` 3.30.0 at
   runtime. From 3.28.0 a session token must carry a `cat` header field or
   the visitor reads as signed out; production's token carries it.
