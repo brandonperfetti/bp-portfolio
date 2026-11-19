@@ -293,7 +293,7 @@ describe('SignUpFormView, email-code step', () => {
   })
 
   it('says so instead when the code could not be sent, and names the way forward (#384)', () => {
-    verify({ codeSendFailed: true })
+    verify({ codeDelivery: 'failed' })
     expect(screen.queryByText(/the code we sent/i)).not.toBeInTheDocument()
     expect(screen.getByText(/couldn.t send a code to/i).textContent).toBe(
       'We couldn\'t send a code to a@example.com. Choose "Send a new code" to try again.',
@@ -301,6 +301,17 @@ describe('SignUpFormView, email-code step', () => {
     expect(
       screen.getByRole('button', { name: 'Send a new code' }),
     ).toBeEnabled()
+  })
+
+  it('claims neither when the page did not see a send (#384)', () => {
+    verify({ codeDelivery: 'unknown' })
+    expect(screen.queryByText(/the code we sent/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/couldn.t send/i)).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/Enter the verification code for/).textContent,
+    ).toBe(
+      'Enter the verification code for a@example.com. If you don\'t have one, choose "Send a new code".',
+    )
   })
 
   it('no longer shows the opt-in: the answer has already been sent', () => {

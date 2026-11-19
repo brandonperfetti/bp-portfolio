@@ -177,7 +177,7 @@ export const VerifyEmailSendFailed: Story = {
   args: {
     step: 'verify',
     verifyEmail: 'reader@example.com',
-    codeSendFailed: true,
+    codeDelivery: 'failed',
     errors: { global: ['Too many requests. Please try again in a bit.'] },
   },
   play: async ({ canvasElement, args }) => {
@@ -194,6 +194,32 @@ export const VerifyEmailSendFailed: Story = {
 
 export const VerifyEmailSendFailedDark: Story = {
   ...VerifyEmailSendFailed,
+  globals: { theme: 'dark' },
+}
+
+/**
+ * The page did not see a code go out (a reload on this step, a return from
+ * Google with only the email left to verify), so the line claims neither.
+ */
+export const VerifyEmailDeliveryUnknown: Story = {
+  args: {
+    step: 'verify',
+    verifyEmail: 'reader@example.com',
+    codeDelivery: 'unknown',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.queryByText(/the code we sent/i),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.getByRole('button', { name: 'Send a new code' }),
+    ).toBeEnabled()
+  },
+}
+
+export const VerifyEmailDeliveryUnknownDark: Story = {
+  ...VerifyEmailDeliveryUnknown,
   globals: { theme: 'dark' },
 }
 

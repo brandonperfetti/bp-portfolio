@@ -11,6 +11,7 @@ import { MAILING_LIST_OPT_IN_KEY } from '@/lib/email/mailingListOptIn'
 
 import {
   SignUpFormView,
+  type SignUpCodeDelivery,
   type SignUpFormErrors,
   type SignUpFormValues,
   type SignUpFormViewProps,
@@ -201,8 +202,12 @@ export function SignUpForm({
   // code step while the code is still being sent, `complete` before the
   // navigation), and none of them should flash by.
   const [heldStep, setHeldStep] = useState<SignUpFormViewProps['step']>('start')
-  // The first code could not be sent, so the code step must not say one was.
-  const [codeSendFailed, setCodeSendFailed] = useState(false)
+  // What this page has seen of the code's delivery, so the code step never
+  // says one was sent when it was not. `unknown` until a send is made here:
+  // a reload on the code step, or a return from Google with only the email
+  // left to verify, arrives without this page having sent anything.
+  const [codeDelivery, setCodeDelivery] =
+    useState<SignUpCodeDelivery>('unknown')
 
   /**
    * Runs one Clerk step with the form locked. `stayLocked` is for a step
@@ -272,7 +277,7 @@ export function SignUpForm({
    */
   const discardAttempt = async (message: string) => {
     setLocalErrors([message])
-    setCodeSendFailed(false)
+    setCodeDelivery('unknown')
     await signUp.reset()
   }
 
@@ -338,7 +343,7 @@ export function SignUpForm({
       // its way and the step has to say so (#384); Clerk's own message
       // shows there too, and "Send a new code" is the way forward.
       const sent = await signUp.verifications.sendEmailCode()
-      setCodeSendFailed(Boolean(sent.error))
+      setCodeDelivery(sent.error ? 'failed' : 'sent')
     })
 
   const onGoogle = ({
@@ -375,7 +380,7 @@ export function SignUpForm({
     run(async () => {
       const { error } = await signUp.verifications.sendEmailCode()
       if (error) return
-      setCodeSendFailed(false)
+      setCodeDelivery('sent')
       setNotice('A new code is on its way.')
     })
 
@@ -383,7 +388,7 @@ export function SignUpForm({
 
   const onUseDifferentEmail = () =>
     run(async () => {
-      setCodeSendFailed(false)
+      setCodeDelivery('unknown')
       await signUp.reset()
     })
 
@@ -413,7 +418,7 @@ export function SignUpForm({
           : undefined
       }
       verifyEmail={signUp.emailAddress ?? undefined}
-      codeSendFailed={codeSendFailed}
+      codeDelivery={codeDelivery}
       notice={notice}
       onSubmit={onSubmit}
       onGoogle={onGoogle}

@@ -850,10 +850,16 @@ describe('SignUpForm: the rest of the flow', () => {
     const user = userEvent.setup()
     awaitingCode()
     render(<SignUpForm />)
+    // A reload on the code step: the page has not seen a send yet.
+    expect(screen.queryByText(/the code we sent/i)).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/Enter the verification code for/),
+    ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Send a new code' }))
 
     expect(clerk.sendEmailCode).toHaveBeenCalledOnce()
     expect(await screen.findByRole('status')).toHaveTextContent(/new code/i)
+    expect(screen.getByText(/the code we sent/i)).toBeInTheDocument()
   })
 
   it('"Use a different email" discards the attempt, so its tick cannot outlive it', async () => {
@@ -982,7 +988,7 @@ describe('SignUpForm: a sign-up back from Google that the form cannot finish (#3
     expect(clerk.reset).not.toHaveBeenCalled()
   })
 
-  it('leaves the code step alone when Google verified the account and only the email code is left', async () => {
+  it('leaves the code step alone when Google verified the account and only the email code is left, and does not say a code was sent', async () => {
     awaitingCode()
     clerk.state.id = 'sua_google'
     clerk.state.externalAccountStatus = 'verified'
@@ -991,6 +997,12 @@ describe('SignUpForm: a sign-up back from Google that the form cannot finish (#3
     expect(
       screen.getByRole('heading', { name: 'Check your email' }),
     ).toBeInTheDocument()
+    // This page sent nothing, and nothing says Clerk did.
+    expect(screen.queryByText(/the code we sent/i)).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/Enter the verification code for/),
+    ).toBeInTheDocument()
+    expect(clerk.sendEmailCode).not.toHaveBeenCalled()
     await act(async () => {})
     expect(clerk.reset).not.toHaveBeenCalled()
   })

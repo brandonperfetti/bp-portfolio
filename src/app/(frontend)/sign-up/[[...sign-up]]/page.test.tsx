@@ -68,7 +68,6 @@ afterEach(() => {
 })
 
 const configure = () => {
-  vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://brandonperfetti.com')
   vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_x')
   vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_x')
 }
@@ -138,26 +137,13 @@ describe('SignUpPage', () => {
       '//evil.example',
       '/\\evil.example',
       'javascript:alert(1)',
-      // The site's name inside another host's.
-      'https://brandonperfetti.com.evil.example/articles/a-gated-one',
-      'https://brandonperfetti.com//evil.example',
+      // Refused on the server, where the origin is not known.
+      'https://brandonperfetti.com/articles/a-gated-one',
     ])('goes to the home page for a redirect_url of %s', async (value) => {
       await expect(page({ redirect_url: value })).rejects.toBeInstanceOf(
         Redirected,
       )
       expect(server.redirect).toHaveBeenCalledExactlyOnceWith('/')
-    })
-
-    it("goes to the path of an absolute redirect_url at this site's origin, as the form does", async () => {
-      // Clerk may pass the target on as an absolute URL (`safeRedirectPath`).
-      await expect(
-        page({
-          redirect_url: 'https://brandonperfetti.com/articles/a-gated-one?x=1',
-        }),
-      ).rejects.toBeInstanceOf(Redirected)
-      expect(server.redirect).toHaveBeenCalledExactlyOnceWith(
-        '/articles/a-gated-one?x=1',
-      )
     })
 
     it('reads the first redirect_url when the query repeats it', async () => {
