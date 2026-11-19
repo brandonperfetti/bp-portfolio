@@ -109,12 +109,17 @@ joins, with the same wording as the contact form
   infer consent from an address. The same goes for a member whose
   `external_id` was written after the event fired (by the handler itself, or
   by the backfill): the id is on the live Clerk user, not in the replayed
-  payload, so replaying does not repair their mirror. **The repair for both
-  is the backfill** (`scripts/backfill-clerk-resend-mapping.ts`, below): it
-  reads each user's `external_id` from Clerk when it plans, rewrites the
-  mirror from that plan (so run it when no primary email is changing mid-run),
-  and maps an unmapped user
-  to the one Resend contact at their current primary address.
+  payload, so replaying does not repair their mirror. **The backfill repairs
+  the second case** (`scripts/backfill-clerk-resend-mapping.ts`, below): it
+  reads each user's `external_id` from Clerk when it plans and rewrites the
+  mirror from that plan (so run it when no primary email is changing mid-run).
+  It maps an unmapped user to the one Resend contact at their current primary
+  address **only when that account's sign-up recorded the opt-in** (#374), so
+  it does not repair the first: an unmapped pre-#362 account has no flag and
+  is reported `not-opted-in`. Linking one by hand means setting its
+  `external_id` to the contact's id in the Clerk dashboard, as in the repair
+  below. Brandon
+  decided no legacy run was needed (2026-11-18, #374).
 - **What the backfill cannot repair.** It matches on the account's current
   primary email. A legacy member captured at address A whose mapping writes
   both failed, and who has since changed to address B, has a contact at A the
@@ -379,8 +384,19 @@ script; the script's docblock explains why.
 
 **Dry run by default** — it prints a per-user plan and writes nothing without
 `--apply`. It has no destructive mode: it never deletes a contact, never clears
-an `external_id`, and never overwrites a mapping the webhook already made. The
-rules (`scripts/lib/clerk-resend-mapping.mjs`) skip rather than guess whenever
+an `external_id`, and never overwrites a mapping the webhook already made.
+
+**It maps opted-in accounts only** (Brandon, 2026-11-18, #374): an unmapped
+account is matched only when its `unsafeMetadata.mailingListOptIn` is `true`,
+the same fail-closed rule the webhook applies at `user.created`. Any other
+unmapped account — the box left unticked, or no field at all because it never
+saw the box — is reported `not-opted-in` before any matching, and a Resend
+contact at its address is left as it is: still on the list, with no account
+owning it, so that account's deletion or email change never touches it. An
+_already-mapped_ account is not re-checked; its link predates the question and
+its mirror is still rewritten.
+
+The rules (`scripts/lib/clerk-resend-mapping.mjs`) skip rather than guess whenever
 a user has no primary email, no matching contact, an address two contacts
 share, or a contact another Clerk user already claims — that last one because
 two users pointed at one contact means the first `user.deleted` removes

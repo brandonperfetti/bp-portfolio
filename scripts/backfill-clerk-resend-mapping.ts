@@ -25,6 +25,12 @@ import {
  * up. This gives them the link retroactively by matching primary email to an
  * existing Resend contact.
  *
+ * **Only accounts whose sign-up recorded the mailing-list opt-in are mapped**
+ * (`unsafeMetadata.mailingListOptIn === true`; Brandon, 2026-11-18, #374). The
+ * rest are reported as `not-opted-in` and left alone, as is any contact at
+ * their address. An account that is already mapped keeps its link and still
+ * gets its mirror written, opt-in or not.
+ *
  * ## Both stores, not just `external_id`
  *
  * `--apply` writes `external_id` for newly-matched users AND the Redis mirror
