@@ -538,7 +538,7 @@ them stay in the source doc.
   production build without it logs a loud error and degrades to
   per-instance memory limits. **When Upstash is configured but failing**
   (a plan cap, an outage, a malformed reply such as #390's
-  `s.map is not a function`), chat and the contact form **fail closed**:
+  `s.map is not a function`, or a stall past `@upstash/ratelimit`'s 5 s timeout, which it would otherwise answer as a success), chat and the contact form **fail closed**:
   one Sentry capture per request (`LimiterUnavailableError`, cause kept, IP
   and limiter key redacted) and a 503 — chat's carries
   `code: 'chat_unavailable'`, which the chat UI shows as "temporarily

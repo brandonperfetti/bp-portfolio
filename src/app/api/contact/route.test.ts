@@ -117,6 +117,27 @@ describe('POST /api/contact — limiter outage fails closed (#390)', () => {
     ).not.toContain(CLIENT_IP)
   })
 
+  it('answers 503 when the store stalls and Ratelimit resolves a timeout as success', async () => {
+    // @upstash/ratelimit's own timeout answer: success, with reason 'timeout'.
+    limitMock.mockResolvedValue({
+      success: true,
+      limit: 0,
+      remaining: 0,
+      reset: 0,
+      reason: 'timeout',
+    })
+    const POST = await loadPost()
+
+    const res = await POST(makeRequest())
+
+    expect(res.status).toBe(503)
+    expect(sendMock).not.toHaveBeenCalled()
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1)
+    expect(
+      (captureExceptionMock.mock.calls[0]?.[0] as Error).message,
+    ).toContain('timed out (minute window)')
+  })
+
   it('still sends when the limiter is healthy, reporting nothing', async () => {
     limitMock.mockResolvedValue({ success: true, remaining: 4, reset: 0 })
     const POST = await loadPost()
