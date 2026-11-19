@@ -3224,9 +3224,6 @@ export interface CookieConsent {
        */
       enabled?: boolean | null;
       title?: string | null;
-      /**
-       * If this still reads "Google Analytics 4 via Consent Mode v2. Before you grant it…", the site does not show it: that sentence stopped being true when Google Analytics became consent-gated, so the dialog shows the current default instead. Any other text you save here is shown exactly as written.
-       */
       subtitle?: string | null;
     };
     social?: {
