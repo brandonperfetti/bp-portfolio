@@ -12,13 +12,13 @@ Each version is an annotated tag on that release's merge commit.
 here; each one's release PR body is its record. How an entry is written and
 when the tag is made: [`docs/WORKFLOW.md` § Releases](docs/WORKFLOW.md#releases).
 
-## v2026.11.18
+## v2026.11.19
 
 Three privacy fixes and a sign-up form of the site's own, so the site does
 what its consent banner and its sign-up screen say. Release PR
 [#382](https://github.com/brandonperfetti/bp-portfolio/pull/382) ·
-[tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.18) ·
-carries #373, #378, #380 and #385.
+[tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.19) ·
+carries #373, #378, #380, #385 and #387.
 
 **Visitors**
 
@@ -153,6 +153,18 @@ which was not done.
 - `@clerk/nextjs` 7.5.22 to 7.10.2, which brings `@clerk/backend` 3.30.0 at
   runtime. From 3.28.0 a session token must carry a `cat` header field or
   the visitor reads as signed out; production's token carries it.
+- **Clerk's provider mounts from a client module** (`ClerkClientProvider`,
+  #387). On a cold start the first request for a prerendered page could
+  fail React's resume check: the shell recorded Clerk's provider under one
+  name and the fresh server rendered it under another, so React dropped the
+  shell and rendered the whole page in the browser (Sentry BP-PORTFOLIO-S,
+  seen once on staging at `c5e86f2`; whether production does it today is
+  not known). Nothing a visitor sees or can do changes; a cold request now
+  uses the prerendered shell. The cause is `@clerk/nextjs` renaming the provider as one of its
+  modules loads, still so in 7.10.4; `ClerkClientProvider.resume.test.tsx`
+  fails when a release drops the rename and the wrapper can go. It was not
+  reproduced end to end locally and no resume has been watched on staging
+  since the fix.
 - Two new shadcn primitives, `ui/input` and `ui/label`. `--destructive` is
   now a rendered text colour and is contrast-pinned in both themes.
 - CI's Build · E2E job builds with `NEXT_PUBLIC_VERCEL_ENV=production` and a
