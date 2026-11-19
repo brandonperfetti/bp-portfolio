@@ -78,9 +78,11 @@ turns on #389's preview, with no OpenAI error; not yet on production.
   (`unsafeMetadata.mailingListOptIn === true`), the rule the webhook has
   applied since #362. Others are reported `not-opted-in` and left unlinked;
   already-mapped accounts keep their link and mirror repair. The backfill
-  no longer re-links an unmapped pre-#362 account; that is a manual
-  `external_id` edit (`docs/AUTH.md`). No backfill was run, and none is
-  needed (#374, #388).
+  no longer re-links an unmapped pre-#362 account. Linking one is now a
+  manual `external_id` edit in the Clerk dashboard and then a backfill run,
+  which writes the Redis mirror that `user.deleted` reads first; the edit
+  alone does not write it (`docs/AUTH.md`). No backfill was run for this
+  release; Brandon decided no legacy run is needed (#374, #388).
 - `docs/JOURNEYS.md`'s "Contact Brandon" row now names the contact route's
   test; `docs/SECURITY.md` says a configured but failing store makes the
   limited routes fail closed.
