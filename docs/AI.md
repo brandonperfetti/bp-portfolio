@@ -49,8 +49,9 @@ multi-turn check on a preview, not something the stub can show.
 - `limiter.ts`: Upstash Redis rate limits — per-minute and daily quota,
   keyed by (HMAC-hashed) IP for anonymous requests and by Clerk `userId`
   for signed-in ones (the route builds the key; see the chatGate bullet).
-  Without Upstash env, dev fails open (`docs/SECURITY.md` § Operational
-  data and infrastructure).
+  Without Upstash env, dev fails open; with Upstash configured but
+  failing, the route fails closed with a 503 (#390, `limiterOutage.ts`).
+  Both: `docs/SECURITY.md` § Operational data and infrastructure.
 - `guardrails.ts`: shared quota/limit application; kill switches
   `CORVUS_DISABLE_CHAT` / `CORVUS_DISABLE_IMAGE` (renamed from `HERMES_*`,
   #77). The in-memory `applyRateLimit`/`applyDailyQuota` here are

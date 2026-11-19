@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  CHAT_UNAVAILABLE_CODE,
   createCorvusChatFetch,
   SIGN_IN_REQUIRED_CODE,
 } from '@/lib/ai/corvusChatFetch'
@@ -20,6 +21,35 @@ const jsonResponse = (body: unknown, status: number) =>
   })
 
 describe('createCorvusChatFetch', () => {
+  it('throws a normalized CHAT_UNAVAILABLE_CODE error on the limiter-outage 503 (#390)', async () => {
+    const baseFetch = vi.fn(async () =>
+      jsonResponse(
+        {
+          error: 'Corvus is temporarily unavailable.',
+          code: 'chat_unavailable',
+        },
+        503,
+      ),
+    )
+    const wrapped = createCorvusChatFetch(baseFetch)
+
+    await expect(wrapped('/api/ai/chat')).rejects.toThrow(CHAT_UNAVAILABLE_CODE)
+  })
+
+  it('passes a 503 WITHOUT the outage code through untouched (the kill switch)', async () => {
+    const baseFetch = vi.fn(async () =>
+      jsonResponse({ error: 'Chat is temporarily disabled.' }, 503),
+    )
+    const wrapped = createCorvusChatFetch(baseFetch)
+
+    const result = await wrapped('/api/ai/chat')
+
+    expect(result.status).toBe(503)
+    await expect(result.json()).resolves.toEqual({
+      error: 'Chat is temporarily disabled.',
+    })
+  })
+
   it('throws a normalized SIGN_IN_REQUIRED_CODE error on a 401 with the gate code', async () => {
     const baseFetch = vi.fn(async () =>
       jsonResponse(

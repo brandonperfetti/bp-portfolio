@@ -61,6 +61,24 @@ const getLimiters = (perMinute: number, perDay: number) => {
 }
 
 /**
+ * Treat a limiter timeout as an outage (#390).
+ *
+ * @remarks `@upstash/ratelimit` races every `limit()` against a 5 s default
+ * timeout and, when the store stalls, resolves `success: true` with
+ * `reason: 'timeout'` — it fails open. Throwing here hands the stall to the
+ * routes' outage handling, which fails closed with a 503, the same as a
+ * store that errors.
+ */
+function throwOnTimeout(
+  result: { reason?: string },
+  window: 'minute' | 'daily',
+) {
+  if (result.reason === 'timeout') {
+    throw new Error(`Upstash ratelimit timed out (${window} window)`)
+  }
+}
+
+/**
  * Global chat rate limiting: Upstash Redis when configured (limits hold
  * across serverless instances — closes the v3 in-memory TODO), otherwise the
  * v3 in-memory buckets as a dev-only fallback.
@@ -78,6 +96,7 @@ export async function checkChatLimits(
 
   if (limiters) {
     const minute = await limiters.minuteLimiter!.limit(key)
+    throwOnTimeout(minute, 'minute')
     if (!minute.success) {
       return {
         allowed: false,
@@ -88,6 +107,7 @@ export async function checkChatLimits(
     }
     if (perDay > 0) {
       const daily = await limiters.dailyLimiter!.limit(key)
+      throwOnTimeout(daily, 'daily')
       if (!daily.success) {
         return {
           allowed: false,
