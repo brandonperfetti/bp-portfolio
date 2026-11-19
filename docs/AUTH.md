@@ -4,7 +4,15 @@
 
 - `@clerk/nextjs`; middleware lives in `src/proxy.ts` (Next 16 proxy
   convention), wrapped by `isClerkEnabled()` so missing keys never break
-  boot. `<ClerkProvider>` mounts in the frontend layout under the same gate.
+  boot. `<ClerkProvider>` mounts in the frontend layout under the same gate,
+  **from a client module** (`ClerkClientProvider`), never as `@clerk/nextjs`'s
+  server `ClerkProvider` rendered from the layout directly. Loading
+  `@clerk/nextjs` in client code renames Clerk's provider as a side effect, so
+  rendered from the layout its name depended on what that server process had
+  already loaded. A cold server then resumed the prerendered shell with a
+  different name from the one the build recorded, and React rendered the
+  whole page on the client instead (BP-PORTFOLIO-S;
+  `ClerkClientProvider.resume.test.tsx` pins both halves).
 - Routes: `/sign-in` (Clerk's prebuilt `<SignIn>`, catch-all), `/sign-up`
   (the site's own form on Clerk's `useSignUp()` hooks, #377, below),
   `/sign-up/sso-callback` (where Google returns to), `/account`.

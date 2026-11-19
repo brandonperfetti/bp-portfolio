@@ -1,6 +1,6 @@
-import { ClerkProvider } from '@clerk/nextjs'
 import type { ReactNode } from 'react'
 
+import { ClerkClientProvider } from '@/components/auth/ClerkClientProvider'
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
 
 /**
@@ -12,13 +12,17 @@ import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
  * no JS wiring because Clerk's default theme keys off the CSS
  * `color-scheme` property, which `tailwind.css` sets on `:root`/`.dark` —
  * the components follow the next-themes toggle automatically.
+ *
+ * The provider is mounted through {@link ClerkClientProvider}, a client
+ * module, so its name matches between the prerendered shell and a cold
+ * resume (BP-PORTFOLIO-S; that component carries why).
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   if (!isClerkEnabled()) {
     return <>{children}</>
   }
   return (
-    <ClerkProvider
+    <ClerkClientProvider
       appearance={{
         variables: {
           // teal-700 — matches the site's primary action color (buttons,
@@ -30,6 +34,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-    </ClerkProvider>
+    </ClerkClientProvider>
   )
 }
