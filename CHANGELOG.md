@@ -12,6 +12,79 @@ Each version is an annotated tag on that release's merge commit.
 here; each one's release PR body is its record. How an entry is written and
 when the tag is made: [`docs/WORKFLOW.md` § Releases](docs/WORKFLOW.md#releases).
 
+## v2026.11.19.1
+
+Corvus stops asking OpenAI to keep conversations, chat and the contact form
+refuse cleanly when their rate limiter is down, and the mailing-list backfill
+follows the sign-up opt-in. Release PR
+[#395](https://github.com/brandonperfetti/bp-portfolio/pull/395) ·
+[tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.19.1) ·
+carries #388, #389 and #392.
+
+**Visitors**
+
+- **OpenAI is no longer asked to keep what you type to Corvus.** Every
+  chat request Corvus sends to OpenAI now sets `store: false`; before this
+  release OpenAI logged each chat by default. The site itself keeps no copy,
+  as before. A follow-up question now resends Corvus's earlier replies as
+  text instead of pointing at OpenAI's stored copy, so a conversation keeps
+  its context (#366, #389).
+- **When the rate limiter is down, Corvus says so.** If the store that
+  counts messages fails or stalls, chat refuses the message and shows
+  "Corvus is temporarily unavailable. Please try again in a few minutes."
+  Before this release it answered with an error the page showed as
+  "Something went wrong reaching Corvus" (#392).
+- **The contact form does the same.** With the limiter down it does not
+  send, and says "The contact form is temporarily unavailable. Please try
+  again later — or email me directly." It fails closed on purpose: an open
+  form during an outage would be an unlimited sender into Brandon's inbox
+  (#392).
+
+**What this release leaves.**
+
+- **A Corvus tab opened before this release** holds replies whose reasoning
+  has no encrypted copy. On that tab's next question the reasoning is dropped
+  with a server warning and the reply text still goes, so nothing breaks
+  (#389).
+- **The privacy page's Corvus wording** ("OpenAI may keep it for a limited
+  time for abuse monitoring") is CMS content and is left to the privacy-page
+  work (#366).
+
+**Not proven before release:** the 503 on a real deployment against a
+failing limiter; it is proven by route, fetch and component tests with the
+limiter faked. Corvus with `store: false` was checked by hand over three
+turns on #389's preview, with no OpenAI error; not yet on production.
+
+**Developers**
+
+- `corvusProviderOptions` (`src/lib/ai/corvus.ts`) always returns
+  `openai.store: false`, and adds `reasoningEffort` only for a reasoning
+  model; the chat route and the eval harness both build their options
+  through it. `docs/AI.md` has a section on what the provider is sent and
+  asked to keep, including the retrieval query that goes to OpenAI
+  embeddings, which have no `store` option (#389).
+- New `src/lib/security/limiterOutage.ts`: `reportLimiterOutage` sends one
+  Sentry event per refused request, grouped into one issue per surface and
+  tagged by surface and operation, with a redacted
+  copy of the upstream error (client IP, anon digest, limiter key and any
+  IPv4 address removed). The chat route returns 503 with
+  `code: 'chat_unavailable'` when `checkChatLimits` or either chatGate call
+  fails; a failed increment refuses rather than streams, since an uncounted
+  message is an unlimited one. `checkChatLimits` treats an
+  `@upstash/ratelimit` `reason: 'timeout'` as an outage. `corvusChatFetch`
+  turns the 503 into a code `CorvusChat` matches (#392).
+- The Clerk↔Resend backfill (`scripts/backfill-clerk-resend-mapping.ts`)
+  maps an unmapped account only when its sign-up recorded the opt-in
+  (`unsafeMetadata.mailingListOptIn === true`), the rule the webhook has
+  applied since #362. Others are reported `not-opted-in` and left unlinked;
+  already-mapped accounts keep their link and mirror repair. The backfill
+  no longer re-links an unmapped pre-#362 account; that is a manual
+  `external_id` edit (`docs/AUTH.md`). No backfill was run, and none is
+  needed (#374, #388).
+- `docs/JOURNEYS.md`'s "Contact Brandon" row now names the contact route's
+  test; `docs/SECURITY.md` says a configured but failing store makes the
+  limited routes fail closed.
+
 ## v2026.11.19
 
 Three privacy fixes and a sign-up form of the site's own, so the site does
