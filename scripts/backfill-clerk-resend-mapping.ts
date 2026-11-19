@@ -22,7 +22,8 @@ import {
  * and mirrors it into Upstash Redis keyed by the Clerk user id. Every user who
  * signed up *before* that shipped has neither, and `user.deleted` carries no
  * email address — so without this script their contacts can never be cleaned
- * up. This gives them the link retroactively by matching primary email to an
+ * up. This writes the missing mirror for users already mapped, and gives an
+ * opted-in user with no mapping the link by matching primary email to an
  * existing Resend contact.
  *
  * **Only accounts whose sign-up recorded the mailing-list opt-in are mapped**

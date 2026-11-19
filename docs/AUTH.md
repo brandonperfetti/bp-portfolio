@@ -366,9 +366,9 @@ match, and stops before touching anything.
 
 ### Backfill
 
-`scripts/backfill-clerk-resend-mapping.ts` gives pre-#86 users the mapping the
-webhook now writes at sign-up, matching each user's primary email to an
-existing Resend contact. It writes **both** stores: `external_id` for
+`scripts/backfill-clerk-resend-mapping.ts` repairs the mapping the webhook
+writes at sign-up: it gives an opted-in user the webhook missed a link to the
+existing Resend contact at their primary email. It writes **both** stores: `external_id` for
 newly-matched users, and a mirror key for every user with a known contact id —
 including users who are _already_ mapped, who by definition have an
 `external_id` and no mirror. Mirroring them is safe where rewriting their

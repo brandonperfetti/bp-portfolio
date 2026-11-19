@@ -1,9 +1,10 @@
 /**
  * Matching rules for the one-shot Clerk↔Resend mapping backfill (#86).
  *
- * `scripts/backfill-clerk-resend-mapping.ts` gives every pre-#86 Clerk user
- * the `external_id` the webhook now writes at sign-up, by matching each user's
- * primary email to an existing Resend contact. The webhook's whole hygiene
+ * `scripts/backfill-clerk-resend-mapping.ts` gives an opted-in Clerk user the
+ * webhook missed the `external_id` the webhook writes at sign-up, by matching
+ * the user's primary email to an existing Resend contact, and rewrites the
+ * mirror for every user already mapped. The webhook's whole hygiene
  * story depends on that link: `user.deleted` carries no email, so an unmapped
  * user's contact can never be cleaned up.
  *
