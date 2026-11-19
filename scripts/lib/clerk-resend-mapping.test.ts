@@ -6,10 +6,16 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  hasMailingListOptIn,
+  MAILING_LIST_OPT_IN_KEY,
+} from '../../src/lib/email/mailingListOptIn'
+import {
   APPLY_INVOCATION,
   formatPlan,
+  hasSignUpOptIn,
   indexContactsByEmail,
   listAllResendContacts,
+  MAILING_LIST_OPT_IN_KEY as SCRIPT_OPT_IN_KEY,
   mirrorTargets,
   normalizeEmail,
   planBackfill,
@@ -40,7 +46,13 @@ const repoRoot = path.resolve(
   '../..',
 )
 
-/** A Clerk Backend API `User` resource (camelCase, unlike the webhook JSON). */
+/**
+ * A Clerk Backend API `User` resource (camelCase, unlike the webhook JSON).
+ *
+ * Opted in by default: most cases here are about matching, and the backfill
+ * only matches accounts whose sign-up recorded consent (#374). The cases that
+ * are about consent override `unsafeMetadata` explicitly.
+ */
 const user = (
   id: string,
   addresses: Array<{ id: string; emailAddress: string }>,
@@ -50,6 +62,7 @@ const user = (
   emailAddresses: addresses,
   primaryEmailAddressId: addresses[0]?.id,
   externalId: null,
+  unsafeMetadata: { mailingListOptIn: true },
   ...extra,
 })
 
@@ -153,6 +166,153 @@ describe('indexContactsByEmail', () => {
 
   it('returns an empty index for missing input', () => {
     expect(indexContactsByEmail(undefined).byEmail.size).toBe(0)
+  })
+})
+
+describe('hasSignUpOptIn', () => {
+  // The script's copy of the webhook's consent rule. The .mjs cannot import
+  // the TypeScript original, so this table is what keeps the two from
+  // disagreeing about who said yes.
+  const cases: Array<[string, unknown]> = [
+    ['ticked', { [MAILING_LIST_OPT_IN_KEY]: true }],
+    ['unticked', { [MAILING_LIST_OPT_IN_KEY]: false }],
+    ['missing field', {}],
+    ['string "true"', { [MAILING_LIST_OPT_IN_KEY]: 'true' }],
+    ['number 1', { [MAILING_LIST_OPT_IN_KEY]: 1 }],
+    ['null metadata', null],
+    ['undefined metadata', undefined],
+    ['array metadata', [true]],
+    ['string metadata', 'mailingListOptIn'],
+    ['other keys only', { theme: 'dark' }],
+  ]
+
+  it.each(cases)('agrees with the webhook for %s', (_label, metadata) => {
+    expect(hasSignUpOptIn({ unsafeMetadata: metadata })).toBe(
+      hasMailingListOptIn(metadata),
+    )
+  })
+
+  it('uses the key the sign-up screen writes', () => {
+    expect(SCRIPT_OPT_IN_KEY).toBe(MAILING_LIST_OPT_IN_KEY)
+  })
+
+  it('reads the opt-in from unsafeMetadata, the Backend SDK field', () => {
+    expect(hasSignUpOptIn({ unsafeMetadata: { mailingListOptIn: true } })).toBe(
+      true,
+    )
+    // The webhook's snake_case spelling is not what the Backend SDK returns;
+    // reading it here would silently skip every account.
+    expect(
+      hasSignUpOptIn({ unsafe_metadata: { mailingListOptIn: true } }),
+    ).toBe(false)
+    expect(hasSignUpOptIn(undefined)).toBe(false)
+  })
+})
+
+describe('planBackfill opt-in (#374)', () => {
+  const contacts = [
+    { id: 'con_yes', email: 'yes@example.test' },
+    { id: 'con_no', email: 'no@example.test' },
+    { id: 'con_missing', email: 'missing@example.test' },
+  ]
+  const users = () => [
+    simpleUser('user_yes', 'yes@example.test', {
+      unsafeMetadata: { mailingListOptIn: true },
+    }),
+    simpleUser('user_no', 'no@example.test', {
+      unsafeMetadata: { mailingListOptIn: false },
+    }),
+    simpleUser('user_missing', 'missing@example.test', { unsafeMetadata: {} }),
+  ]
+
+  it('maps an opted-in account and only that one', () => {
+    const plan = planBackfill(users(), contacts)
+
+    expect(plan.entries[0]).toEqual({
+      userId: 'user_yes',
+      email: 'yes@example.test',
+      status: 'map',
+      contactId: 'con_yes',
+    })
+    expect(plan.summary.map).toBe(1)
+  })
+
+  it('skips an account that left the box unticked, though a contact matches', () => {
+    const plan = planBackfill(users(), contacts)
+
+    expect(plan.entries[1]).toEqual({
+      userId: 'user_no',
+      email: 'no@example.test',
+      status: 'not-opted-in',
+      contactId: undefined,
+    })
+  })
+
+  it('skips an account with no consent field at all', () => {
+    // Every account that never saw the box: created before #362, through a
+    // social sign-in on /sign-in, or in the Clerk dashboard.
+    const plan = planBackfill(users(), contacts)
+
+    expect(plan.entries[2]).toMatchObject({
+      userId: 'user_missing',
+      status: 'not-opted-in',
+    })
+    for (const metadata of [undefined, null, 'yes', []]) {
+      const single = planBackfill(
+        [
+          simpleUser('user_x', 'missing@example.test', {
+            unsafeMetadata: metadata,
+          }),
+        ],
+        contacts,
+      )
+      expect(single.entries[0].status).toBe('not-opted-in')
+    }
+  })
+
+  it('counts the skip in its own summary bucket', () => {
+    expect(planBackfill(users(), contacts).summary['not-opted-in']).toBe(2)
+  })
+
+  it('never mirrors a declined account', () => {
+    const plan = planBackfill(users(), contacts)
+
+    expect(mirrorTargets(plan)).toEqual([
+      { userId: 'user_yes', contactId: 'con_yes' },
+    ])
+  })
+
+  it('still repairs the mirror of an already-mapped account without the flag', () => {
+    // Mapping that already exists was made by the webhook or an earlier run;
+    // the backfill only restates it. Consent gates new links, not old ones.
+    const plan = planBackfill(
+      [
+        simpleUser('user_legacy', 'legacy@example.test', {
+          externalId: 'con_legacy',
+          unsafeMetadata: {},
+        }),
+      ],
+      [{ id: 'con_legacy', email: 'legacy@example.test' }],
+    )
+
+    expect(plan.entries[0].status).toBe('already-mapped')
+    expect(mirrorTargets(plan)).toEqual([
+      { userId: 'user_legacy', contactId: 'con_legacy' },
+    ])
+  })
+
+  it('is stable across re-runs: a declined account stays skipped', () => {
+    const first = planBackfill(users(), contacts)
+    // Simulate --apply: the mapped user now carries its external_id.
+    const after = users().map((u) =>
+      u.id === 'user_yes' ? { ...u, externalId: 'con_yes' } : u,
+    )
+    const second = planBackfill(after, contacts)
+
+    expect(first.summary.map).toBe(1)
+    expect(second.summary.map).toBe(0)
+    expect(second.summary['already-mapped']).toBe(1)
+    expect(second.summary['not-opted-in']).toBe(2)
   })
 })
 
@@ -300,6 +460,7 @@ describe('planBackfill', () => {
       'already-mapped': 1,
       'no-primary-email': 1,
       'no-match': 1,
+      'not-opted-in': 0,
       ambiguous: 0,
       conflict: 0,
     })
@@ -448,6 +609,20 @@ describe('formatPlan', () => {
     expect(summary).toContain('1 to map')
     expect(summary).toContain('1 already mapped')
     expect(summary).toContain('1 unmatched')
+  })
+
+  it('says why a declined account was skipped, and counts it', () => {
+    const lines = formatPlan(
+      planBackfill(
+        [simpleUser('user_no', 'no@example.test', { unsafeMetadata: {} })],
+        [{ id: 'con_no', email: 'no@example.test' }],
+      ),
+    )
+
+    expect(lines[0]).toContain('user_no')
+    expect(lines[0]).toContain('no mailing-list opt-in at sign-up')
+    expect(lines[0]).not.toContain('con_no')
+    expect(lines.at(-2)).toContain('1 not opted in')
   })
 
   it('renders a user with no primary email without inventing one', () => {

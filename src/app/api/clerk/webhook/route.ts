@@ -308,8 +308,9 @@ async function writeExternalId(
  * `user.created` carries the original payload, with neither the flag nor an
  * `external_id`, and is now a no-op where it used to re-capture and re-map.
  * It cannot be told from a new sign-up that declined, and consent is not
- * inferred from an address. `scripts/backfill-clerk-resend-mapping.ts` is the
- * repair for a legacy member left unmapped (`docs/AUTH.md`).
+ * inferred from an address. The backfill does not re-map one either: it
+ * applies the same opt-in rule (#374), so a legacy member left unmapped is
+ * linked by hand (`docs/AUTH.md`).
  *
  * The `external_id` write is skipped when the payload carries one. That says
  * nothing about the live user: an opted-in replay of an event that predates

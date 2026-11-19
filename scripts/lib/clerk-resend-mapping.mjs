@@ -1,17 +1,25 @@
 /**
  * Matching rules for the one-shot Clerk↔Resend mapping backfill (#86).
  *
- * `scripts/backfill-clerk-resend-mapping.ts` gives every pre-#86 Clerk user
- * the `external_id` the webhook now writes at sign-up, by matching each user's
- * primary email to an existing Resend contact. The webhook's whole hygiene
- * story depends on that link: `user.deleted` carries no email, so an unmapped
- * user's contact can never be cleaned up.
+ * `scripts/backfill-clerk-resend-mapping.ts` repairs the link the webhook
+ * writes at sign-up. An opted-in Clerk user with no `external_id` is matched
+ * by primary email to an existing Resend contact, and every user with a
+ * contact id, new or already mapped, gets its Redis mirror written. The
+ * webhook's whole hygiene story depends on that link: `user.deleted` carries
+ * no email, so an unmapped user's contact can never be cleaned up.
  *
  * The rules live in their own module for the same reason
  * `scripts/lib/orphan-guard.mjs` does: the backfill script ends in a top-level
  * `await run()` and cannot be imported without executing, so the logic that
  * decides which contact belongs to which user would otherwise be the one part
  * of a write-to-production script with no test.
+ *
+ * **Opted-in accounts only (Brandon, 2026-11-18, #374).** Since #362 an
+ * account is on the mailing list through sign-up only if it ticked the box, and
+ * the webhook maps only those. The backfill follows the same rule, so an
+ * account that declined is never made the owner of a contact it did not
+ * create through sign-up — a contact-form subscription at the same address,
+ * say, which the account's `user.deleted` would otherwise remove.
  *
  * Everything here is pure. It takes already-fetched users and contacts and
  * returns a plan; it performs no I/O and never decides to delete anything —
@@ -84,6 +92,44 @@ export function primaryEmailOf(user) {
 }
 
 /**
+ * The key the sign-up screen writes into Clerk's `unsafeMetadata`.
+ *
+ * @remarks A copy of `MAILING_LIST_OPT_IN_KEY` in
+ * `src/lib/email/mailingListOptIn.ts`, for the module-boundary reason
+ * {@link primaryEmailOf} gives: this file stays plain `.mjs`. The test suite
+ * imports both and pins them equal.
+ */
+export const MAILING_LIST_OPT_IN_KEY = 'mailingListOptIn'
+
+/**
+ * Whether a Clerk user's sign-up recorded a mailing-list opt-in.
+ *
+ * @param user - A Clerk Backend API `User` resource (camelCase).
+ * @returns `true` only when `unsafeMetadata.mailingListOptIn` is the boolean
+ *   `true`.
+ *
+ * @remarks Fail-closed, the same rule as the webhook's `hasMailingListOptIn`:
+ * a missing field, `false`, a truthy string or number, or metadata that is
+ * not a plain object all read as "did not opt in". That covers every account
+ * that never saw the box — created before #362, through a social sign-in on
+ * `/sign-in`, or in the Clerk dashboard. The Backend SDK spells the field
+ * `unsafeMetadata`; the webhook's `unsafe_metadata` is the raw JSON spelling
+ * and is not read here. The test suite runs both functions over one table of
+ * inputs so the two cannot drift.
+ */
+export function hasSignUpOptIn(user) {
+  const metadata = user?.unsafeMetadata
+  if (
+    metadata === null ||
+    typeof metadata !== 'object' ||
+    Array.isArray(metadata)
+  ) {
+    return false
+  }
+  return metadata[MAILING_LIST_OPT_IN_KEY] === true
+}
+
+/**
  * Index Resend contacts by normalized email.
  *
  * @param contacts - Resend contact records (`id` plus `email`).
@@ -130,9 +176,13 @@ export function indexContactsByEmail(contacts) {
  * - `already-mapped` — `externalId` is set. Skipped, never overwritten: the
  *   backfill repairs users the webhook missed, it does not second-guess links
  *   the webhook made.
+ * - `not-opted-in` — the account's sign-up recorded no mailing-list opt-in
+ *   ({@link hasSignUpOptIn}). Checked before any matching, so a declined
+ *   account is never matched to a contact, even one at its own address
+ *   (#374). The contact, if there is one, is left exactly as it is.
  * - `no-primary-email` — nothing to match on.
  * - `no-match` — no contact carries this address. Expected and benign: the
- *   user never opted in, or their contact was already removed.
+ *   contact was already removed, or was never created.
  * - `ambiguous` — two contacts share the address (see
  *   {@link indexContactsByEmail}).
  * - `conflict` — the matched contact is already another user's `externalId`.
@@ -143,6 +193,10 @@ export function indexContactsByEmail(contacts) {
  *
  * Contacts claimed by `already-mapped` users are reserved *before* any
  * matching happens, so a conflict is detected regardless of user order.
+ *
+ * `already-mapped` is decided before consent on purpose: an existing link was
+ * made by the webhook or an earlier run, and the backfill only restates it in
+ * the mirror. Consent gates new links, not old ones.
  */
 export function planBackfill(users, contacts) {
   const { byEmail, ambiguous } = indexContactsByEmail(contacts)
@@ -172,6 +226,10 @@ export function planBackfill(users, contacts) {
         status: 'already-mapped',
         contactId: user.externalId,
       })
+      continue
+    }
+    if (!hasSignUpOptIn(user)) {
+      entries.push({ ...base, status: 'not-opted-in' })
       continue
     }
     if (!email) {
@@ -205,6 +263,7 @@ export function planBackfill(users, contacts) {
     'already-mapped': 0,
     'no-primary-email': 0,
     'no-match': 0,
+    'not-opted-in': 0,
     ambiguous: 0,
     conflict: 0,
   }
@@ -295,6 +354,9 @@ export function formatPlan(plan, options = {}) {
             `${apply ? ' (mirror written)' : ' (mirror would be written)'}`,
         )
         break
+      case 'not-opted-in':
+        lines.push(`SKIP    ${who} no mailing-list opt-in at sign-up`)
+        break
       case 'no-primary-email':
         lines.push(`SKIP    ${who} no primary email address`)
         break
@@ -318,6 +380,7 @@ export function formatPlan(plan, options = {}) {
   lines.push('')
   lines.push(
     `${s.total} users · ${s.map} to map · ${s['already-mapped']} already mapped · ` +
+      `${s['not-opted-in']} not opted in · ` +
       `${s['no-match']} unmatched · ${s['no-primary-email']} without email · ` +
       `${s.ambiguous} ambiguous · ${s.conflict} conflicting · ` +
       `${mirrorTargets(plan).length} mirror key(s)`,
