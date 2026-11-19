@@ -122,7 +122,8 @@ export async function POST(req: Request) {
     ? getAuthedChatDailyQuota()
     : Number(process.env.CORVUS_CHAT_DAILY_QUOTA) || 0
 
-  const redact = [ip, limiterKey]
+  // The digest too: chatGate's Redis key carries it without the `ip:` prefix.
+  const redact = [ip, anonIpKeyDigest(ip), limiterKey]
 
   let limit: LimitResult
   try {

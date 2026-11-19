@@ -68,4 +68,25 @@ describe('reportLimiterOutage (#390)', () => {
     expect(outage.message).not.toContain('secret-token')
     expect((outage.cause as Error).message).toBe('unknown')
   })
+
+  it('redacts an identifier that straddles the length bound, and bounds the stack', () => {
+    const key = 'user:' + 'k'.repeat(40)
+    // The key starts at 280 and ends past the 300-character bound.
+    const upstream = new Error('x'.repeat(280) + key + ' tail '.repeat(200))
+
+    const outage = reportLimiterOutage(upstream, {
+      surface: 'chat',
+      operation: 'checkChatLimits',
+      redact: [key],
+    })
+
+    const cause = outage.cause as Error
+    expect(cause.message).not.toContain('user:k')
+    expect(cause.message.length).toBeLessThanOrEqual(300)
+    const firstStackLine = (cause.stack ?? '').split('\n')[0] ?? ''
+    expect(firstStackLine).toBe(`Error: ${cause.message}`)
+    // Only the bounded message, not the full 1200-character upstream one.
+    expect(cause.stack).not.toContain(' tail '.repeat(10))
+    expect(cause.stack).toMatch(/\n\s+at /)
+  })
 })

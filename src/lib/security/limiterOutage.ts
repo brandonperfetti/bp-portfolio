@@ -73,9 +73,10 @@ const redact = (text: string, secrets: readonly string[]) => {
  * @remarks Callers turn the outage into a 503 right after this, so a request
  * reports at most one outage: the first failing limiter call ends it. The
  * routes catch the failure themselves, so Next's `onRequestError` never sees
- * it and cannot report it a second time. The upstream message is bounded by
- * {@link boundedErrorMessage} and redacted in both the message and the stack,
- * because a stack's first line repeats the message.
+ * it and cannot report it a second time. The upstream message is redacted,
+ * then bounded by {@link boundedErrorMessage}; the stack keeps only the
+ * upstream frames under that bounded message, because a stack's first line
+ * repeats the message.
  */
 export function reportLimiterOutage(
   error: unknown,
@@ -85,10 +86,25 @@ export function reportLimiterOutage(
     redact: readonly string[]
   },
 ): LimiterUnavailableError {
-  const cause = new Error(redact(boundedErrorMessage(error), context.redact))
+  // Redact first, then bound: truncating first could cut an identifier in
+  // half, leaving a prefix the redaction no longer matches.
+  const cause = new Error(
+    boundedErrorMessage(
+      error instanceof Error
+        ? new Error(redact(error.message, context.redact))
+        : error,
+    ),
+  )
   if (error instanceof Error) {
     cause.name = error.name
-    cause.stack = error.stack ? redact(error.stack, context.redact) : undefined
+    // Rebuild the stack from the bounded message and the upstream frames
+    // only: its first line would otherwise repeat the message unbounded.
+    const frames = (error.stack ?? '')
+      .split('\n')
+      .filter((line) => /^\s+at /.test(line))
+    cause.stack = [`${cause.name}: ${cause.message}`, ...frames]
+      .map((line) => redact(line, context.redact))
+      .join('\n')
   }
   const outage = new LimiterUnavailableError(
     context.surface,
