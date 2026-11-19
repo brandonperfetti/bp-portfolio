@@ -227,9 +227,9 @@ unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
 - **A signed-in visitor never sees the form** (#384). The page redirects
   them on the server to the `redirect_url` target when it is a path on this
   site, else the home page: where a finished sign-up lands, and what Clerk's
-  prebuilt `<SignUp />` did before #377. On the server the origin is not
-  known, so an absolute `redirect_url` goes to the home page even when it is
-  this site's. `/sign-up/sso-callback` does not redirect: a visitor Google
+  prebuilt `<SignUp />` did before #377. An absolute `redirect_url` is
+  followed only at the configured site origin (`NEXT_PUBLIC_SITE_URL`),
+  reduced to its path. `/sign-up/sso-callback` does not redirect: a visitor Google
   has just signed in must reach Clerk's handler there.
 - **`redirect_url` is ours to honour now.** Gated articles and Corvus link to
   `/sign-in?redirect_url=…`, and the target follows the visitor to

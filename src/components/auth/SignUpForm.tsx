@@ -163,9 +163,10 @@ export function SignUpForm({
   // left, locked; unlock it so they can choose again. A restore is the only
   // case handled (`persisted`), and it unlocks whatever the lock was for: a
   // visitor who left by their own navigation while a request was pending and
-  // is restored gets an unlocked form too (#384). That is chosen over a form
-  // that could stay locked for good; a submit made then updates the same
-  // attempt, which the form already handles.
+  // is restored gets an unlocked form too (#384). That favours recovery over
+  // a form that could stay locked for good. It is not exclusive: a request
+  // still pending at the restore can overlap a retry. Whether a browser
+  // restores a page in that state is not measured.
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return
@@ -283,6 +284,9 @@ export function SignUpForm({
     Boolean(signUp.id) &&
     signUp.status === 'missing_requirements' &&
     signUp.verifications.externalAccount?.status === 'verified' &&
+    // A bot check Clerk is still running, or has failed, has its own
+    // message; this one would be shown in its place.
+    !signUp.protectCheck &&
     !needsEmailCode()
   // One discard per attempt: `reset()` clears it, and this keeps a reset
   // that did not from being asked for again on every render.

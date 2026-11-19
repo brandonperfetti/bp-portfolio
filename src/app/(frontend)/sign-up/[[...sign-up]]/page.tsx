@@ -5,6 +5,7 @@ import { SignUpForm } from '@/components/auth/SignUpForm'
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
 import { getViewer } from '@/lib/auth/getViewer'
 import { safeRedirectPath } from '@/lib/auth/safeRedirect'
+import { getSiteUrl } from '@/lib/site'
 
 export const metadata = { title: 'Sign up', robots: { index: false } }
 
@@ -12,6 +13,15 @@ export const metadata = { title: 'Sign up', robots: { index: false } }
 // blocks prerender), and the route is noindex — opt out of prerender.
 // Request-time render; no SEO/static value lost.
 export const instant = false
+
+/** This site's configured origin, for telling its own absolute URLs apart. */
+function siteOrigin(): string | undefined {
+  try {
+    return new URL(getSiteUrl()).origin
+  } catch {
+    return undefined
+  }
+}
 
 /**
  * In-app sign-up, in the site's own markup (#377). An account joins the
@@ -27,9 +37,10 @@ export const instant = false
  * **A signed-in visitor is sent on, and never sees the form** (#384). Clerk's
  * prebuilt `<SignUp />` did this itself; the custom form rendered for
  * everyone. They go where a finished sign-up goes: the `redirect_url` target
- * when it is a path on this site (`safeRedirectPath`, with no origin, so an
- * absolute URL is refused here even when it is this site's), else the home
- * page. It is decided on the server so there is nothing for them to submit.
+ * when it is on this site (`safeRedirectPath`: a path, or an absolute URL at
+ * the configured site origin, reduced to its path, as the form accepts one
+ * at the page's own origin), else the home page. It is decided on the server
+ * so there is nothing for them to submit.
  * `/sign-up/sso-callback` is a separate page and is not redirected: a
  * visitor Google has just signed in must reach Clerk's handler there.
  *
@@ -52,7 +63,10 @@ export default async function SignUpPage({
   if (isAuthenticated) {
     const { redirect_url: target } = await searchParams
     redirect(
-      safeRedirectPath(Array.isArray(target) ? target[0] : target) ?? '/',
+      safeRedirectPath(
+        Array.isArray(target) ? target[0] : target,
+        siteOrigin(),
+      ) ?? '/',
     )
   }
   return (

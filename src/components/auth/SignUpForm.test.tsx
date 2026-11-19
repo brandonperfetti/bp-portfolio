@@ -38,6 +38,8 @@ const clerk = vi.hoisted(() => {
     emailAddress: null as string | null,
     /** Clerk's verification of the Google account, once Google has answered. */
     externalAccountStatus: null as string | null,
+    /** Clerk's pending bot-check challenge, when it has raised one. */
+    protectCheck: null as object | null,
     errors: {
       fields: {
         emailAddress: null as { message: string; longMessage?: string } | null,
@@ -82,6 +84,9 @@ vi.mock('@clerk/nextjs', () => ({
       get emailAddress() {
         return clerk.state.emailAddress
       },
+      get protectCheck() {
+        return clerk.state.protectCheck
+      },
       password: clerk.password,
       sso: clerk.sso,
       verifications: {
@@ -125,6 +130,7 @@ beforeEach(() => {
   clerk.state.missingFields = []
   clerk.state.emailAddress = null
   clerk.state.externalAccountStatus = null
+  clerk.state.protectCheck = null
   clerk.state.errors.fields.emailAddress = null
   clerk.state.errors.fields.password = null
   clerk.state.errors.fields.code = null
@@ -962,6 +968,18 @@ describe('SignUpForm: a sign-up back from Google that the form cannot finish (#3
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(clerk.reset).not.toHaveBeenCalled()
     expect(optIn()).toBeEnabled()
+  })
+
+  it("leaves a sign-up with a bot check pending alone: Clerk's own message is the one to show", async () => {
+    backFromGoogleMissing('legal_accepted')
+    clerk.state.protectCheck = { status: 'pending' }
+    clerk.state.errors.global = [{ message: 'Bot check failed.' }]
+    render(<SignUpForm />)
+
+    await act(async () => {})
+    expect(screen.getByRole('alert')).toHaveTextContent('Bot check failed.')
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/couldn.t finish/i)
+    expect(clerk.reset).not.toHaveBeenCalled()
   })
 
   it('leaves the code step alone when Google verified the account and only the email code is left', async () => {
