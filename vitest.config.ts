@@ -48,6 +48,12 @@ export default defineConfig({
           environment: 'jsdom',
           setupFiles: ['./vitest.setup.ts'],
           include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.{ts,tsx}'],
+          // Clerk's packages run through Vitest's module graph rather than
+          // Node's, so `vi.resetModules()` gives a test fresh copies of
+          // them. `ClerkClientProvider.resume.test.tsx` needs that to stand
+          // for a cold server, whose Clerk modules have not loaded yet
+          // (BP-PORTFOLIO-S).
+          server: { deps: { inline: [/@clerk\//] } },
         },
       },
       {
