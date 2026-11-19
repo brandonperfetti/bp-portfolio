@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import type { OpenAIProvider } from '@ai-sdk/openai'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -153,13 +154,13 @@ describe('getCorvusModel', () => {
 describe('corvusProviderOptions', () => {
   it('sends the effort under the openai namespace for a reasoning model', () => {
     expect(corvusProviderOptions('low', 'gpt-5-mini')).toEqual({
-      openai: { reasoningEffort: 'low' },
+      openai: { store: false, reasoningEffort: 'low' },
     })
   })
 
   it.each(REASONING_EFFORTS)('carries the rung it is given (%s)', (effort) => {
     expect(corvusProviderOptions(effort, 'gpt-5-mini')).toEqual({
-      openai: { reasoningEffort: effort },
+      openai: { store: false, reasoningEffort: effort },
     })
   })
 
@@ -167,25 +168,33 @@ describe('corvusProviderOptions', () => {
     ['a chat-tuned gpt-5 id', 'gpt-5-chat-latest'],
     ['a non-reasoning OpenAI model', 'gpt-4o'],
     ['the Anthropic default', 'claude-sonnet-4-5'],
-  ])('is a no-op for %s', (_case, modelId) => {
-    // Not defensive tidiness. The provider pushes an `unsupported` warning —
-    // "reasoningEffort is not supported for non-reasoning models" — for every
-    // such turn and sends nothing, so an ungated option would buy log noise
-    // on `matrix.eval.ts`'s non-reasoning variants and change no behaviour.
-    expect(corvusProviderOptions('low', modelId)).toEqual({})
-  })
+  ])(
+    'sends no reasoningEffort, and still store: false, for %s',
+    (_case, modelId) => {
+      // Not defensive tidiness. The provider pushes an `unsupported` warning —
+      // "reasoningEffort is not supported for non-reasoning models" — for every
+      // such turn and sends nothing, so an ungated option would buy log noise
+      // on `matrix.eval.ts`'s non-reasoning variants and change no behaviour.
+      // `store: false` is not gated (#366): every turn carries visitor text.
+      expect(corvusProviderOptions('low', modelId)).toEqual({
+        openai: { store: false },
+      })
+    },
+  )
 
   it('defaults the model to the env-selected one', () => {
     withEnv({ AI_CHAT_PROVIDER: 'openai', AI_CHAT_MODEL: undefined }, () => {
       expect(getCorvusModelId()).toBe('gpt-5-mini')
       expect(corvusProviderOptions('low')).toEqual({
-        openai: { reasoningEffort: 'low' },
+        openai: { store: false, reasoningEffort: 'low' },
       })
     })
 
     withEnv({ AI_CHAT_PROVIDER: 'anthropic', AI_CHAT_MODEL: undefined }, () => {
       expect(getCorvusModelId()).toBe('claude-sonnet-4-5')
-      expect(corvusProviderOptions('low')).toEqual({})
+      expect(corvusProviderOptions('low')).toEqual({
+        openai: { store: false },
+      })
     })
   })
 
@@ -271,6 +280,9 @@ describe('isReasoningModelId — pinned to the installed provider', () => {
   })
 })
 
+/** The call options a Responses model's `doGenerate` takes. */
+type CallOptions = Parameters<ReturnType<OpenAIProvider>['doGenerate']>[0]
+
 /**
  * `[measured]` The installed provider, driven keylessly.
  *
@@ -290,12 +302,21 @@ describe('isReasoningModelId — pinned to the installed provider', () => {
  * mode the #138 comments flag ("an unsupported value fails every turn") would
  * be OpenAI's rejection, not the SDK's, so the keyed `pnpm eval:ci` is still
  * the receipt that matters.
+ *
+ * Since #366 it also pins `store: false`: the flag on the wire, the
+ * `reasoning.encrypted_content` include it triggers on a reasoning model, and
+ * how a follow-up turn's earlier reply is sent — as text, where unset `store`
+ * sends an `item_reference` to OpenAI's stored copy. Whether OpenAI accepts
+ * those resent items is a live preview check, not something a stub can show.
  */
-describe('[measured] @ai-sdk/openai turns the helper’s object into reasoning.effort', () => {
+describe('[measured] @ai-sdk/openai puts the helper’s object on the wire', () => {
   /** Run one keyless `doGenerate`, returning the request body and warnings. */
   const captureRequest = async (
     modelId: string,
-    providerOptions: ReturnType<typeof corvusProviderOptions>,
+    providerOptions: CallOptions['providerOptions'],
+    prompt: CallOptions['prompt'] = [
+      { role: 'user', content: [{ type: 'text', text: 'hi' }] },
+    ],
   ) => {
     const { createOpenAI } = await import('@ai-sdk/openai')
     let body: Record<string, unknown> | undefined
@@ -329,7 +350,7 @@ describe('[measured] @ai-sdk/openai turns the helper’s object into reasoning.e
     })
 
     const result = await provider(modelId).doGenerate({
-      prompt: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }],
+      prompt,
       maxOutputTokens: 2048,
       providerOptions,
     })
@@ -359,5 +380,129 @@ describe('[measured] @ai-sdk/openai turns the helper’s object into reasoning.e
 
     expect(body).not.toHaveProperty('reasoning')
     expect(warnings).toEqual([])
+  })
+
+  /**
+   * A follow-up turn as the chat route builds it: the browser echoes back the
+   * earlier reply with the item ids the provider streamed
+   * (`providerMetadata.openai.itemId`), and `convertToModelMessages` turns
+   * them into these `providerOptions`.
+   */
+  const followUpTurn = (
+    reasoningEncryptedContent: string | null,
+  ): CallOptions['prompt'] => [
+    { role: 'user', content: [{ type: 'text', text: 'Who is Brandon?' }] },
+    {
+      role: 'assistant',
+      content: [
+        {
+          type: 'reasoning',
+          text: '',
+          providerOptions: {
+            openai: { itemId: 'rs_prev', reasoningEncryptedContent },
+          },
+        },
+        {
+          type: 'text',
+          text: 'Brandon is a software engineer.',
+          providerOptions: { openai: { itemId: 'msg_prev' } },
+        },
+      ],
+    },
+    { role: 'user', content: [{ type: 'text', text: 'What does he build?' }] },
+  ]
+
+  /** The `input` items of a captured request body. */
+  const inputOf = (body: Record<string, unknown> | undefined) =>
+    (body?.input ?? []) as Array<Record<string, unknown>>
+
+  it('asks OpenAI not to store the turn, on a reasoning model (#366)', async () => {
+    const { body, warnings } = await captureRequest(
+      'gpt-5-mini',
+      corvusProviderOptions('low', 'gpt-5-mini'),
+    )
+
+    expect(body?.store).toBe(false)
+    // Without storage the reasoning has to travel with the conversation, so
+    // the provider asks for it encrypted (`dist/index.mjs:5434-5435`).
+    expect(body?.include).toContain('reasoning.encrypted_content')
+    expect(warnings).toEqual([])
+  })
+
+  it('asks OpenAI not to store the turn, on a non-reasoning model (#366)', async () => {
+    const { body, warnings } = await captureRequest(
+      'gpt-4o',
+      corvusProviderOptions('low', 'gpt-4o'),
+    )
+
+    expect(body?.store).toBe(false)
+    expect(body?.include ?? []).not.toContain('reasoning.encrypted_content')
+    expect(warnings).toEqual([])
+  })
+
+  it('resends an earlier reply as text, not as a reference to a stored one', async () => {
+    const { body, warnings } = await captureRequest(
+      'gpt-5-mini',
+      corvusProviderOptions('low', 'gpt-5-mini'),
+      followUpTurn('enc_prev'),
+    )
+    const input = inputOf(body)
+
+    expect(input.filter((item) => item.type === 'item_reference')).toEqual([])
+    expect(input).toContainEqual(
+      expect.objectContaining({
+        role: 'assistant',
+        content: [
+          { type: 'output_text', text: 'Brandon is a software engineer.' },
+        ],
+      }),
+    )
+    expect(input).toContainEqual(
+      expect.objectContaining({
+        type: 'reasoning',
+        id: 'rs_prev',
+        encrypted_content: 'enc_prev',
+      }),
+    )
+    expect(warnings).toEqual([])
+  })
+
+  it('is what changed: with store unset, the same turn sends references', async () => {
+    // The before picture, kept so the test above cannot pass vacuously: the
+    // provider defaults `store` to true and swaps both earlier items for
+    // `item_reference`s to OpenAI's stored copies (`dist/index.mjs:3218`).
+    const { body } = await captureRequest(
+      'gpt-5-mini',
+      { openai: { reasoningEffort: 'low' } },
+      followUpTurn('enc_prev'),
+    )
+
+    expect(
+      inputOf(body).filter((item) => item.type === 'item_reference'),
+    ).toEqual([
+      { type: 'item_reference', id: 'rs_prev' },
+      { type: 'item_reference', id: 'msg_prev' },
+    ])
+  })
+
+  it('drops, with a warning, reasoning a tab opened before #366 holds', async () => {
+    // A reply streamed while storage was on carries no encrypted reasoning.
+    // The provider skips that part rather than sending it (`:3754-3763`); the
+    // answer text still goes, so the follow-up still has its context.
+    const { body, warnings } = await captureRequest(
+      'gpt-5-mini',
+      corvusProviderOptions('low', 'gpt-5-mini'),
+      followUpTurn(null),
+    )
+    const input = inputOf(body)
+
+    expect(input.some((item) => item.type === 'reasoning')).toBe(false)
+    expect(input).toContainEqual(expect.objectContaining({ role: 'assistant' }))
+    expect(warnings).toContainEqual(
+      expect.objectContaining({
+        type: 'other',
+        message: expect.stringContaining('when store is false') as string,
+      }),
+    )
   })
 })

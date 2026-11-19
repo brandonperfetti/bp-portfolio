@@ -128,29 +128,60 @@ export function isReasoningModelId(modelId: string): boolean {
 }
 
 /**
- * The `providerOptions` object a Corvus turn runs with (#138 option 2).
+ * The OpenAI provider options every Corvus turn sends.
+ *
+ * @remarks A type alias, not an interface: the AI SDK types
+ * `providerOptions` as JSON objects with a string index signature, which a
+ * type alias satisfies and an interface does not.
+ */
+export type CorvusOpenAIOptions = {
+  /** Always `false` — see {@link corvusProviderOptions}. */
+  store: false
+  /** Present only for a reasoning model — see {@link isReasoningModelId}. */
+  reasoningEffort?: ReasoningEffort
+}
+
+/**
+ * The `providerOptions` object a Corvus turn runs with (#138 option 2, #366).
  *
  * @param effort - The resolved reasoning effort (`getSecurityLimits()`'s
  * `reasoningEffort` in production, `EVAL_REASONING_EFFORT` in the harness).
  * @param modelId - The model the turn will run on; defaults to the
  * env-selected one.
- * @returns `{ openai: { reasoningEffort } }` for a reasoning model, and an
- * EMPTY object for anything else.
+ * @returns `{ openai: { store: false, reasoningEffort } }` for a reasoning
+ * model, and `{ openai: { store: false } }` for anything else.
  *
- * @remarks Pure, and shared on purpose. The chat route
+ * @remarks `store: false` is unconditional (Brandon, 2026-11-18, #366). The
+ * OpenAI organization logs Responses API calls by default unless the request
+ * says `store=false`, and a Corvus turn carries what a visitor typed. The
+ * Anthropic provider ignores the `openai` namespace, so the option costs
+ * nothing there.
+ *
+ * Turning storage off changes how follow-up turns are sent. With `store`
+ * unset, `@ai-sdk/openai@3.0.87` sends each earlier reply as an
+ * `item_reference` to OpenAI's stored copy (`dist/index.mjs:3218`, `:3422`),
+ * using the item ids the browser echoes back. With `store: false` it resends
+ * each earlier reply as text (`:3222`), asks for
+ * `reasoning.encrypted_content` on a reasoning model (`:5434-5435`) so the
+ * reasoning can travel back with the conversation, and drops — with a
+ * warning — any reasoning part that has none (`:3754-3763`), which is what a
+ * tab opened before this change holds.
+ *
+ * Pure, and shared on purpose. The chat route
  * (`src/app/api/ai/chat/route.ts`) and the eval harness
  * (`evals/corvus-helpers.ts`) both build their provider options through this
  * one function, so the gate cannot score Corvus at an effort a visitor never
  * gets — the same argument that makes `EVAL_MAX_OUTPUT_TOKENS` mirror the
  * completion budget.
  *
- * The empty-object branch is a real requirement, not a defensive nicety: see
- * {@link isReasoningModelId} for the provider warning it avoids.
+ * Leaving `reasoningEffort` out for a non-reasoning model is a real
+ * requirement, not a defensive nicety: see {@link isReasoningModelId} for the
+ * provider warning it avoids.
  */
 export function corvusProviderOptions(
   effort: ReasoningEffort,
   modelId: string = getCorvusModelId(),
-): Record<string, { reasoningEffort: ReasoningEffort }> {
-  if (!isReasoningModelId(modelId)) return {}
-  return { openai: { reasoningEffort: effort } }
+): { openai: CorvusOpenAIOptions } {
+  if (!isReasoningModelId(modelId)) return { openai: { store: false } }
+  return { openai: { store: false, reasoningEffort: effort } }
 }

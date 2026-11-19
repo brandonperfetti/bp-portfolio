@@ -122,12 +122,12 @@ describe.each([
 
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        providerOptions: { openai: { reasoningEffort: 'low' } },
+        providerOptions: { openai: { store: false, reasoningEffort: 'low' } },
       }),
     )
   })
 
-  it('sends no reasoningEffort for a non-reasoning matrix variant', async () => {
+  it('sends no reasoningEffort, only store: false, for a non-reasoning matrix variant', async () => {
     // `matrix.eval.ts` names a model per variant. Pointed at a non-reasoning
     // one, the provider would warn "reasoningEffort is not supported for
     // non-reasoning models" on every call — so the helper sends nothing, and
@@ -137,7 +137,9 @@ describe.each([
     await ask('who is brandon?', { model: 'gpt-4o' })
 
     expect(generateTextMock).toHaveBeenCalledWith(
-      expect.objectContaining({ providerOptions: {} }),
+      expect.objectContaining({
+        providerOptions: { openai: { store: false } },
+      }),
     )
   })
 
