@@ -367,12 +367,13 @@ match, and stops before touching anything.
 ### Backfill
 
 `scripts/backfill-clerk-resend-mapping.ts` repairs the mapping the webhook
-writes at sign-up: it gives an opted-in user the webhook missed a link to the
-existing Resend contact at their primary email. It writes **both** stores: `external_id` for
-newly-matched users, and a mirror key for every user with a known contact id —
-including users who are _already_ mapped, who by definition have an
-`external_id` and no mirror. Mirroring them is safe where rewriting their
-`external_id` would not be: it only restates a link Clerk already asserts.
+writes at sign-up. An opted-in user with no `external_id` is matched to the
+existing Resend contact at their primary email. It writes **both** stores:
+`external_id` for newly-matched users, and a mirror key for every user with a
+known contact id — including users who are _already_ mapped, who by
+definition have an `external_id` and no mirror. Mirroring them is safe where
+rewriting their `external_id` would not be: it only restates a link Clerk
+already asserts.
 
 ```bash
 payload run scripts/backfill-clerk-resend-mapping.ts              # dry run
@@ -396,9 +397,9 @@ owning it, so that account's deletion or email change never touches it. An
 _already-mapped_ account is not re-checked; its link predates the question and
 its mirror is still rewritten.
 
-The rules (`scripts/lib/clerk-resend-mapping.mjs`) skip rather than guess whenever
-a user has no primary email, no matching contact, an address two contacts
-share, or a contact another Clerk user already claims — that last one because
+The rules (`scripts/lib/clerk-resend-mapping.mjs`) skip rather than guess
+whenever a user has no primary email, no matching contact, an address two
+contacts share, or a contact another Clerk user already claims — that last one because
 two users pointed at one contact means the first `user.deleted` removes
 somebody else's contact. Re-running is safe; a mapped user is `already-mapped`
 next time — and still has their mirror key rewritten, which is what makes a
