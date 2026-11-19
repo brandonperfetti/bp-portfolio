@@ -47,6 +47,11 @@ export type SignUpFormViewProps = {
   captchaTheme?: 'light' | 'dark'
   /** The address the code went to (`verify` step). */
   verifyEmail?: string
+  /**
+   * The first code could not be sent (`verify` step): the card says so
+   * instead of "the code we sent", until a new one goes out.
+   */
+  codeSendFailed?: boolean
   /** A polite status line on the `verify` step, such as "a new code was sent". */
   notice?: string
   onSubmit: (values: SignUpFormValues) => void
@@ -334,6 +339,7 @@ function VerifyStep({
   pending,
   errors,
   verifyEmail,
+  codeSendFailed,
   notice,
   onVerify,
   onResend,
@@ -365,7 +371,9 @@ function VerifyStep({
           Check your email
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Enter the code we sent to{' '}
+          {codeSendFailed
+            ? "We couldn't send a code to "
+            : 'Enter the code we sent to '}
           {verifyEmail ? (
             <span className="font-medium break-all text-card-foreground">
               {verifyEmail}
@@ -373,7 +381,7 @@ function VerifyStep({
           ) : (
             'your email address'
           )}
-          .
+          .{codeSendFailed ? ' Choose "Send a new code" to try again.' : null}
         </p>
       </div>
 

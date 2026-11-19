@@ -33,6 +33,22 @@ function setup(overrides: Partial<SignUpFormViewProps> = {}) {
 const optIn = () =>
   screen.getByRole('checkbox', { name: MAILING_LIST_OPT_IN_LABEL })
 
+/**
+ * The ids `field` names in `aria-describedby`, as whole tokens.
+ *
+ * @remarks `toContain(id)` on the raw attribute passes for an empty id (every
+ * string contains ''), and for an id that is only part of another (#384).
+ */
+function describedBy(field: HTMLElement): string[] {
+  return (field.getAttribute('aria-describedby') ?? '').split(/\s+/)
+}
+
+/** `element`'s id, which must not be empty for anything to point at it. */
+function idOf(element: HTMLElement): string {
+  expect(element.id).not.toBe('')
+  return element.id
+}
+
 describe('SignUpFormView, first step', () => {
   it('shows the accepted heading and welcome line', () => {
     setup()
@@ -144,7 +160,7 @@ describe('SignUpFormView, first step', () => {
     setup({ passwordMinLength: 15 })
     const password = screen.getByLabelText('Password')
     const hint = screen.getByText('At least 15 characters')
-    expect(password.getAttribute('aria-describedby')).toContain(hint.id)
+    expect(describedBy(password)).toContain(idOf(hint))
     expect(password).toHaveAttribute('autocomplete', 'new-password')
     expect(screen.getByLabelText('Email address')).toHaveAttribute(
       'autocomplete',
@@ -172,16 +188,14 @@ describe('SignUpFormView, first step', () => {
     const email = screen.getByLabelText('Email address')
     const emailError = screen.getByText('That email address is taken.')
     expect(email).toHaveAttribute('aria-invalid', 'true')
-    expect(email.getAttribute('aria-describedby')).toContain(emailError.id)
+    expect(describedBy(email)).toEqual([idOf(emailError)])
 
     const password = screen.getByLabelText('Password')
     const passwordError = screen.getByText(
       'Passwords must be 15 characters or more.',
     )
     expect(password).toHaveAttribute('aria-invalid', 'true')
-    expect(password.getAttribute('aria-describedby')).toContain(
-      passwordError.id,
-    )
+    expect(describedBy(password)).toContain(idOf(passwordError))
   })
 
   it('moves focus to the first field with an error', () => {
@@ -271,6 +285,24 @@ describe('SignUpFormView, email-code step', () => {
     expect(screen.getByLabelText('Verification code')).toHaveFocus()
   })
 
+  it('says a code was sent, to the address', () => {
+    verify()
+    expect(screen.getByText(/Enter the code we sent to/).textContent).toBe(
+      'Enter the code we sent to a@example.com.',
+    )
+  })
+
+  it('says so instead when the code could not be sent, and names the way forward (#384)', () => {
+    verify({ codeSendFailed: true })
+    expect(screen.queryByText(/the code we sent/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/couldn.t send a code to/i).textContent).toBe(
+      'We couldn\'t send a code to a@example.com. Choose "Send a new code" to try again.',
+    )
+    expect(
+      screen.getByRole('button', { name: 'Send a new code' }),
+    ).toBeEnabled()
+  })
+
   it('no longer shows the opt-in: the answer has already been sent', () => {
     verify()
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
@@ -301,7 +333,7 @@ describe('SignUpFormView, email-code step', () => {
     const code = screen.getByLabelText('Verification code')
     const error = screen.getByText('That code is incorrect.')
     expect(code).toHaveAttribute('aria-invalid', 'true')
-    expect(code.getAttribute('aria-describedby')).toContain(error.id)
+    expect(describedBy(code)).toEqual([idOf(error)])
     expect(screen.getByRole('status')).toHaveTextContent(
       'A new code is on its way.',
     )

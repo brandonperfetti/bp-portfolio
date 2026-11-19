@@ -169,6 +169,34 @@ export const VerifyEmailPhone: Story = {
   decorators: phone,
 }
 
+/**
+ * The first code could not be sent (#384): the card says so, with Clerk's
+ * reason, and "Send a new code" is the way forward.
+ */
+export const VerifyEmailSendFailed: Story = {
+  args: {
+    step: 'verify',
+    verifyEmail: 'reader@example.com',
+    codeSendFailed: true,
+    errors: { global: ['Too many requests. Please try again in a bit.'] },
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.queryByText(/the code we sent/i),
+    ).not.toBeInTheDocument()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Send a new code' }),
+    )
+    await expect(args.onResend).toHaveBeenCalled()
+  },
+}
+
+export const VerifyEmailSendFailedDark: Story = {
+  ...VerifyEmailSendFailed,
+  globals: { theme: 'dark' },
+}
+
 /** A rejected code, and the notice after "Send a new code". */
 export const VerifyEmailError: Story = {
   args: {
