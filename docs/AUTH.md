@@ -262,7 +262,8 @@ unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
   By Google, the visitor comes back with the Google account verified and the
   field still missing; the form recognises that state when it loads, says it
   could not finish with Google, and discards the attempt, so the next choice
-  starts a new one. A trip to Google the visitor abandoned is not treated
+  starts a new one. An attempt missing only the email or the password is
+  kept, since the first step collects those. A trip to Google the visitor abandoned is not treated
   this way: Google verified nothing, and the first step shows as before.
 - **Sign-in is still Clerk's prebuilt `<SignIn>`** by Brandon's decision
   (2026-11-18); making it custom is its own issue. The optional catch-all

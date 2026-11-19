@@ -988,6 +988,52 @@ describe('SignUpForm: a sign-up back from Google that the form cannot finish (#3
     expect(clerk.reset).not.toHaveBeenCalled()
   })
 
+  it.each([
+    [['password']],
+    [['email_address']],
+    [['email_address', 'password']],
+  ])(
+    'keeps an attempt missing only %j: the first step collects that, and its submit updates the attempt',
+    async (missing) => {
+      const user = userEvent.setup()
+      backFromGoogleMissing('password')
+      clerk.state.missingFields = missing
+      render(<SignUpForm />)
+
+      await act(async () => {})
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(clerk.reset).not.toHaveBeenCalled()
+
+      // The submit updates the same attempt, which then needs its code.
+      clerk.password.mockImplementationOnce(async () => {
+        awaitingCode()
+        return ok
+      })
+      await fill(user)
+      await user.click(submit())
+      expect(clerk.password).toHaveBeenCalledOnce()
+      await screen.findByRole('heading', { name: 'Check your email' })
+      expect(clerk.sendEmailCode).toHaveBeenCalledOnce()
+      expect(clerk.reset).not.toHaveBeenCalled()
+    },
+  )
+
+  it('discards when a field the form cannot collect is missing beside one it can', async () => {
+    backFromGoogleMissing('password')
+    clerk.state.missingFields = ['password', 'legal_accepted']
+    clerk.reset.mockImplementationOnce(resetClears)
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      render(<SignUpForm />)
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        /couldn.t finish/i,
+      )
+      expect(clerk.reset).toHaveBeenCalledOnce()
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
   it('leaves the code step alone when Google verified the account and only the email code is left, and does not say a code was sent', async () => {
     awaitingCode()
     clerk.state.id = 'sua_google'

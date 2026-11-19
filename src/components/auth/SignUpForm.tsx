@@ -59,6 +59,8 @@ const UNFINISHED_MESSAGE =
 const UNFINISHED_GOOGLE_MESSAGE =
   "We couldn't finish creating your account with Google here. Please try again, or sign up with your email and a password."
 const UNEXPECTED_MESSAGE = 'Something went wrong. Please try again.'
+/** The sign-up fields the first step has inputs for, in Clerk's names. */
+const COLLECTED_FIELDS: readonly string[] = ['email_address', 'password']
 /** For a navigation that has not happened yet: nothing is known to have failed. */
 const SLOW_MESSAGE = 'This is taking longer than expected.'
 
@@ -110,7 +112,9 @@ const text = (error: Message): string | undefined =>
  * "Continue with Google" updates the same attempt and comes back the same
  * way. So the form says it could not finish, logs
  * `[sign-up] unsupported requirement`, and discards the attempt, as the
- * email route does for the same state. A Google trip the visitor abandoned
+ * email route does for the same state. An attempt missing only the email
+ * or the password is kept: the first step collects those, and its submit
+ * updates the attempt. A Google trip the visitor abandoned
  * is not this: Google has verified nothing there, and the first step shows
  * as before.
  *
@@ -292,7 +296,13 @@ export function SignUpForm({
     // A bot check Clerk is still running, or has failed, has its own
     // message; this one would be shown in its place.
     !signUp.protectCheck &&
-    !needsEmailCode()
+    !needsEmailCode() &&
+    // Missing only what the first step asks for: the visitor can still
+    // finish this attempt by filling it in, so it is not discarded.
+    !(
+      signUp.missingFields.length > 0 &&
+      signUp.missingFields.every((field) => COLLECTED_FIELDS.includes(field))
+    )
   // One discard per attempt: `reset()` clears it, and this keeps a reset
   // that did not from being asked for again on every render.
   const discardedAttempt = useRef<string>(undefined)
