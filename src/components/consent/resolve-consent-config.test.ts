@@ -89,26 +89,37 @@ describe('resolveConsentConfig (CMS merge over defaults)', () => {
     expect(enabledC15tCategories(resolved)).toEqual(['necessary'])
   })
 
-  it('serves the Analytics subtitle staging and production store (#372)', () => {
-    // The value of `categories.analytics.subtitle` read anonymously from both
-    // environments' `cookie-consent` global on 2026-11-19, after the CMS edit
-    // that #372 waited on. With the pre-#361 special case gone, the dialog
-    // shows whatever is stored, so this is what readers see.
+  it('agrees with what staging and production store for Analytics (#372)', () => {
+    // `categories.analytics.subtitle` read anonymously from both environments'
+    // `cookie-consent` global on 2026-11-19. It is the code default too, so the
+    // admin's column default and the dialog's fallback say the same thing.
     const stored =
       'Google Analytics 4. It loads only while Analytics is allowed; while it is not, nothing is requested from or sent to Google. A change takes effect when you save it. A cookieless Vercel Analytics baseline runs regardless of this choice.'
+    expect(
+      DEFAULT_CONSENT_CONFIG.categories.find((c) => c.key === 'analytics')!
+        .subtitle,
+    ).toBe(stored)
+  })
+
+  it('serves a stored pre-#361 Analytics subtitle as written (#372)', () => {
+    // The reader no longer swaps the old shipped sentence for the default: a
+    // database still holding it would show it, which is why #372 waited for
+    // both environments to be edited first.
+    const old =
+      'Google Analytics 4 via Consent Mode v2. Before you grant it, GA sets no cookies; Google still receives an anonymous, cookieless signal. A cookieless Vercel Analytics baseline runs regardless of this choice.'
     const resolved = resolveConsentConfig(
       global({
         categories: {
-          analytics: { subtitle: stored },
+          analytics: { subtitle: old },
         } as CookieConsent['categories'],
       }),
     )
     expect(
       resolved.categories.find((c) => c.key === 'analytics')!.subtitle,
-    ).toBe(stored)
+    ).toBe(old)
   })
 
-  it('still serves an Analytics subtitle the editor wrote', () => {
+  it('serves an Analytics subtitle the editor wrote', () => {
     const resolved = resolveConsentConfig(
       global({
         categories: {
