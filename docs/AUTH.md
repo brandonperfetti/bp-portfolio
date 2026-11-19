@@ -216,7 +216,26 @@ unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
   taking longer than expected and offers "Start again" and "Sign in" (Clerk
   may still be finishing a bot check or a transfer, so it neither claims
   failure nor redirects); it logs
-  `[sign-up] sso callback unresolved` with the missing field names.
+  `[sign-up] sso callback unresolved` with the missing field names. "Start
+  again" then lands on a form that says why ("A dashboard change can outrun
+  the form", below).
+- **The code step says so when the first code could not be sent** (#384).
+  The card moves to the code step because Clerk's sign-up calls for a code,
+  whether or not the email went out. It says "Enter the code we sent to …"
+  only when this page sent one and Clerk accepted the send. If the send
+  failed, it reads "We couldn't send a code to …" with Clerk's reason, until
+  "Send a new code" succeeds. If the page did not see a send at all (a
+  reload on the code step, or a return from Google with only the email left
+  to verify), it claims neither: "Enter the verification code for …. If you
+  don't have one, choose 'Send a new code'."
+- **A signed-in visitor never sees the form** (#384). The page redirects
+  them on the server to the `redirect_url` target when it is a path on this
+  site, else the home page: where a finished sign-up lands, and what Clerk's
+  prebuilt `<SignUp />` did before #377. Only a path is followed there: the
+  server is given no origin to compare with, so an absolute `redirect_url`
+  goes to the home page even when it is this site's (the form, in the
+  browser, accepts one at the page's own origin). `/sign-up/sso-callback` does not redirect: a visitor Google
+  has just signed in must reach Clerk's handler there.
 - **`redirect_url` is ours to honour now.** Gated articles and Corvus link to
   `/sign-in?redirect_url=…`, and the target follows the visitor to
   `/sign-up`. Clerk's prebuilt form checked it; this form does, with
@@ -238,7 +257,14 @@ unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
   password only. If a sign-up requirement is switched on in the Clerk
   dashboard (names, phone, legal consent), the form says it could not finish
   and logs `[sign-up] unsupported requirement` with the missing fields; the
-  field has to be built before the setting goes live.
+  field has to be built before the setting goes live. That holds for both
+  routes (#384). By email, the form sees it in the answer to its own request.
+  By Google, the visitor comes back with the Google account verified and the
+  field still missing; the form recognises that state when it loads, says it
+  could not finish with Google, and discards the attempt, so the next choice
+  starts a new one. An attempt missing only the email or the password is
+  kept, since the first step collects those. A trip to Google the visitor abandoned is not treated
+  this way: Google verified nothing, and the first step shows as before.
 - **Sign-in is still Clerk's prebuilt `<SignIn>`** by Brandon's decision
   (2026-11-18); making it custom is its own issue. The optional catch-all
   under `/sign-up` stays so the prebuilt sign-in's links into `/sign-up/…`

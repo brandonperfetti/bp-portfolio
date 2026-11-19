@@ -29,6 +29,9 @@ export type SignUpFormValues = {
   mailingListOptIn: boolean
 }
 
+/** What the form knows about the email code's delivery. */
+export type SignUpCodeDelivery = 'sent' | 'failed' | 'unknown'
+
 /** Props of {@link SignUpFormView}. */
 export type SignUpFormViewProps = {
   /**
@@ -47,6 +50,14 @@ export type SignUpFormViewProps = {
   captchaTheme?: 'light' | 'dark'
   /** The address the code went to (`verify` step). */
   verifyEmail?: string
+  /**
+   * What is known about the code's delivery (`verify` step), which decides
+   * the line under the heading. `sent`: this page asked Clerk to send one
+   * and Clerk accepted. `failed`: it asked and Clerk refused. `unknown`: the
+   * page did not see a send (a reload, a return from Google), so the line
+   * claims neither. Defaults to `sent`.
+   */
+  codeDelivery?: SignUpCodeDelivery
   /** A polite status line on the `verify` step, such as "a new code was sent". */
   notice?: string
   onSubmit: (values: SignUpFormValues) => void
@@ -334,6 +345,7 @@ function VerifyStep({
   pending,
   errors,
   verifyEmail,
+  codeDelivery = 'sent',
   notice,
   onVerify,
   onResend,
@@ -365,7 +377,11 @@ function VerifyStep({
           Check your email
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Enter the code we sent to{' '}
+          {codeDelivery === 'failed'
+            ? "We couldn't send a code to "
+            : codeDelivery === 'unknown'
+              ? 'Enter the verification code for '
+              : 'Enter the code we sent to '}
           {verifyEmail ? (
             <span className="font-medium break-all text-card-foreground">
               {verifyEmail}
@@ -374,6 +390,11 @@ function VerifyStep({
             'your email address'
           )}
           .
+          {codeDelivery === 'failed'
+            ? ' Choose "Send a new code" to try again.'
+            : codeDelivery === 'unknown'
+              ? ' If you don\'t have one, choose "Send a new code".'
+              : null}
         </p>
       </div>
 

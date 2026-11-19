@@ -1,7 +1,10 @@
 import { Suspense } from 'react'
+import { redirect } from 'next/navigation'
 
 import { SignUpForm } from '@/components/auth/SignUpForm'
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
+import { getViewer } from '@/lib/auth/getViewer'
+import { safeRedirectPath } from '@/lib/auth/safeRedirect'
 
 export const metadata = { title: 'Sign up', robots: { index: false } }
 
@@ -20,13 +23,36 @@ export const instant = false
  * no longer routes by path: Clerk's prebuilt sign-in, which this release
  * keeps, links and redirects to paths under `/sign-up/…`, and those must land
  * on the form, not a 404. `/sign-up/sso-callback` is its own page.
+ *
+ * **A signed-in visitor is sent on, and never sees the form** (#384). Clerk's
+ * prebuilt `<SignUp />` did this itself; the custom form rendered for
+ * everyone. They go where a finished sign-up goes: the `redirect_url` target
+ * when it is a path on this site (`safeRedirectPath`, with no origin, so an
+ * absolute URL is refused here even when it is this site's), else the home
+ * page. It is decided on the server so there is nothing for them to submit.
+ * `/sign-up/sso-callback` is a separate page and is not redirected: a
+ * visitor Google has just signed in must reach Clerk's handler there.
+ *
+ * @param props - The route's props; of the query string, only `redirect_url`
+ *   is read.
  */
-export default function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   if (!isClerkEnabled()) {
     return (
       <div className="mx-auto max-w-md py-24 text-center text-sm text-zinc-500 dark:text-zinc-400">
         Sign-up isn&apos;t configured in this environment yet.
       </div>
+    )
+  }
+  const { isAuthenticated } = await getViewer()
+  if (isAuthenticated) {
+    const { redirect_url: target } = await searchParams
+    redirect(
+      safeRedirectPath(Array.isArray(target) ? target[0] : target) ?? '/',
     )
   }
   return (

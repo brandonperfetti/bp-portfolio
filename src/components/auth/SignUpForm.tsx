@@ -11,6 +11,7 @@ import { MAILING_LIST_OPT_IN_KEY } from '@/lib/email/mailingListOptIn'
 
 import {
   SignUpFormView,
+  type SignUpCodeDelivery,
   type SignUpFormErrors,
   type SignUpFormValues,
   type SignUpFormViewProps,
@@ -50,7 +51,16 @@ export const LEAVE_TIMEOUT_MS = 10_000
 
 const UNFINISHED_MESSAGE =
   "We couldn't finish creating your account here. Please try again, or sign up with Google."
+/**
+ * For a sign-up that came back from Google still needing something this form
+ * has no field for. It does not point at Google again: that is the route
+ * that has just not finished.
+ */
+const UNFINISHED_GOOGLE_MESSAGE =
+  "We couldn't finish creating your account with Google here. Please try again, or sign up with your email and a password."
 const UNEXPECTED_MESSAGE = 'Something went wrong. Please try again.'
+/** The sign-up fields the first step has inputs for, in Clerk's names. */
+const COLLECTED_FIELDS: readonly string[] = ['email_address', 'password']
 /** For a navigation that has not happened yet: nothing is known to have failed. */
 const SLOW_MESSAGE = 'This is taking longer than expected.'
 
@@ -92,6 +102,21 @@ const text = (error: Message): string | undefined =>
  * or the page was reloaded in between) shows the `finish` step, which calls
  * `finalize()` and nothing else; the first step there would start a second
  * sign-up for an address that now has an account.
+ *
+ * **A sign-up back from Google that this form cannot finish** (#384). When a
+ * sign-up requirement is switched on in the Clerk dashboard that the form
+ * has no field for, a Google sign-up returns with the Google account
+ * verified and a field still missing. Clerk's callback handler sends the
+ * visitor nowhere for it, and they reach this form again by "Start again"
+ * or by the address. The first step with no message would be a loop:
+ * "Continue with Google" updates the same attempt and comes back the same
+ * way. So the form says it could not finish, logs
+ * `[sign-up] unsupported requirement`, and discards the attempt, as the
+ * email route does for the same state. An attempt missing only the email
+ * or the password is kept: the first step collects those, and its submit
+ * updates the attempt. A Google trip the visitor abandoned
+ * is not this: Google has verified nothing there, and the first step shows
+ * as before.
  *
  * **Still fail-closed:** a Google sign-up that turns out to be an existing
  * account is signed in by the callback page and the list is not touched; an
@@ -140,7 +165,13 @@ export function SignUpForm({
 
   // Leaving for Google keeps the form locked. If the visitor comes back with
   // the Back button, the browser may restore this page exactly as it was
-  // left, locked; unlock it so they can choose again.
+  // left, locked; unlock it so they can choose again. A restore is the only
+  // case handled (`persisted`), and it unlocks whatever the lock was for: a
+  // visitor who left by their own navigation while a request was pending and
+  // is restored gets an unlocked form too (#384). That favours recovery over
+  // a form that could stay locked for good. It is not exclusive: a request
+  // still pending at the restore can overlap a retry. Whether a browser
+  // restores a page in that state is not measured.
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return
@@ -175,6 +206,12 @@ export function SignUpForm({
   // code step while the code is still being sent, `complete` before the
   // navigation), and none of them should flash by.
   const [heldStep, setHeldStep] = useState<SignUpFormViewProps['step']>('start')
+  // What this page has seen of the code's delivery, so the code step never
+  // says one was sent when it was not. `unknown` until a send is made here:
+  // a reload on the code step, or a return from Google with only the email
+  // left to verify, arrives without this page having sent anything.
+  const [codeDelivery, setCodeDelivery] =
+    useState<SignUpCodeDelivery>('unknown')
 
   /**
    * Runs one Clerk step with the form locked. `stayLocked` is for a step
@@ -215,6 +252,10 @@ export function SignUpForm({
   const finish = async () => {
     const { error } = await signUp.finalize({
       navigate: ({ decorateUrl }) => {
+        // The visitor has already gone somewhere else (the header, the Back
+        // button) in the moment before Clerk called this. They are signed
+        // in either way; do not pull them to the sign-up's destination.
+        if (!mounted.current) return
         const url = decorateUrl(destination)
         if (url.startsWith('http')) assignLocation(url)
         else router.push(url)
@@ -240,8 +281,44 @@ export function SignUpForm({
    */
   const discardAttempt = async (message: string) => {
     setLocalErrors([message])
+    setCodeDelivery('unknown')
     await signUp.reset()
   }
+
+  // Back from Google with the Google account verified, and Clerk still wants
+  // something this form cannot collect (see the remarks above). Read at
+  // rest only: the email route handles its own case inside its request.
+  const stuckAfterGoogle =
+    !busy &&
+    Boolean(signUp.id) &&
+    signUp.status === 'missing_requirements' &&
+    signUp.verifications.externalAccount?.status === 'verified' &&
+    // A bot check Clerk is still running, or has failed, has its own
+    // message; this one would be shown in its place.
+    !signUp.protectCheck &&
+    !needsEmailCode() &&
+    // Missing only what the first step asks for: the visitor can still
+    // finish this attempt by filling it in, so it is not discarded.
+    !(
+      signUp.missingFields.length > 0 &&
+      signUp.missingFields.every((field) => COLLECTED_FIELDS.includes(field))
+    )
+  // One discard per attempt: `reset()` clears it, and this keeps a reset
+  // that did not from being asked for again on every render.
+  const discardedAttempt = useRef<string>(undefined)
+  useEffect(() => {
+    if (!stuckAfterGoogle || discardedAttempt.current === signUp.id) return
+    discardedAttempt.current = signUp.id
+    // Field names only: nothing the visitor typed.
+    console.error('[sign-up] unsupported requirement', {
+      status: signUp.status,
+      missingFields: signUp.missingFields,
+      unverifiedFields: signUp.unverifiedFields,
+    })
+    void run(() => discardAttempt(UNFINISHED_GOOGLE_MESSAGE))
+    // Keyed on the state alone: `run` and `discardAttempt` are new on every
+    // render and read nothing that this state does not already cover.
+  }, [stuckAfterGoogle]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSubmit = ({
     emailAddress,
@@ -271,7 +348,12 @@ export function SignUpForm({
         await discardAttempt(UNFINISHED_MESSAGE)
         return
       }
-      await signUp.verifications.sendEmailCode()
+      // The card moves to the code step either way, because Clerk's
+      // sign-up now calls for a code. If this send failed, no code is on
+      // its way and the step has to say so (#384); Clerk's own message
+      // shows there too, and "Send a new code" is the way forward.
+      const sent = await signUp.verifications.sendEmailCode()
+      setCodeDelivery(sent.error ? 'failed' : 'sent')
     })
 
   const onGoogle = ({
@@ -307,13 +389,16 @@ export function SignUpForm({
   const onResend = () =>
     run(async () => {
       const { error } = await signUp.verifications.sendEmailCode()
-      if (!error) setNotice('A new code is on its way.')
+      if (error) return
+      setCodeDelivery('sent')
+      setNotice('A new code is on its way.')
     })
 
   const onFinish = () => run(finish)
 
   const onUseDifferentEmail = () =>
     run(async () => {
+      setCodeDelivery('unknown')
       await signUp.reset()
     })
 
@@ -343,6 +428,7 @@ export function SignUpForm({
           : undefined
       }
       verifyEmail={signUp.emailAddress ?? undefined}
+      codeDelivery={codeDelivery}
       notice={notice}
       onSubmit={onSubmit}
       onGoogle={onGoogle}

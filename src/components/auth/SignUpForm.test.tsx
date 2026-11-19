@@ -36,6 +36,10 @@ const clerk = vi.hoisted(() => {
     unverifiedFields: [] as string[],
     missingFields: [] as string[],
     emailAddress: null as string | null,
+    /** Clerk's verification of the Google account, once Google has answered. */
+    externalAccountStatus: null as string | null,
+    /** Clerk's pending bot-check challenge, when it has raised one. */
+    protectCheck: null as object | null,
     errors: {
       fields: {
         emailAddress: null as { message: string; longMessage?: string } | null,
@@ -80,9 +84,15 @@ vi.mock('@clerk/nextjs', () => ({
       get emailAddress() {
         return clerk.state.emailAddress
       },
+      get protectCheck() {
+        return clerk.state.protectCheck
+      },
       password: clerk.password,
       sso: clerk.sso,
       verifications: {
+        get externalAccount() {
+          return { status: clerk.state.externalAccountStatus }
+        },
         sendEmailCode: clerk.sendEmailCode,
         verifyEmailCode: clerk.verifyEmailCode,
       },
@@ -119,6 +129,8 @@ beforeEach(() => {
   clerk.state.unverifiedFields = []
   clerk.state.missingFields = []
   clerk.state.emailAddress = null
+  clerk.state.externalAccountStatus = null
+  clerk.state.protectCheck = null
   clerk.state.errors.fields.emailAddress = null
   clerk.state.errors.fields.password = null
   clerk.state.errors.fields.code = null
@@ -747,14 +759,107 @@ describe('SignUpForm: the rest of the flow', () => {
     expect(optIn()).toBeEnabled()
   })
 
+  it('says so on the code step when the first code could not be sent, until a new one goes out', async () => {
+    // #384: the card moves to the code step because Clerk's sign-up calls
+    // for a code, whether or not the email went out.
+    const user = userEvent.setup()
+    clerk.password.mockImplementationOnce(async () => {
+      awaitingCode()
+      return ok
+    })
+    clerk.sendEmailCode.mockResolvedValueOnce({
+      error: { message: 'Too many requests.' },
+    })
+    render(<SignUpForm />)
+    await fill(user)
+    await user.click(submit())
+
+    await screen.findByRole('heading', { name: 'Check your email' })
+    expect(screen.getByText(/couldn.t send a code to/i)).toBeInTheDocument()
+    expect(screen.queryByText(/the code we sent/i)).not.toBeInTheDocument()
+
+    // A resend that fails too changes nothing.
+    clerk.sendEmailCode.mockResolvedValueOnce({
+      error: { message: 'Too many requests.' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Send a new code' }))
+    await waitFor(() => expect(clerk.sendEmailCode).toHaveBeenCalledTimes(2))
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Send a new code' }),
+      ).toBeEnabled(),
+    )
+    expect(screen.getByText(/couldn.t send a code to/i)).toBeInTheDocument()
+
+    // One that goes out puts the usual line back.
+    await user.click(screen.getByRole('button', { name: 'Send a new code' }))
+    expect(await screen.findByRole('status')).toHaveTextContent(/new code/i)
+    expect(screen.getByText(/the code we sent/i)).toBeInTheDocument()
+    expect(
+      screen.queryByText(/couldn.t send a code to/i),
+    ).not.toBeInTheDocument()
+  })
+
+  it('the code step says a code was sent when the first send worked', async () => {
+    const user = userEvent.setup()
+    clerk.password.mockImplementationOnce(async () => {
+      awaitingCode()
+      return ok
+    })
+    render(<SignUpForm />)
+    await fill(user)
+    await user.click(submit())
+
+    await screen.findByRole('heading', { name: 'Check your email' })
+    expect(screen.getByText(/the code we sent/i)).toBeInTheDocument()
+  })
+
+  it('does not navigate when Clerk finishes the sign-in after the visitor has left the form', async () => {
+    // #384: `finalize()` calls `navigate` a moment after the session is
+    // set. A visitor who has gone elsewhere in that moment stays there.
+    const user = userEvent.setup()
+    awaitingCode()
+    clerk.verifyEmailCode.mockImplementationOnce(async () => {
+      clerk.state.status = 'complete'
+      return ok
+    })
+    let navigate!: (p: unknown) => void
+    const finalizing = deferred()
+    clerk.finalize.mockImplementationOnce(
+      ({ navigate: given }: { navigate: (p: unknown) => void }) => {
+        navigate = given
+        return finalizing.promise
+      },
+    )
+    const assignLocation = vi.fn()
+    const { unmount } = render(<SignUpForm assignLocation={assignLocation} />)
+    await user.type(screen.getByLabelText('Verification code'), '424242')
+    await user.click(screen.getByRole('button', { name: 'Verify' }))
+    await waitFor(() => expect(clerk.finalize).toHaveBeenCalledOnce())
+
+    unmount()
+    navigate({ session: {}, decorateUrl: () => 'https://example.com/' })
+    navigate({ session: {}, decorateUrl: (url: string) => url })
+    await act(async () => finalizing.resolve(ok))
+
+    expect(clerk.push).not.toHaveBeenCalled()
+    expect(assignLocation).not.toHaveBeenCalled()
+  })
+
   it('sends a new code and says it did', async () => {
     const user = userEvent.setup()
     awaitingCode()
     render(<SignUpForm />)
+    // A reload on the code step: the page has not seen a send yet.
+    expect(screen.queryByText(/the code we sent/i)).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/Enter the verification code for/),
+    ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Send a new code' }))
 
     expect(clerk.sendEmailCode).toHaveBeenCalledOnce()
     expect(await screen.findByRole('status')).toHaveTextContent(/new code/i)
+    expect(screen.getByText(/the code we sent/i)).toBeInTheDocument()
   })
 
   it('"Use a different email" discards the attempt, so its tick cannot outlive it', async () => {
@@ -786,5 +891,178 @@ describe('SignUpForm: the rest of the flow', () => {
       'data-cl-theme',
       'dark',
     )
+  })
+})
+
+describe('SignUpForm: a sign-up back from Google that the form cannot finish (#384)', () => {
+  /** Clerk's sign-up after Google verified the account, a field still missing. */
+  function backFromGoogleMissing(field: string) {
+    clerk.state.id = 'sua_google'
+    clerk.state.status = 'missing_requirements'
+    clerk.state.missingFields = [field]
+    clerk.state.unverifiedFields = []
+    clerk.state.externalAccountStatus = 'verified'
+  }
+  const resetClears = async () => {
+    clerk.state.id = undefined
+    clerk.state.missingFields = []
+    clerk.state.externalAccountStatus = null
+    return ok
+  }
+
+  it('says it could not finish, logs the field names and discards the attempt', async () => {
+    backFromGoogleMissing('legal_accepted')
+    clerk.reset.mockImplementationOnce(resetClears)
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      render(<SignUpForm />)
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(
+        /couldn.t finish creating your account with Google/i,
+      )
+      // It does not send the visitor round the same loop.
+      expect(alert).not.toHaveTextContent(/sign up with Google/i)
+      expect(clerk.reset).toHaveBeenCalledOnce()
+      expect(logged).toHaveBeenCalledExactlyOnceWith(
+        '[sign-up] unsupported requirement',
+        {
+          status: 'missing_requirements',
+          missingFields: ['legal_accepted'],
+          unverifiedFields: [],
+        },
+      )
+      // The first step, unlocked, and the next choice starts a new attempt.
+      await waitFor(() => expect(optIn()).toBeEnabled())
+      expect(
+        screen.getByRole('heading', { name: 'Create your account' }),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('alert')).toHaveTextContent(/couldn.t finish/i)
+      expect(clerk.sso).not.toHaveBeenCalled()
+      expect(clerk.password).not.toHaveBeenCalled()
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
+  it('asks for one discard only, even if the attempt is still there afterwards', async () => {
+    backFromGoogleMissing('phone_number')
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      render(<SignUpForm />)
+      await screen.findByRole('alert')
+      await waitFor(() => expect(optIn()).toBeEnabled())
+      expect(clerk.reset).toHaveBeenCalledOnce()
+      expect(logged).toHaveBeenCalledOnce()
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
+  it('leaves an abandoned trip to Google alone: nothing was verified there', async () => {
+    // The visitor pressed Back at Google, or reloaded. Clerk still holds the
+    // attempt with fields missing, and the first step shows as before.
+    clerk.state.id = 'sua_google'
+    clerk.state.missingFields = ['email_address']
+    clerk.state.externalAccountStatus = 'unverified'
+    render(<SignUpForm />)
+
+    expect(
+      screen.getByRole('heading', { name: 'Create your account' }),
+    ).toBeInTheDocument()
+    await act(async () => {})
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(clerk.reset).not.toHaveBeenCalled()
+    expect(optIn()).toBeEnabled()
+  })
+
+  it("leaves a sign-up with a bot check pending alone: Clerk's own message is the one to show", async () => {
+    backFromGoogleMissing('legal_accepted')
+    clerk.state.protectCheck = { status: 'pending' }
+    clerk.state.errors.global = [{ message: 'Bot check failed.' }]
+    render(<SignUpForm />)
+
+    await act(async () => {})
+    expect(screen.getByRole('alert')).toHaveTextContent('Bot check failed.')
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/couldn.t finish/i)
+    expect(clerk.reset).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [['password']],
+    [['email_address']],
+    [['email_address', 'password']],
+  ])(
+    'keeps an attempt missing only %j: the first step collects that, and its submit updates the attempt',
+    async (missing) => {
+      const user = userEvent.setup()
+      backFromGoogleMissing('password')
+      clerk.state.missingFields = missing
+      render(<SignUpForm />)
+
+      await act(async () => {})
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(clerk.reset).not.toHaveBeenCalled()
+
+      // The submit updates the same attempt, which then needs its code.
+      clerk.password.mockImplementationOnce(async () => {
+        awaitingCode()
+        return ok
+      })
+      await fill(user)
+      await user.click(submit())
+      expect(clerk.password).toHaveBeenCalledOnce()
+      await screen.findByRole('heading', { name: 'Check your email' })
+      expect(clerk.sendEmailCode).toHaveBeenCalledOnce()
+      expect(clerk.reset).not.toHaveBeenCalled()
+    },
+  )
+
+  it('discards when a field the form cannot collect is missing beside one it can', async () => {
+    backFromGoogleMissing('password')
+    clerk.state.missingFields = ['password', 'legal_accepted']
+    clerk.reset.mockImplementationOnce(resetClears)
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      render(<SignUpForm />)
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        /couldn.t finish/i,
+      )
+      expect(clerk.reset).toHaveBeenCalledOnce()
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
+  it('leaves the code step alone when Google verified the account and only the email code is left, and does not say a code was sent', async () => {
+    awaitingCode()
+    clerk.state.id = 'sua_google'
+    clerk.state.externalAccountStatus = 'verified'
+    render(<SignUpForm />)
+
+    expect(
+      screen.getByRole('heading', { name: 'Check your email' }),
+    ).toBeInTheDocument()
+    // This page sent nothing, and nothing says Clerk did.
+    expect(screen.queryByText(/the code we sent/i)).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/Enter the verification code for/),
+    ).toBeInTheDocument()
+    expect(clerk.sendEmailCode).not.toHaveBeenCalled()
+    await act(async () => {})
+    expect(clerk.reset).not.toHaveBeenCalled()
+  })
+
+  it('leaves a finished sign-up on the finish step', async () => {
+    clerk.state.id = 'sua_google'
+    clerk.state.status = 'complete'
+    clerk.state.externalAccountStatus = 'verified'
+    render(<SignUpForm />)
+
+    expect(
+      screen.getByRole('heading', { name: 'Your account is ready' }),
+    ).toBeInTheDocument()
+    await act(async () => {})
+    expect(clerk.reset).not.toHaveBeenCalled()
   })
 })

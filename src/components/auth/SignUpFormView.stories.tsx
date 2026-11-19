@@ -169,6 +169,60 @@ export const VerifyEmailPhone: Story = {
   decorators: phone,
 }
 
+/**
+ * The first code could not be sent (#384): the card says so, with Clerk's
+ * reason, and "Send a new code" is the way forward.
+ */
+export const VerifyEmailSendFailed: Story = {
+  args: {
+    step: 'verify',
+    verifyEmail: 'reader@example.com',
+    codeDelivery: 'failed',
+    errors: { global: ['Too many requests. Please try again in a bit.'] },
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.queryByText(/the code we sent/i),
+    ).not.toBeInTheDocument()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Send a new code' }),
+    )
+    await expect(args.onResend).toHaveBeenCalled()
+  },
+}
+
+export const VerifyEmailSendFailedDark: Story = {
+  ...VerifyEmailSendFailed,
+  globals: { theme: 'dark' },
+}
+
+/**
+ * The page did not see a code go out (a reload on this step, a return from
+ * Google with only the email left to verify), so the line claims neither.
+ */
+export const VerifyEmailDeliveryUnknown: Story = {
+  args: {
+    step: 'verify',
+    verifyEmail: 'reader@example.com',
+    codeDelivery: 'unknown',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.queryByText(/the code we sent/i),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.getByRole('button', { name: 'Send a new code' }),
+    ).toBeEnabled()
+  },
+}
+
+export const VerifyEmailDeliveryUnknownDark: Story = {
+  ...VerifyEmailDeliveryUnknown,
+  globals: { theme: 'dark' },
+}
+
 /** A rejected code, and the notice after "Send a new code". */
 export const VerifyEmailError: Story = {
   args: {
