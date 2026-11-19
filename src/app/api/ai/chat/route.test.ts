@@ -768,7 +768,7 @@ describe('POST /api/ai/chat — empty-reply fail-safe (#138)', () => {
     await POST(makeRequest(validBody))
 
     expect(streamTextMock.mock.calls[0]?.[0]).toMatchObject({
-      providerOptions: { openai: { reasoningEffort: 'low' } },
+      providerOptions: { openai: { store: false, reasoningEffort: 'low' } },
     })
   })
 
@@ -781,7 +781,7 @@ describe('POST /api/ai/chat — empty-reply fail-safe (#138)', () => {
     await POST(makeRequest(validBody))
 
     expect(streamTextMock.mock.calls[0]?.[0]).toMatchObject({
-      providerOptions: { openai: { reasoningEffort: 'medium' } },
+      providerOptions: { openai: { store: false, reasoningEffort: 'medium' } },
     })
   })
 
@@ -794,13 +794,21 @@ describe('POST /api/ai/chat — empty-reply fail-safe (#138)', () => {
 
     await POST(makeRequest(validBody))
 
-    expect(streamTextMock.mock.calls[0]?.[0]).toMatchObject({
-      providerOptions: {},
-    })
     expect(
       (streamTextMock.mock.calls[0]?.[0] as { providerOptions: object })
         .providerOptions,
-    ).not.toHaveProperty('openai')
+    ).toEqual({ openai: { store: false } })
+  })
+
+  it('asks OpenAI not to store the turn (#366)', async () => {
+    // Brandon, 2026-11-18: the OpenAI organization logs Responses calls
+    // unless the request says `store=false`, and this request carries what
+    // the visitor typed.
+    await POST(makeRequest(validBody))
+
+    expect(streamTextMock.mock.calls[0]?.[0]).toMatchObject({
+      providerOptions: { openai: { store: false } },
+    })
   })
 
   it('turns an empty length-terminated completion into a visible reply', async () => {
