@@ -127,8 +127,14 @@ export function isReasoningModelId(modelId: string): boolean {
   )
 }
 
-/** The OpenAI provider options every Corvus turn sends. */
-export interface CorvusOpenAIOptions {
+/**
+ * The OpenAI provider options every Corvus turn sends.
+ *
+ * @remarks A type alias, not an interface: the AI SDK types
+ * `providerOptions` as JSON objects with a string index signature, which a
+ * type alias satisfies and an interface does not.
+ */
+export type CorvusOpenAIOptions = {
   /** Always `false` — see {@link corvusProviderOptions}. */
   store: false
   /** Present only for a reasoning model — see {@link isReasoningModelId}. */
