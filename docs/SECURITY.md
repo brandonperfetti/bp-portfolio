@@ -536,7 +536,16 @@ them stay in the source doc.
   ship that state to production). _Moved from `docs/AI.md` § Guardrails
   (#247 addendum 2)._ `[source: src/lib/security/limiter.ts:13-26]` a
   production build without it logs a loud error and degrades to
-  per-instance memory limits.
+  per-instance memory limits. **When Upstash is configured but failing**
+  (a plan cap, an outage, a malformed reply such as #390's
+  `s.map is not a function`), chat and the contact form **fail closed**:
+  one Sentry capture per request (`LimiterUnavailableError`, cause kept, IP
+  and limiter key redacted) and a 503 — chat's carries
+  `code: 'chat_unavailable'`, which the chat UI shows as "temporarily
+  unavailable". Chat closes because every turn spends model tokens; the
+  contact form closes because open, it would be an unlimited sender into
+  Brandon's inbox and the Resend quota. `[source:
+src/lib/security/limiterOutage.ts]`
 - **Supabase Data API:** Do NOT add `public` (or any schema containing real
   tables) to the exposed-schemas list, and do NOT create tables in `api`;
   re-check both on the production project at promotion. _Moved from

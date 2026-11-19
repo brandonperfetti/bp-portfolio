@@ -2,6 +2,7 @@ import { convertToModelMessages, streamText, validateUIMessages } from 'ai'
 import * as z from 'zod'
 
 import { corvusProviderOptions, getCorvusModel } from '@/lib/ai/corvus'
+import { CHAT_UNAVAILABLE_CODE } from '@/lib/ai/corvusChatFetch'
 import { createEmptyReplyFailsafe } from '@/lib/ai/emptyReplyFailsafe'
 import { buildGroundedSystem } from '@/lib/ai/groundedSystem'
 import {
@@ -23,7 +24,11 @@ import {
   isAllowedRequestSource,
   verifyRequestTurnstileToken,
 } from '@/lib/security/guardrails'
-import { checkChatLimits } from '@/lib/security/limiter'
+import { checkChatLimits, type LimitResult } from '@/lib/security/limiter'
+import {
+  type LimiterOperation,
+  reportLimiterOutage,
+} from '@/lib/security/limiterOutage'
 
 export const maxDuration = 60
 
@@ -36,6 +41,31 @@ const bodySchema = z.object({
  * instead of a generic error (see `CorvusChat.tsx`'s `isSignInRequiredError`).
  */
 const SIGN_IN_REQUIRED_CODE = 'sign_in_required'
+
+/**
+ * Fail closed when the rate-limit store is down (#390): report the outage to
+ * Sentry and refuse the request with a 503 the chat UI shows as "temporarily
+ * unavailable". Chat never runs unlimited, because every turn spends model
+ * tokens.
+ *
+ * @param error - What the limiter call threw.
+ * @param operation - Which limiter call it was.
+ * @param redact - The request's client IP and limiter key, kept out of Sentry.
+ */
+function chatUnavailable(
+  error: unknown,
+  operation: LimiterOperation,
+  redact: readonly string[],
+) {
+  reportLimiterOutage(error, { surface: 'chat', operation, redact })
+  return Response.json(
+    {
+      error: 'Corvus is temporarily unavailable. Please try again shortly.',
+      code: CHAT_UNAVAILABLE_CODE,
+    },
+    { status: 503 },
+  )
+}
 
 /**
  * Corvus chat endpoint on the Vercel AI SDK (replaces v3's hand-rolled
@@ -92,11 +122,14 @@ export async function POST(req: Request) {
     ? getAuthedChatDailyQuota()
     : Number(process.env.CORVUS_CHAT_DAILY_QUOTA) || 0
 
-  const limit = await checkChatLimits(
-    limiterKey,
-    limiterPerMinute,
-    limiterPerDay,
-  )
+  const redact = [ip, limiterKey]
+
+  let limit: LimitResult
+  try {
+    limit = await checkChatLimits(limiterKey, limiterPerMinute, limiterPerDay)
+  } catch (error) {
+    return chatUnavailable(error, 'checkChatLimits', redact)
+  }
   if (!limit.allowed) {
     const retryAfter = Math.max(
       1,
@@ -124,7 +157,12 @@ export async function POST(req: Request) {
   const isAnon = !authedViewer
   const anonFreeLimit = getAnonFreeMessageLimit()
   if (isAnon) {
-    const freeCount = await peekAnonFreeMessageCount(ip)
+    let freeCount: number
+    try {
+      freeCount = await peekAnonFreeMessageCount(ip)
+    } catch (error) {
+      return chatUnavailable(error, 'peekAnonFreeMessageCount', redact)
+    }
     if (freeCount >= anonFreeLimit) {
       return Response.json(
         {
@@ -202,8 +240,14 @@ export async function POST(req: Request) {
   // Every other guard has passed and we're committed to streaming — this is
   // the point at which an anon request actually spends one of its free
   // messages (never on a request that was going to be rejected anyway).
+  // An uncounted message is an unlimited one, so a failed increment fails
+  // closed like the two checks above.
   if (isAnon) {
-    await incrementAnonFreeMessageCount(ip)
+    try {
+      await incrementAnonFreeMessageCount(ip)
+    } catch (error) {
+      return chatUnavailable(error, 'incrementAnonFreeMessageCount', redact)
+    }
   }
 
   // Retrieval grounding (#82), inserted here and nowhere else: after every

@@ -79,6 +79,13 @@ vi.mock('@/lib/security/limiter', () => ({
   checkChatLimits: (...args: unknown[]) => checkChatLimitsMock(...args),
 }))
 
+// The limiter-outage reporter (#390) runs for real; only Sentry is faked, so
+// these tests see exactly what would be sent and nothing is.
+const captureExceptionMock = vi.fn()
+vi.mock('@sentry/nextjs', () => ({
+  captureException: (...args: unknown[]) => captureExceptionMock(...args),
+}))
+
 /**
  * Retrieval grounding (#82) — added for the grounding cases at the bottom of
  * this file; the 13 gate cases above are untouched and must stay green.
@@ -834,5 +841,99 @@ describe('POST /api/ai/chat — empty-reply fail-safe (#138)', () => {
     ]
 
     expect(await runRouteTransform(parts)).toEqual(parts)
+  })
+})
+
+/**
+ * Limiter outage (#390): on staging, `@upstash/redis` auto-pipelining threw
+ * `TypeError: s.map is not a function` from `checkChatLimits` and the route
+ * answered with an unhandled 500. Every Redis-backed call must now fail
+ * closed — a 503 the chat UI renders as "temporarily unavailable", one Sentry
+ * capture, no model call — and keep the visitor's IP out of Sentry.
+ */
+describe('POST /api/ai/chat — limiter outage fails closed (#390)', () => {
+  const upstashPipelineError = () =>
+    new TypeError(`s.map is not a function (key ip:digest(${ANON_IP}))`)
+
+  const expectOutage = async (
+    res: Response,
+    operation: string,
+    cause = 's.map is not a function',
+  ) => {
+    expect(res.status).toBe(503)
+    await expect(res.json()).resolves.toMatchObject({
+      code: 'chat_unavailable',
+    })
+    expect(streamTextMock).not.toHaveBeenCalled()
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1)
+    const [captured, hint] = captureExceptionMock.mock.calls[0] as [
+      Error & { cause?: Error },
+      { tags: Record<string, string> },
+    ]
+    expect(captured.name).toBe('LimiterUnavailableError')
+    expect(captured.message).toContain(cause)
+    expect(hint.tags).toMatchObject({
+      'limiter.surface': 'chat',
+      'limiter.operation': operation,
+    })
+    const sent = JSON.stringify([
+      captured.message,
+      captured.stack,
+      captured.cause?.message,
+      captured.cause?.stack,
+    ])
+    expect(sent).not.toContain(ANON_IP)
+    expect(sent).not.toContain(`digest(${ANON_IP})`)
+  }
+
+  it('answers 503 (not a 500) when checkChatLimits throws the s.map shape', async () => {
+    checkChatLimitsMock.mockRejectedValue(upstashPipelineError())
+
+    const res = await POST(makeRequest(validBody))
+
+    await expectOutage(res, 'checkChatLimits')
+    expect(peekAnonFreeMessageCountMock).not.toHaveBeenCalled()
+  })
+
+  it('answers 503 when the signed-in limiter throws', async () => {
+    getViewerMock.mockResolvedValue({
+      isAuthenticated: true,
+      userId: 'user_abc123',
+    })
+    checkChatLimitsMock.mockRejectedValue(
+      new Error('ERR max requests limit exceeded'),
+    )
+
+    const res = await POST(makeRequest(validBody))
+
+    await expectOutage(
+      res,
+      'checkChatLimits',
+      'ERR max requests limit exceeded',
+    )
+  })
+
+  it('answers 503 when the anon free-message peek throws', async () => {
+    peekAnonFreeMessageCountMock.mockRejectedValue(upstashPipelineError())
+
+    const res = await POST(makeRequest(validBody))
+
+    await expectOutage(res, 'peekAnonFreeMessageCount')
+  })
+
+  it('answers 503 rather than streaming uncounted when the increment throws', async () => {
+    incrementAnonFreeMessageCountMock.mockRejectedValue(upstashPipelineError())
+
+    const res = await POST(makeRequest(validBody))
+
+    await expectOutage(res, 'incrementAnonFreeMessageCount')
+    expect(embedQueryMock).not.toHaveBeenCalled()
+  })
+
+  it('reports nothing to Sentry on a healthy request', async () => {
+    const res = await POST(makeRequest(validBody))
+
+    expect(res.status).toBe(200)
+    expect(captureExceptionMock).not.toHaveBeenCalled()
   })
 })

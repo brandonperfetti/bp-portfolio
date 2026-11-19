@@ -18,6 +18,7 @@ import { Copy as CopyIcon } from 'lucide-react'
 
 import { MicIcon, SendIcon } from '@/icons'
 import {
+  CHAT_UNAVAILABLE_CODE,
   createCorvusChatFetch,
   SIGN_IN_REQUIRED_CODE,
 } from '@/lib/ai/corvusChatFetch'
@@ -838,10 +839,15 @@ export default function CorvusChat({
                 role="alert"
                 className="text-sm text-red-600 dark:text-red-400"
               >
-                {error.message.includes('429') ||
-                error.message.toLowerCase().includes('rate')
-                  ? 'Corvus needs a breather — you have hit the rate limit. Try again in a minute.'
-                  : 'Something went wrong reaching Corvus. Please try again.'}
+                {/* The limiter-outage 503 (#390), normalised by
+                    corvusChatFetch: the visitor did nothing wrong, so it
+                    reads as a temporary outage, not a generic failure. */}
+                {error.message.includes(CHAT_UNAVAILABLE_CODE)
+                  ? 'Corvus is temporarily unavailable. Please try again in a few minutes.'
+                  : error.message.includes('429') ||
+                      error.message.toLowerCase().includes('rate')
+                    ? 'Corvus needs a breather — you have hit the rate limit. Try again in a minute.'
+                    : 'Something went wrong reaching Corvus. Please try again.'}
               </p>
             ))}
         </ConversationContent>
