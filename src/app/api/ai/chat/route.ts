@@ -244,10 +244,12 @@ export async function POST(req: Request) {
     // Reasoning-effort cap (#138 option 2, Brandon 2026-09-11). The other
     // half of the same budget: hidden reasoning is billed against
     // `maxOutputTokens` above, so capping the thinking is what leaves room
-    // for the answer. `corvusProviderOptions` returns `{}` unless the
-    // env-selected model is a reasoning model, so this is a no-op on
+    // for the answer. `corvusProviderOptions` sends the effort only when the
+    // env-selected model is a reasoning model, so the cap is a no-op on
     // `gpt-5-chat*`, on `gpt-4o`, and on the Anthropic path. The budget is
     // NOT moved here — raising it is #138 option 1, a separate decision.
+    // The same object carries `store: false` on every turn (#366, Brandon
+    // 2026-11-18), so OpenAI is never asked to keep what a visitor typed.
     providerOptions: corvusProviderOptions(limits.reasoningEffort),
     experimental_transform: createEmptyReplyFailsafe(),
   })

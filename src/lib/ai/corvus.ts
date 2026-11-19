@@ -167,7 +167,7 @@ export type CorvusOpenAIOptions = {
  * warning — any reasoning part that has none (`:3754-3763`), which is what a
  * tab opened before this change holds.
  *
- * @remarks Pure, and shared on purpose. The chat route
+ * Pure, and shared on purpose. The chat route
  * (`src/app/api/ai/chat/route.ts`) and the eval harness
  * (`evals/corvus-helpers.ts`) both build their provider options through this
  * one function, so the gate cannot score Corvus at an effort a visitor never

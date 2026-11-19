@@ -280,6 +280,9 @@ describe('isReasoningModelId — pinned to the installed provider', () => {
   })
 })
 
+/** The call options a Responses model's `doGenerate` takes. */
+type CallOptions = Parameters<ReturnType<OpenAIProvider>['doGenerate']>[0]
+
 /**
  * `[measured]` The installed provider, driven keylessly.
  *
@@ -299,11 +302,14 @@ describe('isReasoningModelId — pinned to the installed provider', () => {
  * mode the #138 comments flag ("an unsupported value fails every turn") would
  * be OpenAI's rejection, not the SDK's, so the keyed `pnpm eval:ci` is still
  * the receipt that matters.
+ *
+ * Since #366 it also pins `store: false`: the flag on the wire, the
+ * `reasoning.encrypted_content` include it triggers on a reasoning model, and
+ * how a follow-up turn's earlier reply is sent — as text, where unset `store`
+ * sends an `item_reference` to OpenAI's stored copy. Whether OpenAI accepts
+ * those resent items is a live preview check, not something a stub can show.
  */
-/** The call options a Responses model's `doGenerate` takes. */
-type CallOptions = Parameters<ReturnType<OpenAIProvider>['doGenerate']>[0]
-
-describe('[measured] @ai-sdk/openai turns the helper’s object into reasoning.effort', () => {
+describe('[measured] @ai-sdk/openai puts the helper’s object on the wire', () => {
   /** Run one keyless `doGenerate`, returning the request body and warnings. */
   const captureRequest = async (
     modelId: string,
