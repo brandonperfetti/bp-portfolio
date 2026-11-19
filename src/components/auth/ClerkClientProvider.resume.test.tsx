@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { existsSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 
 import { Suspense, type ComponentType, type ReactNode } from 'react'
@@ -43,9 +45,24 @@ type Provider = ComponentType<{ children: ReactNode }>
 
 const PUBLISHABLE_KEY = 'pk_test_Y2xlcmsuZXhhbXBsZS5jb20k'
 
-const CLERK_APP_ROUTER_PROVIDER = path.resolve(
-  'node_modules/@clerk/nextjs/dist/esm/app-router/client/ClerkProvider.js',
+/**
+ * What `@clerk/nextjs`'s server `ClerkProvider` renders, found next to the
+ * package's entry. It is not a public export, so a Clerk release may move
+ * it: when this file is missing, re-check the hazard by hand before
+ * deleting the first case.
+ */
+const CLERK_APP_ROUTER_PROVIDER = path.join(
+  path.dirname(createRequire(import.meta.url).resolve('@clerk/nextjs')),
+  '..',
+  'esm/app-router/client/ClerkProvider.js',
 )
+
+/**
+ * How long each helper lets React work before it halts or reads. Nothing
+ * in these trees waits on I/O, so React is done in well under a tick; the
+ * margin is for a slow CI runner.
+ */
+const SETTLE_MS = 200
 
 /** Suspends for good, so the prerender leaves a hole for the resume. */
 function Hole(): ReactNode {
@@ -83,7 +100,7 @@ async function prerenderShell(loadProvider: () => Promise<Provider>) {
     onError: () => undefined,
   })
   // Let everything that can render finish, then halt on the hole.
-  await new Promise((resolve) => setTimeout(resolve, 50))
+  await new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
   controller.abort()
   const { postponed, prelude } = await pending
   await new Response(prelude).text()
@@ -113,7 +130,7 @@ async function resumeCold(
         /* drain */
       }
     })(),
-    new Promise((resolve) => setTimeout(resolve, 50)),
+    new Promise((resolve) => setTimeout(resolve, SETTLE_MS)),
   ])
   await reader.cancel()
   return errors
@@ -126,6 +143,10 @@ afterEach(() => {
 describe('Clerk provider under a cold resume (BP-PORTFOLIO-S)', () => {
   it('pins the hazard: Clerk’s own app-router provider changes name between a warm and a cold process', async () => {
     vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', PUBLISHABLE_KEY)
+    expect(
+      existsSync(CLERK_APP_ROUTER_PROVIDER),
+      `Clerk moved ${CLERK_APP_ROUTER_PROVIDER}; re-check the hazard by hand`,
+    ).toBe(true)
     // What `@clerk/nextjs`'s server `ClerkProvider` renders on the server.
     const loadClerkAppRouterProvider = async () => {
       // Not a public export, so it is loaded by its file path.

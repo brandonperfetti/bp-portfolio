@@ -12,8 +12,10 @@ import type { ReactNode } from 'react'
  * `@clerk/nextjs`'s pages-router provider, and that module renames the
  * shared `@clerk/react` provider to `ReactClerkProvider` as it loads
  * (`ReactClerkProvider.displayName = "ReactClerkProvider"`, a module side
- * effect, in `@clerk/nextjs` 7.10). React's resume compares each component's
- * name with the one the prerender recorded. When the server `ClerkProvider`
+ * effect, in `@clerk/nextjs` 7.10.2 as installed;
+ * `ClerkClientProvider.resume.test.tsx` fails when a release drops it).
+ * React's resume compares each component's name with the one the prerender
+ * recorded. When the server `ClerkProvider`
  * from `@clerk/nextjs` was rendered from the layout directly, the provider's
  * name depended on whether some other client module had already loaded that
  * file in the same process: a build worker always had (its shell recorded
