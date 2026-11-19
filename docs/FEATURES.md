@@ -85,8 +85,9 @@
 - `/api/contact` POST delivers contact-form email via Resend (migrated from
   SendGrid + renamed from `/api/sendgrid` 2026-08-10), with an explicit
   unchecked-by-default mailing-list opt-in checkbox. Clerk webhook
-  (`/api/clerk/webhook`, svix verified) captures sign-up emails as Resend
-  contacts.
+  (`/api/clerk/webhook`, svix verified) captures a sign-up's email as a
+  Resend contact only when the sign-up ticked the same opt-in (#362), which
+  sits inside the site's own sign-up form (#377; `docs/AUTH.md`).
 
 ## SEO surfaces
 

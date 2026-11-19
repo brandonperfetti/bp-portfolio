@@ -20,6 +20,61 @@ export const CONSENT_STORAGE_KEY = 'bp-consent'
 type ConsentScripts = NonNullable<ConsentManagerOptions['scripts']>
 
 /**
+ * The window property gtag.js reads as its documented opt-out switch: while
+ * `window['ga-disable-<measurement id>']` is `true`, the tag sends nothing to
+ * Google Analytics for that id.
+ */
+export function gaDisableKey(measurementId: string): string {
+  return `ga-disable-${measurementId}`
+}
+
+function setGaDisabled(measurementId: string, disabled: boolean): void {
+  if (typeof window === 'undefined') return
+  ;(window as unknown as Record<string, unknown>)[gaDisableKey(measurementId)] =
+    disabled
+}
+
+/**
+ * Stops Google Analytics for the rest of this page's life, once `measurement`
+ * is no longer granted (#361).
+ *
+ * @remarks
+ * c15t stops managing a consent-gated script the moment its category is
+ * revoked: it runs no callback on unload, and it calls `onConsentChange` only
+ * for scripts that still have consent. So a withdrawal reaches gtag.js through
+ * here, not through c15t. It is called from two places: c15t's
+ * `onBeforeConsentRevocationReload` callback, which runs synchronously just
+ * before c15t reloads the page on a revoking save (its
+ * `reloadOnConsentRevoked` default), and an effect in `ConsentSurface`, for
+ * any revoke that does not reload. The effect alone would be too late for the
+ * reloading case: c15t reloads in the same task as the save. Two things
+ * happen, and the first is the one that
+ * matters: gtag's own opt-out switch ({@link gaDisableKey}) is set, which
+ * stops every hit, including the cookieless ping Consent Mode sends while
+ * storage is denied; then, if the tag was ever installed on this page, it is
+ * told storage is denied so it stops reading and writing its cookies. The
+ * script that already ran stays in memory until the next page load; it has
+ * nothing left it is allowed to send.
+ *
+ * A no-op without a measurement id or outside production, where no Google
+ * code is registered at all, and safe to call when the tag never loaded.
+ */
+export function stopGoogleAnalytics(input: {
+  measurementId: string | undefined
+  isProduction: boolean
+}): void {
+  const { measurementId, isProduction } = input
+  if (!measurementId || !isProduction || typeof window === 'undefined') return
+  setGaDisabled(measurementId, true)
+  const tag = (window as unknown as { gtag?: unknown }).gtag
+  if (typeof tag === 'function') {
+    ;(tag as (...args: unknown[]) => void)('consent', 'update', {
+      analytics_storage: 'denied',
+    })
+  }
+}
+
+/**
  * GA4 gating — mirrors the repo's "empty var ⇒ zero code" idiom: no Google
  * code is registered unless a measurement id is present AND the build is
  * production.
@@ -30,6 +85,26 @@ type ConsentScripts = NonNullable<ConsentManagerOptions['scripts']>
  * build is `NODE_ENV==='production'` too, so `NODE_ENV` would wrongly load GA4
  * on previews (code-review Sp-1). No new env var is introduced. Kept pure
  * (inputs, not `process.env`) so it is unit-testable.
+ *
+ * **The tag is gated on the `measurement` category, not always-loaded
+ * (#361).** c15t's prebuilt Google tag ships `alwaysLoad: true`: gtag.js is
+ * installed for every visitor and left to police itself through Consent Mode
+ * v2, which still sends Google a cookieless `page_view` while storage is
+ * denied. The banner promises "Google Analytics only with your consent", so
+ * the override below turns that off: until `measurement` is granted c15t runs
+ * none of the tag's setup (no `dataLayer`, no `gtag`, no script element), and
+ * no request reaches a Google host. Which visitors are granted without asking
+ * is decided in one place, {@link shouldAutoGrantMeasurement}; this function
+ * knows nothing about regions.
+ *
+ * `persistAfterConsentRevoked` stays `true` on purpose. Removing the script
+ * element on a withdrawal would not unload code that already ran, and a later
+ * re-grant would append and execute gtag.js a second time on the same page.
+ * Kept, a re-grant reuses the element and c15t replays the consent state
+ * through `onConsentChange`. What stops the hits on withdrawal is
+ * {@link stopGoogleAnalytics}; the two wrappers here lift that switch again
+ * synchronously, before the tag can send, whenever c15t loads or re-syncs the
+ * script with consent.
  */
 export function buildConsentScripts(input: {
   measurementId: string | undefined
@@ -37,10 +112,22 @@ export function buildConsentScripts(input: {
 }): ConsentScripts {
   const { measurementId, isProduction } = input
   if (!measurementId || !isProduction) return []
-  // Prebuilt Google Tag (gtag.js): Consent Mode v2 defaults denied,
-  // `alwaysLoad` (gtag manages its own consent internally — c15t pushes
-  // `gtag('consent','default'|'update', …)`), category `measurement`.
-  return [gtag({ id: measurementId, category: 'measurement' })]
+  const tag = gtag({ id: measurementId, category: 'measurement' })
+  return [
+    {
+      ...tag,
+      alwaysLoad: false,
+      persistAfterConsentRevoked: true,
+      onBeforeLoad: (info) => {
+        setGaDisabled(measurementId, !info.hasConsent)
+        tag.onBeforeLoad?.(info)
+      },
+      onConsentChange: (info) => {
+        setGaDisabled(measurementId, !info.hasConsent)
+        tag.onConsentChange?.(info)
+      },
+    },
+  ]
 }
 
 /** Reads the client-inlined GA gating inputs from the environment. */
@@ -80,8 +167,23 @@ export function buildConsentManagerOptions(input: {
   scripts: ConsentScripts
   categories?: readonly C15tCategory[]
   disableAutomaticBlocking?: boolean
+  /**
+   * Runs synchronously when a saved choice revokes a category c15t had
+   * granted, immediately before c15t reloads the page. Receives the
+   * preferences being saved.
+   */
+  onBeforeRevocationReload?: (preferences: Record<string, boolean>) => void
 }): ConsentManagerOptions {
+  const { onBeforeRevocationReload } = input
   return {
+    ...(onBeforeRevocationReload
+      ? {
+          callbacks: {
+            onBeforeConsentRevocationReload: ({ preferences }) =>
+              onBeforeRevocationReload(preferences as Record<string, boolean>),
+          },
+        }
+      : {}),
     mode: 'offline',
     // Emit no c15t CSS or built-in component chrome — we render our own UI.
     noStyle: true,

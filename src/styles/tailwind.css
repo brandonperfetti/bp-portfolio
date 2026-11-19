@@ -32,8 +32,11 @@
  *                        in dark (`oklch(1 0 0 / 10%)`, `/ 15%`) — not a ramp
  *                        step at all, so identity is not assertable there and
  *                        the pair is left to the surfaces it sits between.
- *   --destructive*       the generator's red, unused by any component and
- *                        deliberately unpinned — see its own comment below.
+ *   --destructive*       the generator's red. Its INK use (error text and an
+ *                        invalid field's border, first rendered by the
+ *                        sign-up form, #377) is pinned on the page and on a
+ *                        card; its FILL pair is still rendered by nothing
+ *                        and unpinned — see its own comment below.
  *   --primary-hover      identity and the LABEL ratio are pinned in both
  *                        themes, and so is the hover direction; the hovered
  *                        FILL EDGE against the page is not, because in dark it
@@ -192,10 +195,13 @@
   --muted-foreground: oklch(0.442 0.017 285.786); /* zinc-600 */
   --accent: oklch(0.967 0.001 286.375); /* zinc-100 */
   --accent-foreground: oklch(0.21 0.006 285.885); /* zinc-900 */
-  /* Left on the generator's red: the site palette has no destructive hue, and
-   * no component currently renders `variant="destructive"`. Its dark pair is
-   * measured and recorded as a follow-up rather than pinned by a test that
-   * would fail on a token nothing uses. */
+  /* Left on the generator's red: the site palette has no destructive hue.
+   * As INK it is rendered (error text and invalid-field borders in the
+   * sign-up form, #377) and pinned at 4.5:1 on the page and on a card in both
+   * themes. As a FILL no component renders `variant="destructive"`, so the
+   * `--destructive-foreground` pair stays unpinned: its dark pair is measured
+   * and recorded as a follow-up rather than pinned by a test that would fail
+   * on a token nothing uses. */
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(0.92 0.004 286.32); /* zinc-200 */

@@ -8,8 +8,8 @@ middleware geo decision gate the one that needs consent.
 
 - **Vercel Analytics + Speed Insights** — always on, **cookieless**, no consent
   required. Mounted in `src/app/(frontend)/layout.tsx` and untouched.
-- **Google Analytics 4 (GA4)** — free, portable deep analytics, gated behind
-  consent via Google **Consent Mode v2**. Loads only when
+- **Google Analytics 4 (GA4)** — free, portable deep analytics, loaded only
+  once the `measurement` category is granted (#361). Registered only when
   `NEXT_PUBLIC_VERCEL_ENV === 'production'` **and** `NEXT_PUBLIC_GA_MEASUREMENT_ID`
   is set (production-only — `NODE_ENV` is `'production'` on Vercel Preview too,
   so it is not used). Out of scope: GTM, ads/marketing pixels, other vendors.
@@ -62,17 +62,92 @@ backend.
   short TTL and is refreshed on each navigation, so a travelling visitor
   re-resolves.
 
-## Consent Mode v2 — the cookieless-ping caveat (disclosed in the dialog)
+## GA4 loads only on a grant (#361)
 
 GA4 is registered through c15t's prebuilt Google Tag integration
-(`@c15t/scripts/google-tag`) with **Consent Mode v2**: gtag.js loads with consent
-defaults **denied**, and c15t pushes `gtag('consent','update', …)` on grant/revoke.
+(`@c15t/scripts/google-tag`), with one override in `buildConsentScripts`
+(`consent-config.ts`): **`alwaysLoad: false`**. The prebuilt tag ships
+always-load: gtag.js is installed for every visitor and left to police itself
+through Consent Mode v2, which still sends Google a cookieless `page_view`
+(page URL and title, screen size, language, browser and OS versions) while
+storage is denied. That ran from #83 until #361 `[measured on production
+2026-11-18, at 561a5bf]`, under a banner that says "Google Analytics only with
+your consent".
 
-- **Before consent:** GA4 sets **zero cookies**. gtag.js still loads
-  (`alwaysLoad`), so Google receives a **cookieless consent-mode ping** with no
-  identifiers — the basis of modeled conversions, disclosed in the dialog.
-- **After grant:** `analytics_storage` → granted; GA4 collects.
-- **After revoke:** back to denied; collection stops.
+- **Before a grant:** c15t skips the script and all of its setup. No
+  `dataLayer`, no `gtag`, no script element, and no request to a Google host.
+  This is every visitor where consent is required or the region is unknown,
+  until they choose.
+- **On a grant:** c15t runs the tag's setup with Consent Mode v2 defaults
+  already granted for `analytics_storage`, loads gtag.js, and GA4 collects.
+  Where consent is not required the grant is automatic (below), so GA4 loads
+  on the first page as before.
+- **On a withdrawal:** c15t reloads the page when a choice revokes a category
+  it had granted (`reloadOnConsentRevoked`, its default), and the fresh page
+  loads nothing from Google. That covers the dialog's buttons and also the
+  #103 region-change reprompt, whose `setConsent` goes through the same save.
+  `stopGoogleAnalytics` sets gtag's own opt-out switch
+  (`window['ga-disable-<id>']`) and tells an installed tag storage is denied.
+  It is called from c15t's `onBeforeConsentRevocationReload` callback, which
+  runs synchronously just before that reload, and from an effect for a revoke
+  that does not reload. The stop is not made at the click itself: c15t
+  awaits a digest before it commits the choice and calls that callback, so
+  for those few milliseconds the installed tag is still enabled. What the
+  browser proof measures is the outcome, in the runs it made: no request to a
+  Google host from the Reject click onwards, the departing document
+  included. It does not read the switch in that document, and it is not a
+  guarantee that the tag cannot send inside that interval.
+- **What is not covered: an automatic grant meeting a region that asks
+  (#375).** Where consent is not required, `measurement` is granted
+  automatically and the grant is stored. The consent-state logic that follows
+  is unchanged by #361; only what the tag does with that state changed. Two
+  cases are left as they were, by decision (Brandon, 2026-11-18):
+  - **A returning visitor.** c15t restores the stored grant as its store is
+    created and makes its first script pass on it, so a visitor granted
+    automatically where consent is not required, who next loads the site from
+    a region that requires it, gets the tag on that first page. The region
+    check (an effect) then revokes the grant by saving a denial, and c15t
+    reloads; later pages load nothing. Before #361 every visitor got the tag
+    on every page.
+  - **A region change inside one visit.** On a client-side navigation after
+    which the geo cookie says consent is required, the automatic grant is
+    revoked the same way: Analytics goes off and c15t reloads the page, but
+    the banner does not come back, because c15t counts that save as a choice.
+    The tag that was already loaded can also report the route the visitor
+    lands on before it is stopped. And c15t neither orders nor cancels saves:
+    if the automatic grant's save is still in flight when the denial is saved,
+    the older grant can land last, or its second storage write can overwrite
+    the stored denial, leaving a grant stored with nothing marking it as
+    automatic.
+
+  A check that dropped a stored automatic grant before c15t read it was built
+  for the first case during #361 and taken out again: each version of it left
+  some visitor worse off than production in a history involving a second tab
+  or an unfinished save. The design that replaces it, and the histories it
+  must pass, are in #375.
+
+Which visitors are granted without being asked is decided by the region
+predicates in `consent-config.ts` and nowhere else:
+`shouldAutoGrantMeasurement` (who is granted) and
+`shouldRepromptOnRegionChange` (when such a grant stops counting). The script
+registration knows nothing about regions, so changing who is asked is a
+change to those predicates alone.
+
+**The dialog's Analytics sentence.** The default copy now says the tag loads
+only while the category is on. The sentence shipped before #361 ("Google still
+receives an anonymous, cookieless signal") is still the saved value in the
+`cookie-consent` global wherever the global was saved once, production
+included, and the column default in the database. `resolveConsentConfig`
+treats a stored value equal to that exact sentence as not customised and
+serves the current default, so the dialog is right on deploy with no CMS write
+and no migration. The admin field goes on showing the old sentence until it is
+edited. Cleanup (#372): on staging and production, replace the saved
+sentence with the current default or other wording that is true (a reworded
+copy of the old claim would be served as written), confirm neither
+environment still returns the old sentence, and only then remove
+`SUPERSEDED_ANALYTICS_SUBTITLE` and its uses, with the migration that moves
+the column default. Removing it first would put the old sentence back in the
+dialog.
 
 ## Essential cookies (exempt from the banner)
 
@@ -129,7 +204,20 @@ checks:
   and restores focus; toggles are real Radix `switch`es; the teal
   `:focus-visible` ring shows. Reduced-motion: enter/exit static.
 - **GA:** loads only in production (not Preview) and only where allowed
-  (unconsented where not required; denied-until-grant where required). Before
-  grant — zero GA cookies; a cookieless consent-mode ping is expected. After
-  grant — events in DebugView; after revoke — collection stops. Vercel Analytics
-  fires throughout.
+  (unconsented where not required; not at all until a grant where required or
+  unknown). Before a grant: no request to `googletagmanager.com` or
+  `google-analytics.com`, read from the full network log, not a filtered
+  panel. After a grant: gtag.js loads and a `page_view` is sent. After a
+  withdrawal: the page reloads and no request is made. Vercel Analytics fires
+  throughout. The same three states are pinned in a browser by
+  `e2e/consent-google-analytics.spec.ts`.
+- **The real tag, by hand.** In CI that spec answers the gtag.js request with
+  a stand-in, so a required check never depends on Google's servers. When the
+  gating changes, run **that spec alone** once with the real tag, against a
+  production build that has GA configured:
+  `NEXT_PUBLIC_VERCEL_ENV=production NEXT_PUBLIC_GA_MEASUREMENT_ID=<id> GA_E2E_LIVE=1 CI=1 pnpm exec playwright test consent-google-analytics`
+  (the same two variables must have been set for `pnpm build`). Use the CI
+  placeholder id or a test property for `<id>`, never the production one.
+  gtag.js then loads from Google; its `collect` hits are answered locally by
+  the spec, and the measurement hosts stay unresolvable in the browser as a
+  second stop, so the browser is seen to send them and nothing is delivered.

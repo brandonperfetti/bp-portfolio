@@ -1,27 +1,46 @@
-import { SignUp } from '@clerk/nextjs'
+import { Suspense } from 'react'
+import { redirect } from 'next/navigation'
 
+import { SignUpForm } from '@/components/auth/SignUpForm'
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
+import { getViewer } from '@/lib/auth/getViewer'
+import { safeRedirectPath } from '@/lib/auth/safeRedirect'
 
 export const metadata = { title: 'Sign up', robots: { index: false } }
 
-// #76 B3: Clerk's <SignUp> reads `usePathname()` (a client hook that blocks
-// prerender), and the route is noindex — opt out of prerender. Request-time
-// render; no SEO/static value lost.
+// #76 B3: the form reads the URL on the client (`useSearchParams`, which
+// blocks prerender), and the route is noindex — opt out of prerender.
+// Request-time render; no SEO/static value lost.
 export const instant = false
 
 /**
- * In-app, site-themed sign-up (email capture entry point; consent handled
- * by Clerk legal/consent settings). The email-code verification step is
- * part of the same `<SignUp>` flow, so it renders in-app and on-theme too —
- * it isn't a separate route.
+ * In-app sign-up, in the site's own markup (#377). An account joins the
+ * mailing list only when the visitor ticks the opt-in inside the form (#362;
+ * `SignUpForm` carries how that reaches the webhook). The email-code step is
+ * part of the same form, so it is not a separate route.
  *
- * @remarks `path`/`routing="path"` pin the component to this route's
- * optional catch-all segment (`[[...sign-up]]`), and `signInUrl` keeps its
- * "Sign in" cross-link on the app route. Both are explicit so routing stays
- * correct even if `NEXT_PUBLIC_CLERK_SIGN_IN_URL` is left unset — without
- * either, Clerk falls back to the unstyled hosted Account Portal (#96).
+ * @remarks The optional catch-all (`[[...sign-up]]`) stays although the form
+ * no longer routes by path: Clerk's prebuilt sign-in, which this release
+ * keeps, links and redirects to paths under `/sign-up/…`, and those must land
+ * on the form, not a 404. `/sign-up/sso-callback` is its own page.
+ *
+ * **A signed-in visitor is sent on, and never sees the form** (#384). Clerk's
+ * prebuilt `<SignUp />` did this itself; the custom form rendered for
+ * everyone. They go where a finished sign-up goes: the `redirect_url` target
+ * when it is a path on this site (`safeRedirectPath`, with no origin, so an
+ * absolute URL is refused here even when it is this site's), else the home
+ * page. It is decided on the server so there is nothing for them to submit.
+ * `/sign-up/sso-callback` is a separate page and is not redirected: a
+ * visitor Google has just signed in must reach Clerk's handler there.
+ *
+ * @param props - The route's props; of the query string, only `redirect_url`
+ *   is read.
  */
-export default function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   if (!isClerkEnabled()) {
     return (
       <div className="mx-auto max-w-md py-24 text-center text-sm text-zinc-500 dark:text-zinc-400">
@@ -29,9 +48,18 @@ export default function SignUpPage() {
       </div>
     )
   }
+  const { isAuthenticated } = await getViewer()
+  if (isAuthenticated) {
+    const { redirect_url: target } = await searchParams
+    redirect(
+      safeRedirectPath(Array.isArray(target) ? target[0] : target) ?? '/',
+    )
+  }
   return (
-    <div className="flex justify-center py-16">
-      <SignUp path="/sign-up" routing="path" signInUrl="/sign-in" />
+    <div className="flex justify-center px-4 py-16">
+      <Suspense fallback={null}>
+        <SignUpForm />
+      </Suspense>
     </div>
   )
 }

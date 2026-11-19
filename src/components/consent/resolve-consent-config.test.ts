@@ -4,6 +4,7 @@ import type { CookieConsent } from '@/payload-types'
 
 import {
   DEFAULT_CONSENT_CONFIG,
+  SUPERSEDED_ANALYTICS_SUBTITLE,
   enabledC15tCategories,
 } from './consent-content'
 import { resolveConsentConfig } from './resolve-consent-config'
@@ -87,6 +88,64 @@ describe('resolveConsentConfig (CMS merge over defaults)', () => {
       resolved.categories.find((c) => c.key === 'analytics')!.enabled,
     ).toBe(false)
     expect(enabledC15tCategories(resolved)).toEqual(['necessary'])
+  })
+
+  it('serves the current Analytics subtitle when the stored one is the superseded default (#361)', () => {
+    // Production's saved global and the column default both hold the pre-#361
+    // sentence, which says Google gets a signal before consent. Neither is a
+    // customisation, so the reader must not serve it.
+    const resolved = resolveConsentConfig(
+      global({
+        categories: {
+          analytics: { subtitle: `${SUPERSEDED_ANALYTICS_SUBTITLE}\n` },
+        } as CookieConsent['categories'],
+      }),
+    )
+    const analytics = resolved.categories.find((c) => c.key === 'analytics')!
+    expect(analytics.subtitle).toBe(
+      DEFAULT_CONSENT_CONFIG.categories.find((c) => c.key === 'analytics')!
+        .subtitle,
+    )
+    expect(analytics.subtitle).not.toContain('cookieless signal')
+  })
+
+  it('recognises exactly the sentence production has stored', () => {
+    // Written out here, not imported: the special case only works while the
+    // constant equals what is actually in the database. This is the value of
+    // `categories.analytics.subtitle` read from the production `cookie-consent`
+    // global on 2026-11-18, and the column default in
+    // `src/migrations/20260826_145724_cookie_consent_global.ts`. If the
+    // constant is ever edited, this fails before production starts serving
+    // the old sentence again.
+    const stored =
+      'Google Analytics 4 via Consent Mode v2. Before you grant it, GA sets no cookies; Google still receives an anonymous, cookieless signal. A cookieless Vercel Analytics baseline runs regardless of this choice.'
+    expect(SUPERSEDED_ANALYTICS_SUBTITLE).toBe(stored)
+
+    const resolved = resolveConsentConfig(
+      global({
+        categories: {
+          analytics: { subtitle: stored },
+        } as CookieConsent['categories'],
+      }),
+    )
+    expect(
+      resolved.categories.find((c) => c.key === 'analytics')!.subtitle,
+    ).toBe(
+      'Google Analytics 4. It loads only while Analytics is allowed; while it is not, nothing is requested from or sent to Google. A change takes effect when you save it. A cookieless Vercel Analytics baseline runs regardless of this choice.',
+    )
+  })
+
+  it('still serves an Analytics subtitle the editor wrote', () => {
+    const resolved = resolveConsentConfig(
+      global({
+        categories: {
+          analytics: { subtitle: 'Our own words about analytics.' },
+        } as CookieConsent['categories'],
+      }),
+    )
+    expect(
+      resolved.categories.find((c) => c.key === 'analytics')!.subtitle,
+    ).toBe('Our own words about analytics.')
   })
 
   it('resolves the privacy-policy page relation to its public path', () => {

@@ -59,6 +59,7 @@ vi.mock('payload', () => ({
 import { revalidateRedirects } from '@/hooks/revalidateRedirects'
 import { getCmsAuthors } from '@/lib/cms/authorsRepo'
 import { getCmsConsentConfig } from '@/lib/cms/consentRepo'
+import { getCmsFooterLinks } from '@/lib/cms/footerRepo'
 import { getCmsIdentity } from '@/lib/cms/identityRepo'
 import { getPageLayoutBySlug, getPostLayoutBySlug } from '@/lib/cms/layoutsRepo'
 import { getCmsNavigation } from '@/lib/cms/navigationRepo'
@@ -90,6 +91,11 @@ const cases: Array<{
     call: getCmsSiteSettings,
   },
   { name: 'getCmsIdentity', tag: CMS_TAGS.identity, call: getCmsIdentity },
+  {
+    name: 'getCmsFooterLinks',
+    tag: CMS_TAGS.footer,
+    call: getCmsFooterLinks,
+  },
   {
     name: 'getCmsNavigation',
     tag: CMS_TAGS.navigation,
@@ -379,6 +385,7 @@ const EXPECTED_DIRECTIVE_KINDS: Record<string, DirectiveKind> = {
   'src/lib/cms/articlesRepo.ts#isArticleScheduledFuture': 'remote',
   'src/lib/cms/authorsRepo.ts#getCmsAuthors': 'remote',
   'src/lib/cms/consentRepo.ts#getCmsConsentConfig': 'remote',
+  'src/lib/cms/footerRepo.ts#getCmsFooterLinks': 'remote',
   'src/lib/cms/identityRepo.ts#getCmsIdentity': 'remote',
   'src/lib/cms/layoutsRepo.ts#getPageLayoutBySlug': 'remote',
   'src/lib/cms/layoutsRepo.ts#getPostLayoutBySlug': 'remote',

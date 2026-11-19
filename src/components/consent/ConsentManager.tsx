@@ -21,6 +21,7 @@ import {
   setAutoGrantMarker,
   shouldAutoGrantMeasurement,
   shouldRepromptOnRegionChange,
+  stopGoogleAnalytics,
 } from './consent-config'
 import { CookieBanner } from './CookieBanner'
 import { CookieDialog } from './CookieDialog'
@@ -36,9 +37,11 @@ import { CookieDialog } from './CookieDialog'
  * #103 (region change): an auto-grant is tracked with a localStorage marker
  * (`setAutoGrantMarker`) so it can be told apart from an explicit save. When the
  * geo cookie re-resolves to a consent-required region and the current grant is
- * an auto-grant (never an explicit choice), the auto-grant is revoked and the
- * banner re-shows — instead of an opt-out auto-grant silently suppressing the
- * banner forever. Explicit choices and stable regions are untouched.
+ * an auto-grant (never an explicit choice), the auto-grant is revoked: a
+ * denial is saved, Analytics goes off, and c15t reloads the page. The banner
+ * does NOT come back, because c15t counts that save as a choice; asking again
+ * was #103's intent and is open work in #375. Explicit choices and stable
+ * regions are untouched.
  */
 /**
  * Suspense-isolated leaf that re-reads the geo-consent cookie on every client
@@ -72,8 +75,19 @@ function ConsentGeoCookieSignal({
 }
 
 function ConsentSurface() {
-  const { hasConsented, setConsent } = useConsentManager()
+  const { hasConsented, setConsent, consents } = useConsentManager()
   const [consentRequired, setConsentRequired] = useState<boolean | null>(null)
+
+  // #361: a withdrawal has to reach gtag.js from this app. c15t drops a
+  // consent-gated script from its bookkeeping when the category is revoked and
+  // runs no callback for it. A revoking save reloads the page, and the stop
+  // for that case is made synchronously in `onBeforeRevocationReload`; this
+  // effect covers a revoke that does not reload. Runs on mount too, where it
+  // is a no-op unless the tag is somehow present.
+  const measurementGranted = consents?.measurement === true
+  useEffect(() => {
+    if (!measurementGranted) stopGoogleAnalytics(readGaEnv())
+  }, [measurementGranted])
 
   useEffect(() => {
     if (consentRequired === null) return
@@ -84,8 +98,9 @@ function ConsentSurface() {
     const hasExplicitChoice = hasConsented() && !wasAutoGranted
 
     // #103: a visitor auto-granted in an opt-out region who moved into a
-    // required region must be re-prompted — revoke the auto-grant so the banner
-    // reappears (hasConsented() → false).
+    // required region has the auto-grant revoked. This saves a denial, which
+    // turns Analytics off and makes c15t reload; it does not re-show the
+    // banner, since c15t then reports hasConsented() as true (#375).
     if (
       shouldRepromptOnRegionChange({
         wasAutoGranted,
@@ -155,6 +170,11 @@ export function ConsentManager({
   const options = useMemo(() => {
     const { measurementId, isProduction } = readGaEnv()
     return buildConsentManagerOptions({
+      // Synchronous, just before c15t reloads on a revoking save: the effect
+      // in ConsentSurface would not get to run first.
+      onBeforeRevocationReload: (preferences) => {
+        if (preferences.measurement !== true) stopGoogleAnalytics(readGaEnv())
+      },
       scripts: buildConsentScripts({ measurementId, isProduction }),
       categories: enabledC15tCategories(consentConfig),
       disableAutomaticBlocking: consentConfig.features.disableAutomaticBlocking,

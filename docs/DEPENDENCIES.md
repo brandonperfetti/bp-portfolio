@@ -86,8 +86,8 @@ one set, version-locked.
 - `@c15t/scripts` — prebuilt consent-gated script integrations. Only the GA4
   `gtag` (Google Consent Mode v2) integration is used; imported via the
   `@c15t/scripts/google-tag` subpath so the rest tree-shakes away. See
-  `docs/ANALYTICS.md` for the architecture and the Consent Mode v2
-  cookieless-ping caveat.
+  `docs/ANALYTICS.md` for the architecture and for why its always-load
+  default is overridden (#361).
 
 ## Dev/test
 

@@ -370,6 +370,15 @@ stay where they are:
   `src/lib/security/guardrails.ts:272` (`getRequestClientIp`: `x-real-ip`,
   else the rightmost `x-forwarded-for` hop, never the leftmost)].
   Mechanism: `docs/AI.md` § Guardrails.
+- **`redirect_url` after sign-up is followed only to this site.** The custom
+  sign-up form (#377) sends a new member on to `redirect_url` itself, where
+  Clerk's prebuilt form used to. The value is parsed the way a browser parses
+  it and accepted only as a path on this origin, on the form and again on the
+  Google callback page; anything else (another origin, `//host`, `/\host`,
+  `javascript:`, a same-origin URL whose path is `//host`) falls back to the
+  home page [source: `safeRedirectPath`, `src/lib/auth/safeRedirect.ts`;
+  cases pinned in `safeRedirect.test.ts`]. A new surface that follows a
+  `redirect_url` uses the same function.
 - Until Clerk Billing is enabled, `gated` means signed in and nothing more:
   `requiredPlan` and `requiredFeature` are dormant fields `canAccess`
   ignores [source: `src/access/canAccess.ts`].
@@ -393,14 +402,19 @@ stay there.
 ## Consent and analytics data
 
 - **Nothing that needs consent runs before it where consent is required.**
-  GA4 is the only consent-gated vendor. It loads only on production with a
-  measurement id, through c15t's Google tag with Consent Mode v2 defaults
-  denied [source: `src/components/consent/consent-config.ts`]. Where the
+  GA4 is the only consent-gated vendor. It is registered only on production
+  with a measurement id, through c15t's Google tag with its always-load flag
+  turned off [source: `src/components/consent/consent-config.ts`]. Where the
   geo cookie says consent is required, or geo is unknown (fail-closed,
   `src/lib/consent/jurisdiction.ts`), `measurement` stays denied until the
-  visitor grants it: GA4 sets no cookies, and Google receives only the
-  cookieless consent-mode ping disclosed in the dialog. Mechanism:
-  `docs/ANALYTICS.md`.
+  visitor grants it, and until then nothing is loaded from or sent to a
+  Google host (#361; before it, the always-loaded tag sent a cookieless
+  consent-mode ping). **One exception, open in #375:** a visitor whose
+  `measurement` was granted automatically in a region that does not ask, and
+  who then loads the site from one that does or from an unknown one, has that
+  stored grant restored as the page starts, so the tag loads on that page
+  (`docs/ANALYTICS.md`, "What is not covered"). Mechanism:
+  `docs/ANALYTICS.md`; browser proof: `e2e/consent-google-analytics.spec.ts`.
 - **No other script that sets non-essential cookies or identifies a visitor
   loads.** `[measured 2026-09-27]` the frontend's third-party scripts are
   Vercel Analytics and Speed Insights (cookieless), Cloudflare Turnstile
@@ -434,7 +448,9 @@ stay there.
 - **A mailing-list contact is captured only with consent.** The contact
   form captures only when its unchecked-by-default opt-in is set and the
   message was delivered [source: `src/app/api/contact/route.ts`]; sign-up
-  capture comes through the verified Clerk webhook. Mechanism:
+  capture comes through the verified Clerk webhook, and only for an account
+  whose sign-up ticked the same unchecked-by-default opt-in (#362) [source:
+  `src/app/api/clerk/webhook/route.ts`, `hasMailingListOptIn`]. Mechanism:
   `docs/AUTH.md` § Email capture.
 - **Broadcasts:** Respect the marketing consent field, and honor
   per-contact unsubscribe state before any broadcast ever sends. _Moved from

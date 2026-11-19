@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CATEGORY_TO_C15T,
   DEFAULT_CONSENT_CONFIG,
+  SUPERSEDED_ANALYTICS_SUBTITLE,
   enabledC15tCategories,
   enabledCategories,
 } from './consent-content'
@@ -39,11 +40,16 @@ describe('DEFAULT_CONSENT_CONFIG (today’s copy + UX)', () => {
     )
     expect(DEFAULT_CONSENT_CONFIG.dialog.title).toBe('Cookie preferences')
     expect(DEFAULT_CONSENT_CONFIG.dialog.saveLabel).toBe('Save choices')
-    // The Consent Mode v2 disclosure (review Sp-2) lives in the analytics copy.
+    // #361: the analytics copy says what the tag does now. It is loaded only
+    // on a grant, so the pre-consent "cookieless signal" disclosure is gone.
     const analytics = DEFAULT_CONSENT_CONFIG.categories.find(
       (c) => c.key === 'analytics',
     )!
-    expect(analytics.subtitle).toContain('Consent Mode v2')
+    expect(analytics.subtitle).toContain(
+      'nothing is requested from or sent to Google',
+    )
+    expect(analytics.subtitle).not.toContain('cookieless signal')
+    expect(analytics.subtitle).not.toBe(SUPERSEDED_ANALYTICS_SUBTITLE)
   })
 
   it('defaults the three feature toggles to today’s behavior', () => {

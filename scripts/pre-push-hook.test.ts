@@ -15,8 +15,8 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 /**
- * Tests for `.husky/pre-push` (#308): a push that only deletes refs runs no
- * gate, and every other push runs all of it.
+ * Tests for `.husky/pre-push`: a push that only deletes refs (#308) or only
+ * pushes tags (#369) runs no gate, and every other push runs all of it.
  *
  * @remarks
  * The hook is run the way husky runs it (`sh -e <hook> <remote> <url>`, the
@@ -94,6 +94,10 @@ const refLine = (localSha: string, remoteSha: string, branch = 'feature') =>
 const deleteLine = (branch = 'merged') =>
   `(delete) ${ZERO} refs/heads/${branch} ${SHA_A}\n`
 
+/** The line git sends for `git push origin <tag>`: a tag ref on both sides. */
+const tagLine = (tag = 'v2026.11.18', localSha = SHA_B, remoteSha = ZERO) =>
+  `refs/tags/${tag} ${localSha} refs/tags/${tag} ${remoteSha}\n`
+
 describe('.husky/pre-push', () => {
   it('runs no gate step when the push only deletes one branch', () => {
     const { status, calls, stdout } = runHook(deleteLine())
@@ -117,6 +121,93 @@ describe('.husky/pre-push', () => {
 
     expect(status).toBe(0)
     expect(calls).toEqual([])
+  })
+
+  it('runs no gate step when the push only creates a tag', () => {
+    const { status, calls, stdout } = runHook(tagLine())
+
+    expect(status).toBe(0)
+    expect(calls).toEqual([])
+    expect(stdout).toContain('pushes tags')
+  })
+
+  it('runs no gate step when the push carries several tags, or tags and deletions', () => {
+    const tags = runHook(tagLine('v2026.11.18') + tagLine('v2026.11.18.1'))
+    expect(tags.status).toBe(0)
+    expect(tags.calls).toEqual([])
+
+    const mixed = runHook(tagLine() + deleteLine())
+    expect(mixed.status).toBe(0)
+    expect(mixed.calls).toEqual([])
+  })
+
+  it('runs the full gate when a tag is pushed together with a branch', () => {
+    const tagFirst = runHook(tagLine() + refLine(SHA_B, SHA_A))
+    expect(tagFirst.calls).toEqual(FULL_GATE)
+
+    rmSync(callLog, { force: true })
+    const tagLast = runHook(refLine(SHA_B, SHA_A) + tagLine())
+    expect(tagLast.calls).toEqual(FULL_GATE)
+  })
+
+  it('runs the full gate when a local tag is pushed to a branch ref', () => {
+    // What decides is where the push lands, not what it is called locally.
+    const { calls } = runHook(
+      `refs/tags/v2026.11.18 ${SHA_B} refs/heads/develop ${SHA_A}\n`,
+    )
+
+    expect(calls).toEqual(FULL_GATE)
+  })
+
+  it('runs the full gate for a branch whose name only looks like a tag path', () => {
+    const { calls } = runHook(refLine(SHA_B, SHA_A, 'refs/tags/v1'))
+
+    expect(calls).toEqual(FULL_GATE)
+  })
+
+  it('runs the full gate when a line names no remote ref', () => {
+    const { calls } = runHook(`refs/tags/v2026.11.18 ${SHA_B}\n`)
+
+    expect(calls).toEqual(FULL_GATE)
+  })
+
+  it('runs the full gate when a spaced revision shifts the fields of a branch push', () => {
+    // Measured, git 2.54.0: `git push origin 'HEAD^{/x b refs/tags/q}:refs/heads/spacey'`
+    // creates the branch and sends this line; read by position, its third
+    // word is a tag ref.
+    const asTag = runHook(
+      `HEAD^{/x b refs/tags/q} ${SHA_B} refs/heads/spacey ${ZERO}\n`,
+    )
+    expect(asTag.calls).toEqual(FULL_GATE)
+
+    // The same shift with an all-zero second word reads as a deletion.
+    rmSync(callLog, { force: true })
+    const asDeletion = runHook(
+      `HEAD^{/x ${ZERO} y} ${SHA_B} refs/heads/spacey ${ZERO}\n`,
+    )
+    expect(asDeletion.calls).toEqual(FULL_GATE)
+  })
+
+  it('runs the full gate for a ref outside branches and tags', () => {
+    const { calls } = runHook(
+      `refs/notes/commits ${SHA_B} refs/notes/commits ${SHA_A}\n`,
+    )
+
+    expect(calls).toEqual(FULL_GATE)
+  })
+
+  it('runs no gate step for a tag line with no trailing newline, a tag deletion, or a branch pushed to a tag ref', () => {
+    // Deliberate: what decides is that the push lands only on tag refs.
+    for (const line of [
+      tagLine().trimEnd(),
+      `(delete) ${ZERO} refs/tags/v2026.11.17 ${SHA_A}\n`,
+      `refs/heads/side ${SHA_B} refs/tags/fromside ${ZERO}\n`,
+    ]) {
+      rmSync(callLog, { force: true })
+      const { status, calls } = runHook(line)
+      expect(status).toBe(0)
+      expect(calls).toEqual([])
+    }
   })
 
   it('runs the full gate for an ordinary push', () => {

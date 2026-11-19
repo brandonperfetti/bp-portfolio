@@ -117,6 +117,29 @@ export interface ConsentConfig {
 }
 
 /**
+ * The Analytics subtitle shipped before #361, kept only so stored copies of it
+ * can be recognised.
+ *
+ * @remarks
+ * It described the always-loaded Google tag ("Google still receives an
+ * anonymous, cookieless signal"), which stopped being true when the tag became
+ * consent-gated. Two places still hold the sentence and neither can be changed
+ * by editing a default: the `cookie-consent` global's saved value, on every
+ * database where the global was saved once (production included), and the
+ * Postgres column default the first migration baked in. So the schema keeps
+ * this exact string as its `defaultValue` (changing it would be a migration
+ * for copy), and {@link resolveConsentConfig} reads a stored value equal to it
+ * as "not customised" and serves the current default. Any other stored text is
+ * the editor's own and is served as written.
+ *
+ * Remove this, and its two uses, once the saved value has been edited in the
+ * CMS on staging and production and a migration that touches this column has
+ * moved its default.
+ */
+export const SUPERSEDED_ANALYTICS_SUBTITLE =
+  'Google Analytics 4 via Consent Mode v2. Before you grant it, GA sets no cookies; Google still receives an anonymous, cookieless signal. A cookieless Vercel Analytics baseline runs regardless of this choice.'
+
+/**
  * Today's hardcoded copy, verbatim — the behavior-preserving fallback when the
  * `cookie-consent` global is empty/unseeded. Changing these strings changes the
  * empty-CMS default UI, so they are pinned by `consent-config.test.ts`.
@@ -164,7 +187,7 @@ export const DEFAULT_CONSENT_CONFIG: ConsentConfig = {
       alwaysOn: false,
       title: 'Analytics (measurement)',
       subtitle:
-        'Google Analytics 4 via Consent Mode v2. Before you grant it, GA sets no cookies; Google still receives an anonymous, cookieless signal. A cookieless Vercel Analytics baseline runs regardless of this choice.',
+        'Google Analytics 4. It loads only while Analytics is allowed; while it is not, nothing is requested from or sent to Google. A change takes effect when you save it. A cookieless Vercel Analytics baseline runs regardless of this choice.',
     },
     {
       key: 'social',
