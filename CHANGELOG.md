@@ -51,11 +51,14 @@ carries #373, #378, #380 and #385.
   [#379](https://github.com/brandonperfetti/bp-portfolio/issues/379) (#377).
 - **The form says where you stand** (#384):
   - Already signed in, `/sign-up` sends you on instead of showing the form:
-    to the page that sent you there when that is a path on this site,
+    to the on-site path in the link's `redirect_url` when it has one,
     otherwise to the home page.
-  - If a Google sign-up comes back needing something the form has no field
-    for, the form says it could not finish with Google and offers email and
-    a password instead of showing the first step again with no message.
+  - If a Google sign-up still needs something the form has no field for,
+    the form says it could not finish with Google and offers email and a
+    password, where it used to show the first step again with no message.
+    You see this once you are back on the form; the page Google returns to
+    may first say it is taking longer than expected and offer "Start
+    again".
   - The code step says "Enter the code we sent" only when this page sent
     one. If the send failed it says so, and if the page cannot know (a
     reload, a return from Google) it asks for the code and points to "Send
@@ -124,8 +127,10 @@ which was not done.
   list.**
 - **Turning on a sign-up field in the Clerk dashboard can outrun the form,**
   which has fields for email and password only. With names, phone or legal
-  consent required, the form says it could not finish, on the email route
-  and on the return from Google; the field has to be built first.
+  consent required and still missing, the form says it could not finish:
+  at once on the email route, and on the Google route when the visitor is
+  back on the form, by "Start again" on the page Google returns to or by
+  the address. The field has to be built first.
 - No collection, global or field changes shape; there is no migration.
 
 **MCP clients**
