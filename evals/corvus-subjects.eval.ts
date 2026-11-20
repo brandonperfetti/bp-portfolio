@@ -8,6 +8,7 @@ import { createFixtureRetriever, fixtureSourceUrls } from './fixtures/retriever'
 import { containsExpectedFact, createCitesLinkedSourceUrl } from './scorers'
 import { SITE_CHROME_URLS } from './fixtures/site-routes'
 import {
+  ABOUT_CORVUS_PRIVACY_SOURCE_URL,
   ABOUT_CORVUS_SOURCE_URL,
   withAboutCorvusSnippet,
 } from '../src/lib/ai/aboutCorvus'
@@ -413,5 +414,88 @@ evalite('Corvus subjects · what THIS SITE is built on, however you ask', {
     containsExpectedFact,
     citesRepoNotTechList,
     neverNamesTheFabricatedStack,
+  ],
+})
+
+/**
+ * The citation scorer for the retention block, over the source it is given.
+ *
+ * @remarks Built the way {@link citesLinkedSourceUrl} is and for the same two
+ * reasons: `/privacy` is a Page, so no fixture chunk carries it, and a
+ * citation has to be a link to count. Its own construction, so the "you"
+ * block's corpus does not move.
+ */
+const citesLinkedPrivacyUrl = createCitesLinkedSourceUrl(
+  [...fixtureSourceUrls(), ABOUT_CORVUS_PRIVACY_SOURCE_URL],
+  { alsoReal: SITE_CHROME_URLS },
+)
+
+/**
+ * The measured #401 non-answer, as phrases.
+ *
+ * @remarks `[measured, production, 2026-11-20]`: "I don't have a verified
+ * retention policy for Corvus available here, so I won't guess." Scoped to
+ * those words so the scorer stays a regression test.
+ */
+const DISCLAIMED_POLICY = [
+  'verified retention policy',
+  "don't have a retention policy",
+  'do not have a retention policy',
+  "won't guess",
+]
+
+/**
+ * Did the answer give the published policy rather than disclaim it?
+ *
+ * @remarks Binary: saying there is no policy is the whole defect, even in an
+ * answer that goes on to state a fact or two.
+ */
+const neverDisclaimsThePublishedPolicy = createGuardedScorer<
+  string,
+  string,
+  string
+>({
+  name: 'never-disclaims-the-published-policy',
+  description:
+    '0 when the answer says it has no verified retention policy, the #401 non-answer.',
+  scorer: ({ output }) => {
+    const haystack = output.toLowerCase().replace(/\u2019/g, "'")
+    return DISCLAIMED_POLICY.some((phrase) => haystack.includes(phrase)) ? 0 : 1
+  },
+})
+
+/**
+ * #401 — what Corvus keeps of a conversation, cited to `/privacy`.
+ *
+ * @remarks The first case is the measured question, verbatim. On production it
+ * followed "What is Corvus built with?", but retrieval reads only the latest
+ * message, so it is asked here on its own: that is the turn the passage has to
+ * reach. Each question was checked against {@link retrieve} before it was
+ * written down `[measured, 2026-11-20, aboutCorvus.test.ts]`: each carries the
+ * what-Corvus-keeps passage first.
+ */
+evalite('Corvus subjects · what Corvus KEEPS of a conversation', {
+  data: async () => [
+    {
+      input: 'Does it store my conversation?',
+      expected:
+        'No: the site does not save the conversation to a database, and it is gone when you reload. It is sent to "OpenAI" to answer, with a request not to store it, though OpenAI may keep messages for a limited time to check for abuse. Message counts are kept against a scrambled IP for "30 days". See "/privacy".',
+    },
+    {
+      input: 'Is my chat saved?',
+      expected:
+        'Not by the site: the chat is not saved to a database and is gone on reload. It goes to "OpenAI", which is asked not to store it but may keep messages briefly for abuse checks. See "/privacy".',
+    },
+    {
+      input: 'What do you keep?',
+      expected:
+        'Not the conversation: it goes to "OpenAI" to be answered and is not saved by the site. What is kept is a message count, against a scrambled form of your IP for "30 days", or against your account when signed in. See "/privacy".',
+    },
+  ],
+  task: (input) => askCorvusGrounded(input, { retrieve }),
+  scorers: [
+    containsExpectedFact,
+    citesLinkedPrivacyUrl,
+    neverDisclaimsThePublishedPolicy,
   ],
 })

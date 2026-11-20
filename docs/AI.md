@@ -895,6 +895,45 @@ eval:ci, after the #167 citation-format rider]` that one path cost **4 of 5**
   which is written for an engineer; not in a passage handed to a model as
   citable material.**
 
+##### What Corvus keeps: the retention passage (#401)
+
+`[measured, production, 2026-11-20, v2026.11.20]` asked "Does it store my
+conversation?", Corvus said it had no verified retention policy and sent the
+visitor to the contact form. The answer is published on the privacy page, but
+that is a Page (Pages id 28) and Pages are not embedded (D8(b)), so retrieval
+can never return it.
+
+**The retention facts live in `ABOUT_CORVUS_PRIVACY_PASSAGE`**
+(`src/lib/ai/aboutCorvus.ts`), a second code-owned snippet beside the About
+Corvus passage: collection `about-corvus-privacy`, title "What Corvus keeps",
+source `/privacy`. It is its own snippet because a snippet carries one
+`Source:` path, and these facts are cited to the privacy page, not `/corvus`.
+
+**It is copied from the privacy page's "Corvus, the AI assistant" section and
+must change whenever that section does.** The page is CMS content Brandon edits
+without a deploy; the passage is code, and no test can read the CMS. So editing
+that section of Pages id 28 means editing the passage in the same breath, and
+the passage states nothing the page does not, OpenAI by name included (the
+page names it, so a chat-provider change is a privacy-page change too). The
+code facts behind it, checked 2026-11-20: the chat route writes nothing to the
+database and `CorvusChat` uses no browser storage; `store: false` (§ What the
+provider is sent, above); the anonymous free-message counter is keyed by an
+HMAC digest of the IP with a 30-day TTL (`chatGate.ts`); a signed-in visitor's
+limits are keyed by Clerk user id.
+
+`isCorvusRetentionQuestion` offers it, separately from the about-Corvus rule,
+because the measured question has neither of that rule's signals: no "you", no
+"Corvus", and on production it was a follow-up whose referent only the
+previous turn held. It matches a retention verb (store, save, keep, log,
+retain, delete, happens to) with something of the visitor's as its object
+(the conversation or chat, "my messages", "what I type", "about me"), the
+object-less "what do you keep?", or privacy asked about Corvus or a chat.
+"How do I store messages in Redis?" and "do you keep up with React?" do not
+match, and no existing eval input does. When both rules match, the retention
+passage goes first. `evals/corvus-subjects.eval.ts` pins the answer in the
+"what Corvus KEEPS" block, scored on the facts and on a linked `/privacy`
+citation.
+
 Addressee detection (`isAboutCorvusQuestion`) is a regex, and conservative in
 the direction that costs least: a false positive adds one inert passage, a
 false negative is the measured defect itself. Second-person address alone is
