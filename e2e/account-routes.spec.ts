@@ -11,8 +11,12 @@ import { expect, test } from '@playwright/test'
  * No spec signs in (it would need a Clerk user), so this proves the route
  * from the signed-out side: every account URL is served by the account page,
  * which sends an anonymous visitor to `/sign-in` when Clerk is configured and
- * home when it is not. A 404 here is the #391 regression. The signed-in
- * render of the profile is pinned by the page's unit test.
+ * home when it is not. A 404 on the account URL, or no redirect, is the #391
+ * regression. The signed-in render of the profile is pinned by the page's
+ * unit test.
+ *
+ * Which landing page is expected is read from this process's environment, so
+ * set the Clerk keys for both the build and this run, as CI does.
  */
 
 const CLERK_CONFIGURED =
@@ -27,7 +31,14 @@ for (const accountPath of ['/account', '/account/security']) {
   }) => {
     const response = await page.goto(accountPath)
 
-    expect(response?.status()).not.toBe(404)
+    // `goto` follows redirects and returns the last hop, so walk back to the
+    // request for the account URL itself and read its own status.
+    let request = response?.request()
+    while (request?.redirectedFrom()) request = request.redirectedFrom()
+    const accountResponse = await request?.response()
+    expect(new URL(request?.url() ?? '').pathname).toBe(accountPath)
+    expect(accountResponse?.status()).not.toBe(404)
+    // A 404 page does not redirect, so landing here is the decisive check.
     await expect(page).toHaveURL((url) => url.pathname === expectedPath)
   })
 }
