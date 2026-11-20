@@ -15,7 +15,9 @@
   `ClerkClientProvider.resume.test.tsx` pins both halves).
 - Routes: `/sign-in` (Clerk's prebuilt `<SignIn>`, catch-all), `/sign-up`
   (the site's own form on Clerk's `useSignUp()` hooks, #377, below),
-  `/sign-up/sso-callback` (where Google returns to), `/account`.
+  `/sign-up/sso-callback` (where Google returns to), `/account` (Clerk's
+  `<UserProfile>`, catch-all, so a sub-page such as `/account/security`
+  loads directly, #391).
 - Header shows a signed-in-only `UserButton` chip (`HeaderUserButton`,
   mounted only when `isClerkEnabled()` — anonymous visitors and keys-off
   environments get the pre-auth header byte-identical). Sign-IN has no
