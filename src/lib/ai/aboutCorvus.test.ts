@@ -6,10 +6,14 @@ import { describe, expect, it } from 'vitest'
 import {
   ABOUT_CORVUS_COLLECTION,
   ABOUT_CORVUS_PASSAGE,
+  ABOUT_CORVUS_PRIVACY_COLLECTION,
+  ABOUT_CORVUS_PRIVACY_PASSAGE,
   ABOUT_CORVUS_SOURCE_URL,
   ABOUT_CORVUS_STACK_ITEMS,
+  aboutCorvusPrivacySnippet,
   aboutCorvusSnippet,
   isAboutCorvusQuestion,
+  isCorvusRetentionQuestion,
   withAboutCorvusSnippet,
 } from '@/lib/ai/aboutCorvus'
 import { CORVUS_EMBEDDED_COLLECTIONS } from '@/lib/ai/chunking'
@@ -309,5 +313,118 @@ describe('the collection value', () => {
     // Not a measurement, and not pretending to be one: it is the value that
     // keeps the passage first through `applySimilarityFloor`'s sort.
     expect(built.score).toBe(1)
+  })
+})
+
+/**
+ * What Corvus keeps of a conversation (#401).
+ *
+ * @remarks The facts are the privacy page's (Pages id 28), copied, so the tests
+ * pin two things a test can see: that the passage carries the page's sentences
+ * and cites the page, and that `docs/AI.md` records the pairing that keeps
+ * them in step. Neither can read the CMS; the pairing is the mechanism.
+ */
+describe('the what-Corvus-keeps passage (#401)', () => {
+  it("carries the privacy page's Corvus facts", () => {
+    expect(ABOUT_CORVUS_PRIVACY_PASSAGE).toContain('sent to OpenAI')
+    expect(ABOUT_CORVUS_PRIVACY_PASSAGE).toContain(
+      'it is not saved to a database, and it is gone when the page is reloaded',
+    )
+    // The page's sentence since v2026.11.19.1, word for word.
+    expect(ABOUT_CORVUS_PRIVACY_PASSAGE).toContain(
+      'OpenAI may still keep messages for a limited time to check for abuse, under its own policy.',
+    )
+    expect(ABOUT_CORVUS_PRIVACY_PASSAGE).toContain(
+      'a scrambled form of their IP address for 30 days',
+    )
+    expect(ABOUT_CORVUS_PRIVACY_PASSAGE).toContain('kept against their account')
+  })
+
+  it('names no site path; its citation is the Source: line', () => {
+    expect(barePathsIn(ABOUT_CORVUS_PRIVACY_PASSAGE)).toEqual([])
+  })
+
+  it('cites the privacy page under a collection nothing embeds', () => {
+    const built = aboutCorvusPrivacySnippet()
+
+    expect(built.sourceUrl).toBe('/privacy')
+    expect(built.collection).toBe(ABOUT_CORVUS_PRIVACY_COLLECTION)
+    expect(built.collection).not.toBe(ABOUT_CORVUS_COLLECTION)
+    expect(CORVUS_EMBEDDED_COLLECTIONS).not.toContain(
+      ABOUT_CORVUS_PRIVACY_COLLECTION,
+    )
+  })
+
+  it('is recorded in docs/AI.md as owed to the privacy page', () => {
+    expect(AI_DOC).toContain('ABOUT_CORVUS_PRIVACY_PASSAGE')
+    expect(AI_DOC).toContain('Pages id 28')
+  })
+})
+
+describe('isCorvusRetentionQuestion', () => {
+  it.each([
+    ['Does it store my conversation?', 'the measured #401 failure, verbatim'],
+    ['Is my chat saved?', 'saved, chat'],
+    ['What do you keep?', 'no object at all'],
+    ['Does OpenAI keep my messages?', 'the provider named'],
+    ['Do you log what I type?', 'log'],
+    ['What happens to my conversation?', 'happens to'],
+    ['Is this chat private?', 'privacy'],
+    ['Does Corvus retain anything about me?', 'retain'],
+    [
+      'Does Corvus keep things private?',
+      'a retention verb with no object, then privacy',
+    ],
+  ])('matches %s (%s)', (query) => {
+    expect(isCorvusRetentionQuestion(query)).toBe(true)
+  })
+
+  it.each([
+    ['How do I store messages in Redis?', 'an engineering question'],
+    ['How do you save state in React?', 'save with no object of mine'],
+    ['Do you keep up with React?', 'keep up'],
+    ['What do you keep up with?', 'keep up, in the object-less shape'],
+    ['What do you think of private equity?', 'privacy with a bare you'],
+    ['Where should I store private keys?', 'private, but not about Corvus'],
+    ['What tech do you use?', 'the about-Corvus question'],
+    ['Where has Brandon worked?', 'site content'],
+    ['', 'empty'],
+  ])('does not match %s (%s)', (query) => {
+    expect(isCorvusRetentionQuestion(query)).toBe(false)
+  })
+
+  it('handles a missing query without throwing', () => {
+    expect(isCorvusRetentionQuestion(null)).toBe(false)
+    expect(isCorvusRetentionQuestion(undefined)).toBe(false)
+  })
+})
+
+describe('withAboutCorvusSnippet on a retention question (#401)', () => {
+  it('offers the privacy passage first, even with nothing retrieved', () => {
+    const result = withAboutCorvusSnippet('Does it store my conversation?', [])
+
+    expect(result.map((s) => s.collection)).toEqual([
+      ABOUT_CORVUS_PRIVACY_COLLECTION,
+    ])
+  })
+
+  it('puts the privacy passage ahead of the about-Corvus one when both apply', () => {
+    const result = withAboutCorvusSnippet(
+      'Does Corvus store my conversation?',
+      [snippet()],
+    )
+
+    expect(result.map((s) => s.collection)).toEqual([
+      ABOUT_CORVUS_PRIVACY_COLLECTION,
+      ABOUT_CORVUS_COLLECTION,
+      'posts',
+    ])
+  })
+
+  it('never adds either passage twice', () => {
+    const query = 'Does Corvus store my conversation?'
+    const once = withAboutCorvusSnippet(query, [])
+
+    expect(withAboutCorvusSnippet(query, once)).toEqual(once)
   })
 })
