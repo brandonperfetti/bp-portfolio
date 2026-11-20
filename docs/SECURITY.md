@@ -377,8 +377,8 @@ stay where they are:
   and the contact form's limiter key (`contact:<digest>`, #364). An
   outage report redacts the IP, the digest and the key [source:
   `src/lib/security/chatGate.ts:57` (`anonIpKeyDigest`),
-  `src/app/api/ai/chat/route.ts:115-117`,
-  `src/app/api/contact/route.ts:68-69`; the contact key is pinned to the
+  `src/app/api/ai/chat/route.ts:115-117` (key), `:126` (redaction),
+  `src/app/api/contact/route.ts:68-69` (key), `:85` (redaction); the contact key is pinned to the
   digest in `src/app/api/contact/route.test.ts`]. The contact form still
   passes the raw IP to Cloudflare Turnstile as `remoteip`, which stores
   nothing in Redis. A new IP-keyed store follows the same rule.
