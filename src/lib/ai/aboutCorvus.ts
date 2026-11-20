@@ -317,10 +317,10 @@ export function isCorvusRetentionQuestion(
     return true
   }
   if (PRIVACY_PATTERN.test(value)) {
+    // Not a bare "you": "what do you think of private equity?" is not a
+    // question about what Corvus keeps.
     return (
-      RETENTION_OBJECT_PATTERN.test(value) ||
-      ADDRESSEE_PATTERN.test(value) ||
-      CORVUS_BY_NAME_PATTERN.test(value)
+      RETENTION_OBJECT_PATTERN.test(value) || CORVUS_BY_NAME_PATTERN.test(value)
     )
   }
   return false

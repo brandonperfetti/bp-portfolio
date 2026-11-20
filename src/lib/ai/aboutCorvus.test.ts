@@ -372,7 +372,7 @@ describe('isCorvusRetentionQuestion', () => {
     ['Is this chat private?', 'privacy'],
     ['Does Corvus retain anything about me?', 'retain'],
     [
-      'Do you keep this private?',
+      'Does Corvus keep things private?',
       'a retention verb with no object, then privacy',
     ],
   ])('matches %s (%s)', (query) => {
@@ -384,6 +384,7 @@ describe('isCorvusRetentionQuestion', () => {
     ['How do you save state in React?', 'save with no object of mine'],
     ['Do you keep up with React?', 'keep up'],
     ['What do you keep up with?', 'keep up, in the object-less shape'],
+    ['What do you think of private equity?', 'privacy with a bare you'],
     ['Where should I store private keys?', 'private, but not about Corvus'],
     ['What tech do you use?', 'the about-Corvus question'],
     ['Where has Brandon worked?', 'site content'],

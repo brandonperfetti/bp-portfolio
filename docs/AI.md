@@ -943,7 +943,8 @@ because the measured question has neither of that rule's signals: no "you", no
 previous turn held. It matches a retention verb (store, save, keep, log,
 retain, delete, happens to) with something of the visitor's as its object
 (the conversation or chat, "my messages", "what I type", "about me"), the
-object-less "what do you keep?", or privacy asked about Corvus or a chat.
+object-less "what do you keep?", or privacy asked about Corvus by name, a chat or
+the visitor's own things (never privacy with a bare "you").
 "How do I store messages in Redis?" and "do you keep up with React?" do not
 match, and no existing eval input does. It is not exact: "How do I store my
 data in Postgres?" or a question about building a chat app that saves messages
