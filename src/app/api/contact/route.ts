@@ -34,8 +34,9 @@ const escapeHtml = (value: string) =>
  * rate limiting (`mailingListRatePerMinute`, keyed on the IP's HMAC digest,
  * never the raw address, #364, failing closed on a store outage, #390) and
  * Turnstile, all in `guardPublicForm`, which `/api/newsletter` shares (#367);
- * then Zod validation with a real email check, and HTML-escaped interpolation so user input cannot inject
- * markup into the notification email. Turnstile is enforced whenever
+ * then Zod validation with a real email check, and HTML-escaped
+ * interpolation so user input cannot inject markup into the notification
+ * email. Turnstile is enforced whenever
  * `TURNSTILE_SECRET_KEY` is set (the widget ships env-gated with the
  * matching `NEXT_PUBLIC_TURNSTILE_SITE_KEY`); without keys the route
  * behaves exactly as before, so previews and local dev need no setup.

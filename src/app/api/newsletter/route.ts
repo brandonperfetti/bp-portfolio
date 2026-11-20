@@ -35,7 +35,9 @@ const SUBSCRIBED_MESSAGE =
  * the list. Here the act is the whole form, a single email field whose only
  * purpose is subscribing, so submitting it is the opt-in, where sign-up and
  * the contact form, which do something else first, ask with an unticked box.
- * Single opt-in, as at sign-up: no confirmation email.
+ * Single opt-in, like the contact form's box: no confirmation email, so
+ * unlike sign-up (Clerk's email code, or Google) nothing proves the visitor
+ * owns the address. A confirmation step would be a product decision.
  *
  * **Capture** is `captureContact`, the helper the Clerk webhook and the
  * contact form already share, so all three land in the same list and

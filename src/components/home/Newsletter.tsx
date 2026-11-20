@@ -96,6 +96,7 @@ export function Newsletter() {
       {message && (
         <p
           role="status"
+          aria-live="polite"
           className={`mt-3 text-sm ${success ? 'text-emerald-500' : 'text-red-500'}`}
         >
           {message}

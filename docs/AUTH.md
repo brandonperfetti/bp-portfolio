@@ -58,8 +58,9 @@
      set AND the message delivered.
   3. Newsletter Signup block → `/api/newsletter` (#367). The form is one
      email field whose only job is subscribing, so submitting it is the
-     opt-in; there is no checkbox and no confirmation email, the same single
-     opt-in as sign-up. Its answer never says whether the address was
+     opt-in; there is no checkbox. Single opt-in, like the contact form's
+     box: no confirmation email, so nothing proves the visitor owns the
+     address, which sign-up does (Clerk's email code, or Google). Its answer never says whether the address was
      already on the list. Guards shared with `/api/contact`
      (`src/lib/security/publicFormGuard.ts`).
      The capture rule:
