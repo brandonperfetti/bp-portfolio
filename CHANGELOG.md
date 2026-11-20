@@ -33,24 +33,28 @@ carries #396, #397 and #398.
 
 - **The cookie dialog's Analytics sentence is shown as saved.** The site no
   longer swaps the sentence shipped before #361 ("Google still receives an
-  anonymous, cookieless signal") for the current default; whatever the
-  `cookie-consent` global stores is served as written, like every other
-  consent string. Staging and production were edited before this release,
-  so the dialog does not change. The Analytics subtitle field's default is
+  anonymous, cookieless signal") for the current default; a non-blank
+  sentence stored in the `cookie-consent` global is served as written, and a
+  blank one falls back to the default, like every other consent string.
+  Staging and production were edited before this release, so the dialog
+  does not change. The Analytics subtitle field's default is
   now the current sentence, and its note about the swap is gone (#372, #396).
 
 **What this release leaves.**
 
-- **A CMS page saved under `/account/…`** (or `/sign-in/…`, `/sign-up/…`)
-  is shadowed by that route, but saving one is not refused and the sitemap
-  would still list it. No such page exists; `docs/NAVIGATION.md` notes it
-  (#397).
+- **A CMS page saved under `/account/…` is now hidden by the account
+  route.** Before this release the CMS catch-all served one; `/sign-in/…` and
+  `/sign-up/…` already worked this way. Saving such a page, from the admin or
+  an MCP client, is not refused, and the sitemap would still list it. None is
+  known to exist; `docs/NAVIGATION.md` notes the shadowing (#397).
 
 **Not proven before release:** the signed-in profile and its sub-pages on a
 served page, since no spec signs in; a signed-out direct load of `/account`
 and `/account/security` is proven in CI. The signed-in Corvus greeting on a
-served page, for the same reason; it has a story. The migration's down step
-was run on a scratch database only.
+served page, for the same reason; it has a story. The cookie dialog was not
+checked in a browser: that it shows the stored sentence is proven by unit
+tests, and that both environments store the current one by their public API
+on 2026-11-19. The migration's down step was run on a scratch database only.
 
 **Developers**
 
@@ -70,8 +74,11 @@ was run on a scratch database only.
   a deploy with the publishable key but not the secret key no longer throws
   where Corvus renders. Stories supply a name with `ViewerFirstNameProvider`
   (`AI/CorvusChat` › `SignedInGreeting`) (#381, #398).
-- CI's Storybook interaction-test step now runs with the publishable key;
-  the secret key stays on the Build and E2E steps only (#398).
+- `pnpm test:storybook` passes with the publishable key in the
+  environment, locally and in CI, whose Storybook interaction-test step now
+  gets it; the secret key stays on the Build and E2E steps only. A test that
+  mounts `ClerkClientProvider` with `@clerk/nextjs` mocked now mocks
+  `useUser` too (#398).
 
 ## v2026.11.19.1
 
