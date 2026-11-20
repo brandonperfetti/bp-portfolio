@@ -12,6 +12,74 @@ Each version is an annotated tag on that release's merge commit.
 here; each one's release PR body is its record. How an entry is written and
 when the tag is made: [`docs/WORKFLOW.md` § Releases](docs/WORKFLOW.md#releases).
 
+## v2026.11.20
+
+Account sub-pages load directly, the cookie dialog's Analytics sentence is
+served as the CMS stores it, and Corvus learns whether Clerk is on from the
+page it renders in. Release PR
+[#399](https://github.com/brandonperfetti/bp-portfolio/pull/399) ·
+[tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.20) ·
+carries #396, #397 and #398.
+
+**Visitors**
+
+- **Account pages open from a link.** A signed-in reader can reload,
+  bookmark or follow a link to an account sub-page such as
+  `/account/security` and get the page. Before this release only a click
+  inside the profile reached it; a direct load was a 404. The URLs are
+  unchanged (#391, #397).
+
+**CMS admin**
+
+- **The cookie dialog's Analytics sentence is shown as saved.** The site no
+  longer swaps the sentence shipped before #361 ("Google still receives an
+  anonymous, cookieless signal") for the current default; a non-blank
+  sentence stored in the `cookie-consent` global is served as written, and a
+  blank one falls back to the default, like every other consent string.
+  Staging and production were edited before this release, so the dialog
+  does not change. The Analytics subtitle field's default is
+  now the current sentence, and its note about the swap is gone (#372, #396).
+
+**What this release leaves.**
+
+- **A CMS page saved under `/account/…` is now hidden by the account
+  route.** Before this release the CMS catch-all served one; `/sign-in/…` and
+  `/sign-up/…` already worked this way. Saving such a page, from the admin or
+  an MCP client, is not refused, and the sitemap would still list it. None is
+  known to exist; `docs/NAVIGATION.md` notes the shadowing (#397).
+
+**Not proven before release:** the signed-in profile and its sub-pages on a
+served page, since no spec signs in; a signed-out direct load of `/account`
+and `/account/security` is proven in CI. The signed-in Corvus greeting on a
+served page, for the same reason; it has a story. The cookie dialog was not
+checked in a browser: that it shows the stored sentence is proven by unit
+tests, and that both environments store the current one by their public API
+on 2026-11-19. The migration's down step was run on a scratch database only.
+
+**Developers**
+
+- `/account` is now `src/app/(frontend)/account/[[...account]]/page.tsx`,
+  an optional catch-all like `[[...sign-in]]` and `[[...sign-up]]`, and
+  `<UserProfile>` is pinned to `path="/account" routing="path"`. Gating is
+  unchanged. `e2e/account-routes.spec.ts` loads both URLs signed out (#397).
+- `SUPERSEDED_ANALYTICS_SUBTITLE` is removed. The migration
+  `20261119_211457_issue_372_analytics_subtitle_default` moves the column
+  default of `cookie_consent.categories_analytics_subtitle` to the current
+  sentence; its `down` restores the old one. It touches no stored row and
+  creates no table (#396).
+- New `src/components/auth/ViewerFirstName.tsx`: `ClerkViewerFirstName`,
+  mounted inside `<ClerkProvider>`, fills a first-name context, and
+  `CorvusChat` reads it with `useViewerFirstName()`. It no longer reads
+  `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` or calls Clerk's `useUser()`, so
+  a deploy with the publishable key but not the secret key no longer throws
+  where Corvus renders. Stories supply a name with `ViewerFirstNameProvider`
+  (`AI/CorvusChat` › `SignedInGreeting`) (#381, #398).
+- `pnpm test:storybook` passes with the publishable key in the
+  environment, locally and in CI, whose Storybook interaction-test step now
+  gets it; the secret key stays on the Build and E2E steps only. A test that
+  mounts `ClerkClientProvider` with `@clerk/nextjs` mocked now mocks
+  `useUser` too (#398).
+
 ## v2026.11.19.1
 
 Corvus stops asking OpenAI to keep conversations, chat and the contact form

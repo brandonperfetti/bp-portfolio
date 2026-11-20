@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import {
   CATEGORY_TO_C15T,
   DEFAULT_CONSENT_CONFIG,
-  SUPERSEDED_ANALYTICS_SUBTITLE,
   enabledC15tCategories,
   enabledCategories,
 } from './consent-content'
@@ -49,7 +48,6 @@ describe('DEFAULT_CONSENT_CONFIG (today’s copy + UX)', () => {
       'nothing is requested from or sent to Google',
     )
     expect(analytics.subtitle).not.toContain('cookieless signal')
-    expect(analytics.subtitle).not.toBe(SUPERSEDED_ANALYTICS_SUBTITLE)
   })
 
   it('defaults the three feature toggles to today’s behavior', () => {

@@ -47,9 +47,6 @@ const chatState: ChatState = {
 
 vi.mock('@ai-sdk/react', () => ({ useChat: () => chatState }))
 vi.mock('ai', () => ({ DefaultChatTransport: vi.fn() }))
-vi.mock('@clerk/nextjs', () => ({
-  useUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
-}))
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
 }))

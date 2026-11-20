@@ -52,9 +52,6 @@ vi.mock('@ai-sdk/react', () => ({
 vi.mock('ai', () => ({
   DefaultChatTransport: vi.fn(),
 }))
-vi.mock('@clerk/nextjs', () => ({
-  useUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
-}))
 const push = vi.fn()
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, replace: vi.fn(), prefetch: vi.fn() }),
