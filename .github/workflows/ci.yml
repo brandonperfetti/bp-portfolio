@@ -239,8 +239,9 @@ jobs:
       # migrations, the seed and the pg tier keep running with no deployment
       # target named.
       #
-      # #377: the same two steps, and only they, get the Clerk development
-      # instance's keys (repository secrets, added 2026-11-18). Build needs
+      # #377: the same two steps get the Clerk development instance's keys
+      # (repository secrets, added 2026-11-18), and only they get the secret
+      # key; the Storybook step below gets the publishable key alone. Build needs
       # them to build the site with Clerk on; the E2E step needs them for the
       # server it starts and for e2e/sign-up-opt-in.spec.ts, which FAILS
       # without them so that a run that could not exercise the sign-up form
