@@ -16,13 +16,42 @@ citation is a real same-tab anchor (see "Links in a reply" below).
 - Provider/model are env-selected: `AI_CHAT_PROVIDER` (`openai|anthropic`) +
   `AI_CHAT_MODEL`; `AI_MAX_COMPLETION_TOKENS` caps output.
 
+## What the provider is sent, and asked to keep (#366)
+
+**Sent.** Each chat turn sends the provider the server-built system prompt
+(with any retrieval snippets), the visitor's conversation — the most recent
+`maxMessages`, earlier replies included — and the reasoning-effort cap. The
+retrieval query also goes to OpenAI embeddings (`src/lib/ai/embeddings.ts`),
+whatever the chat provider. The site keeps no copy: the chat route writes
+nothing to the database and `CorvusChat` uses no browser storage.
+
+**Asked to keep: nothing.** `corvusProviderOptions()` puts `store: false` on
+every OpenAI Responses call (Brandon, 2026-11-18). The organization's data
+controls log Responses calls by default unless the request says
+`store=false` (read 2026-11-18). OpenAI may still keep the request for a
+limited time for abuse monitoring under its own data-retention policy; that
+is not something the request controls. Embedding requests have no `store`
+option. The Anthropic path ignores the `openai` namespace.
+
+**What `store: false` changes in a conversation.** `@ai-sdk/openai@3.0.87`
+used to send each earlier reply as an `item_reference` to OpenAI's stored
+copy, using the item ids the browser echoes back. With `store: false` it
+resends each earlier reply as text, asks for `reasoning.encrypted_content` on
+a reasoning model so the reasoning travels back with the conversation, and
+drops, with a warning, any reasoning part without it. That last case is a tab
+opened before the change: its answers still go back as text, only their
+reasoning is lost. `src/lib/ai/corvus.test.ts` pins all three on the wire
+through a stub `fetch`; whether OpenAI accepts the resent items is a live
+multi-turn check on a preview, not something the stub can show.
+
 ## Guardrails (`src/lib/security/`)
 
 - `limiter.ts`: Upstash Redis rate limits — per-minute and daily quota,
   keyed by (HMAC-hashed) IP for anonymous requests and by Clerk `userId`
   for signed-in ones (the route builds the key; see the chatGate bullet).
-  Without Upstash env, dev fails open (`docs/SECURITY.md` § Operational
-  data and infrastructure).
+  Without Upstash env, dev fails open; with Upstash configured but
+  failing, the route fails closed with a 503 (#390, `limiterOutage.ts`).
+  Both: `docs/SECURITY.md` § Operational data and infrastructure.
 - `guardrails.ts`: shared quota/limit application; kill switches
   `CORVUS_DISABLE_CHAT` / `CORVUS_DISABLE_IMAGE` (renamed from `HERMES_*`,
   #77). The in-memory `applyRateLimit`/`applyDailyQuota` here are
@@ -361,7 +390,8 @@ above); an unrecognized value logs one `warn` and
 falls back rather than throwing, because this resolves on the chat request path
 and a typo in an env var must not take Corvus down. `corvusProviderOptions()`
 (`src/lib/ai/corvus.ts`) turns that into
-`{ openai: { reasoningEffort } }` — and into `{}` unless the model is a
+`{ openai: { store: false, reasoningEffort } }` — and into
+`{ openai: { store: false } }` (no effort) unless the model is a
 reasoning model by the provider's own predicate (a `gpt-5*` id that is not
 `gpt-5-chat*`, or `o1`/`o3`/`o4-mini`, `@ai-sdk/openai@3.0.87`
 `dist/index.mjs:45`), because the Responses path warns

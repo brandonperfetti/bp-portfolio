@@ -9,7 +9,8 @@ import {
   isAllowedRequestSource,
   verifyRequestTurnstileToken,
 } from '@/lib/security/guardrails'
-import { checkChatLimits } from '@/lib/security/limiter'
+import { checkChatLimits, type LimitResult } from '@/lib/security/limiter'
+import { reportLimiterOutage } from '@/lib/security/limiterOutage'
 
 const bodySchema = z.object({
   fullname: z.string().trim().min(1).max(200),
@@ -59,11 +60,32 @@ export async function POST(req: Request) {
 
   const limits = getSecurityLimits()
   const ip = getRequestClientIp(req)
-  const limit = await checkChatLimits(
-    `contact:${ip}`,
-    limits.mailingListRatePerMinute,
-    0,
-  )
+  const limiterKey = `contact:${ip}`
+  let limit: LimitResult
+  try {
+    limit = await checkChatLimits(
+      limiterKey,
+      limits.mailingListRatePerMinute,
+      0,
+    )
+  } catch (error) {
+    // Fail closed (#390). Open, a store outage would make this an unlimited
+    // sender into Brandon's inbox and through the Resend quota, and Turnstile
+    // is not enforced on every deployment. Closed, a visitor loses the form
+    // for the outage but is pointed at email, which still works.
+    reportLimiterOutage(error, {
+      surface: 'contact',
+      operation: 'checkChatLimits',
+      redact: [ip, limiterKey],
+    })
+    return NextResponse.json(
+      {
+        message:
+          'The contact form is temporarily unavailable. Please try again later — or email me directly.',
+      },
+      { status: 503 },
+    )
+  }
   if (!limit.allowed) {
     const retryAfter = Math.max(
       1,

@@ -174,4 +174,35 @@ describe('CorvusChat — real useChat/DefaultChatTransport pipeline', () => {
       screen.queryByRole('link', { name: /sign in to continue/i }),
     ).not.toBeInTheDocument()
   })
+
+  it('shows "temporarily unavailable" (not the generic error) for the limiter-outage 503 (#390)', async () => {
+    // The exact shape the chat route returns when Upstash is down.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error:
+                'Corvus is temporarily unavailable. Please try again shortly.',
+              code: 'chat_unavailable',
+            }),
+            {
+              status: 503,
+              headers: { 'content-type': 'application/json' },
+            },
+          ),
+      ),
+    )
+
+    const user = userEvent.setup()
+    render(<CorvusChat />)
+
+    await user.type(screen.getByLabelText('Message Corvus'), 'Hi')
+    await user.keyboard('{Enter}')
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/corvus is temporarily unavailable/i)
+    expect(alert).not.toHaveTextContent(/something went wrong/i)
+  })
 })
