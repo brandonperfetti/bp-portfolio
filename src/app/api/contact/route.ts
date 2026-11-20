@@ -3,6 +3,7 @@ import { Resend } from 'resend'
 import * as z from 'zod'
 
 import { captureContact } from '@/lib/email/captureContact'
+import { anonIpKeyDigest } from '@/lib/security/chatGate'
 import {
   getRequestClientIp,
   getSecurityLimits,
@@ -38,7 +39,8 @@ const escapeHtml = (value: string) =>
  *
  * @remarks Hardened to the same guardrail stack as the Corvus chat route
  * (fresh-eyes review 2026-08, finding M1): same-origin source guard, per-IP
- * rate limiting (`mailingListRatePerMinute`), Zod validation with a real
+ * rate limiting (`mailingListRatePerMinute`, keyed on the IP's HMAC digest,
+ * never the raw address, #364), Zod validation with a real
  * email check, and HTML-escaped interpolation so user input cannot inject
  * markup into the notification email. Turnstile is enforced whenever
  * `TURNSTILE_SECRET_KEY` is set (the widget ships env-gated with the
@@ -60,7 +62,11 @@ export async function POST(req: Request) {
 
   const limits = getSecurityLimits()
   const ip = getRequestClientIp(req)
-  const limiterKey = `contact:${ip}`
+  // The limiter key carries an HMAC digest of the IP, never the raw address,
+  // so Redis keeps no personal identifier (#364) — the rule chat's limiter
+  // keys already follow. Turnstile below still gets the raw IP.
+  const ipDigest = anonIpKeyDigest(ip)
+  const limiterKey = `contact:${ipDigest}`
   let limit: LimitResult
   try {
     limit = await checkChatLimits(
@@ -76,7 +82,7 @@ export async function POST(req: Request) {
     reportLimiterOutage(error, {
       surface: 'contact',
       operation: 'checkChatLimits',
-      redact: [ip, limiterKey],
+      redact: [ip, ipDigest, limiterKey],
     })
     return NextResponse.json(
       {
