@@ -951,8 +951,9 @@ data in Postgres?" or a question about building a chat app that saves messages
 still matches, and that is accepted, because the cost is one inert passage.
 When both rules match, the retention
 passage goes first. `evals/corvus-subjects.eval.ts` pins the answer in the
-"what Corvus KEEPS" block, scored on the facts and on a linked `/privacy`
-citation.
+"what Corvus KEEPS" block. Its scorers check the quoted facts, a linked
+citation (only `/privacy` earns it), the absence of the #401 non-answer, and,
+through the `factuality` judge, that no claim contradicts the page.
 
 ##### Eval coverage
 
