@@ -153,22 +153,19 @@ development instance's keys, added 2026-11-18 for #377). Before that date the
 workflow read those secrets but the repository had neither, so every e2e run
 built the site with Clerk off. `e2e/sign-up-opt-in.spec.ts` **fails** in CI
 when they are missing, so a run that could not exercise the sign-up form is
-never taken for a pass. Three things follow:
+never taken for a pass. Two things follow:
 
-- **The keys are set on the Build and E2E steps only**, beside the Google
+- **Both keys are set on the Build and E2E steps**, beside the Google
   Analytics variables, not for the whole job: a secret key has no business in
   the environment of the install, the migrations, the seed or a third-party
-  action.
-- **The Storybook interaction-test step runs with Clerk off on purpose.**
-  Stories mount components without a `<ClerkProvider>`, and with the
-  publishable key present `CorvusChat` takes Clerk to be on and its stories
-  throw (14 failed on the one run that had the keys job-wide). Do not give
-  that step the keys until #381 (make those stories pass with the key set) is
-  fixed. The same failure is expected locally from `pnpm test:storybook`
-  whenever the publishable key is in the environment the story build sees: a
-  shell export, or `.env`. Probably not from `.env.local`, which Next's env
-  loading leaves out under `NODE_ENV=test`, the mode Vitest runs in. None of
-  that is measured (#381).
+  action. **The Storybook interaction-test step gets the publishable key
+  only**, so stories render with Clerk configured, as the site does; no story
+  reads the secret key. Stories mount no `<ClerkProvider>`, so a component
+  must decide "is Clerk on" from the tree, never from the env (#381):
+  `CorvusChat` reads the viewer's first name from `useViewerFirstName()`
+  (`src/components/auth/ViewerFirstName.tsx`), which only the Clerk provider
+  fills, and a story supplies one with `ViewerFirstNameProvider`
+  (`AI/CorvusChat` › `SignedInGreeting`).
 - Every page of every e2e spec now loads clerk-js from that development
   instance. The sign-up spec is the only one that submits anything, and it
   intercepts every write to Clerk before it leaves the browser

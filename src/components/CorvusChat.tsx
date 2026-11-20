@@ -1,7 +1,6 @@
 'use client'
 
 import { useChat } from '@ai-sdk/react'
-import { useUser } from '@clerk/nextjs'
 import { DefaultChatTransport } from 'ai'
 import { useRouter } from 'next/navigation'
 import {
@@ -28,6 +27,7 @@ import { useSpeechInput } from '@/lib/corvus/useSpeechInput'
 import { reportSpeechRecognitionError } from '@/lib/observability/clientTelemetry'
 import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
 import { useMounted } from '@/lib/useMounted'
+import { useViewerFirstName } from '@/components/auth/ViewerFirstName'
 import { RavenMark } from '@/components/corvus/RavenMark'
 import { Button } from '@/components/ui/button'
 import {
@@ -62,43 +62,6 @@ const corvusChatFetch = createCorvusChatFetch()
 
 function isSignInRequiredError(error: Error | undefined): boolean {
   return Boolean(error?.message?.includes(SIGN_IN_REQUIRED_CODE))
-}
-
-/**
- * Whether Clerk is configured for this deployment, read the client-safe way.
- *
- * @remarks `isClerkEnabled` (`@/lib/auth/clerkEnabled`) also checks
- * `CLERK_SECRET_KEY`, which is never inlined into client bundles — calling
- * it here would always read `false`. This mirrors the half of that check
- * `AuthProvider` can see server-side to decide whether to mount
- * `<ClerkProvider>`, so whenever this is `true` a provider is guaranteed to
- * be present in the tree.
- */
-const CLERK_ENABLED_CLIENT = Boolean(
-  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
-)
-
-/**
- * Resolves the signed-in visitor's Clerk first name for the empty-state
- * greeting.
- *
- * @remarks Isolated into its own component — rendered only when
- * {@link CLERK_ENABLED_CLIENT} is true — because `useUser` throws when
- * called outside a `<ClerkProvider>`, which `AuthProvider` never mounts in
- * keys-off environments. `CorvusChat` must never call `useUser` directly.
- */
-function ClerkFirstNameProbe({
-  onChange,
-}: {
-  onChange: (firstName: string | null) => void
-}) {
-  const { user } = useUser()
-
-  useEffect(() => {
-    onChange(user?.firstName ?? null)
-  }, [user, onChange])
-
-  return null
 }
 
 /**
@@ -504,7 +467,9 @@ export default function CorvusChat({
   const dictatingRef = useRef(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const mounted = useMounted()
-  const [firstName, setFirstName] = useState<string | null>(null)
+  // Supplied by the Clerk provider when one is mounted, `null` otherwise
+  // (`ViewerFirstName`, #381): never decided here from an env var.
+  const firstName = useViewerFirstName()
 
   // The empty-state greeting is time-of-day (and optionally name) flavored —
   // both are only knowable client-side, so the first paint renders a
@@ -660,8 +625,6 @@ export default function CorvusChat({
       data-slot="chat-card"
       className="flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100 p-3 sm:p-4 dark:border-zinc-700/40"
     >
-      {CLERK_ENABLED_CLIENT && <ClerkFirstNameProbe onChange={setFirstName} />}
-
       {/* Compact in-card agent header (replaces the separate hero-style
           header/constellation backdrop the page used to render — that
           "went overboard"; this is the whole identity band now). `title`

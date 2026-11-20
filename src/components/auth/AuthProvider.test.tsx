@@ -31,6 +31,8 @@ vi.mock('@clerk/nextjs', () => ({
       {children}
     </div>
   ),
+  // `ClerkClientProvider` mounts `ClerkViewerFirstName` inside the provider.
+  useUser: () => ({ user: null }),
 }))
 
 afterEach(() => {

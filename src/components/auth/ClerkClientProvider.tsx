@@ -3,6 +3,8 @@
 import { ClerkProvider } from '@clerk/nextjs'
 import type { ReactNode } from 'react'
 
+import { ClerkViewerFirstName } from '@/components/auth/ViewerFirstName'
+
 /**
  * Clerk's provider, mounted from a client module so its rendered name is the
  * same in the prerendered shell and in every resume of it (BP-PORTFOLIO-S).
@@ -37,6 +39,10 @@ import type { ReactNode } from 'react'
  * and this project's production domain is a custom one. If the custom
  * domain is ever removed, set `proxyUrl` or `domain` explicitly.
  *
+ * It also mounts {@link ClerkViewerFirstName} directly inside the provider,
+ * so the viewer's first name is supplied exactly where Clerk is mounted and
+ * nowhere else (#381).
+ *
  * @param props - `appearance`, Clerk's theming for every Clerk surface, and
  *   `children`, the site.
  */
@@ -47,5 +53,9 @@ export function ClerkClientProvider({
   appearance: Parameters<typeof ClerkProvider>[0]['appearance']
   children: ReactNode
 }) {
-  return <ClerkProvider appearance={appearance}>{children}</ClerkProvider>
+  return (
+    <ClerkProvider appearance={appearance}>
+      <ClerkViewerFirstName>{children}</ClerkViewerFirstName>
+    </ClerkProvider>
+  )
 }
