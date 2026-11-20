@@ -262,16 +262,13 @@ jobs:
           NEXT_PUBLIC_GA_MEASUREMENT_ID: G-E2E0000000
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-      # This step runs with Clerk OFF ON PURPOSE: it gets no Clerk keys, and
-      # must not be given them. Stories mount components with no
-      # <ClerkProvider>, and a component that reads the publishable key to
-      # decide whether Clerk is on (CorvusChat's CLERK_ENABLED_CLIENT) then
-      # calls a Clerk hook that throws: with the keys set for the whole job,
-      # 14 CorvusChat stories failed here (run 44377185413, 2026-11-18).
-      # Issue #381 asks for those stories to pass with the key set; until it
-      # is fixed, keep the keys on the two steps above only.
+      # Stories run with the publishable key set, as the site's build does, so
+      # a component that decides "is Clerk on" from the env and not from the
+      # tree fails here (#381). The secret key stays off: no story reads it.
       - name: Storybook interaction tests (Vitest browser mode)
         run: pnpm test:storybook
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
