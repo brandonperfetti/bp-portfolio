@@ -133,21 +133,15 @@ predicates in `consent-config.ts` and nowhere else:
 registration knows nothing about regions, so changing who is asked is a
 change to those predicates alone.
 
-**The dialog's Analytics sentence.** The default copy now says the tag loads
-only while the category is on. The sentence shipped before #361 ("Google still
-receives an anonymous, cookieless signal") is still the saved value in the
-`cookie-consent` global wherever the global was saved once, production
-included, and the column default in the database. `resolveConsentConfig`
-treats a stored value equal to that exact sentence as not customised and
-serves the current default, so the dialog is right on deploy with no CMS write
-and no migration. The admin field goes on showing the old sentence until it is
-edited. Cleanup (#372): on staging and production, replace the saved
-sentence with the current default or other wording that is true (a reworded
-copy of the old claim would be served as written), confirm neither
-environment still returns the old sentence, and only then remove
-`SUPERSEDED_ANALYTICS_SUBTITLE` and its uses, with the migration that moves
-the column default. Removing it first would put the old sentence back in the
-dialog.
+**The dialog's Analytics sentence.** The default copy says the tag loads only
+while the category is on. The sentence shipped before #361 ("Google still
+receives an anonymous, cookieless signal") was the saved value in the
+`cookie-consent` global and the column default; until #372 the reader swapped
+that exact stored sentence for the current default. Staging and production
+were edited in the CMS first (confirmed 2026-11-19), then #372 removed the
+swap and moved the column default with a migration. The stored subtitle is now
+served as written, like every other consent string, so a database that still
+holds the old sentence would show it.
 
 ## Essential cookies (exempt from the banner)
 

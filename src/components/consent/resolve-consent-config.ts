@@ -6,7 +6,6 @@ import {
   type ConsentCategoryKey,
   type ConsentConfig,
   DEFAULT_CONSENT_CONFIG,
-  SUPERSEDED_ANALYTICS_SUBTITLE,
 } from './consent-content'
 
 /** Empty/blank string → the provided default; a non-blank CMS value wins. */
@@ -50,16 +49,9 @@ export function resolveConsentConfig(
   ): { title: string; subtitle: string } => {
     const d = defaults.categories.find((c) => c.key === key)!
     const src = cats?.[key]
-    // #361: a stored Analytics subtitle that is still the superseded shipped
-    // default was never customised, and what it says is no longer true.
-    const subtitle =
-      key === 'analytics' &&
-      src?.subtitle?.trim() === SUPERSEDED_ANALYTICS_SUBTITLE
-        ? undefined
-        : src?.subtitle
     return {
       title: str(src?.title, d.title),
-      subtitle: str(subtitle, d.subtitle),
+      subtitle: str(src?.subtitle, d.subtitle),
     }
   }
 
