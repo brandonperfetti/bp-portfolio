@@ -371,6 +371,10 @@ describe('isCorvusRetentionQuestion', () => {
     ['What happens to my conversation?', 'happens to'],
     ['Is this chat private?', 'privacy'],
     ['Does Corvus retain anything about me?', 'retain'],
+    [
+      'Do you keep this private?',
+      'a retention verb with no object, then privacy',
+    ],
   ])('matches %s (%s)', (query) => {
     expect(isCorvusRetentionQuestion(query)).toBe(true)
   })
@@ -379,6 +383,7 @@ describe('isCorvusRetentionQuestion', () => {
     ['How do I store messages in Redis?', 'an engineering question'],
     ['How do you save state in React?', 'save with no object of mine'],
     ['Do you keep up with React?', 'keep up'],
+    ['What do you keep up with?', 'keep up, in the object-less shape'],
     ['Where should I store private keys?', 'private, but not about Corvus'],
     ['What tech do you use?', 'the about-Corvus question'],
     ['Where has Brandon worked?', 'site content'],

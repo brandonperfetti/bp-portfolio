@@ -895,6 +895,22 @@ eval:ci, after the #167 citation-format rider]` that one path cost **4 of 5**
   which is written for an engineer; not in a passage handed to a model as
   citable material.**
 
+Addressee detection (`isAboutCorvusQuestion`) is a regex, and conservative in
+the direction that costs least: a false positive adds one inert passage, a
+false negative is the measured defect itself. Second-person address alone is
+not enough — "what do you think of Postgres?" is addressed to Corvus and is not
+about Corvus — so a match needs an addressee **and** a self-referential topic,
+unless the visitor names Corvus outright. The topic vocabulary is **stack and
+capability nouns only**: an earlier draft carrying the bare verbs `do`, `know`
+and `work` matched both "what do you think of Postgres?" and "do you know who
+won the game?" `[measured, 2026-09-04]` — the very examples this paragraph
+gives as exclusions — so verbs now earn their place only inside a phrase that
+can mean nothing else (`what can you do`, `run on`, `under the hood`). Both
+counter-examples are pinned as negative tests. The known miss is a follow-up turn
+("and what about you?"), which carries no topic word; retrieval embeds only the
+latest user message, so that limitation belongs to the module rather than to
+the rule.
+
 ##### What Corvus keeps: the retention passage (#401)
 
 `[measured, production, 2026-11-20, v2026.11.20]` asked "Does it store my
@@ -929,26 +945,13 @@ retain, delete, happens to) with something of the visitor's as its object
 (the conversation or chat, "my messages", "what I type", "about me"), the
 object-less "what do you keep?", or privacy asked about Corvus or a chat.
 "How do I store messages in Redis?" and "do you keep up with React?" do not
-match, and no existing eval input does. When both rules match, the retention
+match, and no existing eval input does. It is not exact: "How do I store my
+data in Postgres?" or a question about building a chat app that saves messages
+still matches, and that is accepted, because the cost is one inert passage.
+When both rules match, the retention
 passage goes first. `evals/corvus-subjects.eval.ts` pins the answer in the
 "what Corvus KEEPS" block, scored on the facts and on a linked `/privacy`
 citation.
-
-Addressee detection (`isAboutCorvusQuestion`) is a regex, and conservative in
-the direction that costs least: a false positive adds one inert passage, a
-false negative is the measured defect itself. Second-person address alone is
-not enough — "what do you think of Postgres?" is addressed to Corvus and is not
-about Corvus — so a match needs an addressee **and** a self-referential topic,
-unless the visitor names Corvus outright. The topic vocabulary is **stack and
-capability nouns only**: an earlier draft carrying the bare verbs `do`, `know`
-and `work` matched both "what do you think of Postgres?" and "do you know who
-won the game?" `[measured, 2026-09-04]` — the very examples this paragraph
-gives as exclusions — so verbs now earn their place only inside a phrase that
-can mean nothing else (`what can you do`, `run on`, `under the hood`). Both
-counter-examples are pinned as negative tests. The known miss is a follow-up turn
-("and what about you?"), which carries no topic word; retrieval embeds only the
-latest user message, so that limitation belongs to the module rather than to
-the rule.
 
 ##### Eval coverage
 

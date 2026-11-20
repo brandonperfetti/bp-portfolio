@@ -166,8 +166,8 @@ export const ABOUT_CORVUS_PRIVACY_TITLE = 'What Corvus keeps'
  * @remarks **Copied from the privacy page's "Corvus, the AI assistant"
  * section, and it must change when that section does.** The page is CMS
  * content (Pages id 28) that Brandon edits without a deploy; this passage is
- * code. No test can read the CMS, so `docs/AI.md` § The About Corvus passage
- * records the pairing, and the rule is the one this passage exists for: it
+ * code. No test can read the CMS, so `docs/AI.md` § What Corvus keeps: the
+ * retention passage records the pairing, and the rule is the one this passage exists for: it
  * states nothing the page does not.
  *
  * The page names OpenAI rather than "the chat provider", so the passage does
@@ -278,7 +278,7 @@ const RETENTION_OBJECT_PATTERN =
 
 /** "What do you keep?" — the object left implicit, the addressee explicit. */
 const WHAT_DO_YOU_KEEP_PATTERN =
-  /\bwhat (do|does|will|did) (you|corvus|it|this site|the site) (keep|store|save|log|retain)\b/i
+  /\bwhat (do|does|will|did) (you|corvus|it|this site|the site) (keep(?!\s+up)|store|save|log|retain)\b/i
 
 /** Privacy asked about directly. */
 const PRIVACY_PATTERN = /\b(privacy|private|confidential)\b/i
@@ -310,8 +310,11 @@ export function isCorvusRetentionQuestion(
   if (!value) return false
 
   if (WHAT_DO_YOU_KEEP_PATTERN.test(value)) return true
-  if (RETENTION_VERB_PATTERN.test(value)) {
-    return RETENTION_OBJECT_PATTERN.test(value)
+  if (
+    RETENTION_VERB_PATTERN.test(value) &&
+    RETENTION_OBJECT_PATTERN.test(value)
+  ) {
+    return true
   }
   if (PRIVACY_PATTERN.test(value)) {
     return (
