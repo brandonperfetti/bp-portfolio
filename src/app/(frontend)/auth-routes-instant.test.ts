@@ -10,7 +10,7 @@ vi.mock('@clerk/nextjs', () => ({
 }))
 vi.mock('@clerk/nextjs/server', () => ({ auth: vi.fn() }))
 
-import { instant as accountInstant } from '@/app/(frontend)/account/page'
+import { instant as accountInstant } from '@/app/(frontend)/account/[[...account]]/page'
 import { instant as signInInstant } from '@/app/(frontend)/sign-in/[[...sign-in]]/page'
 import { instant as signUpInstant } from '@/app/(frontend)/sign-up/[[...sign-up]]/page'
 

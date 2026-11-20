@@ -34,6 +34,11 @@ copyright line is hard-coded.
 | `/feed.xml`, `/llms.txt`, `/llms-full.txt` | route handlers                |                                      |
 | `/[...segments]`                           | Pages, then Posts, by `path`  | Page-builder catch-all — see below   |
 
+`/sign-in`, `/sign-up` and `/account` are optional catch-alls
+(`[[...sign-in]]` and the like), because Clerk's components path-route their
+own sub-pages: each owns every path below it, so `/account/security` loads
+directly (#391), and a page nested under one of them is never served.
+
 ## Page hierarchy and the `[...segments]` catch-all (#148)
 
 Any published Pages document whose path is not owned by a dedicated route
