@@ -38,14 +38,6 @@ vi.mock('streamdown', () => ({
     <div>{children}</div>
   ),
 }))
-// CorvusChat mounts a ClerkFirstNameProbe (calling useUser) whenever
-// NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is set — which it is in local/CI envs but
-// not the isolated build sandbox. Rendering the component bare (no
-// <ClerkProvider>) then makes useUser throw, so mock it here; a null user
-// exercises the anonymous, nameless greeting path.
-vi.mock('@clerk/nextjs', () => ({
-  useUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
-}))
 // #158: CorvusChat's reply-link component calls `useRouter` so an internal
 // citation can navigate in-app. Mocked here for the same reason every other
 // client-component suite in this repo mocks it — there is no app-router

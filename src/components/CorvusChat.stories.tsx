@@ -1,6 +1,7 @@
 import type { Decorator, Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test'
 
+import { ViewerFirstNameProvider } from '@/components/auth/ViewerFirstName'
 import CorvusChat from '@/components/CorvusChat'
 
 /**
@@ -303,6 +304,35 @@ function stubAssistantReply(markdown: string) {
 }
 
 export const Idle: Story = {}
+
+/**
+ * #381: the empty-state greeting for a signed-in visitor, which uses their
+ * Clerk first name ("Afternoon, Ada.").
+ *
+ * @remarks In the app the name comes from `ClerkViewerFirstName`, mounted
+ * inside `<ClerkProvider>`. A story cannot run Clerk, so it supplies the name
+ * through the same context with `ViewerFirstNameProvider`; `CorvusChat` reads
+ * the context either way and never calls Clerk itself. The bucket word
+ * depends on the clock, so the play asserts the name and its punctuation, not
+ * the time of day.
+ */
+export const SignedInGreeting: Story = {
+  decorators: [
+    (Story) => (
+      <ViewerFirstNameProvider firstName="Ada">
+        <Story />
+      </ViewerFirstNameProvider>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText(
+        /^(Morning|Afternoon|Evening|Late one), Ada[.?]$/,
+      ),
+    ).toBeVisible()
+  },
+}
 
 /**
  * #158: the external-link confirmation, open.

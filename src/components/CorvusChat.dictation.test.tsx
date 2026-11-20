@@ -53,9 +53,6 @@ vi.mock('streamdown', () => ({
     <div>{children}</div>
   ),
 }))
-vi.mock('@clerk/nextjs', () => ({
-  useUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
-}))
 // #158: CorvusChat's reply-link component calls `useRouter` so an internal
 // citation can navigate in-app. Mocked here for the same reason every other
 // client-component suite in this repo mocks it — there is no app-router
