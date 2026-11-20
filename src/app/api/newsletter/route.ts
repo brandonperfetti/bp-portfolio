@@ -39,6 +39,12 @@ const SUBSCRIBED_MESSAGE =
  * unlike sign-up (Clerk's email code, or Google) nothing proves the visitor
  * owns the address. A confirmation step would be a product decision.
  *
+ * **A prior unsubscribe stands.** `captureContact` sends no `unsubscribed`
+ * field, so a reader who unsubscribed and submits again is not asked back
+ * onto the list by this route; clearing an opt-out would change the shared
+ * helper, and the webhook with it. The reply is the same either way, so it
+ * does not disclose that state.
+ *
  * **Capture** is `captureContact`, the helper the Clerk webhook and the
  * contact form already share, so all three land in the same list and
  * segment (`RESEND_CONTACT_SEGMENT_ID`). It swallows Resend's errors,

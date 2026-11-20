@@ -93,15 +93,19 @@ export function Newsletter() {
       {/* Turnstile mount point — empty unless Cloudflare escalates to an
           interactive challenge. */}
       <div ref={turnstileRef} className="empty:hidden [&:not(:empty)]:pt-3" />
-      {message && (
-        <p
-          role="status"
-          aria-live="polite"
-          className={`mt-3 text-sm ${success ? 'text-emerald-500' : 'text-red-500'}`}
-        >
-          {message}
-        </p>
-      )}
+      {/* Always mounted, so the live region exists before its first message
+          and screen readers announce that one too. */}
+      <p
+        role="status"
+        aria-live="polite"
+        className={
+          message
+            ? `mt-3 text-sm ${success ? 'text-emerald-500' : 'text-red-500'}`
+            : undefined
+        }
+      >
+        {message}
+      </p>
     </form>
   )
 }

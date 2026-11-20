@@ -34,6 +34,9 @@ describe('Newsletter (#367)', () => {
       new Response(JSON.stringify({ message: 'Thanks.' }), { status: 200 }),
     )
     render(<Newsletter />)
+    // The live region exists, empty, before any message, so the first one
+    // is announced.
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
 
     submit('reader@example.test')
 

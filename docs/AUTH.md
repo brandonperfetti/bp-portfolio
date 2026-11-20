@@ -61,7 +61,9 @@
      opt-in; there is no checkbox. Single opt-in, like the contact form's
      box: no confirmation email, so nothing proves the visitor owns the
      address, which sign-up does (Clerk's email code, or Google). Its
-     answer never says whether the address was already on the list. Guards
+     answer never says whether the address was already on the list, and it
+     does not ask Resend to clear an earlier unsubscribe (no `unsubscribed`
+     field is sent). Guards
      shared with `/api/contact` (`src/lib/security/publicFormGuard.ts`).
      The capture rule:
      `docs/SECURITY.md` § Consent and analytics data.
