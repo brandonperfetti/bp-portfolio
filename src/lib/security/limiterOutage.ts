@@ -3,7 +3,7 @@ import * as Sentry from '@sentry/nextjs'
 import { boundedErrorMessage } from '@/lib/observability/boundedErrorMessage'
 
 /** Which route a limiter outage blocked. */
-export type LimiterSurface = 'chat' | 'contact'
+export type LimiterSurface = 'chat' | 'contact' | 'newsletter'
 
 /** Which limiter call failed, so the Sentry issue says where. */
 export type LimiterOperation =
