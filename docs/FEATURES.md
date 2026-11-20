@@ -88,6 +88,10 @@
   (`/api/clerk/webhook`, svix verified) captures a sign-up's email as a
   Resend contact only when the sign-up ticked the same opt-in (#362), which
   sits inside the site's own sign-up form (#377; `docs/AUTH.md`).
+- `/api/newsletter` POST adds the Newsletter Signup block's address to the
+  same Resend list (#367; it replaces v3's `/api/mailinglist`). Same guards
+  as `/api/contact`: same-origin, per-IP rate limit, 503 on a limiter outage,
+  Turnstile when configured.
 
 ## SEO surfaces
 

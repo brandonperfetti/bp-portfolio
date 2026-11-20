@@ -46,7 +46,7 @@
 
 ## Email capture
 
-- Two capture paths, one shared helper (`src/lib/email/captureContact.ts`
+- Three capture paths, one shared helper (`src/lib/email/captureContact.ts`
   — logs and swallows every failure; capture is never the caller's
   primary job):
   1. Sign-up → explicit opt-in checkbox (unchecked by default) inside the
@@ -55,9 +55,16 @@
      only a sign-up that ticked it (#362, below).
   2. Contact form → explicit opt-in checkbox (unchecked by default) on
      the Messenger form; `/api/contact` captures only when the flag is
-     set AND the message delivered. The capture rule:
+     set AND the message delivered.
+  3. Newsletter Signup block → `/api/newsletter` (#367). The form is one
+     email field whose only job is subscribing, so submitting it is the
+     opt-in; there is no checkbox and no confirmation email, the same single
+     opt-in as sign-up. Its answer never says whether the address was
+     already on the list. Guards shared with `/api/contact`
+     (`src/lib/security/publicFormGuard.ts`).
+     The capture rule:
      `docs/SECURITY.md` § Consent and analytics data.
-     Both land in the Resend contact list, segmented via
+     All three land in the Resend contact list, segmented via
      `RESEND_CONTACT_SEGMENT_ID`. What a broadcast must honour:
      `docs/SECURITY.md` § Consent and analytics data.
      (Migrated from the SendGrid marketing list 2026-08-10 — SendGrid walls
