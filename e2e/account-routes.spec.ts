@@ -33,10 +33,17 @@ for (const accountPath of ['/account', '/account/security']) {
 
     // `goto` follows redirects and returns the last hop, so walk back to the
     // request for the account URL itself and read its own status.
-    let request = response?.request()
-    while (request?.redirectedFrom()) request = request.redirectedFrom()
-    const accountResponse = await request?.response()
-    expect(new URL(request?.url() ?? '').pathname).toBe(accountPath)
+    expect(response, `no response for ${accountPath}`).not.toBeNull()
+    let request = response!.request()
+    for (
+      let previous = request.redirectedFrom();
+      previous;
+      previous = previous.redirectedFrom()
+    ) {
+      request = previous
+    }
+    const accountResponse = await request.response()
+    expect(new URL(request.url()).pathname).toBe(accountPath)
     expect(accountResponse?.status()).not.toBe(404)
     // A 404 page does not redirect, so landing here is the decisive check.
     await expect(page).toHaveURL((url) => url.pathname === expectedPath)
