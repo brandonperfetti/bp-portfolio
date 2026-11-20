@@ -42,8 +42,8 @@ function getRedis(): Redis | null {
 
 /**
  * Stable digest of an anonymous visitor's IP, used as the storage identity
- * for every anon counter key (this gate's 30-day counter, and the route's
- * per-minute/daily limiter keys).
+ * for every anon counter key (this gate's 30-day counter, the chat route's
+ * per-minute/daily limiter keys, and the contact route's limiter key, #364).
  *
  * @remarks Raw IPs are personal data and IPv4 space is small enough to
  * enumerate, so an unkeyed hash would be trivially reversible — this is an

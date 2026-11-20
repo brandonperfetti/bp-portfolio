@@ -363,13 +363,25 @@ stay where they are:
 - **Identity is resolved server-side, never taken from the request body.**
   Rate limits, the anonymous free-message gate and retrieval grounding key
   on the Clerk session and the trusted IP [source:
-  `src/app/api/ai/chat/route.ts:74-75` (IP and viewer resolved from the
-  request headers and the Clerk session), `:85-87` (limiter key: Clerk
-  `userId`, else the HMAC of the IP), `:127` (free-message count by IP),
-  `:227` (retrieval gets `viewer.isAuthenticated`);
+  `src/app/api/ai/chat/route.ts:104-105` (IP and viewer resolved from the
+  request headers and the Clerk session), `:115-117` (limiter key: Clerk
+  `userId`, else the HMAC of the IP), `:163` (free-message count by IP),
+  `:272` (retrieval gets `viewer.isAuthenticated`);
   `src/lib/security/guardrails.ts:272` (`getRequestClientIp`: `x-real-ip`,
   else the rightmost `x-forwarded-for` hop, never the leftmost)].
   Mechanism: `docs/AI.md` § Guardrails.
+- **Redis keeps no raw IP.** Every IP-derived key in Upstash carries
+  `anonIpKeyDigest(ip)`, an HMAC-SHA256 of the IP keyed by `PAYLOAD_SECRET`,
+  never the address itself: chat's anonymous limiter key
+  (`ip:<digest>`), the free-message counter (`chat:anon-free:<digest>`)
+  and the contact form's limiter key (`contact:<digest>`, #364). An
+  outage report redacts the IP, the digest and the key [source:
+  `src/lib/security/chatGate.ts:57` (`anonIpKeyDigest`),
+  `src/app/api/ai/chat/route.ts:115-117` (key), `:126` (redaction),
+  `src/app/api/contact/route.ts:68-69` (key), `:85` (redaction); the contact key is pinned to the
+  digest in `src/app/api/contact/route.test.ts`]. The contact form still
+  passes the raw IP to Cloudflare Turnstile as `remoteip`, which stores
+  nothing in Redis. A new IP-keyed store follows the same rule.
 - **`redirect_url` after sign-up is followed only to this site.** The custom
   sign-up form (#377) sends a new member on to `redirect_url` itself, where
   Clerk's prebuilt form used to. The value is parsed the way a browser parses
