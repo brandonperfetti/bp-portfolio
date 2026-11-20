@@ -3,6 +3,7 @@ import { evalite } from 'evalite'
 import { askCorvusGrounded } from './corvus-helpers'
 import { createCitationScorers } from './citation-scorers'
 import { createGuardedScorer } from './empty-output'
+import { factuality } from './graded-scorers'
 import { GITHUB_REPO_FIXTURES } from './fixtures/github-repos'
 import { createFixtureRetriever, fixtureSourceUrls } from './fixtures/retriever'
 import { containsExpectedFact, createCitesLinkedSourceUrl } from './scorers'
@@ -422,12 +423,15 @@ evalite('Corvus subjects · what THIS SITE is built on, however you ask', {
  *
  * @remarks Built the way {@link citesLinkedSourceUrl} is and for the same two
  * reasons: `/privacy` is a Page, so no fixture chunk carries it, and a
- * citation has to be a link to count. Its own construction, so the "you"
- * block's corpus does not move.
+ * citation has to be a link to count. Unlike that scorer, only `/privacy`
+ * earns credit: every answer here is owed to the privacy page, so a link to
+ * some other fixture page is not the citation. The fixture URLs stay in
+ * `alsoReal`, so linking one is not scored as an invented page. Its own
+ * construction, so the "you" block's corpus does not move.
  */
 const citesLinkedPrivacyUrl = createCitesLinkedSourceUrl(
-  [...fixtureSourceUrls(), ABOUT_CORVUS_PRIVACY_SOURCE_URL],
-  { alsoReal: SITE_CHROME_URLS },
+  [ABOUT_CORVUS_PRIVACY_SOURCE_URL],
+  { alsoReal: [...fixtureSourceUrls(), ...SITE_CHROME_URLS] },
 )
 
 /**
@@ -493,9 +497,13 @@ evalite('Corvus subjects · what Corvus KEEPS of a conversation', {
     },
   ],
   task: (input) => askCorvusGrounded(input, { retrieve }),
+  // `factuality` grades the claims against `expected`: the literals alone
+  // would pass an answer that names OpenAI and 30 days while saying the site
+  // keeps the conversation, which is the opposite of the page.
   scorers: [
     containsExpectedFact,
     citesLinkedPrivacyUrl,
     neverDisclaimsThePublishedPolicy,
+    factuality,
   ],
 })
