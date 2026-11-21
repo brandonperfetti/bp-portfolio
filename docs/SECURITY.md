@@ -477,7 +477,7 @@ stay there.
   whose sign-up ticked the same unchecked-by-default opt-in (#362) [source:
   `src/app/api/clerk/webhook/route.ts`, `hasMailingListOptIn`]. The
   Newsletter Signup block's form is **double opt-in** (#411): a submit only
-  emails the address a signed, expiring link, and the address joins the
+  emails the address an encrypted, expiring link, and the address joins the
   list, or rejoins it after an unsubscribe (#407), only when its owner
   presses Confirm on the page the link opens. So no one can put another
   person on the list, or back on it; the form can still send a

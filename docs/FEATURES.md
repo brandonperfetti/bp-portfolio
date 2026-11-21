@@ -90,7 +90,7 @@
   sits inside the site's own sign-up form (#377; `docs/AUTH.md`).
 - `/api/newsletter` POST is the Newsletter Signup block's form (#367; it
   replaces v3's `/api/mailinglist`). It is double opt-in (#411): a submit
-  emails the address a signed, three-day link to `/newsletter/confirm`, and
+  emails the address a sealed, three-day link to `/newsletter/confirm`, and
   only pressing Confirm there (`/api/newsletter/confirm`) adds it to the
   same Resend list, or sets a reader who unsubscribed back to subscribed
   (#407). A Resend failure answers a retryable 503 rather than "subscribed"

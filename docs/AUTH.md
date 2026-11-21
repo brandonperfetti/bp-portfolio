@@ -71,11 +71,17 @@
      (Brandon, on #411). The form is one email field and no checkbox. A
      submit changes nothing on the list: it sends one email, through Resend,
      with a link to `/newsletter/confirm?token=…`. The token is stateless:
-     an HMAC over the address and a three-day expiry, keyed by a key derived
-     from `PAYLOAD_SECRET` with a fixed context label
-     (`src/lib/email/newsletterConfirmToken.ts`), so it confirms only the
-     address it was sent to, and an edited, forged or expired one is
-     refused. The page joins no one on load, because mail scanners open
+     the address and a three-day expiry sealed with AES-256-GCM, under a key
+     derived from `PAYLOAD_SECRET` by HKDF with a fixed context label
+     (`src/lib/email/newsletterConfirmToken.ts`). It is encrypted, not only
+     signed, because the link's URL reaches Sentry, analytics and request
+     logs, and the email redaction cannot see an address inside base64; GCM
+     also authenticates it, so it confirms only the address it was sent to,
+     and an edited, forged or expired one is refused. The link points at the
+     host that took the sign-up when that is the site's host, a subdomain of
+     it (staging) or the deployment's own Vercel host, so a staging sign-up
+     confirms on staging under staging's secret; any other `Host` falls back
+     to `NEXT_PUBLIC_SITE_URL`. The page joins no one on load, because mail scanners open
      links in incoming mail; its **Confirm** button posts the token to
      `/api/newsletter/confirm`, which runs `captureContact` with `rejoin`.
      That creates a new contact in the segment, or, **for a reader who
@@ -96,10 +102,11 @@
      (410), `invalid` (400) or `failed` (503); a token's holder already
      knows its address, so these disclose nothing new. A failure is
      reported to Sentry by stage with no address: the error names only the
-     stage, and the server and edge Sentry configs redact addresses from
+     stage, the server and edge Sentry configs redact addresses from
      breadcrumbs, spans and the captured request body, where Resend's
      `/contacts/<email>` URLs and the form's own post would otherwise land
-     (#409). If Resend ever accepted a re-subscribe without applying it, a
+     (#409), and the confirm route's body and the page's URL carry only the
+     encrypted token. If Resend ever accepted a re-subscribe without applying it, a
      once-unsubscribed reader's confirmation would fail every time, and
      Sentry's `resubscribe` stage is where that would first appear. No
      `RESEND_API_KEY` or no `PAYLOAD_SECRET` answers 503 on both routes,

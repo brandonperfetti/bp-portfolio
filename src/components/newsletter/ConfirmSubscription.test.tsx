@@ -46,15 +46,29 @@ describe('ConfirmSubscription (#407)', () => {
   it.each([
     ['expired', 410, /expired/i],
     ['invalid', 400, /doesn't work/i],
-    ['failed', 503, /try again/i],
-  ])('shows the %s answer and keeps the button', async (status, code, copy) => {
-    fetchMock.mockResolvedValue(answer(status, code))
+  ])(
+    'shows the %s answer and hides the button, since pressing again cannot help',
+    async (status, code, copy) => {
+      fetchMock.mockResolvedValue(answer(status, code))
+      render(<ConfirmSubscription readToken={() => 'tok'} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+      await waitFor(() =>
+        expect(screen.getByRole('status')).toHaveTextContent(copy),
+      )
+      expect(screen.queryByRole('button')).toBeNull()
+    },
+  )
+
+  it('shows the failed answer and keeps the button, so the reader can retry', async () => {
+    fetchMock.mockResolvedValue(answer('failed', 503))
     render(<ConfirmSubscription readToken={() => 'tok'} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
 
     await waitFor(() =>
-      expect(screen.getByRole('status')).toHaveTextContent(copy),
+      expect(screen.getByRole('status')).toHaveTextContent(/try again/i),
     )
     expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument()
   })

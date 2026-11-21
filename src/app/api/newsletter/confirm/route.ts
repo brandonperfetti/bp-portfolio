@@ -24,8 +24,8 @@ function answer(status: ConfirmStatus, httpStatus: number, message: string) {
  *
  * @remarks
  * **The address comes only from the token.** The body carries the token and
- * nothing else, and the token's signature covers the address and the expiry
- * (`newsletterConfirmToken.ts`), so a token cannot confirm any address but
+ * nothing else, and the token seals the address and the expiry with
+ * AES-256-GCM (`newsletterConfirmToken.ts`), so a token cannot confirm any address but
  * the one it was sent to; an edited, forged or expired one is refused with
  * no Resend call. Replaying a valid token for its own address repeats an
  * idempotent join.

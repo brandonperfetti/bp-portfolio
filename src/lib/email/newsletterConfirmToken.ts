@@ -1,10 +1,19 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import {
+  createCipheriv,
+  createDecipheriv,
+  hkdfSync,
+  randomBytes,
+} from 'node:crypto'
 
 /** How long a confirmation link works, in seconds: three days. */
 export const CONFIRM_TOKEN_TTL_SECONDS = 3 * 24 * 60 * 60
 
-/** Separates this key from every other use of `PAYLOAD_SECRET`. */
+/** Separates this key from every other use of `PAYLOAD_SECRET` (HKDF info). */
 const KEY_CONTEXT = 'bp-portfolio:newsletter-confirm:v1'
+
+/** AES-256-GCM nonce and tag lengths, in bytes. */
+const IV_BYTES = 12
+const TAG_BYTES = 16
 
 /** Why a token was refused. */
 export type ConfirmTokenRefusal = 'invalid' | 'expired'
@@ -14,7 +23,7 @@ export type ConfirmTokenResult =
   { ok: true; email: string } | { ok: false; reason: ConfirmTokenRefusal }
 
 /**
- * The key that signs newsletter confirmation links, or `null` when
+ * The key that seals newsletter confirmation links, or `null` when
  * `PAYLOAD_SECRET` is unset.
  *
  * @returns A 32-byte key, or `null`; a caller treats `null` as "cannot
@@ -23,47 +32,50 @@ export type ConfirmTokenResult =
  * @remarks **Why `PAYLOAD_SECRET`, not a new variable.** It is server-only,
  * set per environment with staging and production values kept apart
  * (`docs/SECURITY.md` § Secret handling), and the repo already keys HMACs
- * with it (`anonIpKeyDigest`). The key is derived from it with a fixed
- * context label, so a confirmation signature cannot be confused with any
- * other HMAC made from the same secret, and the secret itself never signs a
- * token. Rotating `PAYLOAD_SECRET` invalidates outstanding links, which costs
- * a reader at most one more sign-up. There is no development fallback: an
- * unset secret refuses, never signs with a known value.
+ * with it (`anonIpKeyDigest`). The key is derived from it with HKDF and a
+ * fixed context label, so it is unrelated to any other value made from the
+ * same secret, and the secret itself never touches a token. Rotating
+ * `PAYLOAD_SECRET` invalidates outstanding links, which costs a reader at
+ * most one more sign-up. There is no development fallback: an unset secret
+ * refuses, never seals with a known value.
  */
 export function getConfirmTokenKey(): Buffer | null {
   const secret = process.env.PAYLOAD_SECRET
   if (!secret) return null
-  return createHmac('sha256', secret).update(KEY_CONTEXT).digest()
-}
-
-function sign(key: Buffer, payload: string): Buffer {
-  return createHmac('sha256', key).update(payload).digest()
+  return Buffer.from(hkdfSync('sha256', secret, '', KEY_CONTEXT, 32))
 }
 
 /**
- * Sign a confirmation token for one address.
+ * Seal a confirmation token for one address.
  *
  * @param email - The address the token confirms, as the visitor typed it.
  * @param key - From {@link getConfirmTokenKey}.
  * @param nowMs - The current time, injectable for tests.
- * @returns `<payload>.<signature>`, both base64url, safe in a URL as is.
+ * @returns One base64url string, safe in a URL as is.
  *
- * @remarks Stateless on purpose: the address and the expiry are inside the
- * signed payload, so no store is needed, a token cannot be re-pointed at
- * another address, and a forged or edited one fails the signature check.
+ * @remarks **Encrypted, not only signed.** The address and the expiry are
+ * sealed with AES-256-GCM, so the token is opaque: the link lands in URLs
+ * that Sentry, analytics and request logs keep, and a signed-only token
+ * would hand them the address in base64, past the email redaction. GCM's tag
+ * also authenticates it, so a forged or edited token fails, and a token
+ * cannot be re-pointed at another address. Stateless on purpose: no store.
  */
 export function createConfirmToken(
   email: string,
   key: Buffer,
   nowMs: number = Date.now(),
 ): string {
-  const payload = Buffer.from(
-    JSON.stringify({
-      e: email,
-      x: Math.floor(nowMs / 1000) + CONFIRM_TOKEN_TTL_SECONDS,
-    }),
-  ).toString('base64url')
-  return `${payload}.${sign(key, payload).toString('base64url')}`
+  const iv = randomBytes(IV_BYTES)
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const plaintext = JSON.stringify({
+    e: email,
+    x: Math.floor(nowMs / 1000) + CONFIRM_TOKEN_TTL_SECONDS,
+  })
+  const sealed = Buffer.concat([
+    cipher.update(plaintext, 'utf8'),
+    cipher.final(),
+  ])
+  return Buffer.concat([iv, sealed, cipher.getAuthTag()]).toString('base64url')
 }
 
 /**
@@ -74,32 +86,40 @@ export function createConfirmToken(
  * @param nowMs - The current time, injectable for tests.
  * @returns The address, or why the token was refused.
  *
- * @remarks The signature is checked, in constant time, before the payload is
- * parsed, so nothing about a forged token is read. Only then is the expiry
- * compared, so `expired` is reported only for a token this site signed.
+ * @remarks GCM checks the tag before any plaintext is returned, so nothing
+ * from a forged token is read. Only then is the expiry compared, so
+ * `expired` is reported only for a token this site sealed.
  */
 export function verifyConfirmToken(
   token: unknown,
   key: Buffer,
   nowMs: number = Date.now(),
 ): ConfirmTokenResult {
-  if (typeof token !== 'string' || token.length > 2048) {
+  if (
+    typeof token !== 'string' ||
+    token.length > 2048 ||
+    !/^[\w-]+$/.test(token)
+  ) {
     return { ok: false, reason: 'invalid' }
   }
-  const [payload, signature, ...rest] = token.split('.')
-  if (!payload || !signature || rest.length > 0) {
-    return { ok: false, reason: 'invalid' }
-  }
-
-  const expected = sign(key, payload)
-  const given = Buffer.from(signature, 'base64url')
-  if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
+  const raw = Buffer.from(token, 'base64url')
+  if (raw.length <= IV_BYTES + TAG_BYTES) {
     return { ok: false, reason: 'invalid' }
   }
 
   let claims: unknown
   try {
-    claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
+    const decipher = createDecipheriv(
+      'aes-256-gcm',
+      key,
+      raw.subarray(0, IV_BYTES),
+    )
+    decipher.setAuthTag(raw.subarray(raw.length - TAG_BYTES))
+    const plaintext = Buffer.concat([
+      decipher.update(raw.subarray(IV_BYTES, raw.length - TAG_BYTES)),
+      decipher.final(),
+    ]).toString('utf8')
+    claims = JSON.parse(plaintext)
   } catch {
     return { ok: false, reason: 'invalid' }
   }

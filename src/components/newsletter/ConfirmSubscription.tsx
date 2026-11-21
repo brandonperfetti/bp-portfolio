@@ -70,7 +70,8 @@ export function ConfirmSubscription({
 
   return (
     <div className="max-w-2xl">
-      {result !== 'confirmed' ? (
+      {/* Hidden once the answer is final: pressing again cannot change it. */}
+      {result === null || result === 'failed' ? (
         <Button type="button" onClick={confirm} disabled={loading}>
           {loading ? 'Confirming…' : 'Confirm'}
         </Button>

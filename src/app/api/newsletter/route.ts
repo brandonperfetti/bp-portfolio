@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import * as z from 'zod'
 
-import { buildConfirmEmail } from '@/lib/email/newsletterConfirmEmail'
+import {
+  buildConfirmEmail,
+  confirmLinkOrigin,
+} from '@/lib/email/newsletterConfirmEmail'
 import {
   createConfirmToken,
   getConfirmTokenKey,
@@ -44,7 +47,7 @@ const UNAVAILABLE_MESSAGE = 'Subscriptions are unavailable right now.'
  * @remarks
  * **Double opt-in (Brandon, on #411).** A submit changes nothing on the
  * list. It sends one email to the address, with a link to
- * `/newsletter/confirm` carrying a signed, expiring token for that address
+ * `/newsletter/confirm` carrying a sealed, expiring token for that address
  * (`newsletterConfirmToken.ts`); only the confirmation
  * (`/api/newsletter/confirm`) joins the list, or rejoins it for a reader who
  * unsubscribed. So an address joins only when its owner asks to, which this
@@ -91,7 +94,10 @@ export async function POST(req: Request) {
   }
 
   const { email } = parsed.data
-  const message = buildConfirmEmail(createConfirmToken(email, key))
+  const message = buildConfirmEmail(
+    createConfirmToken(email, key),
+    confirmLinkOrigin(req),
+  )
   const from = process.env.CONTACT_FROM_EMAIL ?? 'info@brandonperfetti.com'
 
   try {

@@ -105,7 +105,7 @@ const makeRequest = (body: unknown) =>
 
 const NOW = Date.UTC(2026, 10, 21, 12, 0, 0)
 
-/** A token signed with the test secret, as the sign-up email carries. */
+/** A token sealed with the test secret, as the sign-up email carries. */
 const tokenFor = async (email: string, nowMs = Date.now()) => {
   const { createConfirmToken, getConfirmTokenKey } =
     await import('@/lib/email/newsletterConfirmToken')
@@ -242,15 +242,11 @@ describe('POST /api/newsletter/confirm (#407)', () => {
   })
 
   it('cannot be replayed for another address: the body names none, and an edited payload fails', async () => {
-    const [, signature] = (await tokenFor('reader@example.test')).split('.')
-    const victimPayload = Buffer.from(
-      JSON.stringify({ e: 'victim@example.test', x: Date.now() / 1000 + 3600 }),
-    ).toString('base64url')
+    const raw = Buffer.from(await tokenFor('reader@example.test'), 'base64url')
+    raw[14] ^= 0x01 // one bit of the sealed address
     const POST = await loadPost()
 
-    const edited = await POST(
-      makeRequest({ token: `${victimPayload}.${signature}` }),
-    )
+    const edited = await POST(makeRequest({ token: raw.toString('base64url') }))
     const extraField = await POST(
       makeRequest({
         token: await tokenFor('reader@example.test'),
