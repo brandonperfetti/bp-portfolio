@@ -29,12 +29,12 @@ carries #411.
   confirm." Opening the link changes nothing either, because mail scanners
   open links; the address joins only when its owner presses **Confirm** on
   that page. Each link works once and stops working after 3 days. Brandon
-  chose double opt-in for every form sign-up on #411, replacing the single
-  opt-in of v2026.11.21 (#411).
+  chose double opt-in for every Newsletter Signup sign-up, new or returning,
+  on #411, replacing the single opt-in of v2026.11.21 (#411).
 - **A reader who unsubscribed can rejoin.** Confirming from the emailed link
   clears an earlier unsubscribe, and the site reads the contact back before
   saying "You're subscribed." Only the confirmation does this; an old link
-  pressed again after an unsubscribe answers "This link has already been
+  confirmed again after an unsubscribe answers "This link has already been
   used." and changes nothing (#407, #411).
 - **A failed write says so.** When Resend refuses or cannot be reached, the
   form answers "Couldn't sign you up right now. Please try again later.", and
@@ -44,20 +44,25 @@ carries #411.
 - **Signing up, the contact form's opt-in and the newsletter all add an
   existing contact to the list's segment.** Before this release only a new
   contact got the segment (#406, #411).
-- **The sign-up and contact-form opt-ins no longer create an existing
-  contact blind.** They look the contact up first and create only an absent
-  one. A live Resend test after #411 merged found that creating a contact
-  that already exists returns the same contact and flipped an unsubscribed
-  one back to subscribed; the connector used may have sent
-  `unsubscribed: false` by default, so a plain create may not do that. On
-  v2026.11.21 both paths created without looking, after the person ticked
-  the opt-in box, so a past unsubscribe could be overridden without a
-  confirmation. Neither path re-subscribes anyone now (#406, #411).
-- **Email addresses are kept out of Sentry.** Resend puts the address in its
-  URL path and Sentry records request paths and bodies, so error and
-  performance reports from the forms could carry it. The server and edge
-  configs now redact addresses from events, breadcrumbs, spans and
-  transactions, for every route (#411).
+- **No capture path creates an existing contact blind.** On v2026.11.21
+  the newsletter form, Clerk sign-up and the contact form's opt-in all
+  created the contact without looking it up. A live Resend test after #411
+  merged found that creating a contact that already exists returns the same
+  contact and flipped an unsubscribed one back to subscribed; the connector
+  used may have sent `unsubscribed: false` by default, so a plain create may
+  not do that. If it does, anyone could put an unsubscribed address back on
+  the list through the newsletter form, which asked for no proof of owning
+  the address, and sign-up or the contact form could override a past
+  unsubscribe without a confirmation. The newsletter form now only sends a
+  confirmation email; sign-up and the contact form look the contact up
+  first, create only an absent one, and never re-subscribe anyone (#406,
+  #411).
+- **Sentry no longer records email addresses from requests.** Resend puts
+  the address in its URL path and Sentry records request paths and bodies,
+  so error and performance reports from the forms could carry it. The server
+  and edge configs now redact addresses from the request on error and
+  transaction events, and from breadcrumbs and spans, for every route. An
+  exception message or log line is not redacted (#411).
 
 **What this release leaves.**
 
@@ -72,7 +77,8 @@ carries #411.
 - **Two links for one address.** An address that signs up twice within 3
   days holds two links, each usable once, so the second can still re-subscribe
   after an unsubscribe until it expires (#411).
-- **Each capture makes 2 to 5 Resend calls where it made 1**, so a burst is
+- **Each capture makes 2 to 5 Resend calls where it made 1** (more when a
+  contact has many pages of segments), so a burst is
   likelier to hit Resend's rate limit, which the form answers with the 503
   above (#411).
 - **A submit made before the Turnstile widget has loaded** can still get a
@@ -106,15 +112,16 @@ re-subscribes a contact. Segment adds were not tested live.
 - `captureContact` looks the address up, creates only an absent contact,
   adds an existing one to the segment if missing (every page of segments is
   read), and with `rejoin` updates and reads back an unsubscribed contact. It
-  returns an outcome and never throws; failures are reported as
-  `NewsletterCaptureError` tagged by stage, with no address (#406, #407,
-  #409, #411).
+  returns an outcome and never throws. The two newsletter routes report a
+  failure as `NewsletterCaptureError`, tagged by stage, with no address; the
+  webhook and the contact form ignore the outcome (#406, #407, #409, #411).
 - `src/lib/observability/sentryConfig.ts` holds the address redaction for
-  `beforeSend`, `beforeBreadcrumb`, `beforeSendSpan` and
-  `beforeSendTransaction`, including JSON bodies and addresses written with
+  `beforeSend` and `beforeSendTransaction` (the event's `request`),
+  `beforeBreadcrumb` and `beforeSendSpan`, including JSON bodies and addresses written with
   unicode escapes (#411).
-- No Payload schema change and no migration. `docs/AUTH.md`, `FEATURES.md`,
-  `SECURITY.md`, `JOURNEYS.md`, `ARCHITECTURE.md` and `NAVIGATION.md` describe
+- No Payload schema change and no migration. `docs/AUTH.md`, `docs/FEATURES.md`,
+  `docs/SECURITY.md`, `docs/JOURNEYS.md`, `docs/ARCHITECTURE.md` and
+  `docs/NAVIGATION.md` describe
   the two-step path (#411).
 
 ## v2026.11.21
