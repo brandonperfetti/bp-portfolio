@@ -160,7 +160,9 @@ describe('POST /api/newsletter (#367)', () => {
   })
 
   it('sets an existing unsubscribed reader back to subscribed and into the segment (#407, #406)', async () => {
-    getContactMock.mockResolvedValue(existingContact(true))
+    getContactMock
+      .mockResolvedValueOnce(existingContact(true))
+      .mockResolvedValueOnce(existingContact(false))
     const POST = await loadPost()
 
     const res = await POST(makeRequest())
@@ -187,7 +189,9 @@ describe('POST /api/newsletter (#367)', () => {
     const fresh = await bodyOf()
     getContactMock.mockResolvedValue(existingContact(false))
     const subscribed = await bodyOf()
-    getContactMock.mockResolvedValue(existingContact(true))
+    getContactMock
+      .mockResolvedValueOnce(existingContact(true))
+      .mockResolvedValueOnce(existingContact(false))
     const unsubscribed = await bodyOf()
 
     countingLimiter()

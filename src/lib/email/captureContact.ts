@@ -43,6 +43,7 @@ type ResendError = {
   statusCode?: number | null
 }
 
+/** Log and shape a failure. Resend's message stays out: it can echo the address. */
 function failed(
   stage: CaptureStage,
   error: ResendError | null | undefined,
@@ -51,13 +52,37 @@ function failed(
   console.error(`[captureContact] ${logMessage}`, {
     stage,
     name: error?.name,
-    message: error?.message?.slice(0, 300),
+    statusCode: error?.statusCode ?? null,
   })
   return {
     status: 'failed',
     stage,
     errorName: error?.name,
     statusCode: error?.statusCode ?? null,
+  }
+}
+
+/**
+ * Whether the contact is in the segment, reading every page of its segments.
+ * Returns the Resend error instead when a page cannot be read.
+ */
+async function isInSegment(
+  resend: Resend,
+  email: string,
+  segmentId: string,
+): Promise<boolean | ResendError> {
+  let after: string | undefined
+  for (;;) {
+    const page = await resend.contacts.segments.list({
+      email,
+      limit: SEGMENT_PAGE_LIMIT,
+      ...(after ? { after } : {}),
+    })
+    if (page.error) return page.error
+    const segments = page.data?.data ?? []
+    if (segments.some((s) => s.id === segmentId)) return true
+    if (!page.data?.has_more || segments.length === 0) return false
+    after = segments[segments.length - 1].id
   }
 }
 
@@ -83,8 +108,13 @@ function failed(
  * - **absent:** create it, with the segment, as before;
  * - **present:** with `rejoin` and `unsubscribed: true`, update it to
  *   `unsubscribed: false` (the field is the contact's global subscription
- *   status); then, when a segment is configured and the contact is not in
- *   it, add it. Names on an existing contact are left as they are.
+ *   status) and read it back, since Resend's docs never say a `false`
+ *   re-subscribes: a contact still unsubscribed after the update is a
+ *   `resubscribe` failure, never a false `captured`. Then, when a segment
+ *   is configured and the contact is not in it (every page of its segments
+ *   is read), add it. An unsubscribed contact joins the segment too; that
+ *   does not subscribe it, since a broadcast skips globally unsubscribed
+ *   contacts. Names on an existing contact are left as they are.
  *
  * Two submits racing past the lookup both create; if Resend refuses the
  * second, that call reports a `create` failure and a retry takes the
@@ -119,7 +149,7 @@ export async function captureContact(
     const absent =
       existing.error?.name === 'not_found' || existing.error?.statusCode === 404
     if (existing.error && !absent) {
-      return failed('lookup', existing.error, 'Resend contact lookup failed')
+      return failed(stage, existing.error, 'Resend contact lookup failed')
     }
 
     if (absent || !existing.data) {
@@ -130,7 +160,7 @@ export async function captureContact(
         lastName: contact.lastName,
         ...(segmentId ? { segments: [{ id: segmentId }] } : {}),
       })
-      if (error) return failed('create', error, 'Resend contact create failed')
+      if (error) return failed(stage, error, 'Resend contact create failed')
       return { status: 'captured' }
     }
 
@@ -140,31 +170,30 @@ export async function captureContact(
         email,
         unsubscribed: false,
       })
-      if (error) {
-        return failed('resubscribe', error, 'Resend contact resubscribe failed')
+      if (error)
+        return failed(stage, error, 'Resend contact resubscribe failed')
+      const after = await resend.contacts.get({ email })
+      if (after.error || after.data?.unsubscribed !== false) {
+        return failed(
+          stage,
+          after.error ?? { name: 'resubscribe_not_applied' },
+          'Resend contact still unsubscribed after update',
+        )
       }
     }
 
     if (segmentId) {
       stage = 'segment'
-      const memberships = await resend.contacts.segments.list({
-        email,
-        limit: SEGMENT_PAGE_LIMIT,
-      })
-      if (memberships.error) {
-        return failed(
-          'segment',
-          memberships.error,
-          'Resend segment read failed',
-        )
+      const member = await isInSegment(resend, email, segmentId)
+      if (typeof member !== 'boolean') {
+        return failed(stage, member, 'Resend segment read failed')
       }
-      const inSegment = memberships.data?.data.some((s) => s.id === segmentId)
-      if (!inSegment) {
+      if (!member) {
         const { error } = await resend.contacts.segments.add({
           email,
           segmentId,
         })
-        if (error) return failed('segment', error, 'Resend segment add failed')
+        if (error) return failed(stage, error, 'Resend segment add failed')
       }
     }
 

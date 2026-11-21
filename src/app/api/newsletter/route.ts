@@ -30,8 +30,8 @@ const CAPTURE_FAILED_MESSAGE =
 /**
  * A newsletter capture Resend did not complete, as reported to Sentry.
  *
- * @remarks Carries only the stage and Resend's error name and status: no
- * address, and not Resend's message, which can echo one.
+ * @remarks Its message names only the stage; Resend's error name and status
+ * go as tags. No address, and not Resend's message, which can echo one.
  */
 class NewsletterCaptureError extends Error {
   constructor(stage: string) {
@@ -114,15 +114,15 @@ export async function POST(req: Request) {
   )
 
   if (outcome.status !== 'captured') {
-    const stage = outcome.status === 'failed' ? outcome.stage : 'skipped'
-    captureException(new NewsletterCaptureError(stage), {
+    const failure =
+      outcome.status === 'failed'
+        ? outcome
+        : { stage: 'skipped', errorName: undefined, statusCode: null }
+    captureException(new NewsletterCaptureError(failure.stage), {
       tags: {
-        'newsletter.capture_stage': stage,
-        'resend.error_name':
-          (outcome.status === 'failed' && outcome.errorName) || 'none',
-        'resend.status_code': String(
-          (outcome.status === 'failed' && outcome.statusCode) || 'none',
-        ),
+        'newsletter.capture_stage': failure.stage,
+        'resend.error_name': failure.errorName ?? 'none',
+        'resend.status_code': String(failure.statusCode ?? 'none'),
       },
     })
     return NextResponse.json(

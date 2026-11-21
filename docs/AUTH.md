@@ -55,8 +55,10 @@
   and a lookup of an absent one answers `404 not_found` (measured
   2026-11-21). A new address is created in the segment. An existing contact
   is added to `RESEND_CONTACT_SEGMENT_ID` when it is not already in it, on
-  every path (#406); its names and its opt-out are left as they are, except
-  on the newsletter path below:
+  every path (#406), an unsubscribed one included: segment membership does
+  not subscribe it, because a broadcast skips globally unsubscribed
+  contacts. Its names and its opt-out are left as they are, except on the
+  newsletter path below:
   1. Sign-up → explicit opt-in checkbox (unchecked by default) inside the
      sign-up form, then the Clerk webhook `POST /api/clerk/webhook` (svix
      signature verified with `CLERK_WEBHOOK_SIGNING_SECRET`), which captures
@@ -71,7 +73,9 @@
      address, which sign-up does (Clerk's email code, or Google).
      **A reader who unsubscribed may rejoin here** (Brandon, on #404; #407):
      an existing contact with `unsubscribed: true` is updated to
-     `unsubscribed: false`, then put in the segment. Only this path does it;
+     `unsubscribed: false` and read back (Resend's docs never say a `false`
+     re-subscribes, so a contact still unsubscribed counts as a failure, not
+     a subscription), then put in the segment. Only this path does it;
      the webhook honours the sign-up's `mailingListOptIn` choice and the
      contact form its box, and neither clears an opt-out. **The consent gap
      is wider for it:** with no confirmation email, anyone can submit an

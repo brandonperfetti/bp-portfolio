@@ -132,6 +132,19 @@ describe('captureContact', () => {
       )
       expect(errorSpy).toHaveBeenCalled()
     })
+
+    it("keeps Resend's message, which can echo the address, out of the log", async () => {
+      mocks.create.mockResolvedValue({
+        data: null,
+        error: {
+          statusCode: 422,
+          name: 'validation_error',
+          message: 'a@example.com is invalid',
+        },
+      })
+      await captureContact({ email: 'a@example.com' })
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('a@example.com')
+    })
   })
 
   describe('an existing contact (#406)', () => {
@@ -156,6 +169,23 @@ describe('captureContact', () => {
       await expect(captureContact({ email: 'a@example.com' })).resolves.toEqual(
         { status: 'captured' },
       )
+      expect(mocks.addSegment).not.toHaveBeenCalled()
+    })
+
+    it('reads every page of segments before deciding to add', async () => {
+      mocks.get.mockResolvedValue(existing(false))
+      mocks.listSegments
+        .mockResolvedValueOnce({
+          ...segmentsPage(['a', 'b']),
+          data: { ...segmentsPage(['a', 'b']).data, has_more: true },
+        })
+        .mockResolvedValueOnce(segmentsPage(['seg-1']))
+      await captureContact({ email: 'a@example.com' })
+      expect(mocks.listSegments).toHaveBeenLastCalledWith({
+        email: 'a@example.com',
+        limit: 100,
+        after: 'b',
+      })
       expect(mocks.addSegment).not.toHaveBeenCalled()
     })
 
@@ -202,7 +232,9 @@ describe('captureContact', () => {
 
   describe('rejoin (#407)', () => {
     it('sets an unsubscribed contact back to subscribed, then into the segment', async () => {
-      mocks.get.mockResolvedValue(existing(true))
+      mocks.get
+        .mockResolvedValueOnce(existing(true))
+        .mockResolvedValueOnce(existing(false))
       const outcome = await captureContact(
         { email: 'a@example.com' },
         { rejoin: true },
@@ -216,6 +248,21 @@ describe('captureContact', () => {
         email: 'a@example.com',
         segmentId: 'seg-1',
       })
+    })
+
+    it('reports a failure when the contact is still unsubscribed after the update', async () => {
+      mocks.get.mockResolvedValue(existing(true))
+      const outcome = await captureContact(
+        { email: 'a@example.com' },
+        { rejoin: true },
+      )
+      expect(outcome).toMatchObject({
+        status: 'failed',
+        stage: 'resubscribe',
+        errorName: 'resubscribe_not_applied',
+      })
+      expect(mocks.update).toHaveBeenCalledTimes(1)
+      expect(mocks.addSegment).not.toHaveBeenCalled()
     })
 
     it('makes no update for a contact already subscribed', async () => {
