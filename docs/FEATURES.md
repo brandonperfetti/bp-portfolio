@@ -91,7 +91,10 @@
 - `/api/newsletter` POST adds the Newsletter Signup block's address to the
   same Resend list (#367; it replaces v3's `/api/mailinglist`). Same guards
   as `/api/contact`: same-origin, per-IP rate limit, 503 on a limiter outage,
-  Turnstile when configured.
+  Turnstile when configured. A reader who unsubscribed is set back to
+  subscribed (#407); a Resend failure answers a retryable 503 rather than
+  "subscribed" (#409). Every capture path puts an existing contact in the
+  segment (#406). Mechanism: `docs/AUTH.md` § Email capture.
 
 ## SEO surfaces
 

@@ -468,7 +468,10 @@ stay there.
   `src/app/api/clerk/webhook/route.ts`, `hasMailingListOptIn`]. The
   Newsletter Signup block's form exists only to subscribe, so submitting its
   one email field is the opt-in, and its answer is the same whether or not
-  the address was already on the list (#367) [source:
+  the address was already on the list (#367), and the same for every
+  address when Resend fails (#409). It alone clears an earlier unsubscribe
+  (#407), so with single opt-in a third party can re-subscribe an address
+  whose owner left; the route's rate limit and Turnstile bound it [source:
   `src/app/api/newsletter/route.ts`]. Mechanism:
   `docs/AUTH.md` § Email capture.
 - **Broadcasts:** Respect the marketing consent field, and honor

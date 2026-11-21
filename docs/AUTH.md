@@ -46,9 +46,17 @@
 
 ## Email capture
 
-- Three capture paths, one shared helper (`src/lib/email/captureContact.ts`
-  — logs and swallows every failure; capture is never the caller's
-  primary job):
+- Three capture paths, one shared helper (`src/lib/email/captureContact.ts`,
+  which never throws and returns an outcome only the newsletter route reads;
+  capture is never the other two callers' primary job, so they ignore it).
+  It looks the address up by email first, because Resend documents no
+  answer for a create on an existing contact (its OpenAPI spec lists only a
+  201; one user report says it returns a plain success, resend-node#494),
+  and a lookup of an absent one answers `404 not_found` (measured
+  2026-11-21). A new address is created in the segment. An existing contact
+  is added to `RESEND_CONTACT_SEGMENT_ID` when it is not already in it, on
+  every path (#406); its names and its opt-out are left as they are, except
+  on the newsletter path below:
   1. Sign-up → explicit opt-in checkbox (unchecked by default) inside the
      sign-up form, then the Clerk webhook `POST /api/clerk/webhook` (svix
      signature verified with `CLERK_WEBHOOK_SIGNING_SECRET`), which captures
@@ -60,10 +68,20 @@
      email field whose only job is subscribing, so submitting it is the
      opt-in; there is no checkbox. Single opt-in, like the contact form's
      box: no confirmation email, so nothing proves the visitor owns the
-     address, which sign-up does (Clerk's email code, or Google). Its
-     answer never says whether the address was already on the list, and it
-     does not ask Resend to clear an earlier unsubscribe (no `unsubscribed`
-     field is sent). Guards
+     address, which sign-up does (Clerk's email code, or Google).
+     **A reader who unsubscribed may rejoin here** (Brandon, on #404; #407):
+     an existing contact with `unsubscribed: true` is updated to
+     `unsubscribed: false`, then put in the segment. Only this path does it;
+     the webhook honours the sign-up's `mailingListOptIn` choice and the
+     contact form its box, and neither clears an opt-out. **The consent gap
+     is wider for it:** with no confirmation email, anyone can submit an
+     address, and now that includes putting back on the list someone who
+     chose to leave. The rate limit and Turnstile on this route are what
+     bound that. Its success answer is the same for a new address and an
+     existing one, subscribed or not. When Resend refuses a write or cannot
+     be reached it answers 503 "Couldn't subscribe you right now. Please try
+     again later.", the same for every address, and reports the failed stage
+     to Sentry with no address (#409). Guards
      shared with `/api/contact` (`src/lib/security/publicFormGuard.ts`).
      The capture rule:
      `docs/SECURITY.md` § Consent and analytics data.

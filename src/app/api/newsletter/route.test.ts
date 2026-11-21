@@ -24,11 +24,42 @@ vi.mock('@upstash/redis', () => ({
 }))
 
 const createContactMock = vi.fn()
+const getContactMock = vi.fn()
+const updateContactMock = vi.fn()
+const listSegmentsMock = vi.fn()
+const addSegmentMock = vi.fn()
 vi.mock('resend', () => ({
   Resend: class {
-    contacts = { create: (...args: unknown[]) => createContactMock(...args) }
+    contacts = {
+      create: (...args: unknown[]) => createContactMock(...args),
+      get: (...args: unknown[]) => getContactMock(...args),
+      update: (...args: unknown[]) => updateContactMock(...args),
+      segments: {
+        list: (...args: unknown[]) => listSegmentsMock(...args),
+        add: (...args: unknown[]) => addSegmentMock(...args),
+      },
+    }
   },
 }))
+
+/** Resend's answer to a lookup of an absent contact (measured 2026-11-21). */
+const NOT_FOUND = {
+  data: null,
+  error: { statusCode: 404, message: 'Contact not found', name: 'not_found' },
+}
+
+/** A lookup that finds the address, opted in or out. */
+const existingContact = (unsubscribed: boolean) => ({
+  data: {
+    id: 'c_existing',
+    email: 'reader@example.test',
+    unsubscribed,
+    first_name: null,
+    last_name: null,
+    created_at: '2026-01-01T00:00:00Z',
+  },
+  error: null,
+})
 
 const captureExceptionMock = vi.fn()
 vi.mock('@sentry/nextjs', () => ({
@@ -95,6 +126,16 @@ beforeEach(() => {
   vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'test-token')
   vi.stubEnv('PAYLOAD_SECRET', TEST_PAYLOAD_SECRET)
   createContactMock.mockResolvedValue({ data: { id: 'c_1' }, error: null })
+  getContactMock.mockResolvedValue(NOT_FOUND)
+  updateContactMock.mockResolvedValue({
+    data: { id: 'c_existing' },
+    error: null,
+  })
+  listSegmentsMock.mockResolvedValue({
+    data: { object: 'list', has_more: false, data: [] },
+    error: null,
+  })
+  addSegmentMock.mockResolvedValue({ data: { id: SEGMENT_ID }, error: null })
   countingLimiter()
 })
 
@@ -118,29 +159,91 @@ describe('POST /api/newsletter (#367)', () => {
     })
   })
 
-  it('answers an address already on the list exactly as a new one', async () => {
+  it('sets an existing unsubscribed reader back to subscribed and into the segment (#407, #406)', async () => {
+    getContactMock.mockResolvedValue(existingContact(true))
     const POST = await loadPost()
-    const fresh = await POST(makeRequest())
 
-    createContactMock.mockResolvedValue({
-      data: null,
-      error: { name: 'conflict', message: 'Contact already exists' },
+    const res = await POST(makeRequest())
+
+    expect(res.status).toBe(200)
+    expect(createContactMock).not.toHaveBeenCalled()
+    expect(updateContactMock).toHaveBeenCalledWith({
+      email: 'reader@example.test',
+      unsubscribed: false,
     })
-    const duplicate = await POST(makeRequest())
-
-    expect(duplicate.status).toBe(fresh.status)
-    expect(await duplicate.json()).toEqual(await fresh.json())
+    expect(addSegmentMock).toHaveBeenCalledWith({
+      email: 'reader@example.test',
+      segmentId: SEGMENT_ID,
+    })
   })
 
-  it('answers a Resend failure as a success too, so no answer differs', async () => {
+  it('answers new, subscribed, unsubscribed and failed captures with one reply each, byte for byte (#407, #409)', async () => {
     const POST = await loadPost()
-    const fresh = await POST(makeRequest())
+    const bodyOf = async () => {
+      const res = await POST(makeRequest())
+      return { status: res.status, body: await res.text() }
+    }
 
+    const fresh = await bodyOf()
+    getContactMock.mockResolvedValue(existingContact(false))
+    const subscribed = await bodyOf()
+    getContactMock.mockResolvedValue(existingContact(true))
+    const unsubscribed = await bodyOf()
+
+    countingLimiter()
+    getContactMock.mockResolvedValue(NOT_FOUND)
+    createContactMock.mockResolvedValue({
+      data: null,
+      error: { statusCode: 500, name: 'internal_server_error', message: 'x' },
+    })
+    const refused = await bodyOf()
     createContactMock.mockRejectedValue(new Error('network down'))
-    const failed = await POST(makeRequest())
+    const unreachable = await bodyOf()
+    getContactMock.mockResolvedValue(existingContact(true))
+    updateContactMock.mockResolvedValue({
+      data: null,
+      error: { statusCode: 500, name: 'application_error', message: 'x' },
+    })
+    const rejoinRefused = await bodyOf()
 
-    expect(failed.status).toBe(200)
-    expect(await failed.json()).toEqual(await fresh.json())
+    expect(fresh.status).toBe(200)
+    expect(subscribed).toEqual(fresh)
+    expect(unsubscribed).toEqual(fresh)
+    expect(refused.status).toBe(503)
+    expect(JSON.parse(refused.body)).toEqual({
+      message: "Couldn't subscribe you right now. Please try again later.",
+    })
+    expect(unreachable).toEqual(refused)
+    expect(rejoinRefused).toEqual(refused)
+  })
+
+  it('reports a failed capture to Sentry by stage, with no address in it (#409)', async () => {
+    createContactMock.mockResolvedValue({
+      data: null,
+      error: {
+        statusCode: 422,
+        name: 'validation_error',
+        message: 'reader@example.test is invalid',
+      },
+    })
+    const POST = await loadPost()
+
+    const res = await POST(makeRequest())
+
+    expect(res.status).toBe(503)
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1)
+    const [captured, hint] = captureExceptionMock.mock.calls[0] as [
+      Error,
+      { tags: Record<string, string> },
+    ]
+    expect(hint.tags).toEqual({
+      'newsletter.capture_stage': 'create',
+      'resend.error_name': 'validation_error',
+      'resend.status_code': '422',
+    })
+    expect(
+      JSON.stringify([captured.message, captured.stack, hint]),
+    ).not.toContain('reader@example.test')
   })
 
   it.each([
