@@ -723,14 +723,33 @@ type SentryEventRequestLike = {
  * and the request-data integration attaches them to every event, sampled
  * transactions included, which never pass through `beforeSend`. The
  * newsletter and contact forms post an address, so an error reported while
- * handling one, such as `NewsletterCaptureError` (#409), would carry it.
+ * handling one, such as `NewsletterCaptureError` (#409), would carry it. A
+ * body that is a JSON string is parsed, redacted on its decoded values and
+ * serialized again, so JSON escapes cannot hide an address.
  */
 export function sentryRedactEventRequest<E extends SentryEventRequestLike>(
   event: E,
 ): E {
   if (!event.request) return event
-  return {
-    ...event,
-    request: redactRecord(event.request as Record<string, unknown>),
+  const request = redactRecord(event.request as Record<string, unknown>)
+  const raw = (event.request as { data?: unknown }).data
+  const parsed = typeof raw === 'string' ? parseJsonContainer(raw) : undefined
+  if (parsed !== undefined) {
+    // Redact the decoded values: an escape such as `\u002e` in the domain
+    // hides an address from the pattern in the raw string.
+    request.data = JSON.stringify(redactValue(parsed))
+  }
+  return { ...event, request }
+}
+
+/** A JSON object or array parsed from `text`, else `undefined`. */
+function parseJsonContainer(text: string): unknown {
+  const start = text.trimStart()[0]
+  if (start !== '{' && start !== '[') return undefined
+  try {
+    const value: unknown = JSON.parse(text)
+    return value !== null && typeof value === 'object' ? value : undefined
+  } catch {
+    return undefined
   }
 }

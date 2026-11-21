@@ -481,8 +481,12 @@ stay there.
   Newsletter Signup block's form is **double opt-in** (#411): a submit only
   emails the address an encrypted, expiring link, and the address joins the
   list, or rejoins it after an unsubscribe (#407), only when its owner
-  presses Confirm on the page the link opens; each link works once, so an
-  old link cannot undo a later unsubscribe. So no one can put another
+  presses Confirm on the page the link opens. Each link works once, so a
+  link already used cannot undo a later unsubscribe; an unused link issued
+  before the unsubscribe can still confirm until it expires (3 days), which
+  only the inbox's owner, or someone the link reached, can do. Single use
+  is shared across instances through Upstash; a deploy without Upstash
+  holds it per instance only. So no one can put another
   person on the list, or back on it; the form can still send a
   confirmation to someone else's address, which its rate limit bounds, and
   Turnstile too when `TURNSTILE_SECRET_KEY` is set. Every success reply is

@@ -281,6 +281,54 @@ describe('POST /api/newsletter/confirm (#407)', () => {
     expect((await POST(makeRequest({ token }))).status).toBe(200)
   })
 
+  it('keeps the link used when the join fails after the re-subscribe may have applied', async () => {
+    getContactMock
+      .mockResolvedValueOnce(existingContact(true))
+      .mockResolvedValueOnce(existingContact(false))
+    addSegmentMock.mockResolvedValueOnce({
+      data: null,
+      error: { name: 'application_error', statusCode: 500, message: 'x' },
+    })
+    const token = await tokenFor('reader@example.test')
+    const POST = await loadPost()
+
+    const res = await POST(makeRequest({ token }))
+
+    expect(res.status).toBe(503)
+    expect(await res.json()).toMatchObject({ status: 'incomplete' })
+    expect(redisDelMock).not.toHaveBeenCalled()
+    // The reader unsubscribes again; the same link must not put them back.
+    getContactMock.mockResolvedValue(existingContact(true))
+    updateContactMock.mockClear()
+    expect((await POST(makeRequest({ token }))).status).toBe(410)
+    expect(updateContactMock).not.toHaveBeenCalled()
+  })
+
+  it('confirms once when two presses of the same link overlap', async () => {
+    let releaseLookup: () => void = () => {}
+    getContactMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseLookup = () => resolve(NOT_FOUND)
+        }),
+    )
+    const token = await tokenFor('reader@example.test')
+    const POST = await loadPost()
+
+    const first = POST(makeRequest({ token }))
+    await vi.waitFor(() => expect(getContactMock).toHaveBeenCalledTimes(1))
+    const second = await POST(makeRequest({ token }))
+
+    expect(second.status).toBe(410)
+    expect(await second.json()).toMatchObject({ status: 'used' })
+    expect(getContactMock).toHaveBeenCalledTimes(1)
+    releaseLookup()
+    const done = await first
+    expect(done.status).toBe(200)
+    expect(await done.json()).toMatchObject({ status: 'confirmed' })
+    expect(createContactMock).toHaveBeenCalledTimes(1)
+  })
+
   it('answers 503 and joins no one when the single-use store fails', async () => {
     redisSetMock.mockRejectedValueOnce(new Error('upstash down'))
     const POST = await loadPost()
@@ -392,6 +440,7 @@ describe('POST /api/newsletter/confirm (#407)', () => {
     )
 
     expect(res.status).toBe(503)
+    expect(await res.json()).toMatchObject({ status: 'incomplete' })
     expect(addSegmentMock).not.toHaveBeenCalled()
   })
 

@@ -4,7 +4,8 @@ import { useState } from 'react'
 
 import { Button } from '@/components/Button'
 
-type Result = 'confirmed' | 'expired' | 'invalid' | 'used' | 'failed'
+type Result =
+  'confirmed' | 'expired' | 'invalid' | 'used' | 'failed' | 'incomplete'
 
 /** What the page says after each answer from `/api/newsletter/confirm`. */
 const RESULT_COPY: Record<Result, string> = {
@@ -14,6 +15,8 @@ const RESULT_COPY: Record<Result, string> = {
   invalid: "This link doesn't work. Sign up again and I’ll send you a new one.",
   used: 'This link has already been used. To sign up again, use the form and I’ll send you a new one.',
   failed: "Couldn't confirm right now. Please try again in a few minutes.",
+  incomplete:
+    "Couldn't finish confirming. Sign up again in a few minutes and I’ll send you a new link.",
 }
 
 function tokenFromLocation(): string | null {

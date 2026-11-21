@@ -16,7 +16,8 @@ import { guardPublicForm } from '@/lib/security/publicFormGuard'
  * What the confirm page shows for each answer. The page reads `status`, so
  * the copy lives with the page; `message` is a plain fallback.
  */
-type ConfirmStatus = 'confirmed' | 'expired' | 'invalid' | 'used' | 'failed'
+type ConfirmStatus =
+  'confirmed' | 'expired' | 'invalid' | 'used' | 'failed' | 'incomplete'
 
 function answer(status: ConfirmStatus, httpStatus: number, message: string) {
   return NextResponse.json({ status, message }, { status: httpStatus })
@@ -36,9 +37,12 @@ function answer(status: ConfirmStatus, httpStatus: number, message: string) {
  * **Each link works once.** A verified token is claimed in the rate
  * limiter's store before the join (`newsletterTokenUse.ts`), so pressing an
  * old link again answers `used` (410) and never clears an unsubscribe made
- * after it was confirmed. A join that fails releases the claim, so the
- * reader can retry the same link; a store failure answers 503 and joins no
- * one.
+ * after it was confirmed. A join that fails before anything on the list
+ * changed (lookup or create) releases the claim, so the reader can retry the
+ * same link; one that fails later (re-subscribe or segment) keeps it, since
+ * the re-subscribe may have applied, and answers `incomplete`: sign up again
+ * for a new link. If the release itself fails, the link stays used too. A
+ * store failure answers 503 and joins no one.
  *
  * **The join is the existing rejoin path.** `captureContact` with `rejoin`
  * creates a new contact in the segment, or sets an existing unsubscribed one
@@ -98,12 +102,23 @@ export async function POST(req: Request) {
     { rejoin: true },
   )
   if (outcome.status !== 'captured') {
-    await releaseConfirmToken(sealed)
     reportNewsletterFailure(
       outcome.status === 'failed' ? outcome.stage : 'skipped',
       outcome.status === 'failed' ? outcome : {},
     )
-    return answer('failed', 503, "Couldn't confirm right now.")
+    // Free the link only when nothing on the list can have changed: the
+    // lookup or the create failed, or capture was skipped. Past that, the
+    // re-subscribe may have applied, and a freed link could undo a later
+    // unsubscribe, so it stays used and the reader signs up again.
+    const unchanged =
+      outcome.status === 'skipped' ||
+      outcome.stage === 'lookup' ||
+      outcome.stage === 'create'
+    if (unchanged) {
+      await releaseConfirmToken(sealed)
+      return answer('failed', 503, "Couldn't confirm right now.")
+    }
+    return answer('incomplete', 503, "Couldn't finish confirming.")
   }
 
   return answer('confirmed', 200, "You're subscribed.")

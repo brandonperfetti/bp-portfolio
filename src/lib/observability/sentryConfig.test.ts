@@ -967,6 +967,21 @@ describe('email redaction, PR-round stand-in (#409)', () => {
     expect(redactEmailAddresses('READER\\U0040EXAMPLE.TEST')).toBe('[email]')
   })
 
+  it('redacts a JSON body whose address is hidden by escapes anywhere', () => {
+    const body = '{"email":"reader\\u0040example\\u002etest","n":1}'
+    expect(JSON.parse(body).email).toBe('reader@example.test')
+    const out = sentryRedactEventRequest({ request: { data: body } })
+    expect(JSON.parse(out.request?.data as string)).toEqual({
+      email: '[email]',
+      n: 1,
+    })
+    // A non-JSON string body keeps the plain string path.
+    const text = sentryRedactEventRequest({
+      request: { data: 'email=reader%40example.test' },
+    })
+    expect(text.request?.data).toBe('email=[email]')
+  })
+
   it('drops function values, so a toJSON cannot return an address later', () => {
     const out = sentryRedactBreadcrumb({
       category: 'console',
