@@ -116,8 +116,11 @@ re-subscribes a contact. Segment adds were not tested live.
   webhook and the contact form ignore the outcome (#406, #407, #409, #411).
 - `src/lib/observability/sentryConfig.ts` holds the address redaction for
   `beforeSend` and `beforeSendTransaction` (the event's `request`),
-  `beforeBreadcrumb` and `beforeSendSpan`, including JSON bodies and
-  addresses written with unicode escapes (#411).
+  `beforeBreadcrumb` and `beforeSendSpan`, including JSON bodies, addresses
+  written with unicode escapes and internationalized addresses
+  (`reader@bücher.de`, plain or percent-encoded). The pattern scans in linear
+  time; before this release's review it was quadratic on a long run with no
+  `@` (#411, #413).
 - No Payload schema change and no migration. `docs/AUTH.md`,
   `docs/FEATURES.md`, `docs/SECURITY.md`, `docs/JOURNEYS.md`,
   `docs/ARCHITECTURE.md` and `docs/NAVIGATION.md` describe the two-step path
