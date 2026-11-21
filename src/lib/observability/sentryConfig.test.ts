@@ -1001,3 +1001,33 @@ describe('email redaction, PR-round stand-in (#409)', () => {
     expect(JSON.stringify(out)).not.toContain('reader@example.test')
   })
 })
+
+describe('email redaction, release round (#413)', () => {
+  it('redacts internationalized addresses whole, plain or percent-encoded', () => {
+    expect(redactEmailAddresses('reader@bücher.de')).toBe('[email]')
+    expect(redactEmailAddresses('jürgen@example.de')).toBe('[email]')
+    expect(redactEmailAddresses('/contacts/reader%40b%C3%BCcher.de')).toBe(
+      '/contacts/[email]',
+    )
+    expect(redactEmailAddresses('reader@example.xn--p1ai')).toBe('[email]')
+    const out = sentryRedactEventRequest({
+      request: { url: '/api/newsletter', data: '{"email":"reader@bücher.de"}' },
+    })
+    expect(out.request?.data).toBe('{"email":"[email]"}')
+  })
+
+  it('still leaves non-addresses alone', () => {
+    for (const text of ['v1.2.3 @ home', 'x@y.c', 'react@18.3.1']) {
+      expect(redactEmailAddresses(text)).toBe(text)
+    }
+  })
+
+  it('scans a long run with no address in linear time', () => {
+    const run = 'a'.repeat(40_000)
+    const started = performance.now()
+    expect(redactEmailAddresses(run)).toBe(run)
+    expect(redactEmailAddresses(`${run}@example.test`)).toBe('[email]')
+    // Quadratic matching took about 1.1 s here; linear takes a few ms.
+    expect(performance.now() - started).toBeLessThan(250)
+  })
+})

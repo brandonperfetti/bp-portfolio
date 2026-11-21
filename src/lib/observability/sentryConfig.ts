@@ -583,9 +583,24 @@ export function sentryDropNoisyLog<L extends SentryLogLike>(log: L): L | null {
  * An email address, plain, with its `@` percent-encoded as it is in a URL
  * path, or JSON-escaped (`\u0040`) as a hand-written request body can carry
  * it: the route decodes the escape, but Sentry keeps the raw body string.
+ *
+ * Letters are Unicode (`\p{L}`, with marks and digits), so an
+ * internationalized address (`jürgen@bücher.de`, RFC 6531) is redacted whole,
+ * and a domain label may hold percent-encoded UTF-8 (`b%C3%BCcher`), as a URL
+ * path carries it; a top-level label is letters or punycode (`xn--p1ai`).
+ * The lookbehind starts a match only where a run of local-part characters
+ * starts, so a long run with no `@` is scanned once, not once per position
+ * (quadratic before: about 1.1 s for 40,000 characters; CodeRabbit on #413).
+ * Every address the pattern finds is still replaced from its first character.
  */
-const EMAIL_ADDRESS_PATTERN =
-  /[A-Za-z0-9._%+'-]+(?:@|%40|\\u0040)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/gi
+const EMAIL_LOCAL_CHAR = String.raw`[\p{L}\p{M}\p{N}._%+'-]`
+const EMAIL_DOMAIN_LABEL = String.raw`(?:[\p{L}\p{M}\p{N}-]|%[0-9A-F]{2})+`
+const EMAIL_ADDRESS_PATTERN = new RegExp(
+  String.raw`(?<!${EMAIL_LOCAL_CHAR})${EMAIL_LOCAL_CHAR}+(?:@|%40|\\u0040)` +
+    String.raw`${EMAIL_DOMAIN_LABEL}(?:\.${EMAIL_DOMAIN_LABEL})*` +
+    String.raw`\.(?:xn--[a-z0-9-]+|\p{L}{2,})`,
+  'giu',
+)
 
 /** What an address is replaced with. */
 const REDACTED_EMAIL = '[email]'
