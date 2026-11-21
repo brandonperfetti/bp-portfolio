@@ -49,12 +49,13 @@ carries #402, #403 and #404.
 - **`/privacy` does not mention the newsletter form yet.** Its Turnstile
   sentence names only the contact form. #404's PR body has suggested text
   for the CMS; the page is not edited by this release.
-- **Single opt-in.** Like the contact form's box, the newsletter form does
-  not prove the visitor owns the address, so someone could subscribe an
-  address that isn't theirs. Whether either form should confirm first is an
-  open product question (#404).
-- **A reader who unsubscribed is not rejoined** by submitting the form again:
-  the route never asks Resend to clear an opt-out (#407). An address already
+- **Single opt-in, by Brandon's choice** (2026-11-21, #404). Like the contact
+  form's box, the newsletter form does not prove the visitor owns the
+  address, so someone could subscribe an address that isn't theirs.
+- **A reader who unsubscribed may stay off the list** after submitting the
+  form again: the route never asks Resend to clear an earlier opt-out, and
+  how Resend treats that create is not verified. Brandon decided such a
+  reader should be able to rejoin; that is #407. An address already
   in Resend is not added to the segment (#406), and a submit made before the
   Turnstile widget has loaded can get a 403 where Turnstile is enforced
   (#405).
@@ -64,9 +65,10 @@ carries #402, #403 and #404.
   object, such as "Is this private?", still miss it (#403).
 
 **Not proven before release:** a newsletter submit from a published page
-reaching the real Resend list; it was proven by route and component tests and
-a `next dev` server with a fake key. Corvus's retention answer on a deployed
-build; it was proven by the keyed eval against the production model
+reaching the real Resend list; what is proven is the route and the form, by
+route and component tests and a `next dev` server with a fake key, which
+Resend refused. Corvus's retention answer on a deployed build; what is proven
+is the keyed eval against the production model
 (`eval:ci` 88% against the 80% floor). The contact limiter against a real
 Upstash store; its key and rate were proven against the real limiter module
 with the Upstash client faked.
