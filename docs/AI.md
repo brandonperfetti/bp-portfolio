@@ -49,6 +49,9 @@ multi-turn check on a preview, not something the stub can show.
 - `limiter.ts`: Upstash Redis rate limits — per-minute and daily quota,
   keyed by (HMAC-hashed) IP for anonymous requests and by Clerk `userId`
   for signed-in ones (the route builds the key; see the chatGate bullet).
+  The contact form shares this limiter, keyed `contact:<HMAC of the IP>`
+  (#364); no limiter key carries a raw IP (`docs/SECURITY.md` § End-user
+  authorization (Clerk)).
   Without Upstash env, dev fails open; with Upstash configured but
   failing, the route fails closed with a 503 (#390, `limiterOutage.ts`).
   Both: `docs/SECURITY.md` § Operational data and infrastructure.
@@ -907,6 +910,50 @@ counter-examples are pinned as negative tests. The known miss is a follow-up tur
 ("and what about you?"), which carries no topic word; retrieval embeds only the
 latest user message, so that limitation belongs to the module rather than to
 the rule.
+
+##### What Corvus keeps: the retention passage (#401)
+
+`[measured, production, 2026-11-20, v2026.11.20]` asked "Does it store my
+conversation?", Corvus said it had no verified retention policy and sent the
+visitor to the contact form. The answer is published on the privacy page, but
+that is a Page (Pages id 28) and Pages are not embedded (D8(b)), so retrieval
+can never return it.
+
+**The retention facts live in `ABOUT_CORVUS_PRIVACY_PASSAGE`**
+(`src/lib/ai/aboutCorvus.ts`), a second code-owned snippet beside the About
+Corvus passage: collection `about-corvus-privacy`, title "What Corvus keeps",
+source `/privacy`. It is its own snippet because a snippet carries one
+`Source:` path, and these facts are cited to the privacy page, not `/corvus`.
+
+**It is copied from the privacy page's "Corvus, the AI assistant" section and
+must change whenever that section does.** The page is CMS content Brandon edits
+without a deploy; the passage is code, and no test can read the CMS. So editing
+that section of Pages id 28 means editing the passage in the same breath, and
+the passage states nothing the page does not, OpenAI by name included (the
+page names it, so a chat-provider change is a privacy-page change too). The
+code facts behind it, checked 2026-11-20: the chat route writes nothing to the
+database and `CorvusChat` uses no browser storage; `store: false` (§ What the
+provider is sent, above); the anonymous free-message counter is keyed by an
+HMAC digest of the IP with a 30-day TTL (`chatGate.ts`); a signed-in visitor's
+limits are keyed by Clerk user id.
+
+`isCorvusRetentionQuestion` offers it, separately from the about-Corvus rule,
+because the measured question has neither of that rule's signals: no "you", no
+"Corvus", and on production it was a follow-up whose referent only the
+previous turn held. It matches a retention verb (store, save, keep, log,
+retain, delete, happens to) with something of the visitor's as its object
+(the conversation or chat, "my messages", "what I type", "about me"), the
+object-less "what do you keep?", or privacy asked about Corvus by name, a chat or
+the visitor's own things (never privacy with a bare "you").
+"How do I store messages in Redis?" and "do you keep up with React?" do not
+match, and no existing eval input does. It is not exact: "How do I store my
+data in Postgres?" or a question about building a chat app that saves messages
+still matches, and that is accepted, because the cost is one inert passage.
+When both rules match, the retention
+passage goes first. `evals/corvus-subjects.eval.ts` pins the answer in the
+"what Corvus KEEPS" block. Its scorers check the quoted facts, a linked
+citation (only `/privacy` earns it), the absence of the #401 non-answer, and,
+through the `factuality` judge, that no claim contradicts the page.
 
 ##### Eval coverage
 

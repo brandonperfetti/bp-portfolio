@@ -137,6 +137,61 @@ export const ABOUT_CORVUS_PASSAGE = [
 ].join('\n')
 
 /**
+ * The `collection` value the what-Corvus-keeps passage travels under (#401).
+ *
+ * @remarks Code-owned for the same reasons as {@link ABOUT_CORVUS_COLLECTION},
+ * and a value of its own rather than a second paragraph in that passage
+ * because a snippet carries exactly one `Source:` path. The retention facts
+ * are cited to the privacy page, not to `/corvus`, so they need a passage
+ * whose source IS the privacy page.
+ */
+export const ABOUT_CORVUS_PRIVACY_COLLECTION = 'about-corvus-privacy'
+
+/**
+ * Where an answer about what Corvus keeps points the visitor.
+ *
+ * @remarks The privacy page (Pages id 28) is the published statement of these
+ * facts. It is a Page, and Pages are not embedded (decision D8(b)), so
+ * retrieval can never return it — which is the defect #401 measured.
+ */
+export const ABOUT_CORVUS_PRIVACY_SOURCE_URL = '/privacy'
+
+/** Title rendered on the retention passage's heading line. */
+export const ABOUT_CORVUS_PRIVACY_TITLE = 'What Corvus keeps'
+
+/**
+ * What happens to a conversation with Corvus, as the privacy page states it
+ * (#401).
+ *
+ * @remarks **Copied from the privacy page's "Corvus, the AI assistant"
+ * section, and it must change when that section does.** The page is CMS
+ * content (Pages id 28) that Brandon edits without a deploy; this passage is
+ * code. No test can read the CMS, so `docs/AI.md` § What Corvus keeps: the
+ * retention passage records the pairing, and the rule is the one this passage exists for: it
+ * states nothing the page does not.
+ *
+ * The page names OpenAI rather than "the chat provider", so the passage does
+ * too, even though the chat model is env-selected (`AI_CHAT_PROVIDER`): a
+ * provider change is a change to what the page must say, and the two move
+ * together. The code facts behind each line, checked 2026-11-20: the chat
+ * route writes nothing to the database and `CorvusChat` uses no browser
+ * storage; `corvusProviderOptions()` sends `store: false`; the anonymous
+ * counter is keyed by an HMAC digest of the IP with a 30-day TTL
+ * (`chatGate.ts`), and a signed-in visitor's limits are keyed by user id.
+ *
+ * Third person and factual, like {@link ABOUT_CORVUS_PASSAGE}, and it names no
+ * site path: the citation is the snippet's `Source:` line.
+ */
+export const ABOUT_CORVUS_PRIVACY_PASSAGE = [
+  "What happens to a conversation with Corvus, as this site's privacy page states it:",
+  '- What a visitor types to Corvus is sent to OpenAI to generate the answer and to find the relevant parts of this site.',
+  '- The site does not store the conversation: it is not saved to a database, and it is gone when the page is reloaded.',
+  '- The site asks OpenAI not to store the conversation. OpenAI may still keep messages for a limited time to check for abuse, under its own policy.',
+  '- To keep Corvus from being abused, the site counts messages. For a visitor who is not signed in, the count is kept against a scrambled form of their IP address for 30 days. For a signed-in visitor, it is kept against their account.',
+  "- The microphone button uses the browser's built-in speech recognition. The site only receives the text; depending on the browser, the audio may be processed by the browser's maker.",
+].join('\n')
+
+/**
  * Words that make a question about Corvus rather than about Brandon.
  *
  * @remarks Second-person address alone is not enough, and that is the whole
@@ -203,6 +258,93 @@ export function isAboutCorvusQuestion(
 }
 
 /**
+ * Verbs that ask whether something is kept. `keep up` is excluded: "do you
+ * keep up with React?" is not a retention question.
+ */
+const RETENTION_VERB_PATTERN =
+  /\b(store|stores|stored|storing|storage|save|saves|saved|saving|keep(?!\s+up)|keeps(?!\s+up)|keeping(?!\s+up)|kept|retain\w*|retention|log|logs|logged|logging|delete[sd]?|deleting|happens? to)\b/i
+
+/**
+ * What a visitor would be asking about being kept: the conversation itself,
+ * or something of theirs.
+ *
+ * @remarks `messages`, `data` and the like count only with a possessive, so
+ * "how do I store messages in Redis?" stays a general engineering question.
+ * `chat` and `conversation` stand alone: in a question that also asks whether
+ * something is stored, they almost always mean this one.
+ */
+const RETENTION_OBJECT_PATTERN =
+  /\b(conversations?|chats?|transcripts?|(my|our) (messages?|questions?|prompts?|data|history|info\w*|ip( address)?)|what i (type|typed|write|wrote|say|said|ask|asked)|about me|anything)\b/i
+
+/** "What do you keep?" — the object left implicit, the addressee explicit. */
+const WHAT_DO_YOU_KEEP_PATTERN =
+  /\bwhat (do|does|will|did) (you|corvus|it|this site|the site) (keep(?!\s+up)|store|save|log|retain)\b/i
+
+/** Privacy asked about directly. */
+const PRIVACY_PATTERN = /\b(privacy|private|confidential)\b/i
+
+/**
+ * Is this a question about what Corvus keeps of a conversation (#401)?
+ *
+ * @remarks A separate rule from {@link isAboutCorvusQuestion}, because the
+ * measured question has neither of its signals: "Does it store my
+ * conversation?" names no Corvus and has no "you", and on production it
+ * arrived as a follow-up whose referent only the previous turn supplied.
+ * Retrieval reads only the latest message, so this rule keys on the question
+ * itself: a retention verb with something of the visitor's as its object, the
+ * object-less "what do you keep?", or privacy asked about Corvus, a chat or
+ * the visitor's own things.
+ *
+ * The same cost argument as the about-Corvus rule sets the bar: a false
+ * positive adds one inert passage, a false negative is Corvus telling a
+ * visitor it has no retention policy when the site publishes one.
+ *
+ * @param query - The visitor's latest message.
+ * @returns True when the what-Corvus-keeps passage should be offered.
+ */
+export function isCorvusRetentionQuestion(
+  query: string | null | undefined,
+): boolean {
+  if (typeof query !== 'string') return false
+  const value = query.trim()
+  if (!value) return false
+
+  if (WHAT_DO_YOU_KEEP_PATTERN.test(value)) return true
+  if (
+    RETENTION_VERB_PATTERN.test(value) &&
+    RETENTION_OBJECT_PATTERN.test(value)
+  ) {
+    return true
+  }
+  if (PRIVACY_PATTERN.test(value)) {
+    // Not a bare "you": "what do you think of private equity?" is not a
+    // question about what Corvus keeps.
+    return (
+      RETENTION_OBJECT_PATTERN.test(value) || CORVUS_BY_NAME_PATTERN.test(value)
+    )
+  }
+  return false
+}
+
+/**
+ * The what-Corvus-keeps passage, shaped as a retrieved snippet.
+ *
+ * @remarks Same shape and same `score` of 1 as {@link aboutCorvusSnippet},
+ * for the same reasons; its `Source:` is the privacy page.
+ *
+ * @returns The snippet to prepend to a retention question's context.
+ */
+export function aboutCorvusPrivacySnippet(): CorvusSnippet {
+  return {
+    collection: ABOUT_CORVUS_PRIVACY_COLLECTION,
+    title: ABOUT_CORVUS_PRIVACY_TITLE,
+    content: ABOUT_CORVUS_PRIVACY_PASSAGE,
+    sourceUrl: ABOUT_CORVUS_PRIVACY_SOURCE_URL,
+    score: 1,
+  }
+}
+
+/**
  * The about-Corvus passage, shaped as a retrieved snippet.
  *
  * @remarks A {@link CorvusSnippet} rather than a second argument to
@@ -249,17 +391,29 @@ export function aboutCorvusSnippet(): CorvusSnippet {
  * a caller that wraps a retriever which already offers it cannot end up
  * telling the model about Corvus twice.
  *
+ * Also offers the what-Corvus-keeps passage on a retention question (#401),
+ * ahead of the about-Corvus passage when both apply, since on that turn it is
+ * the one that answers. Each is added at most once.
+ *
  * @param query - The visitor's latest message.
  * @param snippets - What retrieval found.
- * @returns The snippets, with the about-Corvus passage first when relevant.
+ * @returns The snippets, with the code-owned passages first when relevant.
  */
 export function withAboutCorvusSnippet(
   query: string | null | undefined,
   snippets: readonly CorvusSnippet[],
 ): CorvusSnippet[] {
-  if (!isAboutCorvusQuestion(query)) return [...snippets]
-  if (snippets.some((s) => s.collection === ABOUT_CORVUS_COLLECTION)) {
-    return [...snippets]
+  const has = (collection: string) =>
+    snippets.some((s) => s.collection === collection)
+  const offered: CorvusSnippet[] = []
+  if (
+    isCorvusRetentionQuestion(query) &&
+    !has(ABOUT_CORVUS_PRIVACY_COLLECTION)
+  ) {
+    offered.push(aboutCorvusPrivacySnippet())
   }
-  return [aboutCorvusSnippet(), ...snippets]
+  if (isAboutCorvusQuestion(query) && !has(ABOUT_CORVUS_COLLECTION)) {
+    offered.push(aboutCorvusSnippet())
+  }
+  return [...offered, ...snippets]
 }

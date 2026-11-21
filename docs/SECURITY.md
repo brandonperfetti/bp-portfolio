@@ -363,13 +363,28 @@ stay where they are:
 - **Identity is resolved server-side, never taken from the request body.**
   Rate limits, the anonymous free-message gate and retrieval grounding key
   on the Clerk session and the trusted IP [source:
-  `src/app/api/ai/chat/route.ts:74-75` (IP and viewer resolved from the
-  request headers and the Clerk session), `:85-87` (limiter key: Clerk
-  `userId`, else the HMAC of the IP), `:127` (free-message count by IP),
-  `:227` (retrieval gets `viewer.isAuthenticated`);
+  `src/app/api/ai/chat/route.ts:104-105` (IP and viewer resolved from the
+  request headers and the Clerk session), `:115-117` (limiter key: Clerk
+  `userId`, else the HMAC of the IP), `:163` (free-message count by IP),
+  `:272` (retrieval gets `viewer.isAuthenticated`);
   `src/lib/security/guardrails.ts:272` (`getRequestClientIp`: `x-real-ip`,
   else the rightmost `x-forwarded-for` hop, never the leftmost)].
   Mechanism: `docs/AI.md` § Guardrails.
+- **Redis keeps no raw IP.** Every IP-derived key in Upstash carries
+  `anonIpKeyDigest(ip)`, an HMAC-SHA256 of the IP keyed by `PAYLOAD_SECRET`,
+  never the address itself: chat's anonymous limiter key
+  (`ip:<digest>`), the free-message counter (`chat:anon-free:<digest>`)
+  and the two public forms' limiter keys, the contact form's
+  (`contact:<digest>`, #364) and the newsletter form's
+  (`newsletter:<digest>`, #367). An
+  outage report redacts the IP, the digest and the key [source:
+  `src/lib/security/chatGate.ts:57` (`anonIpKeyDigest`),
+  `src/app/api/ai/chat/route.ts:115-117` (key), `:126` (redaction),
+  `src/lib/security/publicFormGuard.ts:70` (both forms' key), `:82`
+  (redaction); each key is pinned to the digest in its route's
+  `route.test.ts` (`src/app/api/contact/`, `src/app/api/newsletter/`)]. Both
+  forms still pass the raw IP to Cloudflare Turnstile as `remoteip`, which
+  stores nothing in Redis. A new IP-keyed store follows the same rule.
 - **`redirect_url` after sign-up is followed only to this site.** The custom
   sign-up form (#377) sends a new member on to `redirect_url` itself, where
   Clerk's prebuilt form used to. The value is parsed the way a browser parses
@@ -450,7 +465,11 @@ stay there.
   message was delivered [source: `src/app/api/contact/route.ts`]; sign-up
   capture comes through the verified Clerk webhook, and only for an account
   whose sign-up ticked the same unchecked-by-default opt-in (#362) [source:
-  `src/app/api/clerk/webhook/route.ts`, `hasMailingListOptIn`]. Mechanism:
+  `src/app/api/clerk/webhook/route.ts`, `hasMailingListOptIn`]. The
+  Newsletter Signup block's form exists only to subscribe, so submitting its
+  one email field is the opt-in, and its answer is the same whether or not
+  the address was already on the list (#367) [source:
+  `src/app/api/newsletter/route.ts`]. Mechanism:
   `docs/AUTH.md` § Email capture.
 - **Broadcasts:** Respect the marketing consent field, and honor
   per-contact unsubscribe state before any broadcast ever sends. _Moved from
@@ -538,13 +557,14 @@ them stay in the source doc.
   production build without it logs a loud error and degrades to
   per-instance memory limits. **When Upstash is configured but failing**
   (a plan cap, an outage, a malformed reply such as #390's
-  `s.map is not a function`, or a stall past `@upstash/ratelimit`'s 5 s timeout, which it would otherwise answer as a success), chat and the contact form **fail closed**:
+  `s.map is not a function`, or a stall past `@upstash/ratelimit`'s 5 s timeout, which it would otherwise answer as a success), chat and the two public forms (contact, newsletter; one shared guard, `src/lib/security/publicFormGuard.ts`) **fail closed**:
   one Sentry capture per request (`LimiterUnavailableError`, cause kept, IP
   and limiter key redacted) and a 503 — chat's carries
   `code: 'chat_unavailable'`, which the chat UI shows as "temporarily
   unavailable". Chat closes because every turn spends model tokens; the
   contact form closes because open, it would be an unlimited sender into
-  Brandon's inbox and the Resend quota. `[source:
+  Brandon's inbox and the Resend quota, and the newsletter form because it
+  would be an unlimited writer into the mailing list. `[source:
 src/lib/security/limiterOutage.ts]`
 - **Supabase Data API:** Do NOT add `public` (or any schema containing real
   tables) to the exposed-schemas list, and do NOT create tables in `api`;

@@ -12,6 +12,94 @@ Each version is an annotated tag on that release's merge commit.
 here; each one's release PR body is its record. How an entry is written and
 when the tag is made: [`docs/WORKFLOW.md` § Releases](docs/WORKFLOW.md#releases).
 
+## v2026.11.21
+
+The Newsletter Signup form subscribes again, Corvus answers what it keeps of
+a conversation and cites `/privacy`, and the contact form's rate limiter no
+longer stores a visitor's raw IP. Release PR
+[#408](https://github.com/brandonperfetti/bp-portfolio/pull/408) ·
+[tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.21) ·
+carries #402, #403 and #404.
+
+**Visitors**
+
+- **The "Stay up to date" form works.** The Newsletter Signup block's form
+  posted to `/api/mailinglist`, a route that no longer existed, so every
+  submit failed. It now posts to `/api/newsletter`, which adds the address
+  to the same Resend list as the sign-up and contact-form opt-ins.
+  Submitting the form is the opt-in; there is no confirmation email. Every
+  valid address gets the same answer, whether it was new or already on the
+  list. The form runs the same invisible Turnstile check as the contact
+  form, its submit button is named "Subscribe" for screen readers, and its
+  result is announced as a polite status (#367, #404).
+- **Corvus says what it keeps of a conversation.** Asked "Does it store my
+  conversation?" or "What do you keep?", Corvus now answers from the
+  privacy page and links `/privacy`: messages go to OpenAI and are not saved
+  to a database, OpenAI may keep them for a limited time to check for abuse,
+  and a message count is kept against a scrambled IP for 30 days, or against
+  the account when signed in. Before this release it said it had no verified
+  retention policy (#401, #403).
+- **The contact form's rate limit stores no raw IP.** Its Redis key is now
+  the same HMAC digest of the IP that chat already uses. The limit itself is
+  unchanged; each visitor's one-minute window starts over once, on deploy
+  (#364, #402).
+
+**What this release leaves.**
+
+- **`/privacy` does not mention the newsletter form yet.** Its Turnstile
+  sentence names only the contact form. #404's PR body has suggested text
+  for the CMS; the page is not edited by this release.
+- **Single opt-in, by Brandon's choice** (2026-11-21, #404). Like the contact
+  form's box, the newsletter form does not prove the visitor owns the
+  address, so someone could subscribe an address that isn't theirs.
+- **A failed Resend write still reads as subscribed.** The form gives one
+  answer for every valid address so it never reveals who is on the list,
+  and that answer is also given when Resend refuses the write or cannot be
+  reached; the address is then not captured (#409).
+- **A reader who unsubscribed may stay off the list** after submitting the
+  form again: the route never asks Resend to clear an earlier opt-out, and
+  how Resend treats that create is not verified. Brandon decided such a
+  reader should be able to rejoin; that is #407. An address already
+  in Resend is not added to the segment (#406), and a submit made before the
+  Turnstile widget has loaded can get a 403 where Turnstile is enforced
+  (#405).
+- **Corvus's retention passage is a copy of the privacy page**, kept in step
+  by hand: a change to the page's "Corvus, the AI assistant" section needs
+  the same change to `ABOUT_CORVUS_PRIVACY_PASSAGE`. Questions that name no
+  object, such as "Is this private?", still miss it (#403), and so does "Do
+  you store messages?", whose object has no "my" (#410).
+
+**Not proven before release:** a newsletter submit from a published page
+reaching the real Resend list; what is proven is the route and the form, by
+route and component tests and a `next dev` server with a fake key, which
+Resend refused. Corvus's retention answer on a deployed build; what is proven
+is the keyed eval against the production model
+(`eval:ci` 88% against the 80% floor). The contact limiter against a real
+Upstash store; its key and rate were proven against the real limiter module
+with the Upstash client faked.
+
+**Developers**
+
+- New `src/lib/security/publicFormGuard.ts`: `guardPublicForm` holds the
+  public-form guards in `/api/contact`'s order: same-origin, a per-IP limit
+  at `mailingListRatePerMinute` keyed on `anonIpKeyDigest(ip)`, a fail-closed
+  503 with a redacted Sentry report when the limiter store fails, and
+  Turnstile when `TURNSTILE_SECRET_KEY` is set. `/api/contact` and the new
+  `/api/newsletter` both call it, with keys `contact:<digest>` and
+  `newsletter:<digest>`; `LimiterSurface` gains `newsletter` (#402, #404).
+- `/api/newsletter` answers 503 when `RESEND_API_KEY` is unset, and 200 with
+  one constant message for every valid address. `CORVUS_MAILINGLIST_RATE_LIMIT_PER_MINUTE`
+  now sets the rate for both forms, one bucket each, and `.env.example` says
+  to set the Turnstile keys as a pair. No env var is added (#404).
+- New `ABOUT_CORVUS_PRIVACY_PASSAGE` (collection `about-corvus-privacy`,
+  source `/privacy`) and `isCorvusRetentionQuestion`, wired into
+  `withAboutCorvusSnippet`; when both passages apply, this one goes first.
+  `docs/AI.md` § What Corvus keeps records the hand-sync duty, and a new eval
+  block in `evals/corvus-subjects.eval.ts` grades the facts and the `/privacy`
+  citation. No eval floor changed (#403).
+- `docs/SECURITY.md` gets a "Redis keeps no raw IP" rule naming every
+  IP-derived key (#402, #404).
+
 ## v2026.11.20
 
 Account sub-pages load directly, the cookie dialog's Analytics sentence is

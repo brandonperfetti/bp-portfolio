@@ -3,14 +3,7 @@ import { Resend } from 'resend'
 import * as z from 'zod'
 
 import { captureContact } from '@/lib/email/captureContact'
-import {
-  getRequestClientIp,
-  getSecurityLimits,
-  isAllowedRequestSource,
-  verifyRequestTurnstileToken,
-} from '@/lib/security/guardrails'
-import { checkChatLimits, type LimitResult } from '@/lib/security/limiter'
-import { reportLimiterOutage } from '@/lib/security/limiterOutage'
+import { guardPublicForm } from '@/lib/security/publicFormGuard'
 
 const bodySchema = z.object({
   fullname: z.string().trim().min(1).max(200),
@@ -38,9 +31,12 @@ const escapeHtml = (value: string) =>
  *
  * @remarks Hardened to the same guardrail stack as the Corvus chat route
  * (fresh-eyes review 2026-08, finding M1): same-origin source guard, per-IP
- * rate limiting (`mailingListRatePerMinute`), Zod validation with a real
- * email check, and HTML-escaped interpolation so user input cannot inject
- * markup into the notification email. Turnstile is enforced whenever
+ * rate limiting (`mailingListRatePerMinute`, keyed on the IP's HMAC digest,
+ * never the raw address, #364, failing closed on a store outage, #390) and
+ * Turnstile, all in `guardPublicForm`, which `/api/newsletter` shares (#367);
+ * then Zod validation with a real email check, and HTML-escaped
+ * interpolation so user input cannot inject markup into the notification
+ * email. Turnstile is enforced whenever
  * `TURNSTILE_SECRET_KEY` is set (the widget ships env-gated with the
  * matching `NEXT_PUBLIC_TURNSTILE_SITE_KEY`); without keys the route
  * behaves exactly as before, so previews and local dev need no setup.
@@ -54,71 +50,16 @@ export async function POST(req: Request) {
     )
   }
 
-  if (!isAllowedRequestSource(req)) {
-    return NextResponse.json({ message: 'Forbidden' }, { status: 403 })
-  }
-
-  const limits = getSecurityLimits()
-  const ip = getRequestClientIp(req)
-  const limiterKey = `contact:${ip}`
-  let limit: LimitResult
-  try {
-    limit = await checkChatLimits(
-      limiterKey,
-      limits.mailingListRatePerMinute,
-      0,
-    )
-  } catch (error) {
-    // Fail closed (#390). Open, a store outage would make this an unlimited
-    // sender into Brandon's inbox and through the Resend quota, and Turnstile
-    // is not enforced on every deployment. Closed, a visitor loses the form
-    // for the outage but is pointed at email, which still works.
-    reportLimiterOutage(error, {
-      surface: 'contact',
-      operation: 'checkChatLimits',
-      redact: [ip, limiterKey],
-    })
-    return NextResponse.json(
-      {
-        message:
-          'The contact form is temporarily unavailable. Please try again later — or email me directly.',
-      },
-      { status: 503 },
-    )
-  }
-  if (!limit.allowed) {
-    const retryAfter = Math.max(
-      1,
-      Math.ceil((limit.resetAt - Date.now()) / 1000),
-    )
-    return NextResponse.json(
-      { message: 'Too many requests. Please slow down.' },
-      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
-    )
-  }
-
-  const raw: unknown = await req.json().catch(() => null)
-
-  // Bot gate (review finding m4, wired 2026-08-10): verification is a
-  // no-op until TURNSTILE_SECRET_KEY exists in the environment, then it
-  // becomes mandatory. Runs after the rate limit so the verification API
-  // can't itself be hammered through us.
-  const turnstile = await verifyRequestTurnstileToken({
-    token:
-      typeof (raw as { turnstileToken?: unknown })?.turnstileToken === 'string'
-        ? ((raw as { turnstileToken: string }).turnstileToken ?? '')
-        : '',
-    ip,
+  const guard = await guardPublicForm(req, 'contact', {
+    // A visitor who loses the form to a limiter outage (#390) or a failed bot
+    // check is pointed at email, which still works.
+    unavailable:
+      'The contact form is temporarily unavailable. Please try again later — or email me directly.',
+    verificationFailed:
+      'Verification failed. Please refresh and try again — or email me directly.',
   })
-  if (!turnstile.ok) {
-    return NextResponse.json(
-      {
-        message:
-          'Verification failed. Please refresh and try again — or email me directly.',
-      },
-      { status: 403 },
-    )
-  }
+  if (!guard.ok) return guard.response
+  const raw = guard.body
 
   const parsed = bodySchema.safeParse(raw)
   if (!parsed.success) {

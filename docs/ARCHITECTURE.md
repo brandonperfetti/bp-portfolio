@@ -30,8 +30,9 @@ What a reader or editor can do with it, and which tests prove it, is
 - `src/app/(payload)/` — Payload admin + generated API routes. Do not edit
   `admin/importMap.js` by hand (generated; CI-gated).
 - `src/app/api/` — custom route handlers: `ai/chat` (Corvus), `search`
-  (palette index), `contact` (contact form via Resend), `clerk/webhook` (email
-  capture), `revalidate` (secret-gated ISR).
+  (palette index), `contact` (contact form via Resend), `newsletter`
+  (Newsletter Signup block → Resend list), `clerk/webhook` (email capture),
+  `revalidate` (secret-gated ISR).
 - `src/collections/`, `src/globals/`, `src/blocks/`, `src/fields/`,
   `src/access/` — Payload schema. `src/payload.config.ts` is the single
   config entry.
