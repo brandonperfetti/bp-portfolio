@@ -1,9 +1,10 @@
 import * as Sentry from '@sentry/nextjs'
 
 import { boundedErrorMessage } from '@/lib/observability/boundedErrorMessage'
+import type { PublicFormSurface } from '@/lib/security/publicFormGuard'
 
 /** Which route a limiter outage blocked. */
-export type LimiterSurface = 'chat' | 'contact'
+export type LimiterSurface = 'chat' | PublicFormSurface
 
 /** Which limiter call failed, so the Sentry issue says where. */
 export type LimiterOperation =

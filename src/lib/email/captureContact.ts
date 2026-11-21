@@ -3,7 +3,8 @@ import { Resend } from 'resend'
 /**
  * Add an email to the Resend contact list (optionally segmented via
  * `RESEND_CONTACT_SEGMENT_ID`) — the single capture path shared by the
- * Clerk sign-up webhook and the contact form's explicit opt-in checkbox.
+ * Clerk sign-up webhook, the contact form's explicit opt-in checkbox and
+ * the Newsletter Signup form (`/api/newsletter`, #367).
  *
  * @param contact - Email plus optional name parts to store on the contact.
  *
