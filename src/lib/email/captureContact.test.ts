@@ -189,6 +189,19 @@ describe('captureContact', () => {
       expect(mocks.addSegment).not.toHaveBeenCalled()
     })
 
+    it('reports a segment read failing on a later page, without adding', async () => {
+      mocks.get.mockResolvedValue(existing(false))
+      mocks.listSegments
+        .mockResolvedValueOnce({
+          ...segmentsPage(['a']),
+          data: { ...segmentsPage(['a']).data, has_more: true },
+        })
+        .mockResolvedValueOnce(SERVER_ERROR)
+      const outcome = await captureContact({ email: 'a@example.com' })
+      expect(outcome).toMatchObject({ status: 'failed', stage: 'segment' })
+      expect(mocks.addSegment).not.toHaveBeenCalled()
+    })
+
     it('makes no segment call when no segment is configured', async () => {
       vi.stubEnv('RESEND_CONTACT_SEGMENT_ID', '')
       mocks.get.mockResolvedValue(existing(false))
@@ -262,6 +275,23 @@ describe('captureContact', () => {
         errorName: 'resubscribe_not_applied',
       })
       expect(mocks.update).toHaveBeenCalledTimes(1)
+      expect(mocks.addSegment).not.toHaveBeenCalled()
+    })
+
+    it('reports a failed read-back as a resubscribe failure', async () => {
+      mocks.get
+        .mockResolvedValueOnce(existing(true))
+        .mockResolvedValueOnce(SERVER_ERROR)
+      const outcome = await captureContact(
+        { email: 'a@example.com' },
+        { rejoin: true },
+      )
+      expect(outcome).toEqual({
+        status: 'failed',
+        stage: 'resubscribe',
+        errorName: 'internal_server_error',
+        statusCode: 500,
+      })
       expect(mocks.addSegment).not.toHaveBeenCalled()
     })
 

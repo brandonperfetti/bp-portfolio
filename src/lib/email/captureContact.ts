@@ -11,7 +11,8 @@ export type CaptureStage = 'lookup' | 'create' | 'resubscribe' | 'segment'
  * @remarks `captured` covers a new contact and an existing one alike, on
  * purpose: a caller that answers a visitor must not be able to tell them
  * apart, so the type does not either. A failure carries only the stage and
- * Resend's error name and status, never the address or Resend's message
+ * Resend's error name and status (or `resubscribe_not_applied`, this
+ * module's own, when an update was accepted but did not take), never the address or Resend's message
  * (which can echo it), so it is safe to send to Sentry as it is.
  */
 export type CaptureOutcome =
@@ -173,10 +174,13 @@ export async function captureContact(
       if (error)
         return failed(stage, error, 'Resend contact resubscribe failed')
       const after = await resend.contacts.get({ email })
-      if (after.error || after.data?.unsubscribed !== false) {
+      if (after.error) {
+        return failed(stage, after.error, 'Resend contact read-back failed')
+      }
+      if (after.data?.unsubscribed !== false) {
         return failed(
           stage,
-          after.error ?? { name: 'resubscribe_not_applied' },
+          { name: 'resubscribe_not_applied' },
           'Resend contact still unsubscribed after update',
         )
       }

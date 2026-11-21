@@ -221,6 +221,26 @@ describe('POST /api/newsletter (#367)', () => {
     expect(rejoinRefused).toEqual(refused)
   })
 
+  it('answers 503, not "subscribed", when a re-subscribe is accepted but does not take (#409)', async () => {
+    getContactMock.mockResolvedValue(existingContact(true))
+    const POST = await loadPost()
+
+    const res = await POST(makeRequest())
+
+    expect(res.status).toBe(503)
+    expect(updateContactMock).toHaveBeenCalledTimes(1)
+    expect(addSegmentMock).not.toHaveBeenCalled()
+    const [, hint] = captureExceptionMock.mock.calls[0] as [
+      Error,
+      { tags: Record<string, string> },
+    ]
+    expect(hint.tags).toEqual({
+      'newsletter.capture_stage': 'resubscribe',
+      'resend.error_name': 'resubscribe_not_applied',
+      'resend.status_code': 'none',
+    })
+  })
+
   it('reports a failed capture to Sentry by stage, with no address in it (#409)', async () => {
     createContactMock.mockResolvedValue({
       data: null,

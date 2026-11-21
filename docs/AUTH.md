@@ -75,7 +75,11 @@
      an existing contact with `unsubscribed: true` is updated to
      `unsubscribed: false` and read back (Resend's docs never say a `false`
      re-subscribes, so a contact still unsubscribed counts as a failure, not
-     a subscription), then put in the segment. Only this path does it;
+     a subscription), then put in the segment. If Resend ever accepted the
+     update without applying it, every once-unsubscribed address would get
+     the 503 while a new one gets the success, so the failure would show
+     which addresses had left; Sentry's `resubscribe` stage is where that
+     would first appear. Only this path does it;
      the webhook honours the sign-up's `mailingListOptIn` choice and the
      contact form its box, and neither clears an opt-out. **The consent gap
      is wider for it:** with no confirmation email, anyone can submit an
