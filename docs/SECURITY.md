@@ -464,10 +464,12 @@ stay there.
     `beforeSendTransaction`), because Resend's SDK puts a contact's
     address in its URL path, which Sentry's fetch instrumentation records,
     and Sentry's HTTP integration captures incoming request bodies, where
-    the newsletter and contact forms post one (#409). Strings are redacted
-    four levels deep, an `Error` keeps its name, message and stack, and a
-    container nested deeper is replaced with `[redacted]` [source: `src/lib/observability/sentryConfig.ts`,
-    `redactEmailAddresses`].
+    the newsletter and contact forms post one (#409). An address is
+    matched plain, with its `@` as `%40`, or JSON-escaped as `\u0040`.
+    Strings are redacted four levels deep, an `Error` keeps its name,
+    message and stack, functions are dropped, and a container nested
+    deeper is replaced with `[redacted]` [source:
+    `src/lib/observability/sentryConfig.ts`, `redactEmailAddresses`].
   - `clientTelemetry.ts` sends a speech-recognition error code and a
     boolean [source: `src/lib/observability/clientTelemetry.ts:36-39`].
 - **A mailing-list contact is captured only with consent.** The contact
@@ -479,7 +481,7 @@ stay there.
   Newsletter Signup block's form is **double opt-in** (#411): a submit only
   emails the address an encrypted, expiring link, and the address joins the
   list, or rejoins it after an unsubscribe (#407), only when its owner
-  presses Confirm on the page the link opens. So no one can put another
+  presses Confirm on the page the link opens; each link works once, so an old link cannot undo a later unsubscribe. So no one can put another
   person on the list, or back on it; the form can still send a
   confirmation to someone else's address, which its rate limit bounds, and
   Turnstile too when `TURNSTILE_SECRET_KEY` is set. Every success reply is

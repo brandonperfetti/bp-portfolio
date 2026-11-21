@@ -580,11 +580,12 @@ export function sentryDropNoisyLog<L extends SentryLogLike>(log: L): L | null {
 }
 
 /**
- * An email address, plain or with its `@` percent-encoded as it is in a URL
- * path.
+ * An email address, plain, with its `@` percent-encoded as it is in a URL
+ * path, or JSON-escaped (`\u0040`) as a hand-written request body can carry
+ * it: the route decodes the escape, but Sentry keeps the raw body string.
  */
 const EMAIL_ADDRESS_PATTERN =
-  /[A-Za-z0-9._%+'-]+(?:@|%40)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g
+  /[A-Za-z0-9._%+'-]+(?:@|%40|\\u0040)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/gi
 
 /** What an address is replaced with. */
 const REDACTED_EMAIL = '[email]'
@@ -618,11 +619,14 @@ const REDACTED_DEEP_VALUE = '[redacted]'
  * Redact every string in a value, walking arrays, plain objects and `Error`s.
  *
  * An `Error` becomes its `name`, `message` and `stack`, which are not
- * enumerable and would otherwise copy as `{}`. A container past the depth
+ * enumerable and would otherwise copy as `{}`. Functions are dropped. A container past the depth
  * limit is replaced, not kept, so nothing deeper escapes unredacted.
  */
 function redactValue(value: unknown, depth = 0): unknown {
   if (typeof value === 'string') return redactEmailAddresses(value)
+  // A function (such as a `toJSON`) would run at serialization, after
+  // redaction, and could return an address; it carries no report data.
+  if (typeof value === 'function') return undefined
   if (value === null || typeof value !== 'object') return value
   if (depth >= MAX_REDACT_DEPTH) return REDACTED_DEEP_VALUE
   if (Array.isArray(value)) return value.map((v) => redactValue(v, depth + 1))

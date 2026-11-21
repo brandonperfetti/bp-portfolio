@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 import { Button } from '@/components/Button'
 
-type Result = 'confirmed' | 'expired' | 'invalid' | 'failed'
+type Result = 'confirmed' | 'expired' | 'invalid' | 'used' | 'failed'
 
 /** What the page says after each answer from `/api/newsletter/confirm`. */
 const RESULT_COPY: Record<Result, string> = {
@@ -12,6 +12,7 @@ const RESULT_COPY: Record<Result, string> = {
     "You're subscribed. I'll email you when I publish something new, and you can unsubscribe any time.",
   expired: 'This link has expired. Sign up again and I’ll send you a new one.',
   invalid: "This link doesn't work. Sign up again and I’ll send you a new one.",
+  used: 'This link has already been used. To sign up again, use the form and I’ll send you a new one.',
   failed: "Couldn't confirm right now. Please try again in a few minutes.",
 }
 

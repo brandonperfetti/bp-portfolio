@@ -101,8 +101,16 @@
      on the list, and every address with a 503 "Couldn't sign you up right
      now. Please try again later." when Resend refuses the send or cannot
      be reached (#409). The confirm route answers `confirmed`, `expired`
-     (410), `invalid` (400) or `failed` (503); a token's holder already
-     knows its address, so these disclose nothing new. A failure is
+     (410), `invalid` (400), `used` (410) or `failed` (503); a token's
+     holder already knows its address, so these disclose nothing new.
+     **Each link works once:** a verified token is claimed in Upstash
+     (`newsletter:confirm-used:<token digest>`, `SET NX`, expiring with the
+     token; `src/lib/email/newsletterTokenUse.ts`) before the join, so an
+     old link pressed again after an unsubscribe answers `used` and never
+     puts the reader back. A failed join releases the claim so the same
+     link can be retried; a store failure answers 503 and joins no one;
+     without Upstash (development) the claim is a per-instance map, as the
+     rate limiter's fallback is. A failure is
      reported to Sentry by stage with no address: the error names only the
      stage, the server and edge Sentry configs redact addresses from
      breadcrumbs, spans and the captured request body, where Resend's
@@ -110,14 +118,14 @@
      (#409), and the confirm route's body and the page's URL carry only the
      encrypted token. If Resend ever accepted a re-subscribe without
      applying it, a once-unsubscribed reader's confirmation would fail every
-     time, and
-     Sentry's `resubscribe` stage is where that would first appear. No
+     time, and Sentry's `resubscribe` stage is where that would first
+     appear. No
      `RESEND_API_KEY` or no `PAYLOAD_SECRET` answers 503 on both routes,
      before any guard, with nothing sent and the list untouched. The
      confirm route has its own rate-limit bucket
      (`newsletter-confirm:<digest>`) and no Turnstile: the token is the
-     proof. Guards
-     shared with `/api/contact` (`src/lib/security/publicFormGuard.ts`).
+     proof. Guards shared with `/api/contact`
+     (`src/lib/security/publicFormGuard.ts`).
      The capture rule:
      `docs/SECURITY.md` § Consent and analytics data.
      All three land in the Resend contact list, segmented via

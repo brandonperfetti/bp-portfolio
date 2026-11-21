@@ -19,8 +19,25 @@ vi.mock('@upstash/ratelimit', () => {
   }
   return { Ratelimit }
 })
+/** The single-use store (`newsletterTokenUse.ts`): Redis `SET NX` / `DEL`. */
+const usedKeys = new Set<string>()
+const redisSetMock = vi.fn(
+  async (key: string, _v: unknown, opts?: { nx?: boolean }) => {
+    if (opts?.nx && usedKeys.has(key)) return null
+    usedKeys.add(key)
+    return 'OK'
+  },
+)
+const redisDelMock = vi.fn(async (key: string) =>
+  usedKeys.delete(key) ? 1 : 0,
+)
 vi.mock('@upstash/redis', () => ({
-  Redis: { fromEnv: vi.fn(() => ({})) },
+  Redis: {
+    fromEnv: vi.fn(() => ({
+      set: (...args: Parameters<typeof redisSetMock>) => redisSetMock(...args),
+      del: (...args: Parameters<typeof redisDelMock>) => redisDelMock(...args),
+    })),
+  },
 }))
 
 const sendMock = vi.fn()
@@ -153,6 +170,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  usedKeys.clear()
   vi.clearAllMocks()
   vi.unstubAllEnvs()
   vi.resetModules()
@@ -206,6 +224,67 @@ describe('POST /api/newsletter/confirm (#407)', () => {
       segmentId: SEGMENT_ID,
     })
     expect(createContactMock).not.toHaveBeenCalled()
+  })
+
+  it('works once: pressing the same link again answers used and touches nothing', async () => {
+    const token = await tokenFor('reader@example.test')
+    const POST = await loadPost()
+
+    expect((await POST(makeRequest({ token }))).status).toBe(200)
+    vi.clearAllMocks()
+    countingLimiter()
+    const again = await POST(makeRequest({ token }))
+
+    expect(again.status).toBe(410)
+    expect(await again.json()).toMatchObject({ status: 'used' })
+    expect(contactCalls()).toEqual([])
+    const [key, , opts] = redisSetMock.mock.calls[0] as [
+      string,
+      unknown,
+      object,
+    ]
+    expect(key).toMatch(/^newsletter:confirm-used:[0-9a-f]{32}$/)
+    expect(key).not.toContain('reader')
+    expect(opts).toMatchObject({ nx: true, ex: 3 * 24 * 60 * 60 })
+  })
+
+  it('so a reader who unsubscribed after confirming is not put back by the old link', async () => {
+    const token = await tokenFor('reader@example.test')
+    const POST = await loadPost()
+    expect((await POST(makeRequest({ token }))).status).toBe(200)
+
+    // The reader unsubscribes; then the old email's link is pressed again.
+    getContactMock.mockResolvedValue(existingContact(true))
+    const again = await POST(makeRequest({ token }))
+
+    expect(again.status).toBe(410)
+    expect(updateContactMock).not.toHaveBeenCalled()
+  })
+
+  it('releases the link when the join fails, so the reader can retry it', async () => {
+    createContactMock.mockResolvedValueOnce({
+      data: null,
+      error: { name: 'application_error', statusCode: 500, message: 'x' },
+    })
+    const token = await tokenFor('reader@example.test')
+    const POST = await loadPost()
+
+    expect((await POST(makeRequest({ token }))).status).toBe(503)
+    expect(redisDelMock).toHaveBeenCalledTimes(1)
+    expect((await POST(makeRequest({ token }))).status).toBe(200)
+  })
+
+  it('answers 503 and joins no one when the single-use store fails', async () => {
+    redisSetMock.mockRejectedValueOnce(new Error('upstash down'))
+    const POST = await loadPost()
+
+    const res = await POST(
+      makeRequest({ token: await tokenFor('reader@example.test') }),
+    )
+
+    expect(res.status).toBe(503)
+    expect(await res.json()).toMatchObject({ status: 'failed' })
+    expect(contactCalls()).toEqual([])
   })
 
   it('refuses an expired token with 410, touching nothing', async () => {
@@ -356,12 +435,15 @@ describe('POST /api/newsletter/confirm (#407)', () => {
 
   it('is rate limited in its own bucket, keyed on the IP digest', async () => {
     const POST = await loadPost()
-    const token = await tokenFor('reader@example.test')
 
+    // A fresh link each time, since each link works once.
     for (let i = 0; i < RATE_PER_MINUTE; i += 1) {
+      const token = await tokenFor(`reader${i}@example.test`)
       expect((await POST(makeRequest({ token }))).status).toBe(200)
     }
-    const over = await POST(makeRequest({ token }))
+    const over = await POST(
+      makeRequest({ token: await tokenFor('over@example.test') }),
+    )
 
     expect(over.status).toBe(429)
     const [key] = limitMock.mock.calls[0] as [string]

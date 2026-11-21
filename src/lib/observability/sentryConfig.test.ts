@@ -955,3 +955,23 @@ describe('email redaction, round 2 (#409)', () => {
     expect(JSON.stringify(out)).not.toContain('reader@example.test')
   })
 })
+
+describe('email redaction, PR-round stand-in (#409)', () => {
+  it('redacts an address whose @ is JSON-escaped in a raw request body', () => {
+    const body = '{"email":"reader\\u0040example.test"}'
+    expect(JSON.parse(body)).toEqual({ email: 'reader@example.test' })
+    const out = sentryRedactEventRequest({
+      request: { url: '/api/newsletter', data: body },
+    })
+    expect(out.request?.data).toBe('{"email":"[email]"}')
+    expect(redactEmailAddresses('READER\\U0040EXAMPLE.TEST')).toBe('[email]')
+  })
+
+  it('drops function values, so a toJSON cannot return an address later', () => {
+    const out = sentryRedactBreadcrumb({
+      category: 'console',
+      data: { arguments: [{ toJSON: () => 'reader@example.test' }] },
+    })
+    expect(JSON.stringify(out)).not.toContain('reader@example.test')
+  })
+})

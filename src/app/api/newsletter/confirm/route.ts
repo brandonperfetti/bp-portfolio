@@ -6,13 +6,17 @@ import {
   verifyConfirmToken,
 } from '@/lib/email/newsletterConfirmToken'
 import { reportNewsletterFailure } from '@/lib/email/newsletterFailure'
+import {
+  claimConfirmToken,
+  releaseConfirmToken,
+} from '@/lib/email/newsletterTokenUse'
 import { guardPublicForm } from '@/lib/security/publicFormGuard'
 
 /**
  * What the confirm page shows for each answer. The page reads `status`, so
  * the copy lives with the page; `message` is a plain fallback.
  */
-type ConfirmStatus = 'confirmed' | 'expired' | 'invalid' | 'failed'
+type ConfirmStatus = 'confirmed' | 'expired' | 'invalid' | 'used' | 'failed'
 
 function answer(status: ConfirmStatus, httpStatus: number, message: string) {
   return NextResponse.json({ status, message }, { status: httpStatus })
@@ -25,10 +29,16 @@ function answer(status: ConfirmStatus, httpStatus: number, message: string) {
  * @remarks
  * **The address comes only from the token.** The body carries the token and
  * nothing else, and the token seals the address and the expiry with
- * AES-256-GCM (`newsletterConfirmToken.ts`), so a token cannot confirm any address but
- * the one it was sent to; an edited, forged or expired one is refused with
- * no Resend call. Replaying a valid token for its own address repeats an
- * idempotent join.
+ * AES-256-GCM (`newsletterConfirmToken.ts`), so a token cannot confirm any
+ * address but the one it was sent to; an edited, forged or expired one is
+ * refused with no Resend call.
+ *
+ * **Each link works once.** A verified token is claimed in the rate
+ * limiter's store before the join (`newsletterTokenUse.ts`), so pressing an
+ * old link again answers `used` (410) and never clears an unsubscribe made
+ * after it was confirmed. A join that fails releases the claim, so the
+ * reader can retry the same link; a store failure answers 503 and joins no
+ * one.
  *
  * **The join is the existing rejoin path.** `captureContact` with `rejoin`
  * creates a new contact in the segment, or sets an existing unsubscribed one
@@ -70,11 +80,25 @@ export async function POST(req: Request) {
       : answer('invalid', 400, "This link doesn't work.")
   }
 
+  // `verifyConfirmToken` accepted it, so it is a string.
+  const sealed = token as string
+  let claim: Awaited<ReturnType<typeof claimConfirmToken>>
+  try {
+    claim = await claimConfirmToken(sealed)
+  } catch {
+    reportNewsletterFailure('token_claim')
+    return answer('failed', 503, "Couldn't confirm right now.")
+  }
+  if (claim === 'used') {
+    return answer('used', 410, 'This link has already been used.')
+  }
+
   const outcome = await captureContact(
     { email: verified.email },
     { rejoin: true },
   )
   if (outcome.status !== 'captured') {
+    await releaseConfirmToken(sealed)
     reportNewsletterFailure(
       outcome.status === 'failed' ? outcome.stage : 'skipped',
       outcome.status === 'failed' ? outcome : {},
