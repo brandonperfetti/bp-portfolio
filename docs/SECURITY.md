@@ -458,6 +458,11 @@ stay there.
     caller's stack is rethrown untouched; one from a timer retry has no caller
     to reach, so it is logged `retry_failed` and the retry stops, not
     rethrown [source: `installHistoryWriteGuard`'s `scheduleRetry`].
+  - The server and edge runtimes redact email addresses from every
+    breadcrumb and span (`beforeBreadcrumb`, `beforeSendSpan`), because
+    Resend's SDK puts a contact's address in its URL path and Sentry's fetch
+    instrumentation records that path (#409) [source:
+    `src/lib/observability/sentryConfig.ts`, `redactEmailAddresses`].
   - `clientTelemetry.ts` sends a speech-recognition error code and a
     boolean [source: `src/lib/observability/clientTelemetry.ts:36-39`].
 - **A mailing-list contact is captured only with consent.** The contact
@@ -468,10 +473,13 @@ stay there.
   `src/app/api/clerk/webhook/route.ts`, `hasMailingListOptIn`]. The
   Newsletter Signup block's form exists only to subscribe, so submitting its
   one email field is the opt-in, and its answer is the same whether or not
-  the address was already on the list (#367), and the same for every
-  address when Resend fails (#409). It alone clears an earlier unsubscribe
-  (#407), so with single opt-in a third party can re-subscribe an address
-  whose owner left; the route's rate limit and Turnstile bound it [source:
+  the address was already on the list (#367). Every success reply is the
+  same and every failure reply (503, when Resend fails) is the same (#409);
+  a failure that only an existing contact's extra Resend calls hit still
+  answers the 503 where a new address would succeed. It alone clears an
+  earlier unsubscribe (#407), so with single opt-in a third party can
+  re-subscribe an address whose owner left; the route's rate limit bounds
+  it, and Turnstile does too when `TURNSTILE_SECRET_KEY` is set [source:
   `src/app/api/newsletter/route.ts`]. Mechanism:
   `docs/AUTH.md` § Email capture.
 - **Broadcasts:** Respect the marketing consent field, and honor

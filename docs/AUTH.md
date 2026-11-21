@@ -89,7 +89,10 @@
      existing one, subscribed or not. When Resend refuses a write or cannot
      be reached it answers 503 "Couldn't subscribe you right now. Please try
      again later.", the same for every address, and reports the failed stage
-     to Sentry with no address (#409). Guards
+     to Sentry with no address: the error names only the stage, and the
+     server and edge Sentry configs redact addresses from breadcrumbs and
+     spans, where Resend's `/contacts/<email>` URLs would otherwise land
+     (#409). Guards
      shared with `/api/contact` (`src/lib/security/publicFormGuard.ts`).
      The capture rule:
      `docs/SECURITY.md` § Consent and analytics data.

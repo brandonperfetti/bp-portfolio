@@ -6,6 +6,8 @@ import {
   SENTRY_CONSOLE_LOG_LEVELS,
   sentryDropBotEvent,
   sentryDropNoisyLog,
+  sentryRedactBreadcrumb,
+  sentryRedactSpan,
   sentryTracesSampler,
   warnIfDevDsnIgnored,
 } from '@/lib/observability/sentryConfig'
@@ -48,6 +50,10 @@ if (decision.init) {
     // shared with the Node runtime so the two can't drift.
     beforeSend: (event) => sentryDropBotEvent(event),
     beforeSendLog: (log) => sentryDropNoisyLog(log),
+    // Redact email addresses from breadcrumbs and spans: Resend's SDK puts a
+    // contact's address in its URL path, which fetch instrumentation records.
+    beforeBreadcrumb: (breadcrumb) => sentryRedactBreadcrumb(breadcrumb),
+    beforeSendSpan: (span) => sentryRedactSpan(span),
     integrations: [
       Sentry.consoleLoggingIntegration({
         levels: [...SENTRY_CONSOLE_LOG_LEVELS],

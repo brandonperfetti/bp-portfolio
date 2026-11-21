@@ -11,8 +11,11 @@ import {
   isNoisyTransaction,
   isSpotlightRequested,
   isSuppressedSentryLogMessage,
+  redactEmailAddresses,
   sentryDropBotEvent,
   sentryDropNoisyLog,
+  sentryRedactBreadcrumb,
+  sentryRedactSpan,
   SENTRY_CONSOLE_LOG_LEVELS,
   SENTRY_DENY_URLS,
   SENTRY_IGNORE_ERRORS,
@@ -831,5 +834,50 @@ describe('sentryDropNoisyLog (shared beforeSendLog)', () => {
   it('returns a message-less log unchanged', () => {
     const log = {}
     expect(sentryDropNoisyLog(log)).toBe(log)
+  })
+})
+
+describe('email redaction in breadcrumbs and spans (#409)', () => {
+  const RESEND_URL =
+    'https://api.resend.com/contacts/reader@example.test/segments'
+
+  it('replaces plain and percent-encoded addresses', () => {
+    expect(redactEmailAddresses(RESEND_URL)).toBe(
+      'https://api.resend.com/contacts/[email]/segments',
+    )
+    expect(
+      redactEmailAddresses('/contacts/first.last%40mail.example.co.uk'),
+    ).toBe('/contacts/[email]')
+    expect(redactEmailAddresses('no address here')).toBe('no address here')
+  })
+
+  it("redacts the http breadcrumb Sentry's fetch instrumentation records", () => {
+    const crumb = {
+      category: 'http',
+      type: 'http',
+      level: 'error' as const,
+      data: {
+        url: RESEND_URL,
+        'http.method': 'GET',
+        status_code: 500,
+      },
+    }
+    const out = sentryRedactBreadcrumb(crumb)
+    expect(JSON.stringify(out)).not.toContain('reader@example.test')
+    expect(out.data).toEqual({
+      url: 'https://api.resend.com/contacts/[email]/segments',
+      'http.method': 'GET',
+      status_code: 500,
+    })
+    expect(out.category).toBe('http')
+  })
+
+  it('redacts a span named for a Resend URL', () => {
+    const out = sentryRedactSpan({
+      description: `GET ${RESEND_URL}`,
+      data: { 'url.full': RESEND_URL, 'http.response.status_code': 404 },
+    })
+    expect(JSON.stringify(out)).not.toContain('reader@example.test')
+    expect(out.data?.['http.response.status_code']).toBe(404)
   })
 })

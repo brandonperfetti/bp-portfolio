@@ -578,3 +578,96 @@ export function sentryDropBotEvent<E extends SentryEventLike>(
 export function sentryDropNoisyLog<L extends SentryLogLike>(log: L): L | null {
   return isSuppressedSentryLogMessage(String(log.message ?? '')) ? null : log
 }
+
+/**
+ * An email address, plain or with its `@` percent-encoded as it is in a URL
+ * path.
+ */
+const EMAIL_ADDRESS_PATTERN =
+  /[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/gi
+
+/** What an address is replaced with. */
+const REDACTED_EMAIL = '[email]'
+
+/**
+ * Replace every email address in a string with `[email]`.
+ *
+ * @param text - Any string headed for Sentry.
+ * @returns The string with each address replaced.
+ *
+ * @remarks Resend's SDK puts a contact's address in the URL path
+ * (`/contacts/<email>`, `/contacts/<email>/segments`), and Sentry's fetch
+ * instrumentation records that path on its `http` breadcrumbs and spans;
+ * `getSanitizedUrlString` strips only the query and credentials
+ * [source: `@sentry/node-core` 10.78.0 `utils/outgoingFetchRequest.js`
+ * `getBreadcrumbData`]. So an error reported after a contact lookup, such as
+ * the newsletter route's `NewsletterCaptureError` (#409), would otherwise
+ * carry the address in its breadcrumbs.
+ */
+export function redactEmailAddresses(text: string): string {
+  return text.replace(EMAIL_ADDRESS_PATTERN, REDACTED_EMAIL)
+}
+
+/** Redact the string values of a flat record, leaving other values as they are. */
+function redactRecord<T extends Record<string, unknown>>(record: T): T {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(record)) {
+    out[key] = typeof value === 'string' ? redactEmailAddresses(value) : value
+  }
+  return out as T
+}
+
+/** The breadcrumb fields an address can reach. */
+type SentryBreadcrumbLike = {
+  message?: string
+  data?: Record<string, unknown>
+}
+
+/**
+ * Each runtime's `beforeBreadcrumb`: redact email addresses from a
+ * breadcrumb's message and data (its `url` among them).
+ *
+ * @param breadcrumb - The breadcrumb Sentry is about to record.
+ * @returns The same breadcrumb with addresses replaced by `[email]`.
+ *
+ * @remarks Done when the breadcrumb is recorded, so no later event can carry
+ * the address, whichever code reports it. See {@link redactEmailAddresses}.
+ */
+export function sentryRedactBreadcrumb<B extends SentryBreadcrumbLike>(
+  breadcrumb: B,
+): B {
+  return {
+    ...breadcrumb,
+    ...(breadcrumb.message !== undefined
+      ? { message: redactEmailAddresses(breadcrumb.message) }
+      : {}),
+    ...(breadcrumb.data ? { data: redactRecord(breadcrumb.data) } : {}),
+  }
+}
+
+/** The span fields an address can reach. */
+type SentrySpanLike = {
+  description?: string
+  data?: Record<string, unknown>
+}
+
+/**
+ * Each runtime's `beforeSendSpan`: redact email addresses from a span's
+ * description and attributes.
+ *
+ * @param span - The span Sentry is about to send.
+ * @returns The same span with addresses replaced by `[email]`.
+ *
+ * @remarks An outgoing fetch span is named for its URL, so a sampled trace
+ * of a Resend contact call would carry the address too. See
+ * {@link redactEmailAddresses}.
+ */
+export function sentryRedactSpan<S extends SentrySpanLike>(span: S): S {
+  return {
+    ...span,
+    ...(span.description !== undefined
+      ? { description: redactEmailAddresses(span.description) }
+      : {}),
+    ...(span.data ? { data: redactRecord(span.data) } : {}),
+  }
+}
