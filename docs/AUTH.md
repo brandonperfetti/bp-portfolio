@@ -46,9 +46,20 @@
 
 ## Email capture
 
-- Three capture paths, one shared helper (`src/lib/email/captureContact.ts`
-  — logs and swallows every failure; capture is never the caller's
-  primary job):
+- Three capture paths, one shared helper (`src/lib/email/captureContact.ts`,
+  which never throws and returns an outcome only the newsletter confirm
+  route reads;
+  capture is never the other two callers' primary job, so they ignore it).
+  It looks the address up by email first, because Resend documents no
+  answer for a create on an existing contact (its OpenAPI spec lists only a
+  201; one user report says it returns a plain success, resend-node#494),
+  and a lookup of an absent one answers `404 not_found` (measured
+  2026-11-21). A new address is created in the segment. An existing contact
+  is added to `RESEND_CONTACT_SEGMENT_ID` when it is not already in it, on
+  every path (#406), an unsubscribed one included: segment membership does
+  not subscribe it, because a broadcast skips globally unsubscribed
+  contacts. Its names and its opt-out are left as they are, except on the
+  newsletter path below:
   1. Sign-up → explicit opt-in checkbox (unchecked by default) inside the
      sign-up form, then the Clerk webhook `POST /api/clerk/webhook` (svix
      signature verified with `CLERK_WEBHOOK_SIGNING_SECRET`), which captures
@@ -56,15 +67,74 @@
   2. Contact form → explicit opt-in checkbox (unchecked by default) on
      the Messenger form; `/api/contact` captures only when the flag is
      set AND the message delivered.
-  3. Newsletter Signup block → `/api/newsletter` (#367). The form is one
-     email field whose only job is subscribing, so submitting it is the
-     opt-in; there is no checkbox. Single opt-in, like the contact form's
-     box: no confirmation email, so nothing proves the visitor owns the
-     address, which sign-up does (Clerk's email code, or Google). Its
-     answer never says whether the address was already on the list, and it
-     does not ask Resend to clear an earlier unsubscribe (no `unsubscribed`
-     field is sent). Guards
-     shared with `/api/contact` (`src/lib/security/publicFormGuard.ts`).
+  3. Newsletter Signup block → `/api/newsletter` (#367), **double opt-in**
+     (Brandon, on #411). The form is one email field and no checkbox. A
+     submit changes nothing on the list: it sends one email, through Resend,
+     with a link to `/newsletter/confirm?token=…`. The token is stateless:
+     the address and a three-day expiry sealed with AES-256-GCM, under a key
+     derived from `PAYLOAD_SECRET` by HKDF with a fixed context label
+     (`src/lib/email/newsletterConfirmToken.ts`). It is encrypted, not only
+     signed, because the link's URL reaches Sentry, analytics and request
+     logs, and the email redaction cannot see an address inside base64; GCM
+     also authenticates it, so it confirms only the address it was sent to,
+     and an edited, forged or expired one is refused. The link points at the
+     host that took the sign-up when that is the site's host, a subdomain of
+     it (staging) or the deployment's own Vercel host, so a staging sign-up
+     confirms on staging under staging's secret. The header must be a bare
+     host, and any other value falls back to `NEXT_PUBLIC_SITE_URL`, so a
+     forged `Host` can't point a link sent from Brandon's address anywhere
+     else. The page joins no one on load, because mail scanners open
+     links in incoming mail; its **Confirm** button posts the token to
+     `/api/newsletter/confirm`, which runs `captureContact` with `rejoin`.
+     That creates a new contact in the segment, or, **for a reader who
+     unsubscribed** (Brandon, on #404; #407), updates `unsubscribed: true`
+     to `false` and reads it back (Resend's docs never say a `false`
+     re-subscribes, so a contact still unsubscribed counts as a failure),
+     then puts it in the segment. Only this path clears an opt-out; the
+     webhook honours the sign-up's `mailingListOptIn` choice and the contact
+     form its box. Because only the address's owner can confirm, a third
+     party can no longer put anyone on the list or back on it; what the
+     form still allows is sending a confirmation email to someone else's
+     address, which the submit route's rate limit and Turnstile bound.
+     **Replies.** The submit answers every address that was sent a link
+     with "Thanks. Check your inbox for a link to confirm.", new or already
+     on the list, and every address with a 503 "Couldn't sign you up right
+     now. Please try again later." when Resend refuses the send or cannot
+     be reached (#409). The confirm route answers `confirmed`, `expired`
+     (410), `invalid` (400), `used` (410), `failed` or `incomplete`
+     (503); a token's holder already knows its address, so these disclose
+     nothing new.
+     **Each link works once:** a verified token is claimed in Upstash
+     (`newsletter:confirm-used:<token digest>`, `SET NX`, expiring with the
+     token; `src/lib/email/newsletterTokenUse.ts`) before the join, so an
+     old link pressed again after an unsubscribe answers `used` and never
+     puts the reader back. A join that fails before the list changed (the
+     lookup, or a create Resend refused with a 4xx) releases the claim so
+     the same link can be retried (`failed`, 503); any other failure (a
+     create that timed out, threw or got a 5xx, which may have committed,
+     or the re-subscribe or segment step) keeps it, and answers `incomplete`
+     (503): sign up again for a new link. If a release fails, the link
+     stays used and a retry answers `used`, so the reader signs up again
+     too. A store failure answers 503 and joins no one. Without Upstash
+     the claim is a per-instance map outside production only; in
+     production it refuses, so the route answers 503 rather than hold
+     single use per instance. Only a token's canonical base64url spelling
+     verifies, so a respelled link cannot get a fresh claim. A failure is
+     reported to Sentry by stage with no address: the error names only the
+     stage, the server and edge Sentry configs redact addresses from
+     breadcrumbs, spans and the captured request body, where Resend's
+     `/contacts/<email>` URLs and the form's own post would otherwise land
+     (#409), and the confirm route's body and the page's URL carry only the
+     encrypted token. If Resend ever accepted a re-subscribe without
+     applying it, a once-unsubscribed reader's confirmation would fail every
+     time, and Sentry's `resubscribe` stage is where that would first
+     appear. No
+     `RESEND_API_KEY` or no `PAYLOAD_SECRET` answers 503 on both routes,
+     before any guard, with nothing sent and the list untouched. The
+     confirm route has its own rate-limit bucket
+     (`newsletter-confirm:<digest>`) and no Turnstile: the token is the
+     proof. Guards shared with `/api/contact`
+     (`src/lib/security/publicFormGuard.ts`).
      The capture rule:
      `docs/SECURITY.md` § Consent and analytics data.
      All three land in the Resend contact list, segmented via

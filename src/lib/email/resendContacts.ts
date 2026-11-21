@@ -56,9 +56,9 @@ export function getResendClient(context: string): Resend | null {
  * @returns The contact id, or `undefined` when it cannot be resolved.
  *
  * @remarks This extra round trip exists because `captureContact` returns
- * `void` — it is the shared capture path for the contact form too, and
- * widening its contract is out of this change's scope. The create response
- * does carry the new id, so if that helper ever returns it, this lookup
+ * an outcome but no contact id — it is the shared capture path for the
+ * contact form and the newsletter form too. Its own lookup and the create
+ * response both have the id, so if that helper ever returns it, this lookup
  * becomes dead code on the create paths.
  */
 export async function findContactIdByEmail(

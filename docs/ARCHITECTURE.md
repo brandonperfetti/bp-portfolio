@@ -31,7 +31,8 @@ What a reader or editor can do with it, and which tests prove it, is
   `admin/importMap.js` by hand (generated; CI-gated).
 - `src/app/api/` — custom route handlers: `ai/chat` (Corvus), `search`
   (palette index), `contact` (contact form via Resend), `newsletter`
-  (Newsletter Signup block → Resend list), `clerk/webhook` (email capture),
+  and `newsletter/confirm` (Newsletter Signup block → confirmation email →
+  Resend list, double opt-in), `clerk/webhook` (email capture),
   `revalidate` (secret-gated ISR).
 - `src/collections/`, `src/globals/`, `src/blocks/`, `src/fields/`,
   `src/access/` — Payload schema. `src/payload.config.ts` is the single

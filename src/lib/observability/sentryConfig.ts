@@ -578,3 +578,180 @@ export function sentryDropBotEvent<E extends SentryEventLike>(
 export function sentryDropNoisyLog<L extends SentryLogLike>(log: L): L | null {
   return isSuppressedSentryLogMessage(String(log.message ?? '')) ? null : log
 }
+
+/**
+ * An email address, plain, with its `@` percent-encoded as it is in a URL
+ * path, or JSON-escaped (`\u0040`) as a hand-written request body can carry
+ * it: the route decodes the escape, but Sentry keeps the raw body string.
+ */
+const EMAIL_ADDRESS_PATTERN =
+  /[A-Za-z0-9._%+'-]+(?:@|%40|\\u0040)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/gi
+
+/** What an address is replaced with. */
+const REDACTED_EMAIL = '[email]'
+
+/**
+ * Replace every email address in a string with `[email]`.
+ *
+ * @param text - Any string headed for Sentry.
+ * @returns The string with each address replaced.
+ *
+ * @remarks Resend's SDK puts a contact's address in the URL path
+ * (`/contacts/<email>`, `/contacts/<email>/segments`), and Sentry's fetch
+ * instrumentation records that path on its `http` breadcrumbs and spans;
+ * `getSanitizedUrlString` strips only the query and credentials
+ * [source: `@sentry/node-core` 10.78.0 `utils/outgoingFetchRequest.js`
+ * `getBreadcrumbData`]. So an error reported after a contact lookup, such as
+ * the newsletter route's `NewsletterCaptureError` (#409), would otherwise
+ * carry the address in its breadcrumbs.
+ */
+export function redactEmailAddresses(text: string): string {
+  return text.replace(EMAIL_ADDRESS_PATTERN, REDACTED_EMAIL)
+}
+
+/** How deep {@link redactValue} walks before leaving a value as it is. */
+const MAX_REDACT_DEPTH = 4
+
+/** What a container past {@link MAX_REDACT_DEPTH} is replaced with. */
+const REDACTED_DEEP_VALUE = '[redacted]'
+
+/**
+ * Redact every string in a value, walking arrays, plain objects and `Error`s.
+ *
+ * An `Error` becomes its `name`, `message` and `stack`, which are not
+ * enumerable and would otherwise copy as `{}`. Functions are dropped, and
+ * property names are redacted as well as values. A container past the depth
+ * limit is replaced, not kept, so nothing deeper escapes unredacted.
+ */
+function redactValue(value: unknown, depth = 0): unknown {
+  if (typeof value === 'string') return redactEmailAddresses(value)
+  // A function (such as a `toJSON`) would run at serialization, after
+  // redaction, and could return an address; it carries no report data.
+  if (typeof value === 'function') return undefined
+  if (value === null || typeof value !== 'object') return value
+  if (depth >= MAX_REDACT_DEPTH) return REDACTED_DEEP_VALUE
+  if (Array.isArray(value)) return value.map((v) => redactValue(v, depth + 1))
+  const source =
+    value instanceof Error
+      ? { name: value.name, message: value.message, stack: value.stack }
+      : value
+  const out: Record<string, unknown> = {}
+  for (const [key, v] of Object.entries(source)) {
+    // Keys too: a parsed JSON body can carry an address as a property name.
+    out[redactEmailAddresses(key)] = redactValue(v, depth + 1)
+  }
+  return out
+}
+
+/** Redact every string in a record, nested values included. */
+function redactRecord<T extends Record<string, unknown>>(record: T): T {
+  return redactValue(record) as T
+}
+
+/** The breadcrumb fields an address can reach. */
+type SentryBreadcrumbLike = {
+  message?: string
+  data?: Record<string, unknown>
+}
+
+/**
+ * Each runtime's `beforeBreadcrumb`: redact email addresses from a
+ * breadcrumb's message and data (its `url` among them).
+ *
+ * @param breadcrumb - The breadcrumb Sentry is about to record.
+ * @returns The same breadcrumb with addresses replaced by `[email]`.
+ *
+ * @remarks Done when the breadcrumb is recorded, so no later event can carry
+ * the address, whichever code reports it. See {@link redactEmailAddresses}.
+ */
+export function sentryRedactBreadcrumb<B extends SentryBreadcrumbLike>(
+  breadcrumb: B,
+): B {
+  return {
+    ...breadcrumb,
+    ...(breadcrumb.message !== undefined
+      ? { message: redactEmailAddresses(breadcrumb.message) }
+      : {}),
+    ...(breadcrumb.data ? { data: redactRecord(breadcrumb.data) } : {}),
+  }
+}
+
+/** The span fields an address can reach. */
+type SentrySpanLike = {
+  description?: string
+  data?: Record<string, unknown>
+}
+
+/**
+ * Each runtime's `beforeSendSpan`: redact email addresses from a span's
+ * description and attributes.
+ *
+ * @param span - The span Sentry is about to send.
+ * @returns The same span with addresses replaced by `[email]`.
+ *
+ * @remarks An outgoing fetch span is named for its URL, so a sampled trace
+ * of a Resend contact call would carry the address too. See
+ * {@link redactEmailAddresses}.
+ */
+export function sentryRedactSpan<S extends SentrySpanLike>(span: S): S {
+  return {
+    ...span,
+    ...(span.description !== undefined
+      ? { description: redactEmailAddresses(span.description) }
+      : {}),
+    ...(span.data ? { data: redactRecord(span.data) } : {}),
+  }
+}
+
+/** The request fields of an error event an address can reach. */
+type SentryEventRequestLike = {
+  request?: {
+    data?: unknown
+    query_string?: unknown
+    url?: string
+  }
+}
+
+/**
+ * Part of each runtime's `beforeSend`, and its `beforeSendTransaction`:
+ * redact email addresses from the request an event carries.
+ *
+ * @param event - The event Sentry is about to send.
+ * @returns The same event with addresses in its request replaced.
+ *
+ * @remarks Sentry's Node HTTP integration captures incoming request bodies
+ * by default (`maxRequestBodySize` defaults to `'medium'` [source:
+ * `@sentry/node-core` 10.78.0 `integrations/http/httpServerIntegration.js`]),
+ * and the request-data integration attaches them to every event, sampled
+ * transactions included, which never pass through `beforeSend`. The
+ * newsletter and contact forms post an address, so an error reported while
+ * handling one, such as `NewsletterCaptureError` (#409), would carry it. A
+ * body that is a JSON string is parsed, redacted on its decoded values and
+ * serialized again, so JSON escapes cannot hide an address.
+ */
+export function sentryRedactEventRequest<E extends SentryEventRequestLike>(
+  event: E,
+): E {
+  if (!event.request) return event
+  const request = redactRecord(event.request as Record<string, unknown>)
+  const raw = (event.request as { data?: unknown }).data
+  const parsed = typeof raw === 'string' ? parseJsonContainer(raw) : undefined
+  if (parsed !== undefined) {
+    // Redact the decoded values: an escape such as `\u002e` in the domain
+    // hides an address from the pattern in the raw string.
+    request.data = JSON.stringify(redactValue(parsed))
+  }
+  return { ...event, request }
+}
+
+/** A JSON object or array parsed from `text`, else `undefined`. */
+function parseJsonContainer(text: string): unknown {
+  const start = text.trimStart()[0]
+  if (start !== '{' && start !== '[') return undefined
+  try {
+    const value: unknown = JSON.parse(text)
+    return value !== null && typeof value === 'object' ? value : undefined
+  } catch {
+    return undefined
+  }
+}

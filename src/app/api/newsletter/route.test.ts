@@ -3,11 +3,11 @@ import { createHmac } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * Newsletter Signup → Resend (#367). The real limiter, the real shared guard
- * (`guardPublicForm`) and the real `captureContact` run; only the Upstash
- * client, the Resend SDK, Sentry and the request guardrails' environment
- * reads are faked. So a pass here is the route, its guards and the capture
- * helper the Clerk webhook uses, end to end short of the network.
+ * Newsletter Signup → a confirmation email (#367, double opt-in #407). The
+ * real limiter, the real shared guard (`guardPublicForm`) and the real token
+ * module run; only the Upstash client, the Resend SDK, Sentry and the request
+ * guardrails' environment reads are faked. The contact mocks stay so a test
+ * can prove a submit makes no contact call at all.
  */
 
 const limitMock = vi.fn()
@@ -23,12 +23,32 @@ vi.mock('@upstash/redis', () => ({
   Redis: { fromEnv: vi.fn(() => ({})) },
 }))
 
+const sendMock = vi.fn()
 const createContactMock = vi.fn()
+const getContactMock = vi.fn()
+const updateContactMock = vi.fn()
+const listSegmentsMock = vi.fn()
+const addSegmentMock = vi.fn()
 vi.mock('resend', () => ({
   Resend: class {
-    contacts = { create: (...args: unknown[]) => createContactMock(...args) }
+    emails = { send: (...args: unknown[]) => sendMock(...args) }
+    contacts = {
+      create: (...args: unknown[]) => createContactMock(...args),
+      get: (...args: unknown[]) => getContactMock(...args),
+      update: (...args: unknown[]) => updateContactMock(...args),
+      segments: {
+        list: (...args: unknown[]) => listSegmentsMock(...args),
+        add: (...args: unknown[]) => addSegmentMock(...args),
+      },
+    }
   },
 }))
+
+/** Resend's answer to a lookup of an absent contact (measured 2026-11-21). */
+const NOT_FOUND = {
+  data: null,
+  error: { statusCode: 404, message: 'Contact not found', name: 'not_found' },
+}
 
 const captureExceptionMock = vi.fn()
 vi.mock('@sentry/nextjs', () => ({
@@ -94,7 +114,18 @@ beforeEach(() => {
   vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io')
   vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'test-token')
   vi.stubEnv('PAYLOAD_SECRET', TEST_PAYLOAD_SECRET)
+  sendMock.mockResolvedValue({ data: { id: 'em_1' }, error: null })
   createContactMock.mockResolvedValue({ data: { id: 'c_1' }, error: null })
+  getContactMock.mockResolvedValue(NOT_FOUND)
+  updateContactMock.mockResolvedValue({
+    data: { id: 'c_existing' },
+    error: null,
+  })
+  listSegmentsMock.mockResolvedValue({
+    data: { object: 'list', has_more: false, data: [] },
+    error: null,
+  })
+  addSegmentMock.mockResolvedValue({ data: { id: SEGMENT_ID }, error: null })
   countingLimiter()
 })
 
@@ -104,63 +135,139 @@ afterEach(() => {
   vi.resetModules()
 })
 
-describe('POST /api/newsletter (#367)', () => {
-  it('adds the trimmed address to the Resend list and segment', async () => {
+describe('POST /api/newsletter (#367, double opt-in #407)', () => {
+  /** Every Resend contact call: a submit must make none. */
+  const contactCalls = () => [
+    ...createContactMock.mock.calls,
+    ...getContactMock.mock.calls,
+    ...updateContactMock.mock.calls,
+    ...listSegmentsMock.mock.calls,
+    ...addSegmentMock.mock.calls,
+  ]
+
+  it('sends one confirmation email to the trimmed address, and changes nothing on the list', async () => {
     const POST = await loadPost()
 
     const res = await POST(makeRequest())
 
     expect(res.status).toBe(200)
-    expect(createContactMock).toHaveBeenCalledTimes(1)
-    expect(createContactMock.mock.calls[0]?.[0]).toMatchObject({
+    expect(await res.json()).toEqual({
+      message: 'Thanks. Check your inbox for a link to confirm.',
+    })
+    expect(sendMock).toHaveBeenCalledTimes(1)
+    const [sent] = sendMock.mock.calls[0] as [
+      { to: string; subject: string; text: string; html: string },
+    ]
+    expect(sent.to).toBe('reader@example.test')
+    expect(sent.subject).toBe('Confirm your subscription')
+    expect(sent.text).toMatch(/ignore this email\. Nothing happens/)
+    expect(contactCalls()).toEqual([])
+  })
+
+  it('links to the confirm page with a token that confirms only that address', async () => {
+    const POST = await loadPost()
+    await POST(makeRequest())
+
+    const [sent] = sendMock.mock.calls[0] as [{ text: string; html: string }]
+    const link = /https?:\/\/\S+\/newsletter\/confirm\?token=([\w.-]+)/.exec(
+      sent.text,
+    )
+    expect(link).not.toBeNull()
+    expect(sent.html).toContain(link![0])
+
+    const { getConfirmTokenKey, verifyConfirmToken } =
+      await import('@/lib/email/newsletterConfirmToken')
+    expect(verifyConfirmToken(link![1], getConfirmTokenKey()!)).toEqual({
+      ok: true,
       email: 'reader@example.test',
-      segments: [{ id: SEGMENT_ID }],
     })
   })
 
-  it('answers an address already on the list exactly as a new one', async () => {
+  it('answers every address with one byte-identical success, and one byte-identical failure (#409)', async () => {
     const POST = await loadPost()
-    const fresh = await POST(makeRequest())
+    const bodyOf = async (email: string) => {
+      const res = await POST(makeRequest({ email }))
+      return { status: res.status, body: await res.text() }
+    }
 
-    createContactMock.mockResolvedValue({
+    const first = await bodyOf('new@example.test')
+    const second = await bodyOf('subscribed@example.test')
+    expect(first.status).toBe(200)
+    expect(second).toEqual(first)
+
+    countingLimiter()
+    sendMock.mockResolvedValueOnce({
       data: null,
-      error: { name: 'conflict', message: 'Contact already exists' },
+      error: { statusCode: 500, name: 'internal_server_error', message: 'x' },
     })
-    const duplicate = await POST(makeRequest())
+    const refused = await bodyOf('new@example.test')
+    sendMock.mockRejectedValueOnce(new Error('network down'))
+    const unreachable = await bodyOf('subscribed@example.test')
 
-    expect(duplicate.status).toBe(fresh.status)
-    expect(await duplicate.json()).toEqual(await fresh.json())
+    expect(refused.status).toBe(503)
+    expect(JSON.parse(refused.body)).toEqual({
+      message: "Couldn't sign you up right now. Please try again later.",
+    })
+    expect(unreachable).toEqual(refused)
+    expect(contactCalls()).toEqual([])
   })
 
-  it('answers a Resend failure as a success too, so no answer differs', async () => {
+  it('reports a failed send to Sentry by stage, with no address in it (#409)', async () => {
+    sendMock.mockResolvedValue({
+      data: null,
+      error: {
+        statusCode: 422,
+        name: 'validation_error',
+        message: 'reader@example.test is invalid',
+      },
+    })
     const POST = await loadPost()
-    const fresh = await POST(makeRequest())
 
-    createContactMock.mockRejectedValue(new Error('network down'))
-    const failed = await POST(makeRequest())
+    const res = await POST(makeRequest())
 
-    expect(failed.status).toBe(200)
-    expect(await failed.json()).toEqual(await fresh.json())
+    expect(res.status).toBe(503)
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1)
+    const [captured, hint] = captureExceptionMock.mock.calls[0] as [
+      Error,
+      { tags: Record<string, string> },
+    ]
+    expect(hint.tags).toEqual({
+      'newsletter.capture_stage': 'send',
+      'resend.error_name': 'validation_error',
+      'resend.status_code': '422',
+    })
+    expect(
+      JSON.stringify([captured.message, captured.stack, hint]),
+    ).not.toContain('reader@example.test')
+  })
+
+  it('answers 503 and sends nothing without PAYLOAD_SECRET to seal the link', async () => {
+    vi.stubEnv('PAYLOAD_SECRET', '')
+    const POST = await loadPost()
+
+    const res = await POST(makeRequest())
+
+    expect(res.status).toBe(503)
+    expect(limitMock).not.toHaveBeenCalled()
+    expect(sendMock).not.toHaveBeenCalled()
+    expect(contactCalls()).toEqual([])
   })
 
   it.each([
     ['not an email', { email: 'not-an-email' }],
     ['missing', {}],
     ['not JSON-shaped', 'just a string'],
-  ])(
-    'rejects a bad email (%s) with 400 and captures nothing',
-    async (_, body) => {
-      const POST = await loadPost()
+  ])('rejects a bad email (%s) with 400 and sends nothing', async (_, body) => {
+    const POST = await loadPost()
 
-      const res = await POST(makeRequest(body))
+    const res = await POST(makeRequest(body))
 
-      expect(res.status).toBe(400)
-      expect(((await res.json()) as { message: string }).message).toMatch(
-        /valid email/i,
-      )
-      expect(createContactMock).not.toHaveBeenCalled()
-    },
-  )
+    expect(res.status).toBe(400)
+    expect(((await res.json()) as { message: string }).message).toMatch(
+      /valid email/i,
+    )
+    expect(sendMock).not.toHaveBeenCalled()
+  })
 
   it('refuses a cross-origin request with 403 before the limiter runs', async () => {
     sourceAllowedMock.mockReturnValueOnce(false)
@@ -170,7 +277,7 @@ describe('POST /api/newsletter (#367)', () => {
 
     expect(res.status).toBe(403)
     expect(limitMock).not.toHaveBeenCalled()
-    expect(createContactMock).not.toHaveBeenCalled()
+    expect(sendMock).not.toHaveBeenCalled()
   })
 
   it('refuses a failed Turnstile check with 403, passing the raw IP to Cloudflare', async () => {
@@ -186,7 +293,7 @@ describe('POST /api/newsletter (#367)', () => {
       /verification failed/i,
     )
     expect(turnstileMock).toHaveBeenCalledWith({ token: 'tok', ip: CLIENT_IP })
-    expect(createContactMock).not.toHaveBeenCalled()
+    expect(sendMock).not.toHaveBeenCalled()
   })
 
   it('keys the limiter on the HMAC digest of the IP in its own bucket', async () => {
@@ -199,7 +306,7 @@ describe('POST /api/newsletter (#367)', () => {
     expect(key).not.toContain(CLIENT_IP)
   })
 
-  it('trips at the configured rate: the request past it gets 429 and captures nothing', async () => {
+  it('trips at the configured rate: the request past it gets 429 and sends nothing', async () => {
     const POST = await loadPost()
 
     for (let i = 0; i < RATE_PER_MINUTE; i += 1) {
@@ -209,10 +316,10 @@ describe('POST /api/newsletter (#367)', () => {
 
     expect(over.status).toBe(429)
     expect(Number(over.headers.get('Retry-After'))).toBeGreaterThanOrEqual(1)
-    expect(createContactMock).toHaveBeenCalledTimes(RATE_PER_MINUTE)
+    expect(sendMock).toHaveBeenCalledTimes(RATE_PER_MINUTE)
   })
 
-  it('fails closed on a limiter outage: 503, no capture, one redacted report', async () => {
+  it('fails closed on a limiter outage: 503, nothing sent, one redacted report', async () => {
     limitMock.mockRejectedValue(
       new TypeError(
         `s.map is not a function (${EXPECTED_LIMITER_KEY}, ${CLIENT_IP})`,
@@ -226,7 +333,7 @@ describe('POST /api/newsletter (#367)', () => {
     expect(((await res.json()) as { message: string }).message).toMatch(
       /temporarily unavailable/i,
     )
-    expect(createContactMock).not.toHaveBeenCalled()
+    expect(sendMock).not.toHaveBeenCalled()
     expect(captureExceptionMock).toHaveBeenCalledTimes(1)
     const [captured, hint] = captureExceptionMock.mock.calls[0] as [
       Error & { cause?: Error },
@@ -245,7 +352,7 @@ describe('POST /api/newsletter (#367)', () => {
     )
   })
 
-  it('answers 503 without RESEND_API_KEY rather than claim a subscription', async () => {
+  it('answers 503 without RESEND_API_KEY and sends nothing', async () => {
     vi.stubEnv('RESEND_API_KEY', '')
     const POST = await loadPost()
 
@@ -253,6 +360,6 @@ describe('POST /api/newsletter (#367)', () => {
 
     expect(res.status).toBe(503)
     expect(limitMock).not.toHaveBeenCalled()
-    expect(createContactMock).not.toHaveBeenCalled()
+    expect(sendMock).not.toHaveBeenCalled()
   })
 })

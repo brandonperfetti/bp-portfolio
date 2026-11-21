@@ -458,6 +458,18 @@ stay there.
     caller's stack is rethrown untouched; one from a timer retry has no caller
     to reach, so it is logged `retry_failed` and the retry stops, not
     rethrown [source: `installHistoryWriteGuard`'s `scheduleRetry`].
+  - The server and edge runtimes redact email addresses from breadcrumbs
+    and spans (`beforeBreadcrumb`, `beforeSendSpan`) and from the
+    request an error or transaction event carries (`beforeSend`,
+    `beforeSendTransaction`), because Resend's SDK puts a contact's
+    address in its URL path, which Sentry's fetch instrumentation records,
+    and Sentry's HTTP integration captures incoming request bodies, where
+    the newsletter and contact forms post one (#409). An address is
+    matched plain, with its `@` as `%40`, or JSON-escaped as `\u0040`.
+    Strings are redacted four levels deep, an `Error` keeps its name,
+    message and stack, functions are dropped, and a container nested
+    deeper is replaced with `[redacted]` [source:
+    `src/lib/observability/sentryConfig.ts`, `redactEmailAddresses`].
   - `clientTelemetry.ts` sends a speech-recognition error code and a
     boolean [source: `src/lib/observability/clientTelemetry.ts:36-39`].
 - **A mailing-list contact is captured only with consent.** The contact
@@ -466,10 +478,24 @@ stay there.
   capture comes through the verified Clerk webhook, and only for an account
   whose sign-up ticked the same unchecked-by-default opt-in (#362) [source:
   `src/app/api/clerk/webhook/route.ts`, `hasMailingListOptIn`]. The
-  Newsletter Signup block's form exists only to subscribe, so submitting its
-  one email field is the opt-in, and its answer is the same whether or not
-  the address was already on the list (#367) [source:
-  `src/app/api/newsletter/route.ts`]. Mechanism:
+  Newsletter Signup block's form is **double opt-in** (#411): a submit only
+  emails the address an encrypted, expiring link, and the address joins the
+  list, or rejoins it after an unsubscribe (#407), only when its owner
+  presses Confirm on the page the link opens. Each link works once, so a
+  link already used cannot undo a later unsubscribe; an unused link issued
+  before the unsubscribe can still confirm until it expires (3 days), which
+  only the inbox's owner, or someone the link reached, can do. Single use
+  is shared across instances through Upstash; a production deploy without
+  Upstash refuses every confirmation (503) rather than hold it per
+  instance. So no one can put another
+  person on the list, or back on it; the form can still send a
+  confirmation to someone else's address, which its rate limit bounds, and
+  Turnstile too when `TURNSTILE_SECRET_KEY` is set. Every success reply is
+  the same and every failure reply (503, when Resend fails) is the same
+  (#409), so neither says whether the address was already on the list
+  [source: `src/app/api/newsletter/route.ts`,
+  `src/app/api/newsletter/confirm/route.ts`,
+  `src/lib/email/newsletterConfirmToken.ts`]. Mechanism:
   `docs/AUTH.md` § Email capture.
 - **Broadcasts:** Respect the marketing consent field, and honor
   per-contact unsubscribe state before any broadcast ever sends. _Moved from

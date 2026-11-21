@@ -10,8 +10,22 @@ import {
 import { checkChatLimits, type LimitResult } from '@/lib/security/limiter'
 import { reportLimiterOutage } from '@/lib/security/limiterOutage'
 
-/** The public forms that write through Resend from an anonymous visitor. */
-export type PublicFormSurface = 'contact' | 'newsletter'
+/**
+ * The public forms that write through Resend from an anonymous visitor.
+ * `newsletter-confirm` is the double opt-in confirmation (#407), with its
+ * own limiter bucket.
+ */
+export type PublicFormSurface = 'contact' | 'newsletter' | 'newsletter-confirm'
+
+/** Per-route switches for {@link guardPublicForm}. */
+export type PublicFormGuardOptions = {
+  /**
+   * Run the Turnstile check (default `true`). The newsletter confirmation
+   * turns it off: its request carries a signed token only the address's
+   * owner received, so a bot check adds nothing the token does not.
+   */
+  turnstile?: boolean
+}
 
 /** What a guarded form says when one of the guards refuses a request. */
 export type PublicFormMessages = {
@@ -35,6 +49,7 @@ export type PublicFormGuardResult =
  * @param surface - The form, which prefixes the limiter key and names the
  *   Sentry outage.
  * @param messages - The visitor-facing text for the 503 and the Turnstile 403.
+ * @param options - Per-route switches; see {@link PublicFormGuardOptions}.
  * @returns A refusal carrying the response to send, or the client IP and the
  *   parsed body (`null` when it was not JSON) for the route to validate.
  *
@@ -56,6 +71,7 @@ export async function guardPublicForm(
   req: Request,
   surface: PublicFormSurface,
   messages: PublicFormMessages,
+  options: PublicFormGuardOptions = {},
 ): Promise<PublicFormGuardResult> {
   if (!isAllowedRequestSource(req)) {
     return {
@@ -104,6 +120,7 @@ export async function guardPublicForm(
   }
 
   const body: unknown = await req.json().catch(() => null)
+  if (options.turnstile === false) return { ok: true, ip, body }
 
   const token = (body as { turnstileToken?: unknown } | null)?.turnstileToken
   const turnstile = await verifyRequestTurnstileToken({
