@@ -43,10 +43,32 @@ describe('confirmLinkOrigin', () => {
     )
   })
 
-  it('uses http for localhost', () => {
+  it('uses http for localhost, outside production only', () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://brandonperfetti.com')
+    vi.stubEnv('NODE_ENV', 'development')
     expect(confirmLinkOrigin(req({ host: 'localhost:3000' }))).toBe(
       'http://localhost:3000',
     )
+    vi.stubEnv('NODE_ENV', 'production')
+    expect(confirmLinkOrigin(req({ host: 'localhost:3000' }))).toBe(
+      'https://brandonperfetti.com',
+    )
+  })
+
+  it('refuses a header that is not a bare host, even one ending in the site host', () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://brandonperfetti.com')
+    for (const host of [
+      'evil.example/x.brandonperfetti.com',
+      'evil.example?.brandonperfetti.com',
+      'evil.example#.brandonperfetti.com',
+      'evil.example\\.brandonperfetti.com',
+      'evil.example@staging.brandonperfetti.com',
+      'a"><a href="https://evil.example">.brandonperfetti.com',
+    ]) {
+      expect(confirmLinkOrigin(req({ 'x-forwarded-host': host }))).toBe(
+        'https://brandonperfetti.com',
+      )
+    }
   })
 
   it('falls back to the site URL for any other host, or none', () => {
@@ -74,5 +96,11 @@ describe('buildConfirmEmail', () => {
       'https://staging.brandonperfetti.com/newsletter/confirm?token=tok_en'
     expect(text).toContain(link)
     expect(html).toContain(`href="${link}"`)
+  })
+
+  it('escapes the link in the HTML body', () => {
+    const { html } = buildConfirmEmail('t', 'https://x.test/"><b>')
+    expect(html).not.toContain('"><b>')
+    expect(html).toContain('&quot;&gt;&lt;b&gt;')
   })
 })

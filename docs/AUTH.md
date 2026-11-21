@@ -80,8 +80,10 @@
      and an edited, forged or expired one is refused. The link points at the
      host that took the sign-up when that is the site's host, a subdomain of
      it (staging) or the deployment's own Vercel host, so a staging sign-up
-     confirms on staging under staging's secret; any other `Host` falls back
-     to `NEXT_PUBLIC_SITE_URL`. The page joins no one on load, because mail scanners open
+     confirms on staging under staging's secret. The header must be a bare
+     host, and any other value falls back to `NEXT_PUBLIC_SITE_URL`, so a
+     forged `Host` can't point a link sent from Brandon's address anywhere
+     else. The page joins no one on load, because mail scanners open
      links in incoming mail; its **Confirm** button posts the token to
      `/api/newsletter/confirm`, which runs `captureContact` with `rejoin`.
      That creates a new contact in the segment, or, **for a reader who
@@ -106,8 +108,9 @@
      breadcrumbs, spans and the captured request body, where Resend's
      `/contacts/<email>` URLs and the form's own post would otherwise land
      (#409), and the confirm route's body and the page's URL carry only the
-     encrypted token. If Resend ever accepted a re-subscribe without applying it, a
-     once-unsubscribed reader's confirmation would fail every time, and
+     encrypted token. If Resend ever accepted a re-subscribe without
+     applying it, a once-unsubscribed reader's confirmation would fail every
+     time, and
      Sentry's `resubscribe` stage is where that would first appear. No
      `RESEND_API_KEY` or no `PAYLOAD_SECRET` answers 503 on both routes,
      before any guard, with nothing sent and the list untouched. The

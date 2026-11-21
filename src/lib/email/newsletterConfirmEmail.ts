@@ -26,8 +26,9 @@ function hostOf(url: string | undefined): string | null {
  * `PAYLOAD_SECRET`, so a staging sign-up linking to production could never
  * confirm. **Why an allowlist.** The link goes out in mail from Brandon's
  * address, so a forged `Host` must never choose where it points: only the
- * site's host and its subdomains (staging), the deployment's own Vercel
- * hosts (`VERCEL_URL`, `VERCEL_BRANCH_URL`, set by the platform) and
+ * header must be a bare hostname (and port), and only the site's host and
+ * its subdomains (staging), the deployment's own Vercel hosts (`VERCEL_URL`,
+ * `VERCEL_BRANCH_URL`, set by the platform) and, outside production,
  * localhost are used; anything else falls back to the site URL.
  */
 export function confirmLinkOrigin(req: Request): string {
@@ -40,8 +41,15 @@ export function confirmLinkOrigin(req: Request): string {
     .split(',')[0]
     .trim()
     .toLowerCase()
-  if (!host) return fallback
-  if (/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return `http://${host}`
+  // A bare hostname and optional port, nothing else: no path, query,
+  // fragment, backslash, quote or markup can ride along into the link.
+  if (!/^[a-z0-9.-]+(:\d{1,5})?$/.test(host)) return fallback
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)
+  ) {
+    return `http://${host}`
+  }
   const siteHost = hostOf(fallback)
   const allowed =
     (siteHost !== null &&
@@ -49,6 +57,14 @@ export function confirmLinkOrigin(req: Request): string {
     host === hostOf(process.env.VERCEL_URL) ||
     host === hostOf(process.env.VERCEL_BRANCH_URL)
   return allowed ? `https://${host}` : fallback
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
 }
 
 /**
@@ -63,8 +79,9 @@ export function confirmLinkOrigin(req: Request): string {
  * nothing, since anyone can type any address into the form. The link opens
  * a page with a button rather than confirming on load, because mail
  * scanners open links in incoming mail, and a link that confirmed on load
- * would subscribe whoever the mail reached. The token is the only dynamic
- * part, and it is base64url, so it needs no HTML escaping.
+ * would subscribe whoever the mail reached. The origin is checked by
+ * {@link confirmLinkOrigin} and the token is base64url, but the URL is
+ * HTML-escaped in the `href` anyway, so a future caller cannot inject markup.
  */
 export function buildConfirmEmail(
   token: string,
@@ -91,7 +108,7 @@ export function buildConfirmEmail(
     html: `
       <p>Hi,</p>
       <p>Someone, hopefully you, asked to get an email from brandonperfetti.com when I publish something new.</p>
-      <p><a href="${url}">Confirm your subscription</a></p>
+      <p><a href="${escapeHtml(url)}">Confirm your subscription</a></p>
       <p>If that wasn't you, ignore this email. Nothing happens unless you confirm, and the link stops working in 3 days.</p>
       <p>Brandon</p>
     `,

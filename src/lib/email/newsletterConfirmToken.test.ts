@@ -28,7 +28,7 @@ function key(secret = 'test-payload-secret') {
 }
 
 describe('newsletter confirmation token', () => {
-  it('has no key, and so signs nothing, without PAYLOAD_SECRET', () => {
+  it('has no key, and so seals nothing, without PAYLOAD_SECRET', () => {
     vi.stubEnv('PAYLOAD_SECRET', '')
     expect(getConfirmTokenKey()).toBeNull()
   })

@@ -68,7 +68,7 @@ const UNAVAILABLE_MESSAGE = 'Subscriptions are unavailable right now.'
  * is set. They now also bound how many confirmation emails one client can
  * make the site send to other people's addresses.
  *
- * No `RESEND_API_KEY`, or no `PAYLOAD_SECRET` to sign the link with, answers
+ * No `RESEND_API_KEY`, or no `PAYLOAD_SECRET` to seal the link's token with, answers
  * 503 before any guard runs, and nothing is sent.
  */
 export async function POST(req: Request) {

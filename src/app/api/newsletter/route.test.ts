@@ -241,7 +241,7 @@ describe('POST /api/newsletter (#367, double opt-in #407)', () => {
     ).not.toContain('reader@example.test')
   })
 
-  it('answers 503 and sends nothing without PAYLOAD_SECRET to sign the link', async () => {
+  it('answers 503 and sends nothing without PAYLOAD_SECRET to seal the link', async () => {
     vi.stubEnv('PAYLOAD_SECRET', '')
     const POST = await loadPost()
 
