@@ -268,10 +268,10 @@ describe('POST /api/newsletter/confirm (#407)', () => {
     expect(updateContactMock).not.toHaveBeenCalled()
   })
 
-  it('releases the link when the join fails, so the reader can retry it', async () => {
+  it('releases the link when Resend refuses the create outright, so the reader can retry it', async () => {
     createContactMock.mockResolvedValueOnce({
       data: null,
-      error: { name: 'application_error', statusCode: 500, message: 'x' },
+      error: { name: 'validation_error', statusCode: 422, message: 'x' },
     })
     const token = await tokenFor('reader@example.test')
     const POST = await loadPost()
@@ -302,6 +302,46 @@ describe('POST /api/newsletter/confirm (#407)', () => {
     updateContactMock.mockClear()
     expect((await POST(makeRequest({ token }))).status).toBe(410)
     expect(updateContactMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'a 5xx',
+      {
+        data: null,
+        error: { name: 'internal_server_error', statusCode: 500, message: 'x' },
+      },
+    ],
+    [
+      'no status',
+      { data: null, error: { name: 'application_error', message: 'x' } },
+    ],
+  ])(
+    'keeps the link used when a create fails with %s, since it may have committed',
+    async (_label, reply) => {
+      createContactMock.mockResolvedValueOnce(reply)
+      const POST = await loadPost()
+
+      const res = await POST(
+        makeRequest({ token: await tokenFor('reader@example.test') }),
+      )
+
+      expect(res.status).toBe(503)
+      expect(await res.json()).toMatchObject({ status: 'incomplete' })
+      expect(redisDelMock).not.toHaveBeenCalled()
+    },
+  )
+
+  it('keeps the link used when the create throws', async () => {
+    createContactMock.mockRejectedValueOnce(new Error('socket hang up'))
+    const POST = await loadPost()
+
+    const res = await POST(
+      makeRequest({ token: await tokenFor('reader@example.test') }),
+    )
+
+    expect(await res.json()).toMatchObject({ status: 'incomplete' })
+    expect(redisDelMock).not.toHaveBeenCalled()
   })
 
   it('confirms once when two presses of the same link overlap', async () => {
@@ -404,7 +444,7 @@ describe('POST /api/newsletter/confirm (#407)', () => {
     expect(contactCalls()).toEqual([])
   })
 
-  it('answers 503 failed, reported by stage with no address, when Resend refuses the join (#409)', async () => {
+  it('answers 503, never confirmed, reported by stage with no address, when Resend fails the join (#409)', async () => {
     createContactMock.mockResolvedValue({
       data: null,
       error: { statusCode: 500, name: 'internal_server_error', message: 'x' },
@@ -416,7 +456,7 @@ describe('POST /api/newsletter/confirm (#407)', () => {
     )
 
     expect(res.status).toBe(503)
-    expect(await res.json()).toMatchObject({ status: 'failed' })
+    expect(await res.json()).toMatchObject({ status: 'incomplete' })
     const [captured, hint] = captureExceptionMock.mock.calls[0] as [
       Error,
       { tags: Record<string, string> },

@@ -38,9 +38,9 @@ function answer(status: ConfirmStatus, httpStatus: number, message: string) {
  * limiter's store before the join (`newsletterTokenUse.ts`), so pressing an
  * old link again answers `used` (410) and never clears an unsubscribe made
  * after it was confirmed. A join that fails before anything on the list
- * changed (lookup or create) releases the claim, so the reader can retry the
- * same link; one that fails later (re-subscribe or segment) keeps it, since
- * the re-subscribe may have applied, and answers `incomplete`: sign up again
+ * changed (the lookup, or a create Resend refused with a 4xx) releases the
+ * claim, so the reader can retry the same link; any other failure keeps it,
+ * since the write may have applied, and answers `incomplete`: sign up again
  * for a new link. If the release itself fails, the link stays used too. A
  * store failure answers 503 and joins no one.
  *
@@ -106,14 +106,22 @@ export async function POST(req: Request) {
       outcome.status === 'failed' ? outcome.stage : 'skipped',
       outcome.status === 'failed' ? outcome : {},
     )
-    // Free the link only when nothing on the list can have changed: the
-    // lookup or the create failed, or capture was skipped. Past that, the
-    // re-subscribe may have applied, and a freed link could undo a later
-    // unsubscribe, so it stays used and the reader signs up again.
+    // Free the link only when nothing on the list can have changed: capture
+    // was skipped, the lookup failed, or Resend refused the create outright
+    // (a 4xx). A create that timed out, threw or got a 5xx may have
+    // committed, and past the create the re-subscribe may have applied; a
+    // freed link could then undo a later unsubscribe, so it stays used and
+    // the reader signs up again.
+    const refusedCreate =
+      outcome.status === 'failed' &&
+      outcome.stage === 'create' &&
+      typeof outcome.statusCode === 'number' &&
+      outcome.statusCode >= 400 &&
+      outcome.statusCode < 500
     const unchanged =
       outcome.status === 'skipped' ||
       outcome.stage === 'lookup' ||
-      outcome.stage === 'create'
+      refusedCreate
     if (unchanged) {
       await releaseConfirmToken(sealed)
       return answer('failed', 503, "Couldn't confirm right now.")

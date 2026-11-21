@@ -101,16 +101,18 @@
      on the list, and every address with a 503 "Couldn't sign you up right
      now. Please try again later." when Resend refuses the send or cannot
      be reached (#409). The confirm route answers `confirmed`, `expired`
-     (410), `invalid` (400), `used` (410), `failed` or `incomplete` (503); a token's
-     holder already knows its address, so these disclose nothing new.
+     (410), `invalid` (400), `used` (410), `failed` or `incomplete`
+     (503); a token's holder already knows its address, so these disclose
+     nothing new.
      **Each link works once:** a verified token is claimed in Upstash
      (`newsletter:confirm-used:<token digest>`, `SET NX`, expiring with the
      token; `src/lib/email/newsletterTokenUse.ts`) before the join, so an
      old link pressed again after an unsubscribe answers `used` and never
-     puts the reader back. A join that fails before the list changed
-     (lookup or create) releases the claim so the same link can be retried
-     (`failed`, 503); one that fails later (re-subscribe or segment) keeps
-     it, since the re-subscribe may have applied, and answers `incomplete`
+     puts the reader back. A join that fails before the list changed (the
+     lookup, or a create Resend refused with a 4xx) releases the claim so
+     the same link can be retried (`failed`, 503); any other failure (a
+     create that timed out, threw or got a 5xx, which may have committed,
+     or the re-subscribe or segment step) keeps it, and answers `incomplete`
      (503): sign up again for a new link. If a release fails, the link
      stays used and a retry answers `used`, so the reader signs up again
      too. A store failure answers 503 and joins no one;
