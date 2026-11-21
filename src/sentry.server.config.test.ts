@@ -110,7 +110,7 @@ describe('sentry.server.config (#194)', () => {
 
 describe('email redaction wiring (#409)', () => {
   it.each(['./sentry.server.config', './sentry.edge.config'])(
-    '%s redacts a Resend contact URL from breadcrumbs and spans',
+    '%s redacts addresses from breadcrumbs, spans and request bodies',
     async (entry) => {
       stubProduction(DSN)
       await import(/* @vite-ignore */ entry)
@@ -118,12 +118,16 @@ describe('email redaction wiring (#409)', () => {
       const options = init.mock.calls[0]![0] as {
         beforeBreadcrumb: (b: { data: { url: string } }) => unknown
         beforeSendSpan: (s: { description: string }) => unknown
+        beforeSend: (e: { request: { data: string } }) => unknown
       }
       const url = 'https://api.resend.com/contacts/reader@example.test'
       expect(
         JSON.stringify([
           options.beforeBreadcrumb({ data: { url } }),
           options.beforeSendSpan({ description: `GET ${url}` }),
+          options.beforeSend({
+            request: { data: '{"email":"reader@example.test"}' },
+          }),
         ]),
       ).not.toContain('reader@example.test')
     },

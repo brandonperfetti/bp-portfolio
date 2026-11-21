@@ -584,7 +584,7 @@ export function sentryDropNoisyLog<L extends SentryLogLike>(log: L): L | null {
  * path.
  */
 const EMAIL_ADDRESS_PATTERN =
-  /[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/gi
+  /[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g
 
 /** What an address is replaced with. */
 const REDACTED_EMAIL = '[email]'
@@ -608,13 +608,27 @@ export function redactEmailAddresses(text: string): string {
   return text.replace(EMAIL_ADDRESS_PATTERN, REDACTED_EMAIL)
 }
 
-/** Redact the string values of a flat record, leaving other values as they are. */
-function redactRecord<T extends Record<string, unknown>>(record: T): T {
-  const out: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(record)) {
-    out[key] = typeof value === 'string' ? redactEmailAddresses(value) : value
+/** How deep {@link redactValue} walks before leaving a value as it is. */
+const MAX_REDACT_DEPTH = 4
+
+/** Redact every string in a value, walking arrays and plain objects. */
+function redactValue(value: unknown, depth = 0): unknown {
+  if (typeof value === 'string') return redactEmailAddresses(value)
+  if (depth >= MAX_REDACT_DEPTH || value === null) return value
+  if (Array.isArray(value)) return value.map((v) => redactValue(v, depth + 1))
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [key, v] of Object.entries(value)) {
+      out[key] = redactValue(v, depth + 1)
+    }
+    return out
   }
-  return out as T
+  return value
+}
+
+/** Redact every string in a record, nested values included. */
+function redactRecord<T extends Record<string, unknown>>(record: T): T {
+  return redactValue(record) as T
 }
 
 /** The breadcrumb fields an address can reach. */
@@ -669,5 +683,38 @@ export function sentryRedactSpan<S extends SentrySpanLike>(span: S): S {
       ? { description: redactEmailAddresses(span.description) }
       : {}),
     ...(span.data ? { data: redactRecord(span.data) } : {}),
+  }
+}
+
+/** The request fields of an error event an address can reach. */
+type SentryEventRequestLike = {
+  request?: {
+    data?: unknown
+    query_string?: unknown
+    url?: string
+  }
+}
+
+/**
+ * Part of each runtime's `beforeSend`: redact email addresses from the
+ * request an error event carries.
+ *
+ * @param event - The event Sentry is about to send.
+ * @returns The same event with addresses in its request replaced.
+ *
+ * @remarks Sentry's Node HTTP integration captures incoming request bodies
+ * by default (`maxRequestBodySize` defaults to `'medium'` [source:
+ * `@sentry/node-core` 10.78.0 `integrations/http/httpServerIntegration.js`]),
+ * and the request-data integration attaches them to every event. The
+ * newsletter and contact forms post an address, so an error reported while
+ * handling one, such as `NewsletterCaptureError` (#409), would carry it.
+ */
+export function sentryRedactEventRequest<E extends SentryEventRequestLike>(
+  event: E,
+): E {
+  if (!event.request) return event
+  return {
+    ...event,
+    request: redactRecord(event.request as Record<string, unknown>),
   }
 }

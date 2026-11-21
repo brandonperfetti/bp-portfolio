@@ -7,6 +7,7 @@ import {
   sentryDropBotEvent,
   sentryDropNoisyLog,
   sentryRedactBreadcrumb,
+  sentryRedactEventRequest,
   sentryRedactSpan,
   sentryTracesSampler,
   warnIfDevDsnIgnored,
@@ -48,7 +49,11 @@ if (decision.init) {
     // Drop bot/crawler-UA error events (#98) and benign-message logs
     // (#95, incl. the Node `vm.USE_MAIN_CONTEXT_DEFAULT_LOADER` warning) —
     // shared with the Node runtime so the two can't drift.
-    beforeSend: (event) => sentryDropBotEvent(event),
+    // Then redact addresses from the request a kept event carries (#409).
+    beforeSend: (event) => {
+      const kept = sentryDropBotEvent(event)
+      return kept && sentryRedactEventRequest(kept)
+    },
     beforeSendLog: (log) => sentryDropNoisyLog(log),
     // Redact email addresses from breadcrumbs and spans: Resend's SDK puts a
     // contact's address in its URL path, which fetch instrumentation records.

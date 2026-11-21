@@ -15,6 +15,7 @@ import {
   sentryDropBotEvent,
   sentryDropNoisyLog,
   sentryRedactBreadcrumb,
+  sentryRedactEventRequest,
   sentryRedactSpan,
   SENTRY_CONSOLE_LOG_LEVELS,
   SENTRY_DENY_URLS,
@@ -879,5 +880,47 @@ describe('email redaction in breadcrumbs and spans (#409)', () => {
     })
     expect(JSON.stringify(out)).not.toContain('reader@example.test')
     expect(out.data?.['http.response.status_code']).toBe(404)
+  })
+})
+
+describe('email redaction, the rest (#409)', () => {
+  it('leaves package names and versions alone', () => {
+    for (const text of [
+      '@sentry/nextjs',
+      'node_modules/@scope/pkg/index.js',
+      'react@18.3.1',
+      'payload@3.90.0',
+    ]) {
+      expect(redactEmailAddresses(text)).toBe(text)
+    }
+  })
+
+  it('redacts addresses nested in console breadcrumb arguments', () => {
+    const out = sentryRedactBreadcrumb({
+      category: 'console',
+      data: { arguments: ['lookup for', { email: 'reader@example.test' }] },
+    })
+    expect(JSON.stringify(out)).not.toContain('reader@example.test')
+  })
+
+  it('redacts an address from a captured request body, string or parsed', () => {
+    const asString = sentryRedactEventRequest({
+      request: {
+        url: '/api/newsletter',
+        data: '{"email":"reader@example.test"}',
+      },
+    })
+    const asObject = sentryRedactEventRequest({
+      request: { data: { email: 'reader@example.test', turnstileToken: 't' } },
+    })
+    expect(JSON.stringify([asString, asObject])).not.toContain(
+      'reader@example.test',
+    )
+    expect(asObject.request?.data).toEqual({
+      email: '[email]',
+      turnstileToken: 't',
+    })
+    const noRequest = { message: 'x', request: undefined }
+    expect(sentryRedactEventRequest(noRequest)).toBe(noRequest)
   })
 })

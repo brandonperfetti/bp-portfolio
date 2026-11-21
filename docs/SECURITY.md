@@ -458,11 +458,14 @@ stay there.
     caller's stack is rethrown untouched; one from a timer retry has no caller
     to reach, so it is logged `retry_failed` and the retry stops, not
     rethrown [source: `installHistoryWriteGuard`'s `scheduleRetry`].
-  - The server and edge runtimes redact email addresses from every
-    breadcrumb and span (`beforeBreadcrumb`, `beforeSendSpan`), because
-    Resend's SDK puts a contact's address in its URL path and Sentry's fetch
-    instrumentation records that path (#409) [source:
-    `src/lib/observability/sentryConfig.ts`, `redactEmailAddresses`].
+  - The server and edge runtimes redact email addresses from breadcrumbs
+    and spans (`beforeBreadcrumb`, `beforeSendSpan`) and from an error
+    event's request (`beforeSend`), because Resend's SDK puts a contact's
+    address in its URL path, which Sentry's fetch instrumentation records,
+    and Sentry's HTTP integration captures incoming request bodies, where
+    the newsletter and contact forms post one (#409). Strings are redacted
+    four levels deep [source: `src/lib/observability/sentryConfig.ts`,
+    `redactEmailAddresses`].
   - `clientTelemetry.ts` sends a speech-recognition error code and a
     boolean [source: `src/lib/observability/clientTelemetry.ts:36-39`].
 - **A mailing-list contact is captured only with consent.** The contact
