@@ -588,19 +588,54 @@ export function sentryDropNoisyLog<L extends SentryLogLike>(log: L): L | null {
  * internationalized address (`jürgen@bücher.de`, RFC 6531) is redacted whole,
  * and a domain label may hold percent-encoded UTF-8 (`b%C3%BCcher`), as a URL
  * path carries it; a top-level label is letters or punycode (`xn--p1ai`).
- * The lookbehind starts a match only where a run of local-part characters
- * starts, so a long run with no `@` is scanned once, not once per position
- * (quadratic before: about 1.1 s for 40,000 characters; CodeRabbit on #413).
- * Every address the pattern finds is still replaced from its first character.
+ * Only bytes from `%80` up count in a label: that is all encoded UTF-8 holds,
+ * and an ASCII escape such as `%40` or `%2C` would let a label run on.
  */
 const EMAIL_LOCAL_CHAR = String.raw`[\p{L}\p{M}\p{N}._%+'-]`
-const EMAIL_DOMAIN_LABEL = String.raw`(?:[\p{L}\p{M}\p{N}-]|%[0-9A-F]{2})+`
-const EMAIL_ADDRESS_PATTERN = new RegExp(
-  String.raw`(?<!${EMAIL_LOCAL_CHAR})${EMAIL_LOCAL_CHAR}+(?:@|%40|\\u0040)` +
-    String.raw`${EMAIL_DOMAIN_LABEL}(?:\.${EMAIL_DOMAIN_LABEL})*` +
-    String.raw`\.(?:xn--[a-z0-9-]+|\p{L}{2,})`,
-  'giu',
-)
+const EMAIL_DOMAIN_LABEL = String.raw`(?:[\p{L}\p{M}\p{N}-]|%[89A-F][0-9A-F])+`
+const EMAIL_ADDRESS =
+  String.raw`${EMAIL_LOCAL_CHAR}+(?:@|%40|\\u0040)` +
+  String.raw`${EMAIL_DOMAIN_LABEL}(?:\.${EMAIL_DOMAIN_LABEL})*` +
+  String.raw`\.(?:xn--[a-z0-9-]+|\p{L}{2,})`
+
+/**
+ * The two matchers {@link redactEmailAddresses} uses, built on first use.
+ *
+ * `runStart` finds an address that starts where a run of local-part
+ * characters starts. Its lookbehind keeps a long run with no `@` from being
+ * rescanned from every position, which was quadratic (about 1.1 s for 40,000
+ * characters; CodeRabbit on #413). `atIndex` finds one that starts exactly at
+ * `lastIndex`, run start or not: an address glued to the one before it by a
+ * local-part character (`+`, `_`, `%2C`), which the lookbehind alone would
+ * leave visible.
+ *
+ * `ascii` is the fallback for an engine with no lookbehind or `\p{}` (KaiOS
+ * 2.5 is still in the browserslist), where building the others throws. The
+ * client config loads this module, so a throw at load would stop Sentry
+ * starting there; the fallback is the pre-#413 ASCII pattern instead.
+ */
+type EmailMatchers = { runStart: RegExp; atIndex: RegExp } | { ascii: RegExp }
+
+let emailMatchers: EmailMatchers | undefined
+
+function getEmailMatchers(): EmailMatchers {
+  if (emailMatchers) return emailMatchers
+  try {
+    emailMatchers = {
+      runStart: new RegExp(
+        String.raw`(?<!${EMAIL_LOCAL_CHAR})${EMAIL_ADDRESS}`,
+        'giu',
+      ),
+      atIndex: new RegExp(EMAIL_ADDRESS, 'iuy'),
+    }
+  } catch {
+    emailMatchers = {
+      ascii:
+        /[A-Za-z0-9._%+'-]+(?:@|%40|\\u0040)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/gi,
+    }
+  }
+  return emailMatchers
+}
 
 /** What an address is replaced with. */
 const REDACTED_EMAIL = '[email]'
@@ -621,7 +656,26 @@ const REDACTED_EMAIL = '[email]'
  * carry the address in its breadcrumbs.
  */
 export function redactEmailAddresses(text: string): string {
-  return text.replace(EMAIL_ADDRESS_PATTERN, REDACTED_EMAIL)
+  const matchers = getEmailMatchers()
+  if ('ascii' in matchers) return text.replace(matchers.ascii, REDACTED_EMAIL)
+  const { runStart, atIndex } = matchers
+  let out = ''
+  let last = 0
+  runStart.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = runStart.exec(text)) !== null) {
+    out += text.slice(last, match.index) + REDACTED_EMAIL
+    let end = match.index + match[0].length
+    // Addresses glued to this one, each starting where the last one ended.
+    atIndex.lastIndex = end
+    while (atIndex.exec(text) !== null) {
+      out += REDACTED_EMAIL
+      end = atIndex.lastIndex
+    }
+    last = end
+    runStart.lastIndex = end
+  }
+  return out + text.slice(last)
 }
 
 /** How deep {@link redactValue} walks before leaving a value as it is. */

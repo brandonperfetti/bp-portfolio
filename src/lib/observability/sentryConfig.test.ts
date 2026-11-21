@@ -1030,4 +1030,26 @@ describe('email redaction, release round (#413)', () => {
     // Quadratic matching took about 1.1 s here; linear takes a few ms.
     expect(performance.now() - started).toBeLessThan(250)
   })
+
+  it('scans a long run of %40 in linear time', () => {
+    const run = '%40'.repeat(40_000)
+    const started = performance.now()
+    expect(redactEmailAddresses(run)).toBe(run)
+    expect(redactEmailAddresses(`a${run}`)).toBe(`a${run}`)
+    // Before labels took only %80 and up this was about 1.7 s.
+    expect(performance.now() - started).toBeLessThan(250)
+  })
+
+  it('redacts an address glued to the one before it', () => {
+    expect(redactEmailAddresses('?to=a@b.com%2Cc@d.com')).toBe(
+      '?to=[email][email]',
+    )
+    expect(redactEmailAddresses('emails=a@b.com+c@d.com')).toBe(
+      'emails=[email][email]',
+    )
+    expect(redactEmailAddresses('a@b.com%20c@d.com')).toBe('[email][email]')
+    expect(redactEmailAddresses('a@b.com.c@d.com.e@f.com')).toBe(
+      '[email][email][email]',
+    )
+  })
 })
