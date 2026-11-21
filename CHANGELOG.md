@@ -52,6 +52,10 @@ carries #402, #403 and #404.
 - **Single opt-in, by Brandon's choice** (2026-11-21, #404). Like the contact
   form's box, the newsletter form does not prove the visitor owns the
   address, so someone could subscribe an address that isn't theirs.
+- **A failed Resend write still reads as subscribed.** The form gives one
+  answer for every valid address so it never reveals who is on the list,
+  and that answer is also given when Resend refuses the write or cannot be
+  reached; the address is then not captured (#409).
 - **A reader who unsubscribed may stay off the list** after submitting the
   form again: the route never asks Resend to clear an earlier opt-out, and
   how Resend treats that create is not verified. Brandon decided such a
@@ -62,7 +66,8 @@ carries #402, #403 and #404.
 - **Corvus's retention passage is a copy of the privacy page**, kept in step
   by hand: a change to the page's "Corvus, the AI assistant" section needs
   the same change to `ABOUT_CORVUS_PRIVACY_PASSAGE`. Questions that name no
-  object, such as "Is this private?", still miss it (#403).
+  object, such as "Is this private?", still miss it (#403), and so does "Do
+  you store messages?", whose object has no "my" (#410).
 
 **Not proven before release:** a newsletter submit from a published page
 reaching the real Resend list; what is proven is the route and the form, by
