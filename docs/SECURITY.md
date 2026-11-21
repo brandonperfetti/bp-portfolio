@@ -459,8 +459,9 @@ stay there.
     to reach, so it is logged `retry_failed` and the retry stops, not
     rethrown [source: `installHistoryWriteGuard`'s `scheduleRetry`].
   - The server and edge runtimes redact email addresses from breadcrumbs
-    and spans (`beforeBreadcrumb`, `beforeSendSpan`) and from an error
-    event's request (`beforeSend`), because Resend's SDK puts a contact's
+    and spans (`beforeBreadcrumb`, `beforeSendSpan`) and from the
+    request an error or transaction event carries (`beforeSend`,
+    `beforeSendTransaction`), because Resend's SDK puts a contact's
     address in its URL path, which Sentry's fetch instrumentation records,
     and Sentry's HTTP integration captures incoming request bodies, where
     the newsletter and contact forms post one (#409). Strings are redacted

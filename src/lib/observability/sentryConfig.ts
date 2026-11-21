@@ -696,8 +696,8 @@ type SentryEventRequestLike = {
 }
 
 /**
- * Part of each runtime's `beforeSend`: redact email addresses from the
- * request an error event carries.
+ * Part of each runtime's `beforeSend`, and its `beforeSendTransaction`:
+ * redact email addresses from the request an event carries.
  *
  * @param event - The event Sentry is about to send.
  * @returns The same event with addresses in its request replaced.
@@ -705,7 +705,8 @@ type SentryEventRequestLike = {
  * @remarks Sentry's Node HTTP integration captures incoming request bodies
  * by default (`maxRequestBodySize` defaults to `'medium'` [source:
  * `@sentry/node-core` 10.78.0 `integrations/http/httpServerIntegration.js`]),
- * and the request-data integration attaches them to every event. The
+ * and the request-data integration attaches them to every event, sampled
+ * transactions included, which never pass through `beforeSend`. The
  * newsletter and contact forms post an address, so an error reported while
  * handling one, such as `NewsletterCaptureError` (#409), would carry it.
  */

@@ -70,6 +70,8 @@ if (decision.init) {
     beforeSendLog: (log) => sentryDropNoisyLog(log),
     // Redact email addresses from breadcrumbs and spans: Resend's SDK puts a
     // contact's address in its URL path, which fetch instrumentation records.
+    // Sampled transactions carry the request body too and skip beforeSend.
+    beforeSendTransaction: (event) => sentryRedactEventRequest(event),
     beforeBreadcrumb: (breadcrumb) => sentryRedactBreadcrumb(breadcrumb),
     beforeSendSpan: (span) => sentryRedactSpan(span),
     integrations: [
