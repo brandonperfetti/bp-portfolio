@@ -88,13 +88,17 @@
   (`/api/clerk/webhook`, svix verified) captures a sign-up's email as a
   Resend contact only when the sign-up ticked the same opt-in (#362), which
   sits inside the site's own sign-up form (#377; `docs/AUTH.md`).
-- `/api/newsletter` POST adds the Newsletter Signup block's address to the
-  same Resend list (#367; it replaces v3's `/api/mailinglist`). Same guards
-  as `/api/contact`: same-origin, per-IP rate limit, 503 on a limiter outage,
-  Turnstile when configured. A reader who unsubscribed is set back to
-  subscribed (#407); a Resend failure answers a retryable 503 rather than
-  "subscribed" (#409). Every capture path puts an existing contact in the
-  segment (#406). Mechanism: `docs/AUTH.md` § Email capture.
+- `/api/newsletter` POST is the Newsletter Signup block's form (#367; it
+  replaces v3's `/api/mailinglist`). It is double opt-in (#411): a submit
+  emails the address a signed, three-day link to `/newsletter/confirm`, and
+  only pressing Confirm there (`/api/newsletter/confirm`) adds it to the
+  same Resend list, or sets a reader who unsubscribed back to subscribed
+  (#407). A Resend failure answers a retryable 503 rather than "subscribed"
+  (#409). Same guards as `/api/contact` on the submit (same-origin, per-IP
+  rate limit, 503 on a limiter outage, Turnstile when configured); the
+  confirm route has the rate limit and no Turnstile. Every capture path puts
+  an existing contact in the segment (#406). Mechanism: `docs/AUTH.md`
+  § Email capture.
 
 ## SEO surfaces
 

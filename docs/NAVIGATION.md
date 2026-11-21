@@ -28,6 +28,7 @@ copyright line is hard-coded.
 | `/uses`                                    | Uses collection               | Shares tech viz cards; `page`        |
 | `/corvus`                                  | —                             | AI chat surface                      |
 | `/thank-you`                               | —                             | Post-contact landing                 |
+| `/newsletter/confirm`                      | —                             | Double opt-in Confirm button (#411)  |
 | `/sign-in`, `/sign-up`, `/account`         | Clerk                         | Render only when Clerk enabled       |
 | `/sign-up/sso-callback`                    | Clerk                         | Where Google returns to (#377)       |
 | `/next/preview`, `/next/exit-preview`      | —                             | Draft preview (admin session)        |

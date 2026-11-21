@@ -47,7 +47,8 @@
 ## Email capture
 
 - Three capture paths, one shared helper (`src/lib/email/captureContact.ts`,
-  which never throws and returns an outcome only the newsletter route reads;
+  which never throws and returns an outcome only the newsletter confirm
+  route reads;
   capture is never the other two callers' primary job, so they ignore it).
   It looks the address up by email first, because Resend documents no
   answer for a create on an existing contact (its OpenAPI spec lists only a
@@ -66,33 +67,46 @@
   2. Contact form → explicit opt-in checkbox (unchecked by default) on
      the Messenger form; `/api/contact` captures only when the flag is
      set AND the message delivered.
-  3. Newsletter Signup block → `/api/newsletter` (#367). The form is one
-     email field whose only job is subscribing, so submitting it is the
-     opt-in; there is no checkbox. Single opt-in, like the contact form's
-     box: no confirmation email, so nothing proves the visitor owns the
-     address, which sign-up does (Clerk's email code, or Google).
-     **A reader who unsubscribed may rejoin here** (Brandon, on #404; #407):
-     an existing contact with `unsubscribed: true` is updated to
-     `unsubscribed: false` and read back (Resend's docs never say a `false`
-     re-subscribes, so a contact still unsubscribed counts as a failure, not
-     a subscription), then put in the segment. If Resend ever accepted the
-     update without applying it, every once-unsubscribed address would get
-     the 503 while a new one gets the success, so the failure would show
-     which addresses had left; Sentry's `resubscribe` stage is where that
-     would first appear. Only this path does it;
-     the webhook honours the sign-up's `mailingListOptIn` choice and the
-     contact form its box, and neither clears an opt-out. **The consent gap
-     is wider for it:** with no confirmation email, anyone can submit an
-     address, and now that includes putting back on the list someone who
-     chose to leave. The rate limit and Turnstile on this route are what
-     bound that. Its success answer is the same for a new address and an
-     existing one, subscribed or not. When Resend refuses a write or cannot
-     be reached it answers 503 "Couldn't subscribe you right now. Please try
-     again later.", the same for every address, and reports the failed stage
-     to Sentry with no address: the error names only the stage, and the
-     server and edge Sentry configs redact addresses from breadcrumbs,
-     spans and the captured request body, where Resend's `/contacts/<email>`
-     URLs and the form's own post would otherwise land (#409). Guards
+  3. Newsletter Signup block → `/api/newsletter` (#367), **double opt-in**
+     (Brandon, on #411). The form is one email field and no checkbox. A
+     submit changes nothing on the list: it sends one email, through Resend,
+     with a link to `/newsletter/confirm?token=…`. The token is stateless:
+     an HMAC over the address and a three-day expiry, keyed by a key derived
+     from `PAYLOAD_SECRET` with a fixed context label
+     (`src/lib/email/newsletterConfirmToken.ts`), so it confirms only the
+     address it was sent to, and an edited, forged or expired one is
+     refused. The page joins no one on load, because mail scanners open
+     links in incoming mail; its **Confirm** button posts the token to
+     `/api/newsletter/confirm`, which runs `captureContact` with `rejoin`.
+     That creates a new contact in the segment, or, **for a reader who
+     unsubscribed** (Brandon, on #404; #407), updates `unsubscribed: true`
+     to `false` and reads it back (Resend's docs never say a `false`
+     re-subscribes, so a contact still unsubscribed counts as a failure),
+     then puts it in the segment. Only this path clears an opt-out; the
+     webhook honours the sign-up's `mailingListOptIn` choice and the contact
+     form its box. Because only the address's owner can confirm, a third
+     party can no longer put anyone on the list or back on it; what the
+     form still allows is sending a confirmation email to someone else's
+     address, which the submit route's rate limit and Turnstile bound.
+     **Replies.** The submit answers every address that was sent a link
+     with "Thanks. Check your inbox for a link to confirm.", new or already
+     on the list, and every address with a 503 "Couldn't sign you up right
+     now. Please try again later." when Resend refuses the send or cannot
+     be reached (#409). The confirm route answers `confirmed`, `expired`
+     (410), `invalid` (400) or `failed` (503); a token's holder already
+     knows its address, so these disclose nothing new. A failure is
+     reported to Sentry by stage with no address: the error names only the
+     stage, and the server and edge Sentry configs redact addresses from
+     breadcrumbs, spans and the captured request body, where Resend's
+     `/contacts/<email>` URLs and the form's own post would otherwise land
+     (#409). If Resend ever accepted a re-subscribe without applying it, a
+     once-unsubscribed reader's confirmation would fail every time, and
+     Sentry's `resubscribe` stage is where that would first appear. No
+     `RESEND_API_KEY` or no `PAYLOAD_SECRET` answers 503 on both routes,
+     before any guard, with nothing sent and the list untouched. The
+     confirm route has its own rate-limit bucket
+     (`newsletter-confirm:<digest>`) and no Turnstile: the token is the
+     proof. Guards
      shared with `/api/contact` (`src/lib/security/publicFormGuard.ts`).
      The capture rule:
      `docs/SECURITY.md` § Consent and analytics data.

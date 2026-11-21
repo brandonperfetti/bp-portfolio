@@ -1,8 +1,13 @@
-import { captureException } from '@sentry/nextjs'
 import { NextResponse } from 'next/server'
+import { Resend } from 'resend'
 import * as z from 'zod'
 
-import { captureContact } from '@/lib/email/captureContact'
+import { buildConfirmEmail } from '@/lib/email/newsletterConfirmEmail'
+import {
+  createConfirmToken,
+  getConfirmTokenKey,
+} from '@/lib/email/newsletterConfirmToken'
+import { reportNewsletterFailure } from '@/lib/email/newsletterFailure'
 import { guardPublicForm } from '@/lib/security/publicFormGuard'
 
 const bodySchema = z.object({
@@ -10,87 +15,64 @@ const bodySchema = z.object({
 })
 
 /**
- * The one answer to a subscription Resend completed, new address or not.
+ * The one answer to a sign-up whose confirmation email was sent.
  *
- * @remarks Constant on purpose: a different answer for an address already on
- * the list would let anyone test whether an address is subscribed.
+ * @remarks Constant on purpose: every address gets it, on the list or not,
+ * so the answer cannot be used to test whether an address is subscribed.
  */
-const SUBSCRIBED_MESSAGE =
-  "Thanks. You'll get an email when I publish something new."
+const CONFIRM_SENT_MESSAGE = 'Thanks. Check your inbox for a link to confirm.'
 
 /**
- * The one answer when Resend refused the write or could not be reached.
+ * The one answer when the confirmation email could not be sent.
  *
- * @remarks The same for every address (#409): it says the subscription did
- * not happen, never whether the address was already on the list.
+ * @remarks The same for every address (#409): the sign-up did not happen,
+ * and nothing says whether the address was already on the list.
  */
-const CAPTURE_FAILED_MESSAGE =
-  "Couldn't subscribe you right now. Please try again later."
+const SEND_FAILED_MESSAGE =
+  "Couldn't sign you up right now. Please try again later."
+
+/** The answer when this deployment cannot send or sign confirmations. */
+const UNAVAILABLE_MESSAGE = 'Subscriptions are unavailable right now.'
 
 /**
- * A newsletter capture Resend did not complete, as reported to Sentry.
- *
- * @remarks Its message names only the stage; Resend's error name and status
- * go as tags. No address, and not Resend's message, which can echo one.
- */
-class NewsletterCaptureError extends Error {
-  constructor(stage: string) {
-    super(`Newsletter capture failed at ${stage}`)
-    this.name = 'NewsletterCaptureError'
-  }
-}
-
-/**
- * Newsletter Signup block → Resend contact list (#367).
+ * Newsletter Signup block → a confirmation email (#367, double opt-in #407).
  *
  * The page-builder's Newsletter Signup form posts here. It replaces v3's
  * `/api/mailinglist`, which went when the Clerk webhook took over sign-up
  * capture and left this form posting to a 404.
  *
  * @remarks
+ * **Double opt-in (Brandon, on #411).** A submit changes nothing on the
+ * list. It sends one email to the address, with a link to
+ * `/newsletter/confirm` carrying a signed, expiring token for that address
+ * (`newsletterConfirmToken.ts`); only the confirmation
+ * (`/api/newsletter/confirm`) joins the list, or rejoins it for a reader who
+ * unsubscribed. So an address joins only when its owner asks to, which this
+ * form cannot otherwise prove: unlike sign-up (Clerk's email code, or
+ * Google), anyone can type any address here.
+ *
+ * **One success reply, one failure reply (#409).** Every address that is
+ * sent a confirmation gets `CONFIRM_SENT_MESSAGE`, new or already on the
+ * list, so the answer never says which. When Resend refuses the send or
+ * cannot be reached, every address gets a 503 with `SEND_FAILED_MESSAGE`,
+ * reported to Sentry with no address. The owner of an address already on the
+ * list gets a confirmation they can ignore.
+ *
  * **Guardrails** are `/api/contact`'s, through the shared `guardPublicForm`:
  * same-origin source, a per-IP rate limit keyed on the IP's HMAC digest
  * (`newsletter:<digest>`, #364) at `mailingListRatePerMinute`, a 503 when the
  * limiter store fails (#390), and Turnstile whenever `TURNSTILE_SECRET_KEY`
- * is set.
+ * is set. They now also bound how many confirmation emails one client can
+ * make the site send to other people's addresses.
  *
- * **Consent** follows the sign-up rule (#362): only an explicit act joins
- * the list. Here the act is the whole form, a single email field whose only
- * purpose is subscribing, so submitting it is the opt-in, where sign-up and
- * the contact form, which do something else first, ask with an unticked box.
- * Single opt-in, like the contact form's box: no confirmation email, so
- * unlike sign-up (Clerk's email code, or Google) nothing proves the visitor
- * owns the address. A confirmation step would be a product decision.
- *
- * **A returning reader rejoins (#407).** Brandon decided on #404 that
- * someone who unsubscribed may rejoin through this form, so the route asks
- * `captureContact` to `rejoin`: an existing, unsubscribed contact is set back
- * to subscribed and put in the segment. Only this route does; the Clerk
- * webhook and the contact form leave an opt-out alone. With single opt-in
- * this widens the consent gap above: anyone can put back on the list an
- * address whose owner chose to leave, which is one more reason the rate
- * limit and Turnstile stay on this route (`docs/AUTH.md` § Email capture).
- *
- * **One success reply, one failure reply (#409).** A new address and one
- * already on the list, subscribed or not, both get `SUBSCRIBED_MESSAGE`, so
- * the answer does not say which it was. When Resend refuses a write or
- * cannot be reached, the route answers 503 with `CAPTURE_FAILED_MESSAGE`,
- * the same for every address, and reports the failed stage to Sentry with
- * no address in it, rather than tell the visitor they subscribed.
- *
- * **Capture** is `captureContact`, the helper the Clerk webhook and the
- * contact form share, so all three land in the same list and segment
- * (`RESEND_CONTACT_SEGMENT_ID`).
- *
- * No `RESEND_API_KEY` answers 503 before any guard runs: capture would
- * no-op, and telling the visitor they were subscribed would be false.
+ * No `RESEND_API_KEY`, or no `PAYLOAD_SECRET` to sign the link with, answers
+ * 503 before any guard runs, and nothing is sent.
  */
 export async function POST(req: Request) {
-  if (!process.env.RESEND_API_KEY) {
-    return NextResponse.json(
-      { message: 'Subscriptions are unavailable right now.' },
-      { status: 503 },
-    )
+  const apiKey = process.env.RESEND_API_KEY
+  const key = getConfirmTokenKey()
+  if (!apiKey || !key) {
+    return NextResponse.json({ message: UNAVAILABLE_MESSAGE }, { status: 503 })
   }
 
   const guard = await guardPublicForm(req, 'newsletter', {
@@ -108,28 +90,30 @@ export async function POST(req: Request) {
     )
   }
 
-  const outcome = await captureContact(
-    { email: parsed.data.email },
-    { rejoin: true },
-  )
+  const { email } = parsed.data
+  const message = buildConfirmEmail(createConfirmToken(email, key))
+  const from = process.env.CONTACT_FROM_EMAIL ?? 'info@brandonperfetti.com'
 
-  if (outcome.status !== 'captured') {
-    const failure =
-      outcome.status === 'failed'
-        ? outcome
-        : { stage: 'skipped', errorName: undefined, statusCode: null }
-    captureException(new NewsletterCaptureError(failure.stage), {
-      tags: {
-        'newsletter.capture_stage': failure.stage,
-        'resend.error_name': failure.errorName ?? 'none',
-        'resend.status_code': String(failure.statusCode ?? 'none'),
-      },
+  try {
+    const { error } = await new Resend(apiKey).emails.send({
+      from,
+      to: email,
+      ...message,
     })
-    return NextResponse.json(
-      { message: CAPTURE_FAILED_MESSAGE },
-      { status: 503 },
-    )
+    if (error) {
+      reportNewsletterFailure('send', {
+        errorName: error.name,
+        statusCode: error.statusCode,
+      })
+      return NextResponse.json(
+        { message: SEND_FAILED_MESSAGE },
+        { status: 503 },
+      )
+    }
+  } catch {
+    reportNewsletterFailure('send')
+    return NextResponse.json({ message: SEND_FAILED_MESSAGE }, { status: 503 })
   }
 
-  return NextResponse.json({ message: SUBSCRIBED_MESSAGE })
+  return NextResponse.json({ message: CONFIRM_SENT_MESSAGE })
 }

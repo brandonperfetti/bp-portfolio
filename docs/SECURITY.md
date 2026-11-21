@@ -476,16 +476,18 @@ stay there.
   capture comes through the verified Clerk webhook, and only for an account
   whose sign-up ticked the same unchecked-by-default opt-in (#362) [source:
   `src/app/api/clerk/webhook/route.ts`, `hasMailingListOptIn`]. The
-  Newsletter Signup block's form exists only to subscribe, so submitting its
-  one email field is the opt-in, and its answer is the same whether or not
-  the address was already on the list (#367). Every success reply is the
-  same and every failure reply (503, when Resend fails) is the same (#409);
-  a failure that only an existing contact's extra Resend calls hit still
-  answers the 503 where a new address would succeed. It alone clears an
-  earlier unsubscribe (#407), so with single opt-in a third party can
-  re-subscribe an address whose owner left; the route's rate limit bounds
-  it, and Turnstile does too when `TURNSTILE_SECRET_KEY` is set [source:
-  `src/app/api/newsletter/route.ts`]. Mechanism:
+  Newsletter Signup block's form is **double opt-in** (#411): a submit only
+  emails the address a signed, expiring link, and the address joins the
+  list, or rejoins it after an unsubscribe (#407), only when its owner
+  presses Confirm on the page the link opens. So no one can put another
+  person on the list, or back on it; the form can still send a
+  confirmation to someone else's address, which its rate limit bounds, and
+  Turnstile too when `TURNSTILE_SECRET_KEY` is set. Every success reply is
+  the same and every failure reply (503, when Resend fails) is the same
+  (#409), so neither says whether the address was already on the list
+  [source: `src/app/api/newsletter/route.ts`,
+  `src/app/api/newsletter/confirm/route.ts`,
+  `src/lib/email/newsletterConfirmToken.ts`]. Mechanism:
   `docs/AUTH.md` § Email capture.
 - **Broadcasts:** Respect the marketing consent field, and honor
   per-contact unsubscribe state before any broadcast ever sends. _Moved from
