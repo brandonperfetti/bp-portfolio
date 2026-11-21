@@ -78,9 +78,8 @@ carries #411.
   days holds two links, each usable once, so the second can still re-subscribe
   after an unsubscribe until it expires (#411).
 - **Each capture makes 2 to 5 Resend calls where it made 1** (more when a
-  contact has many pages of segments), so a burst is
-  likelier to hit Resend's rate limit, which the form answers with the 503
-  above (#411).
+  contact has many pages of segments), so a burst is likelier to hit
+  Resend's rate limit, which the form answers with the 503 above (#411).
 - **A submit made before the Turnstile widget has loaded** can still get a
   403 where Turnstile is enforced (#405).
 
@@ -117,12 +116,12 @@ re-subscribes a contact. Segment adds were not tested live.
   webhook and the contact form ignore the outcome (#406, #407, #409, #411).
 - `src/lib/observability/sentryConfig.ts` holds the address redaction for
   `beforeSend` and `beforeSendTransaction` (the event's `request`),
-  `beforeBreadcrumb` and `beforeSendSpan`, including JSON bodies and addresses written with
-  unicode escapes (#411).
-- No Payload schema change and no migration. `docs/AUTH.md`, `docs/FEATURES.md`,
-  `docs/SECURITY.md`, `docs/JOURNEYS.md`, `docs/ARCHITECTURE.md` and
-  `docs/NAVIGATION.md` describe
-  the two-step path (#411).
+  `beforeBreadcrumb` and `beforeSendSpan`, including JSON bodies and
+  addresses written with unicode escapes (#411).
+- No Payload schema change and no migration. `docs/AUTH.md`,
+  `docs/FEATURES.md`, `docs/SECURITY.md`, `docs/JOURNEYS.md`,
+  `docs/ARCHITECTURE.md` and `docs/NAVIGATION.md` describe the two-step path
+  (#411).
 
 ## v2026.11.21
 
