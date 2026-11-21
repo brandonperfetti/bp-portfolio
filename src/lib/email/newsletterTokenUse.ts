@@ -7,7 +7,7 @@ import { CONFIRM_TOKEN_TTL_SECONDS } from '@/lib/email/newsletterConfirmToken'
 /** Whether a confirmation token was free to use, or already used. */
 export type TokenClaim = 'claimed' | 'used'
 
-/** Dev-only fallback store, per instance: token key → expiry (ms). */
+/** Fallback store outside production, per instance: token key → expiry (ms). */
 const memoryUsed = new Map<string, number>()
 
 function keyFor(token: string): string {
@@ -35,7 +35,9 @@ function store(): Redis | null {
  * an address joins only when its owner asks to, which an old link is not.
  * The key is a digest of the token, so the store holds no address, and it
  * expires with the token. Upstash Redis when configured, the store the rate
- * limiter uses; otherwise a per-instance map, as the limiter's dev fallback.
+ * limiter uses; otherwise, outside production only, a per-instance map. In
+ * production without Upstash it throws, so no link confirms on a store that
+ * cannot hold single use.
  */
 export async function claimConfirmToken(token: string): Promise<TokenClaim> {
   const key = keyFor(token)
@@ -46,6 +48,12 @@ export async function claimConfirmToken(token: string): Promise<TokenClaim> {
       ex: CONFIRM_TOKEN_TTL_SECONDS,
     })
     return set === 'OK' ? 'claimed' : 'used'
+  }
+  if (process.env.NODE_ENV === 'production') {
+    // A per-instance map forgets a claim on every other instance and on
+    // restart, so in production it would let an old link re-subscribe a
+    // reader who unsubscribed. Fail closed instead: the route answers 503.
+    throw new Error('Upstash is not configured; cannot claim a link once')
   }
   const now = Date.now()
   const expires = memoryUsed.get(key)

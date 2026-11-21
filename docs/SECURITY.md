@@ -485,8 +485,9 @@ stay there.
   link already used cannot undo a later unsubscribe; an unused link issued
   before the unsubscribe can still confirm until it expires (3 days), which
   only the inbox's owner, or someone the link reached, can do. Single use
-  is shared across instances through Upstash; a deploy without Upstash
-  holds it per instance only. So no one can put another
+  is shared across instances through Upstash; a production deploy without
+  Upstash refuses every confirmation (503) rather than hold it per
+  instance. So no one can put another
   person on the list, or back on it; the form can still send a
   confirmation to someone else's address, which its rate limit bounds, and
   Turnstile too when `TURNSTILE_SECRET_KEY` is set. Every success reply is

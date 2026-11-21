@@ -619,7 +619,8 @@ const REDACTED_DEEP_VALUE = '[redacted]'
  * Redact every string in a value, walking arrays, plain objects and `Error`s.
  *
  * An `Error` becomes its `name`, `message` and `stack`, which are not
- * enumerable and would otherwise copy as `{}`. Functions are dropped. A container past the depth
+ * enumerable and would otherwise copy as `{}`. Functions are dropped, and
+ * property names are redacted as well as values. A container past the depth
  * limit is replaced, not kept, so nothing deeper escapes unredacted.
  */
 function redactValue(value: unknown, depth = 0): unknown {
@@ -636,7 +637,8 @@ function redactValue(value: unknown, depth = 0): unknown {
       : value
   const out: Record<string, unknown> = {}
   for (const [key, v] of Object.entries(source)) {
-    out[key] = redactValue(v, depth + 1)
+    // Keys too: a parsed JSON body can carry an address as a property name.
+    out[redactEmailAddresses(key)] = redactValue(v, depth + 1)
   }
   return out
 }

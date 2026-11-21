@@ -982,6 +982,17 @@ describe('email redaction, PR-round stand-in (#409)', () => {
     expect(text.request?.data).toBe('email=[email]')
   })
 
+  it('redacts an address that a JSON body carries as a property name', () => {
+    const body = '{"reader\\u0040example\\u002etest":1,"n":2}'
+    expect(Object.keys(JSON.parse(body))[0]).toBe('reader@example.test')
+    const out = sentryRedactEventRequest({ request: { data: body } })
+    expect(out.request?.data).not.toContain('reader')
+    expect(JSON.parse(out.request?.data as string)).toEqual({
+      '[email]': 1,
+      n: 2,
+    })
+  })
+
   it('drops function values, so a toJSON cannot return an address later', () => {
     const out = sentryRedactBreadcrumb({
       category: 'console',

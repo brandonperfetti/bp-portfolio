@@ -115,10 +115,10 @@
      or the re-subscribe or segment step) keeps it, and answers `incomplete`
      (503): sign up again for a new link. If a release fails, the link
      stays used and a retry answers `used`, so the reader signs up again
-     too. A store failure answers 503 and joins no one;
-     without Upstash the claim is a per-instance map, as the rate
-     limiter's fallback is, so a deploy without Upstash would hold single
-     use only per instance. Only a token's canonical base64url spelling
+     too. A store failure answers 503 and joins no one. Without Upstash
+     the claim is a per-instance map outside production only; in
+     production it refuses, so the route answers 503 rather than hold
+     single use per instance. Only a token's canonical base64url spelling
      verifies, so a respelled link cannot get a fresh claim. A failure is
      reported to Sentry by stage with no address: the error names only the
      stage, the server and edge Sentry configs redact addresses from
