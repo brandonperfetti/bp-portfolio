@@ -258,6 +258,13 @@ describe('POST /api/newsletter/confirm (#407)', () => {
     const again = await POST(makeRequest({ token }))
 
     expect(again.status).toBe(410)
+    // Nor by a respelling of it, which decodes the same but is refused.
+    for (const respelled of [`${token}A`, `${token.slice(0, -1)}_`]) {
+      if (respelled === token) continue
+      expect((await POST(makeRequest({ token: respelled }))).status).not.toBe(
+        200,
+      )
+    }
     expect(updateContactMock).not.toHaveBeenCalled()
   })
 

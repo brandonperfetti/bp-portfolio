@@ -103,6 +103,13 @@ export function verifyConfirmToken(
     return { ok: false, reason: 'invalid' }
   }
   const raw = Buffer.from(token, 'base64url')
+  // Base64url decoding is lenient (spare low bits, a dangling character),
+  // so one token has other spellings that decrypt the same. Only the
+  // canonical one is accepted, so a respelled token cannot dodge the
+  // single-use claim, which is keyed on the string (`newsletterTokenUse.ts`).
+  if (raw.toString('base64url') !== token) {
+    return { ok: false, reason: 'invalid' }
+  }
   if (raw.length <= IV_BYTES + TAG_BYTES) {
     return { ok: false, reason: 'invalid' }
   }

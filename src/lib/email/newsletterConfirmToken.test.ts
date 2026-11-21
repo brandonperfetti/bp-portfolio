@@ -125,6 +125,26 @@ describe('newsletter confirmation token', () => {
     })
   })
 
+  it('refuses every other spelling of a valid token, so each link has one claim key', () => {
+    const k = key()
+    const alphabet =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+    for (const email of [
+      'a@example.test',
+      'ab@example.test',
+      'abc@example.test',
+    ]) {
+      const token = createConfirmToken(email, k, NOW)
+      const spellings = [
+        ...[...alphabet].map((c) => token.slice(0, -1) + c),
+        ...[...alphabet].map((c) => token + c),
+      ].filter((t) => t !== token)
+      const accepted = spellings.filter((t) => verifyConfirmToken(t, k, NOW).ok)
+      expect(accepted).toEqual([])
+      expect(verifyConfirmToken(token, k, NOW).ok).toBe(true)
+    }
+  })
+
   it.each([
     ['not a string', 42],
     ['missing', undefined],
