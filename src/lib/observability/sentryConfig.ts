@@ -584,7 +584,7 @@ export function sentryDropNoisyLog<L extends SentryLogLike>(log: L): L | null {
  * path.
  */
 const EMAIL_ADDRESS_PATTERN =
-  /[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g
+  /[A-Za-z0-9._%+'-]+(?:@|%40)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g
 
 /** What an address is replaced with. */
 const REDACTED_EMAIL = '[email]'
@@ -611,19 +611,30 @@ export function redactEmailAddresses(text: string): string {
 /** How deep {@link redactValue} walks before leaving a value as it is. */
 const MAX_REDACT_DEPTH = 4
 
-/** Redact every string in a value, walking arrays and plain objects. */
+/** What a container past {@link MAX_REDACT_DEPTH} is replaced with. */
+const REDACTED_DEEP_VALUE = '[redacted]'
+
+/**
+ * Redact every string in a value, walking arrays, plain objects and `Error`s.
+ *
+ * An `Error` becomes its `name`, `message` and `stack`, which are not
+ * enumerable and would otherwise copy as `{}`. A container past the depth
+ * limit is replaced, not kept, so nothing deeper escapes unredacted.
+ */
 function redactValue(value: unknown, depth = 0): unknown {
   if (typeof value === 'string') return redactEmailAddresses(value)
-  if (depth >= MAX_REDACT_DEPTH || value === null) return value
+  if (value === null || typeof value !== 'object') return value
+  if (depth >= MAX_REDACT_DEPTH) return REDACTED_DEEP_VALUE
   if (Array.isArray(value)) return value.map((v) => redactValue(v, depth + 1))
-  if (typeof value === 'object') {
-    const out: Record<string, unknown> = {}
-    for (const [key, v] of Object.entries(value)) {
-      out[key] = redactValue(v, depth + 1)
-    }
-    return out
+  const source =
+    value instanceof Error
+      ? { name: value.name, message: value.message, stack: value.stack }
+      : value
+  const out: Record<string, unknown> = {}
+  for (const [key, v] of Object.entries(source)) {
+    out[key] = redactValue(v, depth + 1)
   }
-  return value
+  return out
 }
 
 /** Redact every string in a record, nested values included. */

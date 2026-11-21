@@ -465,7 +465,8 @@ stay there.
     address in its URL path, which Sentry's fetch instrumentation records,
     and Sentry's HTTP integration captures incoming request bodies, where
     the newsletter and contact forms post one (#409). Strings are redacted
-    four levels deep [source: `src/lib/observability/sentryConfig.ts`,
+    four levels deep, an `Error` keeps its name, message and stack, and a
+    container nested deeper is replaced with `[redacted]` [source: `src/lib/observability/sentryConfig.ts`,
     `redactEmailAddresses`].
   - `clientTelemetry.ts` sends a speech-recognition error code and a
     boolean [source: `src/lib/observability/clientTelemetry.ts:36-39`].

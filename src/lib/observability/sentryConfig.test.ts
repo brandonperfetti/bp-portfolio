@@ -924,3 +924,34 @@ describe('email redaction, the rest (#409)', () => {
     expect(sentryRedactEventRequest(noRequest)).toBe(noRequest)
   })
 })
+
+describe('email redaction, round 2 (#409)', () => {
+  it('redacts a whole address whose local part has an apostrophe', () => {
+    expect(redactEmailAddresses("alice.o'brien@example.com")).toBe('[email]')
+  })
+
+  it('replaces a container past the depth limit instead of keeping it', () => {
+    const out = sentryRedactEventRequest({
+      request: {
+        data: { a: { b: { c: { d: { email: 'reader@example.test' } } } } },
+      },
+    })
+    expect(JSON.stringify(out)).not.toContain('reader@example.test')
+    expect(JSON.stringify(out)).toContain('[redacted]')
+  })
+
+  it('keeps an Error argument as its name, message and stack, redacted', () => {
+    const error = new Error('lookup failed for reader@example.test')
+    const out = sentryRedactBreadcrumb({
+      category: 'console',
+      data: { arguments: [error] },
+    })
+    const [arg] = (out.data?.arguments ?? []) as unknown as Array<
+      Record<string, string>
+    >
+    expect(arg.name).toBe('Error')
+    expect(arg.message).toBe('lookup failed for [email]')
+    expect(typeof arg.stack).toBe('string')
+    expect(JSON.stringify(out)).not.toContain('reader@example.test')
+  })
+})
