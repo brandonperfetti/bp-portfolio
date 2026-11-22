@@ -438,10 +438,15 @@ covers" for §9.
   - **`era`** is read from the final prompt's era phrase. `scene` comes
     from the recipe, or is classified from the final prompt for the six
     replacement concepts.
-  - **`metaphorFamily`** is logged for the nine v2 recipes still live. For
-    the other 44 it was classified on 2026-11-22 from the final prompt
-    (`metaphorFamilySource` says which). v1 had no such dial, so treat
-    those 44 as a best reading, and correct any you disagree with.
+  - **`metaphorFamily`** is logged for the nine v2 recipes still live. The
+    other 44 were classified on 2026-11-22 from the final prompt
+    (`metaphorFamilySource` says which). That covers the v1 covers, which
+    had no such dial, and the three v2 recipes whose concept was replaced,
+    since their logged family described the rejected idea. Treat those 44
+    as a best reading, and correct any you disagree with.
+  - **`hue`** is the recipe's topic hue. Two trial-round picks used a
+    different accent in the final prompt (posts 55 and 6); their notes say
+    so.
 
 - **A new article's cover:** add its entry at the top, with the same
   fields, in the same change that attaches it.

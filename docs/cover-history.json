@@ -60,7 +60,10 @@
       "mediaFilename": "runbooks-to-agent-skills-cover-mj-A.jpg",
       "alt": "A single page lifts out of a worn binder and hangs still in mid-air beside a small device glowing emerald",
       "rollout": "2026-09-26 first 9",
-      "notes": ["Picked from the trial rounds (R4-R7) before v1 was locked."],
+      "notes": [
+        "Picked from the trial rounds (R4-R7) before v1 was locked.",
+        "hue is the recipe's topic hue; the live image's only accent is the device's emerald light."
+      ],
       "midjourneyUpscaleJob": "4ab5a321-38c7-49e8-869b-0607dae84401",
       "eraLabel": "near-future minimal"
     },
@@ -389,8 +392,8 @@
       "recipeVersion": "replacement concept",
       "scene": "landscape",
       "era": "nf",
-      "metaphorFamily": "gravity",
-      "metaphorFamilySource": "logged (v2 recipe)",
+      "metaphorFamily": "scale",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
       "fieldOfUnits": false,
       "hue": "fuchsia",
       "impossibleDetail": null,
@@ -448,7 +451,7 @@
       "scene": "interior",
       "era": "60s",
       "metaphorFamily": "material",
-      "metaphorFamilySource": "logged (v2 recipe)",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
       "fieldOfUnits": false,
       "hue": "cyan",
       "impossibleDetail": null,
@@ -1037,7 +1040,10 @@
       "mediaFilename": "accessibility-in-react-the-quick-wins-that-cover-80-percent-of-issues-cover-mj-A.jpg",
       "alt": "A glowing line set into the floor curves through a space-age corridor, guiding a woman in a mustard coat to the far end",
       "rollout": "2026-09-26 first 9",
-      "notes": ["Picked from the trial rounds (R4-R7) before v1 was locked."],
+      "notes": [
+        "Picked from the trial rounds (R4-R7) before v1 was locked.",
+        "hue is the recipe's topic hue; the final prompt asked for a hint of aqua."
+      ],
       "midjourneyUpscaleJob": "ef5edbc7-3fca-403c-a955-ae55c4f63438",
       "eraLabel": "1960s space-age"
     },
@@ -1052,7 +1058,7 @@
       "scene": "water",
       "era": "80s-pastel",
       "metaphorFamily": "causality",
-      "metaphorFamilySource": "logged (v2 recipe)",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
       "fieldOfUnits": false,
       "hue": "sky",
       "impossibleDetail": null,
