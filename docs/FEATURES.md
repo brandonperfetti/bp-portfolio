@@ -99,6 +99,13 @@
   confirm route has the rate limit and no Turnstile. Every capture path puts
   an existing contact in the segment (#406). Mechanism: `docs/AUTH.md`
   § Email capture.
+- Both forms get their Turnstile token from `useTurnstileToken`. A submit
+  made before the widget has loaded waits up to 5 s for it, and the whole
+  check is bounded at 15 s from the press; one that times out sends nothing
+  and announces "The spam check is taking longer than usual. Please try
+  again in a moment." A slow script is not a failed one: the retry waits
+  again, and a script that arrives late still serves it. A blocked or failed
+  script still sends without a token, and the server decides (#405).
 
 ## SEO surfaces
 
