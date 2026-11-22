@@ -105,8 +105,8 @@ noted so future agents know what was tested, not just what was hoped.
   route pulls (`sign-upload`/`upload-asset`, `search-assets` for the
   pre-check). Cover direction, generators and the upload rules:
   **docs/CONTENT_IMAGERY.md**.
-- An image generator for the cover. Agents use GPT Image (`gpt-image-2`,
-  OpenClaw `image_generate`); Midjourney is Brandon's paste path
+- An image generator for the cover. Agents use GPT Image (`openai/gpt-image-2`,
+  OpenClaw `image_generate` on the OpenClaw OAuth route); Midjourney is Brandon's paste path
   (docs/CONTENT_IMAGERY.md §10). _History, 2026-11-22 (#415):_ this bullet
   used to say AI cover generation was retired as of 2026-08, when covers
   were code-rendered SVG. That stopped being true on 2026-09-27, when all
@@ -190,9 +190,9 @@ in the run. Generate → pick → upload → ingest → attach:
    history; `cover-a/b/c` and `cover-ds-A` are retired namespaces. Run the
    exact-id `search-assets` pre-check with a positive control first:
    `sign-upload` forces `overwrite: true`, so a collision is silent.
-   Upload at least 2048 px wide (a GPT Image output is resized locally)
-   and check the file is under 10,485,760 bytes (docs/CONTENT_IMAGERY.md
-   §11 Upload).
+   Keep the native PNG unresized, with a same-size JPEG (about quality 90) beside it that is under 10,485,760 bytes (docs/CONTENT_IMAGERY.md
+   §11 Upload). The GPT Image pilot stays local until #415 lands and
+   Brandon approves the attach (§11 Pilot hold).
 
 5. **Ingest** the 16:9 derivation
    (`c_fill,ar_16:9,g_auto,w_2048/q_auto:good,f_jpg`) through the route

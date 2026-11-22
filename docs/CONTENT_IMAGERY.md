@@ -168,7 +168,9 @@ flying pages and extra props together) is the example.
 
 ## 8. Display constraints
 
-- **16:9.** Delivered at 2048×1152. The article hero is an
+- **16:9.** Generation requests 2048×1152; what a generator returns can
+  be smaller (GPT Image's native output is 1672×941 today, §10). The
+  ingest derivation (§11) delivers 2048×1152. The article hero is an
   `aspect-[16/9] object-cover` frame (`src/components/ArticleLayout.tsx`),
   and so is the `/articles` card (`src/components/articles/ArticlesExplorer.tsx`).
   The same media is the post's `og:image`.
@@ -213,21 +215,27 @@ Keep two facts apart:
   **human paste path**: Brandon runs the prompt and picks. Agents do not
   drive Midjourney. Its terms prohibit automated use, and driving its web UI
   proved fragile: submits failed silently and lists loaded lazily.
-- **GPT Image (`gpt-image-2`, via OpenClaw `image_generate`) is the
-  candidate route for agents.** Agents generate with it. It is not yet
-  proven on this site: as of 2026-11-22 no BP cover has been made through
-  that route.
+- **GPT Image (`openai/gpt-image-2`, via OpenClaw `image_generate` on the
+  OpenClaw OAuth route) is the candidate route for agents.** Agents
+  generate with it. Status, 2026-11-22: local candidates generated; A2-1
+  is the recommended pick, A the fallback; neither uploaded nor attached.
+- **Switching off Midjourney waits for proof.** The Midjourney subscription
+  is cancelled only after GPT Image makes three clean covers in a row.
+  Cloudinary hosting and its URLs stay; only Cloudinary's paid generation
+  add-on is being cancelled.
 
 ### GPT Image (agents)
 
-- **Route.** Confirm the exact `gpt-image-2` provider route before the first
-  generation of a session, and stop if it is unavailable. Never fall back
-  silently to another provider or model. GPT Image 2.5 needs an API-key
-  route and is not available here.
-- **Size.** Request `2048x1152`; the OpenAI provider takes sizes, not aspect
-  ratios. `3840x2160` is the other 16:9 size. On the OpenClaw OAuth route
-  a `2048x1152` request came back at 1672×941 [measured 2026-11-22, one
-  trial], so check the delivered size and expect to upscale (§11 Upload).
+- **Route.** `openai/gpt-image-2` through OpenClaw OAuth, and only that.
+  Confirm it before the first generation of a session and stop if it is
+  unavailable. No API key, no silent fallback to another provider or
+  model, and no change to OpenClaw's default model. GPT Image 2.5 needs an
+  API-key route and is not available here.
+- **Size: requested and native are different.** Request `2048x1152`; the
+  OpenAI provider takes sizes, not aspect ratios, and `3840x2160` is the
+  other 16:9 size. What comes back natively on the OpenClaw OAuth route is
+  1672×941 [measured 2026-11-22, one trial]. Record both, keep the native
+  PNG, and do not resize it in the pilot (§11 Upload).
 - **The tuned prompt form.** The Midjourney text does not transfer.
   Untuned, GPT Image drifts toward stock photos and product renders. What
   closed most of the gap in the September tests:
@@ -278,8 +286,8 @@ Keep two facts apart:
   the concept.
 - Base output is 1456×816; Upscale (Subtle) gives 2912×1632. Upscales draw
   on Fast hours, which ran out mid-rollout; Cloudinary's `e_upscale`
-  covered the 13 that missed (history; §11 no longer uses it). Upscale in
-  Midjourney or locally instead.
+  covered the 13 that missed (history; §11 no longer uses it). A smaller
+  original now goes through the ingest derivation's ordinary resize (§11).
 
 ### Other providers
 
@@ -292,6 +300,12 @@ first. xAI is untested.
 How a picked image becomes a post's cover. The ingest route and attach
 mechanics are in `docs/CONTENT_WORKFLOW.md` §4–§5; this section is what is
 specific to covers.
+
+### Pilot hold (2026-11-22)
+
+The GPT Image pilot is **local only** until #415 lands and Brandon
+approves the attach: no candidate upload, no ingest, no attach. While this
+file is `status: draft`, §1 still applies.
 
 ### Autonomy and the publish boundary
 
@@ -347,14 +361,13 @@ specific to covers.
   3. **After upload**, check the response for `overwritten` or `existing`,
      check width and height match the file, and check stored bytes equal
      the file. If an overwrite happened, stop and report it.
-- **Size limit: 10,485,760 bytes.** Check the file is under it before
-  every upload. Post 45's upscaled Midjourney PNG (10,712,024 bytes) went
-  over it; GPT Image PNGs resized locally to 2048×1152 were 3.6–3.8 MB
-  [measured 2026-11-22, one trial]. Resize a GPT Image output locally to
-  at least 2048 px wide before upload. A PNG over the limit is re-encoded
-  losslessly (PIL `optimize`, level 9, keeping the text chunks, which hold
-  a Midjourney cover's final prompt), verified pixel-identical, then
-  uploaded.
+- **Keep the native PNG, and a same-size JPEG beside it.** Do not resize
+  in the pilot. Next to each PNG, export a JPEG at the same pixel size and
+  about quality 90, and check it is under Cloudinary's upload limit of
+  10,485,760 bytes. Lossless PNG optimisation alone does not meet this.
+- _History:_ post 45's upscaled Midjourney PNG (10,712,024 bytes) went over
+  the limit and was re-encoded losslessly (PIL `optimize`, level 9, keeping
+  the text chunks that hold its final prompt), verified pixel-identical.
 - **Cloudinary hosts and delivers; it does not generate** (Brandon,
   2026-11-22). No rule here depends on a Cloudinary generative or AI
   transform, so `e_upscale` is history, not a step (§Ingest URL).
@@ -374,10 +387,11 @@ Ingest a 16:9 JPEG derivation, not the original:
 
     https://res.cloudinary.com/dgwdyrmsn/image/upload/c_fill,ar_16:9,g_auto,w_2048/q_auto:good,f_jpg/<public_id>.jpg
 
-- **Upload at least 2048 px wide,** resized locally (§Upload), so the
-  derivation needs no Cloudinary upscale. Fetch the URL once, confirm 200
-  at 2048×1152, and view it at full size for smearing, halos or plastic
-  surfaces before ingesting.
+- **The derivation sets the delivered size.** `c_fill,ar_16:9,w_2048` is
+  an ordinary delivery resize, not a generative transform, so a native
+  1672×941 original comes out at 2048×1152. Fetch the URL once, confirm
+  200 at 2048×1152, and view it at full size for smearing, halos or
+  plastic surfaces before ingesting.
 - _History:_ 13 Midjourney covers under 2048 px wide were ingested with
   `e_upscale/` after `upload/` (5–24 s to warm the first time). In the
   September check it came out crisper than a Lanczos resize, with no
@@ -398,9 +412,16 @@ Ingest a 16:9 JPEG derivation, not the original:
 - **Record the previous media id first.** Rollback is re-attaching it.
 - Read `_status` before and after; it must not change.
 - In a batch, take one post end to end and verify it live first.
-- **Verify live:** the article page loads (200) and both its hero and its
-  `og:image` point at the new file; the Blob URL and `/_next/image` return 200 and
-  decode; the card shows on `/articles`. Not verified live means not done.
+- **Verify a published post live:** the article page loads (200) and both
+  its hero and its `og:image` point at the new file; the Blob URL and
+  `/_next/image` return 200 and decode; the card shows on `/articles`. Not
+  verified live means not done.
+- **Verify a draft without publishing it:** open it through the
+  authenticated draft preview (`/next/preview?path=/articles/<slug>`,
+  `docs/CONTENT_WORKFLOW.md` § Draft preview), which needs a signed-in
+  Payload session, and check the hero and the Blob URL there. Never
+  publish to check a cover. Every preview link you hand anyone says "Sign
+  in to Payload first."
 
 ### Environment gotchas
 
