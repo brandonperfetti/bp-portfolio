@@ -505,7 +505,10 @@ stay there.
   `docs/AUTH.md` § Email capture.
 - **Broadcasts:** Respect the marketing consent field, and honor
   per-contact unsubscribe state before any broadcast ever sends. _Moved from
-  `docs/AUTH.md` § Email capture (#247 addendum 2)._
+  `docs/AUTH.md` § Email capture (#247 addendum 2)._ Every broadcast carries
+  Resend's Unsubscribe Footer, which is how a subscriber with no account
+  leaves, and the first send to the list is tested for the link first
+  (`docs/AUTH.md` § Leaving the list, #365).
 
 ## Dependency advisories
 
