@@ -347,13 +347,14 @@ specific to covers.
   3. **After upload**, check the response for `overwritten` or `existing`,
      check width and height match the file, and check stored bytes equal
      the file. If an overwrite happened, stop and report it.
-- **Size limit: 10,485,760 bytes.** Post 45's upscaled PNG
-  (10,712,024 bytes) went over it, and upscaled GPT Image PNGs came out at
-  about 14 MB [measured 2026-11-22, one trial]. Upscale a GPT Image output
-  locally to at least 2048 px wide and upload it as a high-quality JPEG,
-  not PNG. A Midjourney PNG over the limit is re-encoded losslessly
-  instead (PIL `optimize`, level 9, keeping the text chunks, which hold
-  its final prompt), verified pixel-identical, then uploaded.
+- **Size limit: 10,485,760 bytes.** Check the file is under it before
+  every upload. Post 45's upscaled Midjourney PNG (10,712,024 bytes) went
+  over it; GPT Image PNGs resized locally to 2048×1152 were 3.6–3.8 MB
+  [measured 2026-11-22, one trial]. Resize a GPT Image output locally to
+  at least 2048 px wide before upload. A PNG over the limit is re-encoded
+  losslessly (PIL `optimize`, level 9, keeping the text chunks, which hold
+  a Midjourney cover's final prompt), verified pixel-identical, then
+  uploaded.
 - **Cloudinary hosts and delivers; it does not generate** (Brandon,
   2026-11-22). No rule here depends on a Cloudinary generative or AI
   transform, so `e_upscale` is history, not a step (§Ingest URL).
@@ -373,7 +374,7 @@ Ingest a 16:9 JPEG derivation, not the original:
 
     https://res.cloudinary.com/dgwdyrmsn/image/upload/c_fill,ar_16:9,g_auto,w_2048/q_auto:good,f_jpg/<public_id>.jpg
 
-- **Upload at least 2048 px wide,** upscaled locally (§Upload), so the
+- **Upload at least 2048 px wide,** resized locally (§Upload), so the
   derivation needs no Cloudinary upscale. Fetch the URL once, confirm 200
   at 2048×1152, and view it at full size for smearing, halos or plastic
   surfaces before ingesting.

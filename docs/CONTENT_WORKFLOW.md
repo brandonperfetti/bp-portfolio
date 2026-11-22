@@ -190,8 +190,8 @@ in the run. Generate → pick → upload → ingest → attach:
    history; `cover-a/b/c` and `cover-ds-A` are retired namespaces. Run the
    exact-id `search-assets` pre-check with a positive control first:
    `sign-upload` forces `overwrite: true`, so a collision is silent.
-   Upload at least 2048 px wide and under 10,485,760 bytes: a GPT Image
-   output is upscaled locally and uploaded as JPEG (docs/CONTENT_IMAGERY.md
+   Upload at least 2048 px wide (a GPT Image output is resized locally)
+   and check the file is under 10,485,760 bytes (docs/CONTENT_IMAGERY.md
    §11 Upload).
 
 5. **Ingest** the 16:9 derivation
