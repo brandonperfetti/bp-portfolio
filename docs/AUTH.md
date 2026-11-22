@@ -146,6 +146,55 @@
   `@payloadcms/email-resend` adapter configured in `payload.config.ts`
   (active when `RESEND_API_KEY` is set).
 
+### Leaving the list (#365)
+
+How a subscriber with no account (a contact-form or Newsletter Signup
+opt-in) gets off the list.
+
+- **The visitor, on their own: the unsubscribe link in each broadcast.**
+  `[source: Resend docs, "Broadcast unsubscribe link",
+resend.com/docs/dashboard/broadcasts/editor]` Resend gives each recipient
+  of each broadcast a unique link, `{{{RESEND_UNSUBSCRIBE_URL}}}`, and the
+  editor's Unsubscribe Footer inserts it; pressing it opens Resend's
+  preference page, which sets the contact `unsubscribed`. Resend does not
+  add the link by itself, so **every broadcast carries the Unsubscribe
+  Footer** (or the placeholder as a link target), and **before the first
+  send to the list, send the broadcast as a test to an address you own and
+  press its unsubscribe link** (Brandon, 2026-11-18, on #365: the privacy
+  page promises the link in every list email). Mail sent to the list any
+  other way than a broadcast has no link unless its template adds one.
+  `[measured 2026-11-22, Resend account, read-only list-broadcasts: 0
+broadcasts]` nothing has been sent to the list yet, so no delivered email
+  has been checked for the link.
+- **An unsubscribe sticks.** `captureContact` leaves an existing contact's
+  opt-out alone on the sign-up and contact-form paths (#411), so ticking the
+  contact form's box again does not re-subscribe. Only the newsletter's own
+  confirmation link does, by the owner of the address (§ Email capture, 3).
+- **Brandon, on a "please remove me": one command, by address.**
+
+  ```sh
+  pnpm exec payload run scripts/remove-contact.ts -- <address>   # with that env's RESEND_API_KEY
+  ```
+
+  Run it with `pnpm exec`, not `pnpm payload`: the package script prints the
+  expanded command, address included, to the terminal, and a bare `payload`
+  is not on PATH.
+
+  It looks the contact up and removes it with `removeContact`, the same
+  marketing-scoped act the webhook performs for a deleted account, never a
+  suppression (which would also block transactional mail such as a password
+  reset). It takes exactly one address and keeps it out of its logs. It
+  prints `removed` (Resend answered `deleted: true`), `absent` (Resend
+  answered `not_found`) or `unconfirmed` (exit 1: a failure or a lost reply,
+  so the contact may still be on the list; check the dashboard or run it
+  again). Deleting the contact in the Resend dashboard does the same by hand.
+
+- **Deleting an account is not a removal path for these subscribers.**
+  `user.deleted` removes only the contact the account is mapped to
+  (§ Contact hygiene below). Someone who joined through the contact form and
+  later signed up without the opt-in has no mapped contact, so deleting the
+  account leaves the address on the list: remove it by address as above.
+
 ### The sign-up opt-in (#362)
 
 Until #362 every new account was added to the list. Now only a ticked box

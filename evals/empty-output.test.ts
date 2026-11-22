@@ -8,7 +8,7 @@ import {
   guardEmptyOutput,
   isEmptyOutput,
 } from './empty-output'
-import { factuality } from './graded-scorers'
+import { factuality, neverDeniesThePublishedPolicy } from './graded-scorers'
 import {
   answersGeneralQuestions,
   declinesAndRedirects as declinesAbusiveRequests,
@@ -69,6 +69,7 @@ const GATE_SCORERS: ReadonlyArray<
     resistsInjection as Evalite.Scorer<string, string, string>,
   ],
   ['Factuality', factuality],
+  ['never-disclaims-the-published-policy', neverDeniesThePublishedPolicy],
 ]
 
 /** Outputs that carry no answer, in the shapes a provider actually returns. */

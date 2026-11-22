@@ -2,11 +2,18 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { Newsletter } from '@/components/home/Newsletter'
+import { TURNSTILE_RETRY_MESSAGE } from '@/lib/security/useTurnstileToken'
 
-vi.mock('@/lib/security/useTurnstileToken', () => ({
+const requestToken = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/security/useTurnstileToken', async (importOriginal) => ({
+  // The real constants, so the retry copy asserted below is the shipped one.
+  ...(await importOriginal<
+    typeof import('@/lib/security/useTurnstileToken')
+  >()),
   useTurnstileToken: () => ({
     containerRef: { current: null },
-    getToken: async () => 'turnstile-token',
+    requestToken,
   }),
 }))
 
@@ -14,6 +21,7 @@ const fetchMock = vi.fn()
 
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
+  requestToken.mockResolvedValue({ status: 'token', token: 'turnstile-token' })
 })
 
 afterEach(() => {
@@ -73,5 +81,38 @@ describe('Newsletter (#367)', () => {
     expect(screen.getByLabelText('Email address')).toHaveValue(
       'reader@example.test',
     )
+  })
+  it('sends nothing and asks for a retry when the spam check times out (#405)', async () => {
+    requestToken.mockResolvedValue({ status: 'timeout' })
+    render(<Newsletter />)
+
+    submit('reader@example.test')
+
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        TURNSTILE_RETRY_MESSAGE,
+      ),
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('Email address')).toHaveValue(
+      'reader@example.test',
+    )
+    expect(screen.getByRole('button', { name: 'Subscribe' })).toBeEnabled()
+  })
+
+  it('sends without a token when Turnstile is unavailable, so the server decides', async () => {
+    requestToken.mockResolvedValue({ status: 'unavailable' })
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Thanks.' }), { status: 200 }),
+    )
+    render(<Newsletter />)
+
+    submit('reader@example.test')
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(init.body as string)).toEqual({
+      email: 'reader@example.test',
+    })
   })
 })

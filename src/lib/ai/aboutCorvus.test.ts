@@ -375,12 +375,35 @@ describe('isCorvusRetentionQuestion', () => {
       'Does Corvus keep things private?',
       'a retention verb with no object, then privacy',
     ],
+    ['Do you store messages?', '#410: a bare object, put to Corvus'],
+    ['Does Corvus keep any data?', '#410: Corvus by name, a bare object'],
+    ['Are you saving my questions?', 'a possessive, in the -ing form'],
+    ['Will it log prompts?', '#410: it as the subject'],
+    ['Corvus, do you store messages?', '#410: a leading vocative'],
+    ['Do you store any user messages?', '#410: two modifiers'],
+    ['Do you permanently store messages?', '#410: an adverb'],
+    ['How long do you store messages?', '#410: the retention window'],
+    ['How long does Corvus keep chats?', '#410: the window, by name'],
+    ['Can you tell me if you store messages?', '#410: embedded after if'],
+    [
+      'Can you tell me whether you are storing messages?',
+      '#410: embedded, progressive',
+    ],
+    ['Does Corvus store visitors\u2019 messages?', '#410: a curly apostrophe'],
   ])('matches %s (%s)', (query) => {
     expect(isCorvusRetentionQuestion(query)).toBe(true)
   })
 
   it.each([
     ['How do I store messages in Redis?', 'an engineering question'],
+    ['How do you store messages in Redis?', 'a method question, not yes/no'],
+    ['Do I need to store messages in Redis?', 'I as the subject'],
+    ['Should we keep data in Postgres?', 'we as the subject'],
+    ['How long do I keep logs in Datadog?', 'how long, but I as the subject'],
+    [
+      'Can you tell me if I should store messages in Redis?',
+      'if, but I as the subject',
+    ],
     ['How do you save state in React?', 'save with no object of mine'],
     ['Do you keep up with React?', 'keep up'],
     ['What do you keep up with?', 'keep up, in the object-less shape'],
@@ -406,6 +429,12 @@ describe('withAboutCorvusSnippet on a retention question (#401)', () => {
     expect(result.map((s) => s.collection)).toEqual([
       ABOUT_CORVUS_PRIVACY_COLLECTION,
     ])
+  })
+
+  it('offers it for "Do you store messages?" too (#410)', () => {
+    const result = withAboutCorvusSnippet('Do you store messages?', [])
+
+    expect(result[0]?.collection).toBe(ABOUT_CORVUS_PRIVACY_COLLECTION)
   })
 
   it('puts the privacy passage ahead of the about-Corvus one when both apply', () => {

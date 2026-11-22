@@ -12,6 +12,98 @@ Each version is an annotated tag on that release's merge commit.
 here; each one's release PR body is its record. How an entry is written and
 when the tag is made: [`docs/WORKFLOW.md` § Releases](docs/WORKFLOW.md#releases).
 
+## v2026.11.22
+
+A form submitted before the spam check has loaded now waits for it instead
+of failing, Corvus answers "Do you store messages?" from the retention
+policy, a subscriber with no account can be taken off the list with one
+command, and a plain `git add` no longer picks up a real env file. Release PR
+[#421](https://github.com/brandonperfetti/bp-portfolio/pull/421) ·
+[tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.22) ·
+carries #414, #416, #417 and #419.
+
+**Visitors**
+
+- **An early submit no longer gets a 403.** Before this release, pressing
+  Send on the contact form or the "Stay up to date" form before the
+  Turnstile widget had loaded sent the request without a token, and the
+  server refused it where Turnstile is enforced. The form now waits for the
+  widget, up to 5 seconds, and the whole check is bounded at 15 seconds from
+  the press. If the check really does time out, the form sends nothing,
+  keeps what was typed, and says "The spam check is taking longer than
+  usual. Please try again in a moment." A blocked or failed script still
+  sends without a token and the server decides, as before. Where chat
+  protection is on, Corvus chat also waits for the widget; on a timeout it
+  still sends without a token (#405, #417).
+- **The contact form's messages are announced to screen readers.** Its
+  feedback is now a polite live region that is always on the page, so the
+  success, error and timeout messages are read out as they appear (#417).
+- **Corvus answers "Do you store messages?" from the published retention
+  policy.** That question, and others like it ("Does Corvus keep any
+  data?", "How long do you keep…?"), now bring in the retention passage, so
+  Corvus answers with what it keeps and for how long and cites `/privacy`.
+  Before, the question reached Corvus with no policy passage at all (#410,
+  #416).
+
+**What this release leaves.**
+
+- **There is still no unsubscribe page on the site.** A subscriber leaves
+  through the unsubscribe link in each Resend broadcast, or by asking
+  Brandon, who removes them with the new command below. Nothing has been
+  sent to the list yet, so no delivered email has been checked for the link;
+  `docs/AUTH.md` § Leaving the list says to test it before the first send
+  (#365, #419).
+- **Other Resend contact calls still put the address in the URL
+  unencoded**: the contact lookup the Clerk webhook uses, and
+  `captureContact`'s lookup, update and segment calls. An address with `#`,
+  `?` or `/` in it can miss its contact there. That is #418; this release
+  fixes only the new removal lookup (#419).
+- **Corvus's retention routing is a pattern list**, so wordings it doesn't
+  cover still miss the passage; `docs/AI.md` § What Corvus keeps names the
+  rules and their accepted false positives (#416).
+
+**Not proven before release:** the Turnstile wait on a deployed build with
+the real widget; what is proven is the hook and both forms by component and
+hook tests, with Cloudflare's timeout codes injected. A live removal against
+Resend with the production key. Corvus's retention answer in production;
+what is proven is the keyed eval against the production model (`eval:ci` 89%
+before and after, against the 80% floor).
+
+**Developers**
+
+- `.gitignore` ignores `.env*` at any depth and in any case, re-including
+  only the root `.env.example`. `scripts/env-files-ignored.test.ts` (unit
+  tier) checks sample names with `core.ignorecase=false`, as on CI, and fails
+  if any tracked file other than the root example starts with `.env`, which
+  catches a `git add -f`. `docs/SECURITY.md` § Secret handling says what the
+  rule does not cover: a deeper `.gitignore` can re-include a name, and
+  `prod.env` is outside it (#261, #414).
+- `useTurnstileToken` has a new `requestToken()` returning `token`,
+  `inactive`, `unavailable` or `timeout` (Cloudflare's 1106xx codes count as
+  `timeout`). Calls run one at a time, since tokens are single-use, and a
+  timeout resets the widget. `getToken()` keeps its shape. The ten-second
+  load timer that marked a slow script failed for the whole page is gone
+  (#405, #417).
+- New admin command for a "please remove me":
+  `pnpm exec payload run scripts/remove-contact.ts -- <address>`, with that
+  environment's `RESEND_API_KEY`. It prints `removed`, `absent` or
+  `unconfirmed` (exit 1) and keeps the address out of its logs. Use
+  `pnpm exec`, not `pnpm payload`, which prints the address. It calls the
+  new `removeContactByEmail` in `src/lib/email/resendContacts.ts`. The
+  existing `removeContact`, which the Clerk webhook uses, now returns true
+  only on Resend's `deleted: true` and logs an error's name and status, not
+  its message, which can echo the address. `docs/AUTH.md` § Leaving the list
+  is the runbook (#365, #419).
+- `isCorvusRetentionQuestion` gains three patterns (`src/lib/ai/aboutCorvus.ts`).
+  The pattern check that #401's non-answer was scored by is replaced by an
+  AI-graded check, `neverDeniesThePublishedPolicy` in
+  `evals/graded-scorers.ts`, on Brandon's decision. It keeps the reported
+  name `never-disclaims-the-published-policy`, and
+  `evals/graded-scorers.test.ts` pins its question and score map without a
+  model call. The what-Corvus-keeps block gains "Do you store messages?". No
+  eval floor changed (#410, #416).
+- No Payload schema change, no migration and no new env var.
+
 ## v2026.11.21.1
 
 The newsletter form asks the reader to confirm by email before anything is
