@@ -5,7 +5,10 @@ import { ArrowRightIcon } from '@heroicons/react/24/outline'
 
 import { Button } from '@/components/Button'
 import { MailIcon } from '@/icons'
-import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
+import {
+  TURNSTILE_RETRY_MESSAGE,
+  useTurnstileToken,
+} from '@/lib/security/useTurnstileToken'
 
 /**
  * The "Stay up to date" card: one email field that asks to join the
@@ -17,14 +20,16 @@ import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
  * checkbox; the copy says what joining means. The server's answer is shown
  * as given: it is the same for a new address and one already on the list.
  * The Turnstile check is invisible unless Cloudflare escalates, and
- * enforced server-side only when its keys are set.
+ * enforced server-side only when its keys are set. A submit made before
+ * the check has loaded waits for it; one that times out sends nothing and
+ * asks the visitor to try again (#405).
  */
 export function Newsletter() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [success, setSuccess] = useState<boolean | null>(null)
-  const { containerRef: turnstileRef, getToken } = useTurnstileToken({
+  const { containerRef: turnstileRef, requestToken } = useTurnstileToken({
     enabled: true,
   })
 
@@ -34,7 +39,16 @@ export function Newsletter() {
     setMessage('')
 
     try {
-      const turnstileToken = await getToken()
+      const verification = await requestToken()
+      // Still loading or unfinished: a tokenless request would only earn a
+      // 403, so say so and keep the address for the retry (#405).
+      if (verification.status === 'timeout') {
+        setSuccess(false)
+        setMessage(TURNSTILE_RETRY_MESSAGE)
+        return
+      }
+      const turnstileToken =
+        verification.status === 'token' ? verification.token : null
       const response = await fetch('/api/newsletter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

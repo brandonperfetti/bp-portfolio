@@ -5,8 +5,21 @@ import { useState } from 'react'
 import { Button } from '@/components/Button'
 import { MailIcon } from '@/icons'
 import { MAILING_LIST_OPT_IN_LABEL } from '@/lib/email/mailingListOptIn'
-import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
+import {
+  TURNSTILE_RETRY_MESSAGE,
+  useTurnstileToken,
+} from '@/lib/security/useTurnstileToken'
 
+/**
+ * The "Send a message" contact form, posting to `/api/contact`.
+ *
+ * @remarks The mailing-list box is unchecked by default and the server
+ * captures only when it is ticked and the message delivered. The Turnstile
+ * check is invisible unless Cloudflare escalates. A submit made before it
+ * has loaded waits for it; one that times out sends nothing, keeps every
+ * field and says to try again (#405), since a tokenless send would only
+ * earn a 403 where Turnstile is enforced.
+ */
 export function Messenger() {
   const [fullname, setFullname] = useState('')
   const [email, setEmail] = useState('')
@@ -20,7 +33,7 @@ export function Messenger() {
   const [feedback, setFeedback] = useState('')
   // Invisible bot check; enforced server-side only when Turnstile keys are
   // configured, so the form works identically in dev/preview without them.
-  const { containerRef: turnstileRef, getToken } = useTurnstileToken({
+  const { containerRef: turnstileRef, requestToken } = useTurnstileToken({
     enabled: true,
   })
   const fieldClassName =
@@ -32,7 +45,16 @@ export function Messenger() {
     setFeedback('')
 
     try {
-      const turnstileToken = await getToken()
+      const verification = await requestToken()
+      // Still loading or unfinished: a tokenless request would only earn a
+      // 403, so say so and keep the message for the retry (#405).
+      if (verification.status === 'timeout') {
+        setStatus('error')
+        setFeedback(TURNSTILE_RETRY_MESSAGE)
+        return
+      }
+      const turnstileToken =
+        verification.status === 'token' ? verification.token : null
       const response = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -135,13 +157,19 @@ export function Messenger() {
           {loading ? 'Sending...' : 'Send'}
         </Button>
       </div>
-      {feedback && (
-        <p
-          className={`mt-3 text-sm ${status === 'success' ? 'text-emerald-500' : 'text-red-500'}`}
-        >
-          {feedback}
-        </p>
-      )}
+      {/* Always mounted, so the live region exists before its first message
+          and screen readers announce that one too, the retry included. */}
+      <p
+        role="status"
+        aria-live="polite"
+        className={
+          feedback
+            ? `mt-3 text-sm ${status === 'success' ? 'text-emerald-500' : 'text-red-500'}`
+            : undefined
+        }
+      >
+        {feedback}
+      </p>
     </form>
   )
 }
