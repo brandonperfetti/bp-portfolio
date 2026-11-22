@@ -137,7 +137,9 @@ export async function findContactEmailById(
  *
  * The boolean is load-bearing for `user.deleted`: it is what lets the caller
  * keep the Redis mirror key on a failed removal, which is the only remaining
- * record of the link once the Clerk user is gone.
+ * record of the link once the Clerk user is gone. It is `true` only when
+ * Resend answers `deleted: true` (#365): an error, or a success envelope
+ * without it, is `false`.
  */
 export async function removeContact(
   resend: Resend,
@@ -145,13 +147,22 @@ export async function removeContact(
   context: string,
 ): Promise<boolean> {
   try {
-    const { error } = await resend.contacts.remove(contactId)
+    const { data, error } = await resend.contacts.remove(contactId)
     if (error) {
+      // Name and status only: Resend's message can echo the address.
       console.error('[resend-contacts] contact removal failed', {
         context,
         contactId,
         name: error.name,
-        message: error.message.slice(0, 300),
+        statusCode: error.statusCode ?? null,
+      })
+      return false
+    }
+    if (data?.deleted !== true) {
+      // A success envelope that does not say it deleted is not a removal.
+      console.error('[resend-contacts] contact removal not confirmed', {
+        context,
+        contactId,
       })
       return false
     }
@@ -164,5 +175,65 @@ export async function removeContact(
       message: boundedErrorMessage(error),
     })
     return false
+  }
+}
+
+/** What {@link removeContactByEmail} did. */
+export type RemoveByEmailOutcome = 'removed' | 'absent' | 'unconfirmed'
+
+/**
+ * Remove a contact from the audience by its email address: a "please remove
+ * me" from someone with no account, such as a contact-form subscriber (#365).
+ *
+ * @param resend - The Resend client.
+ * @param email - The address to remove.
+ * @param context - Log context describing why the contact is being removed.
+ * @returns `removed` when Resend answered `deleted: true`, `absent` when
+ *   Resend answered `not_found` for the address (nothing to do), and
+ *   `unconfirmed` otherwise: the lookup or removal failed, or its answer was
+ *   lost, so the contact may or may not still be on the list.
+ *
+ * @remarks Its own lookup rather than {@link findContactIdByEmail}, which
+ * answers `undefined` for a missing contact and a failed lookup alike, and an
+ * operator must not read a failure as "already gone". Absent is Resend's
+ * `not_found` error, the answer `captureContact` measured (2026-11-21), and
+ * nothing else: a bare 404 from a proxy is `unconfirmed`. The
+ * removal itself is {@link removeContact}, so it is the same marketing-scoped
+ * act as an account deletion, never a suppression. The address never reaches
+ * a log line, and it is sent as one encoded path segment, so a `#` or `?` in
+ * it cannot turn the lookup into one for another address.
+ */
+export async function removeContactByEmail(
+  resend: Resend,
+  email: string,
+  context: string,
+): Promise<RemoveByEmailOutcome> {
+  try {
+    // The SDK puts the selector into `/contacts/<email>` unencoded
+    // (resend@6.18.1), so a `#`, `?` or `/` in the local part would cut the
+    // path short and look up another contact. One path segment; `@` stays
+    // literal, so an ordinary address sends the same request as before.
+    const selector = encodeURIComponent(email).replace(/%40/g, '@')
+    const { data, error } = await resend.contacts.get({ email: selector })
+    // Resend's own not-found only: a gateway's HTML 404 is an
+    // `application_error`, which says nothing about the contact.
+    if (error?.name === 'not_found') return 'absent'
+    if (error || !data) {
+      console.error('[resend-contacts] contact lookup by email failed', {
+        context,
+        name: error?.name,
+        statusCode: error?.statusCode ?? null,
+      })
+      return 'unconfirmed'
+    }
+    return (await removeContact(resend, data.id, context))
+      ? 'removed'
+      : 'unconfirmed'
+  } catch {
+    // The thrown message can carry the request path, which holds the address.
+    console.error('[resend-contacts] contact removal by email threw', {
+      context,
+    })
+    return 'unconfirmed'
   }
 }
