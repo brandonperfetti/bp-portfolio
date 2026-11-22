@@ -108,6 +108,12 @@ already cost a session or broken production.
 - **decide whether a change fits the product** → `docs/PRODUCT.md`.
 - **write or publish content** → `docs/CONTENT_WORKFLOW.md`,
   `docs/CONTENT_STYLE.md`.
+- **make or replace a cover** → `docs/CONTENT_IMAGERY.md` (history:
+  `docs/cover-history.json`). **Cloudinary's `sign-upload` forces
+  overwrite, so every upload follows an exact-id pre-check with a control
+  query; agents generate with GPT Image, never Midjourney, and Brandon
+  approves the attach.** The code-rendered covers under `archive/` are
+  history, not a tool.
 - **branch, hook, review or release** → `docs/WORKFLOW.md`. **The release
   lane writes the `CHANGELOG.md` section at the cut; an agent creates a
   release tag only on Brandon's explicit word for that tag** (§ Releases).
