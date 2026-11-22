@@ -1,5 +1,5 @@
 {
-  "about": "BP Portfolio cover history: one entry per live cover, newest publishedAt first, so the first N entries are 'the last N covers' for the rotation rules in docs/CONTENT_IMAGERY.md section 9. A new article's cover goes at the top; a new cover on an existing post updates that post's entry in place and moves the old cover into a 'previous' list (section 13). Sources: the receipts posted on brandonperfetti/bp-portfolio#415, a read of the production posts API on 2026-11-22, and the prompt Midjourney embedded in each cover's original PNG on Cloudinary (finalPrompt).",
+  "about": "BP Portfolio cover history: one entry per live cover, newest publishedAt first, so the first N entries are 'the last N covers' for the rotation rules in docs/CONTENT_IMAGERY.md section 9. A new article's cover is inserted in descending publishedAt order (at the top only when it is the newest post); a new cover on an existing post updates that post's entry in place and moves the old cover into a 'previous' list (section 13). Sources: the receipts posted on brandonperfetti/bp-portfolio#415, a read of the production posts API on 2026-11-22, and the prompt Midjourney embedded in each cover's original PNG on Cloudinary (finalPrompt).",
   "verified": {
     "date": "2026-11-22",
     "livePublishedPosts": 53,

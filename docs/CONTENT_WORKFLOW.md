@@ -208,10 +208,11 @@ reschedules a post.
 
 Two paths, one outcome: a Media row in Blob with real bytes behind it.
 
-**Human path (simplest when a person is at the keyboard):** upload the
-PNG in the admin Media collection, or straight from the post's Hero
-Image field, then attach the resulting media id via MCP `updatePosts`
-(§5). No secret, no curl.
+**Human path (simplest when a person is at the keyboard):** download the
+16:9 JPEG derivation (docs/CONTENT_IMAGERY.md §11 Ingest URL), check it is
+2048×1152, and upload that file, not the original PNG, in the admin Media
+collection or straight from the post's Hero Image field. Then attach the
+resulting media id via MCP `updatePosts` (§5). No secret, no curl.
 
 **Agent path:** the MCP cannot upload files (`createMedia` requires
 multipart; admin "Paste URL" is a client-side fetch — spiked

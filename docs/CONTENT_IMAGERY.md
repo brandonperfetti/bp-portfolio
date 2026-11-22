@@ -484,7 +484,8 @@ covers" for §9.
     different accent in the final prompt (posts 55 and 6); their notes say
     so.
 
-- **A new article's cover:** add its entry at the top, with the same
+- **A new article's cover:** insert its entry in descending `publishedAt`
+  order (at the top only when it is the newest post), with the same
   fields, in the same change that attaches it.
 - **A new cover on an existing post:** update that post's entry in place,
   so the order stays by `publishedAt`. Move the replaced cover's series,
