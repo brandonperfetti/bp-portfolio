@@ -1,6 +1,3 @@
-/** Escapes put back: `@` and `+`, which a path segment carries as they are. */
-const KEPT = /%(?:40|2B)/g
-
 /** Marks `encodeURIComponent` leaves unescaped and the redactor does not know. */
 const UNESCAPED_MARKS = /[!*()~]/g
 
@@ -21,20 +18,24 @@ const UNESCAPED_MARKS = /[!*()~]/g
  * `redactEmailAddresses` (`sentryConfig.ts`) matches a local part of letters,
  * digits, `%` and `._+'-` only. Anything else sent literally would split the
  * match and leave the start of the address in the event: `reader$tag@…`
- * becomes `reader$[email]`. So only `@` and `+` are put back (a plus address
- * is common, and goes out as it did before), and the marks
- * `encodeURIComponent` leaves alone are escaped too; `'` stays, which the
- * redactor knows. The escapes are all valid in a path segment.
+ * becomes `reader$[email]`. So only `+` and the last `@` are put back (a
+ * plus address is common, and the capture path always sent it literally),
+ * and the marks `encodeURIComponent` leaves alone are escaped too; `'` stays,
+ * which the redactor knows. An earlier `@`, as in a quoted local part
+ * (`"a@b"@example.test`), stays `%40`: literal, it would end the redactor's
+ * match there. The escapes are all valid in a path segment.
  *
  * Use it only where the address becomes a path: `contacts.get`, `update`,
  * `remove` and `segments.*` by email. A create sends the address in a JSON
  * body, which must carry it as given.
  */
 export function contactSelector(email: string): string {
-  return encodeURIComponent(email)
+  const escaped = encodeURIComponent(email)
     .replace(
       UNESCAPED_MARKS,
       (mark) => `%${mark.charCodeAt(0).toString(16).toUpperCase()}`,
     )
-    .replace(KEPT, (escaped) => decodeURIComponent(escaped))
+    .replace(/%2B/g, '+')
+  const at = escaped.lastIndexOf('%40')
+  return at < 0 ? escaped : `${escaped.slice(0, at)}@${escaped.slice(at + 3)}`
 }

@@ -151,7 +151,7 @@ describe('removeContactByEmail (#365)', () => {
     ['reader?x@example.test', '/contacts/reader%3Fx@example.test'],
     ['a/b@example.test', '/contacts/a%2Fb@example.test'],
     [EMAIL, `/contacts/${EMAIL}`],
-    // Valid in a path segment, so it goes out as it always has (#418).
+    // Literal, as the live capture path always sent it; #365 sent `%2B` (#418).
     ['reader+tag@example.test', '/contacts/reader+tag@example.test'],
   ])(
     'asks the real SDK for exactly %s, as one path segment',

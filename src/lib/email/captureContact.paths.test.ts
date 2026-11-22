@@ -19,6 +19,8 @@ const ADDRESSES: [string, string][] = [
   ['reader@example.test', 'reader@example.test'],
   // A `+` is valid in a path segment and goes out as it did before.
   ['reader+tag@example.test', 'reader+tag@example.test'],
+  // An `@` in a quoted local part stays escaped; only the last one is literal.
+  ['"reader@tag"@example.test', '%22reader%40tag%22@example.test'],
 ]
 
 type Call = {
