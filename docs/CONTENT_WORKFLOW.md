@@ -190,11 +190,14 @@ in the run. Generate → pick → upload → ingest → attach:
    history; `cover-a/b/c` and `cover-ds-A` are retired namespaces. Run the
    exact-id `search-assets` pre-check with a positive control first:
    `sign-upload` forces `overwrite: true`, so a collision is silent.
-   Re-encode a PNG over 10,485,760 bytes losslessly before uploading.
+   Upload at least 2048 px wide and under 10,485,760 bytes: a GPT Image
+   output is upscaled locally and uploaded as JPEG (docs/CONTENT_IMAGERY.md
+   §11 Upload).
 
 5. **Ingest** the 16:9 derivation
-   (`c_fill,ar_16:9,g_auto,w_2048/q_auto:good,f_jpg`, with `e_upscale/`
-   in front for an image under 2048 px wide) through the route in §4.
+   (`c_fill,ar_16:9,g_auto,w_2048/q_auto:good,f_jpg`) through the route
+   in §4. No Cloudinary generative or AI transform (`e_upscale` included)
+   is part of the flow.
 6. **Attach** in §5, once Brandon approves it: `heroImage` and
    `meta.image`, recording the previous media id for rollback.
 

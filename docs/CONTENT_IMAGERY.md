@@ -225,7 +225,9 @@ Keep two facts apart:
   silently to another provider or model. GPT Image 2.5 needs an API-key
   route and is not available here.
 - **Size.** Request `2048x1152`; the OpenAI provider takes sizes, not aspect
-  ratios. `3840x2160` is the other 16:9 size.
+  ratios. `3840x2160` is the other 16:9 size. On the OpenClaw OAuth route
+  a `2048x1152` request came back at 1672×941 [measured 2026-11-22, one
+  trial], so check the delivered size and expect to upscale (§11 Upload).
 - **The tuned prompt form.** The Midjourney text does not transfer.
   Untuned, GPT Image drifts toward stock photos and product renders. What
   closed most of the gap in the September tests:
@@ -275,8 +277,9 @@ Keep two facts apart:
   wording. One sharpened re-run per recipe is the cap; after that, change
   the concept.
 - Base output is 1456×816; Upscale (Subtle) gives 2912×1632. Upscales draw
-  on Fast hours, which ran out mid-rollout; the Cloudinary upscale (§11)
-  covered the 13 that missed.
+  on Fast hours, which ran out mid-rollout; Cloudinary's `e_upscale`
+  covered the 13 that missed (history; §11 no longer uses it). Upscale in
+  Midjourney or locally instead.
 
 ### Other providers
 
@@ -345,10 +348,18 @@ specific to covers.
      check width and height match the file, and check stored bytes equal
      the file. If an overwrite happened, stop and report it.
 - **Size limit: 10,485,760 bytes.** Post 45's upscaled PNG
-  (10,712,024 bytes) went over it. Re-encode oversize PNGs losslessly (PIL `optimize`, level 9,
-  keep the text chunks), verify pixel-identical, then upload.
+  (10,712,024 bytes) went over it, and upscaled GPT Image PNGs came out at
+  about 14 MB [measured 2026-11-22, one trial]. Upscale a GPT Image output
+  locally to at least 2048 px wide and upload it as a high-quality JPEG,
+  not PNG. A Midjourney PNG over the limit is re-encoded losslessly
+  instead (PIL `optimize`, level 9, keeping the text chunks, which hold
+  its final prompt), verified pixel-identical, then uploaded.
+- **Cloudinary hosts and delivers; it does not generate** (Brandon,
+  2026-11-22). No rule here depends on a Cloudinary generative or AI
+  transform, so `e_upscale` is history, not a step (§Ingest URL).
 - **Tags:** `bp-cover`, the series id, and the provider (`midjourney` or
-  `gpt-image`); add `cld-upscaled` when §Ingest URL adds `e_upscale`.
+  `gpt-image`). `cld-upscaled` marks the 13 history covers that used
+  `e_upscale`; new covers do not get it.
   **Context:** `source`, `recipe` (the version) and `upscale`, plus the
   job id (`mj_job` for Midjourney, the generation id for GPT Image).
 - **Match picks by job id,** never by prompt wording or by eye. Midjourney
@@ -362,13 +373,15 @@ Ingest a 16:9 JPEG derivation, not the original:
 
     https://res.cloudinary.com/dgwdyrmsn/image/upload/c_fill,ar_16:9,g_auto,w_2048/q_auto:good,f_jpg/<public_id>.jpg
 
-- **Below 2048 px wide** (Midjourney grid images at 1456×816, small GPT
-  Image outputs), put `e_upscale/` after `upload/`. Fetch the URL once to
-  warm it (5–24 s the first time), confirm 200 at 2048×1152, and view it at
-  full size for smearing, halos or plastic surfaces before ingesting.
-  In the September check, `e_upscale` came out crisper than a Lanczos
-  resize, with no halos, but it softened the film grain a little
-  [measured on 5 of 13].
+- **Upload at least 2048 px wide,** upscaled locally (§Upload), so the
+  derivation needs no Cloudinary upscale. Fetch the URL once, confirm 200
+  at 2048×1152, and view it at full size for smearing, halos or plastic
+  surfaces before ingesting.
+- _History:_ 13 Midjourney covers under 2048 px wide were ingested with
+  `e_upscale/` after `upload/` (5–24 s to warm the first time). In the
+  September check it came out crisper than a Lanczos resize, with no
+  halos, but softened the film grain a little [measured on 5 of 13].
+  Since 2026-11-22 the rules do not use it (§Upload).
 - `w_2048,c_limit` alone gave 2048×1148, because a Midjourney upscale is
   1.784:1, not 16:9. Use `c_fill,ar_16:9`.
 - The ingest route takes only `https` URLs on `res.cloudinary.com`, refuses
@@ -437,7 +450,8 @@ covers" for §9.
     sharpened wording, and the six replacement concepts.
   - **`era`** is read from the final prompt's era phrase. `scene` comes
     from the recipe, or is classified from the final prompt for the six
-    replacement concepts.
+    replacement concepts and for post 20, whose final prompt is a macro
+    close-up although its recipe said interior.
   - **`metaphorFamily`** is logged for the nine v2 recipes still live. The
     other 44 were classified on 2026-11-22 from the final prompt
     (`metaphorFamilySource` says which). That covers the v1 covers, which
