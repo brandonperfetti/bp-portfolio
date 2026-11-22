@@ -12,6 +12,120 @@ Each version is an annotated tag on that release's merge commit.
 here; each one's release PR body is its record. How an entry is written and
 when the tag is made: [`docs/WORKFLOW.md` § Releases](docs/WORKFLOW.md#releases).
 
+## v2026.11.21.1
+
+The newsletter form asks the reader to confirm by email before anything is
+added, a reader who unsubscribed can rejoin that way, and a failed Resend write
+no longer reads as subscribed. Release PR
+[#413](https://github.com/brandonperfetti/bp-portfolio/pull/413) ·
+[tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.21.1) ·
+carries #411.
+
+**Visitors**
+
+- **The "Stay up to date" form is double opt-in.** Submitting it adds
+  nothing to the list. It sends one email to the address, with a link to
+  `/newsletter/confirm`, and answers "Thanks. Check your inbox for a link to
+  confirm." Opening the link changes nothing either, because mail scanners
+  open links; the address joins only when its owner presses **Confirm** on
+  that page. Each link works once and stops working after 3 days. Brandon
+  chose double opt-in for every Newsletter Signup sign-up, new or returning,
+  on #411, replacing the single opt-in of v2026.11.21 (#411).
+- **A reader who unsubscribed can rejoin.** Confirming from the emailed link
+  clears an earlier unsubscribe, and the site reads the contact back before
+  saying "You're subscribed." Only the confirmation does this; an old link
+  confirmed again after an unsubscribe answers "This link has already been
+  used." and changes nothing (#407, #411).
+- **A failed write says so.** When Resend refuses or cannot be reached, the
+  form answers "Couldn't sign you up right now. Please try again later.", and
+  the confirm page says it couldn't confirm, instead of a success. Every
+  address still gets the same answer, so no reply shows who is on the list
+  (#409, #411).
+- **Signing up, the contact form's opt-in and the newsletter all add an
+  existing contact to the list's segment.** Before this release only a new
+  contact got the segment (#406, #411).
+- **No capture path creates an existing contact blind.** On v2026.11.21
+  the newsletter form, Clerk sign-up and the contact form's opt-in all
+  created the contact without looking it up. A live Resend test after #411
+  merged found that creating a contact that already exists returns the same
+  contact and flipped an unsubscribed one back to subscribed; the connector
+  used may have sent `unsubscribed: false` by default, so a plain create may
+  not do that. If it does, anyone could put an unsubscribed address back on
+  the list through the newsletter form, which asked for no proof of owning
+  the address, and sign-up or the contact form could override a past
+  unsubscribe without a confirmation. The newsletter form now only sends a
+  confirmation email; sign-up and the contact form look the contact up
+  first, create only an absent one, and never re-subscribe anyone (#406,
+  #411).
+- **Sentry no longer records email addresses from requests.** Resend puts
+  the address in its URL path and Sentry records request paths and bodies,
+  so error and performance reports from the forms could carry it. The server
+  and edge configs now redact addresses from the request on error and
+  transaction events, and from breadcrumbs and spans, for every route. An
+  exception message or log line is not redacted (#411).
+
+**What this release leaves.**
+
+- **`/privacy` still describes the single opt-in form.** Its "Stay up to
+  date" paragraph says the address is added on submit. The replacement text
+  is on #407 and #411; Brandon replaces it in the CMS after the merge. This
+  release does not edit the page.
+- **Someone can still send one confirmation email to an address that isn't
+  theirs.** Only the owner can confirm it. The submit route's per-IP rate
+  limit, and Turnstile where its key is set, bound how often; there is no
+  per-recipient cooldown (#411).
+- **Two links for one address.** An address that signs up twice within 3
+  days holds two links, each usable once, so the second can still re-subscribe
+  after an unsubscribe until it expires (#411).
+- **Each capture makes 2 to 5 Resend calls where it made 1** (more when a
+  contact has many pages of segments), so a burst is likelier to hit
+  Resend's rate limit, which the form answers with the 503 above (#411).
+- **A submit made before the Turnstile widget has loaded** can still get a
+  403 where Turnstile is enforced (#405).
+
+**Not proven before release:** a real submit, email and confirmation through
+the site on a deployed build; Resend is never configured in CI. What is proven
+is the routes, the token, the capture helper and the confirm page by unit and
+component tests, and Resend's behavior by the live test on #407 (2026-11-21,
+through the Resend connector, not the site's code): `unsubscribed: false`
+re-subscribes a contact. Segment adds were not tested live.
+
+**Developers**
+
+- New `/api/newsletter/confirm` and the `noindex` page `/newsletter/confirm`.
+  `/api/newsletter` now sends the confirmation email (`emails.send` from
+  `CONTACT_FROM_EMAIL`) and makes no contact call. The confirm route has its
+  own limiter bucket, `newsletter-confirm:<digest>`, and no Turnstile; the
+  token is the proof. `guardPublicForm` takes `{ turnstile: false }` (#411).
+- New `src/lib/email/newsletterConfirmToken.ts`: a stateless token holding the
+  address and a 3-day expiry, sealed with AES-256-GCM under a key
+  HKDF-derived from `PAYLOAD_SECRET`. **No env var is added**, and rotating
+  `PAYLOAD_SECRET` voids unconfirmed links (`.env.example`). Only the
+  canonical base64url spelling verifies (#411).
+- New `src/lib/email/newsletterTokenUse.ts`: each link is claimed once in
+  Upstash (`SET NX` on a digest of the token). **In production without
+  Upstash the confirm route answers 503**, with no per-instance fallback;
+  staging and preview run as production, so they need Upstash too. A join
+  that fails before the list could change frees the claim for a retry; a
+  later failure keeps the link used (#411).
+- `captureContact` looks the address up, creates only an absent contact,
+  adds an existing one to the segment if missing (every page of segments is
+  read), and with `rejoin` updates and reads back an unsubscribed contact. It
+  returns an outcome and never throws. The two newsletter routes report a
+  failure as `NewsletterCaptureError`, tagged by stage, with no address; the
+  webhook and the contact form ignore the outcome (#406, #407, #409, #411).
+- `src/lib/observability/sentryConfig.ts` holds the address redaction for
+  `beforeSend` and `beforeSendTransaction` (the event's `request`),
+  `beforeBreadcrumb` and `beforeSendSpan`, including JSON bodies, addresses
+  written with unicode escapes and internationalized addresses
+  (`reader@bücher.de`, plain or percent-encoded). The pattern scans in linear
+  time; before this release's review it was quadratic on a long run with no
+  `@` (#411, #413).
+- No Payload schema change and no migration. `docs/AUTH.md`,
+  `docs/FEATURES.md`, `docs/SECURITY.md`, `docs/JOURNEYS.md`,
+  `docs/ARCHITECTURE.md` and `docs/NAVIGATION.md` describe the two-step path
+  (#411).
+
 ## v2026.11.21
 
 The Newsletter Signup form subscribes again, Corvus answers what it keeps of

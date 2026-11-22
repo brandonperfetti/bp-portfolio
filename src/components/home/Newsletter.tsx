@@ -8,14 +8,16 @@ import { MailIcon } from '@/icons'
 import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
 
 /**
- * The "Stay up to date" card: one email field that joins the mailing list.
+ * The "Stay up to date" card: one email field that asks to join the
+ * mailing list.
  *
- * @remarks Posts to `/api/newsletter` (#367), which adds the address to the
- * same Resend list as the sign-up and contact-form opt-ins. Submitting is the
- * opt-in, so there is no checkbox; the copy says what joining means. The
- * server's answer is shown as given: it is the same for a new address and
- * one already on the list. The Turnstile check is invisible unless
- * Cloudflare escalates, and enforced server-side only when its keys are set.
+ * @remarks Posts to `/api/newsletter` (#367), which emails the address a
+ * link to confirm (double opt-in, #407); only that confirmation adds it to
+ * the Resend list the sign-up and contact-form opt-ins use. There is no
+ * checkbox; the copy says what joining means. The server's answer is shown
+ * as given: it is the same for a new address and one already on the list.
+ * The Turnstile check is invisible unless Cloudflare escalates, and
+ * enforced server-side only when its keys are set.
  */
 export function Newsletter() {
   const [email, setEmail] = useState('')
@@ -50,7 +52,7 @@ export function Newsletter() {
         setMessage(data.message ?? 'Unable to subscribe right now.')
       } else {
         setSuccess(true)
-        setMessage(data.message ?? 'Subscribed.')
+        setMessage(data.message ?? 'Check your inbox for a link to confirm.')
         setEmail('')
       }
     } catch {

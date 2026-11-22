@@ -11,8 +11,12 @@ import {
   isNoisyTransaction,
   isSpotlightRequested,
   isSuppressedSentryLogMessage,
+  redactEmailAddresses,
   sentryDropBotEvent,
   sentryDropNoisyLog,
+  sentryRedactBreadcrumb,
+  sentryRedactEventRequest,
+  sentryRedactSpan,
   SENTRY_CONSOLE_LOG_LEVELS,
   SENTRY_DENY_URLS,
   SENTRY_IGNORE_ERRORS,
@@ -831,5 +835,225 @@ describe('sentryDropNoisyLog (shared beforeSendLog)', () => {
   it('returns a message-less log unchanged', () => {
     const log = {}
     expect(sentryDropNoisyLog(log)).toBe(log)
+  })
+})
+
+describe('email redaction in breadcrumbs and spans (#409)', () => {
+  const RESEND_URL =
+    'https://api.resend.com/contacts/reader@example.test/segments'
+
+  it('replaces plain and percent-encoded addresses', () => {
+    expect(redactEmailAddresses(RESEND_URL)).toBe(
+      'https://api.resend.com/contacts/[email]/segments',
+    )
+    expect(
+      redactEmailAddresses('/contacts/first.last%40mail.example.co.uk'),
+    ).toBe('/contacts/[email]')
+    expect(redactEmailAddresses('no address here')).toBe('no address here')
+  })
+
+  it("redacts the http breadcrumb Sentry's fetch instrumentation records", () => {
+    const crumb = {
+      category: 'http',
+      type: 'http',
+      level: 'error' as const,
+      data: {
+        url: RESEND_URL,
+        'http.method': 'GET',
+        status_code: 500,
+      },
+    }
+    const out = sentryRedactBreadcrumb(crumb)
+    expect(JSON.stringify(out)).not.toContain('reader@example.test')
+    expect(out.data).toEqual({
+      url: 'https://api.resend.com/contacts/[email]/segments',
+      'http.method': 'GET',
+      status_code: 500,
+    })
+    expect(out.category).toBe('http')
+  })
+
+  it('redacts a span named for a Resend URL', () => {
+    const out = sentryRedactSpan({
+      description: `GET ${RESEND_URL}`,
+      data: { 'url.full': RESEND_URL, 'http.response.status_code': 404 },
+    })
+    expect(JSON.stringify(out)).not.toContain('reader@example.test')
+    expect(out.data?.['http.response.status_code']).toBe(404)
+  })
+})
+
+describe('email redaction, the rest (#409)', () => {
+  it('leaves package names and versions alone', () => {
+    for (const text of [
+      '@sentry/nextjs',
+      'node_modules/@scope/pkg/index.js',
+      'react@18.3.1',
+      'payload@3.90.0',
+    ]) {
+      expect(redactEmailAddresses(text)).toBe(text)
+    }
+  })
+
+  it('redacts addresses nested in console breadcrumb arguments', () => {
+    const out = sentryRedactBreadcrumb({
+      category: 'console',
+      data: { arguments: ['lookup for', { email: 'reader@example.test' }] },
+    })
+    expect(JSON.stringify(out)).not.toContain('reader@example.test')
+  })
+
+  it('redacts an address from a captured request body, string or parsed', () => {
+    const asString = sentryRedactEventRequest({
+      request: {
+        url: '/api/newsletter',
+        data: '{"email":"reader@example.test"}',
+      },
+    })
+    const asObject = sentryRedactEventRequest({
+      request: { data: { email: 'reader@example.test', turnstileToken: 't' } },
+    })
+    expect(JSON.stringify([asString, asObject])).not.toContain(
+      'reader@example.test',
+    )
+    expect(asObject.request?.data).toEqual({
+      email: '[email]',
+      turnstileToken: 't',
+    })
+    const noRequest = { message: 'x', request: undefined }
+    expect(sentryRedactEventRequest(noRequest)).toBe(noRequest)
+  })
+})
+
+describe('email redaction, round 2 (#409)', () => {
+  it('redacts a whole address whose local part has an apostrophe', () => {
+    expect(redactEmailAddresses("alice.o'brien@example.com")).toBe('[email]')
+  })
+
+  it('replaces a container past the depth limit instead of keeping it', () => {
+    const out = sentryRedactEventRequest({
+      request: {
+        data: { a: { b: { c: { d: { email: 'reader@example.test' } } } } },
+      },
+    })
+    expect(JSON.stringify(out)).not.toContain('reader@example.test')
+    expect(JSON.stringify(out)).toContain('[redacted]')
+  })
+
+  it('keeps an Error argument as its name, message and stack, redacted', () => {
+    const error = new Error('lookup failed for reader@example.test')
+    const out = sentryRedactBreadcrumb({
+      category: 'console',
+      data: { arguments: [error] },
+    })
+    const [arg] = (out.data?.arguments ?? []) as unknown as Array<
+      Record<string, string>
+    >
+    expect(arg.name).toBe('Error')
+    expect(arg.message).toBe('lookup failed for [email]')
+    expect(typeof arg.stack).toBe('string')
+    expect(JSON.stringify(out)).not.toContain('reader@example.test')
+  })
+})
+
+describe('email redaction, PR-round stand-in (#409)', () => {
+  it('redacts an address whose @ is JSON-escaped in a raw request body', () => {
+    const body = '{"email":"reader\\u0040example.test"}'
+    expect(JSON.parse(body)).toEqual({ email: 'reader@example.test' })
+    const out = sentryRedactEventRequest({
+      request: { url: '/api/newsletter', data: body },
+    })
+    expect(out.request?.data).toBe('{"email":"[email]"}')
+    expect(redactEmailAddresses('READER\\U0040EXAMPLE.TEST')).toBe('[email]')
+  })
+
+  it('redacts a JSON body whose address is hidden by escapes anywhere', () => {
+    const body = '{"email":"reader\\u0040example\\u002etest","n":1}'
+    expect(JSON.parse(body).email).toBe('reader@example.test')
+    const out = sentryRedactEventRequest({ request: { data: body } })
+    expect(JSON.parse(out.request?.data as string)).toEqual({
+      email: '[email]',
+      n: 1,
+    })
+    // A non-JSON string body keeps the plain string path.
+    const text = sentryRedactEventRequest({
+      request: { data: 'email=reader%40example.test' },
+    })
+    expect(text.request?.data).toBe('email=[email]')
+  })
+
+  it('redacts an address that a JSON body carries as a property name', () => {
+    const body = '{"reader\\u0040example\\u002etest":1,"n":2}'
+    expect(Object.keys(JSON.parse(body))[0]).toBe('reader@example.test')
+    const out = sentryRedactEventRequest({ request: { data: body } })
+    expect(out.request?.data).not.toContain('reader')
+    expect(JSON.parse(out.request?.data as string)).toEqual({
+      '[email]': 1,
+      n: 2,
+    })
+  })
+
+  it('drops function values, so a toJSON cannot return an address later', () => {
+    const out = sentryRedactBreadcrumb({
+      category: 'console',
+      data: { arguments: [{ toJSON: () => 'reader@example.test' }] },
+    })
+    expect(JSON.stringify(out)).not.toContain('reader@example.test')
+  })
+})
+
+describe('email redaction, release round (#413)', () => {
+  it('redacts internationalized addresses whole, plain or percent-encoded', () => {
+    expect(redactEmailAddresses('reader@bücher.de')).toBe('[email]')
+    expect(redactEmailAddresses('jürgen@example.de')).toBe('[email]')
+    expect(redactEmailAddresses('/contacts/reader%40b%C3%BCcher.de')).toBe(
+      '/contacts/[email]',
+    )
+    expect(redactEmailAddresses('reader@example.xn--p1ai')).toBe('[email]')
+    expect(redactEmailAddresses('reader@example.भारत')).toBe('[email]')
+    expect(redactEmailAddresses('reader%40example.%D1%80%D1%84')).toBe(
+      '[email]',
+    )
+    const out = sentryRedactEventRequest({
+      request: { url: '/api/newsletter', data: '{"email":"reader@bücher.de"}' },
+    })
+    expect(out.request?.data).toBe('{"email":"[email]"}')
+  })
+
+  it('still leaves non-addresses alone', () => {
+    for (const text of ['v1.2.3 @ home', 'x@y.c', 'react@18.3.1']) {
+      expect(redactEmailAddresses(text)).toBe(text)
+    }
+  })
+
+  it('scans a long run with no address in linear time', () => {
+    const run = 'a'.repeat(40_000)
+    const started = performance.now()
+    expect(redactEmailAddresses(run)).toBe(run)
+    expect(redactEmailAddresses(`${run}@example.test`)).toBe('[email]')
+    // Quadratic matching took about 1.1 s here; linear takes a few ms.
+    expect(performance.now() - started).toBeLessThan(250)
+  })
+
+  it('scans a long run of %40 in linear time', () => {
+    const run = '%40'.repeat(40_000)
+    const started = performance.now()
+    expect(redactEmailAddresses(run)).toBe(run)
+    expect(redactEmailAddresses(`a${run}`)).toBe(`a${run}`)
+    // Before labels took only %80 and up this was about 1.7 s.
+    expect(performance.now() - started).toBeLessThan(250)
+  })
+
+  it('redacts an address glued to the one before it', () => {
+    expect(redactEmailAddresses('?to=a@b.com%2Cc@d.com')).toBe(
+      '?to=[email][email]',
+    )
+    expect(redactEmailAddresses('emails=a@b.com+c@d.com')).toBe(
+      'emails=[email][email]',
+    )
+    expect(redactEmailAddresses('a@b.com%20c@d.com')).toBe('[email][email]')
+    expect(redactEmailAddresses('a@b.com.c@d.com.e@f.com')).toBe(
+      '[email][email][email]',
+    )
   })
 })
