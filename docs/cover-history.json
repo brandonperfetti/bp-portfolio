@@ -648,7 +648,7 @@
       "series": "cover-mj-A",
       "generator": "midjourney",
       "recipeVersion": "v1",
-      "scene": "interior",
+      "scene": "macro",
       "era": "60s",
       "metaphorFamily": "gravity",
       "metaphorFamilySource": "classified 2026-11-22 [inference]",
@@ -665,7 +665,10 @@
       "mediaFilename": "zod-the-validation-library-that-changed-how-i-think-about-data-cover-mj-A.jpg",
       "alt": "Glass beads crowd a brass sorting mesh in close-up; only the perfectly round ones slip through",
       "rollout": "2026-09-26 first 9",
-      "notes": ["Picked from the trial rounds (R4-R7) before v1 was locked."],
+      "notes": [
+        "Picked from the trial rounds (R4-R7) before v1 was locked.",
+        "scene is classified from the final prompt ('Extreme macro close-up'); the logged recipe said interior."
+      ],
       "midjourneyUpscaleJob": "f8343711-fd9a-4629-bbeb-9d4f082ab8e8",
       "eraLabel": "1960s space-age"
     },
