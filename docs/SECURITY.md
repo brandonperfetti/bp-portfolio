@@ -122,15 +122,21 @@ another doc carried in passing lives here instead, and that doc points back.
 ## Secret handling
 
 Rules another doc used to carry, moved here verbatim (#247). The first is
-measured below; the second is held by review (and by GitGuardian on PRs,
+held by the root `.gitignore` and pinned by a test (below); the second is held by review (and by GitGuardian on PRs,
 `docs/WORKFLOW.md` § Review); the rest are **operational**.
 
 - `.env*` never enters git; `.env.example` documents every variable.
   Brandon populates Vercel/GitHub secrets as features land. _Moved from
-  `docs/WORKFLOW.md` § Secrets._ `[measured 2026-09-27]` `.env.example` is
-  the only tracked env file. `.gitignore` ignores `.env` and `.env*.local`
-  only, so any other name (a `.env.production`, say) is kept out by review,
-  not by git.
+  `docs/WORKFLOW.md` § Secrets._ `.gitignore` ignores every `.env*` name,
+  in any case and at any depth, except `.env.example` at the root (#261).
+  `scripts/env-files-ignored.test.ts` (unit tier, so the gate) fails if any
+  env name it samples (`.env`, `.env.local`, `.env.production`, `.envrc`,
+  `.ENV.production`, a nested `.env.example` and others) stops being
+  ignored, or if any tracked file other than the root example has a name
+  starting `.env`, in any case and a `git add -f` included. What it does not
+  hold: a deeper `.gitignore` can re-include a name before it is staged, and
+  a name that only ends in `.env` (`prod.env`) is outside the rule.
+  `[measured 2026-11-22]` `.env.example` is the only tracked `.env*` file.
 - Only the NAMES appear anywhere in this repo. _Moved from
   `docs/MAINTENANCE.md` § Local database from backups, where it followed
   "Values live in the password manager"; `docs/ANALYTICS.md` § Sessions in
