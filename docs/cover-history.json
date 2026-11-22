@@ -1,9 +1,9 @@
 {
-  "about": "BP Portfolio cover history: one entry per live cover, newest publishedAt first, so the first N entries are 'the last N covers' for the rotation rules in docs/CONTENT_IMAGERY.md section 9. A new article's cover goes at the top; a new cover on an existing post updates that post's entry in place and moves the old cover into a 'previous' list (section 13). Sources: the receipts posted on brandonperfetti/bp-portfolio#415 and a read of the production posts API on 2026-11-22.",
+  "about": "BP Portfolio cover history: one entry per live cover, newest publishedAt first, so the first N entries are 'the last N covers' for the rotation rules in docs/CONTENT_IMAGERY.md section 9. A new article's cover goes at the top; a new cover on an existing post updates that post's entry in place and moves the old cover into a 'previous' list (section 13). Sources: the receipts posted on brandonperfetti/bp-portfolio#415, a read of the production posts API on 2026-11-22, and the prompt Midjourney embedded in each cover's original PNG on Cloudinary (finalPrompt).",
   "verified": {
     "date": "2026-11-22",
     "livePublishedPosts": 53,
-    "method": "GET https://brandonperfetti.com/api/posts?limit=0&depth=1 (anonymous, published only): every heroImage and meta.image id equals mediaId, and every mediaFilename is the last two segments of cloudinaryPublicId joined by '-' plus '.jpg'. A HEAD of each cloudinaryPublicId at its version on res.cloudinary.com returned 200 (53/53); controls: an unused cover-mj-B and cover-gpt-B id returned 404."
+    "method": "GET https://brandonperfetti.com/api/posts?limit=0&depth=1 (anonymous, published only): every heroImage and meta.image id equals mediaId, and every mediaFilename is the last two segments of cloudinaryPublicId joined by '-' plus '.jpg'. A HEAD of each cloudinaryPublicId at its version on res.cloudinary.com returned 200 (53/53); controls: an unused cover-mj-B and cover-gpt-B id returned 404. finalPrompt is the PNG Description text chunk of each original (GET at its version, 53/53), and each PNG's XMP DigImageGUID equals the receipt's job id (the upscale job for the first 9)."
   },
   "covers": [
     {
@@ -16,11 +16,14 @@
       "recipeVersion": "v1",
       "scene": "interior",
       "era": "nf",
-      "metaphorFamily": null,
+      "metaphorFamily": "gravity",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "indigo",
       "impossibleDetail": "frosted glass sheets hang perfectly still in mid-air",
       "loggedPrompt": "A sunlit minimalist room where seven frosted glass sheets hang perfectly still in mid-air above a low stone table, the lowest ones already resting in one neat stack, a middle-aged woman sitting calmly on the floor, seen from behind. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of indigo, heightened realism, bright mid-key soft morning daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "A sunlit minimalist room where dozens of frosted glass sheets hang suspended in mid-air, slowly settling into one neat stack on a low stone table, a person sitting calmly on the floor seen from behind. Near-future minimalism, frosted glass and pale stone, clean digital photograph, soft morning daylight, pale neutral palette with a hint of indigo, heightened realism, one quietly impossible detail, mid-key light, a touch of teal glow. --no text, letters, numbers, logo, border --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "908b23c8-99e6-40e8-b827-4ebe060985e6_2",
       "cloudinaryPublicId": "bp-portfolio/images/articles/four-week-context-reset/cover-mj-A",
       "cloudinaryVersion": 1790490286,
@@ -28,9 +31,8 @@
       "mediaFilename": "four-week-context-reset-cover-mj-A.jpg",
       "alt": "Frosted glass sheets hang motionless in mid-air above a stone table, settling into one neat stack while a person sits calmly on the floor",
       "rollout": "2026-09-26 first 9",
-      "notes": [
-        "Picked from the trial rounds (R4-R7) before v1 was locked; the picked job's exact prompt is not receipted. loggedPrompt is the v1 text written from that trial."
-      ],
+      "notes": ["Picked from the trial rounds (R4-R7) before v1 was locked."],
+      "midjourneyUpscaleJob": "3869a65b-8c95-4737-942f-6c2af1f54261",
       "eraLabel": "near-future minimal"
     },
     {
@@ -43,11 +45,14 @@
       "recipeVersion": "v1",
       "scene": "tabletop",
       "era": "nf",
-      "metaphorFamily": null,
+      "metaphorFamily": "gravity",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "violet",
       "impossibleDetail": "a single page hangs perfectly still in mid-air, casting a crisp shadow",
       "loggedPrompt": "Tabletop still life on a pale oak desk: a worn, dog-eared paper binder lies open beside a small sleek near-future device whose status light glows a soft emerald onto the wood; a single page has lifted out of the binder and hangs perfectly still in mid-air between them, casting a crisp shadow on the desk. Near-future minimalism, clean digital photograph, soft window daylight, pale neutral palette, the only color the device's emerald light, heightened realism, bright mid-key light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, glasses, steam",
-      "finalPrompt": null,
+      "finalPrompt": "Tabletop still life on a pale oak desk: a worn, dog-eared paper binder lies open beside a small sleek near-future device whose status light glows a soft emerald onto the wood; a single page has lifted out of the binder and hangs perfectly still in mid-air between them, casting a crisp shadow on the desk. Near-future minimalism, clean digital photograph, soft window daylight, pale neutral palette, the only color the device's emerald light, heightened realism, bright mid-key light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, glasses, steam --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "86eac10e-5f65-4ca2-a3d1-5a5d6cdfd278_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/runbooks-to-agent-skills/cover-mj-A",
       "cloudinaryVersion": 1790490291,
@@ -55,9 +60,8 @@
       "mediaFilename": "runbooks-to-agent-skills-cover-mj-A.jpg",
       "alt": "A single page lifts out of a worn binder and hangs still in mid-air beside a small device glowing emerald",
       "rollout": "2026-09-26 first 9",
-      "notes": [
-        "Picked from the trial rounds (R4-R7) before v1 was locked; the picked job's exact prompt is not receipted. loggedPrompt is the v1 text written from that trial."
-      ],
+      "notes": ["Picked from the trial rounds (R4-R7) before v1 was locked."],
+      "midjourneyUpscaleJob": "4ab5a321-38c7-49e8-869b-0607dae84401",
       "eraLabel": "near-future minimal"
     },
     {
@@ -70,11 +74,14 @@
       "recipeVersion": "v1",
       "scene": "landscape",
       "era": "70s",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "emerald",
       "impossibleDetail": "the crates glow from within like lanterns, lighting the movers' hands",
       "loggedPrompt": "Seen from mid-distance, three middle-aged movers in mismatched everyday 1970s clothes, one in a denim jacket, one in a rust sweater, one in a plaid shirt, carry wooden crates that glow softly from within like lanterns across a short enclosed concrete skybridge between two brutalist buildings on an empty plain at golden hour; each crate's glow lights the mover's hands and the concrete beside it; the new building's windows are just starting to light up, an unfinished highway overpass waits on the horizon. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of emerald, heightened realism, mid-key golden-hour light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, uniforms, crowd",
-      "finalPrompt": null,
+      "finalPrompt": "Three movers in mismatched everyday 1970s clothes, one in a denim jacket, one in a rust sweater, one in a plaid shirt, large in the foreground, carrying wooden crates that glow softly from within like lanterns across a short enclosed concrete skybridge between two brutalist buildings on an empty plain at golden hour; each crate's glow lights the mover's hands and the concrete beside it; the new building's windows are just starting to light up, an unfinished highway overpass waits on the horizon. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of emerald, heightened realism, mid-key light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, uniforms, crowd --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "0ae876a1-e149-425d-bfb2-33685bdf8e6c_2",
       "cloudinaryPublicId": "bp-portfolio/images/articles/from-neon-to-supabase/cover-mj-A",
       "cloudinaryVersion": 1790490302,
@@ -82,9 +89,8 @@
       "mediaFilename": "from-neon-to-supabase-cover-mj-A.jpg",
       "alt": "Three movers carry crates that glow like lanterns between two brutalist buildings at golden hour",
       "rollout": "2026-09-26 first 9",
-      "notes": [
-        "Picked from the trial rounds (R4-R7) before v1 was locked; the picked job's exact prompt is not receipted. loggedPrompt is the v1 text written from that trial."
-      ],
+      "notes": ["Picked from the trial rounds (R4-R7) before v1 was locked."],
+      "midjourneyUpscaleJob": "dcc1cf07-231b-43fb-99c0-2876c2a30006",
       "eraLabel": "1970s brutalist (warm, v1)"
     },
     {
@@ -98,10 +104,13 @@
       "scene": "landscape",
       "era": "60s",
       "metaphorFamily": "scale",
+      "metaphorFamilySource": "logged (v2 recipe)",
+      "fieldOfUnits": false,
       "hue": "amber",
       "impossibleDetail": "a full-size tug towing a paper airplane",
       "loggedPrompt": "A vast empty airport runway at dawn, a full-size baggage tug slowly towing one small folded paper airplane across the concrete, the terminal far behind. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of amber, heightened realism, bright mid-key dawn light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people, crowd",
-      "finalPrompt": "A vast empty airport runway at dawn, a full-size baggage tug slowly towing one small folded paper airplane across the concrete, the terminal far behind. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of amber, heightened realism, bright mid-key dawn light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people, crowd",
+      "finalPrompt": "A vast empty airport runway at dawn, a full-size baggage tug slowly towing one small folded paper airplane across the concrete, the terminal far behind. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of amber, heightened realism, bright mid-key dawn light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, people, crowd --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "ae571c4a-3447-49b0-a5b8-f6d6c620d09b_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/from-sendgrid-to-resend/cover-mj-A",
       "cloudinaryVersion": 1790564302,
@@ -109,9 +118,7 @@
       "mediaFilename": "from-sendgrid-to-resend-cover-mj-A.jpg",
       "alt": "A full-size airport baggage tug tows a single folded paper airplane across an empty runway at dawn",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1960s space-age"
     },
     {
@@ -124,11 +131,14 @@
       "recipeVersion": "v1",
       "scene": "interior",
       "era": "80s-pastel",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": true,
       "hue": "sky",
       "impossibleDetail": "the painted outline on the pegboard has reshaped itself around the new tool",
       "loggedPrompt": "A tidy garage workshop, a pegboard wall of worn, familiar hand tools each hanging inside its painted outline, and one slot now holding a brand-new gleaming version of its tool whose painted outline has quietly reshaped itself to fit it exactly. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, bright mid-key afternoon light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "A tidy garage workshop, a pegboard wall of worn, familiar hand tools each hanging inside its painted outline, and one slot now holding a brand-new gleaming version of its tool whose painted outline has quietly reshaped itself to fit it exactly. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, bright mid-key afternoon light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "A tidy garage workshop, a pegboard wall of worn, familiar hand tools each hanging inside its painted outline, and one slot now holding a brand-new gleaming version of its tool whose painted outline has quietly reshaped itself to fit it exactly. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, bright mid-key afternoon light. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "d1f9224b-120f-49cd-ade3-2a8fe79427ce_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/the-nextjs-stack-i-reuse/cover-mj-A",
       "cloudinaryVersion": 1790564677,
@@ -136,10 +146,7 @@
       "mediaFilename": "the-nextjs-stack-i-reuse-cover-mj-A.jpg",
       "alt": "A pegboard wall of worn hand tools, each hanging inside its painted outline, one gleaming new tool in a reshaped outline",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim.",
-        "A 'field of identical units' composition, kept by Brandon (counts toward the cap of 2)."
-      ],
+      "notes": ["Kept by Brandon after the 2026-09-27 sameness check."],
       "eraLabel": "1980s pastel"
     },
     {
@@ -153,10 +160,13 @@
       "scene": "interior",
       "era": "70s-cool",
       "metaphorFamily": "nature",
+      "metaphorFamilySource": "logged (v2 recipe)",
+      "fieldOfUnits": false,
       "hue": "rose",
       "impossibleDetail": "wild roots growing into a neat grid",
       "loggedPrompt": "A concrete greenhouse at night, one small potted plant on a steel shelf whose roots have grown down through the shelf and spread across the floor into a perfectly orderly square grid, softly glowing where they meet. 1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of rose, heightened realism, low-key night light from a single sodium lamp. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people",
-      "finalPrompt": "A concrete greenhouse at night, one small potted plant on a steel shelf whose roots have grown down through the shelf and spread across the floor into a perfectly orderly square grid, softly glowing where they meet. 1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of rose, heightened realism, low-key night light from a single sodium lamp. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people",
+      "finalPrompt": "A concrete greenhouse at night, one small potted plant on a steel shelf whose roots have grown down through the shelf and spread across the floor into a perfectly orderly square grid, softly glowing where they meet. 1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of rose, heightened realism, low-key night light from a single sodium lamp. --no text, letters, numbers, logo, border, signage, children, smoke, particles, people --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "82708aa4-ecd9-4af2-b605-0812cf4d3e12_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/from-notion-to-payload/cover-mj-A",
       "cloudinaryVersion": 1790564441,
@@ -164,9 +174,7 @@
       "mediaFilename": "from-notion-to-payload-cover-mj-A.jpg",
       "alt": "A potted plant in a dark concrete greenhouse whose roots spread across the floor into a glowing, orderly square grid",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1970s brutalist (cool recast, v2)"
     },
     {
@@ -180,10 +188,13 @@
       "scene": "architecture",
       "era": "80s-neon",
       "metaphorFamily": "causality",
+      "metaphorFamilySource": "logged (v2 recipe)",
+      "fieldOfUnits": false,
       "hue": "rose",
       "impossibleDetail": "a painted sky updating itself",
       "loggedPrompt": "A painted mural of a sunset covering a whole brick wall on a quiet street at dusk, the painted sky changing its colors to match the real sunset behind the building, while the painter's scaffolding stands empty and the paint cans are dry. 1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of rose, heightened realism, mid-key neon dusk light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people, graffiti",
-      "finalPrompt": "A painted mural of a sunset covering a whole brick wall on a quiet street at dusk, the painted sky changing its colors to match the real sunset behind the building, while the painter's scaffolding stands empty and the paint cans are dry. 1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of rose, heightened realism, mid-key neon dusk light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people, graffiti",
+      "finalPrompt": "A painted mural of a sunset covering a whole brick wall on a quiet street at dusk, the painted sky changing its colors to match the real sunset behind the building, while the painter's scaffolding stands empty and the paint cans are dry. 1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of rose, heightened realism, mid-key neon dusk light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, people, graffiti --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "a684bc45-b3d9-485e-915d-c33acf3d5a7b_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/nextjs-15-notion-cms-ditch-git-deploy-content-updates/cover-mj-A",
       "cloudinaryVersion": 1790564444,
@@ -191,9 +202,7 @@
       "mediaFilename": "nextjs-15-notion-cms-ditch-git-deploy-content-updates-cover-mj-A.jpg",
       "alt": "A painted sunset mural on a brick wall that has changed its colors to match the real sunset, the scaffolding left empty",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1980s neon"
     },
     {
@@ -206,11 +215,14 @@
       "recipeVersion": "v1",
       "scene": "macro",
       "era": "60s",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": true,
       "hue": "emerald",
       "impossibleDetail": "one cluster of same-colored marbles glows together in a single pocket",
       "loggedPrompt": "Close-up of an ordinary glass canning jar on a kitchen counter, the whole jar in frame, filled with mixed marbles, where one small cluster of marbles of the same shade glows softly together in a single pocket of the jar while the rest stay unlit. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of emerald, heightened realism, mid-key soft kitchen daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "Close-up of an ordinary glass canning jar on a kitchen counter, the whole jar in frame, filled with dull, unlit mixed marbles; in one small pocket near the middle of the jar, a tight cluster of about a dozen marbles all of the same emerald shade glow brightly from within together, lighting their neighbors, while every other marble stays dark and matte. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of emerald, heightened realism, soft dim kitchen daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "7108df46-d9fb-43a2-9e0c-14a754d54931_1",
       "cloudinaryPublicId": "bp-portfolio/images/articles/pgvector-postgresql-production-ready-semantic-search-without-a-vector-db/cover-mj-A",
       "cloudinaryVersion": 1790564679,
@@ -219,7 +231,7 @@
       "alt": "A canning jar of dull marbles where one small cluster of emerald marbles glows together from within",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "Re-run once with sharpened wording (same concept, scene and era); the re-run's full prompt is not receipted. Final prompt opening (from the file name): \"Close-up of an ordinary glass canning jar on a kitchen counte\"."
+        "Re-run once with sharpened wording; same concept, scene and era."
       ],
       "eraLabel": "1960s space-age"
     },
@@ -233,11 +245,14 @@
       "recipeVersion": "replacement concept",
       "scene": "water",
       "era": "80s-pastel",
-      "metaphorFamily": null,
+      "metaphorFamily": "causality",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "indigo",
       "impossibleDetail": null,
       "loggedPrompt": "Top-down view of a vast library laid out as a maze of tall walnut bookshelves, a path of small lamps set into the floor lighting only the few steps just ahead of one man in a brown corduroy jacket, halfway through the maze. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of indigo, heightened realism, mid-key warm light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "Seen from high above, a lone snorkeler floats on the surface of clear turquoise water, small in the frame, looking down at a vast sunken city far below whose windows are still softly lit. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of indigo, heightened realism, bright mid-key midday light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, fish, boat --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "1b8146ab-fdf0-4535-ad91-8c1c4243af4a_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/reading-code-you-didnt-write-habits-that-make-it-faster/cover-mj-A",
       "cloudinaryVersion": 1790564448,
@@ -246,7 +261,7 @@
       "alt": "Seen from above, a lone snorkeler floats over a vast sunken city whose windows are still softly lit",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "The logged recipe was replaced by a new single-object concept during the 2026-09-27 run; the live concept is the alt text. Scene/era summarise the run log on claude-skills#492 (private); null where the log does not name them. Final prompt opening (from the file name): \"Seen from high above a lone snorkeler floats on the surface o\"."
+        "The logged recipe was replaced by a new single-object concept during the 2026-09-27 run; finalPrompt and alt describe the live cover."
       ],
       "eraLabel": "1980s pastel"
     },
@@ -260,11 +275,14 @@
       "recipeVersion": "v1",
       "scene": "landscape",
       "era": "80s-pastel",
-      "metaphorFamily": null,
+      "metaphorFamily": "causality",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "fuchsia",
       "impossibleDetail": "the new branch of track is laid only a few meters ahead of the train",
       "loggedPrompt": "A desert railway junction at dusk, a single track splitting in two, a new train gliding onto the fresh branch whose rails are laid only a few meters ahead of it, and a middle-aged signalwoman resting her hand on a tall switch lever with a bright fuchsia handle, ready to pull it back. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of fuchsia, heightened realism, mid-key pastel dusk light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "A desert railway junction at dusk, a single track splitting in two, a new train gliding onto the fresh branch whose rails are laid only a few meters ahead of it, and a middle-aged signalwoman resting her hand on a tall switch lever with a bright fuchsia handle, ready to pull it back. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of fuchsia, heightened realism, mid-key pastel dusk light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "A desert railway junction at dusk, a single track splitting in two, a new train gliding onto the fresh branch whose rails are laid only a few meters ahead of it, and a middle-aged signalwoman resting her hand on a tall switch lever with a bright fuchsia handle, ready to pull it back. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of fuchsia, heightened realism, mid-key pastel dusk light. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "e2f10a2a-16e8-4591-bb74-7ede3e271566_2",
       "cloudinaryPublicId": "bp-portfolio/images/articles/feature-flags-in-javascript-ship-faster-without-breaking-things/cover-mj-A",
       "cloudinaryVersion": 1790564680,
@@ -272,9 +290,7 @@
       "mediaFilename": "feature-flags-in-javascript-ship-faster-without-breaking-things-cover-mj-A.jpg",
       "alt": "A train glides onto a fresh branch of track at a desert junction at dusk, its rails laid only a few meters ahead",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1980s pastel"
     },
     {
@@ -287,11 +303,14 @@
       "recipeVersion": "v1",
       "scene": "tabletop",
       "era": "nf",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "emerald",
       "impossibleDetail": "where the key shapes match, two blocks have fused into one seamless block",
       "loggedPrompt": "On a pale stone table, two long rows of machined wooden blocks, each carved with a different key shape, meet in the middle like a giant zipper; wherever two shapes match they have fused into a single seamless block, and the unmatched blocks stand apart on either side. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of emerald, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "High three-quarter view looking down on a bare pale stone table: two long rows of chunky light wooden blocks advance toward each other from opposite ends, the front face of every block carved into a different puzzle-key shape, and in the middle of the table they interlock like the teeth of a giant zipper; wherever two shapes match, the pair has fused into one seamless block, while the few blocks with no matching partner have been pushed out of line, standing apart on either side. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of emerald, heightened realism, bright mid-key daylight, long soft shadows. --no text, letters, numbers, logo, border, signage, children, smoke, particles, bench, furniture legs --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "eba54c07-9e8b-47f6-83a7-e4a8a056d6f4_1",
       "cloudinaryPublicId": "bp-portfolio/images/articles/sql-joins-explained-without-the-venn-diagrams/cover-mj-A",
       "cloudinaryVersion": 1790564682,
@@ -300,7 +319,7 @@
       "alt": "Two rows of carved wooden key blocks interlock like a giant zipper on a pale stone table, matched pairs fused into one",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "Re-run once with sharpened wording (same concept, scene and era); the re-run's full prompt is not receipted. Final prompt opening (from the file name): \"High three-quarter view looking down on a bare pale stone tab\"."
+        "Re-run once with sharpened wording; same concept, scene and era."
       ],
       "eraLabel": "near-future minimal"
     },
@@ -315,10 +334,13 @@
       "scene": "water",
       "era": "nf",
       "metaphorFamily": "material",
+      "metaphorFamilySource": "logged (v2 recipe)",
+      "fieldOfUnits": false,
       "hue": "amber",
       "impossibleDetail": "half paper, half real boat",
       "loggedPrompt": "A folded paper boat drifting on a still canal between pale buildings, its stern already turned into real varnished wood with brass fittings while its bow is still folded paper. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of amber, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people",
-      "finalPrompt": "A folded paper boat drifting on a still canal between pale buildings, its stern already turned into real varnished wood with brass fittings while its bow is still folded paper. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of amber, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people",
+      "finalPrompt": "A folded paper boat drifting on a still canal between pale buildings, its stern already turned into real varnished wood with brass fittings while its bow is still folded paper. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of amber, heightened realism, bright mid-key daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles, people --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "a830abfa-4072-463e-9edd-c866f37c88a7_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/building-a-cli-tool-in-node-js-from-script-to-publishable-package/cover-mj-A",
       "cloudinaryVersion": 1790564453,
@@ -326,9 +348,7 @@
       "mediaFilename": "building-a-cli-tool-in-node-js-from-script-to-publishable-package-cover-mj-A.jpg",
       "alt": "A folded paper boat on a still canal, its stern already turned into real varnished wood while its bow is still paper",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "near-future minimal"
     },
     {
@@ -342,10 +362,13 @@
       "scene": "landscape",
       "era": "70s-cool",
       "metaphorFamily": "causality",
+      "metaphorFamilySource": "logged (v2 recipe)",
+      "fieldOfUnits": false,
       "hue": "amber",
       "impossibleDetail": "footprints that arrive and never leave",
       "loggedPrompt": "A lone rural mailbox on a post in a snowy field at blue hour, its flag raised and its open door glowing warm amber from inside, a single line of footprints leading up to it and none leading away. 1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of amber, heightened realism, low-key blue hour light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people",
-      "finalPrompt": "A lone rural mailbox on a post in a snowy field at blue hour, its flag raised and its open door glowing warm amber from inside, a single line of footprints leading up to it and none leading away. 1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of amber, heightened realism, low-key blue hour light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people",
+      "finalPrompt": "A lone rural mailbox on a post in a snowy field at blue hour, its flag raised and its open door glowing warm amber from inside, a single line of footprints leading up to it and none leading away. 1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of amber, heightened realism, low-key blue hour light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, people --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "c477534a-f095-43b9-aeaf-a0a21e1eda70_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/webhooks-building-reliable-event-receivers-in-node-js/cover-mj-A",
       "cloudinaryVersion": 1790564457,
@@ -353,9 +376,7 @@
       "mediaFilename": "webhooks-building-reliable-event-receivers-in-node-js-cover-mj-A.jpg",
       "alt": "A glowing rural mailbox in a snowy field at blue hour, with a line of footprints that arrive and never leave",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1970s brutalist (cool recast, v2)"
     },
     {
@@ -367,12 +388,15 @@
       "generator": "midjourney",
       "recipeVersion": "replacement concept",
       "scene": "landscape",
-      "era": null,
-      "metaphorFamily": null,
+      "era": "nf",
+      "metaphorFamily": "gravity",
+      "metaphorFamilySource": "logged (v2 recipe)",
+      "fieldOfUnits": false,
       "hue": "fuchsia",
       "impossibleDetail": null,
       "loggedPrompt": "Aerial view of a mountain valley where a winding river below has been abandoned for a single straight ribbon of clear water that runs through the open air from one peak directly to the next, the old meandering riverbed dry beneath it. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of fuchsia, heightened realism, bright mid-key midday light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people",
-      "finalPrompt": null,
+      "finalPrompt": "A single freestanding wooden door in an open grassy meadow at midday, slightly ajar, and through the gap, instead of more meadow, a sunlit city library aisle is visible right there on the other side, the door casting a long shadow on the grass. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of fuchsia, heightened realism, bright mid-key midday light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, people --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "36f2c67c-7914-4f1e-837e-f7cf3ec87e3c_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/typescript-path-aliases-clean-imports-that-actually-work-in-next-js/cover-mj-A",
       "cloudinaryVersion": 1790564460,
@@ -381,9 +405,9 @@
       "alt": "A lone wooden door standing in an open meadow, opening onto a sunlit library aisle",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "The logged recipe was replaced by a new single-object concept during the 2026-09-27 run; the live concept is the alt text. Scene/era summarise the run log on claude-skills#492 (private); null where the log does not name them. Final prompt opening (from the file name): \"A single freestanding wooden door in an open grassy meadow at\"."
+        "The logged recipe was replaced by a new single-object concept during the 2026-09-27 run; finalPrompt and alt describe the live cover."
       ],
-      "eraLabel": null
+      "eraLabel": "near-future minimal"
     },
     {
       "postId": 25,
@@ -395,11 +419,14 @@
       "recipeVersion": "v1",
       "scene": "architecture",
       "era": "80s-neon",
-      "metaphorFamily": null,
+      "metaphorFamily": "scale",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "violet",
       "impossibleDetail": "the console's arms reach impossibly far, each through a ring of light",
       "loggedPrompt": "A mirrored-glass atrium at dusk, a sleek console at its center glowing violet, three long jointed chrome arms reaching out from it across the atrium, each passing through a softly glowing ring on its way to a real object: a telephone, a filing drawer, a light switch. 1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of violet, heightened realism, mid-key dusk light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "A mirrored-glass atrium at dusk, a sleek console at its center glowing violet, three long jointed chrome arms reaching out from it across the atrium, each passing through a softly glowing ring on its way to a real object: a telephone, a filing drawer, a light switch. 1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of violet, heightened realism, mid-key dusk light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "A mirrored-glass atrium at dusk, a sleek console at its center glowing violet, three long jointed chrome arms reaching out from it across the atrium, each passing through a softly glowing ring on its way to a real object: a telephone, a filing drawer, a light switch. 1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of violet, heightened realism, mid-key dusk light. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "46df6081-43dc-4bb3-afc5-aeadae63d740_1",
       "cloudinaryPublicId": "bp-portfolio/images/articles/ai-tool-calls-explained-giving-your-llm-the-ability-to-actually-do-things/cover-mj-A",
       "cloudinaryVersion": 1790564684,
@@ -407,9 +434,7 @@
       "mediaFilename": "ai-tool-calls-explained-giving-your-llm-the-ability-to-actually-do-things-cover-mj-A.jpg",
       "alt": "A mirrored-glass atrium at dusk where chrome arms reach from a violet-lit console through glowing rings",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1980s neon"
     },
     {
@@ -422,11 +447,14 @@
       "recipeVersion": "replacement concept",
       "scene": "interior",
       "era": "60s",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "logged (v2 recipe)",
+      "fieldOfUnits": false,
       "hue": "cyan",
       "impossibleDetail": null,
       "loggedPrompt": "A sunlit courtyard of three mismatched buildings, a single cyan thread running from a spool on a sewing table in an open window across the courtyard and stitching all three facades together along one clean seam. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of cyan, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people",
-      "finalPrompt": null,
+      "finalPrompt": "A sunlit mid-century living room where every piece of furniture, the sofa, an armchair, a lamp, a low table and a vase, is carved from one single continuous piece of pale wood, the grain flowing unbroken from one object across the floor into the next, as if the whole room grew from the same tree. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of cyan, heightened realism, bright mid-key daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles, people --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "74a6b199-451c-435f-904d-3146d91fe18b_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/designing-a-design-system-in-react-tokens-components-and-what-actually-scales/cover-mj-A",
       "cloudinaryVersion": 1790564463,
@@ -435,7 +463,7 @@
       "alt": "A sunlit mid-century living room where all the furniture is carved from one continuous piece of pale wood",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "The logged recipe was replaced by a new single-object concept during the 2026-09-27 run; the live concept is the alt text. Scene/era summarise the run log on claude-skills#492 (private); null where the log does not name them. Final prompt opening (from the file name): \"A sunlit mid-century living room where every piece of furnitu\"."
+        "The logged recipe was replaced by a new single-object concept during the 2026-09-27 run; finalPrompt and alt describe the live cover."
       ],
       "eraLabel": "1960s space-age"
     },
@@ -450,10 +478,13 @@
       "scene": "tabletop",
       "era": "nf",
       "metaphorFamily": "gravity",
+      "metaphorFamilySource": "logged (v2 recipe)",
+      "fieldOfUnits": false,
       "hue": "violet",
       "impossibleDetail": "a pour with no source",
       "loggedPrompt": "Close-up of a pale ceramic cup on a café table at dawn, a thin steady stream of tea pouring into it from the empty air above, with no teapot anywhere, the cup half full. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of violet, heightened realism, bright mid-key dawn window light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people, teapot, hands",
-      "finalPrompt": "Close-up of a pale ceramic cup on a café table at dawn, a thin steady stream of tea pouring into it from the empty air above, with no teapot anywhere, the cup half full. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of violet, heightened realism, bright mid-key dawn window light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people, teapot, hands",
+      "finalPrompt": "Close-up of a pale ceramic cup on a café table at dawn, a thin steady stream of tea pouring into it from the empty air above, with no teapot anywhere, the cup half full. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of violet, heightened realism, bright mid-key dawn window light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, people, teapot, hands --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "24230f03-219f-4adb-b4ad-18c578a9bd9b_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/building-a-streaming-ai-chat-ui-with-ai-sdk-v5-and-react/cover-mj-A",
       "cloudinaryVersion": 1790564467,
@@ -461,9 +492,7 @@
       "mediaFilename": "building-a-streaming-ai-chat-ui-with-ai-sdk-v5-and-react-cover-mj-A.jpg",
       "alt": "A thin stream of tea pours into a ceramic cup from empty air, with no teapot anywhere",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "near-future minimal"
     },
     {
@@ -476,11 +505,14 @@
       "recipeVersion": "v1",
       "scene": "machine",
       "era": "70s",
-      "metaphorFamily": null,
+      "metaphorFamily": "gravity",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "amber",
       "impossibleDetail": "the torrent leaves the valve as evenly spaced, identical drops",
       "loggedPrompt": "A massive brass and concrete metering valve in a sunlit pumping station, a white torrent crashing in from a wide pipe on one side and leaving the other side as a calm, evenly spaced line of identical droplets falling into a channel. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of amber, heightened realism, mid-key daylight through high windows. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "A massive brass and concrete metering valve in a sunlit pumping station, seen side-on: on the left a violent white torrent crashes into it from a wide pipe, and on the right it releases only a calm, perfectly evenly spaced single-file line of identical round water droplets, each one suspended in the air a hand's width apart as it falls into a still channel below. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of amber, heightened realism, mid-key daylight through high windows. --no text, letters, numbers, logo, border, signage, children, smoke, particles, waterfall --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "38587385-13b7-4b28-818b-abc1ff74e343_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/api-rate-limiting-in-node-js-protecting-your-backend-without-killing-ux/cover-mj-A",
       "cloudinaryVersion": 1790564470,
@@ -489,7 +521,7 @@
       "alt": "A brass and concrete valve takes in a crashing torrent and releases only a calm, evenly spaced line of droplets",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "Re-run once with sharpened wording (same concept, scene and era); the re-run's full prompt is not receipted. Final prompt opening (from the file name): \"A massive brass and concrete metering valve in a sunlit pumpi\"."
+        "Re-run once with sharpened wording; same concept, scene and era."
       ],
       "eraLabel": "1970s brutalist (warm, v1)"
     },
@@ -503,11 +535,14 @@
       "recipeVersion": "v1",
       "scene": "interior",
       "era": "60s",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "violet",
       "impossibleDetail": "a crackling spark leaves the third lens as one steady beam",
       "loggedPrompt": "An optics laboratory with curved white walls, a raw crackling violet spark on a lab bench passing through three large round lenses in a row and leaving the last lens as a single clean, steady beam that lights a small screen showing calm abstract waveforms. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of violet, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "An optics laboratory with curved white walls, a raw crackling violet spark on a lab bench passing through three large round lenses in a row and leaving the last lens as a single clean, steady beam that lights a small screen showing calm abstract waveforms. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of violet, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "An optics laboratory with curved white walls, a raw crackling violet spark on a lab bench passing through three large round lenses in a row and leaving the last lens as a single clean, steady beam that lights a small screen showing calm abstract waveforms. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of violet, heightened realism, bright mid-key daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "c18a6217-5479-41ac-ac46-f9cacc83541e_2",
       "cloudinaryPublicId": "bp-portfolio/images/articles/getting-started-with-vercel-ai-sdk-v5-the-patterns-that-actually-stick/cover-mj-A",
       "cloudinaryVersion": 1790564686,
@@ -515,9 +550,7 @@
       "mediaFilename": "getting-started-with-vercel-ai-sdk-v5-the-patterns-that-actually-stick-cover-mj-A.jpg",
       "alt": "In a curved white 1960s lab, a crackling violet spark passes through three lenses and leaves as one clean steady beam",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1960s space-age"
     },
     {
@@ -530,11 +563,14 @@
       "recipeVersion": "v1",
       "scene": "aerial",
       "era": "nf",
-      "metaphorFamily": null,
+      "metaphorFamily": "causality",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "emerald",
       "impossibleDetail": "a new deck section slides into place under a moving car",
       "loggedPrompt": "Aerial view of a pale concrete river bridge in bright daylight, traffic flowing across its full length while a small work crew replaces the deck one section at a time from beneath, a new section sliding into place directly under a moving car. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of emerald, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "Aerial view of a pale concrete river bridge in bright daylight, traffic flowing across its full length while a small work crew replaces the deck one section at a time from beneath, a new section sliding into place directly under a moving car. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of emerald, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "Aerial view of a pale concrete river bridge in bright daylight, traffic flowing across its full length while a small work crew replaces the deck one section at a time from beneath, a new section sliding into place directly under a moving car. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of emerald, heightened realism, bright mid-key daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "04858944-1a34-4ea3-b782-0deab2e79c1e_3",
       "cloudinaryPublicId": "bp-portfolio/images/articles/prisma-migrations-in-production-the-zero-downtime-playbook/cover-mj-A",
       "cloudinaryVersion": 1790564688,
@@ -542,9 +578,7 @@
       "mediaFilename": "prisma-migrations-in-production-the-zero-downtime-playbook-cover-mj-A.jpg",
       "alt": "Aerial view of a pale concrete bridge with traffic flowing while its deck is replaced section by section from beneath",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "near-future minimal"
     },
     {
@@ -557,11 +591,14 @@
       "recipeVersion": "v1",
       "scene": "tabletop",
       "era": "70s",
-      "metaphorFamily": null,
+      "metaphorFamily": "causality",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "fuchsia",
       "impossibleDetail": "each orbiting sphere drops its token into the one chute, one at a time",
       "loggedPrompt": "On a walnut desk, a brass orrery whose orbiting spheres each carry a small glass token; as each sphere passes the top of its orbit it drops its token into a single central glass chute, one at a time, the chute holding a neat single-file column. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of fuchsia, heightened realism, mid-key window daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "On a walnut desk, a brass orrery whose orbiting spheres each carry a small glass token; as each sphere passes the top of its orbit it drops its token into a single central glass chute, one at a time, the chute holding a neat single-file column. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of fuchsia, heightened realism, mid-key window daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "On a walnut desk, a brass orrery whose orbiting spheres each carry a small glass token; as each sphere passes the top of its orbit it drops its token into a single central glass chute, one at a time, the chute holding a neat single-file column. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of fuchsia, heightened realism, mid-key window daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "1ab1a186-959a-4ab5-bfad-24ffbcd18cd6_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/javascript-event-loop-demystified-what-senior-devs-know-that-juniors-dont/cover-mj-A",
       "cloudinaryVersion": 1790564690,
@@ -569,9 +606,7 @@
       "mediaFilename": "javascript-event-loop-demystified-what-senior-devs-know-that-juniors-dont-cover-mj-A.jpg",
       "alt": "A brass orrery on a walnut desk dropping glass tokens one at a time into a single central chute",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1970s brutalist (warm, v1)"
     },
     {
@@ -584,11 +619,14 @@
       "recipeVersion": "v1",
       "scene": "landscape",
       "era": "80s-pastel",
-      "metaphorFamily": null,
+      "metaphorFamily": "scale",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "sky",
       "impossibleDetail": "a single thin glass slide outweighs a huge gilded painting",
       "loggedPrompt": "A giant pastel seesaw on an empty beach at sunset, one end loaded with a huge gilded framed painting, the other end holding a single thin glass photo slide, and it is the slide's end that rests on the sand. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, mid-key pastel sunset light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "A giant pastel seesaw on an empty beach at sunset, one end loaded with a huge gilded framed painting, the other end holding a single thin glass photo slide, and it is the slide's end that rests on the sand. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, mid-key pastel sunset light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "A giant pastel seesaw on an empty beach at sunset, one end loaded with a huge gilded framed painting, the other end holding a single thin glass photo slide, and it is the slide's end that rests on the sand. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, mid-key pastel sunset light. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "aa5e69b0-9b0c-4854-b2e5-521093b6ff34_3",
       "cloudinaryPublicId": "bp-portfolio/images/articles/image-optimization-for-the-web-what-actually-makes-a-difference/cover-mj-A",
       "cloudinaryVersion": 1790564693,
@@ -596,9 +634,7 @@
       "mediaFilename": "image-optimization-for-the-web-what-actually-makes-a-difference-cover-mj-A.jpg",
       "alt": "A pastel seesaw on a beach at sunset where a single thin photo slide outweighs a huge gilded painting",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1980s pastel"
     },
     {
@@ -611,11 +647,14 @@
       "recipeVersion": "v1",
       "scene": "interior",
       "era": "60s",
-      "metaphorFamily": null,
+      "metaphorFamily": "gravity",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "fuchsia",
       "impossibleDetail": "misshapen beads roll uphill, back off the sieve",
       "loggedPrompt": "Mid-distance view of a laboratory: a tall brass sorting sieve on a white pedestal, perfectly round glass beads passing cleanly through its holes into a neat tray below, while misshapen beads roll back up the sieve's slope and off into a separate bin, a woman in her forties in a mustard lab coat watching from a curved console. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of fuchsia, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "Extreme macro close-up: a precision brass sorting sieve fills the whole frame, perfect glass beads dropping cleanly through its round holes while misshapen beads roll uphill back across the mesh. 1960s space-age design, mid-century laboratory instrument, Kodachrome film look, mustard, avocado and cream palette with a hint of fuchsia, heightened realism, mid-key soft light. --no text, letters, numbers, logo, border --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "cdfb23fd-7f3a-4be2-b58f-232b6a9b1a2f_1",
       "cloudinaryPublicId": "bp-portfolio/images/articles/zod-the-validation-library-that-changed-how-i-think-about-data/cover-mj-A",
       "cloudinaryVersion": 1790490307,
@@ -623,9 +662,8 @@
       "mediaFilename": "zod-the-validation-library-that-changed-how-i-think-about-data-cover-mj-A.jpg",
       "alt": "Glass beads crowd a brass sorting mesh in close-up; only the perfectly round ones slip through",
       "rollout": "2026-09-26 first 9",
-      "notes": [
-        "Picked from the trial rounds (R4-R7) before v1 was locked; the picked job's exact prompt is not receipted. loggedPrompt is the v1 text written from that trial."
-      ],
+      "notes": ["Picked from the trial rounds (R4-R7) before v1 was locked."],
+      "midjourneyUpscaleJob": "f8343711-fd9a-4629-bbeb-9d4f082ab8e8",
       "eraLabel": "1960s space-age"
     },
     {
@@ -638,11 +676,14 @@
       "recipeVersion": "v1",
       "scene": "machine",
       "era": "nf",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "sky",
       "impossibleDetail": "a ripple crosses the solid stone console as if it were water",
       "loggedPrompt": "A sleek near-future instrument console of pale stone and brushed aluminum, three large round glass gauges with abstract waveform readouts, every needle resting in the calm zone, and a single ripple crossing the solid console surface as if it were water. Near-future minimalism, clean digital photograph, soft daylight, pale neutral palette with a hint of sky blue, the gauge glow a gentle teal, heightened realism, mid-key light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "A sleek near-future instrument console of pale stone and brushed aluminum, three large round glass gauges with abstract waveform readouts, every needle resting in the calm zone, and a single ripple crossing the solid console surface as if it were water. Near-future minimalism, clean digital photograph, soft daylight, pale neutral palette with a hint of sky blue, the gauge glow a gentle teal, heightened realism, mid-key light. --no text, letters, numbers, logo, border --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "42d15cf0-6136-4d27-aff0-5c95d0f0233d_1",
       "cloudinaryPublicId": "bp-portfolio/images/articles/web-performance-metrics-that-actually-move-the-needle/cover-mj-A",
       "cloudinaryVersion": 1790490312,
@@ -650,9 +691,8 @@
       "mediaFilename": "web-performance-metrics-that-actually-move-the-needle-cover-mj-A.jpg",
       "alt": "Three glass gauges rest calmly on a stone console while a single ripple crosses the solid stone as if it were water",
       "rollout": "2026-09-26 first 9",
-      "notes": [
-        "Picked from the trial rounds (R4-R7) before v1 was locked; the picked job's exact prompt is not receipted. loggedPrompt is the v1 text written from that trial."
-      ],
+      "notes": ["Picked from the trial rounds (R4-R7) before v1 was locked."],
+      "midjourneyUpscaleJob": "0cd36b00-eb1c-400d-97c1-ab739f7d5119",
       "eraLabel": "near-future minimal"
     },
     {
@@ -665,11 +705,14 @@
       "recipeVersion": "v1",
       "scene": "aerial",
       "era": "70s",
-      "metaphorFamily": null,
+      "metaphorFamily": "causality",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "indigo",
       "impossibleDetail": "the campus casts one shadow; every cottage's shadow points a different way",
       "loggedPrompt": "Aerial view at golden hour of a valley split by a river: on one bank a single sprawling brutalist campus joined by covered walkways casting one continuous shadow, on the other a scattered village of small cottages, each with its own road and each casting a shadow that points a different way. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of indigo, heightened realism, mid-key golden-hour light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "Aerial view at golden hour of a valley split by a river: on one bank a single sprawling brutalist campus joined by covered walkways casting one continuous shadow, on the other a scattered village of small cottages, each with its own road and each casting a shadow that points a different way. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of indigo, heightened realism, mid-key golden-hour light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "Aerial view at golden hour of a valley split by a river: on one bank a single sprawling brutalist campus joined by covered walkways casting one continuous shadow, on the other a scattered village of small cottages, each with its own road and each casting a shadow that points a different way. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of indigo, heightened realism, mid-key golden-hour light. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "0d3d8571-a406-4e64-ac44-e7f2218417a0_1",
       "cloudinaryPublicId": "bp-portfolio/images/articles/monorepo-vs-polyrepo-the-real-decision-for-full-stack-js-teams/cover-mj-A",
       "cloudinaryVersion": 1790564696,
@@ -677,9 +720,7 @@
       "mediaFilename": "monorepo-vs-polyrepo-the-real-decision-for-full-stack-js-teams-cover-mj-A.jpg",
       "alt": "Aerial golden-hour view of a valley split by a river: one connected brutalist campus on one bank, scattered cottages on the other",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1970s brutalist (warm, v1)"
     },
     {
@@ -692,11 +733,14 @@
       "recipeVersion": "v1",
       "scene": "architecture",
       "era": "80s-pastel",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "sky",
       "impossibleDetail": "a mannequin presses the elevator button exactly like a waiting shopper",
       "loggedPrompt": "A pastel shopping-mall atrium in afternoon light, a department-store mannequin standing at a public elevator panel, one fiberglass finger pressing the call button, head tilted exactly like a waiting shopper, a middle-aged man beside it glancing over. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, bright mid-key afternoon light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "A pastel shopping-mall atrium in afternoon light: a white fiberglass department-store mannequin with a smooth blank featureless face and visible joints at its wrists and neck stands at a public elevator panel, one fiberglass finger pressing the call button, its head tilted exactly like a waiting shopper; a middle-aged man beside it, seen from behind, glances over at it. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, bright mid-key afternoon light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, human face, sunglasses --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "96c45b83-6d01-46c7-86cd-90fa3ef99498_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/writing-tests-for-react-that-dont-make-you-want-to-quit/cover-mj-A",
       "cloudinaryVersion": 1790564475,
@@ -705,7 +749,7 @@
       "alt": "A blank-faced fiberglass mannequin presses an elevator call button in a pastel mall, head tilted like a waiting shopper",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "Re-run once with sharpened wording (same concept, scene and era); the re-run's full prompt is not receipted. Final prompt opening (from the file name): \"A pastel shopping-mall atrium in afternoon light a white fibe\"."
+        "Re-run once with sharpened wording; same concept, scene and era."
       ],
       "eraLabel": "1980s pastel"
     },
@@ -719,11 +763,14 @@
       "recipeVersion": "v1",
       "scene": "landscape",
       "era": "nf",
-      "metaphorFamily": null,
+      "metaphorFamily": "gravity",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "amber",
       "impossibleDetail": "a crane lifts the whole lake as one clear slab of water",
       "loggedPrompt": "A still mountain lake at midday, a giant construction crane on the shore straining to lift the entire lake as one enormous clear slab of water, while beside it a slim steel pipe quietly carries a steady stream down the valley to a small town. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of amber, heightened realism, bright mid-key midday light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "A mountain valley at midday: on the shore a giant construction crane strains with its cables taut, hoisting the entire lake high into the air as one enormous clear rectangular slab of water, the empty lakebed exposed beneath it; beside it a slim steel pipe quietly carries a steady stream of water down the valley to a small town. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of amber, heightened realism, bright mid-key midday light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, boats, barges --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "22b17e1d-5bac-4f2b-9e00-b815b97fd279_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/nodejs-streams-why-they-matter-and-when-to-actually-use-them/cover-mj-A",
       "cloudinaryVersion": 1790564478,
@@ -732,7 +779,7 @@
       "alt": "A mountain valley where a great clear slab of the lake stands lifted in the air beside a crane",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "Re-run once with sharpened wording (same concept, scene and era); the re-run's full prompt is not receipted. Final prompt opening (from the file name): \"A mountain valley at midday on the shore a giant construction\"."
+        "Re-run once with sharpened wording; same concept, scene and era."
       ],
       "eraLabel": "near-future minimal"
     },
@@ -746,11 +793,14 @@
       "recipeVersion": "v1",
       "scene": "interior",
       "era": "70s",
-      "metaphorFamily": null,
+      "metaphorFamily": "causality",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "sky",
       "impossibleDetail": "everything has been shoved around except the safe, which has no disturbed dust",
       "loggedPrompt": "A wood-paneled living room where every piece of furniture has been shoved around by an unseen force, chairs turned, a rug rucked up, curtains blowing, yet a heavy steel safe in the corner sits exactly where it always was, a small sky-blue light on its dial, the dust around its base undisturbed. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of sky blue, heightened realism, mid-key warm daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "A wood-paneled living room where every piece of furniture has been shoved around by an unseen force, chairs turned, a rug rucked up, curtains blowing, yet a heavy steel safe in the corner sits exactly where it always was, a small sky-blue light on its dial, the dust around its base undisturbed. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of sky blue, heightened realism, mid-key warm daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "A wood-paneled living room where every piece of furniture has been shoved around by an unseen force, chairs turned, a rug rucked up, curtains blowing, yet a heavy steel safe in the corner sits exactly where it always was, a small sky-blue light on its dial, the dust around its base undisturbed. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of sky blue, heightened realism, mid-key warm daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "66e2a8f0-85ec-4b98-913d-3b370fa7d186_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/react-useref-beyond-dom-manipulation-patterns-worth-knowing/cover-mj-A",
       "cloudinaryVersion": 1790568954,
@@ -759,7 +809,6 @@
       "alt": "A wood-paneled 1970s living room in burnt orange, a steel safe in the corner with a small sky-blue light glowing on its dial",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim.",
         "Brandon picked the v1 (calm room) on purpose; the 'disarray' re-run was rejected."
       ],
       "eraLabel": "1970s brutalist (warm, v1)"
@@ -774,11 +823,14 @@
       "recipeVersion": "v1",
       "scene": "tabletop",
       "era": "60s",
-      "metaphorFamily": null,
+      "metaphorFamily": "scale",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "sky",
       "impossibleDetail": "the paper roll never ends: it runs off the desk and out the door",
       "loggedPrompt": "On a cream desk, a roll of paper unspools off the edge, across the floor, out through an open door and down a long corridor, still going, while beside it sits a neat bound stack of pages with a ribbon bookmark. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of sky blue, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "On a cream desk, a roll of paper unspools off the edge, across the floor, out through an open door and down a long corridor, still going, while beside it sits a neat bound stack of pages with a ribbon bookmark. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of sky blue, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "On a cream desk, a roll of paper unspools off the edge, across the floor, out through an open door and down a long corridor, still going, while beside it sits a neat bound stack of pages with a ribbon bookmark. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of sky blue, heightened realism, bright mid-key daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "00f0720c-8e0b-48d2-b480-6c0365b751d8_3",
       "cloudinaryPublicId": "bp-portfolio/images/articles/infinite-scroll-vs-pagination-the-tradeoffs-nobody-tells-you-about/cover-mj-A",
       "cloudinaryVersion": 1790564698,
@@ -786,9 +838,7 @@
       "mediaFilename": "infinite-scroll-vs-pagination-the-tradeoffs-nobody-tells-you-about-cover-mj-A.jpg",
       "alt": "A roll of paper unspools off a cream desk, across the floor and out the door, beside a neat bound stack of pages",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1960s space-age"
     },
     {
@@ -801,11 +851,14 @@
       "recipeVersion": "v1",
       "scene": "architecture",
       "era": "80s-neon",
-      "metaphorFamily": null,
+      "metaphorFamily": "causality",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "sky",
       "impossibleDetail": "the plane glides into the window while its shadow lags far behind",
       "loggedPrompt": "A rain-slick city street at dusk seen from above, a paper airplane folded from wet newsprint, lit magenta by the same neon as the street, gliding into the open lit window of an upper apartment, while its shadow still lags far behind on the wet pavement; one distant adult on the sidewalk looking up. 1980s synthwave, neon reflections on wet asphalt, VHS-era film softness, magenta and cyan palette with a hint of sky blue, heightened realism, the airplane lit and grained like everything else in the scene. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "A rain-slick city street at dusk seen from above, a paper airplane folded from wet newsprint, lit magenta by the same neon as the street, gliding into the open lit window of an upper apartment, while its shadow still lags far behind on the wet pavement; one small figure on the sidewalk looking up. 1980s synthwave, neon reflections on wet asphalt, VHS-era film softness, magenta and cyan palette with a hint of sky blue, heightened realism, the airplane lit and grained like everything else in the scene. --no text, letters, numbers, logo, border, signage --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "6f27623d-8d4a-4f62-9411-d68f3371e97c_2",
       "cloudinaryPublicId": "bp-portfolio/images/articles/optimistic-ui-updates-in-react-making-your-app-feel-instant/cover-mj-A",
       "cloudinaryVersion": 1790490315,
@@ -813,9 +866,8 @@
       "mediaFilename": "optimistic-ui-updates-in-react-making-your-app-feel-instant-cover-mj-A.jpg",
       "alt": "A neon-lit paper airplane glides into an upper window while its shadow still lags far behind on the wet street below",
       "rollout": "2026-09-26 first 9",
-      "notes": [
-        "Picked from the trial rounds (R4-R7) before v1 was locked; the picked job's exact prompt is not receipted. loggedPrompt is the v1 text written from that trial."
-      ],
+      "notes": ["Picked from the trial rounds (R4-R7) before v1 was locked."],
+      "midjourneyUpscaleJob": "f004ec9b-de6d-4149-bf2f-68ec32009970",
       "eraLabel": "1980s neon"
     },
     {
@@ -828,11 +880,14 @@
       "recipeVersion": "v1",
       "scene": "macro",
       "era": "70s",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "emerald",
       "impossibleDetail": "one passage glows emerald through the lens",
       "loggedPrompt": "Close-up of a brass magnifying lens on a stand, focused on an open book where a single passage glows a soft emerald; behind it, out of focus, a vast empty warehouse of bare steel racks. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of emerald, heightened realism, mid-key warm daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "Close-up of a brass magnifying lens on a stand, focused on an open book where a single passage glows a soft emerald; behind it, out of focus, a vast empty warehouse of bare steel racks. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of emerald, heightened realism, mid-key warm daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "Close-up of a brass magnifying lens on a stand, focused on an open book where a single passage glows a soft emerald; behind it, out of focus, a vast empty warehouse of bare steel racks. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of emerald, heightened realism, mid-key warm daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "d0570466-cf16-43ae-8ec2-366b414bb1cf_2",
       "cloudinaryPublicId": "bp-portfolio/images/articles/postgresql-full-text-search-good-enough-to-replace-elasticsearch/cover-mj-A",
       "cloudinaryVersion": 1790564700,
@@ -840,9 +895,7 @@
       "mediaFilename": "postgresql-full-text-search-good-enough-to-replace-elasticsearch-cover-mj-A.jpg",
       "alt": "A brass magnifying lens focused on one glowing emerald passage in an open book, a vast empty warehouse behind",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1970s brutalist (warm, v1)"
     },
     {
@@ -855,11 +908,14 @@
       "recipeVersion": "v1",
       "scene": "machine",
       "era": "nf",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "cyan",
       "impossibleDetail": "scattered chips come out fused inside one flawless glass slab",
       "loggedPrompt": "A brushed-aluminum fabrication machine in a bright white studio, small scattered colored chips on its intake tray and one flawless cyan-tinted glass slab sliding out of its output, the same chips suspended inside the glass like inlay. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of cyan, heightened realism, bright mid-key studio daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "A brushed-aluminum fabrication machine in a bright white studio, small scattered colored chips on its intake tray and one flawless cyan-tinted glass slab sliding out of its output, the same chips suspended inside the glass like inlay. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of cyan, heightened realism, bright mid-key studio daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "A brushed-aluminum fabrication machine in a bright white studio, small scattered colored chips on its intake tray and one flawless cyan-tinted glass slab sliding out of its output, the same chips suspended inside the glass like inlay. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of cyan, heightened realism, bright mid-key studio daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "87db0ef0-7a8e-4818-b701-00e3ec44f8fb_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/tailwind-css-v4-what-changed-and-how-to-migrate/cover-mj-A",
       "cloudinaryVersion": 1790564482,
@@ -867,9 +923,7 @@
       "mediaFilename": "tailwind-css-v4-what-changed-and-how-to-migrate-cover-mj-A.jpg",
       "alt": "A brushed-aluminum machine turns scattered colored chips into one flawless cyan glass slab with the chips set inside like inlay",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "near-future minimal"
     },
     {
@@ -882,11 +936,14 @@
       "recipeVersion": "v1",
       "scene": "aerial",
       "era": "80s-pastel",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "sky",
       "impossibleDetail": "the letter passes straight through the solid glass wall",
       "loggedPrompt": "Top-down view of a pastel office floor divided by a glass partition, a letter sliding across the floor straight through the solid glass and coming to rest squarely in an open sky-blue filing tray on the other side, an office worker in a peach blazer watching. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "Top-down view of a pastel office floor divided by a glass partition, a letter sliding across the floor straight through the solid glass and coming to rest squarely in an open sky-blue filing tray on the other side, an office worker in a peach blazer watching. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "Top-down view of a pastel office floor divided by a glass partition, a letter sliding across the floor straight through the solid glass and coming to rest squarely in an open sky-blue filing tray on the other side, an office worker in a peach blazer watching. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, bright mid-key daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "c458a4af-2342-4feb-95fe-d8def01bf8c6_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/react-19-actions-finally-a-clean-way-to-handle-server-mutations/cover-mj-A",
       "cloudinaryVersion": 1790564484,
@@ -894,9 +951,7 @@
       "mediaFilename": "react-19-actions-finally-a-clean-way-to-handle-server-mutations-cover-mj-A.jpg",
       "alt": "Top-down view of a pastel office where a letter slides straight through a solid glass partition into a sky-blue tray",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1980s pastel"
     },
     {
@@ -909,11 +964,14 @@
       "recipeVersion": "v1",
       "scene": "landscape",
       "era": "70s",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "fuchsia",
       "impossibleDetail": "inside the beam the sand turns transparent, revealing buried hazards",
       "loggedPrompt": "Sand dunes at golden hour, a tall searchlight on a tripod sweeping its beam across the sand, and inside the beam the sand turns transparent, revealing half-buried hazards, a rake, a coiled cable, an old iron trap, invisible outside the light; a woman in her fifties in a canvas jacket at the light. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of fuchsia, heightened realism, mid-key golden-hour light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "Sand dunes at golden hour, a tall searchlight on a tripod casting a wide cone of light across the dunes; wherever the beam falls the sand has turned clear as glass, and through it you can plainly see half-buried hazards, a rake, a coiled cable, an old iron trap, while outside the beam the sand stays solid and opaque; a woman in her fifties in a canvas jacket, seen from behind, operates the light. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of fuchsia, heightened realism, mid-key golden-hour light. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "8137e1c5-940d-49dc-8394-99c88715b17a_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/typescript-strict-mode-extra-pain-worth-it/cover-mj-A",
       "cloudinaryVersion": 1790564488,
@@ -922,7 +980,7 @@
       "alt": "A searchlight sweeps across sand dunes at golden hour, revealing what lies hidden beneath the sand",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "Re-run once with sharpened wording (same concept, scene and era); the re-run's full prompt is not receipted. Final prompt opening (from the file name): \"Sand dunes at golden hour a tall searchlight on a tripod cast\"."
+        "Re-run once with sharpened wording; same concept, scene and era."
       ],
       "eraLabel": "1970s brutalist (warm, v1)"
     },
@@ -936,11 +994,14 @@
       "recipeVersion": "v1",
       "scene": "tabletop",
       "era": "nf",
-      "metaphorFamily": null,
+      "metaphorFamily": "scale",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "rose",
       "impossibleDetail": "a tiny brass elevator car rests at the bottom of the drilled shaft",
       "loggedPrompt": "A clear acrylic block on a pale desk holding layered bands of colored sand like geological strata, a single perfectly straight shaft drilled down through every layer, a tiny brass elevator car resting at the bottom. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of rose, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "A clear acrylic block on a pale desk holding layered bands of colored sand like geological strata, a single perfectly straight shaft drilled down through every layer, a tiny brass elevator car resting at the bottom. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of rose, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "A clear acrylic block on a pale desk holding layered bands of colored sand like geological strata, a single perfectly straight shaft drilled down through every layer, a tiny brass elevator car resting at the bottom. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of rose, heightened realism, bright mid-key daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "85e274ef-d720-411b-8003-b3123d621a32_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/strapi-v4-custom-api-building-endpoints-beyond-generated-crud/cover-mj-A",
       "cloudinaryVersion": 1790564492,
@@ -948,9 +1009,7 @@
       "mediaFilename": "strapi-v4-custom-api-building-endpoints-beyond-generated-crud-cover-mj-A.jpg",
       "alt": "A clear acrylic block of layered colored sand with a perfectly straight shaft drilled through every layer",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "near-future minimal"
     },
     {
@@ -963,11 +1022,14 @@
       "recipeVersion": "v1",
       "scene": "interior",
       "era": "60s",
-      "metaphorFamily": null,
+      "metaphorFamily": "causality",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "cyan",
       "impossibleDetail": "the floor line bends around the bench to guide her",
       "loggedPrompt": "A long 1960s space-age corridor of curved white walls and round doorways, every door standing open; a softly glowing line set into the floor bends gently around a low bench toward the far end, lighting the curved wall beside it, and one distant adult woman in a mustard coat walks along it, seen from behind. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of aqua, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "A long 1960s space-age corridor of curved white walls and round doorways, every door standing open; a softly glowing line set into the floor bends gently around a low bench toward the far end, lighting the curved wall beside it, and one distant adult woman in a mustard coat walks along it, seen from behind. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of aqua, heightened realism, bright mid-key daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "fa4e9fff-b50a-48da-9305-39757383935e_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/accessibility-in-react-the-quick-wins-that-cover-80-percent-of-issues/cover-mj-A",
       "cloudinaryVersion": 1790490320,
@@ -975,9 +1037,8 @@
       "mediaFilename": "accessibility-in-react-the-quick-wins-that-cover-80-percent-of-issues-cover-mj-A.jpg",
       "alt": "A glowing line set into the floor curves through a space-age corridor, guiding a woman in a mustard coat to the far end",
       "rollout": "2026-09-26 first 9",
-      "notes": [
-        "Picked from the trial rounds (R4-R7) before v1 was locked; the picked job's exact prompt is not receipted. loggedPrompt is the v1 text written from that trial."
-      ],
+      "notes": ["Picked from the trial rounds (R4-R7) before v1 was locked."],
+      "midjourneyUpscaleJob": "ef5edbc7-3fca-403c-a955-ae55c4f63438",
       "eraLabel": "1960s space-age"
     },
     {
@@ -989,12 +1050,15 @@
       "generator": "midjourney",
       "recipeVersion": "replacement concept",
       "scene": "water",
-      "era": null,
-      "metaphorFamily": null,
+      "era": "80s-pastel",
+      "metaphorFamily": "causality",
+      "metaphorFamilySource": "logged (v2 recipe)",
+      "fieldOfUnits": false,
       "hue": "sky",
       "impossibleDetail": null,
       "loggedPrompt": "A man in his forties standing at the end of a quiet wooden pier at dusk, seen from behind, while his long shadow on the boards is a younger version of himself, turned around looking back at him. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, mid-key pastel dusk light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, crowd",
-      "finalPrompt": null,
+      "finalPrompt": "A single wooden bench at the end of a quiet pier at dusk, split exactly down the middle: the left half weathered, cracked and silver-grey with peeling paint, the right half freshly built and newly painted in soft pastel sky blue, the two halves meeting in one clean straight line, calm water and a pastel sky behind. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, mid-key pastel dusk light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, people --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "740a25db-f72d-4603-b021-c90d8db33bfc_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/nextjs-app-router-after-a-year-in-production-what-id-tell-my-past-self/cover-mj-A",
       "cloudinaryVersion": 1790564540,
@@ -1003,9 +1067,9 @@
       "alt": "A pier bench at dusk split down the middle, one half weathered grey and the other freshly painted sky blue",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "The logged recipe was replaced by a new single-object concept during the 2026-09-27 run; the live concept is the alt text. Scene/era summarise the run log on claude-skills#492 (private); null where the log does not name them. Final prompt opening (from the file name): \"A single wooden bench at the end of a quiet pier at dusk spli\"."
+        "The logged recipe was replaced by a new single-object concept during the 2026-09-27 run; finalPrompt and alt describe the live cover."
       ],
-      "eraLabel": null
+      "eraLabel": "1980s pastel"
     },
     {
       "postId": 47,
@@ -1017,11 +1081,14 @@
       "recipeVersion": "v1",
       "scene": "aerial",
       "era": "60s",
-      "metaphorFamily": null,
+      "metaphorFamily": "scale",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "emerald",
       "impossibleDetail": "one plaza, two orders: free garden and a precise pod grid",
       "loggedPrompt": "Aerial top-down view of a 1960s space-age plaza split down the middle: one half a free-flowing garden of scattered curved sculptures, the other half a precise grid of identical round pods, a few distant adults crossing between them. 1960s space-age design, mid-century modern forms, Kodachrome film look, mustard, avocado and cream palette with a hint of emerald, heightened realism, mid-key light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "Aerial top-down view of a 1960s space-age plaza split down the middle: one half a free-flowing garden of scattered curved sculptures, the other half a precise grid of identical round pods, tiny people crossing between them. 1960s space-age design, mid-century modern forms, Kodachrome film look, mustard, avocado and cream palette with a hint of emerald, heightened realism, one quietly impossible detail, mid-key light, a touch of teal glow. --no text, letters, numbers, logo, border --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "b6fc8283-3693-4439-94ce-3b9688821cf1_3",
       "cloudinaryPublicId": "bp-portfolio/images/articles/mongodb-vs-postgresql-the-decision-framework-i-actually-use/cover-mj-A",
       "cloudinaryVersion": 1790490325,
@@ -1029,9 +1096,8 @@
       "mediaFilename": "mongodb-vs-postgresql-the-decision-framework-i-actually-use-cover-mj-A.jpg",
       "alt": "Aerial view of a plaza split in two: a free-flowing garden of curved sculptures beside a precise grid of identical pods",
       "rollout": "2026-09-26 first 9",
-      "notes": [
-        "Picked from the trial rounds (R4-R7) before v1 was locked; the picked job's exact prompt is not receipted. loggedPrompt is the v1 text written from that trial."
-      ],
+      "notes": ["Picked from the trial rounds (R4-R7) before v1 was locked."],
+      "midjourneyUpscaleJob": "4ed27039-890e-4f1b-be30-1758c64ef61f",
       "eraLabel": "1960s space-age"
     },
     {
@@ -1045,10 +1111,13 @@
       "scene": "landscape",
       "era": "70s-cool",
       "metaphorFamily": "weather",
+      "metaphorFamilySource": "logged (v2 recipe)",
+      "fieldOfUnits": false,
       "hue": "emerald",
       "impossibleDetail": "a dry, still circle inside the storm",
       "loggedPrompt": "A lone concrete house on a sea cliff in a violent storm at night, waves exploding against the rocks all around it, while the house and a perfect circle of ground beneath it stay completely dry and still, one warm window lit. 1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of emerald, heightened realism, low-key storm light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people",
-      "finalPrompt": "A lone concrete house on a sea cliff in a violent storm at night, waves exploding against the rocks all around it, while the house and a perfect circle of ground beneath it stay completely dry and still, one warm window lit. 1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of emerald, heightened realism, low-key storm light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people",
+      "finalPrompt": "A lone concrete house on a sea cliff in a violent storm at night, waves exploding against the rocks all around it, while the house and a perfect circle of ground beneath it stay completely dry and still, one warm window lit. 1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of emerald, heightened realism, low-key storm light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, people --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "365c8687-192f-4305-be3f-402f7526560a_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/prisma-postgresql-the-data-layer-setup-i-use-on-every-project/cover-mj-A",
       "cloudinaryVersion": 1790564637,
@@ -1056,9 +1125,7 @@
       "mediaFilename": "prisma-postgresql-the-data-layer-setup-i-use-on-every-project-cover-mj-A.jpg",
       "alt": "A lone concrete house on a sea cliff at night, one warm window lit as storm waves explode on the rocks",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1970s brutalist (cool recast, v2)"
     },
     {
@@ -1071,11 +1138,14 @@
       "recipeVersion": "v1",
       "scene": "architecture",
       "era": "80s-pastel",
-      "metaphorFamily": null,
+      "metaphorFamily": "scale",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": true,
       "hue": "emerald",
       "impossibleDetail": "a straight line of floor lights runs to one exact shelf",
       "loggedPrompt": "A vast archive hall of endless pastel shelving, a straight line of glowing emerald floor lights running directly to one exact shelf, while far down an unlit aisle a single snail crawls along the floor. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of emerald, heightened realism, mid-key soft light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "A vast archive hall of endless pastel shelving, a straight line of glowing emerald floor lights running directly to one exact shelf, while far down an unlit aisle a single snail crawls along the floor. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of emerald, heightened realism, mid-key soft light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "A vast archive hall of endless pastel shelving, a straight line of glowing emerald floor lights running directly to one exact shelf, while far down an unlit aisle a single snail crawls along the floor. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of emerald, heightened realism, mid-key soft light. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "e8d650ae-018b-45a8-b615-b7d122a53e84_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/postgresql-indexing-basics-that-actually-matter-for-app-developers/cover-mj-A",
       "cloudinaryVersion": 1790564549,
@@ -1083,9 +1153,7 @@
       "mediaFilename": "postgresql-indexing-basics-that-actually-matter-for-app-developers-cover-mj-A.jpg",
       "alt": "A line of glowing emerald floor lights runs straight to one exact shelf in an endless pastel archive",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1980s pastel"
     },
     {
@@ -1098,11 +1166,14 @@
       "recipeVersion": "v1",
       "scene": "interior",
       "era": "60s",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "cyan",
       "impossibleDetail": "one dial retints every object in the room at once",
       "loggedPrompt": "A living room in cream and tangerine, a woman in her fifties turning a single large chrome dial on the wall, and every object in the room, lampshades, cushions, a vase, the rug, shifting to the same cyan tint at once, caught halfway through the change. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of cyan, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "A 1960s living room in cream and tangerine, a woman in her fifties seen from behind turning a single large chrome dial on the wall, and the whole room caught mid-transformation: a wave of cyan color sweeps across it from the dial, the lampshades, cushions, vase and rug on the near side already fully cyan while those on the far side are still tangerine, the boundary line running straight through the middle of the sofa. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of cyan, heightened realism, bright mid-key daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "b6c15374-0409-40eb-a0af-424651996462_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/css-custom-properties-theyre-not-just-for-color-tokens/cover-mj-A",
       "cloudinaryVersion": 1790564554,
@@ -1111,7 +1182,7 @@
       "alt": "A woman turns a chrome wall dial and a wave of cyan sweeps across a cream and tangerine 1960s living room",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "Re-run once with sharpened wording (same concept, scene and era); the re-run's full prompt is not receipted. Final prompt opening (from the file name): \"A 1960s living room in cream and tangerine a woman in her fif\"."
+        "Re-run once with sharpened wording; same concept, scene and era."
       ],
       "eraLabel": "1960s space-age"
     },
@@ -1125,11 +1196,14 @@
       "recipeVersion": "v1",
       "scene": "machine",
       "era": "70s",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "emerald",
       "impossibleDetail": "a shipping container stands where the mainframe should be",
       "loggedPrompt": "A 1970s concrete and walnut control room lit by daylight through high windows, a single steel shipping container installed where the mainframe should be, its doors open to reveal neatly stacked softly glowing layers inside; an empty swivel chair and a still-warm coffee mug nearby. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of emerald, heightened realism, mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "A 1970s concrete and walnut control room with a single steel shipping container installed where the mainframe should be, its doors open to reveal neatly stacked glowing layers inside; an empty swivel chair and a still-warm coffee mug nearby. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of emerald, heightened realism, one quietly impossible detail, mid-key light, a touch of teal glow. --no text, letters, numbers, logo, border --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "9e9cbe6e-9454-406e-aa53-01ce8d310664_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/docker-for-frontend-devs-stop-being-scared-of-containers/cover-mj-A",
       "cloudinaryVersion": 1790490327,
@@ -1137,9 +1211,8 @@
       "mediaFilename": "docker-for-frontend-devs-stop-being-scared-of-containers-cover-mj-A.jpg",
       "alt": "A steel shipping container stands where the mainframe should be in a 1970s control room, doors open on glowing stacked layers",
       "rollout": "2026-09-26 first 9",
-      "notes": [
-        "Picked from the trial rounds (R4-R7) before v1 was locked; the picked job's exact prompt is not receipted. loggedPrompt is the v1 text written from that trial."
-      ],
+      "notes": ["Picked from the trial rounds (R4-R7) before v1 was locked."],
+      "midjourneyUpscaleJob": "40deaf44-2516-4c26-a251-3ee3e24261c8",
       "eraLabel": "1970s brutalist (warm, v1)"
     },
     {
@@ -1152,11 +1225,14 @@
       "recipeVersion": "v1",
       "scene": "tabletop",
       "era": "nf",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "emerald",
       "impossibleDetail": "grey pebbles go in the first flask; a cut gem rests in the last",
       "loggedPrompt": "On a pale stone lab bench, three clear glass flasks joined by thin tubes, each smaller than the last, rough grey river pebbles poured into the first and a single faceted emerald gem resting in the last. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of emerald, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "On a pale stone lab bench, three clear glass flasks joined by thin tubes, each smaller than the last, rough grey river pebbles poured into the first and a single faceted emerald gem resting in the last. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of emerald, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "On a pale stone lab bench, three clear glass flasks joined by thin tubes, each smaller than the last, rough grey river pebbles poured into the first and a single faceted emerald gem resting in the last. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of emerald, heightened realism, bright mid-key daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "2ada26cc-b37d-442c-aaf9-6b249f4b0ee4_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/mongodb-aggregation-pipeline-the-feature-that-unlocks-real-queries/cover-mj-A",
       "cloudinaryVersion": 1790564557,
@@ -1164,9 +1240,7 @@
       "mediaFilename": "mongodb-aggregation-pipeline-the-feature-that-unlocks-real-queries-cover-mj-A.jpg",
       "alt": "Three linked glass flasks on a stone bench: rough grey pebbles in the first, a single faceted emerald in the last",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "near-future minimal"
     },
     {
@@ -1179,11 +1253,14 @@
       "recipeVersion": "v1",
       "scene": "aerial",
       "era": "80s-neon",
-      "metaphorFamily": null,
+      "metaphorFamily": "causality",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "amber",
       "impossibleDetail": "every stray glowing bead is caught and sorted while the machine keeps running",
       "loggedPrompt": "Top-down view of a factory floor at dusk, one large machine running steadily while every stray glowing amber bead it throws off is caught by a fine mesh net and rolls down a chute into one of three separate bins. 1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of amber, heightened realism, mid-key neon dusk light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "Top-down view of a factory floor at dusk, one large machine running steadily while every stray glowing amber bead it throws off is caught by a fine mesh net and rolls down a chute into one of three separate bins. 1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of amber, heightened realism, mid-key neon dusk light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "Top-down view of a factory floor at dusk, one large machine running steadily while every stray glowing amber bead it throws off is caught by a fine mesh net and rolls down a chute into one of three separate bins. 1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of amber, heightened realism, mid-key neon dusk light. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "825e0987-1804-4052-99ee-f6ae2868e2b3_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/nodejs-error-handling-that-doesnt-embarrass-you-in-production/cover-mj-A",
       "cloudinaryVersion": 1790564560,
@@ -1191,9 +1268,7 @@
       "mediaFilename": "nodejs-error-handling-that-doesnt-embarrass-you-in-production-cover-mj-A.jpg",
       "alt": "Top-down view of a neon-lit factory floor where every stray glowing bead a machine throws off is caught and sorted",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1980s neon"
     },
     {
@@ -1206,11 +1281,14 @@
       "recipeVersion": "v1",
       "scene": "architecture",
       "era": "60s",
-      "metaphorFamily": null,
+      "metaphorFamily": "gravity",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "fuchsia",
       "impossibleDetail": "one new beam hangs in place on the open frame, bolted to nothing",
       "loggedPrompt": "Two pavilions side by side on a bright plaza: one an open steel frame you can see straight through, a new beam hanging in place at its edge bolted to nothing; the other a sealed, smooth white cast block with no seams. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of fuchsia, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "Two pavilions side by side on a bright plaza: one an open steel frame you can see straight through, a new beam hanging in place at its edge bolted to nothing; the other a sealed, smooth white cast block with no seams. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of fuchsia, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "Two pavilions side by side on a bright plaza: one an open steel frame you can see straight through, a new beam hanging in place at its edge bolted to nothing; the other a sealed, smooth white cast block with no seams. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of fuchsia, heightened realism, bright mid-key daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "598ec5dd-23ef-4897-974d-73cd32dfb327_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/typescript-interface-vs-type-the-real-difference-and-when-it-matters/cover-mj-A",
       "cloudinaryVersion": 1790564564,
@@ -1218,9 +1296,7 @@
       "mediaFilename": "typescript-interface-vs-type-the-real-difference-and-when-it-matters-cover-mj-A.jpg",
       "alt": "Two pavilions on a bright plaza: an open steel frame you can see through, and a sealed, seamless white block",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1960s space-age"
     },
     {
@@ -1233,11 +1309,14 @@
       "recipeVersion": "v1",
       "scene": "interior",
       "era": "nf",
-      "metaphorFamily": null,
+      "metaphorFamily": "gravity",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "cyan",
       "impossibleDetail": "each sphere hangs exactly level with her current step",
       "loggedPrompt": "A tall bright stairwell atrium where a kinetic sculpture of polished cyan spheres on thin rods traces a smooth arc down the stairwell beside a woman in her thirties walking down the stairs, every sphere positioned exactly level with the step she is on. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of cyan, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "A tall bright stairwell atrium where a kinetic sculpture of polished cyan spheres on thin rods traces a smooth arc down the stairwell beside a woman in her thirties walking down the stairs, every sphere positioned exactly level with the step she is on. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of cyan, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "A tall bright stairwell atrium where a kinetic sculpture of polished cyan spheres on thin rods traces a smooth arc down the stairwell beside a woman in her thirties walking down the stairs, every sphere positioned exactly level with the step she is on. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of cyan, heightened realism, bright mid-key daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "51bf455f-833a-4623-9ca3-49b487b1e178_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/gsap-scrolltrigger-in-react-the-patterns-that-actually-work/cover-mj-A",
       "cloudinaryVersion": 1790564567,
@@ -1245,9 +1324,7 @@
       "mediaFilename": "gsap-scrolltrigger-in-react-the-patterns-that-actually-work-cover-mj-A.jpg",
       "alt": "A kinetic sculpture of cyan spheres arcs down a bright stairwell, each sphere level with the step a woman is on",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "near-future minimal"
     },
     {
@@ -1260,11 +1337,14 @@
       "recipeVersion": "replacement concept",
       "scene": "interior",
       "era": "nf",
-      "metaphorFamily": null,
+      "metaphorFamily": "scale",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "sky",
       "impossibleDetail": null,
       "loggedPrompt": "A heavy steel machinist's tool chest with a dozen drawers in a sunlit garage, every drawer shut except one open a finger's width, a faint sky-blue glow inside, the whole chest leaning slightly toward that drawer as if its contents weighed far more than the rest. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of sky blue, heightened realism, mid-key warm daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "Looking straight into a huge open steel bank vault through its massive round door: the vault is completely empty except for one ordinary white paper coffee cup standing alone in the exact center of the floor, clearly visible and lit by a single overhead spotlight. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of sky blue, heightened realism, bright mid-key light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, people, money, shelves --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "ed6d0aa4-b747-410e-9764-45e80544fdb2_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/usecallback-and-usememo-stop-reaching-for-them-by-default/cover-mj-A",
       "cloudinaryVersion": 1790564571,
@@ -1273,7 +1353,7 @@
       "alt": "A vast open bank vault guarding nothing but a single paper coffee cup under a spotlight",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "The logged recipe was replaced by a new single-object concept during the 2026-09-27 run; the live concept is the alt text. Scene/era summarise the run log on claude-skills#492 (private); null where the log does not name them. Final prompt opening (from the file name): \"Looking straight into a huge open steel bank vault through it\"."
+        "The logged recipe was replaced by a new single-object concept during the 2026-09-27 run; finalPrompt and alt describe the live cover."
       ],
       "eraLabel": "near-future minimal"
     },
@@ -1288,10 +1368,13 @@
       "scene": "aerial",
       "era": "80s-pastel",
       "metaphorFamily": "nature",
+      "metaphorFamilySource": "logged (v2 recipe)",
+      "fieldOfUnits": false,
       "hue": "cyan",
       "impossibleDetail": "snow that fell into a grid",
       "loggedPrompt": "Aerial view of a snowy field at dawn where the fallen snow has settled into a perfect square grid of clean lines as if drawn with a ruler, one small red fox trotting exactly along a grid line. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of cyan, heightened realism, soft mid-key pastel dawn light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people",
-      "finalPrompt": "Aerial view of a snowy field at dawn where the fallen snow has settled into a perfect square grid of clean lines as if drawn with a ruler, one small red fox trotting exactly along a grid line. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of cyan, heightened realism, soft mid-key pastel dawn light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people",
+      "finalPrompt": "Aerial view of a snowy field at dawn where the fallen snow has settled into a perfect square grid of clean lines as if drawn with a ruler, one small red fox trotting exactly along a grid line. 1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of cyan, heightened realism, soft mid-key pastel dawn light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, people --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "e4c08e62-3b58-4d67-a65e-bf0c29df56dd_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/css-grid-the-layout-system-youve-been-avoiding-and-shouldnt/cover-mj-A",
       "cloudinaryVersion": 1790564574,
@@ -1299,9 +1382,7 @@
       "mediaFilename": "css-grid-the-layout-system-youve-been-avoiding-and-shouldnt-cover-mj-A.jpg",
       "alt": "Aerial view of fresh snow settled into a ruled square grid, a red fox trotting along one line",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1980s pastel"
     },
     {
@@ -1314,11 +1395,14 @@
       "recipeVersion": "replacement concept",
       "scene": "water",
       "era": "70s-cool",
-      "metaphorFamily": null,
+      "metaphorFamily": "material",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "amber",
       "impossibleDetail": null,
       "loggedPrompt": "A post-office sorting wall of hundreds of identical brass-rimmed cubbyholes, each holding one parcel of the same size facing the same way, every cubby casting an identical shadow, a postal clerk in her forties sliding one more parcel into place. 1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of amber, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "At night on a calm, foggy dark sea, a lighthouse beam lies across the water as a solid glowing walkway, and a small wooden rowboat rests on top of the beam instead of in the water. 1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of amber, heightened realism, low-key night light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, people --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "8ebb5ebe-fc1f-45a9-97ac-fb7532ce5137_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/rest-api-design-patterns-that-make-your-nodejs-backend-a-joy-to-work-with/cover-mj-A",
       "cloudinaryVersion": 1790564578,
@@ -1327,7 +1411,7 @@
       "alt": "A small rowboat resting on a lighthouse beam across a dark, foggy sea at night",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "The logged recipe was replaced by a new single-object concept during the 2026-09-27 run; the live concept is the alt text. Scene/era summarise the run log on claude-skills#492 (private); null where the log does not name them. Final prompt opening (from the file name): \"At night on a calm foggy dark sea a lighthouse beam lies acro\"."
+        "The logged recipe was replaced by a new single-object concept during the 2026-09-27 run; finalPrompt and alt describe the live cover."
       ],
       "eraLabel": "1970s brutalist (cool recast, v2)"
     },
@@ -1341,11 +1425,14 @@
       "recipeVersion": "v1",
       "scene": "interior",
       "era": "nf",
-      "metaphorFamily": null,
+      "metaphorFamily": "causality",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "sky",
       "impossibleDetail": "the tiny music box casts the largest shadow",
       "loggedPrompt": "A bright minimalist gallery with three stone pedestals, each holding a very different machine: a tiny elegant brass music box, a huge steel engine crowded with gauges, and a simple wooden lever; the music box casts the largest shadow of the three; a visitor in a grey coat stands between them, deciding. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of sky blue, heightened realism, bright mid-key daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": null,
+      "finalPrompt": "Wide view of a bright minimalist gallery with three separate stone pedestals in a row, clearly spaced apart, each holding one very different machine: on the left a tiny elegant brass music box, in the middle a huge steel engine crowded with gauges, on the right a simple wooden lever; low side light makes the tiny music box cast by far the longest, largest shadow across the floor; a visitor in a grey coat, seen from behind, stands between them deciding. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of sky blue, heightened realism, bright mid-key daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": false,
       "midjourneyJob": "a62d82bc-fc25-4d56-98df-de6fcbafd5df_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/zustand-vs-redux-vs-context-choosing-state-management-that-wont-haunt-you/cover-mj-A",
       "cloudinaryVersion": 1790564581,
@@ -1354,7 +1441,7 @@
       "alt": "A visitor in a grey coat deciding between very different machines on stone pedestals in a bright gallery",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "Re-run once with sharpened wording (same concept, scene and era); the re-run's full prompt is not receipted. Final prompt opening (from the file name): \"Wide view of a bright minimalist gallery with three separate \"."
+        "Re-run once with sharpened wording; same concept, scene and era."
       ],
       "eraLabel": "near-future minimal"
     },
@@ -1368,11 +1455,14 @@
       "recipeVersion": "v1",
       "scene": "machine",
       "era": "80s-neon",
-      "metaphorFamily": null,
+      "metaphorFamily": "causality",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "fuchsia",
       "impossibleDetail": "three riders on three escalators arrive at the same instant",
       "loggedPrompt": "A shopping mall at dusk, a single slow staircase beside three parallel escalators, three adults each riding one escalator arriving at the top at exactly the same moment, while one man on the staircase is still halfway up. 1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of fuchsia, heightened realism, mid-key neon dusk light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "A shopping mall at dusk, a single slow staircase beside three parallel escalators, three adults each riding one escalator arriving at the top at exactly the same moment, while one man on the staircase is still halfway up. 1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of fuchsia, heightened realism, mid-key neon dusk light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "A shopping mall at dusk, a single slow staircase beside three parallel escalators, three adults each riding one escalator arriving at the top at exactly the same moment, while one man on the staircase is still halfway up. 1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of fuchsia, heightened realism, mid-key neon dusk light. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "d0083957-c589-41e2-ad95-4b63ebcf2df6_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/javascript-asyncawait-patterns-that-trip-up-senior-devs/cover-mj-A",
       "cloudinaryVersion": 1790564587,
@@ -1380,9 +1470,7 @@
       "mediaFilename": "javascript-asyncawait-patterns-that-trip-up-senior-devs-cover-mj-A.jpg",
       "alt": "Three people on escalators arrive at the top together while one man on the stairs beside them is still halfway up",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1980s neon"
     },
     {
@@ -1395,11 +1483,14 @@
       "recipeVersion": "v1",
       "scene": "tabletop",
       "era": "70s",
-      "metaphorFamily": null,
+      "metaphorFamily": "causality",
+      "metaphorFamilySource": "classified 2026-11-22 [inference]",
+      "fieldOfUnits": false,
       "hue": "sky",
       "impossibleDetail": "the tangle coils itself neatly as it enters the capsule",
       "loggedPrompt": "On a walnut workbench, a small desk crane lifting a tangled knot of colored wiring off a circuit board and lowering it into a clean, sealed clear capsule, the wires coiling themselves neatly as they pass inside. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of sky blue, heightened realism, mid-key window daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
-      "finalPrompt": "On a walnut workbench, a small desk crane lifting a tangled knot of colored wiring off a circuit board and lowering it into a clean, sealed clear capsule, the wires coiling themselves neatly as they pass inside. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of sky blue, heightened realism, mid-key window daylight. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles",
+      "finalPrompt": "On a walnut workbench, a small desk crane lifting a tangled knot of colored wiring off a circuit board and lowering it into a clean, sealed clear capsule, the wires coiling themselves neatly as they pass inside. 1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of sky blue, heightened realism, mid-key window daylight. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "cbd22180-6186-4e27-84de-728aeab68940_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/custom-react-hooks-when-to-extract-and-when-to-leave-it-inline/cover-mj-A",
       "cloudinaryVersion": 1790564591,
@@ -1407,9 +1498,7 @@
       "mediaFilename": "custom-react-hooks-when-to-extract-and-when-to-leave-it-inline-cover-mj-A.jpg",
       "alt": "A small desk crane lowers a tangled knot of wiring into a clear capsule, the wires coiling neatly as they go in",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "1970s brutalist (warm, v1)"
     },
     {
@@ -1423,10 +1512,13 @@
       "scene": "landscape",
       "era": "nf",
       "metaphorFamily": "nature",
+      "metaphorFamilySource": "logged (v2 recipe)",
+      "fieldOfUnits": false,
       "hue": "sky",
       "impossibleDetail": "one tree bearing many fruits",
       "loggedPrompt": "A single old tree in an open meadow whose branches each bear a different fruit, apples, lemons, pears, plums, every branch grafted cleanly onto the one trunk, a gardener in her sixties on a wooden ladder seen from behind. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of sky blue, heightened realism, bright mid-key afternoon light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, children",
-      "finalPrompt": "A single old tree in an open meadow whose branches each bear a different fruit, apples, lemons, pears, plums, every branch grafted cleanly onto the one trunk, a gardener in her sixties on a wooden ladder seen from behind. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of sky blue, heightened realism, bright mid-key afternoon light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, children",
+      "finalPrompt": "A single old tree in an open meadow whose branches each bear a different fruit, apples, lemons, pears, plums, every branch grafted cleanly onto the one trunk, a gardener in her sixties on a wooden ladder seen from behind. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of sky blue, heightened realism, bright mid-key afternoon light. --no text, letters, numbers, logo, border, signage, children, smoke, particles --ar 16:9 --raw --stylize 150 --v 8.2",
+      "finalPromptMatchesLogged": true,
       "midjourneyJob": "824d8d6c-7257-4bbb-8dde-f252e0f8f6de_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/component-composition-patterns-in-react-that-actually-scale/cover-mj-A",
       "cloudinaryVersion": 1790564595,
@@ -1434,9 +1526,7 @@
       "mediaFilename": "component-composition-patterns-in-react-that-actually-scale-cover-mj-A.jpg",
       "alt": "A gardener on a ladder beside a single old tree whose branches bear many different grafted fruits",
       "rollout": "2026-09-27 final 44",
-      "notes": [
-        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
-      ],
+      "notes": [],
       "eraLabel": "near-future minimal"
     }
   ]

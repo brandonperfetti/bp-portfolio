@@ -46,9 +46,9 @@ solid stone ripples like water, in plain daylight.
 - **The detail is solid and physical,** with correct shadows, reflections
   and grain. It blends into the scene's light (D18). Never stack effects
   (D19).
-- **One simple impossibility, readable at thumbnail size.** No multi-part
-  contraptions; they make the generator invent mechanics, which reads as
-  "AI-strange" (v2).
+- **One simple impossibility, readable at thumbnail size.** No machines
+  with many moving parts: the generator fills in how they work, and the
+  result looks artificial (v2).
 - **Meaning mode follows the topic** (D4, D12):
   - an uncanny real object for tangible topics (tools, hardware, concrete
     tech);
@@ -191,7 +191,9 @@ Check a new recipe against the cover history (§13) before generating.
 - **Metaphor family** rotates (v2). No look-back window was set; choose the
   family used least recently in the history.
 - **"Field of identical units"**: at most 2 across the live set (v2).
-  Post 52's pegboard is the one the history records.
+  The history flags three live covers (posts 40, 46 and 52, from the
+  2026-09-27 sameness audit), so the set is already over the cap. A new
+  cover adds none, and a replacement for one of the three is welcome.
 - **"Previous" means:** for a new article, the newest entries in the
   history. For a new cover on an older post, its neighbours in the listing
   order (the posts published just before and after it), as the September
@@ -261,6 +263,8 @@ Keep two facts apart:
 ### Midjourney (Brandon)
 
 - Append `--ar 16:9 --style raw --s 150 --no <§7 list>` to the §2 template.
+  Midjourney stores it in its normalized form (`--raw --stylize 150 --v
+8.2`, with `--no` moved first), as the history's `finalPrompt` shows.
 - The live covers used no moodboard or `--p` profile: the "BP Covers House
   Style" moodboard pulled every image toward one look (D15).
 - **What it renders well:** one object with one odd property.
@@ -362,7 +366,8 @@ Ingest a 16:9 JPEG derivation, not the original:
   Image outputs), put `e_upscale/` after `upload/`. Fetch the URL once to
   warm it (5–24 s the first time), confirm 200 at 2048×1152, and view it at
   full size for smearing, halos or plastic surfaces before ingesting.
-  `e_upscale` was sharper than a plain resize with slightly smoothed grain
+  In the September check, `e_upscale` came out crisper than a Lanczos
+  resize, with no halos, but it softened the film grain a little
   [measured on 5 of 13].
 - `w_2048,c_limit` alone gave 2048×1148, because a Midjourney upscale is
   1.784:1, not 16:9. Use `c_fill,ar_16:9`.
@@ -423,22 +428,20 @@ covers" for §9.
   recipe version, scene, era, metaphor family, hue, impossible detail,
   logged prompt, final prompt, Midjourney job id, Cloudinary public_id and
   version, production media id and filename, alt, rollout, and notes.
-- **Gaps.** No receipt holds these values, so they are left empty rather
-  than guessed:
-  - **`finalPrompt`** is filled for 30 of the 53, where the Midjourney file
-    name's prompt opening matches the logged prompt [inference: the file
-    name holds only the opening]. The other 23 have no exact prompt on
-    record. Nine first-9 covers were picked from the trial rounds before v1
-    was locked, eight are one-time re-runs with sharpened wording, and six
-    are replacement concepts. For the re-runs and replacements, the notes
-    keep the prompt's opening from the file name.
-  - **`metaphorFamily`** is recorded only for the nine v2 recipes still
-    live. v1 had no such dial.
-  - **`era`** is unrecorded for two replacement concepts (posts 1 and 41).
-
-  The exact prompts are embedded in the Midjourney PNGs on Brandon's
-  machine. Recovering them, and assigning families to the v1 covers, is
-  follow-up work.
+- **Where the values come from:**
+  - **`finalPrompt`** is the prompt Midjourney embedded in each cover's
+    original PNG (its `Description` text chunk), read from the Cloudinary
+    original on 2026-11-22, for all 53. Each PNG's job GUID matches the
+    rollout receipt. `finalPromptMatchesLogged` is false for 20: six first-9
+    covers picked from trial-round prompts, the eight one-time re-runs with
+    sharpened wording, and the six replacement concepts.
+  - **`era`** is read from the final prompt's era phrase. `scene` comes
+    from the recipe, or is classified from the final prompt for the six
+    replacement concepts.
+  - **`metaphorFamily`** is logged for the nine v2 recipes still live. For
+    the other 44 it was classified on 2026-11-22 from the final prompt
+    (`metaphorFamilySource` says which). v1 had no such dial, so treat
+    those 44 as a best reading, and correct any you disagree with.
 
 - **A new article's cover:** add its entry at the top, with the same
   fields, in the same change that attaches it.
