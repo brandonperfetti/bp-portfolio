@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { contactSelector } from '@/lib/email/contactSelector'
+
 import {
   getClientSentryDsn,
   getSentryEnvironment,
@@ -852,14 +854,18 @@ describe('email redaction in breadcrumbs and spans (#409)', () => {
     expect(redactEmailAddresses('no address here')).toBe('no address here')
   })
 
-  it.each([
-    'reader%23tag@example.test',
-    'reader%3Fx@example.test',
-    'a%2Fb@example.test',
-    'reader+tag@example.test',
-  ])(
-    'redacts the whole of the selector contactSelector sends: %s (#418)',
-    (selector) => {
+  // Every printable ASCII character but `@`, a space and two non-ASCII ones.
+  const LOCAL_CHARS = [
+    ...Array.from({ length: 94 }, (_, i) => String.fromCharCode(33 + i)),
+    ' ',
+    'ü',
+    '中',
+  ].filter((c) => c !== '@')
+
+  it.each(LOCAL_CHARS)(
+    'redacts the whole contactSelector path for a local part holding %j (#418)',
+    (char) => {
+      const selector = contactSelector(`reader${char}tag@example.test`)
       expect(
         redactEmailAddresses(
           `https://api.resend.com/contacts/${selector}/segments/seg-1`,
