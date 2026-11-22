@@ -2,7 +2,10 @@
 import { Resend } from 'resend'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { removeContactByEmail } from '@/lib/email/resendContacts'
+import {
+  findContactIdByEmail,
+  removeContactByEmail,
+} from '@/lib/email/resendContacts'
 
 /**
  * `removeContactByEmail`, the one-step removal for a subscriber with no
@@ -148,6 +151,8 @@ describe('removeContactByEmail (#365)', () => {
     ['reader?x@example.test', '/contacts/reader%3Fx@example.test'],
     ['a/b@example.test', '/contacts/a%2Fb@example.test'],
     [EMAIL, `/contacts/${EMAIL}`],
+    // Valid in a path segment, so it goes out as it always has (#418).
+    ['reader+tag@example.test', '/contacts/reader+tag@example.test'],
   ])(
     'asks the real SDK for exactly %s, as one path segment',
     async (address, path) => {
@@ -169,6 +174,43 @@ describe('removeContactByEmail (#365)', () => {
       } finally {
         vi.unstubAllGlobals()
         vi.unstubAllEnvs()
+      }
+    },
+  )
+})
+
+describe('findContactIdByEmail request path (#418)', () => {
+  it.each([
+    ['reader#tag@example.test', '/contacts/reader%23tag@example.test'],
+    ['reader?x@example.test', '/contacts/reader%3Fx@example.test'],
+    ['a/b@example.test', '/contacts/a%2Fb@example.test'],
+    [EMAIL, `/contacts/${EMAIL}`],
+    ['reader+tag@example.test', '/contacts/reader+tag@example.test'],
+  ])(
+    'asks the real SDK for exactly %s, as one path segment',
+    async (address, path) => {
+      const fetchMock = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              object: 'contact',
+              id: 'contact-1',
+              email: address,
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      try {
+        await expect(
+          findContactIdByEmail(new Resend('re_test'), address),
+        ).resolves.toBe('contact-1')
+        const [url] = fetchMock.mock.calls[0] as unknown as [string]
+        expect(new URL(url).pathname).toBe(path)
+        expect(new URL(url).hash).toBe('')
+        expect(new URL(url).search).toBe('')
+      } finally {
+        vi.unstubAllGlobals()
       }
     },
   )

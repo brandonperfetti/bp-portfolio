@@ -852,6 +852,22 @@ describe('email redaction in breadcrumbs and spans (#409)', () => {
     expect(redactEmailAddresses('no address here')).toBe('no address here')
   })
 
+  it.each([
+    'reader%23tag@example.test',
+    'reader%3Fx@example.test',
+    'a%2Fb@example.test',
+    'reader+tag@example.test',
+  ])(
+    'redacts the whole of the selector contactSelector sends: %s (#418)',
+    (selector) => {
+      expect(
+        redactEmailAddresses(
+          `https://api.resend.com/contacts/${selector}/segments/seg-1`,
+        ),
+      ).toBe('https://api.resend.com/contacts/[email]/segments/seg-1')
+    },
+  )
+
   it("redacts the http breadcrumb Sentry's fetch instrumentation records", () => {
     const crumb = {
       category: 'http',
