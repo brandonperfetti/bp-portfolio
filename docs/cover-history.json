@@ -453,7 +453,7 @@
       "hue": "violet",
       "impossibleDetail": "a pour with no source",
       "loggedPrompt": "Close-up of a pale ceramic cup on a café table at dawn, a thin steady stream of tea pouring into it from the empty air above, with no teapot anywhere, the cup half full. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of violet, heightened realism, bright mid-key dawn window light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people, teapot, hands",
-      "finalPrompt": null,
+      "finalPrompt": "Close-up of a pale ceramic cup on a café table at dawn, a thin steady stream of tea pouring into it from the empty air above, with no teapot anywhere, the cup half full. Near-future minimalism, clean digital photograph, pale neutral palette with a hint of violet, heightened realism, bright mid-key dawn window light. --ar 16:9 --style raw --s 150 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people, teapot, hands",
       "midjourneyJob": "24230f03-219f-4adb-b4ad-18c578a9bd9b_0",
       "cloudinaryPublicId": "bp-portfolio/images/articles/building-a-streaming-ai-chat-ui-with-ai-sdk-v5-and-react/cover-mj-A",
       "cloudinaryVersion": 1790564467,
@@ -462,7 +462,7 @@
       "alt": "A thin stream of tea pours into a ceramic cup from empty air, with no teapot anywhere",
       "rollout": "2026-09-27 final 44",
       "notes": [
-        "Re-run once with sharpened wording (same concept, scene and era); the re-run's full prompt is not receipted. Final prompt opening (from the file name): \"Close-up of a pale ceramic cup on a caf table at dawn a thin \"."
+        "[inference] Final prompt = loggedPrompt: the file name's prompt opening matches it, and the run submitted the logged prompts verbatim."
       ],
       "eraLabel": "near-future minimal"
     },

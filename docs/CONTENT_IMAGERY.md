@@ -29,10 +29,8 @@ brandonperfetti/claude-skills#492 (private; summarized here, not copied).
 The front matter holds `status`, `owner` and `last_reviewed`. Only the owner
 sets `status: approved`.
 
-- **While `status: draft`:** generate nothing for production use. An agent
-  may make exploratory candidates to test this direction. Each one is
-  labelled unapproved wherever it is shown, never uploaded under a cover
-  series id, and never attached to a post.
+- **While `status: draft`:** generate nothing. A draft is a proposal for
+  Brandon to read, not a direction to work from.
 - **Once `approved`:** follow §2–§13. Re-read this file when
   `last_reviewed` changes.
 
@@ -136,7 +134,9 @@ cover.
   window. It lights the surfaces near it and is never a free-floating aura.
 - **Screens** may show abstract UI shapes (bars, waveforms, grids), never
   letters or numbers (D13).
-- **Leave empty space.** A title and card UI sit over the image.
+- **Leave empty space.** Quiet frames with room around the subject read
+  better at card size than busy ones. Titles sit beside or below the image,
+  not over it.
 - **"A field of identical units with one that differs" is capped** (§9).
 
 ## 6. People
@@ -225,35 +225,35 @@ Keep two facts apart:
 - **Size.** Request `2048x1152`; the OpenAI provider takes sizes, not aspect
   ratios. `3840x2160` is the other 16:9 size.
 - **The tuned prompt form.** The Midjourney text does not transfer.
-  Untuned, GPT Image drifts toward stock photos and product renders. The
-  form that closed most of the gap in the September tests:
-  - no `--` flags; exclusions become a closing sentence ("No text, letters,
-    numbers, logos, signage, borders, children, smoke or particles; faces
-    not visible.");
-  - the impossible detail first, with explicit geometry ("detached, a
-    hand's width above the desk, touching nothing, casting a crisp
-    shadow");
-  - a camera line ("35mm film still, 50mm lens at f/2, low three-quarter
-    angle, off-center, shallow depth of field");
-  - a light line ("warm raking light from one side, long soft shadows");
-  - a texture line ("fine visible grain, slight halation, muted slightly
-    desaturated color, real surfaces with dust and wear");
-  - "quiet and restrained, not an advertisement, not a 3D render, not an
-    interior-design catalogue, not symmetrical, not frontal";
-  - "only the objects named" with the decor it tends to add named as
-    excluded (plants, bowls, vases, cushions, lamps);
-  - "blank pages, unlettered signs";
-  - people small in frame, seen from behind or in silhouette;
-  - "wide landscape composition with every important element in the middle
-    band".
-- **Known failure modes** [measured on the September Codex tests, one image
-  per cell, so the ranking is inference-grade]:
-  - catalogue staging: bright, glossy, busy frames with unrequested decor;
+  Untuned, GPT Image drifts toward stock photos and product renders. What
+  closed most of the gap in the September tests:
+  - Drop the `--` flags and turn the exclusions (§7) into one closing
+    sentence.
+  - Lead with the impossible detail, and give its geometry: where the
+    object is, how far it is from what it should touch, and the shadow it
+    casts.
+  - Add three short lines describing a real photograph:
+    - the camera (a 35mm still, a normal lens, a low angle off to one side,
+      shallow focus);
+    - the light (one directional source, long shadows);
+    - the surface (visible grain, muted color, worn real materials).
+  - Rule out the render look in words: not an ad, not a 3D render, not a
+    catalogue shot, not symmetrical, not head-on.
+  - Say that only the named objects appear, and name the decor it tends to
+    add as excluded.
+  - Ask for blank paper and unlettered signs, since it fills both with fake
+    writing.
+  - Keep people small, from behind or in silhouette.
+  - Ask for a wide frame with everything important in the middle band, so
+    a 16:9 crop loses nothing.
+- **Known failure modes** [measured on the September tests, one image per
+  cell, so the ranking below is inference-grade]:
+  - staged, glossy, crowded frames with props nobody asked for;
   - a readable, front-lit face despite the people rule;
-  - aspect drift: 3:2, near-square, and "cinemascope" frames that the tool
-    letterboxed with black bars (crop, never ship the bars);
-  - tuning can weaken the impossible detail (a floating page curled up out
-    of its binder), which is why the detail goes first.
+  - the wrong aspect ratio: 3:2, near-square, or wider than 16:9 with black
+    bars added (crop it; never ship the bars);
+  - tuning can weaken the impossible detail (a page meant to float stayed
+    attached to its binder), which is why the detail goes first.
 - **Ranking.** Tuned, it came second on look, behind Midjourney and ahead
   of Cloudinary's FLUX.2 Pro, and ahead of Midjourney on literal adherence
   in about a third of the rows.
@@ -266,7 +266,7 @@ Keep two facts apart:
 - **What it renders well:** one object with one odd property.
 - **What it fails at** [measured across the v2 run]: an oddity that depends
   on something else, such as a reflection, a shadow, a copy of another
-  object, or "disarray around one untouched thing". Three v2 concepts (posts
+  object, or a mess around one object left untouched. Three v2 concepts (posts
   1, 15 and 41) missed after a re-run and needed new ideas, not more
   wording. One sharpened re-run per recipe is the cap; after that, change
   the concept.
@@ -290,8 +290,8 @@ specific to covers.
 
 - **Agents stop at the attach.** An agent generates, reviews against this
   file, and uploads its candidates (below). Brandon approves the attach
-  (claude-skills#492, option (b), 2026-11-22). Agents attach without asking
-  only after Brandon closes that pilot.
+  (claude-skills#492, option (b), 2026-11-22). Whether agents may ever
+  attach without asking is Brandon's decision, not yet made.
 - **Covers never publish.** No cover step publishes, unpublishes or
   reschedules a post. `_status` is read before and after every attach and
   must not change.
@@ -340,17 +340,17 @@ specific to covers.
   3. **After upload**, check the response for `overwritten` or `existing`,
      check width and height match the file, and check stored bytes equal
      the file. If an overwrite happened, stop and report it.
-- **Size limit: 10,485,760 bytes.** One 2912×1632 PNG (10.7 MB) was
-  refused. Re-encode oversize PNGs losslessly (PIL `optimize`, level 9,
+- **Size limit: 10,485,760 bytes.** Post 45's upscaled PNG
+  (10,712,024 bytes) went over it. Re-encode oversize PNGs losslessly (PIL `optimize`, level 9,
   keep the text chunks), verify pixel-identical, then upload.
 - **Tags:** `bp-cover`, the series id, and the provider (`midjourney` or
   `gpt-image`); add `cld-upscaled` when §Ingest URL adds `e_upscale`.
   **Context:** `source`, `recipe` (the version) and `upscale`, plus the
   job id (`mj_job` for Midjourney, the generation id for GPT Image).
 - **Match picks by job id,** never by prompt wording or by eye. Midjourney
-  file names end in the job UUID and image index. Post 11 was held because
-  its manifest key came from a rejected re-run while the folder held the
-  image Brandon had picked.
+  file names end in the job UUID and image index. Post 11 stalled on this: the
+  matching phrase belonged to a re-run Brandon had turned down, and the
+  image he had chosen was the earlier one.
 
 ### Ingest URL
 
@@ -379,8 +379,8 @@ Ingest a 16:9 JPEG derivation, not the original:
 - **Record the previous media id first.** Rollback is re-attaching it.
 - Read `_status` before and after; it must not change.
 - In a batch, take one post end to end and verify it live first.
-- **Verify live:** `/articles/<slug>` returns 200; the hero and `og:image`
-  reference the new file; the Blob URL and `/_next/image` return 200 and
+- **Verify live:** the article page loads (200) and both its hero and its
+  `og:image` point at the new file; the Blob URL and `/_next/image` return 200 and
   decode; the card shows on `/articles`. Not verified live means not done.
 
 ### Environment gotchas
@@ -423,18 +423,22 @@ covers" for §9.
   recipe version, scene, era, metaphor family, hue, impossible detail,
   logged prompt, final prompt, Midjourney job id, Cloudinary public_id and
   version, production media id and filename, alt, rollout, and notes.
-- **Gaps.** `finalPrompt` is filled for 29 of the 53, where the Midjourney
-  file name's prompt opening matches the logged prompt [inference: the
-  file name holds only the opening]. The other 24 have no exact prompt on
-  record:
-  - nine first-9 covers were picked from the trial rounds before v1 was
-    locked;
-  - nine covers are one-time re-runs with sharpened wording;
-  - six are replacement concepts.
+- **Gaps.** No receipt holds these values, so they are left empty rather
+  than guessed:
+  - **`finalPrompt`** is filled for 30 of the 53, where the Midjourney file
+    name's prompt opening matches the logged prompt [inference: the file
+    name holds only the opening]. The other 23 have no exact prompt on
+    record. Nine first-9 covers were picked from the trial rounds before v1
+    was locked, eight are one-time re-runs with sharpened wording, and six
+    are replacement concepts. For the re-runs and replacements, the notes
+    keep the prompt's opening from the file name.
+  - **`metaphorFamily`** is recorded only for the nine v2 recipes still
+    live. v1 had no such dial.
+  - **`era`** is unrecorded for two replacement concepts (posts 1 and 41).
 
-  For the re-runs and replacements, the notes keep the prompt's opening
-  from the file name. Metaphor family is recorded only for the nine v2
-  recipes still live; v1 had no such dial.
+  The exact prompts are embedded in the Midjourney PNGs on Brandon's
+  machine. Recovering them, and assigning families to the v1 covers, is
+  follow-up work.
 
 - **A new article's cover:** add its entry at the top, with the same
   fields, in the same change that attaches it.
