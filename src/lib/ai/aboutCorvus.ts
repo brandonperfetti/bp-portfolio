@@ -276,6 +276,41 @@ const RETENTION_VERB_PATTERN =
 const RETENTION_OBJECT_PATTERN =
   /\b(conversations?|chats?|transcripts?|(my|our) (messages?|questions?|prompts?|data|history|info\w*|ip( address)?)|what i (type|typed|write|wrote|say|said|ask|asked)|about me|anything)\b/i
 
+/**
+ * "Do you store messages?" — a yes/no question put to Corvus, a retention
+ * verb and a bare object (#410).
+ *
+ * @remarks {@link RETENTION_OBJECT_PATTERN} wants a possessive before
+ * `messages` or `data`, and this question has none. What makes it about
+ * Corvus is its shape: it opens with an auxiliary (`do`, `does`, `will`,
+ * `are`…) whose subject is `you`, `Corvus` or `it`, so "How do I store
+ * messages in Redis?" (a method question, subject `I`) and "How do you save
+ * state in React?" (a method question, no message-like object) stay out. Up
+ * to two words may sit before the verb ("permanently") and before the object
+ * ("any user"). A leading "Corvus," or "hey," is allowed. The known false positive is a
+ * yes/no engineering question put to Corvus, "Do you store data in
+ * Postgres?" or "Can you store data in a JavaScript Map?": it costs one
+ * inert passage, the same trade the rule below makes.
+ */
+const ADDRESSED_RETENTION_PATTERN =
+  /^\s*(?:(?:hey|hi|so|and|but|ok(?:ay)?|corvus)[,\s]+)*(?:do|does|did|will|would|can|could|are|is)\s+(?:you|corvus|it)\s+(?:[a-z']+\s+){0,2}?(?:store|stores|storing|save|saves|saving|keep(?!\s+up)|keeps(?!\s+up)|keeping(?!\s+up)|log|logs|logging|retain|retains|retaining|record|records|recording)\s+(?:[a-z']+\s+){0,2}?(?:messages?|questions?|prompts?|chats?|conversations?|data|history|info\w*|anything|everything)\b/i
+
+/**
+ * "How long do you keep messages?" — asking for the retention window, the
+ * object optional (#410). Only with Corvus as the subject: "how long do I
+ * keep logs?" is an operations question.
+ */
+const HOW_LONG_RETENTION_PATTERN =
+  /\bhow long (?:do|does|will|would|is|are) (?:you|corvus|it|this site|the site)\s+(?:[a-z']+\s+)?(?:keep(?!\s+up)|keeping(?!\s+up)|store|storing|save|saving|retain|retaining|log|logging|kept|stored|saved|retained|logged)\b/i
+
+/**
+ * "Can you tell me if you store messages?" — the same question embedded
+ * after `if` or `whether` (#410), with the same subject, verb and object as
+ * {@link ADDRESSED_RETENTION_PATTERN}.
+ */
+const EMBEDDED_RETENTION_PATTERN =
+  /\b(?:if|whether)\s+(?:you|corvus|it)\s+(?:[a-z']+\s+){0,2}?(?:store|stores|storing|save|saves|saving|keep(?!\s+up)|keeps(?!\s+up)|keeping(?!\s+up)|log|logs|logging|retain|retains|retaining|record|records|recording)\s+(?:[a-z']+\s+){0,2}?(?:messages?|questions?|prompts?|chats?|conversations?|data|history|info\w*|anything|everything)\b/i
+
 /** "What do you keep?" — the object left implicit, the addressee explicit. */
 const WHAT_DO_YOU_KEEP_PATTERN =
   /\bwhat (do|does|will|did) (you|corvus|it|this site|the site) (keep(?!\s+up)|store|save|log|retain)\b/i
@@ -292,8 +327,9 @@ const PRIVACY_PATTERN = /\b(privacy|private|confidential)\b/i
  * arrived as a follow-up whose referent only the previous turn supplied.
  * Retrieval reads only the latest message, so this rule keys on the question
  * itself: a retention verb with something of the visitor's as its object, the
- * object-less "what do you keep?", or privacy asked about Corvus, a chat or
- * the visitor's own things.
+ * object-less "what do you keep?", a yes/no "do you store messages?" or a
+ * "how long do you keep…?" put to Corvus (#410), or privacy asked about Corvus, a chat or the visitor's own
+ * things.
  *
  * The same cost argument as the about-Corvus rule sets the bar: a false
  * positive adds one inert passage, a false negative is Corvus telling a
@@ -306,10 +342,14 @@ export function isCorvusRetentionQuestion(
   query: string | null | undefined,
 ): boolean {
   if (typeof query !== 'string') return false
-  const value = query.trim()
+  // Curly apostrophes, as phones type them, read as straight ones.
+  const value = query.trim().replace(/\u2019/g, "'")
   if (!value) return false
 
   if (WHAT_DO_YOU_KEEP_PATTERN.test(value)) return true
+  if (ADDRESSED_RETENTION_PATTERN.test(value)) return true
+  if (HOW_LONG_RETENTION_PATTERN.test(value)) return true
+  if (EMBEDDED_RETENTION_PATTERN.test(value)) return true
   if (
     RETENTION_VERB_PATTERN.test(value) &&
     RETENTION_OBJECT_PATTERN.test(value)

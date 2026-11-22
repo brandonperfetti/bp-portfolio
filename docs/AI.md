@@ -943,17 +943,22 @@ because the measured question has neither of that rule's signals: no "you", no
 previous turn held. It matches a retention verb (store, save, keep, log,
 retain, delete, happens to) with something of the visitor's as its object
 (the conversation or chat, "my messages", "what I type", "about me"), the
-object-less "what do you keep?", or privacy asked about Corvus by name, a chat or
+object-less "what do you keep?", a yes/no question put to Corvus with a bare
+message-like object ("Do you store messages?", "Does Corvus keep any data?"),
+the same question after "if" or "whether", or "How long do you keep…?" (#410), or privacy asked about Corvus by name, a chat or
 the visitor's own things (never privacy with a bare "you").
 "How do I store messages in Redis?" and "do you keep up with React?" do not
-match, and no existing eval input does. It is not exact: "How do I store my
+match, and no eval input outside the what-Corvus-keeps block does. It is not exact: "How do I store my
 data in Postgres?" or a question about building a chat app that saves messages
 still matches, and that is accepted, because the cost is one inert passage.
 When both rules match, the retention
 passage goes first. `evals/corvus-subjects.eval.ts` pins the answer in the
 "what Corvus KEEPS" block. Its scorers check the quoted facts, a linked
-citation (only `/privacy` earns it), the absence of the #401 non-answer, and,
-through the `factuality` judge, that no claim contradicts the page.
+citation (only `/privacy` earns it), and two graded checks: the
+`never-disclaims-the-published-policy` grader asks whether the answer denies
+that a published retention policy exists (the #401 non-answer; #410 replaced a
+pattern check that kept misreading caveats and rewordings), and the
+`factuality` judge checks that no claim contradicts the page.
 
 ##### Eval coverage
 
@@ -1224,8 +1229,11 @@ Two known gaps in that snapshot:
 
 Scorers are mostly deterministic and unit-tested at zero provider cost in
 `evals/scorers.test.ts` and `evals/persona-scorers.test.ts`; `autoevals`'
-`Factuality` is the one graded scorer, applied on top of two deterministic ones
-so a disagreement is legible.
+`Factuality` is the graded scorer, applied on top of two deterministic ones
+so a disagreement is legible. The what-Corvus-keeps block adds one more graded
+check, `never-disclaims-the-published-policy` (#410); both live in
+`evals/graded-scorers.ts`, and `evals/graded-scorers.test.ts` pins the
+policy check's question and score map without a model call.
 
 ### Running them
 
