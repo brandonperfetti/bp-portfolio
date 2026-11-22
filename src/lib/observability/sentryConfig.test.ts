@@ -1010,6 +1010,10 @@ describe('email redaction, release round (#413)', () => {
       '/contacts/[email]',
     )
     expect(redactEmailAddresses('reader@example.xn--p1ai')).toBe('[email]')
+    expect(redactEmailAddresses('reader@example.भारत')).toBe('[email]')
+    expect(redactEmailAddresses('reader%40example.%D1%80%D1%84')).toBe(
+      '[email]',
+    )
     const out = sentryRedactEventRequest({
       request: { url: '/api/newsletter', data: '{"email":"reader@bücher.de"}' },
     })

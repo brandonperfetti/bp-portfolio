@@ -587,16 +587,23 @@ export function sentryDropNoisyLog<L extends SentryLogLike>(log: L): L | null {
  * Letters are Unicode (`\p{L}`, with marks and digits), so an
  * internationalized address (`jürgen@bücher.de`, RFC 6531) is redacted whole,
  * and a domain label may hold percent-encoded UTF-8 (`b%C3%BCcher`), as a URL
- * path carries it; a top-level label is letters or punycode (`xn--p1ai`).
+ * path carries it; a top-level label is letters, marks and encoded bytes, or
+ * punycode (`xn--p1ai`).
  * Only bytes from `%80` up count in a label: that is all encoded UTF-8 holds,
  * and an ASCII escape such as `%40` or `%2C` would let a label run on.
  */
 const EMAIL_LOCAL_CHAR = String.raw`[\p{L}\p{M}\p{N}._%+'-]`
 const EMAIL_DOMAIN_LABEL = String.raw`(?:[\p{L}\p{M}\p{N}-]|%[89A-F][0-9A-F])+`
+/**
+ * A top-level label: a letter or an encoded UTF-8 byte, then letters, marks
+ * or encoded bytes (`.भारत`, `.%D1%80%D1%84`). Digits never start or fill
+ * one, so `react@18.3.1` and a single letter (`x@y.c`) stay unredacted.
+ */
+const EMAIL_TOP_LABEL = String.raw`(?:\p{L}|%[89A-F][0-9A-F])(?:[\p{L}\p{M}]|%[89A-F][0-9A-F])+`
 const EMAIL_ADDRESS =
   String.raw`${EMAIL_LOCAL_CHAR}+(?:@|%40|\\u0040)` +
   String.raw`${EMAIL_DOMAIN_LABEL}(?:\.${EMAIL_DOMAIN_LABEL})*` +
-  String.raw`\.(?:xn--[a-z0-9-]+|\p{L}{2,})`
+  String.raw`\.(?:xn--[a-z0-9-]+|${EMAIL_TOP_LABEL})`
 
 /**
  * The two matchers {@link redactEmailAddresses} uses, built on first use.
