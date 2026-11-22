@@ -18,7 +18,7 @@ A form submitted before the spam check has loaded now waits for it instead
 of failing, Corvus answers "Do you store messages?" from the retention
 policy, a subscriber with no account can be taken off the list with one
 command, and a plain `git add` no longer picks up a real env file. Release PR
-[#420](https://github.com/brandonperfetti/bp-portfolio/pull/420) ·
+[#421](https://github.com/brandonperfetti/bp-portfolio/pull/421) ·
 [tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.22) ·
 carries #414, #416, #417 and #419.
 
