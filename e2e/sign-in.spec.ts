@@ -216,7 +216,7 @@ test.describe("sign-in: the site's own form on Clerk's hooks", () => {
     await openForm(page)
     await page.getByLabel('Email address').fill(EMAIL)
     await page.getByLabel('Password', { exact: true }).fill('not the password')
-    await page.getByRole('button', { name: 'Continue' }).click()
+    await page.getByRole('button', { name: 'Continue', exact: true }).click()
 
     await expect(
       page.getByLabel('Password', { exact: true }),
@@ -224,7 +224,9 @@ test.describe("sign-in: the site's own form on Clerk's hooks", () => {
     expect(requests.length).toBeGreaterThan(0)
     expect(bodyOf(requests[0]).get('identifier')).toBe(EMAIL)
     // The form unlocks for another try.
-    await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled()
+    await expect(
+      page.getByRole('button', { name: 'Continue', exact: true }),
+    ).toBeEnabled()
   })
 
   test('starts Google with the sign-in callback page as the way back', async ({
@@ -237,7 +239,8 @@ test.describe("sign-in: the site's own form on Clerk's hooks", () => {
     await openForm(page)
     await page.getByRole('button', { name: 'Continue with Google' }).click()
 
-    await expect(page.getByRole('alert')).toContainText(
+    // Scoped to the page body: Next's route announcer is an empty alert too.
+    await expect(page.getByRole('main').getByRole('alert')).toContainText(
       'Intercepted by the e2e spec.',
     )
     const google = requests.find(
