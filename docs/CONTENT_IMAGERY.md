@@ -491,8 +491,9 @@ covers" for §9.
   fields, in the same change that attaches it.
 - **A new cover on an existing post:** update that post's entry in place,
   so the order stays by `publishedAt`. Move the replaced cover's series,
-  public_id and media id into a `previous` list on the entry; they are the
-  rollback target.
+  public_id and media id into a `previous` list on the entry. That list is
+  the cover's history, not the rollback: a rollback restores the per-field
+  ids recorded at the attach (§ Attach).
 - **Retire a post:** keep its entry and add `"retiredAt": "<date>"`.
   Rotation skips retired entries.
 - **Count, 2026-11-22:** 53 published posts, 53 entries, 53 `cover-mj-A`
