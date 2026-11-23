@@ -853,13 +853,16 @@ describe('SignInForm: Google', () => {
     await user.click(
       screen.getByRole('button', { name: 'Continue with Google' }),
     )
+    await waitFor(() => expect(clerk.sso).toHaveBeenCalledOnce())
     expect(clerk.reset).toHaveBeenCalledOnce()
     expect(clerk.reset.mock.invocationCallOrder[0]).toBeLessThan(
       clerk.sso.mock.invocationCallOrder[0],
     )
-    expect(
-      screen.getByRole('button', { name: 'Continue with Google' }),
-    ).toBeDisabled()
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Continue with Google' }),
+      ).toBeDisabled(),
+    )
   })
 
   it('unlocks and says so when Clerk returns without a way to Google', async () => {

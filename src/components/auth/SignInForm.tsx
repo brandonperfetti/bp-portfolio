@@ -143,7 +143,8 @@ export function SignInForm({
       leaveTimeoutMs,
       onStart: () => setHeldStep(currentStep()),
     })
-  const step = busy ? heldStep : currentStep()
+  const pending = busy || googleAfterReset !== null
+  const step = pending ? heldStep : currentStep()
   const codeDelivery =
     delivery?.step === step && delivery.attemptId === signIn.id
       ? delivery.status
@@ -416,7 +417,7 @@ export function SignInForm({
   return (
     <SignInFormView
       step={step}
-      pending={busy}
+      pending={pending}
       errors={formErrors}
       passwordMinLength={PASSWORD_MIN_LENGTH}
       signUpHref={withRedirect(SIGN_UP_PATH, redirectTarget)}
