@@ -1,25 +1,43 @@
-import { SignIn } from '@clerk/nextjs'
+import { Suspense } from 'react'
+import { redirect } from 'next/navigation'
 
+import { SignInForm } from '@/components/auth/SignInForm'
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
+import { getViewer } from '@/lib/auth/getViewer'
+import { safeRedirectPath } from '@/lib/auth/safeRedirect'
 
 export const metadata = { title: 'Sign in', robots: { index: false } }
 
-// #76 B3: Clerk's <SignIn> reads `usePathname()` (a client hook that blocks
-// prerender), and the route is noindex — opt out of prerender. Request-time
-// render; no SEO/static value lost.
+// #76 B3: the form reads the URL on the client (`useSearchParams`, which
+// blocks prerender), and the route is noindex — opt out of prerender.
+// Request-time render; no SEO/static value lost.
 export const instant = false
 
 /**
- * In-app, site-themed sign-in (renders a notice until Clerk is configured).
+ * In-app sign-in, in the site's own markup (#379), the pair of `/sign-up`.
+ * Every step (password, email code, forgot password, the new-device code)
+ * is part of the same form; `SignInForm` carries how each reaches Clerk.
  *
- * @remarks `path`/`routing="path"` pin the component to this route's
- * optional catch-all segment (`[[...sign-in]]`), and `signUpUrl` keeps its
- * own "Sign up" cross-link on the app route. Both are explicit so routing
- * stays correct even if `NEXT_PUBLIC_CLERK_SIGN_UP_URL` is left unset —
- * without either, Clerk falls back to the unstyled hosted Account Portal
- * (#96).
+ * @remarks The optional catch-all (`[[...sign-in]]`) stays although the form
+ * no longer routes by path: links Clerk built for its prebuilt form, and
+ * bookmarks of them (`/sign-in/factor-one`, `/sign-in/reset-password`…),
+ * land on the form instead of a 404, and the form picks up whatever step
+ * Clerk's sign-in is on. `/sign-in/sso-callback` is its own page.
+ *
+ * **A signed-in visitor is sent on, and never sees the form**, as Clerk's
+ * prebuilt `<SignIn />` did and as `/sign-up` does (#384): to the
+ * `redirect_url` target when it is a path on this site (`safeRedirectPath`,
+ * with no origin, so an absolute URL is refused here even when it is this
+ * site's), else the home page.
+ *
+ * @param props - The route's props; of the query string, only `redirect_url`
+ *   is read.
  */
-export default function SignInPage() {
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   if (!isClerkEnabled()) {
     return (
       <div className="mx-auto max-w-md py-24 text-center text-sm text-zinc-500 dark:text-zinc-400">
@@ -27,9 +45,18 @@ export default function SignInPage() {
       </div>
     )
   }
+  const { isAuthenticated } = await getViewer()
+  if (isAuthenticated) {
+    const { redirect_url: target } = await searchParams
+    redirect(
+      safeRedirectPath(Array.isArray(target) ? target[0] : target) ?? '/',
+    )
+  }
   return (
-    <div className="flex justify-center py-16">
-      <SignIn path="/sign-in" routing="path" signUpUrl="/sign-up" />
+    <div className="flex justify-center px-4 py-16">
+      <Suspense fallback={null}>
+        <SignInForm />
+      </Suspense>
     </div>
   )
 }

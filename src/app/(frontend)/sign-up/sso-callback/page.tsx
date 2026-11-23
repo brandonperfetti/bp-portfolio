@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 
-import { SignUpSsoCallback } from '@/components/auth/SignUpSsoCallback'
+import { SsoCallback } from '@/components/auth/SsoCallback'
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
 
 export const metadata = { title: 'Signing up', robots: { index: false } }
@@ -11,7 +11,7 @@ export const instant = false
 
 /**
  * The page Google returns to after "Continue with Google" on `/sign-up`
- * (#377). `SignUpSsoCallback` carries what happens next.
+ * (#377). `SsoCallback` carries what happens next.
  *
  * @remarks A static segment beside the `[[...sign-up]]` catch-all, so it
  * wins for this one path and every other `/sign-up/…` still renders the
@@ -28,7 +28,7 @@ export default function SignUpSsoCallbackPage() {
   return (
     <div className="flex justify-center px-4 py-16">
       <Suspense fallback={null}>
-        <SignUpSsoCallback />
+        <SsoCallback flow="sign-up" />
       </Suspense>
     </div>
   )

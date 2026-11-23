@@ -13,8 +13,9 @@
   different name from the one the build recorded, and React rendered the
   whole page on the client instead (BP-PORTFOLIO-S;
   `ClerkClientProvider.resume.test.tsx` pins both halves).
-- Routes: `/sign-in` (Clerk's prebuilt `<SignIn>`, catch-all), `/sign-up`
-  (the site's own form on Clerk's `useSignUp()` hooks, #377, below),
+- Routes: `/sign-in` (the site's own form on Clerk's `useSignIn()` hooks,
+  #379, catch-all, below), `/sign-up` (the site's own form on Clerk's
+  `useSignUp()` hooks, #377, below), `/sign-in/sso-callback` and
   `/sign-up/sso-callback` (where Google returns to), `/account` (Clerk's
   `<UserProfile>`, catch-all, so a sub-page such as `/account/security`
   loads directly, #391).
@@ -314,8 +315,10 @@ password, the email code, the session and the bot check.
 
 - **Pieces.** `SignUpFormView` is the markup, free of Clerk (so every state
   has a Storybook story, `Auth/SignUpForm`). `SignUpForm` drives it from
-  `useSignUp()`. `SignUpSsoCallback` is the page Google returns to and mounts
-  Clerk's `<HandleSSOCallback />`.
+  `useSignUp()`. `SsoCallback` is the page Google returns to and mounts
+  Clerk's `<HandleSSOCallback />`. The card, fields, Google button, code step
+  and request lock are shared with the sign-in form (`AuthFormParts`,
+  `useAuthSteps`), so a change to one form's frame is a change to both.
 - **Email and password.** `signUp.password({ emailAddress, password,
 unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
   six-digit code step in the same card, `verifyEmailCode()`, `finalize()`.
@@ -393,7 +396,7 @@ unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
   Clerk dashboard without re-testing both sign-up paths; Clerk says that
   update cannot be reversed.**
 - **The password hint is a constant.** "At least 15 characters" comes from
-  `PASSWORD_MIN_LENGTH` in `SignUpForm.tsx`, because Clerk's hooks expose no
+  `PASSWORD_MIN_LENGTH` in `useAuthSteps.ts`, because Clerk's hooks expose no
   instance settings. 15 is production's value (measured 2026-11-18). If the
   dashboard value changes, change the constant; a too-short password is
   refused by Clerk either way, and its message shows under the field.
@@ -414,12 +417,142 @@ unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
   a sign-up that also wants a phone verified says it could not finish at
   once, by either route, instead of after the code. A Google sign-up that
   the code still does not finish is never told to sign up with Google.
-- **Sign-in is still Clerk's prebuilt `<SignIn>`** by Brandon's decision
-  (2026-11-18); making it custom is its own issue. The optional catch-all
-  under `/sign-up` stays so the prebuilt sign-in's links into `/sign-up/…`
-  land on the form.
+- **The optional catch-all under `/sign-up` stays** although no prebuilt
+  Clerk form is left to link into `/sign-up/…`: links Clerk built before
+  #379, and bookmarks of them, land on the form instead of a 404.
 - **`@clerk/nextjs` must stay at 7.9.13 or later**: that is the first release
   exporting `<HandleSSOCallback />`.
+
+### The custom sign-in form (#379)
+
+`/sign-in` is the site's own markup on Clerk's `useSignIn()` hooks, in the
+same card, fields and type as `/sign-up`, so the two pages are one pair.
+Clerk still owns the password check, the codes, the session and the bot
+check. Gated articles and Corvus link here, so it is the first auth page
+most visitors see.
+
+- **Pieces.** `SignInFormView` is the markup, free of Clerk (Storybook
+  `Auth/SignInForm`, every state, both themes, 375px). `SignInForm` drives it
+  from `useSignIn()`. `/sign-in/sso-callback` mounts `SsoCallback` with
+  `flow="sign-in"`.
+- **Which step shows is read from Clerk's sign-in**, never kept in the page:
+  `complete` → "Almost there" (make the session active); `needs_new_password`
+  → the new password; `needs_client_trust` or `needs_second_factor` with an
+  emailed code on offer → the code step; `needs_first_factor` whose pending
+  verification is `email_code` or `reset_password_email_code` → that code
+  step; anything else → the first step. So a reload, or a return from Google
+  that still needs something, lands where Clerk is. While a request is in
+  flight the card holds the step it was sent from, as on sign-up.
+- **Paths.** Production allows these (measured on its Clerk instance
+  2026-11-18, #379): email and password, email and a one-time code, Google;
+  no second factor; Device Trust on.
+  - Email and password: `signIn.password({ emailAddress, password })`.
+  - "Email me a sign-in code instead": `signIn.create({ identifier })`, then
+    `signIn.emailCode.sendCode()` and `verifyCode()`. Offered for any
+    address; an account whose first factors do not include `email_code` is
+    told so and no code is sent.
+  - "Forgot password?": `signIn.create({ identifier })`, then
+    `signIn.resetPasswordEmailCode.sendCode()`, `verifyCode()` and
+    `submitPassword({ password, signOutOfOtherSessions: true })`. The new
+    password signs the visitor in and signs the account out everywhere else,
+    which the step says before it is submitted.
+  - Google: `signIn.sso({ strategy: 'oauth_google', … })` with
+    `/sign-in/sso-callback` as the return page, always as a new attempt:
+    `sso()` reuses an attempt that exists, and for one with no Google
+    redirect on it (left by a refused "Email me a sign-in code") it neither
+    starts Google nor returns an error. The form resets and calls `sso()` on
+    the replacement resource from `useSignIn()`. The form stays locked only
+    once Clerk has the URL to Google
+    (`firstFactorVerification.externalVerificationRedirectURL`); without it
+    it unlocks and logs `[sign-in] Google did not start`.
+  - After any of them, a finished sign-in is made active with `finalize()`.
+    **Device Trust** (`needs_client_trust`, Clerk's new-device check) and a
+    second factor that offers an emailed code send one with
+    `signIn.mfa.sendEmailCode()` and take it with `mfa.verifyEmailCode()`.
+- **A Google sign-in for an address with no account** is made a sign-up by
+  Clerk's callback handler (`signIn.isTransferable` →
+  `signUp.create({ transfer: true })`, read from the installed
+  `@clerk/react` 6.18.9). That account carries no `unsafeMetadata`, so it is
+  never added to the mailing list (fail-closed, #362), as with the prebuilt
+  sign-in before. The opt-in question is asked only on `/sign-up`; the
+  sign-in form has no box.
+- **Device Trust after Google.** Clerk's callback handler has no branch for
+  `needs_client_trust`, so a Google sign-in that needs the new-device code
+  would wait on the callback page until it stalls. `SsoCallback` sends such a
+  sign-in to `/sign-in`. Only a sign-in whose first factor Google has just
+  verified counts, so an older password attempt left in that state is not
+  mistaken for it. The form, finding the second-factor step with no code
+  sent by this page (that return, or a reload), sends one itself, once per
+  attempt, as the password path does; a failed send reads "We couldn't send a
+  code to …".
+- **A step the form has no screen for says so.** A second factor other than
+  an emailed code (an authenticator app, a text message), or Device Trust by
+  text message (Clerk uses it only when email is off for the instance), ends
+  with "We couldn't finish signing you in here…", logs
+  `[sign-in] unsupported step` with the status and factor names, and drops
+  the attempt. It does so in answer to the form's own request and, once per
+  attempt, when the page loads in that state. **Before switching on MFA, or
+  a second factor other than email, in the Clerk dashboard, build its step.**
+- **A session task the site has no step for says so** (both forms and the
+  Google callback page, `useFinalizeNavigate` and `sessionTask` in
+  `useAuthSteps.ts`). Clerk can finish a sign-in or sign-up with the session
+  still pending a task (`reset-password`, `setup-mfa`,
+  `choose-organization`) and treats that session as signed out, so leaving
+  for the destination would only bring the visitor back here. The page
+  stays, shows "We couldn't finish signing you in here: your account needs
+  one more step…", and logs `[sign-in]` / `[sign-up] session task this site
+has no step for` with the task's name. The prebuilt `<SignIn>` showed these
+  tasks itself; no setting that makes one is on today.
+- **No state is a dead end**, as on sign-up: every Clerk error unlocks the
+  form; a navigation that has not happened after ten seconds unlocks it with
+  "This is taking longer than expected."; every code step has "Send a new
+  code" and a way back to the first step (`signIn.reset()`); the code step
+  never says a code was sent when this page did not see it sent.
+- **A signed-in visitor never sees the form**: the page redirects them on
+  the server, as `/sign-up` does (above). `/sign-in/sso-callback` does not.
+- **`redirect_url`** is honoured through `safeRedirectPath` in the browser and
+  on the server, as on sign-up, and carried to `/sign-up` and to the Google
+  callback.
+- **The catch-all** (`[[...sign-in]]`) stays: links and bookmarks of the
+  prebuilt form's sub-paths (`/sign-in/factor-one`, …) land on the form, which
+  shows whatever step Clerk's sign-in is on.
+- **Clerk dashboard settings the form relies on** (none changed by #379;
+  each is handled if it is off, and listed here so a change is checked
+  against the form first):
+  - **Email address as the identifier, with password** as a first factor:
+    the first step. Username or phone sign-in has no field.
+  - **Email verification code** as a first factor: "Email me a sign-in code
+    instead". Off, the form says the account cannot have one.
+  - **Password reset by email code**: "Forgot password?". Off, the form says
+    the password cannot be reset by email.
+  - **Google** as a social connection: "Continue with Google". Off, Clerk's
+    refusal shows above the button.
+  - **No session tasks**: required MFA (`setup-mfa`), required
+    organization membership (`choose-organization`), or a forced password
+    reset (`reset-password`). Each needs its step built first (Clerk ships
+    `<TaskSetupMFA>`, `<TaskChooseOrganization>` and `<TaskResetPassword>`,
+    with `taskUrls` on `ClerkProvider`); until then the form says it cannot
+    finish (above).
+  - **Device Trust by email code** (Clerk's default while email is on): the
+    new-device step. By text message only, it is a step the form lacks.
+  - **No MFA, and no second factor other than email.** Switching one on
+    needs its step built first (above).
+  - **Password minimum 15**: the hint (`PASSWORD_MIN_LENGTH`, above).
+  - `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in` keeps Clerk's own redirects to
+    sign-in on this page.
+- **Errors.** Clerk's field errors show under their fields (`identifier`
+  under the email, `password`, `code`); the rest above the submit button.
+  Clerk's wording is shown as it comes, including "Couldn't find your
+  account", which the prebuilt form showed too.
+- **Proven where.** `SignInForm.test.tsx` pins which Clerk call each control
+  makes and which step follows, for every path above, with no account made
+  and no email sent; `SignInFormView` stories run each state in a browser
+  with the accessibility check; `SsoCallback.test.tsx` and the sign-in
+  `page.test.tsx` pin the callback and the server redirect. **Not proven by
+  any test:** a real sign-in against Clerk, a real code, the trip to Google.
+  These are for a hand-run on staging (`docs/JOURNEYS.md`, "Sign in"), which
+  is pending until its results are recorded here; the intercepted e2e spec
+  does not stand in for it.
 
 ## Contact hygiene: the Clerk↔Resend mapping (#86)
 

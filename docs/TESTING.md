@@ -166,10 +166,10 @@ never taken for a pass. Two things follow:
   (`src/components/auth/ViewerFirstName.tsx`), which only the Clerk provider
   fills, and a story supplies one with `ViewerFirstNameProvider`
   (`AI/CorvusChat` › `SignedInGreeting`).
-- Every page of every e2e spec now loads clerk-js from that development
-  instance. The sign-up spec is the only one that submits anything, and it
-  intercepts every write to Clerk before it leaves the browser
-  (`docs/JOURNEYS.md`, "Sign up").
+- Every page of every e2e spec loads clerk-js from that development instance.
+  The sign-up and sign-in specs submit forms and intercept every write to
+  Clerk before it leaves the browser (`docs/JOURNEYS.md`, "Sign up" and
+  "Sign in").
 
 **A pull request that gets no Actions secrets fails that spec.** Dependabot
 pull requests and pull requests from forks are run without them. Today the

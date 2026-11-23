@@ -1,7 +1,8 @@
 import { act, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { SignUpSsoCallback } from './SignUpSsoCallback'
+import { SsoCallback } from './SsoCallback'
+import { SESSION_TASK_MESSAGE } from './useAuthSteps'
 
 /**
  * #377: the page Google returns to. Clerk's `<HandleSSOCallback />` is
@@ -10,7 +11,10 @@ import { SignUpSsoCallback } from './SignUpSsoCallback'
  * `redirect_url` on the callback URL is not followed.
  */
 type Handlers = {
-  navigateToApp: (params: { decorateUrl: (url: string) => string }) => void
+  navigateToApp: (params: {
+    session?: { currentTask?: { key: string } } | null
+    decorateUrl: (url: string) => string
+  }) => void
   navigateToSignIn: () => void
   navigateToSignUp: () => void
 }
@@ -19,6 +23,13 @@ const mocks = vi.hoisted(() => ({
   handlers: undefined as Handlers | undefined,
   push: vi.fn(),
   search: { value: '' },
+  signIn: {
+    status: 'needs_identifier' as string,
+    firstFactorVerification: { strategy: null, status: null } as {
+      strategy: string | null
+      status: string | null
+    },
+  },
 }))
 
 vi.mock('@clerk/nextjs', () => ({
@@ -26,6 +37,7 @@ vi.mock('@clerk/nextjs', () => ({
     mocks.handlers = props
     return <div data-testid="clerk-callback" />
   },
+  useSignIn: () => ({ signIn: mocks.signIn }),
   useSignUp: () => ({
     signUp: {
       status: 'missing_requirements',
@@ -47,31 +59,33 @@ const plain = { decorateUrl: (url: string) => url }
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.search.value = ''
+  mocks.signIn.status = 'needs_identifier'
+  mocks.signIn.firstFactorVerification = { strategy: null, status: null }
 })
 
-describe('SignUpSsoCallback', () => {
+describe('SsoCallback, from the sign-up form', () => {
   it("mounts Clerk's callback handler and says what is happening", () => {
-    render(<SignUpSsoCallback />)
+    render(<SsoCallback flow="sign-up" />)
     expect(screen.getByTestId('clerk-callback')).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('Finishing sign-up')
   })
 
   it('goes to the home page once there is a session', () => {
-    render(<SignUpSsoCallback />)
+    render(<SsoCallback flow="sign-up" />)
     mocks.handlers?.navigateToApp(plain)
     expect(mocks.push).toHaveBeenCalledExactlyOnceWith('/')
   })
 
   it('goes back to the page that started the sign-up', () => {
     mocks.search.value = 'redirect_url=%2Farticles%2Fsome-post'
-    render(<SignUpSsoCallback />)
+    render(<SsoCallback flow="sign-up" />)
     mocks.handlers?.navigateToApp(plain)
     expect(mocks.push).toHaveBeenCalledExactlyOnceWith('/articles/some-post')
   })
 
   it('does not follow a redirect_url that leaves the site', () => {
     mocks.search.value = 'redirect_url=%2F%2Fevil.example'
-    render(<SignUpSsoCallback />)
+    render(<SsoCallback flow="sign-up" />)
     mocks.handlers?.navigateToApp(plain)
     mocks.handlers?.navigateToSignIn()
     mocks.handlers?.navigateToSignUp()
@@ -80,7 +94,7 @@ describe('SignUpSsoCallback', () => {
 
   it('hands a decorated absolute URL to the browser instead of the router', () => {
     const assign = vi.fn()
-    render(<SignUpSsoCallback assignLocation={assign} />)
+    render(<SsoCallback flow="sign-up" assignLocation={assign} />)
     mocks.handlers?.navigateToApp({
       decorateUrl: (url) => `https://accounts.example/sync?to=${url}`,
     })
@@ -92,7 +106,7 @@ describe('SignUpSsoCallback', () => {
 
   it('sends an unfinished sign-in to /sign-in and an unfinished sign-up to /sign-up, keeping the target', () => {
     mocks.search.value = 'redirect_url=%2Farticles%2Fsome-post'
-    render(<SignUpSsoCallback />)
+    render(<SsoCallback flow="sign-up" />)
     mocks.handlers?.navigateToSignIn()
     mocks.handlers?.navigateToSignUp()
     expect(mocks.push.mock.calls).toEqual([
@@ -111,7 +125,7 @@ describe('SignUpSsoCallback', () => {
       const error = vi.spyOn(console, 'error').mockImplementation(() => {})
       try {
         mocks.search.value = 'redirect_url=%2Farticles%2Fsome-post'
-        render(<SignUpSsoCallback stallMs={5000} />)
+        render(<SsoCallback flow="sign-up" stallMs={5000} />)
         expect(screen.queryByRole('link')).not.toBeInTheDocument()
 
         await act(async () => vi.advanceTimersByTime(5000))
@@ -148,7 +162,7 @@ describe('SignUpSsoCallback', () => {
       vi.useFakeTimers()
       const error = vi.spyOn(console, 'error').mockImplementation(() => {})
       try {
-        render(<SignUpSsoCallback stallMs={5000} />)
+        render(<SsoCallback flow="sign-up" stallMs={5000} />)
         mocks.handlers?.navigateToApp(plain)
         expect(mocks.push).toHaveBeenCalledExactlyOnceWith('/')
         await act(async () => vi.advanceTimersByTime(5000))
@@ -172,7 +186,9 @@ describe('SignUpSsoCallback', () => {
     it('cancels its timer when the page is left before the deadline', async () => {
       vi.useFakeTimers()
       try {
-        const { unmount } = render(<SignUpSsoCallback stallMs={5000} />)
+        const { unmount } = render(
+          <SsoCallback flow="sign-up" stallMs={5000} />,
+        )
         mocks.handlers?.navigateToApp(plain)
         expect(vi.getTimerCount()).toBe(1)
 
@@ -182,5 +198,90 @@ describe('SignUpSsoCallback', () => {
         vi.useRealTimers()
       }
     })
+  })
+})
+
+describe('SsoCallback, from the sign-in form (#379)', () => {
+  it('does not leave for the target when Clerk left the session with a task, and says so', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      mocks.search.value = 'redirect_url=%2Farticles%2Fsome-post'
+      render(<SsoCallback flow="sign-in" />)
+      act(() =>
+        mocks.handlers?.navigateToApp({
+          ...plain,
+          session: { currentTask: { key: 'setup-mfa' } },
+        }),
+      )
+      expect(mocks.push).not.toHaveBeenCalled()
+      expect(screen.getByRole('status')).toHaveTextContent(SESSION_TASK_MESSAGE)
+      expect(screen.getByRole('link', { name: 'Start again' })).toBeVisible()
+      expect(error).toHaveBeenCalledWith(
+        '[sign-in] session task this site has no step for',
+        { task: 'setup-mfa' },
+      )
+    } finally {
+      error.mockRestore()
+    }
+  })
+
+  it('says it is finishing a sign-in', () => {
+    render(<SsoCallback flow="sign-in" />)
+    expect(screen.getByRole('status')).toHaveTextContent('Finishing sign-in')
+  })
+
+  it('offers to start the sign-in again and to sign up, once stalled', async () => {
+    vi.useFakeTimers()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      mocks.search.value = 'redirect_url=%2Farticles%2Fsome-post'
+      render(<SsoCallback flow="sign-in" stallMs={1000} />)
+      await act(async () => {
+        vi.advanceTimersByTime(1000)
+      })
+      expect(screen.getByRole('link', { name: 'Start again' })).toHaveAttribute(
+        'href',
+        // next/link renders the site's trailing slash.
+        expect.stringMatching(
+          /^\/sign-in\/?\?redirect_url=%2Farticles%2Fsome-post$/,
+        ),
+      )
+      expect(screen.getByRole('link', { name: 'Sign up' })).toHaveAttribute(
+        'href',
+        expect.stringMatching(
+          /^\/sign-up\/?\?redirect_url=%2Farticles%2Fsome-post$/,
+        ),
+      )
+      expect(error).toHaveBeenCalledWith(
+        '[sign-in] sso callback unresolved',
+        expect.objectContaining({ signInStatus: 'needs_identifier' }),
+      )
+    } finally {
+      error.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('sends a Google sign-in that needs the new-device check to /sign-in, keeping the target', () => {
+    mocks.search.value = 'redirect_url=%2Farticles%2Fsome-post'
+    mocks.signIn.status = 'needs_client_trust'
+    mocks.signIn.firstFactorVerification = {
+      strategy: 'oauth_google',
+      status: 'verified',
+    }
+    render(<SsoCallback flow="sign-in" />)
+    expect(mocks.push).toHaveBeenCalledExactlyOnceWith(
+      '/sign-in?redirect_url=%2Farticles%2Fsome-post',
+    )
+  })
+
+  it('leaves an older password attempt in the same state alone', () => {
+    mocks.signIn.status = 'needs_client_trust'
+    mocks.signIn.firstFactorVerification = {
+      strategy: 'password',
+      status: 'verified',
+    }
+    render(<SsoCallback flow="sign-up" />)
+    expect(mocks.push).not.toHaveBeenCalled()
   })
 })
