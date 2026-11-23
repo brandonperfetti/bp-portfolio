@@ -362,8 +362,9 @@ file is `status: draft`, §1 still applies.
      The writer records release in the same thread after the attempt and
      any reconciliation are complete, or after stopping before a request
      was sent. An interrupted or uncertain attempt keeps the slot held.
-     If its writer is unavailable, Brandon explicitly transfers the slot
-     for reconciliation before another operator can write.
+     If its writer is unavailable, Brandon can assign another operator
+     to reconcile it in the same thread. The slot remains held during
+     the transfer.
   2. **Look up the exact public ID.** Use the authenticated Cloudinary
      [Admin API single-resource lookup](https://cloudinary.com/documentation/admin_api#get_details_of_a_single_resource_by_public_id),
      `GET /resources/image/upload/{public_id}`, in the upload's product
@@ -380,13 +381,16 @@ file is `status: draft`, §1 still applies.
      stop before signing or uploading.
      If the ID exists, choose the next available candidate number or
      series letter and check that ID before uploading.
-  3. **Reconcile an uncertain upload before writing to that ID again.**
+  3. **Stop and escalate an unresolved upload.**
      After a timeout, missing response or error after send, repeat the
-     exact lookup while holding the same writer slot. If the asset exists,
-     verify its stored original against the intended file. Continue with the existing
-     asset if it matches. If the match cannot be verified, stop and report
-     it. If the asset is absent, stop until the original request can no
-     longer complete. Then rerun the exact lookup before retrying.
+     exact lookup while holding the same writer slot. Continue with an
+     existing asset only if its stored original matches the intended
+     file. Otherwise, record the target ID and last known result in the
+     cover-run thread, leave the slot held, and escalate to Brandon.
+     Do not retry or start another upload in that folder while the
+     attempt is unresolved. A 404 shows absence at lookup time and a
+     timeout ends the client's wait. Neither establishes that Cloudinary
+     stopped processing the original request.
   4. **When the upload returns a response**, check for `overwritten` or
      `existing`, check width and height match the file, and check stored
      bytes equal the file. If an overwrite happened, stop and report it.
