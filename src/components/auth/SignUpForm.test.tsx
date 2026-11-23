@@ -704,6 +704,30 @@ describe('SignUpForm: the rest of the flow', () => {
     expect(clerk.reset).toHaveBeenCalledOnce()
   })
 
+  it('email: says so at once when the sign-up wants a phone verified beside the email (#386)', async () => {
+    const user = userEvent.setup()
+    clerk.password.mockImplementationOnce(async () => {
+      awaitingCode()
+      clerk.state.unverifiedFields = ['email_address', 'phone_number']
+      return ok
+    })
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      render(<SignUpForm />)
+      await fill(user)
+      await user.click(submit())
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        /couldn.t finish/i,
+      )
+      // No code goes out for a sign-up the code step could not finish.
+      expect(clerk.sendEmailCode).not.toHaveBeenCalled()
+      expect(clerk.reset).toHaveBeenCalledOnce()
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
   it('discards an earlier attempt when updating it fails, and keeps the reason on screen', async () => {
     // An attempt already exists (an abandoned trip to Google, say), so
     // clerk-js sends this submit as an update to it. If Clerk refuses the
@@ -1051,6 +1075,70 @@ describe('SignUpForm: a sign-up back from Google that the form cannot finish (#3
     expect(clerk.sendEmailCode).not.toHaveBeenCalled()
     await act(async () => {})
     expect(clerk.reset).not.toHaveBeenCalled()
+  })
+
+  it('discards at once when Google left the email and a phone both unverified (#386)', async () => {
+    // The code step can verify the email only, so showing it would end, after
+    // the code, on a message that sends the visitor back to Google.
+    awaitingCode()
+    clerk.state.id = 'sua_google'
+    clerk.state.unverifiedFields = ['email_address', 'phone_number']
+    clerk.state.externalAccountStatus = 'verified'
+    clerk.reset.mockImplementationOnce(resetClears)
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      render(<SignUpForm />)
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(
+        /couldn.t finish creating your account with Google/i,
+      )
+      expect(alert).not.toHaveTextContent(/sign up with Google/i)
+      expect(
+        screen.queryByRole('heading', { name: 'Check your email' }),
+      ).not.toBeInTheDocument()
+      expect(clerk.reset).toHaveBeenCalledOnce()
+      expect(logged).toHaveBeenCalledExactlyOnceWith(
+        '[sign-up] unsupported requirement',
+        {
+          status: 'missing_requirements',
+          missingFields: [],
+          unverifiedFields: ['email_address', 'phone_number'],
+        },
+      )
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
+  it('a Google sign-up the code does not finish does not point back at Google (#386)', async () => {
+    const user = userEvent.setup()
+    awaitingCode()
+    clerk.state.id = 'sua_google'
+    clerk.state.externalAccountStatus = 'verified'
+    // The code verifies, and Clerk then wants something this form has no
+    // step for.
+    clerk.verifyEmailCode.mockImplementationOnce(async () => {
+      clerk.state.unverifiedFields = []
+      clerk.state.missingFields = ['legal_accepted']
+      return ok
+    })
+    clerk.reset.mockImplementationOnce(resetClears)
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      render(<SignUpForm />)
+      await user.type(screen.getByLabelText('Verification code'), '424242')
+      await user.click(screen.getByRole('button', { name: 'Verify' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(
+        /couldn.t finish creating your account with Google/i,
+      )
+      expect(alert).not.toHaveTextContent(/sign up with Google/i)
+      expect(clerk.reset).toHaveBeenCalledOnce()
+    } finally {
+      logged.mockRestore()
+    }
   })
 
   it('leaves a finished sign-up on the finish step', async () => {
