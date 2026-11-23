@@ -472,10 +472,12 @@ most visitors see.
 - **Device Trust after Google.** Clerk's callback handler has no branch for
   `needs_client_trust`, so a Google sign-in that needs the new-device code
   would wait on the callback page until it stalls. `SsoCallback` sends such a
-  sign-in to `/sign-in`, whose form shows the code step ("If you don't have
-  one, choose 'Send a new code'", since that page sent none). Only a sign-in
-  whose first factor Google has just verified counts, so an older password
-  attempt left in that state is not mistaken for it.
+  sign-in to `/sign-in`. Only a sign-in whose first factor Google has just
+  verified counts, so an older password attempt left in that state is not
+  mistaken for it. The form, finding the second-factor step with no code
+  sent by this page (that return, or a reload), sends one itself, once per
+  attempt, as the password path does; a failed send reads "We couldn't send a
+  code to …".
 - **A step the form has no screen for says so.** A second factor other than
   an emailed code (an authenticator app, a text message), or Device Trust by
   text message (Clerk uses it only when email is off for the instance), ends
@@ -497,6 +499,24 @@ most visitors see.
 - **The catch-all** (`[[...sign-in]]`) stays: links and bookmarks of the
   prebuilt form's sub-paths (`/sign-in/factor-one`, …) land on the form, which
   shows whatever step Clerk's sign-in is on.
+- **Clerk dashboard settings the form relies on** (none changed by #379;
+  each is handled if it is off, and listed here so a change is checked
+  against the form first):
+  - **Email address as the identifier, with password** as a first factor:
+    the first step. Username or phone sign-in has no field.
+  - **Email verification code** as a first factor: "Email me a sign-in code
+    instead". Off, the form says the account cannot have one.
+  - **Password reset by email code**: "Forgot password?". Off, the form says
+    the password cannot be reset by email.
+  - **Google** as a social connection: "Continue with Google". Off, Clerk's
+    refusal shows above the button.
+  - **Device Trust by email code** (Clerk's default while email is on): the
+    new-device step. By text message only, it is a step the form lacks.
+  - **No MFA, and no second factor other than email.** Switching one on
+    needs its step built first (above).
+  - **Password minimum 15**: the hint (`PASSWORD_MIN_LENGTH`, above).
+  - `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in` keeps Clerk's own redirects to
+    sign-in on this page.
 - **Errors.** Clerk's field errors show under their fields (`identifier`
   under the email, `password`, `code`); the rest above the submit button.
   Clerk's wording is shown as it comes, including "Couldn't find your

@@ -17,6 +17,20 @@ import { safeRedirectPath } from '@/lib/auth/safeRedirect'
  */
 export const LEAVE_TIMEOUT_MS = 10_000
 
+/**
+ * Clerk's password minimum, for the hint under the field on sign-up and
+ * on sign-in's new-password step.
+ *
+ * @remarks Hardcoded: `useSignUp()`, `useSignIn()` and the public `Clerk` object expose no
+ * instance settings, so the dashboard value cannot be read here (Brandon's
+ * decision 4 on #377: read it if the hook exposes it, otherwise hardcode and
+ * say so). 15 is production's setting, measured 2026-11-18 from Clerk's
+ * public environment endpoint. If the dashboard value changes, change this;
+ * until then a too-short password is still refused by Clerk, whose message
+ * shows under the field.
+ */
+export const PASSWORD_MIN_LENGTH = 15
+
 /** For any failure Clerk gave no words for. */
 export const UNEXPECTED_MESSAGE = 'Something went wrong. Please try again.'
 /** For a navigation that has not happened yet: nothing is known to have failed. */

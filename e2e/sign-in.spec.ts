@@ -193,7 +193,7 @@ test.describe("sign-in: the site's own form on Clerk's hooks", () => {
     await expect(
       page.getByRole('button', { name: 'Continue with Google' }),
     ).toBeVisible()
-    await expect(page.getByLabelText('Email address')).toBeVisible()
+    await expect(page.getByLabel('Email address')).toBeVisible()
     await expect(
       page.getByRole('button', { name: 'Forgot password?' }),
     ).toBeVisible()
@@ -214,11 +214,11 @@ test.describe("sign-in: the site's own form on Clerk's hooks", () => {
       param: 'password',
     })
     await openForm(page)
-    await page.getByLabelText('Email address').fill(EMAIL)
-    await page.getByLabelText('Password').fill('not the password')
+    await page.getByLabel('Email address').fill(EMAIL)
+    await page.getByLabel('Password').fill('not the password')
     await page.getByRole('button', { name: 'Continue' }).click()
 
-    await expect(page.getByLabelText('Password')).toHaveAccessibleDescription(
+    await expect(page.getByLabel('Password')).toHaveAccessibleDescription(
       /password is incorrect/i,
     )
     expect(requests.length).toBeGreaterThan(0)

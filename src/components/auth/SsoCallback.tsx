@@ -10,6 +10,7 @@ import { safeRedirectPath, withRedirect } from '@/lib/auth/safeRedirect'
 
 import { AUTH_CARD_CLASS, AUTH_LINK_CLASS } from './AuthFormParts'
 import { SIGN_IN_PATH, SIGN_UP_PATH } from './paths'
+import { SLOW_MESSAGE } from './useAuthSteps'
 
 /**
  * How long the callback page waits for Clerk to send the visitor somewhere
@@ -80,14 +81,14 @@ const FLOWS = {
  * @param stallMs - See {@link SSO_CALLBACK_STALL_MS}; a seam for tests.
  */
 export function SsoCallback({
-  flow = 'sign-up',
+  flow,
   assignLocation = (url: string) => window.location.assign(url),
   stallMs = SSO_CALLBACK_STALL_MS,
 }: {
-  flow?: keyof typeof FLOWS
+  flow: keyof typeof FLOWS
   assignLocation?: (url: string) => void
   stallMs?: number
-} = {}) {
+}) {
   const copy = FLOWS[flow]
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -100,12 +101,14 @@ export function SsoCallback({
 
   const navigated = useRef(false)
   const [stalled, setStalled] = useState(false)
-  // The latest sign-up, for the log line below, without restarting the timer
-  // each time Clerk's state changes.
+  // The latest sign-up and sign-in, for the log line below, without
+  // restarting the timer each time Clerk's state changes.
   const latestSignUp = useRef(signUp)
+  const latestSignIn = useRef(signIn)
   useEffect(() => {
     latestSignUp.current = signUp
-  }, [signUp])
+    latestSignIn.current = signIn
+  }, [signUp, signIn])
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -117,11 +120,14 @@ export function SsoCallback({
       setStalled(true)
       if (navigated.current) return
       const current = latestSignUp.current
-      // Clerk sent the visitor nowhere. Field names only: nothing they typed.
+      // Clerk sent the visitor nowhere. Statuses and field names only:
+      // nothing they typed. Both resources, since a Google trip from either
+      // form can end as a sign-in or a sign-up.
       console.error(`[${flow}] sso callback unresolved`, {
         status: current?.status,
         missingFields: current?.missingFields,
         unverifiedFields: current?.unverifiedFields,
+        signInStatus: latestSignIn.current?.status,
       })
     }, stallMs)
     return () => clearTimeout(timer)
@@ -166,7 +172,7 @@ export function SsoCallback({
   return (
     <div className={`${AUTH_CARD_CLASS} text-center`}>
       <p role="status" className="text-sm text-muted-foreground">
-        {stalled ? 'This is taking longer than expected.' : copy.working}
+        {stalled ? SLOW_MESSAGE : copy.working}
       </p>
       {stalledLinks}
       <HandleSSOCallback

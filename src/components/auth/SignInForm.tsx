@@ -15,10 +15,10 @@ import {
   type SignInFormValues,
   type SignInStep,
 } from './SignInFormView'
-import { PASSWORD_MIN_LENGTH } from './SignUpForm'
 import {
   errorText as text,
   LEAVE_TIMEOUT_MS,
+  PASSWORD_MIN_LENGTH,
   UNEXPECTED_MESSAGE,
   useAuthSteps,
   useFinalizeNavigate,
@@ -200,6 +200,22 @@ export function SignInForm({
     // Keyed on the state alone, as sign-up's twin of this is.
   }, [stuck]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // At rest on the second-factor step with no code sent by this page: a
+  // return from Google that needs the new-device code (`SsoCallback` sends
+  // it here), or a reload. Send one, as the password path does, once per
+  // attempt, so the visitor is not asked to press "Send a new code" first.
+  const awaitingUnsentCode =
+    !busy &&
+    Boolean(signIn.id) &&
+    codeDelivery === 'unknown' &&
+    needsEmailSecondFactor()
+  const autoSentAttempt = useRef<string>(undefined)
+  useEffect(() => {
+    if (!awaitingUnsentCode || autoSentAttempt.current === signIn.id) return
+    autoSentAttempt.current = signIn.id
+    void run(sendSecondFactorCode)
+  }, [awaitingUnsentCode]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const onSubmit = ({ emailAddress, password }: SignInFormValues) =>
     run(async () => {
       const { error } = await signIn.password({ emailAddress, password })
@@ -251,29 +267,41 @@ export function SignInForm({
       return { stayLocked: true }
     })
 
+  /**
+   * The Clerk calls behind each code step. Called on their objects, never
+   * detached: clerk-js methods may read `this`.
+   */
+  const codeCalls = () => {
+    switch (currentStep()) {
+      case 'second-factor':
+        return {
+          send: () => signIn.mfa.sendEmailCode(),
+          verify: (code: string) => signIn.mfa.verifyEmailCode({ code }),
+        }
+      case 'reset-code':
+        return {
+          send: () => signIn.resetPasswordEmailCode.sendCode(),
+          verify: (code: string) =>
+            signIn.resetPasswordEmailCode.verifyCode({ code }),
+        }
+      default:
+        return {
+          send: () => signIn.emailCode.sendCode(),
+          verify: (code: string) => signIn.emailCode.verifyCode({ code }),
+        }
+    }
+  }
+
   const onVerify = (code: string) =>
     run(async () => {
-      const step = currentStep()
-      // Called on their objects: clerk-js methods may read `this`.
-      const { error } =
-        step === 'second-factor'
-          ? await signIn.mfa.verifyEmailCode({ code })
-          : step === 'reset-code'
-            ? await signIn.resetPasswordEmailCode.verifyCode({ code })
-            : await signIn.emailCode.verifyCode({ code })
+      const { error } = await codeCalls().verify(code)
       if (error) return
       return proceed()
     })
 
   const onResend = () =>
     run(async () => {
-      const step = currentStep()
-      const { error } =
-        step === 'second-factor'
-          ? await signIn.mfa.sendEmailCode()
-          : step === 'reset-code'
-            ? await signIn.resetPasswordEmailCode.sendCode()
-            : await signIn.emailCode.sendCode()
+      const { error } = await codeCalls().send()
       if (error) return
       setCodeDelivery('sent')
       setNotice('A new code is on its way.')

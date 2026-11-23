@@ -122,6 +122,9 @@ export function SignInFormView(props: SignInFormViewProps) {
 
   const codeStep = (title: string, backLabel: string, intro?: string) => (
     <CodeStep
+      // One instance per step: a code typed on one step must not carry into
+      // the next (an email code, then the new-device code).
+      key={props.step}
       title={title}
       intro={intro}
       email={props.email}

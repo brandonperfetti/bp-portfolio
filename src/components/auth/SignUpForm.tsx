@@ -20,24 +20,14 @@ import {
 import {
   errorText as text,
   LEAVE_TIMEOUT_MS,
+  PASSWORD_MIN_LENGTH,
   UNEXPECTED_MESSAGE,
   useAuthSteps,
   useFinalizeNavigate,
   useRedirectTarget,
 } from './useAuthSteps'
 
-/**
- * Clerk's password minimum, for the hint under the field.
- *
- * @remarks Hardcoded: `useSignUp()` and the public `Clerk` object expose no
- * instance settings, so the dashboard value cannot be read here (Brandon's
- * decision 4 on #377: read it if the hook exposes it, otherwise hardcode and
- * say so). 15 is production's setting, measured 2026-11-18 from Clerk's
- * public environment endpoint. If the dashboard value changes, change this;
- * until then a too-short password is still refused by Clerk, whose message
- * shows under the field.
- */
-export const PASSWORD_MIN_LENGTH = 15
+export { PASSWORD_MIN_LENGTH }
 
 const UNFINISHED_MESSAGE =
   "We couldn't finish creating your account here. Please try again, or sign up with Google."

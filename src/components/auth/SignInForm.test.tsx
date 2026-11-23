@@ -467,6 +467,23 @@ describe('SignInForm: an emailed sign-in code instead of a password', () => {
     expect(heading()).toHaveTextContent('Confirm it’s you')
   })
 
+  it('the new-device code step starts empty, not with the email code just used', async () => {
+    clerk.emailCodeVerify.mockImplementation(async () => {
+      needsClientTrust()
+      return ok
+    })
+    const user = userEvent.setup()
+    render(<SignInForm />)
+    await typeEmail(user)
+    await user.click(
+      screen.getByRole('button', { name: 'Email me a sign-in code instead' }),
+    )
+    await enterCode(user, '111111')
+
+    expect(heading()).toHaveTextContent('Confirm it’s you')
+    expect(screen.getByLabelText('Verification code')).toHaveValue('')
+  })
+
   it('says so for an account that cannot have an emailed code, and sends none', async () => {
     clerk.create.mockImplementation(async () => {
       identified(['password'])
@@ -653,17 +670,32 @@ describe('SignInForm: Google', () => {
     error.mockRestore()
   })
 
-  it('a return from Google needing the new-device code shows the code step', () => {
+  it('a return from Google needing the new-device code sends the code once and shows the code step', async () => {
     clerk.state.id = 'sia_3'
     clerk.state.identifier = EMAIL
     needsClientTrust()
-    render(<SignInForm />)
+    const { rerender } = render(<SignInForm />)
 
     expect(heading()).toHaveTextContent('Confirm it’s you')
-    // This page sent no code: it claims none.
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Enter the code we sent to/, { exact: false }),
+      ).toBeInTheDocument(),
+    )
+    rerender(<SignInForm />)
+    expect(clerk.mfaSend).toHaveBeenCalledOnce()
+  })
+
+  it('a return from Google whose new-device code could not be sent says so', async () => {
+    clerk.state.id = 'sia_4'
+    needsClientTrust()
+    clerk.mfaSend.mockResolvedValue({ error: { message: 'Too many requests' } })
+    render(<SignInForm />)
+
     expect(
-      screen.getByText(/Enter the verification code for/, { exact: false }),
+      await screen.findByText(/couldn't send a code to/i, { exact: false }),
     ).toBeInTheDocument()
+    expect(clerk.mfaSend).toHaveBeenCalledOnce()
   })
 })
 
