@@ -415,10 +415,13 @@ Ingest a 16:9 JPEG derivation, not the original:
 - Read `_status` before and after; it must not change.
 - In a batch, take one post end to end and verify it live first.
 - **Verify a published post live:** the article page loads (200) and both
-  its hero and its `og:image` point at the new file, but for a post whose
-  `ogImageMode` is `generated`, whose `og:image` stays the generated card
-  [source: `src/lib/og/resolveOgImage.ts`]; leave the mode as it was. The
-  Blob URL and `/_next/image` return 200 and decode; the card shows on
+  its hero and its `og:image` point at the new file. A post whose
+  `ogImageMode` is `generated` keeps the generated card
+  (`/api/og/article/<slug>`) as its `og:image` [source:
+  `src/lib/og/resolveOgImage.ts`,
+  `src/app/(frontend)/articles/[slug]/ArticleView.tsx`]: check that URL
+  returns 200, and leave the mode as it was. The Blob URL and
+  `/_next/image` return 200 and decode; the post's tile shows on
   `/articles`. Not verified live means not done.
 - **Verify a draft without publishing it:** open it through the
   authenticated draft preview (`/next/preview?path=/articles/<slug>`,
