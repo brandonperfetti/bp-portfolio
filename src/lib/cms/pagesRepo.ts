@@ -128,9 +128,10 @@ export const getCmsPageByPath = async (
  * document at a reserved path is legitimate and load-bearing: `/about`,
  * `/tech`, `/uses`, `/projects`, `/corvus` and `/articles` all take their copy
  * from one through {@link getCmsPageByPath}. The save-time reservation is a
- * different, smaller set — `CODE_OWNED_FIRST_SEGMENTS` in
- * `src/collections/Pages/hooks/pageHierarchy.ts` — and the two are deliberately
- * not merged.
+ * different set — `CODE_OWNED_FIRST_SEGMENTS` in
+ * `src/fields/slug/documentPath.ts` — and the two are deliberately not merged.
+ * `account`, `sign-in` and `sign-up` sit in both (#400): their Clerk catch-alls
+ * shadow every depth and read no Pages doc, so a save there is refused too.
  */
 export const RESERVED_PAGE_SLUGS = new Set([
   'about',

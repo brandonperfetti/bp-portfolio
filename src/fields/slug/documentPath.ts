@@ -56,8 +56,15 @@ export const PATH_MAX_DEPTH = 3
  * `api`, `admin` and `next` are matched as **first segments** because Next owns
  * their whole subtree; the file-shaped entries can only ever be exact
  * single-segment paths anyway.
+ *
+ * `account`, `sign-in` and `sign-up` belong here for the same reason (#400):
+ * each is an optional catch-all (`[[...account]]` and the like, #391/#397) so
+ * Clerk can path-route its own sub-pages, which means it serves every path
+ * beneath it. A Pages document at `/account/<x>` would publish, could be
+ * sitemapped, and would never render.
  */
 export const CODE_OWNED_FIRST_SEGMENTS = new Set([
+  'account',
   'admin',
   'api',
   'feed.xml',
@@ -66,6 +73,8 @@ export const CODE_OWNED_FIRST_SEGMENTS = new Set([
   'manifest.webmanifest',
   'next',
   'robots.txt',
+  'sign-in',
+  'sign-up',
   'sitemap.xml',
 ])
 
