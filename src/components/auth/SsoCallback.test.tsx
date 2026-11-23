@@ -2,6 +2,7 @@ import { act, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SsoCallback } from './SsoCallback'
+import { SESSION_TASK_MESSAGE } from './useAuthSteps'
 
 /**
  * #377: the page Google returns to. Clerk's `<HandleSSOCallback />` is
@@ -10,7 +11,10 @@ import { SsoCallback } from './SsoCallback'
  * `redirect_url` on the callback URL is not followed.
  */
 type Handlers = {
-  navigateToApp: (params: { decorateUrl: (url: string) => string }) => void
+  navigateToApp: (params: {
+    session?: { currentTask?: { key: string } } | null
+    decorateUrl: (url: string) => string
+  }) => void
   navigateToSignIn: () => void
   navigateToSignUp: () => void
 }
@@ -198,6 +202,29 @@ describe('SsoCallback, from the sign-up form', () => {
 })
 
 describe('SsoCallback, from the sign-in form (#379)', () => {
+  it('does not leave for the target when Clerk left the session with a task, and says so', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      mocks.search.value = 'redirect_url=%2Farticles%2Fsome-post'
+      render(<SsoCallback flow="sign-in" />)
+      act(() =>
+        mocks.handlers?.navigateToApp({
+          ...plain,
+          session: { currentTask: { key: 'setup-mfa' } },
+        }),
+      )
+      expect(mocks.push).not.toHaveBeenCalled()
+      expect(screen.getByRole('status')).toHaveTextContent(SESSION_TASK_MESSAGE)
+      expect(screen.getByRole('link', { name: 'Start again' })).toBeVisible()
+      expect(error).toHaveBeenCalledWith(
+        '[sign-in] session task this site has no step for',
+        { task: 'setup-mfa' },
+      )
+    } finally {
+      error.mockRestore()
+    }
+  })
+
   it('says it is finishing a sign-in', () => {
     render(<SsoCallback flow="sign-in" />)
     expect(screen.getByRole('status')).toHaveTextContent('Finishing sign-in')

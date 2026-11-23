@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { SLOW_MESSAGE, useAuthSteps } from './useAuthSteps'
+import { SLOW_MESSAGE, UNEXPECTED_MESSAGE, useAuthSteps } from './useAuthSteps'
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -78,6 +78,57 @@ describe('useAuthSteps', () => {
       await newerRun
     })
     expect(result.current.busy).toBe(false)
+  })
+
+  it('a request that fails after a Back-button restore puts no error on a newer one', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { result } = renderHook(() => useAuthSteps({ logTag: 'test' }))
+      const newer = held<void>()
+      let rejectOld!: (reason: unknown) => void
+      const oldPromise = new Promise<void>((_, reject) => {
+        rejectOld = reject
+      })
+
+      let oldRun!: Promise<void>
+      act(() => {
+        oldRun = result.current.run(() => oldPromise)
+      })
+      act(() => restoreFromBackForwardCache())
+      let newerRun!: Promise<void>
+      act(() => {
+        newerRun = result.current.run(() => newer.promise)
+      })
+
+      await act(async () => {
+        rejectOld(new Error('network'))
+        await oldRun
+      })
+      expect(result.current.localErrors).toEqual([])
+
+      await act(async () => {
+        newer.resolve()
+        await newerRun
+      })
+      expect(result.current.localErrors).toEqual([])
+    } finally {
+      error.mockRestore()
+    }
+  })
+
+  it('a request that fails while it holds the lock says so', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { result } = renderHook(() => useAuthSteps({ logTag: 'test' }))
+      await act(() =>
+        result.current.run(async () => {
+          throw new Error('network')
+        }),
+      )
+      expect(result.current.localErrors).toEqual([UNEXPECTED_MESSAGE])
+    } finally {
+      error.mockRestore()
+    }
   })
 
   it('a step that leaves the page stays locked, then unlocks with the slow message', async () => {

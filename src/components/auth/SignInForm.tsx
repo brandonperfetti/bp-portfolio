@@ -19,6 +19,7 @@ import {
   errorText as text,
   LEAVE_TIMEOUT_MS,
   PASSWORD_MIN_LENGTH,
+  SESSION_TASK_MESSAGE,
   UNEXPECTED_MESSAGE,
   useAuthSteps,
   useFinalizeNavigate,
@@ -134,10 +135,11 @@ export function SignInForm({
       leaveTimeoutMs,
       onStart: () => setHeldStep(currentStep()),
     })
-  const navigate = useFinalizeNavigate({
+  const { navigate, blockedTask } = useFinalizeNavigate({
     destination,
     mounted,
     assignLocation,
+    logTag: 'sign-in',
   })
 
   /** Makes the finished sign-in's session active and leaves. */
@@ -145,6 +147,10 @@ export function SignInForm({
     const { error } = await signIn.finalize({ navigate })
     if (error) {
       setLocalErrors([text(error) ?? UNEXPECTED_MESSAGE])
+      return
+    }
+    if (blockedTask.current) {
+      setLocalErrors([SESSION_TASK_MESSAGE])
       return
     }
     return { stayLocked: true }
@@ -254,6 +260,11 @@ export function SignInForm({
 
   const onGoogle = () =>
     run(async () => {
+      // Google is a new attempt. `sso()` reuses an attempt that already
+      // exists, and for one with no Google redirect on it (left by "Email
+      // me a sign-in code" or "Forgot password?" for an account that cannot
+      // have them) it neither starts Google nor says so.
+      if (signIn.id) await signIn.reset()
       const { error } = await signIn.sso({
         strategy: 'oauth_google',
         redirectCallbackUrl: withRedirect(
@@ -263,7 +274,15 @@ export function SignInForm({
         redirectUrl: destination,
       })
       if (error) return
-      // No error means the browser is on its way to Google.
+      // Clerk hands off to Google through this URL. Without it the page is
+      // going nowhere, and a locked form would be a dead end.
+      if (!signIn.firstFactorVerification?.externalVerificationRedirectURL) {
+        console.error('[sign-in] Google did not start', {
+          status: signIn.status,
+        })
+        setLocalErrors([UNEXPECTED_MESSAGE])
+        return
+      }
       return { stayLocked: true }
     })
 

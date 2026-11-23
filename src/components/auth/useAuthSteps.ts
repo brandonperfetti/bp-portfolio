@@ -37,6 +37,37 @@ export const UNEXPECTED_MESSAGE = 'Something went wrong. Please try again.'
 /** For a navigation that has not happened yet: nothing is known to have failed. */
 export const SLOW_MESSAGE = 'This is taking longer than expected.'
 
+/**
+ * Said when Clerk finishes a sign-in but leaves its session with a task (a
+ * new password, setting up MFA, choosing an organization) that this site
+ * has no step for. Clerk treats such a session as signed out, so leaving
+ * for the destination would only bring the visitor back to sign in again.
+ */
+export const SESSION_TASK_MESSAGE =
+  "We couldn't finish signing you in here: your account needs one more step this site doesn't support yet."
+
+/** The part of Clerk's session the navigation reads: its pending task. */
+export type FinalizedSession = { currentTask?: { key: string } } | null
+
+/**
+ * The task Clerk left on a finished sign-in's session, logged, or nothing.
+ *
+ * @param session - The session Clerk passes to its `navigate` callbacks.
+ * @param logTag - The log line's prefix (`sign-in`, `sign-up`).
+ */
+export function sessionTask(
+  session: FinalizedSession | undefined,
+  logTag: string,
+): string | undefined {
+  const task = session?.currentTask?.key
+  // The task's name only: nothing the visitor typed.
+  if (task)
+    console.error(`[${logTag}] session task this site has no step for`, {
+      task,
+    })
+  return task
+}
+
 /** A Clerk error, or the absence of one. */
 export type ClerkMessage =
   { message: string; longMessage?: string } | null | undefined
@@ -132,7 +163,9 @@ export function useAuthSteps({
       stayLocked = (await step())?.stayLocked ?? false
     } catch (error) {
       console.error(`[${logTag}] unexpected failure`, error)
-      setLocalErrors([UNEXPECTED_MESSAGE])
+      // Only for the request that still holds the lock: one released by a
+      // restore must not put its error on a newer request's form.
+      if (owner.current === token) setLocalErrors([UNEXPECTED_MESSAGE])
     } finally {
       if (owner.current !== token) {
         // A restore released this lock and a newer request may hold it.
@@ -190,25 +223,42 @@ export function useRedirectTarget() {
  * through `decorateUrl` (which may turn it into an absolute URL Clerk needs
  * to set the session on), unless the visitor has already left this page.
  *
+ * @remarks A session Clerk left with a task (`SESSION_TASK_MESSAGE`) is not
+ * sent on: `blockedTask` records it, for the form to say so once
+ * `finalize()` returns. No task is switched on in the Clerk dashboard today;
+ * each needs its own step built first (`docs/AUTH.md`).
+ *
  * @param options - `mounted`: From {@link useAuthSteps}; a visitor who left in
  *   the moment before Clerk called this is signed in either way, and is not
  *   pulled back.
  *   `assignLocation`: How to leave for an absolute URL.
+ *   `logTag`: The log line's prefix for a session task.
  */
 export function useFinalizeNavigate({
   destination,
   mounted,
   assignLocation,
+  logTag,
 }: {
   destination: string
   mounted: { current: boolean }
   assignLocation: (url: string) => void
+  logTag: string
 }) {
   const router = useRouter()
-  return ({ decorateUrl }: { decorateUrl: (url: string) => string }) => {
-    if (!mounted.current) return
+  const blockedTask = useRef<string | undefined>(undefined)
+  const navigate = ({
+    session,
+    decorateUrl,
+  }: {
+    session?: FinalizedSession
+    decorateUrl: (url: string) => string
+  }) => {
+    blockedTask.current = sessionTask(session, logTag)
+    if (blockedTask.current || !mounted.current) return
     const url = decorateUrl(destination)
     if (url.startsWith('http')) assignLocation(url)
     else router.push(url)
   }
+  return { navigate, blockedTask }
 }

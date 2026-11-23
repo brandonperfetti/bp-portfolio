@@ -8,6 +8,7 @@ import {
   SignInForm,
   UNSUPPORTED_STEP_MESSAGE,
 } from './SignInForm'
+import { SESSION_TASK_MESSAGE, UNEXPECTED_MESSAGE } from './useAuthSteps'
 
 /**
  * #379: what the custom sign-in form does with Clerk.
@@ -28,7 +29,10 @@ const clerk = vi.hoisted(() => {
     identifier: null as string | null,
     supportedFirstFactors: [] as Factor[],
     supportedSecondFactors: [] as Factor[],
-    firstFactorVerification: { strategy: null as string | null },
+    firstFactorVerification: {
+      strategy: null as string | null,
+      externalVerificationRedirectURL: undefined as URL | undefined,
+    } as { strategy: string | null; externalVerificationRedirectURL?: URL },
     errors: {
       fields: {
         identifier: null as { message: string } | null,
@@ -162,7 +166,17 @@ beforeEach(() => {
     identified(['password', 'email_code', 'reset_password_email_code'])
     return ok
   })
-  clerk.sso.mockResolvedValue(ok)
+  // As clerk-js does: the hand-off to Google is the URL on the attempt.
+  clerk.sso.mockImplementation(async () => {
+    clerk.state.id = 'sia_google'
+    clerk.state.firstFactorVerification = {
+      strategy: 'oauth_google',
+      externalVerificationRedirectURL: new URL(
+        'https://accounts.google.com/o/oauth2/auth',
+      ),
+    }
+    return ok
+  })
   clerk.emailCodeSend.mockImplementation(async () => {
     clerk.state.firstFactorVerification = { strategy: 'email_code' }
     return ok
@@ -323,6 +337,39 @@ describe('SignInForm: email and password', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled(),
     )
+  })
+
+  it('does not leave when Clerk left the session with a task this site has no step for, and says so', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    clerk.finalize.mockImplementation(
+      async ({
+        navigate,
+      }: {
+        navigate: (p: {
+          session: { currentTask: { key: string } }
+          decorateUrl: (u: string) => string
+        }) => void
+      }) => {
+        navigate({
+          session: { currentTask: { key: 'reset-password' } },
+          decorateUrl: (url) => url,
+        })
+        return ok
+      },
+    )
+    const user = userEvent.setup()
+    render(<SignInForm />)
+    await signInWithPassword(user)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      SESSION_TASK_MESSAGE,
+    )
+    expect(clerk.push).not.toHaveBeenCalled()
+    expect(error).toHaveBeenCalledWith(
+      '[sign-in] session task this site has no step for',
+      { task: 'reset-password' },
+    )
+    error.mockRestore()
   })
 
   it('shows the message and unlocks when making the session active fails', async () => {
@@ -648,6 +695,51 @@ describe('SignInForm: Google', () => {
     expect(
       screen.getByRole('button', { name: 'Continue with Google' }),
     ).toBeDisabled()
+  })
+
+  it('starts Google as a new attempt after a refused emailed code, so clerk-js does not reuse the old one', async () => {
+    clerk.create.mockImplementation(async () => {
+      identified(['password'])
+      return ok
+    })
+    const user = userEvent.setup()
+    render(<SignInForm />)
+    await typeEmail(user)
+    await user.click(
+      screen.getByRole('button', { name: 'Email me a sign-in code instead' }),
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(NO_EMAIL_CODE_MESSAGE)
+
+    await user.click(
+      screen.getByRole('button', { name: 'Continue with Google' }),
+    )
+    expect(clerk.reset).toHaveBeenCalledOnce()
+    expect(clerk.reset.mock.invocationCallOrder[0]).toBeLessThan(
+      clerk.sso.mock.invocationCallOrder[0],
+    )
+    expect(
+      screen.getByRole('button', { name: 'Continue with Google' }),
+    ).toBeDisabled()
+  })
+
+  it('unlocks and says so when Clerk returns without a way to Google', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    clerk.sso.mockResolvedValue(ok)
+    const user = userEvent.setup()
+    render(<SignInForm />)
+    await user.click(
+      screen.getByRole('button', { name: 'Continue with Google' }),
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent(UNEXPECTED_MESSAGE)
+    expect(
+      screen.getByRole('button', { name: 'Continue with Google' }),
+    ).toBeEnabled()
+    expect(error).toHaveBeenCalledWith(
+      '[sign-in] Google did not start',
+      expect.anything(),
+    )
+    error.mockRestore()
   })
 
   it('carries no mailing-list opt-in: an account Clerk makes from it never joins the list (#362)', async () => {

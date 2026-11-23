@@ -8,6 +8,7 @@ import {
 } from '@/lib/email/mailingListOptIn'
 
 import { SignUpForm } from './SignUpForm'
+import { SESSION_TASK_MESSAGE } from './useAuthSteps'
 
 /**
  * #377: what the custom sign-up form does with Clerk.
@@ -484,6 +485,38 @@ describe('SignUpForm: the rest of the flow', () => {
       code: '424242',
     })
     await waitFor(() => expect(clerk.push).toHaveBeenCalledWith('/'))
+  })
+
+  it('does not leave when Clerk left the new session with a task this site has no step for, and says so', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const user = userEvent.setup()
+    awaitingCode()
+    clerk.verifyEmailCode.mockImplementationOnce(async () => {
+      clerk.state.status = 'complete'
+      return ok
+    })
+    clerk.finalize.mockImplementationOnce(
+      async ({ navigate }: { navigate: (p: unknown) => void }) => {
+        navigate({
+          session: { currentTask: { key: 'setup-mfa' } },
+          decorateUrl: (url: string) => url,
+        })
+        return ok
+      },
+    )
+    render(<SignUpForm />)
+    await user.type(screen.getByLabelText('Verification code'), '424242')
+    await user.click(screen.getByRole('button', { name: 'Verify' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      SESSION_TASK_MESSAGE,
+    )
+    expect(clerk.push).not.toHaveBeenCalled()
+    expect(error).toHaveBeenCalledWith(
+      '[sign-up] session task this site has no step for',
+      { task: 'setup-mfa' },
+    )
+    error.mockRestore()
   })
 
   it('goes back to the page that sent the visitor here', async () => {

@@ -10,7 +10,7 @@ import { safeRedirectPath, withRedirect } from '@/lib/auth/safeRedirect'
 
 import { AUTH_CARD_CLASS, AUTH_LINK_CLASS } from './AuthFormParts'
 import { SIGN_IN_PATH, SIGN_UP_PATH } from './paths'
-import { SLOW_MESSAGE } from './useAuthSteps'
+import { SESSION_TASK_MESSAGE, sessionTask, SLOW_MESSAGE } from './useAuthSteps'
 
 /**
  * How long the callback page waits for Clerk to send the visitor somewhere
@@ -71,6 +71,9 @@ const FLOWS = {
  *   installed `@clerk/react` 6.18.9) and would leave the visitor here until
  *   the stall. Only a sign-in Google has just verified counts, so an older
  *   password attempt left in that state does not send a sign-up there.
+ * - **A session Clerk left with a task** this site has no step for
+ *   (`SESSION_TASK_MESSAGE`): the page says so and offers the two links,
+ *   instead of leaving for a destination that would ask for sign-in again.
  * - **A Google sign-in for an address with no account** is made a sign-up
  *   by Clerk's handler (`signIn.isTransferable`); that account carries no
  *   opt-in and never joins the mailing list (#362).
@@ -101,6 +104,7 @@ export function SsoCallback({
 
   const navigated = useRef(false)
   const [stalled, setStalled] = useState(false)
+  const [taskBlocked, setTaskBlocked] = useState(false)
   // The latest sign-up and sign-in, for the log line below, without
   // restarting the timer each time Clerk's state changes.
   const latestSignUp = useRef(signUp)
@@ -150,39 +154,52 @@ export function SsoCallback({
     // this state does not already cover.
   }, [googleSignInNeedsDeviceCheck]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Rendered after mount only (`stalled`), so `window` is there to check
+  // Rendered after mount only (`stalled`, `taskBlocked`), so `window` is there to check
   // the target against.
-  const stalledLinks = stalled ? (
-    <p className="mt-4 flex justify-center gap-6 text-sm">
-      <Link
-        href={withRedirect(copy.startAgain, target())}
-        className={AUTH_LINK_CLASS}
-      >
-        Start again
-      </Link>
-      <Link
-        href={withRedirect(copy.other.href, target())}
-        className={AUTH_LINK_CLASS}
-      >
-        {copy.other.label}
-      </Link>
-    </p>
-  ) : null
+  const stalledLinks =
+    stalled || taskBlocked ? (
+      <p className="mt-4 flex justify-center gap-6 text-sm">
+        <Link
+          href={withRedirect(copy.startAgain, target())}
+          className={AUTH_LINK_CLASS}
+        >
+          Start again
+        </Link>
+        <Link
+          href={withRedirect(copy.other.href, target())}
+          className={AUTH_LINK_CLASS}
+        >
+          {copy.other.label}
+        </Link>
+      </p>
+    ) : null
 
   return (
     <div className={`${AUTH_CARD_CLASS} text-center`}>
       <p role="status" className="text-sm text-muted-foreground">
-        {stalled ? SLOW_MESSAGE : copy.working}
+        {taskBlocked
+          ? SESSION_TASK_MESSAGE
+          : stalled
+            ? SLOW_MESSAGE
+            : copy.working}
       </p>
       {stalledLinks}
       <HandleSSOCallback
-        navigateToApp={({ decorateUrl }) =>
+        navigateToApp={({ session, decorateUrl }) => {
+          // A session with a task this site has no step for (see the
+          // remarks): say so here, not leave for a page that would ask
+          // for sign-in again.
+          if (sessionTask(session, flow)) {
+            navigated.current = true
+            setTaskBlocked(true)
+            return
+          }
           go(() => {
             const url = decorateUrl(target() ?? '/')
             if (url.startsWith('http')) assignLocation(url)
             else router.push(url)
           })
-        }
+        }}
         navigateToSignIn={() =>
           go(() => router.push(withRedirect(SIGN_IN_PATH, target())))
         }

@@ -21,6 +21,7 @@ import {
   errorText as text,
   LEAVE_TIMEOUT_MS,
   PASSWORD_MIN_LENGTH,
+  SESSION_TASK_MESSAGE,
   UNEXPECTED_MESSAGE,
   useAuthSteps,
   useFinalizeNavigate,
@@ -160,10 +161,11 @@ export function SignUpForm({
       leaveTimeoutMs,
       onStart: () => setHeldStep(currentStep()),
     })
-  const navigate = useFinalizeNavigate({
+  const { navigate, blockedTask } = useFinalizeNavigate({
     destination,
     mounted,
     assignLocation,
+    logTag: 'sign-up',
   })
 
   /** Signs the visitor in to the account Clerk has just created. */
@@ -173,6 +175,10 @@ export function SignUpForm({
     const { error } = await signUp.finalize({ navigate })
     if (error) {
       setLocalErrors([text(error) ?? UNEXPECTED_MESSAGE])
+      return
+    }
+    if (blockedTask.current) {
+      setLocalErrors([SESSION_TASK_MESSAGE])
       return
     }
     // Signed in, and on the way to the destination.

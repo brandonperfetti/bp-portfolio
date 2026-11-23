@@ -457,7 +457,13 @@ most visitors see.
     password signs the visitor in and signs the account out everywhere else,
     which the step says before it is submitted.
   - Google: `signIn.sso({ strategy: 'oauth_google', … })` with
-    `/sign-in/sso-callback` as the return page.
+    `/sign-in/sso-callback` as the return page, always as a new attempt:
+    `sso()` reuses an attempt that exists, and for one with no Google
+    redirect on it (left by a refused "Email me a sign-in code") it neither
+    starts Google nor returns an error, so the form `reset()`s first. The
+    form stays locked only once Clerk has the URL to Google
+    (`firstFactorVerification.externalVerificationRedirectURL`); without it
+    it unlocks and logs `[sign-in] Google did not start`.
   - After any of them, a finished sign-in is made active with `finalize()`.
     **Device Trust** (`needs_client_trust`, Clerk's new-device check) and a
     second factor that offers an emailed code send one with
@@ -486,6 +492,16 @@ most visitors see.
   the attempt. It does so in answer to the form's own request and, once per
   attempt, when the page loads in that state. **Before switching on MFA, or
   a second factor other than email, in the Clerk dashboard, build its step.**
+- **A session task the site has no step for says so** (both forms and the
+  Google callback page, `useFinalizeNavigate` and `sessionTask` in
+  `useAuthSteps.ts`). Clerk can finish a sign-in or sign-up with the session
+  still pending a task (`reset-password`, `setup-mfa`,
+  `choose-organization`) and treats that session as signed out, so leaving
+  for the destination would only bring the visitor back here. The page
+  stays, shows "We couldn't finish signing you in here: your account needs
+  one more step…", and logs `[sign-in]` / `[sign-up] session task this site
+has no step for` with the task's name. The prebuilt `<SignIn>` showed these
+  tasks itself; no setting that makes one is on today.
 - **No state is a dead end**, as on sign-up: every Clerk error unlocks the
   form; a navigation that has not happened after ten seconds unlocks it with
   "This is taking longer than expected."; every code step has "Send a new
@@ -510,6 +526,12 @@ most visitors see.
     the password cannot be reset by email.
   - **Google** as a social connection: "Continue with Google". Off, Clerk's
     refusal shows above the button.
+  - **No session tasks**: required MFA (`setup-mfa`), required
+    organization membership (`choose-organization`), or a forced password
+    reset (`reset-password`). Each needs its step built first (Clerk ships
+    `<TaskSetupMFA>`, `<TaskChooseOrganization>` and `<TaskResetPassword>`,
+    with `taskUrls` on `ClerkProvider`); until then the form says it cannot
+    finish (above).
   - **Device Trust by email code** (Clerk's default while email is on): the
     new-device step. By text message only, it is a step the form lacks.
   - **No MFA, and no second factor other than email.** Switching one on
@@ -527,7 +549,9 @@ most visitors see.
   with the accessibility check; `SsoCallback.test.tsx` and the sign-in
   `page.test.tsx` pin the callback and the server redirect. **Not proven by
   any test:** a real sign-in against Clerk, a real code, the trip to Google.
-  Checked by hand on staging (`docs/JOURNEYS.md`, "Sign in").
+  These are for a hand-run on staging (`docs/JOURNEYS.md`, "Sign in"), which
+  is pending until its results are recorded here; the intercepted e2e spec
+  does not stand in for it.
 
 ## Contact hygiene: the Clerk↔Resend mapping (#86)
 
