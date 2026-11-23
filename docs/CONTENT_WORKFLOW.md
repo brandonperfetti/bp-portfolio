@@ -199,7 +199,7 @@ in the run. Generate → pick → upload → ingest → attach:
    in §4. No Cloudinary generative or AI transform (`e_upscale` included)
    is part of the flow.
 6. **Attach** in §5, once Brandon approves it: `heroImage` and
-   `meta.image`, recording the previous media id for rollback.
+   `meta.image`, recording each field's previous media id for rollback.
 
 Publishing stays separate: no cover step publishes, unpublishes or
 reschedules a post.

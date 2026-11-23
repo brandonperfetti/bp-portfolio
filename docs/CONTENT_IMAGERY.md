@@ -409,7 +409,9 @@ Ingest a 16:9 JPEG derivation, not the original:
 - After Brandon approves: production Payload `updatePosts`, setting only
   `heroImage` and `meta.image` to the new media id. A partial `meta`
   update keeps the meta title and description [measured 2026-09-27].
-- **Record the previous media id first.** Rollback is re-attaching it.
+- **Record the previous `heroImage` and `meta.image` media ids first**,
+  each on its own: they are independent fields. Rollback re-attaches each
+  recorded id to its own field.
 - Read `_status` before and after; it must not change.
 - In a batch, take one post end to end and verify it live first.
 - **Verify a published post live:** the article page loads (200) and both
