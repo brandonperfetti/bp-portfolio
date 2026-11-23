@@ -354,13 +354,33 @@ file is `status: draft`, §1 still applies.
   to `true` on every upload of both rollouts, and added `upload_preset`,
   `colors` and `audit_context`. A collision would silently replace the old
   asset. So:
-  1. **Pre-check the exact public_id** with `search-assets`: it must return 0. Run a positive control in the same query (an id that exists, such
-     as the post's `cover-mj-A`) so the 0 is real.
-  2. **The pre-check is not atomic.** Run one writer per post folder at a
-     time. If the id exists, take the next letter; never reuse an id.
-  3. **After upload**, check the response for `overwritten` or `existing`,
-     check width and height match the file, and check stored bytes equal
-     the file. If an overwrite happened, stop and report it.
+  1. **Look up the exact public ID.** Use the authenticated Cloudinary
+     [Admin API single-resource lookup](https://cloudinary.com/documentation/admin_api#get_details_of_a_single_resource_by_public_id),
+     `GET /resources/image/upload/{public_id}`, in the upload's product
+     environment. Pass the full public ID, including its folder path, to
+     the SDK's `api.resource` method or URL-encode it for REST. With the
+     same connection, first confirm a known original such as the post's
+     `cover-mj-A`. Only a resource-level 404 for the full target ID
+     establishes absence. Treat any returned resource,
+     including a backup placeholder, as occupied. Stop if the control
+     fails or the result is ambiguous.
+     The current Asset Management MCP exposes `get-asset-details` by
+     internal asset ID and `list-images` by public IDs. If the upload
+     operator lacks an authorized single-resource Admin API connection,
+     stop before signing or uploading.
+  2. **Run one writer per post folder.** The lookup and upload are separate
+     operations. If the ID exists, choose the next available candidate
+     number or series letter and check that ID before uploading.
+  3. **Reconcile an uncertain upload before writing to that ID again.**
+     After a timeout, missing response or error after send, repeat the
+     exact lookup while holding the same writer slot. If the asset exists,
+     verify its stored original against the intended file. Continue with the existing
+     asset if it matches. If the match cannot be verified, stop and report
+     it. If the asset is absent, stop until the original request can no
+     longer complete. Then rerun step 1 before retrying.
+  4. **When the upload returns a response**, check for `overwritten` or
+     `existing`, check width and height match the file, and check stored
+     bytes equal the file. If an overwrite happened, stop and report it.
 - **Keep the native PNG, and a same-size JPEG beside it.** Do not resize
   in the pilot. Next to each PNG, export a JPEG at the same pixel size and
   about quality 90, and check it is under Cloudinary's upload limit of
