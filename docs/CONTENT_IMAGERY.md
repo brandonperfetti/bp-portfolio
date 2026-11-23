@@ -354,7 +354,10 @@ file is `status: draft`, §1 still applies.
   to `true` on every upload of both rollouts, and added `upload_preset`,
   `colors` and `audit_context`. A collision would silently replace the old
   asset. So:
-  1. **Look up the exact public ID.** Use the authenticated Cloudinary
+  1. **Take the writer slot before checking any ID.** Allow one writer per
+     post folder. Hold the slot through the lookup, upload and any
+     reconciliation.
+  2. **Look up the exact public ID.** Use the authenticated Cloudinary
      [Admin API single-resource lookup](https://cloudinary.com/documentation/admin_api#get_details_of_a_single_resource_by_public_id),
      `GET /resources/image/upload/{public_id}`, in the upload's product
      environment. Pass the full public ID, including its folder path, to
@@ -368,16 +371,15 @@ file is `status: draft`, §1 still applies.
      internal asset ID and `list-images` by public IDs. If the upload
      operator lacks an authorized single-resource Admin API connection,
      stop before signing or uploading.
-  2. **Run one writer per post folder.** The lookup and upload are separate
-     operations. If the ID exists, choose the next available candidate
-     number or series letter and check that ID before uploading.
+     If the ID exists, choose the next available candidate number or
+     series letter and check that ID before uploading.
   3. **Reconcile an uncertain upload before writing to that ID again.**
      After a timeout, missing response or error after send, repeat the
      exact lookup while holding the same writer slot. If the asset exists,
      verify its stored original against the intended file. Continue with the existing
      asset if it matches. If the match cannot be verified, stop and report
      it. If the asset is absent, stop until the original request can no
-     longer complete. Then rerun step 1 before retrying.
+     longer complete. Then rerun the exact lookup before retrying.
   4. **When the upload returns a response**, check for `overwritten` or
      `existing`, check width and height match the file, and check stored
      bytes equal the file. If an overwrite happened, stop and report it.
