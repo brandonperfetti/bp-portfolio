@@ -39,8 +39,9 @@ copyright line is hard-coded.
 (`[[...sign-in]]` and the like), because Clerk's components path-route their
 own sub-pages: each serves every path below it that has no route of its own,
 so `/account/security` loads directly (#391). A dedicated route beside one
-still wins (`/sign-up/sso-callback`), but a CMS page nested under one is
-shadowed by it.
+still wins (`/sign-up/sso-callback`), but a CMS page nested under one would
+be shadowed by it, so saving a Pages document at or under any of the three is
+refused: they are in `CODE_OWNED_FIRST_SEGMENTS` (#400).
 
 ## Page hierarchy and the `[...segments]` catch-all (#148)
 

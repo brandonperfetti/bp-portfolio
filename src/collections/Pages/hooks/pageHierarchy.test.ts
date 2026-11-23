@@ -221,6 +221,13 @@ describe('validatePageHierarchy', () => {
     ).rejects.toThrow(/owned by the application/i)
   })
 
+  it('rejects a page nested under a Clerk catch-all parent (#400)', async () => {
+    rows.push({ id: 5, slug: 'account', path: 'account', parent: null })
+    await expect(
+      validatePageHierarchy(args({ slug: 'billing', parent: 5 })),
+    ).rejects.toThrow(/“\/account” is owned by the application/i)
+  })
+
   it('rejects a page nested under a code-owned first segment', async () => {
     rows.push({ id: 5, slug: 'admin', path: 'admin', parent: null })
     await expect(
@@ -230,6 +237,7 @@ describe('validatePageHierarchy', () => {
 
   it('names every code-owned first segment it guards', () => {
     expect([...CODE_OWNED_FIRST_SEGMENTS].sort()).toEqual([
+      'account',
       'admin',
       'api',
       'feed.xml',
@@ -238,6 +246,8 @@ describe('validatePageHierarchy', () => {
       'manifest.webmanifest',
       'next',
       'robots.txt',
+      'sign-in',
+      'sign-up',
       'sitemap.xml',
     ])
   })
