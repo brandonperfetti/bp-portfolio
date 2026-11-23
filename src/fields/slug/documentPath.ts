@@ -50,18 +50,19 @@ export const PATH_MAX_DEPTH = 3
  * `/tech` stays the dedicated route (Brandon, D1).
  *
  * The set below is the genuinely hard reservation: paths under Next's own route
- * tree and the metadata routes. Nothing behind these can ever render a CMS
- * document, so saving one there is always a silent mistake.
+ * tree, the metadata routes, and the Clerk catch-alls. Nothing behind these can
+ * ever render a CMS document, so saving one there is always a silent mistake.
  *
  * `api`, `admin` and `next` are matched as **first segments** because Next owns
  * their whole subtree; the file-shaped entries can only ever be exact
  * single-segment paths anyway.
  *
- * `account`, `sign-in` and `sign-up` belong here for the same reason (#400):
- * each is an optional catch-all (`[[...account]]` and the like, #391/#397) so
- * Clerk can path-route its own sub-pages, which means it serves every path
- * beneath it. A Pages document at `/account/<x>` would publish, could be
- * sitemapped, and would never render.
+ * `account`, `sign-in` and `sign-up` are matched as first segments too, for a
+ * different reason (#400): each is an optional catch-all (`[[...account]]` and
+ * the like, #391/#397) so Clerk can path-route its own sub-pages, which means
+ * it serves every path beneath it that has no route of its own. A Pages
+ * document at `/account/<x>` would publish, could be sitemapped, and would
+ * never render.
  */
 export const CODE_OWNED_FIRST_SEGMENTS = new Set([
   'account',
