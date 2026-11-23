@@ -28,8 +28,8 @@ carries #420, #422, #424 and #425.
   entry.** Before this release, `reader#tag@example.test` was looked up as
   `reader`, so confirming the newsletter from the emailed link, ticking the
   contact form's subscribe box, or opting in at account sign-up could
-  update another reader's entry or find none. Each now finds the address
-  as given. A plain or `+` address behaves as before (#418, #422).
+  reach another reader's entry or none. Each now finds the address as
+  given. A plain or `+` address behaves as before (#418, #422).
 - **A sign-up that also needs a phone verified says so at once.** Where a
   sign-up asks for both the email and a phone number to be verified, the
   form used to show the email-code step anyway, and after the code it
@@ -83,8 +83,8 @@ form against a fake of Clerk's fields. The page refusal on a deployed admin.
   `findContactIdByEmail`, and `removeContactByEmail`, which drops #419's
   inline form. It encodes the address as one path segment and puts back
   only `+` and the last `@`, which Sentry's `redactEmailAddresses` matches,
-  so the address in a breadcrumb or span path is still redacted whole; `sentryConfig.test.ts` checks that over
-  every printable ASCII character. The create still sends the address raw in
+  so the address in a breadcrumb or span path is still redacted whole;
+  `sentryConfig.test.ts` checks that over every printable ASCII character. The create still sends the address raw in
   its JSON body. The removal path now sends `+` literally where #419 sent
   `%2B` (#418, #422).
 - `SignUpForm`'s `needsEmailCode()` is true only when `email_address` is the
