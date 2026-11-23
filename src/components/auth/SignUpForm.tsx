@@ -27,8 +27,6 @@ import {
   useRedirectTarget,
 } from './useAuthSteps'
 
-export { PASSWORD_MIN_LENGTH }
-
 const UNFINISHED_MESSAGE =
   "We couldn't finish creating your account here. Please try again, or sign up with Google."
 /**

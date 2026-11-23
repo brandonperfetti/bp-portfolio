@@ -21,8 +21,9 @@ export const LEAVE_TIMEOUT_MS = 10_000
  * Clerk's password minimum, for the hint under the field on sign-up and
  * on sign-in's new-password step.
  *
- * @remarks Hardcoded: `useSignUp()`, `useSignIn()` and the public `Clerk` object expose no
- * instance settings, so the dashboard value cannot be read here (Brandon's
+ * @remarks Hardcoded: `useSignUp()`, `useSignIn()` and the public `Clerk`
+ * object expose no instance settings, so the dashboard value cannot be read
+ * here (Brandon's
  * decision 4 on #377: read it if the hook exposes it, otherwise hardcode and
  * say so). 15 is production's setting, measured 2026-11-18 from Clerk's
  * public environment endpoint. If the dashboard value changes, change this;

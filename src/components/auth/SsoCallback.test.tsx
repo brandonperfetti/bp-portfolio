@@ -227,7 +227,7 @@ describe('SsoCallback, from the sign-in form (#379)', () => {
       )
       expect(error).toHaveBeenCalledWith(
         '[sign-in] sso callback unresolved',
-        expect.anything(),
+        expect.objectContaining({ signInStatus: 'needs_identifier' }),
       )
     } finally {
       error.mockRestore()
