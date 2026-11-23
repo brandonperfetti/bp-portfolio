@@ -850,19 +850,33 @@ describe('SignInForm: Google', () => {
     )
     expect(screen.getByRole('alert')).toHaveTextContent(NO_EMAIL_CODE_MESSAGE)
 
-    await user.click(
-      screen.getByRole('button', { name: 'Continue with Google' }),
-    )
-    await waitFor(() => expect(clerk.sso).toHaveBeenCalledOnce())
-    expect(clerk.reset).toHaveBeenCalledOnce()
-    expect(clerk.reset.mock.invocationCallOrder[0]).toBeLessThan(
-      clerk.sso.mock.invocationCallOrder[0],
-    )
-    await waitFor(() =>
+    const google = screen.getByRole('button', { name: 'Continue with Google' })
+    const fieldset = google.closest('fieldset')
+    if (!fieldset) throw new Error('Google must be in the sign-in fieldset')
+
+    const changes: MutationRecord[] = []
+    const observer = new MutationObserver((records) => changes.push(...records))
+    observer.observe(fieldset, {
+      attributeFilter: ['disabled'],
+      attributeOldValue: true,
+    })
+    try {
+      await user.click(google)
+      await waitFor(() => expect(clerk.sso).toHaveBeenCalledOnce())
+      expect(clerk.reset).toHaveBeenCalledOnce()
+      expect(clerk.reset.mock.invocationCallOrder[0]).toBeLessThan(
+        clerk.sso.mock.invocationCallOrder[0],
+      )
+      expect(google).toBeDisabled()
+      // The fieldset becomes disabled once and stays so across the handoff.
       expect(
-        screen.getByRole('button', { name: 'Continue with Google' }),
-      ).toBeDisabled(),
-    )
+        [...changes, ...observer.takeRecords()].map(
+          (change) => change.oldValue,
+        ),
+      ).toEqual([null])
+    } finally {
+      observer.disconnect()
+    }
   })
 
   it('unlocks and says so when Clerk returns without a way to Google', async () => {
