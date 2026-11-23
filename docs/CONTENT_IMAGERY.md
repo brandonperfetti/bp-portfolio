@@ -354,13 +354,46 @@ file is `status: draft`, §1 still applies.
   to `true` on every upload of both rollouts, and added `upload_preset`,
   `colors` and `audit_context`. A collision would silently replace the old
   asset. So:
-  1. **Pre-check the exact public_id** with `search-assets`: it must return 0. Run a positive control in the same query (an id that exists, such
-     as the post's `cover-mj-A`) so the 0 is real.
-  2. **The pre-check is not atomic.** Run one writer per post folder at a
-     time. If the id exists, take the next letter; never reuse an id.
-  3. **After upload**, check the response for `overwritten` or `existing`,
-     check width and height match the file, and check stored bytes equal
-     the file. If an overwrite happened, stop and report it.
+  1. **Take the writer slot before checking any ID.** Brandon designates
+     one cover-run thread for each Cloudinary product environment and full
+     post folder. He records the active writer there,
+     naming the operator and session. Start only after that assignment
+     appears in the thread. If someone holds the slot, wait.
+     The writer records release in the same thread after the attempt and
+     any reconciliation are complete, or after stopping before a request
+     was sent. An interrupted or uncertain attempt keeps the slot held.
+     If its writer is unavailable, Brandon can assign another operator
+     to reconcile it in the same thread. The slot remains held during
+     the transfer.
+  2. **Look up the exact public ID.** Use the authenticated Cloudinary
+     [Admin API single-resource lookup](https://cloudinary.com/documentation/admin_api#get_details_of_a_single_resource_by_public_id),
+     `GET /resources/image/upload/{public_id}`, in the upload's product
+     environment. Pass the full public ID, including its folder path, to
+     the SDK's `api.resource` method or URL-encode it for REST. With the
+     same connection, first confirm a known original such as the post's
+     `cover-mj-A`. Only a resource-level 404 for the full target ID
+     establishes absence. Treat any returned resource,
+     including a backup placeholder, as occupied. Stop if the control
+     fails or the result is ambiguous.
+     The current Asset Management MCP exposes `get-asset-details` by
+     internal asset ID and `list-images` by public IDs. If the upload
+     operator lacks an authorized single-resource Admin API connection,
+     stop before signing or uploading.
+     If the ID exists, choose the next available candidate number or
+     series letter and check that ID before uploading.
+  3. **Stop and escalate an unresolved upload.**
+     After a timeout, missing response or error after send, repeat the
+     exact lookup while holding the same writer slot. Continue with an
+     existing asset only if its stored original matches the intended
+     file. Otherwise, record the target ID and last known result in the
+     cover-run thread, leave the slot held, and escalate to Brandon.
+     Do not retry or start another upload in that folder while the
+     attempt is unresolved. A 404 shows absence at lookup time and a
+     timeout ends the client's wait. Neither establishes that Cloudinary
+     stopped processing the original request.
+  4. **When the upload returns a response**, check for `overwritten` or
+     `existing`, check width and height match the file, and check stored
+     bytes equal the file. If an overwrite happened, stop and report it.
 - **Keep the native PNG, and a same-size JPEG beside it.** Do not resize
   in the pilot. Next to each PNG, export a JPEG at the same pixel size and
   about quality 90, and check it is under Cloudinary's upload limit of
