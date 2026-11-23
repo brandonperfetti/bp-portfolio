@@ -24,14 +24,12 @@ carries #420, #422, #424 and #425.
 
 **Visitors**
 
-- **An address with `#`, `?` or `/` in its local part reaches its own
-  contact.** Resend's SDK puts the address into the request path without
-  encoding it, so before this release `reader#tag@example.test` looked up
-  `/contacts/reader`: another contact, or none. Signing up with the "Stay up
-  to date" form, confirming from the emailed link, and the account mapping
-  the Clerk webhook does now all send the address as one encoded path
-  segment. A plain or `+` address sends the same request as before (#418,
-  #422).
+- **An address with `#`, `?` or `/` before the `@` reaches its own list
+  entry.** Before this release, `reader#tag@example.test` was looked up as
+  `reader`, so confirming the newsletter from the emailed link, ticking the
+  contact form's subscribe box, or opting in at account sign-up could
+  update another reader's entry or find none. Each now finds the address
+  as given. A plain or `+` address behaves as before (#418, #422).
 - **A sign-up that also needs a phone verified says so at once.** Where a
   sign-up asks for both the email and a phone number to be verified, the
   form used to show the email-code step anyway, and after the code it
@@ -79,12 +77,13 @@ form against a fake of Clerk's fields. The page refusal on a deployed admin.
 **Developers**
 
 - New `contactSelector(email)` in `src/lib/email/contactSelector.ts` is the
-  one helper for every Resend call that addresses a contact by email:
+  one helper for every Resend call that addresses a contact by email, since
+  `resend@6.18.1` puts the address into the request path unencoded:
   `captureContact`'s lookup, resubscribe update, read-back and segment calls,
   `findContactIdByEmail`, and `removeContactByEmail`, which drops #419's
-  inline form. It leaves literal only `+` and the last `@`, the characters
-  Sentry's `redactEmailAddresses` matches, so the address in a breadcrumb or
-  span path is still redacted whole; `sentryConfig.test.ts` checks that over
+  inline form. It encodes the address as one path segment and puts back
+  only `+` and the last `@`, which Sentry's `redactEmailAddresses` matches,
+  so the address in a breadcrumb or span path is still redacted whole; `sentryConfig.test.ts` checks that over
   every printable ASCII character. The create still sends the address raw in
   its JSON body. The removal path now sends `+` literally where #419 sent
   `%2B` (#418, #422).
@@ -99,10 +98,11 @@ form against a fake of Clerk's fields. The page refusal on a deployed admin.
   covers; agents generate with GPT Image, never Midjourney; an exact-id
   pre-check before any Cloudinary upload, because `sign-upload` overwrites;
   Brandon approves every attach) and `docs/cover-history.json`, the 53 live
-  covers with their final prompts. The code-rendered cover tooling moved
-  from `tools/covers/` to `archive/code-rendered-covers/` unchanged, and
-  `CONTENT_STYLE.md` §9 and `CONTENT_WORKFLOW.md` point to the new guide
-  (#415, #420).
+  covers with their final prompts; `AGENTS.md` routes cover work there. The
+  code-rendered cover tooling moved from `tools/covers/` to
+  `archive/code-rendered-covers/`, with an archive note in its README and
+  the old §9 spec kept in its `HISTORY.md`, and `CONTENT_STYLE.md` §9 and
+  `CONTENT_WORKFLOW.md` point to the new guide (#415, #420).
 - No Payload schema change, no migration and no new env var.
 
 ## v2026.11.22
