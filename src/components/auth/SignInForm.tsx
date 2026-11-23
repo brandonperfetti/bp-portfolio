@@ -128,28 +128,37 @@ export function SignInForm({
   // What this page has seen of the latest code's delivery, so a code step
   // never says one was sent when it was not (as on sign-up, #384).
   const [codeDelivery, setCodeDelivery] = useState<CodeDelivery>('unknown')
+  const [googleAfterReset, setGoogleAfterReset] = useState<{
+    isCurrent: () => boolean
+    discarded: typeof signIn
+  } | null>(null)
 
-  const { busy, run, mounted, localErrors, setLocalErrors, notice, setNotice } =
+  const { busy, run, localErrors, setLocalErrors, notice, setNotice } =
     useAuthSteps({
       logTag: 'sign-in',
       leaveTimeoutMs,
       onStart: () => setHeldStep(currentStep()),
     })
-  const { navigate, blockedTask } = useFinalizeNavigate({
+  const navigate = useFinalizeNavigate({
     destination,
-    mounted,
     assignLocation,
     logTag: 'sign-in',
   })
 
   /** Makes the finished sign-in's session active and leaves. */
-  const finish = async () => {
-    const { error } = await signIn.finalize({ navigate })
+  const finish = async (isCurrent: () => boolean) => {
+    let blockedTask: string | undefined
+    const { error } = await signIn.finalize({
+      navigate: (params) => {
+        if (isCurrent()) blockedTask = navigate(params)
+      },
+    })
+    if (!isCurrent()) return
     if (error) {
       setLocalErrors([text(error) ?? UNEXPECTED_MESSAGE])
       return
     }
-    if (blockedTask.current) {
+    if (blockedTask) {
       setLocalErrors([SESSION_TASK_MESSAGE])
       return
     }
@@ -174,17 +183,23 @@ export function SignInForm({
   }
 
   /** Sends the second-factor code, recording whether it went. */
-  const sendSecondFactorCode = async () => {
-    const sent = await signIn.mfa.sendEmailCode()
-    setCodeDelivery(sent.error ? 'failed' : 'sent')
+  const sendSecondFactorCode = async (isCurrent: () => boolean) => {
+    try {
+      const sent = await signIn.mfa.sendEmailCode()
+      if (isCurrent()) setCodeDelivery(sent.error ? 'failed' : 'sent')
+    } catch (error) {
+      // An earlier challenge's successful send does not apply to this code.
+      if (isCurrent()) setCodeDelivery('failed')
+      throw error
+    }
   }
 
   /** Takes the sign-in on from wherever a successful step left it. */
-  const proceed = async () => {
-    if (signIn.status === 'complete') return finish()
+  const proceed = async (isCurrent: () => boolean) => {
+    if (signIn.status === 'complete') return finish(isCurrent)
     // The reset code was accepted: the new-password step shows.
     if (signIn.status === 'needs_new_password') return
-    if (needsEmailSecondFactor()) return sendSecondFactorCode()
+    if (needsEmailSecondFactor()) return sendSecondFactorCode(isCurrent)
     await discardAttempt(UNSUPPORTED_STEP_MESSAGE)
   }
 
@@ -223,28 +238,29 @@ export function SignInForm({
   }, [awaitingUnsentCode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSubmit = ({ emailAddress, password }: SignInFormValues) =>
-    run(async () => {
+    run(async (isCurrent) => {
       const { error } = await signIn.password({ emailAddress, password })
-      if (error) return
-      return proceed()
+      if (!isCurrent() || error) return
+      return proceed(isCurrent)
     })
 
   const onEmailCode = (emailAddress: string) =>
-    run(async () => {
+    run(async (isCurrent) => {
       const { error } = await signIn.create({ identifier: emailAddress })
-      if (error) return
+      if (!isCurrent() || error) return
       if (!hasStrategy(signIn.supportedFirstFactors ?? [], 'email_code')) {
         setLocalErrors([NO_EMAIL_CODE_MESSAGE])
         return
       }
       const sent = await signIn.emailCode.sendCode()
+      if (!isCurrent()) return
       setCodeDelivery(sent.error ? 'failed' : 'sent')
     })
 
   const onForgotPassword = (emailAddress: string) =>
-    run(async () => {
+    run(async (isCurrent) => {
       const { error } = await signIn.create({ identifier: emailAddress })
-      if (error) return
+      if (!isCurrent() || error) return
       if (
         !hasStrategy(
           signIn.supportedFirstFactors ?? [],
@@ -255,16 +271,12 @@ export function SignInForm({
         return
       }
       const sent = await signIn.resetPasswordEmailCode.sendCode()
+      if (!isCurrent()) return
       setCodeDelivery(sent.error ? 'failed' : 'sent')
     })
 
-  const onGoogle = () =>
-    run(async () => {
-      // Google is a new attempt. `sso()` reuses an attempt that already
-      // exists, and for one with no Google redirect on it (left by "Email
-      // me a sign-in code" or "Forgot password?" for an account that cannot
-      // have them) it neither starts Google nor says so.
-      if (signIn.id) await signIn.reset()
+  const startGoogle = () =>
+    run(async (isCurrent) => {
       const { error } = await signIn.sso({
         strategy: 'oauth_google',
         redirectCallbackUrl: withRedirect(
@@ -273,7 +285,7 @@ export function SignInForm({
         ),
         redirectUrl: destination,
       })
-      if (error) return
+      if (!isCurrent() || error) return
       // Clerk hands off to Google through this URL. Without it the page is
       // going nowhere, and a locked form would be a dead end.
       if (!signIn.firstFactorVerification?.externalVerificationRedirectURL) {
@@ -285,6 +297,29 @@ export function SignInForm({
       }
       return { stayLocked: true }
     })
+
+  const onGoogle = () => {
+    if (!signIn.id) return startGoogle()
+    // Clerk replaces the resource on reset. The old resource still has its ID,
+    // so calling sso() on it would reuse the attempt and can skip the redirect.
+    return run(async (isCurrent) => {
+      const { error } = await signIn.reset()
+      if (isCurrent() && !error)
+        setGoogleAfterReset({ isCurrent, discarded: signIn })
+    })
+  }
+
+  useEffect(() => {
+    if (busy || !googleAfterReset) return
+    setGoogleAfterReset(null)
+    if (!googleAfterReset.isCurrent()) return
+    if (signIn === googleAfterReset.discarded || signIn.id) {
+      setLocalErrors([UNEXPECTED_MESSAGE])
+      return
+    }
+    void startGoogle()
+    // The idle render reads the replacement resource from Clerk's hook.
+  }, [busy, googleAfterReset, signIn]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * The Clerk calls behind each code step. Called on their objects, never
@@ -312,28 +347,28 @@ export function SignInForm({
   }
 
   const onVerify = (code: string) =>
-    run(async () => {
+    run(async (isCurrent) => {
       const { error } = await codeCalls().verify(code)
-      if (error) return
-      return proceed()
+      if (!isCurrent() || error) return
+      return proceed(isCurrent)
     })
 
   const onResend = () =>
-    run(async () => {
+    run(async (isCurrent) => {
       const { error } = await codeCalls().send()
-      if (error) return
+      if (!isCurrent() || error) return
       setCodeDelivery('sent')
       setNotice('A new code is on its way.')
     })
 
   const onNewPassword = (password: string) =>
-    run(async () => {
+    run(async (isCurrent) => {
       const { error } = await signIn.resetPasswordEmailCode.submitPassword({
         password,
         signOutOfOtherSessions: true,
       })
-      if (error) return
-      return proceed()
+      if (!isCurrent() || error) return
+      return proceed(isCurrent)
     })
 
   const onStartOver = () =>

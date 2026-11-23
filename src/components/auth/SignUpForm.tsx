@@ -155,29 +155,34 @@ export function SignUpForm({
 
   // The lock around each request (`useAuthSteps`), holding the step it was
   // sent from while it is in flight.
-  const { busy, run, mounted, localErrors, setLocalErrors, notice, setNotice } =
+  const { busy, run, localErrors, setLocalErrors, notice, setNotice } =
     useAuthSteps({
       logTag: 'sign-up',
       leaveTimeoutMs,
       onStart: () => setHeldStep(currentStep()),
     })
-  const { navigate, blockedTask } = useFinalizeNavigate({
+  const navigate = useFinalizeNavigate({
     destination,
-    mounted,
     assignLocation,
     logTag: 'sign-up',
   })
 
   /** Signs the visitor in to the account Clerk has just created. */
-  const finish = async () => {
+  const finish = async (isCurrent: () => boolean) => {
     // `navigate` does nothing for a visitor who has already gone somewhere
     // else (the header, the Back button): they are signed in either way.
-    const { error } = await signUp.finalize({ navigate })
+    let blockedTask: string | undefined
+    const { error } = await signUp.finalize({
+      navigate: (params) => {
+        if (isCurrent()) blockedTask = navigate(params)
+      },
+    })
+    if (!isCurrent()) return
     if (error) {
       setLocalErrors([text(error) ?? UNEXPECTED_MESSAGE])
       return
     }
-    if (blockedTask.current) {
+    if (blockedTask) {
       setLocalErrors([SESSION_TASK_MESSAGE])
       return
     }
@@ -241,18 +246,19 @@ export function SignUpForm({
     password,
     mailingListOptIn,
   }: SignUpFormValues) =>
-    run(async () => {
+    run(async (isCurrent) => {
       const hadAttempt = Boolean(signUp.id)
       const { error } = await signUp.password({
         emailAddress,
         password,
         unsafeMetadata: { [MAILING_LIST_OPT_IN_KEY]: mailingListOptIn },
       })
+      if (!isCurrent()) return
       if (error) {
         if (hadAttempt) await discardAttempt(text(error) ?? UNEXPECTED_MESSAGE)
         return
       }
-      if (signUp.status === 'complete') return finish()
+      if (signUp.status === 'complete') return finish(isCurrent)
       if (!needsEmailCode()) {
         // The instance asks for something this form has no field or step
         // for (a dashboard setting changed: a field, or a phone to verify
@@ -270,13 +276,14 @@ export function SignUpForm({
       // its way and the step has to say so (#384); Clerk's own message
       // shows there too, and "Send a new code" is the way forward.
       const sent = await signUp.verifications.sendEmailCode()
+      if (!isCurrent()) return
       setCodeDelivery(sent.error ? 'failed' : 'sent')
     })
 
   const onGoogle = ({
     mailingListOptIn,
   }: Pick<SignUpFormValues, 'mailingListOptIn'>) =>
-    run(async () => {
+    run(async (isCurrent) => {
       const hadAttempt = Boolean(signUp.id)
       const { error } = await signUp.sso({
         strategy: 'oauth_google',
@@ -287,6 +294,7 @@ export function SignUpForm({
         redirectUrl: destination,
         unsafeMetadata: { [MAILING_LIST_OPT_IN_KEY]: mailingListOptIn },
       })
+      if (!isCurrent()) return
       if (error) {
         if (hadAttempt) await discardAttempt(text(error) ?? UNEXPECTED_MESSAGE)
         return
@@ -296,17 +304,17 @@ export function SignUpForm({
     })
 
   const onVerify = (code: string) =>
-    run(async () => {
+    run(async (isCurrent) => {
       const { error } = await signUp.verifications.verifyEmailCode({ code })
-      if (error) return
-      if (signUp.status === 'complete') return finish()
+      if (!isCurrent() || error) return
+      if (signUp.status === 'complete') return finish(isCurrent)
       await discardAttempt(unfinishedMessage())
     })
 
   const onResend = () =>
-    run(async () => {
+    run(async (isCurrent) => {
       const { error } = await signUp.verifications.sendEmailCode()
-      if (error) return
+      if (!isCurrent() || error) return
       setCodeDelivery('sent')
       setNotice('A new code is on its way.')
     })

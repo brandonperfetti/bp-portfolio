@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -24,6 +24,7 @@ type Factor = { strategy: string }
 
 const clerk = vi.hoisted(() => {
   const state = {
+    generation: 0,
     id: undefined as string | undefined,
     status: 'needs_identifier' as string,
     identifier: null as string | null,
@@ -63,48 +64,54 @@ const clerk = vi.hoisted(() => {
 })
 
 vi.mock('@clerk/nextjs', () => ({
-  useSignIn: () => ({
-    fetchStatus: 'idle',
-    errors: clerk.state.errors,
-    signIn: {
-      get id() {
-        return clerk.state.id
+  useSignIn: () => {
+    const generation = clerk.state.generation
+    return {
+      fetchStatus: 'idle',
+      errors: clerk.state.errors,
+      signIn: {
+        get id() {
+          return clerk.state.id
+        },
+        get status() {
+          return clerk.state.status
+        },
+        get identifier() {
+          return clerk.state.identifier
+        },
+        get supportedFirstFactors() {
+          return clerk.state.supportedFirstFactors
+        },
+        get supportedSecondFactors() {
+          return clerk.state.supportedSecondFactors
+        },
+        get firstFactorVerification() {
+          return clerk.state.firstFactorVerification
+        },
+        password: clerk.password,
+        create: clerk.create,
+        sso: (params: unknown) =>
+          generation === clerk.state.generation
+            ? clerk.sso(params)
+            : Promise.resolve(ok),
+        emailCode: {
+          sendCode: clerk.emailCodeSend,
+          verifyCode: clerk.emailCodeVerify,
+        },
+        resetPasswordEmailCode: {
+          sendCode: clerk.resetSend,
+          verifyCode: clerk.resetVerify,
+          submitPassword: clerk.resetSubmit,
+        },
+        mfa: {
+          sendEmailCode: clerk.mfaSend,
+          verifyEmailCode: clerk.mfaVerify,
+        },
+        finalize: clerk.finalize,
+        reset: clerk.reset,
       },
-      get status() {
-        return clerk.state.status
-      },
-      get identifier() {
-        return clerk.state.identifier
-      },
-      get supportedFirstFactors() {
-        return clerk.state.supportedFirstFactors
-      },
-      get supportedSecondFactors() {
-        return clerk.state.supportedSecondFactors
-      },
-      get firstFactorVerification() {
-        return clerk.state.firstFactorVerification
-      },
-      password: clerk.password,
-      create: clerk.create,
-      sso: clerk.sso,
-      emailCode: {
-        sendCode: clerk.emailCodeSend,
-        verifyCode: clerk.emailCodeVerify,
-      },
-      resetPasswordEmailCode: {
-        sendCode: clerk.resetSend,
-        verifyCode: clerk.resetVerify,
-        submitPassword: clerk.resetSubmit,
-      },
-      mfa: {
-        sendEmailCode: clerk.mfaSend,
-        verifyEmailCode: clerk.mfaVerify,
-      },
-      finalize: clerk.finalize,
-      reset: clerk.reset,
-    },
-  }),
+    }
+  },
 }))
 
 vi.mock('next/navigation', () => ({
@@ -215,6 +222,7 @@ beforeEach(() => {
     },
   )
   clerk.reset.mockImplementation(async () => {
+    clerk.state.generation += 1
     Object.assign(clerk.state, {
       id: undefined,
       status: 'needs_identifier',
@@ -248,6 +256,32 @@ async function enterCode(
 }
 
 describe('SignInForm: email and password', () => {
+  it('does not finalize a password request that settles after a Back-button restore', async () => {
+    let resolvePassword!: (result: Result) => void
+    clerk.password.mockImplementationOnce(
+      () =>
+        new Promise<Result>((resolve) => {
+          resolvePassword = resolve
+        }),
+    )
+    const user = userEvent.setup()
+    render(<SignInForm />)
+    await signInWithPassword(user)
+
+    act(() => {
+      window.dispatchEvent(
+        Object.assign(new Event('pageshow'), { persisted: true }),
+      )
+    })
+    await act(async () => {
+      complete()
+      resolvePassword(ok)
+    })
+
+    expect(clerk.finalize).not.toHaveBeenCalled()
+    expect(clerk.push).not.toHaveBeenCalled()
+  })
+
   it('sends the address and password, then makes the session active and goes home', async () => {
     const user = userEvent.setup()
     render(<SignInForm />)
@@ -428,6 +462,33 @@ describe('SignInForm: the new-device check (Device Trust)', () => {
     expect(
       screen.getByText(/couldn't send a code to/i, { exact: false }),
     ).toBeInTheDocument()
+  })
+
+  it('clears the first code’s delivery confirmation when the new-device send throws', async () => {
+    const logging = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      clerk.emailCodeVerify.mockImplementationOnce(async () => {
+        needsClientTrust()
+        return ok
+      })
+      clerk.mfaSend.mockRejectedValueOnce(new Error('Provider unavailable'))
+      const user = userEvent.setup()
+      render(<SignInForm />)
+      await typeEmail(user)
+      await user.click(
+        screen.getByRole('button', { name: 'Email me a sign-in code instead' }),
+      )
+      expect(screen.getByText(/enter the code we sent/i)).toBeInTheDocument()
+
+      await enterCode(user)
+
+      expect(screen.getByText(/couldn't send a code to/i)).toBeInTheDocument()
+      expect(logging.mock.calls).toContainEqual([
+        '[sign-in] unexpected failure',
+      ])
+    } finally {
+      logging.mockRestore()
+    }
   })
 
   it('sends a new code with the second-factor method', async () => {
@@ -724,17 +785,27 @@ describe('SignInForm: Google', () => {
 
   it('unlocks and says so when Clerk returns without a way to Google', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    clerk.sso.mockResolvedValue(ok)
+    let resolveSso!: (result: Result) => void
+    clerk.sso.mockImplementationOnce(
+      () =>
+        new Promise<Result>((resolve) => {
+          resolveSso = resolve
+        }),
+    )
     const user = userEvent.setup()
     render(<SignInForm />)
-    await user.click(
-      screen.getByRole('button', { name: 'Continue with Google' }),
-    )
+    const google = screen.getByRole('button', { name: 'Continue with Google' })
+    await user.click(google)
+    expect(google).toBeDisabled()
+    // JSDOM keeps disabled controls focused. Model a browser that drops focus.
+    document.body.tabIndex = -1
+    document.body.focus()
+    document.body.removeAttribute('tabindex')
+    await act(async () => resolveSso(ok))
 
     expect(screen.getByRole('alert')).toHaveTextContent(UNEXPECTED_MESSAGE)
-    expect(
-      screen.getByRole('button', { name: 'Continue with Google' }),
-    ).toBeEnabled()
+    expect(google).toBeEnabled()
+    expect(screen.getByLabelText('Email address')).toHaveFocus()
     expect(error).toHaveBeenCalledWith(
       '[sign-in] Google did not start',
       expect.anything(),

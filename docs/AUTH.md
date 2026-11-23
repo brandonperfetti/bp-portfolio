@@ -396,7 +396,7 @@ unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
   Clerk dashboard without re-testing both sign-up paths; Clerk says that
   update cannot be reversed.**
 - **The password hint is a constant.** "At least 15 characters" comes from
-  `PASSWORD_MIN_LENGTH` in `SignUpForm.tsx`, because Clerk's hooks expose no
+  `PASSWORD_MIN_LENGTH` in `useAuthSteps.ts`, because Clerk's hooks expose no
   instance settings. 15 is production's value (measured 2026-11-18). If the
   dashboard value changes, change the constant; a too-short password is
   refused by Clerk either way, and its message shows under the field.
@@ -460,8 +460,9 @@ most visitors see.
     `/sign-in/sso-callback` as the return page, always as a new attempt:
     `sso()` reuses an attempt that exists, and for one with no Google
     redirect on it (left by a refused "Email me a sign-in code") it neither
-    starts Google nor returns an error, so the form `reset()`s first. The
-    form stays locked only once Clerk has the URL to Google
+    starts Google nor returns an error. The form resets and calls `sso()` on
+    the replacement resource from `useSignIn()`. The form stays locked only
+    once Clerk has the URL to Google
     (`firstFactorVerification.externalVerificationRedirectURL`); without it
     it unlocks and logs `[sign-in] Google did not start`.
   - After any of them, a finished sign-in is made active with `finalize()`.

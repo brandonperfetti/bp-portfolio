@@ -106,7 +106,7 @@ export type StepOutcome = { stayLocked?: boolean } | void
  *   `onStart`: Called as a step starts, before the lock shows;
  *   the forms use it to hold the step the request was sent from.
  * @returns The lock state, the messages this side of Clerk owns, `run`, and
- *   `mounted` for a navigation callback to check.
+ *   a current-request check for callbacks and continuations.
  */
 export function useAuthSteps({
   logTag,
@@ -150,22 +150,27 @@ export function useAuthSteps({
     return () => window.removeEventListener('pageshow', onPageShow)
   }, [])
 
-  const run = async (step: () => Promise<StepOutcome>) => {
+  const run = async (
+    step: (isCurrent: () => boolean) => Promise<StepOutcome>,
+  ) => {
     if (inFlight.current) return
     inFlight.current = true
     const token = ++owner.current
+    // A new attempt or a restored page can supersede a pending SDK call.
+    // Check before continuing the flow or updating the form after that call.
+    const isCurrent = () => mounted.current && owner.current === token
     onStart?.()
     setBusy(true)
     setLocalErrors([])
     setNotice(undefined)
     let stayLocked = false
     try {
-      stayLocked = (await step())?.stayLocked ?? false
-    } catch (error) {
-      console.error(`[${logTag}] unexpected failure`, error)
+      stayLocked = (await step(isCurrent))?.stayLocked ?? false
+    } catch {
+      console.error(`[${logTag}] unexpected failure`)
       // Only for the request that still holds the lock: one released by a
       // restore must not put its error on a newer request's form.
-      if (owner.current === token) setLocalErrors([UNEXPECTED_MESSAGE])
+      if (isCurrent()) setLocalErrors([UNEXPECTED_MESSAGE])
     } finally {
       if (owner.current !== token) {
         // A restore released this lock and a newer request may hold it.
@@ -188,7 +193,6 @@ export function useAuthSteps({
   return {
     busy,
     run,
-    mounted,
     localErrors,
     setLocalErrors,
     notice,
@@ -221,44 +225,37 @@ export function useRedirectTarget() {
 /**
  * The `navigate` callback for Clerk's `finalize()`: on to `destination`,
  * through `decorateUrl` (which may turn it into an absolute URL Clerk needs
- * to set the session on), unless the visitor has already left this page.
+ * to set the session on), when the form request still owns the lock.
  *
  * @remarks A session Clerk left with a task (`SESSION_TASK_MESSAGE`) is not
- * sent on: `blockedTask` records it, for the form to say so once
- * `finalize()` returns. No task is switched on in the Clerk dashboard today;
- * each needs its own step built first (`docs/AUTH.md`).
+ * sent on. The callback returns the task key so the form can explain why.
+ * No task is switched on in the Clerk dashboard today. Each needs its own
+ * step built first (`docs/AUTH.md`).
  *
- * @param options - `mounted`: From {@link useAuthSteps}; a visitor who left in
- *   the moment before Clerk called this is signed in either way, and is not
- *   pulled back.
- *   `assignLocation`: How to leave for an absolute URL.
+ * @param options - `assignLocation`: How to leave for an absolute URL.
  *   `logTag`: The log line's prefix for a session task.
  */
 export function useFinalizeNavigate({
   destination,
-  mounted,
   assignLocation,
   logTag,
 }: {
   destination: string
-  mounted: { current: boolean }
   assignLocation: (url: string) => void
   logTag: string
 }) {
   const router = useRouter()
-  const blockedTask = useRef<string | undefined>(undefined)
-  const navigate = ({
+  return ({
     session,
     decorateUrl,
   }: {
     session?: FinalizedSession
     decorateUrl: (url: string) => string
   }) => {
-    blockedTask.current = sessionTask(session, logTag)
-    if (blockedTask.current || !mounted.current) return
+    const task = sessionTask(session, logTag)
+    if (task) return task
     const url = decorateUrl(destination)
     if (url.startsWith('http')) assignLocation(url)
     else router.push(url)
   }
-  return { navigate, blockedTask }
 }

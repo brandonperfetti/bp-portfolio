@@ -183,6 +183,8 @@ function StartStep({
   const [password, setPassword] = useState('')
   const emailRef = useRef<HTMLInputElement>(null)
   const passwordRef = useRef<HTMLInputElement>(null)
+  const wasPending = useRef(false)
+  const hasGlobalError = Boolean(errors.global?.length)
 
   // Back on this step from another one: start at the email field. On
   // arrival only, as on sign-up.
@@ -190,12 +192,24 @@ function StartStep({
     if (focusOnArrival && !pending) emailRef.current?.focus()
   }, [focusOnArrival]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A rejected submit puts the visitor back on the first field to fix.
+  // A rejected submit puts focus on the first field to fix. If disabling
+  // the controls dropped focus and only a global error remains, restore it.
   useEffect(() => {
-    if (pending) return
+    if (pending) {
+      wasPending.current = true
+      return
+    }
+    const settled = wasPending.current
+    wasPending.current = false
     if (errors.emailAddress) emailRef.current?.focus()
     else if (errors.password) passwordRef.current?.focus()
-  }, [pending, errors.emailAddress, errors.password])
+    else if (
+      settled &&
+      hasGlobalError &&
+      document.activeElement === document.body
+    )
+      emailRef.current?.focus()
+  }, [pending, errors.emailAddress, errors.password, hasGlobalError])
 
   return (
     <form
