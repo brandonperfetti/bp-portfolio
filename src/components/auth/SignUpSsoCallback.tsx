@@ -8,7 +8,7 @@ import { HandleSSOCallback, useSignUp } from '@clerk/nextjs'
 
 import { safeRedirectPath, withRedirect } from '@/lib/auth/safeRedirect'
 
-import { SIGN_IN_PATH, SIGN_UP_PATH } from './SignUpForm'
+import { SIGN_IN_PATH, SIGN_UP_PATH } from './paths'
 
 /**
  * How long the callback page waits for Clerk to send the visitor somewhere
