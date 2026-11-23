@@ -97,6 +97,29 @@ describe('assertPathShapeServable — the pure half', () => {
       )
     }
   })
+
+  it('rejects the Clerk catch-all segments at the root and beneath (#400)', () => {
+    // `/account`, `/sign-in` and `/sign-up` are optional catch-alls, so they
+    // shadow every CMS page beneath them: a save there would never render.
+    for (const path of [
+      'account',
+      'account/x',
+      'account/x/y',
+      'sign-in',
+      'sign-in/x',
+      'sign-up',
+      'sign-up/x',
+    ]) {
+      const first = path.split('/')[0]
+      expect(() => assertPathShapeServable(path)).toThrow(
+        new RegExp(`“/${first}” is owned by the application`),
+      )
+    }
+  })
+
+  it('still accepts a nested placement under a dedicated route', () => {
+    expect(() => assertPathShapeServable('tech/ai')).not.toThrow()
+  })
 })
 
 describe('postSlugCollidingWith', () => {

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { contactSelector } from '@/lib/email/contactSelector'
+
 import {
   getClientSentryDsn,
   getSentryEnvironment,
@@ -850,6 +852,36 @@ describe('email redaction in breadcrumbs and spans (#409)', () => {
       redactEmailAddresses('/contacts/first.last%40mail.example.co.uk'),
     ).toBe('/contacts/[email]')
     expect(redactEmailAddresses('no address here')).toBe('no address here')
+  })
+
+  // Every printable ASCII character, a space and two non-ASCII ones. An `@`
+  // here is the one inside a quoted local part, as in `"a@b"@example.test`.
+  const LOCAL_CHARS = [
+    ...Array.from({ length: 94 }, (_, i) => String.fromCharCode(33 + i)),
+    ' ',
+    'ü',
+    '中',
+  ]
+
+  it.each(LOCAL_CHARS)(
+    'redacts the whole contactSelector path for a local part holding %j (#418)',
+    (char) => {
+      const selector = contactSelector(`reader${char}tag@example.test`)
+      expect(selector.endsWith('tag@example.test')).toBe(true)
+      expect(
+        redactEmailAddresses(
+          `https://api.resend.com/contacts/${selector}/segments/seg-1`,
+        ),
+      ).toBe('https://api.resend.com/contacts/[email]/segments/seg-1')
+    },
+  )
+
+  it('redacts a quoted local part holding an @ whole, and sends it as one segment (#418)', () => {
+    const selector = contactSelector('"reader@tag"@example.test')
+    expect(selector).toBe('%22reader%40tag%22@example.test')
+    expect(redactEmailAddresses(`/contacts/${selector}/segments`)).toBe(
+      '/contacts/[email]/segments',
+    )
   })
 
   it("redacts the http breadcrumb Sentry's fetch instrumentation records", () => {

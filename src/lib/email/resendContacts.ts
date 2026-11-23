@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 
+import { contactSelector } from '@/lib/email/contactSelector'
 import { boundedErrorMessage } from '@/lib/observability/boundedErrorMessage'
 
 /**
@@ -66,7 +67,9 @@ export async function findContactIdByEmail(
   email: string,
 ): Promise<string | undefined> {
   try {
-    const { data, error } = await resend.contacts.get({ email })
+    const { data, error } = await resend.contacts.get({
+      email: contactSelector(email),
+    })
     if (error || !data) {
       console.error('[resend-contacts] contact lookup failed', {
         name: error?.name,
@@ -209,12 +212,9 @@ export async function removeContactByEmail(
   context: string,
 ): Promise<RemoveByEmailOutcome> {
   try {
-    // The SDK puts the selector into `/contacts/<email>` unencoded
-    // (resend@6.18.1), so a `#`, `?` or `/` in the local part would cut the
-    // path short and look up another contact. One path segment; `@` stays
-    // literal, so an ordinary address sends the same request as before.
-    const selector = encodeURIComponent(email).replace(/%40/g, '@')
-    const { data, error } = await resend.contacts.get({ email: selector })
+    const { data, error } = await resend.contacts.get({
+      email: contactSelector(email),
+    })
     // Resend's own not-found only: a gateway's HTML 404 is an
     // `application_error`, which says nothing about the contact.
     if (error?.name === 'not_found') return 'absent'

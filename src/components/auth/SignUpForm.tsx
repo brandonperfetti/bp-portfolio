@@ -189,10 +189,26 @@ export function SignUpForm({
   )
   const destination = redirectTarget ?? '/'
 
+  /**
+   * Whether the code step can finish this sign-up: the email is the only
+   * thing left to verify. A sign-up that also wants a phone verified (a
+   * dashboard setting) would end, after the code, on a dead end, so it is
+   * treated like any other requirement this form has no step for (#386).
+   */
   const needsEmailCode = () =>
     signUp.status === 'missing_requirements' &&
-    signUp.unverifiedFields.includes('email_address') &&
-    signUp.missingFields.length === 0
+    signUp.missingFields.length === 0 &&
+    signUp.unverifiedFields.length > 0 &&
+    signUp.unverifiedFields.every((field) => field === 'email_address')
+
+  /**
+   * The message for a sign-up this form cannot finish. One that came by
+   * Google is not pointed back at Google: that route has just not finished.
+   */
+  const unfinishedMessage = () =>
+    signUp.verifications.externalAccount?.status === 'verified'
+      ? UNFINISHED_GOOGLE_MESSAGE
+      : UNFINISHED_MESSAGE
 
   /** The step Clerk's sign-up calls for right now. */
   const currentStep = (): SignUpFormViewProps['step'] => {
@@ -338,8 +354,9 @@ export function SignUpForm({
       }
       if (signUp.status === 'complete') return finish()
       if (!needsEmailCode()) {
-        // The instance asks for something this form has no field for (a
-        // dashboard setting changed). Say so instead of showing a dead end.
+        // The instance asks for something this form has no field or step
+        // for (a dashboard setting changed: a field, or a phone to verify
+        // beside the email, #386). Say so instead of showing a dead end.
         console.error('[sign-up] unsupported requirement', {
           status: signUp.status,
           missingFields: signUp.missingFields,
@@ -383,7 +400,7 @@ export function SignUpForm({
       const { error } = await signUp.verifications.verifyEmailCode({ code })
       if (error) return
       if (signUp.status === 'complete') return finish()
-      await discardAttempt(UNFINISHED_MESSAGE)
+      await discardAttempt(unfinishedMessage())
     })
 
   const onResend = () =>

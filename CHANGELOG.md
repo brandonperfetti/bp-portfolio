@@ -12,6 +12,99 @@ Each version is an annotated tag on that release's merge commit.
 here; each one's release PR body is its record. How an entry is written and
 when the tag is made: [`docs/WORKFLOW.md` § Releases](docs/WORKFLOW.md#releases).
 
+## v2026.11.23
+
+A subscriber whose address has a `#`, `?` or `/` in it now reaches their own
+list entry, a sign-up that also wants a phone verified says at once that it
+can't finish instead of after the code, and the CMS refuses a page saved
+under `/account`, `/sign-in` or `/sign-up`, where it could never render.
+Release PR [#426](https://github.com/brandonperfetti/bp-portfolio/pull/426) ·
+[tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.23) ·
+carries #420, #422, #424 and #425.
+
+**Visitors**
+
+- **An address with `#`, `?` or `/` before the `@` reaches its own list
+  entry.** Before this release, `reader#tag@example.test` was looked up as
+  `reader`, so confirming the newsletter from the emailed link, ticking the
+  contact form's subscribe box, or opting in at account sign-up could
+  reach another reader's entry or none. Each now finds the address as
+  given. A plain or `+` address behaves as before (#418, #422).
+- **A sign-up that also needs a phone verified says so at once.** Where a
+  sign-up asks for both the email and a phone number to be verified, the
+  form used to show the email-code step anyway, and after the code it
+  discarded the attempt; a Google visitor was then told to sign up with
+  Google, the route that had just failed. Now the code step is shown only
+  when the email is the one thing left to verify. Otherwise the email route
+  says it couldn't finish before any code is sent, and a Google sign-up gets
+  the message that points to email and a password. Phone is off on
+  production, so no visitor can reach this today (#386, #425).
+
+**CMS admin**
+
+- **A page saved at or under `/account`, `/sign-in` or `/sign-up` is
+  refused.** Each of those is an app route that serves every path beneath
+  it, so a Pages document there used to publish, could be sitemapped, and
+  never rendered. The save now fails with "“/account” is owned by the
+  application, so a document saved under it could never be served. Pick a
+  different first segment." The same check covers a post placed under a
+  parent page. Other paths, such as `/tech/ai`, save as before (#400, #424).
+
+**MCP clients**
+
+- A page created or updated through the MCP server at or under the same three
+  segments is refused with the same message, since it runs the same save
+  check (#400, #424).
+
+**What this release leaves.**
+
+- **Draft-only pages under the three segments were not checked.** No
+  published page sits there on production or staging (the public pages API,
+  15 documents each), but a public read cannot see drafts or versions. A
+  draft there would now fail on its next save (#424).
+- **The cover guide is a draft.** `docs/CONTENT_IMAGERY.md` is
+  `status: draft`, so it tells agents to generate no cover until Brandon
+  approves it; #415 stays open until then, and posts 40, 46 and 52 over the
+  rotation cap are #423 (#420).
+
+**Not proven before release:** a live Resend request with an encoded
+address; what is proven is the real SDK against a stubbed `fetch`, asserting
+each exact path, and that Resend decodes the path is inferred from standard
+routing and from the removal command that already relies on it. The sign-up
+form against a Clerk instance that verifies phones; what is proven is the
+form against a fake of Clerk's fields. The page refusal on a deployed admin.
+
+**Developers**
+
+- New `contactSelector(email)` in `src/lib/email/contactSelector.ts` is the
+  one helper for every Resend call that addresses a contact by email, since
+  `resend@6.18.1` puts the address into the request path unencoded:
+  `captureContact`'s lookup, resubscribe update, read-back and segment calls,
+  `findContactIdByEmail`, and `removeContactByEmail`, which drops #419's
+  inline form. It encodes the address as one path segment and puts back
+  only `+` and the last `@`, which Sentry's `redactEmailAddresses` matches,
+  so the address in a breadcrumb or span path is still redacted whole;
+  `sentryConfig.test.ts` checks that over every printable ASCII character. The create still sends the address raw in
+  its JSON body. The removal path now sends `+` literally where #419 sent
+  `%2B` (#418, #422).
+- `SignUpForm`'s `needsEmailCode()` is true only when `email_address` is the
+  only unverified field and nothing is missing, and `onVerify`'s fallback
+  picks its message by route through `unfinishedMessage()`. `docs/AUTH.md`
+  and the `docs/JOURNEYS.md` Sign up row say so (#386, #425).
+- `CODE_OWNED_FIRST_SEGMENTS` (`src/fields/slug/documentPath.ts`) gains
+  `account`, `sign-in` and `sign-up`; `RESERVED_PAGE_SLUGS` is unchanged but
+  for its TSDoc. `docs/NAVIGATION.md` says the save is refused (#400, #424).
+- Cover work has its own route: `docs/CONTENT_IMAGERY.md` (photographic
+  covers; agents generate with GPT Image, never Midjourney; an exact-id
+  pre-check before any Cloudinary upload, because `sign-upload` overwrites;
+  Brandon approves every attach) and `docs/cover-history.json`, the 53 live
+  covers with their final prompts; `AGENTS.md` routes cover work there. The
+  code-rendered cover tooling moved from `tools/covers/` to
+  `archive/code-rendered-covers/`, with an archive note in its README and
+  the old §9 spec kept in its `HISTORY.md`, and `CONTENT_STYLE.md` §9 and
+  `CONTENT_WORKFLOW.md` point to the new guide (#415, #420).
+- No Payload schema change, no migration and no new env var.
+
 ## v2026.11.22
 
 A form submitted before the spam check has loaded now waits for it instead

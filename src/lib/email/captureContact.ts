@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 
+import { contactSelector } from '@/lib/email/contactSelector'
 import { boundedErrorMessage } from '@/lib/observability/boundedErrorMessage'
 
 /** The Resend call a failed capture stopped at. */
@@ -65,17 +66,18 @@ function failed(
 
 /**
  * Whether the contact is in the segment, reading every page of its segments.
+ * `selector` is the address from {@link contactSelector}.
  * Returns the Resend error instead when a page cannot be read.
  */
 async function isInSegment(
   resend: Resend,
-  email: string,
+  selector: string,
   segmentId: string,
 ): Promise<boolean | ResendError> {
   let after: string | undefined
   for (;;) {
     const page = await resend.contacts.segments.list({
-      email,
+      email: selector,
       limit: SEGMENT_PAGE_LIMIT,
       ...(after ? { after } : {}),
     })
@@ -145,8 +147,11 @@ export async function captureContact(
   try {
     const resend = new Resend(apiKey)
     const { email } = contact
+    // Every call that addresses the contact by email puts it in the path;
+    // the create below sends it in a JSON body, as given (#418).
+    const selector = contactSelector(email)
 
-    const existing = await resend.contacts.get({ email })
+    const existing = await resend.contacts.get({ email: selector })
     const absent =
       existing.error?.name === 'not_found' || existing.error?.statusCode === 404
     if (existing.error && !absent) {
@@ -168,12 +173,12 @@ export async function captureContact(
     if (options.rejoin && existing.data.unsubscribed) {
       stage = 'resubscribe'
       const { error } = await resend.contacts.update({
-        email,
+        email: selector,
         unsubscribed: false,
       })
       if (error)
         return failed(stage, error, 'Resend contact resubscribe failed')
-      const after = await resend.contacts.get({ email })
+      const after = await resend.contacts.get({ email: selector })
       if (after.error) {
         return failed(stage, after.error, 'Resend contact read-back failed')
       }
@@ -188,13 +193,13 @@ export async function captureContact(
 
     if (segmentId) {
       stage = 'segment'
-      const member = await isInSegment(resend, email, segmentId)
+      const member = await isInSegment(resend, selector, segmentId)
       if (typeof member !== 'boolean') {
         return failed(stage, member, 'Resend segment read failed')
       }
       if (!member) {
         const { error } = await resend.contacts.segments.add({
-          email,
+          email: selector,
           segmentId,
         })
         if (error) return failed(stage, error, 'Resend segment add failed')

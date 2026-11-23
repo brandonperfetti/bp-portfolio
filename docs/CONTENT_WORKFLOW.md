@@ -100,12 +100,17 @@ noted so future agents know what was tested, not just what was hoped.
 
 - Payload MCP connector (find/create/update/delete over content
   collections + createMedia/find/update).
-- Cloudinary MCP connector (asset management) — the rasterizer of record
-  and the archive for **code-rendered** covers: the assembled SVG is
-  uploaded as a data URI with `format: "png"` and Cloudinary serves the
-  PNG the ingest route then pulls (docs/CONTENT_STYLE.md §9). AI cover
-  generation is retired as of 2026-08; do not reach for `generate-image`
-  for a cover.
+- Cloudinary MCP connector (asset management) — the archive of every
+  cover's original and the source of the 16:9 JPEG derivation the ingest
+  route pulls (`sign-upload`/`upload-asset`, `search-assets` for the
+  pre-check). Cover direction, generators and the upload rules:
+  **docs/CONTENT_IMAGERY.md**.
+- An image generator for the cover. Agents use GPT Image (`openai/gpt-image-2`,
+  OpenClaw `image_generate` on the OpenClaw OAuth route); Midjourney is Brandon's paste path
+  (docs/CONTENT_IMAGERY.md §10). _History, 2026-11-22 (#415):_ this bullet
+  used to say AI cover generation was retired as of 2026-08, when covers
+  were code-rendered SVG. That stopped being true on 2026-09-27, when all
+  53 live covers became Midjourney photographs.
 - `CMS_REVALIDATE_SECRET` — auths `/api/revalidate` AND
   `/api/media/ingest`. The **app** reads this bare name for whichever
   environment it is deployed to (Preview + the custom `staging`
@@ -163,31 +168,51 @@ posts; never put image prompts in the body.
 
 ### 3. Covers
 
-Covers are **designed, not generated** — follow **docs/CONTENT_STYLE.md
-§9** in full; this section only places it in the run. Author the motif
-in `tools/covers/cover-{postId}.html` over the shared shell, render the
-review PNG (`node render.mjs cover-NN`), pass the distinctiveness gate
-(thumbnail contact sheet beside the five most recent covers; no
-archetype repeat within the last four), get human approval, then
-`assemble.py` → `minify.py` → upload to Cloudinary as a data-URI PNG at
-the canonical path:
+Follow **docs/CONTENT_IMAGERY.md** in full; this section only places it
+in the run. Generate → pick → upload → ingest → attach:
 
-    bp-portfolio/images/articles/{slug}/cover-ds-A.png
+1. **Recipe.** Write the cover's recipe (§2 there), each dial with a
+   one-line reason, and check it against the cover history for rotation
+   (§9 there, `docs/cover-history.json`).
+2. **Generate.** Agents use GPT Image with the tuned prompt form;
+   Midjourney is Brandon's paste path (§10 there). Review each candidate
+   against the rules, on the light and the dark card, and run the
+   distinctiveness gate.
+3. **Pick.** Upload the candidates under `…/{slug}/candidates/` and hand
+   them to Brandon. He picks; match the pick by its job id, never by
+   prompt wording or by eye.
+4. **Upload** the pick to the next provider-aware series id (§11 there):
 
-(`cover-ds-B`, `-C` for later variants — the retired AI-era `cover-a/b/c`
-slots still exist and Cloudinary collisions are silent; §9 has the
-gotchas.) Verify the delivered PNG visually — 2048×1152, `existing:
-false` — before anything proceeds. Only the approved cover goes on to
-§4.
+       bp-portfolio/images/articles/{slug}/cover-<provider>-<letter>
+
+   For example `cover-gpt-B` for an agent's second cover on a post, or
+   `cover-mj-B` for Brandon's Midjourney paste. `cover-mj-A` is the live
+   history; `cover-a/b/c` and `cover-ds-A` are retired namespaces. Run the
+   exact-id `search-assets` pre-check with a positive control first:
+   `sign-upload` forces `overwrite: true`, so a collision is silent.
+   Keep the native PNG unresized, with a same-size JPEG (about quality 90) beside it that is under 10,485,760 bytes (docs/CONTENT_IMAGERY.md
+   §11 Upload). The GPT Image pilot stays local until #415 lands and
+   Brandon approves the attach (§11 Pilot hold).
+
+5. **Ingest** the 16:9 derivation
+   (`c_fill,ar_16:9,g_auto,w_2048/q_auto:good,f_jpg`) through the route
+   in §4. No Cloudinary generative or AI transform (`e_upscale` included)
+   is part of the flow.
+6. **Attach** in §5, once Brandon approves it: `heroImage` and
+   `meta.image`, recording each field's previous media id for rollback.
+
+Publishing stays separate: no cover step publishes, unpublishes or
+reschedules a post.
 
 ### 4. Ingest the winner
 
 Two paths, one outcome: a Media row in Blob with real bytes behind it.
 
-**Human path (simplest when a person is at the keyboard):** upload the
-PNG in the admin Media collection, or straight from the post's Hero
-Image field, then attach the resulting media id via MCP `updatePosts`
-(§5). No secret, no curl.
+**Human path (simplest when a person is at the keyboard):** download the
+16:9 JPEG derivation (docs/CONTENT_IMAGERY.md §11 Ingest URL), check it is
+2048×1152, and upload that file, not the original PNG, in the admin Media
+collection or straight from the post's Hero Image field. Then attach the
+resulting media id via MCP `updatePosts` (§5). No secret, no curl.
 
 **Agent path:** the MCP cannot upload files (`createMedia` requires
 multipart; admin "Paste URL" is a client-side fetch — spiked
@@ -255,7 +280,7 @@ reuses the secret's name:
     Content-Type: application/json
     x-vercel-protection-bypass: <VERCEL_AUTOMATION_BYPASS_SECRET>   # any *.vercel.app host; omit on brandonperfetti.com
     { "secret": <that host's value: CMS_REVALIDATE_SECRET_STAGING or _PRODUCTION>,
-      "url": <cloudinary PNG URL>, "alt": <alt text> }
+      "url": <Cloudinary 16:9 JPEG derivation URL, docs/CONTENT_IMAGERY.md §11>, "alt": <alt text> }
     → { ok, media: { id, url, filename } }
 
 Auth is the **JSON body** (`secret`), never an `Authorization` or custom
@@ -274,17 +299,18 @@ The Media guard rule and the ingest route's rails: `docs/SECURITY.md` § Media u
 Server-side fetch → Media doc in Blob via the Local API (dimensions,
 sizes, and the whole image pipeline apply); the stored filename is the
 source URL's last two path segments joined with `-`, i.e.
-`<slug>-cover-ds-A.png`. Guard rails: https + `res.cloudinary.com`
+`<slug>-cover-mj-A.jpg`. Guard rails: https + `res.cloudinary.com`
 allowlist only; JPEG, PNG, WebP, AVIF or GIF only (the route itself
 rejects a non-`image/*` response and SVG with 415, and any other
 `image/*` — TIFF, say — passes that check but fails the Media
 collection's allowlist with 422); 12MB cap (413) [source:
 `src/app/api/media/ingest/route.ts`, `src/collections/Media.ts`].
-Cloudinary = rasterization + archive of the source; Blob = serving copy.
+Cloudinary = archive of the original + the 16:9 derivation; Blob = serving copy.
 
 ### 5. Attach, publish, verify
 
-1. `updatePosts` → `heroImage: <media id>`, SEO meta, categories/tags.
+1. `updatePosts` → `heroImage` and `meta.image: <media id>`, SEO meta,
+   categories/tags.
 2. Publish now (`_status: "published"`) or schedule (future
    `publishedAt` — scheduled publish is native; no hidden-until-date
    conventions needed).
@@ -409,3 +435,7 @@ draft-only write needs no call: nothing public changed.
   media 175 exist in both) [measured 2026-09-17], and the two environments
   share one Blob store. Always name the environment alongside any id in
   a receipt, handoff, or ticket — a bare "media 175" is ambiguous.
+  _Corrected 2026-11-22 (#415):_ the media sequences no longer coincide
+  past 176. On 2026-09-26 staging media 177 became a cover rehearsal and
+  production media 177 an unrelated image [measured, first-9 rollout
+  receipt on #415]. Naming the environment is now the only safe form.

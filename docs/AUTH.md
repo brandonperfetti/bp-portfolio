@@ -409,6 +409,11 @@ unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
   starts a new one. An attempt missing only the email or the password is
   kept, since the first step collects those. A trip to Google the visitor abandoned is not treated
   this way: Google verified nothing, and the first step shows as before.
+  A verification the form has no step for counts the same way (#386): the
+  code step is shown only when the email is the one thing left to verify, so
+  a sign-up that also wants a phone verified says it could not finish at
+  once, by either route, instead of after the code. A Google sign-up that
+  the code still does not finish is never told to sign up with Google.
 - **Sign-in is still Clerk's prebuilt `<SignIn>`** by Brandon's decision
   (2026-11-18); making it custom is its own issue. The optional catch-all
   under `/sign-up` stays so the prebuilt sign-in's links into `/sign-up/…`

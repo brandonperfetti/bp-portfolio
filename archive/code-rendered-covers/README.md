@@ -1,7 +1,11 @@
-# Cover design system tooling
+# Cover design system tooling (archived)
 
-Code-rendered article covers (2048×1152). Spec: `docs/CONTENT_STYLE.md` §9
-(shell constants, hue map, composition archetypes, distinctiveness gate).
+**Archived 2026-11-22 (#415); nothing renders with it now.** Current covers
+follow `docs/CONTENT_IMAGERY.md`. Moved here from `tools/covers/`.
+
+Code-rendered article covers (2048×1152). Spec: [`HISTORY.md`](HISTORY.md),
+the former `docs/CONTENT_STYLE.md` §9 (shell constants, hue map, composition
+archetypes, distinctiveness gate).
 
 ## Files
 
