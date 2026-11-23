@@ -354,9 +354,16 @@ file is `status: draft`, §1 still applies.
   to `true` on every upload of both rollouts, and added `upload_preset`,
   `colors` and `audit_context`. A collision would silently replace the old
   asset. So:
-  1. **Take the writer slot before checking any ID.** Allow one writer per
-     post folder. Hold the slot through the lookup, upload and any
-     reconciliation.
+  1. **Take the writer slot before checking any ID.** Brandon designates
+     one cover-run thread for each Cloudinary product environment and full
+     post folder. He records the active writer there,
+     naming the operator and session. Start only after that assignment
+     appears in the thread. If someone holds the slot, wait.
+     The writer records release in the same thread after the attempt and
+     any reconciliation are complete, or after stopping before a request
+     was sent. An interrupted or uncertain attempt keeps the slot held.
+     If its writer is unavailable, Brandon explicitly transfers the slot
+     for reconciliation before another operator can write.
   2. **Look up the exact public ID.** Use the authenticated Cloudinary
      [Admin API single-resource lookup](https://cloudinary.com/documentation/admin_api#get_details_of_a_single_resource_by_public_id),
      `GET /resources/image/upload/{public_id}`, in the upload's product
