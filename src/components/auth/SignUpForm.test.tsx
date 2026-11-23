@@ -519,6 +519,49 @@ describe('SignUpForm: the rest of the flow', () => {
     error.mockRestore()
   })
 
+  it('ignores a stale session task and returned finalize error after a Back-button restore', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      let settleFinalize!: () => void
+      const user = userEvent.setup()
+      awaitingCode()
+      clerk.verifyEmailCode.mockImplementationOnce(async () => {
+        clerk.state.status = 'complete'
+        return ok
+      })
+      clerk.finalize.mockImplementationOnce(
+        ({ navigate }: { navigate: (params: unknown) => void }) =>
+          new Promise<Result>((resolve) => {
+            settleFinalize = () => {
+              navigate({
+                session: { currentTask: { key: 'setup-mfa' } },
+                decorateUrl: (url: string) => url,
+              })
+              resolve({ error: { message: 'Stale sign-up error' } })
+            }
+          }),
+      )
+      render(<SignUpForm />)
+      await user.type(screen.getByLabelText('Verification code'), '424242')
+      await user.click(screen.getByRole('button', { name: 'Verify' }))
+      expect(clerk.finalize).toHaveBeenCalledOnce()
+
+      act(() => {
+        window.dispatchEvent(
+          Object.assign(new Event('pageshow'), { persisted: true }),
+        )
+      })
+      await act(async () => settleFinalize())
+
+      expect(clerk.push).not.toHaveBeenCalled()
+      expect(log).not.toHaveBeenCalled()
+      expect(screen.queryByText(SESSION_TASK_MESSAGE)).not.toBeInTheDocument()
+      expect(screen.queryByText('Stale sign-up error')).not.toBeInTheDocument()
+    } finally {
+      log.mockRestore()
+    }
+  })
+
   it('goes back to the page that sent the visitor here', async () => {
     const user = userEvent.setup()
     clerk.search.value = 'redirect_url=%2Farticles%2Fsome-post'

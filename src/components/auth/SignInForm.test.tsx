@@ -256,6 +256,23 @@ async function enterCode(
 }
 
 describe('SignInForm: email and password', () => {
+  it.each(['', '   '])(
+    'does not submit a blank email (%j) against a retained Clerk attempt',
+    async (value) => {
+      identified(['password'])
+      const user = userEvent.setup()
+      render(<SignInForm />)
+      if (value) await user.type(screen.getByLabelText('Email address'), value)
+      await user.type(screen.getByLabelText('Password'), 'correct horse')
+      await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+      expect(clerk.password).not.toHaveBeenCalled()
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Enter your email address.',
+      )
+    },
+  )
+
   it('does not finalize a password request that settles after a Back-button restore', async () => {
     let resolvePassword!: (result: Result) => void
     clerk.password.mockImplementationOnce(
@@ -406,6 +423,35 @@ describe('SignInForm: email and password', () => {
     error.mockRestore()
   })
 
+  it('ignores a stale finalize callback and returned error after a Back-button restore', async () => {
+    let settleFinalize!: () => void
+    const decorateUrl = vi.fn((url: string) => url)
+    clerk.finalize.mockImplementationOnce(
+      ({ navigate }: { navigate: (params: unknown) => void }) =>
+        new Promise<Result>((resolve) => {
+          settleFinalize = () => {
+            navigate({ decorateUrl })
+            resolve({ error: { message: 'Stale sign-in error' } })
+          }
+        }),
+    )
+    const user = userEvent.setup()
+    render(<SignInForm />)
+    await signInWithPassword(user)
+    expect(clerk.finalize).toHaveBeenCalledOnce()
+
+    act(() => {
+      window.dispatchEvent(
+        Object.assign(new Event('pageshow'), { persisted: true }),
+      )
+    })
+    await act(async () => settleFinalize())
+
+    expect(decorateUrl).not.toHaveBeenCalled()
+    expect(clerk.push).not.toHaveBeenCalled()
+    expect(screen.queryByText('Stale sign-in error')).not.toBeInTheDocument()
+  })
+
   it('shows the message and unlocks when making the session active fails', async () => {
     clerk.finalize.mockResolvedValue({
       error: { message: 'Session could not be set.' },
@@ -489,6 +535,39 @@ describe('SignInForm: the new-device check (Device Trust)', () => {
     } finally {
       logging.mockRestore()
     }
+  })
+
+  it('sends a new-device code when a superseded first-code verification advances Clerk', async () => {
+    let finishOldVerify!: (result: Result) => void
+    clerk.emailCodeVerify.mockImplementationOnce(
+      () =>
+        new Promise<Result>((resolve) => {
+          finishOldVerify = resolve
+        }),
+    )
+    const user = userEvent.setup()
+    const { rerender } = render(<SignInForm />)
+    await typeEmail(user)
+    await user.click(
+      screen.getByRole('button', { name: 'Email me a sign-in code instead' }),
+    )
+    expect(screen.getByText(/enter the code we sent/i)).toBeInTheDocument()
+    await enterCode(user)
+
+    act(() => {
+      window.dispatchEvent(
+        Object.assign(new Event('pageshow'), { persisted: true }),
+      )
+    })
+    await act(async () => {
+      needsClientTrust()
+      finishOldVerify(ok)
+    })
+    // Clerk publishes the new challenge independently of the stale request.
+    rerender(<SignInForm />)
+
+    await waitFor(() => expect(clerk.mfaSend).toHaveBeenCalledOnce())
+    expect(heading()).toHaveTextContent('Confirm it’s you')
   })
 
   it('sends a new code with the second-factor method', async () => {

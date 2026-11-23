@@ -125,9 +125,13 @@ export function SignInForm({
     }
   }
   const [heldStep, setHeldStep] = useState<SignInStep>('start')
-  // What this page has seen of the latest code's delivery, so a code step
-  // never says one was sent when it was not (as on sign-up, #384).
-  const [codeDelivery, setCodeDelivery] = useState<CodeDelivery>('unknown')
+  // Delivery for this challenge only. Clerk can move to another challenge
+  // while the page is restored, even if we discard the old request's result.
+  const [delivery, setDelivery] = useState<{
+    attemptId: typeof signIn.id
+    step: SignInStep
+    status: Exclude<CodeDelivery, 'unknown'>
+  }>()
   const [googleAfterReset, setGoogleAfterReset] = useState<{
     isCurrent: () => boolean
     discarded: typeof signIn
@@ -139,6 +143,15 @@ export function SignInForm({
       leaveTimeoutMs,
       onStart: () => setHeldStep(currentStep()),
     })
+  const step = busy ? heldStep : currentStep()
+  const codeDelivery =
+    delivery?.step === step && delivery.attemptId === signIn.id
+      ? delivery.status
+      : 'unknown'
+  const recordDelivery = (
+    step: SignInStep,
+    status: Exclude<CodeDelivery, 'unknown'>,
+  ) => setDelivery({ attemptId: signIn.id, step, status })
   const navigate = useFinalizeNavigate({
     destination,
     assignLocation,
@@ -178,7 +191,7 @@ export function SignInForm({
       ),
     })
     setLocalErrors([message])
-    setCodeDelivery('unknown')
+    setDelivery(undefined)
     await signIn.reset()
   }
 
@@ -186,10 +199,11 @@ export function SignInForm({
   const sendSecondFactorCode = async (isCurrent: () => boolean) => {
     try {
       const sent = await signIn.mfa.sendEmailCode()
-      if (isCurrent()) setCodeDelivery(sent.error ? 'failed' : 'sent')
+      if (isCurrent())
+        recordDelivery('second-factor', sent.error ? 'failed' : 'sent')
     } catch (error) {
       // An earlier challenge's successful send does not apply to this code.
-      if (isCurrent()) setCodeDelivery('failed')
+      if (isCurrent()) recordDelivery('second-factor', 'failed')
       throw error
     }
   }
@@ -239,7 +253,15 @@ export function SignInForm({
 
   const onSubmit = ({ emailAddress, password }: SignInFormValues) =>
     run(async (isCurrent) => {
-      const { error } = await signIn.password({ emailAddress, password })
+      const identifier = emailAddress.trim()
+      if (!identifier) {
+        setLocalErrors(['Enter your email address.'])
+        return
+      }
+      const { error } = await signIn.password({
+        emailAddress: identifier,
+        password,
+      })
       if (!isCurrent() || error) return
       return proceed(isCurrent)
     })
@@ -254,7 +276,7 @@ export function SignInForm({
       }
       const sent = await signIn.emailCode.sendCode()
       if (!isCurrent()) return
-      setCodeDelivery(sent.error ? 'failed' : 'sent')
+      recordDelivery('email-code', sent.error ? 'failed' : 'sent')
     })
 
   const onForgotPassword = (emailAddress: string) =>
@@ -272,7 +294,7 @@ export function SignInForm({
       }
       const sent = await signIn.resetPasswordEmailCode.sendCode()
       if (!isCurrent()) return
-      setCodeDelivery(sent.error ? 'failed' : 'sent')
+      recordDelivery('reset-code', sent.error ? 'failed' : 'sent')
     })
 
   const startGoogle = () =>
@@ -355,9 +377,10 @@ export function SignInForm({
 
   const onResend = () =>
     run(async (isCurrent) => {
+      const step = currentStep()
       const { error } = await codeCalls().send()
       if (!isCurrent() || error) return
-      setCodeDelivery('sent')
+      recordDelivery(step, 'sent')
       setNotice('A new code is on its way.')
     })
 
@@ -373,7 +396,7 @@ export function SignInForm({
 
   const onStartOver = () =>
     run(async () => {
-      setCodeDelivery('unknown')
+      setDelivery(undefined)
       await signIn.reset()
     })
 
@@ -392,7 +415,7 @@ export function SignInForm({
 
   return (
     <SignInFormView
-      step={busy ? heldStep : currentStep()}
+      step={step}
       pending={busy}
       errors={formErrors}
       passwordMinLength={PASSWORD_MIN_LENGTH}
