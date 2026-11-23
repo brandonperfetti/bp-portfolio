@@ -354,8 +354,9 @@ export function SignUpForm({
       }
       if (signUp.status === 'complete') return finish()
       if (!needsEmailCode()) {
-        // The instance asks for something this form has no field for (a
-        // dashboard setting changed). Say so instead of showing a dead end.
+        // The instance asks for something this form has no field or step
+        // for (a dashboard setting changed: a field, or a phone to verify
+        // beside the email, #386). Say so instead of showing a dead end.
         console.error('[sign-up] unsupported requirement', {
           status: signUp.status,
           missingFields: signUp.missingFields,
