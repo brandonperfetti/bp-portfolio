@@ -7,6 +7,7 @@ import SignUpSsoCallbackPage from './page'
 vi.mock('@clerk/nextjs', () => ({
   HandleSSOCallback: () => <div data-testid="clerk-callback" />,
   useSignUp: () => ({ signUp: {} }),
+  useSignIn: () => ({ signIn: {} }),
 }))
 
 vi.mock('next/navigation', () => ({

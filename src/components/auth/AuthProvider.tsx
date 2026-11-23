@@ -7,8 +7,10 @@ import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
  * Wraps children in ClerkProvider only when Clerk is configured, so the app
  * renders identically (signed-out) in environments without keys.
  *
- * @remarks Appearance: `colorPrimary` brands every Clerk surface (sign-in,
- * sign-up, account, UserButton) with the site's teal-700; dark mode needs
+ * @remarks Appearance: `colorPrimary` brands the Clerk surfaces still
+ * prebuilt (account, UserButton, Clerk's bot-check and Protect modals; sign-in
+ * and sign-up are the site's own forms, #377, #379) with the site's
+ * teal-700; dark mode needs
  * no JS wiring because Clerk's default theme keys off the CSS
  * `color-scheme` property, which `tailwind.css` sets on `:root`/`.dark` —
  * the components follow the next-themes toggle automatically.

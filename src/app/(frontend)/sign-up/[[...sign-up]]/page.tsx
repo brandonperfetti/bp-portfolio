@@ -20,9 +20,9 @@ export const instant = false
  * part of the same form, so it is not a separate route.
  *
  * @remarks The optional catch-all (`[[...sign-up]]`) stays although the form
- * no longer routes by path: Clerk's prebuilt sign-in, which this release
- * keeps, links and redirects to paths under `/sign-up/…`, and those must land
- * on the form, not a 404. `/sign-up/sso-callback` is its own page.
+ * no longer routes by path: links Clerk's prebuilt forms built into
+ * `/sign-up/…` before #379, and bookmarks of them, must land on the form,
+ * not a 404. `/sign-up/sso-callback` is its own page.
  *
  * **A signed-in visitor is sent on, and never sees the form** (#384). Clerk's
  * prebuilt `<SignUp />` did this itself; the custom form rendered for
