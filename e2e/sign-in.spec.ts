@@ -215,12 +215,12 @@ test.describe("sign-in: the site's own form on Clerk's hooks", () => {
     })
     await openForm(page)
     await page.getByLabel('Email address').fill(EMAIL)
-    await page.getByLabel('Password').fill('not the password')
+    await page.getByLabel('Password', { exact: true }).fill('not the password')
     await page.getByRole('button', { name: 'Continue' }).click()
 
-    await expect(page.getByLabel('Password')).toHaveAccessibleDescription(
-      /password is incorrect/i,
-    )
+    await expect(
+      page.getByLabel('Password', { exact: true }),
+    ).toHaveAccessibleDescription(/password is incorrect/i)
     expect(requests.length).toBeGreaterThan(0)
     expect(bodyOf(requests[0]).get('identifier')).toBe(EMAIL)
     // The form unlocks for another try.

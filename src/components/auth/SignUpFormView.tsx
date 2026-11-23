@@ -295,12 +295,13 @@ function FinishStep({
   const id = useId()
   const continueRef = useRef<HTMLButtonElement>(null)
 
-  // The card arrives here from the code step, whose field is gone; put focus
-  // on the one thing left to do. Once, on arrival: a retry that fails keeps
-  // focus where the visitor has it (the button they pressed).
+  // The card arrives here from a step whose field is gone; put focus on the
+  // one thing left to do. Again whenever a retry settles: the button is
+  // disabled while it runs, which takes focus from it, so a failed retry
+  // would otherwise leave keyboard and screen-reader users at the top.
   useEffect(() => {
-    continueRef.current?.focus()
-  }, [])
+    if (!pending) continueRef.current?.focus()
+  }, [pending])
 
   return (
     <form

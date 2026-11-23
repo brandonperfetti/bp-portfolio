@@ -226,7 +226,7 @@ function StartStep({
           error={errors.emailAddress}
           type="email"
           name="emailAddress"
-          autoComplete="username email"
+          autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}
           required
@@ -368,10 +368,13 @@ function FinishStep({ pending, errors, onFinish }: SignInFormViewProps) {
   const id = useId()
   const continueRef = useRef<HTMLButtonElement>(null)
 
-  // The field the visitor was in is gone; put focus on the one thing left.
+  // The card arrives here from a step whose field is gone; put focus on the
+  // one thing left to do. Again whenever a retry settles: the button is
+  // disabled while it runs, which takes focus from it, so a failed retry
+  // would otherwise leave keyboard and screen-reader users at the top.
   useEffect(() => {
-    continueRef.current?.focus()
-  }, [])
+    if (!pending) continueRef.current?.focus()
+  }, [pending])
 
   return (
     <form

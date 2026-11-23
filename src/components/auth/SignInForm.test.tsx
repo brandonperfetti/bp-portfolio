@@ -339,6 +339,10 @@ describe('SignInForm: email and password', () => {
     expect(heading()).toHaveTextContent('Almost there')
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     expect(clerk.finalize).toHaveBeenCalledTimes(2)
+    // The retry failed too; focus is back on the button, not lost.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Continue' })).toHaveFocus(),
+    )
   })
 })
 

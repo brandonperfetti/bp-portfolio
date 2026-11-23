@@ -63,7 +63,9 @@ export type StepOutcome = { stayLocked?: boolean } | void
  * - **Back from Google.** A browser may restore the page exactly as it was
  *   left, locked. A restore (`pageshow` with `persisted`) unlocks it so the
  *   visitor can choose again; it unlocks whatever the lock was for, which
- *   favours recovery over a form that could stay locked for good (#384).
+ *   favours recovery over a form that could stay locked for good (#384). A
+ *   request still pending at the restore no longer owns the lock: when it
+ *   settles it unlocks nothing, so it cannot release a newer request's.
  * - **A step that throws** is logged under `logTag` and shown as
  *   {@link UNEXPECTED_MESSAGE}; Clerk's own errors come back as values and
  *   are the caller's to show.
@@ -86,6 +88,11 @@ export function useAuthSteps({
 }) {
   const [busy, setBusy] = useState(false)
   const inFlight = useRef(false)
+  // Which acquisition of the lock is current. A request, or its leave
+  // timer, releases the lock only while it still owns it, so one that
+  // settles after a Back-button restore has unlocked the form cannot unlock
+  // a newer request started since.
+  const owner = useRef(0)
   const leaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   // A Clerk call can settle after the page has gone; `run` must not arm a
   // timer then, since this cleanup has already run.
@@ -104,6 +111,7 @@ export function useAuthSteps({
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return
       clearTimeout(leaveTimer.current)
+      owner.current += 1
       inFlight.current = false
       setBusy(false)
     }
@@ -114,6 +122,7 @@ export function useAuthSteps({
   const run = async (step: () => Promise<StepOutcome>) => {
     if (inFlight.current) return
     inFlight.current = true
+    const token = ++owner.current
     onStart?.()
     setBusy(true)
     setLocalErrors([])
@@ -125,9 +134,12 @@ export function useAuthSteps({
       console.error(`[${logTag}] unexpected failure`, error)
       setLocalErrors([UNEXPECTED_MESSAGE])
     } finally {
-      if (stayLocked) {
+      if (owner.current !== token) {
+        // A restore released this lock and a newer request may hold it.
+      } else if (stayLocked) {
         if (mounted.current) {
           leaveTimer.current = setTimeout(() => {
+            if (owner.current !== token) return
             inFlight.current = false
             setBusy(false)
             setLocalErrors([SLOW_MESSAGE])
