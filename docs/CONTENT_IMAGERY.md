@@ -306,6 +306,9 @@ specific to covers.
 The GPT Image pilot is **local only** until #415 lands and Brandon
 approves the attach: no candidate upload, no ingest, no attach. While this
 file is `status: draft`, §1 still applies.
+Keep post 61's A2-1 candidate on hold. The authenticated exact-ID lookup
+in [#427](https://github.com/brandonperfetti/bp-portfolio/issues/427) must
+be verified before Brandon sets this guide to `status: approved`.
 
 ### Autonomy and the publish boundary
 
@@ -413,6 +416,23 @@ file is `status: draft`, §1 still applies.
   file names end in the job UUID and image index. Post 11 stalled on this: the
   matching phrase belonged to a re-run Brandon had turned down, and the
   image he had chosen was the earlier one.
+
+### Candidate upload receipts
+
+The writer reserves the full candidate public ID in the cover-run thread
+under the slot above, after the authenticated lookup confirms absence.
+Use that reservation as `--reserved-id` for `cover_recipes.py receipt`.
+Build the expected JSON before upload: set `public_id` to the exact
+reserved ID, and take `width`, `height`, and `bytes` from the local JPEG.
+These four fields are the receipt allowlist. Check overwrite and existing
+markers separately when reading the response.
+
+After Brandon approves this guide and the pilot holds are cleared, run
+`cover_recipes.py receipt --check-only` against those values before staging a
+candidate. A failed plan check stops the upload. After upload, feed the
+response privately on standard input to the receipt writer with the same
+reservation and expected file. Save the allowlisted receipt and keep the
+raw response out of files, logs and handoffs.
 
 ### Ingest URL
 
@@ -540,3 +560,113 @@ covers" for §9.
   count will drop as Sloane's audit retires posts.
 - **Earlier eras:** the code-rendered covers and their spec are in
   [`archive/code-rendered-covers/`](../archive/code-rendered-covers/HISTORY.md).
+
+## Settings for the cover-recipes scripts
+
+This block mirrors §3, §4, §7, §9, §10, §11 and §13. Change the prose and
+settings together. The prose governs the generation route and pilot hold.
+The retired `70s` row and the `sky blue` prompt spelling come from the
+stored prompts in the cover history.
+
+```json cover-recipes
+{
+  "schema": 1,
+  "draftExploratory": false,
+  "styles": {
+    "60s": {
+      "design": "1960s space-age design, mid-century modern forms",
+      "look": "Kodachrome film look",
+      "palette": "cream, tangerine and avocado"
+    },
+    "70s-cool": {
+      "design": "1970s brutalist sci-fi production design",
+      "look": "grainy 35mm film",
+      "palette": "concrete grey, deep teal and sodium-vapor amber"
+    },
+    "80s-pastel": {
+      "design": "1980s pastel Memphis-era design",
+      "look": "soft VHS-era film look",
+      "palette": "peach, lavender and turquoise"
+    },
+    "80s-neon": {
+      "design": "1980s synthwave, neon reflections",
+      "look": "VHS-era film softness",
+      "palette": "magenta and cyan"
+    },
+    "nf": {
+      "design": "near-future minimalism",
+      "look": "clean digital photograph",
+      "palette": "pale neutral"
+    },
+    "70s": {
+      "design": "1970s brutalist sci-fi production design",
+      "look": "grainy 35mm film",
+      "palette": "burnt orange and brown",
+      "retired": true
+    }
+  },
+  "accents": { "sky": "sky blue" },
+  "styleLine": "{design}, {look}, {palette} palette with a hint of {accent}, heightened realism, {light}.",
+  "exclusions": [
+    "text",
+    "letters",
+    "numbers",
+    "logo",
+    "border",
+    "signage",
+    "children",
+    "smoke",
+    "particles"
+  ],
+  "rotation": {
+    "windows": { "scene": 3, "style": 2 },
+    "caps": { "fieldOfUnits": 2 },
+    "leastRecent": ["family"]
+  },
+  "history": {
+    "path": "docs/cover-history.json",
+    "list": "covers",
+    "id": "postId",
+    "date": "publishedAt",
+    "retired": "retiredAt",
+    "fields": {
+      "scene": "scene",
+      "style": "era",
+      "family": "metaphorFamily",
+      "accent": "hue",
+      "fieldOfUnits": "fieldOfUnits"
+    }
+  },
+  "generators": {
+    "midjourney": {
+      "params": "--ar 16:9 --style raw --s 150",
+      "storedVersion": "8.2"
+    },
+    "gpt-image": {
+      "lines": [
+        "35mm film still, 50mm lens at f/2, low three-quarter angle, off-center, shallow depth of field.",
+        "One directional light source from the side, long soft shadows.",
+        "Fine visible film grain, slight halation, muted slightly desaturated color, real surfaces with wear.",
+        "Not an advertisement, not a 3D render, not a catalogue shot, not symmetrical, not head-on.",
+        "Only the objects named appear: no plants, bowls, vases, flowers, cushions, rugs, lamps or other decor.",
+        "Blank paper, unlettered signs.",
+        "Any person is an adult, small in frame, seen from behind or in silhouette, face not visible.",
+        "Wide landscape composition with every important element in the middle band, so a 16:9 crop loses nothing."
+      ],
+      "exclusionSentence": "No {exclusions}.",
+      "exclusionJoin": "or",
+      "size": { "request": "2048x1152" }
+    }
+  },
+  "naming": {
+    "pattern": "cover-{provider}-{letter}",
+    "providers": { "midjourney": "mj", "gpt-image": "gpt" },
+    "retired": ["cover-a", "cover-b", "cover-c", "cover-ds-A"]
+  },
+  "upload": {
+    "limitBytes": 10485760,
+    "receiptFields": ["public_id", "width", "height", "bytes"],
+    "receiptIdentityField": "public_id"
+  }
+}
+```
