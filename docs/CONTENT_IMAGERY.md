@@ -427,12 +427,32 @@ reserved ID, and take `width`, `height`, and `bytes` from the local JPEG.
 These four fields are the receipt allowlist. Check overwrite and existing
 markers separately when reading the response.
 
-After Brandon approves this guide and the pilot holds are cleared, run
-`cover_recipes.py receipt --check-only` against those values before staging a
-candidate. A failed plan check stops the upload. After upload, feed the
-response privately on standard input to the receipt writer with the same
-reservation and expected file. Save the allowlisted receipt and keep the
-raw response out of files, logs and handoffs.
+Use `scripts/cover_recipes.py` inside the installed `cover-recipes` skill.
+The [released skill source](https://github.com/brandonperfetti/claude-skills/blob/v1.58.0/skills/personal/cover-recipes/scripts/cover_recipes.py)
+is maintained in `claude-skills`. Set `COVER_RECIPES_SCRIPT` to the installed
+script's full path and run from the BP Portfolio checkout root so the tool
+reads this guide.
+
+After Brandon approves this guide and the pilot holds are cleared, check the
+plan before staging a candidate. `EXPECTED_JSON` names the independently
+prepared JSON file and `RESERVED_ID` is the full reserved public ID.
+
+```sh
+python3 "$COVER_RECIPES_SCRIPT" receipt --check-only \
+  --expected "$EXPECTED_JSON" --reserved-id "$RESERVED_ID"
+```
+
+A failed plan check stops the upload. After upload, connect the raw JSON
+response directly to the standard input of the command below. Use the same
+expected file and reservation, and set `RECEIPT_JSON` to a new receipt path.
+
+```sh
+python3 "$COVER_RECIPES_SCRIPT" receipt \
+  --expected "$EXPECTED_JSON" --reserved-id "$RESERVED_ID" "$RECEIPT_JSON"
+```
+
+The saved receipt contains only `public_id`, `width`, `height`, and `bytes`.
+Keep the raw response out of files, logs and handoffs.
 
 ### Ingest URL
 
