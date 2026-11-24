@@ -24,10 +24,10 @@ implements the shared procedure,
 > branch. Releases for tags that predate the grant, and `v2026.11.23`, are
 > outside it.
 
-## Verify the merge (read-only)
+## Verify the merge
 
-Stop and report on the first failed check; never repair it by moving a tag or
-pushing a branch.
+Steps 1 to 5 are read-only. Stop and report on the first failed check; never
+repair it by moving a tag or pushing a branch.
 
 1. **The merge is Brandon's and is done.** The release PR is `MERGED` by
    `brandonperfetti` (`mergedBy.login`; a merge by anyone else, a bot
@@ -41,11 +41,7 @@ pushing a branch.
    `origin/master` is anywhere but this merge commit (a later release or
    commit landed), stop and report to Brandon; do not tag an earlier merge on
    your own.
-3. **Fast-forward local `master`.** From a clean checkout on `master` that is
-   not another session's, run `git merge --ff-only origin/master` as its own
-   call. Stop if it fails. Confirm `HEAD` and `origin/master` both equal the
-   merge commit. Never commit to local `master`.
-4. **The version is the Pacific date of the merge.** Convert the PR's
+3. **The version is the Pacific date of the merge.** Convert the PR's
    `mergedAt` to `America/Los_Angeles`; the version is `vYYYY.MM.DD`. Read the
    tags first (`git ls-remote --tags origin 'vYYYY.MM.DD*'`, and the local
    tags):
@@ -59,17 +55,22 @@ pushing a branch.
      next suffix, `.1`, then `.2`. A conflict is not a reason for a suffix: a
      tag you cannot explain, or one that names this commit with a different
      annotation, goes to Brandon. A pushed tag is never moved or deleted.
-5. **The changelog section.** `CHANGELOG.md` at the merge commit has a
-   `## <version>` heading that matches step 4 and links the release PR. If the
+4. **The changelog section.** `CHANGELOG.md` at the merge commit has a
+   `## <version>` heading that matches step 3 and links the release PR. If the
    merge slipped past midnight Pacific the heading is wrong and Brandon is
    told; do not fix it from here.
-6. **Review and checks, each recorded in the hand-back.**
+5. **Review and checks, each recorded in the hand-back.**
    - the release PR's head has `Lint · Types · Unit`, `Build · E2E` and
      `Evalite (Corvus)` all `success`;
    - the review is accepted at that head (`docs/WORKFLOW.md` § Review;
      CodeRabbit `success`, or the recorded stand-in when its limit was hit);
    - the PR body's "After the merge" list: say which checks ran and which
      remain Brandon's. A Release never claims a check nobody ran.
+6. **Only then, fast-forward local `master`.** This is the one local write in this section, made after steps 1 to 5
+   pass. From a clean checkout on `master` that is
+   not another session's, run `git merge --ff-only origin/master` as its own
+   call. Stop if it fails. Confirm `HEAD` and `origin/master` both equal the
+   merge commit. Never commit to local `master`.
 
 ## Tag
 
@@ -171,7 +172,10 @@ Publishing against an earlier tag needs a grant that explicitly covers
 historical Releases, or Brandon's explicit decision for that backfill. Audit
 first and record each tag's eligibility: the tag is annotated, peels to its
 release PR's merge commit on `master`, the version matches the Pacific merge
-date, and a changelog section exists. Use the existing tags, and never
+date, and a changelog section exists. Also record, for each, the evidence
+§ Verify the merge asks of a new release: `mergedBy.login`, the PR head's
+checks and accepted review, and a `success` `Production` deployment for the
+exact merge commit. Use the existing tags, and never
 create history before `v2026.11.17`, the first tag and the start of the
 changelog. The notes come from the changelog section at the release's merge
 commit; `v2026.11.17` is the exception, since `CHANGELOG.md` was added after

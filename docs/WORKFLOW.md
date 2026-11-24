@@ -32,8 +32,8 @@ Brandon merges it; there is no release branch and no version bump
 the release PR) does steps 1 to 3. Step 4 is Brandon's alone. Step 5 and the
 GitHub Release that follows it are the release lane's under the standing grant
 in `AGENTS.md` § Release authority, following `docs/RELEASE_RUNBOOK.md`;
-outside that grant they are Brandon's, or an agent's on his explicit word for
-that tag.
+outside that grant they are Brandon's, or an agent's on his explicit word
+naming that tag, and naming its Release too if the agent is to publish it.
 
 1. **Open the release PR** from `develop` into `master`, in the shape of the
    last one: what it carries, what the merge deploys and triggers, the Door
@@ -87,8 +87,8 @@ releases are recorded in their release PR bodies only.
   `.next` types can false-fail the push — remove `.next` and retry before
   suspecting real breakage. Two kinds of push skip the gate: one that only
   deletes refs (`git push --delete origin <branch>`), which sends no code
-  (#308), and one that only pushes tags (`git push origin v2026.11.17`),
-  which moves no branch (#369). A branch anywhere in the same push runs all
+  (#308), and one that only pushes tags (one named tag ref, as in
+  `docs/RELEASE_RUNBOOK.md`), which moves no branch (#369). A branch anywhere in the same push runs all
   of it (pinned by `scripts/pre-push-hook.test.ts`). The tag skip rests on
   three facts, so re-read it if one changes: no workflow here runs on a tag,
   nothing deploys from one, and a release tag names a commit already on
