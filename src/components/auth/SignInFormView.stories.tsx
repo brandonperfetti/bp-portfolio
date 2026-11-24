@@ -23,7 +23,7 @@ const meta = {
     signUpHref: '/sign-up',
     email: 'reader@example.com',
     onSubmit: fn(),
-    onGoogle: fn(),
+    onSocial: fn(),
     onEmailCode: fn(),
     onForgotPassword: fn(),
     onVerify: fn(),
@@ -82,6 +82,26 @@ export const Default: Story = {
 export const DefaultDark: Story = { ...dark }
 export const Phone: Story = { decorators: phone }
 export const PhoneDark: Story = { decorators: phone, ...dark }
+
+/** GitHub switched on (#431): its button sits under Google's. */
+export const WithGitHub: Story = {
+  args: { providers: ['google', 'github'] },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Continue with GitHub' }),
+    )
+    await expect(args.onSocial).toHaveBeenCalledWith('github')
+  },
+}
+export const WithGitHubDark: Story = {
+  args: { providers: ['google', 'github'] },
+  ...dark,
+}
+export const WithGitHubPhone: Story = {
+  args: { providers: ['google', 'github'] },
+  decorators: phone,
+}
 
 /** A request is in flight: every control is disabled. */
 export const Submitting: Story = {

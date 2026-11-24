@@ -4,6 +4,10 @@ import { useEffect, useId, useRef, useState } from 'react'
 import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
+import {
+  DEFAULT_SOCIAL_PROVIDERS,
+  type SocialProvider,
+} from '@/lib/auth/socialProviders'
 import { MAILING_LIST_OPT_IN_KEY } from '@/lib/email/mailingListOptIn'
 
 import {
@@ -13,7 +17,7 @@ import {
   AuthHeading,
   CodeStep,
   GlobalErrors,
-  GoogleButton,
+  SocialButtons,
   PasswordField,
   type CodeDelivery,
 } from './AuthFormParts'
@@ -41,7 +45,7 @@ export type SignUpCodeDelivery = CodeDelivery
 /** Props of {@link SignUpFormView}. */
 export type SignUpFormViewProps = {
   /**
-   * `start`: opt-in, Google, email and password. `verify`: the email code.
+   * `start`: opt-in, the social buttons, email and password. `verify`: the email code.
    * `finish`: the account exists but signing in to it did not complete.
    */
   step: 'start' | 'verify' | 'finish'
@@ -50,6 +54,11 @@ export type SignUpFormViewProps = {
   errors: SignUpFormErrors
   /** Clerk's password minimum, for the hint under the field. */
   passwordMinLength: number
+  /**
+   * The social connections to offer on the first step, in order (#431).
+   * Defaults to Google alone.
+   */
+  providers?: readonly SocialProvider[]
   /** Where "Sign in" goes; the caller adds any `redirect_url`. */
   signInHref: string
   /** Theme for Clerk's bot-check widget, when it shows one. */
@@ -67,7 +76,11 @@ export type SignUpFormViewProps = {
   /** A polite status line on the `verify` step, such as "a new code was sent". */
   notice?: string
   onSubmit: (values: SignUpFormValues) => void
-  onGoogle: (values: Pick<SignUpFormValues, 'mailingListOptIn'>) => void
+  /** A social button: the connection, and the opt-in as it was at the click. */
+  onSocial: (
+    provider: SocialProvider,
+    values: Pick<SignUpFormValues, 'mailingListOptIn'>,
+  ) => void
   onVerify: (code: string) => void
   onResend: () => void
   onUseDifferentEmail: () => void
@@ -89,12 +102,12 @@ function readOptIn(form: HTMLFormElement | null): boolean {
  * Free of Clerk, so every state renders in jsdom and in Storybook without a
  * Clerk instance; `SignUpForm` drives it from Clerk's `useSignUp()`.
  *
- * **The opt-in comes first.** Someone signing up with Google never reaches
- * the email fields, so the question sits under the heading, before the Google
- * button (Brandon, 2026-11-18).
+ * **The opt-in comes first.** Someone signing up with Google or GitHub never
+ * reaches the email fields, so the question sits under the heading, before
+ * the social buttons (Brandon, 2026-11-18; GitHub, #431).
  *
  * **The tick is read from the form at the moment of submit**, for the
- * Continue button and the Google button alike (`readOptIn`), and handed up as
+ * Continue button and every social button alike (`readOptIn`), and handed up as
  * a plain boolean. From then on the value cannot change: it is a copy, and
  * the caller sets `pending`, which disables the whole `<fieldset>`, the box
  * included, until Clerk answers. That closes the limit #373 recorded, where
@@ -146,8 +159,9 @@ function StartStep({
   passwordMinLength,
   signInHref,
   captchaTheme,
+  providers = DEFAULT_SOCIAL_PROVIDERS,
   onSubmit,
-  onGoogle,
+  onSocial,
   focusOnArrival,
 }: SignUpFormViewProps & { focusOnArrival: boolean }) {
   const id = useId()
@@ -200,10 +214,13 @@ function StartStep({
           name={MAILING_LIST_OPT_IN_KEY}
         />
 
-        <GoogleButton
-          onClick={(event) => {
+        <SocialButtons
+          providers={providers}
+          onSelect={(provider, event) => {
             if (pending) return
-            onGoogle({ mailingListOptIn: readOptIn(event.currentTarget.form) })
+            onSocial(provider, {
+              mailingListOptIn: readOptIn(event.currentTarget.form),
+            })
           }}
         />
 

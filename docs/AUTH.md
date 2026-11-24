@@ -16,7 +16,8 @@
 - Routes: `/sign-in` (the site's own form on Clerk's `useSignIn()` hooks,
   #379, catch-all, below), `/sign-up` (the site's own form on Clerk's
   `useSignUp()` hooks, #377, below), `/sign-in/sso-callback` and
-  `/sign-up/sso-callback` (where Google returns to), `/account` (Clerk's
+  `/sign-up/sso-callback` (where Google, and GitHub where it is on, return
+  to, #431), `/account` (Clerk's
   `<UserProfile>`, catch-all, so a sub-page such as `/account/security`
   loads directly, #391).
 - Header shows a signed-in-only `UserButton` chip (`HeaderUserButton`,
@@ -204,8 +205,8 @@ joins, with the same wording as the contact form
 
 - **Where the box is.** Inside the sign-up form
   (`src/components/auth/SignUpFormView.tsx`), under the heading and before
-  both ways of signing up, so someone using Google meets it before the
-  Google button. The form reads it at the moment of submit and sends it as
+  every way of signing up, so someone using Google or GitHub meets it before
+  the social buttons (#431). The form reads it at the moment of submit and sends it as
   `unsafeMetadata: { mailingListOptIn: <boolean> }` on the request that
   starts the sign-up; Clerk copies it onto the created user. **No Clerk
   dashboard setting is involved**, on any instance. How the form does that:
@@ -219,8 +220,8 @@ joins, with the same wording as the contact form
 - **Fail-closed by construction.** A sign-up that never passes the box is not
   opted in: a social sign-in started on `/sign-in` that creates the account,
   an account made in the Clerk dashboard, a client that sends no metadata.
-  A Google sign-up on `/sign-up` that turns out to be an existing account is
-  signed in, and the list is not touched for it.
+  A Google or GitHub sign-up on `/sign-up` that turns out to be an existing
+  account is signed in, and the list is not touched for it.
   The box shows on the first step only, because the metadata goes out with
   the request that starts the sign-up; on the email-code step it could be
   ticked to no effect.
@@ -527,6 +528,8 @@ has no step for` with the task's name. The prebuilt `<SignIn>` showed these
     the password cannot be reset by email.
   - **Google** as a social connection: "Continue with Google". Off, Clerk's
     refusal shows above the button.
+  - **GitHub** as a social connection, only where `CLERK_GITHUB_ENABLED` is
+    `true` ("GitHub" below). The flag and the connection go on together.
   - **No session tasks**: required MFA (`setup-mfa`), required
     organization membership (`choose-organization`), or a forced password
     reset (`reset-password`). Each needs its step built first (Clerk ships
@@ -553,6 +556,119 @@ has no step for` with the task's name. The prebuilt `<SignIn>` showed these
   These are for a hand-run on staging (`docs/JOURNEYS.md`, "Sign in"), which
   is pending until its results are recorded here; the intercepted e2e spec
   does not stand in for it.
+
+### GitHub (#431)
+
+"Continue with GitHub" sits under "Continue with Google" on both forms. It is
+the Google path with GitHub's strategy (`oauth_github`): the same buttons
+(`SocialButtons` in `AuthFormParts`), the same callback pages and the same
+`SsoCallback`, so everything said above about Google holds for GitHub unless
+this section says otherwise. The connections on offer are
+`enabledSocialProviders()` (`src/lib/auth/socialProviders.ts`).
+
+- **Off unless switched on.** The pages read `CLERK_GITHUB_ENABLED` on the
+  server, per request, and pass the list to the form: Google always, GitHub
+  only for the exact value `true`. Clerk's hooks expose no instance settings,
+  so the form cannot ask Clerk whether the connection is on, and a button for
+  a connection that is off would only show Clerk's refusal. Unset, the forms
+  are as before #431, copy included. Changing the flag needs the variable
+  redeployed, not a rebuild.
+- **Initiation.** Sign-up: `signUp.sso({ strategy: 'oauth_github',
+redirectCallbackUrl: '/sign-up/sso-callback?redirect_url=…', redirectUrl,
+unsafeMetadata: { mailingListOptIn } })`, the box read at the click as for
+  Google. Sign-in: `signIn.sso({ strategy: 'oauth_github', … })` with
+  `/sign-in/sso-callback` and no metadata. `redirect_url` is checked by
+  `safeRedirectPath` before it is sent and again on the callback page.
+- **Retained attempts.** Sign-in drops any attempt already in the browser
+  before a social start, whichever way it began (a refused emailed code, an
+  abandoned trip to Google or to GitHub), and starts on Clerk's replacement
+  resource, so a stale hand-off is never reused (clerk-js reuses an attempt
+  that exists; its current source also starts fresh when the attempt holds a
+  pending redirect [source: clerk-js `SignIn.ts` `sso()`, main, read
+  2026-11-24], and the form does not depend on that). Sign-up keeps Google's
+  rule: a social start on an existing attempt is sent as an update to it, the
+  latest box included, and an update Clerk refuses discards the attempt so
+  the next choice is a new one. Switching from an abandoned Google trip to
+  GitHub on the same sign-up attempt is that update; it is not observed
+  against a live instance.
+- **A cancelled or failed GitHub attempt.** A refusal (the connection off,
+  the bot check) unlocks the form with Clerk's message; on sign-in, Clerk
+  answering with no URL to GitHub unlocks it and logs `[sign-in] GitHub did
+not start`. Cancelling on GitHub's page brings the visitor back to the
+  callback page, where Clerk's handler sends them to the form, or to the
+  ten-second "taking longer than expected" links; the next choice on sign-in
+  is a new attempt (above). Password, code, reset and Google are untouched by
+  it.
+- **Consent.** Only `/sign-up` carries the opt-in, on the GitHub request as on
+  Google's. A GitHub sign-in on `/sign-in` for an account that does not exist
+  is made a sign-up by Clerk's callback handler with no `unsafeMetadata`, so
+  it never joins the list (#362, fail-closed).
+- **Back from GitHub unfinished.** A GitHub sign-up that returns verified with
+  a field the form lacks is discarded as Google's is, and the message names
+  GitHub ("with GitHub here… sign up with your email and a password"), read
+  from `externalAccount.strategy`. Device Trust after GitHub goes to
+  `/sign-in` as after Google (`SsoCallback` already accepts any `oauth_`
+  strategy).
+- **Messages that name the ways in** ("Email me a sign-in code" and "Forgot
+  password?" for an account without them; an email sign-up the form cannot
+  finish) name "Google or GitHub" when GitHub is on.
+- **Account linking is Clerk's.** A GitHub account whose verified email
+  already has an account (made by password or Google) is linked or refused by
+  Clerk's instance settings, inside `<HandleSSOCallback />`; the form adds no
+  rule of its own. Not observed live.
+- **Proven where.** `SignInForm.test.tsx` and `SignUpForm.test.tsx` ("GitHub
+  (#431)") pin each GitHub call's arguments, the lock, the refusal, the reset
+  before a sign-in start, the opt-in on sign-up and none on sign-in, and the
+  unfinished message; `SignUpFormView.test.tsx`, the `Auth/SignInForm` and
+  `Auth/SignUpForm` "WithGitHub" stories (both themes, 375px) the button's
+  place after the opt-in; `SsoCallback.test.tsx` Device Trust after GitHub;
+  both `page.test.tsx` files the flag; `socialProviders.test.ts` its values.
+  `e2e/sign-in.spec.ts` and `e2e/sign-up-opt-in.spec.ts` intercept the
+  request the real clerk-js sends for GitHub (CI sets
+  `CLERK_GITHUB_ENABLED=true` on the e2e step; a run without it fails in CI
+  and skips locally). **Not proven by any test:** the round trip to GitHub
+  and back, a new reader's sign-up, a returning reader's sign-in, the opt-in
+  surviving the trip to a real `user.created`, cancelling on GitHub's page,
+  and account linking. These are the staging hand-run below.
+
+#### Turning GitHub on (Brandon)
+
+Nothing in the repository switches the connection on; each environment is
+two settings, the Clerk connection first, then the flag.
+
+1. **Staging / development instance.** Clerk Dashboard → the development
+   instance → **SSO connections** → **Add connection** → **For all users** →
+   **GitHub**. A development instance uses Clerk's shared OAuth credentials
+   and needs no GitHub app [source: Clerk docs, GitHub social connection
+   guide, read 2026-11-24]. Then set `CLERK_GITHUB_ENABLED=true` on the
+   environment that uses that instance and redeploy.
+2. **Staging hand-run, recorded here before production.** On that
+   environment, with a GitHub account that has no account on the instance and
+   one that has: sign up with the box ticked (the user's `unsafe_metadata` has
+   `mailingListOptIn: true`, and `user.created` captures them) and unticked
+   (no contact); sign in as the returning reader from a gated article (lands
+   back on the article); start on `/sign-in` with the new account (made a
+   sign-up, no opt-in); cancel on GitHub's page (the form is usable, and
+   Google and password still sign in). Record each result and its date here.
+   **Pending.**
+3. **Production.** In the production instance, add GitHub the same way with
+   **Enable for sign-up and sign-in** and **Use custom credentials** on and
+   **App type: GitHub OAuth App**, and copy the **Authorization Callback
+   URL** Clerk shows. Register an OAuth app at
+   `github.com/settings/applications/new` (Homepage URL
+   `https://brandonperfetti.com`; the callback URL is Clerk's), generate a
+   client secret, and paste the **Client ID** and **Client Secret** back into
+   Clerk [source: the same guide; it names no Homepage URL, so that one is
+   the site's]. A GitHub _App_ instead also needs **Account permissions →
+   Email addresses: Read-only**, or members with a private email cannot sign
+   in [source: same]. Then set `CLERK_GITHUB_ENABLED=true` on Vercel
+   Production and redeploy. The client secret stays in Clerk; the
+   repository and Vercel never hold it. A failed sign-in shows in Clerk's
+   Application Logs as `oauth_callback.failed` [source: same].
+4. **Production round trip**, once on: one sign-in with GitHub, recorded here
+   with its date. **Pending** until the connection is enabled.
+
+To turn it off, unset the flag first (the button goes), then the connection.
 
 ## Contact hygiene: the Clerk↔Resend mapping (#86)
 

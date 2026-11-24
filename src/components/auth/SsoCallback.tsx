@@ -39,13 +39,14 @@ const FLOWS = {
 } as const
 
 /**
- * Where Google sends the visitor back to after "Continue with Google" on the
- * custom sign-up form (#377) or sign-in form (#379); `flow` says which.
+ * Where Google or GitHub (#431) sends the visitor back to after "Continue
+ * with …" on the custom sign-up form (#377) or sign-in form (#379); `flow`
+ * says which.
  *
  * @remarks
  * Clerk's `<HandleSSOCallback />` does the work: it finishes the sign-up, or,
- * when the Google account already belongs to a member, signs them in instead
- * (the mailing list is not touched for an existing member). It also shows
+ * when the Google or GitHub account already belongs to a member, signs them
+ * in instead (the mailing list is not touched for an existing member). It also shows
  * Clerk's bot check if the instance asks for one at this point, which is why
  * this is Clerk's component and not a copy of its logic.
  *
@@ -65,20 +66,21 @@ const FLOWS = {
  *   may still be working through a bot check or an account transfer, and
  *   finishes if left alone (measured by the review of #377). Following a
  *   link is the visitor's choice to leave that.
- * - **A Google sign-in that needs the new-device check** (Clerk's Device
- *   Trust, `needs_client_trust`): to `/sign-in`, whose form sends and takes
+ * - **A Google or GitHub sign-in that needs the new-device check** (Clerk's
+ *   Device Trust, `needs_client_trust`): to `/sign-in`, whose form sends and takes
  *   the code. Clerk's handler has no branch for this status (read from the
  *   installed `@clerk/react` 6.18.9) and would leave the visitor here until
- *   the stall. Only a sign-in Google has just verified counts, so an older
- *   password attempt left in that state does not send a sign-up there.
+ *   the stall. Only a sign-in the connection has just verified counts (any
+ *   `oauth_` strategy), so an older password attempt left in that state
+ *   does not send a sign-up there.
  * - **A session Clerk left with a task** this site has no step for
  *   (`SESSION_TASK_MESSAGE`): the page says so and offers the two links,
  *   instead of leaving for a destination that would ask for sign-in again.
- * - **A Google sign-in for an address with no account** is made a sign-up
- *   by Clerk's handler (`signIn.isTransferable`); that account carries no
+ * - **A Google or GitHub sign-in for an account that does not exist** is
+ *   made a sign-up by Clerk's handler (`signIn.isTransferable`); that account carries no
  *   opt-in and never joins the mailing list (#362).
  *
- * @param flow - Which form sent the visitor to Google; sets the copy, the
+ * @param flow - Which form sent the visitor to the connection; sets the copy, the
  *   "Start again" link and the log line's prefix.
  * @param assignLocation - How to leave for an absolute URL; a seam for tests.
  * @param stallMs - See {@link SSO_CALLBACK_STALL_MS}; a seam for tests.
@@ -125,7 +127,7 @@ export function SsoCallback({
       if (navigated.current) return
       const current = latestSignUp.current
       // Clerk sent the visitor nowhere. Statuses and field names only:
-      // nothing they typed. Both resources, since a Google trip from either
+      // nothing they typed. Both resources, since a social trip from either
       // form can end as a sign-in or a sign-up.
       console.error(`[${flow}] sso callback unresolved`, {
         status: current?.status,
@@ -142,7 +144,7 @@ export function SsoCallback({
     navigate()
   }
 
-  // Device Trust after Google (see the remarks): on to the sign-in form.
+  // Device Trust after Google or GitHub (see the remarks): on to the sign-in form.
   const googleSignInNeedsDeviceCheck =
     signIn?.status === 'needs_client_trust' &&
     signIn.firstFactorVerification?.strategy?.startsWith('oauth_') === true &&

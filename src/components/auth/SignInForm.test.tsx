@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   NO_EMAIL_CODE_MESSAGE,
   NO_RESET_MESSAGE,
+  noEmailCodeMessage,
+  noResetMessage,
   SignInForm,
   UNSUPPORTED_STEP_MESSAGE,
 } from './SignInForm'
@@ -173,13 +175,16 @@ beforeEach(() => {
     identified(['password', 'email_code', 'reset_password_email_code'])
     return ok
   })
-  // As clerk-js does: the hand-off to Google is the URL on the attempt.
-  clerk.sso.mockImplementation(async () => {
-    clerk.state.id = 'sia_google'
+  // As clerk-js does: the hand-off to the connection is the URL on the
+  // attempt.
+  clerk.sso.mockImplementation(async ({ strategy }: { strategy: string }) => {
+    clerk.state.id = strategy === 'oauth_github' ? 'sia_github' : 'sia_google'
     clerk.state.firstFactorVerification = {
-      strategy: 'oauth_google',
+      strategy,
       externalVerificationRedirectURL: new URL(
-        'https://accounts.google.com/o/oauth2/auth',
+        strategy === 'oauth_github'
+          ? 'https://github.com/login/oauth/authorize'
+          : 'https://accounts.google.com/o/oauth2/auth',
       ),
     }
     return ok
@@ -981,5 +986,137 @@ describe('SignInForm: around the form', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     expect(clerk.finalize).toHaveBeenCalledOnce()
     expect(clerk.password).not.toHaveBeenCalled()
+  })
+})
+
+describe('SignInForm: GitHub (#431)', () => {
+  const BOTH = ['google', 'github'] as const
+  const github = () =>
+    screen.getByRole('button', { name: 'Continue with GitHub' })
+  const google = () =>
+    screen.getByRole('button', { name: 'Continue with Google' })
+
+  it('is not offered unless the page passes it in', () => {
+    render(<SignInForm />)
+    expect(
+      screen.queryByRole('button', { name: 'Continue with GitHub' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('starts the GitHub sign-in with the callback page and the target, carries no opt-in, and stays locked', async () => {
+    clerk.search.value = 'redirect_url=%2Farticles%2Fgated'
+    const user = userEvent.setup()
+    render(<SignInForm providers={BOTH} />)
+    await user.click(github())
+
+    expect(clerk.sso).toHaveBeenCalledExactlyOnceWith({
+      strategy: 'oauth_github',
+      redirectCallbackUrl:
+        '/sign-in/sso-callback?redirect_url=%2Farticles%2Fgated',
+      redirectUrl: '/articles/gated',
+    })
+    // A GitHub sign-in Clerk turns into a sign-up joins no list (#362).
+    expect(clerk.sso.mock.calls[0][0]).not.toHaveProperty('unsafeMetadata')
+    expect(github()).toBeDisabled()
+    expect(google()).toBeDisabled()
+  })
+
+  it('drops an abandoned trip to Google before starting GitHub, so the stale redirect is never reused', async () => {
+    // Back from Google's page without finishing: the attempt still holds
+    // Google's hand-off.
+    clerk.state.id = 'sia_google'
+    clerk.state.status = 'needs_first_factor'
+    clerk.state.firstFactorVerification = {
+      strategy: 'oauth_google',
+      externalVerificationRedirectURL: new URL(
+        'https://accounts.google.com/o/oauth2/auth',
+      ),
+    }
+    const user = userEvent.setup()
+    render(<SignInForm providers={BOTH} />)
+    await user.click(github())
+
+    await waitFor(() => expect(clerk.sso).toHaveBeenCalledOnce())
+    expect(clerk.reset).toHaveBeenCalledOnce()
+    expect(clerk.reset.mock.invocationCallOrder[0]).toBeLessThan(
+      clerk.sso.mock.invocationCallOrder[0],
+    )
+    expect(clerk.sso).toHaveBeenCalledWith(
+      expect.objectContaining({ strategy: 'oauth_github' }),
+    )
+    expect(github()).toBeDisabled()
+  })
+
+  it('drops an abandoned trip to GitHub before starting Google', async () => {
+    clerk.state.id = 'sia_github'
+    clerk.state.status = 'needs_first_factor'
+    clerk.state.firstFactorVerification = {
+      strategy: 'oauth_github',
+      externalVerificationRedirectURL: new URL(
+        'https://github.com/login/oauth/authorize',
+      ),
+    }
+    const user = userEvent.setup()
+    render(<SignInForm providers={BOTH} />)
+    await user.click(google())
+
+    await waitFor(() => expect(clerk.sso).toHaveBeenCalledOnce())
+    expect(clerk.reset).toHaveBeenCalledOnce()
+    expect(clerk.sso).toHaveBeenCalledWith(
+      expect.objectContaining({ strategy: 'oauth_google' }),
+    )
+  })
+
+  it('a refused GitHub start leaves the form usable: the reason shows, and password and Google still work', async () => {
+    clerk.sso.mockResolvedValueOnce({
+      error: { message: 'GitHub is not enabled.' },
+    })
+    const user = userEvent.setup()
+    render(<SignInForm providers={BOTH} />)
+    await user.click(github())
+
+    await waitFor(() => expect(github()).toBeEnabled())
+    expect(google()).toBeEnabled()
+    await signInWithPassword(user)
+    expect(clerk.password).toHaveBeenCalledOnce()
+  })
+
+  it('unlocks and logs when Clerk returns without a way to GitHub', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    clerk.sso.mockResolvedValueOnce(ok)
+    const user = userEvent.setup()
+    render(<SignInForm providers={BOTH} />)
+    await user.click(github())
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      UNEXPECTED_MESSAGE,
+    )
+    expect(github()).toBeEnabled()
+    expect(error).toHaveBeenCalledWith(
+      '[sign-in] GitHub did not start',
+      expect.anything(),
+    )
+    error.mockRestore()
+  })
+
+  it('names both connections when an account cannot have an emailed code or a reset', async () => {
+    clerk.create.mockImplementation(async () => {
+      identified(['password'])
+      return ok
+    })
+    const user = userEvent.setup()
+    render(<SignInForm providers={BOTH} />)
+    await typeEmail(user)
+    await user.click(
+      screen.getByRole('button', { name: 'Email me a sign-in code instead' }),
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      noEmailCodeMessage(BOTH),
+    )
+    expect(noEmailCodeMessage(BOTH)).toContain('with Google or GitHub.')
+    expect(noResetMessage(BOTH)).toContain('with Google or GitHub or an email')
+    // Google alone reads exactly as before #431.
+    expect(noEmailCodeMessage(['google'])).toBe(NO_EMAIL_CODE_MESSAGE)
+    expect(noResetMessage(['google'])).toBe(NO_RESET_MESSAGE)
   })
 })

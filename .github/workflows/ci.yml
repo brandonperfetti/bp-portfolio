@@ -256,6 +256,10 @@ jobs:
           NEXT_PUBLIC_GA_MEASUREMENT_ID: G-E2E0000000
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      # #431: the auth pages read CLERK_GITHUB_ENABLED per request, so it is
+      # set on the server this step starts (not the build). The specs only
+      # intercept the request clerk-js sends; nothing needs the development
+      # instance's GitHub connection to be on.
       - name: E2E tests (Playwright)
         run: pnpm test:e2e
         env:
@@ -263,6 +267,7 @@ jobs:
           NEXT_PUBLIC_GA_MEASUREMENT_ID: G-E2E0000000
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          CLERK_GITHUB_ENABLED: 'true'
       # Stories run with the publishable key set, as the site's build does, so
       # a component that decides "is Clerk on" from the env and not from the
       # tree fails here (#381). The secret key stays off: no story reads it.

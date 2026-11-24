@@ -113,6 +113,24 @@ describe('SignUpPage', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('offers GitHub only where CLERK_GITHUB_ENABLED is "true" (#431)', async () => {
+    configure()
+    const { unmount } = render(await page())
+    expect(
+      screen.getByRole('button', { name: 'Continue with Google' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Continue with GitHub' }),
+    ).not.toBeInTheDocument()
+    unmount()
+
+    vi.stubEnv('CLERK_GITHUB_ENABLED', 'true')
+    render(await page())
+    expect(
+      screen.getByRole('button', { name: 'Continue with GitHub' }),
+    ).toBeInTheDocument()
+  })
+
   describe('a signed-in visitor is sent on instead of seeing the form (#384)', () => {
     beforeEach(() => {
       configure()

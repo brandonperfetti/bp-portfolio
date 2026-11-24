@@ -24,7 +24,7 @@ const meta = {
     passwordMinLength: 15,
     signInHref: '/sign-in',
     onSubmit: fn(),
-    onGoogle: fn(),
+    onSocial: fn(),
     onVerify: fn(),
     onResend: fn(),
     onUseDifferentEmail: fn(),
@@ -66,7 +66,9 @@ export const Default: Story = {
     await userEvent.click(
       canvas.getByRole('button', { name: 'Continue with Google' }),
     )
-    await expect(args.onGoogle).toHaveBeenCalledWith({ mailingListOptIn: true })
+    await expect(args.onSocial).toHaveBeenCalledWith('google', {
+      mailingListOptIn: true,
+    })
 
     await userEvent.type(
       canvas.getByLabelText('Email address'),
@@ -86,6 +88,37 @@ export const Default: Story = {
 }
 
 export const DefaultDark: Story = { globals: { theme: 'dark' } }
+
+/**
+ * GitHub switched on (#431): its button sits under Google's, after the
+ * opt-in, and carries the tick as it was at the click, like Google's.
+ */
+export const WithGitHub: Story = {
+  args: { providers: ['google', 'github'] },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const github = canvas.getByRole('button', { name: 'Continue with GitHub' })
+    await userEvent.click(github)
+    await expect(args.onSocial).toHaveBeenLastCalledWith('github', {
+      mailingListOptIn: false,
+    })
+    await userEvent.click(
+      canvas.getByRole('checkbox', { name: MAILING_LIST_OPT_IN_LABEL }),
+    )
+    await userEvent.click(github)
+    await expect(args.onSocial).toHaveBeenLastCalledWith('github', {
+      mailingListOptIn: true,
+    })
+  },
+}
+export const WithGitHubDark: Story = {
+  args: { providers: ['google', 'github'] },
+  globals: { theme: 'dark' },
+}
+export const WithGitHubPhone: Story = {
+  args: { providers: ['google', 'github'] },
+  decorators: phone,
+}
 
 /** 375px: the card fills the width and the opt-in wraps inside it. */
 export const Phone: Story = { decorators: phone }

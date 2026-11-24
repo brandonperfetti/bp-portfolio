@@ -395,7 +395,7 @@ stay where they are:
   sign-up form (#377) sends a new member on to `redirect_url` itself, where
   Clerk's prebuilt form used to. The value is parsed the way a browser parses
   it and accepted only as a path on this origin, on the form and again on the
-  Google callback page; anything else (another origin, `//host`, `/\host`,
+  callback page Google or GitHub returns to (#431); anything else (another origin, `//host`, `/\host`,
   `javascript:`, a same-origin URL whose path is `//host`) falls back to the
   home page [source: `safeRedirectPath`, `src/lib/auth/safeRedirect.ts`;
   cases pinned in `safeRedirect.test.ts`]. A new surface that follows a

@@ -4,6 +4,10 @@ import { useEffect, useId, useRef, useState } from 'react'
 import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
+import {
+  DEFAULT_SOCIAL_PROVIDERS,
+  type SocialProvider,
+} from '@/lib/auth/socialProviders'
 
 import {
   AUTH_LINK_CLASS,
@@ -12,7 +16,7 @@ import {
   AuthHeading,
   CodeStep,
   GlobalErrors,
-  GoogleButton,
+  SocialButtons,
   PasswordField,
   type CodeDelivery,
 } from './AuthFormParts'
@@ -43,7 +47,7 @@ export type SignInStep =
 /** Props of {@link SignInFormView}. */
 export type SignInFormViewProps = {
   /**
-   * `start`: Google, email and password, and the two ways round a password
+   * `start`: the social buttons, email and password, and the two ways round a password
    * (an emailed code, a reset). `email-code`: the code that signs in without
    * a password. `second-factor`: an emailed code Clerk asks for after the
    * first one (the new-device check, or a second factor). `reset-code`: the
@@ -57,6 +61,11 @@ export type SignInFormViewProps = {
   errors: SignInFormErrors
   /** Clerk's password minimum, for the hint on the new-password step. */
   passwordMinLength: number
+  /**
+   * The social connections to offer on the first step, in order (#431).
+   * Defaults to Google alone.
+   */
+  providers?: readonly SocialProvider[]
   /** Where "Sign up" goes; the caller adds any `redirect_url`. */
   signUpHref: string
   /** Theme for Clerk's bot-check widget, when it shows one. */
@@ -74,7 +83,8 @@ export type SignInFormViewProps = {
   /** A polite status line on a code step, such as "a new code was sent". */
   notice?: string
   onSubmit: (values: SignInFormValues) => void
-  onGoogle: () => void
+  /** A social button: the connection chosen. */
+  onSocial: (provider: SocialProvider) => void
   /** Sign in with an emailed code instead of the password. */
   onEmailCode: (emailAddress: string) => void
   /** Start a password reset for this address. */
@@ -98,9 +108,10 @@ export type SignInFormViewProps = {
  * Free of Clerk, so every state renders in jsdom and in Storybook without a
  * Clerk instance; `SignInForm` drives it from Clerk's `useSignIn()`.
  *
- * **One first step for every way in.** Google, then email and password, with
- * "Email me a sign-in code" for an account that has no password (one made
- * with Google, say) and "Forgot password?" beside the password label. Both
+ * **One first step for every way in.** The social buttons (Google, and
+ * GitHub where it is on, #431), then email and password, with "Email me a
+ * sign-in code" for an account that has no password (one made with Google,
+ * say) and "Forgot password?" beside the password label. Both
  * use the address typed above, so there is no separate screen to ask for it.
  *
  * **Every code step is the same `CodeStep`** as sign-up's: the line under
@@ -172,8 +183,9 @@ function StartStep({
   errors,
   signUpHref,
   captchaTheme,
+  providers = DEFAULT_SOCIAL_PROVIDERS,
   onSubmit,
-  onGoogle,
+  onSocial,
   onEmailCode,
   onForgotPassword,
   focusOnArrival,
@@ -226,10 +238,11 @@ function StartStep({
       </AuthHeading>
 
       <fieldset disabled={pending} className="mt-6 flex min-w-0 flex-col gap-5">
-        <GoogleButton
-          onClick={() => {
+        <SocialButtons
+          providers={providers}
+          onSelect={(provider) => {
             if (pending) return
-            onGoogle()
+            onSocial(provider)
           }}
         />
 
