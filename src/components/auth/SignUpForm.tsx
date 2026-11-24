@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
 
 import { useSignUp } from '@clerk/nextjs'
 import { useTheme } from 'next-themes'
 
-import { safeRedirectPath, withRedirect } from '@/lib/auth/safeRedirect'
+import { withRedirect } from '@/lib/auth/safeRedirect'
 import { MAILING_LIST_OPT_IN_KEY } from '@/lib/email/mailingListOptIn'
+
+import { SIGN_IN_PATH, SIGN_UP_SSO_CALLBACK_PATH } from './paths'
 
 import {
   SignUpFormView,
@@ -16,38 +17,16 @@ import {
   type SignUpFormValues,
   type SignUpFormViewProps,
 } from './SignUpFormView'
-
-/** The sign-up route. */
-export const SIGN_UP_PATH = '/sign-up'
-/** The page Google returns to (`sign-up/sso-callback/page.tsx`). */
-export const SIGN_UP_SSO_CALLBACK_PATH = '/sign-up/sso-callback'
-/** The sign-in route, still Clerk's prebuilt form. */
-export const SIGN_IN_PATH = '/sign-in'
-
-/**
- * Clerk's password minimum, for the hint under the field.
- *
- * @remarks Hardcoded: `useSignUp()` and the public `Clerk` object expose no
- * instance settings, so the dashboard value cannot be read here (Brandon's
- * decision 4 on #377: read it if the hook exposes it, otherwise hardcode and
- * say so). 15 is production's setting, measured 2026-11-18 from Clerk's
- * public environment endpoint. If the dashboard value changes, change this;
- * until then a too-short password is still refused by Clerk, whose message
- * shows under the field.
- */
-export const PASSWORD_MIN_LENGTH = 15
-
-/**
- * How long the form stays locked after a step that should end by leaving the
- * page (the redirect to Google, the navigation after sign-in) without the
- * page having gone.
- *
- * @remarks Leaving normally takes well under a second. If the page is still
- * here after this long, a form locked for good would be a dead end; it
- * unlocks and says it is taking long, so the visitor can act. It does not
- * say anything failed: the timer only knows the page is still here.
- */
-export const LEAVE_TIMEOUT_MS = 10_000
+import {
+  errorText as text,
+  LEAVE_TIMEOUT_MS,
+  PASSWORD_MIN_LENGTH,
+  SESSION_TASK_MESSAGE,
+  UNEXPECTED_MESSAGE,
+  useAuthSteps,
+  useFinalizeNavigate,
+  useRedirectTarget,
+} from './useAuthSteps'
 
 const UNFINISHED_MESSAGE =
   "We couldn't finish creating your account here. Please try again, or sign up with Google."
@@ -58,16 +37,8 @@ const UNFINISHED_MESSAGE =
  */
 const UNFINISHED_GOOGLE_MESSAGE =
   "We couldn't finish creating your account with Google here. Please try again, or sign up with your email and a password."
-const UNEXPECTED_MESSAGE = 'Something went wrong. Please try again.'
 /** The sign-up fields the first step has inputs for, in Clerk's names. */
 const COLLECTED_FIELDS: readonly string[] = ['email_address', 'password']
-/** For a navigation that has not happened yet: nothing is known to have failed. */
-const SLOW_MESSAGE = 'This is taking longer than expected.'
-
-type Message = { message: string; longMessage?: string } | null | undefined
-
-const text = (error: Message): string | undefined =>
-  error ? (error.longMessage ?? error.message) : undefined
 
 /**
  * The custom sign-up form (#377): Clerk's `useSignUp()` flow behind this
@@ -139,55 +110,8 @@ export function SignUpForm({
   leaveTimeoutMs?: number
 } = {}) {
   const { signUp, errors } = useSignUp()
-  const router = useRouter()
-  const searchParams = useSearchParams()
   const { resolvedTheme } = useTheme()
-
-  const [busy, setBusy] = useState(false)
-  const inFlight = useRef(false)
-  const leaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  // A Clerk call can settle after the page has gone; `run` must not arm a
-  // timer then, since this cleanup has already run.
-  const mounted = useRef(true)
-  useEffect(() => {
-    mounted.current = true
-    return () => {
-      mounted.current = false
-      clearTimeout(leaveTimer.current)
-    }
-  }, [])
-  const [localErrors, setLocalErrors] = useState<string[]>([])
-  const [notice, setNotice] = useState<string>()
-  // Unknown until mounted: the server render accepts a path only, and a
-  // same-origin absolute `redirect_url` is accepted once the origin is known.
-  const [origin, setOrigin] = useState<string>()
-  useEffect(() => setOrigin(window.location.origin), [])
-
-  // Leaving for Google keeps the form locked. If the visitor comes back with
-  // the Back button, the browser may restore this page exactly as it was
-  // left, locked; unlock it so they can choose again. A restore is the only
-  // case handled (`persisted`), and it unlocks whatever the lock was for: a
-  // visitor who left by their own navigation while a request was pending and
-  // is restored gets an unlocked form too (#384). That favours recovery over
-  // a form that could stay locked for good. It is not exclusive: a request
-  // still pending at the restore can overlap a retry. Whether a browser
-  // restores a page in that state is not measured.
-  useEffect(() => {
-    const onPageShow = (event: PageTransitionEvent) => {
-      if (!event.persisted) return
-      clearTimeout(leaveTimer.current)
-      inFlight.current = false
-      setBusy(false)
-    }
-    window.addEventListener('pageshow', onPageShow)
-    return () => window.removeEventListener('pageshow', onPageShow)
-  }, [])
-
-  const redirectTarget = safeRedirectPath(
-    searchParams.get('redirect_url'),
-    origin,
-  )
-  const destination = redirectTarget ?? '/'
+  const { redirectTarget, destination } = useRedirectTarget()
 
   /**
    * Whether the code step can finish this sign-up: the email is the only
@@ -229,56 +153,37 @@ export function SignUpForm({
   const [codeDelivery, setCodeDelivery] =
     useState<SignUpCodeDelivery>('unknown')
 
-  /**
-   * Runs one Clerk step with the form locked. `stayLocked` is for a step
-   * that ends by leaving the page: the lock holds so nothing can be changed
-   * or sent again behind the navigation, and is released after
-   * `leaveTimeoutMs` if the page is somehow still here.
-   */
-  const run = async (step: () => Promise<{ stayLocked?: boolean } | void>) => {
-    if (inFlight.current) return
-    inFlight.current = true
-    setHeldStep(currentStep())
-    setBusy(true)
-    setLocalErrors([])
-    setNotice(undefined)
-    let stayLocked = false
-    try {
-      stayLocked = (await step())?.stayLocked ?? false
-    } catch (error) {
-      console.error('[sign-up] unexpected failure', error)
-      setLocalErrors([UNEXPECTED_MESSAGE])
-    } finally {
-      if (stayLocked) {
-        if (mounted.current) {
-          leaveTimer.current = setTimeout(() => {
-            inFlight.current = false
-            setBusy(false)
-            setLocalErrors([SLOW_MESSAGE])
-          }, leaveTimeoutMs)
-        }
-      } else {
-        inFlight.current = false
-        setBusy(false)
-      }
-    }
-  }
+  // The lock around each request (`useAuthSteps`), holding the step it was
+  // sent from while it is in flight.
+  const { busy, run, localErrors, setLocalErrors, notice, setNotice } =
+    useAuthSteps({
+      logTag: 'sign-up',
+      leaveTimeoutMs,
+      onStart: () => setHeldStep(currentStep()),
+    })
+  const navigate = useFinalizeNavigate({
+    destination,
+    assignLocation,
+    logTag: 'sign-up',
+  })
 
   /** Signs the visitor in to the account Clerk has just created. */
-  const finish = async () => {
+  const finish = async (isCurrent: () => boolean) => {
+    // `navigate` does nothing for a visitor who has already gone somewhere
+    // else (the header, the Back button): they are signed in either way.
+    let blockedTask: string | undefined
     const { error } = await signUp.finalize({
-      navigate: ({ decorateUrl }) => {
-        // The visitor has already gone somewhere else (the header, the Back
-        // button) in the moment before Clerk called this. They are signed
-        // in either way; do not pull them to the sign-up's destination.
-        if (!mounted.current) return
-        const url = decorateUrl(destination)
-        if (url.startsWith('http')) assignLocation(url)
-        else router.push(url)
+      navigate: (params) => {
+        if (isCurrent()) blockedTask = navigate(params)
       },
     })
+    if (!isCurrent()) return
     if (error) {
       setLocalErrors([text(error) ?? UNEXPECTED_MESSAGE])
+      return
+    }
+    if (blockedTask) {
+      setLocalErrors([SESSION_TASK_MESSAGE])
       return
     }
     // Signed in, and on the way to the destination.
@@ -341,18 +246,19 @@ export function SignUpForm({
     password,
     mailingListOptIn,
   }: SignUpFormValues) =>
-    run(async () => {
+    run(async (isCurrent) => {
       const hadAttempt = Boolean(signUp.id)
       const { error } = await signUp.password({
         emailAddress,
         password,
         unsafeMetadata: { [MAILING_LIST_OPT_IN_KEY]: mailingListOptIn },
       })
+      if (!isCurrent()) return
       if (error) {
         if (hadAttempt) await discardAttempt(text(error) ?? UNEXPECTED_MESSAGE)
         return
       }
-      if (signUp.status === 'complete') return finish()
+      if (signUp.status === 'complete') return finish(isCurrent)
       if (!needsEmailCode()) {
         // The instance asks for something this form has no field or step
         // for (a dashboard setting changed: a field, or a phone to verify
@@ -370,13 +276,14 @@ export function SignUpForm({
       // its way and the step has to say so (#384); Clerk's own message
       // shows there too, and "Send a new code" is the way forward.
       const sent = await signUp.verifications.sendEmailCode()
+      if (!isCurrent()) return
       setCodeDelivery(sent.error ? 'failed' : 'sent')
     })
 
   const onGoogle = ({
     mailingListOptIn,
   }: Pick<SignUpFormValues, 'mailingListOptIn'>) =>
-    run(async () => {
+    run(async (isCurrent) => {
       const hadAttempt = Boolean(signUp.id)
       const { error } = await signUp.sso({
         strategy: 'oauth_google',
@@ -387,6 +294,7 @@ export function SignUpForm({
         redirectUrl: destination,
         unsafeMetadata: { [MAILING_LIST_OPT_IN_KEY]: mailingListOptIn },
       })
+      if (!isCurrent()) return
       if (error) {
         if (hadAttempt) await discardAttempt(text(error) ?? UNEXPECTED_MESSAGE)
         return
@@ -396,17 +304,17 @@ export function SignUpForm({
     })
 
   const onVerify = (code: string) =>
-    run(async () => {
+    run(async (isCurrent) => {
       const { error } = await signUp.verifications.verifyEmailCode({ code })
-      if (error) return
-      if (signUp.status === 'complete') return finish()
+      if (!isCurrent() || error) return
+      if (signUp.status === 'complete') return finish(isCurrent)
       await discardAttempt(unfinishedMessage())
     })
 
   const onResend = () =>
-    run(async () => {
+    run(async (isCurrent) => {
       const { error } = await signUp.verifications.sendEmailCode()
-      if (error) return
+      if (!isCurrent() || error) return
       setCodeDelivery('sent')
       setNotice('A new code is on its way.')
     })

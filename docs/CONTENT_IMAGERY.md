@@ -306,6 +306,9 @@ specific to covers.
 The GPT Image pilot is **local only** until #415 lands and Brandon
 approves the attach: no candidate upload, no ingest, no attach. While this
 file is `status: draft`, §1 still applies.
+Keep post 61's A2-1 candidate on hold. The authenticated exact-ID lookup
+in [#427](https://github.com/brandonperfetti/bp-portfolio/issues/427) must
+be verified before Brandon sets this guide to `status: approved`.
 
 ### Autonomy and the publish boundary
 
@@ -354,13 +357,46 @@ file is `status: draft`, §1 still applies.
   to `true` on every upload of both rollouts, and added `upload_preset`,
   `colors` and `audit_context`. A collision would silently replace the old
   asset. So:
-  1. **Pre-check the exact public_id** with `search-assets`: it must return 0. Run a positive control in the same query (an id that exists, such
-     as the post's `cover-mj-A`) so the 0 is real.
-  2. **The pre-check is not atomic.** Run one writer per post folder at a
-     time. If the id exists, take the next letter; never reuse an id.
-  3. **After upload**, check the response for `overwritten` or `existing`,
-     check width and height match the file, and check stored bytes equal
-     the file. If an overwrite happened, stop and report it.
+  1. **Take the writer slot before checking any ID.** Brandon designates
+     one cover-run thread for each Cloudinary product environment and full
+     post folder. He records the active writer there,
+     naming the operator and session. Start only after that assignment
+     appears in the thread. If someone holds the slot, wait.
+     The writer records release in the same thread after the attempt and
+     any reconciliation are complete, or after stopping before a request
+     was sent. An interrupted or uncertain attempt keeps the slot held.
+     If its writer is unavailable, Brandon can assign another operator
+     to reconcile it in the same thread. The slot remains held during
+     the transfer.
+  2. **Look up the exact public ID.** Use the authenticated Cloudinary
+     [Admin API single-resource lookup](https://cloudinary.com/documentation/admin_api#get_details_of_a_single_resource_by_public_id),
+     `GET /resources/image/upload/{public_id}`, in the upload's product
+     environment. Pass the full public ID, including its folder path, to
+     the SDK's `api.resource` method or URL-encode it for REST. With the
+     same connection, first confirm a known original such as the post's
+     `cover-mj-A`. Only a resource-level 404 for the full target ID
+     establishes absence. Treat any returned resource,
+     including a backup placeholder, as occupied. Stop if the control
+     fails or the result is ambiguous.
+     The current Asset Management MCP exposes `get-asset-details` by
+     internal asset ID and `list-images` by public IDs. If the upload
+     operator lacks an authorized single-resource Admin API connection,
+     stop before signing or uploading.
+     If the ID exists, choose the next available candidate number or
+     series letter and check that ID before uploading.
+  3. **Stop and escalate an unresolved upload.**
+     After a timeout, missing response or error after send, repeat the
+     exact lookup while holding the same writer slot. Continue with an
+     existing asset only if its stored original matches the intended
+     file. Otherwise, record the target ID and last known result in the
+     cover-run thread, leave the slot held, and escalate to Brandon.
+     Do not retry or start another upload in that folder while the
+     attempt is unresolved. A 404 shows absence at lookup time and a
+     timeout ends the client's wait. Neither establishes that Cloudinary
+     stopped processing the original request.
+  4. **When the upload returns a response**, check for `overwritten` or
+     `existing`, check width and height match the file, and check stored
+     bytes equal the file. If an overwrite happened, stop and report it.
 - **Keep the native PNG, and a same-size JPEG beside it.** Do not resize
   in the pilot. Next to each PNG, export a JPEG at the same pixel size and
   about quality 90, and check it is under Cloudinary's upload limit of
@@ -380,6 +416,43 @@ file is `status: draft`, §1 still applies.
   file names end in the job UUID and image index. Post 11 stalled on this: the
   matching phrase belonged to a re-run Brandon had turned down, and the
   image he had chosen was the earlier one.
+
+### Candidate upload receipts
+
+The writer reserves the full candidate public ID in the cover-run thread
+under the slot above, after the authenticated lookup confirms absence.
+Use that reservation as `--reserved-id` for `cover_recipes.py receipt`.
+Build the expected JSON before upload: set `public_id` to the exact
+reserved ID, and take `width`, `height`, and `bytes` from the local JPEG.
+These four fields are the receipt allowlist. Check overwrite and existing
+markers separately when reading the response.
+
+Use `scripts/cover_recipes.py` inside the installed `cover-recipes` skill.
+The [released skill source](https://github.com/brandonperfetti/claude-skills/blob/v1.58.0/skills/personal/cover-recipes/scripts/cover_recipes.py)
+is maintained in `claude-skills`. Set `COVER_RECIPES_SCRIPT` to the installed
+script's full path and run from the BP Portfolio checkout root so the tool
+reads this guide.
+
+After Brandon approves this guide and the pilot holds are cleared, check the
+plan before staging a candidate. `EXPECTED_JSON` names the independently
+prepared JSON file and `RESERVED_ID` is the full reserved public ID.
+
+```sh
+python3 "$COVER_RECIPES_SCRIPT" receipt --check-only \
+  --expected "$EXPECTED_JSON" --reserved-id "$RESERVED_ID"
+```
+
+A failed plan check stops the upload. After upload, connect the raw JSON
+response directly to the standard input of the command below. Use the same
+expected file and reservation, and set `RECEIPT_JSON` to a new receipt path.
+
+```sh
+python3 "$COVER_RECIPES_SCRIPT" receipt \
+  --expected "$EXPECTED_JSON" --reserved-id "$RESERVED_ID" "$RECEIPT_JSON"
+```
+
+The saved receipt contains only `public_id`, `width`, `height`, and `bytes`.
+Keep the raw response out of files, logs and handoffs.
 
 ### Ingest URL
 
@@ -507,3 +580,113 @@ covers" for §9.
   count will drop as Sloane's audit retires posts.
 - **Earlier eras:** the code-rendered covers and their spec are in
   [`archive/code-rendered-covers/`](../archive/code-rendered-covers/HISTORY.md).
+
+## Settings for the cover-recipes scripts
+
+This block mirrors §3, §4, §7, §9, §10, §11 and §13. Change the prose and
+settings together. The prose governs the generation route and pilot hold.
+The retired `70s` row and the `sky blue` prompt spelling come from the
+stored prompts in the cover history.
+
+```json cover-recipes
+{
+  "schema": 1,
+  "draftExploratory": false,
+  "styles": {
+    "60s": {
+      "design": "1960s space-age design, mid-century modern forms",
+      "look": "Kodachrome film look",
+      "palette": "cream, tangerine and avocado"
+    },
+    "70s-cool": {
+      "design": "1970s brutalist sci-fi production design",
+      "look": "grainy 35mm film",
+      "palette": "concrete grey, deep teal and sodium-vapor amber"
+    },
+    "80s-pastel": {
+      "design": "1980s pastel Memphis-era design",
+      "look": "soft VHS-era film look",
+      "palette": "peach, lavender and turquoise"
+    },
+    "80s-neon": {
+      "design": "1980s synthwave, neon reflections",
+      "look": "VHS-era film softness",
+      "palette": "magenta and cyan"
+    },
+    "nf": {
+      "design": "near-future minimalism",
+      "look": "clean digital photograph",
+      "palette": "pale neutral"
+    },
+    "70s": {
+      "design": "1970s brutalist sci-fi production design",
+      "look": "grainy 35mm film",
+      "palette": "burnt orange and brown",
+      "retired": true
+    }
+  },
+  "accents": { "sky": "sky blue" },
+  "styleLine": "{design}, {look}, {palette} palette with a hint of {accent}, heightened realism, {light}.",
+  "exclusions": [
+    "text",
+    "letters",
+    "numbers",
+    "logo",
+    "border",
+    "signage",
+    "children",
+    "smoke",
+    "particles"
+  ],
+  "rotation": {
+    "windows": { "scene": 3, "style": 2 },
+    "caps": { "fieldOfUnits": 2 },
+    "leastRecent": ["family"]
+  },
+  "history": {
+    "path": "docs/cover-history.json",
+    "list": "covers",
+    "id": "postId",
+    "date": "publishedAt",
+    "retired": "retiredAt",
+    "fields": {
+      "scene": "scene",
+      "style": "era",
+      "family": "metaphorFamily",
+      "accent": "hue",
+      "fieldOfUnits": "fieldOfUnits"
+    }
+  },
+  "generators": {
+    "midjourney": {
+      "params": "--ar 16:9 --style raw --s 150",
+      "storedVersion": "8.2"
+    },
+    "gpt-image": {
+      "lines": [
+        "35mm film still, 50mm lens at f/2, low three-quarter angle, off-center, shallow depth of field.",
+        "One directional light source from the side, long soft shadows.",
+        "Fine visible film grain, slight halation, muted slightly desaturated color, real surfaces with wear.",
+        "Not an advertisement, not a 3D render, not a catalogue shot, not symmetrical, not head-on.",
+        "Only the objects named appear: no plants, bowls, vases, flowers, cushions, rugs, lamps or other decor.",
+        "Blank paper, unlettered signs.",
+        "Any person is an adult, small in frame, seen from behind or in silhouette, face not visible.",
+        "Wide landscape composition with every important element in the middle band, so a 16:9 crop loses nothing."
+      ],
+      "exclusionSentence": "No {exclusions}.",
+      "exclusionJoin": "or",
+      "size": { "request": "2048x1152" }
+    }
+  },
+  "naming": {
+    "pattern": "cover-{provider}-{letter}",
+    "providers": { "midjourney": "mj", "gpt-image": "gpt" },
+    "retired": ["cover-a", "cover-b", "cover-c", "cover-ds-A"]
+  },
+  "upload": {
+    "limitBytes": 10485760,
+    "receiptFields": ["public_id", "width", "height", "bytes"],
+    "receiptIdentityField": "public_id"
+  }
+}
+```

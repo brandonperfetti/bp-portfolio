@@ -31,15 +31,19 @@ copyright line is hard-coded.
 | `/newsletter/confirm`                      | —                             | Double opt-in Confirm button (#411)  |
 | `/sign-in`, `/sign-up`, `/account`         | Clerk                         | Render only when Clerk enabled       |
 | `/sign-up/sso-callback`                    | Clerk                         | Where Google returns to (#377)       |
+| `/sign-in/sso-callback`                    | Clerk                         | Where Google returns to (#379)       |
 | `/next/preview`, `/next/exit-preview`      | —                             | Draft preview (admin session)        |
 | `/feed.xml`, `/llms.txt`, `/llms-full.txt` | route handlers                |                                      |
 | `/[...segments]`                           | Pages, then Posts, by `path`  | Page-builder catch-all — see below   |
 
 `/sign-in`, `/sign-up` and `/account` are optional catch-alls
-(`[[...sign-in]]` and the like), because Clerk's components path-route their
-own sub-pages: each serves every path below it that has no route of its own,
-so `/account/security` loads directly (#391). A dedicated route beside one
-still wins (`/sign-up/sso-callback`), but a CMS page nested under one would
+(`[[...sign-in]]` and the like). `/account` is Clerk's `<UserProfile>`,
+which path-routes its own sub-pages, so `/account/security` loads directly
+(#391). `/sign-in` and `/sign-up` are the site's own forms (#377, #379) and
+route nothing by path; their catch-alls stay so links Clerk's prebuilt forms
+built, and bookmarks of them, land on the form. Each serves every path below
+it that has no route of its own. A dedicated route beside one still wins
+(`/sign-in/sso-callback`, `/sign-up/sso-callback`), but a CMS page nested under one would
 be shadowed by it, so saving a Pages document at or under any of the three is
 refused: they are in `CODE_OWNED_FIRST_SEGMENTS` (#400).
 

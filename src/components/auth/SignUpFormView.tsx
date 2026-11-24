@@ -3,14 +3,20 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import Link from 'next/link'
 
-import { Eye, EyeOff } from 'lucide-react'
-
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { GoogleIcon } from '@/icons'
 import { MAILING_LIST_OPT_IN_KEY } from '@/lib/email/mailingListOptIn'
 
+import {
+  AUTH_LINK_CLASS,
+  AuthCard,
+  AuthField,
+  AuthHeading,
+  CodeStep,
+  GlobalErrors,
+  GoogleButton,
+  PasswordField,
+  type CodeDelivery,
+} from './AuthFormParts'
 import { MailingListOptIn } from './MailingListOptIn'
 
 /** Messages to show, already in words: one per field, plus any that belong to none. */
@@ -30,7 +36,7 @@ export type SignUpFormValues = {
 }
 
 /** What the form knows about the email code's delivery. */
-export type SignUpCodeDelivery = 'sent' | 'failed' | 'unknown'
+export type SignUpCodeDelivery = CodeDelivery
 
 /** Props of {@link SignUpFormView}. */
 export type SignUpFormViewProps = {
@@ -68,11 +74,6 @@ export type SignUpFormViewProps = {
   /** Sign in to the account just created (`finish` step). */
   onFinish: () => void
 }
-
-const CARD_CLASS =
-  'w-full max-w-[25rem] rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-sm sm:p-8'
-
-const ERROR_CLASS = 'text-sm text-destructive'
 
 /** Whether the opt-in box in `form` is ticked right now, read from the DOM. */
 function readOptIn(form: HTMLFormElement | null): boolean {
@@ -127,7 +128,7 @@ export function SignUpFormView(props: SignUpFormViewProps) {
   }, [props.step])
 
   return (
-    <div className={CARD_CLASS}>
+    <AuthCard>
       {props.step === 'verify' ? (
         <VerifyStep {...props} />
       ) : props.step === 'finish' ? (
@@ -135,18 +136,7 @@ export function SignUpFormView(props: SignUpFormViewProps) {
       ) : (
         <StartStep {...props} focusOnArrival={cameFromAnotherStep} />
       )}
-    </div>
-  )
-}
-
-function GlobalErrors({ messages }: { messages?: string[] }) {
-  if (!messages?.length) return null
-  return (
-    <div role="alert" className={`${ERROR_CLASS} space-y-1`}>
-      {messages.map((message) => (
-        <p key={message}>{message}</p>
-      ))}
-    </div>
+    </AuthCard>
   )
 }
 
@@ -164,7 +154,6 @@ function StartStep({
   const [optIn, setOptIn] = useState(false)
   const [emailAddress, setEmailAddress] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const emailRef = useRef<HTMLInputElement>(null)
   const passwordRef = useRef<HTMLInputElement>(null)
 
@@ -186,13 +175,6 @@ function StartStep({
     else if (errors.password) passwordRef.current?.focus()
   }, [pending, errors.emailAddress, errors.password])
 
-  const passwordDescribedBy = [
-    `${id}-password-hint`,
-    errors.password ? `${id}-password-error` : null,
-  ]
-    .filter(Boolean)
-    .join(' ')
-
   return (
     <form
       aria-labelledby={`${id}-title`}
@@ -207,14 +189,9 @@ function StartStep({
         })
       }}
     >
-      <div className="text-center">
-        <h1 id={`${id}-title`} className="text-lg font-semibold">
-          Create your account
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Welcome! Please fill in the details to get started.
-        </p>
-      </div>
+      <AuthHeading id={`${id}-title`} title="Create your account">
+        Welcome! Please fill in the details to get started.
+      </AuthHeading>
 
       <fieldset disabled={pending} className="mt-6 flex min-w-0 flex-col gap-5">
         <MailingListOptIn
@@ -223,95 +200,37 @@ function StartStep({
           name={MAILING_LIST_OPT_IN_KEY}
         />
 
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
+        <GoogleButton
           onClick={(event) => {
             if (pending) return
             onGoogle({ mailingListOptIn: readOptIn(event.currentTarget.form) })
           }}
-        >
-          <GoogleIcon className="size-4" />
-          Continue with Google
-        </Button>
+        />
 
-        <div
-          aria-hidden="true"
-          className="flex items-center gap-3 text-xs text-muted-foreground"
-        >
-          <span className="h-px flex-1 bg-border" />
-          or
-          <span className="h-px flex-1 bg-border" />
-        </div>
+        <AuthField
+          id={`${id}-email`}
+          inputRef={emailRef}
+          label="Email address"
+          error={errors.emailAddress}
+          type="email"
+          name="emailAddress"
+          autoComplete="email"
+          autoCapitalize="none"
+          spellCheck={false}
+          required
+          value={emailAddress}
+          onChange={(event) => setEmailAddress(event.target.value)}
+        />
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor={`${id}-email`}>Email address</Label>
-          <Input
-            ref={emailRef}
-            id={`${id}-email`}
-            type="email"
-            name="emailAddress"
-            autoComplete="email"
-            autoCapitalize="none"
-            spellCheck={false}
-            required
-            value={emailAddress}
-            onChange={(event) => setEmailAddress(event.target.value)}
-            aria-invalid={errors.emailAddress ? true : undefined}
-            aria-describedby={
-              errors.emailAddress ? `${id}-email-error` : undefined
-            }
-          />
-          {errors.emailAddress ? (
-            <p id={`${id}-email-error`} className={ERROR_CLASS}>
-              {errors.emailAddress}
-            </p>
-          ) : null}
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <Label htmlFor={`${id}-password`}>Password</Label>
-          <div className="relative">
-            <Input
-              ref={passwordRef}
-              id={`${id}-password`}
-              type={showPassword ? 'text' : 'password'}
-              name="password"
-              autoComplete="new-password"
-              required
-              className="pr-10"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              aria-invalid={errors.password ? true : undefined}
-              aria-describedby={passwordDescribedBy}
-            />
-            <button
-              type="button"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              aria-pressed={showPassword}
-              onClick={() => setShowPassword((shown) => !shown)}
-              className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-md text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-            >
-              {showPassword ? (
-                <EyeOff aria-hidden="true" className="size-4" />
-              ) : (
-                <Eye aria-hidden="true" className="size-4" />
-              )}
-            </button>
-          </div>
-          <p
-            id={`${id}-password-hint`}
-            className="text-sm text-muted-foreground"
-          >
-            At least {passwordMinLength} characters
-          </p>
-          {errors.password ? (
-            <p id={`${id}-password-error`} className={ERROR_CLASS}>
-              {errors.password}
-            </p>
-          ) : null}
-        </div>
+        <PasswordField
+          id={`${id}-password`}
+          inputRef={passwordRef}
+          value={password}
+          onChange={setPassword}
+          autoComplete="new-password"
+          hint={`At least ${passwordMinLength} characters`}
+          error={errors.password}
+        />
 
         <GlobalErrors messages={errors.global} />
 
@@ -330,10 +249,7 @@ function StartStep({
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{' '}
-        <Link
-          href={signInHref}
-          className="font-medium text-link-accent underline-offset-4 hover:underline"
-        >
+        <Link href={signInHref} className={AUTH_LINK_CLASS}>
           Sign in
         </Link>
       </p>
@@ -351,101 +267,22 @@ function VerifyStep({
   onResend,
   onUseDifferentEmail,
 }: SignUpFormViewProps) {
-  const id = useId()
-  const [code, setCode] = useState('')
-  const codeRef = useRef<HTMLInputElement>(null)
-
-  // Arriving on this step, and every rejected code, lands on the code field.
-  // A disabled field cannot take focus, so this also runs when the step
-  // unlocks after a request made from it (a rejected code, a new code).
-  useEffect(() => {
-    if (!pending) codeRef.current?.focus()
-  }, [pending, errors.code])
-
   return (
-    <form
-      aria-labelledby={`${id}-title`}
-      noValidate
-      onSubmit={(event) => {
-        event.preventDefault()
-        if (pending) return
-        onVerify(code.trim())
-      }}
-    >
-      <div className="text-center">
-        <h1 id={`${id}-title`} className="text-lg font-semibold">
-          Check your email
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {codeDelivery === 'failed'
-            ? "We couldn't send a code to "
-            : codeDelivery === 'unknown'
-              ? 'Enter the verification code for '
-              : 'Enter the code we sent to '}
-          {verifyEmail ? (
-            <span className="font-medium break-all text-card-foreground">
-              {verifyEmail}
-            </span>
-          ) : (
-            'your email address'
-          )}
-          .
-          {codeDelivery === 'failed'
-            ? ' Choose "Send a new code" to try again.'
-            : codeDelivery === 'unknown'
-              ? ' If you don\'t have one, choose "Send a new code".'
-              : null}
-        </p>
-      </div>
-
-      <fieldset disabled={pending} className="mt-6 flex min-w-0 flex-col gap-5">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor={`${id}-code`}>Verification code</Label>
-          <Input
-            ref={codeRef}
-            id={`${id}-code`}
-            name="code"
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            required
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-            aria-invalid={errors.code ? true : undefined}
-            aria-describedby={errors.code ? `${id}-code-error` : undefined}
-          />
-          {errors.code ? (
-            <p id={`${id}-code-error`} className={ERROR_CLASS}>
-              {errors.code}
-            </p>
-          ) : null}
-        </div>
-
-        <GlobalErrors messages={errors.global} />
-
-        <p role="status" className="text-sm text-muted-foreground empty:hidden">
-          {notice}
-        </p>
-
-        <Button type="submit" className="w-full">
-          {pending ? 'Verifying…' : 'Verify'}
-        </Button>
-
-        <div className="flex flex-wrap justify-between gap-x-4 gap-y-2">
-          <Button type="button" variant="link" size="sm" onClick={onResend}>
-            Send a new code
-          </Button>
-          <Button
-            type="button"
-            variant="link"
-            size="sm"
-            onClick={onUseDifferentEmail}
-          >
-            Use a different email
-          </Button>
-        </div>
-      </fieldset>
-    </form>
+    <CodeStep
+      title="Check your email"
+      email={verifyEmail}
+      codeDelivery={codeDelivery}
+      pending={pending}
+      codeError={errors.code}
+      globalErrors={errors.global}
+      notice={notice}
+      submitLabel="Verify"
+      pendingLabel="Verifying…"
+      backLabel="Use a different email"
+      onVerify={onVerify}
+      onResend={onResend}
+      onBack={onUseDifferentEmail}
+    />
   )
 }
 
@@ -458,12 +295,13 @@ function FinishStep({
   const id = useId()
   const continueRef = useRef<HTMLButtonElement>(null)
 
-  // The card arrives here from the code step, whose field is gone; put focus
-  // on the one thing left to do. Once, on arrival: a retry that fails keeps
-  // focus where the visitor has it (the button they pressed).
+  // The card arrives here from a step whose field is gone; put focus on the
+  // one thing left to do. Again whenever a retry settles: the button is
+  // disabled while it runs, which takes focus from it, so a failed retry
+  // would otherwise leave keyboard and screen-reader users at the top.
   useEffect(() => {
-    continueRef.current?.focus()
-  }, [])
+    if (!pending) continueRef.current?.focus()
+  }, [pending])
 
   return (
     <form
@@ -475,14 +313,9 @@ function FinishStep({
         onFinish()
       }}
     >
-      <div className="text-center">
-        <h1 id={`${id}-title`} className="text-lg font-semibold">
-          Your account is ready
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          One more step to sign you in.
-        </p>
-      </div>
+      <AuthHeading id={`${id}-title`} title="Your account is ready">
+        One more step to sign you in.
+      </AuthHeading>
 
       <fieldset disabled={pending} className="mt-6 flex min-w-0 flex-col gap-5">
         <GlobalErrors messages={errors.global} />
@@ -493,10 +326,7 @@ function FinishStep({
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Or{' '}
-        <Link
-          href={signInHref}
-          className="font-medium text-link-accent underline-offset-4 hover:underline"
-        >
+        <Link href={signInHref} className={AUTH_LINK_CLASS}>
           sign in
         </Link>{' '}
         with the account you just made.

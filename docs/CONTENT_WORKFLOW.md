@@ -92,9 +92,10 @@ must respect (Lexical node set, locked slugs, live writes, home
 One agent session produces one article end to end. This replaces the
 legacy Notion pipeline (Content Database + Image Jobs queue + three
 workers) — a single session that can draft, generate, _look at_ its
-candidates, and publish needs none of that coordination machinery. Every
-step below was verified live on staging 2026-08-09; measured limits are
-noted so future agents know what was tested, not just what was hoped.
+candidates, and publish needs none of that coordination machinery. The
+2026-08-09 staging run predates the current cover upload procedure. The
+exact-ID Admin API check and uncertain-upload recovery have yet to run on
+staging.
 
 ### 0. Prerequisites
 
@@ -102,8 +103,9 @@ noted so future agents know what was tested, not just what was hoped.
   collections + createMedia/find/update).
 - Cloudinary MCP connector (asset management) — the archive of every
   cover's original and the source of the 16:9 JPEG derivation the ingest
-  route pulls (`sign-upload`/`upload-asset`, `search-assets` for the
-  pre-check). Cover direction, generators and the upload rules:
+  route pulls (`sign-upload`/`upload-asset`). Cover uploads also require an
+  authorized Cloudinary Admin API connection for the exact-ID pre-check.
+  Cover direction, generators and the upload rules:
   **docs/CONTENT_IMAGERY.md**.
 - An image generator for the cover. Agents use GPT Image (`openai/gpt-image-2`,
   OpenClaw `image_generate` on the OpenClaw OAuth route); Midjourney is Brandon's paste path
@@ -187,9 +189,10 @@ in the run. Generate → pick → upload → ingest → attach:
 
    For example `cover-gpt-B` for an agent's second cover on a post, or
    `cover-mj-B` for Brandon's Midjourney paste. `cover-mj-A` is the live
-   history; `cover-a/b/c` and `cover-ds-A` are retired namespaces. Run the
-   exact-id `search-assets` pre-check with a positive control first:
-   `sign-upload` forces `overwrite: true`, so a collision is silent.
+   history; `cover-a/b/c` and `cover-ds-A` are retired namespaces. Follow
+   the exact-ID lookup and uncertain-upload instructions in
+   `docs/CONTENT_IMAGERY.md` §11 Upload. `sign-upload` forces
+   `overwrite: true`, so a collision is silent.
    Keep the native PNG unresized, with a same-size JPEG (about quality 90) beside it that is under 10,485,760 bytes (docs/CONTENT_IMAGERY.md
    §11 Upload). The GPT Image pilot stays local until #415 lands and
    Brandon approves the attach (§11 Pilot hold).

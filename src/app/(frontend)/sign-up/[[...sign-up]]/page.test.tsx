@@ -39,6 +39,7 @@ vi.mock('@clerk/nextjs', () => ({
       emailAddress: null,
     },
   }),
+  useSignIn: () => ({ signIn: { status: 'needs_identifier' } }),
   HandleSSOCallback: () => <div data-testid="clerk-sso-callback" />,
   SignUp: () => <div data-testid="clerk-prebuilt-sign-up" />,
 }))
