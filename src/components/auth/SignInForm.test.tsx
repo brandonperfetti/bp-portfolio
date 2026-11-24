@@ -1115,7 +1115,13 @@ describe('SignInForm: GitHub (#431)', () => {
     )
     expect(noEmailCodeMessage(BOTH)).toContain('with Google or GitHub.')
     expect(noResetMessage(BOTH)).toContain('with Google or GitHub or an email')
-    // Google alone reads exactly as before #431.
+    // Google alone reads exactly as before #431: the strings as they were.
+    expect(NO_EMAIL_CODE_MESSAGE).toBe(
+      "We can't email a sign-in code for this account. Please sign in with your password or with Google.",
+    )
+    expect(NO_RESET_MESSAGE).toBe(
+      "We can't reset the password for this account by email. Please sign in with Google or an email code.",
+    )
     expect(noEmailCodeMessage(['google'])).toBe(NO_EMAIL_CODE_MESSAGE)
     expect(noResetMessage(['google'])).toBe(NO_RESET_MESSAGE)
   })

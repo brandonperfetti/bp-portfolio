@@ -643,14 +643,24 @@ two settings, the Clerk connection first, then the flag.
    guide, read 2026-11-24]. Then set `CLERK_GITHUB_ENABLED=true` on the
    environment that uses that instance and redeploy.
 2. **Staging hand-run, recorded here before production.** On that
-   environment, with a GitHub account that has no account on the instance and
-   one that has: sign up with the box ticked (the user's `unsafe_metadata` has
-   `mailingListOptIn: true`, and `user.created` captures them) and unticked
-   (no contact); sign in as the returning reader from a gated article (lands
-   back on the article); start on `/sign-in` with the new account (made a
-   sign-up, no opt-in); cancel on GitHub's page (the form is usable, and
-   Google and password still sign in). Record each result and its date here.
-   **Pending.**
+   environment, with a **fresh GitHub identity for each new-account case**
+   (a GitHub account with no account on the instance; reusing one turns the
+   next case into a returning sign-in, which proves no consent):
+   - sign up with the box ticked: the user's `unsafe_metadata` has
+     `mailingListOptIn: true`, and `user.created` captures them;
+   - sign up with the box unticked, a second identity: no contact;
+   - start on `/sign-in` with a third identity: made a sign-up, no opt-in,
+     no contact;
+   - sign in with the first identity from a gated article: lands back on the
+     article;
+   - account linking: GitHub with an identity whose verified email already
+     has a password or Google account on the instance; record what Clerk
+     does (links, or refuses with which message);
+   - cancel on GitHub's page: the form is usable, and Google and password
+     still sign in.
+
+   Record each result and its date here. **Pending.**
+
 3. **Production.** In the production instance, add GitHub the same way with
    **Enable for sign-up and sign-in** and **Use custom credentials** on and
    **App type: GitHub OAuth App**, and copy the **Authorization Callback
@@ -668,7 +678,10 @@ two settings, the Clerk connection first, then the flag.
 4. **Production round trip**, once on: one sign-in with GitHub, recorded here
    with its date. **Pending** until the connection is enabled.
 
-To turn it off, unset the flag first (the button goes), then the connection.
+To turn it off, unset the flag and redeploy first, so the serving
+deployment no longer offers the button (Vercel applies an edited variable on
+the next deployment); only then switch the Clerk connection off. Done the
+other way round, readers are sent to a connection that refuses them.
 
 ## Contact hygiene: the Clerk↔Resend mapping (#86)
 
