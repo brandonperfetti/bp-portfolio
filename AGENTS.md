@@ -115,12 +115,42 @@ already cost a session or broken production.
   approves the attach.** The code-rendered covers under `archive/` are
   history, not a tool.
 - **branch, hook, review or release** → `docs/WORKFLOW.md`. **The release
-  lane writes the `CHANGELOG.md` section at the cut; an agent creates a
-  release tag only on Brandon's explicit word for that tag** (§ Releases).
+  lane writes the `CHANGELOG.md` section at the cut; only Brandon merges the
+  release PR** (§ Releases).
+- **tag a release or publish its GitHub Release** →
+  `docs/RELEASE_RUNBOOK.md` and **§ Release authority** below. **Tag push
+  stays tag-only; outside the grant an agent acts on a tag only on Brandon's
+  explicit word for that tag.**
 - **find where code lives** → `docs/ARCHITECTURE.md` (capability map),
   `docs/FEATURES.md` (behavior), `docs/STATE.md` (data flow).
 - **upkeep or production promotion** → `docs/MAINTENANCE.md`.
 - **edit these docs** → `docs/DOCUMENTATION.md`.
+
+## Release authority
+
+Brandon approved this standing grant on 2026-11-24 (#432), under the shared
+procedure
+[`post-merge-release.md`](https://github.com/brandonperfetti/agent-working-agreements/blob/v2026.11.24/procedures/post-merge-release.md).
+It takes effect when the PR that records it merges into `develop`. The
+commands and checks are in [`docs/RELEASE_RUNBOOK.md`](docs/RELEASE_RUNBOOK.md).
+
+**Designated role:** the release lane, the session that opened the release PR
+(`docs/WORKFLOW.md` § Releases), acting as a B0-qualified autonomous delivery;
+in attended mode, B1's batch approval and owner-push rules apply.
+**Repository and branch:** `brandonperfetti/bp-portfolio`, release branch
+`master`. **Eligible:** a `develop` → `master` release PR that Brandon merged
+himself, as a merge commit, after the review and checks in
+`docs/RELEASE_RUNBOOK.md` § Verify the merge. **Allowed operations:**
+fast-forward the local `master` only; create one annotated tag on that merge
+commit; push only that tag; create or verify its GitHub Release from the
+changelog section; read back the remote tag, Release and Production
+deployment. **Identity:** the tagger is `brandon@brandonperfetti.com`; the
+`Agent:` line names the agent; the Release is published through the authorized
+`gh` session. **Downstream outcome:** the GitHub `Production` deployment for
+the merge commit has state `success`. **Not granted:** merging any PR, pushing
+a branch, moving, deleting or recreating a tag, editing a published Release,
+Releases for tags that predate the grant, and `v2026.11.23`. Each of those
+needs Brandon's explicit word for it.
 
 ## Agent skills
 

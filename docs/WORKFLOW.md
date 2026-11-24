@@ -29,7 +29,11 @@
 A release is the `develop` → `master` PR. Vercel deploys production when
 Brandon merges it; there is no release branch and no version bump
 (`package.json` stays at `4.0.0`). The release lane (the session that opens
-the release PR) does steps 1 to 3; steps 4 and 5 are Brandon's.
+the release PR) does steps 1 to 3. Step 4 is Brandon's alone. Step 5 and the
+GitHub Release that follows it are the release lane's under the standing grant
+in `AGENTS.md` § Release authority, following `docs/RELEASE_RUNBOOK.md`;
+outside that grant they are Brandon's, or an agent's on his explicit word for
+that tag.
 
 1. **Open the release PR** from `develop` into `master`, in the shape of the
    last one: what it carries, what the merge deploys and triggers, the Door
@@ -61,9 +65,13 @@ the release PR) does steps 1 to 3; steps 4 and 5 are Brandon's.
    date as `YYYY-MM-DD`, an em dash, then what it ships. The first tag,
    `v2026.11.17`, is the model. A tag an agent creates adds a blank line and
    its one `Agent:` line; the tagger is Brandon's identity either way. **An
-   agent creates a release tag only on Brandon's explicit word for that
-   tag**: a word given for one release's tag does not cover the next. A tag
-   is never moved or deleted once pushed; a wrong one is reported to Brandon.
+   agent creates a release tag only under the standing grant, for a release
+   PR Brandon merged himself, or on his explicit word for that tag**: a word
+   given for one release's tag does not cover the next. Push only that tag,
+   then publish its GitHub Release from the changelog section and read the
+   tag, Release and Production deployment back
+   (`docs/RELEASE_RUNBOOK.md`). A tag is never moved or deleted once pushed;
+   a wrong one is reported to Brandon.
 
 The changelog starts at `v2026.11.17` (release #357), the first tag. Earlier
 releases are recorded in their release PR bodies only.
