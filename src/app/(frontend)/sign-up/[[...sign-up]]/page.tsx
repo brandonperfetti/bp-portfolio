@@ -5,6 +5,7 @@ import { SignUpForm } from '@/components/auth/SignUpForm'
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
 import { getViewer } from '@/lib/auth/getViewer'
 import { safeRedirectPath } from '@/lib/auth/safeRedirect'
+import { enabledSocialProviders } from '@/lib/auth/socialProviders'
 
 export const metadata = { title: 'Sign up', robots: { index: false } }
 
@@ -33,6 +34,10 @@ export const instant = false
  * `/sign-up/sso-callback` is a separate page and is not redirected: a
  * visitor Google has just signed in must reach Clerk's handler there.
  *
+ * **Which social buttons show** is read here, per request, from
+ * `CLERK_GITHUB_ENABLED` (`enabledSocialProviders`, #431): Google always,
+ * GitHub only where that instance's GitHub connection is on.
+ *
  * @param props - The route's props; of the query string, only `redirect_url`
  *   is read.
  */
@@ -58,7 +63,7 @@ export default async function SignUpPage({
   return (
     <div className="flex justify-center px-4 py-16">
       <Suspense fallback={null}>
-        <SignUpForm />
+        <SignUpForm providers={enabledSocialProviders()} />
       </Suspense>
     </div>
   )

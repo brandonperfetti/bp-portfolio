@@ -19,7 +19,7 @@ function setup(overrides: Partial<SignUpFormViewProps> = {}) {
     passwordMinLength: 15,
     signInHref: '/sign-in',
     onSubmit: vi.fn(),
-    onGoogle: vi.fn(),
+    onSocial: vi.fn(),
     onVerify: vi.fn(),
     onResend: vi.fn(),
     onUseDifferentEmail: vi.fn(),
@@ -115,7 +115,7 @@ describe('SignUpFormView, first step', () => {
     await user.click(
       screen.getByRole('button', { name: 'Continue with Google' }),
     )
-    expect(props.onGoogle).toHaveBeenCalledExactlyOnceWith({
+    expect(props.onSocial).toHaveBeenCalledExactlyOnceWith('google', {
       mailingListOptIn: true,
     })
 
@@ -123,8 +123,49 @@ describe('SignUpFormView, first step', () => {
     await user.click(
       screen.getByRole('button', { name: 'Continue with Google' }),
     )
-    expect(props.onGoogle).toHaveBeenLastCalledWith({ mailingListOptIn: false })
+    expect(props.onSocial).toHaveBeenLastCalledWith('google', {
+      mailingListOptIn: false,
+    })
     expect(props.onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('offers Google alone unless GitHub is passed in (#431)', () => {
+    setup()
+    expect(
+      screen.queryByRole('button', { name: 'Continue with GitHub' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('reports the tick with the GitHub button, after the opt-in, like Google (#431)', async () => {
+    const { user, props } = setup({ providers: ['google', 'github'] })
+    const github = screen.getByRole('button', { name: 'Continue with GitHub' })
+    // The question still comes first: before every way of signing up.
+    expect(
+      optIn().compareDocumentPosition(github) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+
+    await user.click(github)
+    expect(props.onSocial).toHaveBeenLastCalledWith('github', {
+      mailingListOptIn: false,
+    })
+    await user.click(optIn())
+    await user.click(github)
+    expect(props.onSocial).toHaveBeenLastCalledWith('github', {
+      mailingListOptIn: true,
+    })
+    expect(props.onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('disables the GitHub button with the rest while a request is pending (#431)', async () => {
+    const { user, props } = setup({
+      pending: true,
+      providers: ['google', 'github'],
+    })
+    const github = screen.getByRole('button', { name: 'Continue with GitHub' })
+    expect(github).toBeDisabled()
+    await user.click(github)
+    expect(props.onSocial).not.toHaveBeenCalled()
   })
 
   it('submits on Enter from the password field', async () => {
@@ -153,7 +194,7 @@ describe('SignUpFormView, first step', () => {
     expect(optIn()).not.toBeChecked()
     await user.click(submit)
     expect(props.onSubmit).not.toHaveBeenCalled()
-    expect(props.onGoogle).not.toHaveBeenCalled()
+    expect(props.onSocial).not.toHaveBeenCalled()
   })
 
   it('states the password minimum and ties it to the field', () => {

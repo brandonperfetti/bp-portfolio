@@ -6,6 +6,12 @@ import { useSignIn } from '@clerk/nextjs'
 import { useTheme } from 'next-themes'
 
 import { withRedirect } from '@/lib/auth/safeRedirect'
+import {
+  DEFAULT_SOCIAL_PROVIDERS,
+  SOCIAL_PROVIDERS,
+  socialProviderNames,
+  type SocialProvider,
+} from '@/lib/auth/socialProviders'
 
 import type { CodeDelivery } from './AuthFormParts'
 import { SIGN_IN_SSO_CALLBACK_PATH, SIGN_UP_PATH } from './paths'
@@ -33,12 +39,28 @@ import {
  */
 export const UNSUPPORTED_STEP_MESSAGE =
   "We couldn't finish signing you in here: your account asks for a verification step this page doesn't support yet."
-/** "Email me a sign-in code" for an account that cannot have one. */
-export const NO_EMAIL_CODE_MESSAGE =
-  "We can't email a sign-in code for this account. Please sign in with your password or with Google."
-/** "Forgot password?" for an account that cannot reset one by email. */
-export const NO_RESET_MESSAGE =
-  "We can't reset the password for this account by email. Please sign in with Google or an email code."
+/**
+ * "Email me a sign-in code" for an account that cannot have one, naming the
+ * social connections on offer.
+ *
+ * @param providers - The connections the form offers.
+ */
+export const noEmailCodeMessage = (providers: readonly SocialProvider[]) =>
+  `We can't email a sign-in code for this account. Please sign in with your password or with ${socialProviderNames(providers)}.`
+/**
+ * "Forgot password?" for an account that cannot reset one by email, naming
+ * the social connections on offer.
+ *
+ * @param providers - The connections the form offers.
+ */
+export const noResetMessage = (providers: readonly SocialProvider[]) =>
+  `We can't reset the password for this account by email. Please sign in with ${socialProviderNames(providers)} or an email code.`
+/** {@link noEmailCodeMessage} for Google alone, the form's default. */
+export const NO_EMAIL_CODE_MESSAGE = noEmailCodeMessage(
+  DEFAULT_SOCIAL_PROVIDERS,
+)
+/** {@link noResetMessage} for Google alone, the form's default. */
+export const NO_RESET_MESSAGE = noResetMessage(DEFAULT_SOCIAL_PROVIDERS)
 
 /** The strategy Clerk names on a factor or a verification. */
 type HasStrategy = { strategy: string }
@@ -49,9 +71,9 @@ type HasStrategy = { strategy: string }
  *
  * @remarks
  * **Which step shows** is read from Clerk's sign-in, never kept here, so a
- * reload, or a return from Google that still needs something, lands on the
- * right step (`currentStep`). While a request is in flight the card holds
- * the step it was sent from (`heldStep`), as on sign-up.
+ * reload, or a return from Google or GitHub that still needs something,
+ * lands on the right step (`currentStep`). While a request is in flight the
+ * card holds the step it was sent from (`heldStep`), as on sign-up.
  *
  * **The paths** (production, measured 2026-11-18 on #379: email with a
  * password, email with a code, Google; no second factor; Device Trust on):
@@ -62,8 +84,11 @@ type HasStrategy = { strategy: string }
  * - Forgot password: `signIn.create({ identifier })`, then Clerk's
  *   reset-by-email-code (`resetPasswordEmailCode`), then the new password,
  *   which signs out the account's other sessions.
- * - Google: `signIn.sso()`, returning to `/sign-in/sso-callback`, where
- *   Clerk's `<HandleSSOCallback />` finishes it.
+ * - Google, and GitHub where it is on (#431): `signIn.sso()` with that
+ *   connection's strategy, returning to `/sign-in/sso-callback`, where
+ *   Clerk's `<HandleSSOCallback />` finishes it. Always a new attempt (see
+ *   `onSocial`), so a trip to one connection the visitor abandoned, or a
+ *   refused emailed code, never carries into the next.
  * - After any first factor, `proceed()`: a finished sign-in is made active
  *   (`finalize()`); Device Trust (`needs_client_trust`) or a second factor
  *   (`needs_second_factor`) that offers an emailed code sends one
@@ -71,8 +96,8 @@ type HasStrategy = { strategy: string }
  *   is a step this form does not have, and says so ({@link
  *   UNSUPPORTED_STEP_MESSAGE}) instead of showing a dead end.
  *
- * **A Google sign-in for an address with no account** is turned into a
- * sign-up by Clerk's callback handler (`signIn.isTransferable`). The account
+ * **A Google or GitHub sign-in for an account that does not exist** is
+ * turned into a sign-up by Clerk's callback handler (`signIn.isTransferable`). The account
  * is created with no mailing-list opt-in, so it is never added to the list:
  * the webhook adds a contact only for a literal `true` (#362, fail-closed).
  * The opt-in question is asked only on `/sign-up`.
@@ -81,13 +106,17 @@ type HasStrategy = { strategy: string }
  * send it) is honoured only as a path on this site (`safeRedirectPath`);
  * anything else falls back to the home page.
  *
+ * @param providers - The social connections to offer, in order; the page
+ *   reads them from the environment (`enabledSocialProviders`).
  * @param assignLocation - How to leave for an absolute URL; a seam for tests.
  * @param leaveTimeoutMs - See {@link LEAVE_TIMEOUT_MS}; a seam for tests.
  */
 export function SignInForm({
+  providers = DEFAULT_SOCIAL_PROVIDERS,
   assignLocation = (url: string) => window.location.assign(url),
   leaveTimeoutMs = LEAVE_TIMEOUT_MS,
 }: {
+  providers?: readonly SocialProvider[]
   assignLocation?: (url: string) => void
   leaveTimeoutMs?: number
 } = {}) {
@@ -132,7 +161,10 @@ export function SignInForm({
     step: SignInStep
     status: Exclude<CodeDelivery, 'unknown'>
   }>()
-  const [googleAfterReset, setGoogleAfterReset] = useState<{
+  // A social sign-in waiting for the reset of an earlier attempt to settle,
+  // so it starts on the replacement resource (`onSocial`).
+  const [socialAfterReset, setSocialAfterReset] = useState<{
+    provider: SocialProvider
     isCurrent: () => boolean
     discarded: typeof signIn
   } | null>(null)
@@ -143,7 +175,7 @@ export function SignInForm({
       leaveTimeoutMs,
       onStart: () => setHeldStep(currentStep()),
     })
-  const pending = busy || googleAfterReset !== null
+  const pending = busy || socialAfterReset !== null
   const step = pending ? heldStep : currentStep()
   const codeDelivery =
     delivery?.step === step && delivery.attemptId === signIn.id
@@ -219,7 +251,7 @@ export function SignInForm({
   }
 
   // At rest on a second step this form has no screen for: a reload, or a
-  // return from Google, can land here without a request of this page's
+  // return from Google or GitHub, can land here without a request of this page's
   // making. Say so instead of showing the first step as if nothing were
   // pending, once per attempt.
   const stuck =
@@ -237,7 +269,7 @@ export function SignInForm({
   }, [stuck]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // At rest on the second-factor step with no code sent by this page: a
-  // return from Google that needs the new-device code (`SsoCallback` sends
+  // return from Google or GitHub that needs the new-device code (`SsoCallback` sends
   // it here), or a reload. Send one, as the password path does, once per
   // attempt, so the visitor is not asked to press "Send a new code" first.
   const awaitingUnsentCode =
@@ -272,7 +304,7 @@ export function SignInForm({
       const { error } = await signIn.create({ identifier: emailAddress })
       if (!isCurrent() || error) return
       if (!hasStrategy(signIn.supportedFirstFactors ?? [], 'email_code')) {
-        setLocalErrors([NO_EMAIL_CODE_MESSAGE])
+        setLocalErrors([noEmailCodeMessage(providers)])
         return
       }
       const sent = await signIn.emailCode.sendCode()
@@ -290,7 +322,7 @@ export function SignInForm({
           'reset_password_email_code',
         )
       ) {
-        setLocalErrors([NO_RESET_MESSAGE])
+        setLocalErrors([noResetMessage(providers)])
         return
       }
       const sent = await signIn.resetPasswordEmailCode.sendCode()
@@ -298,10 +330,10 @@ export function SignInForm({
       recordDelivery('reset-code', sent.error ? 'failed' : 'sent')
     })
 
-  const startGoogle = () =>
+  const startSocial = (provider: SocialProvider) =>
     run(async (isCurrent) => {
       const { error } = await signIn.sso({
-        strategy: 'oauth_google',
+        strategy: SOCIAL_PROVIDERS[provider].strategy,
         redirectCallbackUrl: withRedirect(
           SIGN_IN_SSO_CALLBACK_PATH,
           redirectTarget,
@@ -309,40 +341,46 @@ export function SignInForm({
         redirectUrl: destination,
       })
       if (!isCurrent() || error) return
-      // Clerk hands off to Google through this URL. Without it the page is
-      // going nowhere, and a locked form would be a dead end.
+      // Clerk hands off to the connection through this URL. Without it the
+      // page is going nowhere, and a locked form would be a dead end.
       if (!signIn.firstFactorVerification?.externalVerificationRedirectURL) {
-        console.error('[sign-in] Google did not start', {
-          status: signIn.status,
-        })
+        console.error(
+          `[sign-in] ${SOCIAL_PROVIDERS[provider].label} did not start`,
+          { status: signIn.status },
+        )
         setLocalErrors([UNEXPECTED_MESSAGE])
         return
       }
       return { stayLocked: true }
     })
 
-  const onGoogle = () => {
-    if (!signIn.id) return startGoogle()
-    // Clerk replaces the resource on reset. The old resource still has its ID,
-    // so calling sso() on it would reuse the attempt and can skip the redirect.
+  /**
+   * A social button. Any attempt already here is dropped first, whichever
+   * way it was started: a refused emailed code, or a trip to Google or
+   * GitHub the visitor abandoned. Clerk replaces the resource on reset; the
+   * old resource keeps its ID, so calling sso() on it would reuse the
+   * attempt and can skip the redirect.
+   */
+  const onSocial = (provider: SocialProvider) => {
+    if (!signIn.id) return startSocial(provider)
     return run(async (isCurrent) => {
       const { error } = await signIn.reset()
       if (isCurrent() && !error)
-        setGoogleAfterReset({ isCurrent, discarded: signIn })
+        setSocialAfterReset({ provider, isCurrent, discarded: signIn })
     })
   }
 
   useEffect(() => {
-    if (busy || !googleAfterReset) return
-    setGoogleAfterReset(null)
-    if (!googleAfterReset.isCurrent()) return
-    if (signIn === googleAfterReset.discarded || signIn.id) {
+    if (busy || !socialAfterReset) return
+    setSocialAfterReset(null)
+    if (!socialAfterReset.isCurrent()) return
+    if (signIn === socialAfterReset.discarded || signIn.id) {
       setLocalErrors([UNEXPECTED_MESSAGE])
       return
     }
-    void startGoogle()
+    void startSocial(socialAfterReset.provider)
     // The idle render reads the replacement resource from Clerk's hook.
-  }, [busy, googleAfterReset, signIn]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [busy, socialAfterReset, signIn]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * The Clerk calls behind each code step. Called on their objects, never
@@ -433,7 +471,8 @@ export function SignInForm({
       }
       notice={notice}
       onSubmit={onSubmit}
-      onGoogle={onGoogle}
+      providers={providers}
+      onSocial={onSocial}
       onEmailCode={onEmailCode}
       onForgotPassword={onForgotPassword}
       onVerify={onVerify}
