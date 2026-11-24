@@ -12,6 +12,43 @@ Each version is an annotated tag on that release's merge commit.
 here; each one's release PR body is its record. How an entry is written and
 when the tag is made: [`docs/WORKFLOW.md` § Releases](docs/WORKFLOW.md#releases).
 
+## v2026.11.24
+
+Readers can sign in through the site's own form, and the cover workflow now
+documents how to check for an existing upload and recover after an uncertain
+response.
+Release PR [#434](https://github.com/brandonperfetti/bp-portfolio/pull/434) ·
+[tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.24) ·
+carries #428, #429 and #430.
+
+**Visitors**
+
+- **Sign in with password, an email code, or Google.** The new form matches
+  sign-up and handles password reset and new-device verification on the site
+  (#379, #428).
+
+**Content operators and developers**
+
+- Check the full Cloudinary public ID with the authenticated single-resource
+  lookup while holding the writer assignment. The writer keeps that
+  assignment through reconciliation. If the outcome remains unresolved,
+  stop uploads to the folder and escalate to Brandon without retrying (#427, #429).
+- The imagery guide now includes draft machine-readable settings for cover
+  recipes (#430).
+
+**What this release leaves.**
+
+- The imagery guide remains draft and post 61's A2-1 candidate remains on hold.
+  The cover rotation follow-up stays open (#423).
+
+**Not proven before release:** Google sign-up from `/sign-up`, the
+Google sign-in transfer to sign-up for a new address, and delivery of
+the Device Trust code to Brandon's first test address. Device Trust
+was exercised after password sign-in. The live Google callback did
+not present a separate Device Trust challenge. Brandon completed email sign-up on staging from his phone after
+receiving the verification code. Production sign-in and sign-up smoke
+checks follow the merge.
+
 ## v2026.11.23
 
 A subscriber whose address has a `#`, `?` or `/` in it now reaches their own
