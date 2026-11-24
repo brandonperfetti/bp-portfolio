@@ -7,8 +7,9 @@ import { Button, buttonVariants } from './button'
 /**
  * #431 review: the primitive animates every change (`transition-all`), so it
  * must also switch that off under `prefers-reduced-motion`
- * (docs/ACCESSIBILITY.md "Reduced motion"). Pinned at the primitive, because
- * every button on the site inherits it.
+ * (docs/ACCESSIBILITY.md "Reduced motion"). Pinned at the primitive, which
+ * every `@/components/ui/button` user inherits (the auth forms' buttons
+ * among them).
  */
 describe('Button: reduced motion', () => {
   it.each(['default', 'outline', 'ghost', 'link'] as const)(

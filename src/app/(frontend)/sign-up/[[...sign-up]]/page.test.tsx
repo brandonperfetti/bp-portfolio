@@ -115,6 +115,8 @@ describe('SignUpPage', () => {
 
   it('offers GitHub only where CLERK_GITHUB_ENABLED is "true" (#431)', async () => {
     configure()
+    // Off on purpose: an inherited value would otherwise decide the first half.
+    vi.stubEnv('CLERK_GITHUB_ENABLED', undefined)
     const { unmount } = render(await page())
     expect(
       screen.getByRole('button', { name: 'Continue with Google' }),
