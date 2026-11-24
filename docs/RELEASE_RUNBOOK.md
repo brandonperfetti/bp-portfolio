@@ -44,15 +44,17 @@ repair it by moving a tag or pushing a branch.
 3. **The version is the Pacific date of the merge.** Convert the PR's
    `mergedAt` to `America/Los_Angeles`; the version is `vYYYY.MM.DD`. Read the
    tags first (`git ls-remote --tags origin 'vYYYY.MM.DD*'`, and the local
-   tags):
+   tags). Check every same-day tag, local and remote, for a repeat before
+   choosing a suffix: if any of them peels to this commit, this is a repeat
+   run, whatever the others point at.
    - none: use `vYYYY.MM.DD`;
    - one that peels to this same commit: a repeat run. Inspect it (§ Tag).
      If the remote has the same tag object, create and push nothing, still
      pass steps 4 and 5, and resume at § Publish the Release. If it exists only locally, use it only with
      provenance from this release attempt, then push it (§ Push only that
      tag); otherwise report it;
-   - one on another commit, from an earlier release the same day: take the
-     next suffix, `.1`, then `.2`. A conflict is not a reason for a suffix: a
+   - only tags on other commits, from earlier releases the same day: take
+     the next unused suffix in sequence, `.1`, then `.2`. A conflict is not a reason for a suffix: a
      tag you cannot explain, or one that names this commit with a different
      annotation, goes to Brandon. A pushed tag is never moved or deleted.
 4. **The changelog section.** `CHANGELOG.md` at the merge commit has a

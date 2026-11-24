@@ -69,10 +69,10 @@ naming that tag, and naming its Release too if the agent is to publish it.
    its one `Agent:` line; the tagger is Brandon's identity either way. **An
    agent creates a release tag only under the standing grant, for a release
    PR Brandon merged himself, or on his explicit word for that tag**: a word
-   given for one release's tag does not cover the next. Push only that tag,
-   then publish its GitHub Release from the changelog section and read the
-   tag, Release and Production deployment back
-   (`docs/RELEASE_RUNBOOK.md`). A tag is never moved or deleted once pushed;
+   given for one release's tag does not cover the next. Push only that tag.
+   Publish its GitHub Release from the changelog section only under the
+   standing grant or on his explicit word that names that Release. Read the
+   tag, Release and Production deployment back (`docs/RELEASE_RUNBOOK.md`). A tag is never moved or deleted once pushed;
    a wrong one is reported to Brandon.
 
 The changelog starts at `v2026.11.17` (release #357), the first tag. Earlier
