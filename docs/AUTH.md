@@ -423,6 +423,13 @@ unsafeMetadata })`, then `signUp.verifications.sendEmailCode()`, the
 - **`@clerk/nextjs` must stay at 7.9.13 or later**: that is the first release
   exporting `<HandleSSOCallback />`.
 
+- **Live staging sign-up, 2026-11-24.** On deployment
+  `dpl_6dZTqjYL1mAPecsa3Yd6XR1pEnFa` at `f4ae457e`, Brandon signed up
+  with email on mobile. The code reached the Kody test inbox, verification
+  succeeded, and the new account landed signed in on the staging home
+  page. Google sign-up and mailing-list delivery were outside this
+  hand-run.
+
 ### The custom sign-in form (#379)
 
 `/sign-in` is the site's own markup on Clerk's `useSignIn()` hooks, in the
@@ -550,9 +557,16 @@ has no step for` with the task's name. The prebuilt `<SignIn>` showed these
   with the accessibility check; `SsoCallback.test.tsx` and the sign-in
   `page.test.tsx` pin the callback and the server redirect. **Not proven by
   any test:** a real sign-in against Clerk, a real code, the trip to Google.
-  These are for a hand-run on staging (`docs/JOURNEYS.md`, "Sign in"), which
-  is pending until its results are recorded here; the intercepted e2e spec
-  does not stand in for it.
+  **Live staging hand-run, 2026-11-23–24.** On deployment
+  `dpl_6dZTqjYL1mAPecsa3Yd6XR1pEnFa` at `f4ae457e`, password sign-in,
+  email-code sign-in, password reset and the signed-in redirect passed.
+  A password sign-in in a distinct Clerk client returned
+  `needs_client_trust`. Clerk emailed a code, accepted it, established a
+  session, and let the reader open Account Security. The ordinary Google
+  callback passed in Brandon's mobile hand-run without a second challenge.
+  Device Trust after Google, Google's transfer to sign-up for a new
+  address, and delivery of the Device Trust code to Brandon's first test
+  address remain unexercised or unverified.
 
 ## Contact hygiene: the Clerk↔Resend mapping (#86)
 
