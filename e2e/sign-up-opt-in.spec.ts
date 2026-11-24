@@ -325,6 +325,21 @@ test.afterEach(async ({}, testInfo) => {
   ).toEqual([])
 })
 
+/**
+ * #431: the GitHub button shows only where the server has
+ * `CLERK_GITHUB_ENABLED=true`. CI sets it on the e2e step (the intercepted
+ * request proves the strategy whether or not the Clerk instance has GitHub
+ * on); a CI run without it fails rather than skip, and a local run skips
+ * with the reason. A skip is not proof.
+ */
+function requireGitHub(): void {
+  if (process.env.CLERK_GITHUB_ENABLED === 'true') return
+  const reason =
+    'this run has no CLERK_GITHUB_ENABLED=true, so the server offers no GitHub button'
+  if (process.env.CI) throw new Error(`#431 proof cannot run: ${reason}`)
+  test.skip(true, reason)
+}
+
 test.describe('sign-up: the mailing-list tick travels with the request', () => {
   test('the opt-in is inside the form, unticked, before both ways of signing up', async ({
     page,
@@ -344,9 +359,15 @@ test.describe('sign-up: the mailing-list tick travels with the request', () => {
           '',
       ),
     )
-    expect(order.slice(0, 4)).toEqual([
+    // GitHub, where the server offers it (#431), sits after Google: still
+    // after the question.
+    const social =
+      process.env.CLERK_GITHUB_ENABLED === 'true'
+        ? ['Continue with Google', 'Continue with GitHub']
+        : ['Continue with Google']
+    expect(order.slice(0, 3 + social.length)).toEqual([
       'mailingListOptIn',
-      'Continue with Google',
+      ...social,
       'emailAddress',
       'password',
     ])
@@ -464,6 +485,58 @@ test.describe('sign-up: the mailing-list tick travels with the request', () => {
 
     const request = await intercepted.first
     expect(bodyOf(request).get('strategy')).toBe('oauth_google')
+    expect(unsafeMetadataOf(request)).toEqual({ mailingListOptIn: false })
+    intercepted.release()
+    await expect(optIn(page)).toBeEnabled()
+    expect(intercepted.requests).toHaveLength(1)
+  })
+
+  test('GitHub, ticked: the request that starts it carries a literal true, and the box is locked while it is in flight (#431)', async ({
+    page,
+  }) => {
+    requireGitHub()
+    const intercepted = await interceptSignUpWrites(page, {
+      code: 'e2e_intercepted',
+      message: 'Intercepted by the e2e spec: nothing was sent to Clerk.',
+    })
+    await openForm(page)
+
+    await optIn(page).check()
+    await page.getByRole('button', { name: 'Continue with GitHub' }).click()
+
+    const request = await intercepted.first
+    expect(request.method()).toBe('POST')
+    const body = bodyOf(request)
+    expect(body.get('strategy')).toBe('oauth_github')
+    expect(unsafeMetadataOf(request)).toEqual({ mailingListOptIn: true })
+    expect(new URL(body.get('redirect_url') ?? '').pathname).toBe(
+      '/sign-up/sso-callback',
+    )
+
+    await expect(optIn(page)).toBeDisabled()
+    await optIn(page).click({ force: true })
+    await expect(optIn(page)).toBeChecked()
+
+    intercepted.release()
+    await expect(optIn(page)).toBeEnabled()
+    expect(intercepted.requests).toHaveLength(1)
+    await expect(page).toHaveURL(/\/sign-up\/?$/)
+  })
+
+  test('GitHub, unticked: the request carries an explicit false (#431)', async ({
+    page,
+  }) => {
+    requireGitHub()
+    const intercepted = await interceptSignUpWrites(page, {
+      code: 'e2e_intercepted',
+      message: 'Intercepted by the e2e spec: nothing was sent to Clerk.',
+    })
+    await openForm(page)
+
+    await page.getByRole('button', { name: 'Continue with GitHub' }).click()
+
+    const request = await intercepted.first
+    expect(bodyOf(request).get('strategy')).toBe('oauth_github')
     expect(unsafeMetadataOf(request)).toEqual({ mailingListOptIn: false })
     intercepted.release()
     await expect(optIn(page)).toBeEnabled()

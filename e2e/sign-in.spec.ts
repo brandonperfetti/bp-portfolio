@@ -134,6 +134,21 @@ async function openForm(page: Page) {
   await expect(reveal).toHaveAttribute('aria-pressed', 'false')
 }
 
+/**
+ * #431: the GitHub button shows only where the server has
+ * `CLERK_GITHUB_ENABLED=true`. CI sets it on the e2e step (the intercepted
+ * request proves the strategy whether or not the Clerk instance has GitHub
+ * on); a CI run without it fails rather than skip, and a local run skips
+ * with the reason. A skip is not proof.
+ */
+function requireGitHub(): void {
+  if (process.env.CLERK_GITHUB_ENABLED === 'true') return
+  const reason =
+    'this run has no CLERK_GITHUB_ENABLED=true, so the server offers no GitHub button'
+  if (process.env.CI) throw new Error(`#431 proof cannot run: ${reason}`)
+  test.skip(true, reason)
+}
+
 let unintercepted: string[] = []
 
 test.beforeEach(async ({ context }) => {
@@ -250,5 +265,34 @@ test.describe("sign-in: the site's own form on Clerk's hooks", () => {
     expect(bodyOf(google!).get('redirect_url')).toContain(
       '/sign-in/sso-callback',
     )
+  })
+
+  test('starts GitHub with the sign-in callback page as the way back (#431)', async ({
+    page,
+  }) => {
+    requireGitHub()
+    const requests = await interceptSignInWrites(page, {
+      code: 'e2e_intercepted',
+      message: 'Intercepted by the e2e spec.',
+    })
+    await openForm(page)
+    await page.getByRole('button', { name: 'Continue with GitHub' }).click()
+
+    await expect(page.getByRole('main').getByRole('alert')).toContainText(
+      'Intercepted by the e2e spec.',
+    )
+    const github = requests.find(
+      (request) => bodyOf(request).get('strategy') === 'oauth_github',
+    )
+    expect(github, 'a sign-in write with strategy oauth_github').toBeDefined()
+    expect(bodyOf(github!).get('redirect_url')).toContain(
+      '/sign-in/sso-callback',
+    )
+    // A sign-in carries no opt-in: an account Clerk makes from it joins no list.
+    expect(bodyOf(github!).get('unsafe_metadata')).toBeNull()
+    // The refusal leaves the form usable.
+    await expect(
+      page.getByRole('button', { name: 'Continue with GitHub' }),
+    ).toBeEnabled()
   })
 })

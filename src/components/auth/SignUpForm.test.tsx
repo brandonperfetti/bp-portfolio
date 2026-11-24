@@ -7,7 +7,7 @@ import {
   MAILING_LIST_OPT_IN_LABEL,
 } from '@/lib/email/mailingListOptIn'
 
-import { SignUpForm } from './SignUpForm'
+import { SignUpForm, unfinishedMessage } from './SignUpForm'
 import { SESSION_TASK_MESSAGE } from './useAuthSteps'
 
 /**
@@ -37,8 +37,10 @@ const clerk = vi.hoisted(() => {
     unverifiedFields: [] as string[],
     missingFields: [] as string[],
     emailAddress: null as string | null,
-    /** Clerk's verification of the Google account, once Google has answered. */
+    /** Clerk's verification of the social account, once the connection has answered. */
     externalAccountStatus: null as string | null,
+    /** Which connection that verification is for. */
+    externalAccountStrategy: 'oauth_google' as string | null,
     /** Clerk's pending bot-check challenge, when it has raised one. */
     protectCheck: null as object | null,
     errors: {
@@ -92,7 +94,10 @@ vi.mock('@clerk/nextjs', () => ({
       sso: clerk.sso,
       verifications: {
         get externalAccount() {
-          return { status: clerk.state.externalAccountStatus }
+          return {
+            status: clerk.state.externalAccountStatus,
+            strategy: clerk.state.externalAccountStrategy,
+          }
         },
         sendEmailCode: clerk.sendEmailCode,
         verifyEmailCode: clerk.verifyEmailCode,
@@ -131,6 +136,7 @@ beforeEach(() => {
   clerk.state.missingFields = []
   clerk.state.emailAddress = null
   clerk.state.externalAccountStatus = null
+  clerk.state.externalAccountStrategy = 'oauth_google'
   clerk.state.protectCheck = null
   clerk.state.errors.fields.emailAddress = null
   clerk.state.errors.fields.password = null
@@ -1228,5 +1234,147 @@ describe('SignUpForm: a sign-up back from Google that the form cannot finish (#3
     ).toBeInTheDocument()
     await act(async () => {})
     expect(clerk.reset).not.toHaveBeenCalled()
+  })
+})
+
+describe('SignUpForm: GitHub (#431)', () => {
+  const github = () =>
+    screen.getByRole('button', { name: 'Continue with GitHub' })
+  const BOTH = ['google', 'github'] as const
+
+  it('is not offered unless the page passes it in', () => {
+    render(<SignUpForm />)
+    expect(
+      screen.queryByRole('button', { name: 'Continue with GitHub' }),
+    ).not.toBeInTheDocument()
+    expect(google()).toBeInTheDocument()
+  })
+
+  it('ticked: starts GitHub with a literal true, the callback page and the target', async () => {
+    clerk.search.value = 'redirect_url=%2Farticles%2Fgated'
+    const user = userEvent.setup()
+    render(<SignUpForm providers={BOTH} />)
+    await user.click(optIn())
+    await user.click(github())
+
+    expect(clerk.sso).toHaveBeenCalledExactlyOnceWith({
+      strategy: 'oauth_github',
+      redirectCallbackUrl:
+        '/sign-up/sso-callback?redirect_url=%2Farticles%2Fgated',
+      redirectUrl: '/articles/gated',
+      unsafeMetadata: { mailingListOptIn: true },
+    })
+    expect(hasMailingListOptIn(clerk.sso.mock.calls[0][0].unsafeMetadata)).toBe(
+      true,
+    )
+    expect(clerk.password).not.toHaveBeenCalled()
+  })
+
+  it('unticked: sends an explicit false, which the webhook never captures', async () => {
+    const user = userEvent.setup()
+    render(<SignUpForm providers={BOTH} />)
+    await user.click(github())
+
+    expect(clerk.sso).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        strategy: 'oauth_github',
+        unsafeMetadata: { mailingListOptIn: false },
+      }),
+    )
+    expect(hasMailingListOptIn(clerk.sso.mock.calls[0][0].unsafeMetadata)).toBe(
+      false,
+    )
+  })
+
+  it('locks the box and both buttons from the click while the browser leaves for GitHub', async () => {
+    const user = userEvent.setup()
+    const inFlight = deferred()
+    clerk.sso.mockReturnValueOnce(inFlight.promise)
+    render(<SignUpForm providers={BOTH} />)
+    await user.click(optIn())
+    await user.click(github())
+
+    expect(optIn()).toBeDisabled()
+    expect(github()).toBeDisabled()
+    expect(google()).toBeDisabled()
+    await user.click(google())
+    await act(async () => inFlight.resolve(ok))
+    // Clerk answered without an error: the redirect is under way.
+    expect(github()).toBeDisabled()
+    expect(clerk.sso).toHaveBeenCalledOnce()
+  })
+
+  it('unlocks on a refusal, keeps the reason, and the next click reads the box again', async () => {
+    const user = userEvent.setup()
+    // As clerk-js does: a refused first request shows through the hook's
+    // errors, not as a message of the form's own.
+    clerk.sso.mockImplementationOnce(async () => {
+      clerk.state.errors.global = [{ message: 'GitHub is not enabled.' }]
+      return { error: { message: 'GitHub is not enabled.' } }
+    })
+    render(<SignUpForm providers={BOTH} />)
+    await user.click(github())
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'GitHub is not enabled.',
+    )
+    expect(github()).toBeEnabled()
+    expect(google()).toBeEnabled()
+    // A first attempt Clerk refused created nothing to discard.
+    expect(clerk.reset).not.toHaveBeenCalled()
+
+    await user.click(optIn())
+    await user.click(google())
+    expect(clerk.sso).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        strategy: 'oauth_google',
+        unsafeMetadata: { mailingListOptIn: true },
+      }),
+    )
+  })
+
+  it('discards an earlier attempt when updating it to GitHub fails', async () => {
+    // An abandoned trip to Google, say: clerk-js sends the GitHub start as
+    // an update to that attempt.
+    const user = userEvent.setup()
+    clerk.state.id = 'sua_existing'
+    clerk.sso.mockResolvedValueOnce({ error: { message: 'Refused.' } })
+    render(<SignUpForm providers={BOTH} />)
+    await user.click(github())
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Refused.')
+    expect(clerk.reset).toHaveBeenCalledOnce()
+  })
+
+  it('back from GitHub still needing a field: names GitHub, never points back at it, and discards', async () => {
+    clerk.state.id = 'sua_github'
+    clerk.state.status = 'missing_requirements'
+    clerk.state.missingFields = ['legal_accepted']
+    clerk.state.externalAccountStatus = 'verified'
+    clerk.state.externalAccountStrategy = 'oauth_github'
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      render(<SignUpForm providers={BOTH} />)
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(
+        /couldn.t finish creating your account with GitHub/i,
+      )
+      expect(alert).not.toHaveTextContent(/Google/)
+      expect(alert).not.toHaveTextContent(/sign up with GitHub/i)
+      expect(clerk.reset).toHaveBeenCalledOnce()
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
+  it('an email sign-up it cannot finish names both connections on offer', () => {
+    expect(unfinishedMessage(BOTH)).toBe(
+      "We couldn't finish creating your account here. Please try again, or sign up with Google or GitHub.",
+    )
+    // Google alone reads exactly as before #431.
+    expect(unfinishedMessage(['google'])).toBe(
+      "We couldn't finish creating your account here. Please try again, or sign up with Google.",
+    )
   })
 })

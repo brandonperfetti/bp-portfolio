@@ -15,12 +15,16 @@ import { Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { GoogleIcon } from '@/icons'
+import { GitHubIcon, GoogleIcon } from '@/icons'
+import {
+  SOCIAL_PROVIDERS,
+  type SocialProvider,
+} from '@/lib/auth/socialProviders'
 
 /**
  * The pieces the custom sign-up (#377) and sign-in (#379) forms share, so
  * `/sign-up` and `/sign-in` read as one pair: one card, one error style,
- * one Google button, one password field and one code step.
+ * one row of social buttons, one password field and one code step.
  *
  * Free of Clerk, like the views that use them.
  */
@@ -91,26 +95,49 @@ export function GlobalErrors({ messages }: { messages?: string[] }) {
 }
 
 /**
- * "Continue with Google" and the "or" rule under it.
- *
- * @param props - `onClick`: Receives the click, so a caller can read its form.
+ * The mark beside each connection's name. Google's keeps its own colours;
+ * GitHub's takes the button's text colour, so it reads in both themes.
  */
-export function GoogleButton({
-  onClick,
+const SOCIAL_ICONS: Record<SocialProvider, ReactNode> = {
+  google: <GoogleIcon className="size-4" />,
+  github: <GitHubIcon className="size-4 fill-current" />,
+}
+
+/**
+ * One "Continue with …" button per social connection on offer (#431), and
+ * the "or" rule under them.
+ *
+ * @param props - `providers`: The connections, in order; nothing renders
+ *   for none. `onSelect`: Receives the connection and the click, so a caller
+ *   can read its form.
+ */
+export function SocialButtons({
+  providers,
+  onSelect,
 }: {
-  onClick: ComponentProps<'button'>['onClick']
+  providers: readonly SocialProvider[]
+  onSelect: (
+    provider: SocialProvider,
+    event: Parameters<NonNullable<ComponentProps<'button'>['onClick']>>[0],
+  ) => void
 }) {
+  if (!providers.length) return null
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={onClick}
-      >
-        <GoogleIcon className="size-4" />
-        Continue with Google
-      </Button>
+      <div className="flex flex-col gap-3">
+        {providers.map((provider) => (
+          <Button
+            key={provider}
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={(event) => onSelect(provider, event)}
+          >
+            {SOCIAL_ICONS[provider]}
+            Continue with {SOCIAL_PROVIDERS[provider].label}
+          </Button>
+        ))}
+      </div>
 
       <div
         aria-hidden="true"

@@ -29,7 +29,11 @@
 A release is the `develop` → `master` PR. Vercel deploys production when
 Brandon merges it; there is no release branch and no version bump
 (`package.json` stays at `4.0.0`). The release lane (the session that opens
-the release PR) does steps 1 to 3; steps 4 and 5 are Brandon's.
+the release PR) does steps 1 to 3. Step 4 is Brandon's alone. Step 5 and the
+GitHub Release that follows it are the release lane's under the standing grant
+in `AGENTS.md` § Release authority, following `docs/RELEASE_RUNBOOK.md`;
+outside that grant they are Brandon's, or an agent's on his explicit word
+naming that tag, and naming its Release too if the agent is to publish it.
 
 1. **Open the release PR** from `develop` into `master`, in the shape of the
    last one: what it carries, what the merge deploys and triggers, the Door
@@ -54,16 +58,22 @@ the release PR) does steps 1 to 3; steps 4 and 5 are Brandon's.
 
    ```sh
    git tag -a vYYYY.MM.DD <merge commit on master> -F <message file>
-   git push origin vYYYY.MM.DD
    ```
+
+   The push is one named tag ref and nothing else; its command is in
+   `docs/RELEASE_RUNBOOK.md` § Push only that tag.
 
    The message is one line in Brandon's voice: the word `Release`, the
    date as `YYYY-MM-DD`, an em dash, then what it ships. The first tag,
    `v2026.11.17`, is the model. A tag an agent creates adds a blank line and
    its one `Agent:` line; the tagger is Brandon's identity either way. **An
-   agent creates a release tag only on Brandon's explicit word for that
-   tag**: a word given for one release's tag does not cover the next. A tag
-   is never moved or deleted once pushed; a wrong one is reported to Brandon.
+   agent creates a release tag only under the standing grant, for a release
+   PR Brandon merged himself, or on his explicit word for that tag**: a word
+   given for one release's tag does not cover the next. Push only that tag.
+   Publish its GitHub Release from the changelog section only under the
+   standing grant or on his explicit word that names that Release. Read the
+   tag, Release and Production deployment back (`docs/RELEASE_RUNBOOK.md`). A tag is never moved or deleted once pushed;
+   a wrong one is reported to Brandon.
 
 The changelog starts at `v2026.11.17` (release #357), the first tag. Earlier
 releases are recorded in their release PR bodies only.
@@ -77,8 +87,8 @@ releases are recorded in their release PR bodies only.
   `.next` types can false-fail the push — remove `.next` and retry before
   suspecting real breakage. Two kinds of push skip the gate: one that only
   deletes refs (`git push --delete origin <branch>`), which sends no code
-  (#308), and one that only pushes tags (`git push origin v2026.11.17`),
-  which moves no branch (#369). A branch anywhere in the same push runs all
+  (#308), and one that only pushes tags (one named tag ref, as in
+  `docs/RELEASE_RUNBOOK.md`), which moves no branch (#369). A branch anywhere in the same push runs all
   of it (pinned by `scripts/pre-push-hook.test.ts`). The tag skip rests on
   three facts, so re-read it if one changes: no workflow here runs on a tag,
   nothing deploys from one, and a release tag names a commit already on

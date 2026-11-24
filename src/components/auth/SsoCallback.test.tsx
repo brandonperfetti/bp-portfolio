@@ -275,6 +275,19 @@ describe('SsoCallback, from the sign-in form (#379)', () => {
     )
   })
 
+  it('sends a GitHub sign-in that needs the new-device check to /sign-in too (#431)', () => {
+    mocks.search.value = 'redirect_url=%2Farticles%2Fsome-post'
+    mocks.signIn.status = 'needs_client_trust'
+    mocks.signIn.firstFactorVerification = {
+      strategy: 'oauth_github',
+      status: 'verified',
+    }
+    render(<SsoCallback flow="sign-in" />)
+    expect(mocks.push).toHaveBeenCalledExactlyOnceWith(
+      '/sign-in?redirect_url=%2Farticles%2Fsome-post',
+    )
+  })
+
   it('leaves an older password attempt in the same state alone', () => {
     mocks.signIn.status = 'needs_client_trust'
     mocks.signIn.firstFactorVerification = {

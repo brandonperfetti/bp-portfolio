@@ -6,6 +6,13 @@ import { useSignUp } from '@clerk/nextjs'
 import { useTheme } from 'next-themes'
 
 import { withRedirect } from '@/lib/auth/safeRedirect'
+import {
+  DEFAULT_SOCIAL_PROVIDERS,
+  SOCIAL_PROVIDERS,
+  socialProviderNames,
+  socialProviderOf,
+  type SocialProvider,
+} from '@/lib/auth/socialProviders'
 import { MAILING_LIST_OPT_IN_KEY } from '@/lib/email/mailingListOptIn'
 
 import { SIGN_IN_PATH, SIGN_UP_SSO_CALLBACK_PATH } from './paths'
@@ -28,15 +35,24 @@ import {
   useRedirectTarget,
 } from './useAuthSteps'
 
-const UNFINISHED_MESSAGE =
-  "We couldn't finish creating your account here. Please try again, or sign up with Google."
 /**
- * For a sign-up that came back from Google still needing something this form
- * has no field for. It does not point at Google again: that is the route
- * that has just not finished.
+ * For an email sign-up this form cannot finish, naming the social
+ * connections on offer.
+ *
+ * @param providers - The connections the form offers.
  */
-const UNFINISHED_GOOGLE_MESSAGE =
-  "We couldn't finish creating your account with Google here. Please try again, or sign up with your email and a password."
+export const unfinishedMessage = (providers: readonly SocialProvider[]) =>
+  `We couldn't finish creating your account here. Please try again, or sign up with ${socialProviderNames(providers)}.`
+/**
+ * For a sign-up that came back from a social connection still needing
+ * something this form has no field for. It does not point at that
+ * connection again: that is the route that has just not finished.
+ *
+ * @param provider - The connection it came back from, when Clerk names one
+ *   the form knows.
+ */
+export const unfinishedSocialMessage = (provider?: SocialProvider) =>
+  `We couldn't finish creating your account${provider ? ` with ${SOCIAL_PROVIDERS[provider].label}` : ''} here. Please try again, or sign up with your email and a password.`
 /** The sign-up fields the first step has inputs for, in Clerk's names. */
 const COLLECTED_FIELDS: readonly string[] = ['email_address', 'password']
 
@@ -48,8 +64,9 @@ const COLLECTED_FIELDS: readonly string[] = ['email_address', 'password']
  * **How the tick travels.** `SignUpFormView` reads the box at the moment of
  * submit and hands it here as a boolean. It goes to Clerk as
  * `unsafeMetadata` on the one request that starts the sign-up:
- * `signUp.password()` for email and password, `signUp.sso()` for Google.
- * Clerk keeps it on the sign-up (across the trip to Google too) and copies it
+ * `signUp.password()` for email and password, `signUp.sso()` for Google and
+ * for GitHub (#431), whichever button was pressed. Clerk keeps it on the
+ * sign-up (across the trip to the connection too) and copies it
  * to the user it creates, so `user.created` carries it as `unsafe_metadata`
  * and the webhook's rule is unchanged: a contact only for a literal `true`
  * (`hasMailingListOptIn`, #362). An unticked box sends an explicit `false`.
@@ -61,7 +78,7 @@ const COLLECTED_FIELDS: readonly string[] = ['email_address', 'password']
  * unlocks and the next submit reads the box again (and if the failed request
  * was an update to an earlier attempt, that attempt is discarded, so the
  * retry is a new one: `discardAttempt`). On success the box is gone:
- * the email path moves to the code step, the Google path leaves the page.
+ * the email path moves to the code step, a social path leaves the page.
  * "Use a different email" discards the attempt (`signUp.reset()`), so its
  * tick does not outlive it.
  *
@@ -74,22 +91,22 @@ const COLLECTED_FIELDS: readonly string[] = ['email_address', 'password']
  * `finalize()` and nothing else; the first step there would start a second
  * sign-up for an address that now has an account.
  *
- * **A sign-up back from Google that this form cannot finish** (#384). When a
- * sign-up requirement is switched on in the Clerk dashboard that the form
- * has no field for, a Google sign-up returns with the Google account
- * verified and a field still missing. Clerk's callback handler sends the
+ * **A sign-up back from Google or GitHub that this form cannot finish**
+ * (#384, #431). When a sign-up requirement is switched on in the Clerk
+ * dashboard that the form has no field for, a social sign-up returns with
+ * that account verified and a field still missing. Clerk's callback handler sends the
  * visitor nowhere for it, and they reach this form again by "Start again"
  * or by the address. The first step with no message would be a loop:
- * "Continue with Google" updates the same attempt and comes back the same
- * way. So the form says it could not finish, logs
+ * "Continue with …" updates the same attempt and comes back the same way. So the form says it could not finish, logs
  * `[sign-up] unsupported requirement`, and discards the attempt, as the
  * email route does for the same state. An attempt missing only the email
  * or the password is kept: the first step collects those, and its submit
- * updates the attempt. A Google trip the visitor abandoned
- * is not this: Google has verified nothing there, and the first step shows
- * as before.
+ * updates the attempt. A trip to Google or GitHub the visitor abandoned
+ * is not this: the connection has verified nothing there, and the first
+ * step shows as before. The message names the connection that came back
+ * (`externalAccount.strategy`), never the one to try again.
  *
- * **Still fail-closed:** a Google sign-up that turns out to be an existing
+ * **Still fail-closed:** a social sign-up that turns out to be an existing
  * account is signed in by the callback page and the list is not touched; an
  * account created from `/sign-in` or the Clerk dashboard never passes this
  * form and has no opt-in.
@@ -98,14 +115,18 @@ const COLLECTED_FIELDS: readonly string[] = ['email_address', 'password']
  * send it by way of `/sign-in`) is honoured only as a path on this site
  * (`safeRedirectPath`); anything else falls back to the home page.
  *
+ * @param providers - The social connections to offer, in order; the page
+ *   reads them from the environment (`enabledSocialProviders`).
  * @param assignLocation - How to leave for an absolute URL; a seam for tests.
  * @param leaveTimeoutMs - See {@link LEAVE_TIMEOUT_MS}; a seam for
  *   tests.
  */
 export function SignUpForm({
+  providers = DEFAULT_SOCIAL_PROVIDERS,
   assignLocation = (url: string) => window.location.assign(url),
   leaveTimeoutMs = LEAVE_TIMEOUT_MS,
 }: {
+  providers?: readonly SocialProvider[]
   assignLocation?: (url: string) => void
   leaveTimeoutMs?: number
 } = {}) {
@@ -125,14 +146,25 @@ export function SignUpForm({
     signUp.unverifiedFields.length > 0 &&
     signUp.unverifiedFields.every((field) => field === 'email_address')
 
+  /** The social connection whose account Clerk has verified on this sign-up, if any. */
+  const verifiedSocial = () => {
+    const external = signUp.verifications.externalAccount
+    return external?.status === 'verified'
+      ? { provider: socialProviderOf(external.strategy) }
+      : undefined
+  }
+
   /**
-   * The message for a sign-up this form cannot finish. One that came by
-   * Google is not pointed back at Google: that route has just not finished.
+   * The message for a sign-up this form cannot finish. One that came by a
+   * social connection is not pointed back at it: that route has just not
+   * finished.
    */
-  const unfinishedMessage = () =>
-    signUp.verifications.externalAccount?.status === 'verified'
-      ? UNFINISHED_GOOGLE_MESSAGE
-      : UNFINISHED_MESSAGE
+  const unfinishedFor = () => {
+    const social = verifiedSocial()
+    return social
+      ? unfinishedSocialMessage(social.provider)
+      : unfinishedMessage(providers)
+  }
 
   /** The step Clerk's sign-up calls for right now. */
   const currentStep = (): SignUpFormViewProps['step'] => {
@@ -206,10 +238,10 @@ export function SignUpForm({
     await signUp.reset()
   }
 
-  // Back from Google with the Google account verified, and Clerk still wants
+  // Back from Google or GitHub with that account verified, and Clerk still wants
   // something this form cannot collect (see the remarks above). Read at
   // rest only: the email route handles its own case inside its request.
-  const stuckAfterGoogle =
+  const stuckAfterSocial =
     !busy &&
     Boolean(signUp.id) &&
     signUp.status === 'missing_requirements' &&
@@ -228,7 +260,7 @@ export function SignUpForm({
   // that did not from being asked for again on every render.
   const discardedAttempt = useRef<string>(undefined)
   useEffect(() => {
-    if (!stuckAfterGoogle || discardedAttempt.current === signUp.id) return
+    if (!stuckAfterSocial || discardedAttempt.current === signUp.id) return
     discardedAttempt.current = signUp.id
     // Field names only: nothing the visitor typed.
     console.error('[sign-up] unsupported requirement', {
@@ -236,10 +268,10 @@ export function SignUpForm({
       missingFields: signUp.missingFields,
       unverifiedFields: signUp.unverifiedFields,
     })
-    void run(() => discardAttempt(UNFINISHED_GOOGLE_MESSAGE))
+    void run(() => discardAttempt(unfinishedFor()))
     // Keyed on the state alone: `run` and `discardAttempt` are new on every
     // render and read nothing that this state does not already cover.
-  }, [stuckAfterGoogle]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stuckAfterSocial]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSubmit = ({
     emailAddress,
@@ -268,7 +300,7 @@ export function SignUpForm({
           missingFields: signUp.missingFields,
           unverifiedFields: signUp.unverifiedFields,
         })
-        await discardAttempt(UNFINISHED_MESSAGE)
+        await discardAttempt(unfinishedMessage(providers))
         return
       }
       // The card moves to the code step either way, because Clerk's
@@ -280,13 +312,14 @@ export function SignUpForm({
       setCodeDelivery(sent.error ? 'failed' : 'sent')
     })
 
-  const onGoogle = ({
-    mailingListOptIn,
-  }: Pick<SignUpFormValues, 'mailingListOptIn'>) =>
+  const onSocial = (
+    provider: SocialProvider,
+    { mailingListOptIn }: Pick<SignUpFormValues, 'mailingListOptIn'>,
+  ) =>
     run(async (isCurrent) => {
       const hadAttempt = Boolean(signUp.id)
       const { error } = await signUp.sso({
-        strategy: 'oauth_google',
+        strategy: SOCIAL_PROVIDERS[provider].strategy,
         redirectCallbackUrl: withRedirect(
           SIGN_UP_SSO_CALLBACK_PATH,
           redirectTarget,
@@ -299,7 +332,7 @@ export function SignUpForm({
         if (hadAttempt) await discardAttempt(text(error) ?? UNEXPECTED_MESSAGE)
         return
       }
-      // No error means the browser is on its way to Google.
+      // No error means the browser is on its way to the connection.
       return { stayLocked: true }
     })
 
@@ -308,7 +341,7 @@ export function SignUpForm({
       const { error } = await signUp.verifications.verifyEmailCode({ code })
       if (!isCurrent() || error) return
       if (signUp.status === 'complete') return finish(isCurrent)
-      await discardAttempt(unfinishedMessage())
+      await discardAttempt(unfinishedFor())
     })
 
   const onResend = () =>
@@ -356,7 +389,8 @@ export function SignUpForm({
       codeDelivery={codeDelivery}
       notice={notice}
       onSubmit={onSubmit}
-      onGoogle={onGoogle}
+      providers={providers}
+      onSocial={onSocial}
       onVerify={onVerify}
       onResend={onResend}
       onUseDifferentEmail={onUseDifferentEmail}

@@ -5,6 +5,7 @@ import { SignInForm } from '@/components/auth/SignInForm'
 import { isClerkEnabled } from '@/lib/auth/clerkEnabled'
 import { getViewer } from '@/lib/auth/getViewer'
 import { safeRedirectPath } from '@/lib/auth/safeRedirect'
+import { enabledSocialProviders } from '@/lib/auth/socialProviders'
 
 export const metadata = { title: 'Sign in', robots: { index: false } }
 
@@ -29,6 +30,10 @@ export const instant = false
  * `redirect_url` target when it is a path on this site (`safeRedirectPath`,
  * with no origin, so an absolute URL is refused here even when it is this
  * site's), else the home page.
+ *
+ * **Which social buttons show** is read here, per request, from
+ * `CLERK_GITHUB_ENABLED` (`enabledSocialProviders`, #431): Google always,
+ * GitHub only where that instance's GitHub connection is on.
  *
  * @param props - The route's props; of the query string, only `redirect_url`
  *   is read.
@@ -55,7 +60,7 @@ export default async function SignInPage({
   return (
     <div className="flex justify-center px-4 py-16">
       <Suspense fallback={null}>
-        <SignInForm />
+        <SignInForm providers={enabledSocialProviders()} />
       </Suspense>
     </div>
   )

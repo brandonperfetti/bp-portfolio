@@ -12,6 +12,36 @@ Each version is an annotated tag on that release's merge commit.
 here; each one's release PR body is its record. How an entry is written and
 when the tag is made: [`docs/WORKFLOW.md` § Releases](docs/WORKFLOW.md#releases).
 
+## v2026.11.24.1
+
+This release ships the GitHub authentication code behind its server flag and
+adds the BP release runbook.
+Release PR [#437](https://github.com/brandonperfetti/bp-portfolio/pull/437) ·
+[tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.24.1) ·
+carries #433 and #435.
+
+**Visitors**
+
+- Buttons honor reduced motion by disabling transitions when requested.
+- The sign-in and sign-up forms support GitHub in environments where the
+  connection and server flag are enabled. Production continues to offer
+  Google and email at this cut (#431, #433).
+
+**Developers**
+
+- After Brandon merges a qualified release PR, the designated release lane
+  can verify the merge, push its annotated tag and publish the GitHub Release
+  under the documented standing grant (#432, #435).
+
+**What this release leaves.** The production GitHub connection and flag stay
+off. Partial Prefetching is a separate follow-up (#436).
+
+**Not proven before release:** Fresh GitHub sign-up, continuity of the original
+Clerk user ID, cancellation and recovery, sign-in that transfers to sign-up,
+and live mailing-list consent. Brandon completed GitHub sign-in and returned
+to the staging home page signed in on `0b10ac86`. Production smoke checks
+follow the merge.
+
 ## v2026.11.24
 
 Readers can sign in through the site's own form, and the cover workflow now
