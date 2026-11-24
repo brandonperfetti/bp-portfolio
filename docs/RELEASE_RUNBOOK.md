@@ -20,13 +20,13 @@ implements the shared procedure,
 > Outside that grant, an agent acts on a tag only on Brandon's explicit word
 > for that tag; that word covers the Release only if it says so, and a word
 > given for one release does not cover the next. Brandon alone merges the release
-> PR, and no step here merges, pushes `master` or `develop`, or edits a
-> branch. Releases for tags that predate the grant, and `v2026.11.23`, are
+> PR, and no step here merges, pushes `master` or `develop`, or commits to a
+> branch; the only branch write is the fast-forward-only local `master`. Releases for tags that predate the grant, and `v2026.11.23`, are
 > outside it.
 
 ## Verify the merge
 
-Steps 1 to 5 are read-only. Stop and report on the first failed check; never
+Steps 1 to 5 change nothing but fetched refs. Stop and report on the first failed check; never
 repair it by moving a tag or pushing a branch.
 
 1. **The merge is Brandon's and is done.** The release PR is `MERGED` by
@@ -47,8 +47,8 @@ repair it by moving a tag or pushing a branch.
    tags):
    - none: use `vYYYY.MM.DD`;
    - one that peels to this same commit: a repeat run. Inspect it (§ Tag).
-     If the remote has the same tag object, create and push nothing and resume
-     at § Publish the Release. If it exists only locally, use it only with
+     If the remote has the same tag object, create and push nothing, still
+     pass steps 4 and 5, and resume at § Publish the Release. If it exists only locally, use it only with
      provenance from this release attempt, then push it (§ Push only that
      tag); otherwise report it;
    - one on another commit, from an earlier release the same day: take the
@@ -175,7 +175,7 @@ release PR's merge commit on `master`, the version matches the Pacific merge
 date, and a changelog section exists. Also record, for each, the evidence
 § Verify the merge asks of a new release: `mergedBy.login`, the PR head's
 checks and accepted review, and a `success` `Production` deployment for the
-exact merge commit. Use the existing tags, and never
+exact merge commit (§ Publish the Release). Use the existing tags, and never
 create history before `v2026.11.17`, the first tag and the start of the
 changelog. The notes come from the changelog section at the release's merge
 commit; `v2026.11.17` is the exception, since `CHANGELOG.md` was added after
