@@ -58,8 +58,10 @@ that tag.
 
    ```sh
    git tag -a vYYYY.MM.DD <merge commit on master> -F <message file>
-   git push origin vYYYY.MM.DD
    ```
+
+   The push is one named tag ref and nothing else; its command is in
+   `docs/RELEASE_RUNBOOK.md` § Push only that tag.
 
    The message is one line in Brandon's voice: the word `Release`, the
    date as `YYYY-MM-DD`, an em dash, then what it ships. The first tag,

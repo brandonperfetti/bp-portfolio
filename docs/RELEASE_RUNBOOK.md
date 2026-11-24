@@ -18,8 +18,8 @@ implements the shared procedure,
 > (approved by Brandon 2026-11-24, #432); it takes effect when the PR that
 > records it merges into `develop`. This file is the procedure it covers.
 > Outside that grant, an agent acts on a tag only on Brandon's explicit word
-> for that tag, and that word covers the tag's GitHub Release; a word given
-> for one release does not cover the next. Brandon alone merges the release
+> for that tag; that word covers the Release only if it says so, and a word
+> given for one release does not cover the next. Brandon alone merges the release
 > PR, and no step here merges, pushes `master` or `develop`, or edits a
 > branch. Releases for tags that predate the grant, and `v2026.11.23`, are
 > outside it.
@@ -29,28 +29,32 @@ implements the shared procedure,
 Stop and report on the first failed check; never repair it by moving a tag or
 pushing a branch.
 
-1. **The merge is Brandon's and is done.** The release PR is `MERGED`, base
-   `master`, head `develop`, and its `mergeCommit.oid` is the commit you will
-   tag. Read it from the PR, never from `git log` alone. The PR's head commit
+1. **The merge is Brandon's and is done.** The release PR is `MERGED` by
+   `brandonperfetti` (`mergedBy.login`; a merge by anyone else, a bot
+   included, is outside the grant), base `master`, head `develop`, and its
+   `mergeCommit.oid` is the commit you will tag. Read it from the PR, never from `git log` alone. The PR's head commit
    is the accepted head: the merge commit's second parent equals it.
 2. **The commit is on `master`.** After `git fetch origin master --tags`,
    the merge commit is on the first-parent line of `origin/master`
    (`git rev-list --first-parent origin/master`), has two parents, and its
    subject is `Merge pull request #<n> from brandonperfetti/develop`. If
-   later commits sit on top, tag the merge commit, not the tip. If
-   `origin/master` moved to something you did not expect, stop.
-3. **Fast-forward local `master`, if you will use it.** From a clean checkout
-   on `master` that is not another session's, run
-   `git merge --ff-only origin/master` as its own call. Confirm `HEAD` equals
-   `origin/master`. Tagging by the merge commit's full SHA needs no local
-   `master`; never commit to it.
+   `origin/master` is anywhere but this merge commit (a later release or
+   commit landed), stop and report to Brandon; do not tag an earlier merge on
+   your own.
+3. **Fast-forward local `master`.** From a clean checkout on `master` that is
+   not another session's, run `git merge --ff-only origin/master` as its own
+   call. Stop if it fails. Confirm `HEAD` and `origin/master` both equal the
+   merge commit. Never commit to local `master`.
 4. **The version is the Pacific date of the merge.** Convert the PR's
    `mergedAt` to `America/Los_Angeles`; the version is `vYYYY.MM.DD`. Read the
    tags first (`git ls-remote --tags origin 'vYYYY.MM.DD*'`, and the local
    tags):
    - none: use `vYYYY.MM.DD`;
-   - one that peels to this same commit: a repeat run. Inspect it (§ Tag),
-     then resume at § Publish the Release; create and push nothing;
+   - one that peels to this same commit: a repeat run. Inspect it (§ Tag).
+     If the remote has the same tag object, create and push nothing and resume
+     at § Publish the Release. If it exists only locally, use it only with
+     provenance from this release attempt, then push it (§ Push only that
+     tag); otherwise report it;
    - one on another commit, from an earlier release the same day: take the
      next suffix, `.1`, then `.2`. A conflict is not a reason for a suffix: a
      tag you cannot explain, or one that names this commit with a different
@@ -108,16 +112,21 @@ missing, different or unreadable result goes to Brandon before any retry.
 
 ## Publish the Release
 
-1. Read the Releases for the exact tag first, drafts included
+1. **The Production deployment first.** Read the deployments for the merge
+   commit (`gh api 'repos/brandonperfetti/bp-portfolio/deployments?sha=<merge commit>'`
+   and its statuses). Publish only when the `Production` deployment is
+   `success`. Pending: wait, and the Release stays unpublished. Failed or
+   unreadable: stop and report to Brandon with the run.
+2. Read the Releases for the exact tag first, drafts included
    (`gh api repos/brandonperfetti/bp-portfolio/releases --paginate`), and
    confirm absence from a successful read. A matching published Release
    completes this step. An unexpected draft, a conflicting record or an
    unreadable result stops the write.
-2. Prepare the notes: the version's `CHANGELOG.md` section at the merge
+3. Prepare the notes: the version's `CHANGELOG.md` section at the merge
    commit, without its heading and without the `[tag](…)` link line, which
    points at the page being created. Never `--generate-notes`, and no summary
    of your own. The title is `<tag> — <short summary>`, as for `v2026.11.24`.
-3. Recheck the remote tag object and peeled commit against the receipt, then:
+4. Recheck the remote tag object and peeled commit against the receipt, then:
 
    ```sh
    gh release create vYYYY.MM.DD --repo brandonperfetti/bp-portfolio \
@@ -136,10 +145,9 @@ Read the remote, not the local state, and put the output in the hand-back:
   peels to the merge commit;
 - `gh release view vYYYY.MM.DD --repo brandonperfetti/bp-portfolio --json tagName,name,isDraft,isPrerelease,url,body,assets`:
   the tag, title and body match, not a draft, not a prerelease, no assets;
-- `gh api 'repos/brandonperfetti/bp-portfolio/deployments?sha=<merge commit>'`,
-  and that deployment's statuses: environment `Production`, state `success`.
-  A pending deploy leaves the close open. A failed one keeps the tag and
-  Release as they are and goes to Brandon with the run.
+- the `Production` deployment for the merge commit is still `success`. A
+  later failure keeps the tag and Release as they are and goes to Brandon
+  with the run.
 
 BP has no back-merge workflow; `develop` is the release PR's head and stays
 as it is.
@@ -165,7 +173,10 @@ first and record each tag's eligibility: the tag is annotated, peels to its
 release PR's merge commit on `master`, the version matches the Pacific merge
 date, and a changelog section exists. Use the existing tags, and never
 create history before `v2026.11.17`, the first tag and the start of the
-changelog.
+changelog. The notes come from the changelog section at the release's merge
+commit; `v2026.11.17` is the exception, since `CHANGELOG.md` was added after
+that tag, so its notes are the section as first added (`0ab881f7`), and the
+hand-back says so.
 
 ## What this does not cover
 
