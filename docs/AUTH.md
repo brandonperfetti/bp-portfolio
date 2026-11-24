@@ -673,7 +673,13 @@ two settings, the Clerk connection first, then the flag.
    - cancel on GitHub's page: the form is usable, and Google and password
      still sign in.
 
-   Record each result and its date here. **Pending.**
+   **2026-11-24 staging hand-run.** On deployment
+   `dpl_2ESqH8oVBEHUDcCm6kq2PkJ8Azbq` at `0b10ac86`, Brandon saw
+   **Continue with GitHub** on both forms, completed GitHub sign-in, and
+   returned to the staging home page with an active Clerk session. The
+   gated-article redirect, confirmation that the original Clerk user ID
+   was retained with GitHub connected, and the remaining sign-up, consent,
+   transfer and cancellation cases are pending.
 
 3. **Production.** In the production instance, add GitHub the same way with
    **Enable for sign-up and sign-in** and **Use custom credentials** on and
