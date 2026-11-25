@@ -21,6 +21,8 @@ import {
   staleRepoDocIds,
   syncGithubRepoEmbeddings,
 } from '../src/lib/ai/githubReposSync'
+import { PRIVATE_REPO_SUMMARIES } from '../src/lib/ai/privateRepoSummaries'
+import { syncPrivateRepoSummaries } from '../src/lib/ai/privateRepoSummariesSync'
 
 /**
  * Index every public `brandonperfetti` repository into `corvus_embeddings` (#147).
@@ -52,6 +54,17 @@ import {
  * README fetch 403s in the middle of a run is a failure to record and retry —
  * it is not evidence that the repository disappeared, and treating it as such
  * would delete a live repo's rows over a transient rate limit.
+ *
+ * ## Private-repository summaries ride along (#193)
+ *
+ * After the public pass, the same run brings the `github-private-summary`
+ * collection in line with `PRIVATE_REPO_SUMMARIES` — owner-written summaries,
+ * never anything fetched from a private repository (no request here can see
+ * one). It is its own pass with its own sweep: always on, `--no-prune`
+ * notwithstanding, because the allowlist is code and cannot be partially read,
+ * so a summary it no longer names is one that was removed on purpose. With the
+ * allowlist empty — the default — it writes nothing and removes any row left
+ * over. `--dry-run` reports what it would write and remove.
  *
  * Usage:
  *   pnpm corvus:sync-github
@@ -202,6 +215,25 @@ async function run(): Promise<void> {
         )
       }
     }
+  }
+
+  try {
+    const summaries = await syncPrivateRepoSummaries({
+      db,
+      summaries: PRIVATE_REPO_SUMMARIES,
+      dryRun,
+    })
+    payload.logger.info(
+      `[corvus:private] ${dryRun ? 'dry run: would sync' : 'synced'} ` +
+        `listed=${summaries.listed} written=${summaries.written} ` +
+        `skipped=${summaries.skipped} metadataUpdated=${summaries.metadataUpdated} ` +
+        `${dryRun ? 'wouldDelete' : 'deleted'}=${summaries.deleted}`,
+    )
+  } catch (error) {
+    totals.failed += 1
+    payload.logger.error(
+      `[corvus:private] summary pass failed: ${String(error)}`,
+    )
   }
 
   payload.logger.info(

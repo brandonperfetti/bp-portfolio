@@ -76,6 +76,21 @@ export const CORVUS_GITHUB_REPOS_COLLECTION = 'github-repos'
 export const CORVUS_TECH_STACK_SUMMARY_COLLECTION = 'tech-stack-summary'
 
 /**
+ * The non-CMS collection holding allowlisted private-repository summaries
+ * (#193).
+ *
+ * @remarks Its own pseudo-collection, apart from
+ * {@link CORVUS_GITHUB_REPOS_COLLECTION}, for two reasons. The public sync's
+ * prune sweep deletes every `github-repos` document the public listing no
+ * longer accounts for, and a private repository is never in that listing, so
+ * sharing the namespace would delete every summary on every run. And
+ * `assertIndexableRepo` refuses anything private outright; keeping summaries
+ * out of that path means that guard stays exactly as strict as it is. Every
+ * word in these rows is owner-written (`src/lib/ai/privateRepoSummaries.ts`).
+ */
+export const CORVUS_PRIVATE_REPO_SUMMARY_COLLECTION = 'github-private-summary'
+
+/**
  * The summary's document id — there is exactly one such document.
  *
  * @remarks `1` rather than `0` because `doc_id` is `NOT NULL integer` with no
@@ -114,6 +129,7 @@ export type CorvusChunkCollection =
   | CorvusCollectionSlug
   | typeof CORVUS_GITHUB_REPOS_COLLECTION
   | typeof CORVUS_TECH_STACK_SUMMARY_COLLECTION
+  | typeof CORVUS_PRIVATE_REPO_SUMMARY_COLLECTION
 
 /**
  * One row destined for `corvus_embeddings`, minus the vector itself.
@@ -277,6 +293,11 @@ export function sourceUrlFor(
       // different view of exactly the page those rows render on, so whichever
       // passage answers, the visitor is sent to `/tech`.
       return '/tech'
+    case CORVUS_PRIVATE_REPO_SUMMARY_COLLECTION:
+      // Never derived (#193). A summary's citation is the `publicUrl` its
+      // owner wrote, or none; there is no path this function could compose
+      // that would not risk pointing at the private repository itself.
+      return null
     case CORVUS_GITHUB_REPOS_COLLECTION: {
       const fullName = typeof ref === 'string' ? ref.trim() : ''
       // `owner/name`, both segments present. A half-formed value would

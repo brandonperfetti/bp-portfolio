@@ -33,6 +33,10 @@ import {
   chunkGithubRepo,
 } from '../../src/lib/ai/githubRepos'
 import {
+  type PrivateRepoSummary,
+  chunkPrivateRepoSummary,
+} from '../../src/lib/ai/privateRepoSummaries'
+import {
   CORVUS_SIMILARITY_FLOOR,
   type CorvusSnippet,
   DEFAULT_RETRIEVAL_TOP_K,
@@ -340,6 +344,14 @@ export interface FixtureRetrieverOptions {
    * been shown to win one in production. The retrieval proof is a keyed run.
    */
   summary?: boolean
+  /**
+   * Private-repository summaries to index alongside (#193).
+   *
+   * @remarks Opt-in and empty by default, for the reason `repos` is: every
+   * block that existed before #193 builds byte-identically the corpus its
+   * recorded score was measured against.
+   */
+  privateSummaries?: PrivateRepoSummary[]
 }
 
 /**
@@ -357,11 +369,13 @@ export function createFixtureRetriever(
     floor = CORVUS_SIMILARITY_FLOOR,
     repos = [],
     summary = false,
+    privateSummaries = [],
   } = options
   const chunks = [
     ...fixtureChunks(docs),
     ...repoFixtureChunks(repos),
     ...(summary ? summaryFixtureChunks(docs) : []),
+    ...privateSummaries.map((entry) => chunkPrivateRepoSummary(entry)),
   ]
 
   return (query: string): CorvusSnippet[] => {

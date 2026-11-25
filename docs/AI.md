@@ -782,6 +782,58 @@ timestamp changes on every push, so folding it in would re-embed every active
 repo every week for nothing. A moved `pushed_at` alone takes the metadata-repair
 path: one `UPDATE`, zero provider calls.
 
+#### Private repositories: summaries only (#193, 2026-11-25)
+
+Corvus may speak at a top level about work in a private repository (what it
+is, what it is for, where it is headed) and never about its code or files. The
+rule is enforced at ingestion: **nothing is ever read from a private
+repository.** Every word a summary row holds is written by Brandon in
+`PRIVATE_REPO_SUMMARIES` (`src/lib/ai/privateRepoSummaries.ts`), so Corvus
+cannot leak what was never stored. No GitHub token is involved, and the public
+sync's token (public repositories only) is not widened.
+
+**Adding a repository** is a pull request that adds one entry:
+
+- `name`: the bare repository name, no owner and no slash;
+- `description` and `topics`: the frame, in a line and a few words;
+- `blurb`: the story, in Brandon's words, written for the public;
+- `publicUrl` (optional): the blurb's public home on this site, as a path
+  (`/articles/…`). Never a GitHub URL; the visitor cannot open one.
+
+`assertPublishableSummary` refuses a name with an owner, slash or space, a URL
+or `github.com` address in any text field, an empty blurb, and a `publicUrl`
+that is not a site path. The list is **empty by default** and takes no
+wildcard. The row is built from those four fields one by one, so an object that
+also carries a README or code contributes none of it, and a test hands it
+exactly such an object.
+
+**Storage.** One chunk per entry, in its own pseudo-collection
+`github-private-summary`, so the public sync's prune sweep (which deletes every
+`github-repos` document the public listing does not name) never touches it, and
+`assertIndexableRepo` stays as strict as it was. The `doc_id` comes from a hash
+of the name, so editing a blurb updates the row in place. `pnpm
+corvus:sync-github` runs a second pass after the public one:
+`syncPrivateRepoSummaries` embeds what changed, skips what did not at no
+provider cost, and **always** sweeps rows the allowlist no longer names
+(`--no-prune` does not apply, because a list in the code cannot be partially
+read). With the list empty it writes nothing and removes any leftover row.
+
+**In the prompt.** A summary passage opens with `Private repository:` and ends
+with a notice that only the summary is public. When one is in the window,
+`PRIVATE_REPO_SUMMARY_RULE` (`src/lib/ai/groundedSystem.ts`) tells Corvus to
+answer at the summary's level only, to say plainly that the repository is
+private when asked for its code, and never to write a `github.com` link for it.
+Turns with no summary passage get the prompt they got before.
+
+**Proof.** `evals/private-repos.eval.ts` runs a synthetic fixture
+(`evals/fixtures/private-repo-summaries.ts`, not a real repository, because
+the allowlist is empty and this repository is public): "what is it?" answers
+from the blurb, and "show me its code" must deflect with no code block. Both
+are scored by `never-links-a-private-repo`. **Ops:** once Brandon adds the
+first entry, the sync's runbook applies unchanged. Run it with `--dry-run`
+first, check that the `[corvus:private]` counts line names the entries
+expected, then let the scheduled run (or a dispatch) apply it.
+
 #### Three subjects: you, this site, Brandon (#147, #167)
 
 `/tech` lists the technologies Brandon **works with**. The `bp-portfolio`

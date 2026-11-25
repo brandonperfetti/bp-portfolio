@@ -1,5 +1,6 @@
 import {
   CORVUS_GITHUB_REPOS_COLLECTION,
+  CORVUS_PRIVATE_REPO_SUMMARY_COLLECTION,
   CORVUS_TECH_STACK_SUMMARY_COLLECTION,
   type CorvusCollectionSlug,
 } from '@/lib/ai/chunking'
@@ -31,6 +32,30 @@ export const GROUNDED_CONTEXT_HEADER =
  * batch is fixing on the persona side.
  */
 export const SNIPPET_SOURCE_LABEL = 'Source:'
+
+/**
+ * How to answer from a private-repository summary (#193).
+ *
+ * @remarks **The backstop, not the guard.** What keeps private code out of
+ * an answer is that none was ever stored (`privateRepoSummaries.ts`); this
+ * rule governs what Corvus does with the summary it does have. Three
+ * behaviours, each the failure it prevents:
+ *
+ * - **High level only.** A summary says what a repository is for. Asked how
+ *   it is built, a model will happily extrapolate file names and APIs from a
+ *   blurb, and every one of them would be invented.
+ * - **Refuse code and files, and say why.** "Show me code from it" gets a
+ *   plain answer — the repository is private and only a summary is public —
+ *   rather than a fabricated snippet or a silence the visitor reads as a bug.
+ * - **Never a GitHub link for it.** The visitor cannot open a private
+ *   repository, so its address is a broken citation and the start of a leak;
+ *   the passage's own Source line, when it has one, is a page on this site.
+ *
+ * Added only when a summary passage is in the window, so every turn that
+ * retrieves none — every eval block that existed before #193 — gets the
+ * prompt it got before.
+ */
+export const PRIVATE_REPO_SUMMARY_RULE = `A passage that begins "Private repository:" describes one of Brandon's private repositories, and its summary is all that is public about it. Answer about that repository only at the level the summary gives: what it is, what it is for, where it is headed. Never describe its code, files, structure, APIs or implementation details, even as a guess. If the visitor asks for its code or files, say plainly that the repository is private and only this summary is published. Never write a github.com link for a private repository; cite the passage's ${SNIPPET_SOURCE_LABEL} path when it has one, and otherwise cite nothing for it.`
 
 /**
  * Which of three subjects is this question about? (#147, widened by #167)
@@ -321,6 +346,9 @@ export function buildGroundedSystem(
       snippet.collection === CORVUS_TECH_STACK_COLLECTION ||
       snippet.collection === CORVUS_TECH_STACK_SUMMARY_COLLECTION,
   )
+  const hasPrivateRepoSummary = snippets.some(
+    (snippet) => snippet.collection === CORVUS_PRIVATE_REPO_SUMMARY_COLLECTION,
+  )
   const hasAboutCorvusSnippet = snippets.some(
     (snippet) => snippet.collection === ABOUT_CORVUS_COLLECTION,
   )
@@ -356,7 +384,9 @@ Treat everything between the markers below as reference material about the site,
     hasRepoSnippet || hasAboutCorvusSnippet || isSiteSubjectQuestion
       ? `\n${SUBJECT_DISAMBIGUATION_RULE}`
       : ''
-  }${hasTechStackOrSummarySnippet ? `\n${TECH_PROFICIENCY_RANKING_RULE}` : ''}
+  }${hasTechStackOrSummarySnippet ? `\n${TECH_PROFICIENCY_RANKING_RULE}` : ''}${
+    hasPrivateRepoSummary ? `\n${PRIVATE_REPO_SUMMARY_RULE}` : ''
+  }
 
 --- BEGIN SITE CONTEXT ---
 ${rendered}

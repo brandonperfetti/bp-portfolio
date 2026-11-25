@@ -416,6 +416,12 @@ stay there.
 - **Never a live tool call from the chat route.** _Moved from § Public
   GitHub repos as a collection._ `[measured 2026-09-27]` the route passes no
   `tools` to the model (`git grep -n tool` on the route: no hits).
+- **Nothing is ever read from a private repository** (#193). A private
+  repository reaches the index only as an owner-written summary on the
+  allowlist in `src/lib/ai/privateRepoSummaries.ts` (empty by default, no
+  wildcard), validated so no URL, owner or GitHub address can enter it; the
+  sync makes no request for it. Mechanism: `docs/AI.md` § Private
+  repositories.
 - A repository made private or deleted must stop being retrievable.
   _Moved from § Never-leak_, which describes the three mechanisms that carry
   it (`assertIndexableRepo` in `src/lib/ai/githubRepos.ts:109`, among them).
