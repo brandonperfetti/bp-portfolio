@@ -132,10 +132,12 @@ async function run(): Promise<void> {
       // unambiguously to the next reader.
       limit: 0,
       pagination: false,
-      // Posts are drafts-enabled: ask for the published view explicitly so a
-      // doc with an in-flight draft is embedded as READERS see it, never as
-      // its unpublished draft reads.
-      ...(collection === 'posts' ? { draft: false } : {}),
+      // Posts and Pages are drafts-enabled: ask for the published view
+      // explicitly so a doc with an in-flight draft is embedded as READERS see
+      // it, never as its unpublished draft reads.
+      ...(collection === 'posts' || collection === 'pages'
+        ? { draft: false }
+        : {}),
       overrideAccess: true,
     })
 

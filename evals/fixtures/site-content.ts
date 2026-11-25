@@ -8,6 +8,8 @@
  *   - https://brandonperfetti.com/api/tech-stack?limit=200&depth=0
  *   - https://brandonperfetti.com/api/uses?limit=200&depth=0
  *   - https://brandonperfetti.com/api/posts?limit=5&sort=-publishedAt&depth=0
+ *   - https://brandonperfetti.com/api/pages?limit=200&depth=0 (the one Page
+ *     below, captured 2026-11-25 for #208)
  * Corroborated against https://brandonperfetti.com/sitemap.xml (article slugs),
  * https://brandonperfetti.com/api/search (article titles + publish dates) and the
  * server-rendered homepage (work history). Full capture record, including the
@@ -435,6 +437,64 @@ const POSTS: SiteFixtureDoc[] = [
   },
 ]
 
+/** One Lexical paragraph or heading, as the Page's `prose` block stores it. */
+const lexicalNode = (type: 'heading' | 'paragraph', text: string) => ({
+  type,
+  ...(type === 'heading' ? { tag: 'h3' } : {}),
+  children: [{ type: 'text', text }],
+})
+
+/**
+ * Page records — `/api/pages`, captured 2026-11-25 for #208.
+ *
+ * @remarks One role Page, trimmed to its lead and its first two prose
+ * sections, verbatim. It is here so the evals see what #208 changed: the
+ * narrative on `/work/brytecore` (the Strapi CMS behind each tenant, the
+ * GraphQL layer) is in no other fixture, so the case that asks for it can
+ * only pass through `chunkPage`. The `workHistoryCard` block is kept so the
+ * fixture also exercises the skip of a block that renders another collection.
+ */
+const PAGES: SiteFixtureDoc[] = [
+  {
+    collection: 'pages',
+    doc: {
+      id: 19,
+      title: 'Brytecore',
+      subtitle: 'Senior Frontend Engineer, 2024 – present.',
+      slug: 'brytecore',
+      path: 'work/brytecore',
+      publishedAt: '2026-09-06T22:41:46.916Z',
+      _status: 'published',
+      layout: [
+        {
+          blockType: 'lead',
+          text: "I lead frontend engineering for Brytecore's multi-tenant real-estate platform — Next.js and TypeScript sites for brokerages across North America, built on a shared component architecture I own.",
+        },
+        { blockType: 'workHistoryCard', entry: 1 },
+        {
+          blockType: 'prose',
+          content: {
+            root: {
+              children: [
+                lexicalNode('heading', 'The platform problem'),
+                lexicalNode(
+                  'paragraph',
+                  'One platform, many brokerages: every tenant gets its own Next.js site powered by its own Strapi headless CMS, and all of them consume a shared package I build and maintain — design-system components, listing search and mapping, and edge middleware for bot detection, geo-aware consent, and visitor identity. A GraphQL layer feeds structured CMS content into each app, so the content model and the component architecture have to evolve together.',
+                ),
+                lexicalNode('heading', 'The role runs well past UI'),
+                lexicalNode(
+                  'paragraph',
+                  'Three fronts get most of my attention. Technical SEO at fleet scale: schema.org structured data, sitemap and canonical correctness, ISR caching strategy, and SSR crawlability guards that catch regressions at build time rather than in search consoles. Privacy and analytics integrity: consent management across opt-in and opt-out markets, consent-gated network blocking, and first-party analytics you can trust — bot filtering, event dedupe, attribution. And test infrastructure: colocated Vitest suites plus a shared Playwright E2E registrar that gives every tenant a fleet-wide spec suite from a single source.',
+                ),
+              ],
+            },
+          },
+        },
+      ],
+    },
+  },
+]
+
 /** The whole captured corpus, in the order the collections are listed above. */
 export const SITE_FIXTURE_DOCS: SiteFixtureDoc[] = [
   ...WORK_HISTORY,
@@ -442,4 +502,5 @@ export const SITE_FIXTURE_DOCS: SiteFixtureDoc[] = [
   ...TECH_STACK,
   ...USES,
   ...POSTS,
+  ...PAGES,
 ]

@@ -151,8 +151,10 @@ export const ABOUT_CORVUS_PRIVACY_COLLECTION = 'about-corvus-privacy'
  * Where an answer about what Corvus keeps points the visitor.
  *
  * @remarks The privacy page (Pages id 28) is the published statement of these
- * facts. It is a Page, and Pages are not embedded (decision D8(b)), so
- * retrieval can never return it — which is the defect #401 measured.
+ * facts. When #401 measured the defect it was a Page that was not embedded
+ * (decision D8(b)), so retrieval could never return it. #208 embeds its text
+ * now, and this passage stays: it is offered by rule, so it also reaches a
+ * follow-up whose latest message retrieval has no topic word to match.
  */
 export const ABOUT_CORVUS_PRIVACY_SOURCE_URL = '/privacy'
 

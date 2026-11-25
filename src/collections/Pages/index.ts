@@ -15,6 +15,10 @@ import { pageBuilderBlocks } from '@/blocks/library'
 import { SHARE_TARGET_OPTIONS } from '@/globals/SiteSettings'
 import { hero } from '@/heros/config'
 import { capturePublishedSlug } from '@/hooks/capturePublishedSlug'
+import {
+  deleteCorvusEmbeddings,
+  refreshCorvusEmbeddings,
+} from '@/hooks/corvusEmbeddings'
 import { createPathRedirect } from '@/hooks/createPathRedirect'
 import { populatePublishedAt } from '@/hooks/populatePublishedAt'
 import { generatePreviewPath } from '@/utilities/generatePreviewPath'
@@ -242,7 +246,15 @@ export const Pages: CollectionConfig = {
     // `cascadePagePaths` last: it recomputes the subtree beneath a moved page,
     // and it must run after the redirect row for the page's OWN old path has
     // landed (#150).
-    afterChange: [revalidatePage, createPathRedirect, cascadePagePaths],
+    // `refreshCorvusEmbeddings` (#208) embeds a published Page's text blocks;
+    // it is fail-open and bounded, and a cascaded descendant's path change
+    // reaches its chunks through its own `afterChange` as a metadata repair.
+    afterChange: [
+      revalidatePage,
+      createPathRedirect,
+      refreshCorvusEmbeddings('pages'),
+      cascadePagePaths,
+    ],
     // `validatePageHierarchy` rejects an unservable placement before
     // `computePagePath` ever stores a path — the guard runs in `beforeValidate`,
     // the computation in `beforeChange`, so the stored `path` is always one the
@@ -265,7 +277,7 @@ export const Pages: CollectionConfig = {
       capturePublishedSlug,
       computePagePath,
     ],
-    afterDelete: [revalidateDelete],
+    afterDelete: [revalidateDelete, deleteCorvusEmbeddings('pages')],
   },
   versions: {
     drafts: {

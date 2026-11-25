@@ -190,7 +190,7 @@ export interface CitationScorerOptions {
    * @remarks `fixtures/site-routes.ts` supplies these from the site's own nav.
    * Without them a scorer built on corpus URLs alone treats every published
    * page the corpus does not cover — `/about`, `/articles` — as an invention,
-   * which is a statement about #82's decision D8(b) rather than about the
+   * which is a statement about what the corpus holds rather than about the
    * answer. Defaults to none, so a caller that passes only corpus URLs keeps
    * the pre-Batch-6 allow-list exactly.
    */

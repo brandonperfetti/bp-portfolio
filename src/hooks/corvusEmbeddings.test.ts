@@ -343,6 +343,23 @@ describe('6. afterDelete AND published → draft delete the rows', () => {
     )
   })
 
+  it('an UNPUBLISHED Page deletes its rows, exactly as a post does (#208)', async () => {
+    deleteDocumentEmbeddingsMock.mockResolvedValue(undefined)
+    const { args } = changeArgs({
+      doc: { id: 28, _status: 'draft' },
+      previousDoc: { id: 28, _status: 'published' },
+    })
+
+    await refreshCorvusEmbeddings('pages')(args)
+
+    expect(deleteDocumentEmbeddingsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'pages',
+      28,
+    )
+    expect(syncDocumentEmbeddingsMock).not.toHaveBeenCalled()
+  })
+
   it('a publish (draft → published) refreshes rather than deletes', async () => {
     syncDocumentEmbeddingsMock.mockResolvedValue({
       written: 2,
@@ -399,27 +416,31 @@ describe('6. afterDelete AND published → draft delete the rows', () => {
 })
 
 describe('7. carries the collection slug through to the store', () => {
-  it.each(['posts', 'projects', 'uses', 'tech-stack', 'work-history'] as const)(
-    'wires %s',
-    async (collection) => {
-      syncDocumentEmbeddingsMock.mockResolvedValue({
-        written: 1,
-        deleted: 0,
-        metadataUpdated: 0,
-        skipped: false,
-      })
-      const { args } = changeArgs({
-        doc: { id: 1, _status: 'published' },
-        previousDoc: { id: 1, _status: 'published' },
-      })
+  it.each([
+    'posts',
+    'pages',
+    'projects',
+    'uses',
+    'tech-stack',
+    'work-history',
+  ] as const)('wires %s', async (collection) => {
+    syncDocumentEmbeddingsMock.mockResolvedValue({
+      written: 1,
+      deleted: 0,
+      metadataUpdated: 0,
+      skipped: false,
+    })
+    const { args } = changeArgs({
+      doc: { id: 1, _status: 'published' },
+      previousDoc: { id: 1, _status: 'published' },
+    })
 
-      await refreshCorvusEmbeddings(collection)(args)
+    await refreshCorvusEmbeddings(collection)(args)
 
-      expect(syncDocumentEmbeddingsMock).toHaveBeenCalledWith(
-        expect.objectContaining({ collection }),
-      )
-    },
-  )
+    expect(syncDocumentEmbeddingsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ collection }),
+    )
+  })
 })
 
 describe('8. re-emits the daily-driver summary on tech-stack writes (#165)', () => {

@@ -63,6 +63,14 @@ export const SITE_FACT_CASES: EvalCase[] = [
       'Brandon currently works at "Brytecore" as a "Senior Frontend Engineer", a role that began in "2024".',
   },
   {
+    // #208: the Strapi CMS behind each tenant is on the `/work/brytecore`
+    // Page and in no other fixture, so this passes only through `chunkPage`.
+    input:
+      'What headless CMS powers each Brytecore tenant site, and what feeds its content into each app?',
+    expected:
+      'Each tenant site runs on its own "Strapi" headless CMS, and a "GraphQL" layer feeds its content into each app.',
+  },
+  {
     input: 'What role did Brandon hold at Lone Wolf Technologies?',
     expected:
       'At "Lone Wolf Technologies" he was a "Software Engineer" and "Technical PM", from "2020" until "2023".',
