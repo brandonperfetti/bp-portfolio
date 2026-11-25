@@ -480,10 +480,10 @@ describe('eval harness wiring', () => {
 
   it('runs the gate on the code default model', () => {
     // #238. Until it, the code default was gpt-5-mini while production set
-    // AI_CHAT_MODEL=gpt-5.6-luna, so CI's Evalite job pinned the variable
-    // (release-235, 2026-09-15) and nothing guarded that pin. Now the default
-    // IS the model, and the gate reaches it the only way that cannot drift:
-    // by setting nothing. This pins all three links: the literal, an empty
+    // AI_CHAT_MODEL=gpt-5.6-luna (measured 2026-09-15), so CI's Evalite job
+    // pinned the variable (release-235) and nothing guarded that pin. Now
+    // the default is gpt-5.6-luna, and the gate reaches the default the only
+    // way that cannot drift: by setting nothing. This pins all three links: the literal, an empty
     // `.env.example` value (so a local keyed run measures the same model),
     // and no model or provider selection anywhere in ci.yml outside a
     // comment. Moving the default means editing this test, in the same

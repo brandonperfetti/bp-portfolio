@@ -326,12 +326,13 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       # No AI_CHAT_MODEL or AI_CHAT_PROVIDER here, deliberately: the gate runs
       # the code default (`getCorvusModelId()`, gpt-5.6-luna), the model
-      # production was measured running (2026-09-15 runtime logs; #238). Until
-      # #238 this job pinned
-      # AI_CHAT_MODEL=gpt-5.6-luna because the code default was gpt-5-mini,
-      # a model the site never sends, and the gate flaked on it (release-235,
-      # 2026-09-15; docs/AI.md, the 2026-09-15 correction). Setting either
-      # variable here would measure a model the site may not run;
+      # production was last measured running (2026-09-15 runtime logs; no
+      # later log names a model, so today's value is unconfirmed; #238). Until
+      # #238 this job pinned AI_CHAT_MODEL=gpt-5.6-luna because the code
+      # default was gpt-5-mini, which production was not sending then, and
+      # the gate flaked on it (release-235, 2026-09-15; docs/AI.md, the
+      # 2026-09-15 correction). Setting either variable here would measure a
+      # model other than the code default;
       # `scripts/eval-harness.test.ts` fails if one comes back.
     steps:
       - uses: actions/checkout@v4
