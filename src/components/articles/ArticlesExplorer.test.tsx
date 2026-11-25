@@ -1,6 +1,7 @@
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -1148,17 +1149,90 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
     expect(replaceMock).toHaveBeenCalledTimes(1)
   })
 
-  it('a modified click on that link opens a new tab and leaves the filters alone (#307)', async () => {
+  it('a click on that link while the debounce is still running drops the unsent text (#307)', async () => {
     const user = useFakeClock()
     render(<PageWithSameUrlLink />)
     const box = screen.getByPlaceholderText('Search articles')
 
-    await user.type(box, 'observer')
-    await advance(500)
-    await user.keyboard('{Meta>}')
+    await user.type(box, 'obs')
     await user.click(screen.getByRole('link', { name: 'All articles' }))
-    await user.keyboard('{/Meta}')
 
-    expect(box).toHaveValue('observer')
+    expect(box).toHaveValue('')
+    await advance(1000)
+    expect(replaceMock).not.toHaveBeenCalled()
   })
+
+  /**
+   * Clicks that do not load the URL already showing in this tab: each must
+   * leave the typed query and its pending write alone (#307).
+   */
+  const otherClicks: Array<
+    [
+      string,
+      (
+        link: HTMLElement,
+        user: ReturnType<typeof useFakeClock>,
+      ) => Promise<void>,
+    ]
+  > = [
+    [
+      'a modified click (new tab)',
+      async (link, user) => {
+        await user.keyboard('{Meta>}')
+        await user.click(link)
+        await user.keyboard('{/Meta}')
+      },
+    ],
+    [
+      // Browsers send other buttons as `auxclick`; a `click` carrying one is
+      // what the listener's button check is for.
+      'a click from a non-primary button',
+      async (link) => {
+        fireEvent.click(link, { button: 1 })
+      },
+    ],
+    [
+      'a link that opens another tab',
+      async (link, user) => {
+        link.setAttribute('target', '_blank')
+        await user.click(link)
+      },
+    ],
+    [
+      'a download link',
+      async (link, user) => {
+        link.setAttribute('download', '')
+        await user.click(link)
+      },
+    ],
+    [
+      'a fragment link on the same page',
+      async (link, user) => {
+        link.setAttribute('href', '/articles#latest')
+        await user.click(link)
+      },
+    ],
+    [
+      'a link to another origin',
+      async (link, user) => {
+        link.setAttribute('href', 'https://example.com/articles')
+        await user.click(link)
+      },
+    ],
+  ]
+
+  it.each(otherClicks)(
+    '%s leaves the filters alone (#307)',
+    async (_name, clickLink) => {
+      const user = useFakeClock()
+      render(<PageWithSameUrlLink />)
+      const box = screen.getByPlaceholderText('Search articles')
+
+      await user.type(box, 'observer')
+      await advance(500)
+      await clickLink(screen.getByRole('link', { name: 'All articles' }), user)
+
+      expect(box).toHaveValue('observer')
+    },
+  )
 })
