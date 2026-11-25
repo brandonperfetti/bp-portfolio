@@ -66,7 +66,7 @@ describe('cleanHostTitle', () => {
     expect(cleanHostTitle('The "real" story')).toBe("The 'real' story")
   })
 
-  it('cannot form a Markdown link or autolink (#217 review)', () => {
+  it('strips Markdown link and autolink syntax (#217 review)', () => {
     const title = cleanHostTitle(
       'Guide](https://elsewhere.example) [Verify <https://x.example> `code`',
     ) as string

@@ -419,8 +419,8 @@ stay there.
   the published CMS document, a gated post is named only to a viewer
   `canAccess` admits, and a crafted body with its own title is refused. The
   CMS title itself is treated as data: it cannot form a Markdown link and is
-  never a link label, so the only destination the line names is the
-  server-resolved path
+  never a link label, so the one link the line offers is always the
+  server-resolved path (a bare URL in a title still appears as quoted text)
   [source: `src/lib/ai/pageContext.ts`, `src/lib/ai/groundedSystem.ts`,
   `src/app/api/ai/chat/route.test.ts`].
 - **Never a live tool call from the chat route.** _Moved from § Public
