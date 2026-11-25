@@ -29,7 +29,10 @@ visitor is on, so "this page" and "this article" have a referent.
   `resolveHostDocument` from the published view (`draft: false`,
   `_status = published`, `overrideAccess: false`); a gated post is named only
   to a viewer `canAccess` admits. The title is reduced to one quoted line of
-  at most 160 characters before it enters the prompt.
+  at most 160 characters, with double quotes, square and angle brackets and
+  backticks removed, before it enters the prompt. It is never a link label:
+  the line offers `[this page](<path>)`, so an editor-written title cannot
+  put another destination into the instruction.
 - **Never a reason to fail.** Unknown id, draft, gated, no public path, a
   database error, or a lookup slower than one second: every one is `null`, and
   the turn runs as a `/corvus` turn does. It resolves alongside retrieval

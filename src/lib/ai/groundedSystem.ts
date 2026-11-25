@@ -31,8 +31,12 @@ export const GROUNDED_CONTEXT_HEADER =
  *
  * Both values are server-resolved (`resolveHostDocument`): the client names a
  * collection and an id and nothing else, so no visitor text can reach this
- * line. The title is still treated as data — quoted, single-line, capped —
- * because it is editor-authored content inside the system prompt.
+ * line. The title is still treated as data — quoted, single-line, capped,
+ * with Markdown link syntax removed — because it is editor-authored content
+ * inside the system prompt. It is never a link label: the suggested link
+ * carries a fixed label and the server-resolved path, so a title shaped like
+ * `Guide](https://elsewhere.example) [Verify` (#217 review) cannot place
+ * another destination in the instruction.
  *
  * The line names the page and says nothing about what is on it. It is not a
  * passage: Corvus must not answer "what does this page say?" from a title
@@ -46,7 +50,7 @@ export const GROUNDED_CONTEXT_HEADER =
  * @returns The context line.
  */
 export function hostPageContextLine(host: ResolvedHostDocument): string {
-  return `The visitor is talking to you from a page on this site: "${host.title}" at ${host.path}. When they say "this page", "this article", "here" or the like, they mean that page, and you may link it as [${host.title}](${host.path}). This line only names the page; it does not say what the page contains, so answer questions about its content from the site context when it covers them, and otherwise say you do not have that page's text.`
+  return `The visitor is talking to you from a page on this site: "${host.title}" at ${host.path}. When they say "this page", "this article", "here" or the like, they mean that page, and you may link it as [this page](${host.path}). This line only names the page; it does not say what the page contains, so answer questions about its content from the site context when it covers them, and otherwise say you do not have that page's text.`
 }
 
 /**

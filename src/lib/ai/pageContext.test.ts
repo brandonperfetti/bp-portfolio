@@ -66,6 +66,20 @@ describe('cleanHostTitle', () => {
     expect(cleanHostTitle('The "real" story')).toBe("The 'real' story")
   })
 
+  it('cannot form a Markdown link or autolink (#217 review)', () => {
+    const title = cleanHostTitle(
+      'Guide](https://elsewhere.example) [Verify <https://x.example> `code`',
+    ) as string
+    expect(title).not.toMatch(/[[\]<>`]/)
+    expect(title).toBe(
+      'Guide (https://elsewhere.example) Verify https://x.example code',
+    )
+  })
+
+  it('keeps parentheses, which make no link alone', () => {
+    expect(cleanHostTitle('Payload (part 2)')).toBe('Payload (part 2)')
+  })
+
   it('caps an oversized title', () => {
     const title = cleanHostTitle('word '.repeat(100)) as string
     expect(title.length).toBeLessThanOrEqual(HOST_TITLE_MAX_CHARS)

@@ -417,8 +417,12 @@ stay there.
   phase 2.) The body's only field beside `messages` is a strict
   `{ collection, id }`; the title and path the prompt carries are read from
   the published CMS document, a gated post is named only to a viewer
-  `canAccess` admits, and a crafted body with its own title is refused
-  [source: `src/lib/ai/pageContext.ts`, `src/app/api/ai/chat/route.test.ts`].
+  `canAccess` admits, and a crafted body with its own title is refused. The
+  CMS title itself is treated as data: it cannot form a Markdown link and is
+  never a link label, so the only destination the line names is the
+  server-resolved path
+  [source: `src/lib/ai/pageContext.ts`, `src/lib/ai/groundedSystem.ts`,
+  `src/app/api/ai/chat/route.test.ts`].
 - **Never a live tool call from the chat route.** _Moved from § Public
   GitHub repos as a collection._ `[measured 2026-09-27]` the route passes no
   `tools` to the model (`git grep -n tool` on the route: no hits).

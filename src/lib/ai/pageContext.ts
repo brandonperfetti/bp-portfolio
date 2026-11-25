@@ -59,8 +59,10 @@ export const HOST_LOOKUP_TIMEOUT_MS = 1_000
  * @remarks The title is editor-authored site content, but it lands inside the
  * system prompt, so it is reduced to a single line of printable text: control
  * characters and line breaks become spaces, runs of whitespace collapse, and
- * the result is capped at {@link HOST_TITLE_MAX_CHARS}. A title cannot then
- * open a new paragraph of instructions or close the quotes around it.
+ * the result is capped at {@link HOST_TITLE_MAX_CHARS}. Double quotes,
+ * square and angle brackets and backticks are removed too. A title cannot
+ * then open a new paragraph of instructions, close the quotes around it, or
+ * form a Markdown link (#217 review).
  *
  * @param value - The stored title.
  * @returns The cleaned title, or `null` when nothing printable is left.
@@ -70,6 +72,10 @@ export function cleanHostTitle(value: unknown): string | null {
   const flat = value
     .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')
     .replace(/"/g, "'")
+    // Link and code syntax. Square brackets are what a Markdown link needs,
+    // and angle brackets make an autolink; parentheses stay, since alone
+    // they make no link and real titles use them.
+    .replace(/[[\]<>`]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
   if (!flat) return null
