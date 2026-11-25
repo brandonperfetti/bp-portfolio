@@ -17,9 +17,10 @@ vi.mock('next/link', () => ({
  * (`hover:text-link-accent-hover` — `CMSLink`, `ArticlesArchiveView`,
  * `ArticlesExplorer`, `CookieBanner`, `CookieDialog`; #231). The token
  * inverts on `.dark` for you, so the class is one and parity holds by
- * construction. Before #231 this site carried a literal light-only
+ * construction. Before #235 this site carried a literal light-only
  * `hover:text-teal-600`, which overrode the dark resting teal-400 with a
  * darker step on a dark backdrop (CodeRabbit on #235, `Component.tsx:54`);
+ * #235 added the `dark:` half, and #231 replaced the pair with the token;
  * the assertion that no literal `hover:text-teal-*` survives is what keeps
  * that from coming back.
  */
