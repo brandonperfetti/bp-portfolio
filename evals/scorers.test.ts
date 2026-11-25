@@ -149,6 +149,7 @@ describe('fixture corpus', () => {
       '/projects',
       '/tech',
       '/uses',
+      '/work/brytecore',
     ])
   })
 
@@ -156,6 +157,11 @@ describe('fixture corpus', () => {
     // The fixtures ship in a PUBLIC repo. A draft or gated record must never
     // be added here, and this is the assertion that says so out loud.
     for (const { collection, doc } of SITE_FIXTURE_DOCS) {
+      if (collection === 'pages') {
+        // A Page has no gate of its own; it is retrievable once published (#208).
+        expect(doc._status).toBe('published')
+        continue
+      }
       if (collection !== 'posts') continue
       expect(doc._status).toBe('published')
       expect((doc.access as { visibility?: string }).visibility).toBe('public')

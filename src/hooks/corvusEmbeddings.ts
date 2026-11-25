@@ -62,6 +62,59 @@ export function isAutosaveRequest(req: unknown): boolean {
 }
 
 /**
+ * Is this draft write sitting on top of a document whose published version
+ * still serves?
+ *
+ * @remarks "Save draft" on a published Post or Page (#208 review) fires
+ * `afterChange` with `doc._status: 'draft'`, the same shape as an unpublish,
+ * but Payload writes only a new version: the collection's own row stays
+ * published and keeps serving. Treated as an unpublish, that save deleted the
+ * live document's embeddings until its next publish or backfill.
+ *
+ * The flag that tells them apart, `?draft=true`, is not readable here: the
+ * hook receives no `draft` argument, and a Local-API `draft: true` never
+ * reaches `req.query` (docs/PAYLOAD.md § Local API gotchas). So it asks the
+ * collection row directly, on this request's transaction (`req` is
+ * forwarded): after a draft save that row is still `published`; after an
+ * unpublish this same transaction has already set it to `draft`.
+ *
+ * Fails toward the delete: if the lookup is unavailable or throws, it answers
+ * `false`, and the caller removes the rows as before. A wrongly kept row could
+ * quote text the reader cannot see; a wrongly deleted one only waits for the
+ * backfill.
+ *
+ * @param req - The Payload request of the save.
+ * @param collection - The collection the hook is wired onto.
+ * @param id - The saved document's id.
+ * @returns `true` only when the collection row is verifiably published.
+ */
+async function isDraftOverPublished(
+  req: unknown,
+  collection: CorvusCollectionSlug,
+  id: number,
+): Promise<boolean> {
+  const payload = (req as { payload?: { findByID?: unknown } } | null)?.payload
+  if (typeof payload?.findByID !== 'function') return false
+  try {
+    const row = (await (
+      payload.findByID as (args: Record<string, unknown>) => Promise<unknown>
+    )({
+      collection,
+      id,
+      depth: 0,
+      draft: false,
+      overrideAccess: true,
+      disableErrors: true,
+      select: { _status: true },
+      req,
+    })) as HookDoc | null
+    return isPublished(row)
+  } catch {
+    return false
+  }
+}
+
+/**
  * Payload's drizzle handle, or `null` when the adapter is not Postgres.
  *
  * @param payload - The Payload instance from `req`.
@@ -169,6 +222,16 @@ export const refreshCorvusEmbeddings = (
       // embeddings while the published version was still serving them. The
       // ordering is the fix, so it is load-bearing: do not move this back.
       if (isAutosaveRequest(req)) return doc
+
+      // A draft saved over a still-published document changes nothing a
+      // reader can see, so it must not reach the unpublish branch or the
+      // store's draft rule below, both of which delete the live rows.
+      if (
+        current?._status === 'draft' &&
+        (await isDraftOverPublished(req, collection, docId))
+      ) {
+        return doc
+      }
 
       // Unpublish (published → draft), detected exactly as revalidatePost
       // detects it. Delete first and return: an unpublished doc is not
