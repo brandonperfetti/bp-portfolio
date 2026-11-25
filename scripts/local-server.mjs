@@ -15,7 +15,12 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 
-import { assertPortFree, portFor } from './lib/local-ports.mjs'
+import {
+  assertPortFree,
+  LOCAL_SERVICES,
+  portFor,
+  serverCommand,
+} from './lib/local-ports.mjs'
 
 const require = createRequire(import.meta.url)
 const [service, ...extra] = process.argv.slice(2)
@@ -36,51 +41,20 @@ function binOf(name) {
   )
 }
 
-/** The command line for each service, given its resolved port. */
-const commands = {
-  dev: (port) => [
-    require.resolve('next/dist/bin/next'),
-    'dev',
-    '--turbopack',
-    '--port',
-    String(port),
-  ],
-  // CI serves the production build it just made; a local run uses dev mode,
-  // as `playwright.config.ts` always has (docs/TESTING.md).
-  e2e: (port) =>
-    process.env.CI
-      ? [require.resolve('next/dist/bin/next'), 'start', '--port', String(port)]
-      : [
-          require.resolve('next/dist/bin/next'),
-          'dev',
-          '--turbopack',
-          '--port',
-          String(port),
-        ],
-  storybook: (port) => [
-    binOf('storybook'),
-    'dev',
-    '--port',
-    String(port),
-    '--exact-port',
-  ],
-}
-
 try {
-  if (!Object.hasOwn(commands, service)) {
+  if (!Object.hasOwn(LOCAL_SERVICES, service)) {
     throw new Error(
-      `Usage: node scripts/local-server.mjs <${Object.keys(commands).join('|')}> [args]`,
+      `Usage: node scripts/local-server.mjs <${Object.keys(LOCAL_SERVICES).join('|')}> [args]`,
     )
   }
   const port = portFor(service)
   await assertPortFree(service, port)
-  const child = spawn(
-    process.execPath,
-    [...commands[service](port), ...extra],
-    {
-      stdio: 'inherit',
-    },
-  )
+  const { bin, args } = serverCommand(service, port, {
+    ci: Boolean(process.env.CI),
+  })
+  const child = spawn(process.execPath, [binOf(bin), ...args, ...extra], {
+    stdio: 'inherit',
+  })
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
     process.on(signal, () => child.kill(signal))
   }

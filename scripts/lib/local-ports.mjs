@@ -35,20 +35,23 @@ export const LOCAL_SERVICES = Object.freeze({
  * The port a local service should listen on.
  *
  * @remarks An override (for a parallel worktree) must be a decimal port inside
- * {@link PORT_FAMILY} and not {@link UNSAFE_FAMILY_PORT}; anything else throws
- * with the variable's name, so a typo never lands a server outside the family
- * or on a port the browser will not open. Resolves configuration only: the
+ * {@link PORT_FAMILY}, not {@link UNSAFE_FAMILY_PORT}, and not another
+ * service's default; anything else throws with the variable's name, so a typo
+ * never lands a server outside the family, on a port the browser will not
+ * open, or on the port another service of this checkout expects. Resolves configuration only: the
  * caller must still fail on a collision (see {@link assertPortFree}).
  *
- * @param service - A key of {@link LOCAL_SERVICES}.
- * @param env - The environment to read the override from.
- * @returns The validated port.
+ * @param {string} service - A key of {@link LOCAL_SERVICES}.
+ * @param {Record<string, string | undefined>} [env] - The environment to read
+ * the override from.
+ * @returns {number} The validated port.
  */
 export function portFor(service, env = process.env) {
   if (!Object.hasOwn(LOCAL_SERVICES, service)) {
     throw new Error(`Unknown local port service: ${String(service)}`)
   }
-  const { variable, port: fallback } = LOCAL_SERVICES[service]
+  const { variable, port: fallback } =
+    LOCAL_SERVICES[/** @type {keyof typeof LOCAL_SERVICES} */ (service)]
   const value = env[variable]
   if (value === undefined || value === '') return fallback
 
@@ -65,13 +68,26 @@ export function portFor(service, env = process.env) {
         `refused by browsers); received ${JSON.stringify(value)}`,
     )
   }
+  const owner = Object.entries(LOCAL_SERVICES).find(
+    ([name, assigned]) => name !== service && assigned.port === port,
+  )
+  if (owner) {
+    throw new Error(
+      `${variable}=${port} is the ${owner[0]} server's default; pick a port no ` +
+        `service is assigned (${Object.values(LOCAL_SERVICES)
+          .map((assigned) => assigned.port)
+          .join(', ')} are taken)`,
+    )
+  }
   return port
 }
 
 /**
  * Try to bind one host and port, then release it.
  *
- * @returns `null` when the bind succeeded or the address family is absent on
+ * @param {number} port - The port to bind.
+ * @param {string} host - The address to bind it on.
+ * @returns {Promise<string | null>} `null` when the bind succeeded or the address family is absent on
  * this machine, otherwise the bind error's code.
  */
 function probe(port, host) {
@@ -93,17 +109,19 @@ function probe(port, host) {
  * @remarks Next and Storybook can both move to the next free port on a
  * collision; the launcher passes them an explicit port (`--port`,
  * `--exact-port`) so they cannot, and this check gives the failure a message
- * that names the service and its override. It probes the IPv4 loopback and the
- * IPv6 wildcard separately because a listener on `127.0.0.1` alone does not
- * stop a later bind on `::`, which would leave two servers answering the same
- * port number on different addresses.
+ * that names the service and its override. It probes the IPv4 loopback, the
+ * IPv6 loopback and the IPv6 wildcard separately because a listener on one
+ * specific address does not stop a later bind on the wildcard, which would
+ * leave two servers answering the same port number on different addresses;
+ * `::1` matters most on macOS, where `localhost` resolves to it first.
  *
- * @param service - A key of {@link LOCAL_SERVICES}, for the message.
- * @param port - The port to check.
+ * @param {keyof typeof LOCAL_SERVICES} service - A key of
+ * {@link LOCAL_SERVICES}, for the message.
+ * @param {number} port - The port to check.
  * @throws When the port is taken on either address.
  */
 export async function assertPortFree(service, port) {
-  for (const host of ['127.0.0.1', '::']) {
+  for (const host of ['127.0.0.1', '::1', '::']) {
     const code = await probe(port, host)
     if (code === null) continue
     const { variable } = LOCAL_SERVICES[service]
@@ -113,5 +131,41 @@ export async function assertPortFree(service, port) {
         `free port from ${PORT_FAMILY.min + 1}–${PORT_FAMILY.max} with ${variable}=<port>. ` +
         'This command never moves to a different port on its own.',
     )
+  }
+}
+
+/**
+ * The program and arguments that start a service on a port.
+ *
+ * @remarks Kept here, beside the port table, so the one decision with a
+ * branch (CI serves the production build it just made with `next start`; a
+ * local e2e run uses `next dev`, as `playwright.config.ts` always has) is
+ * tested. The port is always passed explicitly: Next retries other ports only
+ * when the port came from its own default, and Storybook only without
+ * `--exact-port`.
+ *
+ * @param {keyof typeof LOCAL_SERVICES} service - The service to start.
+ * @param {number} port - Its resolved port.
+ * @param {{ ci: boolean }} options - Whether this is a CI run.
+ * @returns {{ bin: 'next' | 'storybook', args: string[] }} The package whose
+ * bin to run, and its arguments.
+ */
+export function serverCommand(service, port, { ci }) {
+  const nextDev = ['dev', '--turbopack', '--port', String(port)]
+  switch (service) {
+    case 'dev':
+      return { bin: 'next', args: nextDev }
+    case 'e2e':
+      return {
+        bin: 'next',
+        args: ci ? ['start', '--port', String(port)] : nextDev,
+      }
+    case 'storybook':
+      return {
+        bin: 'storybook',
+        args: ['dev', '--port', String(port), '--exact-port'],
+      }
+    default:
+      throw new Error(`Unknown local port service: ${String(service)}`)
   }
 }

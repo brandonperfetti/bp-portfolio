@@ -8,6 +8,7 @@ import {
   LOCAL_SERVICES,
   PORT_FAMILY,
   portFor,
+  serverCommand,
   UNSAFE_FAMILY_PORT,
 } from './local-ports.mjs'
 
@@ -50,8 +51,48 @@ describe('portFor', () => {
     },
   )
 
+  it('rejects an override onto another service’s default', () => {
+    expect(() => portFor('dev', { BP_DEV_PORT: '6001' })).toThrow(
+      /^BP_DEV_PORT=6001 is the e2e server's default/,
+    )
+    expect(() => portFor('e2e', { BP_E2E_PORT: '6006' })).toThrow(
+      /is the storybook server's default/,
+    )
+  })
+
+  it('accepts an override equal to its own default', () => {
+    expect(portFor('dev', { BP_DEV_PORT: '6002' })).toBe(6002)
+  })
+
   it('rejects an unknown service', () => {
     expect(() => portFor('admin', {})).toThrow(/Unknown local port service/)
+  })
+})
+
+describe('serverCommand', () => {
+  it('starts dev mode with an explicit port', () => {
+    expect(serverCommand('dev', 6002, { ci: false })).toEqual({
+      bin: 'next',
+      args: ['dev', '--turbopack', '--port', '6002'],
+    })
+  })
+
+  it('serves the production build for e2e under CI, dev mode otherwise', () => {
+    expect(serverCommand('e2e', 6001, { ci: true })).toEqual({
+      bin: 'next',
+      args: ['start', '--port', '6001'],
+    })
+    expect(serverCommand('e2e', 6001, { ci: false })).toEqual({
+      bin: 'next',
+      args: ['dev', '--turbopack', '--port', '6001'],
+    })
+  })
+
+  it('pins Storybook to its port with --exact-port', () => {
+    expect(serverCommand('storybook', 6006, { ci: false })).toEqual({
+      bin: 'storybook',
+      args: ['dev', '--port', '6006', '--exact-port'],
+    })
   })
 })
 
@@ -75,6 +116,17 @@ describe('assertPortFree', () => {
     await expect(assertPortFree('e2e', port)).rejects.toThrow(
       new RegExp(
         `^Port ${port} for BP Portfolio's e2e server is not available on 127\\.0\\.0\\.1 \\(EADDRINUSE\\).*BP_E2E_PORT=<port>.*never moves to a different port`,
+      ),
+    )
+  })
+
+  it('fails clearly when only the IPv6 loopback holds the port', async () => {
+    // A server bound to `localhost` on macOS takes `::1`; the `::` wildcard
+    // probe alone would not see it.
+    const port = await hold('::1')
+    await expect(assertPortFree('dev', port)).rejects.toThrow(
+      new RegExp(
+        `^Port ${port} for BP Portfolio's dev server is not available on ::1 `,
       ),
     )
   })
