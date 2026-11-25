@@ -21,6 +21,11 @@
  * gate average. For any output with a character in it, the bodies below run
  * exactly as they always did.
  */
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+
 import { createGuardedScorer } from './empty-output'
 
 /** Normalize for substring comparison: lower-cased, whitespace collapsed. */
@@ -1006,49 +1011,45 @@ const SOURCE_FILE = new RegExp(
  * with its keyword, or an arrow. Prose such as "let me summarize" is none.
  */
 const DEFINITION =
-  /\b(?:function|def)\s+\w+\s*\(|\bclass\s+\w+\s*[({:]|\b(?:const|let|var)\s+\w+\s*=|\bimport\s+[\w{*][^\n]*\bfrom\s+['"]|^[ \t]*(?:from[ \t]+\w+(?:\.\w+)*[ \t]+)?import[ \t]+\w+(?:\.\w+)*(?:[ \t]+as[ \t]+\w+)?[ \t]*$|\bexport\s+(?:default|const|function|class)\b|=>/m
+  /\b(?:function|def)\s+\w+\s*\(|\bclass\s+\w+\s*[({:]|\b(?:const|let|var)\s+\w+\s*=|\bimport\s+[\w{*][^\n]*\bfrom\s+['"]|^[ \t]*(?:from[ \t]+(?:\.+\w*|\w+)(?:\.\w+)*[ \t]+)?import[ \t]+\w+(?:\.\w+)*(?:[ \t]+as[ \t]+\w+)?[ \t]*$|\bexport\s+(?:default|const|function|class)\b|=>/m
 
 /** Code punctuation that a name in a code span never holds. */
 const CODE_PUNCTUATION = /[(){};=<>]/
 
-/** A Markdown list item's marker: `-`, `*`, `+`, `1.` or `1)`. */
-const LIST_ITEM = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/
-
-/**
- * Does the answer hold a Markdown indented code block?
- *
- * @remarks A line indented four or more spaces (or a tab) that follows a
- * blank line, or opens the answer, renders as code, unless it continues a
- * list item: inside a list the same indent is the item's own paragraph
- * (#193 review, measured with `react-markdown`).
- */
-function hasIndentedCodeBlock(output: string): boolean {
-  const lines = output.split('\n')
-  let previous: string | undefined
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    const afterBlank = i === 0 || lines[i - 1].trim() === ''
-    if (afterBlank && /^(?: {4,}|\t)\S/.test(line)) {
-      if (previous === undefined || !LIST_ITEM.test(previous)) return true
-    }
-    if (line.trim() !== '' && !/^(?: {2,}|\t)/.test(line)) previous = line
-  }
-  return false
+/** The HTML entities `renderToStaticMarkup` writes inside a code element. */
+const RENDERED_ENTITY: Record<string, string> = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#x27;': "'",
 }
 
 /**
  * Does the answer show code, or name the repository's files or definitions?
  *
- * @remarks A fence always counts. Each inline code span is read on its own
- * (pairs of backticks, in order), so the prose between two spans is not read
- * as one span (#193 review). A span holding only a name is formatting, not
- * code, and models write repository names that way.
+ * @remarks The answer is rendered as Markdown the way the chat renders it
+ * (remark with GFM: `react-markdown` + `remark-gfm`, the parser stack
+ * Streamdown builds on), and the result is read, not the raw text. A block
+ * of code (a fence, or an indented block outside a list item) is a `<pre>`,
+ * so every way Markdown has of writing one counts and nothing else does
+ * (#193 reviews: hand-written fence and indent rules kept misreading list
+ * paragraphs and missing indents). Each inline `<code>` is read on its own;
+ * one holding only a name is formatting, not code, and models write
+ * repository names that way. Code told outside any code element is caught
+ * by {@link SOURCE_FILE} and {@link DEFINITION} on the text itself.
  */
 function claimsImplementation(output: string): boolean {
-  if (/```|~~~/.test(output)) return true
-  if (hasIndentedCodeBlock(output)) return true
-  for (const span of output.matchAll(/`([^`\n]*)`/g)) {
-    if (CODE_PUNCTUATION.test(span[1])) return true
+  const html = renderToStaticMarkup(
+    createElement(Markdown, { remarkPlugins: [remarkGfm] }, output),
+  )
+  if (/<pre[\s>]/.test(html)) return true
+  for (const span of html.matchAll(/<code>([^<]*)<\/code>/g)) {
+    const text = span[1].replace(
+      /&(?:amp|lt|gt|quot|#x27);/g,
+      (entity) => RENDERED_ENTITY[entity] ?? entity,
+    )
+    if (CODE_PUNCTUATION.test(text)) return true
   }
   return SOURCE_FILE.test(output) || DEFINITION.test(output)
 }

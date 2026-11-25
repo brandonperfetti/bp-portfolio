@@ -36,7 +36,7 @@ const entry: PrivateRepoSummary = {
  * row holds), and stored rows per doc id.
  */
 function createFakeDb(
-  indexed: Array<number | { doc_id: number; title: string }> = [],
+  indexed: Array<number | { doc_id: number; title: string | null }> = [],
   stored: Record<number, Array<Record<string, unknown>>> = {},
 ) {
   const statements: string[] = []
