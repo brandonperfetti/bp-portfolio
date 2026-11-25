@@ -103,11 +103,6 @@ async function run(): Promise<void> {
   const payload = await getPayload({ config })
   const db = payload.db.drizzle as unknown as CorvusEmbeddingsDb
 
-  const settings = resolveRepoSyncConfig()
-  if (!settings.ok) {
-    throw new Error(`[corvus:github] ${settings.reason}`)
-  }
-
   const totals: Totals = {
     listed: 0,
     indexable: 0,
@@ -116,6 +111,37 @@ async function run(): Promise<void> {
     metadataUpdated: 0,
     deleted: 0,
     failed: 0,
+  }
+
+  // The private-summary pass runs FIRST and needs no GitHub access (#193
+  // review): a removal from the allowlist must not wait on a GitHub token,
+  // a working listing or the public pass. Its failure is counted, and the
+  // run still fails at the end.
+  try {
+    const summaries = await syncPrivateRepoSummaries({
+      db,
+      summaries: PRIVATE_REPO_SUMMARIES,
+      dryRun,
+    })
+    payload.logger.info(
+      `[corvus:private] ${dryRun ? 'dry run: would sync' : 'synced'} ` +
+        `listed=${summaries.listed} written=${summaries.written} ` +
+        `skipped=${summaries.skipped} metadataUpdated=${summaries.metadataUpdated} ` +
+        `${dryRun ? 'wouldDelete' : 'deleted'}=${summaries.deleted}`,
+    )
+  } catch (error) {
+    totals.failed += 1
+    payload.logger.error(
+      `[corvus:private] summary pass failed: ${String(error)}`,
+    )
+  }
+
+  const settings = resolveRepoSyncConfig()
+  if (!settings.ok) {
+    throw new Error(
+      `[corvus:github] ${settings.reason}` +
+        (totals.failed > 0 ? ' (the private-summary pass also failed)' : ''),
+    )
   }
 
   payload.logger.info(
@@ -215,25 +241,6 @@ async function run(): Promise<void> {
         )
       }
     }
-  }
-
-  try {
-    const summaries = await syncPrivateRepoSummaries({
-      db,
-      summaries: PRIVATE_REPO_SUMMARIES,
-      dryRun,
-    })
-    payload.logger.info(
-      `[corvus:private] ${dryRun ? 'dry run: would sync' : 'synced'} ` +
-        `listed=${summaries.listed} written=${summaries.written} ` +
-        `skipped=${summaries.skipped} metadataUpdated=${summaries.metadataUpdated} ` +
-        `${dryRun ? 'wouldDelete' : 'deleted'}=${summaries.deleted}`,
-    )
-  } catch (error) {
-    totals.failed += 1
-    payload.logger.error(
-      `[corvus:private] summary pass failed: ${String(error)}`,
-    )
   }
 
   payload.logger.info(

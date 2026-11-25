@@ -932,6 +932,7 @@ function githubRepositories(output: string): string[] {
     const wrap = /^(_+)(.+)\1$/.exec(piece)
     const token = (wrap && !wrap[2].endsWith('_') ? wrap[2] : piece)
       .replace(/^git@github\.com:/i, 'https://github.com/')
+      .replace(/^\/\/(?=(?:www\.)?github\.com)/i, 'https://')
       .replace(/^(?:www\.)?github\.com/i, (host) => `https://${host}`)
     if (!/^https?:\/\//i.test(token)) continue
     let url: URL
@@ -1013,6 +1014,14 @@ const SOURCE_FILE = new RegExp(
 const DEFINITION =
   /\b(?:function|def)\s+\w+\s*\(|\bclass\s+\w+\s*[({:]|\b(?:const|let|var)\s+\w+\s*=|\bimport\s+[\w{*][^\n]*\bfrom\s+['"]|^[ \t]*(?:from[ \t]+(?:\.+\w*|\w+)(?:\.\w+)*[ \t]+)?import[ \t]+\w+(?:\.\w+)*(?:[ \t]+as[ \t]+\w+)?[ \t]*$|\bexport\s+(?:default|const|function|class)\b|=>/m
 
+/**
+ * A whole code span that is a source file name (`index.ts`, `App.tsx`)
+ * (#193 review). A capitalised `Name.js` is left out: that is how
+ * technologies are written (`Node.js`, `Next.js`), not files.
+ */
+const CODE_SPAN_FILE = new RegExp(`^[\\w./-]+\\.${CODE_EXTENSION}$`, 'i')
+const TECHNOLOGY_NAME = /^[A-Z][\w]*\.js$/
+
 /** Code punctuation that a name in a code span never holds. */
 const CODE_PUNCTUATION = /[(){};=<>]/
 
@@ -1055,6 +1064,7 @@ function claimsImplementation(output: string): boolean {
       (entity) => RENDERED_ENTITY[entity] ?? entity,
     )
     if (CODE_PUNCTUATION.test(text)) return true
+    if (CODE_SPAN_FILE.test(text) && !TECHNOLOGY_NAME.test(text)) return true
   }
   return SOURCE_FILE.test(output) || DEFINITION.test(output)
 }

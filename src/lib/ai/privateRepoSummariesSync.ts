@@ -89,6 +89,17 @@ async function readIndexedSummaries(
  * two entries that derive the same `doc_id`: they would share one row, and
  * the second would silently overwrite the first.
  *
+ * A dry run reads the stored rows and counts each entry as the apply would
+ * (written, skipped or metadata-updated), with no provider call and no
+ * write.
+ *
+ * Two runs at once are not serialized: a run that has embedded an entry can
+ * write it back after a second run, with an allowlist that omits it, has
+ * swept it. That needs two runs from different allowlists at the same time
+ * (the scheduled run and a local apply from another commit), and the next
+ * run removes the row. `docs/AI.md` § Private repositories says not to
+ * apply locally while a scheduled run is in flight.
+ *
  * @param args - Database handle, the allowlist, and `dryRun` to report
  * without writing.
  * @returns What the pass did, or would have done on a dry run.
@@ -137,19 +148,24 @@ export async function syncPrivateRepoSummaries(args: {
   ]
   if (dryRun) {
     totals.deleted = stale.length
-    return totals
+  } else {
+    for (const docId of stale) {
+      await deleteDocumentEmbeddings(db, collection, docId)
+      totals.deleted += 1
+    }
   }
 
-  for (const docId of stale) {
-    await deleteDocumentEmbeddings(db, collection, docId)
-    totals.deleted += 1
-  }
-
+  // A dry run classifies every entry the way a real run would, from reads
+  // alone, so its counts line names what the apply will write (#193 review).
   for (const chunk of chunks) {
     const stored = await readStoredChunks(db, collection, chunk.docId)
     if (isContentUnchanged([chunk], stored)) {
       if (!hasMetadataDrift([chunk], stored)) {
         totals.skipped += 1
+        continue
+      }
+      if (dryRun) {
+        totals.metadataUpdated += 1
         continue
       }
       await updateDocumentMetadata(
@@ -161,6 +177,10 @@ export async function syncPrivateRepoSummaries(args: {
         chunk.sourceUrl,
       )
       totals.metadataUpdated += 1
+      continue
+    }
+    if (dryRun) {
+      totals.written += 1
       continue
     }
     const [embedding] = await embedChunks([chunk.content], {

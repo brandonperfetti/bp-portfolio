@@ -150,7 +150,9 @@ describe('syncPrivateRepoSummaries', () => {
       dryRun: true,
     })
 
-    expect(totals).toMatchObject({ listed: 1, deleted: 1, written: 0 })
+    // The new entry is counted as a planned write, so the dry-run line names
+    // what the apply will do (#193 review).
+    expect(totals).toMatchObject({ listed: 1, deleted: 1, written: 1 })
     expect(embedChunksMock).not.toHaveBeenCalled()
     expect(
       db.statements.some((text) => /INSERT|DELETE|UPDATE/.test(text)),

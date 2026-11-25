@@ -852,8 +852,12 @@ passes, because no syntax marks it, and the negation word is not tied to the
 code ("you cannot lose requests" counts); the prompt rule is the guard there, and
 tests pin both limits so they stay stated. **Ops:** once Brandon adds the
 first entry, the sync's runbook applies unchanged. Run it with `--dry-run`
-first, check that the `[corvus:private]` counts line names the entries
-expected, then let the scheduled run (or a dispatch) apply it.
+first, check that the `[corvus:private]` counts line names the writes and
+removals expected, then let the scheduled run (or a dispatch) apply it. The
+summary pass runs before the public GitHub pass and needs no GitHub token, so
+a removal still applies when the listing fails. Two runs at once are not
+serialized, so don't apply from a terminal while a scheduled run is in flight:
+a removal can be written back by the other run, and stays until the next run.
 
 #### Three subjects: you, this site, Brandon (#147, #167)
 
