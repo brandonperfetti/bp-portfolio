@@ -86,6 +86,29 @@ describe('instrumentation-client installs the history-write guard app-wide (#268
     )
   })
 
+  it('logs a refusal on a second route with that route, not only the first (#306)', async () => {
+    await import('@/instrumentation-client')
+
+    refuse = webkitThrottle()
+    window.history.replaceState({}, '', '/articles?q=a')
+    await flushTelemetry()
+    // The same session moves on and crosses the throttle on another route.
+    nativePush.call(window.history, {}, '', '/work')
+    window.history.replaceState({}, '', '/work?q=a')
+    await flushTelemetry()
+
+    expect(warn.mock.calls).toEqual([
+      [
+        'history.write_dropped',
+        { method: 'replaceState', outcome: 'retrying', path: '/articles' },
+      ],
+      [
+        'history.write_dropped',
+        { method: 'replaceState', outcome: 'retrying', path: '/work' },
+      ],
+    ])
+  })
+
   it('still throws a SecurityError that is not the throttle', async () => {
     await import('@/instrumentation-client')
 

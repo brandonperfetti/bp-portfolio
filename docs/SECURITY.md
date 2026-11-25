@@ -456,7 +456,7 @@ stay there.
     `path` is `window.location.pathname` (no query string, no user data) and
     `outcome` is `retrying`, `gave_up` or `retry_failed` (a refused replace
     is retried since #272, so `dropped` is no longer logged), once
-    per method-and-outcome pair per page load.
+    per method, outcome and route per page load (#306).
   - The guard (`src/lib/history/historyWriteGuard.ts`) contains only the
     browser's history-throttle `SecurityError` (matched on name and message,
     so the cross-origin `SecurityError` is not mistaken for it)
