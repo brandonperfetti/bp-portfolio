@@ -171,10 +171,10 @@ function tint(
   return { colour, alpha }
 }
 
-/** sRGB transfer: linear -> gamma-encoded, per IEC 61966-2-1. */
+/** sRGB transfer: linear to gamma-encoded, per IEC 61966-2-1. */
 const encode = (v: number) =>
   v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055
-/** sRGB transfer: gamma-encoded -> linear. */
+/** sRGB transfer: gamma-encoded to linear. */
 const decode = (v: number) =>
   v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
 

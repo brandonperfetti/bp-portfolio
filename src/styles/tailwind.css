@@ -148,10 +148,11 @@
    * `hover:text-link-accent-hover`. Before this token the six links that
    * hovered (`ArticlesArchiveView`, `VideoEmbed`, `ArticlesExplorer`'s
    * "View the ⟨X⟩ section" link, `CMSLink`, `CookieBanner`, `CookieDialog`)
-   * carried the literal `hover:text-teal-600 dark:hover:text-teal-300`, whose light half
-   * LIGHTENED teal-700 -> teal-600 — and teal-600 on white is 3.66:1, so the
-   * hovered link fell under 1.4.3. Brandon decided on 2026-11-25 that link
-   * hover DARKENS in light mode, the same doctrine as --primary-hover, so:
+   * carried the literal `hover:text-teal-600 dark:hover:text-teal-300`,
+   * whose light half LIGHTENED teal-700 -> teal-600 — and teal-600 on white
+   * is 3.66:1, so the hovered link fell under 1.4.3. Brandon decided on
+   * 2026-11-25 that link hover DARKENS in light mode, the same doctrine as
+   * --primary-hover, so:
    *   teal-800 on white            7.53:1  >= 4.5  (light, was 3.66:1)
    *   teal-300 on zinc-950         13.52:1 >= 4.5  (dark, unchanged)
    *   teal-300 on zinc-900         12.05:1 >= 4.5  (dark card/popover)
