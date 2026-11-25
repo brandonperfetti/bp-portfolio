@@ -609,9 +609,11 @@ covers" for §9.
     different accent in the final prompt (posts 55 and 6); their notes say
     so.
 
-- **A new article's cover:** insert its entry in descending `publishedAt`
-  order (at the top only when it is the newest post), with the same
-  fields, in the same change that attaches it.
+- **A new article's cover:** record an attached draft in `draftCovers`,
+  outside published rotation, in the same change that attaches it. On
+  publication, move it to `covers` using its actual `publishedAt`, in
+  descending date order (at the top only when it is the newest post).
+  Complete or verify unavailable metadata before publication.
 - **A new cover on an existing post:** update that post's entry in place,
   so the order stays by `publishedAt`. Move the replaced cover's series,
   public_id and media id into a `previous` list on the entry. That list is
