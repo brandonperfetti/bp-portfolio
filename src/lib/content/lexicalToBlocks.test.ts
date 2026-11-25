@@ -79,8 +79,15 @@ describe('lexicalToBlocks — internal links (#359)', () => {
         ],
       },
     ])
-  const hrefOf = (fields: Record<string, unknown>) =>
-    lexicalToBlocks(paragraphWithLink(fields))[0]?.richText?.[0]?.href
+  const spanOf = (fields: Record<string, unknown>) =>
+    lexicalToBlocks(paragraphWithLink(fields))[0]?.richText?.[0]
+  const hrefOf = (fields: Record<string, unknown>) => spanOf(fields)?.href
+  /** The link's text survives as plain text, with no destination. */
+  const expectTextOnly = (fields: Record<string, unknown>) => {
+    const span = spanOf(fields)
+    expect(span).toMatchObject({ plainText: 'here' })
+    expect(span?.href).toBeUndefined()
+  }
 
   it('links a populated page to its public path', () => {
     expect(
@@ -112,23 +119,22 @@ describe('lexicalToBlocks — internal links (#359)', () => {
   })
 
   it('renders no link for a target the reader could not see (a bare id)', () => {
-    expect(
-      hrefOf({ linkType: 'internal', doc: { relationTo: 'pages', value: 2 } }),
-    ).toBeUndefined()
+    expectTextOnly({
+      linkType: 'internal',
+      doc: { relationTo: 'pages', value: 2 },
+    })
   })
 
   it('renders no link for a populated target that is not published', () => {
     // A trusted read (`getGatedPostContent`, `overrideAccess: true`) populates
     // drafts too; their path serves nothing yet.
-    expect(
-      hrefOf({
-        linkType: 'internal',
-        doc: {
-          relationTo: 'pages',
-          value: { _status: 'draft', id: 2, path: 'lab', slug: 'lab' },
-        },
-      }),
-    ).toBeUndefined()
+    expectTextOnly({
+      linkType: 'internal',
+      doc: {
+        relationTo: 'pages',
+        value: { _status: 'draft', id: 2, path: 'lab', slug: 'lab' },
+      },
+    })
   })
 
   it('keeps a custom link on its url', () => {
