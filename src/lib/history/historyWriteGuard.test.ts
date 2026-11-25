@@ -68,7 +68,7 @@ describe('isHistoryThrottleError (#249)', () => {
 })
 
 describe('installHistoryWriteGuard (#249)', () => {
-  it('contains a throttled write instead of throwing, and reports it once per method and outcome', () => {
+  it('contains a throttled write instead of throwing, and reports it once per method, outcome and route', () => {
     const { history, calls, throwNext } = fakeHistory()
     const onDrop = vi.fn()
     installHistoryWriteGuard(history, onDrop)
@@ -388,6 +388,28 @@ describe('installHistoryWriteGuard · refused pushes are retried (CR round 6)', 
       ['pushState', 'retry_failed'],
     ])
     expect(writes).toEqual([])
+  })
+
+  it('reports the same method and outcome again on a different route, once per route (#306)', () => {
+    const { history, throwNext } = fakeHistory()
+    const onRefusal = vi.fn()
+    let route = '/articles'
+    installHistoryWriteGuard(history, onRefusal, new EventTarget(), () => route)
+
+    throwNext(webkitThrottle())
+    history.replaceState({}, '', '/articles?q=a')
+    throwNext(webkitThrottle())
+    history.replaceState({}, '', '/articles?q=b') // same route: not again
+    route = '/work'
+    throwNext(webkitThrottle())
+    history.replaceState({}, '', '/work?q=a') // a new route: reported again
+    throwNext(webkitThrottle())
+    history.replaceState({}, '', '/work?q=b')
+
+    expect(onRefusal.mock.calls).toEqual([
+      ['replaceState', 'retrying'],
+      ['replaceState', 'retrying'],
+    ])
   })
 
   it('a Back/Forward traversal cancels the pending push, so the restore write stays a replace', () => {

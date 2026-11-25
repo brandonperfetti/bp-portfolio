@@ -60,8 +60,15 @@ const RETRY_LIMIT = 15
  *
  * @param history - The `History` to guard (`window.history` in the app).
  * @param onRefusal - Called with the method that was called and what became of
- *   the write, once per method-and-outcome pair per installation, so a burst is
- *   recorded without a report per call. It is not called for every refusal.
+ *   the write, once per method, outcome and route per installation, so a burst
+ *   is recorded without a report per call. It is not called for every refusal.
+ * @param target - Where the `popstate` listener goes (`window` in the app).
+ * @param currentRoute - Reads the route a refusal is deduplicated on, at the
+ *   moment of the refusal. Defaults to `window.location.pathname`, the path
+ *   `reportHistoryWriteRefusal` logs (read on the same synchronous call), so
+ *   the key and the logged route agree. Since #268 the guard lives for the whole page load, so
+ *   a key without the route would log only the first route a reader hit the
+ *   throttle on (#306).
  * @returns An uninstall function. It cancels a pending retry and restores the
  *   original methods when the guard is still the outermost wrapper; when
  *   something wrapped it since (Next captures the current method as its
@@ -117,6 +124,7 @@ export function installHistoryWriteGuard(
   history: History,
   onRefusal: (method: HistoryWriteMethod, outcome: HistoryWriteOutcome) => void,
   target: Pick<Window, 'addEventListener' | 'removeEventListener'> = window,
+  currentRoute: () => string = () => window.location.pathname,
 ): () => void {
   const previous = {
     pushState: history.pushState,
@@ -132,7 +140,8 @@ export function installHistoryWriteGuard(
   let retries = 0
 
   const report = (method: HistoryWriteMethod, outcome: HistoryWriteOutcome) => {
-    const key = `${method}:${outcome}`
+    // Bounded by the routes visited in one page load.
+    const key = `${method}:${outcome}:${currentRoute()}`
     if (reported.has(key)) return
     reported.add(key)
     onRefusal(method, outcome)
