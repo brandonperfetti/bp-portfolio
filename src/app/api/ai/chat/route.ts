@@ -5,6 +5,7 @@ import { corvusProviderOptions, getCorvusModel } from '@/lib/ai/corvus'
 import { CHAT_UNAVAILABLE_CODE } from '@/lib/ai/corvusChatFetch'
 import { createEmptyReplyFailsafe } from '@/lib/ai/emptyReplyFailsafe'
 import { buildGroundedSystem } from '@/lib/ai/groundedSystem'
+import { pageContextSchema, resolveHostDocument } from '@/lib/ai/pageContext'
 import {
   extractRetrievalQuery,
   retrieveCorvusContext,
@@ -32,8 +33,17 @@ import {
 
 export const maxDuration = 60
 
+/**
+ * The request body.
+ *
+ * @remarks `pageContext` (#217 phase 2) is the one addition since `{ messages }`,
+ * and it is a reference, not text: `{ collection, id }`, strict, so the page's
+ * title and path are read from the CMS and never taken from the client. See
+ * `pageContextSchema`.
+ */
 const bodySchema = z.object({
   messages: z.array(z.unknown()).min(1).max(60),
+  pageContext: pageContextSchema.optional(),
 })
 
 /**
@@ -267,10 +277,21 @@ export async function POST(req: Request) {
   // limiter keys on) is the gating input, because that is the exact argument
   // `canAccess` takes: a signed-in visitor may be grounded on gated bodies,
   // an anonymous one may not, and the filter is enforced in SQL.
-  const snippets = await retrieveCorvusContext({
-    query: extractRetrievalQuery(windowed),
-    isAuthenticated: viewer.isAuthenticated,
-  })
+  //
+  // The host page (#217 phase 2) resolves alongside it, under the same
+  // contract: `resolveHostDocument` never rejects, and every failure — no
+  // reference, an unknown or draft id, a gated post this viewer may not read,
+  // a slow lookup — is `null`, which leaves the prompt exactly as a `/corvus`
+  // turn builds it. The same `viewer.isAuthenticated` decides the gated case.
+  const [snippets, hostDocument] = await Promise.all([
+    retrieveCorvusContext({
+      query: extractRetrievalQuery(windowed),
+      isAuthenticated: viewer.isAuthenticated,
+    }),
+    resolveHostDocument(parsedBody.pageContext, {
+      isAuthenticated: viewer.isAuthenticated,
+    }),
+  ])
 
   // Empty-reply fail-safe (#138), applied here and nowhere else. On the
   // Responses API the model's hidden reasoning is billed against the same
@@ -283,7 +304,7 @@ export async function POST(req: Request) {
   // changes no budget and touches no other turn.
   const result = streamText({
     model: getCorvusModel(),
-    system: buildGroundedSystem(snippets),
+    system: buildGroundedSystem(snippets, hostDocument),
     messages: await convertToModelMessages(windowed),
     maxOutputTokens: limits.maxCompletionTokens,
     // Reasoning-effort cap (#138 option 2, Brandon 2026-09-11). The other

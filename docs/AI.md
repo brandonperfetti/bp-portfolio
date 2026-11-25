@@ -16,10 +16,40 @@ citation is a real same-tab anchor (see "Links in a reply" below).
 - Provider/model are env-selected: `AI_CHAT_PROVIDER` (`openai|anthropic`) +
   `AI_CHAT_MODEL`; `AI_MAX_COMPLETION_TOKENS` caps output.
 
+## The host page (#217 phase 2, 2026-11-25)
+
+A `corvusChat` block knows which document it sits on (`hostDoc`, the
+`{ collection, id }` pair `RenderBlocks` already threads to its blocks) and
+sends it with each turn as `pageContext`. The prompt then says which page the
+visitor is on, so "this page" and "this article" have a referent.
+
+- **A reference, never text.** `pageContextSchema` (`src/lib/ai/pageContext.ts`)
+  is strict: `collection` is `pages` or `posts`, `id` a positive integer, and
+  any other key is a 400. The title and path are read back by
+  `resolveHostDocument` from the published view (`draft: false`,
+  `_status = published`, `overrideAccess: false`); a gated post is named only
+  to a viewer `canAccess` admits. The title is reduced to one quoted line of
+  at most 160 characters before it enters the prompt.
+- **Never a reason to fail.** Unknown id, draft, gated, no public path, a
+  database error, or a lookup slower than one second: every one is `null`, and
+  the turn runs as a `/corvus` turn does. It resolves alongside retrieval
+  (`Promise.all`), so it adds no serial round-trip.
+- **Gated on presence.** `buildGroundedSystem(snippets, host)` adds
+  `hostPageContextLine` after the positioning paragraph (or after the bare
+  persona prompt on an ungrounded turn) only when a host resolved. `/corvus`
+  sends no `pageContext`, so its prompt is byte-identical to the one every
+  keyed eval baseline measured; `groundedSystem.test.ts` pins that the line is
+  the only difference a host makes.
+- **It names the page and nothing more.** The line says the page's text is not
+  in it, so Corvus answers about the page's content from retrieved passages or
+  says it does not have them; it may link the page itself. Biasing retrieval
+  toward the host page (spike #192's option b) is deliberately not done.
+
 ## What the provider is sent, and asked to keep (#366)
 
 **Sent.** Each chat turn sends the provider the server-built system prompt
-(with any retrieval snippets), the visitor's conversation — the most recent
+(with any retrieval snippets, and the host page's title and path when the chat
+is a page-builder block), the visitor's conversation — the most recent
 `maxMessages`, earlier replies included — and the reasoning-effort cap. The
 retrieval query also goes to OpenAI embeddings (`src/lib/ai/embeddings.ts`),
 whatever the chat provider. The site keeps no copy: the chat route writes

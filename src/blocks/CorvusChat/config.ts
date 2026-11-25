@@ -9,10 +9,11 @@ import {
  * Corvus, as a block an editor can drop onto any page — especially a sticky
  * sidebar column (#217 phase 1).
  *
- * @remarks Phase 1 renders the chat and nothing else: the block has **no
- * page-context awareness**, and `/api/ai/chat`'s body schema stays
- * `{ messages }` (phase 2 is what widens it, server-side). Nothing an editor
- * types here reaches the model as instructions — see `starterPrompt` below.
+ * @remarks Phase 1 renders the chat; phase 2 gives it its page, with no field
+ * here: the component sends the host document as an id-only reference and the
+ * server names the page from the CMS (`src/lib/ai/pageContext.ts`). Nothing an
+ * editor types here reaches the model as instructions — see `starterPrompt`
+ * below.
  *
  * `variant` rather than a height field on purpose: an editor-entered height is
  * a number nobody can keep consistent across pages, and the three that exist

@@ -3,7 +3,11 @@ import {
   CORVUS_CHAT_BLOCK_SURFACE_CLASS,
   corvusChatVariantHeightClass,
 } from '@/blocks/CorvusChat/variants'
-import { type BlockHostContext, blockRhythmClass } from '@/blocks/hostContext'
+import {
+  type BlockHostContext,
+  type BlockHostDocument,
+  blockRhythmClass,
+} from '@/blocks/hostContext'
 import CorvusChat from '@/components/CorvusChat'
 import { cn } from '@/lib/utils'
 import type { CorvusChatBlock } from '@/payload-types'
@@ -12,7 +16,10 @@ import type { CorvusChatBlock } from '@/payload-types'
  * Corvus chat section (CMS page builder) — #217 phase 1.
  *
  * @param props - The stored block (`variant` / `heading` / `starterPrompt`),
- * plus `hosted`: where the block is rendering (see {@link BlockHostContext}).
+ * plus `hosted`: where the block is rendering (see {@link BlockHostContext}),
+ * and `hostDoc`: the document it was composed on (see
+ * {@link BlockHostDocument}), which phase 2 hands the chat as its page
+ * context.
  *
  * @remarks Three decisions live here, and each is argued in `variants.ts`
  * rather than in this file so the reasoning sits next to the value it
@@ -52,7 +59,11 @@ export function CorvusChatBlockComponent({
   heading,
   starterPrompt,
   hosted,
-}: Partial<CorvusChatBlock> & { hosted?: BlockHostContext }) {
+  hostDoc,
+}: Partial<CorvusChatBlock> & {
+  hosted?: BlockHostContext
+  hostDoc?: BlockHostDocument
+}) {
   const headingText = heading?.trim() || undefined
   const starter = starterPrompt?.trim() || undefined
 
@@ -71,6 +82,7 @@ export function CorvusChatBlockComponent({
         headingLevel={CORVUS_CHAT_BLOCK_HEADING_LEVEL}
         starterPrompt={starter}
         globalShortcut={false}
+        pageContext={hostDoc}
       />
     </section>
   )

@@ -10,6 +10,7 @@ import {
   SNIPPET_SOURCE_LABEL,
   TECH_PROFICIENCY_RANKING_RULE,
   buildGroundedSystem,
+  hostPageContextLine,
 } from '@/lib/ai/groundedSystem'
 import type { CorvusSnippet } from '@/lib/ai/retrieval'
 
@@ -603,5 +604,65 @@ describe('three-way subject disambiguation (#167)', () => {
     expect(buildGroundedSystem([aboutCorvus])).toContain(
       `${SNIPPET_SOURCE_LABEL} /corvus`,
     )
+  })
+})
+
+/**
+ * The host page (#217 phase 2). The AC this pins is the no-context path:
+ * every `/corvus` turn sends no page context, and its prompt must be
+ * byte-identical to the one it got before the parameter existed — so the
+ * line is asserted to be the ONLY difference a host makes.
+ */
+describe('buildGroundedSystem — the host page (#217 phase 2)', () => {
+  const host = { title: 'Brytecore', path: '/work/brytecore' }
+  const line = hostPageContextLine(host)
+
+  it('leaves the no-context path byte-identical, grounded or not', () => {
+    const grounded = [snippet()]
+    expect(buildGroundedSystem([], undefined)).toBe(CORVUS_SYSTEM_PROMPT)
+    expect(buildGroundedSystem([], null)).toBe(CORVUS_SYSTEM_PROMPT)
+    expect(buildGroundedSystem(grounded, undefined)).toBe(
+      buildGroundedSystem(grounded),
+    )
+    expect(buildGroundedSystem(grounded, null)).toBe(
+      buildGroundedSystem(grounded),
+    )
+  })
+
+  it('pins the grounded no-context layout: persona, positioning, header', () => {
+    expect(buildGroundedSystem([snippet()])).toContain(
+      `${CORVUS_SYSTEM_PROMPT}\n\n${CORVUS_POSITIONING}\n\n${GROUNDED_CONTEXT_HEADER}\n`,
+    )
+  })
+
+  it('adds the line, and only the line, when a host resolved', () => {
+    const grounded = [snippet()]
+    const withHost = buildGroundedSystem(grounded, host)
+    expect(withHost).toContain(line)
+    expect(withHost.replace(`\n${line}\n`, '')).toBe(
+      buildGroundedSystem(grounded),
+    )
+  })
+
+  it('places it after the positioning and before the site context', () => {
+    const withHost = buildGroundedSystem([snippet()], host)
+    expect(withHost.indexOf(CORVUS_POSITIONING)).toBeLessThan(
+      withHost.indexOf(line),
+    )
+    expect(withHost.indexOf(line)).toBeLessThan(
+      withHost.indexOf(GROUNDED_CONTEXT_HEADER),
+    )
+  })
+
+  it('names the page on an ungrounded turn too', () => {
+    expect(buildGroundedSystem([], host)).toBe(
+      `${CORVUS_SYSTEM_PROMPT}\n\n${line}`,
+    )
+  })
+
+  it('names the page, allows linking it, and claims nothing about its text', () => {
+    expect(line).toContain('"Brytecore" at /work/brytecore')
+    expect(line).toContain('[Brytecore](/work/brytecore)')
+    expect(line).toMatch(/does not say what the page contains/)
   })
 })

@@ -88,8 +88,9 @@ export type RenderableBlock = ColumnContentBlock | LayoutBlock
  * that cannot name its host — a Storybook story, a test rendering a bare block
  * list — keeps working, and a block that reads it treats "no host" the way it
  * already treats "no selection". Handed only to the blocks that need it:
- * `container`, because it is the sole route to a nested column, and
- * `postRollup`, the one leaf that asks (#177).
+ * `container`, because it is the sole route to a nested column, and the two
+ * leaves that ask — `postRollup` (#177) and `corvusChat`, which sends it as
+ * the chat's page context (#217 phase 2).
  */
 export function RenderBlocks({
   blocks,
@@ -138,6 +139,7 @@ export function RenderBlocks({
                   key={key}
                   {...block}
                   hosted={hosted}
+                  hostDoc={hostDoc}
                 />
               )
             case 'featureCardGrid':
