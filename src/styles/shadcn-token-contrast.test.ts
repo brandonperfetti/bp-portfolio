@@ -123,6 +123,17 @@ function contrast(a: Oklch, b: Oklch): number {
  * @returns The declared colour.
  */
 function token(selector: string, name: string): Oklch {
+  return parseOklch(declaration(selector, name))
+}
+
+/**
+ * The raw `oklch(...)` text of one custom property in a named rule block.
+ *
+ * @remarks Shared by {@link token} and {@link tint}; split out so the one
+ * alpha-bearing declaration in the block is read by the same anchored lookup
+ * as every opaque one, rather than by a second regex that could drift.
+ */
+function declaration(selector: string, name: string): string {
   const start = cssCode.indexOf(`\n${selector} {`)
   expect(start, `${selector} block must exist in tailwind.css`).toBeGreaterThan(
     -1,
@@ -133,7 +144,57 @@ function token(selector: string, name: string): Oklch {
     found,
     `${selector} must declare --${name} as an oklch() colour`,
   ).toBeDefined()
-  return parseOklch(found as string)
+  return found as string
+}
+
+/**
+ * Read a colour that may carry an alpha: `oklch(L C H)` or `oklch(L C H / A)`.
+ *
+ * @remarks Only the badge tint uses this (#230): its dark value is teal-900 at
+ * 40%, exactly what the `bg-teal-900/40` it replaced resolved to, so the tint
+ * cannot be measured until it is composited over what it sits on. An opaque
+ * declaration reads as alpha 1.
+ *
+ * @returns The opaque colour and its alpha (0..1).
+ */
+function tint(
+  selector: string,
+  name: string,
+): { colour: Oklch; alpha: number } {
+  const raw = declaration(selector, name)
+  const [colourPart, alphaPart] = raw.replace(/^oklch\(|\)$/g, '').split('/')
+  const colour = parseOklch(`oklch(${colourPart.trim()})`)
+  if (alphaPart === undefined) return { colour, alpha: 1 }
+  const a = alphaPart.trim()
+  const alpha = a.endsWith('%') ? Number(a.slice(0, -1)) / 100 : Number(a)
+  expect(Number.isFinite(alpha), `${raw} must have a numeric alpha`).toBe(true)
+  return { colour, alpha }
+}
+
+/** sRGB transfer: linear -> gamma-encoded, per IEC 61966-2-1. */
+const encode = (v: number) =>
+  v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055
+/** sRGB transfer: gamma-encoded -> linear. */
+const decode = (v: number) =>
+  v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+
+/**
+ * WCAG luminance of a translucent colour composited over an opaque backdrop.
+ *
+ * @remarks Blended in gamma-encoded sRGB, which is what browsers do when they
+ * paint a translucent background over its parent — not in linear light and
+ * not in oklab (`color-mix(in oklab, …)` only builds the translucent colour;
+ * the compositing onto the page is still sRGB).
+ */
+function compositeLuminance(fg: Oklch, alpha: number, bg: Oklch): number {
+  const f = oklchToLinearSrgb(fg).map((v) =>
+    encode(Math.min(1, Math.max(0, v))),
+  )
+  const b = oklchToLinearSrgb(bg).map((v) =>
+    encode(Math.min(1, Math.max(0, v))),
+  )
+  const [r, g, bl] = f.map((v, i) => decode(alpha * v + (1 - alpha) * b[i]))
+  return 0.2126 * r + 0.7152 * g + 0.0722 * bl
 }
 
 /**
@@ -148,11 +209,15 @@ function token(selector: string, name: string): Oklch {
  */
 const RAMP = {
   white: [1, 0, 0],
+  'teal-50': [0.984, 0.014, 180.72],
+  'teal-200': [0.91, 0.096, 180.426],
+  'teal-300': [0.855, 0.138, 181.071],
   'teal-400': [0.777, 0.152, 181.912],
   'teal-500': [0.704, 0.14, 182.503],
   'teal-600': [0.6, 0.118, 184.704],
   'teal-700': [0.511, 0.096, 186.391],
   'teal-800': [0.437, 0.078, 188.216],
+  'teal-900': [0.386, 0.063, 188.416],
   'zinc-50': [0.985, 0, 0],
   'zinc-100': [0.967, 0.001, 286.375],
   'zinc-200': [0.92, 0.004, 286.32],
@@ -244,6 +309,45 @@ describe('shadcn token layer — palette identity (#190)', () => {
       /--color-link-accent:\s*var\(--link-accent\)/.test(cssCode),
       '--link-accent must be exposed as a utility via @theme inline',
     ).toBe(true)
+  })
+
+  it('gives the link ink a hover step that DARKENS in light (#231)', () => {
+    // Brandon, 2026-11-25: link hover darkens in light mode. The six links
+    // that hovered carried the literal `hover:text-teal-600
+    // dark:hover:text-teal-300`, and teal-600 both LIGHTENED the teal-700 rest
+    // and fell to 3.66:1 on white. Light moves to teal-800; dark keeps the
+    // teal-300 it already rendered.
+    expectStep(LIGHT, 'link-accent-hover', 'teal-800')
+    expectStep(DARK, 'link-accent-hover', 'teal-300')
+    expect(
+      /--color-link-accent-hover:\s*var\(--link-accent-hover\)/.test(cssCode),
+      '--link-accent-hover must be exposed as a utility via @theme inline',
+    ).toBe(true)
+  })
+
+  it('gives the teal chip its own ink-on-tint pair (#230)', () => {
+    // Light is exactly the literal `bg-teal-50 text-teal-700` the three chips
+    // carried. Dark unifies two spellings (teal-200 on teal-900/40 in
+    // `ArticleMeta` and `ArticlesExplorer`, teal-300 on teal-950/50 in
+    // `TechCard`) on the majority pair — a deliberate change for `TechCard`.
+    expectStep(LIGHT, 'badge-accent', 'teal-700')
+    expectStep(DARK, 'badge-accent', 'teal-200')
+    expectStep(LIGHT, 'badge-accent-surface', 'teal-50')
+    const darkTint = tint(DARK, 'badge-accent-surface')
+    const want = RAMP['teal-900'] as unknown as Oklch
+    expect(
+      darkTint.colour.map((n) => Number(n.toFixed(3))),
+      '.dark --badge-accent-surface must be teal-900',
+    ).toEqual(want.map((n) => Number(n.toFixed(3))))
+    expect(darkTint.alpha, '.dark --badge-accent-surface must be at 40%').toBe(
+      0.4,
+    )
+    for (const name of ['badge-accent', 'badge-accent-surface']) {
+      expect(
+        new RegExp(`--color-${name}:\\s*var\\(--${name}\\)`).test(cssCode),
+        `--${name} must be exposed as a utility via @theme inline`,
+      ).toBe(true)
+    }
   })
 
   it('leaves --corvus-accent as the single alias of that pair, not a copy', () => {
@@ -438,6 +542,52 @@ describe('shadcn token layer — WCAG floors in both themes (#190)', () => {
             TEXT_AA,
             `[${theme}] --link-accent on --${surface} (${label})`,
           )
+        }
+      })
+
+      it('link accent hover: ink on every surface, and moves AWAY from the page (#231)', () => {
+        // Same three surfaces as the resting ink, same 1.4.3 floor: a hovered
+        // link is still text. Light teal-800 is 7.53:1 on white; dark teal-300
+        // is 13.52:1 on zinc-950 and 12.05:1 on the zinc-900 card/popover.
+        for (const surface of ['background', 'card', 'popover'] as const) {
+          expectRatio(
+            token(sel, 'link-accent-hover'),
+            token(sel, surface),
+            TEXT_AA,
+            `[${theme}] --link-accent-hover on --${surface}`,
+          )
+        }
+        // The direction, stated so it holds in BOTH themes: the hovered ink
+        // contrasts with the page MORE than the resting ink does. In light
+        // that is "darker" (Brandon's 2026-11-25 call); in dark it is
+        // "lighter". The pre-#231 teal-600 fails this in light (3.66:1 vs
+        // 5.39:1) — the regression the assertion exists for.
+        const rest = contrast(token(sel, 'link-accent'), page)
+        const hover = contrast(token(sel, 'link-accent-hover'), page)
+        expect(
+          hover,
+          `[${theme}] --link-accent-hover must contrast with the page more ` +
+            `than --link-accent: ${hover.toFixed(2)}:1 vs ${rest.toFixed(2)}:1`,
+        ).toBeGreaterThan(rest)
+      })
+
+      it('badge accent: chip ink on its own tint, over the page and a card (#230)', () => {
+        // Measured against the TINT, not the page — the chip's ink never sits
+        // on the page directly. The tint is translucent in dark, so it is
+        // composited over each surface a chip renders on first: the page
+        // (`ArticleMeta`, `ArticlesExplorer`) and a card (`TechCard`).
+        // Light 5.17:1; dark 12.82:1 over zinc-950 and 11.47:1 over zinc-900.
+        const ink = luminance(token(sel, 'badge-accent'))
+        const { colour, alpha } = tint(sel, 'badge-accent-surface')
+        for (const surface of ['background', 'card'] as const) {
+          const under = compositeLuminance(colour, alpha, token(sel, surface))
+          const [hi, lo] = [ink, under].sort((x, y) => y - x)
+          const ratio = (hi + 0.05) / (lo + 0.05)
+          expect(
+            ratio,
+            `[${theme}] --badge-accent on --badge-accent-surface over ` +
+              `--${surface}: measured ${ratio.toFixed(2)}:1, floor ${TEXT_AA}:1`,
+          ).toBeGreaterThanOrEqual(TEXT_AA)
         }
       })
 
