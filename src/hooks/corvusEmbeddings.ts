@@ -441,7 +441,8 @@ export const deleteCorvusEmbeddings = (
     } catch (error) {
       payload.logger.error(
         `[corvus] embedding delete failed for ${collection}; stale rows may ` +
-          `remain (payload run scripts/backfill-corvus-embeddings.ts repairs it): ${String(error)}`,
+          `remain (payload run scripts/backfill-corvus-embeddings.ts -- --drop-orphans ` +
+          `repairs it): ${String(error)}`,
       )
     } finally {
       deadline?.done()
