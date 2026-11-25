@@ -77,6 +77,9 @@ already cost a session or broken production.
   `src/app/(payload)/admin/importMap.js` (§ Generated artifacts). **Never
   unregister a Posts rich-text node type** (lists, blockquote, upload): every
   migrated article breaks with Lexical error #17.
+- **review a CMS change, or change the CMS Domain Agent** →
+  `docs/agents/cms-domain.md`. **A scenario check is never deleted or
+  weakened to make it pass.**
 - **write Payload `find` or Local-API code (scripts, seeds, tests, MCP
   writes)** → `docs/PAYLOAD.md` § Local API gotchas: **`limit: N` still caps
   with `pagination: false`** (unlimited is `limit: 0`, or `pagination: false`
