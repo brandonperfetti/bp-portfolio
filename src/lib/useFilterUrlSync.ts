@@ -73,6 +73,17 @@ export type FilterUrlSyncOptions<
  *   only when the state differs from it, and it is recorded from the URL only
  *   once the state has caught up with a canonical URL and nothing is pending.
  *
+ * - **A link to the URL already showing (#307).** Next keeps the same
+ *   `useSearchParams()` object for the same URL, so clicking such a link
+ *   produces no URL change for the read below to see. Measured on a
+ *   production build in Chromium and WebKit, the click also supersedes a
+ *   pending write, and the input kept the typed query over a bare URL for
+ *   good. So the click itself is the signal: an unmodified, same-tab click on
+ *   a link to this pathname and the confirmed query string drops every
+ *   pending write and copies that URL into the state, as any destination is.
+ *   If the superseded write lands after all, it is no longer pending, so it
+ *   reads as a destination too and the input follows it.
+ *
  * A `popstate` forgets every pending write: a traversal moves to an existing
  * entry, so no earlier write can still be about to land on top of it, and a
  * write that never produced a URL change cannot be mistaken for a later
@@ -124,6 +135,54 @@ export function useFilterUrlSync<Params extends FilterSearchParams>({
     window.addEventListener('popstate', forgetPending, { capture: true })
     return () => {
       window.removeEventListener('popstate', forgetPending, { capture: true })
+    }
+  }, [])
+
+  // The latest confirmed URL for the click listener below, which is
+  // registered once.
+  const latestRef = useRef({ searchParams, pathname, applyUrl })
+  useEffect(() => {
+    latestRef.current = { searchParams, pathname, applyUrl }
+  }, [searchParams, pathname, applyUrl])
+
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return
+      }
+      const anchor =
+        event.target instanceof Element ? event.target.closest('a[href]') : null
+      if (
+        !(anchor instanceof HTMLAnchorElement) ||
+        (anchor.target !== '' && anchor.target !== '_self') ||
+        anchor.hasAttribute('download')
+      ) {
+        return
+      }
+      const url = new URL(anchor.href)
+      const latest = latestRef.current
+      if (
+        url.origin !== window.location.origin ||
+        url.pathname !== latest.pathname ||
+        url.hash !== '' ||
+        new URLSearchParams(url.search).toString() !==
+          latest.searchParams.toString()
+      ) {
+        return
+      }
+      pendingRef.current = []
+      latest.applyUrl(latest.searchParams, { syncQuery: true })
+    }
+    // Capture phase, so it runs before `next/link` routes the click.
+    document.addEventListener('click', onClick, { capture: true })
+    return () => {
+      document.removeEventListener('click', onClick, { capture: true })
     }
   }, [])
 

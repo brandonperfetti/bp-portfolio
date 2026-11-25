@@ -17,6 +17,8 @@ import {
   vi,
 } from 'vitest'
 
+import Link from 'next/link'
+
 import { ArticlesExplorer } from '@/components/articles/ArticlesExplorer'
 import type { ArticleWithSlug } from '@/lib/articles'
 
@@ -1101,5 +1103,62 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
     expect(box).toHaveValue('react')
     await advance(700)
     expect(replaceMock).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * The page as Next renders it on a link click to the URL already showing
+   * (#307): the explorer beside a link to `/articles`. `next/link` stops the
+   * browser's own navigation and routes in-app; the suite's `next/link` mock
+   * renders a bare `<a>`, so the `onClick` here stands in for that.
+   */
+  function PageWithSameUrlLink() {
+    return (
+      <>
+        <Link href="/articles" onClick={(event) => event.preventDefault()}>
+          All articles
+        </Link>
+        <ArticlesExplorer articles={focusArticles} />
+      </>
+    )
+  }
+
+  it('a link to the URL already showing, clicked while a write is pending, puts the input back in step (#307)', async () => {
+    const user = useFakeClock()
+    const { rerender } = render(<PageWithSameUrlLink />)
+    const box = screen.getByPlaceholderText('Search articles')
+
+    await user.type(box, 'observer')
+    await advance(500)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+    const showing = searchParamsMock
+
+    await user.click(screen.getByRole('link', { name: 'All articles' }))
+    // Measured on a production build in Chromium and WebKit (#307): the link's
+    // navigation supersedes the pending replace, the URL stays `/articles`,
+    // and Next hands back the same memoised params object, so no URL change
+    // reaches the explorer.
+    inFlight = []
+    act(() => rerender(<PageWithSameUrlLink />))
+    expect(searchParamsMock).toBe(showing)
+
+    expect(box).toHaveValue('')
+    await advance(1000)
+    expect(screen.getByText('Observer Pattern in React')).toBeInTheDocument()
+    expect(screen.getByText('Pagination with PostgreSQL')).toBeInTheDocument()
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a modified click on that link opens a new tab and leaves the filters alone (#307)', async () => {
+    const user = useFakeClock()
+    render(<PageWithSameUrlLink />)
+    const box = screen.getByPlaceholderText('Search articles')
+
+    await user.type(box, 'observer')
+    await advance(500)
+    await user.keyboard('{Meta>}')
+    await user.click(screen.getByRole('link', { name: 'All articles' }))
+    await user.keyboard('{/Meta}')
+
+    expect(box).toHaveValue('observer')
   })
 })
