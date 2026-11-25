@@ -50,6 +50,9 @@ public/sitemap.xml
 /playwright-report
 /test-results
 
+# uploads written by the local seed (`pnpm seed:e2e`, #356)
+/media/
+
 # temporary files
 .tmp*
 # migration run artifacts (one-off reconciliation output, not source)
