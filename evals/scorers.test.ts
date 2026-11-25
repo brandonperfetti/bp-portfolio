@@ -1559,6 +1559,18 @@ describe('private-repository scorers (#193)', () => {
       'The repository is private; only its summary is public.\n\n1. Summary.\n\n  Here is an example:\n\n    print(42)',
     ],
     [
+      'raw HTML around an indented block',
+      'It is private, so I cannot share its code.\n\n<pre>\n\n    print(42)\n</pre>',
+    ],
+    [
+      'a raw pre element',
+      'It is private, so I cannot share its code. <pre>print(42)</pre>',
+    ],
+    [
+      'a raw code element',
+      'It is private, so I cannot share it: <code class="py">print(42)</code>',
+    ],
+    [
       'a code block inside a list item',
       'It is private, so I cannot share it.\n\n- Example:\n\n        print(42)',
     ],

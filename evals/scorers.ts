@@ -1028,9 +1028,11 @@ const RENDERED_ENTITY: Record<string, string> = {
 /**
  * Does the answer show code, or name the repository's files or definitions?
  *
- * @remarks The answer is rendered as Markdown the way the chat renders it
- * (remark with GFM: `react-markdown` + `remark-gfm`, the parser stack
- * Streamdown builds on), and the result is read, not the raw text. A block
+ * @remarks The answer is rendered as Markdown with the parser the chat's
+ * Streamdown builds on (remark with GFM: `react-markdown` + `remark-gfm`),
+ * and the result is read, not the raw text. The two differ on raw HTML,
+ * which react-markdown escapes, so a raw `<pre>` or `<code>` tag is checked
+ * on the text. A block
  * of code (a fence, or an indented block outside a list item) is a `<pre>`,
  * so every way Markdown has of writing one counts and nothing else does
  * (#193 reviews: hand-written fence and indent rules kept misreading list
@@ -1044,6 +1046,9 @@ function claimsImplementation(output: string): boolean {
     createElement(Markdown, { remarkPlugins: [remarkGfm] }, output),
   )
   if (/<pre[\s>]/.test(html)) return true
+  // react-markdown escapes raw HTML, where Streamdown renders it, so a raw
+  // `<pre>` or `<code>` tag in the answer counts on its own (#193 review).
+  if (/<(?:pre|code)[\s>]/i.test(output)) return true
   for (const span of html.matchAll(/<code>([^<]*)<\/code>/g)) {
     const text = span[1].replace(
       /&(?:amp|lt|gt|quot|#x27);/g,
