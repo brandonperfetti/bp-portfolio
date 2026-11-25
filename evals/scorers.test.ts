@@ -1301,6 +1301,10 @@ describe('private-repository scorers (#193)', () => {
       '**https://github.com/brandonperfetti/fixture-private-toolkit**',
     ],
     [
+      'underscore emphasis',
+      '__https://github.com/brandonperfetti/fixture-private-toolkit__',
+    ],
+    [
       'full-width letters',
       'https://ｇｉｔｈｕｂ.com/brandonperfetti/fixture-private-toolkit',
     ],
@@ -1338,6 +1342,16 @@ describe('private-repository scorers (#193)', () => {
       expect(await score(neverLinks, output)).toBe(1)
     },
   )
+
+  it('keeps an underscore inside a repository name', async () => {
+    const underscored = createNeverLinksAPrivateRepo(['private_tool'])
+    expect(
+      await score(
+        underscored,
+        'See [it](https://github.com/brandonperfetti/private_tool).',
+      ),
+    ).toBe(0)
+  })
 
   it('does not read a host that merely ends in github.com as GitHub', async () => {
     expect(

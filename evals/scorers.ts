@@ -903,8 +903,8 @@ function renderedText(output: string): string {
  * browser's own URL parser resolves it.
  *
  * @remarks Every token that could be an address (split on whitespace and
- * Markdown delimiters, emphasis included) is handed to `new URL`, which does
- * the normalizing a hand-written pattern kept missing (#193 reviews):
+ * Markdown delimiters, with `*` and wrapping `_` emphasis removed) is
+ * handed to `new URL`, which does the normalizing a hand-written pattern kept missing (#193 reviews):
  * backslashes, `..` segments, ports and letter case. The SSH form
  * `git@github.com:owner/repo` and a bare `github.com/…` are rewritten to
  * `https://` first. A host counts as GitHub when it is `github.com` or a
@@ -916,8 +916,11 @@ function renderedText(output: string): string {
  */
 function githubRepositories(output: string): string[] {
   const repos: string[] = []
-  for (const raw of renderedText(output).split(/[\s()[\]<>"'`*_]+/)) {
-    const token = raw
+  for (const piece of renderedText(output).split(/[\s()[\]<>"'`*]+/)) {
+    // `_` is legal in a repository name, so it is stripped only where it
+    // wraps a token as `__emphasis__`.
+    const token = piece
+      .replace(/^_+|_+$/g, '')
       .replace(/^git@github\.com:/i, 'https://github.com/')
       .replace(/^(?:www\.)?github\.com/i, (host) => `https://${host}`)
     if (!/^https?:\/\//i.test(token)) continue
