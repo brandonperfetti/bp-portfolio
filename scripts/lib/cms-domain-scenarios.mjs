@@ -111,15 +111,17 @@ export function checkScenarioRun(events, scenario, exitCode) {
  * Splits the scenarios document into the parts the runner needs.
  *
  * @remarks The prompt stops at `**Required finding:**`, so the agent is never
- * handed the answer. A scenario with no required finding or no terms throws:
- * a check that cannot fail would pass silently, which is the one outcome the
- * file's "never deleted to make a check pass" rule exists to prevent.
+ * handed the answer. A document with no scenarios, or a scenario with no
+ * required finding or no terms, throws: a check that cannot fail would pass
+ * silently, which is the one outcome the file's "never deleted to make a
+ * check pass" rule exists to prevent.
  *
  * @param {string} markdown - The scenarios document.
  * @returns {Scenario[]} The scenarios, in document order.
  */
 export function parseScenarios(markdown) {
   const parts = markdown.split(/^## Scenario /m).slice(1)
+  if (parts.length === 0) throw new Error('No scenarios found')
   return parts.map((part) => {
     const heading = part.slice(0, part.indexOf('\n'))
     const match = /^(\d+):\s*(.+)$/.exec(heading.trim())

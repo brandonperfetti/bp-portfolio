@@ -48,6 +48,12 @@ describe('parseScenarios', () => {
       /no finding/,
     )
   })
+
+  it('refuses a document with no scenarios, so the runner cannot pass on none', () => {
+    expect(() => parseScenarios('# Scenarios\n\nNothing here.\n')).toThrow(
+      /No scenarios found/,
+    )
+  })
 })
 
 describe('checkScenarioRun', () => {
