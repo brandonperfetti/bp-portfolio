@@ -44,12 +44,13 @@ export interface MatrixVariant {
  * @remarks `name` is what evalite appends to each eval name (`… [gpt-5-mini]`)
  * and writes as `variantName` in the `--outputPath` JSON, so it is kept equal
  * to the model id: the numbers posted to the ticket then say which model they
- * came from without a lookup table. `gpt-5-mini` is first because it is the
- * current default (`getCorvusModel()`), making it the baseline column.
+ * came from without a lookup table. `gpt-5.6-luna` is first because it is the
+ * current default (`getCorvusModel()`, since #238), making it the baseline
+ * column; `gpt-5-mini`, the previous default, is the comparison.
  */
 export const MATRIX_VARIANTS: MatrixVariant[] = [
-  { name: 'gpt-5-mini', input: { modelId: 'gpt-5-mini' } },
   { name: 'gpt-5.6-luna', input: { modelId: 'gpt-5.6-luna' } },
+  { name: 'gpt-5-mini', input: { modelId: 'gpt-5-mini' } },
 ]
 
 /**

@@ -14,7 +14,8 @@ citation is a real same-tab anchor (see "Links in a reply" below).
   `docs/SECURITY.md` § Corvus (AI chat).
 - Request bodies are Zod-validated; oversize/malformed input is rejected.
 - Provider/model are env-selected: `AI_CHAT_PROVIDER` (`openai|anthropic`) +
-  `AI_CHAT_MODEL`; `AI_MAX_COMPLETION_TOKENS` caps output.
+  `AI_CHAT_MODEL`, defaulting to `gpt-5.6-luna` on OpenAI and
+  `claude-sonnet-4-5` on Anthropic; `AI_MAX_COMPLETION_TOKENS` caps output.
 
 ## What the provider is sent, and asked to keep (#366)
 
@@ -218,7 +219,7 @@ the bare provider call is the **Responses** API (`OpenAIProvider`'s call
 signature takes an `OpenAIResponsesModelId`). On that API a reasoning model's
 hidden reasoning tokens are billed as output tokens and drawn from the _same_
 `maxOutputTokens` allowance as the visible answer. The default model is
-`gpt-5-mini`; the allowance is **2048**
+`gpt-5.6-luna` (`gpt-5-mini` until #238); the allowance is **2048**
 (`resolveGuardrailLimits`, `AI_MAX_COMPLETION_TOKENS`, cap 8000 — it was 1024
 until 2026-09-11, see the decision below), mirrored by
 `EVAL_MAX_OUTPUT_TOKENS` in `evals/corvus-helpers.ts` and drift-guarded by
@@ -318,6 +319,11 @@ runtime logs, dpl_B3pPxfiyvcZbq9NH4rv5hWxEJFMD]` every `/api/ai/chat` turn
 > the tiebreaker — `gpt-5-mini`'s clean draws score as well or better (94% /
 > 86% on one run) — the essay row's failure rate on a model production never
 > sends was.
+>
+> **Superseded 2026-11-25 (#238).** The code default is now `gpt-5.6-luna`,
+> so the `ci.yml` pin is gone: the job sets no `AI_CHAT_MODEL`, a local keyed
+> run exports none, and `scripts/eval-harness.test.ts` ("runs the gate on the
+> code default model") fails if `ci.yml` selects a model or provider again.
 
 **Decided 2026-09-11 (Brandon): BOTH levers — #138 option 2, reasoning effort
 capped at `minimal`, AND #138 option 1, the completion budget raised

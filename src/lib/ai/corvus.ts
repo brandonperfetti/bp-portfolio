@@ -76,6 +76,14 @@ function getCorvusProvider(): string {
  * literals `getCorvusModel` used before this split, and `corvus.test.ts` pins
  * both functions against each other.
  *
+ * The OpenAI default is `gpt-5.6-luna`, the model production was measured
+ * running (2026-09-15 runtime logs; #238):
+ * a default that differs from the deployed model let every environment that
+ * forgot `AI_CHAT_MODEL` (CI until 2026-09-15, any local checkout) measure a
+ * model the site never sends. `scripts/eval-harness.test.ts` pins this
+ * literal, and pins the Evalite job to it by keeping `AI_CHAT_MODEL` out of
+ * that job's env.
+ *
  * @returns The env-selected model id.
  */
 export function getCorvusModelId(): string {
@@ -83,7 +91,7 @@ export function getCorvusModelId(): string {
   if (getCorvusProvider() === 'anthropic') {
     return model || 'claude-sonnet-4-5'
   }
-  return model || 'gpt-5-mini'
+  return model || 'gpt-5.6-luna'
 }
 
 /**
