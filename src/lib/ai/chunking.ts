@@ -604,9 +604,9 @@ export function dailyDriverLead(
  * with a career question, so on production's public corpus those passages sat
  * at 0.35–0.43 cosine — level with the "Brandon Perfetti's Portfolio" project
  * — and on that last question none cleared `CORVUS_SIMILARITY_FLOOR`
- * `[measured 2026-11-25, text-embedding-3-small over the public
- * /api/{posts,projects,uses,tech-stack,work-history} corpus plus the repo
- * fixtures, 10 queries]`.
+ * [measured 2026-11-25: text-embedding-3-small over the public posts,
+ * projects, uses, tech-stack and work-history API corpus plus the repo
+ * fixtures, 10 queries].
  *
  * With this sentence first, work history ranks first on all seven
  * career-shaped queries measured (0.45–0.48 on the work-history question),
