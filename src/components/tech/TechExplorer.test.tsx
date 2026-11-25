@@ -101,7 +101,41 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
 })
+
+/**
+ * Puts the test on a fake clock (#335). The explorer's 350 ms search debounce
+ * then settles only when the test advances time. On the real clock, a busy
+ * machine stretched the gap between two simulated keystrokes past 350 ms, the
+ * debounce settled mid-word, and the explorer made a write the test never
+ * asked for. `Date` is faked with the timers, so the pending-write TTL reads
+ * the same clock.
+ *
+ * Testing Library drains its async wrapper (which every user-event call runs
+ * in) with a `setTimeout(0)`, and advances that timer only when it sees Jest:
+ * a `jest` global and a faked `setTimeout`. Without the stand-in below every
+ * user-event call waits forever on a Vitest fake clock; with it the drain
+ * moves the clock by 0 ms, so no debounce can fire. Tests on this clock still
+ * move time with {@link advance} and assert synchronously.
+ *
+ * @returns A user-event instance whose own waits run on the fake clock.
+ */
+function useFakeClock() {
+  vi.useFakeTimers()
+  vi.stubGlobal('jest', {
+    advanceTimersByTime: (ms: number) => vi.advanceTimersByTime(ms),
+  })
+  return userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+}
+
+/** Moves the fake clock on by `ms` and flushes the renders its timers cause. */
+async function advance(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms)
+  })
+}
 
 describe('TechExplorer pagination (#88)', () => {
   it('is a no-op at the current corpus size — no control, every card rendered', () => {
@@ -232,6 +266,7 @@ describe('TechExplorer URL writes per burst (#249)', () => {
   })
 
   it('issues zero writes for a burst of ten Back/Forward traversals', async () => {
+    useFakeClock()
     const items = makeTech(3)
     const { rerender } = render(<TechExplorer items={items} />)
 
@@ -242,13 +277,13 @@ describe('TechExplorer URL writes per burst (#249)', () => {
       rerender(<TechExplorer items={items} />)
     }
     // Past the 350 ms debounce, so a pending write would have landed.
-    await new Promise((resolve) => setTimeout(resolve, 450))
+    await advance(450)
 
     expect(replaceMock).not.toHaveBeenCalled()
   })
 
   it('a chip tap inside the typing debounce writes once, not twice', async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     render(<TechExplorer items={makeTech(3)} />)
 
     await user.type(
@@ -256,13 +291,14 @@ describe('TechExplorer URL writes per burst (#249)', () => {
       'tech',
     )
     await user.click(screen.getByRole('button', { name: 'Tooling' }))
+    // No time has passed, so the tap is inside the debounce: nothing yet.
+    expect(replaceMock).not.toHaveBeenCalled()
 
-    await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith(
-        '/tech?q=tech&category=Tooling',
-        { scroll: false },
-      )
+    await advance(350)
+    expect(replaceMock).toHaveBeenCalledWith('/tech?q=tech&category=Tooling', {
+      scroll: false,
     })
+    await advance(1000)
     expect(replaceMock).toHaveBeenCalledTimes(1)
   })
 
@@ -271,26 +307,23 @@ describe('TechExplorer URL writes per burst (#249)', () => {
     // `debouncedQuery` is still '' for 350 ms. A clear inside that window
     // returned the filters to the state the write gate last recorded (''),
     // so the gate skipped the write: an unfiltered list under `?q=react`.
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    try {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-      const items = makeTech(3)
-      const { rerender } = render(<TechExplorer items={items} />)
+    // The clear lands at the same fake instant as the traversal, so it is
+    // inside the window on any machine.
+    const user = useFakeClock()
+    const items = makeTech(3)
+    const { rerender } = render(<TechExplorer items={items} />)
 
-      searchParamsMock = new URLSearchParams('q=react')
-      rerender(<TechExplorer items={items} />)
-      const box = screen.getByRole('searchbox', { name: 'Search technologies' })
-      expect(box).toHaveValue('react')
+    searchParamsMock = new URLSearchParams('q=react')
+    rerender(<TechExplorer items={items} />)
+    const box = screen.getByRole('searchbox', { name: 'Search technologies' })
+    expect(box).toHaveValue('react')
 
-      await user.clear(box)
-      await vi.advanceTimersByTimeAsync(450)
+    await user.clear(box)
+    await advance(450)
 
-      expect(box).toHaveValue('')
-      expect(replaceMock).toHaveBeenCalledWith('/tech', { scroll: false })
-      expect(replaceMock).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(box).toHaveValue('')
+    expect(replaceMock).toHaveBeenCalledWith('/tech', { scroll: false })
+    expect(replaceMock).toHaveBeenCalledTimes(1)
   })
 
   it('still rewrites a non-canonical URL once on load', async () => {
@@ -306,7 +339,7 @@ describe('TechExplorer URL writes per burst (#249)', () => {
   })
 
   it('a type-and-clear burst on a clean URL issues no writes at all', async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     render(<TechExplorer items={makeTech(3)} />)
     const box = screen.getByRole('searchbox', { name: 'Search technologies' })
 
@@ -314,7 +347,7 @@ describe('TechExplorer URL writes per burst (#249)', () => {
       await user.type(box, 're')
       await user.clear(box)
     }
-    await new Promise((resolve) => setTimeout(resolve, 450))
+    await advance(450)
 
     expect(replaceMock).not.toHaveBeenCalled()
   })
@@ -359,9 +392,10 @@ describe('TechExplorer focused input and URL changes (#302, release finding F1)'
 
   it('a Back/Forward that changes only q syncs the focused input, the URL and the list (#302)', async () => {
     searchParamsMock = new URLSearchParams('q=Tech+2')
+    const user = useFakeClock()
     const { rerender } = render(<TechExplorer items={focusItems} />)
     const box = screen.getByRole('searchbox', { name: 'Search technologies' })
-    await userEvent.setup().click(box)
+    await user.click(box)
     expect(box).toHaveFocus()
     expect(box).toHaveValue('Tech 2')
 
@@ -369,49 +403,44 @@ describe('TechExplorer focused input and URL changes (#302, release finding F1)'
 
     expect(box).toHaveFocus()
     expect(box).toHaveValue('Tech 3')
-    await waitFor(
-      () => {
-        expect(screen.getByText('Tech 3')).toBeInTheDocument()
-        expect(screen.queryByText('Tech 2')).not.toBeInTheDocument()
-      },
-      { timeout: 2000 },
-    )
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    await advance(350)
+    expect(screen.getByText('Tech 3')).toBeInTheDocument()
+    expect(screen.queryByText('Tech 2')).not.toBeInTheDocument()
+    await advance(700)
     expect(replaceMock).not.toHaveBeenCalled()
   })
 
   it('a Back/Forward that changes q and another filter writes nothing over the entry (#302)', async () => {
     searchParamsMock = new URLSearchParams('q=Tech+2')
+    const user = useFakeClock()
     const { rerender } = render(<TechExplorer items={focusItems} />)
     const box = screen.getByRole('searchbox', { name: 'Search technologies' })
-    await userEvent.setup().click(box)
+    await user.click(box)
 
     traverseTo(rerender, 'sort=active')
 
     expect(box).toHaveFocus()
     expect(box).toHaveValue('')
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    await advance(700)
     expect(replaceMock).not.toHaveBeenCalled()
   })
 
   it("typing is never overwritten by the echo of the explorer's own write (#302)", async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     const { rerender } = render(<TechExplorer items={focusItems} />)
     const box = screen.getByRole('searchbox', { name: 'Search technologies' })
 
     await user.type(box, 'tech')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
-      timeout: 2000,
-    })
+    await advance(350)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
     // The reader keeps typing while that write is still in flight.
     await user.type(box, 'x')
     landNext(rerender)
 
     expect(box).toHaveFocus()
     expect(box).toHaveValue('techx')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(2), {
-      timeout: 2000,
-    })
+    await advance(350)
+    expect(replaceMock).toHaveBeenCalledTimes(2)
     expect(replaceMock).toHaveBeenLastCalledWith('/tech?q=techx', {
       scroll: false,
     })
@@ -420,14 +449,13 @@ describe('TechExplorer focused input and URL changes (#302, release finding F1)'
   })
 
   it("F1: a clear made while the explorer's own write is in flight converges the URL and the list", async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     const { rerender } = render(<TechExplorer items={focusItems} />)
     const box = screen.getByRole('searchbox', { name: 'Search technologies' })
 
     await user.type(box, 'tech')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
-      timeout: 2000,
-    })
+    await advance(350)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
     expect(replaceMock).toHaveBeenLastCalledWith('/tech?q=tech', {
       scroll: false,
     })
@@ -440,7 +468,7 @@ describe('TechExplorer focused input and URL changes (#302, release finding F1)'
     while (inFlight.length > 0) {
       landNext(rerender)
     }
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    await advance(700)
     while (inFlight.length > 0) {
       landNext(rerender)
     }
@@ -454,20 +482,20 @@ describe('TechExplorer focused input and URL changes (#302, release finding F1)'
   })
 
   it('F1: the same holds when Next skips the first URL and lands only the last', async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     const { rerender } = render(<TechExplorer items={focusItems} />)
     const box = screen.getByRole('searchbox', { name: 'Search technologies' })
 
     await user.type(box, 'tech')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
-      timeout: 2000,
-    })
+    await advance(350)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
     await user.clear(box)
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(2))
+    await advance(0)
+    expect(replaceMock).toHaveBeenCalledTimes(2)
 
     inFlight.shift()
     landNext(rerender)
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    await advance(700)
 
     expect(box).toHaveValue('')
     expect(searchParamsMock.get('q') ?? '').toBe('')
@@ -475,41 +503,39 @@ describe('TechExplorer focused input and URL changes (#302, release finding F1)'
   })
 
   it('a traversal after the write has landed is not mistaken for its echo', async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     const { rerender } = render(<TechExplorer items={focusItems} />)
     const box = screen.getByRole('searchbox', { name: 'Search technologies' })
 
     await user.type(box, 'tech')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
-      timeout: 2000,
-    })
+    await advance(350)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
     landNext(rerender)
     traverseTo(rerender, '')
     expect(box).toHaveValue('')
     traverseTo(rerender, 'q=tech')
     expect(box).toHaveValue('tech')
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    await advance(700)
     expect(replaceMock).toHaveBeenCalledTimes(1)
   })
   it('N1: a write Next dropped cannot swallow a later in-app navigation to the same URL', async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     const { rerender } = render(<TechExplorer items={focusItems} />)
     const box = screen.getByRole('searchbox', { name: 'Search technologies' })
 
     await user.type(box, 'Tech 1')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
-      timeout: 2000,
-    })
+    await advance(350)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
     await user.clear(box)
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(2))
+    await advance(0)
+    expect(replaceMock).toHaveBeenCalledTimes(2)
     // Next discards the earlier pending replace, and the second is a no-op
     // navigation to the confirmed URL: neither ever lands.
     inFlight = []
 
     await user.type(box, 'Tech 1')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(3), {
-      timeout: 2000,
-    })
+    await advance(350)
+    expect(replaceMock).toHaveBeenCalledTimes(3)
     landNext(rerender)
     expect(searchParamsMock.get('q')).toBe('Tech 1')
 
@@ -525,6 +551,9 @@ describe('TechExplorer focused input and URL changes (#302, release finding F1)'
   })
 
   it('pins the 10 s bound: an echo inside it is not a destination, one past it is (N3)', async () => {
+    // The clock goes first: it replaces `Date`, so the spy must sit on the
+    // fake one the hook reads.
+    const user = useFakeClock()
     const now = vi.spyOn(Date, 'now')
     const base = Date.now()
     try {
@@ -536,7 +565,6 @@ describe('TechExplorer focused input and URL changes (#302, release finding F1)'
         replaceMock.mockClear()
         searchParamsMock = new URLSearchParams('')
         now.mockReturnValue(base)
-        const user = userEvent.setup()
         const { rerender, unmount } = render(
           <TechExplorer items={focusItems} />,
         )
@@ -545,9 +573,8 @@ describe('TechExplorer focused input and URL changes (#302, release finding F1)'
         })
 
         await user.type(box, 'Tech 1')
-        await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
-          timeout: 2000,
-        })
+        await advance(350)
+        expect(replaceMock).toHaveBeenCalledTimes(1)
         now.mockReturnValue(base + lateMs)
         await user.type(box, 'x')
         landNext(rerender)
@@ -561,14 +588,13 @@ describe('TechExplorer focused input and URL changes (#302, release finding F1)'
   })
 
   it('the popstate listener forgets pending writes, so a traversal to the in-flight URL is a destination (N2)', async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     const { rerender } = render(<TechExplorer items={focusItems} />)
     const box = screen.getByRole('searchbox', { name: 'Search technologies' })
 
     await user.type(box, 'Tech 1')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
-      timeout: 2000,
-    })
+    await advance(350)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
     // The reader types on (debounce pending), then goes Back to an entry whose
     // URL is the one in flight; Next discards the in-flight replace.
     await user.type(box, 'x')
@@ -579,7 +605,7 @@ describe('TechExplorer focused input and URL changes (#302, release finding F1)'
     traverseTo(rerender, 'q=Tech+1')
 
     expect(box).toHaveValue('Tech 1')
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    await advance(700)
     expect(replaceMock).toHaveBeenCalledTimes(1)
   })
 })
