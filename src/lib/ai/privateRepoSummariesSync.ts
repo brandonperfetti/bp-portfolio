@@ -37,16 +37,20 @@ export interface PrivateSummarySyncTotals {
 }
 
 /**
- * Every summary `doc_id` currently in the index.
+ * Every summary document currently in the index, with the title it holds.
+ *
+ * @remarks The title is read so a `doc_id` can be checked against the entry
+ * that now claims it. Two names can hash to the same id (#193 review), so an
+ * id alone does not say whose summary a row is.
  *
  * @param db - Payload's drizzle instance.
- * @returns The distinct `doc_id` values in the summary collection.
+ * @returns One `{ docId, title }` per distinct stored document.
  */
-async function readIndexedSummaryDocIds(
+async function readIndexedSummaries(
   db: CorvusEmbeddingsDb,
-): Promise<number[]> {
+): Promise<Array<{ docId: number; title: string }>> {
   const result = await db.execute(sql`
-    SELECT DISTINCT "doc_id"
+    SELECT DISTINCT "doc_id", "title"
     FROM "corvus_embeddings"
     WHERE "collection" = ${CORVUS_PRIVATE_REPO_SUMMARY_COLLECTION}
     ORDER BY "doc_id"
@@ -56,8 +60,8 @@ async function readIndexedSummaryDocIds(
     : (((result as { rows?: unknown } | null)?.rows as
         Array<Record<string, unknown>> | undefined) ?? [])
   return rows
-    .map((row) => Number(row.doc_id))
-    .filter((id) => Number.isInteger(id))
+    .map((row) => ({ docId: Number(row.doc_id), title: String(row.title) }))
+    .filter((row) => Number.isInteger(row.docId))
 }
 
 /**
@@ -119,9 +123,18 @@ export async function syncPrivateRepoSummaries(args: {
     }
     keep.add(chunk.docId)
   }
-  const stale = (await readIndexedSummaryDocIds(db)).filter(
-    (id) => !keep.has(id),
-  )
+  // Stale: an id no entry claims, or one whose stored title is not the
+  // claiming entry's. The second is a removed repository whose name hashed
+  // to the same id as a newly added one (#193 review); left in place, it
+  // would stay retrievable whenever the new entry's embed failed.
+  const titleFor = new Map(chunks.map((chunk) => [chunk.docId, chunk.title]))
+  const stale = [
+    ...new Set(
+      (await readIndexedSummaries(db))
+        .filter(({ docId, title }) => titleFor.get(docId) !== title)
+        .map(({ docId }) => docId),
+    ),
+  ]
   if (dryRun) {
     totals.deleted = stale.length
     return totals

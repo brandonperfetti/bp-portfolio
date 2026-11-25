@@ -31,9 +31,12 @@ const entry: PrivateRepoSummary = {
   blurb: 'Where the review checklists live while they become a toolkit.',
 }
 
-/** A recording fake: `indexed` doc ids, and stored rows per doc id. */
+/**
+ * A recording fake: `indexed` documents (an id, or an id with the title its
+ * row holds), and stored rows per doc id.
+ */
 function createFakeDb(
-  indexed: number[] = [],
+  indexed: Array<number | { doc_id: number; title: string }> = [],
   stored: Record<number, Array<Record<string, unknown>>> = {},
 ) {
   const statements: string[] = []
@@ -50,7 +53,11 @@ function createFakeDb(
       const params = chunks.filter((part) => !isText(part))
       statements.push(text)
       if (text.includes('DISTINCT')) {
-        return { rows: indexed.map((doc_id) => ({ doc_id })) }
+        return {
+          rows: indexed.map((row) =>
+            typeof row === 'number' ? { doc_id: row, title: '' } : row,
+          ),
+        }
       }
       if (text.includes('SELECT') && text.includes('chunk_index')) {
         const docId = params.find(
@@ -109,10 +116,14 @@ describe('syncPrivateRepoSummaries', () => {
   it('skips an unchanged summary with zero provider calls', async () => {
     embedChunksMock.mockClear()
     const id = privateRepoSummaryDocId(entry.name)
-    const db = createFakeDb([id], { [id]: [storedRowFor(entry)] })
+    const db = createFakeDb(
+      [{ doc_id: id, title: chunkPrivateRepoSummary(entry).title }],
+      { [id]: [storedRowFor(entry)] },
+    )
 
     const totals = await syncPrivateRepoSummaries({ db, summaries: [entry] })
 
+    expect(totals.deleted).toBe(0)
     expect(totals.skipped).toBe(1)
     expect(totals.written).toBe(0)
     expect(embedChunksMock).not.toHaveBeenCalled()
@@ -177,6 +188,26 @@ describe('syncPrivateRepoSummaries', () => {
     ).rejects.toThrow(/doc_id/)
     expect(embedChunksMock).not.toHaveBeenCalled()
     expect(db.statements).toEqual([])
+  })
+
+  it('revokes a removed entry whose id a new entry now claims (#193 review)', async () => {
+    // fixture-2607 was indexed; the allowlist now names only fixture-70509,
+    // which hashes to the same doc_id. Its embed fails. The old summary must
+    // still go, before any provider call.
+    embedChunksMock.mockClear()
+    embedChunksMock.mockRejectedValueOnce(new Error('provider down'))
+    const removed = { ...entry, name: 'fixture-2607' }
+    const added = { ...entry, name: 'fixture-70509' }
+    const id = privateRepoSummaryDocId(added.name)
+    const db = createFakeDb([
+      { doc_id: id, title: chunkPrivateRepoSummary(removed).title },
+    ])
+
+    await expect(
+      syncPrivateRepoSummaries({ db, summaries: [added] }),
+    ).rejects.toThrow(/provider down/)
+    const deleteAt = db.statements.findIndex((text) => text.includes('DELETE'))
+    expect(deleteAt).toBeGreaterThan(-1)
   })
 
   it('validates every entry before writing any', async () => {
