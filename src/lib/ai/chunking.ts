@@ -880,12 +880,17 @@ export function chunkFlatRecord(
       const role = str(doc.title)
       title = [company, role].filter(Boolean).join(' — ') || null
       const start = dateOnly(doc.startDate)
-      const end = doc.current ? 'Present' : dateOnly(doc.endDate)
+      // One status for the lead AND the period. The collection says an empty
+      // `endDate` means a current role and does not require `current`, so a
+      // row with neither must read as current in both places, not "Past
+      // employer" beside "– Present" (#236 review).
+      const endDate = dateOnly(doc.endDate)
+      const isCurrent = doc.current === true || !endDate
       lines = [
-        employmentHistoryLead(company, role, doc.current === true),
+        employmentHistoryLead(company, role, isCurrent),
         label('Company', company),
         label('Title', role),
-        start ? `Period: ${start} – ${end || 'Present'}` : null,
+        start ? `Period: ${start} – ${isCurrent ? 'Present' : endDate}` : null,
         label('Description', doc.description),
       ]
       break

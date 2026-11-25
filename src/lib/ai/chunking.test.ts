@@ -330,6 +330,23 @@ describe('chunkFlatRecord', () => {
       )
     })
 
+    it('reads an empty end date as current in the lead and the period alike', () => {
+      // The collection says "Leave empty for a current role" and does not
+      // require `current`; the lead and the period must agree (#236 review).
+      const [chunk] = chunkFlatRecord('work-history', {
+        id: 2,
+        company: 'Acme',
+        title: 'Engineer',
+        startDate: '2024-01-01T00:00:00.000Z',
+        current: false,
+      })
+      const [lead, , , period] = chunk.content.split('\n')
+      expect(lead).toBe(
+        'Current employer in his work history: Engineer at Acme.',
+      )
+      expect(period).toBe('Period: 2024-01-01 – Present')
+    })
+
     it('names the company alone when the role has no title', () => {
       expect(employmentHistoryLead('Freelance', '', false)).toBe(
         'Past employer in his work history: Freelance.',
