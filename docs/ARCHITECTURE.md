@@ -60,10 +60,14 @@ What a reader or editor can do with it, and which tests prove it, is
   "admin edits are live in seconds" (#118; pinned by
   `src/app/api/revalidate/route.test.ts`).
 - **A reader that populates another collection's document subscribes to that
-  collection's tag too** (#359, option A; Brandon). Repo reads run with access
-  control enforced, so a relation to a draft comes back as a bare id: a link
-  field renders it as `'#'` (`resolveCmsHref`) and a rich-text internal link
-  as plain text (`lexicalToBlocks`). The target's publish, unpublish or delete
+  collection's tag too** (#359, option A; Brandon). Visitor-facing reads run
+  with access control enforced (`overrideAccess: false`), so a relation to a
+  draft comes back as a bare id: a link field renders it as `'#'`
+  (`resolveCmsHref`) and a rich-text internal link as plain text
+  (`lexicalToBlocks`). The exceptions use `overrideAccess: true` and are
+  uncached: the draft-preview readers, where linking a draft is the point,
+  and `getGatedPostContent`, which asks for each link target's `_status` so a
+  draft still renders as text. The target's publish, unpublish or delete
   purges only its own tag (`revalidatePage` purges `pages`, `revalidatePost`
   purges `posts`). So the cached page readers that return blocks
   (`getPageByPathDraftAware`, `getPageLayoutBySlug`) carry `posts`; the cached
