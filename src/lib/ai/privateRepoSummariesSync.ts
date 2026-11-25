@@ -18,6 +18,7 @@ import {
 } from '@/lib/ai/embeddingsStore'
 import {
   type PrivateRepoSummary,
+  UnpublishableSummaryError,
   chunkPrivateRepoSummary,
 } from '@/lib/ai/privateRepoSummaries'
 
@@ -74,8 +75,15 @@ async function readIndexedSummaryDocIds(
  * removing an entry must take its row out of the index on the next run. An
  * empty allowlist therefore empties the collection.
  *
+ * The sweep runs FIRST, before any provider call (#193 review): a removal is
+ * a revocation, and it must not wait on an embedding that can fail. Removing
+ * one repository while adding another whose embed then fails still takes the
+ * removed one out of the index.
+ *
  * Every entry is validated before anything is written, so one bad entry
- * fails the pass without indexing the entries listed before it.
+ * fails the pass without indexing the entries listed before it. That includes
+ * two entries that derive the same `doc_id`: they would share one row, and
+ * the second would silently overwrite the first.
  *
  * @param args - Database handle, the allowlist, and `dryRun` to report
  * without writing.
@@ -100,13 +108,28 @@ export async function syncPrivateRepoSummaries(args: {
     deleted: 0,
   }
 
-  const keep = new Set(chunks.map((chunk) => chunk.docId))
+  const keep = new Set<number>()
+  for (const chunk of chunks) {
+    if (keep.has(chunk.docId)) {
+      throw new UnpublishableSummaryError(
+        `[corvus:private] refusing the allowlist: "${chunk.title}" derives ` +
+          `doc_id ${chunk.docId}, which an earlier entry already uses. ` +
+          `Rename one, or remove the duplicate.`,
+      )
+    }
+    keep.add(chunk.docId)
+  }
   const stale = (await readIndexedSummaryDocIds(db)).filter(
     (id) => !keep.has(id),
   )
   if (dryRun) {
     totals.deleted = stale.length
     return totals
+  }
+
+  for (const docId of stale) {
+    await deleteDocumentEmbeddings(db, collection, docId)
+    totals.deleted += 1
   }
 
   for (const chunk of chunks) {
@@ -134,11 +157,6 @@ export async function syncPrivateRepoSummaries(args: {
     await upsertChunk(db, chunk, embedding, getEmbeddingModelId())
     await deleteTrailingChunks(db, collection, chunk.docId, 1)
     totals.written += 1
-  }
-
-  for (const docId of stale) {
-    await deleteDocumentEmbeddings(db, collection, docId)
-    totals.deleted += 1
   }
   return totals
 }

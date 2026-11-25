@@ -146,6 +146,39 @@ describe('syncPrivateRepoSummaries', () => {
     ).toBe(false)
   })
 
+  it('revokes a removed entry even when another entry’s embed fails (#193 review)', async () => {
+    embedChunksMock.mockClear()
+    embedChunksMock.mockRejectedValueOnce(new Error('provider down'))
+    const removed = privateRepoSummaryDocId('gone')
+    const db = createFakeDb([removed])
+
+    await expect(
+      syncPrivateRepoSummaries({ db, summaries: [entry] }),
+    ).rejects.toThrow(/provider down/)
+    expect(db.statements.some((text) => text.includes('DELETE'))).toBe(true)
+  })
+
+  it('refuses two entries that derive the same doc_id (#193 review)', async () => {
+    embedChunksMock.mockClear()
+    // A measured sha256 collision in the first 31 bits.
+    expect(privateRepoSummaryDocId('fixture-2607')).toBe(
+      privateRepoSummaryDocId('fixture-70509'),
+    )
+    const db = createFakeDb()
+
+    await expect(
+      syncPrivateRepoSummaries({
+        db,
+        summaries: [
+          { ...entry, name: 'fixture-2607' },
+          { ...entry, name: 'fixture-70509' },
+        ],
+      }),
+    ).rejects.toThrow(/doc_id/)
+    expect(embedChunksMock).not.toHaveBeenCalled()
+    expect(db.statements).toEqual([])
+  })
+
   it('validates every entry before writing any', async () => {
     embedChunksMock.mockClear()
     const db = createFakeDb()

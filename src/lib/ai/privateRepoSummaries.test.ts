@@ -95,6 +95,12 @@ describe('chunkPrivateRepoSummary', () => {
       { publicUrl: 'https://github.com/brandonperfetti/sample-private' },
     ],
     ['a protocol-relative publicUrl', { publicUrl: '//evil.example/x' }],
+    [
+      'a backslash publicUrl a browser reads as GitHub (#193 review)',
+      { publicUrl: '/\\github.com/brandonperfetti/sample-private' },
+    ],
+    ['a publicUrl with a backslash later on', { publicUrl: '/a\\b' }],
+    ['a publicUrl with a tab', { publicUrl: '/\tgithub.com/x' }],
   ])('refuses %s', (_label, override) => {
     expect(() =>
       chunkPrivateRepoSummary({ ...entry, ...override } as PrivateRepoSummary),

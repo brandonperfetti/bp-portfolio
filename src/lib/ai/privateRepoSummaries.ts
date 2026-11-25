@@ -82,6 +82,31 @@ export class UnpublishableSummaryError extends Error {
 /** Any URL, or a bare GitHub address, inside a free-text field. */
 const URL_LIKE = /\b(?:https?:\/\/|www\.)\S+|\bgithub\.com\b/i
 
+/** A stand-in origin: only whether a path stays on it matters. */
+const SITE_ORIGIN = 'https://site.invalid'
+
+/**
+ * Is `value` a path on this site, as a browser would resolve it?
+ *
+ * @remarks A leading-slash regex is not enough (#193 review): browsers read
+ * a backslash as a slash, so `/\github.com/owner/repo` resolves to
+ * GitHub. The value must start with exactly one `/`, carry no backslash,
+ * whitespace or control character, and still resolve to the site's own
+ * origin under WHATWG URL parsing.
+ *
+ * @param value - The candidate `publicUrl`.
+ * @returns `true` only for a same-origin site path.
+ */
+function isSitePath(value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  if (!/^\/(?![/\\])[^\s\\\u0000-\u001f\u007f]*$/.test(value)) return false
+  try {
+    return new URL(value, SITE_ORIGIN).origin === SITE_ORIGIN
+  } catch {
+    return false
+  }
+}
+
 /**
  * Refuse an entry that could put more than its summary into the index.
  *
@@ -121,7 +146,7 @@ export function assertPublishableSummary(entry: PrivateRepoSummary): void {
     )
   }
   const url = entry.publicUrl
-  if (url !== undefined && url !== null && !/^\/(?!\/)\S*$/.test(url)) {
+  if (url !== undefined && url !== null && !isSitePath(url)) {
     throw new UnpublishableSummaryError(
       `[corvus:private] refusing summary "${name}": publicUrl must be a path ` +
         `on this site (starting with a single "/"), never a GitHub or ` +

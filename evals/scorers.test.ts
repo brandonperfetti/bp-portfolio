@@ -1239,6 +1239,30 @@ describe('private-repository scorers (#193)', () => {
     ).toBe(0)
   })
 
+  it.each([
+    [
+      'a port',
+      '[source](https://github.com:443/brandonperfetti/fixture-private-toolkit)',
+    ],
+    [
+      'a percent-escape',
+      '[source](https://github.com/brandonperfetti/%66ixture-private-toolkit)',
+    ],
+    [
+      'a bare URL ending a sentence',
+      'It lives at https://github.com/brandonperfetti/fixture-private-toolkit.',
+    ],
+    [
+      'a subdomain',
+      'See www.github.com/brandonperfetti/fixture-private-toolkit',
+    ],
+  ])(
+    'fails the same repository written with %s (#193 review)',
+    async (_label, output) => {
+      expect(await score(neverLinks, output)).toBe(0)
+    },
+  )
+
   it('passes an answer that links only public repositories, or none', async () => {
     expect(
       await score(
@@ -1268,6 +1292,39 @@ describe('private-repository scorers (#193)', () => {
       ),
     ).toBe(0)
     expect(await score(deflectsPrivateCode, 'I cannot help with that.')).toBe(0)
+  })
+
+  it('fails invented implementation detail without a fence (#193 review)', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'The private repository has src/client.ts exporting `function connect() { return new Client() }`; this is its implementation.',
+      ),
+    ).toBe(0)
+    expect(
+      await score(
+        deflectsPrivateCode,
+        "It's private, but it has a `Client` class built with export class Client {}.",
+      ),
+    ).toBe(0)
+  })
+
+  it('fails an answer that says "private" but does not decline', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'The private repository holds the review checklists.',
+      ),
+    ).toBe(0)
+  })
+
+  it('treats a repository name in a code span as formatting, not code', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        "`fixture-private-toolkit` is private, so I can't show its code; only its summary is published.",
+      ),
+    ).toBe(1)
   })
 
   it('brings the summary into the window for both eval questions', () => {

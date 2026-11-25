@@ -802,8 +802,11 @@ sync's token (public repositories only) is not widened.
 
 `assertPublishableSummary` refuses a name with an owner, slash or space, a URL
 or `github.com` address in any text field, an empty blurb, and a `publicUrl`
-that is not a site path. The list is **empty by default** and takes no
-wildcard. The row is built from those four fields one by one, so an object that
+that is not a site path: it must start with exactly one `/`, hold no
+backslash or whitespace, and still resolve to this site's origin under URL
+parsing, because a browser reads `/\github.com/…` as GitHub. The sync also
+refuses two entries whose names hash to the same `doc_id`. The list is
+**empty by default** and takes no wildcard. The row is built from those four fields one by one, so an object that
 also carries a README or code contributes none of it, and a test hands it
 exactly such an object.
 
@@ -816,7 +819,9 @@ corvus:sync-github` runs a second pass after the public one:
 `syncPrivateRepoSummaries` embeds what changed, skips what did not at no
 provider cost, and **always** sweeps rows the allowlist no longer names
 (`--no-prune` does not apply, because a list in the code cannot be partially
-read). With the list empty it writes nothing and removes any leftover row.
+read). The sweep runs first, before any provider call, so a removal takes
+effect even when another entry's embed fails. With the list empty it writes
+nothing and removes any leftover row.
 
 **In the prompt.** A summary passage opens with `Private repository:` and ends
 with a notice that only the summary is public. When one is in the window,
