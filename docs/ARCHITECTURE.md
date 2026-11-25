@@ -64,6 +64,38 @@ What a reader or editor can do with it, and which tests prove it, is
 - GitHub tech signals cache 6h under tag `tech-signals`
   (`src/lib/tech/githubSignals.ts`).
 
+## Link prefetching
+
+`next.config.mjs` sets `partialPrefetching: false` beside
+`cacheComponents: true` (#436), decided 2026-11-25 on Next 16.4.6.
+
+- **What it keeps.** Each `<Link>` that enters the viewport prefetches the
+  cached render of its own URL, the behavior the site has had since Cache
+  Components landed (#76). Leaving the option unset behaves the same but logs
+  a warning on every build; `false` states the choice and removes the warning.
+- **Why not `true` yet.** With Partial Prefetching, a default `<Link>`
+  prefetches one App Shell per route: only the output that does not depend on
+  the URL. `/articles/[slug]` and the `[...segments]` catch-all await `params`
+  outside `<Suspense>` on purpose, so a 404, a #120/#130 redirect or the #153
+  placed-article 308 keeps a real HTTP status (#172), and neither has a
+  `loading.tsx`. Their App Shell would hold the layout and no body, so the
+  article or page a reader clicks would render after the click instead of
+  being prefetched before it [inference: verify by comparing the same
+  client-side navigations in a production build with the flag off and on].
+- **What it does not hold back.** No link in `src/` sets `prefetch={true}`
+  [measured 2026-11-25, `grep -rn prefetch src`], so there is no legacy full
+  prefetch to migrate; adoption is only the content-route question above.
+- **Adoption work.** Pick one route at a time (`export const prefetch =
+'partial'` lets a route adopt with the global flag off): either move the
+  `params` read behind `<Suspense>` without losing #172's status codes, or
+  keep the current shape and give the links to it `prefetch={true}`, which
+  resolves the cached URL-specific render ahead of the click at the cost of a
+  server invocation per visible link. Prove each with the same production
+  navigation before and after, then set the flag to `true`. Next's next major
+  turns Partial Prefetching on everywhere and removes the option, so this
+  work is due before that upgrade
+  (`node_modules/next/dist/docs/01-app/02-guides/adopting-partial-prefetching.md`).
+
 ## Environments
 
 - GitFlow since the v4 cutover: `master` → production
