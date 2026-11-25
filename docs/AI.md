@@ -841,12 +841,14 @@ from the blurb, and "show me its code" must deflect. Both are scored by
 URL parser (after Unicode folding and HTML-entity decoding, so `&#97;` and
 full-width letters count) and compares only the repository segment: an owner,
 file path or fragment that holds a private name is not a link to it.
-`deflects-private-code` needs the word "private" and no code: no fence, no
-code span holding code, no source file and no code-shaped definition. It does
-not judge the refusal's wording; a list of refusal phrases misread ordinary
-refusals in two reviews. **Its limit:** an invented behaviour told in plain prose
-passes, because no syntax marks it; the prompt rule is the guard there, and a
-test pins the limit so it stays stated. **Ops:** once Brandon adds the
+`deflects-private-code` needs the word "private", a negation or limit word
+(`not`, `n't`, `cannot`, `only`, `instead` …), and no code: no fence or indented block,
+no code span holding code, no source file and no code-shaped definition or
+import. It does not match refusal phrases; a list of them misread ordinary
+refusals in two reviews. **Its limits:** an invented behaviour told in plain prose
+passes, because no syntax marks it, and the negation word is not tied to the
+code ("you cannot lose requests" counts); the prompt rule is the guard there, and a
+tests pin both limits so they stay stated. **Ops:** once Brandon adds the
 first entry, the sync's runbook applies unchanged. Run it with `--dry-run`
 first, check that the `[corvus:private]` counts line names the entries
 expected, then let the scheduled run (or a dispatch) apply it.
