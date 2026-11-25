@@ -248,9 +248,11 @@ export const Pages: CollectionConfig = {
     // page's OWN old path has landed (#150).
     // `refreshCorvusEmbeddings` (#208) LAST, after the cascade. Its writes go
     // through `payload.db.drizzle`, outside this request's transaction, so
-    // anything that can still roll the save back must run before it: a
-    // cascade that throws then rolls back a publish whose text was never
-    // embedded, instead of leaving an unpublished Page's text retrievable.
+    // the hooks that can roll the save back run before it: a cascade that
+    // throws then rolls back a publish whose text was never embedded, instead
+    // of leaving an unpublished Page's text retrievable. Ordering cannot close
+    // the last window: if the transaction itself fails to commit after this
+    // hook has written, the rows stay until the backfill, as for Posts.
     // It is fail-open and bounded, and a cascaded descendant's path change
     // reaches that descendant's chunks through its own `afterChange` as a
     // metadata repair.

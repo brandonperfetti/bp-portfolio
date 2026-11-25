@@ -44,7 +44,7 @@ const changeArgs = (
     context?: Record<string, unknown>
     query?: Record<string, unknown>
     drizzle?: unknown
-    findByID?: (...args: unknown[]) => unknown
+    findOne?: (...args: unknown[]) => unknown
   } = {},
 ) => {
   const log = logger()
@@ -54,8 +54,10 @@ const changeArgs = (
     req: {
       payload: {
         logger: log,
-        db: { drizzle: 'drizzle' in over ? over.drizzle : { execute } },
-        ...(over.findByID ? { findByID: over.findByID } : {}),
+        db: {
+          drizzle: 'drizzle' in over ? over.drizzle : { execute },
+          ...(over.findOne ? { findOne: over.findOne } : {}),
+        },
       },
       context: over.context ?? {},
       query: over.query ?? {},
@@ -143,31 +145,32 @@ describe('2. skips drafts, unpublished saves, and autosave ticks', () => {
 
 describe('2b. a draft saved over a published document deletes nothing (#208)', () => {
   // "Save draft" writes only a version; the collection row stays published and
-  // keeps serving. The hook asks that row, on the request's transaction.
-  const draftOver = (row: unknown) => {
-    const findByID = vi.fn(async () => row)
-    const { args } = changeArgs({
+  // keeps serving. The hook asks that row through the adapter, on the
+  // request's transaction.
+  const draftOver = (
+    findOne: (...args: unknown[]) => unknown,
+    previousStatus = 'published',
+  ) =>
+    changeArgs({
       doc: { id: 7, _status: 'draft' },
-      previousDoc: { id: 7, _status: 'published' },
-      findByID,
+      previousDoc: { id: 7, _status: previousStatus },
+      findOne,
     })
-    return { args, findByID }
-  }
 
   it.each(['posts', 'pages'] as const)(
     'keeps a published %s’s rows when a draft is saved over it',
     async (collection) => {
-      const { args, findByID } = draftOver({ id: 7, _status: 'published' })
+      const findOne = vi.fn(async () => ({ _status: 'published' }))
+      const { args } = draftOver(findOne)
 
       await refreshCorvusEmbeddings(collection)(args)
 
       expect(deleteDocumentEmbeddingsMock).not.toHaveBeenCalled()
       expect(syncDocumentEmbeddingsMock).not.toHaveBeenCalled()
-      expect(findByID).toHaveBeenCalledWith(
+      expect(findOne).toHaveBeenCalledWith(
         expect.objectContaining({
           collection,
-          id: 7,
-          draft: false,
+          where: { id: { equals: 7 } },
           req: expect.objectContaining({ payload: expect.anything() }),
         }),
       )
@@ -175,12 +178,8 @@ describe('2b. a draft saved over a published document deletes nothing (#208)', (
   )
 
   it('keeps the rows when a second draft follows the first', async () => {
-    const findByID = vi.fn(async () => ({ id: 7, _status: 'published' }))
-    const { args } = changeArgs({
-      doc: { id: 7, _status: 'draft' },
-      previousDoc: { id: 7, _status: 'draft' },
-      findByID,
-    })
+    const findOne = vi.fn(async () => ({ _status: 'published' }))
+    const { args } = draftOver(findOne, 'draft')
 
     await refreshCorvusEmbeddings('pages')(args)
 
@@ -189,7 +188,7 @@ describe('2b. a draft saved over a published document deletes nothing (#208)', (
   })
 
   it('still deletes on a real unpublish: the row itself is now a draft', async () => {
-    const { args } = draftOver({ id: 7, _status: 'draft' })
+    const { args } = draftOver(vi.fn(async () => ({ _status: 'draft' })))
 
     await refreshCorvusEmbeddings('pages')(args)
 
@@ -200,19 +199,38 @@ describe('2b. a draft saved over a published document deletes nothing (#208)', (
     )
   })
 
-  it('fails toward the delete when the lookup throws', async () => {
-    const findByID = vi.fn(async () => {
-      throw new Error('db down')
-    })
-    const { args } = changeArgs({
-      doc: { id: 7, _status: 'draft' },
-      previousDoc: { id: 7, _status: 'published' },
-      findByID,
-    })
+  it('fails the save, not silently, when the lookup errors (#208 review)', async () => {
+    // The error happened inside the save's own transaction, so the save
+    // cannot be trusted to commit; swallowing it would report one anyway.
+    const { args } = draftOver(
+      vi.fn(async () => {
+        throw new Error('db down')
+      }),
+    )
 
-    await refreshCorvusEmbeddings('posts')(args)
+    await expect(refreshCorvusEmbeddings('posts')(args)).rejects.toThrow(
+      /could not read posts#7/,
+    )
+    expect(deleteDocumentEmbeddingsMock).not.toHaveBeenCalled()
+  })
 
-    expect(deleteDocumentEmbeddingsMock).toHaveBeenCalled()
+  it('gives up on a stalled lookup at the hook budget and deletes (#208 review)', async () => {
+    vi.useFakeTimers()
+    try {
+      const { args } = draftOver(vi.fn(() => new Promise(() => {})))
+
+      const run = refreshCorvusEmbeddings('pages')(args)
+      await vi.advanceTimersByTimeAsync(HOOK_EMBEDDING_TIMEOUT_MS)
+      await run
+
+      expect(deleteDocumentEmbeddingsMock).toHaveBeenCalledWith(
+        expect.anything(),
+        'pages',
+        7,
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not look anything up for a published save', async () => {
@@ -222,12 +240,12 @@ describe('2b. a draft saved over a published document deletes nothing (#208)', (
       metadataUpdated: 0,
       skipped: true,
     })
-    const findByID = vi.fn()
-    const { args } = changeArgs({ findByID })
+    const findOne = vi.fn()
+    const { args } = changeArgs({ findOne })
 
     await refreshCorvusEmbeddings('pages')(args)
 
-    expect(findByID).not.toHaveBeenCalled()
+    expect(findOne).not.toHaveBeenCalled()
   })
 })
 
