@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 
 /**
@@ -26,12 +26,43 @@ const BRIEF_START = '<!-- cms-domain-hook-brief:start -->'
 const BRIEF_END = '<!-- cms-domain-hook-brief:end -->'
 
 /**
+ * Resolves `p` the way the filesystem identifies it: symlinks followed and,
+ * on a case-insensitive volume, the on-disk spelling of each name.
+ *
+ * @remarks `realpath(3)` returns the canonical case on macOS, so
+ * `src/COLLECTIONS/Tags.ts` and `/users/…` resolve to the same path as the
+ * real spelling (#383 review, finding 3). A file being created does not exist
+ * yet, so its nearest existing ancestor is resolved and the rest of the path is
+ * appended as given. A case-sensitive volume keeps the spelling, so two
+ * genuinely different files are never merged.
+ *
+ * @param p - An absolute path.
+ * @returns The canonical absolute path, or `p` when nothing on it resolves.
+ */
+function canonicalPath(p) {
+  const rest = []
+  let current = p
+  for (;;) {
+    try {
+      return path.join(realpathSync.native(current), ...rest)
+    } catch {
+      const parent = path.dirname(current)
+      if (parent === current) return p
+      rest.unshift(path.basename(current))
+      current = parent
+    }
+  }
+}
+
+/**
  * Whether `filePath` falls under one of the owned paths.
  *
  * @remarks A path outside `repoRoot` (another worktree, `~/.claude`, a
  * relative path that climbs out) is never owned, so the hook stays quiet for
- * edits that are not to this checkout's CMS. Separators are normalised so the
- * prefix match does not depend on the platform.
+ * edits that are not to this checkout's CMS. Both paths are compared after
+ * {@link canonicalPath}, so a case alias or a symlink to an owned file still
+ * matches. Separators are normalised so the prefix match does not depend on
+ * the platform.
  *
  * @param filePath - Absolute path, or one relative to `repoRoot`.
  * @param repoRoot - Absolute path of the checkout.
@@ -39,10 +70,9 @@ const BRIEF_END = '<!-- cms-domain-hook-brief:end -->'
  */
 export function isOwnedPath(filePath, repoRoot) {
   if (typeof filePath !== 'string' || filePath === '') return false
-  const rel = path
-    .relative(repoRoot, path.resolve(repoRoot, filePath))
-    .split(path.sep)
-    .join('/')
+  const root = canonicalPath(path.resolve(repoRoot))
+  const target = canonicalPath(path.resolve(repoRoot, filePath))
+  const rel = path.relative(root, target).split(path.sep).join('/')
   if (rel === '' || rel.startsWith('../') || path.isAbsolute(rel)) return false
   return OWNED_PATHS.some((owned) =>
     owned.endsWith('/') ? rel.startsWith(owned) : rel === owned,

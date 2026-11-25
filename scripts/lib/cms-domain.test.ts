@@ -1,6 +1,6 @@
 // @vitest-environment node
-import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { spawn, spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -62,6 +62,29 @@ describe('isOwnedPath', () => {
     '',
   ])('does not own %s', (p) => {
     expect(isOwnedPath(p, repoRoot)).toBe(false)
+  })
+
+  // #383 review finding 3: on a case-insensitive volume a case alias names
+  // the same owned file, and must match like the real spelling.
+  const caseInsensitive = existsSync(path.join(repoRoot, 'SRC'))
+  it.runIf(caseInsensitive)(
+    'owns a case alias of an owned file on a case-insensitive volume',
+    () => {
+      expect(isOwnedPath('src/COLLECTIONS/Tags.ts', repoRoot)).toBe(true)
+      expect(
+        isOwnedPath(
+          path.join(repoRoot.toUpperCase(), 'src/collections/Tags.ts'),
+          repoRoot,
+        ),
+      ).toBe(true)
+      expect(isOwnedPath('src/COLLECTIONS/NewFile.ts', repoRoot)).toBe(true)
+    },
+  )
+
+  it('owns a file that does not exist yet under an owned directory', () => {
+    expect(
+      isOwnedPath('src/collections/NotYetCreated/index.ts', repoRoot),
+    ).toBe(true)
   })
 
   it('does not own a non-string path', () => {
@@ -139,7 +162,33 @@ describe('the hook script never blocks', () => {
     expect(r.stdout).toBe('')
   })
 
-  it('is wired for Edit and Write in .claude/settings.json, with no deny', () => {
+  it('exits 0 with no output when stdin never closes', async () => {
+    // #383 review finding 1: a complete payload with stdin left open must not
+    // hold the edit; the hook's own deadline ends it.
+    const child = spawn(process.execPath, [hookScript])
+    let stdout = ''
+    child.stdout.on('data', (d) => (stdout += d))
+    child.stdin.write(
+      editInput(path.join(repoRoot, 'src/collections/Posts/index.ts')),
+    )
+    const started = Date.now()
+    const code = await new Promise((resolve) => child.on('exit', resolve))
+    expect(code).toBe(0)
+    expect(stdout).toBe('')
+    expect(Date.now() - started).toBeLessThan(5000)
+  }, 10_000)
+
+  it('exits 0 with no output on input past the size cap', () => {
+    const r = spawnSync(process.execPath, [hookScript], {
+      input: 'x'.repeat(5 * 1024 * 1024),
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+    })
+    expect(r.status).toBe(0)
+    expect(r.stdout).toBe('')
+  })
+
+  it('is wired for Edit and Write, fails open, and runs without a shell', () => {
     const settings = JSON.parse(
       readFileSync(path.join(repoRoot, '.claude/settings.json'), 'utf8'),
     )
@@ -147,9 +196,12 @@ describe('the hook script never blocks', () => {
     expect(entry.matcher.split('|')).toEqual(
       expect.arrayContaining(['Edit', 'Write']),
     )
-    expect(entry.hooks[0].command).toContain(
-      '.claude/hooks/cms-domain-context.mjs',
-    )
+    const [hook] = entry.hooks
+    expect(hook.command).toBe('node')
+    expect(hook.args).toEqual([
+      '${CLAUDE_PROJECT_DIR}/.claude/hooks/cms-domain-context.mjs',
+    ])
+    expect(hook.onFailure).toBe('continue')
     expect(settings.permissions).toBeUndefined()
   })
 })

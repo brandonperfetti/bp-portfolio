@@ -2,14 +2,17 @@
 
 Three changes the CMS Domain Agent (`docs/agents/cms-domain.md`) must catch.
 Each is a short PR description with its diff, then the finding the agent must
-give. Run them by hand, or with `scripts/cms-domain-scenarios.sh` under Claude
-Code, whenever the agent's brief, its subagent definition or the CMS section
-of `GLOSSARY.md` changes. Record each run (date, model, output) in the PR that
-changed the agent.
+give. Run them by hand, or under Claude Code with
+`node scripts/cms-domain-scenarios.mjs [outDir]`, whenever the agent's brief,
+its subagent definition or the CMS section of `GLOSSARY.md` changes. Record
+each run (date, model, output) in the PR that changed the agent.
 
-A check passes when the agent's answer gives the finding below. Each finding
-lists the terms the script looks for. They are a floor, not the whole check:
-read the answer too.
+A check passes only when a reader has checked the agent's answer against the
+finding below and recorded that verdict in the PR. The script cannot make that
+call: an answer can name every term while recommending the defect. It checks a
+floor. A run fails if it calls a tool other than Read, Grep or Glob, if it sees
+this file, or if its answer misses one of the listed terms. A run that clears
+the floor is reported `TERMS PRESENT`, never `PASS`.
 
 **A scenario is never deleted to make a check pass.** If the agent misses one,
 fix the brief, the subagent definition or the glossary, never the scenario.

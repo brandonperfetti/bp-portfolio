@@ -44,7 +44,11 @@ restate them.
 
 1. Name every owned path the change touches.
 2. For each `AGENTS.md` CMS hazard, say whether the change can trip it and
-   what in the diff shows that it does or does not. Cite file and line.
+   what in the diff shows that it does or does not. Cite file and line. For a
+   schema change, name every table it alters, its companion tables included:
+   a versioned collection (drafts on, as on Posts and Pages) has a `_v` table
+   the migration must alter too, and a `hasMany` or polymorphic relationship
+   has `_rels` (`GLOSSARY.md` § CMS, "Companion tables").
 3. Give each finding as: what is wrong, the rule it breaks (with the doc
    section), and what would fix it. Say "nothing found" when nothing is.
 4. Never edit a file. When asked to, decline and give the finding instead.
@@ -54,6 +58,10 @@ restate them.
 `docs/agents/cms-domain-scenarios.md` holds three changes the agent must catch.
 Run them whenever this file, the subagent definition or the glossary's CMS
 section changes. **A scenario is never deleted to make a check pass.**
+
+That file is the answer key the agent is checked against. **The agent never
+opens or searches it**: a review that read the answers would prove nothing, and
+the scenario runner fails any run that tries.
 
 ## Hook brief
 

@@ -30,9 +30,10 @@ live in `docs/PAYLOAD.md`.
   versions enabled; a Local-API `draft: true` never reaches `req.query`.
 - **Revalidation tag**: a `CMS_TAGS` string (`src/lib/cms/cache.ts`) that repo
   modules cache under and hooks purge with `revalidateTag(tag, { expire: 0 })`.
-- **Slug lock**: the `slugLock` checkbox beside a slug field; set, the slug
-  follows the title until first publish and is frozen after it
-  (`enforceSlugFreeze`); cleared, the editor hand-edits it.
+- **Slug lock**: the `slugLock` checkbox; set, it means "I do not hand-edit
+  this slug". The admin form then follows the title until first publish (a
+  REST or MCP title-only write keeps the stored slug), and on Posts and Pages a
+  published slug is frozen (`docs/PAYLOAD.md` § Slugs and paths).
 - **Public path**: a document's public URL as `publicPathFor` computes it
   (`src/fields/slug/slugPaths.ts`), the one owner of that answer.
 - **Placed post**: a Post given a parent Page, served at `/<path>` through the

@@ -5,20 +5,25 @@
  * Usage: `node scripts/cms-domain-scenarios.mjs [outDir]`
  *
  * Each scenario in `docs/agents/cms-domain-scenarios.md` is sent, without its
- * required finding, to `claude -p --agent cms-domain`. A scenario passes when
- * the answer names every one of its terms and the agent neither touched the
- * scenarios file nor called a tool outside Read, Grep and Glob. The full
- * transcript of each run is written to `outDir` (default: a temp directory),
- * with a `summary.json` that records the date, the Claude Code version and the
- * model that answered.
+ * required finding, to `claude -p --agent cms-domain`. The transcript of each
+ * run is written to `outDir` (default: a temp directory), with a
+ * `summary.json` that records the date, the Claude Code version, the model
+ * that answered and each full answer.
  *
- * @remarks **Why the scenarios file is denied.** It holds the answers. The
- * agent runs inside the repo with read access, so a run that read it would
- * prove nothing; the file is denied by a permission rule for the run, and a
- * transcript that mentions it in any tool call fails the scenario anyway.
+ * @remarks **This script checks a floor, not the finding.** It fails a run
+ * with no init or result event, a tool outside Read, Grep and Glob, any sign
+ * of the answer key, or a missing term (`checkScenarioRun`). A run that clears
+ * all of that is reported `TERMS PRESENT`, never `PASS`: an answer can name
+ * every term while recommending the defect. A scenario passes only when a
+ * reader has checked each answer in `summary.json` against its required
+ * finding and recorded that in the PR.
  *
- * Not part of the CI gate: it spends model calls and needs a signed-in
- * Claude Code. It exits 1 when any scenario fails.
+ * The scenarios file holds the answers, so it is also denied by a permission
+ * rule for the run. Claude Code applies a Read deny to Grep and Glob on a
+ * best-effort basis, which is why the transcript check exists as well.
+ *
+ * Not part of the CI gate: it spends model calls and needs a signed-in Claude
+ * Code. It exits 1 when any run fails the floor.
  */
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -26,14 +31,16 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { parseScenarios } from './lib/cms-domain-scenarios.mjs'
+import {
+  checkScenarioRun,
+  parseScenarios,
+} from './lib/cms-domain-scenarios.mjs'
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 )
 const SCENARIOS = 'docs/agents/cms-domain-scenarios.md'
-const READ_ONLY_TOOLS = new Set(['Read', 'Grep', 'Glob'])
 
 const outDir =
   process.argv[2] ?? mkdtempSync(path.join(os.tmpdir(), 'cms-domain-'))
@@ -47,7 +54,7 @@ const settings = JSON.stringify({
 })
 const version = spawnSync('claude', ['--version'], {
   encoding: 'utf8',
-}).stdout.trim()
+}).stdout?.trim()
 
 const results = []
 for (const s of scenarios) {
@@ -67,7 +74,9 @@ for (const s of scenarios) {
     ],
     { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
   )
-  const events = run.stdout
+  const stdout = run.stdout ?? ''
+  writeFileSync(path.join(outDir, `scenario-${s.number}.jsonl`), stdout)
+  const events = stdout
     .split('\n')
     .filter(Boolean)
     .map((line) => {
@@ -77,51 +86,19 @@ for (const s of scenarios) {
         return null
       }
     })
-    .filter(Boolean)
-  writeFileSync(path.join(outDir, `scenario-${s.number}.jsonl`), run.stdout)
-
-  const init = events.find((e) => e.type === 'system' && e.subtype === 'init')
-  const final = events.findLast((e) => e.type === 'result')
-  const toolCalls = events
-    .filter((e) => e.type === 'assistant')
-    .flatMap((e) => e.message?.content ?? [])
-    .filter((c) => c.type === 'tool_use')
-  const answer = final?.result ?? ''
-  const missing = s.terms.filter(
-    (t) => !answer.toLowerCase().includes(t.toLowerCase()),
-  )
-  const offTools = toolCalls.filter((c) => !READ_ONLY_TOOLS.has(c.name))
-  const touchedAnswers = toolCalls.some((c) =>
-    JSON.stringify(c.input).includes('cms-domain-scenarios'),
-  )
-  const pass =
-    run.status === 0 &&
-    missing.length === 0 &&
-    offTools.length === 0 &&
-    !touchedAnswers
-  results.push({
-    scenario: s.number,
-    title: s.title,
-    pass,
-    missingTerms: missing,
-    offTools: offTools.map((c) => c.name),
-    touchedAnswers,
-    model: init?.model ?? null,
-    tools: init?.tools ?? null,
-    toolCalls: toolCalls.map((c) => ({ name: c.name, input: c.input })),
-    answer,
-  })
+  const check = checkScenarioRun(events, s, run.status)
+  results.push({ scenario: s.number, title: s.title, ...check })
   console.log(
-    `${pass ? 'PASS' : 'FAIL'} scenario ${s.number}: ${s.title}` +
-      (missing.length ? ` (missing: ${missing.join(', ')})` : '') +
-      (offTools.length ? ` (non-read tools: ${offTools.join(', ')})` : '') +
-      (touchedAnswers ? ' (touched the scenarios file)' : ''),
+    `${check.status === 'terms-present' ? 'TERMS PRESENT' : 'FAIL'} scenario ${s.number}: ${s.title}` +
+      (check.problems.length ? ` (${check.problems.join('; ')})` : ''),
   )
 }
 
 const summary = {
   date: new Date().toISOString(),
-  claudeCode: version,
+  claudeCode: version ?? null,
+  semanticReview:
+    'pending: read each answer against its required finding and record the verdict in the PR',
   results,
 }
 writeFileSync(
@@ -129,4 +106,7 @@ writeFileSync(
   JSON.stringify(summary, null, 2),
 )
 console.log(`transcripts and summary: ${outDir}`)
-process.exit(results.every((r) => r.pass) ? 0 : 1)
+console.log(
+  'A scenario passes only once each answer is read against its required finding.',
+)
+process.exit(results.every((r) => r.status === 'terms-present') ? 0 : 1)
