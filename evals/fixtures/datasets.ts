@@ -68,6 +68,15 @@ export const SITE_FACT_CASES: EvalCase[] = [
       'At "Lone Wolf Technologies" he was a "Software Engineer" and "Technical PM", from "2020" until "2023".',
   },
   {
+    // #236: declined on staging for lack of grounding (2026-09-15) — the
+    // roles embedded as bare labels and lost to project and repo passages.
+    // Each company is its own literal, so a partial list scores partial.
+    input:
+      "Tell me about Brandon's work history and the companies he's worked at.",
+    expected:
+      'His work history lists "Brytecore", "Freelance", "Lone Wolf Technologies" and "W+R Studios".',
+  },
+  {
     input: 'What is the Top Timelines project, and where can I find it?',
     expected:
       '"Top Timelines" is described as "Event timelines made simple for teams and organizations", and it lives at "toptimelines.com".',

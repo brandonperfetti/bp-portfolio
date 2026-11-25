@@ -240,8 +240,28 @@ describe('eval retrieval preconditions', () => {
   it.each(ADJACENT_CONTEXT_CASES)(
     'hands over real but unhelpful context for: $input',
     ({ input }) => {
-      expect(createFixtureRetriever()(input)).toEqual([])
       expect(createFixtureRetriever({ floor: 0 })(input).length).toBe(5)
+
+      // The block runs floorless, so what the floor alone would return only
+      // says how hard the trap is. Since #236 a work-history chunk opens with
+      // "… employer in his work history", so the career question below clears
+      // the floor on its own — as it does on real embeddings — and the trap
+      // gets harder, not weaker: every passage is a real role, and none of
+      // them covers the years asked about. Every other case still retrieves
+      // nothing at the floor.
+      const atFloor = createFixtureRetriever()(input)
+      if (!/between 2008 and 2011/.test(input)) {
+        expect(atFloor).toEqual([])
+        return
+      }
+      expect(atFloor.length).toBeGreaterThan(0)
+      for (const snippet of atFloor) {
+        const start = /Period: (\d{4})/.exec(snippet.content)?.[1]
+        expect(snippet.content, 'only real roles, none in 2008–2011').toMatch(
+          /^(Current|Past) employer in his work history:/,
+        )
+        expect(Number(start)).toBeGreaterThanOrEqual(2012)
+      }
     },
   )
 

@@ -307,7 +307,8 @@ const str = (value: unknown): string =>
  *
  * Booleans are deliberately NOT coerced. No call site labels a boolean today
  * (`work-history.current` is the only boolean any chunker reads, and it picks
- * the word `'Present'` rather than emitting `true`), and a bare
+ * the words `'Present'` and `employmentHistoryLead`'s `Current` rather than
+ * emitting `true`), and a bare
  * `"Featured: true"` is worse grounding text than a purpose-written phrase.
  * A boolean field that earns a place in a chunk should get real wording at
  * its call site, which is a decision this helper should not silently make.
@@ -593,6 +594,58 @@ export function dailyDriverLead(
 }
 
 /**
+ * The sentence that opens a `work-history` chunk (#236).
+ *
+ * @remarks The measured defect: on staging (2026-09-15) the same career
+ * question retrieved the work-history passages on one ask and repository or
+ * project notes on the next, and "Tell me about Brandon's work history and the
+ * companies he's worked at" declined for lack of grounding. A role embedded as
+ * bare `Company:` / `Title:` / `Period:` labels shares almost no vocabulary
+ * with a career question, so on production's public corpus those passages sat
+ * at 0.35–0.43 cosine — level with the "Brandon Perfetti's Portfolio" project
+ * — and on that last question none cleared `CORVUS_SIMILARITY_FLOOR`
+ * `[measured 2026-11-25, text-embedding-3-small over the public
+ * /api/{posts,projects,uses,tech-stack,work-history} corpus plus the repo
+ * fixtures, 10 queries]`.
+ *
+ * With this sentence first, work history ranks first on all seven
+ * career-shaped queries measured (0.45–0.48 on the work-history question),
+ * the current role ranks first for "where does he currently work", and the top
+ * five for "what does this site run on", "what tech does Brandon use" and
+ * "has Brandon built anything with Next.js" are identical to before.
+ *
+ * The WORDING is the finding, not a detail. A draft that opened "Brandon's
+ * current job … he works at" (the `dailyDriverLead` shape) won the career
+ * questions too, but then took four of the five slots on "what tech does
+ * Brandon use" — a sentence about Brandon resembles every question about
+ * Brandon. "Employer" and "work history" are career words a stack or project
+ * question does not use, so keep the name out of it. A longer draft ("…, the
+ * company where he worked as …") started taking a slot on "has Brandon built
+ * anything with Next.js"; this one did not. "Work history" and "employment
+ * history" scored the same on embeddings; "work history" is also what the
+ * eval tier's term-coverage retriever needs to match "work history" and
+ * "worked" (`evals/fixtures/retriever.ts`).
+ *
+ * Note this changes chunk TEXT, so it changes `contentHash`: the four rows
+ * re-embed on their next save or the next `backfill-corvus-embeddings.ts` run
+ * (the weekly `corvus-backfill.yml`).
+ *
+ * @param company - The employer's name.
+ * @param title - The role's title.
+ * @param current - Whether this is the role he holds now.
+ * @returns The lead sentence, or `null` when there is no company to name.
+ */
+export function employmentHistoryLead(
+  company: string,
+  title: string,
+  current: boolean,
+): string | null {
+  if (!company) return null
+  const role = title ? `${title} at ${company}` : company
+  return `${current ? 'Current' : 'Past'} employer in his work history: ${role}.`
+}
+
+/**
  * The second tier the summary is allowed to NAME, and the only one (#165).
  *
  * @remarks `TECH_PROFICIENCY_RANKING_RULE` asks for two tiers and says which
@@ -829,6 +882,7 @@ export function chunkFlatRecord(
       const start = dateOnly(doc.startDate)
       const end = doc.current ? 'Present' : dateOnly(doc.endDate)
       lines = [
+        employmentHistoryLead(company, role, doc.current === true),
         label('Company', company),
         label('Title', role),
         start ? `Period: ${start} – ${end || 'Present'}` : null,

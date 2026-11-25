@@ -690,6 +690,37 @@ technology list. The acceptance criterion uses "What tech does **Brandon**
 use?", which is the right one — do not re-test the original phrasing and read a
 correct #167 answer as a #165 failure.
 
+### The work-history lead sentence (#236, 2026-11-25)
+
+Career questions retrieved the roles on one ask and project or repository notes
+on the next, and "Tell me about Brandon's work history and the companies he's
+worked at" declined for lack of grounding (staging, 2026-09-15). The cause was
+not missing data: each role embedded as bare `Company:` / `Title:` / `Period:`
+labels, which share almost no vocabulary with a career question. Over
+production's public corpus (posts, projects, uses, tech-stack, work-history,
+plus the repo fixtures) with `text-embedding-3-small`, those passages scored
+0.35–0.43 — level with the "Brandon Perfetti's Portfolio" project — and on the
+work-history question none cleared the 0.35 floor `[measured 2026-11-25; the
+experiment and its results are in the sansfaux agent store under
+evidence/2026-11-25-bp-236-work-history-retrieval/]`.
+
+`employmentHistoryLead` (`src/lib/ai/chunking.ts`) now opens each role with
+"Current|Past employer in his work history: <title> at <company>." On the same
+corpus, work history ranks first on all seven career-shaped queries measured,
+the current role ranks first for "where does he currently work", and the top
+five for "what does this site run on", "what tech does Brandon use" and "has
+Brandon built anything with Next.js" are unchanged. The wording is the finding:
+a lead about "Brandon" won the career questions but took four of five slots on
+"what tech does Brandon use", and a longer one leaked into the Next.js question.
+The docblock keeps the reasoning; a test keeps Brandon's name out of it.
+
+The text change moves `contentHash`, so the four rows re-embed on their next
+save or the weekly `corvus-backfill.yml`. What it does to live answers is a
+signed-in measurement on production after that run, recorded on #236. In the
+eval tier, a site-facts case asks the work-history question, and the
+adjacent-context precondition now expects the 2008–2011 question to retrieve
+real roles at the floor (none covering those years) instead of nothing.
+
 ### Public GitHub repos as a collection (#147)
 
 `collection: 'github-repos'` is the first non-CMS collection in the index: one
