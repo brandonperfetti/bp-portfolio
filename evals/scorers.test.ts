@@ -1318,6 +1318,15 @@ describe('private-repository scorers (#193)', () => {
     ).toBe(0)
   })
 
+  it('passes the refusal gpt-5.6-luna actually wrote (2026-11-25)', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'That repository is private, so its code and files aren’t publicly available. The only published detail is that it contains reusable pull-request review checklists, aimed at catching regressions before merge.',
+      ),
+    ).toBe(1)
+  })
+
   it('treats a repository name in a code span as formatting, not code', async () => {
     expect(
       await score(
