@@ -72,7 +72,10 @@ What a reader or editor can do with it, and which tests prove it, is
 - **What it keeps.** Each `<Link>` that enters the viewport prefetches the
   cached render of its own URL, the behavior the site has had since Cache
   Components landed (#76). Leaving the option unset behaves the same but logs
-  a warning on every build; `false` states the choice and removes the warning.
+  a warning on every build; `false` states the choice and removes the warning
+  [source: next 16.4.6 `dist/server/config.js`; measured 2026-11-25 with
+  Next's `loadConfig` on this config, warning absent, and on a control copy
+  without the key, warning printed].
 - **Why not `true` yet.** With Partial Prefetching, a default `<Link>`
   prefetches one App Shell per route: only the output that does not depend on
   the URL. `/articles/[slug]` and the `[...segments]` catch-all await `params`
@@ -93,8 +96,8 @@ What a reader or editor can do with it, and which tests prove it, is
   server invocation per visible link. Prove each with the same production
   navigation before and after, then set the flag to `true`. Next's next major
   turns Partial Prefetching on everywhere and removes the option, so this
-  work is due before that upgrade
-  (`node_modules/next/dist/docs/01-app/02-guides/adopting-partial-prefetching.md`).
+  work is due before that upgrade [source: next 16.4.6
+  `dist/docs/01-app/02-guides/adopting-partial-prefetching.md`].
 
 ## Environments
 

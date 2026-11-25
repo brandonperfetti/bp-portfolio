@@ -27,17 +27,12 @@ const nextConfig = {
   // the minimum Suspense/sync-IO scaffolding for a behavior-preserving build;
   // the `'use cache'` conversion of the CMS reader layer is Piece 2.
   cacheComponents: true,
-  // #436: Partial Prefetching stays OFF, explicitly. Unset already behaves as
-  // `false` but logs a build warning under `cacheComponents`; `false` keeps
-  // today's prefetch (each visible `<Link>` prefetches its URL's cached page
-  // render) and silences the warning. Turning it on would make a default
-  // `<Link>` prefetch only the route's URL-independent App Shell, and the two
-  // content routes (`/articles/[slug]`, `[...segments]`) deliberately await
-  // `params` outside `<Suspense>` so a 404/redirect keeps its HTTP status
-  // (#172), so their App Shell carries no article or page body: that content
-  // would move from "prefetched before the click" to "rendered after it".
-  // Adoption is migration work, recorded in docs/ARCHITECTURE.md § Link
-  // prefetching; Next's next major turns it on and removes the option.
+  // #436: Partial Prefetching stays OFF, explicitly. Unset behaves as `false`
+  // but warns on every build under `cacheComponents` [source: next 16.4.6
+  // `dist/server/config.js`, the `partialPrefetching === undefined` check].
+  // Not `true` yet because the content routes keep `await params` outside
+  // `<Suspense>` for real HTTP statuses (#172). Why, and the adoption work:
+  // docs/ARCHITECTURE.md § Link prefetching.
   partialPrefetching: false,
   // #76 B1: custom `cacheLife` profiles for the CMS reader layer's `'use cache'`
   // functions. Tag-purge (`revalidateTag` in the Payload afterChange/afterDelete
