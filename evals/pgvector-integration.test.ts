@@ -32,9 +32,12 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  * content would be worse than labelling it.
  *
  * Ownership is exact (collection, doc_id): the shifted SITE_FIXTURE_DOCS,
- * posts 900900–900902 and the rejected dimension probe 900999. Cleanup and
- * counts use those keys, never an open-ended offset band. The peer GitHub
- * file owns its shifted repo keys and posts sentinel 1009000, independently.
+ * posts 900900–900902, the rejected dimension probe 900999, and the two
+ * foreign-sibling rows the backfill case writes and removes itself,
+ * (github-repos, 900900) and (posts, 1000000). Cleanup and counts use those
+ * keys, never an open-ended offset band. The peer GitHub file owns its
+ * shifted repo keys, posts sentinel 1009000 and its own two foreign-sibling
+ * rows, independently.
  */
 
 /** Shifts captured IDs away from Payload rows; ownership also pins collection. */

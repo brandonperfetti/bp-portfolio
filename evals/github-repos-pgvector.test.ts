@@ -26,9 +26,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  *
  * Ownership is exact (collection, doc_id): github-repos at the shifted
  * fixture repo IDs (currently 911001–911003), plus posts sentinel 1009000
- * (offset +99000). Cleanup includes that sentinel without sweeping a band.
- * The peer pgvector file owns its captured corpus keys and posts 900900–
- * 900902/900999; neither file deletes or counts the other's keys.
+ * (offset +99000), plus the two foreign-sibling rows the indexing case writes
+ * and removes itself, (github-repos, 960000) and (posts, 911001). Cleanup
+ * includes that sentinel without sweeping a band. The peer pgvector file owns
+ * its captured corpus keys, posts 900900–900902/900999 and its own two
+ * foreign-sibling rows; neither file deletes or counts the other's keys.
  */
 
 /** Keeps every row this file writes in its own id range, for exact cleanup. */

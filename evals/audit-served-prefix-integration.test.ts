@@ -24,7 +24,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
  * detail counts over the same owned IDs. CTEs scope the input relations for
  * ALL THREE unchanged statements, so total-predicate drift still fails.
  * Foreign violations are positively observed by the unscoped statements but
- * never enter the owned assertions. Cleanup uses captured IDs only.
+ * never enter the owned assertions. Cleanup uses captured IDs, plus one
+ * age-bounded sweep of this file's own marker in `beforeAll` that recovers the
+ * rows a killed run left behind (see {@link STALE_AFTER}).
  *
  * **Why the rows are seeded by raw SQL and not through Payload.** The #180
  * `beforeChange` guards refuse to publish a page under an unpublished parent —
@@ -69,9 +71,29 @@ const SQL_PATH = path.resolve(
   '../scripts/audit-served-prefix.sql',
 )
 
-/** Marks every row this file writes, for exact cleanup. */
+/**
+ * Prefixes the slug of every row this file writes, so a killed run's leftovers
+ * can be found again.
+ *
+ * @remarks Cleanup within a run is by captured id; the marker exists for the
+ * `beforeAll` sweep, which needs a way to recognise this file's rows without
+ * an id list a dead process took with it. The per-run UUID keeps concurrent
+ * runs' slugs apart.
+ */
 const MARKER = 'zz-audit-served-prefix'
 const runMarker = `${MARKER}-${randomUUID()}`
+
+/**
+ * How old a marked row must be before `beforeAll` treats it as abandoned.
+ *
+ * @remarks A run killed between seeding and teardown takes its captured ids
+ * with it, and its rows (a published page and post under a draft parent) would
+ * otherwise sit in the database for good, making a hand run of the audit
+ * script report violations that are not real. Every test here finishes in well
+ * under a minute, so an hour-old row cannot belong to a sibling still in
+ * flight (#254, #266): the sweep only ever takes a dead run's rows.
+ */
+const STALE_AFTER = '1 hour'
 
 /**
  * The file's executable statements, in order, with psql meta-commands and
@@ -160,7 +182,16 @@ describe.skipIf(!connectionString)(
     beforeAll(async () => {
       client = new Client({ connectionString })
       await client.connect()
-      await clean()
+      // Recover a killed run's fixtures: posts first, then pages, so no child
+      // outlives the parent its violation needs. Age-bounded (see STALE_AFTER)
+      // so a sibling's in-flight rows are never taken.
+      for (const table of ['posts', 'pages'] as const) {
+        await client.query(
+          `DELETE FROM ${table}
+           WHERE slug LIKE $1 AND created_at < now() - $2::interval`,
+          [`${MARKER}-%`, STALE_AFTER],
+        )
+      }
       // A sibling can leave violations in flight for the entire audit run.
       // Capture their IDs separately so neither cleanup nor assertions adopt them.
       const parent = await client.query(
@@ -369,22 +400,78 @@ describe.skipIf(!connectionString)(
       }
     }, 60_000)
 
-    it('returns an owned total of zero once the violation is cleared', async () => {
+    it('returns an owned total of zero once the parent is published', async () => {
       // The clean case has to be POSITIVELY expressed — a tagged line printed
       // by a statement that ran — because the runner treats a MISSING line as a
-      // failure, not as a pass.
-      await clean()
-      const [pagesQuery, postsQuery, totalQuery] = statements()
-      const result = await audit(totalQuery)
-      expect(String(result.rows[0].audit_total)).toBe(
-        'AUDIT_SERVED_PREFIX_VIOLATIONS=0',
-      )
-      expect((await client.query(pagesQuery)).rows).toContainEqual(
-        expect.objectContaining({ page_id: foreignPageIds[1] }),
-      )
-      expect((await client.query(postsQuery)).rows).toContainEqual(
-        expect.objectContaining({ post_id: foreignPostIds[0] }),
-      )
+      // failure, not as a pass. It also has to be a zero the predicates EARNED:
+      // over an empty owned set every statement returns nothing whatever its
+      // WHERE says. So the rows stay seeded and only the parent's state moves,
+      // and a second, draft family is the negative control for the CHILD
+      // predicate — a draft page or post under a draft parent serves no URL.
+      try {
+        const parent = await insert(
+          'pages',
+          `INSERT INTO pages (title, slug, path, _status, updated_at, created_at)
+         VALUES ($1, $1, $1, 'draft', now(), now())`,
+          [`${runMarker}-clean-parent`],
+        )
+        const parentId = parent.rows[0].id as number
+        for (const table of ['pages', 'posts'] as const) {
+          await insert(
+            table,
+            `INSERT INTO ${table} (title, slug, path, parent_id, _status, updated_at, created_at)
+           VALUES ($1, $1, $2, $3, 'published', now(), now())`,
+            [
+              `${runMarker}-clean-${table}`,
+              `${runMarker}-clean-parent/${table}`,
+              parentId,
+            ],
+          )
+        }
+        const draftParent = await insert(
+          'pages',
+          `INSERT INTO pages (title, slug, path, _status, updated_at, created_at)
+         VALUES ($1, $1, $1, 'draft', now(), now())`,
+          [`${runMarker}-draft-parent`],
+        )
+        for (const table of ['pages', 'posts'] as const) {
+          await insert(
+            table,
+            `INSERT INTO ${table} (title, slug, path, parent_id, _status, updated_at, created_at)
+           VALUES ($1, $1, $2, $3, 'draft', now(), now())`,
+            [
+              `${runMarker}-draft-${table}`,
+              `${runMarker}-draft-parent/${table}`,
+              draftParent.rows[0].id,
+            ],
+          )
+        }
+
+        const [pagesQuery, postsQuery, totalQuery] = statements()
+        // Before: the published pair is in scope and counted, and the draft
+        // family is not — the owned set really is what the zero is about.
+        expect(await total()).toBe(2)
+
+        await client.query(
+          `UPDATE pages SET _status = 'published' WHERE id = $1`,
+          [parentId],
+        )
+
+        expect((await audit(pagesQuery)).rows).toEqual([])
+        expect((await audit(postsQuery)).rows).toEqual([])
+        const result = await audit(totalQuery)
+        expect(String(result.rows[0].audit_total)).toBe(
+          'AUDIT_SERVED_PREFIX_VIOLATIONS=0',
+        )
+        expect((await client.query(pagesQuery)).rows).toContainEqual(
+          expect.objectContaining({ page_id: foreignPageIds[1] }),
+        )
+        expect((await client.query(postsQuery)).rows).toContainEqual(
+          expect.objectContaining({ post_id: foreignPostIds[0] }),
+        )
+      } finally {
+        await clean()
+      }
     }, 60_000)
   },
 )
