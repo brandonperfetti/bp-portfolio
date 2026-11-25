@@ -160,7 +160,8 @@ docker run -d --rm --name bp-pg-tier -p 127.0.0.1:55432:5432 \
   pgvector/pgvector:pg16
 export DATABASE_URI=postgres://postgres:postgres@127.0.0.1:55432/bp_portfolio_ci
 export PAYLOAD_SECRET=ci-not-a-real-secret
-unset BLOB_READ_WRITE_TOKEN # keep seed uploads on local disk
+# Empty, not unset: Payload's CLI reloads .env, which an unset name lets back in.
+export BLOB_READ_WRITE_TOKEN= STORAGE_VERCEL_BLOB_BASE_URL=
 pnpm migrate
 pnpm seed:e2e
 pnpm exec vitest run --root evals
@@ -170,8 +171,10 @@ docker rm -f bp-pg-tier
 With no `BLOB_READ_WRITE_TOKEN`, `pnpm seed:e2e` writes its uploaded images to
 `media/` in the checkout (Payload's default upload directory for the `media`
 collection). With the token set, `src/payload.config.ts` turns on Vercel Blob
-storage and the seed uploads to that store instead, which is why the recipe
-clears it. `/media/` is in
+storage and the seed uploads to that store instead, and a set
+`STORAGE_VERCEL_BLOB_BASE_URL` refuses tokenless uploads. The recipe exports
+both as empty strings, because `payload run` loads `.env` files and fills any
+name that is unset, but leaves a name that is set (even to empty) alone. `/media/` is in
 `.gitignore`, so a seeded checkout keeps a clean `git status`; delete the folder
 when you are done with the seed.
 
