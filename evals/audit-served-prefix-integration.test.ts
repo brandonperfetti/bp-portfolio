@@ -25,8 +25,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
  * ALL THREE unchanged statements, so total-predicate drift still fails.
  * Foreign violations are positively observed by the unscoped statements but
  * never enter the owned assertions. Cleanup uses captured IDs, plus one
- * age-bounded sweep of this file's own marker in `beforeAll` that recovers the
- * rows a killed run left behind (see {@link STALE_AFTER}).
+ * liveness-checked sweep of this file's own marker in `beforeAll` that
+ * recovers the rows a killed run left behind (see {@link RUN_LOCK_CLASS}).
  *
  * **Why the rows are seeded by raw SQL and not through Payload.** The #180
  * `beforeChange` guards refuse to publish a page under an unpublished parent —
@@ -81,19 +81,27 @@ const SQL_PATH = path.resolve(
  * runs' slugs apart.
  */
 const MARKER = 'zz-audit-served-prefix'
-const runMarker = `${MARKER}-${randomUUID()}`
+const runId = randomUUID()
+const runMarker = `${MARKER}-${runId}`
 
 /**
- * How old a marked row must be before `beforeAll` treats it as abandoned.
+ * The advisory-lock namespace in which each run holds a lock on its own id.
  *
  * @remarks A run killed between seeding and teardown takes its captured ids
  * with it, and its rows (a published page and post under a draft parent) would
  * otherwise sit in the database for good, making a hand run of the audit
- * script report violations that are not real. Every test here finishes in well
- * under a minute, so an hour-old row cannot belong to a sibling still in
- * flight (#254, #266): the sweep only ever takes a dead run's rows.
+ * script report violations that are not real. Row age cannot tell such a run
+ * from a live one that is merely slow or suspended, so liveness is asked of
+ * Postgres instead: every run holds `pg_advisory_lock(RUN_LOCK_CLASS, hashtext(runId))`
+ * on its connection from before its first insert, and the lock goes when that
+ * connection does, whether by `client.end()` or by the process dying. The
+ * `beforeAll` sweep deletes a run's rows only while it holds that run's lock
+ * itself, so it can never take a live sibling's fixtures (#254, #266).
  */
-const STALE_AFTER = '1 hour'
+const RUN_LOCK_CLASS = 360_360
+
+/** Where the run id sits in a marked slug (1-based, for SQL `substr`). */
+const RUN_ID_OFFSET = MARKER.length + 2
 
 /**
  * The file's executable statements, in order, with psql meta-commands and
@@ -182,15 +190,41 @@ describe.skipIf(!connectionString)(
     beforeAll(async () => {
       client = new Client({ connectionString })
       await client.connect()
-      // Recover a killed run's fixtures: posts first, then pages, so no child
-      // outlives the parent its violation needs. Age-bounded (see STALE_AFTER)
-      // so a sibling's in-flight rows are never taken.
-      for (const table of ['posts', 'pages'] as const) {
-        await client.query(
-          `DELETE FROM ${table}
-           WHERE slug LIKE $1 AND created_at < now() - $2::interval`,
-          [`${MARKER}-%`, STALE_AFTER],
+      // Held for the life of this connection; see RUN_LOCK_CLASS.
+      await client.query('SELECT pg_advisory_lock($1, hashtext($2))', [
+        RUN_LOCK_CLASS,
+        runId,
+      ])
+      // Recover a dead run's fixtures. A run whose lock is free has no live
+      // connection, so its rows are abandoned; a held lock means a sibling is
+      // still in flight and is left alone. Posts first, then pages, so no
+      // child outlives the parent its violation needs.
+      const marked = await client.query(
+        `SELECT DISTINCT substr(slug, $2, 36) AS run
+         FROM (SELECT slug FROM pages UNION ALL SELECT slug FROM posts) AS marked
+         WHERE left(slug, length($1)) = $1`,
+        [`${MARKER}-`, RUN_ID_OFFSET],
+      )
+      for (const { run } of marked.rows as { run: string }[]) {
+        if (run === runId) continue
+        const lock = await client.query(
+          'SELECT pg_try_advisory_lock($1, hashtext($2)) AS got',
+          [RUN_LOCK_CLASS, run],
         )
+        if (!lock.rows[0].got) continue
+        try {
+          for (const table of ['posts', 'pages'] as const) {
+            await client.query(
+              `DELETE FROM ${table} WHERE left(slug, length($1)) = $1`,
+              [`${MARKER}-${run}`],
+            )
+          }
+        } finally {
+          await client.query('SELECT pg_advisory_unlock($1, hashtext($2))', [
+            RUN_LOCK_CLASS,
+            run,
+          ])
+        }
       }
       // A sibling can leave violations in flight for the entire audit run.
       // Capture their IDs separately so neither cleanup nor assertions adopt them.
