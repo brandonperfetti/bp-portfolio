@@ -1,7 +1,7 @@
 ---
-status: draft
+status: approved
 owner: Brandon Perfetti
-last_reviewed: 2026-11-22
+last_reviewed: 2026-11-25
 ---
 
 # Content imagery (article covers)
@@ -12,8 +12,9 @@ Read it before you make or replace a cover. The `cover-recipes` skill reads
 this file. Voice and article craft live in `docs/CONTENT_STYLE.md`; the
 article run lives in `docs/CONTENT_WORKFLOW.md`.
 
-Every live cover is a heightened-real photograph from a logged recipe, in
-the `cover-mj-A` series (53 covers, 2026-09-26/27). The code-rendered SVG
+The September baseline is 53 shipped heightened-real photographic covers in
+the `cover-mj-A` series (2026-09-26/27), not a fresh live census. Post 61
+has a separately approved pre-pilot `cover-mj-B` on its draft (§13). The code-rendered SVG
 system that came before it is archived in
 [`archive/code-rendered-covers/`](../archive/code-rendered-covers/HISTORY.md).
 Do not use it.
@@ -27,7 +28,10 @@ brandonperfetti/claude-skills#492 (private; summarized here, not copied).
 ## 1. Status
 
 The front matter holds `status`, `owner` and `last_reviewed`. Only the owner
-sets `status: approved`.
+approves this profile by merging its review PR into `develop`. The proposed
+`approved` header on an unmerged branch grants no generation authority.
+Generate nothing, including exploratory renders, until Brandon merges this PR.
+The subsequent pilot gates in #438 each wait for Brandon’s approval.
 
 - **While `status: draft`:** generate nothing. A draft is a proposal for
   Brandon to read, not a direction to work from.
@@ -61,6 +65,19 @@ solid stone ripples like water, in plain daylight.
   impossibly), weather.
 - **The line to hold:** "the fine line is between subtly uncanny and
   AI-generated slop" (Brandon, 2026-09-26).
+
+**Before rendering: test the metaphor against the article.** Read the article,
+state its thesis in one sentence, and explain how the scene expresses that
+thesis rather than its opposite. Record the mapping and the likely competing
+reading. A clever scene that reverses the argument fails before generation
+(Post 61's hedge-grown shears).
+
+**The impossible thing must be a visible state.** A still cannot establish
+motion, duration, or that motion has stopped. Describe geometry, material,
+contact and shadows that look impossible at once, without a caption or a
+before/after story. A tilted domino can look like an ordinary falling domino;
+“frozen mid-tip” alone proves nothing. Preserve historical prompts verbatim,
+but do not copy their temporal claims into new recipes.
 
 **The recipe.** Per article, the agent sets each dial with a one-line
 reason and logs it (D6). Brandon may override any dial before the cover is
@@ -122,9 +139,9 @@ cover.
   machine/hardware, aerial/top-down, tabletop still life (D10, D14), plus
   water, weather and night exterior (v2). Favour exteriors; the v1 set
   skewed toward interiors and tabletops.
-- **Framing follows the idea** (D22). An action (sorting, moving, syncing,
-  filtering) gets mid-distance framing that shows the mechanism and both
-  outcomes. Extreme macro is only for texture or material ideas; it erased
+- **Framing follows the idea** (D22). A process idea (sorting, moving, syncing,
+  filtering) gets mid-distance framing showing a legible physical state and
+  its contrast, not an action whose timing the viewer must infer. Extreme macro is only for texture or material ideas; it erased
   the sorting idea on post 20 twice.
 - **The hero is large in frame.** State the impossible detail early and
   concretely in the prompt.
@@ -169,7 +186,7 @@ flying pages and extra props together) is the example.
 ## 8. Display constraints
 
 - **16:9.** Generation requests 2048×1152; what a generator returns can
-  be smaller (GPT Image's native output is 1672×941 today, §10). The
+  be smaller (1672×941 in one historical GPT Image trial, §10). The
   ingest derivation (§11) delivers 2048×1152. The article hero is an
   `aspect-[16/9] object-cover` frame (`src/components/ArticleLayout.tsx`),
   and so is the `/articles` card (`src/components/articles/ArticlesExplorer.tsx`).
@@ -208,29 +225,30 @@ Check a new recipe against the cover history (§13) before generating.
 
 ## 10. Generators
 
-Keep two facts apart:
+**GPT Image 2 first (Brandon, 2026-11-25).** Use `openai/gpt-image-2`
+through OpenClaw's OAuth `image_generate` route first. The pilot's purpose
+is to learn how to get BP-quality covers from it: prompt tuning is the work,
+not a box to tick. No API key, silent provider/model fallback, or change to
+the default model. If that exact route is unavailable, stop generation and
+return the prompt and route failure; unavailability is not two failed rounds.
 
-- **Midjourney was Brandon's chosen generator for the 53 live covers.** It
-  ranked first on look in the September comparisons and stays his tool. It is a
-  **human paste path**: Brandon runs the prompt and picks. Agents do not
-  drive Midjourney. Its terms prohibit automated use, and driving its web UI
-  proved fragile: submits failed silently and lists loaded lazily.
-- **GPT Image (`openai/gpt-image-2`, via OpenClaw `image_generate` on the
-  OpenClaw OAuth route) is the candidate route for agents.** Agents
-  generate with it. Status, 2026-11-22: local candidates generated; A2-1
-  is the recommended pick, A the fallback; neither uploaded nor attached.
-- **Switching off Midjourney waits for proof.** The Midjourney subscription
-  is cancelled only after GPT Image makes three clean covers in a row.
-  Cloudinary hosting and its URLs stay; only Cloudinary's paid generation
-  add-on is being cancelled.
+**Recorded Midjourney fallback.** Only after a concept passes the §2
+article/metaphor check and **two tuned GPT Image 2 rounds, two images each,
+fail Sloane's review**, Sloane may use the `midjourney` browser profile
+herself. Tune between rounds using the actual review failures. Record the
+GPT round paths, why each round failed, and `fallback: midjourney` in the
+receipt. Follow the 2026-11-24 pace rules: one action at a time, no bulk or
+parallel jobs, and stop at any login, CAPTCHA or warning. Midjourney output
+stays `cover-mj-<letter>` (§11); never disguise its provider. Subscription
+cancellation remains Brandon's decision. Ceiling (b), Brandon's approval of
+each attach and each publish, and the pre-merge generation hold are unchanged.
 
 ### GPT Image (agents)
 
 - **Route.** `openai/gpt-image-2` through OpenClaw OAuth, and only that.
   Confirm it before the first generation of a session and stop if it is
   unavailable. No API key, no silent fallback to another provider or
-  model, and no change to OpenClaw's default model. GPT Image 2.5 needs an
-  API-key route and is not available here.
+  model, and no change to OpenClaw's default model. Only the recorded Midjourney fallback above is authorized after the required failed rounds.
 - **Size: requested and native are different.** Request `2048x1152`; the
   OpenAI provider takes sizes, not aspect ratios, and `3840x2160` is the
   other 16:9 size. What comes back natively on the OpenClaw OAuth route is
@@ -263,14 +281,36 @@ Keep two facts apart:
   - staged, glossy, crowded frames with props nobody asked for;
   - a readable, front-lit face despite the people rule;
   - the wrong aspect ratio: 3:2, near-square, or wider than 16:9 with black
-    bars added (crop it; never ship the bars);
+    bars added (reject; tune within the two-round GPT sequence above, never ship bars);
   - tuning can weaken the impossible detail (a page meant to float stayed
     attached to its binder), which is why the detail goes first.
 - **Ranking.** Tuned, it came second on look, behind Midjourney and ahead
   of Cloudinary's FLUX.2 Pro, and ahead of Midjourney on literal adherence
   in about a third of the rows.
 
-### Midjourney (Brandon)
+### Tuning GPT Image 2
+
+- [source] Post 61's 2026-11-24 reviews for rounds 2–4 and 6–8
+  (`_agent/evidence/2026-11-24-post61-cut-continues/round-<n>/review.md`
+  under the Sans Faux agent root) record uphill-paint and self-repair
+  concepts failing at native size and 400 px. Paint direction could read
+  downward; roots could read as branches inserted into a split bench.
+- [inference] These were principally concept failures: uphill motion and
+  self-repair cannot be established by a single still. Pass the article/metaphor
+  and visible-state checks before asking a model to solve the rendering.
+- [source] The same reviews record material failures: paint resembling
+  icing, rubbery membrane or peeling vinyl, and molded-looking wood. Tune
+  concrete material thickness, junctions and photographic surfaces; palette
+  and grain alone do not rescue the hero.
+- [source] GPT Image 2 was not tried on the domino concept later selected
+  from Midjourney (Brandon's 2026-11-25 correction; Post 61 round-16 pick
+  recorded in `docs/cover-history.json`).
+- [inference] Yesterday's results do **not** prove GPT Image 2 cannot make
+  BP-quality covers. A later, owner-approved three-recipe test could include
+  Post 61's domino recipe in tuned GPT form for a direct comparison with
+  Brandon's Midjourney pick. This is a test proposal, not generation authority.
+
+### Midjourney (recorded fallback)
 
 - Append `--ar 16:9 --style raw --s 150 --no <§7 list>` to the §2 template.
   Midjourney stores it in its normalized form (`--raw --stylize 150 --v
@@ -301,14 +341,17 @@ How a picked image becomes a post's cover. The ingest route and attach
 mechanics are in `docs/CONTENT_WORKFLOW.md` §4–§5; this section is what is
 specific to covers.
 
-### Pilot hold (2026-11-22)
+### Pilot gates (#438, 2026-11-25)
 
-The GPT Image pilot is **local only** until #415 lands and Brandon
-approves the attach: no candidate upload, no ingest, no attach. While this
-file is `status: draft`, §1 still applies.
-Keep post 61's A2-1 candidate on hold. The authenticated exact-ID lookup
-in [#427](https://github.com/brandonperfetti/bp-portfolio/issues/427) must
-be verified before Brandon sets this guide to `status: approved`.
+This PR covers profile approval only. Generate nothing before Brandon merges
+it, even though its proposed header says `approved`. After merge, perform
+only the pilot step Brandon has approved. Ceiling (b) permits generation,
+review and staging-id uploads; every attach and every publish remains
+Brandon's decision. Agents never publish to the CMS.
+
+Post 61's `cover-mj-B` was attached before this pilot with Brandon's one-off
+approval (media 233, Cloudinary v1795555503). It supersedes the A2-1 hold for
+that post only and does not count toward the pilot.
 
 ### Autonomy and the publish boundary
 
@@ -341,15 +384,16 @@ be verified before Brandon sets this guide to `status: approved`.
 - **The letter counts the post's photographic covers,** across providers.
   The next cover takes the letter after the highest one any `cover-<slug>-`
   series holds for that post. Every live post holds `-A`, so its next cover
-  is `-B`: `cover-gpt-B` from an agent, `cover-mj-B` if Brandon pastes it
-  from Midjourney.
+  is `-B`: `cover-gpt-B` from GPT Image, `cover-mj-B` from Midjourney
+  (including the recorded agent fallback).
 - **Retired namespaces, never reused:** `cover-a`/`-b`/`-c` (the AI era,
   before 2026-08) and `cover-ds-A` (the code-rendered covers, 2026-08). Both
   still occupy their slots in Cloudinary.
 - **Candidates:** upload to
   `bp-portfolio/images/articles/{slug}/candidates/cover-<provider>-<letter>-<n>`
   (`n` = 1, 2, …), tagged `bp-cover-candidate`. They are never ingested.
-  After Brandon picks, the pick is uploaded again at the series id.
+  A pick alone grants no promotion authority. Final series-id upload, ingest
+  and attach each wait for Brandon’s explicit approval.
 
 ### Upload
 
@@ -368,22 +412,19 @@ be verified before Brandon sets this guide to `status: approved`.
      If its writer is unavailable, Brandon can assign another operator
      to reconcile it in the same thread. The slot remains held during
      the transfer.
-  2. **Look up the exact public ID.** Use the authenticated Cloudinary
-     [Admin API single-resource lookup](https://cloudinary.com/documentation/admin_api#get_details_of_a_single_resource_by_public_id),
-     `GET /resources/image/upload/{public_id}`, in the upload's product
-     environment. Pass the full public ID, including its folder path, to
-     the SDK's `api.resource` method or URL-encode it for REST. With the
-     same connection, first confirm a known original such as the post's
-     `cover-mj-A`. Only a resource-level 404 for the full target ID
-     establishes absence. Treat any returned resource,
-     including a backup placeholder, as occupied. Stop if the control
-     fails or the result is ambiguous.
-     The current Asset Management MCP exposes `get-asset-details` by
-     internal asset ID and `list-images` by public IDs. If the upload
-     operator lacks an authorized single-resource Admin API connection,
-     stop before signing or uploading.
-     If the ID exists, choose the next available candidate number or
-     series letter and check that ID before uploading.
+  2. **Look up the exact public ID through Kody.** Use
+     `cloudinary-asset-mgmt` `list-images`, `type: upload`, with `public_ids`
+     containing the full reserved target id and a known original positive
+     control in the same product environment and connection. For example,
+     `bp-portfolio/images/articles/four-week-context-reset/cover-mj-A`
+     was the Post 61 control (v1790490286). Confirm that the control is
+     returned before accepting the target's absence from `resources`.
+     A returned target, including a placeholder, is occupied; choose the
+     next candidate number or series letter and repeat the check. A failed
+     control, ambiguous response or unavailable route stops the upload
+     before signing. Save the exact ids, environment, lookup time and
+     bounded result, not credentials. This replaces the single-resource-only
+     restriction from #427, following the verified Post 61 check.
   3. **Stop and escalate an unresolved upload.**
      After a timeout, missing response or error after send, repeat the
      exact lookup while holding the same writer slot. Continue with an
@@ -391,7 +432,7 @@ be verified before Brandon sets this guide to `status: approved`.
      file. Otherwise, record the target ID and last known result in the
      cover-run thread, leave the slot held, and escalate to Brandon.
      Do not retry or start another upload in that folder while the
-     attempt is unresolved. A 404 shows absence at lookup time and a
+     attempt is unresolved. An exact-id negative shows absence at lookup time and a
      timeout ends the client's wait. Neither establishes that Cloudinary
      stopped processing the original request.
   4. **When the upload returns a response**, check for `overwritten` or
@@ -428,7 +469,7 @@ These four fields are the receipt allowlist. Check overwrite and existing
 markers separately when reading the response.
 
 Use `scripts/cover_recipes.py` inside the installed `cover-recipes` skill.
-The [released skill source](https://github.com/brandonperfetti/claude-skills/blob/v1.58.0/skills/personal/cover-recipes/scripts/cover_recipes.py)
+The [released skill source](https://github.com/brandonperfetti/claude-skills/blob/v1.60.0/skills/personal/cover-recipes/scripts/cover_recipes.py)
 is maintained in `claude-skills`. Set `COVER_RECIPES_SCRIPT` to the installed
 script's full path and run from the BP Portfolio checkout root so the tool
 reads this guide.
@@ -479,9 +520,13 @@ Ingest a 16:9 JPEG derivation, not the original:
 
 ### Attach
 
-- After Brandon approves: production Payload `updatePosts`, setting only
+- After Brandon explicitly approves the attach: production Payload `updatePosts`, setting only
   `heroImage` and `meta.image` to the new media id. A partial `meta`
   update keeps the meta title and description [measured 2026-09-27].
+- **Production `updatePosts` quirk (Post 61):** a `data` JSON string
+  was ignored. Pass `heroImage` and `meta: {image: <id>}` as top-level tool
+  arguments, alongside the post id and draft option, not inside `data`.
+  Read back both fields and `_status`; a successful call alone is not proof.
 - **Record the previous `heroImage` and `meta.image` media ids first:**
   they are independent fields [source: `src/collections/Posts/index.ts`].
   Rollback re-attaches each recorded id to its own field.
@@ -535,8 +580,8 @@ Examples from live covers:
 
 ## 13. Cover history
 
-[`docs/cover-history.json`](cover-history.json) holds one entry per live
-cover, newest `publishedAt` first, so its first entries are "the previous
+[`docs/cover-history.json`](cover-history.json) holds published covers in `covers`, newest `publishedAt` first, and
+attached draft covers separately in `draftCovers` (excluded from live rotation), so its first entries are "the previous
 covers" for §9.
 
 - **Each entry:** post id, slug, title, `publishedAt`, series, generator,
@@ -564,9 +609,11 @@ covers" for §9.
     different accent in the final prompt (posts 55 and 6); their notes say
     so.
 
-- **A new article's cover:** insert its entry in descending `publishedAt`
-  order (at the top only when it is the newest post), with the same
-  fields, in the same change that attaches it.
+- **A new article's cover:** record an attached draft in `draftCovers`,
+  outside published rotation, in the same change that attaches it. On
+  publication, move it to `covers` using its actual `publishedAt`, in
+  descending date order (at the top only when it is the newest post).
+  Complete or verify unavailable metadata before publication.
 - **A new cover on an existing post:** update that post's entry in place,
   so the order stays by `publishedAt`. Move the replaced cover's series,
   public_id and media id into a `previous` list on the entry. That list is
@@ -574,8 +621,14 @@ covers" for §9.
   ids recorded at the attach (§ Attach).
 - **Retire a post:** keep its entry and add `"retiredAt": "<date>"`.
   Rotation skips retired entries.
+- **Post 61:** `draftCovers` records its pre-pilot Midjourney one-off,
+  Brandon approval, production media 233, version 1795555503 and receipt
+  locator. It is not a GPT Image pilot result. On publication, move it into
+  `covers` at its actual `publishedAt` only after completing and verifying
+  any metadata marked unavailable (including the final prompt); do not
+  invent a date or missing prompt now.
 - **Count, 2026-11-22:** 53 published posts, 53 entries, 53 `cover-mj-A`
-  originals in Cloudinary. Every `heroImage` and `meta.image` equals the
+  originals in Cloudinary at that measurement. Every `heroImage` and `meta.image` equals the
   entry's media id. The method is in the file's `verified` block. The
   count will drop as Sloane's audit retires posts.
 - **Earlier eras:** the code-rendered covers and their spec are in
