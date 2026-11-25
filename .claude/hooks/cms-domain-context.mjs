@@ -4,9 +4,13 @@
  * path, add the CMS Domain Agent's hook brief to the conversation (#383).
  *
  * @remarks **A reminder, never a gate.** The only thing this file ever prints
- * is `additionalContext`. Every path through it exits 0 within
- * `STDIN_DEADLINE_MS`: malformed or oversize input, stdin that never closes, a
- * missing brief and a thrown error all end in silence. The harness side is set
+ * is `additionalContext`, and every path through it exits 0. Stdin must arrive
+ * within `STDIN_DEADLINE_MS` and under `MAX_INPUT_BYTES`, or the hook exits
+ * silently; the work after that (parsing, resolving the path, reading the
+ * brief) is bounded by the hook's 10 s `timeout` in settings. Malformed or
+ * oversize input, stdin that never closes or arrives late, a missing brief and
+ * a thrown error all end in silence, which means a missed reminder, never a
+ * held edit. The harness side is set
  * in `.claude/settings.json`: `onFailure: "continue"`, so even a hook that
  * fails or times out lets the edit go ahead (including under Code Mode, which
  * otherwise refuses a timed-out `PreToolUse` call), and the `command`/`args`
