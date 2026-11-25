@@ -363,7 +363,8 @@ that post only and does not count toward the pilot.
 - **Candidates:** upload to
   `bp-portfolio/images/articles/{slug}/candidates/cover-<provider>-<letter>-<n>`
   (`n` = 1, 2, …), tagged `bp-cover-candidate`. They are never ingested.
-  After Brandon picks, the pick is uploaded again at the series id.
+  A pick alone grants no promotion authority. Final series-id upload, ingest
+  and attach each wait for Brandon’s explicit approval.
 
 ### Upload
 
