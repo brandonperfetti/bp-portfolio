@@ -158,6 +158,12 @@ docker run -d --rm --name bp-pg-tier -p 127.0.0.1:55432:5432 \
   -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
   -e POSTGRES_DB=bp_portfolio_ci --tmpfs /var/lib/postgresql/data \
   pgvector/pgvector:pg16
+# Wait for the TCP listener; during first-boot init Postgres serves only a socket.
+for i in $(seq 1 30); do
+  docker exec bp-pg-tier pg_isready -h 127.0.0.1 -U postgres -q && break
+  sleep 1
+done
+docker exec bp-pg-tier pg_isready -h 127.0.0.1 -U postgres # fails if never ready
 export DATABASE_URI=postgres://postgres:postgres@127.0.0.1:55432/bp_portfolio_ci
 export PAYLOAD_SECRET=ci-not-a-real-secret
 # Empty, not unset: Payload's CLI reloads .env, which an unset name lets back in.
