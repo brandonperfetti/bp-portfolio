@@ -39,6 +39,25 @@ class InventoryChecks(unittest.TestCase):
         self.assertEqual(result["errors"], [])
         self.assertEqual(result["diff"], "")
 
+    def test_new_published_cover_without_recipe_is_allowed(self):
+        data = self.load("cover-history.json")
+        cover = dict(data["covers"][0])
+        cover.update(postId=999, slug="new-published-cover",
+                     cloudinaryPublicId="new-published-cover", rollout="new publication")
+        data["covers"].append(cover)
+        self.write("cover-history.json", data)
+        result = VERIFY.verify(self.root, self.skill)
+        self.assertEqual(result["history"], 54)
+        self.assertEqual(result["recipes"], 53)
+        self.assertEqual(result["errors"], [])
+        self.assertEqual(result["diff"], "")
+
+    def test_missing_historical_cover_is_rejected(self):
+        data = self.load("cover-history.json")
+        data["covers"].pop()
+        self.write("cover-history.json", data)
+        self.assertTrue(VERIFY.verify(self.root, self.skill)["errors"])
+
     def test_missing_recipe_is_not_zero_diff_success(self):
         data = self.load("cover-recipes.json")
         data["recipes"].pop()

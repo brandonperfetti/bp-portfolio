@@ -28,8 +28,9 @@ def verify(project, skill):
     captured = keyed(recipes, "id")
     rollout = keyed(manifest, "postId")
     errors = []
-    if len(covers) != 53 or set(covers) != set(captured):
-        errors.append("history/recipe identities must match all 53 published covers")
+    # Recipes freeze the historical cohort; section 13 may add published covers.
+    if len(captured) != 53 or not set(captured).issubset(covers):
+        errors.append("all 53 historical recipe identities must remain in published covers")
     expected44 = {c["postId"] for c in history if c["rollout"] == "2026-09-27 final 44"}
     if len(rollout) != 44 or set(rollout) != expected44:
         errors.append("manifest identities must match the final 44 rollout covers")

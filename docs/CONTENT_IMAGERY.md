@@ -636,7 +636,7 @@ covers" for §9.
 
 ### Historical recipe round-trip
 
-`docs/cover-recipes.json` captures the 53 published covers as renderable
+`docs/cover-recipes.json` captures the original 53 published covers as renderable
 historical recipes, excluding `draftCovers`. Each recipe's subject and
 `styleOverride` are split from its embedded `finalPrompt`, not its sometimes
 different `loggedPrompt`; `exclusionsOverride` preserves historical exclusions.
@@ -655,7 +655,9 @@ python3 -m unittest discover -s scripts -p 'test_verify_cover_recipes.py'
 
 The verifier calls the real skill's `render_midjourney(..., form="stored")`
 against every embedded final prompt, comparing exact strings without trimming
-or normalizing the expected side. It also checks recipe identities/dials/public
+or normalizing the expected side. New published covers may be added without a
+historical recipe; all 53 historical recipe identities must remain in `covers`.
+It also checks recipe identities/dials/public
 IDs and compares the final 44's slugs, public IDs and alt text against the
 independent `docs/cover-final44-manifest.json` fixture from
 [#415's receipt](https://github.com/brandonperfetti/bp-portfolio/issues/415#issuecomment-7083630425).
