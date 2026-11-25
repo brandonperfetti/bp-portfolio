@@ -1,0 +1,1410 @@
+{
+  "schema": 1,
+  "about": "53 historical recipes reconstructed from embedded final prompts, not the different logged prompts. Read CONTENT_IMAGERY.md \u00a713. Excludes attached drafts.",
+  "recipes": [
+    {
+      "id": 56,
+      "slug": "four-week-context-reset",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/four-week-context-reset/cover-mj-A",
+      "dials": {
+        "scene": "interior",
+        "style": "nf",
+        "family": "gravity",
+        "accent": "indigo",
+        "fieldOfUnits": false
+      },
+      "subject": "A sunlit minimalist room where dozens of frosted glass sheets hang suspended in mid-air, slowly settling into one neat stack on a low stone table, a person sitting calmly on the floor seen from behind.",
+      "detail": "frosted glass sheets hang perfectly still in mid-air",
+      "styleOverride": "Near-future minimalism, frosted glass and pale stone, clean digital photograph, soft morning daylight, pale neutral palette with a hint of indigo, heightened realism, one quietly impossible detail, mid-key light, a touch of teal glow.",
+      "exclusionsOverride": ["text", "letters", "numbers", "logo", "border"],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 55,
+      "slug": "runbooks-to-agent-skills",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/runbooks-to-agent-skills/cover-mj-A",
+      "dials": {
+        "scene": "tabletop",
+        "style": "nf",
+        "family": "gravity",
+        "accent": "violet",
+        "fieldOfUnits": false
+      },
+      "subject": "Tabletop still life on a pale oak desk: a worn, dog-eared paper binder lies open beside a small sleek near-future device whose status light glows a soft emerald onto the wood; a single page has lifted out of the binder and hangs perfectly still in mid-air between them, casting a crisp shadow on the desk.",
+      "detail": "a single page hangs perfectly still in mid-air, casting a crisp shadow",
+      "styleOverride": "Near-future minimalism, clean digital photograph, soft window daylight, pale neutral palette, the only color the device's emerald light, heightened realism, bright mid-key light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "glasses",
+        "steam"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 54,
+      "slug": "from-neon-to-supabase",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/from-neon-to-supabase/cover-mj-A",
+      "dials": {
+        "scene": "landscape",
+        "style": "70s",
+        "family": "material",
+        "accent": "emerald",
+        "fieldOfUnits": false
+      },
+      "subject": "Three movers in mismatched everyday 1970s clothes, one in a denim jacket, one in a rust sweater, one in a plaid shirt, large in the foreground, carrying wooden crates that glow softly from within like lanterns across a short enclosed concrete skybridge between two brutalist buildings on an empty plain at golden hour; each crate's glow lights the mover's hands and the concrete beside it; the new building's windows are just starting to light up, an unfinished highway overpass waits on the horizon.",
+      "detail": "the crates glow from within like lanterns, lighting the movers' hands",
+      "styleOverride": "1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of emerald, heightened realism, mid-key light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "uniforms",
+        "crowd"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 53,
+      "slug": "from-sendgrid-to-resend",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/from-sendgrid-to-resend/cover-mj-A",
+      "dials": {
+        "scene": "landscape",
+        "style": "60s",
+        "family": "scale",
+        "accent": "amber",
+        "fieldOfUnits": false
+      },
+      "subject": "A vast empty airport runway at dawn, a full-size baggage tug slowly towing one small folded paper airplane across the concrete, the terminal far behind.",
+      "detail": "a full-size tug towing a paper airplane",
+      "styleOverride": "1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of amber, heightened realism, bright mid-key dawn light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "people",
+        "crowd"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 52,
+      "slug": "the-nextjs-stack-i-reuse",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/the-nextjs-stack-i-reuse/cover-mj-A",
+      "dials": {
+        "scene": "interior",
+        "style": "80s-pastel",
+        "family": "material",
+        "accent": "sky",
+        "fieldOfUnits": true
+      },
+      "subject": "A tidy garage workshop, a pegboard wall of worn, familiar hand tools each hanging inside its painted outline, and one slot now holding a brand-new gleaming version of its tool whose painted outline has quietly reshaped itself to fit it exactly.",
+      "detail": "the painted outline on the pegboard has reshaped itself around the new tool",
+      "styleOverride": "1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, bright mid-key afternoon light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 51,
+      "slug": "from-notion-to-payload",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/from-notion-to-payload/cover-mj-A",
+      "dials": {
+        "scene": "interior",
+        "style": "70s-cool",
+        "family": "nature",
+        "accent": "rose",
+        "fieldOfUnits": false
+      },
+      "subject": "A concrete greenhouse at night, one small potted plant on a steel shelf whose roots have grown down through the shelf and spread across the floor into a perfectly orderly square grid, softly glowing where they meet.",
+      "detail": "wild roots growing into a neat grid",
+      "styleOverride": "1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of rose, heightened realism, low-key night light from a single sodium lamp.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "people"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 5,
+      "slug": "nextjs-15-notion-cms-ditch-git-deploy-content-updates",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/nextjs-15-notion-cms-ditch-git-deploy-content-updates/cover-mj-A",
+      "dials": {
+        "scene": "architecture",
+        "style": "80s-neon",
+        "family": "causality",
+        "accent": "rose",
+        "fieldOfUnits": false
+      },
+      "subject": "A painted mural of a sunset covering a whole brick wall on a quiet street at dusk, the painted sky changing its colors to match the real sunset behind the building, while the painter's scaffolding stands empty and the paint cans are dry.",
+      "detail": "a painted sky updating itself",
+      "styleOverride": "1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of rose, heightened realism, mid-key neon dusk light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "people",
+        "graffiti"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 40,
+      "slug": "pgvector-postgresql-production-ready-semantic-search-without-a-vector-db",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/pgvector-postgresql-production-ready-semantic-search-without-a-vector-db/cover-mj-A",
+      "dials": {
+        "scene": "macro",
+        "style": "60s",
+        "family": "material",
+        "accent": "emerald",
+        "fieldOfUnits": true
+      },
+      "subject": "Close-up of an ordinary glass canning jar on a kitchen counter, the whole jar in frame, filled with dull, unlit mixed marbles; in one small pocket near the middle of the jar, a tight cluster of about a dozen marbles all of the same emerald shade glow brightly from within together, lighting their neighbors, while every other marble stays dark and matte.",
+      "detail": "one cluster of same-colored marbles glows together in a single pocket",
+      "styleOverride": "1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of emerald, heightened realism, soft dim kitchen daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 9,
+      "slug": "reading-code-you-didnt-write-habits-that-make-it-faster",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/reading-code-you-didnt-write-habits-that-make-it-faster/cover-mj-A",
+      "dials": {
+        "scene": "water",
+        "style": "80s-pastel",
+        "family": "causality",
+        "accent": "indigo",
+        "fieldOfUnits": false
+      },
+      "subject": "Seen from high above, a lone snorkeler floats on the surface of clear turquoise water, small in the frame, looking down at a vast sunken city far below whose windows are still softly lit.",
+      "styleOverride": "1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of indigo, heightened realism, bright mid-key midday light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "fish",
+        "boat"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 13,
+      "slug": "feature-flags-in-javascript-ship-faster-without-breaking-things",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/feature-flags-in-javascript-ship-faster-without-breaking-things/cover-mj-A",
+      "dials": {
+        "scene": "landscape",
+        "style": "80s-pastel",
+        "family": "causality",
+        "accent": "fuchsia",
+        "fieldOfUnits": false
+      },
+      "subject": "A desert railway junction at dusk, a single track splitting in two, a new train gliding onto the fresh branch whose rails are laid only a few meters ahead of it, and a middle-aged signalwoman resting her hand on a tall switch lever with a bright fuchsia handle, ready to pull it back.",
+      "detail": "the new branch of track is laid only a few meters ahead of the train",
+      "styleOverride": "1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of fuchsia, heightened realism, mid-key pastel dusk light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 14,
+      "slug": "sql-joins-explained-without-the-venn-diagrams",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/sql-joins-explained-without-the-venn-diagrams/cover-mj-A",
+      "dials": {
+        "scene": "tabletop",
+        "style": "nf",
+        "family": "material",
+        "accent": "emerald",
+        "fieldOfUnits": false
+      },
+      "subject": "High three-quarter view looking down on a bare pale stone table: two long rows of chunky light wooden blocks advance toward each other from opposite ends, the front face of every block carved into a different puzzle-key shape, and in the middle of the table they interlock like the teeth of a giant zipper; wherever two shapes match, the pair has fused into one seamless block, while the few blocks with no matching partner have been pushed out of line, standing apart on either side.",
+      "detail": "where the key shapes match, two blocks have fused into one seamless block",
+      "styleOverride": "Near-future minimalism, clean digital photograph, pale neutral palette with a hint of emerald, heightened realism, bright mid-key daylight, long soft shadows.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "bench",
+        "furniture legs"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 3,
+      "slug": "building-a-cli-tool-in-node-js-from-script-to-publishable-package",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/building-a-cli-tool-in-node-js-from-script-to-publishable-package/cover-mj-A",
+      "dials": {
+        "scene": "water",
+        "style": "nf",
+        "family": "material",
+        "accent": "amber",
+        "fieldOfUnits": false
+      },
+      "subject": "A folded paper boat drifting on a still canal between pale buildings, its stern already turned into real varnished wood with brass fittings while its bow is still folded paper.",
+      "detail": "half paper, half real boat",
+      "styleOverride": "Near-future minimalism, clean digital photograph, pale neutral palette with a hint of amber, heightened realism, bright mid-key daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "people"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 2,
+      "slug": "webhooks-building-reliable-event-receivers-in-node-js",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/webhooks-building-reliable-event-receivers-in-node-js/cover-mj-A",
+      "dials": {
+        "scene": "landscape",
+        "style": "70s-cool",
+        "family": "causality",
+        "accent": "amber",
+        "fieldOfUnits": false
+      },
+      "subject": "A lone rural mailbox on a post in a snowy field at blue hour, its flag raised and its open door glowing warm amber from inside, a single line of footprints leading up to it and none leading away.",
+      "detail": "footprints that arrive and never leave",
+      "styleOverride": "1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of amber, heightened realism, low-key blue hour light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "people"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 1,
+      "slug": "typescript-path-aliases-clean-imports-that-actually-work-in-next-js",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/typescript-path-aliases-clean-imports-that-actually-work-in-next-js/cover-mj-A",
+      "dials": {
+        "scene": "landscape",
+        "style": "nf",
+        "family": "scale",
+        "accent": "fuchsia",
+        "fieldOfUnits": false
+      },
+      "subject": "A single freestanding wooden door in an open grassy meadow at midday, slightly ajar, and through the gap, instead of more meadow, a sunlit city library aisle is visible right there on the other side, the door casting a long shadow on the grass.",
+      "styleOverride": "Near-future minimalism, clean digital photograph, pale neutral palette with a hint of fuchsia, heightened realism, bright mid-key midday light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "people"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 25,
+      "slug": "ai-tool-calls-explained-giving-your-llm-the-ability-to-actually-do-things",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/ai-tool-calls-explained-giving-your-llm-the-ability-to-actually-do-things/cover-mj-A",
+      "dials": {
+        "scene": "architecture",
+        "style": "80s-neon",
+        "family": "scale",
+        "accent": "violet",
+        "fieldOfUnits": false
+      },
+      "subject": "A mirrored-glass atrium at dusk, a sleek console at its center glowing violet, three long jointed chrome arms reaching out from it across the atrium, each passing through a softly glowing ring on its way to a real object: a telephone, a filing drawer, a light switch.",
+      "detail": "the console's arms reach impossibly far, each through a ring of light",
+      "styleOverride": "1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of violet, heightened realism, mid-key dusk light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 15,
+      "slug": "designing-a-design-system-in-react-tokens-components-and-what-actually-scales",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/designing-a-design-system-in-react-tokens-components-and-what-actually-scales/cover-mj-A",
+      "dials": {
+        "scene": "interior",
+        "style": "60s",
+        "family": "material",
+        "accent": "cyan",
+        "fieldOfUnits": false
+      },
+      "subject": "A sunlit mid-century living room where every piece of furniture, the sofa, an armchair, a lamp, a low table and a vase, is carved from one single continuous piece of pale wood, the grain flowing unbroken from one object across the floor into the next, as if the whole room grew from the same tree.",
+      "styleOverride": "1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of cyan, heightened realism, bright mid-key daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "people"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 28,
+      "slug": "building-a-streaming-ai-chat-ui-with-ai-sdk-v5-and-react",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/building-a-streaming-ai-chat-ui-with-ai-sdk-v5-and-react/cover-mj-A",
+      "dials": {
+        "scene": "tabletop",
+        "style": "nf",
+        "family": "gravity",
+        "accent": "violet",
+        "fieldOfUnits": false
+      },
+      "subject": "Close-up of a pale ceramic cup on a caf\u00e9 table at dawn, a thin steady stream of tea pouring into it from the empty air above, with no teapot anywhere, the cup half full.",
+      "detail": "a pour with no source",
+      "styleOverride": "Near-future minimalism, clean digital photograph, pale neutral palette with a hint of violet, heightened realism, bright mid-key dawn window light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "people",
+        "teapot",
+        "hands"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 4,
+      "slug": "api-rate-limiting-in-node-js-protecting-your-backend-without-killing-ux",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/api-rate-limiting-in-node-js-protecting-your-backend-without-killing-ux/cover-mj-A",
+      "dials": {
+        "scene": "machine",
+        "style": "70s",
+        "family": "gravity",
+        "accent": "amber",
+        "fieldOfUnits": false
+      },
+      "subject": "A massive brass and concrete metering valve in a sunlit pumping station, seen side-on: on the left a violent white torrent crashes into it from a wide pipe, and on the right it releases only a calm, perfectly evenly spaced single-file line of identical round water droplets, each one suspended in the air a hand's width apart as it falls into a still channel below.",
+      "detail": "the torrent leaves the valve as evenly spaced, identical drops",
+      "styleOverride": "1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of amber, heightened realism, mid-key daylight through high windows.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "waterfall"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 26,
+      "slug": "getting-started-with-vercel-ai-sdk-v5-the-patterns-that-actually-stick",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/getting-started-with-vercel-ai-sdk-v5-the-patterns-that-actually-stick/cover-mj-A",
+      "dials": {
+        "scene": "interior",
+        "style": "60s",
+        "family": "material",
+        "accent": "violet",
+        "fieldOfUnits": false
+      },
+      "subject": "An optics laboratory with curved white walls, a raw crackling violet spark on a lab bench passing through three large round lenses in a row and leaving the last lens as a single clean, steady beam that lights a small screen showing calm abstract waveforms.",
+      "detail": "a crackling spark leaves the third lens as one steady beam",
+      "styleOverride": "1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of violet, heightened realism, bright mid-key daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 16,
+      "slug": "prisma-migrations-in-production-the-zero-downtime-playbook",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/prisma-migrations-in-production-the-zero-downtime-playbook/cover-mj-A",
+      "dials": {
+        "scene": "aerial",
+        "style": "nf",
+        "family": "causality",
+        "accent": "emerald",
+        "fieldOfUnits": false
+      },
+      "subject": "Aerial view of a pale concrete river bridge in bright daylight, traffic flowing across its full length while a small work crew replaces the deck one section at a time from beneath, a new section sliding into place directly under a moving car.",
+      "detail": "a new deck section slides into place under a moving car",
+      "styleOverride": "Near-future minimalism, clean digital photograph, pale neutral palette with a hint of emerald, heightened realism, bright mid-key daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 17,
+      "slug": "javascript-event-loop-demystified-what-senior-devs-know-that-juniors-dont",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/javascript-event-loop-demystified-what-senior-devs-know-that-juniors-dont/cover-mj-A",
+      "dials": {
+        "scene": "tabletop",
+        "style": "70s",
+        "family": "causality",
+        "accent": "fuchsia",
+        "fieldOfUnits": false
+      },
+      "subject": "On a walnut desk, a brass orrery whose orbiting spheres each carry a small glass token; as each sphere passes the top of its orbit it drops its token into a single central glass chute, one at a time, the chute holding a neat single-file column.",
+      "detail": "each orbiting sphere drops its token into the one chute, one at a time",
+      "styleOverride": "1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of fuchsia, heightened realism, mid-key window daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 18,
+      "slug": "image-optimization-for-the-web-what-actually-makes-a-difference",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/image-optimization-for-the-web-what-actually-makes-a-difference/cover-mj-A",
+      "dials": {
+        "scene": "landscape",
+        "style": "80s-pastel",
+        "family": "scale",
+        "accent": "sky",
+        "fieldOfUnits": false
+      },
+      "subject": "A giant pastel seesaw on an empty beach at sunset, one end loaded with a huge gilded framed painting, the other end holding a single thin glass photo slide, and it is the slide's end that rests on the sand.",
+      "detail": "a single thin glass slide outweighs a huge gilded painting",
+      "styleOverride": "1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, mid-key pastel sunset light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 20,
+      "slug": "zod-the-validation-library-that-changed-how-i-think-about-data",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/zod-the-validation-library-that-changed-how-i-think-about-data/cover-mj-A",
+      "dials": {
+        "scene": "macro",
+        "style": "60s",
+        "family": "gravity",
+        "accent": "fuchsia",
+        "fieldOfUnits": false
+      },
+      "subject": "Extreme macro close-up: a precision brass sorting sieve fills the whole frame, perfect glass beads dropping cleanly through its round holes while misshapen beads roll uphill back across the mesh.",
+      "detail": "misshapen beads roll uphill, back off the sieve",
+      "styleOverride": "1960s space-age design, mid-century laboratory instrument, Kodachrome film look, mustard, avocado and cream palette with a hint of fuchsia, heightened realism, mid-key soft light.",
+      "exclusionsOverride": ["text", "letters", "numbers", "logo", "border"],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 21,
+      "slug": "web-performance-metrics-that-actually-move-the-needle",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/web-performance-metrics-that-actually-move-the-needle/cover-mj-A",
+      "dials": {
+        "scene": "machine",
+        "style": "nf",
+        "family": "material",
+        "accent": "sky",
+        "fieldOfUnits": false
+      },
+      "subject": "A sleek near-future instrument console of pale stone and brushed aluminum, three large round glass gauges with abstract waveform readouts, every needle resting in the calm zone, and a single ripple crossing the solid console surface as if it were water.",
+      "detail": "a ripple crosses the solid stone console as if it were water",
+      "styleOverride": "Near-future minimalism, clean digital photograph, soft daylight, pale neutral palette with a hint of sky blue, the gauge glow a gentle teal, heightened realism, mid-key light.",
+      "exclusionsOverride": ["text", "letters", "numbers", "logo", "border"],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 19,
+      "slug": "monorepo-vs-polyrepo-the-real-decision-for-full-stack-js-teams",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/monorepo-vs-polyrepo-the-real-decision-for-full-stack-js-teams/cover-mj-A",
+      "dials": {
+        "scene": "aerial",
+        "style": "70s",
+        "family": "causality",
+        "accent": "indigo",
+        "fieldOfUnits": false
+      },
+      "subject": "Aerial view at golden hour of a valley split by a river: on one bank a single sprawling brutalist campus joined by covered walkways casting one continuous shadow, on the other a scattered village of small cottages, each with its own road and each casting a shadow that points a different way.",
+      "detail": "the campus casts one shadow; every cottage's shadow points a different way",
+      "styleOverride": "1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of indigo, heightened realism, mid-key golden-hour light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 39,
+      "slug": "writing-tests-for-react-that-dont-make-you-want-to-quit",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/writing-tests-for-react-that-dont-make-you-want-to-quit/cover-mj-A",
+      "dials": {
+        "scene": "architecture",
+        "style": "80s-pastel",
+        "family": "material",
+        "accent": "sky",
+        "fieldOfUnits": false
+      },
+      "subject": "A pastel shopping-mall atrium in afternoon light: a white fiberglass department-store mannequin with a smooth blank featureless face and visible joints at its wrists and neck stands at a public elevator panel, one fiberglass finger pressing the call button, its head tilted exactly like a waiting shopper; a middle-aged man beside it, seen from behind, glances over at it.",
+      "detail": "a mannequin presses the elevator button exactly like a waiting shopper",
+      "styleOverride": "1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, bright mid-key afternoon light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "human face",
+        "sunglasses"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 22,
+      "slug": "nodejs-streams-why-they-matter-and-when-to-actually-use-them",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/nodejs-streams-why-they-matter-and-when-to-actually-use-them/cover-mj-A",
+      "dials": {
+        "scene": "landscape",
+        "style": "nf",
+        "family": "gravity",
+        "accent": "amber",
+        "fieldOfUnits": false
+      },
+      "subject": "A mountain valley at midday: on the shore a giant construction crane strains with its cables taut, hoisting the entire lake high into the air as one enormous clear rectangular slab of water, the empty lakebed exposed beneath it; beside it a slim steel pipe quietly carries a steady stream of water down the valley to a small town.",
+      "detail": "a crane lifts the whole lake as one clear slab of water",
+      "styleOverride": "Near-future minimalism, clean digital photograph, pale neutral palette with a hint of amber, heightened realism, bright mid-key midday light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "boats",
+        "barges"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 11,
+      "slug": "react-useref-beyond-dom-manipulation-patterns-worth-knowing",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/react-useref-beyond-dom-manipulation-patterns-worth-knowing/cover-mj-A",
+      "dials": {
+        "scene": "interior",
+        "style": "70s",
+        "family": "causality",
+        "accent": "sky",
+        "fieldOfUnits": false
+      },
+      "subject": "A wood-paneled living room where every piece of furniture has been shoved around by an unseen force, chairs turned, a rug rucked up, curtains blowing, yet a heavy steel safe in the corner sits exactly where it always was, a small sky-blue light on its dial, the dust around its base undisturbed.",
+      "detail": "everything has been shoved around except the safe, which has no disturbed dust",
+      "styleOverride": "1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of sky blue, heightened realism, mid-key warm daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 23,
+      "slug": "infinite-scroll-vs-pagination-the-tradeoffs-nobody-tells-you-about",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/infinite-scroll-vs-pagination-the-tradeoffs-nobody-tells-you-about/cover-mj-A",
+      "dials": {
+        "scene": "tabletop",
+        "style": "60s",
+        "family": "scale",
+        "accent": "sky",
+        "fieldOfUnits": false
+      },
+      "subject": "On a cream desk, a roll of paper unspools off the edge, across the floor, out through an open door and down a long corridor, still going, while beside it sits a neat bound stack of pages with a ribbon bookmark.",
+      "detail": "the paper roll never ends: it runs off the desk and out the door",
+      "styleOverride": "1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of sky blue, heightened realism, bright mid-key daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 24,
+      "slug": "optimistic-ui-updates-in-react-making-your-app-feel-instant",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/optimistic-ui-updates-in-react-making-your-app-feel-instant/cover-mj-A",
+      "dials": {
+        "scene": "architecture",
+        "style": "80s-neon",
+        "family": "causality",
+        "accent": "sky",
+        "fieldOfUnits": false
+      },
+      "subject": "A rain-slick city street at dusk seen from above, a paper airplane folded from wet newsprint, lit magenta by the same neon as the street, gliding into the open lit window of an upper apartment, while its shadow still lags far behind on the wet pavement; one small figure on the sidewalk looking up.",
+      "detail": "the plane glides into the window while its shadow lags far behind",
+      "styleOverride": "1980s synthwave, neon reflections on wet asphalt, VHS-era film softness, magenta and cyan palette with a hint of sky blue, heightened realism, the airplane lit and grained like everything else in the scene.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 27,
+      "slug": "postgresql-full-text-search-good-enough-to-replace-elasticsearch",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/postgresql-full-text-search-good-enough-to-replace-elasticsearch/cover-mj-A",
+      "dials": {
+        "scene": "macro",
+        "style": "70s",
+        "family": "material",
+        "accent": "emerald",
+        "fieldOfUnits": false
+      },
+      "subject": "Close-up of a brass magnifying lens on a stand, focused on an open book where a single passage glows a soft emerald; behind it, out of focus, a vast empty warehouse of bare steel racks.",
+      "detail": "one passage glows emerald through the lens",
+      "styleOverride": "1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of emerald, heightened realism, mid-key warm daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 42,
+      "slug": "tailwind-css-v4-what-changed-and-how-to-migrate",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/tailwind-css-v4-what-changed-and-how-to-migrate/cover-mj-A",
+      "dials": {
+        "scene": "machine",
+        "style": "nf",
+        "family": "material",
+        "accent": "cyan",
+        "fieldOfUnits": false
+      },
+      "subject": "A brushed-aluminum fabrication machine in a bright white studio, small scattered colored chips on its intake tray and one flawless cyan-tinted glass slab sliding out of its output, the same chips suspended inside the glass like inlay.",
+      "detail": "scattered chips come out fused inside one flawless glass slab",
+      "styleOverride": "Near-future minimalism, clean digital photograph, pale neutral palette with a hint of cyan, heightened realism, bright mid-key studio daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 29,
+      "slug": "react-19-actions-finally-a-clean-way-to-handle-server-mutations",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/react-19-actions-finally-a-clean-way-to-handle-server-mutations/cover-mj-A",
+      "dials": {
+        "scene": "aerial",
+        "style": "80s-pastel",
+        "family": "material",
+        "accent": "sky",
+        "fieldOfUnits": false
+      },
+      "subject": "Top-down view of a pastel office floor divided by a glass partition, a letter sliding across the floor straight through the solid glass and coming to rest squarely in an open sky-blue filing tray on the other side, an office worker in a peach blazer watching.",
+      "detail": "the letter passes straight through the solid glass wall",
+      "styleOverride": "1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, bright mid-key daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 12,
+      "slug": "typescript-strict-mode-extra-pain-worth-it",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/typescript-strict-mode-extra-pain-worth-it/cover-mj-A",
+      "dials": {
+        "scene": "landscape",
+        "style": "70s",
+        "family": "material",
+        "accent": "fuchsia",
+        "fieldOfUnits": false
+      },
+      "subject": "Sand dunes at golden hour, a tall searchlight on a tripod casting a wide cone of light across the dunes; wherever the beam falls the sand has turned clear as glass, and through it you can plainly see half-buried hazards, a rake, a coiled cable, an old iron trap, while outside the beam the sand stays solid and opaque; a woman in her fifties in a canvas jacket, seen from behind, operates the light.",
+      "detail": "inside the beam the sand turns transparent, revealing buried hazards",
+      "styleOverride": "1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of fuchsia, heightened realism, mid-key golden-hour light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 10,
+      "slug": "strapi-v4-custom-api-building-endpoints-beyond-generated-crud",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/strapi-v4-custom-api-building-endpoints-beyond-generated-crud/cover-mj-A",
+      "dials": {
+        "scene": "tabletop",
+        "style": "nf",
+        "family": "scale",
+        "accent": "rose",
+        "fieldOfUnits": false
+      },
+      "subject": "A clear acrylic block on a pale desk holding layered bands of colored sand like geological strata, a single perfectly straight shaft drilled down through every layer, a tiny brass elevator car resting at the bottom.",
+      "detail": "a tiny brass elevator car rests at the bottom of the drilled shaft",
+      "styleOverride": "Near-future minimalism, clean digital photograph, pale neutral palette with a hint of rose, heightened realism, bright mid-key daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 6,
+      "slug": "accessibility-in-react-the-quick-wins-that-cover-80-percent-of-issues",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/accessibility-in-react-the-quick-wins-that-cover-80-percent-of-issues/cover-mj-A",
+      "dials": {
+        "scene": "interior",
+        "style": "60s",
+        "family": "causality",
+        "accent": "cyan",
+        "fieldOfUnits": false
+      },
+      "subject": "A long 1960s space-age corridor of curved white walls and round doorways, every door standing open; a softly glowing line set into the floor bends gently around a low bench toward the far end, lighting the curved wall beside it, and one distant adult woman in a mustard coat walks along it, seen from behind.",
+      "detail": "the floor line bends around the bench to guide her",
+      "styleOverride": "1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of aqua, heightened realism, bright mid-key daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 41,
+      "slug": "nextjs-app-router-after-a-year-in-production-what-id-tell-my-past-self",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/nextjs-app-router-after-a-year-in-production-what-id-tell-my-past-self/cover-mj-A",
+      "dials": {
+        "scene": "water",
+        "style": "80s-pastel",
+        "family": "causality",
+        "accent": "sky",
+        "fieldOfUnits": false
+      },
+      "subject": "A single wooden bench at the end of a quiet pier at dusk, split exactly down the middle: the left half weathered, cracked and silver-grey with peeling paint, the right half freshly built and newly painted in soft pastel sky blue, the two halves meeting in one clean straight line, calm water and a pastel sky behind.",
+      "styleOverride": "1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of sky blue, heightened realism, mid-key pastel dusk light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "people"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 47,
+      "slug": "mongodb-vs-postgresql-the-decision-framework-i-actually-use",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/mongodb-vs-postgresql-the-decision-framework-i-actually-use/cover-mj-A",
+      "dials": {
+        "scene": "aerial",
+        "style": "60s",
+        "family": "scale",
+        "accent": "emerald",
+        "fieldOfUnits": false
+      },
+      "subject": "Aerial top-down view of a 1960s space-age plaza split down the middle: one half a free-flowing garden of scattered curved sculptures, the other half a precise grid of identical round pods, tiny people crossing between them.",
+      "detail": "one plaza, two orders: free garden and a precise pod grid",
+      "styleOverride": "1960s space-age design, mid-century modern forms, Kodachrome film look, mustard, avocado and cream palette with a hint of emerald, heightened realism, one quietly impossible detail, mid-key light, a touch of teal glow.",
+      "exclusionsOverride": ["text", "letters", "numbers", "logo", "border"],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 45,
+      "slug": "prisma-postgresql-the-data-layer-setup-i-use-on-every-project",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/prisma-postgresql-the-data-layer-setup-i-use-on-every-project/cover-mj-A",
+      "dials": {
+        "scene": "landscape",
+        "style": "70s-cool",
+        "family": "weather",
+        "accent": "emerald",
+        "fieldOfUnits": false
+      },
+      "subject": "A lone concrete house on a sea cliff in a violent storm at night, waves exploding against the rocks all around it, while the house and a perfect circle of ground beneath it stay completely dry and still, one warm window lit.",
+      "detail": "a dry, still circle inside the storm",
+      "styleOverride": "1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of emerald, heightened realism, low-key storm light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "people"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 46,
+      "slug": "postgresql-indexing-basics-that-actually-matter-for-app-developers",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/postgresql-indexing-basics-that-actually-matter-for-app-developers/cover-mj-A",
+      "dials": {
+        "scene": "architecture",
+        "style": "80s-pastel",
+        "family": "scale",
+        "accent": "emerald",
+        "fieldOfUnits": true
+      },
+      "subject": "A vast archive hall of endless pastel shelving, a straight line of glowing emerald floor lights running directly to one exact shelf, while far down an unlit aisle a single snail crawls along the floor.",
+      "detail": "a straight line of floor lights runs to one exact shelf",
+      "styleOverride": "1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of emerald, heightened realism, mid-key soft light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 30,
+      "slug": "css-custom-properties-theyre-not-just-for-color-tokens",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/css-custom-properties-theyre-not-just-for-color-tokens/cover-mj-A",
+      "dials": {
+        "scene": "interior",
+        "style": "60s",
+        "family": "material",
+        "accent": "cyan",
+        "fieldOfUnits": false
+      },
+      "subject": "A 1960s living room in cream and tangerine, a woman in her fifties seen from behind turning a single large chrome dial on the wall, and the whole room caught mid-transformation: a wave of cyan color sweeps across it from the dial, the lampshades, cushions, vase and rug on the near side already fully cyan while those on the far side are still tangerine, the boundary line running straight through the middle of the sofa.",
+      "detail": "one dial retints every object in the room at once",
+      "styleOverride": "1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of cyan, heightened realism, bright mid-key daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 44,
+      "slug": "docker-for-frontend-devs-stop-being-scared-of-containers",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/docker-for-frontend-devs-stop-being-scared-of-containers/cover-mj-A",
+      "dials": {
+        "scene": "machine",
+        "style": "70s",
+        "family": "material",
+        "accent": "emerald",
+        "fieldOfUnits": false
+      },
+      "subject": "A 1970s concrete and walnut control room with a single steel shipping container installed where the mainframe should be, its doors open to reveal neatly stacked glowing layers inside; an empty swivel chair and a still-warm coffee mug nearby.",
+      "detail": "a shipping container stands where the mainframe should be",
+      "styleOverride": "1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of emerald, heightened realism, one quietly impossible detail, mid-key light, a touch of teal glow.",
+      "exclusionsOverride": ["text", "letters", "numbers", "logo", "border"],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 31,
+      "slug": "mongodb-aggregation-pipeline-the-feature-that-unlocks-real-queries",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/mongodb-aggregation-pipeline-the-feature-that-unlocks-real-queries/cover-mj-A",
+      "dials": {
+        "scene": "tabletop",
+        "style": "nf",
+        "family": "material",
+        "accent": "emerald",
+        "fieldOfUnits": false
+      },
+      "subject": "On a pale stone lab bench, three clear glass flasks joined by thin tubes, each smaller than the last, rough grey river pebbles poured into the first and a single faceted emerald gem resting in the last.",
+      "detail": "grey pebbles go in the first flask; a cut gem rests in the last",
+      "styleOverride": "Near-future minimalism, clean digital photograph, pale neutral palette with a hint of emerald, heightened realism, bright mid-key daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 32,
+      "slug": "nodejs-error-handling-that-doesnt-embarrass-you-in-production",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/nodejs-error-handling-that-doesnt-embarrass-you-in-production/cover-mj-A",
+      "dials": {
+        "scene": "aerial",
+        "style": "80s-neon",
+        "family": "causality",
+        "accent": "amber",
+        "fieldOfUnits": false
+      },
+      "subject": "Top-down view of a factory floor at dusk, one large machine running steadily while every stray glowing amber bead it throws off is caught by a fine mesh net and rolls down a chute into one of three separate bins.",
+      "detail": "every stray glowing bead is caught and sorted while the machine keeps running",
+      "styleOverride": "1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of amber, heightened realism, mid-key neon dusk light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 8,
+      "slug": "typescript-interface-vs-type-the-real-difference-and-when-it-matters",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/typescript-interface-vs-type-the-real-difference-and-when-it-matters/cover-mj-A",
+      "dials": {
+        "scene": "architecture",
+        "style": "60s",
+        "family": "gravity",
+        "accent": "fuchsia",
+        "fieldOfUnits": false
+      },
+      "subject": "Two pavilions side by side on a bright plaza: one an open steel frame you can see straight through, a new beam hanging in place at its edge bolted to nothing; the other a sealed, smooth white cast block with no seams.",
+      "detail": "one new beam hangs in place on the open frame, bolted to nothing",
+      "styleOverride": "1960s space-age design, mid-century modern forms, Kodachrome film look, cream, tangerine and avocado palette with a hint of fuchsia, heightened realism, bright mid-key daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 7,
+      "slug": "gsap-scrolltrigger-in-react-the-patterns-that-actually-work",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/gsap-scrolltrigger-in-react-the-patterns-that-actually-work/cover-mj-A",
+      "dials": {
+        "scene": "interior",
+        "style": "nf",
+        "family": "gravity",
+        "accent": "cyan",
+        "fieldOfUnits": false
+      },
+      "subject": "A tall bright stairwell atrium where a kinetic sculpture of polished cyan spheres on thin rods traces a smooth arc down the stairwell beside a woman in her thirties walking down the stairs, every sphere positioned exactly level with the step she is on.",
+      "detail": "each sphere hangs exactly level with her current step",
+      "styleOverride": "Near-future minimalism, clean digital photograph, pale neutral palette with a hint of cyan, heightened realism, bright mid-key daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 33,
+      "slug": "usecallback-and-usememo-stop-reaching-for-them-by-default",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/usecallback-and-usememo-stop-reaching-for-them-by-default/cover-mj-A",
+      "dials": {
+        "scene": "interior",
+        "style": "nf",
+        "family": "scale",
+        "accent": "sky",
+        "fieldOfUnits": false
+      },
+      "subject": "Looking straight into a huge open steel bank vault through its massive round door: the vault is completely empty except for one ordinary white paper coffee cup standing alone in the exact center of the floor, clearly visible and lit by a single overhead spotlight.",
+      "styleOverride": "Near-future minimalism, clean digital photograph, pale neutral palette with a hint of sky blue, heightened realism, bright mid-key light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "people",
+        "money",
+        "shelves"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 34,
+      "slug": "css-grid-the-layout-system-youve-been-avoiding-and-shouldnt",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/css-grid-the-layout-system-youve-been-avoiding-and-shouldnt/cover-mj-A",
+      "dials": {
+        "scene": "aerial",
+        "style": "80s-pastel",
+        "family": "nature",
+        "accent": "cyan",
+        "fieldOfUnits": false
+      },
+      "subject": "Aerial view of a snowy field at dawn where the fallen snow has settled into a perfect square grid of clean lines as if drawn with a ruler, one small red fox trotting exactly along a grid line.",
+      "detail": "snow that fell into a grid",
+      "styleOverride": "1980s pastel Memphis-era design, soft VHS-era film look, peach, lavender and turquoise palette with a hint of cyan, heightened realism, soft mid-key pastel dawn light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "people"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 35,
+      "slug": "rest-api-design-patterns-that-make-your-nodejs-backend-a-joy-to-work-with",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/rest-api-design-patterns-that-make-your-nodejs-backend-a-joy-to-work-with/cover-mj-A",
+      "dials": {
+        "scene": "water",
+        "style": "70s-cool",
+        "family": "material",
+        "accent": "amber",
+        "fieldOfUnits": false
+      },
+      "subject": "At night on a calm, foggy dark sea, a lighthouse beam lies across the water as a solid glowing walkway, and a small wooden rowboat rests on top of the beam instead of in the water.",
+      "styleOverride": "1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of amber, heightened realism, low-key night light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles",
+        "people"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 43,
+      "slug": "zustand-vs-redux-vs-context-choosing-state-management-that-wont-haunt-you",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/zustand-vs-redux-vs-context-choosing-state-management-that-wont-haunt-you/cover-mj-A",
+      "dials": {
+        "scene": "interior",
+        "style": "nf",
+        "family": "causality",
+        "accent": "sky",
+        "fieldOfUnits": false
+      },
+      "subject": "Wide view of a bright minimalist gallery with three separate stone pedestals in a row, clearly spaced apart, each holding one very different machine: on the left a tiny elegant brass music box, in the middle a huge steel engine crowded with gauges, on the right a simple wooden lever; low side light makes the tiny music box cast by far the longest, largest shadow across the floor; a visitor in a grey coat, seen from behind, stands between them deciding.",
+      "detail": "the tiny music box casts the largest shadow",
+      "styleOverride": "Near-future minimalism, clean digital photograph, pale neutral palette with a hint of sky blue, heightened realism, bright mid-key daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 36,
+      "slug": "javascript-asyncawait-patterns-that-trip-up-senior-devs",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/javascript-asyncawait-patterns-that-trip-up-senior-devs/cover-mj-A",
+      "dials": {
+        "scene": "machine",
+        "style": "80s-neon",
+        "family": "causality",
+        "accent": "fuchsia",
+        "fieldOfUnits": false
+      },
+      "subject": "A shopping mall at dusk, a single slow staircase beside three parallel escalators, three adults each riding one escalator arriving at the top at exactly the same moment, while one man on the staircase is still halfway up.",
+      "detail": "three riders on three escalators arrive at the same instant",
+      "styleOverride": "1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of fuchsia, heightened realism, mid-key neon dusk light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 37,
+      "slug": "custom-react-hooks-when-to-extract-and-when-to-leave-it-inline",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/custom-react-hooks-when-to-extract-and-when-to-leave-it-inline/cover-mj-A",
+      "dials": {
+        "scene": "tabletop",
+        "style": "70s",
+        "family": "causality",
+        "accent": "sky",
+        "fieldOfUnits": false
+      },
+      "subject": "On a walnut workbench, a small desk crane lifting a tangled knot of colored wiring off a circuit board and lowering it into a clean, sealed clear capsule, the wires coiling themselves neatly as they pass inside.",
+      "detail": "the tangle coils itself neatly as it enters the capsule",
+      "styleOverride": "1970s brutalist sci-fi production design, grainy 35mm film, burnt orange and brown palette with a hint of sky blue, heightened realism, mid-key window daylight.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    },
+    {
+      "id": 38,
+      "slug": "component-composition-patterns-in-react-that-actually-scale",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/component-composition-patterns-in-react-that-actually-scale/cover-mj-A",
+      "dials": {
+        "scene": "landscape",
+        "style": "nf",
+        "family": "nature",
+        "accent": "sky",
+        "fieldOfUnits": false
+      },
+      "subject": "A single old tree in an open meadow whose branches each bear a different fruit, apples, lemons, pears, plums, every branch grafted cleanly onto the one trunk, a gardener in her sixties on a wooden ladder seen from behind.",
+      "detail": "one tree bearing many fruits",
+      "styleOverride": "Near-future minimalism, clean digital photograph, pale neutral palette with a hint of sky blue, heightened realism, bright mid-key afternoon light.",
+      "exclusionsOverride": [
+        "text",
+        "letters",
+        "numbers",
+        "logo",
+        "border",
+        "signage",
+        "children",
+        "smoke",
+        "particles"
+      ],
+      "provenance": "Historical reconstruction from cover-history finalPrompt (PNG Description); not a new recipe or art-direction approval. Dial provenance remains in cover-history."
+    }
+  ]
+}

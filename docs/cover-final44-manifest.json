@@ -1,0 +1,403 @@
+{
+  "source": "https://github.com/brandonperfetti/bp-portfolio/issues/415#issuecomment-7083630425",
+  "about": "Unmodified final44-manifest.json rows extracted from the source comment, kept as an independent rollout fixture.",
+  "covers": [
+    {
+      "postId": 53,
+      "slug": "from-sendgrid-to-resend",
+      "title": "I Was Paying $20 a Month to Email Myself",
+      "match_key": "airport runway at dawn",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/from-sendgrid-to-resend/cover-mj-A",
+      "alt": "A full-size airport baggage tug tows a single folded paper airplane across an empty runway at dawn"
+    },
+    {
+      "postId": 52,
+      "slug": "the-nextjs-stack-i-reuse",
+      "title": "The Stack I'll Reuse: My 2026 Next.js Foundation, and the Rules That Keep It Current",
+      "match_key": "pegboard wall",
+      "source": "midjourney_grid_1456_needs_cloudinary_upscale",
+      "cloudinary_public_id": "bp-portfolio/images/articles/the-nextjs-stack-i-reuse/cover-mj-A",
+      "alt": "A pegboard wall of worn hand tools, each hanging inside its painted outline, one gleaming new tool in a reshaped outline"
+    },
+    {
+      "postId": 51,
+      "slug": "from-notion-to-payload",
+      "title": "From Notion to Payload: Why I Rebuilt My Portfolio's Content Engine",
+      "match_key": "concrete greenhouse at night",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/from-notion-to-payload/cover-mj-A",
+      "alt": "A potted plant in a dark concrete greenhouse whose roots spread across the floor into a glowing, orderly square grid"
+    },
+    {
+      "postId": 5,
+      "slug": "nextjs-15-notion-cms-ditch-git-deploy-content-updates",
+      "title": "Next.js 15 + Notion as CMS: Ditch the Git Deploy for Content Updates",
+      "match_key": "painted mural of a sunset",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/nextjs-15-notion-cms-ditch-git-deploy-content-updates/cover-mj-A",
+      "alt": "A painted sunset mural on a brick wall that has changed its colors to match the real sunset, the scaffolding left empty"
+    },
+    {
+      "postId": 40,
+      "slug": "pgvector-postgresql-production-ready-semantic-search-without-a-vector-db",
+      "title": "pgvector + PostgreSQL: Production-Ready Semantic Search Without a Vector DB",
+      "match_key": "filled with dull, unlit mixed marbles",
+      "source": "midjourney_grid_1456_needs_cloudinary_upscale",
+      "cloudinary_public_id": "bp-portfolio/images/articles/pgvector-postgresql-production-ready-semantic-search-without-a-vector-db/cover-mj-A",
+      "alt": "A canning jar of dull marbles where one small cluster of emerald marbles glows together from within"
+    },
+    {
+      "postId": 9,
+      "slug": "reading-code-you-didnt-write-habits-that-make-it-faster",
+      "title": "Reading Code You Didn't Write: Habits That Make It Faster",
+      "match_key": "lone snorkeler",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/reading-code-you-didnt-write-habits-that-make-it-faster/cover-mj-A",
+      "alt": "Seen from above, a lone snorkeler floats over a vast sunken city whose windows are still softly lit"
+    },
+    {
+      "postId": 13,
+      "slug": "feature-flags-in-javascript-ship-faster-without-breaking-things",
+      "title": "Feature Flags in JavaScript: Ship Faster Without Breaking Things",
+      "match_key": "desert railway junction",
+      "source": "midjourney_grid_1456_needs_cloudinary_upscale",
+      "cloudinary_public_id": "bp-portfolio/images/articles/feature-flags-in-javascript-ship-faster-without-breaking-things/cover-mj-A",
+      "alt": "A train glides onto a fresh branch of track at a desert junction at dusk, its rails laid only a few meters ahead"
+    },
+    {
+      "postId": 14,
+      "slug": "sql-joins-explained-without-the-venn-diagrams",
+      "title": "SQL Joins Explained Without the Venn Diagrams",
+      "match_key": "bare pale stone table",
+      "source": "midjourney_grid_1456_needs_cloudinary_upscale",
+      "cloudinary_public_id": "bp-portfolio/images/articles/sql-joins-explained-without-the-venn-diagrams/cover-mj-A",
+      "alt": "Two rows of carved wooden key blocks interlock like a giant zipper on a pale stone table, matched pairs fused into one"
+    },
+    {
+      "postId": 3,
+      "slug": "building-a-cli-tool-in-node-js-from-script-to-publishable-package",
+      "title": "Building a CLI Tool in Node.js: From Script to Publishable Package",
+      "match_key": "folded paper boat",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/building-a-cli-tool-in-node-js-from-script-to-publishable-package/cover-mj-A",
+      "alt": "A folded paper boat on a still canal, its stern already turned into real varnished wood while its bow is still paper"
+    },
+    {
+      "postId": 2,
+      "slug": "webhooks-building-reliable-event-receivers-in-node-js",
+      "title": "Webhooks: Building Reliable Event Receivers in Node.js",
+      "match_key": "lone rural mailbox",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/webhooks-building-reliable-event-receivers-in-node-js/cover-mj-A",
+      "alt": "A glowing rural mailbox in a snowy field at blue hour, with a line of footprints that arrive and never leave"
+    },
+    {
+      "postId": 1,
+      "slug": "typescript-path-aliases-clean-imports-that-actually-work-in-next-js",
+      "title": "TypeScript Path Aliases: Clean Imports That Actually Work in Next.js",
+      "match_key": "freestanding wooden door",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/typescript-path-aliases-clean-imports-that-actually-work-in-next-js/cover-mj-A",
+      "alt": "A lone wooden door standing in an open meadow, opening onto a sunlit library aisle"
+    },
+    {
+      "postId": 25,
+      "slug": "ai-tool-calls-explained-giving-your-llm-the-ability-to-actually-do-things",
+      "title": "AI Tool Calls Explained: Giving Your LLM the Ability to Actually Do Things",
+      "match_key": "mirrored-glass atrium",
+      "source": "midjourney_grid_1456_needs_cloudinary_upscale",
+      "cloudinary_public_id": "bp-portfolio/images/articles/ai-tool-calls-explained-giving-your-llm-the-ability-to-actually-do-things/cover-mj-A",
+      "alt": "A mirrored-glass atrium at dusk where chrome arms reach from a violet-lit console through glowing rings"
+    },
+    {
+      "postId": 15,
+      "slug": "designing-a-design-system-in-react-tokens-components-and-what-actually-scales",
+      "title": "Designing a Design System in React: Tokens, Components, and What Actually Scales",
+      "match_key": "every piece of furniture",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/designing-a-design-system-in-react-tokens-components-and-what-actually-scales/cover-mj-A",
+      "alt": "A sunlit mid-century living room where all the furniture is carved from one continuous piece of pale wood"
+    },
+    {
+      "postId": 28,
+      "slug": "building-a-streaming-ai-chat-ui-with-ai-sdk-v5-and-react",
+      "title": "Building a Streaming AI Chat UI with AI SDK v5 and React",
+      "match_key": "pale ceramic cup",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/building-a-streaming-ai-chat-ui-with-ai-sdk-v5-and-react/cover-mj-A",
+      "alt": "A thin stream of tea pours into a ceramic cup from empty air, with no teapot anywhere"
+    },
+    {
+      "postId": 4,
+      "slug": "api-rate-limiting-in-node-js-protecting-your-backend-without-killing-ux",
+      "title": "API Rate Limiting in Node.js: Protecting Your Backend Without Killing UX",
+      "match_key": "metering valve",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/api-rate-limiting-in-node-js-protecting-your-backend-without-killing-ux/cover-mj-A",
+      "alt": "A brass and concrete valve takes in a crashing torrent and releases only a calm, evenly spaced line of droplets"
+    },
+    {
+      "postId": 26,
+      "slug": "getting-started-with-vercel-ai-sdk-v5-the-patterns-that-actually-stick",
+      "title": "Getting Started with Vercel AI SDK v5: The Patterns That Actually Stick",
+      "match_key": "optics laboratory",
+      "source": "midjourney_grid_1456_needs_cloudinary_upscale",
+      "cloudinary_public_id": "bp-portfolio/images/articles/getting-started-with-vercel-ai-sdk-v5-the-patterns-that-actually-stick/cover-mj-A",
+      "alt": "In a curved white 1960s lab, a crackling violet spark passes through three lenses and leaves as one clean steady beam"
+    },
+    {
+      "postId": 16,
+      "slug": "prisma-migrations-in-production-the-zero-downtime-playbook",
+      "title": "Prisma Migrations in Production: The Zero-Downtime Playbook",
+      "match_key": "river bridge",
+      "source": "midjourney_grid_1456_needs_cloudinary_upscale",
+      "cloudinary_public_id": "bp-portfolio/images/articles/prisma-migrations-in-production-the-zero-downtime-playbook/cover-mj-A",
+      "alt": "Aerial view of a pale concrete bridge with traffic flowing while its deck is replaced section by section from beneath"
+    },
+    {
+      "postId": 17,
+      "slug": "javascript-event-loop-demystified-what-senior-devs-know-that-juniors-dont",
+      "title": "JavaScript Event Loop Demystified: What Senior Devs Know That Juniors Don't",
+      "match_key": "brass orrery",
+      "source": "midjourney_grid_1456_needs_cloudinary_upscale",
+      "cloudinary_public_id": "bp-portfolio/images/articles/javascript-event-loop-demystified-what-senior-devs-know-that-juniors-dont/cover-mj-A",
+      "alt": "A brass orrery on a walnut desk dropping glass tokens one at a time into a single central chute"
+    },
+    {
+      "postId": 18,
+      "slug": "image-optimization-for-the-web-what-actually-makes-a-difference",
+      "title": "Image Optimization for the Web: What Actually Makes a Difference",
+      "match_key": "pastel seesaw",
+      "source": "midjourney_grid_1456_needs_cloudinary_upscale",
+      "cloudinary_public_id": "bp-portfolio/images/articles/image-optimization-for-the-web-what-actually-makes-a-difference/cover-mj-A",
+      "alt": "A pastel seesaw on a beach at sunset where a single thin photo slide outweighs a huge gilded painting"
+    },
+    {
+      "postId": 19,
+      "slug": "monorepo-vs-polyrepo-the-real-decision-for-full-stack-js-teams",
+      "title": "Monorepo vs Polyrepo: The Real Decision for Full-Stack JS Teams",
+      "match_key": "valley split by a river",
+      "source": "midjourney_grid_1456_needs_cloudinary_upscale",
+      "cloudinary_public_id": "bp-portfolio/images/articles/monorepo-vs-polyrepo-the-real-decision-for-full-stack-js-teams/cover-mj-A",
+      "alt": "Aerial golden-hour view of a valley split by a river: one connected brutalist campus on one bank, scattered cottages on the other"
+    },
+    {
+      "postId": 39,
+      "slug": "writing-tests-for-react-that-dont-make-you-want-to-quit",
+      "title": "Writing Tests for React That Don't Make You Want to Quit",
+      "match_key": "mannequin",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/writing-tests-for-react-that-dont-make-you-want-to-quit/cover-mj-A",
+      "alt": "A blank-faced fiberglass mannequin presses an elevator call button in a pastel mall, head tilted like a waiting shopper"
+    },
+    {
+      "postId": 22,
+      "slug": "nodejs-streams-why-they-matter-and-when-to-actually-use-them",
+      "title": "Node.js Streams: Why They Matter and When to Actually Use Them",
+      "match_key": "construction crane",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/nodejs-streams-why-they-matter-and-when-to-actually-use-them/cover-mj-A",
+      "alt": "A mountain valley where a great clear slab of the lake stands lifted in the air beside a crane"
+    },
+    {
+      "postId": 11,
+      "slug": "react-useref-beyond-dom-manipulation-patterns-worth-knowing",
+      "title": "React useRef Beyond DOM Manipulation: The Patterns Worth Knowing",
+      "match_key": "66e2a8f0-85ec-4b98-913d-3b370fa7d186_0",
+      "source": "midjourney_grid_1456_needs_cloudinary_upscale",
+      "cloudinary_public_id": "bp-portfolio/images/articles/react-useref-beyond-dom-manipulation-patterns-worth-knowing/cover-mj-A",
+      "alt": "A wood-paneled 1970s living room in burnt orange, a steel safe in the corner with a small sky-blue light glowing on its dial",
+      "note": "2026-09-27 fix: Brandon picked the v1 (calm room) on purpose; the re-run was rejected. match_key is the v1 job id + index in the grid filename."
+    },
+    {
+      "postId": 23,
+      "slug": "infinite-scroll-vs-pagination-the-tradeoffs-nobody-tells-you-about",
+      "title": "Infinite Scroll vs Pagination: The Tradeoffs Nobody Tells You About",
+      "match_key": "roll of paper unspools",
+      "source": "midjourney_grid_1456_needs_cloudinary_upscale",
+      "cloudinary_public_id": "bp-portfolio/images/articles/infinite-scroll-vs-pagination-the-tradeoffs-nobody-tells-you-about/cover-mj-A",
+      "alt": "A roll of paper unspools off a cream desk, across the floor and out the door, beside a neat bound stack of pages"
+    },
+    {
+      "postId": 27,
+      "slug": "postgresql-full-text-search-good-enough-to-replace-elasticsearch",
+      "title": "PostgreSQL Full-Text Search: Good Enough to Replace Elasticsearch?",
+      "match_key": "magnifying lens",
+      "source": "midjourney_grid_1456_needs_cloudinary_upscale",
+      "cloudinary_public_id": "bp-portfolio/images/articles/postgresql-full-text-search-good-enough-to-replace-elasticsearch/cover-mj-A",
+      "alt": "A brass magnifying lens focused on one glowing emerald passage in an open book, a vast empty warehouse behind"
+    },
+    {
+      "postId": 42,
+      "slug": "tailwind-css-v4-what-changed-and-how-to-migrate",
+      "title": "Tailwind CSS v4: What Changed and How to Migrate",
+      "match_key": "fabrication machine",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/tailwind-css-v4-what-changed-and-how-to-migrate/cover-mj-A",
+      "alt": "A brushed-aluminum machine turns scattered colored chips into one flawless cyan glass slab with the chips set inside like inlay"
+    },
+    {
+      "postId": 29,
+      "slug": "react-19-actions-finally-a-clean-way-to-handle-server-mutations",
+      "title": "React 19 Actions: Finally a Clean Way to Handle Server Mutations",
+      "match_key": "pastel office floor",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/react-19-actions-finally-a-clean-way-to-handle-server-mutations/cover-mj-A",
+      "alt": "Top-down view of a pastel office where a letter slides straight through a solid glass partition into a sky-blue tray"
+    },
+    {
+      "postId": 12,
+      "slug": "typescript-strict-mode-extra-pain-worth-it",
+      "title": "TypeScript Strict Mode: Is the Extra Pain Worth It?",
+      "match_key": "Sand dunes at golden hour",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/typescript-strict-mode-extra-pain-worth-it/cover-mj-A",
+      "alt": "A searchlight sweeps across sand dunes at golden hour, revealing what lies hidden beneath the sand"
+    },
+    {
+      "postId": 10,
+      "slug": "strapi-v4-custom-api-building-endpoints-beyond-generated-crud",
+      "title": "Strapi v4 Custom API: Building Endpoints Beyond the Generated CRUD",
+      "match_key": "clear acrylic block",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/strapi-v4-custom-api-building-endpoints-beyond-generated-crud/cover-mj-A",
+      "alt": "A clear acrylic block of layered colored sand with a perfectly straight shaft drilled through every layer"
+    },
+    {
+      "postId": 41,
+      "slug": "nextjs-app-router-after-a-year-in-production-what-id-tell-my-past-self",
+      "title": "Next.js App Router After a Year in Production: What I'd Tell My Past Self",
+      "match_key": "wooden bench at the end",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/nextjs-app-router-after-a-year-in-production-what-id-tell-my-past-self/cover-mj-A",
+      "alt": "A pier bench at dusk split down the middle, one half weathered grey and the other freshly painted sky blue"
+    },
+    {
+      "postId": 45,
+      "slug": "prisma-postgresql-the-data-layer-setup-i-use-on-every-project",
+      "title": "Prisma + PostgreSQL: The Data Layer Setup I Use on Every Project",
+      "match_key": "concrete house on a sea cliff",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/prisma-postgresql-the-data-layer-setup-i-use-on-every-project/cover-mj-A",
+      "alt": "A lone concrete house on a sea cliff at night, one warm window lit as storm waves explode on the rocks"
+    },
+    {
+      "postId": 46,
+      "slug": "postgresql-indexing-basics-that-actually-matter-for-app-developers",
+      "title": "PostgreSQL Indexing Basics That Actually Matter for App Developers",
+      "match_key": "archive hall",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/postgresql-indexing-basics-that-actually-matter-for-app-developers/cover-mj-A",
+      "alt": "A line of glowing emerald floor lights runs straight to one exact shelf in an endless pastel archive"
+    },
+    {
+      "postId": 30,
+      "slug": "css-custom-properties-theyre-not-just-for-color-tokens",
+      "title": "CSS Custom Properties: They're Not Just for Color Tokens",
+      "match_key": "living room in cream and tangerine",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/css-custom-properties-theyre-not-just-for-color-tokens/cover-mj-A",
+      "alt": "A woman turns a chrome wall dial and a wave of cyan sweeps across a cream and tangerine 1960s living room"
+    },
+    {
+      "postId": 31,
+      "slug": "mongodb-aggregation-pipeline-the-feature-that-unlocks-real-queries",
+      "title": "MongoDB Aggregation Pipeline: The Feature That Unlocks Real Queries",
+      "match_key": "three clear glass flasks",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/mongodb-aggregation-pipeline-the-feature-that-unlocks-real-queries/cover-mj-A",
+      "alt": "Three linked glass flasks on a stone bench: rough grey pebbles in the first, a single faceted emerald in the last"
+    },
+    {
+      "postId": 32,
+      "slug": "nodejs-error-handling-that-doesnt-embarrass-you-in-production",
+      "title": "Node.js Error Handling That Doesn't Embarrass You in Production",
+      "match_key": "factory floor at dusk",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/nodejs-error-handling-that-doesnt-embarrass-you-in-production/cover-mj-A",
+      "alt": "Top-down view of a neon-lit factory floor where every stray glowing bead a machine throws off is caught and sorted"
+    },
+    {
+      "postId": 8,
+      "slug": "typescript-interface-vs-type-the-real-difference-and-when-it-matters",
+      "title": "TypeScript: interface vs type \u2014 The Real Difference and When It Matters",
+      "match_key": "Two pavilions",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/typescript-interface-vs-type-the-real-difference-and-when-it-matters/cover-mj-A",
+      "alt": "Two pavilions on a bright plaza: an open steel frame you can see through, and a sealed, seamless white block"
+    },
+    {
+      "postId": 7,
+      "slug": "gsap-scrolltrigger-in-react-the-patterns-that-actually-work",
+      "title": "GSAP ScrollTrigger in React: The Patterns That Actually Work",
+      "match_key": "kinetic sculpture",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/gsap-scrolltrigger-in-react-the-patterns-that-actually-work/cover-mj-A",
+      "alt": "A kinetic sculpture of cyan spheres arcs down a bright stairwell, each sphere level with the step a woman is on"
+    },
+    {
+      "postId": 33,
+      "slug": "usecallback-and-usememo-stop-reaching-for-them-by-default",
+      "title": "useCallback and useMemo: Stop Reaching for Them by Default",
+      "match_key": "bank vault",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/usecallback-and-usememo-stop-reaching-for-them-by-default/cover-mj-A",
+      "alt": "A vast open bank vault guarding nothing but a single paper coffee cup under a spotlight"
+    },
+    {
+      "postId": 34,
+      "slug": "css-grid-the-layout-system-youve-been-avoiding-and-shouldnt",
+      "title": "CSS Grid: The Layout System You've Been Avoiding (And Shouldn't)",
+      "match_key": "snowy field at dawn",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/css-grid-the-layout-system-youve-been-avoiding-and-shouldnt/cover-mj-A",
+      "alt": "Aerial view of fresh snow settled into a ruled square grid, a red fox trotting along one line"
+    },
+    {
+      "postId": 35,
+      "slug": "rest-api-design-patterns-that-make-your-nodejs-backend-a-joy-to-work-with",
+      "title": "REST API Design Patterns That Make Your Node.js Backend a Joy to Work With",
+      "match_key": "foggy dark sea",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/rest-api-design-patterns-that-make-your-nodejs-backend-a-joy-to-work-with/cover-mj-A",
+      "alt": "A small rowboat resting on a lighthouse beam across a dark, foggy sea at night"
+    },
+    {
+      "postId": 43,
+      "slug": "zustand-vs-redux-vs-context-choosing-state-management-that-wont-haunt-you",
+      "title": "Zustand vs Redux vs Context: Choosing State Management That Won't Haunt You",
+      "match_key": "minimalist gallery",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/zustand-vs-redux-vs-context-choosing-state-management-that-wont-haunt-you/cover-mj-A",
+      "alt": "A visitor in a grey coat deciding between very different machines on stone pedestals in a bright gallery"
+    },
+    {
+      "postId": 36,
+      "slug": "javascript-asyncawait-patterns-that-trip-up-senior-devs",
+      "title": "JavaScript Async/Await Patterns That Trip Up Senior Devs",
+      "match_key": "slow staircase",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/javascript-asyncawait-patterns-that-trip-up-senior-devs/cover-mj-A",
+      "alt": "Three people on escalators arrive at the top together while one man on the stairs beside them is still halfway up"
+    },
+    {
+      "postId": 37,
+      "slug": "custom-react-hooks-when-to-extract-and-when-to-leave-it-inline",
+      "title": "Custom React Hooks: When to Extract and When to Leave It Inline",
+      "match_key": "small desk crane",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/custom-react-hooks-when-to-extract-and-when-to-leave-it-inline/cover-mj-A",
+      "alt": "A small desk crane lowers a tangled knot of wiring into a clear capsule, the wires coiling neatly as they go in"
+    },
+    {
+      "postId": 38,
+      "slug": "component-composition-patterns-in-react-that-actually-scale",
+      "title": "Component Composition Patterns in React That Actually Scale",
+      "match_key": "single old tree",
+      "source": "midjourney_upscale_2912",
+      "cloudinary_public_id": "bp-portfolio/images/articles/component-composition-patterns-in-react-that-actually-scale/cover-mj-A",
+      "alt": "A gardener on a ladder beside a single old tree whose branches bear many different grafted fruits"
+    }
+  ]
+}

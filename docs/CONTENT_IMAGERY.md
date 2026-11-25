@@ -634,6 +634,35 @@ covers" for §9.
 - **Earlier eras:** the code-rendered covers and their spec are in
   [`archive/code-rendered-covers/`](../archive/code-rendered-covers/HISTORY.md).
 
+### Historical recipe round-trip
+
+`docs/cover-recipes.json` captures the 53 published covers as renderable
+historical recipes, excluding `draftCovers`. Each recipe's subject and
+`styleOverride` are split from its embedded `finalPrompt`, not its sometimes
+different `loggedPrompt`; `exclusionsOverride` preserves historical exclusions.
+These overrides reproduce history, not current art direction. Dial provenance
+and missing historical detail remain in `cover-history.json`; a missing detail
+is omitted, not invented. Never use these historical fixtures to skip §2 or
+approve generation, rotation exceptions, fallback, upload or attachment.
+
+Run the exact check with the installed skill's full path (Python 3; no network
+or generation):
+
+```sh
+python3 scripts/verify-cover-recipes.py --skill-script "$COVER_RECIPES_SCRIPT"
+python3 -m unittest discover -s scripts -p 'test_verify_cover_recipes.py'
+```
+
+The verifier calls the real skill's `render_midjourney(..., form="stored")`
+against every embedded final prompt, comparing exact strings without trimming
+or normalizing the expected side. It also checks recipe identities/dials/public
+IDs and compares the final 44's slugs, public IDs and alt text against the
+independent `docs/cover-final44-manifest.json` fixture from
+[#415's receipt](https://github.com/brandonperfetti/bp-portfolio/issues/415#issuecomment-7083630425).
+This is historical inventory verification, not a fresh Payload/Cloudinary
+census or a generation-quality pass. Both commands must exit zero; an empty
+diff alone cannot hide inventory errors.
+
 ## Settings for the cover-recipes scripts
 
 This block mirrors §3, §4, §7, §9, §10, §11 and §13. Change the prose and
