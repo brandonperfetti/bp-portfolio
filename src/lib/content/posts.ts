@@ -320,16 +320,28 @@ export const getPostByPath = async (path: string): Promise<Post | null> => {
  * this function is the deliberate, single point where that app-layer
  * decision is allowed to override the data-layer gate. Never call it before
  * the gate. (Fresh-eyes review 2026-08, finding B2.)
+ *
+ * The override also reaches the body's link targets: Payload forwards
+ * `overrideAccess` into Lexical link population, so a link to a draft page or
+ * post comes back populated, where an access-enforced read returns a bare id.
+ * Each collection's `defaultPopulate` leaves `_status` out, so the read asks
+ * for it on top of those defaults; `lexicalToBlocks` then renders a draft
+ * target as text instead of a link to a URL that serves nothing (#359).
  */
 export const getGatedPostContent = async (
   id: number,
 ): Promise<Post['content'] | null> => {
   const payload = await getPayload({ config: configPromise })
+  const withStatus = (slug: 'pages' | 'posts') => ({
+    ...(payload.collections[slug]?.config.defaultPopulate ?? {}),
+    _status: true as const,
+  })
   const doc = await payload.findByID({
     collection: 'posts',
     id,
     depth: 2,
     overrideAccess: true,
+    populate: { pages: withStatus('pages'), posts: withStatus('posts') },
     select: { content: true },
   })
   return doc?.content ?? null

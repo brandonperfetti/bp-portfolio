@@ -33,7 +33,9 @@ const textToRichText = (node: LexicalNode): CmsRichText => {
  * shapes render no link: a bare id, which is how a read with access control
  * returns a target it cannot see (a draft), and a populated target whose
  * `_status` is not `published`, which a trusted read (`getGatedPostContent`)
- * can return. Either would otherwise point at a URL that serves nothing; the
+ * can return; that read asks for `_status` explicitly, because a populated
+ * target without one (the collections' `defaultPopulate` omits it) is taken
+ * as published, the shape every access-enforced read returns. Either would otherwise point at a URL that serves nothing; the
  * text still renders. When the target is published, the cached reader is
  * refreshed by the other collection's tag (`docs/ARCHITECTURE.md` § Caching).
  */
