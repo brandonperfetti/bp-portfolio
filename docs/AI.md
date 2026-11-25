@@ -847,7 +847,7 @@ no code span holding code, no source file and no code-shaped definition or
 import. It does not match refusal phrases; a list of them misread ordinary
 refusals in two reviews. **Its limits:** an invented behaviour told in plain prose
 passes, because no syntax marks it, and the negation word is not tied to the
-code ("you cannot lose requests" counts); the prompt rule is the guard there, and a
+code ("you cannot lose requests" counts); the prompt rule is the guard there, and
 tests pin both limits so they stay stated. **Ops:** once Brandon adds the
 first entry, the sync's runbook applies unchanged. Run it with `--dry-run`
 first, check that the `[corvus:private]` counts line names the entries

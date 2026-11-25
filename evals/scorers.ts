@@ -922,10 +922,10 @@ function renderedText(output: string): string {
 function githubRepositories(output: string): string[] {
   const repos: string[] = []
   for (const piece of renderedText(output).split(/[\s()[\]<>"'`*]+/)) {
-    // `_` is legal in a repository name, so it is stripped only where it
-    // wraps a token as `__emphasis__`.
-    const token = piece
-      .replace(/^_+|_+$/g, '')
+    // `_` is legal in a repository name, so it is stripped only where the
+    // same run opens and closes the token, as `__emphasis__` does.
+    const wrap = /^(_+)(.+)\1$/.exec(piece)
+    const token = (wrap && !wrap[2].endsWith('_') ? wrap[2] : piece)
       .replace(/^git@github\.com:/i, 'https://github.com/')
       .replace(/^(?:www\.)?github\.com/i, (host) => `https://${host}`)
     if (!/^https?:\/\//i.test(token)) continue
@@ -1006,10 +1006,35 @@ const SOURCE_FILE = new RegExp(
  * with its keyword, or an arrow. Prose such as "let me summarize" is none.
  */
 const DEFINITION =
-  /\b(?:function|def)\s+\w+\s*\(|\bclass\s+\w+\s*[({:]|\b(?:const|let|var)\s+\w+\s*=|\bimport\s+[\w{*][^\n]*\bfrom\s+['"]|^\s*(?:from\s+[\w.]+\s+)?import\s+[\w.]+(?:\s+as\s+\w+)?\s*$|\bexport\s+(?:default|const|function|class)\b|=>/m
+  /\b(?:function|def)\s+\w+\s*\(|\bclass\s+\w+\s*[({:]|\b(?:const|let|var)\s+\w+\s*=|\bimport\s+[\w{*][^\n]*\bfrom\s+['"]|^[ \t]*(?:from[ \t]+\w+(?:\.\w+)*[ \t]+)?import[ \t]+\w+(?:\.\w+)*(?:[ \t]+as[ \t]+\w+)?[ \t]*$|\bexport\s+(?:default|const|function|class)\b|=>/m
 
 /** Code punctuation that a name in a code span never holds. */
 const CODE_PUNCTUATION = /[(){};=<>]/
+
+/** A Markdown list item's marker: `-`, `*`, `+`, `1.` or `1)`. */
+const LIST_ITEM = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/
+
+/**
+ * Does the answer hold a Markdown indented code block?
+ *
+ * @remarks A line indented four or more spaces (or a tab) that follows a
+ * blank line, or opens the answer, renders as code, unless it continues a
+ * list item: inside a list the same indent is the item's own paragraph
+ * (#193 review, measured with `react-markdown`).
+ */
+function hasIndentedCodeBlock(output: string): boolean {
+  const lines = output.split('\n')
+  let previous: string | undefined
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const afterBlank = i === 0 || lines[i - 1].trim() === ''
+    if (afterBlank && /^(?: {4,}|\t)\S/.test(line)) {
+      if (previous === undefined || !LIST_ITEM.test(previous)) return true
+    }
+    if (line.trim() !== '' && !/^(?: {2,}|\t)/.test(line)) previous = line
+  }
+  return false
+}
 
 /**
  * Does the answer show code, or name the repository's files or definitions?
@@ -1021,9 +1046,7 @@ const CODE_PUNCTUATION = /[(){};=<>]/
  */
 function claimsImplementation(output: string): boolean {
   if (/```|~~~/.test(output)) return true
-  // A Markdown indented code block: a line indented four spaces or a tab
-  // after a blank line (or at the start).
-  if (/(?:^|\n[ \t]*\n)(?: {4}|\t)\S/.test(output)) return true
+  if (hasIndentedCodeBlock(output)) return true
   for (const span of output.matchAll(/`([^`\n]*)`/g)) {
     if (CODE_PUNCTUATION.test(span[1])) return true
   }
