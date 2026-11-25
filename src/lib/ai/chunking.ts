@@ -622,9 +622,9 @@ export function dailyDriverLead(
  * question does not use, so keep the name out of it. A longer draft ("…, the
  * company where he worked as …") started taking a slot on "has Brandon built
  * anything with Next.js"; this one did not. "Work history" and "employment
- * history" scored the same on embeddings; "work history" is also what the
- * eval tier's term-coverage retriever needs to match "work history" and
- * "worked" (`evals/fixtures/retriever.ts`).
+ * history" both ranked work history first on all seven career queries;
+ * "work history" is also what the eval tier's term-coverage retriever needs
+ * to match "work history" and "worked" (`evals/fixtures/retriever.ts`).
  *
  * Note this changes chunk TEXT, so it changes `contentHash`: the four rows
  * re-embed on their next save or the next `backfill-corvus-embeddings.ts` run

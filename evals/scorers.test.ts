@@ -245,7 +245,7 @@ describe('eval retrieval preconditions', () => {
       // The block runs floorless, so what the floor alone would return only
       // says how hard the trap is. Since #236 a work-history chunk opens with
       // "… employer in his work history", so the career question below clears
-      // the floor on its own — as it does on real embeddings — and the trap
+      // the floor on its own, and the trap
       // gets harder, not weaker: every passage is a real role, and none of
       // them covers the years asked about. Every other case still retrieves
       // nothing at the floor.
