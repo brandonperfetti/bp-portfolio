@@ -55,8 +55,9 @@ export const getCmsPageByPath = async (
   path: string,
 ): Promise<CmsPageContent | null> => {
   'use cache: remote'
-  // `posts` too (#359): see {@link getPublishedPageByPath}.
-  cacheTag(CMS_TAGS.pages, CMS_TAGS.articles)
+  // `pages` alone (#359): the value is page metadata and carries none of the
+  // page's links, so a post's publish state cannot change it.
+  cacheTag(CMS_TAGS.pages)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
   const pagePath = pathToPagePath(path)

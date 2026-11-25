@@ -60,3 +60,80 @@ describe('lexicalToBlocks — embedded mediaBlock (#45)', () => {
     expect(blocks.map((b) => b.type)).toEqual(['code', 'image'])
   })
 })
+
+/**
+ * Internal links (#359, case 2). Payload's LinkFeature stores an internal link
+ * as `fields: { linkType: 'internal', doc: { relationTo, value } }` and no
+ * `url`; the converter used to read `url` alone, so every internal link in an
+ * article body or a Prose block rendered as plain text. `value` is populated
+ * only when the reader could see the target: a draft target comes back as a
+ * bare id, which is what the cross-collection cache tags refresh.
+ */
+describe('lexicalToBlocks — internal links (#359)', () => {
+  const paragraphWithLink = (fields: Record<string, unknown>) =>
+    root([
+      {
+        type: 'paragraph',
+        children: [
+          { type: 'link', fields, children: [{ type: 'text', text: 'here' }] },
+        ],
+      },
+    ])
+  const hrefOf = (fields: Record<string, unknown>) =>
+    lexicalToBlocks(paragraphWithLink(fields))[0]?.richText?.[0]?.href
+
+  it('links a populated page to its public path', () => {
+    expect(
+      hrefOf({
+        linkType: 'internal',
+        doc: {
+          relationTo: 'pages',
+          value: {
+            _status: 'published',
+            id: 2,
+            path: 'work/acme',
+            slug: 'acme',
+          },
+        },
+      }),
+    ).toBe('/work/acme')
+  })
+
+  it('links a populated, unplaced post to /articles/<slug>', () => {
+    expect(
+      hrefOf({
+        linkType: 'internal',
+        doc: {
+          relationTo: 'posts',
+          value: { _status: 'published', id: 3, slug: 'hello' },
+        },
+      }),
+    ).toBe('/articles/hello')
+  })
+
+  it('renders no link for a target the reader could not see (a bare id)', () => {
+    expect(
+      hrefOf({ linkType: 'internal', doc: { relationTo: 'pages', value: 2 } }),
+    ).toBeUndefined()
+  })
+
+  it('renders no link for a populated target that is not published', () => {
+    // A trusted read (`getGatedPostContent`, `overrideAccess: true`) populates
+    // drafts too; their path serves nothing yet.
+    expect(
+      hrefOf({
+        linkType: 'internal',
+        doc: {
+          relationTo: 'pages',
+          value: { _status: 'draft', id: 2, path: 'lab', slug: 'lab' },
+        },
+      }),
+    ).toBeUndefined()
+  })
+
+  it('keeps a custom link on its url', () => {
+    expect(hrefOf({ linkType: 'custom', url: 'https://example.com' })).toBe(
+      'https://example.com',
+    )
+  })
+})

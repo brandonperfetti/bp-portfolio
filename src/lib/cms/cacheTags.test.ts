@@ -263,9 +263,10 @@ describe('readers that populate a Pages relation ↔ pages purge pairing (#262)'
  * fail here.
  *
  * The second test pins the readers that do NOT carry the other tag, because
- * option A's cost is a re-read on every purge of it: a reader that selects only
- * its own scalar columns (`path`, `slug`, `title`) populates no relation and
- * has nothing to refresh.
+ * option A's cost is a re-read on every purge of it: a reader whose cached
+ * value carries no link to the other collection (a path or slug list, page
+ * metadata, post summaries whose consumers read no page reference) has nothing
+ * to refresh.
  */
 describe('pages ↔ posts cross-collection readers (#359)', () => {
   beforeEach(() => {
@@ -273,7 +274,6 @@ describe('pages ↔ posts cross-collection readers (#359)', () => {
   })
 
   const crossReaders: Array<[string, string, () => Promise<unknown>]> = [
-    ['getCmsPageByPath', 'posts', () => getCmsPageByPath('/x')],
     ['getPageByPathDraftAware', 'posts', () => getPageByPathDraftAware('x')],
     ['getPageBySlugDraftAware', 'posts', () => getPageBySlugDraftAware('x')],
     ['getPageLayoutBySlug', 'posts', () => getPageLayoutBySlug('x')],
@@ -292,6 +292,8 @@ describe('pages ↔ posts cross-collection readers (#359)', () => {
   )
 
   const ownOnly: Array<[string, string, () => Promise<unknown>]> = [
+    // Returns metadata only: title, SEO, hero image, share flags, no links.
+    ['getCmsPageByPath', 'pages', () => getCmsPageByPath('/x')],
     ['getPublishedPagePaths', 'pages', getPublishedPagePaths],
     ['getAncestorPages', 'pages', () => getAncestorPages('a/b')],
     ['getPublishedPostSummaries', 'posts', getPublishedPostSummaries],

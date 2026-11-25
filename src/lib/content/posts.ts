@@ -202,10 +202,11 @@ export const getPublishedPostPaths = async (): Promise<string[]> => {
  * the detail-page staleness incident landed on. Measured 45,356 bytes for one
  * post, far under the 2 MB Runtime Cache item limit.
  *
- * **Also tagged `pages` (#359).** The post's Lexical body links to pages
- * (`src/fields/defaultLexical.ts`, `enabledCollections: ['pages', 'posts']`)
- * and its `parent` is a page, both populated here with access control
- * enforced, so a link to a draft page is cached as a bare id. A page publish,
+ * **Also tagged `pages` (#359).** The post's Lexical body can link to pages
+ * (`src/fields/defaultLexical.ts`, `enabledCollections: ['pages', 'posts']`),
+ * populated here with access control enforced, so a link to a draft page is
+ * cached as a bare id and renders as plain text (`lexicalToBlocks`, which also
+ * since #359 renders a populated internal link at all). A page publish,
  * unpublish or delete purges `pages`, never `posts`, so without this tag the
  * article kept that stale link until the `cmsContent` lifetime lapsed. The
  * mirror of the page readers' `posts` tag (`pagesRepo.ts`).

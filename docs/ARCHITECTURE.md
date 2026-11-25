@@ -61,20 +61,22 @@ What a reader or editor can do with it, and which tests prove it, is
   `src/app/api/revalidate/route.test.ts`).
 - **A reader that populates another collection's document subscribes to that
   collection's tag too** (#359, option A; Brandon). Repo reads run with access
-  control enforced, so a relation to a draft comes back as a bare id and
-  `resolveCmsHref` renders it as `'#'`; the target's publish, unpublish or
-  delete purges only its own tag (`revalidatePage` purges `pages`,
-  `revalidatePost` purges `posts`). The cached page readers
-  (`getCmsPageByPath`, `getPageByPathDraftAware`, `getPageLayoutBySlug`)
-  therefore carry `posts`; the cached post readers (`getPostBySlug`,
-  `getPostByPath`, `getPostLayoutBySlug`) carry `pages`; the consent reader
-  carries `pages` and `getCmsRedirects` both (#262). A reader that selects only
-  its own scalar columns (`getPublishedPagePaths`, `getAncestorPages`, the post
-  summary, slug and path lists) populates nothing and stays on its own tag. The
-  cost is one re-read of each such entry after any write to the other
-  collection; a shared "publish state" tag (option B) is the alternative if
-  that ever shows up as load. `src/lib/cms/cacheTags.test.ts` pins both sides,
-  so a new cross-collection reader gets added there.
+  control enforced, so a relation to a draft comes back as a bare id: a link
+  field renders it as `'#'` (`resolveCmsHref`) and a rich-text internal link
+  as plain text (`lexicalToBlocks`). The target's publish, unpublish or delete
+  purges only its own tag (`revalidatePage` purges `pages`, `revalidatePost`
+  purges `posts`). So the cached page readers that return blocks
+  (`getPageByPathDraftAware`, `getPageLayoutBySlug`) carry `posts`; the cached
+  post readers that return the body (`getPostBySlug`, `getPostByPath`,
+  `getPostLayoutBySlug`) carry `pages`; the consent reader carries `pages` and
+  `getCmsRedirects` both (#262). A reader whose cached value carries no link to
+  the other collection stays on its own tag: the path and slug lists,
+  `getAncestorPages`, `getCmsPageByPath` (page metadata), and the post
+  summaries, whose consumers read no page reference. The cost is one re-read of
+  each tagged entry after any write to the other collection; a shared "publish
+  state" tag (option B) is the alternative if that ever shows up as load.
+  `src/lib/cms/cacheTags.test.ts` pins both sides, so a new cross-collection
+  reader gets added there.
 - `/api/revalidate` (secret `CMS_REVALIDATE_SECRET`) is the manual escape
   hatch.
 - GitHub tech signals cache 6h under tag `tech-signals`
