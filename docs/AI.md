@@ -640,6 +640,14 @@ autosave ticks, is bounded by `AbortSignal.timeout`, and **never throws** — a
 provider outage must not fail a content save. Published-content edits therefore
 reach retrieval with no redeploy.
 
+One exception (#208): a draft saved over a published Post or Page keeps the
+live rows, and to tell it from an unpublish the hook reads the collection row
+on the save's own transaction (`payload.db.findOne`). If that read fails, the
+hook rethrows and the save fails, because the failure is inside the save's
+transaction and the save could not be trusted to commit. That read is not
+under the hook's deadline: a read on the transaction cannot be abandoned, since
+the save's COMMIT waits behind it on the same connection.
+
 Two skip paths, and the second one is a security fix, not an optimisation:
 
 1. **`content_hash` skip.** Every chunk's sha256 is stored. If the freshly

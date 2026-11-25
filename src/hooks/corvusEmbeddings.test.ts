@@ -214,25 +214,6 @@ describe('2b. a draft saved over a published document deletes nothing (#208)', (
     expect(deleteDocumentEmbeddingsMock).not.toHaveBeenCalled()
   })
 
-  it('gives up on a stalled lookup at the hook budget and deletes (#208 review)', async () => {
-    vi.useFakeTimers()
-    try {
-      const { args } = draftOver(vi.fn(() => new Promise(() => {})))
-
-      const run = refreshCorvusEmbeddings('pages')(args)
-      await vi.advanceTimersByTimeAsync(HOOK_EMBEDDING_TIMEOUT_MS)
-      await run
-
-      expect(deleteDocumentEmbeddingsMock).toHaveBeenCalledWith(
-        expect.anything(),
-        'pages',
-        7,
-      )
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('does not look anything up for a published save', async () => {
     syncDocumentEmbeddingsMock.mockResolvedValue({
       written: 0,

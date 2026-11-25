@@ -253,7 +253,9 @@ export const Pages: CollectionConfig = {
     // of leaving an unpublished Page's text retrievable. Ordering cannot close
     // the last window: if the transaction itself fails to commit after this
     // hook has written, the rows stay until the backfill, as for Posts.
-    // It is fail-open and bounded, and a cascaded descendant's path change
+    // Its provider work is fail-open and bounded (the draft-status read is
+    // the one exception; see `isDraftOverPublished`), and a cascaded
+    // descendant's path change
     // reaches that descendant's chunks through its own `afterChange` as a
     // metadata repair.
     afterChange: [

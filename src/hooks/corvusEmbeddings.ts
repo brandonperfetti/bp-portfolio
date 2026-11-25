@@ -84,16 +84,19 @@ export function isAutosaveRequest(req: unknown): boolean {
  * lets it report success anyway (#208 review). The adapter call takes `req`
  * for the transaction and does nothing else on failure.
  *
- * Two failure modes, handled differently:
+ * A database error throws {@link DraftLookupError}, which the hook rethrows
+ * instead of swallowing. The error happened inside the save's own
+ * transaction, so the save cannot be trusted to commit; failing it loudly is
+ * the honest outcome, where the hook's usual fail-open would report a save
+ * that may not have happened.
  *
- * - **Over the hook's budget** (`signal` aborts): answers `false`, so the
- *   caller deletes as before. A wrongly kept row could quote text the reader
- *   cannot see; a wrongly deleted one only waits for the backfill.
- * - **A database error**: throws {@link DraftLookupError}, which the hook
- *   rethrows instead of swallowing. The error happened inside the save's own
- *   transaction, so the save cannot be trusted to commit; failing it loudly
- *   is the honest outcome, where the hook's usual fail-open would report a
- *   save that may not have happened.
+ * **Not raced against the hook's deadline**, deliberately (#208 re-review).
+ * A read on the save's transaction cannot be abandoned: the save's COMMIT
+ * queues behind it on the same connection, so a race would bound nothing,
+ * and a failure arriving after the race had settled would be swallowed while
+ * PostgreSQL turned the COMMIT into a ROLLBACK the caller never sees. It is a
+ * primary-key read on the transaction the save is already using, so it is
+ * bounded exactly as the save's own statements are.
  *
  * With no adapter `findOne` (not Postgres; a test double without one), it
  * answers `false`.
@@ -101,7 +104,6 @@ export function isAutosaveRequest(req: unknown): boolean {
  * @param req - The Payload request of the save.
  * @param collection - The collection the hook is wired onto.
  * @param id - The saved document's id.
- * @param signal - The hook's shared deadline.
  * @returns `true` only when the collection row is verifiably published.
  * @throws {@link DraftLookupError} when the lookup itself fails.
  */
@@ -109,27 +111,21 @@ async function isDraftOverPublished(
   req: unknown,
   collection: CorvusCollectionSlug,
   id: number,
-  signal: AbortSignal,
 ): Promise<boolean> {
   const db = (req as { payload?: { db?: { findOne?: unknown } } } | null)
     ?.payload?.db
   if (typeof db?.findOne !== 'function') return false
   let row: HookDoc | null
   try {
-    row = (await withDeadline(
-      (db.findOne as (args: Record<string, unknown>) => Promise<unknown>).call(
-        db,
-        {
-          collection,
-          where: { id: { equals: id } },
-          select: { _status: true },
-          req,
-        },
-      ),
-      signal,
-    )) as HookDoc | null
+    row = (await (
+      db.findOne as (args: Record<string, unknown>) => Promise<unknown>
+    ).call(db, {
+      collection,
+      where: { id: { equals: id } },
+      select: { _status: true },
+      req,
+    })) as HookDoc | null
   } catch (error) {
-    if (signal.aborted) return false
     throw new DraftLookupError(collection, id, error)
   }
   return isPublished(row)
@@ -265,20 +261,12 @@ export const refreshCorvusEmbeddings = (
       // ordering is the fix, so it is load-bearing: do not move this back.
       if (isAutosaveRequest(req)) return doc
 
-      // ONE deadline for the whole hook, created here and shared by every
-      // step below — see the docblock. `withDeadline` is what extends it over
-      // the work the signal cannot reach (drizzle statements; the summary's
-      // `find`; the draft lookup); the signal itself is still passed in so
-      // the provider call aborts at the source rather than merely being
-      // abandoned.
-      deadline = createDeadline(HOOK_EMBEDDING_TIMEOUT_MS)
-
       // A draft saved over a still-published document changes nothing a
       // reader can see, so it must not reach the unpublish branch or the
       // store's draft rule below, both of which delete the live rows.
       if (
         current?._status === 'draft' &&
-        (await isDraftOverPublished(req, collection, docId, deadline.signal))
+        (await isDraftOverPublished(req, collection, docId))
       ) {
         return doc
       }
@@ -293,6 +281,13 @@ export const refreshCorvusEmbeddings = (
         )
         return doc
       }
+
+      // ONE deadline for the whole hook, created here and shared by every
+      // step below — see the docblock. `withDeadline` is what extends it over
+      // the work the signal cannot reach (drizzle statements; the summary's
+      // `find`); the signal itself is still passed in so the provider call
+      // aborts at the source rather than merely being abandoned.
+      deadline = createDeadline(HOOK_EMBEDDING_TIMEOUT_MS)
 
       const result = await withDeadline(
         syncDocumentEmbeddings({
