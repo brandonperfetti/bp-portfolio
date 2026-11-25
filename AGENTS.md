@@ -170,4 +170,12 @@ The five canonical triage roles, kept as their own names. See
 
 ### Domain docs
 
-Single-context. See `docs/agents/domain.md`.
+Single-context. See `docs/agents/domain.md`; terms in `GLOSSARY.md`.
+
+### CMS Domain Agent
+
+A read-only advisor and reviewer for the Payload CMS paths:
+`docs/agents/cms-domain.md` (brief, owned paths, scenario checks). Under Claude
+Code it is the `cms-domain` subagent, and a `PreToolUse` hook adds its brief
+when an edit touches an owned path; the hook never blocks an edit. It adds to
+the `code-review` verdicts and the CodeRabbit round, never replaces them.
