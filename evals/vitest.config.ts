@@ -47,8 +47,18 @@ const repoRoot = path.resolve(
  * project uses. `retrieval.ts` imports it at module scope for
  * `retrieveCorvusContext`; nothing in `evals/` calls that function, so the stub
  * only has to satisfy the import — no CMS, no database, no pool.
+ *
+ * ## Why there is a global setup (#356)
+ *
+ * `migrations-current.ts` refuses the pg tier, once and before any file runs,
+ * when `DATABASE_URI` names a database behind this checkout's migrations, and
+ * names `pnpm migrate` as the fix. It does nothing without `DATABASE_URI` or
+ * under Evalite, which collects only `*.eval.ts`.
  */
 export default defineConfig({
+  test: {
+    globalSetup: ['./migrations-current.ts'],
+  },
   resolve: {
     alias: {
       '@payload-config': path.resolve(

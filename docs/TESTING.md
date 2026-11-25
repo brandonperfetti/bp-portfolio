@@ -133,6 +133,44 @@ says nothing about whether a user journey works. The two reader discovery
 journeys have an owned recipe in § Verifying a journey locally below; see
 JOURNEYS for the proof and remaining gaps of other journeys.
 
+## Running the pg tier locally
+
+The pg tier is `pnpm exec vitest run --root evals` with `DATABASE_URI` set: the
+`evals/*.test.ts` files that need a real migrated Postgres (see the Payload
+pipeline integration bullet above). CI runs it on a fresh database every time;
+locally, the database is whatever `DATABASE_URI` names.
+
+**It refuses a database behind this checkout's migrations (#356).**
+`evals/migrations-current.ts`, the eval root's Vitest global setup, compares
+`payload_migrations` with `src/migrations/index.ts` before any file runs, and a
+database missing any shipped migration fails the run with one message naming
+`pnpm migrate`. Before it, a stale shared development database failed eight
+files on missing columns, which read like a regression in the change under
+test. Rows the checkout does not ship (a newer branch's migrations) are not a
+refusal. It does nothing without `DATABASE_URI`, and nothing under Evalite.
+
+Either run `pnpm migrate` on the database you point it at, or use a throwaway
+one. A throwaway database is the closer match to CI and leaves no fixtures in a
+database you keep:
+
+```sh
+docker run -d --rm --name bp-pg-tier -p 127.0.0.1:55432:5432 \
+  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=bp_portfolio_ci --tmpfs /var/lib/postgresql/data \
+  pgvector/pgvector:pg16
+export DATABASE_URI=postgres://postgres:postgres@127.0.0.1:55432/bp_portfolio_ci
+export PAYLOAD_SECRET=ci-not-a-real-secret
+pnpm migrate
+pnpm seed:e2e
+pnpm exec vitest run --root evals
+docker rm -f bp-pg-tier
+```
+
+`pnpm seed:e2e` writes its uploaded images to `media/` in the checkout
+(Payload's default upload directory for the `media` collection). `/media/` is in
+`.gitignore`, so a seeded checkout keeps a clean `git status`; delete the folder
+when you are done with the seed.
+
 ## CI (`.github/workflows/ci.yml`)
 
 Quality job: lint (ESLint + tsdoc) → prettier check → typecheck → generated
