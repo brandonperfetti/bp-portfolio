@@ -1213,6 +1213,13 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
       },
     ],
     [
+      'an empty-fragment link on the same page',
+      async (link, user) => {
+        link.setAttribute('href', '/articles#')
+        await user.click(link)
+      },
+    ],
+    [
       'a link to another origin',
       async (link, user) => {
         link.setAttribute('href', 'https://example.com/articles')

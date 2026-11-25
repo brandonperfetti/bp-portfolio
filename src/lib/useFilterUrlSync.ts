@@ -174,7 +174,8 @@ export function useFilterUrlSync<Params extends FilterSearchParams>({
       if (
         url.origin !== window.location.origin ||
         url.pathname !== latest.pathname ||
-        url.hash !== '' ||
+        // `hash` is '' for an empty fragment too (`/articles#`).
+        anchor.href.includes('#') ||
         new URLSearchParams(url.search).toString() !==
           latest.searchParams.toString()
       ) {
