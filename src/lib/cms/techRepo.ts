@@ -33,8 +33,9 @@ export const getCmsTech = async (): Promise<CmsEntityItem[] | null> => {
   const { docs } = await payload.find({
     collection: 'tech-stack',
     depth: 1,
-    limit: 500,
+    limit: 0,
     overrideAccess: false,
+    pagination: false,
     sort: 'sortOrder',
   })
   if (!docs.length) return null

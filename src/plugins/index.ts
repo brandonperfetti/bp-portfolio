@@ -91,10 +91,11 @@ export const plugins: Plugin[] = [
           }),
           // #150 (D4, Brandon 2026-09-02). Moving a section page moves every
           // URL beneath it, and one row per descendant is the design that does
-          // not scale: `getCmsRedirects` reads at most `REDIRECT_LIMIT = 500`
-          // rows, and a handful of reorganisations on a site with a few hundred
-          // articles walks toward that ceiling. A prefix row is O(1) per move
-          // whatever the subtree size.
+          // not scale: `getCmsRedirects` reads the whole table into memory,
+          // and past `REDIRECT_SCALE_THRESHOLD = 500` rows that design wants a
+          // keyed lookup instead (#256); a handful of reorganisations on a site
+          // with a few hundred articles walks toward it. A prefix row is O(1)
+          // per move whatever the subtree size.
           //
           // `to` is still a document reference resolved through the target's
           // CURRENT path at read time, so `/work/x` resolves to wherever that
@@ -106,7 +107,7 @@ export const plugins: Plugin[] = [
           // onto `toPathAtCapture` and re-resolved through the same list, up to
           // `MAX_REDIRECT_HOPS` times, because the live reference is precisely
           // what skips the era the descendant's own row is keyed under. Still
-          // one 500-row read; the walk is in memory.
+          // one whole-table read; the walk is in memory.
           {
             name: 'matchDescendants',
             type: 'checkbox',

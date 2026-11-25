@@ -134,11 +134,19 @@ export const isPermanentRedirect = (type: CmsRedirectType): boolean =>
   type !== '302'
 
 /**
- * Upper bound on rows read per lookup. Redirects here are editorial plus one
- * row per deliberate published rename, so this is generous; a site that ever
- * approached it would want a keyed lookup instead of a full-list read.
+ * The table size at which the full-list read should give way to a keyed
+ * lookup. Redirects here are editorial plus one row per deliberate published
+ * rename, so this is generous.
+ *
+ * @remarks **A threshold, not a read limit (#256).** It used to be the read's
+ * `limit`, so row 501 and beyond were dropped with no error and no log, and
+ * with no `sort` on the read the dropped rows were whichever the database
+ * returned last: an old URL whose row fell outside would 404 instead of
+ * redirecting. {@link getCmsRedirects} now reads every row and warns on each
+ * cache refill past this size, so the scale point the design names is
+ * observable rather than a silent truncation.
  */
-const REDIRECT_LIMIT = 500
+export const REDIRECT_SCALE_THRESHOLD = 500
 
 /**
  * Canonical form for comparing paths: leading slash, no trailing slash, no
@@ -183,7 +191,7 @@ const isAbsoluteDestination = (destination: string): boolean =>
  * hop. Read five as a floor, not a cap on moves — it buys *at least* five
  * chained ancestor moves, and usually more — and it exists so a cycle
  * terminates rather than to be generous. It also bounds the cost: each hop
- * re-walks the (at most `REDIRECT_LIMIT`) rows already in hand, so the worst
+ * re-walks the rows already in hand, so the worst
  * case is five passes over an in-memory list, no extra reads.
  */
 const MAX_REDIRECT_HOPS = 5
@@ -376,7 +384,7 @@ type HopBudget = { exhausted: boolean; remaining: number }
  * Under a complete table those are the same string (nothing keyed at the
  * snapshot means the target has not moved since capture), so this is not a
  * behaviour difference; under a table missing an intermediate row — deleted in
- * admin, or past the {@link REDIRECT_LIMIT} read — the current path is a live
+ * admin — the current path is a live
  * document's, and the capture-time form is a spelling that may serve nothing.
  * Serving the latter would have been a regression against the pre-#178 answer.
  *
@@ -710,10 +718,9 @@ const resolveThroughHops = (
       // the current path. Under an incomplete one they differ, and the
       // capture-time form is the worse of the two — it is a spelling that was
       // current in the past and may serve nothing now, whereas the current-path
-      // rewrite is at least built on a live document's path. The table can be
-      // incomplete two ways: an editor deletes an intermediate row (the
-      // collection is fully editable in admin), or the row falls outside the
-      // {@link REDIRECT_LIMIT} read. Serving the stale form there would be a
+      // rewrite is at least built on a live document's path. The table is
+      // incomplete when an editor deletes an intermediate row (the collection
+      // is fully editable in admin). Serving the stale form there would be a
       // regression against pre-#178 behaviour, and in the most expensive
       // direction this system has — a 301 to a dead URL, cached by the browser
       // past any server-side retraction.
@@ -862,7 +869,9 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
   const { docs } = await payload.find({
     collection: 'redirects',
     depth: 0,
-    limit: REDIRECT_LIMIT,
+    // Every row (#256): `limit: N` caps even with `pagination: false`, and a
+    // row cut off here is an old URL that 404s instead of redirecting.
+    limit: 0,
     overrideAccess: false,
     pagination: false,
     select: {
@@ -883,6 +892,18 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
       type: true,
     },
   })
+
+  if (docs.length > REDIRECT_SCALE_THRESHOLD) {
+    // Once per execution of this body, which runs only on a cache miss, so
+    // once per cache generation rather than per request (in development Next
+    // also replays a cached body's console output on hits). Nothing is
+    // dropped; the warning says the full-list design has reached the size its
+    // docblock names for a keyed lookup.
+    console.warn(
+      '[redirects] table is past the full-list read threshold; a keyed lookup is due',
+      { rows: docs.length, threshold: REDIRECT_SCALE_THRESHOLD },
+    )
+  }
 
   const idsByCollection = collectReferenceIds(docs)
   const rowById = new Map<string, PathableDoc>()

@@ -162,16 +162,16 @@ reasoning that made it a limit is what the fix had to answer.
 
 - **Five hops** (`MAX_REDIRECT_HOPS`). A longer chain, or a cycle, answers no
   redirect at all rather than a half-walked guess. No extra database reads —
-  every hop re-walks the same in-memory row list, which is still the one 500-row
-  read, traversed up to six times (the initial pass plus five hops).
+  every hop re-walks the same in-memory row list, which is still the one
+  whole-table read, traversed up to six times (the initial pass plus five hops).
 - **A hop that finds nothing falls back; it never serves the snapshot.** Under a
   complete table the two are the same string — if the target had moved since
   capture there would be a row keyed at the snapshot and the hop would have
   matched it. Under an incomplete one they differ, and the snapshot is the worse
   answer: a spelling that was current in the past and may serve nothing today.
-  The table can be incomplete two ways, both reachable — an editor deletes an
-  intermediate row (the redirects collection is fully editable in admin), or the
-  row falls outside the 500-row read. Serving the stale form there would answer
+  The table is incomplete when an editor deletes an intermediate row (the
+  redirects collection is fully editable in admin); until #256 a row past the
+  old 500-row read cap was a second way. Serving the stale form there would answer
   a **301 to a dead URL** where the pre-#178 code answered the live one, so the
   resolver falls through to the current-path rewrite instead. **[Amended
   2026-09-09, #201:** that fall-through is now onto the **captured document's**
@@ -272,7 +272,8 @@ and one lookup always suffices. It was rejected twice over: it mutates history,
 so a row no longer records what happened, and it makes each move cost O(rows
 touching the subtree) writes inside the editor's publish transaction — the
 per-descendant cost D4 chose one prefix row to avoid, arriving by a different
-door and pushing at the same 500-row ceiling.
+door and pushing at the same 500-row scale point (a read cap until #256, a
+warning threshold since).
 
 ## The `/work` section (#137)
 

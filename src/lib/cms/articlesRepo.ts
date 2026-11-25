@@ -128,7 +128,7 @@ export async function getTopicSectionPaths(): Promise<TopicSectionPaths> {
   const { docs: topics } = await payload.find({
     collection: 'categories',
     depth: 0,
-    limit: 500,
+    limit: 0,
     overrideAccess: false,
     pagination: false,
     select: { title: true, sectionPage: true },
@@ -239,8 +239,8 @@ async function findRollupPosts(
  * @param limit - How many to return (clamped to the block's 1–12 range).
  *
  * @remarks A scoped read rather than a filter over
- * {@link getPublishedPostSummaries}: the whole-corpus list is cached at 1000
- * rows and would have to be fetched, deserialized and scanned to render six
+ * {@link getPublishedPostSummaries}: the whole-corpus list is every published
+ * post (#256) and would have to be fetched, deserialized and scanned to render six
  * cards, and — more to the point — the category relation is only reliably
  * populated on the *projected* read this issues, at `depth: 1`.
  *

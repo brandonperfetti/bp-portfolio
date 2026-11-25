@@ -75,8 +75,9 @@ export const getCmsAuthors = async (): Promise<CmsAuthorProfile[]> => {
   const { docs } = await payload.find({
     collection: 'authors',
     depth: 1,
-    limit: 200,
+    limit: 0,
     overrideAccess: false,
+    pagination: false,
     sort: 'name',
   })
   if (!docs.length) return [DEFAULT_CMS_AUTHOR]
