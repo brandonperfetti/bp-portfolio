@@ -60,12 +60,36 @@ function ResetConsentOnMount() {
   return null
 }
 
+/**
+ * Renders a marker once c15t's consent manager has finished its own async
+ * start-up (#233).
+ *
+ * @remarks The start-up resolves after the first render, and when it lands
+ * with no consent stored (which {@link ResetConsentOnMount} guarantees) it
+ * writes `activeUI` to `'banner'` or `'none'`. A "Customize" click that beats
+ * it opens the dialog and unmounts the banner, and the start-up then puts the
+ * banner back: no wait window fixes that. Tests that click wait for this
+ * marker first.
+ */
+function ConsentSettled() {
+  // `hasFetchedBanner` flips in the start-up's own store update, the signal
+  // `ConsentManager.ga.test.tsx` already waits on.
+  const { hasFetchedBanner } = useConsentManager()
+  return hasFetchedBanner ? <span data-testid="c15t-ready" hidden /> : null
+}
+
+/** Waits for {@link ConsentSettled}'s marker. */
+async function consentSettled() {
+  await screen.findByTestId('c15t-ready')
+}
+
 function renderBanner(consentRequired: boolean | null) {
   return render(
     <ConsentManagerProvider
       options={buildConsentManagerOptions({ scripts: [] })}
     >
       <ResetConsentOnMount />
+      <ConsentSettled />
       <CookieBanner consentRequired={consentRequired} />
     </ConsentManagerProvider>,
   )
@@ -119,6 +143,7 @@ describe('CookieBanner visibility across the four consent states (#140)', () => 
   it('required + decided → hidden', async () => {
     const user = userEvent.setup()
     renderBanner(true)
+    await consentSettled()
     await user.click(screen.getByRole('button', { name: /^accept all$/i }))
     // RACE (#186): "accept all" hands off to c15t, which persists the choice
     // and notifies its store subscribers on its own schedule — not inside the
@@ -181,6 +206,7 @@ describe('CookieBanner dialog triggers (#112 — return-focus capture)', () => {
     async (_label, name, id) => {
       const user = userEvent.setup()
       renderBanner(true)
+      await consentSettled()
       const trigger = screen.getByRole('button', { name })
 
       await user.click(trigger)
@@ -285,9 +311,12 @@ describe('CookieBanner hydration (#140)', () => {
     render(
       <ConsentManagerProvider options={optionsFor('bp-consent-seed')}>
         <ResetConsentOnMount />
+        <ConsentSettled />
         <CookieBanner consentRequired={true} />
       </ConsentManagerProvider>,
     )
+    // A fresh store (its own storage key), so its start-up is still pending.
+    await consentSettled()
     await user.click(screen.getByRole('button', { name: /^accept all$/i }))
     // RACE (#186): c15t persists the choice asynchronously, outside the `act`
     // that `user.click` awaits, so reading `localStorage` on the next line is
