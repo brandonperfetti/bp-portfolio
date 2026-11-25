@@ -20,7 +20,7 @@ import {
  * exercise the real UI: the home images, the Identity + SiteSettings globals, a
  * few published Posts (so `/articles` shows its search UI), and the published
  * `home` and `about` docs carrying their *real* composed layouts, so `/` and
- * the flipped `/about` (#44) render the true pages and their sticky rails —
+ * the flipped `/about` (#44) render the true pages, and `/about` its sticky rail —
  * both `notFound()` without a published doc.
  *
  * Notion-free by design — CI has no Notion creds. Constants come from
@@ -392,7 +392,9 @@ const run = async () => {
         {
           blockType: 'column' as const,
           size: 'half' as const,
-          sticky: true,
+          // Not sticky, as on the live home (Brandon, 2026-09-09; #205): the
+          // seed mirrors the real layout, and `/about` carries the sticky rail.
+          sticky: false,
           contentInset: 'railGutter' as const,
           revealChildren: true,
           content: [
