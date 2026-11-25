@@ -9,7 +9,12 @@
 - **E2E** — Playwright (`e2e/`), production server in CI
   (`pnpm test:e2e`). Sandboxed runners can pin the browser via
   `PLAYWRIGHT_EXECUTABLE_PATH`. Conditional skips guard content-dependent
-  specs (e.g. empty article DB).
+  specs (e.g. empty article DB). **A probe that feeds `test.skip` must not
+  swallow a load failure** (#205): assert the page loaded (status, a landmark)
+  before reading the content condition, and never wrap the probe in a
+  catch-all, or a 500 becomes a green skip. Worked example: `hasStickyRail` in
+  `e2e/ui-regression.spec.ts`. A skip whose condition is a settled owner
+  decision rather than variable content is dead coverage: delete the spec.
 - **Storybook** — `pnpm build-storybook` is a CI gate (story breakage);
   a11y addon fails stories on serious violations. That gate is
   **compile-only**, though: it proves a story module builds, not that it
@@ -257,12 +262,14 @@ Two related notes:
   `next.config.mjs` carries `allowedDevOrigins: ['127.0.0.1']` (#119). The key
   is dev-only — it has no effect on `next build` / `next start`, which is what
   `CI=1` uses.
-- **Home sticky rail** — if the home rail does not stick, check the DATA
-  before the code. Sticky is a per-column CHECKBOX on the Column block
-  (`src/blocks/Column/config.ts`, `sticky`, label "Stick to the top while
-  scrolling", `defaultValue: false`), and it only applies from the `lg`
-  breakpoint up. The one-line check: open Pages → `home` in the admin and
-  confirm that checkbox is ticked on the rail column. Unticked is a content
+- **Sticky rails** — the home rail is **not** sticky, by Brandon's decision
+  (2026-09-09, #205), and the e2e seed matches; `about desktop sticky right
+rail…` in `e2e/ui-regression.spec.ts` is the sticky-rail coverage. If a rail
+  that should stick does not, check the DATA before the code. Sticky is a
+  per-column CHECKBOX on the Column block (`src/blocks/Column/config.ts`,
+  `sticky`, label "Stick to the top while scrolling", `defaultValue: false`),
+  and it only applies from the `lg` breakpoint up. Open the page in the admin
+  and confirm that checkbox is ticked on the rail column. Unticked is a content
   edit, not a bug — no code change will fix it.
 
 ## Verifying a journey locally

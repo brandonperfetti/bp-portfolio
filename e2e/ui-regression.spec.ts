@@ -1,10 +1,13 @@
-import { type Locator, type Page, expect, test } from '@playwright/test'
+import {
+  type Locator,
+  type Page,
+  type Response,
+  expect,
+  test,
+} from '@playwright/test'
 
 import { interactUntil } from './support/hydration'
 
-// Home rail can legitimately shift more due to sticky offset transitions and
-// stacked cards entering/leaving around the rail during long-scroll sampling.
-const HOME_STICKY_RAIL_MAX_DRIFT_RATIO = 0.25
 // About rail should remain visually tighter because the right column is more
 // static while the left narrative content scrolls.
 const ABOUT_STICKY_RAIL_MAX_DRIFT_RATIO = 0.07
@@ -24,45 +27,38 @@ const STICKY_RAIL_MAX_SAMPLES = 16
 const STICKY_RAIL_TEST_ID = 'cms-sticky-rail'
 
 /**
- * How long to wait for the rail anchor before calling it absent.
- *
- * @remarks Generous enough that a streamed page-builder block is not mistaken
- * for a non-sticky one, short enough that the skip path does not cost a full
- * expect timeout on two specs. The present case — CI's seeded content — never
- * waits: the anchor is server-rendered and already attached.
- */
-const STICKY_RAIL_PRESENCE_TIMEOUT_MS = 5_000
-
-/**
  * Whether this page's rail column actually opted into sticky behaviour.
  *
  * @remarks `ColumnShell` emits the anchor if and only if the Column block's
  * `sticky` field is true — "Stick to the top while scrolling" in the admin —
  * and React drops the attribute entirely when it is false. So the anchor's
  * absence is not a bug to fail on: it is an editor having left the flag off,
- * which is a legitimate choice the CMS offers. Measured against a copy of
- * production, where exactly that is the case, and where both rail specs
- * therefore failed on `expect(railAnchor).toBeVisible()` while the page was
- * rendering perfectly correctly.
+ * which is a legitimate choice the CMS offers.
  *
- * `attached`, not `visible`: the about rail is `desktopOnly`, so visibility is
- * a second, viewport-dependent question. Presence of the mechanism is the
- * question the skip decision turns on, and the specs set a desktop viewport
- * before calling this anyway.
+ * **The page must have loaded before its absence means anything (#205).** An
+ * earlier version waited for the anchor and turned ANY failure into `false`,
+ * so a 500, a navigation error or a page that never rendered became a green
+ * skip. The load is asserted first, and those fail the spec. After that the
+ * anchor needs no waiting: it is server-rendered with the column, so once
+ * `main` is visible it is either in the DOM or the flag is off.
  *
- * @param page - Active Playwright page, already navigated.
+ * `count`, not visibility: the about rail is `desktopOnly`, so visibility is a
+ * second, viewport-dependent question. Presence of the mechanism is the
+ * question the skip decision turns on.
+ *
+ * @param page - Active Playwright page.
+ * @param response - What `page.goto` returned for that page.
  * @returns `true` when the sticky mechanism exists on this page.
  */
-async function hasStickyRail(page: Page): Promise<boolean> {
-  try {
-    await page
-      .getByTestId(STICKY_RAIL_TEST_ID)
-      .first()
-      .waitFor({ state: 'attached', timeout: STICKY_RAIL_PRESENCE_TIMEOUT_MS })
-    return true
-  } catch {
-    return false
-  }
+async function hasStickyRail(
+  page: Page,
+  response: Response | null,
+): Promise<boolean> {
+  expect(response?.status(), 'the page loaded before the sticky probe').toBe(
+    200,
+  )
+  await expect(page.locator('main')).toBeVisible()
+  return (await page.getByTestId(STICKY_RAIL_TEST_ID).count()) > 0
 }
 
 /** The skip reason, naming the CMS control a reader has to go turn on. */
@@ -199,49 +195,20 @@ test('corvus empty submit focuses input', async ({ page }) => {
   })
 })
 
-test('home desktop sticky right rail remains pinned while scrolling', async ({
-  page,
-}) => {
-  // Stabilize after each scroll, then compare drift against viewport-relative tolerance.
-  await page.setViewportSize({ width: 1440, height: 1000 })
-  await page.goto('/')
-
-  // The home is now a CMS page-builder doc (#42 flip), so the rail is the
-  // sticky Column shell rather than the old hard-coded `home-sticky-rail-anchor`
-  // JSX — target the stable testid ColumnShell emits when `sticky` is on.
-  // Whether it IS on is content, not code (#119), so decide before measuring.
-  test.skip(!(await hasStickyRail(page)), STICKY_RAIL_SKIP_REASON)
-
-  const viewportHeight = page.viewportSize()?.height ?? 1000
-
-  await page.evaluate(
-    (topOffset) => window.scrollTo(0, topOffset),
-    Math.round(viewportHeight * 1.2),
-  )
-  const railAnchor = page.getByTestId(STICKY_RAIL_TEST_ID)
-  await expect(railAnchor).toBeVisible()
-  const firstY = await getStableBoundingBoxY(page, railAnchor)
-
-  await page.evaluate(
-    (topOffset) => window.scrollTo(0, topOffset),
-    Math.round(viewportHeight * 2),
-  )
-  const secondY = await getStableBoundingBoxY(page, railAnchor)
-  const maxDrift = viewportHeight * HOME_STICKY_RAIL_MAX_DRIFT_RATIO
-  expect(Math.abs(secondY - firstY)).toBeLessThan(maxDrift)
-})
-
 test('about desktop sticky right rail remains pinned while scrolling', async ({
   page,
 }) => {
+  // The site's sticky-rail coverage (#205). The home rail is not sticky by
+  // Brandon's decision (2026-09-09), so a home variant of this spec only ever
+  // measured a configuration production does not use; `/about` is the page
+  // that sticks.
   await page.setViewportSize({ width: 1440, height: 1000 })
-  await page.goto('/about')
+  const response = await page.goto('/about')
 
-  // About is now a CMS page-builder doc (#44 flip): its right rail is the
-  // sticky Column shell rather than the old hard-coded `about-sticky-rail-anchor`
-  // JSX — target the stable testid ColumnShell emits when `sticky` is on (the
-  // same anchor the home rail test grabs). Same content-not-code caveat (#119).
-  test.skip(!(await hasStickyRail(page)), STICKY_RAIL_SKIP_REASON)
+  // About is a CMS page-builder doc (#44 flip): its right rail is the sticky
+  // Column shell, so target the stable testid ColumnShell emits when `sticky`
+  // is on. Whether it IS on is content, not code (#119).
+  test.skip(!(await hasStickyRail(page, response)), STICKY_RAIL_SKIP_REASON)
 
   const viewportHeight = page.viewportSize()?.height ?? 1000
 
