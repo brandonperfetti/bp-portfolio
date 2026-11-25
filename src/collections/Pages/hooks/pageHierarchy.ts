@@ -298,12 +298,17 @@ const readSubtree = async (
  * parents, and for both it means this cascade fires on the draft save as well
  * as on the publish. `[measured]` the new
  * `evals/pages-hierarchy-integration.test.ts` case logs `Subtree moved` twice.
- * The extra pass is waste, not corruption: descendants recompute from the
- * parent's MAIN row, which the draft save did not touch, so every path is
- * rewritten to the value it already had. The admin path is unaffected — its
- * autosave and "Save draft" are REST and carry `draft=true` in the query
- * string, so they return before any of this. A caller that wants the fast path
- * can pass `req: { query: { draft: 'true' } }`.
+ * That pass is not only waste: each descendant is updated with no `draft`
+ * argument, which loads its LATEST version, so a served child carrying a
+ * pending draft would have that draft written live (#197 review). Since #197
+ * (option A) the unpublish guard refuses a Local-API draft that would move a
+ * page with served descendants (`servedPrefix.ts`), so this cascade only runs
+ * for such a draft when nothing under the page is served. A Local-API draft
+ * save that does not move the page leaves the path unchanged, and the capture
+ * rewrites its stash on every such write, so no cascade fires. The admin path
+ * is unaffected: its autosave and "Save draft" are REST and carry `draft=true`
+ * in the query string, so they return before any of this. The same
+ * latest-version load on a real publish's cascade is #443.
  *
  * **Failure posture is deliberately asymmetric, and different from the redirect
  * writer's.** `createPathRedirect` swallows its own failure because a missing

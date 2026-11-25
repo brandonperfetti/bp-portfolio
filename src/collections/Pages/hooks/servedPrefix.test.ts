@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PayloadRequest } from 'payload'
 
+import { capturePublishedSlug } from '@/hooks/capturePublishedSlug'
+import {
+  recordDraftSaveIntent,
+  releaseDraftSaveIntent,
+} from '@/hooks/draftSaveIntent'
+
 import {
   refusePublishUnderUnpublishedParent,
   refuseUnpublishWithServedDescendants,
@@ -48,7 +54,11 @@ type Row = {
  * guard's JS re-filter exists precisely to survive that, and a stub that
  * modelled `like` as a prefix would make the re-filter untestable.
  */
-const stub = (rows: Row[], query?: Record<string, unknown>) => {
+const stub = (
+  rows: Row[],
+  query?: Record<string, unknown>,
+  extra: Record<string, unknown> = {},
+) => {
   const calls: Array<{ collection: string; where: unknown }> = []
 
   const matches = (row: Row, where: Record<string, unknown>): boolean => {
@@ -72,6 +82,8 @@ const stub = (rows: Row[], query?: Record<string, unknown>) => {
   }
 
   const req = {
+    context: {},
+    ...extra,
     ...(query === undefined ? {} : { query }),
     payload: {
       find: async ({
@@ -352,6 +364,9 @@ describe('refuseUnpublishWithServedDescendants (#180)', () => {
     },
   ]
 
+  /** The served section as Payload hands it to `beforeChange` (`originalDoc`). */
+  const workDoc = { id: 1, parent: null, path: 'work', slug: 'work' }
+
   it('refuses an unpublish while a published child PAGE sits beneath it', async () => {
     const { req } = stub(servedSubtree())
 
@@ -526,24 +541,264 @@ describe('refuseUnpublishWithServedDescendants (#180)', () => {
   })
 
   /**
-   * The residual, pinned in BOTH directions (#180 follow-up).
+   * A Local-API draft save is a draft save, and an unpublish is still an
+   * unpublish (#197).
    *
    * @remarks `createLocalReq` does not mirror the Local API's `draft` option
-   * into `req.query` (`payload/dist/utilities/createLocalReq.js:102`), while
+   * into `req.query` (`payload/dist/utilities/createLocalReq.js`), while
    * `updateDocument` DOES set `data._status = 'draft'` for such a call
-   * (`collections/operations/utilities/update.js:29-33`). So a Local-API draft
-   * save on a served page with served descendants is refused although it would
-   * have unpublished nothing. That is a false refusal, not a wasted lookup, and
-   * it is why the escape hatch is pinned beside it.
+   * (`collections/operations/utilities/update.js`), so at `beforeChange` the two
+   * writes look the same. What tells them apart is the operation's own `draft`
+   * argument, which only `beforeOperation` is handed:
+   * `recordDraftSaveIntent` writes it to `req.context` per document id, the
+   * guard reads it there, and `releaseDraftSaveIntent` (`afterOperation`)
+   * clears it. These cases drive the hooks in Payload's order on one request,
+   * which is how the pipeline shares that context, and with the operation names
+   * Payload passes: `'update'` into either kind of update, `'updateByID'` out of
+   * a by-id one and `'update'` out of a bulk one (`updateByID.js`, `update.js`).
+   * The real pipeline's sequence is pinned in the pg tier.
    */
-  it('FALSELY refuses a Local-API explicit draft save (documented residual)', async () => {
-    const { req } = stub(servedSubtree())
+  const intent = async (
+    req: PayloadRequest,
+    opArgs: Record<string, unknown>,
+    operation: 'create' | 'update' = 'update',
+  ) =>
+    recordDraftSaveIntent({
+      args: { ...opArgs, req },
+      collection: { slug: 'pages' },
+      context: req.context,
+      operation,
+      req,
+    } as never)
+  const release = async (
+    req: PayloadRequest,
+    opArgs: Record<string, unknown>,
+  ) =>
+    releaseDraftSaveIntent({
+      args: { ...opArgs, req },
+      collection: { slug: 'pages' },
+      operation: 'id' in opArgs ? 'updateByID' : 'update',
+      req,
+      result: {},
+    } as never)
 
+  it('allows a Local-API draft save (`draft: true`) on a served page with served children, query-free (#197)', async () => {
+    const { req, calls } = stub(servedSubtree(), undefined, {
+      payloadAPI: 'local',
+    })
+
+    await intent(req, { id: 1, draft: true })
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft', title: 'Work, edited' }, workDoc),
+      ),
+    ).resolves.toBeTruthy()
+    // One main-row read to see the draft does not move the page; no subtree read.
+    expect(calls.map((call) => call.collection)).toEqual(['pages'])
+  })
+
+  it('refuses a Local-API draft that RENAMES a served section, so no cascade can run (#197 review, P1)', async () => {
+    const { req } = stub(servedSubtree(), undefined, { payloadAPI: 'local' })
+
+    await intent(req, { id: 1, draft: true })
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft', slug: 'work-renamed' }, workDoc),
+      ),
+    ).rejects.toThrow(
+      /“Work” has published documents under it, so a Local-API draft cannot change its slug or parent.*“Brytecore” \(\/work\/brytecore\)/,
+    )
+  })
+
+  it('refuses a Local-API draft that re-parents a served section (#197)', async () => {
+    const { req } = stub(servedSubtree(), undefined, { payloadAPI: 'local' })
+
+    await intent(req, { id: 1, draft: true })
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft', parent: 9 }, workDoc),
+      ),
+    ).rejects.toThrow(/cannot change its slug or parent/)
+  })
+
+  it('counts a pending renamed draft as a move, even for a title-only Local-API draft on top of it (#197)', async () => {
+    // `originalDoc` is the LATEST version: here a draft already renamed to
+    // `work-next`. Its path is what the cascade would compare to the main row.
+    const { req } = stub(servedSubtree(), undefined, { payloadAPI: 'local' })
+
+    await intent(req, { id: 1, draft: true })
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(
+          req,
+          { _status: 'draft', title: 'Work, edited' },
+          { ...workDoc, slug: 'work-next' },
+        ),
+      ),
+    ).rejects.toThrow(/cannot change its slug or parent/)
+  })
+
+  it('still refuses a Local-API UNPUBLISH — `_status: "draft"` with no `draft` argument (#197 keeps #180)', async () => {
+    const { req } = stub(servedSubtree(), undefined, { payloadAPI: 'local' })
+
+    await intent(req, { id: 1, data: { _status: 'draft' } })
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).rejects.toThrow(
+      /“Work” still has published documents under it.*Unpublish the page “Brytecore” \(\/work\/brytecore\)/,
+    )
+  })
+
+  it('tells a Local-API caller how to say "draft", and keeps the admin sentence free of it (#197)', async () => {
+    const local = stub(servedSubtree(), undefined, { payloadAPI: 'local' })
+    const rest = stub(servedSubtree(), undefined, { payloadAPI: 'REST' })
+
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(local.req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).rejects.toThrow(/pass `draft: true`/)
+    const restError = await refuseUnpublishWithServedDescendants(
+      args(rest.req, { _status: 'draft' }, { id: 1 }),
+    ).catch((error: Error) => error)
+    expect(String((restError as Error).message)).not.toMatch(/draft: true/)
+  })
+
+  it('does not let an earlier, finished draft save on the same request excuse a later unpublish (#197)', async () => {
+    const { req } = stub(servedSubtree(), undefined, { payloadAPI: 'local' })
+
+    await intent(req, { id: 1, draft: true })
+    await release(req, { id: 1, draft: true })
+    await intent(req, { id: 1, data: { _status: 'draft' } })
     await expect(
       refuseUnpublishWithServedDescendants(
         args(req, { _status: 'draft' }, { id: 1 }),
       ),
     ).rejects.toThrow(/still has published documents under it/)
+  })
+
+  it('allows a second draft save on the same request once the first has finished (#197 review, R1)', async () => {
+    const { req, calls } = stub(servedSubtree(), undefined, {
+      payloadAPI: 'local',
+    })
+
+    await intent(req, { id: 1, draft: true })
+    await release(req, { id: 1, draft: true })
+    await intent(req, { id: 1, draft: true })
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, workDoc),
+      ),
+    ).resolves.toBeTruthy()
+    expect(calls.map((call) => call.collection)).toEqual(['pages'])
+  })
+
+  it("keeps one document's draft save from excusing another document's unpublish (#197)", async () => {
+    const { req } = stub(servedSubtree(), undefined, { payloadAPI: 'local' })
+
+    await intent(req, { id: 2, draft: true })
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).rejects.toThrow(/still has published documents under it/)
+  })
+
+  it('does not let a draft save that started second excuse an unpublish still in flight (#197 review, P2)', async () => {
+    // Two updates of one page overlapping on a shared `req`: the unpublish
+    // records `draft: false`, then a draft save of the same page starts and
+    // records `draft: true` before the unpublish reaches the guard.
+    const { req } = stub(servedSubtree(), undefined, { payloadAPI: 'local' })
+
+    await intent(req, { id: 1, data: { _status: 'draft' } })
+    await intent(req, { id: 1, draft: true })
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).rejects.toThrow(/still has published documents under it/)
+  })
+
+  it('treats a document whose earlier update threw (never released) as conflicting (#197)', async () => {
+    const { req } = stub(servedSubtree(), undefined, { payloadAPI: 'local' })
+
+    await intent(req, { id: 1, draft: true }) // threw: no release
+    await intent(req, { id: 1, draft: true })
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).rejects.toThrow(/still has published documents under it/)
+  })
+
+  it('reads no draft intent while a bulk (`where`) update is in flight, so it fails closed (#197)', async () => {
+    const { req } = stub(servedSubtree(), undefined, { payloadAPI: 'local' })
+
+    await intent(req, { id: 1, draft: true })
+    await intent(req, { where: { id: { equals: 1 } }, draft: true })
+    await expect(
+      refuseUnpublishWithServedDescendants(
+        args(req, { _status: 'draft' }, { id: 1 }),
+      ),
+    ).rejects.toThrow(/still has published documents under it/)
+  })
+
+  it('records nothing for a non-update operation', async () => {
+    const { req } = stub(servedSubtree())
+
+    await intent(req, { id: 1, draft: true }, 'create')
+    expect(req.context).toEqual({})
+  })
+
+  it('leaves capturePublishedSlug query-only, so a Local-API draft save rewrites its stash instead of leaving a stale one (#197 review, R3)', async () => {
+    // Option A: only the guard reads the intent. The capture runs as it does
+    // for any non-admin write and stashes the main-row path afresh, so a stash
+    // left by an earlier write on the same request cannot reach the cascade.
+    const { req, calls } = stub(servedSubtree(), undefined, {
+      payloadAPI: 'local',
+    })
+    ;(req.context as Record<string, unknown>).previousStoredPaths = {
+      'pages:1': 'stale-path',
+    }
+
+    await intent(req, { id: 1, draft: true })
+    await capturePublishedSlug({
+      collection: { slug: 'pages' },
+      context: req.context,
+      data: { _status: 'draft', title: 'Work, edited' },
+      operation: 'update',
+      originalDoc: { ...workDoc, _status: 'draft' },
+      req,
+    } as never)
+
+    expect(calls.length).toBeGreaterThan(0)
+    expect(
+      (req.context as { previousStoredPaths?: Record<string, string> })
+        .previousStoredPaths?.['pages:1'],
+    ).toBe('work')
+  })
+
+  it("never lets a page's draft save stand in for a post with the same id (#197 review, R2)", async () => {
+    // Posts registers no intent hooks. A page draft save of id 1 on the same
+    // request must not make the capture skip a post 1 unpublish: that capture
+    // is what lets `revalidatePost` purge the article's served URL.
+    const { req, calls } = stub(servedSubtree(), undefined, {
+      payloadAPI: 'local',
+    })
+
+    await intent(req, { id: 1, draft: true })
+    await capturePublishedSlug({
+      collection: { slug: 'posts' },
+      context: req.context,
+      data: { _status: 'draft' },
+      operation: 'update',
+      originalDoc: { _status: 'draft', id: 1, slug: 'served-post' },
+      req,
+    } as never)
+
+    expect(calls.map((call) => call.collection)).toContain('posts')
   })
 
   it('takes the documented escape hatch: `req: { query: { draft: "true" } }`', async () => {

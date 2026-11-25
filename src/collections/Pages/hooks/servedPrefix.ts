@@ -1,7 +1,12 @@
 import { APIError, ValidationError } from 'payload'
 import type { CollectionBeforeChangeHook, PayloadRequest } from 'payload'
 
-import { placementOf } from '@/fields/slug/documentPath'
+import {
+  type PlaceableDoc,
+  parentIdOf,
+  placementOf,
+} from '@/fields/slug/documentPath'
+import { hasDraftSaveIntent } from '@/hooks/draftSaveIntent'
 import { ROOT_PAGE_SLUG, publicPathFor } from '@/fields/slug/slugPaths'
 import type { Page } from '@/payload-types'
 
@@ -57,6 +62,7 @@ import type { Page } from '@/payload-types'
 type GuardRow = {
   _status?: unknown
   id?: unknown
+  parent?: unknown
   path?: unknown
   slug?: unknown
   title?: unknown
@@ -102,7 +108,13 @@ const readPageMainRow = async (
     overrideAccess: true,
     pagination: false,
     req,
-    select: { _status: true, path: true, slug: true, title: true },
+    select: {
+      _status: true,
+      parent: true,
+      path: true,
+      slug: true,
+      title: true,
+    },
     where: { id: { equals: id } },
   })
   return (docs[0] as GuardRow | undefined) ?? null
@@ -125,30 +137,33 @@ const labelFor = (row: GuardRow | null | undefined): string => {
 }
 
 /**
- * Is the write in flight a **draft save** — an autosave or an explicit "Save
- * draft" — rather than a publish or an unpublish?
+ * Is the write in flight an admin or REST **draft save**, an autosave or an
+ * explicit "Save draft", rather than a publish or an unpublish?
  *
  * @param req - The in-flight request.
  * @param data - The incoming payload, for the `_status` clause Payload itself
  *   applies.
- * @returns `true` when the write is a draft save.
+ * @returns `true` when the query string says the write is a draft save.
  *
- * @remarks **A deliberate COPY of the predicate in
- * `src/hooks/capturePublishedSlug.ts`, not an import.** That one is
- * module-private, and #180's fence does not include the file it lives in, so
- * exporting it is out of scope here. The duplication is stated rather than
- * hidden: the two copies must stay in step, and the clean fix — exporting the
- * predicate from `capturePublishedSlug.ts` and deleting this — is filed as a
- * follow-up.
+ * @remarks `req.query.draft` / `req.query.autosave` is how the admin and REST
+ * say it, and how a Local-API caller can say it by hand
+ * (`req: { query: { draft: 'true' } }`). A plain Local-API
+ * `payload.update({ draft: true })` does not reach `req.query`; the guard below
+ * reads that call's own `draft` argument separately (#197), because it lets a
+ * Local-API draft through only when the draft does not move the page.
  *
- * Read that file's docblock for the measured evidence; the short version is
- * that an unpublish and an autosave arrive at `beforeChange` with the SAME
- * `data._status: 'draft'`, the same `operation`, and the same `originalDoc`,
- * and only `req.query` separates them. The `data._status === 'published'` test
- * comes first because Payload's own `isSavingDraft`
- * (`collections/operations/utilities/update.js:29`) ANDs that clause in: a
- * REST `PATCH ?draft=true` carrying `{ _status: 'published' }` is a real
- * publish and writes the main table.
+ * **A deliberate copy of the predicate in `src/hooks/capturePublishedSlug.ts`**,
+ * which stays query-only: the capture rewrites its stash on every other write,
+ * so a Local-API draft save the guard lets through never leaves a stale one
+ * for the cascade to read (#197 review, R3).
+ *
+ * An unpublish and an autosave arrive at `beforeChange` with the SAME
+ * `data._status: 'draft'`, the same `operation`, and the same `originalDoc`;
+ * that file's docblock has the measured evidence. The
+ * `data._status === 'published'` test comes first because Payload's own
+ * `isSavingDraft` (`collections/operations/utilities/update.js`) ANDs that
+ * clause in: a REST `PATCH ?draft=true` carrying `{ _status: 'published' }` is a
+ * real publish and writes the main table.
  */
 const isDraftSaveRequest = (
   req: PayloadRequest | undefined,
@@ -158,6 +173,34 @@ const isDraftSaveRequest = (
   const query = req?.query as Record<string, unknown> | undefined
   const flag = query?.draft ?? query?.autosave
   return flag === true || flag === 'true'
+}
+
+/**
+ * Would this write give the page a different slug or parent from its main row,
+ * the row the site serves and its descendants' paths were composed from?
+ *
+ * @param data - The incoming payload.
+ * @param originalDoc - The latest version, draft or not, which Payload hands
+ *   `beforeChange`; it supplies whatever `data` leaves out.
+ * @param own - The page's main-table row.
+ *
+ * @remarks Read the way `computePagePath` reads it (`placementOf`), so a field
+ * the write leaves out counts at its LATEST value: a title-only draft on top of
+ * a pending renamed draft still moves the page, because that draft's path is
+ * the one the cascade would compare against the main row.
+ */
+const movesPage = (
+  data: PlaceableDoc | undefined,
+  originalDoc: PlaceableDoc | undefined,
+  own: GuardRow,
+): boolean => {
+  const { parentId, slug } = placementOf(data, originalDoc)
+  const ownParent = parentIdOf(own.parent)
+  return (
+    slug !== own.slug ||
+    (parentId === null ? null : String(parentId)) !==
+      (ownParent === null ? null : String(ownParent))
+  )
 }
 
 /**
@@ -414,52 +457,38 @@ const readServedChildrenByParent = async (
  *
  * **Cost, and where it is not paid.** The guard returns before any read on a
  * publish (`_status !== 'draft'`) and on an admin draft save or autosave
- * ({@link isDraftSaveRequest}, which the admin's own `?draft=true` /
- * `?autosave=true` query string satisfies). An unpublish pays one indexed
- * main-row read, and only if that row is actually published does it pay the two
- * subtree reads.
+ * ({@link isDraftSaveRequest}: the admin's own `?draft=true` /
+ * `?autosave=true` query string). An unpublish or a Local-API draft save pays
+ * one indexed main-row read, and only if that row is actually published does
+ * an unpublish, or a Local-API draft that moves the page, pay the two subtree
+ * reads.
  *
- * **The residual, stated rather than hidden: a Local-API explicit draft save
- * reads as an unpublish, and here that is a FALSE REFUSAL rather than a wasted
- * lookup.** `createLocalReq` does `req.query = req?.query || {}`
- * (`payload/dist/utilities/createLocalReq.js:102`) — it does not mirror the
- * Local API's own `draft` option into `req.query` — while
- * `updateDocument` DOES set `data._status = 'draft'` for such a call
- * (`collections/operations/utilities/update.js:29-33`). So
- * `payload.update({ draft: true })` on a PUBLISHED page that has published
- * descendants is refused, though it would not have unpublished anything.
- * `capturePublishedSlug` pays one wasted `find` for the same residual; this
- * guard turns it into a rejection, which is a step up in severity and is why it
- * is written down here and filed as a follow-up. It is unreachable from the
- * admin (autosave and "Save draft" are REST and carry `draft=true`) and
- * unreached in this repo (every Local-API draft save in the tree is on a page
- * whose main row is not published, so the guard returns on the status check).
- * A Local-API caller that needs the fast path can pass
- * `req: { query: { draft: 'true' } }` — the same escape hatch
- * `capturePublishedSlug` documents. Both directions are pinned by test.
+ * **A Local-API draft save that does not move the page is a draft save (#197,
+ * option A, Brandon).** By `beforeChange` it looks exactly like an unpublish
+ * (`_status: 'draft'`, empty `req.query`); the operation's own `draft`
+ * argument tells them apart, and `recordDraftSaveIntent`
+ * (`src/hooks/draftSaveIntent.ts`) carries it here from `beforeOperation`, the
+ * one hook handed it. So `payload.update({ draft: true })` that edits the
+ * title, layout or SEO of a served page with served descendants saves a draft,
+ * while `payload.update({ data: { _status: 'draft' } })` is still an unpublish
+ * and is still refused. Skipping the guard on `req.payloadAPI === 'local'` was
+ * the rejected alternative: that separates Local from REST, not the two
+ * Local-API intents.
  *
- * **Where the follow-up should START, because the fix as filed is heavier than
- * the one available** `[spec reviewer, #180; re-measured here]`. The ticket
- * reads "export the predicate, then make Local-API callers pass `req.query`" —
- * a caller sweep, which makes the residual look unfixable in place. It is not.
- * `createLocalReq` sets `req.payloadAPI = 'local'` at
- * `utilities/createLocalReq.js:87`, FIFTEEN lines before the
- * `req.query = req?.query || {}` at `:102` this residual rests on, and
- * `payloadAPI: 'GraphQL' | 'local' | 'REST'` is a declared field of
- * `PayloadRequest` (`payload/dist/types/index.d.ts`). One clause here sees what
- * no caller would have to be changed to say.
+ * **A Local-API draft that MOVES such a page is refused** ({@link movesPage}:
+ * a slug or parent other than the main row's). The capture and the subtree
+ * cascade cannot see the Local-API `draft` flag, so they would treat that draft
+ * as a move and rewrite every descendant with no `draft` argument, which loads
+ * each one's LATEST version and can publish a child's pending draft. Three
+ * review rounds found harm in teaching them the flag (#197); refusing the move
+ * here is the narrow claim instead. The admin is unaffected: its draft rename
+ * carries `?draft=true`, so the capture stashes nothing and no cascade runs.
  *
- * It is NOT taken in this change, and the reason is the half the ticket has to
- * carry: `payloadAPI` separates Local from REST, it does NOT separate the two
- * Local-API intents. `payload.update({ draft: true })` and
- * `payload.update({ data: { _status: 'draft' } })` both arrive as
- * `payloadAPI: 'local'` with `data._status: 'draft'` — `updateDocument` stamps
- * the first (`:29-33`), the second carries it — so skipping the guard on
- * `payloadAPI === 'local'` would drop the false refusal AND stop guarding
- * genuine script-driven unpublishes, which is where an audit is least likely to
- * catch the damage. A real design choice for whoever takes the ticket, not a
- * one-liner. The clean fix remains asking Payload for the draft flag on the
- * hook argument.
+ * **A Local-API unpublish refusal says how to save a draft instead.** The
+ * admin never reaches this sentence on a draft save, so its wording stays as
+ * #180 wrote it; a script or MCP caller that trips it by sending
+ * `_status: 'draft'` with no `draft` argument is told that `draft: true` is the
+ * draft form.
  *
  * @param args - Payload's `beforeChange` arguments.
  * @returns `data`, unchanged, when the write is allowed.
@@ -474,12 +503,17 @@ export const refuseUnpublishWithServedDescendants: CollectionBeforeChangeHook<
 
   const id = originalDoc?.id
   if (id === undefined || id === null) return data
+  const localDraft = hasDraftSaveIntent(req, data, 'pages', id)
 
   const own = await readPageMainRow(req, id)
   // Not currently served => this write takes nothing off the site.
   if (own?._status !== 'published') return data
   const path = typeof own.path === 'string' && own.path ? own.path : null
   if (!path) return data
+
+  // A Local-API draft save that leaves the page where it is takes nothing off
+  // the site and moves nothing: let it through (#197).
+  if (localDraft && !movesPage(data, originalDoc, own)) return data
 
   const blockers =
     path === ROOT_PAGE_SLUG
@@ -496,8 +530,20 @@ export const refuseUnpublishWithServedDescendants: CollectionBeforeChangeHook<
       ? ''
       : ` (and ${blockers.length - 1} more below this page)`
 
+  if (localDraft) {
+    throw new APIError(
+      `“${labelFor(own)}” has published documents under it, so a Local-API draft cannot change its slug or parent: the subtree's paths move only when the move is published. Save the draft without changing slug or parent, or publish the move. The ${noun} “${labelFor(first)}”${firstUrl ? ` (${firstUrl})` : ''}${rest} is served under it.`,
+      400,
+    )
+  }
+
+  const localHint =
+    req?.payloadAPI === 'local'
+      ? ' (Local API: to save a draft instead, pass `draft: true` to `payload.update`.)'
+      : ''
+
   throw new APIError(
-    `“${labelFor(own)}” still has published documents under it, so unpublishing it would leave them served under a URL that no longer resolves. Unpublish the ${noun} “${labelFor(first)}”${firstUrl ? ` (${firstUrl})` : ''}${rest} first, then unpublish this page.`,
+    `“${labelFor(own)}” still has published documents under it, so unpublishing it would leave them served under a URL that no longer resolves. Unpublish the ${noun} “${labelFor(first)}”${firstUrl ? ` (${firstUrl})` : ''}${rest} first, then unpublish this page.${localHint}`,
     400,
   )
 }

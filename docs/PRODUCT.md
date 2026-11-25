@@ -151,11 +151,13 @@ source states none, it says so.
   cascading (`docs/FEATURES.md` § Pages and sections).
 - **Consequence:** a section rename carries its subtree with one prefix
   redirect.
-- **Revisit when:** the source records no condition. Known defect, not a
-  bypass: a Local-API draft save of a published page with published children
-  is wrongly refused, because the guard cannot see `draft: true` and reads it
-  as an unpublish (#197; `docs/PAYLOAD.md` § Local API gotchas). The invariant
-  itself stands.
+- **Revisit when:** the source records no condition. A Local-API draft save
+  (`draft: true`) of a published page with published children goes through
+  when it does not move the page; a Local-API draft that would change its slug
+  or parent is refused, and so is an unpublish (#197, option A;
+  `docs/PAYLOAD.md` § Local API gotchas). Overlapping or failed updates of the
+  same page on one reused request fall back to refusing, never to letting an
+  unpublish through. The invariant itself stands.
 
 ### Corvus answers about everything Brandon, grounded in site content (#166)
 

@@ -173,10 +173,15 @@ seed, test or MCP write.
   save** and will take its non-draft branch. The admin UI and REST both carry
   `?draft=true` and are unaffected — this bites scripts, seeds, tests and MCP
   writes. A Local-API caller that needs a hook to see the draft passes it
-  explicitly: `req: { query: { draft: 'true' } }`. Worked cases: the `cascadePagePaths` docblock in
-  `src/collections/Pages/hooks/pageHierarchy.ts` and the `createLocalReq` note
-  in `src/collections/Pages/hooks/servedPrefix.ts`; #197 for the live defect.
-  `[source: payload 3.88.0]`
+  explicitly: `req: { query: { draft: 'true' } }`, or the hook reads the
+  operation's own `draft` argument in `beforeOperation`, the one hook that runs
+  before `beforeChange` and is handed it. Its `afterOperation` release must
+  accept `'updateByID'`: Payload names a by-id update `'update'` going in and
+  `'updateByID'` coming out. Worked cases: the `cascadePagePaths` docblock in
+  `src/collections/Pages/hooks/pageHierarchy.ts`, and `recordDraftSaveIntent`
+  in `src/hooks/draftSaveIntent.ts`, which the Pages unpublish guard reads to
+  let a Local-API draft save through when it does not move the page (#197).
+  `[source: payload 3.88.0; beforeOperation/afterOperation at 3.93.0]`
 
 ## Slugs and paths
 
