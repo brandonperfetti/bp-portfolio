@@ -201,10 +201,18 @@ export const getPublishedPostPaths = async (): Promise<string[]> => {
  * not only the one that ran the hook (#118) — this per-slug entry is the one
  * the detail-page staleness incident landed on. Measured 45,356 bytes for one
  * post, far under the 2 MB Runtime Cache item limit.
+ *
+ * **Also tagged `pages` (#359).** The post's Lexical body links to pages
+ * (`src/fields/defaultLexical.ts`, `enabledCollections: ['pages', 'posts']`)
+ * and its `parent` is a page, both populated here with access control
+ * enforced, so a link to a draft page is cached as a bare id. A page publish,
+ * unpublish or delete purges `pages`, never `posts`, so without this tag the
+ * article kept that stale link until the `cmsContent` lifetime lapsed. The
+ * mirror of the page readers' `posts` tag (`pagesRepo.ts`).
  */
 const getPublishedPostBySlug = async (slug: string): Promise<Post | null> => {
   'use cache: remote'
-  cacheTag(CMS_TAGS.articles)
+  cacheTag(CMS_TAGS.articles, CMS_TAGS.pages)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
   const { docs } = await payload.find({
@@ -227,10 +235,13 @@ const getPublishedPostBySlug = async (slug: string): Promise<Post | null> => {
  * exactly what a page costs it. An unplaced post has `path: null` and can never
  * match — which is what keeps `/articles/<slug>` the only URL for the rest of
  * the corpus.
+ *
+ * Tagged `pages` as well, for the reason {@link getPublishedPostBySlug} gives
+ * (#359).
  */
 const getPublishedPostByPath = async (path: string): Promise<Post | null> => {
   'use cache: remote'
-  cacheTag(CMS_TAGS.articles)
+  cacheTag(CMS_TAGS.articles, CMS_TAGS.pages)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
   const { docs } = await payload.find({

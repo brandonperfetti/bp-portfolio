@@ -49,6 +49,12 @@ vi.mock('next/cache', () => ({
 // Payload Local API fixture: empty collection reads and empty globals. The repo
 // mappers all tolerate empty results (they fall back to defaults or null), so
 // each function runs its cacheTag/cacheLife prologue and returns without a DB.
+// The draft-aware selectors read `draftMode()`; off, they take the cached
+// published branch, which is the one whose tags matter (#359).
+vi.mock('next/headers', () => ({
+  draftMode: async () => ({ isEnabled: false }),
+}))
+
 vi.mock('payload', () => ({
   getPayload: vi.fn(async () => ({
     find: vi.fn(async () => ({ docs: [] })),
@@ -66,6 +72,8 @@ import { getCmsNavigation } from '@/lib/cms/navigationRepo'
 import {
   getAncestorPages,
   getCmsPageByPath,
+  getPageByPathDraftAware,
+  getPageBySlugDraftAware,
   getPublishedPagePaths,
 } from '@/lib/cms/pagesRepo'
 import { getCmsProjects } from '@/lib/cms/projectsRepo'
@@ -75,6 +83,9 @@ import { getCmsTech } from '@/lib/cms/techRepo'
 import { getCmsUses } from '@/lib/cms/usesRepo'
 import { getCmsWorkHistory } from '@/lib/cms/workHistoryRepo'
 import {
+  getPostByPath,
+  getPostBySlug,
+  getPublishedPostPaths,
   getPublishedPostSlugs,
   getPublishedPostSummaries,
   getPublishedPosts,
@@ -232,6 +243,70 @@ describe('readers that populate a Pages relation ↔ pages purge pairing (#262)'
 
     expect(rec.tags).toContain('pages')
   })
+})
+
+/**
+ * Pages ↔ posts cross-collection readers (#359, option A — Brandon).
+ *
+ * A page's blocks and rich text carry links that can point at a post, and a
+ * post's Lexical body and `parent` point at pages (`src/fields/link.ts`,
+ * `src/fields/defaultLexical.ts`: `relationTo` / `enabledCollections`
+ * `['pages', 'posts']`). These readers populate those relations with access
+ * control enforced, so a link to a draft comes back as a bare id and
+ * `resolveCmsHref` renders it as `'#'`. Publishing the target purges its own
+ * collection's tag (`revalidatePage` the literal `'pages'`, `revalidatePost`
+ * the literal `'posts'`), so each reader must subscribe to the other one too,
+ * or the dead link outlives the publish by up to the `cmsContent` lifetime.
+ *
+ * The tags are pinned as literals for the reason the #262 block gives: the
+ * hooks purge literals, so a `CMS_TAGS` rename that left them behind must
+ * fail here.
+ *
+ * The second test pins the readers that do NOT carry the other tag, because
+ * option A's cost is a re-read on every purge of it: a reader that selects only
+ * its own scalar columns (`path`, `slug`, `title`) populates no relation and
+ * has nothing to refresh.
+ */
+describe('pages ↔ posts cross-collection readers (#359)', () => {
+  beforeEach(() => {
+    rec.tags = []
+  })
+
+  const crossReaders: Array<[string, string, () => Promise<unknown>]> = [
+    ['getCmsPageByPath', 'posts', () => getCmsPageByPath('/x')],
+    ['getPageByPathDraftAware', 'posts', () => getPageByPathDraftAware('x')],
+    ['getPageBySlugDraftAware', 'posts', () => getPageBySlugDraftAware('x')],
+    ['getPageLayoutBySlug', 'posts', () => getPageLayoutBySlug('x')],
+    ['getPostBySlug', 'pages', () => getPostBySlug('x')],
+    ['getPostByPath', 'pages', () => getPostByPath('x')],
+  ]
+
+  it.each(crossReaders)(
+    '%s subscribes to the %s tag as well as its own',
+    async (_name, otherTag, call) => {
+      await call().catch(() => {})
+
+      const own = otherTag === 'posts' ? 'pages' : 'posts'
+      expect(rec.tags).toEqual(expect.arrayContaining([own, otherTag]))
+    },
+  )
+
+  const ownOnly: Array<[string, string, () => Promise<unknown>]> = [
+    ['getPublishedPagePaths', 'pages', getPublishedPagePaths],
+    ['getAncestorPages', 'pages', () => getAncestorPages('a/b')],
+    ['getPublishedPostSummaries', 'posts', getPublishedPostSummaries],
+    ['getPublishedPostSlugs', 'posts', getPublishedPostSlugs],
+    ['getPublishedPostPaths', 'posts', getPublishedPostPaths],
+  ]
+
+  it.each(ownOnly)(
+    '%s reads no cross-collection relation, so it stays on %s alone',
+    async (_name, own, call) => {
+      await call().catch(() => {})
+
+      expect(rec.tags).toEqual([own])
+    },
+  )
 })
 
 // Vitest runs with the repo root as its working directory (vitest.config.ts).

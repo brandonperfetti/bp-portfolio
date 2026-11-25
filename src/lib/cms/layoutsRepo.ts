@@ -44,14 +44,19 @@ export type HostedLayout<T extends { id: number; layout?: unknown }> = {
  * `'use cache: remote'` so a `pages` tag purge reaches every serverless
  * instance, not only the one that ran the hook (#118). The cache key is the
  * function plus its arguments, and neither moved when the id joined the return
- * value: same name, same single `slug` argument, same `cacheTag(CMS_TAGS.pages)`,
- * same `cacheLife('cmsContent')`. Only the cached *value* grew, by one number.
+ * value: same name, same single `slug` argument, same `cacheLife('cmsContent')`.
+ * Only the cached *value* grew, by one number.
+ *
+ * **Also tagged `posts` (#359)**, for the reason `getPublishedPageByPath`
+ * (`pagesRepo.ts`) gives: the layout's link fields can point at a post and are
+ * populated with access control enforced, and a post write purges `posts`
+ * only. The mirror of {@link getPostLayoutBySlug}'s `pages` tag (#262).
  */
 export const getPageLayoutBySlug = async (
   slug: string,
 ): Promise<HostedLayout<Page> | null> => {
   'use cache: remote'
-  cacheTag(CMS_TAGS.pages)
+  cacheTag(CMS_TAGS.pages, CMS_TAGS.articles)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
   const { docs } = await payload.find({
