@@ -215,10 +215,12 @@ function drizzleOf(payload: unknown): CorvusEmbeddingsDb | null {
  * function is not guaranteed to run at all, and an awaited-but-bounded call
  * has a knowable worst case.
  *
- * **ONE deadline, for everything this hook does.** The bound above is a
+ * **ONE deadline, for the sync and summary steps.** The bound above is a
  * property of the SAVE, not of each step, so a single
- * {@link createDeadline} call is made once at the top of
- * the `try`, cancelled in a `finally`, and shared by the per-row sync and the summary re-emit. Giving
+ * {@link createDeadline} call is made once, after the draft-status read and
+ * the unpublish delete (neither is under it: see `isDraftOverPublished`),
+ * cancelled in a `finally`, and shared by the per-row sync and the summary
+ * re-emit. Giving
  * the summary step a second, independent timeout would silently double a
  * `tech-stack` save's worst case while this docblock went on naming one
  * constant. Each step gets the signal AND is raced against it through
