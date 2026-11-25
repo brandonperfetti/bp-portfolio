@@ -37,6 +37,27 @@ const PRIMARY_FILTER_CHIPS_LIMIT = 12
  */
 const ARTICLES_PAGE_SIZE = 12
 
+/**
+ * Loading hints for the first cover in the grid, and only the first (#218).
+ *
+ * @remarks Next's dev server logged an `/articles` card cover as the Largest
+ * Contentful Paint while it loaded lazily, as every `next/image` does by
+ * default. The first card's cover is the one above the fold at every width,
+ * so it alone loads eagerly and is fetched at high priority. Every later card
+ * stays lazy: marking the whole grid eager would compete with the one image
+ * that matters and make LCP worse.
+ *
+ * `loading` + `fetchPriority` rather than `priority`/`preload`: Next 16
+ * deprecates `priority`, and its docs advise against `preload` when which
+ * image is the LCP depends on the viewport, which is true of a grid that is
+ * one column on a phone and three on a desktop. These two attributes go on
+ * the `<img>` itself and inject no `<link rel="preload">` into the head.
+ */
+const LEAD_COVER_LOADING = {
+  loading: 'eager',
+  fetchPriority: 'high',
+} as const
+
 function getAuthor(article: ArticleWithSlug) {
   if (typeof article.author === 'string') {
     return { name: article.author, role: '', href: '#', image: '' }
@@ -597,7 +618,7 @@ export function ArticlesExplorer({
           aria-label="Article results"
           className="grid scroll-mt-16 grid-cols-1 gap-8 lg:grid-cols-3"
         >
-          {visibleArticles.map((article) => {
+          {visibleArticles.map((article, index) => {
             const author = getAuthor(article)
             const topicValues = (article.topics ?? [])
               .map((item) => item.trim())
@@ -655,6 +676,7 @@ export function ArticlesExplorer({
                         width={960}
                         height={540}
                         sizes="(min-width: 1280px) 24rem, (min-width: 1024px) 30vw, 100vw"
+                        {...(index === 0 ? LEAD_COVER_LOADING : {})}
                         data-hover-image
                         className="aspect-[16/9] w-full object-cover"
                       />
