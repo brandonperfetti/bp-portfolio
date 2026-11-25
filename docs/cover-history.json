@@ -1538,5 +1538,33 @@
       "notes": [],
       "eraLabel": "near-future minimal"
     }
+  ],
+  "draftCovers": [
+    {
+      "postId": 61,
+      "slug": "an-agent-naming-the-next-step",
+      "title": "An Agent Naming the Next Step",
+      "publishedAt": null,
+      "status": "draft",
+      "series": "cover-mj-B",
+      "generator": "midjourney",
+      "pilotCheck": false,
+      "approval": "Brandon-approved one-off, made by Midjourney before the live cover pilot",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/an-agent-naming-the-next-step/cover-mj-B",
+      "cloudinaryVersion": 1795555503,
+      "mediaId": 233,
+      "receipt": "_agent/evidence/2026-11-24-post61-cut-continues/final/receipt.json",
+      "sourceJobId": "3c926415-3047-401b-8fde-b67e83820f0e",
+      "upscaleJobId": "fea2073c-b949-4a85-b8ae-74464f2046a1",
+      "previousFields": {
+        "heroImage": null,
+        "meta.image": null
+      },
+      "attachedFields": {
+        "heroImage": 233,
+        "meta.image": 233
+      },
+      "notes": "Historical attach receipt, not a new live query; _status remained draft. Receipt contains stale intermediate lookup/writer/preview notes; terminal attached-draft status and before/after fields are the source. Preview rendering unverified."
+    }
   ]
 }
