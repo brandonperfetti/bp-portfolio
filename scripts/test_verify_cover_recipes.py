@@ -41,15 +41,37 @@ class InventoryChecks(unittest.TestCase):
 
     def test_new_published_cover_without_recipe_is_allowed(self):
         data = self.load("cover-history.json")
+        expected_count = len(data["covers"]) + 1
         cover = dict(data["covers"][0])
         cover.update(postId=999, slug="new-published-cover",
                      cloudinaryPublicId="new-published-cover", rollout="new publication")
         data["covers"].append(cover)
         self.write("cover-history.json", data)
         result = VERIFY.verify(self.root, self.skill)
-        self.assertEqual(result["history"], 54)
+        self.assertEqual(result["history"], expected_count)
         self.assertEqual(result["recipes"], 53)
         self.assertEqual(result["errors"], [])
+        self.assertEqual(result["diff"], "")
+
+    def test_swapped_recipe_identity_is_rejected(self):
+        history = self.load("cover-history.json")
+        recipe_data = self.load("cover-recipes.json")
+        recipe = recipe_data["recipes"][0]
+        original_id = recipe["id"]
+        new_id = max(c["postId"] for c in history["covers"]) + 1
+        cover = dict(next(c for c in history["covers"] if c["postId"] == original_id))
+        cover.update(postId=new_id, rollout="new publication")
+        history["covers"].append(cover)
+        self.write("cover-history.json", history)
+        recipe["id"] = new_id
+        self.write("cover-recipes.json", recipe_data)
+        render = self.skill.render_midjourney
+        self.skill.render_midjourney = lambda row, settings, form: render(
+            {**row, "id": original_id if row["id"] == new_id else row["id"]},
+            settings, form)
+        result = VERIFY.verify(self.root, self.skill)
+        self.assertIn(f"missing historical recipe ids: {original_id}", result["errors"])
+        self.assertIn(f"unexpected recipe ids: {new_id}", result["errors"])
         self.assertEqual(result["diff"], "")
 
     def test_missing_historical_cover_is_rejected(self):

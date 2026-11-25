@@ -28,9 +28,17 @@ def verify(project, skill):
     captured = keyed(recipes, "id")
     rollout = keyed(manifest, "postId")
     errors = []
-    # Recipes freeze the historical cohort; section 13 may add published covers.
-    if len(captured) != 53 or not set(captured).issubset(covers):
-        errors.append("all 53 historical recipe identities must remain in published covers")
+    # Rollout tags anchor the cohort independently of the editable recipe file.
+    historical_ids = {c["postId"] for c in history if c["rollout"] in (
+        "2026-09-26 first 9", "2026-09-27 final 44")}
+    if len(historical_ids) != 53:
+        errors.append("historical rollout cohort must contain 53 identities")
+    missing = historical_ids - set(captured)
+    unexpected = set(captured) - historical_ids
+    if missing:
+        errors.append("missing historical recipe ids: " + ", ".join(map(str, sorted(missing))))
+    if unexpected:
+        errors.append("unexpected recipe ids: " + ", ".join(map(str, sorted(unexpected))))
     expected44 = {c["postId"] for c in history if c["rollout"] == "2026-09-27 final 44"}
     if len(rollout) != 44 or set(rollout) != expected44:
         errors.append("manifest identities must match the final 44 rollout covers")
