@@ -27,6 +27,13 @@ const nextConfig = {
   // the minimum Suspense/sync-IO scaffolding for a behavior-preserving build;
   // the `'use cache'` conversion of the CMS reader layer is Piece 2.
   cacheComponents: true,
+  // #436: Partial Prefetching stays OFF, explicitly. Unset behaves as `false`
+  // but warns on every build under `cacheComponents` [source: next 16.4.6
+  // `dist/server/config.js`, the `partialPrefetching === undefined` check].
+  // Not `true` yet because the content routes keep `await params` outside
+  // `<Suspense>` for real HTTP statuses (#172). Why, and the adoption work:
+  // docs/ARCHITECTURE.md § Link prefetching.
+  partialPrefetching: false,
   // #76 B1: custom `cacheLife` profiles for the CMS reader layer's `'use cache'`
   // functions. Tag-purge (`revalidateTag` in the Payload afterChange/afterDelete
   // hooks) is the PRIMARY freshness mechanism — an admin edit is live in seconds

@@ -57,16 +57,42 @@ function ResetConsentOnMount() {
   return null
 }
 
-function renderDialog() {
-  return render(
+/**
+ * Renders a marker once c15t's consent manager has finished its own async
+ * start-up (#233).
+ *
+ * @remarks The start-up resolves after the first render, and when it lands
+ * with no consent stored (which {@link ResetConsentOnMount} guarantees) it
+ * writes `activeUI` to `'banner'` or `'none'`. A click that beats it opens the
+ * dialog, and the start-up then closes it again: the #233 failure, whose DOM
+ * dump held only the trigger. No longer wait window fixes that, so every test
+ * waits for this marker before its first interaction.
+ */
+function ConsentSettled() {
+  // `hasFetchedBanner` flips in the start-up's own store update, the signal
+  // `ConsentManager.ga.test.tsx` already waits on.
+  const { hasFetchedBanner } = useConsentManager()
+  return hasFetchedBanner ? <span data-testid="c15t-ready" hidden /> : null
+}
+
+/** Waits for {@link ConsentSettled}'s marker. */
+async function consentSettled() {
+  await screen.findByTestId('c15t-ready')
+}
+
+async function renderDialog() {
+  const view = render(
     <ConsentManagerProvider
       options={buildConsentManagerOptions({ scripts: [] })}
     >
       <ResetConsentOnMount />
+      <ConsentSettled />
       <ManageCookiesLink />
       <CookieDialog />
     </ConsentManagerProvider>,
   )
+  await consentSettled()
+  return view
 }
 
 /**
@@ -96,7 +122,7 @@ function UnmountingTrigger() {
 describe('CookieDialog open focus (Fix 2 — no scroll jump)', () => {
   it('opens from the manage trigger and focuses the dialog content (a11y kept, no top-focus jump)', async () => {
     const user = userEvent.setup()
-    renderDialog()
+    await renderDialog()
 
     // The persistent link label is CMS-driven; with no provider the context
     // default renders exactly "Manage Cookies".
@@ -134,7 +160,7 @@ describe('CookieDialog open focus (Fix 2 — no scroll jump)', () => {
 describe('CookieDialog return focus (#112)', () => {
   it('labels the persistent footer trigger and records it on click', async () => {
     const user = userEvent.setup()
-    renderDialog()
+    await renderDialog()
     const trigger = screen.getByRole('button', { name: 'Manage Cookies' })
     // The footer trigger doubles as the fallback return target when a banner
     // trigger is gone for good, so it must be findable by attribute.
@@ -150,7 +176,7 @@ describe('CookieDialog return focus (#112)', () => {
 
   it('returns focus to the footer trigger on close (0f7bd362 behavior kept)', async () => {
     const user = userEvent.setup()
-    renderDialog()
+    await renderDialog()
     const trigger = screen.getByRole('button', { name: 'Manage Cookies' })
 
     await user.click(trigger)
@@ -170,11 +196,13 @@ describe('CookieDialog return focus (#112)', () => {
         options={buildConsentManagerOptions({ scripts: [] })}
       >
         <ResetConsentOnMount />
+        <ConsentSettled />
         <UnmountingTrigger />
         <ManageCookiesLink />
         <CookieDialog />
       </ConsentManagerProvider>,
     )
+    await consentSettled()
 
     await user.click(screen.getByRole('button', { name: 'Customize' }))
     await screen.findByRole('dialog')

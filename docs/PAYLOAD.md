@@ -621,13 +621,15 @@ statement belongs in it — `redirects` was swept by the #72 backfill and its RL
 is already on. `scripts/check-migrations-rls.mjs` agrees: the migration creates
 no table, so it carries no obligation.
 
-Known limits: the reader reads at most 500 rows — and since #178 it may walk
-that one list up to six times per request (the initial pass plus five hops),
-resolving each capture-time rewrite through it (`docs/NAVIGATION.md` §How many
-moves a URL survives). The 500-row ceiling is also what makes the resolver's
-fall-back-rather-than-serve-the-snapshot rule load-bearing: a row past the
-ceiling is a missing intermediate hop, and serving the capture-time spelling
-there would answer a permanent redirect to a dead URL.
+Known limits: the reader reads the whole table into memory — and since #178 it
+may walk that one list up to six times per request (the initial pass plus five
+hops), resolving each capture-time rewrite through it (`docs/NAVIGATION.md`
+§How many moves a URL survives). Past `REDIRECT_SCALE_THRESHOLD` (500 rows) it
+logs a warning that a keyed lookup is due; it drops no row (#256, which removed
+the old 500-row read cap). The resolver's
+fall-back-rather-than-serve-the-snapshot rule is still load-bearing: an
+intermediate row an editor deleted is a missing hop, and serving the
+capture-time spelling there would answer a permanent redirect to a dead URL.
 
 ## Plugins (`src/plugins/index.ts`)
 

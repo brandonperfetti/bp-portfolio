@@ -14,14 +14,13 @@ import { cn } from '@/lib/utils'
  *
  * @remarks Emitted only when `sticky` is true, on the outer grid item that
  * actually carries the sticky classes — i.e. the element whose pinned
- * position the home rail regression test measures. It replaces the
- * `home-sticky-rail-anchor` testid that lived in the hard-coded homepage JSX
- * before the #42 page-builder flip: nothing rendered that anchor once the
- * home became CMS blocks, so the rail test had no element to target. This is
- * a static attribute on the rendered element, not a CMS field — no schema
- * change. The about page still emits its own `about-sticky-rail-anchor` from
- * hard-coded JSX; when About flips to the builder (W4B2) its test retargets
- * to this same testid.
+ * position the `/about` rail regression test in `e2e/ui-regression.spec.ts`
+ * measures. It replaced the hard-coded `home-sticky-rail-anchor` and
+ * `about-sticky-rail-anchor` testids when the #42 and #44 page-builder flips
+ * turned both pages into CMS blocks, which left the rail tests nothing to
+ * target. This is a static attribute on the rendered element, not a CMS field
+ * — no schema change. The home rail is not sticky by Brandon's decision
+ * (2026-09-09, #205), so the home page emits no anchor and has no rail test.
  */
 export const STICKY_RAIL_TEST_ID = 'cms-sticky-rail'
 
