@@ -225,23 +225,30 @@ Check a new recipe against the cover history (§13) before generating.
 
 ## 10. Generators
 
-**Pilot generator: `openai/gpt-image-2`, through OpenClaw's OAuth
-`image_generate` route only.** No API key, no silent provider/model fallback,
-and no change to the default model. If that exact route is unavailable,
-stop generation and return the prompt and route failure.
+**GPT Image 2 first (Brandon, 2026-11-25).** Use `openai/gpt-image-2`
+through OpenClaw's OAuth `image_generate` route first. The pilot's purpose
+is to learn how to get BP-quality covers from it: prompt tuning is the work,
+not a box to tick. No API key, silent provider/model fallback, or change to
+the default model. If that exact route is unavailable, stop generation and
+return the prompt and route failure; unavailability is not two failed rounds.
 
-Midjourney is a human-paste prompt output only. Do not use the `midjourney`
-browser profile or drive its UI. Brandon decides whether to remove the
-profile; this PR changes no browser or model configuration. The 53 baseline
-covers and Post 61's one-off are historical Midjourney work, not authority
-to automate it again. Subscription cancellation remains Brandon's decision.
+**Recorded Midjourney fallback.** Only after a concept passes the §2
+article/metaphor check and **two tuned GPT Image 2 rounds, two images each,
+fail Sloane's review**, Sloane may use the `midjourney` browser profile
+herself. Tune between rounds using the actual review failures. Record the
+GPT round paths, why each round failed, and `fallback: midjourney` in the
+receipt. Follow the 2026-11-24 pace rules: one action at a time, no bulk or
+parallel jobs, and stop at any login, CAPTCHA or warning. Midjourney output
+stays `cover-mj-<letter>` (§11); never disguise its provider. Subscription
+cancellation remains Brandon's decision. Ceiling (b), Brandon's approval of
+each attach and each publish, and the pre-merge generation hold are unchanged.
 
 ### GPT Image (agents)
 
 - **Route.** `openai/gpt-image-2` through OpenClaw OAuth, and only that.
   Confirm it before the first generation of a session and stop if it is
   unavailable. No API key, no silent fallback to another provider or
-  model, and no change to OpenClaw's default model. No alternative route is authorized by this profile.
+  model, and no change to OpenClaw's default model. Only the recorded Midjourney fallback above is authorized after the required failed rounds.
 - **Size: requested and native are different.** Request `2048x1152`; the
   OpenAI provider takes sizes, not aspect ratios, and `3840x2160` is the
   other 16:9 size. What comes back natively on the OpenClaw OAuth route is
@@ -274,14 +281,36 @@ to automate it again. Subscription cancellation remains Brandon's decision.
   - staged, glossy, crowded frames with props nobody asked for;
   - a readable, front-lit face despite the people rule;
   - the wrong aspect ratio: 3:2, near-square, or wider than 16:9 with black
-    bars added (reject and use the one sharpened re-run; never ship bars);
+    bars added (reject; tune within the two-round GPT sequence above, never ship bars);
   - tuning can weaken the impossible detail (a page meant to float stayed
     attached to its binder), which is why the detail goes first.
 - **Ranking.** Tuned, it came second on look, behind Midjourney and ahead
   of Cloudinary's FLUX.2 Pro, and ahead of Midjourney on literal adherence
   in about a third of the rows.
 
-### Midjourney (Brandon)
+### Tuning GPT Image 2
+
+- [source] Post 61's 2026-11-24 reviews for rounds 2–4 and 6–8
+  (`_agent/evidence/2026-11-24-post61-cut-continues/round-<n>/review.md`
+  under the Sans Faux agent root) record uphill-paint and self-repair
+  concepts failing at native size and 400 px. Paint direction could read
+  downward; roots could read as branches inserted into a split bench.
+- [inference] These were principally concept failures: uphill motion and
+  self-repair cannot be established by a single still. Pass the article/metaphor
+  and visible-state checks before asking a model to solve the rendering.
+- [source] The same reviews record material failures: paint resembling
+  icing, rubbery membrane or peeling vinyl, and molded-looking wood. Tune
+  concrete material thickness, junctions and photographic surfaces; palette
+  and grain alone do not rescue the hero.
+- [source] GPT Image 2 was not tried on the domino concept later selected
+  from Midjourney (Brandon's 2026-11-25 correction; Post 61 round-16 pick
+  recorded in `docs/cover-history.json`).
+- [inference] Yesterday's results do **not** prove GPT Image 2 cannot make
+  BP-quality covers. A later, owner-approved three-recipe test could include
+  Post 61's domino recipe in tuned GPT form for a direct comparison with
+  Brandon's Midjourney pick. This is a test proposal, not generation authority.
+
+### Midjourney (recorded fallback)
 
 - Append `--ar 16:9 --style raw --s 150 --no <§7 list>` to the §2 template.
   Midjourney stores it in its normalized form (`--raw --stylize 150 --v
@@ -355,8 +384,8 @@ that post only and does not count toward the pilot.
 - **The letter counts the post's photographic covers,** across providers.
   The next cover takes the letter after the highest one any `cover-<slug>-`
   series holds for that post. Every live post holds `-A`, so its next cover
-  is `-B`: `cover-gpt-B` from an agent, `cover-mj-B` if Brandon pastes it
-  from Midjourney.
+  is `-B`: `cover-gpt-B` from GPT Image, `cover-mj-B` from Midjourney
+  (including the recorded agent fallback).
 - **Retired namespaces, never reused:** `cover-a`/`-b`/`-c` (the AI era,
   before 2026-08) and `cover-ds-A` (the code-rendered covers, 2026-08). Both
   still occupy their slots in Cloudinary.

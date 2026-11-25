@@ -111,8 +111,9 @@ already cost a session or broken production.
 - **make or replace a cover** → `docs/CONTENT_IMAGERY.md` (history:
   `docs/cover-history.json`). **Cloudinary's `sign-upload` forces
   overwrite, so every upload follows an exact-id pre-check with a control
-  query; agents generate with GPT Image, never Midjourney, and Brandon
-  approves the attach.** The code-rendered covers under `archive/` are
+  query; GPT Image 2 comes first; Midjourney is a recorded fallback only after
+  two failed tuned rounds (two images each), and Brandon approves each attach
+  and each publish.** The code-rendered covers under `archive/` are
   history, not a tool.
 - **branch, hook, review or release** → `docs/WORKFLOW.md`. **The release
   lane writes the `CHANGELOG.md` section at the cut; only Brandon merges the
