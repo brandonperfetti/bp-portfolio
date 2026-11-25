@@ -84,12 +84,12 @@ exist (see below).
 BP Portfolio owns the **6000–6029** port family for local development (#285),
 so it runs beside the other Sans Faux projects with stable URLs:
 
-| Port   | What                                                                  | Override            |
-| ------ | --------------------------------------------------------------------- | ------------------- |
-| `6000` | Reserved, never used: browsers, Node and Next refuse it               | —                   |
-| `6001` | Playwright's managed server and `use.baseURL`; the reader-journey lab | `BP_E2E_PORT`       |
-| `6002` | `pnpm dev`, the normal app entrypoint                                 | `BP_DEV_PORT`       |
-| `6006` | `pnpm storybook`                                                      | `BP_STORYBOOK_PORT` |
+| Port   | What                                                                                       | Override                        |
+| ------ | ------------------------------------------------------------------------------------------ | ------------------------------- |
+| `6000` | Reserved, never used: browsers, Node and Next refuse it                                    | —                               |
+| `6001` | Playwright's managed server and `use.baseURL`; the reader-journey lab (fixed, no override) | `BP_E2E_PORT` (Playwright only) |
+| `6002` | `pnpm dev`, the normal app entrypoint                                                      | `BP_DEV_PORT`                   |
+| `6006` | `pnpm storybook`                                                                           | `BP_STORYBOOK_PORT`             |
 
 The family was assigned with the app on `6000`; that is X11's port, which
 Chromium (`ERR_UNSAFE_PORT`), Node's `fetch` (`bad port`) and Next itself

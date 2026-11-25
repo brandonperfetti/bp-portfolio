@@ -22,13 +22,21 @@ import { Agent, get } from 'node:http'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { portFor } from './lib/local-ports.mjs'
+import { LOCAL_SERVICES } from './lib/local-ports.mjs'
 
 const ROOT = realpathSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
 )
-/** The lab serves on the e2e port `playwright.config.ts` drives (#285). */
-const PORT = portFor('e2e')
+/**
+ * The lab serves on the e2e default `playwright.config.ts` drives (#285).
+ *
+ * @remarks Fixed, not read from `BP_E2E_PORT`: `prepare`, `doctor`, `drive`
+ * and `cleanup` run as separate commands and the saved state carries no port,
+ * so an override on one of them would point the others at the wrong listener
+ * and refuse the lab's own server, cleanup included. The Playwright child is
+ * pinned to this port through its environment below.
+ */
+const PORT: number = LOCAL_SERVICES.e2e.port
 const ORIGIN = `http://127.0.0.1:${PORT}`
 const IMAGE = 'pgvector/pgvector:pg16'
 const LABEL = 'bp.reader-lab'
