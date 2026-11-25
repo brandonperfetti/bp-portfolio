@@ -16,6 +16,7 @@ import path from 'node:path'
 import process from 'node:process'
 
 import {
+  assertNoPortArgs,
   assertPortFree,
   LOCAL_SERVICES,
   portFor,
@@ -47,6 +48,7 @@ try {
       `Usage: node scripts/local-server.mjs <${Object.keys(LOCAL_SERVICES).join('|')}> [args]`,
     )
   }
+  assertNoPortArgs(service, extra)
   const port = portFor(service)
   await assertPortFree(service, port)
   const { bin, args } = serverCommand(service, port, {

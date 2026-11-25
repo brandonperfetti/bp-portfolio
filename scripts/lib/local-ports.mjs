@@ -169,3 +169,32 @@ export function serverCommand(service, port, { ci }) {
       throw new Error(`Unknown local port service: ${String(service)}`)
   }
 }
+
+/**
+ * Refuse forwarded arguments that would pick the port themselves.
+ *
+ * @remarks The launcher appends extra arguments after its own `--port`, and
+ * Next and Storybook both take the last port option they see, so
+ * `pnpm dev --port 3000` would start on a port that was never checked and sits
+ * outside the family. The override variables are the one way to move a port.
+ *
+ * @param {keyof typeof LOCAL_SERVICES} service - The service being started,
+ * for the message.
+ * @param {string[]} args - The arguments forwarded to it.
+ * @throws When any argument sets the port.
+ */
+export function assertNoPortArgs(service, args) {
+  const portArg = args.find(
+    (arg) =>
+      arg === '--port' ||
+      arg.startsWith('--port=') ||
+      arg === '-p' ||
+      /^-p\d/.test(arg),
+  )
+  if (portArg === undefined) return
+  const { variable } = LOCAL_SERVICES[service]
+  throw new Error(
+    `${JSON.stringify(portArg)} cannot set the ${service} server's port; use ` +
+      `${variable}=<port> (${PORT_FAMILY.min + 1}–${PORT_FAMILY.max}) instead.`,
+  )
+}

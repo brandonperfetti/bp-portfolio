@@ -4,6 +4,7 @@ import net from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  assertNoPortArgs,
   assertPortFree,
   LOCAL_SERVICES,
   PORT_FAMILY,
@@ -93,6 +94,29 @@ describe('serverCommand', () => {
       bin: 'storybook',
       args: ['dev', '--port', '6006', '--exact-port'],
     })
+  })
+})
+
+describe('assertNoPortArgs', () => {
+  it.each([
+    ['--port', '3000'],
+    ['--port=3000'],
+    ['-p', '3000'],
+    ['-p3000'],
+    ['--ci', '--port', '6010'],
+  ])('refuses the forwarded port option in %j', (...args) => {
+    expect(() => assertNoPortArgs('dev', args)).toThrow(
+      /cannot set the dev server's port; use BP_DEV_PORT=<port>/,
+    )
+  })
+
+  it('keeps unrelated options', () => {
+    expect(() =>
+      assertNoPortArgs('storybook', ['--ci', '--no-open', '--debug']),
+    ).not.toThrow()
+    expect(() =>
+      assertNoPortArgs('dev', ['--experimental-https']),
+    ).not.toThrow()
   })
 })
 
