@@ -233,9 +233,10 @@ const readSubtree = async (
  * @remarks **What it does NOT do: write one redirect row per descendant.**
  * Inbound coverage for the subtree is one `matchDescendants` prefix row on the
  * moved page itself (D4, Brandon 2026-09-02) — O(1) rows per move rather than
- * O(subtree), which matters because `getCmsRedirects` reads at most
- * `REDIRECT_LIMIT = 500` rows and a handful of reorganisations on a site with a
- * few hundred articles walks toward that ceiling. So each descendant update
+ * O(subtree), which matters because `getCmsRedirects` reads the whole table
+ * into memory, past `REDIRECT_SCALE_THRESHOLD = 500` rows that design wants a
+ * keyed lookup (#256), and a handful of reorganisations on a site with a few
+ * hundred articles walks toward it. So each descendant update
  * carries `disableSlugRedirect: true`: without it every descendant would write
  * its own row and the prefix row would be decoration.
  *

@@ -27,8 +27,9 @@ export const getCmsWorkHistory = async (): Promise<
   const { docs } = await payload.find({
     collection: 'work-history',
     depth: 1,
-    limit: 50,
+    limit: 0,
     overrideAccess: false,
+    pagination: false,
     sort: 'sortOrder',
   })
   if (!docs.length) return null

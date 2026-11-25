@@ -128,7 +128,7 @@ export async function getTopicSectionPaths(): Promise<TopicSectionPaths> {
   const { docs: topics } = await payload.find({
     collection: 'categories',
     depth: 0,
-    limit: 500,
+    limit: 0,
     overrideAccess: false,
     pagination: false,
     select: { title: true, sectionPage: true },

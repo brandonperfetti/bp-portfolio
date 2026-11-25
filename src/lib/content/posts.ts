@@ -75,8 +75,16 @@ export type PublishedPostSummary = Pick<
  *
  * @remarks `'use cache: remote'` so a `posts` tag purge reaches every
  * serverless instance, not only the one that ran the hook (#118). Measured
- * 43,381 bytes at the current corpus, 838,561 at the 1000-post query ceiling —
- * both under the 2 MB Runtime Cache item limit.
+ * 43,381 bytes at the current corpus and 838,561 at 1000 posts — both under
+ * the 2 MB Runtime Cache item limit, which puts that limit near 2,400 posts.
+ *
+ * **Every published post (#256).** This feeds `/sitemap.xml`'s article half,
+ * so it reads with `limit: 0`: it used to carry `limit: 1000`, and `limit: N`
+ * caps a Payload `find` even with `pagination: false` (`docs/PAYLOAD.md` §
+ * Local API gotchas), so post 1001 would have left the sitemap with no error
+ * and no log. Past the cache item limit the read stays complete and only
+ * stops caching; a missing URL is the worse of the two failures. The other
+ * list reads in this file follow the same rule.
  */
 export const getPublishedPostSummaries = async (): Promise<
   PublishedPostSummary[]
@@ -88,7 +96,8 @@ export const getPublishedPostSummaries = async (): Promise<
   const { docs } = await payload.find({
     collection: 'posts',
     draft: false,
-    limit: 1000,
+    limit: 0,
+    pagination: false,
     overrideAccess: false,
     select: PUBLISHED_POST_SUMMARY_SELECT,
     sort: '-publishedAt',
@@ -128,7 +137,8 @@ export const getPublishedPosts = async (): Promise<Post[]> => {
   const { docs } = await payload.find({
     collection: 'posts',
     draft: false,
-    limit: 1000,
+    limit: 0,
+    pagination: false,
     overrideAccess: false,
     sort: '-publishedAt',
     where: { _status: { equals: 'published' } },
@@ -150,7 +160,8 @@ export const getPublishedPostSlugs = async (): Promise<string[]> => {
   const { docs } = await payload.find({
     collection: 'posts',
     draft: false,
-    limit: 1000,
+    limit: 0,
+    pagination: false,
     overrideAccess: false,
     select: { slug: true },
     where: { _status: { equals: 'published' } },
@@ -179,7 +190,8 @@ export const getPublishedPostPaths = async (): Promise<string[]> => {
   const { docs } = await payload.find({
     collection: 'posts',
     draft: false,
-    limit: 1000,
+    limit: 0,
+    pagination: false,
     overrideAccess: false,
     select: { path: true },
     where: {
