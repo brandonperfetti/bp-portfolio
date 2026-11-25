@@ -107,7 +107,7 @@ export const plugins: Plugin[] = [
           // onto `toPathAtCapture` and re-resolved through the same list, up to
           // `MAX_REDIRECT_HOPS` times, because the live reference is precisely
           // what skips the era the descendant's own row is keyed under. Still
-          // one 500-row read; the walk is in memory.
+          // one whole-table read; the walk is in memory.
           {
             name: 'matchDescendants',
             type: 'checkbox',

@@ -142,8 +142,8 @@ export const isPermanentRedirect = (type: CmsRedirectType): boolean =>
  * `limit`, so row 501 and beyond were dropped with no error and no log, and
  * with no `sort` on the read the dropped rows were whichever the database
  * returned last: an old URL whose row fell outside would 404 instead of
- * redirecting. {@link getCmsRedirects} now reads every row and warns once per
- * cache generation past this size, so the scale point the design names is
+ * redirecting. {@link getCmsRedirects} now reads every row and warns on each
+ * cache refill past this size, so the scale point the design names is
  * observable rather than a silent truncation.
  */
 export const REDIRECT_SCALE_THRESHOLD = 500
@@ -894,9 +894,11 @@ export const getCmsRedirects = async (): Promise<CmsRedirect[]> => {
   })
 
   if (docs.length > REDIRECT_SCALE_THRESHOLD) {
-    // Once per cache generation, not per request: this body runs only on a
-    // cache miss. Nothing is dropped; the warning says the full-list design
-    // has reached the size its docblock names for a keyed lookup.
+    // Once per execution of this body, which runs only on a cache miss, so
+    // once per cache generation rather than per request (in development Next
+    // also replays a cached body's console output on hits). Nothing is
+    // dropped; the warning says the full-list design has reached the size its
+    // docblock names for a keyed lookup.
     console.warn(
       '[redirects] table is past the full-list read threshold; a keyed lookup is due',
       { rows: docs.length, threshold: REDIRECT_SCALE_THRESHOLD },
