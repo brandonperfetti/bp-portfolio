@@ -1564,7 +1564,20 @@
         "heroImage": 233,
         "meta.image": 233
       },
-      "notes": "Historical attach receipt, not a new live query; _status remained draft. Receipt contains stale intermediate lookup/writer/preview notes; terminal attached-draft status and before/after fields are the source. Preview rendering unverified."
+      "notes": "Historical attach receipt, not a new live query; _status remained draft. Receipt contains stale intermediate lookup/writer/preview notes; terminal attached-draft status and before/after fields are the source. Preview rendering unverified.",
+      "recipeVersion": null,
+      "scene": "tabletop",
+      "era": "80s-neon",
+      "metaphorFamily": "causality",
+      "metaphorFamilySource": "classified from round-16 prompt, 2026-11-25 [inference]",
+      "hue": "violet",
+      "fieldOfUnits": true,
+      "impossibleDetail": "one domino described as frozen halfway through its fall at forty-five degrees; historical intent, not proof of stopped motion",
+      "loggedPrompt": "Low side view along a plain worn counter, a row of worn ivory dominoes with correctly arranged black pips, the earlier dominoes lying flat in sequence, one large domino in the foreground frozen halfway through its fall at forty-five degrees with only its lower corner touching the counter and nothing supporting it, a clear gap before the remaining upright dominoes beyond it. 1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of violet, heightened realism, bright mid-key dusk light. --ar 16:9 --style raw --s 150 --v 8.2 --no text, letters, numbers, logo, border, signage, children, smoke, particles, people, hands, fingers, supports, motion blur",
+      "finalPrompt": "Low side view along a plain worn counter, a row of worn ivory dominoes with correctly arranged black pips, the earlier dominoes lying flat in sequence, one large domino in the foreground frozen halfway through its fall at forty-five degrees with only its lower corner touching the counter and nothing supporting it, a clear gap before the remaining upright dominoes beyond it. 1980s synthwave, neon reflections, VHS-era film softness, magenta and cyan palette with a hint of violet, heightened realism, bright mid-key dusk light. --no text, letters, numbers, logo, border, signage, children, smoke, particles, people, hands, fingers, supports, motion blur --ar 16:9 --raw --stylize 150 --v 8.2 Job ID: fea2073c-b949-4a85-b8ae-74464f2046a1",
+      "finalPromptSource": "native PNG Description text chunk",
+      "metadataSource": "_agent/evidence/2026-11-24-post61-cut-continues/round-16/prompt.txt",
+      "rotationException": "Brandon selected this pre-pilot one-off despite the recorded repeated-unit/tabletop and semantic concerns; round-16/review.md records the initial rejection, final/receipt.json records later selection."
     }
   ]
 }

@@ -593,7 +593,9 @@ covers" for §9.
 - **Post 61:** `draftCovers` records its pre-pilot Midjourney one-off,
   Brandon approval, production media 233, version 1795555503 and receipt
   locator. It is not a GPT Image pilot result. On publication, move it into
-  `covers` at its actual `publishedAt`; do not invent a date now.
+  `covers` at its actual `publishedAt` only after completing and verifying
+  any metadata marked unavailable (including the final prompt); do not
+  invent a date or missing prompt now.
 - **Count, 2026-11-22:** 53 published posts, 53 entries, 53 `cover-mj-A`
   originals in Cloudinary at that measurement. Every `heroImage` and `meta.image` equals the
   entry's media id. The method is in the file's `verified` block. The
