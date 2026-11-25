@@ -57,8 +57,9 @@ of work are named in **Before you…** below, at the point that work starts.
 - Conventional commits with `Refs #n`; small, focused commits; one PR into
   `develop` per piece of work (`docs/WORKFLOW.md`). The PR template is
   `.github/pull_request_template.md`.
-- TSDoc on every exported function/component/collection (enforced by
-  `eslint-plugin-tsdoc`); document _why_, not _what_ (`docs/DOCUMENTATION.md`).
+- TSDoc on every exported function/component/collection, by convention:
+  `eslint-plugin-tsdoc` gates the syntax of comments that exist, not their
+  presence. Document _why_, not _what_ (`docs/DOCUMENTATION.md`).
 - New UI starts from shadcn/ui primitives (`src/components/ui`) and gets a
   Storybook story; serious a11y violations fail the story.
 - Tests accompany behavior changes: Vitest unit/component, Playwright e2e,
