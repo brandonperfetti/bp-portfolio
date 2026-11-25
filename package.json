@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "dev": "next dev --turbopack",
+    "dev": "node scripts/local-server.mjs dev",
     "prepare": "husky",
     "build": "next build",
     "start": "next start",
@@ -21,7 +21,7 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "diff:pages": "node scripts/diff-pages.mjs",
-    "storybook": "storybook dev -p 6006",
+    "storybook": "node scripts/local-server.mjs storybook",
     "build-storybook": "storybook build",
     "payload": "payload",
     "migrate": "payload migrate",

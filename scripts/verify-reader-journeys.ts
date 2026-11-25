@@ -22,10 +22,14 @@ import { Agent, get } from 'node:http'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import { portFor } from './lib/local-ports.mjs'
+
 const ROOT = realpathSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
 )
-const ORIGIN = 'http://127.0.0.1:3000'
+/** The lab serves on the e2e port `playwright.config.ts` drives (#285). */
+const PORT = portFor('e2e')
+const ORIGIN = `http://127.0.0.1:${PORT}`
 const IMAGE = 'pgvector/pgvector:pg16'
 const LABEL = 'bp.reader-lab'
 // pnpm 11 otherwise installs stale dependencies before both run and exec.
@@ -263,6 +267,9 @@ export function labEnvironment(
     DATABASE_URI: 'postgres://postgres:postgres@127.0.0.1:55432/bp_journey',
     PAYLOAD_SECRET: 'ci-not-a-real-secret',
     NEXT_PUBLIC_SITE_URL: ORIGIN,
+    // The Playwright child re-reads its port from this; pin it to the one
+    // the lab's own server listens on.
+    BP_E2E_PORT: String(PORT),
     NEXT_PUBLIC_SITE_NAME: 'BP Portfolio (journey)',
     NEXT_TELEMETRY_DISABLED: '1',
     PLAYWRIGHT_EXECUTABLE_PATH: browser,
@@ -455,7 +462,7 @@ function assertServer(s: State) {
   const listeners = command('lsof', [
     '-nP',
     '-t',
-    '-iTCP:3000',
+    `-iTCP:${PORT}`,
     '-sTCP:LISTEN',
   ]).split('\n')
   must(
@@ -484,7 +491,7 @@ async function logged(s: State, name: string, bin: string, args: string[]) {
 export async function readLoopback(
   route: '/articles' | '/api/search',
   timeoutMs: number,
-  port = 3000,
+  port = PORT,
 ) {
   // A fresh Agent receives no proxyEnv; never borrow a proxy-configured global agent.
   const agent = new Agent()
@@ -963,7 +970,7 @@ async function prepare(run: string, browser: string) {
     existsSync(path.join(ROOT, 'node_modules/next/package.json')),
     'Missing installed dependencies',
   )
-  await freePort(3000)
+  await freePort(PORT)
   await freePort(55432)
   const s: State = {
     version: 1,
@@ -1089,7 +1096,7 @@ async function prepare(run: string, browser: string) {
           '-H',
           '127.0.0.1',
           '-p',
-          '3000',
+          String(PORT),
         ],
         {
           cwd: ROOT,

@@ -8,7 +8,7 @@ const nextConfig = {
   // `localhost` / `**.localhost` (next/dist/server/lib/router-utils/
   // block-cross-site-dev.js), so a browser pointed at 127.0.0.1 gets 403s on
   // dev-only assets even though it is the same machine. `playwright.config.ts`
-  // uses `baseURL: 'http://127.0.0.1:3000'`, which is exactly that case.
+  // uses `baseURL: 'http://127.0.0.1:6001'` (#285), which is exactly that case.
   // Entries are HOSTNAMES, not origins — no scheme, no port (the block check
   // compares `parseUrl(origin).hostname`). Dev-only: this key has no effect on
   // `next build` / `next start`, so it cannot loosen anything in production.

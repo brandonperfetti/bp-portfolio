@@ -15,7 +15,7 @@ import nextConfig from '../../next.config.mjs'
  */
 describe('next.config.mjs', () => {
   it('allows 127.0.0.1 as a dev origin', () => {
-    // Playwright drives the app at `http://127.0.0.1:3000`
+    // Playwright drives the app at `http://127.0.0.1:6001` (#285)
     // (`playwright.config.ts`, `use.baseURL`), and Next's built-in dev
     // allowlist covers only `localhost` / `**.localhost`. Without this entry
     // the dev server 403s its own `/_next` and `/__nextjs` endpoints for that
