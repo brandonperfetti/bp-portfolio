@@ -619,7 +619,7 @@ describe('runProbe', () => {
 
   it('keeps the create id and both errors when a create row fails, then the publish fails', async () => {
     const site = fakeSite({ failPublish: true })
-    const { result } = await run('rest', site, [], undefined, (e) => {
+    const { result, lines } = await run('rest', site, [], undefined, (e) => {
       const original = e.write
       e.write = (cells: string[]) => {
         if (cells[2] === 'create-draft') throw new Error('disk full')
@@ -629,6 +629,27 @@ describe('runProbe', () => {
     expect(site.docs.size).toBe(0)
     expect(result.cleanup).toBe('PASS')
     expect(result.error).toMatch(/^evidence write failed: disk full; .+/)
+    expect(
+      lines.filter((l) => /error +evidence write failed/.test(l)),
+    ).toHaveLength(1)
+    expect(exitCodeFor(result)).toBe(EXIT.fail)
+  })
+
+  it('logs and keeps a delete-row failure that follows a run error', async () => {
+    const site = fakeSite({ failPublish: true })
+    const { result, lines } = await run('rest', site, [], undefined, (e) => {
+      const original = e.write
+      e.write = (cells: string[]) => {
+        if (cells[2] === 'delete') throw new Error('disk full')
+        original(cells)
+      }
+    })
+    expect(site.docs.size).toBe(0)
+    expect(result.cleanup).toBe('PASS')
+    expect(result.error).toMatch(/.+; evidence write failed: disk full$/)
+    expect(
+      lines.filter((l) => /error +evidence write failed/.test(l)),
+    ).toHaveLength(1)
     expect(exitCodeFor(result)).toBe(EXIT.fail)
   })
 

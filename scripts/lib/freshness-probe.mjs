@@ -1050,16 +1050,20 @@ export async function runProbe({
 
   /**
    * Appends a writes.tsv row. A failed append never masks the write it
-   * records: it is kept as the run's error, so the run cannot exit 0
-   * without its evidence.
+   * records: the first one is logged and added to the run's error, beside
+   * any error already there, so the run cannot exit 0 without its evidence
+   * and a short writes.tsv is always explained.
    */
+  let evidenceFailed = false
   const record = (/** @type {string[]} */ cells) => {
     try {
       evidence.write(cells)
     } catch (error) {
-      if (result.error) return
-      result.error = `evidence write failed: ${error instanceof Error ? error.message : String(error)}`
-      log(`${utc()}  error      ${result.error}`)
+      if (evidenceFailed) return
+      evidenceFailed = true
+      const message = `evidence write failed: ${error instanceof Error ? error.message : String(error)}`
+      result.error = result.error ? `${result.error}; ${message}` : message
+      log(`${utc()}  error      ${message}`)
     }
   }
 
