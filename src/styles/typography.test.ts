@@ -7,11 +7,9 @@ type TypographyFn = (helpers: {
 }) => Record<string, { css: Record<string, unknown> }>
 
 /**
- * Pins the reading-measure decision on #196 (Brandon, 2026-11-26): `.prose`
- * caps at 65ch, set in the site's own `DEFAULT.css`. The override stays under
- * `theme`, so it still replaces the plugin's default stylesheet; under
- * `theme.extend` it would merge with it and bring the plugin's spacing and
- * inline-code backticks back on every article.
+ * Pins the reading-measure decision on #196 (Brandon, 2026-11-26): a 65ch
+ * cap in the site's own `DEFAULT.css`, with the override kept under `theme`.
+ * The reasons are in the `typography.ts` remarks.
  */
 describe('typography.ts', () => {
   // The real `PluginUtils` is wider than the one helper the config calls;

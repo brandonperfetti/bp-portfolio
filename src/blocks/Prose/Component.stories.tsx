@@ -153,11 +153,9 @@ export const Default: Story = {
     prose.appendChild(probe)
     const cap = probe.getBoundingClientRect().width
     probe.remove()
-    await expect(getComputedStyle(prose).maxWidth).not.toBe('none')
-    await expect(parseFloat(getComputedStyle(prose).maxWidth)).toBeCloseTo(
-      cap,
-      1,
-    )
+    const { maxWidth } = getComputedStyle(prose)
+    await expect(maxWidth).not.toBe('none')
+    await expect(parseFloat(maxWidth)).toBeCloseTo(cap, 1)
     const h2 = prose.querySelector('h2') as HTMLElement
     await expect(getComputedStyle(h2).fontSize).toBe('20px')
     await expect(getComputedStyle(h2).lineHeight).toBe('28px')

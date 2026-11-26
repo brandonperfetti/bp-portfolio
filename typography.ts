@@ -13,9 +13,14 @@ import { type Config } from 'tailwindcss'
  *
  * That replacement also dropped the plugin's 65ch measure, so `DEFAULT.css`
  * sets `maxWidth: '65ch'` itself (#196, Brandon, 2026-11-26). It is the only
- * plugin default restored, and it caps text only: a 1024px root-hosted Prose
- * block narrows to 655px, while an article body in its 672px column changes
- * by 17px.
+ * plugin default restored. It caps the whole prose box, uploads inside it
+ * included, on every `.prose` element: a 1024px root-hosted Prose block
+ * narrows to 655px, an article body in its 672px column changes by 17px, and
+ * hero rich text and FAQ answers are capped at the same 655px (an FAQ
+ * answer's `prose-sm` changes nothing here, since this theme defines no `sm`
+ * entry). Blocks beside a root-hosted Prose block, such as Image,
+ * MediaBlock, Lead and the per-entry work card, are not capped and stay at the
+ * host width (#481).
  */
 export default {
   theme: {
