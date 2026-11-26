@@ -17,6 +17,7 @@ import {
   chunkTechStackSummary,
   chunkFlatRecord,
   chunkPost,
+  employmentHistoryLead,
   estimateTokens,
   hashChunkContent,
   isEmbeddable,
@@ -297,6 +298,7 @@ describe('chunkFlatRecord', () => {
 
     expect(chunk.content).toBe(
       [
+        'Past employer in his work history: Technical PM at Acme.',
         'Company: Acme',
         'Title: Technical PM',
         'Period: 2021-03-01 – 2023-06-01',
@@ -306,6 +308,70 @@ describe('chunkFlatRecord', () => {
     expect(chunk.title).toBe('Acme — Technical PM')
     expect(chunk.sourceUrl).toBe('/')
     expect(chunk.chunkIndex).toBe(0)
+  })
+
+  /**
+   * #236: a role embedded as bare labels shared no vocabulary with a career
+   * question, so work history lost to project and repository passages. The
+   * lead sentence is what a career question now matches; the wording rule it
+   * pins is the measured one (`employmentHistoryLead`'s docblock).
+   */
+  describe('employment-history lead (#236)', () => {
+    it('opens the current role with "Current employer"', () => {
+      const [chunk] = chunkFlatRecord('work-history', {
+        id: 1,
+        company: 'Brytecore',
+        title: 'Senior Frontend Engineer',
+        startDate: '2024-09-02T00:00:00.000Z',
+        current: true,
+      })
+      expect(chunk.content.split('\n')[0]).toBe(
+        'Current employer in his work history: Senior Frontend Engineer at Brytecore.',
+      )
+    })
+
+    it('reads an empty end date as current in the lead and the period alike', () => {
+      // The collection says "Leave empty for a current role" and does not
+      // require `current`; the lead and the period must agree (#236 review).
+      const [chunk] = chunkFlatRecord('work-history', {
+        id: 2,
+        company: 'Acme',
+        title: 'Engineer',
+        startDate: '2024-01-01T00:00:00.000Z',
+        current: false,
+      })
+      const [lead, , , period] = chunk.content.split('\n')
+      expect(lead).toBe(
+        'Current employer in his work history: Engineer at Acme.',
+      )
+      expect(period).toBe('Period: 2024-01-01 – Present')
+    })
+
+    it('names the company alone when the role has no title', () => {
+      expect(employmentHistoryLead('Freelance', '', false)).toBe(
+        'Past employer in his work history: Freelance.',
+      )
+    })
+
+    it('adds no lead when there is no company to name', () => {
+      expect(employmentHistoryLead('', 'Engineer', true)).toBeNull()
+      const [chunk] = chunkFlatRecord('work-history', {
+        id: 9,
+        title: 'Engineer',
+      })
+      expect(chunk.content).toBe('Title: Engineer')
+    })
+
+    it("keeps Brandon's name out of the lead", () => {
+      // [measured 2026-11-25] A lead about "Brandon" took four of the five
+      // slots on "what tech does Brandon use"; career words that a stack or
+      // project question does not use are what kept those results unchanged.
+      for (const current of [true, false]) {
+        expect(employmentHistoryLead('Acme', 'PM', current)).not.toMatch(
+          /brandon|perfetti/i,
+        )
+      }
+    })
   })
 
   /**
