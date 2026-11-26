@@ -27,11 +27,11 @@ import CorvusChat from '@/components/CorvusChat'
  *   by exactly one message, whose role must be `user`.
  * - The starter travels in a NEW top-level body field (`system`,
  *   `systemPrompt`, `context`, …) → caught by scanning every top-level key
- *   other than `messages`. `/api/ai/chat`'s `bodySchema` is `{ messages }` and
- *   phase 1 does not touch it, so such a field would be silently dropped by the
- *   route — which is a security property worth pinning from the client side
- *   too, since the failure mode of relying on it is a client that *thinks* it
- *   is grounding the model.
+ *   other than `messages`. `/api/ai/chat`'s `bodySchema` is `{ messages }` plus
+ *   phase 2's id-only `pageContext`, so such a field would be silently dropped
+ *   by the route — which is a security property worth pinning from the client
+ *   side too, since the failure mode of relying on it is a client that
+ *   *thinks* it is grounding the model.
  */
 
 vi.mock('next/navigation', () => ({
