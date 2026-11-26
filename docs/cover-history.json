@@ -1582,6 +1582,47 @@
       "finalPromptSource": "native PNG Description text chunk",
       "metadataSource": "_agent/evidence/2026-11-24-post61-cut-continues/round-16/prompt.txt",
       "rotationException": "Brandon selected this pre-pilot one-off despite the recorded repeated-unit/tabletop and semantic concerns; round-16/review.md records the initial rejection, final/receipt.json records later selection."
+    },
+    {
+      "postId": 62,
+      "slug": "deep-work-reviewing-agent-output",
+      "title": "Deep work when your job is reviewing agent output",
+      "publishedAt": null,
+      "status": "draft",
+      "series": "cover-gpt-A",
+      "generator": "gpt-image",
+      "pilotCheck": true,
+      "approval": "Brandon approved ingest and draft attachment on 2026-11-26; no publish or status change.",
+      "route": "OpenClaw OAuth image_generate",
+      "model": "openai/gpt-image-2",
+      "cloudinaryPublicId": "bp-portfolio/images/articles/deep-work-reviewing-agent-output/candidates/cover-gpt-A-1",
+      "cloudinaryVersion": 1795670665,
+      "mediaId": 234,
+      "mediaFilename": "candidates-cover-gpt-A-1.jpg",
+      "alt": "Rain hangs in a sharply bounded rectangle inside a freestanding concrete doorway while the surrounding courtyard stays dry.",
+      "rollout": "2026-11-26 pilot checks 5 and 6",
+      "receipt": "_agent/evidence/2026-11-26-deep-work-check5/attach-receipt.json",
+      "sourceJobId": "73b4545c-d97f-4ec5-9194-bfc19a33d7b0",
+      "previousFields": {
+        "heroImage": null,
+        "meta.image": null
+      },
+      "attachedFields": {
+        "heroImage": 234,
+        "meta.image": 234
+      },
+      "recipeVersion": "post62-check5-r2",
+      "scene": "architecture/city",
+      "era": "70s-cool",
+      "metaphorFamily": "weather",
+      "metaphorFamilySource": "logged (round 2 recipe)",
+      "hue": "violet",
+      "fieldOfUnits": false,
+      "impossibleDetail": "A dense vertical sheet of real rain exists only inside the opening of a freestanding concrete doorway, with sharply bounded vertical edges and no roof, pipe or cloud supplying it",
+      "loggedPrompt": "A rectangular volume of dense real rain hangs freely in open air inside a freestanding brutalist concrete doorway. CRITICAL: the flat upper edge of the rain starts 40 centimetres BELOW the underside of the concrete lintel. A conspicuous horizontal band of completely empty dry air separates rain from concrete across the entire width. You can see the courtyard wall through this clear gap. Rain touches nothing above or on either side: no connection to lintel, no pipes, no supply. Both side edges of the rain are perfectly vertical, inset 20 centimetres from the solid concrete jambs. The rain terminates in a precisely rectangular wet footprint; all surrounding paving is dry. This suspended rectangular rainstorm is the ONE impossible physical state. Rain consists of scattered water droplets and streaks with spaces between, not a solid panel, not glass, not luminous threads, not a waterfall or fountain. Empty brutalist courtyard. Single weathered concrete rectangular doorway large in the middle of the wide frame, enough surrounding dry courtyard visible. No people. 1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of violet, heightened realism, mid-key overcast daylight. 35mm film still, 50mm lens, low three-quarter off-center angle. Directional side lighting, soft shadows, fine visible grain, muted color, worn real materials. Not an advertisement, not a 3D render, not a catalogue shot, not symmetrical, not head-on. Only named objects appear. Important elements in middle band of 16:9 composition. No text, letters, numbers, logos, borders, signage, children, people, smoke, mist, fog, plants, decor, pipes, showerheads, fountains, neon or supernatural glow. Keep the empty air gap clearly visible at thumbnail size.",
+      "finalPrompt": "A rectangular volume of dense real rain hangs freely in open air inside a freestanding brutalist concrete doorway. CRITICAL: the flat upper edge of the rain starts 40 centimetres BELOW the underside of the concrete lintel. A conspicuous horizontal band of completely empty dry air separates rain from concrete across the entire width. You can see the courtyard wall through this clear gap. Rain touches nothing above or on either side: no connection to lintel, no pipes, no supply. Both side edges of the rain are perfectly vertical, inset 20 centimetres from the solid concrete jambs. The rain terminates in a precisely rectangular wet footprint; all surrounding paving is dry. This suspended rectangular rainstorm is the ONE impossible physical state. Rain consists of scattered water droplets and streaks with spaces between, not a solid panel, not glass, not luminous threads, not a waterfall or fountain. Empty brutalist courtyard. Single weathered concrete rectangular doorway large in the middle of the wide frame, enough surrounding dry courtyard visible. No people. 1970s brutalist sci-fi production design, grainy 35mm film, concrete grey, deep teal and sodium-vapor amber palette with a hint of violet, heightened realism, mid-key overcast daylight. 35mm film still, 50mm lens, low three-quarter off-center angle. Directional side lighting, soft shadows, fine visible grain, muted color, worn real materials. Not an advertisement, not a 3D render, not a catalogue shot, not symmetrical, not head-on. Only named objects appear. Important elements in middle band of 16:9 composition. No text, letters, numbers, logos, borders, signage, children, people, smoke, mist, fog, plants, decor, pipes, showerheads, fountains, neon or supernatural glow. Keep the empty air gap clearly visible at thumbnail size.",
+      "finalPromptMatchesLogged": true,
+      "notes": "Approved staging candidate ingested directly, with e_upscale before 2048x1152 derivation per check-5 owner direction. Production read-back verified both fields 234, _status draft, publishedAt null, SEO title/description unchanged. Preview rendering unverified; Brandon must sign in to Payload. No publication."
     }
   ]
 }
