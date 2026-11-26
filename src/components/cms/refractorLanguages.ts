@@ -1,6 +1,12 @@
 // GENERATED for #350 from refractor 3.6.0's registration order: its core
 // (markup, css, clike, javascript), then the alphabetical list in its
 // index.js. Do not sort or reorder: see the TSDoc on `refractor` below.
+// The list was read from refractor@3.6.0's tarball (`npm pack refractor@3.6.0`)
+// with:
+//   { printf 'markup\ncss\nclike\njavascript\n'
+//     grep -o 'lang/[a-z0-9-]*\.js' package/index.js |
+//       sed 's#lang/##;s#\.js##'; }
+// Each name is imported from `refractor/<name>` and registered in that order.
 import { refractor } from 'refractor/core'
 
 import markup from 'refractor/markup'
