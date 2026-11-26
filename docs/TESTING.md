@@ -111,7 +111,7 @@ first failing step:
 ```sh
 set -euo pipefail
 export PAYLOAD_SECRET=ci-not-a-real-secret
-export NEXT_PUBLIC_SITE_URL=http://localhost:3000
+export NEXT_PUBLIC_SITE_URL=http://localhost:6001
 export NEXT_PUBLIC_SITE_NAME='BP Portfolio (CI)'
 corepack enable
 pnpm install --frozen-lockfile
@@ -256,7 +256,7 @@ that the suite passes; a red one is not evidence that it fails.
 
 Two related notes:
 
-- The suite drives the app at `http://127.0.0.1:3000` (`use.baseURL`). Next
+- The suite drives the app at `http://127.0.0.1:6001` (`use.baseURL`). Next
   blocks cross-origin requests to its dev-only `/_next` and `/__nextjs`
   endpoints, and its built-in allowlist covers only `localhost`, so
   `next.config.mjs` carries `allowedDevOrigins: ['127.0.0.1']` (#119). The key
@@ -326,7 +326,7 @@ checks on the existing local installation layout instead of switching its
 virtual-store default. The application and tests still receive `CI=1` and
 `NODE_ENV=production`; this does not disable their CI behavior. A different
 installation layout must satisfy admission or stop, not reinstall.
-It refuses occupied loopback ports 3000/55432, missing dependencies,
+It refuses occupied loopback ports 6001/55432, missing dependencies,
 pre-existing `media/`, and another lab's checkout lock. It preserves an
 existing `.next/` by moving it to `original.next` in the run directory and
 restores it during cleanup. Do not edit source, change environment files,
@@ -393,7 +393,7 @@ A green total, zero tests, expected failure or skipped required case is not
 proof. Read the full report/trace for assertions and any skip annotations.
 
 For authorized interactive browser checks, use the prepared
-`http://127.0.0.1:3000` instance after doctor, as the sole driver. Do not change
+`http://127.0.0.1:6001` instance after doctor, as the sole driver. Do not change
 fixtures. Keep interactive observations separate from the codified verdict.
 The evidence command also works after cleanup. Source review or one client's
 successful invocation does not establish another client's capabilities.

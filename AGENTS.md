@@ -57,8 +57,9 @@ of work are named in **Before you…** below, at the point that work starts.
 - Conventional commits with `Refs #n`; small, focused commits; one PR into
   `develop` per piece of work (`docs/WORKFLOW.md`). The PR template is
   `.github/pull_request_template.md`.
-- TSDoc on every exported function/component/collection (enforced by
-  `eslint-plugin-tsdoc`); document _why_, not _what_ (`docs/DOCUMENTATION.md`).
+- TSDoc on every exported function/component/collection, by convention:
+  `eslint-plugin-tsdoc` gates the syntax of comments that exist, not their
+  presence. Document _why_, not _what_ (`docs/DOCUMENTATION.md`).
 - New UI starts from shadcn/ui primitives (`src/components/ui`) and gets a
   Storybook story; serious a11y violations fail the story.
 - Tests accompany behavior changes: Vitest unit/component, Playwright e2e,
@@ -77,6 +78,9 @@ already cost a session or broken production.
   `src/app/(payload)/admin/importMap.js` (§ Generated artifacts). **Never
   unregister a Posts rich-text node type** (lists, blockquote, upload): every
   migrated article breaks with Lexical error #17.
+- **review a CMS change, or change the CMS Domain Agent** →
+  `docs/agents/cms-domain.md`. **A scenario check is never deleted or
+  weakened to make it pass.**
 - **write Payload `find` or Local-API code (scripts, seeds, tests, MCP
   writes)** → `docs/PAYLOAD.md` § Local API gotchas: **`limit: N` still caps
   with `pagination: false`** (unlimited is `limit: 0`, or `pagination: false`
@@ -170,4 +174,12 @@ The five canonical triage roles, kept as their own names. See
 
 ### Domain docs
 
-Single-context. See `docs/agents/domain.md`.
+Single-context. See `docs/agents/domain.md`; terms in `GLOSSARY.md`.
+
+### CMS Domain Agent
+
+A read-only advisor and reviewer for the Payload CMS paths:
+`docs/agents/cms-domain.md` (brief, owned paths, scenario checks). Under Claude
+Code it is the `cms-domain` subagent, and a `PreToolUse` hook adds its brief
+when an edit touches an owned path; the hook never blocks an edit. It adds to
+the `code-review` verdicts and the CodeRabbit round, never replaces them.

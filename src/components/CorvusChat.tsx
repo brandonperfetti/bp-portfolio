@@ -27,6 +27,7 @@ import { useSpeechInput } from '@/lib/corvus/useSpeechInput'
 import { reportSpeechRecognitionError } from '@/lib/observability/clientTelemetry'
 import { useTurnstileToken } from '@/lib/security/useTurnstileToken'
 import { useMounted } from '@/lib/useMounted'
+import type { BlockHostDocument } from '@/blocks/hostContext'
 import { useViewerFirstName } from '@/components/auth/ViewerFirstName'
 import { RavenMark } from '@/components/corvus/RavenMark'
 import { Button } from '@/components/ui/button'
@@ -390,9 +391,9 @@ export interface CorvusChatProps {
    * point it travels as a normal `user` message through the same
    * `sendMessage` path as typed or dictated text. It never becomes a `system`
    * message and never reaches the prompt: the system prompt is server-enforced
-   * and `/api/ai/chat`'s body schema is `{ messages }` and nothing else
-   * (`src/app/api/ai/chat/route.ts`), so there is no field for it to travel in
-   * even if this component tried. `CorvusChat.starterPrompt.test.tsx` asserts
+   * and `/api/ai/chat`'s body schema is `{ messages }` plus an id-only
+   * `pageContext` reference (`src/app/api/ai/chat/route.ts`), so there is no
+   * text field for it to travel in even if this component tried. `CorvusChat.starterPrompt.test.tsx` asserts
    * that from the wire, not from this docblock.
    *
    * Read once, as the initial state: a later change to the prop does not
@@ -414,6 +415,18 @@ export interface CorvusChatProps {
    * registered at all.
    */
   globalShortcut?: boolean
+  /**
+   * The document this chat is hosted on, sent with every turn as a reference
+   * (#217 phase 2).
+   *
+   * @remarks **An id, never text.** The request carries `{ collection, id }`
+   * and the server reads the title and path back from the CMS, so this prop
+   * cannot put words in the prompt; it can only point at a published page.
+   * Omitted — `/corvus`, Storybook, tests — and the body is `{ messages }`
+   * exactly as before, which is what keeps a `/corvus` turn's system prompt
+   * byte-identical.
+   */
+  pageContext?: BlockHostDocument
 }
 
 /**
@@ -452,6 +465,7 @@ export default function CorvusChat({
   headingLevel = 'h1',
   starterPrompt,
   globalShortcut = true,
+  pageContext,
 }: CorvusChatProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   // The agent name's tag. Capitalised local because JSX reads a lowercase
@@ -481,13 +495,23 @@ export default function CorvusChat({
     ? getCorvusGreeting(new Date().getHours(), firstName)
     : 'Welcome.'
 
+  // The reference is reduced to its two primitives so the transport is built
+  // once per host document, not once per render of a caller that passes a
+  // fresh object literal.
+  const hostCollection = pageContext?.collection
+  const hostId = pageContext?.id
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: '/api/ai/chat',
         fetch: corvusChatFetch,
+        ...(hostCollection && hostId
+          ? {
+              body: { pageContext: { collection: hostCollection, id: hostId } },
+            }
+          : {}),
       }),
-    [],
+    [hostCollection, hostId],
   )
   const { messages, sendMessage, status, error } = useChat({ transport })
 

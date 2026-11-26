@@ -14,12 +14,47 @@ citation is a real same-tab anchor (see "Links in a reply" below).
   `docs/SECURITY.md` § Corvus (AI chat).
 - Request bodies are Zod-validated; oversize/malformed input is rejected.
 - Provider/model are env-selected: `AI_CHAT_PROVIDER` (`openai|anthropic`) +
-  `AI_CHAT_MODEL`; `AI_MAX_COMPLETION_TOKENS` caps output.
+  `AI_CHAT_MODEL`, defaulting to `gpt-5.6-luna` on OpenAI and
+  `claude-sonnet-4-5` on Anthropic; `AI_MAX_COMPLETION_TOKENS` caps output.
+
+## The host page (#217 phase 2, 2026-11-25)
+
+A `corvusChat` block knows which document it sits on (`hostDoc`, the
+`{ collection, id }` pair `RenderBlocks` already threads to its blocks) and
+sends it with each turn as `pageContext`. The prompt then says which page the
+visitor is on, so "this page" and "this article" have a referent.
+
+- **A reference, never text.** `pageContextSchema` (`src/lib/ai/pageContext.ts`)
+  is strict: `collection` is `pages` or `posts`, `id` a positive integer, and
+  any other key is a 400. The title and path are read back by
+  `resolveHostDocument` from the published view (`draft: false`,
+  `_status = published`, `overrideAccess: false`); a gated post is named only
+  to a viewer `canAccess` admits. The title is reduced to one quoted line of
+  at most 160 characters, with double quotes, square and angle brackets and
+  backticks removed, before it enters the prompt. It is never a link label:
+  the line offers `[this page](<path>)`, so an editor-written title cannot
+  change the link the instruction offers. A bare URL in a title still reaches
+  the prompt as quoted text.
+- **Never a reason to fail.** Unknown id, draft, gated, no public path, a
+  database error, or a lookup slower than one second: every one is `null`, and
+  the turn runs as a `/corvus` turn does. It resolves alongside retrieval
+  (`Promise.all`), so it adds no serial round-trip.
+- **Gated on presence.** `buildGroundedSystem(snippets, host)` adds
+  `hostPageContextLine` after the positioning paragraph (or after the bare
+  persona prompt on an ungrounded turn) only when a host resolved. `/corvus`
+  sends no `pageContext`, so its prompt is byte-identical to the one every
+  keyed eval baseline measured; `groundedSystem.test.ts` pins that the line is
+  the only difference a host makes.
+- **It names the page and nothing more.** The line says the page's text is not
+  in it, so Corvus answers about the page's content from retrieved passages or
+  says it does not have them; it may link the page itself. Biasing retrieval
+  toward the host page (spike #192's option b) is deliberately not done.
 
 ## What the provider is sent, and asked to keep (#366)
 
 **Sent.** Each chat turn sends the provider the server-built system prompt
-(with any retrieval snippets), the visitor's conversation — the most recent
+(with any retrieval snippets, and the host page's title and path when the chat
+is a page-builder block), the visitor's conversation — the most recent
 `maxMessages`, earlier replies included — and the reasoning-effort cap. The
 retrieval query also goes to OpenAI embeddings (`src/lib/ai/embeddings.ts`),
 whatever the chat provider. The site keeps no copy: the chat route writes
@@ -218,7 +253,7 @@ the bare provider call is the **Responses** API (`OpenAIProvider`'s call
 signature takes an `OpenAIResponsesModelId`). On that API a reasoning model's
 hidden reasoning tokens are billed as output tokens and drawn from the _same_
 `maxOutputTokens` allowance as the visible answer. The default model is
-`gpt-5-mini`; the allowance is **2048**
+`gpt-5.6-luna` (`gpt-5-mini` until #238); the allowance is **2048**
 (`resolveGuardrailLimits`, `AI_MAX_COMPLETION_TOKENS`, cap 8000 — it was 1024
 until 2026-09-11, see the decision below), mirrored by
 `EVAL_MAX_OUTPUT_TOKENS` in `evals/corvus-helpers.ts` and drift-guarded by
@@ -318,6 +353,11 @@ runtime logs, dpl_B3pPxfiyvcZbq9NH4rv5hWxEJFMD]` every `/api/ai/chat` turn
 > the tiebreaker — `gpt-5-mini`'s clean draws score as well or better (94% /
 > 86% on one run) — the essay row's failure rate on a model production never
 > sends was.
+>
+> **Superseded 2026-11-25 (#238).** The code default is now `gpt-5.6-luna`,
+> so the `ci.yml` pin is gone: the job sets no `AI_CHAT_MODEL`, a local keyed
+> run exports none, and `scripts/eval-harness.test.ts` ("runs the gate on the
+> code default model") fails if `ci.yml` selects a model or provider again.
 
 **Decided 2026-09-11 (Brandon): BOTH levers — #138 option 2, reasoning effort
 capped at `minimal`, AND #138 option 1, the completion budget raised
@@ -561,10 +601,50 @@ native 3072 would force `halfvec` and a more exotic schema. Instead the write
 path always sends an explicit `dimensions` provider option, which lets
 `-3-large` be swapped in later at 1536 with no migration at all.
 
-Embedded collections: `posts`, `projects`, `uses`, `tech-stack`,
-`work-history`, plus the non-CMS `github-repos` (#147, below). Pages are **not**
-embedded (decision D8(b)) — mostly layout chrome, and retrieval noise for little
-factual value. Adding them later needs no schema change.
+Embedded collections: `posts`, `pages`, `projects`, `uses`, `tech-stack`,
+`work-history`, plus the non-CMS `github-repos` (#147, below). Pages were left
+out by decision D8(b) as mostly layout chrome; #208 took them back in, text
+blocks only (§ Pages: text blocks only, below).
+
+### Pages: text blocks only (#208, 2026-11-25)
+
+D8(b)'s reason expired when `/work` shipped: each role Page carries a few
+hundred words of narrative that exist in no other collection, and Corvus could
+link `/work/brytecore` without being able to quote a word of it. Of the three
+shapes #208 offered, the third was taken — **chunk only a Page's text blocks** —
+because production's own Pages showed the chrome and the prose are separable by
+block type, so no editor-facing knob is needed `[measured, public /api/pages,
+2026-11-25]`: of 15 published Pages, the four `/work/<role>` Pages, `/about`,
+`/how-i-work` and `/privacy` carry `lead`/`prose`/`content`/`faqList` text, and
+the rest are a `spacer`, an archive, a form, a photo strip, or a one-line lead
+over a card grid.
+
+- **What is read** (`PAGE_TEXT_BLOCK_TYPES`, `src/lib/ai/chunking.ts`):
+  `heading`, `lead`, `prose`, `content` and `faqList`, walked through
+  `container` → `column` nesting, de-duplicated so a paragraph placed once per
+  breakpoint counts once. Blocks that render another collection
+  (`workHistoryCard`, `featureCardGrid`, `postRollup`, the archives) are
+  skipped: those rows are embedded already, and reading them again would put
+  one fact in the window twice under two citations.
+- **What is left out:** a Page under `MIN_PAGE_TEXT_TOKENS` (60) of text yields
+  no chunk at all, which is what keeps `/work`, `/now`, `/uses` and the other
+  chrome Pages out of every window.
+- **Chunks** pack exactly as a post's do (same packer, same overlap), under a
+  `title — subtitle` prefix, cited at the Page's served path (`/work/brytecore`,
+  `/` for the root).
+- **Drafts are never retrievable.** Pages are drafts-enabled, so `isEmbeddable`
+  refuses any `_status` but `published`, and an unpublish deletes the rows, both
+  pinned by test (`chunking.test.ts`, `embeddingsStore.test.ts`,
+  `corvusEmbeddings.test.ts`). The backfill reads the published view
+  (`draft: false`) for Pages as for posts.
+- **The hooks** are the same `refreshCorvusEmbeddings`/`deleteCorvusEmbeddings`
+  pair every embedded collection carries; a path cascade's descendant updates
+  re-run it, and a moved Page's new citation lands through the metadata-only
+  repair, not a re-embed.
+
+The cost is the one any added collection carries: every grounded answer's top
+five now competes with Page chunks. The before/after keyed eval is recorded on
+#208.
 
 ### What an anonymous visitor can retrieve
 
@@ -596,9 +676,19 @@ the free taste is exactly where grounding helps most.
 `src/hooks/corvusEmbeddings.ts` mirrors the `revalidateCollection.ts` pattern:
 an `afterChange` factory plus an `afterDelete` companion, per collection. It
 honours `context.disableRevalidate`, skips drafts, unpublished documents and
-autosave ticks, is bounded by `AbortSignal.timeout`, and **never throws** — a
+autosave ticks, bounds its provider and sync work by `AbortSignal.timeout`, and
+**never throws** — a
 provider outage must not fail a content save. Published-content edits therefore
 reach retrieval with no redeploy.
+
+One exception (#208): a draft saved over a published Post or Page keeps the
+live rows, and to tell it from an unpublish the hook reads the collection row
+on the save's own transaction (`payload.db.findOne`). If that read fails, the
+hook rethrows and the save fails, because the failure is inside the save's
+transaction and the save could not be trusted to commit. That read is not
+under the hook's deadline: a read on the transaction cannot be abandoned, since
+the save's COMMIT waits behind it on the same connection. The unpublish delete
+also runs before the deadline is created, as it did before #208.
 
 Two skip paths, and the second one is a security fix, not an optimisation:
 
@@ -689,6 +779,37 @@ rule and must be answered from the About-Corvus passage, never from Brandon's
 technology list. The acceptance criterion uses "What tech does **Brandon**
 use?", which is the right one — do not re-test the original phrasing and read a
 correct #167 answer as a #165 failure.
+
+### The work-history lead sentence (#236, 2026-11-25)
+
+Career questions retrieved the roles on one ask and project or repository notes
+on the next, and "Tell me about Brandon's work history and the companies he's
+worked at" declined for lack of grounding (staging, 2026-09-15). The cause was
+not missing data: each role embedded as bare `Company:` / `Title:` / `Period:`
+labels, which share almost no vocabulary with a career question. Over
+production's public corpus (posts, projects, uses, tech-stack, work-history,
+plus the repo fixtures) with `text-embedding-3-small`, those passages scored
+0.35–0.43 — level with the "Brandon Perfetti's Portfolio" project — and on the
+work-history question none cleared the 0.35 floor `[measured 2026-11-25; the
+experiment and its results are in the sansfaux agent store under
+evidence/2026-11-25-bp-236-work-history-retrieval/]`.
+
+`employmentHistoryLead` (`src/lib/ai/chunking.ts`) now opens each role with
+"Current|Past employer in his work history: <title> at <company>." On the same
+corpus, work history ranks first on all seven career-shaped queries measured,
+the current role ranks first for "where does he currently work", and the top
+five for "what does this site run on", "what tech does Brandon use" and "has
+Brandon built anything with Next.js" are unchanged. The wording is the finding:
+a lead about "Brandon" won the career questions but took four of five slots on
+"what tech does Brandon use", and a longer one leaked into the Next.js question.
+The docblock keeps the reasoning; a test keeps Brandon's name out of it.
+
+The text change moves `contentHash`, so the four rows re-embed on their next
+save or the weekly `corvus-backfill.yml`. What it does to live answers is a
+signed-in measurement on production after that run, recorded on #236. In the
+eval tier, a site-facts case asks the work-history question, and the
+adjacent-context precondition now expects the 2008–2011 question to retrieve
+real roles at the floor (none covering those years) instead of nothing.
 
 ### Public GitHub repos as a collection (#147)
 
@@ -996,8 +1117,10 @@ the rule.
 `[measured, production, 2026-11-20, v2026.11.20]` asked "Does it store my
 conversation?", Corvus said it had no verified retention policy and sent the
 visitor to the contact form. The answer is published on the privacy page, but
-that is a Page (Pages id 28) and Pages are not embedded (D8(b)), so retrieval
-can never return it.
+that was a Page (Pages id 28) and Pages were not embedded then (D8(b)), so
+retrieval could never return it. #208 now embeds the page's text too; the
+passage below stays, because it is offered by rule and so reaches a follow-up
+whose latest message carries no retention topic word, which retrieval cannot.
 
 **The retention facts live in `ABOUT_CORVUS_PRIVACY_PASSAGE`**
 (`src/lib/ai/aboutCorvus.ts`), a second code-owned snippet beside the About

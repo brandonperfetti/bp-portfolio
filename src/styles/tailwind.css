@@ -141,25 +141,36 @@
    * `-ring-hover` fill family keeps its corvus- name because it is a
    * different role.
    *
-   * NOT the hover step, deliberately. #202 is ONE role — the resting ink — and
-   * the six call sites that pair this token with a hover keep their literal
-   * `hover:text-teal-600` / `dark:hover:text-teal-300`
-   * (`ArticlesArchive/ArticlesArchiveView.tsx`, `VideoEmbed/Component.tsx`,
-   * `articles/ArticlesExplorer.tsx`, `cms/CMSLink.tsx`,
-   * `consent/CookieBanner.tsx`, `consent/CookieDialog.tsx`). Both FILL roles
-   * here have a hover token (--primary-hover, --secondary-hover); the ink role
-   * has the resting half only, and a `--link-accent-hover` is the obvious
-   * follow-up rather than something to smuggle in behind a token rename.
-   * Whoever writes it should also settle a PRE-EXISTING problem those six
-   * carry, which #202 neither introduced nor fixed: teal-700 → teal-600
-   * LIGHTENS in light mode, the direction `docs/STYLING.md` says is wrong.
-   *
-   * NOT the badge ink. `text-teal-700` also survives in three chip call sites
-   * (`ArticleMeta`, `TechCard`, `ArticlesExplorer`'s tag pill) where it sits
-   * on a `bg-teal-50` tint and inverts to teal-200/teal-300 on a teal-900/950
-   * tint — a different pair, on a different backdrop, and routing it here
-   * would repaint it. That role wants its own token; #202 is not a sweep. */
+   * Its hover step is --link-accent-hover, below. NOT the badge ink: that is
+   * --badge-accent, on its own tint, also below. */
   --link-accent: oklch(0.511 0.096 186.391); /* teal-700 */
+  /* LINK ACCENT HOVER (#231) — the hover step of the ink above, consumed as
+   * `hover:text-link-accent-hover`. Before this token the six links that
+   * hovered (`ArticlesArchiveView`, `VideoEmbed`, `ArticlesExplorer`'s
+   * "View the ⟨X⟩ section" link, `CMSLink`, `CookieBanner`, `CookieDialog`)
+   * carried the literal `hover:text-teal-600 dark:hover:text-teal-300`,
+   * whose light half LIGHTENED teal-700 -> teal-600 — and teal-600 on white
+   * is 3.66:1, so the hovered link fell under 1.4.3. Brandon decided on
+   * 2026-11-25 that link hover DARKENS in light mode, the same doctrine as
+   * --primary-hover, so:
+   *   teal-800 on white            7.53:1  >= 4.5  (light, was 3.66:1)
+   *   teal-300 on zinc-950         13.52:1 >= 4.5  (dark, unchanged)
+   *   teal-300 on zinc-900         12.05:1 >= 4.5  (dark card/popover)
+   * The rule the test pins is the one both themes share: hover moves AWAY
+   * from the page — darker on white, lighter on zinc-950 — so the hovered
+   * link always reads stronger than the resting one. */
+  --link-accent-hover: oklch(0.437 0.078 188.216); /* teal-800 */
+  /* BADGE ACCENT (#230) — the teal chip: ink on its own light tint, a
+   * different pair from the link ink because it never sits on the page
+   * directly. Consumed as `bg-badge-accent-surface text-badge-accent` by the
+   * three chips that carried the literal pair before (`ArticleMeta`'s topic
+   * chips, `ArticlesExplorer`'s tag pill, `TechCard`'s GitHub-signal badge).
+   * Light is unchanged from those literals:
+   *   teal-700 on teal-50          5.17:1  >= 4.5
+   * The light ink is the same step as --link-accent and still a separate
+   * token, because its floor is measured against the tint, not the page. */
+  --badge-accent: oklch(0.511 0.096 186.391); /* teal-700 */
+  --badge-accent-surface: oklch(0.984 0.014 180.72); /* teal-50 */
   /* Neutral roles — already the site's zinc ramp step for step before #190,
    * confirmed rather than moved. --accent is shadcn's HOVER SURFACE (the
    * `outline`/`ghost` hover pair), not the brand accent: the brand accent is
@@ -232,6 +243,20 @@
   /* Ink accent, and unlike --primary it DOES invert — see the light block for
    * why the fill role cannot serve as the text role. 10.66:1 on the page. */
   --link-accent: oklch(0.777 0.152 181.912); /* teal-400 */
+  /* Hover step: lighter here, which is AWAY from the dark page — the same
+   * rule as light's darker step. Unchanged from the literal it replaces. */
+  --link-accent-hover: oklch(0.855 0.138 181.071); /* teal-300 */
+  /* Badge pair, dark. The three chips disagreed before #230: two painted
+   * teal-200 on teal-900/40, `TechCard` painted teal-300 on teal-950/50. They
+   * are unified on the majority pair, a deliberate visual change for
+   * `TechCard` only. The tint is the one alpha value in this block — it is
+   * teal-900 at 40%, exactly what `bg-teal-900/40` resolved to — so the test
+   * composites it over the surface the chip sits on before measuring:
+   *   teal-200 on teal-900/40 over zinc-950   12.82:1  >= 4.5  (page)
+   *   teal-200 on teal-900/40 over zinc-900   11.47:1  >= 4.5  (card)
+   * (`TechCard` was teal-300 on teal-950/50 over its zinc-900 card, 11.07:1.) */
+  --badge-accent: oklch(0.91 0.096 180.426); /* teal-200 */
+  --badge-accent-surface: oklch(0.386 0.063 188.416 / 0.4); /* teal-900/40 */
   --secondary: oklch(0.274 0.006 286.033); /* zinc-800 */
   --secondary-foreground: oklch(0.985 0 0); /* zinc-50 */
   /* See the light block for the doctrine. One notch down the same ramp:
@@ -284,6 +309,9 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-primary-hover: var(--primary-hover);
   --color-link-accent: var(--link-accent);
+  --color-link-accent-hover: var(--link-accent-hover);
+  --color-badge-accent: var(--badge-accent);
+  --color-badge-accent-surface: var(--badge-accent-surface);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary-hover: var(--secondary-hover);

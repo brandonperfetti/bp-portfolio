@@ -25,7 +25,8 @@ export default defineConfig({
    *
    * 120s, sized from measurement (2026-09-15, #138, the release-235 CI fix),
    * pinned by `scripts/eval-harness.test.ts`. At reasoning effort `low` on the
-   * harness's default `gpt-5-mini`, the safety block's essay refusal ran
+   * harness's then-default `gpt-5-mini` (`gpt-5.6-luna` since #238), the
+   * safety block's essay refusal ran
    * 27.0–32.7s per single attempt [measured: seven single attempts — five
    * probe draws, two harness runs], and the two-attempt path (first attempt
    * truncated at the 2048 budget, one retry) completed in 63.6s, 70.0s and

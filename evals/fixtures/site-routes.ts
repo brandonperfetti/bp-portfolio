@@ -9,10 +9,11 @@
  * claim is unverifiable.
  *
  * *"Did this answer invent a page on this site?"* is a question about the
- * SITE — and the site is bigger than the corpus. Pages are deliberately not
- * embedded (#82 decision D8(b)) and the four flat collections have no per-doc
- * route, so `/about` and `/articles` are real, linkable, published pages with
- * no chunk behind them.
+ * SITE — and the site is bigger than the corpus. Most Pages carry no chunk —
+ * #208 embeds only those with enough text, and this fixture corpus holds one,
+ * `/work/brytecore` — and the four flat collections have no per-doc route, so
+ * `/about` and `/articles` are real, linkable, published pages with no chunk
+ * behind them.
  *
  * Conflating the two is what made `cites-a-real-source-url` punish the exact
  * behaviour the persona prompt asks for. `CORVUS_SYSTEM_PROMPT` tells Corvus

@@ -1,17 +1,37 @@
 # Documentation standards
 
-## TSDoc (enforced)
+## TSDoc
 
-- Every exported function, React component, hook, Payload
-  collection/field/hook, and non-obvious utility carries a TSDoc comment:
-  intent first, then params/returns where non-trivial, `@remarks` for
-  gotchas and rationale.
-- `eslint-plugin-tsdoc` validates syntax in CI. The rule stays severity
-  `warn` so `eslint --fix` at commit time doesn't block a work-in-progress
-  doc comment, but `pnpm lint` runs `--max-warnings=0` — so any tsdoc
-  warning fails pre-push and CI. Fix the comment; don't suppress it.
-- Document **why**, not what: tradeoffs, invariants, failure modes,
-  cross-file contracts (e.g. "repoCount reads as at-least-N").
+The standard has two halves, and only one of them is a gate.
+
+**Enforced: syntax.** `eslint-plugin-tsdoc`'s `tsdoc/syntax` rule checks
+every doc comment that exists in a `.ts`/`.tsx` file. The rule stays severity
+`warn` so `eslint --fix` at commit time doesn't block a work-in-progress doc
+comment, but `pnpm lint` runs `--max-warnings=0`, so any tsdoc warning fails
+pre-push and CI. Fix the comment; don't suppress it.
+
+**Convention: presence.** Every exported function, React component, hook,
+Payload collection/field/hook, and non-obvious utility carries a TSDoc
+comment: intent first, then params/returns where non-trivial, `@remarks` for
+gotchas and rationale. No rule checks this. An export with no doc comment
+gives the syntax rule nothing to validate, so it passes lint, pre-push and CI.
+Review holds this half (#240).
+
+Whatever the comment says, document **why**, not what: tradeoffs,
+invariants, failure modes, cross-file contracts (e.g. "repoCount reads as
+at-least-N").
+
+**Relationship to sans-faux-studios.** sans-faux-studios adopts this
+standard and adds a lint rule that fails on an exported symbol with no doc
+comment
+([brandonperfetti/sans-faux-studios#41](https://github.com/brandonperfetti/sans-faux-studios/issues/41)),
+so it enforces both halves where this repo enforces syntax only. Its rule
+shipped in
+[sans-faux-studios#53](https://github.com/brandonperfetti/sans-faux-studios/pull/53):
+`jsdoc/require-jsdoc` scoped to exported declarations, `jsdoc/require-description`,
+and a ban on `export *`, which the presence rule cannot see. Once that rule is
+proven on its tree, the cost of adopting it here is measured and presence
+enforcement is reconsidered on that measurement (#240).
 
 ## Inline comments
 

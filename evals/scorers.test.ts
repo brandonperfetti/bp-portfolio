@@ -156,6 +156,7 @@ describe('fixture corpus', () => {
       '/projects',
       '/tech',
       '/uses',
+      '/work/brytecore',
     ])
   })
 
@@ -163,6 +164,11 @@ describe('fixture corpus', () => {
     // The fixtures ship in a PUBLIC repo. A draft or gated record must never
     // be added here, and this is the assertion that says so out loud.
     for (const { collection, doc } of SITE_FIXTURE_DOCS) {
+      if (collection === 'pages') {
+        // A Page has no gate of its own; it is retrievable once published (#208).
+        expect(doc._status).toBe('published')
+        continue
+      }
       if (collection !== 'posts') continue
       expect(doc._status).toBe('published')
       expect((doc.access as { visibility?: string }).visibility).toBe('public')
@@ -247,8 +253,28 @@ describe('eval retrieval preconditions', () => {
   it.each(ADJACENT_CONTEXT_CASES)(
     'hands over real but unhelpful context for: $input',
     ({ input }) => {
-      expect(createFixtureRetriever()(input)).toEqual([])
       expect(createFixtureRetriever({ floor: 0 })(input).length).toBe(5)
+
+      // The block runs floorless, so what the floor alone would return only
+      // says how hard the trap is. Since #236 a work-history chunk opens with
+      // "… employer in his work history", so the career question below clears
+      // the floor on its own, and the trap
+      // gets harder, not weaker: every passage is a real role, and none of
+      // them covers the years asked about. Every other case still retrieves
+      // nothing at the floor.
+      const atFloor = createFixtureRetriever()(input)
+      if (!/between 2008 and 2011/.test(input)) {
+        expect(atFloor).toEqual([])
+        return
+      }
+      expect(atFloor.length).toBeGreaterThan(0)
+      for (const snippet of atFloor) {
+        const start = /Period: (\d{4})/.exec(snippet.content)?.[1]
+        expect(snippet.content, 'only real roles, none in 2008–2011').toMatch(
+          /^(Current|Past) employer in his work history:/,
+        )
+        expect(Number(start)).toBeGreaterThanOrEqual(2012)
+      }
     },
   )
 

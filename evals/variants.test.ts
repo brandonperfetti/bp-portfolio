@@ -45,8 +45,8 @@ function lastModelId(): string {
 describe('matrix variants', () => {
   it('compares exactly the two models #82 asks about', () => {
     expect(MATRIX_VARIANTS.map((variant) => variant.name)).toEqual([
-      'gpt-5-mini',
       'gpt-5.6-luna',
+      'gpt-5-mini',
     ])
     // The reported name IS the model id: the numbers posted to the ticket then
     // say which model produced them with no lookup table in between.
@@ -77,7 +77,7 @@ describe('eval helper model plumbing', () => {
 
     await askCorvus('who are you?')
 
-    expect(lastModelId()).toBe('gpt-5-mini')
+    expect(lastModelId()).toBe('gpt-5.6-luna')
     expect(generateTextMock.mock.calls.at(-1)?.[0].system).toBe(
       CORVUS_SYSTEM_PROMPT,
     )
@@ -121,7 +121,7 @@ describe('eval helper model plumbing', () => {
 
     await askCorvusGrounded('what does the site say?', { retrieve: () => [] })
 
-    expect(lastModelId()).toBe('gpt-5-mini')
+    expect(lastModelId()).toBe('gpt-5.6-luna')
     // An empty retrieval is still the untouched persona prompt (#82 Batch 3's
     // byte-identity contract), and adding a model option did not disturb it.
     expect(generateTextMock.mock.calls.at(-1)?.[0].system).toBe(

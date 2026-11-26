@@ -10,6 +10,8 @@ import {
   vi,
 } from 'vitest'
 
+import Link from 'next/link'
+
 import { TechExplorer } from '@/components/tech/TechExplorer'
 import type { CmsEntityItem } from '@/lib/cms/types'
 
@@ -606,6 +608,49 @@ describe('TechExplorer focused input and URL changes (#302, release finding F1)'
 
     expect(box).toHaveValue('Tech 1')
     await advance(700)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * The page as Next renders it on a link click to the URL already showing
+   * (#307): the explorer beside a link to `/tech`. `next/link` stops the
+   * browser's own navigation and routes in-app; the suite's `next/link` mock
+   * renders a bare `<a>`, so the `onClick` here stands in for that.
+   */
+  function PageWithSameUrlLink() {
+    return (
+      <>
+        <Link href="/tech" onClick={(event) => event.preventDefault()}>
+          All tech
+        </Link>
+        <TechExplorer items={focusItems} />
+      </>
+    )
+  }
+
+  it('a link to the URL already showing, clicked while a write is pending, puts the input back in step (#307)', async () => {
+    const user = useFakeClock()
+    const { rerender } = render(<PageWithSameUrlLink />)
+    const box = screen.getByRole('searchbox', { name: 'Search technologies' })
+
+    await user.type(box, 'Tech 2')
+    await advance(350)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+    const showing = searchParamsMock
+
+    await user.click(screen.getByRole('link', { name: 'All tech' }))
+    // Measured on a production build in Chromium and WebKit (#307): the link's
+    // navigation supersedes the pending replace, the URL stays `/tech`, and
+    // Next hands back the same memoised params object, so no URL change
+    // reaches the explorer.
+    inFlight = []
+    act(() => rerender(<PageWithSameUrlLink />))
+    expect(searchParamsMock).toBe(showing)
+
+    expect(box).toHaveValue('')
+    await advance(700)
+    expect(screen.getByText('Tech 1')).toBeInTheDocument()
+    expect(screen.getByText('Tech 3')).toBeInTheDocument()
     expect(replaceMock).toHaveBeenCalledTimes(1)
   })
 })

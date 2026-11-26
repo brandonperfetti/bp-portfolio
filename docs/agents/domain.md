@@ -4,8 +4,9 @@ How the engineering skills should consume this repo's domain documentation when 
 
 ## Layout: single-context
 
-This repo is **single-context**: one `GLOSSARY.md` at the repo root and one `docs/adr/` directory,
-neither of which exists yet — see "Where they would live" below.
+This repo is **single-context**: one `GLOSSARY.md` at the repo root and one `docs/adr/` directory.
+`GLOSSARY.md` exists, seeded with a CMS section for the CMS Domain Agent (#383); `docs/adr/` does not
+exist yet. See "Where they live" below.
 
 ### The `pnpm-workspace.yaml` here is not a monorepo signal
 
@@ -39,17 +40,17 @@ the strength of the workspace file alone; re-run the three checks above first.
 - **`GLOSSARY-MAP.md`** at the repo root if it exists: it points at one `GLOSSARY.md` per context. Read each one relevant to the topic.
 - **`docs/adr/`**: read ADRs that touch the area you're about to work in. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
 
-If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
+If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved, and adds new sections to `GLOSSARY.md` the same way. The CMS section is the one exception: it was seeded up front, on Brandon's decision of 2026-11-25 on #383, because the CMS Domain Agent (`docs/agents/cms-domain.md`) reads it.
 
-## Where they would live
+## Where they live
 
 ```
 /
-├── GLOSSARY.md                        ← glossary (does not exist yet)
+├── GLOSSARY.md                        ← glossary (CMS section seeded, #383)
 ├── docs/
 │   ├── adr/                           ← ADRs (does not exist yet)
 │   │   └── 0001-<slug>.md
-│   ├── agents/                        ← this directory
+│   ├── agents/                        ← this directory, and the CMS Domain Agent's brief
 │   └── ARCHITECTURE.md, AI.md, …      ← the existing subject-matter docs
 └── src/
 ```
