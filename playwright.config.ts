@@ -1,8 +1,17 @@
 import { defineConfig, devices } from '@playwright/test'
 
 import { GOOGLE_HOSTS, TAG_SCRIPT_HOST } from './e2e/support/google-hosts'
+import { portFor } from './scripts/lib/local-ports.mjs'
 
 const isCi = Boolean(process.env.CI)
+
+/**
+ * The origin the suite drives: BP Portfolio's e2e port, `6001` unless
+ * `BP_E2E_PORT` overrides it within the 6000–6029 family (#285, README.md §
+ * Local ports). `127.0.0.1`, not `localhost`, is why `next.config.mjs`
+ * carries `allowedDevOrigins: ['127.0.0.1']` (#119).
+ */
+const e2eOrigin = `http://127.0.0.1:${portFor('e2e')}`
 
 /**
  * Hosts Google's tag and its measurement endpoints are served from, made
@@ -54,7 +63,7 @@ export default defineConfig({
   workers: isCi ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://127.0.0.1:3000',
+    baseURL: e2eOrigin,
     trace: 'on-first-retry',
     // Deterministic consent geo (#114 mechanism B). The suite runs without a
     // Vercel edge, so `src/proxy.ts` sees no `x-vercel-ip-*` headers and
@@ -93,9 +102,15 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: isCi ? 'pnpm start' : 'pnpm dev',
-    url: 'http://127.0.0.1:3000',
-    reuseExistingServer: !isCi,
+    // `scripts/local-server.mjs e2e` serves `next start` under CI and
+    // `next dev` otherwise, on the e2e port passed explicitly, after refusing
+    // an occupied port with a message that names the override.
+    command: 'node scripts/local-server.mjs e2e',
+    url: e2eOrigin,
+    // Never reuse (#285): whatever already answers this port is not known to
+    // be this checkout's server, so Playwright fails with "already used"
+    // instead of running the suite against it.
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 })

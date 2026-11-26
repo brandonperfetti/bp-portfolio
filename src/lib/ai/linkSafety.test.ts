@@ -60,11 +60,11 @@ describe('isInternalCorvusLink', () => {
   })
 
   it.each([
-    'http://localhost:3000/tech',
+    'http://localhost:6002/tech',
     'http://127.0.0.1/tech',
     // The Playwright `use.baseURL` origin (docs/TESTING.md); inherited from
     // the shared host set in `link-utils.ts`.
-    'http://127.0.0.1:3000/tech',
+    'http://127.0.0.1:6001/tech',
   ])('treats the dev/e2e host %s as internal', (href) => {
     expect(isInternalCorvusLink(href)).toBe(true)
   })
@@ -139,7 +139,7 @@ describe('isInternalCorvusLink', () => {
     process.env.NEXT_PUBLIC_SITE_URL = 'not a url'
 
     expect(isInternalCorvusLink('/tech')).toBe(true)
-    expect(isInternalCorvusLink('http://localhost:3000/tech')).toBe(true)
+    expect(isInternalCorvusLink('http://localhost:6002/tech')).toBe(true)
     expect(isInternalCorvusLink('https://vercel.com/docs')).toBe(false)
   })
 })

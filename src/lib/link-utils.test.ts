@@ -4,7 +4,10 @@ import {
   getExternalLinkProps,
   isExternalHref,
   isInternalHost,
+  LOCAL_PORT_FAMILY,
 } from '@/lib/link-utils'
+
+import { PORT_FAMILY } from '../../scripts/lib/local-ports.mjs'
 
 /**
  * `src/lib/link-utils.ts` had no tests. It acquired them when #144 pulled the
@@ -44,14 +47,31 @@ describe('isInternalHost', () => {
     expect(isInternalHost('example-site.test')).toBe(false)
   })
 
-  it.each(['localhost', 'localhost:3000', '127.0.0.1', '127.0.0.1:3000'])(
-    'accepts the local/e2e host %s',
+  it.each([
+    'localhost',
+    '127.0.0.1',
+    // `pnpm dev`'s default port (#285).
+    'localhost:6002',
+    // The Playwright `use.baseURL` origin; it was missing before the set was
+    // shared.
+    '127.0.0.1:6001',
+    // Both ends of the family a worktree override may use.
+    'localhost:6000',
+    '127.0.0.1:6029',
+  ])('accepts the local/e2e host %s', (host) => {
+    expect(isInternalHost(host)).toBe(true)
+  })
+
+  it.each(['localhost:3000', '127.0.0.1:5999', 'localhost:6030'])(
+    'rejects the local host %s outside the 6000 family',
     (host) => {
-      // `127.0.0.1:3000` is the Playwright `use.baseURL` origin
-      // (docs/TESTING.md); it was missing before the set was shared.
-      expect(isInternalHost(host)).toBe(true)
+      expect(isInternalHost(host)).toBe(false)
     },
   )
+
+  it('mirrors the launchers’ port family', () => {
+    expect(LOCAL_PORT_FAMILY).toEqual(PORT_FAMILY)
+  })
 
   it.each([
     'vercel.com',
@@ -65,7 +85,7 @@ describe('isInternalHost', () => {
   it('keeps the local defaults when NEXT_PUBLIC_SITE_URL is malformed', () => {
     process.env.NEXT_PUBLIC_SITE_URL = 'not a url'
 
-    expect(isInternalHost('localhost:3000')).toBe(true)
+    expect(isInternalHost('localhost:6002')).toBe(true)
     expect(isInternalHost('vercel.com')).toBe(false)
   })
 })
