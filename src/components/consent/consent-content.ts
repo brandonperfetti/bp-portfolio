@@ -159,7 +159,7 @@ export const DEFAULT_CONSENT_CONFIG: ConsentConfig = {
       // not because the site needs it to work, so the old "Required for the
       // site to work" line is gone.
       subtitle:
-        'Always on, whatever you choose here. Clerk, for signing in: its script loads on every page and sets a couple of cookies even if you never sign in. Cloudflare Turnstile, a bot check that loads only once you start filling in a form. Sentry, for error reports: it gets no name, email or account, only a random id that lasts as long as your browser tab.',
+        'Always on, whatever you choose here. Clerk, for signing in: its script loads on every page and sets a couple of cookies even if you never sign in. Cloudflare Turnstile, a bot check that loads only once you start filling in a form. Sentry, for error reports: it gets the error and the page it happened on, but no name, email or account, and its only id is a random one that lasts as long as your browser tab.',
     },
     {
       key: 'analytics',

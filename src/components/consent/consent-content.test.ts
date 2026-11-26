@@ -63,6 +63,8 @@ describe('DEFAULT_CONSENT_CONFIG (today’s copy + UX)', () => {
     expect(essential.subtitle).toContain('once you start filling in a form')
     expect(essential.subtitle).toContain('Sentry')
     expect(essential.subtitle).toContain('no name, email or account')
+    // The id is not all Sentry gets; the error and its page go too.
+    expect(essential.subtitle).toContain('the error and the page')
     // Not every one of them is needed for the site to work.
     expect(essential.subtitle).not.toContain('Required for the site to work')
   })
