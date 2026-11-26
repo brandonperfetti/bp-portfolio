@@ -1039,10 +1039,11 @@ const SOURCE_FILE = new RegExp(
 const BARE_SCRIPT_FILE = /\b[\w-]+\.[cm]?[jt]sx?\b/g
 
 /**
- * A Markdown file inside a directory (`checklists/review.md`): a repository
- * path, not a site page, which never ends in `.md` (#193 review).
+ * A Markdown file, bare (`README.md`) or inside a directory
+ * (`checklists/review.md`): a repository file, not a site page, which never
+ * ends in `.md` (#193 review; bare names, #465 stand-in).
  */
-const MARKDOWN_PATH = /\b[\w.-]+\/[\w./-]*[\w-]\.md\b/i
+const MARKDOWN_PATH = /\b(?:[\w.-]+\/[\w./-]*)?[\w-]+\.md\b/i
 
 /**
  * A definition written out as code: a declared function or class with its
