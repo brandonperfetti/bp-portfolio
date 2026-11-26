@@ -291,7 +291,10 @@ type Doc = {
  * the store but the sitemap and the page cache never see them.
  * `stalePageCache` keeps the sitemap honest but never evicts a cached page,
  * the shape of #274's "unpublished page kept serving 200 HIT".
- * `redirectsClosed` answers the redirects read with a 403.
+ * `redirectsClosed` answers the redirects read with a 403;
+ * `redirectsCloseAfterWrite` does so only once a probe was created.
+ * `createWithoutId` commits a REST create but answers with no id.
+ * `onRequest` sees each request before it is answered.
  */
 function fakeSite({
   brokenPurge = false,
@@ -301,6 +304,9 @@ function fakeSite({
   htmlSitemap = false,
   truncatedSitemap = false,
   leftovers = [] as Doc[],
+  redirectsCloseAfterWrite = false,
+  createWithoutId = false,
+  onRequest = (_method: string, _path: string, _body: string) => {},
 } = {}) {
   const docs = new Map<number, Doc>()
   for (const d of leftovers) docs.set(d.id, d)
@@ -347,6 +353,7 @@ function fakeSite({
     if (typeof init.body === 'string') requestBodies.push(init.body)
     const auth = new Headers(init.headers).get('authorization') ?? ''
     const path = url.pathname
+    onRequest(method, path, typeof init.body === 'string' ? init.body : '')
 
     if (path === '/sitemap.xml' && truncatedSitemap)
       return new Response('<urlset><url><loc>https://site.test/</loc></url>', {
@@ -378,7 +385,9 @@ function fakeSite({
     }
     if (path === '/llms.txt') return new Response('# llms', { status: 200 })
     if (path === '/api/redirects')
-      return redirectsClosed ? json(403, {}) : json(200, { docs: [] })
+      return redirectsClosed || (redirectsCloseAfterWrite && nextId > 100)
+        ? json(403, {})
+        : json(200, { docs: [] })
     if (path === '/api/users/login') {
       const body = JSON.parse(String(init.body))
       return body.password === SECRET_PASSWORD
@@ -406,7 +415,10 @@ function fakeSite({
           status: 'draft',
         }
         docs.set(doc.id, doc)
-        return json(201, { doc: { id: doc.id } })
+        return json(
+          201,
+          createWithoutId ? { doc: {} } : { doc: { id: doc.id } },
+        )
       }
       const doc = id === null ? undefined : docs.get(id)
       if (!doc || doc.kind !== kind) return json(404, {})
@@ -667,6 +679,90 @@ describe('runProbe', () => {
       lines.filter((l) => /error +evidence write failed/.test(l)),
     ).toHaveLength(1)
     expect(exitCodeFor(result)).toBe(EXIT.fail)
+  })
+
+  it('adopts a REST draft by slug when the create answers with no id', async () => {
+    const site = fakeSite({ createWithoutId: true })
+    const { result } = await run('rest', site)
+    expect(site.calls).not.toContain('PATCH /api/pages/undefined')
+    expect(site.docs.size).toBe(0)
+    expect(result.cleanup).toBe('PASS')
+    expect(result.error).toMatch(/no document id/)
+    expect(exitCodeFor(result)).toBe(EXIT.fail)
+  })
+
+  it('starts no new publish after an interrupt during the page publish', async () => {
+    const controller = new AbortController()
+    const site = fakeSite({
+      onRequest: (method, path, body) => {
+        if (method === 'PATCH' && path.startsWith('/api/pages/'))
+          if (body.includes('published'))
+            controller.abort(new Error('interrupted'))
+      },
+    })
+    const { result } = await run('rest', site, ['--article'], controller.signal)
+    expect(site.calls.filter((c) => /^PATCH \/api\/posts\//.test(c))).toEqual(
+      [],
+    )
+    expect(site.docs.size).toBe(0)
+    expect(result.error).toMatch(/interrupted/)
+    expect(exitCodeFor(result)).toBe(EXIT.fail)
+  })
+
+  it('fails cleanup when the final redirect lookup cannot be read', async () => {
+    const site = fakeSite({ redirectsCloseAfterWrite: true })
+    const { result, lines } = await run('rest', site)
+    expect(site.docs.size).toBe(0)
+    expect(result.cleanup).toBe('FAIL')
+    expect(lines.some((l) => /redirects not readable/.test(l))).toBe(true)
+    expect(exitCodeFor(result)).toBe(EXIT.cleanupIncomplete)
+  })
+
+  it('returns its result when a final evidence write fails', async () => {
+    const site = fakeSite()
+    const { result } = await run('rest', site, [], undefined, (e) => {
+      const original = e.file
+      e.file = (name: string, text: string) => {
+        if (name === 'locs-final.txt' || name === 'summary.json')
+          throw new Error('disk full')
+        original(name, text)
+      }
+    })
+    expect(site.docs.size).toBe(0)
+    expect(result.cleanup).toBe('PASS')
+    expect(result.error).toBe('evidence write failed: disk full')
+    expect(exitCodeFor(result)).toBe(EXIT.fail)
+  })
+
+  it('notes a warmed probe URL that showed no cache hit, without failing', async () => {
+    const base = fakeSite()
+    const site = {
+      ...base,
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const res = await base.fetch(input, init)
+        if (!new URL(String(input)).pathname.startsWith('/zz-')) return res
+        return new Response(await res.text(), { status: res.status })
+      }) as typeof fetch,
+    }
+    const { result } = await run('rest', site)
+    expect(result.notes.join(' ')).toMatch(/showed no cache hit when warmed/)
+    expect(exitCodeFor(result)).toBe(EXIT.pass)
+  })
+
+  it('reports a failed /llms.txt read as unavailable, not as lacking the article', async () => {
+    const base = fakeSite()
+    const site = {
+      ...base,
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) =>
+        new URL(String(input)).pathname === '/llms.txt'
+          ? new Response('busy', { status: 503 })
+          : base.fetch(input, init)) as typeof fetch,
+    }
+    const { result } = await run('rest', site, ['--article'])
+    expect(result.llms.join(' ')).toMatch(
+      /function read was unavailable \(503\)/,
+    )
+    expect(result.llms.join(' ')).not.toMatch(/lacks/)
   })
 
   it('refuses a truncated sitemap with no closing </urlset>', async () => {

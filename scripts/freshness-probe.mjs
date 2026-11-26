@@ -37,7 +37,14 @@ import {
   scrubEvidence,
 } from './lib/freshness-probe.mjs'
 
-const log = (/** @type {string} */ line) => process.stdout.write(`${line}\n`)
+/** Secrets to redact from console output; filled once credentials are read. */
+/** @type {string[]} */
+const redact = []
+/** Replaces every known secret, so server text echoed in a log line cannot print one. */
+const clean = (/** @type {string} */ text) =>
+  redact.reduce((t, secret) => t.split(secret).join('[redacted]'), text)
+const log = (/** @type {string} */ line) =>
+  process.stdout.write(`${clean(line)}\n`)
 
 /** Set once the probe may have written: a crash after it may leave probes. */
 let mayHaveWritten = false
@@ -53,6 +60,11 @@ async function main() {
     ? readFileSync('.env.local', 'utf8')
     : null
   const creds = readCredentials(plan, process.env, envLocal)
+  // The email is an identifier, not a secret, and may appear in a public body.
+  const secrets = Object.entries(creds)
+    .filter(([name, value]) => name !== 'email' && value)
+    .map(([, value]) => value)
+  redact.push(...secrets)
   const evidence = createEvidence(plan.evidenceDir)
   const extraHeaders = creds.bypass ? { [BYPASS_HEADER]: creds.bypass } : {}
   log(
@@ -99,10 +111,8 @@ async function main() {
     })
   } finally {
     await writer.close()
-    // The email is an identifier, not a secret, and may appear in a public body.
-    const secrets = Object.entries(creds)
-      .filter(([name]) => name !== 'email')
-      .map(([, value]) => value)
+    process.off('SIGINT', onSignal)
+    process.off('SIGTERM', onSignal)
     const scrubbed = scrubEvidence(evidence.dir, secrets)
     if (scrubbed.length) {
       log(
@@ -132,21 +142,33 @@ async function main() {
   return code
 }
 
+/**
+ * Exits once stdout and stderr have flushed: on a pipe `process.exit` can
+ * drop pending writes, the final verdict among them.
+ */
+function exitAfterFlush(/** @type {number} */ code) {
+  process.exitCode = code
+  process.stdout.write('', () =>
+    process.stderr.write('', () => process.exit(code)),
+  )
+}
+
 main().then(
-  (code) => process.exit(code),
+  (code) => exitAfterFlush(code),
   (error) => {
     if (error instanceof RefusalError) {
-      process.stderr.write(`refused: ${error.message}\n\n${USAGE}\n`)
-      process.exit(EXIT.refused)
+      process.stderr.write(`refused: ${clean(error.message)}\n\n${USAGE}\n`)
+      exitAfterFlush(EXIT.refused)
+      return
     }
     process.stderr.write(
-      `freshness probe crashed: ${error instanceof Error ? error.message : String(error)}\n`,
+      `freshness probe crashed: ${clean(error instanceof Error ? error.message : String(error))}\n`,
     )
     process.stderr.write(
       mayHaveWritten
         ? 'Probes may remain: look for zz-freshness-probe- pages and posts.\n'
         : 'Nothing was written.\n',
     )
-    process.exit(mayHaveWritten ? EXIT.cleanupIncomplete : EXIT.fail)
+    exitAfterFlush(mayHaveWritten ? EXIT.cleanupIncomplete : EXIT.fail)
   },
 )

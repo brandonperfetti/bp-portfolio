@@ -79,6 +79,12 @@ export const BYPASS_ENV = 'VERCEL_AUTOMATION_BYPASS_SECRET'
 /** The request header {@link BYPASS_ENV} travels in; never recorded. */
 export const BYPASS_HEADER = 'x-vercel-protection-bypass'
 
+/**
+ * Cache headers that show a warmed probe URL served a resident copy:
+ * `x-nextjs-cache` on a local `next start`, `x-vercel-cache` on a deployment.
+ */
+export const CACHE_HIT = /\b(HIT|STALE|PRERENDER)\b/
+
 /** Response headers each read records. Anything else (notably `set-cookie`) is never written. */
 export const RECORDED_HEADERS = Object.freeze([
   'cache-control',
@@ -126,8 +132,10 @@ Options:
 Credentials are script-only, per target (process env, else .env.local):
   rest: CMS_PROBE_EMAIL_<T>, CMS_PROBE_PASSWORD_<T>
   mcp:  CMS_PROBE_MCP_API_KEY_<T>
-  where <T> is LOCAL, STAGING or PRODUCTION. Remote targets also send
-  ${BYPASS_ENV} as ${BYPASS_HEADER} when it is set (required on *.vercel.app).`
+  where <T> is LOCAL, STAGING or PRODUCTION. Staging alone also sends
+  ${BYPASS_ENV} as ${BYPASS_HEADER} when it is set; a staging
+  bp-portfolio-git-<branch> alias on *.vercel.app requires it. Production
+  never reads or sends it.`
 
 /**
  * Parses the command line. Pure: it never reads the environment.
@@ -618,7 +626,12 @@ export async function createRestWriter({
         token,
       )
       ok(r, `create ${kind}`)
-      return r.json.doc.id
+      const id = r.json?.doc?.id
+      // No usable id: throw, so the run keeps a null id and cleanup adopts
+      // the draft by its slug instead of publishing to `/undefined`.
+      if (typeof id !== 'number' && typeof id !== 'string')
+        throw new Error(`create ${kind}: response carried no document id`)
+      return id
     },
     async setStatus(kind, id, status) {
       ok(
@@ -967,6 +980,27 @@ export async function runProbe({
     unchecked: /** @type {string[]} */ ([]),
     error: /** @type {string | null} */ (null),
   }
+  /**
+   * Runs one evidence append. A failed append never masks the operation it
+   * records or stops the run: the first one is logged and added to the
+   * run's error, beside any error already there, so the run cannot exit 0
+   * without its evidence and short evidence is always explained.
+   */
+  let evidenceFailed = false
+  const keep = (/** @type {() => void} */ append) => {
+    try {
+      append()
+    } catch (error) {
+      if (evidenceFailed) return
+      evidenceFailed = true
+      const message = `evidence write failed: ${error instanceof Error ? error.message : String(error)}`
+      result.error = result.error ? `${result.error}; ${message}` : message
+      log(`${utc()}  error      ${message}`)
+    }
+  }
+  const record = (/** @type {string[]} */ cells) =>
+    keep(() => evidence.write(cells))
+
   let reads = 0
   /** @type {string[]} */
   let baseline = []
@@ -1008,24 +1042,28 @@ export async function runProbe({
     const present = locs
       ? probes.filter((p) => locs.includes(p.path)).map((p) => p.kind)
       : []
-    evidence.read([
-      at,
-      phase,
-      label,
-      url,
-      status,
-      ...RECORDED_HEADERS.map((h) => headers[h]),
-      locs ? String(locs.length) : '',
-      locs ? present.join(',') || 'none' : '',
-    ])
-    evidence.raw(
-      `${phase}-${label}`,
-      [
-        `${status} ${url}`,
-        `utc: ${at}`,
-        ...RECORDED_HEADERS.map((h) => `${h}: ${headers[h]}`),
-      ].join('\n') + '\n',
-      body,
+    keep(() =>
+      evidence.read([
+        at,
+        phase,
+        label,
+        url,
+        status,
+        ...RECORDED_HEADERS.map((h) => headers[h]),
+        locs ? String(locs.length) : '',
+        locs ? present.join(',') || 'none' : '',
+      ]),
+    )
+    keep(() =>
+      evidence.raw(
+        `${phase}-${label}`,
+        [
+          `${status} ${url}`,
+          `utc: ${at}`,
+          ...RECORDED_HEADERS.map((h) => `${h}: ${headers[h]}`),
+        ].join('\n') + '\n',
+        body,
+      ),
     )
     log(
       [
@@ -1045,25 +1083,13 @@ export async function runProbe({
         .filter(Boolean)
         .join('  '),
     )
-    return { status, body, locs, present }
-  }
-
-  /**
-   * Appends a writes.tsv row. A failed append never masks the write it
-   * records: the first one is logged and added to the run's error, beside
-   * any error already there, so the run cannot exit 0 without its evidence
-   * and a short writes.tsv is always explained.
-   */
-  let evidenceFailed = false
-  const record = (/** @type {string[]} */ cells) => {
-    try {
-      evidence.write(cells)
-    } catch (error) {
-      if (evidenceFailed) return
-      evidenceFailed = true
-      const message = `evidence write failed: ${error instanceof Error ? error.message : String(error)}`
-      result.error = result.error ? `${result.error}; ${message}` : message
-      log(`${utc()}  error      ${message}`)
+    return {
+      status,
+      body,
+      locs,
+      present,
+      cache: headers['x-vercel-cache'] ?? '',
+      nextCache: headers['x-nextjs-cache'] ?? '',
     }
   }
 
@@ -1135,8 +1161,15 @@ export async function runProbe({
       `/llms.txt?freshness-probe=${reads}`,
     )
     const plain = await read(phase, 'llms-plain', '/llms.txt')
+    // A failed read says nothing about the article, so it is not "lacks".
+    const has = (/** @type {{ status: string, body: string }} */ r) =>
+      r.status !== '200'
+        ? `was unavailable (${r.status})`
+        : r.body.includes(post.slug)
+          ? 'has the article'
+          : 'lacks the article'
     result.llms.push(
-      `${phase}: function read ${busted.body.includes(post.slug) ? 'has' : 'lacks'} the article; plain URL ${plain.body.includes(post.slug) ? 'has' : 'lacks'} it`,
+      `${phase}: function read ${has(busted)}; plain URL ${has(plain)}`,
     )
   }
 
@@ -1167,6 +1200,8 @@ export async function runProbe({
     stopIfAborted()
     wrote = true
     for (const p of probes) {
+      // An interrupt stops every new foreground write; cleanup still runs.
+      stopIfAborted()
       p.attempted = true
       // The id is kept the moment the create resolves, before its evidence
       // row is written, so cleanup never depends on a search for it.
@@ -1178,8 +1213,8 @@ export async function runProbe({
         return p.id
       })
     }
-    stopIfAborted()
-    for (const p of probes)
+    for (const p of probes) {
+      stopIfAborted()
       await write('publish', p, () =>
         writer.setStatus(
           p.kind,
@@ -1187,6 +1222,7 @@ export async function runProbe({
           'published',
         ),
       )
+    }
     const included = await poll('inclusion', async () => {
       const sm = await read('inclusion', 'sitemap', '/sitemap.xml')
       let allUp = sm.present.length === probes.length
@@ -1208,9 +1244,16 @@ export async function runProbe({
           `${p.path} answered ${warm.status} when warmed, so removal was not checked against a cached published copy.`,
         )
         result.unchecked.push(`removal of a cached copy of ${p.path}`)
+      } else if (!CACHE_HIT.test(`${warm.cache} ${warm.nextCache}`)) {
+        // Informational: which values mean "resident" on Vercel is still to
+        // be measured on staging, so a miss here is shown, not failed.
+        result.notes.push(
+          `${p.path} showed no cache hit when warmed (x-vercel-cache=${warm.cache || '-'}, x-nextjs-cache=${warm.nextCache || '-'}): removal was checked, but not shown to reach a cached copy.`,
+        )
       }
     }
-    for (const p of probes)
+    for (const p of probes) {
+      stopIfAborted()
       await write('unpublish', p, () =>
         writer.setStatus(
           p.kind,
@@ -1218,6 +1261,7 @@ export async function runProbe({
           'draft',
         ),
       )
+    }
     const removed = await poll('removal', async () => {
       const sm = await read('removal', 'sitemap', '/sitemap.xml')
       let allGone = sm.locs !== null && sm.present.length === 0
@@ -1248,7 +1292,9 @@ export async function runProbe({
       'Removal PASS is weak here: the probes never fully joined the sitemap.',
     )
   }
-  evidence.file('summary.json', `${JSON.stringify(result, null, 2)}\n`)
+  keep(() =>
+    evidence.file('summary.json', `${JSON.stringify(result, null, 2)}\n`),
+  )
   return result
 
   async function findLeftovers() {
@@ -1346,10 +1392,14 @@ export async function runProbe({
     }
     try {
       const left = await findLeftovers()
-      log(
-        `${at()}  cleanup    prefix matches: ${left.length ? left.join(', ') : 'none'}`,
+      // An unreadable redirect lookup is not "none": cleanup is unverified.
+      const redirectsUnread = result.unchecked.some((u) =>
+        u.startsWith('redirects matching the probe prefix'),
       )
-      if (left.length) ok = false
+      log(
+        `${at()}  cleanup    prefix matches: ${left.length ? left.join(', ') : 'none'}${redirectsUnread ? ' (redirects not readable)' : ''}`,
+      )
+      if (left.length || redirectsUnread) ok = false
     } catch (error) {
       ok = false
       log(
@@ -1370,7 +1420,7 @@ export async function runProbe({
     }
     const final = await read('final', 'sitemap', '/sitemap.xml')
     if (final.locs) {
-      evidence.file('locs-final.txt', `${final.locs.join('\n')}\n`)
+      keep(() => evidence.file('locs-final.txt', `${final.locs.join('\n')}\n`))
       const diff = diffPaths(baseline, final.locs)
       log(
         `${at()}  cleanup    final <loc> list ${diff.identical ? 'identical to the baseline' : `differs: +${diff.added.join(' +')} -${diff.removed.join(' -')}`}`,

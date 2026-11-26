@@ -97,7 +97,11 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
   `--target production` needs `--allow-production-writes`. The article probe is
   opt-in, because a live article shows in the public `/feed.xml`. Credentials
   are script-only and per target (`CMS_PROBE_*_<TARGET>`, `.env.example`), from
-  `.env.local`; a nonempty exported value wins over the file. Run it after a change to caching, the revalidation hooks,
+  `.env.local`; a nonempty exported value wins over the file. A staging run
+  against a `*.vercel.app` branch alias also needs
+  `VERCEL_AUTOMATION_BYPASS_SECRET`, which goes out as
+  `x-vercel-protection-bypass`; only staging sends it, and production never
+  reads it. Run it after a change to caching, the revalidation hooks,
   Next, Payload or the MCP plugin; it is not a CI step or a monitor. A local
   `pnpm dev` server does not cache like a deployment, so a local run proves
   the script and the purge order, not the edge: run it against
