@@ -1057,7 +1057,9 @@ export async function runProbe({
     try {
       evidence.write(cells)
     } catch (error) {
-      result.error ??= `evidence write failed: ${error instanceof Error ? error.message : String(error)}`
+      if (result.error) return
+      result.error = `evidence write failed: ${error instanceof Error ? error.message : String(error)}`
+      log(`${utc()}  error      ${result.error}`)
     }
   }
 
@@ -1162,8 +1164,8 @@ export async function runProbe({
     wrote = true
     for (const p of probes) {
       p.attempted = true
-      // The id is kept the moment the create resolves, before any evidence
-      // write that could throw, so cleanup never depends on a search for it.
+      // The id is kept the moment the create resolves, before its evidence
+      // row is written, so cleanup never depends on a search for it.
       await write('create-draft', p, async () => {
         p.id = await writer.create(
           p.kind,
@@ -1225,8 +1227,10 @@ export async function runProbe({
     await llmsRead('removal')
   } catch (error) {
     if (error instanceof RefusalError && !wrote) throw error
-    result.error = error instanceof Error ? error.message : String(error)
-    log(`${utc()}  error      ${result.error}`)
+    const message = error instanceof Error ? error.message : String(error)
+    // An earlier evidence failure stays on the record beside this error.
+    result.error = result.error ? `${result.error}; ${message}` : message
+    log(`${utc()}  error      ${message}`)
   } finally {
     if (wrote) result.cleanup = await cleanup()
   }

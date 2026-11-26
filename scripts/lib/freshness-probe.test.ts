@@ -617,6 +617,21 @@ describe('runProbe', () => {
     expect(exitCodeFor(result)).toBe(EXIT.fail)
   })
 
+  it('keeps the create id and both errors when a create row fails, then the publish fails', async () => {
+    const site = fakeSite({ failPublish: true })
+    const { result } = await run('rest', site, [], undefined, (e) => {
+      const original = e.write
+      e.write = (cells: string[]) => {
+        if (cells[2] === 'create-draft') throw new Error('disk full')
+        original(cells)
+      }
+    })
+    expect(site.docs.size).toBe(0)
+    expect(result.cleanup).toBe('PASS')
+    expect(result.error).toMatch(/^evidence write failed: disk full; .+/)
+    expect(exitCodeFor(result)).toBe(EXIT.fail)
+  })
+
   it('refuses a truncated sitemap with no closing </urlset>', async () => {
     const site = fakeSite({ truncatedSitemap: true })
     await expect(run('rest', site)).rejects.toThrow(/Baseline \/sitemap.xml/)
