@@ -997,10 +997,14 @@ export async function runProbe({
         `x-vercel-cache=${headers['x-vercel-cache'] || '-'}`,
         `age=${headers.age || '-'}`,
         `x-vercel-id=${headers['x-vercel-id'] || '-'}`,
+        // Next's own ISR cache: the signal on a local `next start`.
+        headers['x-nextjs-cache']
+          ? `x-nextjs-cache=${headers['x-nextjs-cache']}`
+          : '',
         locs ? `locs=${locs.length} probes=${present.join(',') || 'none'}` : '',
       ]
-        .join('  ')
-        .trimEnd(),
+        .filter(Boolean)
+        .join('  '),
     )
     return { status, body, locs, present }
   }
