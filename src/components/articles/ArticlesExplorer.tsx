@@ -37,6 +37,30 @@ const PRIMARY_FILTER_CHIPS_LIMIT = 12
  */
 const ARTICLES_PAGE_SIZE = 12
 
+/**
+ * Loading hints for the first cover in the grid, and only that one (#218).
+ *
+ * @remarks Next's dev server logged an `/articles` card cover as the Largest
+ * Contentful Paint while it loaded lazily, as every `next/image` does by
+ * default. Measured on a phone (390x844), the first card's cover sits inside
+ * the first screen and is the LCP; on a 1280x800 desktop the covers start at
+ * the fold and text is the LCP. The first cover alone loads eagerly and is
+ * fetched at high priority. Every later card stays lazy: marking the whole
+ * grid eager would compete with the one image that matters and make LCP
+ * worse.
+ *
+ * `loading` + `fetchPriority` rather than `priority`/`preload`: Next 16
+ * deprecates `priority`, and its docs advise against `preload` when which
+ * image is the LCP depends on the viewport, which is true of a grid that is
+ * one column on a phone and three on a desktop. Next's own `preload` stays
+ * off; React may still emit a resource hint for an eager, high-priority image
+ * on its own, which is the browser being told the same thing earlier.
+ */
+const LEAD_COVER_LOADING = {
+  loading: 'eager',
+  fetchPriority: 'high',
+} as const
+
 function getAuthor(article: ArticleWithSlug) {
   if (typeof article.author === 'string') {
     return { name: article.author, role: '', href: '#', image: '' }
@@ -438,6 +462,9 @@ export function ArticlesExplorer({
     () => getPageItems(filtered, currentPage, ARTICLES_PAGE_SIZE),
     [filtered, currentPage],
   )
+  // The first card that actually renders a cover, not the first card: a
+  // cover-less lead card would otherwise leave the grid with no eager image.
+  const leadCoverSlug = visibleArticles.find((article) => article.image)?.slug
 
   const buildPageHref = useCallback(
     (nextPage: number) => {
@@ -655,6 +682,9 @@ export function ArticlesExplorer({
                         width={960}
                         height={540}
                         sizes="(min-width: 1280px) 24rem, (min-width: 1024px) 30vw, 100vw"
+                        {...(article.slug === leadCoverSlug
+                          ? LEAD_COVER_LOADING
+                          : {})}
                         data-hover-image
                         className="aspect-[16/9] w-full object-cover"
                       />

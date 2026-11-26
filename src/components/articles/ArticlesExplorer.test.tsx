@@ -1243,3 +1243,47 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
     },
   )
 })
+
+describe('ArticlesExplorer cover loading (#218)', () => {
+  /** Articles that each carry a cover, so every card renders an image. */
+  const withCovers = (count: number) =>
+    makeArticles(count).map((article, index) => ({
+      ...article,
+      image: `https://example.com/cover-${index + 1}.png`,
+    }))
+
+  it('loads only the first cover eagerly, at high fetch priority', () => {
+    render(<ArticlesExplorer articles={withCovers(4)} />)
+    const covers = screen.getAllByRole('img')
+    expect(covers).toHaveLength(4)
+    const [lead, ...rest] = covers
+    expect(lead).toHaveAttribute('loading', 'eager')
+    expect(lead).toHaveAttribute('fetchPriority', 'high')
+    // The rest keep next/image's default lazy loading: no eager hint, no
+    // raised priority. Marking the grid eager would compete with the LCP.
+    for (const cover of rest) {
+      expect(cover).not.toHaveAttribute('loading', 'eager')
+      expect(cover).not.toHaveAttribute('fetchPriority')
+    }
+  })
+
+  it('gives the hints to the first cover even when the lead card has none', () => {
+    const [bare, ...covered] = withCovers(3)
+    const { image: _omit, ...noCover } = bare
+    render(<ArticlesExplorer articles={[noCover, ...covered]} />)
+    const covers = screen.getAllByRole('img')
+    expect(covers).toHaveLength(2)
+    expect(covers[0]).toHaveAttribute('loading', 'eager')
+    expect(covers[0]).toHaveAttribute('fetchPriority', 'high')
+    expect(covers[1]).not.toHaveAttribute('loading', 'eager')
+  })
+
+  it('makes the first cover of a later page the eager one', () => {
+    searchParamsMock = new URLSearchParams('page=2')
+    render(<ArticlesExplorer articles={withCovers(ARTICLES_PAGE_SIZE + 2)} />)
+    const covers = screen.getAllByRole('img')
+    expect(covers).toHaveLength(2)
+    expect(covers[0]).toHaveAttribute('loading', 'eager')
+    expect(covers[1]).not.toHaveAttribute('loading', 'eager')
+  })
+})
