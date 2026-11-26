@@ -1,4 +1,6 @@
-# pnpm settings (pnpm 11 reads these from pnpm-workspace.yaml, not package.json)
+# pnpm settings (pnpm 12 reads these from pnpm-workspace.yaml, not package.json).
+# pnpm 12 fails a command on a key it does not recognize here, since the
+# packageManager pin is honored, so a misspelled setting cannot sit inert.
 packages:
   - '.'
 overrides:

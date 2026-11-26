@@ -40,7 +40,8 @@ const PORT: number = LOCAL_SERVICES.e2e.port
 const ORIGIN = `http://127.0.0.1:${PORT}`
 const IMAGE = 'pgvector/pgvector:pg16'
 const LABEL = 'bp.reader-lab'
-// pnpm 11 otherwise installs stale dependencies before both run and exec.
+// pnpm otherwise installs stale dependencies before both run and exec
+// (measured on 12.16.1: a bare `pnpm run` in a fresh clone installs first).
 const PNPM_NO_INSTALL = [
   '--config.verify-deps-before-run=error',
   '--config.pm-on-fail=error',

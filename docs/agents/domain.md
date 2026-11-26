@@ -11,7 +11,7 @@ exist yet. See "Where they live" below.
 ### The `pnpm-workspace.yaml` here is not a monorepo signal
 
 The setup skill lists `pnpm-workspace.yaml` as a monorepo signal. This repo has one, and it is a
-**false positive**. pnpm 11 reads its settings from `pnpm-workspace.yaml` rather than from
+**false positive**. pnpm (11 and later) reads its settings from `pnpm-workspace.yaml` rather than from
 `package.json`, so the file exists here purely to hold `overrides`, `allowBuilds`,
 `minimumReleaseAge` and `minimumReleaseAgeExclude`. Its `packages:` list is `['.']` — the repo root
 itself, not a set of sub-packages.

@@ -5,9 +5,10 @@
 - **pnpm only** — enforced by `preinstall: npx only-allow pnpm` and the
   `packageManager` pin (Corepack). Vercel needs
   `ENABLE_EXPERIMENTAL_COREPACK=1`.
-- pnpm 11 settings live in `pnpm-workspace.yaml` (overrides + `allowBuilds`
+- pnpm settings live in `pnpm-workspace.yaml` (overrides + `allowBuilds`
   with real boolean values). Native-build approvals go there, not
-  package.json.
+  package.json. pnpm 12 fails a command on a key there it does not
+  recognize, so a misspelled setting errors instead of sitting inert.
 - A release-age gate is in force (#222): pnpm will not resolve a version
   published less than a day ago — `docs/DEPENDENCIES.md` § Release-age gate.
 - Dependency majors are pinned. All `payload` + `@payloadcms/*` packages move

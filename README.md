@@ -69,7 +69,7 @@ The active codebase for [brandonperfetti.com](https://brandonperfetti.com):
 
 ```bash
 nvm use                      # or fnm/asdf — .nvmrc pins Node 24
-corepack enable              # honors the pnpm@11 packageManager pin
+corepack enable              # honors the pnpm@12 packageManager pin
 cp .env.example .env.local   # then fill in what you need (comments explain each var)
 pnpm install
 pnpm migrate                 # applies the committed migration chain to DATABASE_URI
