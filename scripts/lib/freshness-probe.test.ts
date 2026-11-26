@@ -295,6 +295,7 @@ type Doc = {
  * `redirectsClosed` answers the redirects read with a 403;
  * `redirectsCloseAfterWrite` does so only once a probe was created.
  * `createWithoutId` commits a REST create but answers with no id.
+ * `publishErrorText` is the MCP tool error text a failed publish returns.
  * `onRequest` sees each request before it is answered.
  */
 function fakeSite({
@@ -307,6 +308,7 @@ function fakeSite({
   leftovers = [] as Doc[],
   redirectsCloseAfterWrite = false,
   createWithoutId = false,
+  publishErrorText = 'boom',
   onRequest = (_method: string, _path: string, _body: string) => {},
 } = {}) {
   const docs = new Map<number, Doc>()
@@ -476,7 +478,7 @@ function fakeSite({
         return reply(`Resource from collection "x":\n${JSON.stringify(doc)}`)
       if (name.startsWith('update')) {
         if (failPublish && args._status === 'published')
-          return reply('Error updating resource: boom')
+          return reply(`Error updating resource: ${publishErrorText}`)
         doc.status = args._status
         seen()
         return reply(`Document updated successfully${fence(doc)}`)
@@ -680,6 +682,23 @@ describe('runProbe', () => {
       lines.filter((l) => /error +evidence write failed/.test(l)),
     ).toHaveLength(1)
     expect(exitCodeFor(result)).toBe(EXIT.fail)
+  })
+
+  it('never lets an MCP error cut a key in half before it is redacted', async () => {
+    // The key straddles the 200-character cutoff of the error excerpt.
+    const pad = 'x'.repeat(200 - 'Error updating resource: '.length - 4)
+    const site = fakeSite({
+      failPublish: true,
+      publishErrorText: `${pad}${SECRET_KEY} tail`,
+    })
+    const { result, dir, lines } = await run('mcp', site)
+    const prefix = SECRET_KEY.slice(0, 4)
+    // Redaction runs first, so the cutoff falls inside the marker, not the key.
+    expect(lines.join('\n')).toContain(`${pad}[red`)
+    expect(lines.join('\n')).not.toContain(`${pad}${prefix}`)
+    expect(allFiles(dir).join('\n')).not.toContain(`${pad}${prefix}`)
+    expect(String(result.error)).not.toContain(prefix)
+    expect(site.docs.size).toBe(0)
   })
 
   it('adopts a REST draft by slug when the create answers with no id', async () => {

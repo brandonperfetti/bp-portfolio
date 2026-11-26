@@ -735,7 +735,9 @@ export async function createMcpWriter({
     const msg = parseMcpBody(body, id)
     if (msg.error)
       throw new Error(
-        `${name}: JSON-RPC ${msg.error.code ?? ''} ${msg.error.message ?? ''}`.trim(),
+        excerpt(
+          `${name}: JSON-RPC ${msg.error.code ?? ''} ${msg.error.message ?? ''}`.trim(),
+        ),
       )
     const text =
       msg.result?.content
@@ -743,6 +745,11 @@ export async function createMcpWriter({
         .join('\n') ?? ''
     return { text, isError: msg.result?.isError === true || isMcpError(text) }
   }
+  // Server text is kept for diagnosis, but the key is redacted from the whole
+  // text before it is cut: a key split at the cutoff would leave a prefix that
+  // neither console redaction nor the evidence scrub can recognise.
+  const excerpt = (/** @type {string} */ text, max = Infinity) =>
+    redactSecrets(text, [apiKey]).slice(0, max)
   const toolName = (
     /** @type {string} */ verb,
     /** @type {'page' | 'post'} */ kind,
@@ -752,7 +759,7 @@ export async function createMcpWriter({
     /** @type {object} */ args,
   ) => {
     const r = await tool(name, args)
-    if (r.isError) throw new Error(`${name}: ${r.text.slice(0, 200)}`)
+    if (r.isError) throw new Error(`${name}: ${excerpt(r.text, 200)}`)
     return r.text
   }
   const exists = async (
@@ -763,7 +770,7 @@ export async function createMcpWriter({
     if (/^Error: Document with ID .* not found/.test(r.text.trim()))
       return false
     if (r.isError)
-      throw new Error(`${toolName('find', kind)}: ${r.text.slice(0, 200)}`)
+      throw new Error(`${toolName('find', kind)}: ${excerpt(r.text, 200)}`)
     return true
   }
   return {
@@ -788,7 +795,7 @@ export async function createMcpWriter({
       const r = await tool(toolName('delete', kind), { id })
       // An error reply for a document that is already gone is a success.
       if (r.isError && (await exists(kind, id))) {
-        throw new Error(`${toolName('delete', kind)}: ${r.text.slice(0, 200)}`)
+        throw new Error(`${toolName('delete', kind)}: ${excerpt(r.text, 200)}`)
       }
     },
     exists,
