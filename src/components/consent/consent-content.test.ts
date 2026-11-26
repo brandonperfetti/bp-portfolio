@@ -62,7 +62,9 @@ describe('DEFAULT_CONSENT_CONFIG (today’s copy + UX)', () => {
     expect(essential.subtitle).toContain('Cloudflare Turnstile')
     expect(essential.subtitle).toContain('once you start filling in a form')
     expect(essential.subtitle).toContain('Sentry')
-    expect(essential.subtitle).toContain('no name, email or account')
+    expect(essential.subtitle).toContain('not your account')
+    // No promise about email until the browser redacts addresses (#480).
+    expect(essential.subtitle).not.toMatch(/email/i)
     // The id is not all Sentry gets; the error and its page go too.
     expect(essential.subtitle).toContain('the error and the page')
     // Not every one of them is needed for the site to work.

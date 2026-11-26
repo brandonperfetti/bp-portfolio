@@ -26248,7 +26248,7 @@
           "type": "varchar",
           "primaryKey": false,
           "notNull": false,
-          "default": "'Always on, whatever you choose here. Clerk, for signing in: its script loads on every page and sets a couple of cookies even if you never sign in. Cloudflare Turnstile, a bot check that loads only once you start filling in a form. Sentry, for error reports: it gets the error and the page it happened on, but no name, email or account, and its only id is a random one that lasts as long as your browser tab.'"
+          "default": "'Always on, whatever you choose here. Clerk, for signing in: its script loads on every page and sets a couple of cookies even if you never sign in. Cloudflare Turnstile, a bot check that loads only once you start filling in a form. Sentry, for error reports: it gets the error and the page it happened on, but not your account, and its only id is a random one that lasts as long as your browser tab.'"
         },
         "categories_analytics_enabled": {
           "name": "categories_analytics_enabled",
@@ -26986,6 +26986,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "1d1a94fa-6a0e-49f6-9177-a99d024c2f4c",
+  "id": "d0934a4a-5dac-4b86-9387-3d6dd7b906c5",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }
