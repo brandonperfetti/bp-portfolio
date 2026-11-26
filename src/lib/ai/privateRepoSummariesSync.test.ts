@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   type PrivateRepoSummary,
+  UnpublishableSummaryError,
   chunkPrivateRepoSummary,
   privateRepoSummaryDocId,
 } from '@/lib/ai/privateRepoSummaries'
@@ -189,7 +190,33 @@ describe('syncPrivateRepoSummaries', () => {
       }),
     ).rejects.toThrow(/doc_id/)
     expect(embedChunksMock).not.toHaveBeenCalled()
-    expect(db.statements).toEqual([])
+    expect(
+      db.statements.some((text) => /INSERT|DELETE|UPDATE/.test(text)),
+    ).toBe(false)
+  })
+
+  it('still revokes a removed entry when another entry is refused (#193 review)', async () => {
+    embedChunksMock.mockClear()
+    const removed = privateRepoSummaryDocId('gone')
+    const invalid = {
+      ...entry,
+      name: 'sample-new',
+      blurb: 'See https://internal.example/runbook.',
+    }
+    // The refused entry already has a row from its last valid version: it
+    // keeps it.
+    const kept = privateRepoSummaryDocId('sample-new')
+    const db = createFakeDb([
+      removed,
+      { doc_id: kept, title: 'sample-new (private repository)' },
+    ])
+
+    await expect(
+      syncPrivateRepoSummaries({ db, summaries: [invalid] }),
+    ).rejects.toThrow(UnpublishableSummaryError)
+    const deletes = db.statements.filter((text) => text.includes('DELETE'))
+    expect(deletes).toHaveLength(1)
+    expect(embedChunksMock).not.toHaveBeenCalled()
   })
 
   it('revokes a removed entry whose id a new entry now claims (#193 review)', async () => {

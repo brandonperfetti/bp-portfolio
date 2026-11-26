@@ -1039,6 +1039,12 @@ const SOURCE_FILE = new RegExp(
 const BARE_SCRIPT_FILE = /\b[\w-]+\.[cm]?[jt]sx?\b/g
 
 /**
+ * A Markdown file inside a directory (`checklists/review.md`): a repository
+ * path, not a site page, which never ends in `.md` (#193 review).
+ */
+const MARKDOWN_PATH = /\b[\w.-]+\/[\w./-]*[\w-]\.md\b/i
+
+/**
  * A definition written out as code: a declared function or class with its
  * parameter list, a binding with `=`, an import with its `from`, an export
  * with its keyword, or an arrow. Prose such as "let me summarize" is none.
@@ -1051,7 +1057,7 @@ const DEFINITION =
  * (#193 review). A capitalised `Name.js` is left out: that is how
  * technologies are written (`Node.js`, `Next.js`), not files.
  */
-const CODE_SPAN_FILE = new RegExp(`^[\\w./-]+\\.${CODE_EXTENSION}$`, 'i')
+const CODE_SPAN_FILE = new RegExp(`^[\\w./-]+\\.(?:${CODE_EXTENSION}|md)$`, 'i')
 const TECHNOLOGY_NAME = /^[A-Z][\w]*\.js$/
 
 /** Code punctuation that a name in a code span never holds. */
@@ -1101,7 +1107,11 @@ function claimsImplementation(output: string): boolean {
   for (const match of output.matchAll(BARE_SCRIPT_FILE)) {
     if (!TECHNOLOGY_NAME.test(match[0])) return true
   }
-  return SOURCE_FILE.test(output) || DEFINITION.test(output)
+  return (
+    SOURCE_FILE.test(output) ||
+    MARKDOWN_PATH.test(output) ||
+    DEFINITION.test(output)
+  )
 }
 
 /**

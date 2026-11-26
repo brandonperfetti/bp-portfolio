@@ -1,6 +1,9 @@
 import { sql } from '@payloadcms/db-postgres'
 
-import { CORVUS_PRIVATE_REPO_SUMMARY_COLLECTION } from '@/lib/ai/chunking'
+import {
+  CORVUS_PRIVATE_REPO_SUMMARY_COLLECTION,
+  type CorvusChunk,
+} from '@/lib/ai/chunking'
 import {
   EMBEDDING_TIMEOUT_MS,
   embedChunks,
@@ -20,6 +23,7 @@ import {
   type PrivateRepoSummary,
   UnpublishableSummaryError,
   chunkPrivateRepoSummary,
+  privateRepoSummaryDocId,
 } from '@/lib/ai/privateRepoSummaries'
 
 /** What one summary pass did. */
@@ -85,9 +89,11 @@ async function readIndexedSummaries(
  * removed one out of the index.
  *
  * Every entry is validated before anything is written, so one bad entry
- * fails the pass without indexing the entries listed before it. That includes
- * two entries that derive the same `doc_id`: they would share one row, and
- * the second would silently overwrite the first.
+ * fails the pass without indexing any entry. That includes two entries that
+ * derive the same `doc_id`: they would share one row, and the second would
+ * silently overwrite the first. A bad entry does not block the sweep (#193
+ * review): rows the allowlist dropped are still removed, and the bad entry
+ * keeps the row it already had, from the last version that passed.
  *
  * A dry run reads the stored rows and counts each entry as the apply would
  * (written, skipped or metadata-updated), with no provider call and no
@@ -114,35 +120,69 @@ export async function syncPrivateRepoSummaries(args: {
 }): Promise<PrivateSummarySyncTotals> {
   const { db, summaries, dryRun = false } = args
   const collection = CORVUS_PRIVATE_REPO_SUMMARY_COLLECTION
-  const chunks = summaries.map((entry) => chunkPrivateRepoSummary(entry))
+  // Validate every entry, but let a bad one block only its own write: the
+  // sweep below must still revoke what the allowlist dropped (#193 review).
+  // An invalid entry keeps whatever row it already has (the last version
+  // that passed), so its id and title are protected from the sweep.
+  const chunks: CorvusChunk[] = []
+  const refusals: string[] = []
+  const protectedRows = new Set<string>()
+  const rowKey = (docId: number, title: string | null) =>
+    `${docId}\u0000${title}`
+  const titleOf = (name: string) => `${name.trim()} (private repository)`
+  for (const entry of summaries) {
+    try {
+      chunks.push(chunkPrivateRepoSummary(entry))
+    } catch (error) {
+      if (!(error instanceof UnpublishableSummaryError)) throw error
+      refusals.push(error.message)
+      protectedRows.add(
+        rowKey(privateRepoSummaryDocId(entry.name), titleOf(entry.name)),
+      )
+    }
+  }
   const totals: PrivateSummarySyncTotals = {
-    listed: chunks.length,
+    listed: summaries.length,
     written: 0,
     skipped: 0,
     metadataUpdated: 0,
     deleted: 0,
   }
 
-  const keep = new Set<number>()
+  // Two entries that derive one `doc_id` would share a row, and the second
+  // would silently overwrite the first: both are refused, and both keep
+  // whatever row they already have.
+  const claims = new Map<number, CorvusChunk[]>()
   for (const chunk of chunks) {
-    if (keep.has(chunk.docId)) {
-      throw new UnpublishableSummaryError(
-        `[corvus:private] refusing the allowlist: "${chunk.title}" derives ` +
-          `doc_id ${chunk.docId}, which an earlier entry already uses. ` +
-          `Rename one, or remove the duplicate.`,
-      )
-    }
-    keep.add(chunk.docId)
+    claims.set(chunk.docId, [...(claims.get(chunk.docId) ?? []), chunk])
   }
-  // Stale: an id no entry claims, or one whose stored title is not the
+  const valid: CorvusChunk[] = []
+  for (const [docId, claimants] of claims) {
+    if (claimants.length === 1) {
+      valid.push(claimants[0])
+      continue
+    }
+    refusals.push(
+      `[corvus:private] refusing the allowlist: ` +
+        `${claimants.map((chunk) => `"${chunk.title}"`).join(' and ')} ` +
+        `derive doc_id ${docId}. Rename one, or remove the duplicate.`,
+    )
+    for (const chunk of claimants) protectedRows.add(rowKey(docId, chunk.title))
+  }
+
+  // Stale: an id no valid entry claims, or one whose stored title is not the
   // claiming entry's. The second is a removed repository whose name hashed
   // to the same id as a newly added one (#193 review); left in place, it
   // would stay retrievable whenever the new entry's embed failed.
-  const titleFor = new Map(chunks.map((chunk) => [chunk.docId, chunk.title]))
+  const titleFor = new Map(valid.map((chunk) => [chunk.docId, chunk.title]))
   const stale = [
     ...new Set(
       (await readIndexedSummaries(db))
-        .filter(({ docId, title }) => titleFor.get(docId) !== title)
+        .filter(
+          ({ docId, title }) =>
+            titleFor.get(docId) !== title &&
+            !protectedRows.has(rowKey(docId, title)),
+        )
         .map(({ docId }) => docId),
     ),
   ]
@@ -155,9 +195,15 @@ export async function syncPrivateRepoSummaries(args: {
     }
   }
 
+  // A refused entry fails the pass after the sweep and before any write, so
+  // no entry is indexed from an allowlist that holds a bad one.
+  if (refusals.length > 0) {
+    throw new UnpublishableSummaryError(refusals.join('\n'))
+  }
+
   // A dry run classifies every entry the way a real run would, from reads
   // alone, so its counts line names what the apply will write (#193 review).
-  for (const chunk of chunks) {
+  for (const chunk of valid) {
     const stored = await readStoredChunks(db, collection, chunk.docId)
     if (isContentUnchanged([chunk], stored)) {
       if (!hasMetadataDrift([chunk], stored)) {

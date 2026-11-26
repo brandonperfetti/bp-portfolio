@@ -815,12 +815,14 @@ exactly such an object.
 `github-repos` document the public listing does not name) never touches it, and
 `assertIndexableRepo` stays as strict as it was. The `doc_id` comes from a hash
 of the name, so editing a blurb updates the row in place. `pnpm
-corvus:sync-github` runs a second pass after the public one:
+corvus:sync-github` runs a pass before the public one:
 `syncPrivateRepoSummaries` embeds what changed, skips what did not at no
 provider cost, and **always** sweeps rows the allowlist no longer names
 (`--no-prune` does not apply, because a list in the code cannot be partially
 read). The sweep runs first, before any provider call, so a removal takes
-effect even when another entry's embed fails. A stored row also counts as
+effect even when another entry's embed fails, and even when another entry is
+refused: a refused entry fails the pass before any write but keeps the row it
+already had. A stored row also counts as
 stale when its title is not the title of the entry that now claims its
 `doc_id`, so a removed repository whose name hashed to a new entry's id is
 removed too. With the list empty it writes
