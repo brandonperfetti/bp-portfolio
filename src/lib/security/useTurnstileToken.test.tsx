@@ -14,6 +14,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  */
 
 type Hook = typeof import('@/lib/security/useTurnstileToken')
+type TurnstileLoadOn =
+  import('@/lib/security/useTurnstileToken').TurnstileLoadOn
 type HookResult = ReturnType<Hook['useTurnstileToken']>
 type RenderParams = { callback: (token: string) => void } & Record<
   string,
@@ -31,8 +33,14 @@ let fakeApi: {
 }
 
 /** Mount the hook with a container, as a form does, and expose its result. */
-function Probe({ enabled = true }: { enabled?: boolean }) {
-  const result = mod.useTurnstileToken({ enabled })
+function Probe({
+  enabled = true,
+  loadOn,
+}: {
+  enabled?: boolean
+  loadOn?: TurnstileLoadOn
+}) {
+  const result = mod.useTurnstileToken({ enabled, loadOn })
   useEffect(() => {
     hook = result
   })
@@ -326,5 +334,84 @@ describe('useTurnstileToken (#405)', () => {
   it('is inactive when the surface turns it off', async () => {
     render(<Probe enabled={false} />)
     await expect(hook.requestToken()).resolves.toEqual({ status: 'inactive' })
+  })
+})
+
+describe("useTurnstileToken loadOn: 'demand' (#475)", () => {
+  /** Every Turnstile script element in the document. */
+  const scripts = () =>
+    document.querySelectorAll('script[src*="challenges.cloudflare.com"]')
+
+  it('loads nothing on mount, where the default loads at once', async () => {
+    const { unmount } = render(<Probe loadOn="demand" />)
+    expect(scripts()).toHaveLength(0)
+    unmount()
+
+    render(<Probe />)
+    expect(scripts()).toHaveLength(1)
+  })
+
+  it('load() fetches the script once and renders the widget', async () => {
+    render(<Probe loadOn="demand" />)
+    await act(async () => {
+      hook.load()
+      hook.load()
+    })
+    expect(scripts()).toHaveLength(1)
+    expect(fakeApi.render).not.toHaveBeenCalled()
+
+    await loadScript()
+    expect(fakeApi.render).toHaveBeenCalledTimes(1)
+
+    const pending = hook.requestToken()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    await expect(pending).resolves.toEqual({
+      status: 'token',
+      token: 'fresh-token',
+    })
+  })
+
+  it('a token request with nothing loaded starts the load and waits for it', async () => {
+    render(<Probe loadOn="demand" />)
+    let pending!: Promise<unknown>
+    await act(async () => {
+      pending = hook.requestToken()
+    })
+    expect(scripts()).toHaveLength(1)
+
+    await loadScript()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    await expect(pending).resolves.toEqual({
+      status: 'token',
+      token: 'fresh-token',
+    })
+  })
+
+  it('a token request whose load never arrives still times out at the ready bound', async () => {
+    render(<Probe loadOn="demand" />)
+    let pending!: Promise<unknown>
+    await act(async () => {
+      pending = hook.requestToken()
+    })
+    expect(scripts()).toHaveLength(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(mod.TURNSTILE_READY_TIMEOUT_MS)
+    })
+    await expect(pending).resolves.toEqual({ status: 'timeout' })
+    expect(fakeApi.execute).not.toHaveBeenCalled()
+  })
+
+  it('loads nothing when inactive, even on load()', async () => {
+    vi.stubEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY', '')
+    render(<Probe loadOn="demand" />)
+    await act(async () => {
+      hook.load()
+    })
+    await expect(hook.requestToken()).resolves.toEqual({ status: 'inactive' })
+    expect(scripts()).toHaveLength(0)
   })
 })

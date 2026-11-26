@@ -149,8 +149,11 @@ Set regardless of the consent choice — strictly-necessary, consent frameworks
 exempt them:
 
 - **Clerk** — authentication session. See `docs/AUTH.md`.
-- **Cloudflare Turnstile** — bot/security challenge on the contact form (and,
-  when armed, Corvus chat).
+- **Cloudflare Turnstile** — bot/security challenge on the contact form and
+  the Newsletter Signup block (and, when armed, Corvus chat). The forms load
+  its script on their first focus, not when the page arrives, so a visitor
+  who never uses one makes no request to Cloudflare (#475, Brandon's #368
+  decision). Armed chat loads it on mount.
 
 ## Sessions in Sentry (#213) — outside the banner, like the rest of Sentry
 
