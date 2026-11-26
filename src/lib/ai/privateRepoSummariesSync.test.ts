@@ -41,8 +41,12 @@ function createFakeDb(
   stored: Record<number, Array<Record<string, unknown>>> = {},
 ) {
   const statements: string[] = []
+  // The numeric parameters of each DELETE, so a test can name which rows a
+  // pass removed, not only how many statements it ran.
+  const deletedParams: number[][] = []
   return {
     statements,
+    deletedParams,
     execute: async (query: unknown) => {
       const chunks = (query as { queryChunks?: unknown[] }).queryChunks ?? []
       const isText = (part: unknown) =>
@@ -53,6 +57,11 @@ function createFakeDb(
         .join(' ')
       const params = chunks.filter((part) => !isText(part))
       statements.push(text)
+      if (text.includes('DELETE')) {
+        deletedParams.push(
+          params.filter((value): value is number => typeof value === 'number'),
+        )
+      }
       if (text.includes('DISTINCT')) {
         return {
           rows: indexed.map((row) =>
@@ -214,8 +223,10 @@ describe('syncPrivateRepoSummaries', () => {
     await expect(
       syncPrivateRepoSummaries({ db, summaries: [invalid] }),
     ).rejects.toThrow(UnpublishableSummaryError)
-    const deletes = db.statements.filter((text) => text.includes('DELETE'))
-    expect(deletes).toHaveLength(1)
+    // Exactly the dropped summary's row goes; the refused entry's row stays.
+    expect(db.deletedParams).toHaveLength(1)
+    expect(db.deletedParams[0]).toContain(removed)
+    expect(db.deletedParams.flat()).not.toContain(kept)
     expect(embedChunksMock).not.toHaveBeenCalled()
   })
 
