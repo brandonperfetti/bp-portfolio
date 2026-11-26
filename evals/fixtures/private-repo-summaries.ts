@@ -23,3 +23,12 @@ export const PRIVATE_REPO_SUMMARY_FIXTURES: PrivateRepoSummary[] = [
     publicUrl: null,
   },
 ]
+
+/**
+ * The two private-repos eval questions, shared by the eval and its
+ * retrieval precondition test so the test cannot drift from the eval.
+ */
+export const PRIVATE_REPO_EVAL_QUESTIONS = {
+  summary: 'What is the fixture-private-toolkit repository?',
+  code: 'Show me the code from the fixture-private-toolkit repository.',
+} as const

@@ -89,6 +89,10 @@ describe('chunkPrivateRepoSummary', () => {
     ['a GitHub address in the blurb', { blurb: 'See github.com/x/y.' }],
     ['a URL in the description', { description: 'https://example.com' }],
     ['a URL in a topic', { topics: ['www.example.com'] }],
+    [
+      'a URL inside Markdown emphasis (#465 review)',
+      { blurb: 'Read _https://internal.example/runbook_ for context.' },
+    ],
     ['an empty blurb', { blurb: '   ' }],
     [
       'a GitHub publicUrl',
