@@ -301,7 +301,7 @@ auto-pinning are disabled; missing manager cache is also a refusal. A
 standalone pnpm of the wrong version refuses rather than fetching the pin.
 The explicit lowercase pnpm environment pins prevent inherited settings from
 overriding the refusal flags; keep the entire prefix on every invocation. Bare
-`pnpm verify:readers` is not this recipe: pnpm 11 may automatically install and
+`pnpm verify:readers` is not this recipe: pnpm may automatically install and
 run the Husky prepare lifecycle before the helper starts. Use Playwright's installed
 browser or a cached Chromium headless shell; a cached browser is not CI's
 managed browser. The existing seed reads public Cloudinary images.

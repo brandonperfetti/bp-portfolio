@@ -210,10 +210,25 @@ beside it had no effect. Verify with `pnpm config get minimumReleaseAge`
 (`1440`).
 
 - **Where it bites:** resolution — `pnpm add`, `pnpm update`, and an install
-  that has to re-resolve. `[measured 2026-09-26, pnpm 11.24.0]` a
-  `--frozen-lockfile` install of a version that is already locked is **not**
-  re-checked, so the gate guards what enters the lockfile, not what is
-  already in it.
+  that has to re-resolve — and every install's check of the lockfile. A
+  `--frozen-lockfile` install verifies each locked version against the
+  cutoff and fails with `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` on one that
+  is too new (`[measured 2026-11-25, pnpm 12.16.1 and 11.24.0]`: a scratch
+  clone with the cutoff raised to five years refused 1433 of 1741 entries
+  under both). So a version younger than a day breaks CI's install even once
+  locked, unless it is excluded. A passing check is cached on the machine
+  that ran it ("verified 1h ago"), so a warm local install can skip it; CI's
+  clean runners always run it. Corrected 2026-11-25 (#376): this bullet used
+  to say, from a 2026-09-26 measurement on pnpm 11.24.0, that a frozen
+  install does not re-check a locked version. Re-measured on that same
+  version, it does, so the earlier measurement did not hold.
+- **Strict by default (pnpm ≥12.3):** because the cutoff is set explicitly,
+  `minimumReleaseAgeStrict` defaults to `true`, so a resolution that finds no
+  version old enough stops and asks instead of adding the young version to
+  `minimumReleaseAgeExclude` on its own. One other command still writes
+  entries there: `pnpm audit --fix` adds each advisory's patched version
+  (since pnpm 11.0.0, pnpm/pnpm#11216), so review every entry it adds like a
+  hand-added one. The eighteen below predate strict mode.
 - **Exceptions:** a `name@version` entry in `minimumReleaseAgeExclude`,
   under the rule in `docs/SECURITY.md` § Dependency advisories (the case it
   exists for: a same-day security patch). The entries present on 2026-09-26 predate the gate —
