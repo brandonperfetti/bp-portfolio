@@ -30,6 +30,7 @@ import {
   readCredentials,
   resolvePlan,
   runProbe,
+  redactSecrets,
   scrubEvidence,
   sitemapPaths,
 } from './freshness-probe.mjs'
@@ -856,6 +857,19 @@ describe('exitCodeFor', () => {
         error: 'evidence write failed',
       }),
     ).toBe(EXIT.fail)
+  })
+})
+
+describe('redactSecrets', () => {
+  it('removes each secret, the longest first, and skips empty values', () => {
+    expect(
+      redactSecrets(`key ${SECRET_KEY}x and ${SECRET_KEY}`, [
+        '',
+        SECRET_KEY,
+        `${SECRET_KEY}x`,
+      ]),
+    ).toBe('key [redacted] and [redacted]')
+    expect(redactSecrets('plain text', [''])).toBe('plain text')
   })
 })
 

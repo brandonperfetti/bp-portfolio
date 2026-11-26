@@ -33,18 +33,25 @@ import {
   parseArgs,
   readCredentials,
   resolvePlan,
+  redactSecrets,
   runProbe,
   scrubEvidence,
 } from './lib/freshness-probe.mjs'
 
-/** Secrets to redact from console output; filled once credentials are read. */
-/** @type {string[]} */
+/**
+ * Secrets redacted from console output, filled once credentials are read, so
+ * server text echoed in a log line cannot print one.
+ *
+ * @type {string[]}
+ */
 const redact = []
-/** Replaces every known secret, so server text echoed in a log line cannot print one. */
-const clean = (/** @type {string} */ text) =>
-  redact.reduce((t, secret) => t.split(secret).join('[redacted]'), text)
+const clean = (/** @type {string} */ text) => redactSecrets(text, redact)
 const log = (/** @type {string} */ line) =>
   process.stdout.write(`${clean(line)}\n`)
+// Console output is best-effort: a closed pipe (`| head`) must not crash the
+// run before cleanup deletes the probes and the verdict sets the exit code.
+process.stdout.on('error', () => {})
+process.stderr.on('error', () => {})
 
 /** Set once the probe may have written: a crash after it may leave probes. */
 let mayHaveWritten = false
@@ -90,7 +97,7 @@ async function main() {
   const controller = new AbortController()
   const onSignal = () => {
     if (!controller.signal.aborted) {
-      log('interrupted: stopping the poll; cleanup still runs')
+      log('interrupted: no new writes or polls; cleanup still runs')
       controller.abort(new Error('interrupted'))
     }
   }

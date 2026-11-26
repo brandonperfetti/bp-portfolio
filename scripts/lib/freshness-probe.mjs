@@ -629,7 +629,7 @@ export async function createRestWriter({
       const id = r.json?.doc?.id
       // No usable id: throw, so the run keeps a null id and cleanup adopts
       // the draft by its slug instead of publishing to `/undefined`.
-      if (typeof id !== 'number' && typeof id !== 'string')
+      if (typeof id !== 'number' && (typeof id !== 'string' || id === ''))
         throw new Error(`create ${kind}: response carried no document id`)
       return id
     },
@@ -862,6 +862,21 @@ export function createEvidence(dir) {
       writeFileSync(join(dir, name), text)
     },
   }
+}
+
+/**
+ * Replaces each secret in console text with `[redacted]`. Longest first, so
+ * a secret that contains another is removed whole; empty values are skipped,
+ * since splitting on '' would break the text apart.
+ *
+ * @param {string} text
+ * @param {string[]} secrets
+ */
+export function redactSecrets(text, secrets) {
+  return [...secrets]
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+    .reduce((t, secret) => t.split(secret).join('[redacted]'), text)
 }
 
 /**
