@@ -770,6 +770,27 @@ describe('runProbe', () => {
     expect(exitCodeFor(result)).toBe(EXIT.pass)
   })
 
+  it('reports a 200 /llms.txt whose body fails to read as unavailable', async () => {
+    const base = fakeSite()
+    const site = {
+      ...base,
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (new URL(String(input)).pathname !== '/llms.txt')
+          return base.fetch(input, init)
+        const res = new Response('# llms', { status: 200 })
+        Object.defineProperty(res, 'text', {
+          value: () => Promise.reject(new Error('connection reset')),
+        })
+        return res
+      }) as typeof fetch,
+    }
+    const { result } = await run('rest', site, ['--article'])
+    expect(result.llms.join(' ')).toMatch(
+      /function read was unavailable \(ERR\)/,
+    )
+    expect(result.llms.join(' ')).not.toMatch(/lacks/)
+  })
+
   it('reports a failed /llms.txt read as unavailable, not as lacking the article', async () => {
     const base = fakeSite()
     const site = {

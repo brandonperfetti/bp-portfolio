@@ -1041,10 +1041,18 @@ export async function runProbe({
         cache: 'no-store',
         signal: timeoutSignal(30_000),
       })
-      status = String(res.status)
       for (const name of RECORDED_HEADERS)
         headers[name] = res.headers.get(name) ?? ''
-      body = await res.text()
+      try {
+        body = await res.text()
+      } catch (error) {
+        // A status whose body never arrived proves nothing, so it stays ERR.
+        throw new Error(
+          `body read failed after HTTP ${res.status}: ${error instanceof Error ? error.message : String(error)}`,
+          { cause: error },
+        )
+      }
+      status = String(res.status)
     } catch (error) {
       body = `fetch failed: ${error instanceof Error ? error.message : String(error)}`
     }
