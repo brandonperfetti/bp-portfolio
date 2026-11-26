@@ -122,11 +122,12 @@ against, is [`docs/designs/375-automatic-grant-region.md`](designs/375-automatic
   the visitor goes back out without choosing, Analytics is granted again.
   Both are changes from before #375, where the revoke was stored as a choice
   and the banner stayed away.
-- **The route the visitor lands on** is not reported. While an automatic
-  grant is live, a wrapper on `history.pushState`/`replaceState`, installed
-  before the tag ever loads, reads the region cookie the route's response has
-  just rewritten and switches the tag off before the router commits, so
-  gtag's history-driven `page_view` for that route is dropped.
+- **The route the visitor lands on** is not reported, once the region cookie
+  has changed. While an automatic grant is live, a wrapper on
+  `history.pushState`/`replaceState`, installed before the tag ever loads,
+  reads the cookie and switches the tag off before the router commits a route
+  into a region that asks, so gtag's history-driven `page_view` for that route
+  is dropped.
 - **Explicit choices** go through `saveExplicitChoice` from the banner and the
   dialog, and are stored as before. A record stored by this code is therefore
   always an explicit choice.
@@ -151,6 +152,14 @@ against, is [`docs/designs/375-automatic-grant-region.md`](designs/375-automatic
   tab's explicit save can land between the clean-up's read and its delete,
   and be deleted. The window is sub-millisecond and open only on the first
   page that finds a marked automatic record [inference: unmeasured].
+- **A region change that has not reached the proxy yet.** The site learns
+  the region only from a request the proxy answers. A route the router
+  prefetched before the change commits from that prefetch with no new
+  request, so the cookie still says "not required": the grant stays, the
+  banner does not come back and that route is reported, until a request
+  reaches the proxy (a full load, a route not prefetched yet). Production has
+  the same gap. Measured on a local production build on 2026-11-26, and
+  pinned as a known failure in `e2e/consent-google-analytics.spec.ts`.
 - **A page left visible and idle** gets no new region information until its
   next navigation or the next time it becomes visible, because the region is
   decided only on a request.

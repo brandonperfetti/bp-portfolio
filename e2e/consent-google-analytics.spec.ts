@@ -468,6 +468,53 @@ test.describe('an automatic grant meeting a region that asks (#375)', () => {
     ).toBe(true)
   })
 
+  /**
+   * Known gap, pinned (#375): the region is learned only from a request that
+   * reaches the proxy. A link the router prefetched while the visitor was in
+   * AU commits from that prefetch with no new request, so the cookie still
+   * says "not required": the grant stays, the banner does not come back and
+   * the landing route is reported, as in production. Measured 2026-11-26 on a
+   * local production build: the cookie still `false` after two such
+   * navigations, and a page view for each. Closing it needs a region check
+   * the site does not make today, which is Brandon's decision; see the PR.
+   * `test.fail` turns red the day this starts passing, so the note is
+   * revisited.
+   */
+  test('criterion (b), the header alone: a prefetched route commits with no request, so the change is not seen (known gap)', async ({
+    context,
+    page,
+  }) => {
+    test.fail(
+      true,
+      'no request reaches the proxy on a prefetched navigation (#375)',
+    )
+    const prefetched: string[] = []
+    page.on('request', (request) => {
+      if (request.headers()['next-router-prefetch'])
+        prefetched.push(request.url())
+    })
+    const seen = await watchGoogle(context)
+    await page.goto('/articles', { waitUntil: 'networkidle' })
+    await consentRuntimeReady(page)
+    await expect.poll(() => seen.filter(isPageView).length).toBeGreaterThan(0)
+    // The gap is about a route already prefetched; wait until it is.
+    await expect
+      .poll(() => prefetched.some((url) => new URL(url).pathname === '/uses'))
+      .toBe(true)
+
+    await page.setExtraHTTPHeaders(FR)
+    const atMove = seen.length
+    await page.getByRole('link', { name: 'Uses' }).first().click()
+    await page.waitForURL('**/uses')
+    await page.waitForLoadState('networkidle')
+
+    await expect(banner(page)).toBeVisible({ timeout: 2000 })
+    expect(
+      seen.slice(atMove).filter(isPageView),
+      'page views after the move',
+    ).toEqual([])
+  })
+
   test('control for (b): the same navigation where consent is still not required reports the landing route', async ({
     context,
     page,

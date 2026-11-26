@@ -43,10 +43,15 @@ import { CONSENT_REQUIRED_COOKIE } from '@/lib/consent/cookie'
  *   await between a save's start and its first storage write. The runtime is
  *   initialised first, so a held digest belongs to a save, not to start-up.
  *
- * Each case asserts the behaviour the design signs. The same file run on the
- * code before #375 is the production comparison: the PR records which cases
- * fail there, and the few that pass because production already behaves
- * correctly are named in their titles ("production already").
+ * ## The comparison with production is part of each test
+ *
+ * Each history is one sequence, written once, that asserts the behaviour the
+ * design signs. {@link history} runs it twice: against the change, where it
+ * must pass, and against `__production__/` (production's consent code before
+ * #375, frozen), where it must either pass too ("production already behaves
+ * this way") or fail. A production failure is pinned by its message in
+ * `__snapshots__/`, so the reason production fails is reviewed, and a
+ * failure for some other reason shows up as a snapshot change.
  */
 
 const { getMockPathname, setMockPathname } = vi.hoisted(() => {
@@ -93,6 +98,14 @@ const AUTOMATIC_SHAPE = {
 const REJECT_SHAPE = { ...AUTOMATIC_SHAPE, measurement: false }
 
 type Region = 'true' | 'false' | null
+
+/** Which consent code a page runs: the change, or production's before #375. */
+type Impl = 'change' | 'production'
+let impl: Impl = 'change'
+
+/** `window.history`'s own methods, restored after each test. */
+const originalPushState = window.history.pushState
+const originalReplaceState = window.history.replaceState
 
 function setRegion(region: Region): void {
   document.cookie =
@@ -180,11 +193,18 @@ type StoreState = {
  * Opens one page: a fresh module graph, so a fresh c15t store, mounted with
  * the region and pathname given. Resolves once c15t has initialised.
  */
-async function openPage(region: Region, path = '/start') {
+async function openPage(
+  region: Region,
+  path = '/start',
+  options: { impl?: Impl } = {},
+) {
   setRegion(region)
   setMockPathname(path)
   vi.resetModules()
-  const { ConsentManager } = await import('./ConsentManager')
+  const { ConsentManager } =
+    (options.impl ?? impl) === 'change'
+      ? await import('./ConsentManager')
+      : await import('./__production__/ConsentManager')
   const { DEFAULT_CONSENT_CONFIG } = await import('./consent-content')
 
   let config = DEFAULT_CONSENT_CONFIG
@@ -281,9 +301,45 @@ function leavePage() {
   delete win.gtag
 }
 
+/**
+ * Runs one history against the change and against production's code.
+ *
+ * @param production - `'same'` when production already behaves as the change
+ * does, so the sequence passes on both; `'differs'` when production fails it,
+ * in which case its failure message is pinned by snapshot.
+ */
+function history(
+  title: string,
+  production: 'same' | 'differs',
+  run: () => Promise<void>,
+): void {
+  it(title, async () => {
+    impl = 'change'
+    await run()
+  })
+  it(`${title} — production ${production === 'same' ? 'already does' : 'fails it'}`, async () => {
+    impl = 'production'
+    if (production === 'same') await run()
+    else {
+      const failure = await run().then(
+        () => null,
+        (error: unknown) => error,
+      )
+      expect(failure, 'production fails this history').toBeInstanceOf(Error)
+      // Timestamps in a failed value change on every run.
+      expect(
+        (failure as Error).message.replace(/\b\d{13}\b/g, '<time>'),
+      ).toMatchSnapshot()
+    }
+  })
+}
+
 afterEach(() => {
+  impl = 'change'
   tagObserver.disconnect()
   cleanup()
+  window.history.pushState = originalPushState
+  window.history.replaceState = originalReplaceState
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   window.localStorage.clear()
@@ -296,264 +352,400 @@ afterEach(() => {
 })
 
 describe('#375 histories — fresh loads', () => {
-  it('H0: a not-required region grants Analytics in memory only; nothing is stored', async () => {
-    const page = await openPage('false')
+  history(
+    'H0: a not-required region grants Analytics in memory only; nothing is stored',
+    'differs',
+    async () => {
+      const page = await openPage('false')
 
-    expect(page.state().consents.measurement).toBe(true)
-    expect(page.state().consentInfo).toBeNull()
-    expect(tagScripts()).toHaveLength(1)
-    expect(gaDisabled()).toBe(false)
-    expect(page.banner()).toBeNull()
-    expect(rawLocalRecord()).toBeNull()
-    expect(await storedRecord()).toBeNull()
-    expect(marker()).toBeNull()
-  })
+      expect(page.state().consents.measurement).toBe(true)
+      expect(
+        page.state().consentInfo,
+        'nothing automatic is recorded',
+      ).toBeNull()
+      expect(tagScripts()).toHaveLength(1)
+      expect(gaDisabled()).toBe(false)
+      expect(page.banner()).toBeNull()
+      expect(rawLocalRecord()).toBeNull()
+      expect(await storedRecord()).toBeNull()
+      expect(marker()).toBeNull()
+    },
+  )
 
-  it('E (production already): an explicit choice in a stable region is kept', async () => {
-    await writeRecord(REJECT_SHAPE)
-    const page = await openPage('true')
-    await page.navigate('true', '/next')
+  history(
+    'E: an explicit choice in a stable region is kept',
+    'same',
+    async () => {
+      await writeRecord(REJECT_SHAPE)
+      const page = await openPage('true')
+      await page.navigate('true', '/next')
 
-    expect(page.state().consentInfo).not.toBeNull()
-    expect(page.state().consents.measurement).toBe(false)
-    expect(tagScripts()).toHaveLength(0)
-    expect((await storedRecord())?.consents?.measurement).toBe(false)
-  })
+      expect(page.state().consentInfo).not.toBeNull()
+      expect(page.state().consents.measurement).toBe(false)
+      expect(tagScripts()).toHaveLength(0)
+      expect((await storedRecord())?.consents?.measurement).toBe(false)
+    },
+  )
 
-  it("E′ (production already): an explicit Reject made where asked holds in a region that doesn't ask", async () => {
-    await writeRecord(REJECT_SHAPE)
-    const page = await openPage('false')
+  history(
+    "E′: an explicit Reject made where asked holds in a region that doesn't ask",
+    'same',
+    async () => {
+      await writeRecord(REJECT_SHAPE)
+      const page = await openPage('false')
 
-    expect(page.state().consents.measurement).toBe(false)
-    expect(tagScripts()).toHaveLength(0)
-    expect((await storedRecord())?.consents?.measurement).toBe(false)
-  })
+      expect(page.state().consents.measurement).toBe(false)
+      expect(tagScripts()).toHaveLength(0)
+      expect((await storedRecord())?.consents?.measurement).toBe(false)
+    },
+  )
 
-  it('H1: a stored automatic grant does not load the tag on a fresh page in a region that asks', async () => {
-    await writeRecord(AUTOMATIC_SHAPE, { marker: true })
-    const page = await openPage('true')
+  history(
+    'H1: a stored automatic grant does not load the tag on a fresh page in a region that asks',
+    'differs',
+    async () => {
+      await writeRecord(AUTOMATIC_SHAPE, { marker: true })
+      const page = await openPage('true')
 
-    expect(tagScripts()).toHaveLength(0)
-    expect(tagsEverAppended).toBe(0)
-    expect(page.state().consents.measurement).toBe(false)
-    expect(page.state().consentInfo).toBeNull()
-    expect(page.banner()).not.toBeNull()
-    expect(await storedRecord()).toBeNull()
-    // Kept, so a tab still on production's code still revokes (rule 4).
-    expect(marker()).toBe('1')
-  })
+      expect(tagScripts()).toHaveLength(0)
+      expect(tagsEverAppended).toBe(0)
+      expect(page.state().consents.measurement).toBe(false)
+      expect(
+        page.state().consentInfo,
+        'the stored automatic grant is not restored',
+      ).toBeNull()
+      expect(page.banner()).not.toBeNull()
+      expect(await storedRecord()).toBeNull()
+      // Kept, so a tab still on production's code still revokes (rule 4).
+      expect(marker()).toBe('1')
+    },
+  )
 
-  it('H1u: the same where the region cannot be read', async () => {
-    await writeRecord(AUTOMATIC_SHAPE, { marker: true })
-    const page = await openPage(null)
+  history(
+    'H1u: the same where the region cannot be read',
+    'differs',
+    async () => {
+      await writeRecord(AUTOMATIC_SHAPE, { marker: true })
+      const page = await openPage(null)
 
-    expect(tagScripts()).toHaveLength(0)
-    expect(tagsEverAppended).toBe(0)
-    expect(page.state().consents.measurement).toBe(false)
-    expect(page.banner()).not.toBeNull()
-    expect(await storedRecord()).toBeNull()
-  })
+      expect(tagScripts(), 'no tag loads').toHaveLength(0)
+      expect(tagsEverAppended).toBe(0)
+      expect(page.state().consents.measurement).toBe(false)
+      expect(page.banner()).not.toBeNull()
+      expect(await storedRecord()).toBeNull()
+    },
+  )
 })
 
 describe('#375 histories — mid-visit', () => {
-  it('H2: moving into a region that asks clears the grant in memory; no denial is stored and the banner returns', async () => {
-    const page = await openPage('false')
-    expect(tagScripts()).toHaveLength(1)
+  history(
+    'H2: moving into a region that asks clears the grant in memory; no denial is stored and the banner returns',
+    'differs',
+    async () => {
+      const page = await openPage('false')
+      expect(tagScripts()).toHaveLength(1)
 
-    await page.navigate('true', '/next')
+      await page.navigate('true', '/next')
 
-    expect(page.state().consents.measurement).toBe(false)
-    expect(page.state().selectedConsents?.measurement).toBe(false)
-    expect(page.state().consentInfo).toBeNull()
-    expect(gaDisabled()).toBe(true)
-    expect(page.banner()).not.toBeNull()
-    expect(await storedRecord()).toBeNull()
-  })
+      expect(page.state().consents.measurement).toBe(false)
+      expect(page.state().selectedConsents?.measurement).toBe(false)
+      expect(
+        page.state().consentInfo,
+        'no denial is recorded on the visitor’s behalf',
+      ).toBeNull()
+      expect(gaDisabled()).toBe(true)
+      expect(page.banner()).not.toBeNull()
+      expect(await storedRecord()).toBeNull()
+    },
+  )
 
-  it('H3 (signed deviation): in, then back out without choosing, re-grants automatically', async () => {
-    const page = await openPage('false')
-    await page.navigate('true', '/asks')
-    await page.navigate('false', '/back')
+  history(
+    'H3 (signed deviation): in, then back out without choosing, re-grants automatically',
+    'differs',
+    async () => {
+      const page = await openPage('false')
+      await page.navigate('true', '/asks')
+      await page.navigate('false', '/back')
 
-    expect(page.state().consents.measurement).toBe(true)
-    expect(page.state().consentInfo).toBeNull()
-    expect(gaDisabled()).toBe(false)
-    expect(page.banner()).toBeNull()
-    expect(await storedRecord()).toBeNull()
-  })
+      expect(
+        page.state().consents.measurement,
+        'going back out re-grants automatically',
+      ).toBe(true)
+      expect(page.state().consentInfo).toBeNull()
+      expect(gaDisabled()).toBe(false)
+      expect(page.banner()).toBeNull()
+      expect(await storedRecord()).toBeNull()
+    },
+  )
 
-  it('rule 6: a navigation after which the region cookie is gone clears an automatic grant', async () => {
-    const page = await openPage('false')
-    await page.navigate(null, '/next')
+  history(
+    'rule 6: a navigation after which the region cookie is gone clears an automatic grant',
+    'differs',
+    async () => {
+      const page = await openPage('false')
+      await page.navigate(null, '/next')
 
-    expect(page.state().consents.measurement).toBe(false)
-    expect(gaDisabled()).toBe(true)
-    expect(page.banner()).not.toBeNull()
-  })
+      expect(
+        page.state().consents.measurement,
+        'the automatic grant is cleared',
+      ).toBe(false)
+      expect(gaDisabled()).toBe(true)
+      expect(page.banner()).not.toBeNull()
+    },
+  )
 
-  it('rule 6: a page restored from the back-forward cache with no region cookie clears an automatic grant', async () => {
-    const page = await openPage('false')
-    setRegion(null)
-    await act(async () => {
-      const event = new Event('pageshow') as Event & { persisted?: boolean }
-      Object.defineProperty(event, 'persisted', { value: true })
-      window.dispatchEvent(event)
-    })
-    await settle()
+  history(
+    'rule 6: a page restored from the back-forward cache with no region cookie clears an automatic grant',
+    'differs',
+    async () => {
+      const page = await openPage('false')
+      setRegion(null)
+      await act(async () => {
+        const event = new Event('pageshow') as Event & { persisted?: boolean }
+        Object.defineProperty(event, 'persisted', { value: true })
+        window.dispatchEvent(event)
+      })
+      await settle()
 
-    expect(page.state().consents.measurement).toBe(false)
-    expect(gaDisabled()).toBe(true)
-  })
+      expect(
+        page.state().consents.measurement,
+        'the automatic grant is cleared',
+      ).toBe(false)
+      expect(gaDisabled()).toBe(true)
+    },
+  )
 
-  it('rule 6: a tab becoming visible with no region cookie clears an automatic grant', async () => {
-    const page = await openPage('false')
-    setRegion(null)
-    await act(async () => {
-      document.dispatchEvent(new Event('visibilitychange'))
-    })
-    await settle()
+  history(
+    'rule 6: a tab becoming visible with no region cookie clears an automatic grant',
+    'differs',
+    async () => {
+      const page = await openPage('false')
+      setRegion(null)
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      await settle()
 
-    expect(page.state().consents.measurement).toBe(false)
-    expect(gaDisabled()).toBe(true)
-  })
+      expect(
+        page.state().consents.measurement,
+        'the automatic grant is cleared',
+      ).toBe(false)
+      expect(gaDisabled()).toBe(true)
+    },
+  )
 
-  it('landing route: a history push into a region that asks switches the tag off before the push returns', async () => {
-    await openPage('false')
-    expect(gaDisabled()).toBe(false)
+  history(
+    'landing route: a history push into a region that asks switches the tag off before the push returns',
+    'differs',
+    async () => {
+      await openPage('false')
+      expect(gaDisabled()).toBe(false)
 
-    // The route's response has already rewritten the cookie by the time the
-    // router commits and pushes; nothing else has run yet.
-    setRegion('true')
-    window.history.pushState({}, '', '/landing')
+      // The route's response has already rewritten the cookie by the time the
+      // router commits and pushes; nothing else has run yet.
+      setRegion('true')
+      window.history.pushState({}, '', '/landing')
 
-    expect(gaDisabled()).toBe(true)
-  })
+      expect(gaDisabled(), 'the tag is off before the push returns').toBe(true)
+    },
+  )
 
-  it("landing route (production already): a history push where consent isn't required leaves the tag on", async () => {
-    await openPage('false')
-    window.history.pushState({}, '', '/elsewhere')
+  history(
+    "landing route: a history push where consent isn't required leaves the tag on",
+    'same',
+    async () => {
+      await openPage('false')
+      window.history.pushState({}, '', '/elsewhere')
 
-    expect(gaDisabled()).toBe(false)
-  })
+      expect(gaDisabled()).toBe(false)
+    },
+  )
 })
 
 describe('#375 histories — saves in flight', () => {
-  it('F7: an automatic grant cannot land after the region asks, whatever order saves finish in', async () => {
-    const page = await openPage(null)
-    const digests = holdDigests()
+  history(
+    'F7: an automatic grant cannot land after the region asks, whatever order saves finish in',
+    'differs',
+    async () => {
+      const page = await openPage(null)
+      const digests = holdDigests()
 
-    await page.navigate('false', '/grant')
-    await page.navigate('true', '/asks')
-    // Later save first, then the earlier one (production's F7 ordering).
-    for (let i = digests.count() - 1; i >= 0; i--) await digests.release(i)
-    await digests.releaseAll()
+      await page.navigate('false', '/grant')
+      await page.navigate('true', '/asks')
+      // Later save first, then the earlier one (production's F7 ordering).
+      for (let i = digests.count() - 1; i >= 0; i--) await digests.release(i)
+      await digests.releaseAll()
 
-    expect(page.state().consents.measurement).toBe(false)
-    expect(gaDisabled()).toBe(true)
-    expect(page.banner()).not.toBeNull()
-    expect(await storedRecord()).toBeNull()
-  })
+      expect(
+        page.state().consents.measurement,
+        'the automatic grant did not land last',
+      ).toBe(false)
+      expect(gaDisabled()).toBe(true)
+      expect(page.banner()).not.toBeNull()
+      expect(await storedRecord()).toBeNull()
+    },
+  )
 
-  it('F7b: nothing automatic is ever written to storage, so no write can overwrite a denial', async () => {
-    const writes: string[] = []
-    const setItem = Storage.prototype.setItem
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
-      this: Storage,
-      key: string,
-      value: string,
-    ) {
-      if (key === RECORD_KEY) writes.push(value)
-      return setItem.call(this, key, value)
-    })
+  history(
+    'F7b: nothing automatic is ever written to storage, so no write can overwrite a denial',
+    'differs',
+    async () => {
+      const writes: string[] = []
+      const setItem = Storage.prototype.setItem
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+        this: Storage,
+        key: string,
+        value: string,
+      ) {
+        if (key === RECORD_KEY) writes.push(value)
+        return setItem.call(this, key, value)
+      })
 
-    const page = await openPage(null)
-    const digests = holdDigests()
-    await page.navigate('false', '/grant')
-    await page.navigate('true', '/asks')
-    // The earlier save first this time, with a turn of the loop between.
-    for (let i = 0; i < digests.count(); i++) await digests.release(i)
-    await digests.releaseAll()
+      const page = await openPage(null)
+      const digests = holdDigests()
+      await page.navigate('false', '/grant')
+      await page.navigate('true', '/asks')
+      // The earlier save first this time, with a turn of the loop between.
+      for (let i = 0; i < digests.count(); i++) await digests.release(i)
+      await digests.releaseAll()
 
-    expect(writes).toEqual([])
-    expect(await storedRecord()).toBeNull()
-    expect(page.state().consents.measurement).toBe(false)
-  })
+      expect(writes, 'nothing automatic is written to storage').toEqual([])
+      expect(await storedRecord()).toBeNull()
+      expect(page.state().consents.measurement).toBe(false)
+    },
+  )
 
-  it('F4: a grant and a clear in quick succession leave no record and Analytics off', async () => {
-    const page = await openPage(null)
-    const digests = holdDigests()
-    await page.navigate('false', '/grant')
-    await page.navigate('true', '/asks')
-    await digests.releaseAll()
+  history(
+    'F4: a grant and a clear in quick succession leave no record and Analytics off',
+    'differs',
+    async () => {
+      const page = await openPage(null)
+      const digests = holdDigests()
+      await page.navigate('false', '/grant')
+      await page.navigate('true', '/asks')
+      await digests.releaseAll()
 
-    expect(await storedRecord()).toBeNull()
-    expect(page.state().consents.measurement).toBe(false)
-    expect(page.banner()).not.toBeNull()
-  })
+      expect(await storedRecord(), 'nothing is stored').toBeNull()
+      expect(page.state().consents.measurement).toBe(false)
+      expect(page.banner()).not.toBeNull()
+    },
+  )
 
-  it('F5: overlapping automatic grants with a dialog draft in between end on the last region, with nothing stored', async () => {
-    const page = await openPage('true')
-    const digests = holdDigests()
-    await page.navigate('false', '/a')
-    act(() => page.state().setSelectedConsent('measurement', false))
-    await page.navigate('true', '/b')
-    await page.navigate('false', '/c')
-    for (let i = digests.count() - 1; i >= 0; i--) await digests.release(i)
-    await digests.releaseAll()
+  history(
+    'F5: overlapping automatic grants with a dialog draft in between end on the last region, with nothing stored',
+    'differs',
+    async () => {
+      const page = await openPage('true')
+      const digests = holdDigests()
+      await page.navigate('false', '/a')
+      act(() => page.state().setSelectedConsent('measurement', false))
+      await page.navigate('true', '/b')
+      await page.navigate('false', '/c')
+      for (let i = digests.count() - 1; i >= 0; i--) await digests.release(i)
+      await digests.releaseAll()
 
-    expect(await storedRecord()).toBeNull()
-    expect(page.state().consents.measurement).toBe(true)
-    expect(page.state().consentInfo).toBeNull()
-  })
+      expect(await storedRecord(), 'nothing is stored').toBeNull()
+      expect(page.state().consents.measurement).toBe(true)
+      expect(page.state().consentInfo).toBeNull()
+    },
+  )
 
-  it('F6: a clear never wipes an explicit choice made while saves were in flight', async () => {
-    const page = await openPage('false')
-    const digests = holdDigests()
-    await page.navigate('true', '/asks')
+  history(
+    'F6: a clear never wipes an explicit choice made while saves were in flight',
+    'differs',
+    async () => {
+      const page = await openPage('false')
+      const digests = holdDigests()
+      await page.navigate('true', '/asks')
 
-    // The visitor accepts from the banner while saves are held.
-    const banner = page.banner()
-    expect(banner).not.toBeNull()
-    fireEvent.click(within(banner!).getByRole('button', { name: 'Accept all' }))
-    await settle()
-    await page.navigate('false', '/back')
-    await digests.releaseAll()
+      // The visitor accepts from the banner while saves are held.
+      const banner = page.banner()
+      expect(
+        banner,
+        'the banner is back after moving into a region that asks',
+      ).not.toBeNull()
+      fireEvent.click(
+        within(banner!).getByRole('button', { name: 'Accept all' }),
+      )
+      await settle()
+      await page.navigate('false', '/back')
+      await digests.releaseAll()
 
-    const record = await storedRecord()
-    expect(record?.consents?.measurement).toBe(true)
-    expect(page.state().consentInfo).not.toBeNull()
-    expect(marker()).toBeNull()
-  })
+      const record = await storedRecord()
+      expect(record?.consents?.measurement).toBe(true)
+      expect(page.state().consentInfo).not.toBeNull()
+      expect(marker()).toBeNull()
+    },
+  )
+
+  history(
+    'F6b: an explicit Accept still saving is never taken for an automatic grant afterwards',
+    'differs',
+    async () => {
+      const page = await openPage('false')
+      await page.navigate('true', '/asks')
+      const digests = holdDigests()
+
+      // The visitor accepts; before the save lands they move back to a region
+      // that does not ask, where an automatic grant would otherwise be made.
+      expect(
+        page.banner(),
+        'the banner is back after moving into a region that asks',
+      ).not.toBeNull()
+      fireEvent.click(
+        within(page.banner()!).getByRole('button', { name: 'Accept all' }),
+      )
+      await page.navigate('false', '/back')
+      await digests.releaseAll()
+      expect(page.state().consentInfo).not.toBeNull()
+
+      // A push into a region that asks must leave the explicit Accept's tag on.
+      setRegion('true')
+      window.history.pushState({}, '', '/landing')
+      expect(gaDisabled()).toBe(false)
+      await page.navigate('true', '/landing')
+      expect(page.state().consents.measurement).toBe(true)
+      expect(gaDisabled()).toBe(false)
+    },
+  )
 })
 
 describe('#375 histories — the one-time clean-up and re-renders', () => {
-  it('F8: a re-render with a new config after the store exists deletes nothing and keeps the in-memory grant ours', async () => {
-    await writeRecord(AUTOMATIC_SHAPE, { marker: true })
-    const page = await openPage('false')
-    expect(await storedRecord()).toBeNull()
+  history(
+    'F8: a re-render with a new config after the store exists deletes nothing and keeps the in-memory grant ours',
+    'differs',
+    async () => {
+      await writeRecord(AUTOMATIC_SHAPE, { marker: true })
+      const page = await openPage('false')
+      expect(await storedRecord(), 'nothing is stored or restored').toBeNull()
 
-    await page.rerenderWithNewConfig()
-    await page.navigate('true', '/asks')
+      await page.rerenderWithNewConfig()
+      await page.navigate('true', '/asks')
 
-    expect(page.state().consents.measurement).toBe(false)
-    expect(page.banner()).not.toBeNull()
-    expect(await storedRecord()).toBeNull()
-    expect(marker()).toBe('1')
-  })
+      expect(page.state().consents.measurement).toBe(false)
+      expect(page.banner()).not.toBeNull()
+      expect(await storedRecord()).toBeNull()
+      expect(marker()).toBe('1')
+    },
+  )
 
-  it('F8 (production already): an explicit choice made after mount survives a re-render with a new config', async () => {
-    const page = await openPage('true')
-    fireEvent.click(
-      within(page.banner()!).getByRole('button', { name: 'Accept all' }),
-    )
-    await settle()
-    await page.rerenderWithNewConfig()
+  history(
+    'F8: an explicit choice made after mount survives a re-render with a new config',
+    'same',
+    async () => {
+      const page = await openPage('true')
+      fireEvent.click(
+        within(page.banner()!).getByRole('button', { name: 'Accept all' }),
+      )
+      await settle()
+      await page.rerenderWithNewConfig()
 
-    expect((await storedRecord())?.consents?.measurement).toBe(true)
-    expect(page.state().consentInfo).not.toBeNull()
-  })
+      expect((await storedRecord())?.consents?.measurement).toBe(true)
+      expect(page.state().consentInfo).not.toBeNull()
+    },
+  )
 
-  it('shape (production already): a marked Reject is kept', async () => {
+  history('shape: a marked Reject is kept', 'same', async () => {
     await writeRecord(REJECT_SHAPE, { marker: true })
     const page = await openPage('false')
 
@@ -562,104 +754,149 @@ describe('#375 histories — the one-time clean-up and re-renders', () => {
     expect(tagScripts()).toHaveLength(0)
   })
 
-  it('shape (production already): a marked Accept of more than Analytics is kept', async () => {
-    await writeRecord({ ...AUTOMATIC_SHAPE, marketing: true }, { marker: true })
-    await openPage('false')
+  history(
+    'shape: a marked Accept of more than Analytics is kept',
+    'same',
+    async () => {
+      await writeRecord(
+        { ...AUTOMATIC_SHAPE, marketing: true },
+        { marker: true },
+      )
+      await openPage('false')
 
-    expect((await storedRecord())?.consents?.marketing).toBe(true)
-  })
+      expect((await storedRecord())?.consents?.marketing).toBe(true)
+    },
+  )
 
-  it('shape: a marked record of exactly the automatic shape is deleted and re-granted in memory', async () => {
-    await writeRecord(AUTOMATIC_SHAPE, { marker: true })
-    const page = await openPage('false')
+  history(
+    'shape: a marked record of exactly the automatic shape is deleted and re-granted in memory',
+    'differs',
+    async () => {
+      await writeRecord(AUTOMATIC_SHAPE, { marker: true })
+      const page = await openPage('false')
 
-    expect(await storedRecord()).toBeNull()
-    expect(page.state().consents.measurement).toBe(true)
-    expect(page.state().consentInfo).toBeNull()
-    expect(tagScripts()).toHaveLength(1)
-  })
+      expect(await storedRecord(), 'the automatic record is deleted').toBeNull()
+      expect(page.state().consents.measurement).toBe(true)
+      expect(page.state().consentInfo).toBeNull()
+      expect(tagScripts()).toHaveLength(1)
+    },
+  )
 })
 
 describe('#375 histories — two tabs', () => {
-  it('two tabs: a fresh tab in a region that asks writes nothing, and the first tab clears its own grant', async () => {
-    const tabA = await openPage('false')
-    expect(tabA.state().consents.measurement).toBe(true)
+  history(
+    'two tabs: a fresh tab in a region that asks writes nothing, and the first tab clears its own grant',
+    'differs',
+    async () => {
+      const tabA = await openPage('false')
+      expect(tabA.state().consents.measurement).toBe(true)
 
-    const tabB = await openPage('true')
-    expect(tabB.state().consents.measurement).toBe(false)
-    expect(tabB.banner()).not.toBeNull()
+      const tabB = await openPage('true')
+      expect(tabB.state().consents.measurement).toBe(false)
+      expect(tabB.banner(), 'tab B asks the visitor').not.toBeNull()
 
-    await tabA.navigate('true', '/asks')
+      await tabA.navigate('true', '/asks')
 
-    expect(tabA.state().consents.measurement).toBe(false)
-    expect(tabA.banner()).not.toBeNull()
-    expect(await storedRecord()).toBeNull()
-    expect(marker()).toBeNull()
-  })
+      expect(tabA.state().consents.measurement).toBe(false)
+      expect(tabA.banner()).not.toBeNull()
+      expect(await storedRecord()).toBeNull()
+      expect(marker()).toBeNull()
+    },
+  )
 
-  it('two tabs, deploy skew: a new tab deletes an old tab’s automatic record but keeps its marker, so the old tab still revokes', async () => {
-    // Tab A, on production's code, auto-granted where consent is not required.
-    await writeRecord(AUTOMATIC_SHAPE, { marker: true })
+  history(
+    'two tabs, deploy skew: a new tab deletes an old tab’s automatic record but keeps its marker, so the old tab still revokes',
+    'differs',
+    async () => {
+      // Tab A runs production's code: it saves its automatic grant and marks it.
+      const tabA = await openPage('false', '/a', { impl: 'production' })
+      await waitFor(async () => expect(await storedRecord()).not.toBeNull())
+      expect(marker()).toBe('1')
 
-    const tabB = await openPage('true')
+      // Tab B loads in a region that asks.
+      const tabB = await openPage('true', '/b')
+      expect(tabB.state().consents.measurement).toBe(false)
+      expect(tabB.state().consentInfo, 'tab B records nothing').toBeNull()
+      expect(tabB.banner()).not.toBeNull()
+      expect(marker()).toBe('1')
 
-    expect(tagScripts()).toHaveLength(0)
-    expect(tagsEverAppended).toBe(0)
-    expect(tabB.banner()).not.toBeNull()
-    expect(await storedRecord()).toBeNull()
-    expect(marker()).toBe('1')
-  })
+      // Tab A moves into a region that asks and revokes as production does.
+      await tabA.navigate('true', '/asks')
+      expect(tabA.state().consents.measurement).toBe(false)
+    },
+  )
 
-  it('R1: a settled automatic record is cleaned before the store exists, so no tab restores it', async () => {
-    await writeRecord(AUTOMATIC_SHAPE, { marker: true })
-    const tabA = await openPage('false')
+  history(
+    'R1: a settled automatic record is cleaned before the store exists, so no tab restores it',
+    'differs',
+    async () => {
+      await writeRecord(AUTOMATIC_SHAPE, { marker: true })
+      const tabA = await openPage('false')
 
-    expect(tabA.state().consentInfo).toBeNull()
-    await tabA.navigate('true', '/asks')
+      expect(
+        tabA.state().consentInfo,
+        'the automatic record was not restored',
+      ).toBeNull()
+      await tabA.navigate('true', '/asks')
 
-    expect(tabA.state().consents.measurement).toBe(false)
-    expect(tabA.banner()).not.toBeNull()
-  })
+      expect(tabA.state().consents.measurement).toBe(false)
+      expect(tabA.banner()).not.toBeNull()
+    },
+  )
 
-  it("R2: an old tab's second write after the clean-up is cleaned again on the next page, marker still kept", async () => {
-    // Old tab A, write 1.
-    await writeRecord(AUTOMATIC_SHAPE, { marker: true })
-    // New tab B loads and cleans.
-    await openPage('false')
-    expect(await storedRecord()).toBeNull()
-    // Old tab A, write 2, recreating the record; the marker was never removed.
-    await writeRecord(AUTOMATIC_SHAPE)
-    leavePage()
+  history(
+    "R2: an old tab's second write after the clean-up is cleaned again on the next page, marker still kept",
+    'differs',
+    async () => {
+      // Old tab A, write 1.
+      await writeRecord(AUTOMATIC_SHAPE, { marker: true })
+      // New tab B loads and cleans.
+      await openPage('false')
+      expect(
+        await storedRecord(),
+        'the old tab’s record is deleted again',
+      ).toBeNull()
+      // Old tab A, write 2, recreating the record; the marker was never removed.
+      await writeRecord(AUTOMATIC_SHAPE)
+      leavePage()
 
-    tagsEverAppended = 0
-    const tabC = await openPage('true')
+      tagsEverAppended = 0
+      const tabC = await openPage('true')
 
-    expect(tagScripts()).toHaveLength(0)
-    expect(tagsEverAppended).toBe(0)
-    expect(tabC.banner()).not.toBeNull()
-    expect(await storedRecord()).toBeNull()
-    expect(marker()).toBe('1')
-  })
+      expect(tagScripts()).toHaveLength(0)
+      expect(tagsEverAppended).toBe(0)
+      expect(tabC.banner()).not.toBeNull()
+      expect(await storedRecord()).toBeNull()
+      expect(marker()).toBe('1')
+    },
+  )
 
-  it("R3: with localStorage unavailable, a tab writes nothing automatic over another tab's Accept, and clears its own grant", async () => {
-    const tabA = await openPage('false')
-    expect(tabA.state().consents.measurement).toBe(true)
+  history(
+    "R3: with localStorage unavailable, a tab writes nothing automatic over another tab's Accept, and clears its own grant",
+    'differs',
+    async () => {
+      const tabA = await openPage('false')
+      expect(tabA.state().consents.measurement).toBe(true)
 
-    // Tab B accepts; with localStorage gone, only the cookie holds it.
-    await writeRecord({ ...AUTOMATIC_SHAPE, marketing: true })
-    window.localStorage.removeItem(RECORD_KEY)
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-      throw new Error('storage unavailable')
-    })
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('storage unavailable')
-    })
+      // Tab B accepts; with localStorage gone, only the cookie holds it.
+      await writeRecord({ ...AUTOMATIC_SHAPE, marketing: true })
+      window.localStorage.removeItem(RECORD_KEY)
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new Error('storage unavailable')
+      })
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('storage unavailable')
+      })
 
-    await tabA.navigate('true', '/asks')
+      await tabA.navigate('true', '/asks')
 
-    expect(tabA.state().consents.measurement).toBe(false)
-    expect(document.cookie).toContain('c.marketing:1')
-  })
+      expect(
+        tabA.state().consents.measurement,
+        'tab A clears its own grant',
+      ).toBe(false)
+      expect(document.cookie).toContain('c.marketing:1')
+    },
+  )
 })
 
 describe('#375 histories — explicit choices after an automatic grant', () => {
@@ -687,17 +924,80 @@ describe('#375 histories — explicit choices after an automatic grant', () => {
     expect(marker()).toBeNull()
   })
 
-  it('the banner and dialog clear the marker before they save (production already does)', async () => {
-    const page = await openPage('true')
-    // A tab still on production's code sets the marker after this page loaded.
-    window.localStorage.setItem(MARKER_KEY, '1')
-    fireEvent.click(
-      within(page.banner()!).getByRole('button', {
-        name: 'Reject non-essential',
-      }),
+  for (const [surface, button] of [
+    ['banner', 'Accept all'],
+    ['banner', 'Reject non-essential'],
+    ['dialog', 'Reject non-essential'],
+    ['dialog', 'Save choices'],
+    ['dialog', 'Accept all'],
+  ] as const) {
+    history(
+      `the ${surface}'s “${button}” clears the marker before it saves`,
+      'same',
+      async () => {
+        const page = await openPage('true')
+        // A tab still on production's code sets the marker after this page
+        // loaded; the one-time clean-up has already run.
+        window.localStorage.setItem(MARKER_KEY, '1')
+        const digests = holdDigests()
+        let scope = page.banner()!
+        if (surface === 'dialog') {
+          act(() => page.state().setActiveUI('dialog', { force: true }))
+          scope = await within(document.body).findByRole('dialog')
+        }
+        fireEvent.click(within(scope).getByRole('button', { name: button }))
+
+        // Cleared while the save is still held, before anything is stored.
+        expect(digests.count()).toBeGreaterThan(0)
+        expect(rawLocalRecord()).toBeNull()
+        expect(marker()).toBeNull()
+        await digests.releaseAll()
+        expect(await storedRecord()).not.toBeNull()
+      },
     )
-    expect(marker()).toBeNull()
-    await settle()
-    expect((await storedRecord())?.consents?.measurement).toBe(false)
-  })
+  }
+
+  history(
+    'callback throws: an explicit Reject is still stored when stopping the tag throws',
+    'same',
+    async () => {
+      await writeRecord({ ...AUTOMATIC_SHAPE })
+      const page = await openPage('true')
+      expect(page.state().consents.measurement).toBe(true)
+      // The callback c15t runs just before its reload stops the tag, which
+      // calls gtag; make that first call throw, as a broken tag would. c15t
+      // does not catch it, so the save rejects: catch that here, where the
+      // banner's `void` would leave it unhandled.
+      let thrown = false
+      win.gtag = () => {
+        if (thrown) return
+        thrown = true
+        throw new Error('gtag is broken')
+      }
+      let rejection: unknown = null
+      const store = page.store as unknown as {
+        getState: () => StoreState
+        setState: (partial: Partial<StoreState>) => void
+      }
+      const save = store.getState().saveConsents
+      act(() =>
+        store.setState({
+          saveConsents: (type) =>
+            save(type).catch((error: unknown) => {
+              rejection = error
+            }),
+        }),
+      )
+
+      act(() => page.state().setActiveUI('dialog', { force: true }))
+      const dialog = await within(document.body).findByRole('dialog')
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: 'Reject non-essential' }),
+      )
+      await settle(60)
+
+      expect(rejection).toBeInstanceOf(Error)
+      expect((await storedRecord())?.consents?.measurement).toBe(false)
+    },
+  )
 })

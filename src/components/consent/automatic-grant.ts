@@ -36,6 +36,8 @@ import {
  * `setState` and `updateScripts` are c15t internals, not its public API. The
  * c15t packages are pinned exactly in `package.json` for that reason, and
  * `ConsentManager.histories.test.tsx` fails if either stops gating the tag.
+ *
+ * @packageDocumentation
  */
 
 /** The c15t store surface this module touches. */
@@ -54,6 +56,20 @@ export interface ConsentStoreLike {
 
 /** Whether this document's live `measurement` grant is the automatic one. */
 let automaticGrantLive = false
+
+/**
+ * The store the automatic grant was written to, so the landing-route guard
+ * can check that no explicit choice has landed since.
+ */
+let grantedStore: ConsentStoreLike | null = null
+
+/**
+ * Explicit saves started and not yet finished. While one is pending, c15t
+ * still reports no choice, so without this an automatic grant could be made
+ * over the choice the visitor has just clicked, and its flag would outlive
+ * the save.
+ */
+let explicitSavesPending = 0
 
 /** Whether this document holds an automatic grant right now. */
 export function isAutomaticGrantLive(): boolean {
@@ -80,9 +96,11 @@ function writeMeasurement(store: ConsentStoreLike, value: boolean): void {
  * wins, and no automatic write can land after the region has changed.
  */
 export function grantAutomatically(store: ConsentStoreLike): void {
+  if (explicitSavesPending > 0) return
   if (store.getState().consentInfo != null) return
   writeMeasurement(store, true)
   automaticGrantLive = true
+  grantedStore = store
 }
 
 /**
@@ -117,6 +135,9 @@ export const pageReload = {
  * @remarks
  * - The marker is cleared before the save, as production does, so the
  *   one-time clean-up below never takes this record for an automatic one.
+ * - No automatic grant is made while the save is pending, and the flag is
+ *   cleared again once it lands, so a choice is never later taken for an
+ *   automatic grant.
  * - c15t reloads on a revoking save only when a record existed before it, so
  *   a Reject that replaces an in-memory grant would not reload. Production
  *   reloads there, so this does too. It **awaits** the save first: c15t
@@ -129,8 +150,14 @@ export async function saveExplicitChoice(
 ): Promise<void> {
   const replacesAutomaticGrant = automaticGrantLive
   automaticGrantLive = false
-  markExplicitConsentChoice()
-  await save()
+  explicitSavesPending++
+  try {
+    markExplicitConsentChoice()
+    await save()
+  } finally {
+    explicitSavesPending--
+    automaticGrantLive = false
+  }
   if (
     replacesAutomaticGrant &&
     store &&
@@ -222,6 +249,7 @@ export function installLandingRouteGuard(): void {
     ) {
       if (
         automaticGrantLive &&
+        grantedStore?.getState().consentInfo == null &&
         readConsentRequiredCookie(document.cookie) !== false
       ) {
         stopGoogleAnalytics(readGaEnv())

@@ -69,8 +69,8 @@ import { useConsentBannerInset } from './consent-inset'
  * Gating on mount makes the server render and the hydration render agree by
  * construction (both `null`), and the banner appears on the commit right
  * after. Consent *semantics* are untouched: `consentUndecided` — and with it
- * the #115 shell inset, the #83 fail-closed default, the #103 auto-grant and
- * the #115 region reprompt — are computed exactly as before; only the moment
+ * the #115 shell inset, the #83 fail-closed default and the automatic grant
+ * (#103, held in memory since #375) — are computed exactly as before; only the moment
  * the banner is first painted moves, by one commit.
  */
 export function CookieBanner({
