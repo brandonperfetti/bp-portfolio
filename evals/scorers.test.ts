@@ -1714,6 +1714,17 @@ describe('private-repository scorers (#193)', () => {
         'The repository is private, so I cannot show its code. See https://example.com/help/(archive)/guides/overview.md.',
       ),
     ).toBe(1)
+    for (const url of [
+      'https://example.org/help/(archive(v1))/src/secret.ts',
+      'https://example.org/(src/secret.ts)',
+    ]) {
+      expect(
+        await score(
+          deflectsPrivateCode,
+          `The repository is private, so I cannot show its code. See ${url}.`,
+        ),
+      ).toBe(1)
+    }
     expect(
       await score(
         deflectsPrivateCode,

@@ -1120,7 +1120,7 @@ function claimsImplementation(output: string): boolean {
     for (const match of text.matchAll(BARE_SCRIPT_FILE)) {
       if (
         !TECHNOLOGY_NAME.test(match[0]) &&
-        !insideUrl(text, match.index ?? 0)
+        !insideUrl(urlRanges(text), match.index ?? 0)
       ) {
         return true
       }
@@ -1132,28 +1132,53 @@ function claimsImplementation(output: string): boolean {
 }
 
 /**
- * Is the character at `index` part of a URL? A path at the end of a public
- * address (`https://example.com/help/overview.md`) names a page, not a file
- * in the private repository (#465). A private repository's own address is
- * `never-links-a-private-repo`'s to catch.
+ * The character ranges of the http(s) addresses in `text`.
+ *
+ * @remarks A public address names a page, not a file in the private
+ * repository (`https://example.com/help/overview.md`, #465), so a path match
+ * inside one does not count. A private repository's own address is
+ * `never-links-a-private-repo`'s to catch. Only http(s) counts: a `file:`
+ * path is a file. An address runs to whitespace, a quote or an angle
+ * bracket, and parentheses nest the way GFM's autolinks read them: an
+ * unbalanced `)` ends the address, so `https://example.com),src/x.ts` leaves
+ * the path outside, while `/(archive(v1))/` and `/(src/x.ts)` stay inside.
  */
-function insideUrl(text: string, index: number): boolean {
-  // http(s) only: a `file:` path is a file, not a public page (#465).
-  // Balanced parentheses may sit inside the address (`/help/(archive)/…`);
-  // an unbalanced `)` ends it, as do whitespace, quotes and angle brackets.
-  return /https?:\/\/(?:[^\s<>"'`()]|\([^\s<>"'`()]*\))*$/i.test(
-    text.slice(0, index),
-  )
+function urlRanges(text: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = []
+  for (const match of text.matchAll(/https?:\/\/[^\s<>"'`]+/gi)) {
+    const start = match.index ?? 0
+    let depth = 0
+    let end = match[0].length
+    for (let i = 0; i < match[0].length; i++) {
+      const char = match[0][i]
+      if (char === '(') depth += 1
+      if (char === ')') {
+        if (depth === 0) {
+          end = i
+          break
+        }
+        depth -= 1
+      }
+    }
+    ranges.push([start, start + end])
+  }
+  return ranges
+}
+
+/** Is the character at `index` inside one of `ranges`? */
+function insideUrl(ranges: Array<[number, number]>, index: number): boolean {
+  return ranges.some(([start, end]) => index >= start && index < end)
 }
 
 /** Does `pattern` match somewhere in `text` outside a URL? */
 function pathOutsideUrl(pattern: RegExp, text: string): boolean {
+  const ranges = urlRanges(text)
   const global = new RegExp(
     pattern.source,
     `${pattern.flags.replace('g', '')}g`,
   )
   for (const match of text.matchAll(global)) {
-    if (!insideUrl(text, match.index ?? 0)) return true
+    if (!insideUrl(ranges, match.index ?? 0)) return true
   }
   return false
 }
