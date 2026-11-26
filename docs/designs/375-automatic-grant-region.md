@@ -275,10 +275,15 @@ Six rules, all in `src/components/consent/`:
 4. **One-time clean-up of what production stored.** This runs once per
    module instance, the lifetime of c15t's store cache, before
    `ConsentManagerProvider` first renders. If `bp-consent-autogrant` is
-   `'1'` **and the stored record grants `measurement`**, it deletes the
+   `'1'` **and the stored record has the automatic shape**, it deletes the
    `bp-consent` record with c15t's own
    `deleteConsentFromStorage(undefined, { storageKey })`, so the cookie's path
    and domain match how c15t wrote it (`:308-316`, `:412-441`).
+   - **The automatic shape.** `necessary` and `measurement` are true, and
+     every other offered category is false: exactly what production's
+     `setConsent('measurement', true)` stores. The test reads the copy c15t
+     will restore, cookie first, as `getConsentFromStorage` does
+     (`:694-772`), not `localStorage` alone.
    - **The marker is kept.** A tab still running production's code reads the
      marker to know its grant is automatic. Deleting it would make that tab
      treat its grant as explicit, and never revoke it: fix B's two-tab failure.
@@ -286,20 +291,40 @@ Six rules, all in `src/components/consent/`:
      automatic grant, the next new-code page cleans that up too.
    - The marker is cleared only by an explicit choice, before it saves (rule
      3). An explicit record can still end up next to a marker, through two
-     orderings in deploy skew:
+     orderings between tabs. Both can also happen with every tab on
+     production's code, so such records may already be stored before the
+     deploy:
      - an old tab auto-grants over the explicit record after it lands; or
      - a new tab clears the marker and starts an explicit save. An old tab
        then auto-grants and sets the marker, and its save lands first, so the
        explicit record is the final one while the marker reads `'1'`.
 
-     **The `measurement` test bounds both.** A record that refuses
-     `measurement`, such as an explicit Reject, is never deleted, so it is
-     kept as production keeps it. An explicit Accept caught in this race is
-     deleted. In a not-required region it is re-granted in memory, so the tag
-     behaves as before. In a region that asks, the visitor is asked again.
-     Production treats that same Accept as automatic and revokes it there, so
-     less reaches Google under C than under production. Tests run both
-     orderings.
+     **The shape test bounds both.** A record that refuses `measurement`
+     (a Reject), or grants any other category (an Accept of more than
+     Analytics), does not have the automatic shape, so it is kept as
+     production keeps it.
+
+     The one explicit record that can be deleted is an Accept, caught in this
+     race, of exactly `necessary` plus `measurement`. That is the whole of an
+     Accept while the CMS offers only those two categories.
+     - **For Google:** no worse. In a not-required region it is re-granted in
+       memory, so the tag behaves as before. In a region that asks, production
+       restores it, loads the tag on page 1 and then revokes it; C loads
+       nothing.
+     - **Residual:** the choice itself is lost, so a visitor in a region that
+       asks is asked again. Production keeps the record there as a choice,
+       with `measurement` switched off.
+
+     Tests run both orderings.
+
+   - **Check, then delete, across tabs.** The clean-up reads the marker and
+     the record, then deletes, all in one synchronous task. Browsers give
+     `localStorage` no lock across tabs, so another tab's save can land
+     between the read and the delete. If that save is an explicit Reject, it
+     is deleted. Accepted as a residual: it needs an explicit save to finish
+     inside that sub-millisecond window, and only on the first new-code page
+     that finds a marked automatic record. c15t's saves take no lock that the
+     clean-up could share. [inference: the width of the window is unmeasured]
 
    - The clean-up runs in every region, with no region test. A not-required
      region re-grants in memory on the same page, so nothing is lost there.
@@ -321,11 +346,21 @@ Six rules, all in `src/components/consent/`:
    next page refreshes the cookie.
    - **What re-reads the region without a navigation.** A page restored
      from the back-forward cache keeps its pathname, so the pathname-keyed
-     effect does not run. The signal therefore also re-reads the cookie on
-     `pageshow` when `event.persisted` is true. A test restores a page after
-     the cookie has gone and asserts that the automatic grant is cleared.
-     Production does not re-read here either, and leaves the grant on a null
-     region anyway.
+     effect does not run. The signal therefore also re-reads the cookie:
+     - on `pageshow` when `event.persisted` is true;
+     - on `visibilitychange` to `visible`, for a tab the visitor returns to
+       after it sat idle past the cookie's hour.
+
+     A test restores a page after the cookie has gone and asserts that the
+     automatic grant is cleared, and that no Google request is made. Until the
+     handler runs, the restored page's tag is still enabled. Whether gtag
+     sends anything in that gap is [inference: the restore test measures it].
+
+     A page left visible and idle gets no new region information, because the
+     proxy decides the region only on a request. It keeps its grant until the
+     next navigation or the next time it becomes visible again. Accepted as a
+     residual. Production does not re-read in any of these cases, and leaves
+     the grant on a null region anyway.
 
 - **Why it holds** [inference, each history's test verifies it]. Every
   history in #375 needs one of two things: an automatic write that can land
@@ -353,9 +388,11 @@ Six rules, all in `src/components/consent/`:
   - Reverting the code brings production's behaviour back.
   - The only data effect is the deleted automatic records. Production
     re-creates those on the visitor's next page in a not-required region.
-  - Explicit records that refuse `measurement` are never touched. An
-    explicit Accept is deleted only in the deploy-skew race of rule 4, where
-    production already treats it as automatic.
+  - Explicit records that do not have the automatic shape are not deleted,
+    apart from rule 4's sub-millisecond check-then-delete window. An explicit
+    Accept of exactly `necessary` and `measurement` is deleted only in rule
+    4's race between tabs, including such records already stored before the
+    deploy.
 - **Blast radius.**
   - Inside `src/components/consent`: the tag's gating, the dialog's toggle
     state, the banner inset (`consentUndecided` is unchanged) and the reload
@@ -462,9 +499,11 @@ says otherwise.
   and production has it too: an old tab auto-granting over a new tab's
   explicit choice. Production's own region effect can overwrite an explicit
   record when its in-memory state is stale. The same race can leave an
-  explicit record next to a marker. Rule 4's `measurement` test keeps a
-  Reject, and treats an Accept as production does. It lasts only until old
-  tabs are reloaded.
+  explicit record next to a marker. Rule 4's shape test keeps a Reject and
+  any wider Accept. An Accept of only Analytics is deleted, and the visitor
+  is asked again in a region that asks; nothing more reaches Google. It
+  lasts only until old tabs are reloaded, apart from such records already
+  stored before the deploy.
 - **Records production left unmarked** (F7 and F7b already happened in
   some browser). They read as explicit, as they do in production =P. Nothing
   can tell them apart.
