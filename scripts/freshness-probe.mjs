@@ -120,7 +120,8 @@ async function main() {
   for (const item of result.unchecked) log(`NOT CHECKED: ${item}`)
   for (const note of result.notes) log(`note: ${note}`)
   if (result.error) log(`error: ${result.error}`)
-  const code = exitCodeFor(result)
+  // The scrub can raise the code; print the verdict for what is returned.
+  const code = Math.max(exitCodeFor(result), process.exitCode ?? 0)
   log(
     code === EXIT.pass
       ? 'PASS'
@@ -128,7 +129,7 @@ async function main() {
         ? 'CLEANUP INCOMPLETE: probes may remain'
         : 'FAIL',
   )
-  return Math.max(code, process.exitCode ?? 0)
+  return code
 }
 
 main().then(

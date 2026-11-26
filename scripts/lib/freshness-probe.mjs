@@ -107,7 +107,7 @@ Options:
   --evidence <dir>             New or empty directory for reads.tsv, raw headers and bodies. Required.
   --target local|staging|production   Default local.
   --base-url <url>             local: a loopback URL (default http://localhost:6002).
-                               staging: another non-production https host (e.g. a preview).
+                               staging: a bp-portfolio-*-sans-faux-studios.vercel.app preview.
                                production: only https://brandonperfetti.com.
   --allow-staging-writes       Required for --target staging.
   --allow-production-writes    Required for --target production.
@@ -238,12 +238,17 @@ export function resolvePlan(args) {
   } else if (args.target === 'staging') {
     // An allowlist, not a denylist: the run sends a password or an MCP key
     // and the bypass secret, so a mistyped host must not receive them.
+    // A preview must be this project's, on this team: Vercel names them
+    // `bp-portfolio-<hash|git-branch>-sans-faux-studios.vercel.app`
+    // [measured 2026-11-26, GitHub deployment status]. A bare `.vercel.app`
+    // suffix would admit any other project's deployment.
     const stagingHost =
       host === new URL(target.defaultBaseUrl).hostname ||
-      host.endsWith('.vercel.app')
+      (host.startsWith('bp-portfolio-') &&
+        host.endsWith('-sans-faux-studios.vercel.app'))
     if (base.protocol !== 'https:' || isProductionHost || !stagingHost) {
       throw new RefusalError(
-        `--target staging takes ${target.defaultBaseUrl} or an https *.vercel.app preview, not ${base.origin}`,
+        `--target staging takes ${target.defaultBaseUrl} or an https bp-portfolio-*-sans-faux-studios.vercel.app preview, not ${base.origin}`,
       )
     }
   } else if (base.origin !== target.defaultBaseUrl) {
@@ -918,6 +923,7 @@ export async function runProbe({
     slug: slugs[kind],
     path: probePath(kind, slugs[kind]),
     id: /** @type {number | string | null} */ (null),
+    attempted: false,
   }))
   const result = {
     target: plan.target,
@@ -965,7 +971,12 @@ export async function runProbe({
       body = `fetch failed: ${error instanceof Error ? error.message : String(error)}`
     }
     const isSitemap = path === '/sitemap.xml'
-    const locs = isSitemap && status === '200' ? sitemapPaths(body) : null
+    // Only a body that is a sitemap counts: an HTML error page with a 200
+    // would parse as an empty list and could match an empty baseline.
+    const locs =
+      isSitemap && status === '200' && /<urlset[\s>]/.test(body)
+        ? sitemapPaths(body)
+        : null
     const present = locs
       ? probes.filter((p) => locs.includes(p.path)).map((p) => p.kind)
       : []
@@ -1053,7 +1064,8 @@ export async function runProbe({
   ) => {
     const deadline = now().getTime() + plan.timeoutMs
     for (;;) {
-      if (await check()) return true
+      // A check that finishes after the deadline does not count.
+      if (await check()) return now().getTime() <= deadline
       if (now().getTime() + plan.intervalMs > deadline) return false
       await wait(plan.intervalMs, signal)
     }
@@ -1077,6 +1089,10 @@ export async function runProbe({
     )
   }
 
+  const stopIfAborted = () => {
+    if (signal?.aborted) throw signal.reason ?? new Error('interrupted')
+  }
+
   let wrote = false
   try {
     const base = await read('baseline', 'sitemap', '/sitemap.xml')
@@ -1092,14 +1108,21 @@ export async function runProbe({
     }
     for (const p of probes) await read('baseline', p.kind, p.path)
 
+    stopIfAborted()
     wrote = true
     for (const p of probes) {
-      p.id = /** @type {number | string} */ (
-        await write('create-draft', p, () =>
-          writer.create(p.kind, probeDocument(p.kind, p.slug, startedAt)),
+      p.attempted = true
+      // The id is kept the moment the create resolves, before any evidence
+      // write that could throw, so cleanup never depends on a search for it.
+      await write('create-draft', p, async () => {
+        p.id = await writer.create(
+          p.kind,
+          probeDocument(p.kind, p.slug, startedAt),
         )
-      )
+        return p.id
+      })
     }
+    stopIfAborted()
     for (const p of probes)
       await write('publish', p, () =>
         writer.setStatus(
@@ -1120,9 +1143,15 @@ export async function runProbe({
     result.inclusion = included ? 'PASS' : 'FAIL'
     await llmsRead('inclusion')
 
+    stopIfAborted()
     for (const p of probes) {
       await read('warm', p.kind, p.path)
-      await read('warm', p.kind, p.path)
+      const warm = await read('warm', p.kind, p.path)
+      if (warm.status !== '200') {
+        result.notes.push(
+          `${p.path} answered ${warm.status} when warmed, so removal was not checked against a cached published copy.`,
+        )
+      }
     }
     for (const p of probes)
       await write('unpublish', p, () =>
@@ -1203,15 +1232,20 @@ export async function runProbe({
     // A create that timed out may have landed without returning its id: adopt
     // any document carrying this run's own slug. Other runs' leftovers are
     // never touched; the prefix check below reports them.
+    // A create that failed on the client can still commit on the server a
+    // moment later, so a miss is searched again after a short settle.
     for (const p of probes) {
-      if (p.id !== null) continue
-      try {
-        const mine = (await writer.findProbes(p.kind)).find(
-          (d) => d.slug === p.slug,
-        )
-        if (mine) p.id = mine.id
-      } catch {
-        ok = false
+      if (p.id !== null || !p.attempted) continue
+      for (let attempt = 1; attempt <= 2 && p.id === null; attempt += 1) {
+        if (attempt === 2) await wait(5000)
+        try {
+          const mine = (await writer.findProbes(p.kind)).find(
+            (d) => d.slug === p.slug,
+          )
+          if (mine) p.id = mine.id
+        } catch {
+          ok = false
+        }
       }
     }
     for (const p of probes) {

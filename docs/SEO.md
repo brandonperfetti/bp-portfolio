@@ -90,11 +90,12 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
   goes to the console and to `reads.tsv`, with raw headers and bodies, in the
   `--evidence` directory. Exit codes: 0 PASS, 1 FAIL, 2 refused before any
   write, 3 cleanup incomplete. The target is local by default (a loopback
-  `--base-url`); `--target staging` needs `--allow-staging-writes`, and
+  `--base-url`); `--target staging` needs `--allow-staging-writes` and takes only
+  `staging.brandonperfetti.com` or a `bp-portfolio-*-sans-faux-studios.vercel.app` preview, and
   `--target production` needs `--allow-production-writes`. The article probe is
   opt-in, because a live article shows in the public `/feed.xml`. Credentials
-  are script-only and per target, from `.env.local` (`CMS_PROBE_*_<TARGET>`,
-  `.env.example`). Run it after a change to caching, the revalidation hooks,
+  are script-only and per target (`CMS_PROBE_*_<TARGET>`, `.env.example`), from
+  `.env.local`; a nonempty exported value wins over the file. Run it after a change to caching, the revalidation hooks,
   Next, Payload or the MCP plugin; it is not a CI step or a monitor. A local
   `pnpm dev` server does not cache like a deployment, so a local run proves
   the script and the purge order, not the edge: run it against

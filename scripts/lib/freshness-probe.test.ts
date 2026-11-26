@@ -118,9 +118,16 @@ describe('resolvePlan: where a run may write', () => {
     expect(() =>
       plan([...staging, '--base-url', 'https://staging.brandonperfetti.co']),
     ).toThrow(/vercel\.app preview/)
+    expect(() =>
+      plan([...staging, '--base-url', 'https://other-app.vercel.app']),
+    ).toThrow(/vercel\.app preview/)
     expect(
-      plan([...staging, '--base-url', 'https://bp-git-x.vercel.app']).base,
-    ).toBe('https://bp-git-x.vercel.app')
+      plan([
+        ...staging,
+        '--base-url',
+        'https://bp-portfolio-git-x-sans-faux-studios.vercel.app',
+      ]).base,
+    ).toBe('https://bp-portfolio-git-x-sans-faux-studios.vercel.app')
   })
 
   it('keeps local on loopback', () => {
@@ -206,7 +213,7 @@ describe('readCredentials', () => {
       'staging',
       '--allow-staging-writes',
       '--base-url',
-      'https://bp-git-x.vercel.app',
+      'https://bp-portfolio-git-x-sans-faux-studios.vercel.app',
     ])
     expect(() =>
       readCredentials(remote, { CMS_PROBE_MCP_API_KEY_STAGING: 'k' }, null),
@@ -272,6 +279,7 @@ function fakeSite({
   failPublish = false,
   stalePageCache = false,
   redirectsClosed = false,
+  htmlSitemap = false,
   leftovers = [] as Doc[],
 } = {}) {
   const docs = new Map<number, Doc>()
@@ -320,6 +328,8 @@ function fakeSite({
     const auth = new Headers(init.headers).get('authorization') ?? ''
     const path = url.pathname
 
+    if (path === '/sitemap.xml' && htmlSitemap)
+      return new Response('<html>maintenance</html>', { status: 200 })
     if (path === '/sitemap.xml') {
       const locs = [
         '/',
@@ -453,6 +463,7 @@ async function run(
   writePath: 'rest' | 'mcp',
   site: ReturnType<typeof fakeSite>,
   extra: string[] = [],
+  signal?: AbortSignal,
 ) {
   const dir = join(tempDir(), 'evidence')
   const p = plan([
@@ -490,6 +501,7 @@ async function run(
       clock += ms
     },
     slugTail: 'test',
+    signal,
   })
   await writer.close()
   return { result, dir, lines }
@@ -579,6 +591,30 @@ describe('runProbe', () => {
       ),
     ).toBe(false)
     expect(site.docs.get(7)).toEqual(leftover)
+    const mutating = site.requestBodies
+      .map((b) => JSON.parse(b))
+      .filter((b) => b.method === 'tools/call')
+      .map((b) => b.params.name)
+      .filter((name: string) => !name.startsWith('find'))
+    expect(mutating).toEqual([])
+  })
+
+  it('refuses a 200 sitemap that is not a sitemap, before any write', async () => {
+    const site = fakeSite({ htmlSitemap: true })
+    await expect(run('rest', site)).rejects.toThrow(/Baseline \/sitemap.xml/)
+    expect(site.docs.size).toBe(0)
+  })
+
+  it('writes nothing when interrupted before the first write', async () => {
+    const site = fakeSite()
+    const controller = new AbortController()
+    controller.abort(new Error('interrupted'))
+    const { result } = await run('mcp', site, [], controller.signal)
+    expect(result.error).toBe('interrupted')
+    expect(result.cleanup).toBe('NOT NEEDED')
+    expect(site.requestBodies.some((b) => b.includes('"createPages"'))).toBe(
+      false,
+    )
   })
 
   it('writes no credential or token into the evidence', async () => {
