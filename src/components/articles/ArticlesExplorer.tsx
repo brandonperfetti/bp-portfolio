@@ -557,7 +557,7 @@ export function ArticlesExplorer({
           <div>
             <Link
               href={sectionLink.href}
-              className="inline-flex items-center gap-1 rounded-full text-xs font-medium text-link-accent transition hover:text-teal-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:hover:text-teal-300 dark:focus-visible:ring-teal-400/80"
+              className="inline-flex items-center gap-1 rounded-full text-xs font-medium text-link-accent transition hover:text-link-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/80 dark:focus-visible:ring-teal-400/80"
             >
               <span>
                 View the <span className="capitalize">{sectionLink.label}</span>{' '}
@@ -678,7 +678,7 @@ export function ArticlesExplorer({
                           </span>
                         )}
                         {techChip && (
-                          <span className="max-w-[11rem] truncate rounded-full bg-teal-50 px-2 py-0.5 text-teal-700 capitalize dark:bg-teal-900/40 dark:text-teal-200">
+                          <span className="max-w-[11rem] truncate rounded-full bg-badge-accent-surface px-2 py-0.5 text-badge-accent capitalize">
                             {techChip}
                           </span>
                         )}

@@ -273,7 +273,7 @@ export function ArticleMeta({
           {techChips.map((item, index) => (
             <span
               key={`tech-${item}-${index}`}
-              className="rounded-full bg-teal-50 px-2 py-0.5 text-teal-700 dark:bg-teal-900/40 dark:text-teal-200"
+              className="rounded-full bg-badge-accent-surface px-2 py-0.5 text-badge-accent"
             >
               {item}
             </span>

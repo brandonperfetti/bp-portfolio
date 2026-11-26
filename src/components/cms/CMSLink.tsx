@@ -79,7 +79,7 @@ export function CMSLink({
       {...target}
       className={
         className ||
-        'font-medium text-link-accent transition hover:text-teal-600 dark:hover:text-teal-300'
+        'font-medium text-link-accent transition hover:text-link-accent-hover'
       }
     >
       {link.label}
