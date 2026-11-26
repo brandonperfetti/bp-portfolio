@@ -42,16 +42,19 @@ const ARTICLES_PAGE_SIZE = 12
  *
  * @remarks Next's dev server logged an `/articles` card cover as the Largest
  * Contentful Paint while it loaded lazily, as every `next/image` does by
- * default. The first card's cover is the one above the fold at every width,
- * so it alone loads eagerly and is fetched at high priority. Every later card
- * stays lazy: marking the whole grid eager would compete with the one image
- * that matters and make LCP worse.
+ * default. Measured on a phone (390x844), the first card's cover sits inside
+ * the first screen and is the LCP; on a 1280x800 desktop the covers start at
+ * the fold and text is the LCP. The first cover alone loads eagerly and is
+ * fetched at high priority. Every later card stays lazy: marking the whole
+ * grid eager would compete with the one image that matters and make LCP
+ * worse.
  *
  * `loading` + `fetchPriority` rather than `priority`/`preload`: Next 16
  * deprecates `priority`, and its docs advise against `preload` when which
  * image is the LCP depends on the viewport, which is true of a grid that is
- * one column on a phone and three on a desktop. These two attributes go on
- * the `<img>` itself and inject no `<link rel="preload">` into the head.
+ * one column on a phone and three on a desktop. Next's own `preload` stays
+ * off; React may still emit a resource hint for an eager, high-priority image
+ * on its own, which is the browser being told the same thing earlier.
  */
 const LEAD_COVER_LOADING = {
   loading: 'eager',
