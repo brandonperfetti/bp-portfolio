@@ -1025,6 +1025,9 @@ export async function runProbe({
     /** @type {string} */ label,
     /** @type {string} */ path,
   ) => {
+    // After an interrupt no new foreground read starts, so cleanup is not held
+    // behind their timeouts; cleanup's own 'final' reads always run.
+    if (phase !== 'final') stopIfAborted()
     reads += 1
     const url = `${plan.base}${path}`
     const at = utc()

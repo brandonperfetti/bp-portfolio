@@ -710,6 +710,26 @@ describe('runProbe', () => {
     expect(exitCodeFor(result)).toBe(EXIT.fail)
   })
 
+  it('starts no foreground read after an interrupt during the last publish', async () => {
+    const controller = new AbortController()
+    let abortedAt = -1
+    const site = fakeSite({
+      onRequest: (method, path, body) => {
+        if (method === 'PATCH' && body.includes('published')) {
+          controller.abort(new Error('interrupted'))
+          abortedAt = site.calls.length
+        }
+      },
+    })
+    const { result } = await run('rest', site, [], controller.signal)
+    const after = site.calls.slice(abortedAt)
+    // Cleanup reads (and its deletes) still run; no inclusion read does.
+    expect(after.filter((c) => c === 'GET /sitemap.xml')).toHaveLength(1)
+    expect(site.docs.size).toBe(0)
+    expect(result.inclusion).toBe('NOT RUN')
+    expect(exitCodeFor(result)).toBe(EXIT.fail)
+  })
+
   it('fails cleanup when the final redirect lookup cannot be read', async () => {
     const site = fakeSite({ redirectsCloseAfterWrite: true })
     const { result, lines } = await run('rest', site)
