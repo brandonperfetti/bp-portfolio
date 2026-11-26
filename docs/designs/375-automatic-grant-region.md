@@ -71,14 +71,14 @@ yet. Every claim about it is **[inference]**, and the test for each history in
   full save. [source]
 - **What a c15t save does.** It awaits a policy fingerprint
   (`crypto.subtle.digest`), then commits.
-  - Write 1: `localStorage` and the `bp-consent` cookie (`:2814`).
+  - Write 1: `localStorage` and the `bp-consent` cookie (`:2798-2801`).
   - Write 2, a task later, from the offline manager: both again
     (`:1486-1502`).
   - Saves are not sequenced. Two saves are merged only when their payload is
     identical (`:3673-3690`).
   - When a save revokes a category and a record already existed, c15t calls
     `onBeforeConsentRevocationReload` and reloads the page. None of those
-    callbacks is inside a try/catch (`:2717-2723`, `:2814-2830`).
+    callbacks is inside a try/catch (`:2717-2723`, `:2798-2831`).
 
   [source]
 
@@ -251,7 +251,7 @@ Six rules, all in `src/components/consent/`:
    - set `measurement` to `false` in both `consents` and `selectedConsents`,
      with `setState`, and call `updateScripts()`. Clearing both matters: the
      dialog's toggles show `selectedConsents`, and `saveConsents('custom')`
-     builds from `selectedConsents ?? consents` (`:2742`);
+     builds from `selectedConsents ?? consents` (`:2744-2745`);
    - clear the flag.
 
    Nothing is saved, so no denial is recorded, `hasConsented()` stays false,
@@ -262,7 +262,8 @@ Six rules, all in `src/components/consent/`:
 
 3. **Explicit choices.**
    - The banner and dialog still call `saveConsents`, which persists.
-   - Every explicit save clears the flag.
+   - Every explicit save clears the flag, after the handler has read it to
+     decide the reload below.
    - They keep calling `markExplicitConsentChoice()` first, which clears the
      marker (rule 4).
    - A **Reject** after an in-memory grant does not reload (§2, item 6).
@@ -270,7 +271,7 @@ Six rules, all in `src/components/consent/`:
      the grant it replaces was automatic. It must **await** `saveConsents`
      first. A reload issued straight after `void saveConsents(...)` would kill
      the page during the digest, before write 1, and lose the Reject.
-     Production reloads only after write 1 (`:2814-2830`).
+     Production reloads only after write 1 (`:2798-2831`).
 4. **One-time clean-up of what production stored.** This runs once per
    module instance, the lifetime of c15t's store cache, before
    `ConsentManagerProvider` first renders. If `bp-consent-autogrant` is
@@ -291,7 +292,7 @@ Six rules, all in `src/components/consent/`:
      region re-grants in memory on the same page, so nothing is lost there.
    - This is fix B's mechanism. What made fix B unsafe was that automatic
      grants were still being saved and marked while it ran; under C, new code
-     never writes either, so the clean-up's input only shrinks.
+     never writes either, so nothing new code writes is ever cleaned up.
 5. **Start-up order.** The region effect does not wait for c15t's start-up.
    The in-memory grant survives start-up's state update only because of §2,
    item 7, which rests on today's offline policy. The exact pin (blast radius,
@@ -323,7 +324,9 @@ Six rules, all in `src/components/consent/`:
   - Tests: one per history in §4, run against production's code and against
     C, using the held-digest harness in `ConsentManager.ga.test.tsx`. A
     deploy-skew test runs production's region effect beside new code over
-    shared storage.
+    shared storage. A unit test pins that every banner and dialog handler
+    clears the marker before it saves: the clean-up is safe only while that
+    holds.
   - E2e: criteria (a) and (b) in `e2e/consent-google-analytics.spec.ts`.
   - Docs: `docs/ANALYTICS.md`.
 - **Undo: two-way.**
