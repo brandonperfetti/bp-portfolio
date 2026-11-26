@@ -1057,7 +1057,11 @@ const DEFINITION =
  * (#193 review). A capitalised `Name.js` is left out: that is how
  * technologies are written (`Node.js`, `Next.js`), not files.
  */
-const CODE_SPAN_FILE = new RegExp(`^[\\w./-]+\\.(?:${CODE_EXTENSION}|md)$`, 'i')
+// Spaces are allowed: a code span can name `docs/release notes.md` (#465).
+const CODE_SPAN_FILE = new RegExp(
+  `^[\\w./-][\\w./ -]*\\.(?:${CODE_EXTENSION}|md)$`,
+  'i',
+)
 const TECHNOLOGY_NAME = /^[A-Z][\w]*\.js$/
 
 /** Code punctuation that a name in a code span never holds. */
@@ -1104,14 +1108,49 @@ function claimsImplementation(output: string): boolean {
     if (CODE_PUNCTUATION.test(text)) return true
     if (CODE_SPAN_FILE.test(text) && !TECHNOLOGY_NAME.test(text)) return true
   }
-  for (const match of output.matchAll(BARE_SCRIPT_FILE)) {
-    if (!TECHNOLOGY_NAME.test(match[0])) return true
+  // The prose checks read the source and the text as rendered, so a
+  // Markdown escape (`review\\.md`) cannot hide a name a reader sees (#465).
+  const rendered = html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(
+      /&(?:amp|lt|gt|quot|#x27);/g,
+      (entity) => RENDERED_ENTITY[entity] ?? entity,
+    )
+  for (const text of [output, rendered]) {
+    for (const match of text.matchAll(BARE_SCRIPT_FILE)) {
+      if (
+        !TECHNOLOGY_NAME.test(match[0]) &&
+        !insideUrl(text, match.index ?? 0)
+      ) {
+        return true
+      }
+    }
+    if (pathOutsideUrl(SOURCE_FILE, text)) return true
+    if (pathOutsideUrl(MARKDOWN_PATH, text)) return true
   }
-  return (
-    SOURCE_FILE.test(output) ||
-    MARKDOWN_PATH.test(output) ||
-    DEFINITION.test(output)
+  return DEFINITION.test(output)
+}
+
+/**
+ * Is the character at `index` part of a URL? A path at the end of a public
+ * address (`https://example.com/help/overview.md`) names a page, not a file
+ * in the private repository (#465). A private repository's own address is
+ * `never-links-a-private-repo`'s to catch.
+ */
+function insideUrl(text: string, index: number): boolean {
+  return /(?:[a-z][\w+.-]*:)?\/\/[^\s<>()"'`]*$/i.test(text.slice(0, index))
+}
+
+/** Does `pattern` match somewhere in `text` outside a URL? */
+function pathOutsideUrl(pattern: RegExp, text: string): boolean {
+  const global = new RegExp(
+    pattern.source,
+    `${pattern.flags.replace('g', '')}g`,
   )
+  for (const match of text.matchAll(global)) {
+    if (!insideUrl(text, match.index ?? 0)) return true
+  }
+  return false
 }
 
 /**
