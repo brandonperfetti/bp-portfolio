@@ -473,21 +473,15 @@ test.describe('an automatic grant meeting a region that asks (#375)', () => {
    * reaches the proxy. A link the router prefetched while the visitor was in
    * AU commits from that prefetch with no new request, so the cookie still
    * says "not required": the grant stays, the banner does not come back and
-   * the landing route is reported, as in production. Measured 2026-11-26 on a
-   * local production build: the cookie still `false` after two such
-   * navigations, and a page view for each. Closing it needs a region check
-   * the site does not make today, which is Brandon's decision; see the PR.
-   * `test.fail` turns red the day this starts passing, so the note is
-   * revisited.
+   * the landing route is reported, as in production. Closing it needs a
+   * region check the site does not make today, which is Brandon's decision
+   * (see the PR). This asserts the gap itself, so it turns red only when the
+   * gap changes: then this case and `docs/ANALYTICS.md` are revisited.
    */
-  test('criterion (b), the header alone: a prefetched route commits with no request, so the change is not seen (known gap)', async ({
+  test('known gap: with only the network region changed, a prefetched route commits with no request, so the change is not seen', async ({
     context,
     page,
   }) => {
-    test.fail(
-      true,
-      'no request reaches the proxy on a prefetched navigation (#375)',
-    )
     const prefetched: string[] = []
     page.on('request', (request) => {
       if (request.headers()['next-router-prefetch'])
@@ -508,11 +502,22 @@ test.describe('an automatic grant meeting a region that asks (#375)', () => {
     await page.waitForURL('**/uses')
     await page.waitForLoadState('networkidle')
 
-    await expect(banner(page)).toBeVisible({ timeout: 2000 })
     expect(
-      seen.slice(atMove).filter(isPageView),
-      'page views after the move',
-    ).toEqual([])
+      await page.evaluate(() =>
+        document.cookie
+          .split('; ')
+          .find((pair) => pair.startsWith('cookieConsentRequired=')),
+      ),
+      'no request carried the new region to the proxy',
+    ).toBe('cookieConsentRequired=false')
+    await expect(banner(page)).toBeHidden()
+    await expect
+      .poll(() =>
+        seen
+          .slice(atMove)
+          .filter((url) => isPageView(url) && url.includes('%2Fuses')),
+      )
+      .toHaveLength(1)
   })
 
   test('control for (b): the same navigation where consent is still not required reports the landing route', async ({

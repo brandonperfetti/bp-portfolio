@@ -306,18 +306,27 @@ function leavePage() {
  *
  * @param production - `'same'` when production already behaves as the change
  * does, so the sequence passes on both; `'differs'` when production fails it,
- * in which case its failure message is pinned by snapshot.
+ * in which case its failure message is pinned by snapshot; `{ premise }` when
+ * production fails it too, but on an earlier history's defect before this
+ * history's own property is reached, so the pin shows that premise and the
+ * title names it.
  */
 function history(
   title: string,
-  production: 'same' | 'differs',
+  production: 'same' | 'differs' | { premise: string },
   run: () => Promise<void>,
 ): void {
   it(title, async () => {
     impl = 'change'
     await run()
   })
-  it(`${title} — production ${production === 'same' ? 'already does' : 'fails it'}`, async () => {
+  const verdict =
+    production === 'same'
+      ? 'already does'
+      : production === 'differs'
+        ? 'fails it'
+        : `fails earlier, on ${production.premise}`
+  it(`${title} — production ${verdict}`, async () => {
     impl = 'production'
     if (production === 'same') await run()
     else {
@@ -404,6 +413,10 @@ describe('#375 histories — fresh loads', () => {
     'H1: a stored automatic grant does not load the tag on a fresh page in a region that asks',
     'differs',
     async () => {
+      // In a browser production loads the tag on this first page (e2e
+      // criterion (a), which fails on production's code). jsdom shows only
+      // what follows: production restores the grant and saves a denial over
+      // it before the first script pass, so it fails here on the record.
       await writeRecord(AUTOMATIC_SHAPE, { marker: true })
       const page = await openPage('true')
 
@@ -412,7 +425,7 @@ describe('#375 histories — fresh loads', () => {
       expect(page.state().consents.measurement).toBe(false)
       expect(
         page.state().consentInfo,
-        'the stored automatic grant is not restored',
+        'no record is restored or saved for the visitor',
       ).toBeNull()
       expect(page.banner()).not.toBeNull()
       expect(await storedRecord()).toBeNull()
@@ -617,7 +630,7 @@ describe('#375 histories — saves in flight', () => {
 
   history(
     'F4: a grant and a clear in quick succession leave no record and Analytics off',
-    'differs',
+    { premise: 'H0 (the automatic grant is stored)' },
     async () => {
       const page = await openPage(null)
       const digests = holdDigests()
@@ -633,7 +646,7 @@ describe('#375 histories — saves in flight', () => {
 
   history(
     'F5: overlapping automatic grants with a dialog draft in between end on the last region, with nothing stored',
-    'differs',
+    { premise: 'H0 (the automatic grant is stored)' },
     async () => {
       const page = await openPage('true')
       const digests = holdDigests()
@@ -652,7 +665,7 @@ describe('#375 histories — saves in flight', () => {
 
   history(
     'F6: a clear never wipes an explicit choice made while saves were in flight',
-    'differs',
+    { premise: 'H2 (the banner never comes back)' },
     async () => {
       const page = await openPage('false')
       const digests = holdDigests()
@@ -680,7 +693,7 @@ describe('#375 histories — saves in flight', () => {
 
   history(
     'F6b: an explicit Accept still saving is never taken for an automatic grant afterwards',
-    'differs',
+    { premise: 'H2 (the banner never comes back)' },
     async () => {
       const page = await openPage('false')
       await page.navigate('true', '/asks')
@@ -713,7 +726,7 @@ describe('#375 histories — saves in flight', () => {
 describe('#375 histories — the one-time clean-up and re-renders', () => {
   history(
     'F8: a re-render with a new config after the store exists deletes nothing and keeps the in-memory grant ours',
-    'differs',
+    { premise: 'H0 (the automatic grant is stored)' },
     async () => {
       await writeRecord(AUTOMATIC_SHAPE, { marker: true })
       const page = await openPage('false')
@@ -781,6 +794,22 @@ describe('#375 histories — the one-time clean-up and re-renders', () => {
       expect(tagScripts()).toHaveLength(1)
     },
   )
+})
+
+describe('#375 rollback', () => {
+  it('reverting to production after the clean-up: production re-creates the automatic grant where consent is not required', async () => {
+    await writeRecord(AUTOMATIC_SHAPE, { marker: true })
+    await openPage('true', '/start', { impl: 'change' })
+    expect(await storedRecord(), 'the change deleted it').toBeNull()
+    leavePage()
+
+    // The revert is deployed; the visitor's next page is in AU.
+    await openPage('false', '/start', { impl: 'production' })
+    await waitFor(async () =>
+      expect((await storedRecord())?.consents?.measurement).toBe(true),
+    )
+    expect(marker()).toBe('1')
+  })
 })
 
 describe('#375 histories — two tabs', () => {

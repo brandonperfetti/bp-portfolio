@@ -2,7 +2,7 @@
 
 exports[`#375 histories — fresh loads > H0: a not-required region grants Analytics in memory only; nothing is stored — production fails it 1`] = `"nothing automatic is recorded: expected { time: <time>, …(2) } to be null"`;
 
-exports[`#375 histories — fresh loads > H1: a stored automatic grant does not load the tag on a fresh page in a region that asks — production fails it 1`] = `"the stored automatic grant is not restored: expected { time: <time>, …(2) } to be null"`;
+exports[`#375 histories — fresh loads > H1: a stored automatic grant does not load the tag on a fresh page in a region that asks — production fails it 1`] = `"no record is restored or saved for the visitor: expected { time: <time>, …(2) } to be null"`;
 
 exports[`#375 histories — fresh loads > H1u: the same where the region cannot be read — production fails it 1`] = `"no tag loads: expected [ Array(1) ] to have a length of +0 but got 1"`;
 
@@ -18,19 +18,19 @@ exports[`#375 histories — mid-visit > rule 6: a page restored from the back-fo
 
 exports[`#375 histories — mid-visit > rule 6: a tab becoming visible with no region cookie clears an automatic grant — production fails it 1`] = `"the automatic grant is cleared: expected true to be false // Object.is equality"`;
 
-exports[`#375 histories — saves in flight > F4: a grant and a clear in quick succession leave no record and Analytics off — production fails it 1`] = `"nothing is stored: expected { consents: { …(5) }, …(1) } to be null"`;
+exports[`#375 histories — saves in flight > F4: a grant and a clear in quick succession leave no record and Analytics off — production fails earlier, on H0 (the automatic grant is stored) 1`] = `"nothing is stored: expected { consents: { …(5) }, …(1) } to be null"`;
 
-exports[`#375 histories — saves in flight > F5: overlapping automatic grants with a dialog draft in between end on the last region, with nothing stored — production fails it 1`] = `"nothing is stored: expected { consents: { …(5) }, …(1) } to be null"`;
+exports[`#375 histories — saves in flight > F5: overlapping automatic grants with a dialog draft in between end on the last region, with nothing stored — production fails earlier, on H0 (the automatic grant is stored) 1`] = `"nothing is stored: expected { consents: { …(5) }, …(1) } to be null"`;
 
-exports[`#375 histories — saves in flight > F6: a clear never wipes an explicit choice made while saves were in flight — production fails it 1`] = `"the banner is back after moving into a region that asks: expected null not to be null"`;
+exports[`#375 histories — saves in flight > F6: a clear never wipes an explicit choice made while saves were in flight — production fails earlier, on H2 (the banner never comes back) 1`] = `"the banner is back after moving into a region that asks: expected null not to be null"`;
 
-exports[`#375 histories — saves in flight > F6b: an explicit Accept still saving is never taken for an automatic grant afterwards — production fails it 1`] = `"the banner is back after moving into a region that asks: expected null not to be null"`;
+exports[`#375 histories — saves in flight > F6b: an explicit Accept still saving is never taken for an automatic grant afterwards — production fails earlier, on H2 (the banner never comes back) 1`] = `"the banner is back after moving into a region that asks: expected null not to be null"`;
 
 exports[`#375 histories — saves in flight > F7: an automatic grant cannot land after the region asks, whatever order saves finish in — production fails it 1`] = `"the automatic grant did not land last: expected true to be false // Object.is equality"`;
 
 exports[`#375 histories — saves in flight > F7b: nothing automatic is ever written to storage, so no write can overwrite a denial — production fails it 1`] = `"nothing automatic is written to storage: expected [ …(6) ] to deeply equal []"`;
 
-exports[`#375 histories — the one-time clean-up and re-renders > F8: a re-render with a new config after the store exists deletes nothing and keeps the in-memory grant ours — production fails it 1`] = `"nothing is stored or restored: expected { consents: { …(5) }, …(1) } to be null"`;
+exports[`#375 histories — the one-time clean-up and re-renders > F8: a re-render with a new config after the store exists deletes nothing and keeps the in-memory grant ours — production fails earlier, on H0 (the automatic grant is stored) 1`] = `"nothing is stored or restored: expected { consents: { …(5) }, …(1) } to be null"`;
 
 exports[`#375 histories — the one-time clean-up and re-renders > shape: a marked record of exactly the automatic shape is deleted and re-granted in memory — production fails it 1`] = `"the automatic record is deleted: expected { consents: { …(5) }, …(1) } to be null"`;
 

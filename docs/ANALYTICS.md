@@ -159,7 +159,7 @@ against, is [`docs/designs/375-automatic-grant-region.md`](designs/375-automatic
   banner does not come back and that route is reported, until a request
   reaches the proxy (a full load, a route not prefetched yet). Production has
   the same gap. Measured on a local production build on 2026-11-26, and
-  pinned as a known failure in `e2e/consent-google-analytics.spec.ts`.
+  pinned as a known gap in `e2e/consent-google-analytics.spec.ts`.
 - **A page left visible and idle** gets no new region information until its
   next navigation or the next time it becomes visible, because the region is
   decided only on a request.
