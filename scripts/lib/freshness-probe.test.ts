@@ -488,6 +488,7 @@ async function run(
   site: ReturnType<typeof fakeSite>,
   extra: string[] = [],
   signal?: AbortSignal,
+  patchEvidence?: (e: ReturnType<typeof createEvidence>) => void,
 ) {
   const dir = join(tempDir(), 'evidence')
   const p = plan([
@@ -502,6 +503,7 @@ async function run(
     ...extra,
   ])
   const evidence = createEvidence(dir)
+  patchEvidence?.(evidence)
   const common = { base: p.base, fetch: site.fetch, extraHeaders: {} }
   const writer =
     writePath === 'rest'
@@ -598,6 +600,21 @@ describe('runProbe', () => {
     )
     expect(site.calls).not.toContain('POST /api/pages')
     expect(site.docs.size).toBe(0)
+  })
+
+  it('deletes the probe and fails the run when the delete evidence cannot be written', async () => {
+    const site = fakeSite()
+    const { result } = await run('rest', site, [], undefined, (e) => {
+      const original = e.write
+      e.write = (cells: string[]) => {
+        if (cells[2] === 'delete') throw new Error('disk full')
+        original(cells)
+      }
+    })
+    expect(site.docs.size).toBe(0)
+    expect(result.cleanup).toBe('PASS')
+    expect(result.error).toMatch(/evidence write failed: disk full/)
+    expect(exitCodeFor(result)).toBe(EXIT.fail)
   })
 
   it('refuses a truncated sitemap with no closing </urlset>', async () => {

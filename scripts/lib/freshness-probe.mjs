@@ -1048,29 +1048,31 @@ export async function runProbe({
     return { status, body, locs, present }
   }
 
+  /**
+   * Appends a writes.tsv row. A failed append never masks the write it
+   * records: it is kept as the run's error, so the run cannot exit 0
+   * without its evidence.
+   */
+  const record = (/** @type {string[]} */ cells) => {
+    try {
+      evidence.write(cells)
+    } catch (error) {
+      result.error ??= `evidence write failed: ${error instanceof Error ? error.message : String(error)}`
+    }
+  }
+
   const write = async (
     /** @type {string} */ action,
     /** @type {typeof probes[number]} */ probe,
     /** @type {() => Promise<unknown>} */ fn,
   ) => {
     const at = utc()
+    let out
     try {
-      const out = await fn()
-      evidence.write([
-        at,
-        plan.writePath,
-        action,
-        probe.kind,
-        String(probe.id ?? out ?? ''),
-        'ok',
-      ])
-      log(
-        `${at}  write      ${plan.writePath} ${action} ${probe.kind} ${probe.id ?? out ?? ''} ok`,
-      )
-      return out
+      out = await fn()
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      evidence.write([
+      record([
         at,
         plan.writePath,
         action,
@@ -1083,6 +1085,18 @@ export async function runProbe({
       )
       throw error
     }
+    record([
+      at,
+      plan.writePath,
+      action,
+      probe.kind,
+      String(probe.id ?? out ?? ''),
+      'ok',
+    ])
+    log(
+      `${at}  write      ${plan.writePath} ${action} ${probe.kind} ${probe.id ?? out ?? ''} ok`,
+    )
+    return out
   }
 
   /** Polls `check` immediately and then every interval, until it holds or the timeout passes. */
