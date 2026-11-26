@@ -601,10 +601,50 @@ native 3072 would force `halfvec` and a more exotic schema. Instead the write
 path always sends an explicit `dimensions` provider option, which lets
 `-3-large` be swapped in later at 1536 with no migration at all.
 
-Embedded collections: `posts`, `projects`, `uses`, `tech-stack`,
-`work-history`, plus the non-CMS `github-repos` (#147, below). Pages are **not**
-embedded (decision D8(b)) — mostly layout chrome, and retrieval noise for little
-factual value. Adding them later needs no schema change.
+Embedded collections: `posts`, `pages`, `projects`, `uses`, `tech-stack`,
+`work-history`, plus the non-CMS `github-repos` (#147, below). Pages were left
+out by decision D8(b) as mostly layout chrome; #208 took them back in, text
+blocks only (§ Pages: text blocks only, below).
+
+### Pages: text blocks only (#208, 2026-11-25)
+
+D8(b)'s reason expired when `/work` shipped: each role Page carries a few
+hundred words of narrative that exist in no other collection, and Corvus could
+link `/work/brytecore` without being able to quote a word of it. Of the three
+shapes #208 offered, the third was taken — **chunk only a Page's text blocks** —
+because production's own Pages showed the chrome and the prose are separable by
+block type, so no editor-facing knob is needed `[measured, public /api/pages,
+2026-11-25]`: of 15 published Pages, the four `/work/<role>` Pages, `/about`,
+`/how-i-work` and `/privacy` carry `lead`/`prose`/`content`/`faqList` text, and
+the rest are a `spacer`, an archive, a form, a photo strip, or a one-line lead
+over a card grid.
+
+- **What is read** (`PAGE_TEXT_BLOCK_TYPES`, `src/lib/ai/chunking.ts`):
+  `heading`, `lead`, `prose`, `content` and `faqList`, walked through
+  `container` → `column` nesting, de-duplicated so a paragraph placed once per
+  breakpoint counts once. Blocks that render another collection
+  (`workHistoryCard`, `featureCardGrid`, `postRollup`, the archives) are
+  skipped: those rows are embedded already, and reading them again would put
+  one fact in the window twice under two citations.
+- **What is left out:** a Page under `MIN_PAGE_TEXT_TOKENS` (60) of text yields
+  no chunk at all, which is what keeps `/work`, `/now`, `/uses` and the other
+  chrome Pages out of every window.
+- **Chunks** pack exactly as a post's do (same packer, same overlap), under a
+  `title — subtitle` prefix, cited at the Page's served path (`/work/brytecore`,
+  `/` for the root).
+- **Drafts are never retrievable.** Pages are drafts-enabled, so `isEmbeddable`
+  refuses any `_status` but `published`, and an unpublish deletes the rows, both
+  pinned by test (`chunking.test.ts`, `embeddingsStore.test.ts`,
+  `corvusEmbeddings.test.ts`). The backfill reads the published view
+  (`draft: false`) for Pages as for posts.
+- **The hooks** are the same `refreshCorvusEmbeddings`/`deleteCorvusEmbeddings`
+  pair every embedded collection carries; a path cascade's descendant updates
+  re-run it, and a moved Page's new citation lands through the metadata-only
+  repair, not a re-embed.
+
+The cost is the one any added collection carries: every grounded answer's top
+five now competes with Page chunks. The before/after keyed eval is recorded on
+#208.
 
 ### What an anonymous visitor can retrieve
 
@@ -636,9 +676,19 @@ the free taste is exactly where grounding helps most.
 `src/hooks/corvusEmbeddings.ts` mirrors the `revalidateCollection.ts` pattern:
 an `afterChange` factory plus an `afterDelete` companion, per collection. It
 honours `context.disableRevalidate`, skips drafts, unpublished documents and
-autosave ticks, is bounded by `AbortSignal.timeout`, and **never throws** — a
+autosave ticks, bounds its provider and sync work by `AbortSignal.timeout`, and
+**never throws** — a
 provider outage must not fail a content save. Published-content edits therefore
 reach retrieval with no redeploy.
+
+One exception (#208): a draft saved over a published Post or Page keeps the
+live rows, and to tell it from an unpublish the hook reads the collection row
+on the save's own transaction (`payload.db.findOne`). If that read fails, the
+hook rethrows and the save fails, because the failure is inside the save's
+transaction and the save could not be trusted to commit. That read is not
+under the hook's deadline: a read on the transaction cannot be abandoned, since
+the save's COMMIT waits behind it on the same connection. The unpublish delete
+also runs before the deadline is created, as it did before #208.
 
 Two skip paths, and the second one is a security fix, not an optimisation:
 
@@ -987,8 +1037,10 @@ the rule.
 `[measured, production, 2026-11-20, v2026.11.20]` asked "Does it store my
 conversation?", Corvus said it had no verified retention policy and sent the
 visitor to the contact form. The answer is published on the privacy page, but
-that is a Page (Pages id 28) and Pages are not embedded (D8(b)), so retrieval
-can never return it.
+that was a Page (Pages id 28) and Pages were not embedded then (D8(b)), so
+retrieval could never return it. #208 now embeds the page's text too; the
+passage below stays, because it is offered by rule and so reaches a follow-up
+whose latest message carries no retention topic word, which retrieval cannot.
 
 **The retention facts live in `ABOUT_CORVUS_PRIVACY_PASSAGE`**
 (`src/lib/ai/aboutCorvus.ts`), a second code-owned snippet beside the About

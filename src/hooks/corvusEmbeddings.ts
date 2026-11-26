@@ -62,6 +62,93 @@ export function isAutosaveRequest(req: unknown): boolean {
 }
 
 /**
+ * Is this draft write sitting on top of a document whose published version
+ * still serves?
+ *
+ * @remarks "Save draft" on a published Post or Page (#208 review) fires
+ * `afterChange` with `doc._status: 'draft'`, the same shape as an unpublish,
+ * but Payload writes only a new version: the collection's own row stays
+ * published and keeps serving. Treated as an unpublish, that save deleted the
+ * live document's embeddings until its next publish or backfill.
+ *
+ * The flag that tells them apart, `?draft=true`, is not readable here: the
+ * hook receives no `draft` argument, and a Local-API `draft: true` never
+ * reaches `req.query` (docs/PAYLOAD.md § Local API gotchas). So it asks the
+ * collection row directly, on this request's transaction (`req` is
+ * forwarded): after a draft save that row is still `published`; after an
+ * unpublish this same transaction has already set it to `draft`.
+ *
+ * It reads through the database adapter (`payload.db.findOne`), not
+ * `payload.findByID`: the Local API operation calls `killTransaction(req)`
+ * when it fails, which rolls back the save this hook is running inside and
+ * lets it report success anyway (#208 review). The adapter call takes `req`
+ * for the transaction and does nothing else on failure.
+ *
+ * A database error throws {@link DraftLookupError}, which the hook rethrows
+ * instead of swallowing. The error happened inside the save's own
+ * transaction, so the save cannot be trusted to commit; failing it loudly is
+ * the honest outcome, where the hook's usual fail-open would report a save
+ * that may not have happened.
+ *
+ * **Not raced against the hook's deadline**, deliberately (#208 re-review).
+ * A read on the save's transaction cannot be abandoned: the save's COMMIT
+ * queues behind it on the same connection, so a race would bound nothing,
+ * and a failure arriving after the race had settled would be swallowed while
+ * PostgreSQL turned the COMMIT into a ROLLBACK the caller never sees. It is a
+ * primary-key read on the transaction the save is already using, so it is
+ * bounded exactly as the save's own statements are.
+ *
+ * With no adapter `findOne` (not Postgres; a test double without one), it
+ * answers `false`.
+ *
+ * @param req - The Payload request of the save.
+ * @param collection - The collection the hook is wired onto.
+ * @param id - The saved document's id.
+ * @returns `true` only when the collection row is verifiably published.
+ * @throws {@link DraftLookupError} when the lookup itself fails.
+ */
+async function isDraftOverPublished(
+  req: unknown,
+  collection: CorvusCollectionSlug,
+  id: number,
+): Promise<boolean> {
+  const db = (req as { payload?: { db?: { findOne?: unknown } } } | null)
+    ?.payload?.db
+  if (typeof db?.findOne !== 'function') return false
+  let row: HookDoc | null
+  try {
+    row = (await (
+      db.findOne as (args: Record<string, unknown>) => Promise<unknown>
+    ).call(db, {
+      collection,
+      where: { id: { equals: id } },
+      select: { _status: true },
+      req,
+    })) as HookDoc | null
+  } catch (error) {
+    throw new DraftLookupError(collection, id, error)
+  }
+  return isPublished(row)
+}
+
+/**
+ * The draft-over-published lookup failed inside the save's transaction.
+ *
+ * @remarks The one error the afterChange hook does not swallow; see
+ * {@link isDraftOverPublished}.
+ */
+class DraftLookupError extends Error {
+  constructor(collection: string, id: number, cause: unknown) {
+    super(
+      `[corvus] could not read ${collection}#${id}'s published status; ` +
+        `failing the save rather than reporting one that may not commit`,
+      { cause },
+    )
+    this.name = 'DraftLookupError'
+  }
+}
+
+/**
  * Payload's drizzle handle, or `null` when the adapter is not Postgres.
  *
  * @param payload - The Payload instance from `req`.
@@ -107,7 +194,11 @@ function drizzleOf(payload: unknown): CorvusEmbeddingsDb | null {
  *   error is logged through `req.payload.logger` and the stale row is left in
  *   place; `scripts/backfill-corvus-embeddings.ts` is the repair path. This is
  *   the same "the index is derived and rebuildable" stance the migration takes
- *   by keeping the table out of the Payload config.
+ *   by keeping the table out of the Payload config. The one exception is a
+ *   failed draft-status lookup (#208), which fails inside the save's own
+ *   transaction and is rethrown; see `isDraftOverPublished`.
+ * - **A draft saved over a published document deletes nothing** (#208): the
+ *   collection row is still published and still serving.
  *
  * - **On `tech-stack` only, the daily-driver summary is re-emitted** after the
  *   per-row sync and inside the same `try` (#165). A per-row hook cannot
@@ -124,10 +215,12 @@ function drizzleOf(payload: unknown): CorvusEmbeddingsDb | null {
  * function is not guaranteed to run at all, and an awaited-but-bounded call
  * has a knowable worst case.
  *
- * **ONE deadline, for everything this hook does.** The bound above is a
+ * **ONE deadline, for the sync and summary steps.** The bound above is a
  * property of the SAVE, not of each step, so a single
- * {@link createDeadline} call is made once at the top of
- * the `try`, cancelled in a `finally`, and shared by the per-row sync and the summary re-emit. Giving
+ * {@link createDeadline} call is made once, after the draft-status read and
+ * the unpublish delete (neither is under it: see `isDraftOverPublished`),
+ * cancelled in a `finally`, and shared by the per-row sync and the summary
+ * re-emit. Giving
  * the summary step a second, independent timeout would silently double a
  * `tech-stack` save's worst case while this docblock went on naming one
  * constant. Each step gets the signal AND is raced against it through
@@ -169,6 +262,16 @@ export const refreshCorvusEmbeddings = (
       // embeddings while the published version was still serving them. The
       // ordering is the fix, so it is load-bearing: do not move this back.
       if (isAutosaveRequest(req)) return doc
+
+      // A draft saved over a still-published document changes nothing a
+      // reader can see, so it must not reach the unpublish branch or the
+      // store's draft rule below, both of which delete the live rows.
+      if (
+        current?._status === 'draft' &&
+        (await isDraftOverPublished(req, collection, docId))
+      ) {
+        return doc
+      }
 
       // Unpublish (published → draft), detected exactly as revalidatePost
       // detects it. Delete first and return: an unpublished doc is not
@@ -257,6 +360,8 @@ export const refreshCorvusEmbeddings = (
         )
       }
     } catch (error) {
+      // The one exception to the rule below: see `isDraftOverPublished`.
+      if (error instanceof DraftLookupError) throw error
       // NEVER throw: a provider outage or a database hiccup must not fail the
       // content save. The stale row stays; the backfill script repairs it.
       payload.logger.error(
@@ -336,7 +441,8 @@ export const deleteCorvusEmbeddings = (
     } catch (error) {
       payload.logger.error(
         `[corvus] embedding delete failed for ${collection}; stale rows may ` +
-          `remain (payload run scripts/backfill-corvus-embeddings.ts repairs it): ${String(error)}`,
+          `remain (payload run scripts/backfill-corvus-embeddings.ts -- --drop-orphans ` +
+          `repairs it): ${String(error)}`,
       )
     } finally {
       deadline?.done()
