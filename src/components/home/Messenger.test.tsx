@@ -19,6 +19,7 @@ vi.mock('@/lib/security/useTurnstileToken', async (importOriginal) => ({
   useTurnstileToken: () => ({
     containerRef: { current: null },
     requestToken,
+    load: vi.fn(),
   }),
 }))
 

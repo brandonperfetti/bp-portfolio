@@ -14,6 +14,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  */
 
 type Hook = typeof import('@/lib/security/useTurnstileToken')
+type TurnstileLoadOn =
+  import('@/lib/security/useTurnstileToken').TurnstileLoadOn
 type HookResult = ReturnType<Hook['useTurnstileToken']>
 type RenderParams = { callback: (token: string) => void } & Record<
   string,
@@ -36,7 +38,7 @@ function Probe({
   loadOn,
 }: {
   enabled?: boolean
-  loadOn?: 'mount' | 'demand'
+  loadOn?: TurnstileLoadOn
 }) {
   const result = mod.useTurnstileToken({ enabled, loadOn })
   useEffect(() => {
@@ -340,7 +342,7 @@ describe("useTurnstileToken loadOn: 'demand' (#475)", () => {
   const scripts = () =>
     document.querySelectorAll('script[src*="challenges.cloudflare.com"]')
 
-  it('loads nothing on mount, by default it does', async () => {
+  it('loads nothing on mount, where the default loads at once', async () => {
     const { unmount } = render(<Probe loadOn="demand" />)
     expect(scripts()).toHaveLength(0)
     unmount()
@@ -395,6 +397,7 @@ describe("useTurnstileToken loadOn: 'demand' (#475)", () => {
     await act(async () => {
       pending = hook.requestToken()
     })
+    expect(scripts()).toHaveLength(1)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(mod.TURNSTILE_READY_TIMEOUT_MS)
     })

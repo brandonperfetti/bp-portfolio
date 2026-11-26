@@ -71,6 +71,12 @@ export type TurnstileTokenResult =
 type WidgetState = 'loading' | 'ready' | 'failed'
 
 /**
+ * When a surface's Turnstile script loads: as it mounts, or only once the
+ * surface asks (#475). See {@link useTurnstileToken}.
+ */
+export type TurnstileLoadOn = 'mount' | 'demand'
+
+/**
  * Is this Turnstile `error-callback` code a timeout?
  *
  * @remarks Cloudflare's client-side codes in the `1106xx` family are the
@@ -149,7 +155,7 @@ function loadTurnstile(): Promise<TurnstileApi | null> {
  */
 export function useTurnstileToken(options: {
   enabled: boolean
-  loadOn?: 'mount' | 'demand'
+  loadOn?: TurnstileLoadOn
 }) {
   const { enabled, loadOn = 'mount' } = options
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY

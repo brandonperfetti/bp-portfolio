@@ -21,9 +21,9 @@ import {
  * as given: it is the same for a new address and one already on the list.
  * The Turnstile check is invisible unless Cloudflare escalates, loads on
  * the form's first focus (#475), and is enforced server-side only when its
- * keys are set. A submit made before
- * the check has loaded waits for it; one that times out sends nothing and
- * asks the visitor to try again (#405).
+ * keys are set. A submit made before the check has loaded waits for it;
+ * one that times out sends nothing and asks the visitor to try again
+ * (#405).
  */
 export function Newsletter() {
   const [email, setEmail] = useState('')
@@ -33,7 +33,7 @@ export function Newsletter() {
   const {
     containerRef: turnstileRef,
     requestToken,
-    load: loadTurnstile,
+    load: startTurnstile,
   } = useTurnstileToken({
     enabled: true,
     // Nothing from Cloudflare until the visitor focuses the form (#475).
@@ -88,7 +88,7 @@ export function Newsletter() {
     <form
       onSubmit={onSubmit}
       // Focus bubbles in React: any field, or the button, starts the load.
-      onFocus={loadTurnstile}
+      onFocus={startTurnstile}
       className="rounded-2xl border border-zinc-100 p-6 dark:border-zinc-700/40"
     >
       <h2 className="flex text-sm font-semibold text-zinc-900 dark:text-zinc-100">
