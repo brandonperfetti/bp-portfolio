@@ -124,7 +124,8 @@ your consent".
   for the first case during #361 and taken out again: each version of it left
   some visitor worse off than production in a history involving a second tab
   or an unfinished save. The design that replaces it, and the histories it
-  must pass, are in #375.
+  must pass, are in #375. The proposed design, awaiting Brandon's signature,
+  is [`docs/designs/375-automatic-grant-region.md`](designs/375-automatic-grant-region.md).
 
 Which visitors are granted without being asked is decided by the region
 predicates in `consent-config.ts` and nowhere else:
