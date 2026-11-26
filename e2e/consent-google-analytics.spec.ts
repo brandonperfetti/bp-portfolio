@@ -328,6 +328,176 @@ test.describe('region where consent is not required (AU, the suite default)', ()
   })
 })
 
+/**
+ * #375 — the automatic grant is held in memory only. The suite's default
+ * region (AU) grants Analytics without asking; these cases then move the
+ * visitor into a region that asks (FR), by a fresh load and inside one visit.
+ */
+test.describe('an automatic grant meeting a region that asks (#375)', () => {
+  const FR = { 'x-vercel-ip-country': 'FR' }
+
+  /** The stored consent record, as c15t keeps it in `localStorage`. */
+  const storedRecord = (page: Page) =>
+    page.evaluate(() => window.localStorage.getItem('bp-consent'))
+
+  test('criterion (a): a fresh load in a region that asks, after an automatic grant, loads nothing from Google and shows the banner', async ({
+    context,
+    page,
+  }, testInfo) => {
+    const seen = await watchGoogle(context)
+    await page.goto('/articles', { waitUntil: 'networkidle' })
+    await consentRuntimeReady(page)
+    await expect(banner(page)).toBeHidden()
+    await expect.poll(() => seen.filter(isTagScript).length).toBe(1)
+    expect(
+      await storedRecord(page),
+      'the automatic grant is not stored',
+    ).toBeNull()
+
+    await page.setExtraHTTPHeaders(FR)
+    const atMove = seen.length
+    await page.goto('/about', { waitUntil: 'networkidle' })
+    await consentRuntimeReady(page)
+
+    await expect(banner(page)).toBeVisible()
+    expect(seen.slice(atMove), 'requests to Google hosts in FR').toEqual([])
+    const resources = await resourceDump(page, testInfo, 'resources-fr')
+    expect(resources.filter(isGoogle)).toEqual([])
+    expect(await storedRecord(page)).toBeNull()
+  })
+
+  test('criterion (a), upgrade: a record the previous release stored as an automatic grant is not restored in a region that asks', async ({
+    context,
+    page,
+  }, testInfo) => {
+    const seen = await watchGoogle(context)
+    await page.goto('/articles', { waitUntil: 'networkidle' })
+    await consentRuntimeReady(page)
+
+    // What the previous release left behind: the automatic grant saved
+    // through c15t (`setConsent`), and the marker beside it.
+    await page.evaluate(() => {
+      const store = (
+        window as unknown as {
+          c15tStore: {
+            getState: () => {
+              setConsent: (name: string, value: boolean) => unknown
+            }
+          }
+        }
+      ).c15tStore
+      store.getState().setConsent('measurement', true)
+      window.localStorage.setItem('bp-consent-autogrant', '1')
+    })
+    await expect
+      .poll(() => storedRecord(page), {
+        message: 'the legacy record is stored',
+      })
+      .not.toBeNull()
+
+    await page.setExtraHTTPHeaders(FR)
+    const atMove = seen.length
+    await page.goto('/about', { waitUntil: 'networkidle' })
+    await consentRuntimeReady(page)
+
+    await expect(banner(page)).toBeVisible()
+    expect(seen.slice(atMove), 'requests to Google hosts in FR').toEqual([])
+    const resources = await resourceDump(page, testInfo, 'resources-fr-upgrade')
+    expect(resources.filter(isGoogle)).toEqual([])
+    expect(await storedRecord(page), 'the legacy record is deleted').toBeNull()
+    expect(
+      await page.evaluate(() =>
+        window.localStorage.getItem('bp-consent-autogrant'),
+      ),
+      'the marker is kept for tabs on the previous release',
+    ).toBe('1')
+  })
+
+  /**
+   * Moves the visitor into `headers`' region inside one visit, then follows
+   * an internal link.
+   *
+   * @remarks The cookie is set as well as the header: a route the router
+   * prefetched while the visitor was in AU commits without a new request, so
+   * the header alone would not reach the proxy. Any request after the move
+   * rewrites the cookie this way in production.
+   */
+  async function moveAndFollowLink(
+    page: Page,
+    context: BrowserContext,
+    headers: Record<string, string>,
+    required: boolean,
+  ): Promise<void> {
+    await page.setExtraHTTPHeaders(headers)
+    await context.addCookies([
+      {
+        name: 'cookieConsentRequired',
+        value: String(required),
+        url: page.url(),
+      },
+    ])
+    await page.getByRole('link', { name: 'Uses' }).first().click()
+    await page.waitForURL('**/uses')
+    await page.waitForLoadState('networkidle')
+  }
+
+  test('criterion (b): a region change inside a visit shows the banner, stores nothing and reports no page view for the landing route', async ({
+    context,
+    page,
+  }) => {
+    const seen = await watchGoogle(context)
+    await page.goto('/articles', { waitUntil: 'networkidle' })
+    await consentRuntimeReady(page)
+    await expect.poll(() => seen.filter(isPageView).length).toBeGreaterThan(0)
+    await expect(banner(page)).toBeHidden()
+
+    const atMove = seen.length
+    await moveAndFollowLink(page, context, FR, true)
+
+    await expect(banner(page)).toBeVisible()
+    expect(
+      seen.slice(atMove).filter(isPageView),
+      'page views after the move',
+    ).toEqual([])
+    expect(await storedRecord(page), 'no denial is stored').toBeNull()
+    expect(
+      await page.evaluate(
+        (key) => (window as unknown as Record<string, unknown>)[key],
+        `ga-disable-${GA_ID}`,
+      ),
+    ).toBe(true)
+  })
+
+  test('control for (b): the same navigation where consent is still not required reports the landing route', async ({
+    context,
+    page,
+  }) => {
+    const seen = await watchGoogle(context)
+    await page.goto('/articles', { waitUntil: 'networkidle' })
+    await consentRuntimeReady(page)
+    await expect.poll(() => seen.filter(isPageView).length).toBeGreaterThan(0)
+
+    const atMove = seen.length
+    await moveAndFollowLink(
+      page,
+      context,
+      { 'x-vercel-ip-country': 'AU' },
+      false,
+    )
+
+    await expect
+      .poll(
+        () =>
+          seen
+            .slice(atMove)
+            .filter((url) => isPageView(url) && url.includes('%2Fuses')),
+        { message: 'the stand-in reports the landing route' },
+      )
+      .toHaveLength(1)
+    await expect(banner(page)).toBeHidden()
+  })
+})
+
 test.describe('every other spec in this suite', () => {
   test.skip(LIVE, 'the live mode lets the tag host resolve on purpose')
 
