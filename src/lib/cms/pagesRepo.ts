@@ -55,6 +55,8 @@ export const getCmsPageByPath = async (
   path: string,
 ): Promise<CmsPageContent | null> => {
   'use cache: remote'
+  // `pages` alone (#359): the value is page metadata and carries none of the
+  // page's links, so a post's publish state cannot change it.
   cacheTag(CMS_TAGS.pages)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
@@ -177,10 +179,21 @@ export const isReservedPagePath = (segments: string[]): boolean =>
  *
  * @remarks `'use cache: remote'` so a `pages` tag purge reaches every
  * serverless instance, not only the one that ran the hook (#118).
+ *
+ * **Also tagged `posts` (#359).** A page's blocks and rich text carry links
+ * that can point at a post (`src/fields/link.ts`, `src/fields/defaultLexical.ts`),
+ * populated here with access control enforced, so a link to a draft post is
+ * cached as a bare id and renders as `'#'`, and a link to a post that is later
+ * unpublished keeps pointing at a URL that 404s. Publishing, unpublishing or
+ * deleting a post purges `posts`, never `pages`, so without this tag the page
+ * kept the stale link until the `cmsContent` lifetime lapsed or the page was
+ * re-saved. The cost is one re-read of each cached page on its next request
+ * after any post write that purges `posts` (Brandon chose this over a shared
+ * "publish state" tag on #359; `docs/ARCHITECTURE.md` § Caching).
  */
 const getPublishedPageByPath = async (path: string): Promise<Page | null> => {
   'use cache: remote'
-  cacheTag(CMS_TAGS.pages)
+  cacheTag(CMS_TAGS.pages, CMS_TAGS.articles)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
   const { docs } = await payload.find({
