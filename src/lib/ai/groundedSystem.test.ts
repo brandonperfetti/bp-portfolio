@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import { describe, expect, it } from 'vitest'
 
 import { ABOUT_CORVUS_COLLECTION } from '@/lib/ai/aboutCorvus'
@@ -10,7 +12,9 @@ import {
   SNIPPET_SOURCE_LABEL,
   TECH_PROFICIENCY_RANKING_RULE,
   buildGroundedSystem,
+  hostPageContextLine,
 } from '@/lib/ai/groundedSystem'
+import { cleanHostTitle } from '@/lib/ai/pageContext'
 import type { CorvusSnippet } from '@/lib/ai/retrieval'
 
 /**
@@ -603,5 +607,134 @@ describe('three-way subject disambiguation (#167)', () => {
     expect(buildGroundedSystem([aboutCorvus])).toContain(
       `${SNIPPET_SOURCE_LABEL} /corvus`,
     )
+  })
+})
+
+/**
+ * The host page (#217 phase 2). The AC this pins is the no-context path:
+ * every `/corvus` turn sends no page context, and its prompt must be
+ * byte-identical to the one it got before the parameter existed — so the
+ * line is asserted to be the ONLY difference a host makes.
+ */
+describe('buildGroundedSystem — the host page (#217 phase 2)', () => {
+  const host = { title: 'Brytecore', path: '/work/brytecore' }
+  const line = hostPageContextLine(host)
+
+  it('leaves the no-context path byte-identical, grounded or not', () => {
+    const grounded = [snippet()]
+    expect(buildGroundedSystem([], undefined)).toBe(CORVUS_SYSTEM_PROMPT)
+    expect(buildGroundedSystem([], null)).toBe(CORVUS_SYSTEM_PROMPT)
+    expect(buildGroundedSystem(grounded, undefined)).toBe(
+      buildGroundedSystem(grounded),
+    )
+    expect(buildGroundedSystem(grounded, null)).toBe(
+      buildGroundedSystem(grounded),
+    )
+  })
+
+  it('matches the pre-#217 prompt bytes for every no-context shape', () => {
+    // Frozen, not derived: both sides of the assertions above call the
+    // current builder, so a change to text after the header would pass them.
+    // These sha256 digests were produced by the builder at 3659fdea (before
+    // #217 phase 2) over these exact inputs. A deliberate prompt change
+    // updates them, and says so in its PR.
+    const digest = (value: string) =>
+      createHash('sha256').update(value).digest('hex')
+    const cases: Record<string, CorvusSnippet[]> = {
+      empty: [],
+      post: [snippet()],
+      repo: [
+        snippet({
+          collection: 'github-repos',
+          title: 'brandonperfetti/bp-portfolio',
+          sourceUrl: 'https://github.com/brandonperfetti/bp-portfolio',
+        }),
+      ],
+      about: [
+        snippet({
+          collection: ABOUT_CORVUS_COLLECTION,
+          title: 'About Corvus',
+          sourceUrl: '/corvus',
+          content: 'Corvus is the AI assistant built into this site.',
+          score: 1,
+        }),
+      ],
+      mixed: [
+        snippet(),
+        snippet({
+          collection: 'tech-stack',
+          title: 'Next.js',
+          sourceUrl: '/tech',
+          content: 'Next.js daily.',
+        }),
+        snippet({
+          collection: 'github-repos',
+          title: 'x/y',
+          sourceUrl: 'https://github.com/x/y',
+        }),
+      ],
+    }
+    const digests = Object.fromEntries(
+      Object.entries(cases).map(([name, snippets]) => [
+        name,
+        digest(buildGroundedSystem(snippets)),
+      ]),
+    )
+    expect(digests).toEqual({
+      empty: '48c697ca83c598abcb4473a31c5ac87047493ffb3e7df7c72442c856a719f36c',
+      post: 'd992e0146ec486ac13b4b918eacc94cd535388e35ef1e6967f0803fe98f7b0a4',
+      repo: 'a7b2bde7620f2799fd31abe08bdb36788650efa53fd7d02b1015852b45e9ff7c',
+      about: '194ba3c59b02f6ed9ec85820e13bab216a9d2593921e795d98b3f6bb806ff14a',
+      mixed: 'a5b3997e9fcbb0af7067e92415feb87d001b8d8c4e242d2581d75e74baf61fd2',
+    })
+  })
+
+  it('never puts the title in a link label', () => {
+    // The title as `resolveHostDocument` hands it over: cleaned.
+    const crafted = hostPageContextLine({
+      title: cleanHostTitle(
+        'Guide](https://elsewhere.example) [Verify',
+      ) as string,
+      path: '/articles/guide',
+    })
+    expect(crafted).toContain('[this page](/articles/guide)')
+    expect(crafted).not.toContain('](https://elsewhere.example)')
+  })
+
+  it('pins the grounded no-context layout: persona, positioning, header', () => {
+    expect(buildGroundedSystem([snippet()])).toContain(
+      `${CORVUS_SYSTEM_PROMPT}\n\n${CORVUS_POSITIONING}\n\n${GROUNDED_CONTEXT_HEADER}\n`,
+    )
+  })
+
+  it('adds the line, and only the line, when a host resolved', () => {
+    const grounded = [snippet()]
+    const withHost = buildGroundedSystem(grounded, host)
+    expect(withHost).toContain(line)
+    expect(withHost.replace(`\n${line}\n`, '')).toBe(
+      buildGroundedSystem(grounded),
+    )
+  })
+
+  it('places it after the positioning and before the site context', () => {
+    const withHost = buildGroundedSystem([snippet()], host)
+    expect(withHost.indexOf(CORVUS_POSITIONING)).toBeLessThan(
+      withHost.indexOf(line),
+    )
+    expect(withHost.indexOf(line)).toBeLessThan(
+      withHost.indexOf(GROUNDED_CONTEXT_HEADER),
+    )
+  })
+
+  it('names the page on an ungrounded turn too', () => {
+    expect(buildGroundedSystem([], host)).toBe(
+      `${CORVUS_SYSTEM_PROMPT}\n\n${line}`,
+    )
+  })
+
+  it('names the page, allows linking it, and claims nothing about its text', () => {
+    expect(line).toContain('"Brytecore" at /work/brytecore')
+    expect(line).toContain('[this page](/work/brytecore)')
+    expect(line).toMatch(/does not say what the page contains/)
   })
 })

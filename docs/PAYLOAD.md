@@ -72,9 +72,11 @@ Payload is the single source of truth for site content. Admin at `/admin`
   agent's name renders as an `h2` in both host contexts, so a page hosting the
   block keeps exactly one `<h1>`. `starterPrompt` **pre-fills the composer and
   nothing else** — it is the visitor's editable draft, it is sent only when they
-  press send, and it travels as a `user` message; `/api/ai/chat`'s body schema
-  is still `{ messages }` and phase 1 does not touch it (page-context grounding
-  is phase 2). The select carries an explicit `enumName`
+  press send, and it travels as a `user` message. **Phase 2** (`[2026-11-25]`)
+  gives the block its page: it sends the host document (`hostDoc`, a
+  `{ collection, id }` reference) with each turn, and the server names that page
+  in the prompt from the CMS (`docs/AI.md` § The host page). Nothing about it is
+  an editor setting. The select carries an explicit `enumName`
   (`enum_corvus_chat_variant`) for the reason `ArticlesArchive/config.ts`
   records. Storage: four tables plus one enum
   (`20260911_152336_issue_217_corvus_chat_block`), the same four-table shape

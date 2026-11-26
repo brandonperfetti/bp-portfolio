@@ -1,3 +1,4 @@
+import { publicPathFor } from '@/fields/slug/slugPaths'
 import type { CmsArticleBlock, CmsRichText } from '@/lib/cms/types'
 
 type LexicalNode = {
@@ -19,16 +20,49 @@ const textToRichText = (node: LexicalNode): CmsRichText => {
   }
 }
 
+/**
+ * The href a Lexical link node renders at, or `undefined` for no link.
+ *
+ * @param fields - The link node's `fields`.
+ *
+ * @remarks Payload's LinkFeature stores a custom link as `url` and an internal
+ * one as `doc: { relationTo, value }` with no `url` (#359, case 2). An internal
+ * link resolves through the target's current public path, the same rule
+ * `resolveCmsHref` (`src/components/cms/CMSLink.tsx`) applies to link fields,
+ * so a placed post or a nested page links where it is actually served. Two
+ * shapes render no link: a bare id, which is how a read with access control
+ * returns a target it cannot see (a draft), and a populated target whose
+ * `_status` is not `published`, which a trusted read (`getGatedPostContent`)
+ * can return; that read asks for `_status` explicitly, because a populated
+ * target without one (the collections' `defaultPopulate` omits it) is taken
+ * as published, the shape every access-enforced read returns. Either would otherwise point at a URL that serves nothing; the
+ * text still renders. When the target is published, the cached reader is
+ * refreshed by the other collection's tag (`docs/ARCHITECTURE.md` § Caching).
+ */
+const hrefFor = (fields: Record<string, unknown>): string | undefined => {
+  if (fields.linkType !== 'internal') {
+    return typeof fields.url === 'string' && fields.url ? fields.url : undefined
+  }
+  const doc = fields.doc as
+    { relationTo?: unknown; value?: unknown } | null | undefined
+  const value = doc?.value
+  if (typeof doc?.relationTo !== 'string') return undefined
+  if (typeof value !== 'object' || value === null) return undefined
+  const status = (value as { _status?: unknown })._status
+  if (status !== undefined && status !== 'published') return undefined
+  return publicPathFor(doc.relationTo, value) ?? undefined
+}
+
 const inlineToRichText = (children: LexicalNode[] = []): CmsRichText[] => {
   const out: CmsRichText[] = []
   for (const child of children) {
     if (child.type === 'text') {
       out.push(textToRichText(child))
     } else if (child.type === 'link' || child.type === 'autolink') {
-      const fields = (child.fields ?? {}) as { url?: string }
+      const href = hrefFor((child.fields ?? {}) as Record<string, unknown>)
       for (const inner of (child.children as LexicalNode[]) ?? []) {
         if (inner.type === 'text') {
-          out.push({ ...textToRichText(inner), href: fields.url })
+          out.push({ ...textToRichText(inner), href })
         }
       }
     } else if (Array.isArray(child.children)) {

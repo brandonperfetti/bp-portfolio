@@ -117,7 +117,7 @@ describe('CORVUS_SYSTEM_PROMPT · destinations', () => {
 describe('getCorvusModel', () => {
   it('defaults to the OpenAI model when nothing is configured', () => {
     withEnv({ AI_CHAT_PROVIDER: undefined, AI_CHAT_MODEL: undefined }, () => {
-      expect(getCorvusModel()).toMatchObject({ modelId: 'gpt-5-mini' })
+      expect(getCorvusModel()).toMatchObject({ modelId: 'gpt-5.6-luna' })
     })
   })
 
@@ -184,7 +184,7 @@ describe('corvusProviderOptions', () => {
 
   it('defaults the model to the env-selected one', () => {
     withEnv({ AI_CHAT_PROVIDER: 'openai', AI_CHAT_MODEL: undefined }, () => {
-      expect(getCorvusModelId()).toBe('gpt-5-mini')
+      expect(getCorvusModelId()).toBe('gpt-5.6-luna')
       expect(corvusProviderOptions('low')).toEqual({
         openai: { store: false, reasoningEffort: 'low' },
       })

@@ -78,6 +78,9 @@ already cost a session or broken production.
   `src/app/(payload)/admin/importMap.js` (§ Generated artifacts). **Never
   unregister a Posts rich-text node type** (lists, blockquote, upload): every
   migrated article breaks with Lexical error #17.
+- **review a CMS change, or change the CMS Domain Agent** →
+  `docs/agents/cms-domain.md`. **A scenario check is never deleted or
+  weakened to make it pass.**
 - **write Payload `find` or Local-API code (scripts, seeds, tests, MCP
   writes)** → `docs/PAYLOAD.md` § Local API gotchas: **`limit: N` still caps
   with `pagination: false`** (unlimited is `limit: 0`, or `pagination: false`
@@ -171,4 +174,12 @@ The five canonical triage roles, kept as their own names. See
 
 ### Domain docs
 
-Single-context. See `docs/agents/domain.md`.
+Single-context. See `docs/agents/domain.md`; terms in `GLOSSARY.md`.
+
+### CMS Domain Agent
+
+A read-only advisor and reviewer for the Payload CMS paths:
+`docs/agents/cms-domain.md` (brief, owned paths, scenario checks). Under Claude
+Code it is the `cms-domain` subagent, and a `PreToolUse` hook adds its brief
+when an edit touches an owned path; the hook never blocks an edit. It adds to
+the `code-review` verdicts and the CodeRabbit round, never replaces them.

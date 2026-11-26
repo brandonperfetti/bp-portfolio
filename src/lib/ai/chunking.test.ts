@@ -8,6 +8,8 @@ import {
   CORVUS_EMBEDDED_COLLECTIONS,
   CORVUS_TECH_STACK_SUMMARY_COLLECTION,
   DAILY_DRIVER_PROFICIENCY,
+  MIN_PAGE_TEXT_TOKENS,
+  PAGE_TEXT_BLOCK_TYPES,
   TARGET_CHUNK_TOKENS,
   TECH_PROFICIENCY_LABELS,
   TECH_STACK_SUMMARY_DOC_ID,
@@ -16,7 +18,9 @@ import {
   chunkDocument,
   chunkTechStackSummary,
   chunkFlatRecord,
+  chunkPage,
   chunkPost,
+  employmentHistoryLead,
   estimateTokens,
   hashChunkContent,
   isEmbeddable,
@@ -297,6 +301,7 @@ describe('chunkFlatRecord', () => {
 
     expect(chunk.content).toBe(
       [
+        'Past employer in his work history: Technical PM at Acme.',
         'Company: Acme',
         'Title: Technical PM',
         'Period: 2021-03-01 – 2023-06-01',
@@ -306,6 +311,70 @@ describe('chunkFlatRecord', () => {
     expect(chunk.title).toBe('Acme — Technical PM')
     expect(chunk.sourceUrl).toBe('/')
     expect(chunk.chunkIndex).toBe(0)
+  })
+
+  /**
+   * #236: a role embedded as bare labels shared no vocabulary with a career
+   * question, so work history lost to project and repository passages. The
+   * lead sentence is what a career question now matches; the wording rule it
+   * pins is the measured one (`employmentHistoryLead`'s docblock).
+   */
+  describe('employment-history lead (#236)', () => {
+    it('opens the current role with "Current employer"', () => {
+      const [chunk] = chunkFlatRecord('work-history', {
+        id: 1,
+        company: 'Brytecore',
+        title: 'Senior Frontend Engineer',
+        startDate: '2024-09-02T00:00:00.000Z',
+        current: true,
+      })
+      expect(chunk.content.split('\n')[0]).toBe(
+        'Current employer in his work history: Senior Frontend Engineer at Brytecore.',
+      )
+    })
+
+    it('reads an empty end date as current in the lead and the period alike', () => {
+      // The collection says "Leave empty for a current role" and does not
+      // require `current`; the lead and the period must agree (#236 review).
+      const [chunk] = chunkFlatRecord('work-history', {
+        id: 2,
+        company: 'Acme',
+        title: 'Engineer',
+        startDate: '2024-01-01T00:00:00.000Z',
+        current: false,
+      })
+      const [lead, , , period] = chunk.content.split('\n')
+      expect(lead).toBe(
+        'Current employer in his work history: Engineer at Acme.',
+      )
+      expect(period).toBe('Period: 2024-01-01 – Present')
+    })
+
+    it('names the company alone when the role has no title', () => {
+      expect(employmentHistoryLead('Freelance', '', false)).toBe(
+        'Past employer in his work history: Freelance.',
+      )
+    })
+
+    it('adds no lead when there is no company to name', () => {
+      expect(employmentHistoryLead('', 'Engineer', true)).toBeNull()
+      const [chunk] = chunkFlatRecord('work-history', {
+        id: 9,
+        title: 'Engineer',
+      })
+      expect(chunk.content).toBe('Title: Engineer')
+    })
+
+    it("keeps Brandon's name out of the lead", () => {
+      // [measured 2026-11-25] A lead about "Brandon" took four of the five
+      // slots on "what tech does Brandon use"; career words that a stack or
+      // project question does not use are what kept those results unchanged.
+      for (const current of [true, false]) {
+        expect(employmentHistoryLead('Acme', 'PM', current)).not.toMatch(
+          /brandon|perfetti/i,
+        )
+      }
+    })
   })
 
   /**
@@ -583,6 +652,215 @@ describe('chunkDocument', () => {
 
     const project = chunkDocument('projects', { id: 2, title: 'P' })
     expect(project[0].collection).toBe('projects')
+
+    const page = chunkDocument('pages', {
+      id: 3,
+      title: 'About',
+      _status: 'published',
+      layout: [{ blockType: 'prose', content: lexical([words(80)]) }],
+    })
+    expect(page[0].collection).toBe('pages')
+  })
+})
+
+/**
+ * Pages embed their text blocks only (#208).
+ *
+ * @remarks The shapes mirror production's Pages as read on 2026-11-25: a role
+ * Page is a `lead` plus a `workHistoryCard` plus a `prose` block, `/about`
+ * nests its text inside a `container` → `column`, and a chrome Page is a
+ * single block that renders another collection.
+ */
+describe('chunkPage (#208)', () => {
+  const prose = (...paragraphs: string[]) => ({
+    blockType: 'prose',
+    content: lexical(paragraphs),
+  })
+
+  const rolePage = {
+    id: 40,
+    title: 'Brytecore',
+    subtitle: 'Senior Engineering Manager',
+    slug: 'brytecore',
+    path: 'work/brytecore',
+    _status: 'published',
+    publishedAt: '2026-09-01T00:00:00.000Z',
+    layout: [
+      { blockType: 'lead', text: 'Platform architecture across three fronts.' },
+      { blockType: 'workHistoryCard', company: 'Brytecore', current: true },
+      prose(words(60, 'architecture'), words(30, 'mentoring')),
+    ],
+  }
+
+  it('embeds a role Page under its title and subtitle, cited at its served path', () => {
+    const chunks = chunkPage(rolePage)
+    expect(chunks).toHaveLength(1)
+    const [chunk] = chunks
+    expect(chunk).toMatchObject({
+      collection: 'pages',
+      docId: 40,
+      chunkIndex: 0,
+      title: 'Brytecore',
+      sourceUrl: '/work/brytecore',
+      visibility: 'public',
+      publishedAt: '2026-09-01T00:00:00.000Z',
+    })
+    expect(chunk.content).toMatch(
+      /^Brytecore — Senior Engineering Manager\n\nPlatform architecture across three fronts\./,
+    )
+    expect(chunk.content).toContain('architecture architecture')
+    expect(chunk.contentHash).toBe(hashChunkContent(chunk.content))
+  })
+
+  it('leaves out blocks that render another collection', () => {
+    const [chunk] = chunkPage(rolePage)
+    // `workHistoryCard` renders the work-history row, which is embedded on its
+    // own; reading it here would put one fact in the window twice.
+    expect(chunk.content).not.toContain('current')
+    expect(PAGE_TEXT_BLOCK_TYPES).not.toContain('workHistoryCard')
+    expect(PAGE_TEXT_BLOCK_TYPES).not.toContain('postRollup')
+  })
+
+  it("yields nothing for a chrome Page, so D8(b)'s noise stays out", () => {
+    expect(
+      chunkPage({
+        id: 41,
+        title: 'Articles',
+        _status: 'published',
+        layout: [{ blockType: 'articlesArchive' }],
+      }),
+    ).toEqual([])
+    // `/work`: a one-line lead over a card grid of the roles.
+    expect(
+      chunkPage({
+        id: 42,
+        title: 'Work',
+        _status: 'published',
+        layout: [
+          { blockType: 'lead', text: 'Where I have worked.' },
+          { blockType: 'featureCardGrid', cards: [{ title: 'Brytecore' }] },
+        ],
+      }),
+    ).toEqual([])
+  })
+
+  it('embeds a Page at the token floor and not one just under it', () => {
+    // `words(n)` of 'alpha' estimates to ceil((6n - 1) / 4) tokens.
+    const atFloor = (count: number) =>
+      chunkPage({
+        id: 43,
+        title: 'T',
+        _status: 'published',
+        layout: [{ blockType: 'lead', text: words(count) }],
+      })
+    expect(atFloor(40)).toHaveLength(1) // 60 tokens
+    expect(atFloor(39)).toEqual([]) // 59 tokens
+    expect(MIN_PAGE_TEXT_TOKENS).toBe(60)
+  })
+
+  it('reads text nested in a container → column, in reading order', () => {
+    const [chunk] = chunkPage({
+      id: 44,
+      title: 'About',
+      path: 'about',
+      _status: 'published',
+      layout: [
+        {
+          blockType: 'container',
+          columns: [
+            {
+              blockType: 'column',
+              content: [
+                { blockType: 'heading', text: 'Who I am' },
+                prose(words(70, 'first')),
+              ],
+            },
+            {
+              blockType: 'column',
+              content: [{ blockType: 'image' }, prose(words(10, 'second'))],
+            },
+          ],
+        },
+      ],
+    })
+    expect(chunk.sourceUrl).toBe('/about')
+    const body = chunk.content
+    expect(body.indexOf('Who I am')).toBeLessThan(body.indexOf('first'))
+    expect(body.indexOf('first')).toBeLessThan(body.indexOf('second'))
+  })
+
+  it("reads a content block's columns and an FAQ's questions with their answers", () => {
+    const [chunk] = chunkPage({
+      id: 45,
+      title: 'Privacy',
+      path: 'privacy',
+      _status: 'published',
+      layout: [
+        {
+          blockType: 'content',
+          columns: [{ richText: lexical([words(40, 'policy')]) }],
+        },
+        {
+          blockType: 'faqList',
+          heading: 'Questions',
+          items: [
+            {
+              question: 'Does Corvus store my conversation?',
+              answer: lexical(['Only the current session.']),
+            },
+          ],
+        },
+      ],
+    })
+    expect(chunk.content).toContain('policy policy')
+    expect(chunk.content).toContain(
+      'Does Corvus store my conversation?\nonly the current session.',
+    )
+  })
+
+  it('takes a paragraph placed twice for two breakpoints once', () => {
+    const paragraph = words(70, 'twice')
+    const chunks = chunkPage({
+      id: 46,
+      title: 'T',
+      _status: 'published',
+      layout: [
+        { ...prose(paragraph), visibility: 'desktopOnly' },
+        { ...prose(paragraph), visibility: 'mobileOnly' },
+      ],
+    })
+    expect(chunks).toHaveLength(1)
+    expect(chunks[0].content.split(words(70, 'twice')).length - 1).toBe(1)
+  })
+
+  it('splits a long Page into overlapping chunks the way a post is split', () => {
+    const paragraphs = Array.from({ length: 12 }, (_, i) => words(120, `p${i}`))
+    const page = chunkPage({
+      id: 47,
+      title: 'Long',
+      _status: 'published',
+      layout: [prose(...paragraphs)],
+    })
+    const post = chunkPost({
+      id: 47,
+      title: 'Long',
+      _status: 'published',
+      content: lexical(paragraphs),
+    })
+    expect(page.length).toBeGreaterThan(1)
+    expect(page.map((c) => c.content)).toEqual(post.map((c) => c.content))
+  })
+
+  it('cites the root Page at /', () => {
+    const [chunk] = chunkPage({
+      id: 48,
+      title: 'Home',
+      slug: 'home',
+      path: 'home',
+      _status: 'published',
+      layout: [prose(words(80))],
+    })
+    expect(chunk.sourceUrl).toBe('/')
   })
 })
 
@@ -591,6 +869,12 @@ describe('isEmbeddable', () => {
     expect(isEmbeddable('posts', { _status: 'published' })).toBe(true)
     expect(isEmbeddable('posts', { _status: 'draft' })).toBe(false)
     expect(isEmbeddable('posts', {})).toBe(false)
+  })
+
+  it('embeds only published Pages: a draft Page is never retrievable (#208)', () => {
+    expect(isEmbeddable('pages', { _status: 'published' })).toBe(true)
+    expect(isEmbeddable('pages', { _status: 'draft' })).toBe(false)
+    expect(isEmbeddable('pages', {})).toBe(false)
   })
 
   it('always embeds the draft-free flat collections', () => {
@@ -610,9 +894,10 @@ describe('isEmbeddable', () => {
 })
 
 describe('CORVUS_EMBEDDED_COLLECTIONS', () => {
-  it('is exactly the five collections decision D8(b) named', () => {
+  it("is exactly D8(b)'s five collections plus the Pages #208 added", () => {
     expect([...CORVUS_EMBEDDED_COLLECTIONS]).toEqual([
       'posts',
+      'pages',
       'projects',
       'uses',
       'tech-stack',
@@ -620,9 +905,8 @@ describe('CORVUS_EMBEDDED_COLLECTIONS', () => {
     ])
   })
 
-  it('excludes pages and the taxonomy collections', () => {
+  it('excludes the taxonomy collections, which D8(b) still keeps out', () => {
     const slugs = CORVUS_EMBEDDED_COLLECTIONS as readonly string[]
-    expect(slugs).not.toContain('pages')
     expect(slugs).not.toContain('categories')
     expect(slugs).not.toContain('tags')
   })

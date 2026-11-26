@@ -213,10 +213,19 @@ export const getPublishedPostPaths = async (): Promise<string[]> => {
  * not only the one that ran the hook (#118) — this per-slug entry is the one
  * the detail-page staleness incident landed on. Measured 45,356 bytes for one
  * post, far under the 2 MB Runtime Cache item limit.
+ *
+ * **Also tagged `pages` (#359).** The post's Lexical body can link to pages
+ * (`src/fields/defaultLexical.ts`, `enabledCollections: ['pages', 'posts']`),
+ * populated here with access control enforced, so a link to a draft page is
+ * cached as a bare id and renders as plain text (`lexicalToBlocks`, which also
+ * since #359 renders a populated internal link at all). A page publish,
+ * unpublish or delete purges `pages`, never `posts`, so without this tag the
+ * article kept that stale link until the `cmsContent` lifetime lapsed. The
+ * mirror of the page readers' `posts` tag (`pagesRepo.ts`).
  */
 const getPublishedPostBySlug = async (slug: string): Promise<Post | null> => {
   'use cache: remote'
-  cacheTag(CMS_TAGS.articles)
+  cacheTag(CMS_TAGS.articles, CMS_TAGS.pages)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
   const { docs } = await payload.find({
@@ -239,10 +248,13 @@ const getPublishedPostBySlug = async (slug: string): Promise<Post | null> => {
  * exactly what a page costs it. An unplaced post has `path: null` and can never
  * match — which is what keeps `/articles/<slug>` the only URL for the rest of
  * the corpus.
+ *
+ * Tagged `pages` as well, for the reason {@link getPublishedPostBySlug} gives
+ * (#359).
  */
 const getPublishedPostByPath = async (path: string): Promise<Post | null> => {
   'use cache: remote'
-  cacheTag(CMS_TAGS.articles)
+  cacheTag(CMS_TAGS.articles, CMS_TAGS.pages)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
   const { docs } = await payload.find({
@@ -320,16 +332,28 @@ export const getPostByPath = async (path: string): Promise<Post | null> => {
  * this function is the deliberate, single point where that app-layer
  * decision is allowed to override the data-layer gate. Never call it before
  * the gate. (Fresh-eyes review 2026-08, finding B2.)
+ *
+ * The override also reaches the body's link targets: Payload forwards
+ * `overrideAccess` into Lexical link population, so a link to a draft page or
+ * post comes back populated, where an access-enforced read returns a bare id.
+ * Each collection's `defaultPopulate` leaves `_status` out, so the read asks
+ * for it on top of those defaults; `lexicalToBlocks` then renders a draft
+ * target as text instead of a link to a URL that serves nothing (#359).
  */
 export const getGatedPostContent = async (
   id: number,
 ): Promise<Post['content'] | null> => {
   const payload = await getPayload({ config: configPromise })
+  const withStatus = (slug: 'pages' | 'posts') => ({
+    ...(payload.collections[slug]?.config.defaultPopulate ?? {}),
+    _status: true as const,
+  })
   const doc = await payload.findByID({
     collection: 'posts',
     id,
     depth: 2,
     overrideAccess: true,
+    populate: { pages: withStatus('pages'), posts: withStatus('posts') },
     select: { content: true },
   })
   return doc?.content ?? null
