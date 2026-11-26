@@ -745,11 +745,13 @@ export async function createMcpWriter({
         .join('\n') ?? ''
     return { text, isError: msg.result?.isError === true || isMcpError(text) }
   }
-  // Server text is kept for diagnosis, but the key is redacted from the whole
-  // text before it is cut: a key split at the cutoff would leave a prefix that
+  // Server text is kept for diagnosis, but every secret this writer sends (the
+  // key, and the bypass header on staging) is redacted from the whole text
+  // before it is cut: a secret split at the cutoff would leave a prefix that
   // neither console redaction nor the evidence scrub can recognise.
+  const sent = [apiKey, ...Object.values(extraHeaders ?? {})]
   const excerpt = (/** @type {string} */ text, max = Infinity) =>
-    redactSecrets(text, [apiKey]).slice(0, max)
+    redactSecrets(text, sent).slice(0, max)
   const toolName = (
     /** @type {string} */ verb,
     /** @type {'page' | 'post'} */ kind,
