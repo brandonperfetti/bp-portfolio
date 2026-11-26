@@ -107,7 +107,8 @@ Options:
   --evidence <dir>             New or empty directory for reads.tsv, raw headers and bodies. Required.
   --target local|staging|production   Default local.
   --base-url <url>             local: a loopback URL (default http://localhost:6002).
-                               staging: a bp-portfolio-*-sans-faux-studios.vercel.app preview.
+                               staging: a bp-portfolio-git-<branch>-sans-faux-studios.vercel.app
+                               alias (never master).
                                production: only https://brandonperfetti.com.
   --allow-staging-writes       Required for --target staging.
   --allow-production-writes    Required for --target production.
@@ -238,17 +239,21 @@ export function resolvePlan(args) {
   } else if (args.target === 'staging') {
     // An allowlist, not a denylist: the run sends a password or an MCP key
     // and the bypass secret, so a mistyped host must not receive them.
-    // A preview must be this project's, on this team: Vercel names them
-    // `bp-portfolio-<hash|git-branch>-sans-faux-studios.vercel.app`
-    // [measured 2026-11-26, GitHub deployment status]. A bare `.vercel.app`
-    // suffix would admit any other project's deployment.
+    // Only a branch alias of this project is admitted besides the staging
+    // domain: `bp-portfolio-git-<branch>-sans-faux-studios.vercel.app`
+    // [measured 2026-11-26, GitHub deployment status]. A per-deployment hash
+    // URL can be a production deployment, and the bare project alias and the
+    // `master` alias serve production, so all three would write to the
+    // production CMS without --allow-production-writes.
+    const branchAlias = host.match(
+      /^bp-portfolio-git-([a-z0-9-]+)-sans-faux-studios\.vercel\.app$/,
+    )
     const stagingHost =
       host === new URL(target.defaultBaseUrl).hostname ||
-      (host.startsWith('bp-portfolio-') &&
-        host.endsWith('-sans-faux-studios.vercel.app'))
+      (branchAlias !== null && branchAlias[1] !== 'master')
     if (base.protocol !== 'https:' || isProductionHost || !stagingHost) {
       throw new RefusalError(
-        `--target staging takes ${target.defaultBaseUrl} or an https bp-portfolio-*-sans-faux-studios.vercel.app preview, not ${base.origin}`,
+        `--target staging takes ${target.defaultBaseUrl} or a bp-portfolio-git-<branch>-sans-faux-studios.vercel.app alias (not master), not ${base.origin}`,
       )
     }
   } else if (base.origin !== target.defaultBaseUrl) {
@@ -1236,17 +1241,20 @@ export async function runProbe({
     // moment later, so a miss is searched again after a short settle.
     for (const p of probes) {
       if (p.id !== null || !p.attempted) continue
+      let searched = false
       for (let attempt = 1; attempt <= 2 && p.id === null; attempt += 1) {
         if (attempt === 2) await wait(5000)
         try {
           const mine = (await writer.findProbes(p.kind)).find(
             (d) => d.slug === p.slug,
           )
+          searched = true
           if (mine) p.id = mine.id
         } catch {
-          ok = false
+          /* the second attempt, or the prefix check below, decides */
         }
       }
+      if (!searched) ok = false
     }
     for (const p of probes) {
       if (p.id === null) continue

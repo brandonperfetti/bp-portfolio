@@ -91,7 +91,9 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
   `--evidence` directory. Exit codes: 0 PASS, 1 FAIL, 2 refused before any
   write, 3 cleanup incomplete. The target is local by default (a loopback
   `--base-url`); `--target staging` needs `--allow-staging-writes` and takes only
-  `staging.brandonperfetti.com` or a `bp-portfolio-*-sans-faux-studios.vercel.app` preview, and
+  `staging.brandonperfetti.com` or a non-`master` branch alias
+  (`bp-portfolio-git-<branch>-sans-faux-studios.vercel.app`; a hash URL or the
+  `master` alias can be production), and
   `--target production` needs `--allow-production-writes`. The article probe is
   opt-in, because a live article shows in the public `/feed.xml`. Credentials
   are script-only and per target (`CMS_PROBE_*_<TARGET>`, `.env.example`), from

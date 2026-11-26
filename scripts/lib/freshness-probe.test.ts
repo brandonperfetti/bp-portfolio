@@ -117,10 +117,18 @@ describe('resolvePlan: where a run may write', () => {
     const staging = [...base, '--target', 'staging', '--allow-staging-writes']
     expect(() =>
       plan([...staging, '--base-url', 'https://staging.brandonperfetti.co']),
-    ).toThrow(/vercel\.app preview/)
-    expect(() =>
-      plan([...staging, '--base-url', 'https://other-app.vercel.app']),
-    ).toThrow(/vercel\.app preview/)
+    ).toThrow(/alias \(not master\)/)
+    for (const host of [
+      'https://other-app.vercel.app',
+      // These can serve production: never through --target staging.
+      'https://bp-portfolio-sans-faux-studios.vercel.app',
+      'https://bp-portfolio-git-master-sans-faux-studios.vercel.app',
+      'https://bp-portfolio-579q7c0ag-sans-faux-studios.vercel.app',
+    ]) {
+      expect(() => plan([...staging, '--base-url', host])).toThrow(
+        /alias \(not master\)/,
+      )
+    }
     expect(
       plan([
         ...staging,
