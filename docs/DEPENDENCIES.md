@@ -217,8 +217,10 @@ beside it had no effect. Verify with `pnpm config get minimumReleaseAge`
 - **Strict by default (pnpm ≥12.3):** because the cutoff is set explicitly,
   `minimumReleaseAgeStrict` defaults to `true`, so a resolution that finds no
   version old enough stops and asks instead of adding the young version to
-  `minimumReleaseAgeExclude` on its own. An entry added under pnpm ≥12.3 is
-  therefore one somebody chose to add; the eighteen below predate that.
+  `minimumReleaseAgeExclude` on its own. One other command still writes
+  entries there: `pnpm audit --fix` adds each advisory's patched version
+  (since pnpm 11.0.0, pnpm/pnpm#11216), so review every entry it adds like a
+  hand-added one. The eighteen below predate strict mode.
 - **Exceptions:** a `name@version` entry in `minimumReleaseAgeExclude`,
   under the rule in `docs/SECURITY.md` § Dependency advisories (the case it
   exists for: a same-day security patch). The entries present on 2026-09-26 predate the gate —
