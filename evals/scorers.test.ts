@@ -1717,6 +1717,7 @@ describe('private-repository scorers (#193)', () => {
     for (const url of [
       'https://example.org/help/(archive(v1))/src/secret.ts',
       'https://example.org/(src/secret.ts)',
+      '[guide](https://example.org/help),[reference](https://example.org/src/secret.ts)',
     ]) {
       expect(
         await score(

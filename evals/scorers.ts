@@ -1145,8 +1145,13 @@ function claimsImplementation(output: string): boolean {
  */
 function urlRanges(text: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = []
-  for (const match of text.matchAll(/https?:\/\/[^\s<>"'`]+/gi)) {
-    const start = match.index ?? 0
+  // An exec loop, so the scan resumes where an address was cut short: in
+  // `[a](https://x/help),[b](https://x/src/y.ts)` the second address gets its
+  // own range (#465).
+  const addresses = /https?:\/\/[^\s<>"'`]+/gi
+  let match: RegExpExecArray | null
+  while ((match = addresses.exec(text)) !== null) {
+    const start = match.index
     let depth = 0
     let end = match[0].length
     for (let i = 0; i < match[0].length; i++) {
@@ -1161,6 +1166,7 @@ function urlRanges(text: string): Array<[number, number]> {
       }
     }
     ranges.push([start, start + end])
+    addresses.lastIndex = start + end
   }
   return ranges
 }
