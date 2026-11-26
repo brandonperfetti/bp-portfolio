@@ -635,6 +635,22 @@ describe('runProbe', () => {
     expect(exitCodeFor(result)).toBe(EXIT.fail)
   })
 
+  it('reports an evidence failure once when every row fails', async () => {
+    const site = fakeSite()
+    const { result, lines } = await run('rest', site, [], undefined, (e) => {
+      e.write = () => {
+        throw new Error('disk full')
+      }
+    })
+    expect(site.docs.size).toBe(0)
+    expect(result.cleanup).toBe('PASS')
+    expect(result.error).toBe('evidence write failed: disk full')
+    expect(
+      lines.filter((l) => /error +evidence write failed/.test(l)),
+    ).toHaveLength(1)
+    expect(exitCodeFor(result)).toBe(EXIT.fail)
+  })
+
   it('logs and keeps a delete-row failure that follows a run error', async () => {
     const site = fakeSite({ failPublish: true })
     const { result, lines } = await run('rest', site, [], undefined, (e) => {
