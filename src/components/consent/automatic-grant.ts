@@ -223,37 +223,50 @@ export function discardStoredAutomaticGrantOnce(): void {
 
 let landingGuardInstalled = false
 
+/** Switches the tag off when an automatic grant meets a region that asks. */
+function stopIfRegionAsks(): void {
+  if (
+    automaticGrantLive &&
+    grantedStore?.getState().consentInfo == null &&
+    readConsentRequiredCookie(document.cookie) !== false
+  ) {
+    stopGoogleAnalytics(readGaEnv())
+  }
+}
+
 /**
  * Switches the tag off before the router pushes a route into a region that
- * asks, so the landing route is not reported (#375, acceptance criterion b).
+ * asks, or the visitor goes Back or Forward to one, so the landing route is
+ * not reported (#375, acceptance criterion b).
  *
  * @remarks
- * On a client navigation the route's response rewrites the region cookie
- * before the router commits, and the commit is a `history.pushState`. gtag
- * reports a history change from its own `pushState` wrapper, after calling
- * through. This wrapper is installed before the tag ever loads, so it sits
- * inside gtag's and runs first. While an automatic grant is live it reads the
- * cookie and, unless the region is confidently not required, sets the tag's
- * opt-out switch before the push. The region effect then clears the grant as
- * usual. Where consent is not required it does nothing, and the landing route
- * is reported as before.
+ * - **Push and replace.** On a client navigation the route's response
+ *   rewrites the region cookie before the router commits, and the commit is a
+ *   `history.pushState`. gtag reports a history change from its own
+ *   `pushState` wrapper, after calling through. This wrapper is installed
+ *   before the tag ever loads, so it sits inside gtag's and runs first.
+ * - **Back and Forward.** gtag also reports a `popstate`. A `popstate`
+ *   listener added here, before the tag loads, runs before gtag's, since
+ *   listeners on one target run in the order they were added.
+ *
+ * Either way, while an automatic grant is live, it reads the cookie and,
+ * unless the region is confidently not required, sets the tag's opt-out
+ * switch first. The region effect then clears the grant as usual. Where
+ * consent is not required it does nothing, and the route is reported as
+ * before. A region change no request has carried to the proxy yet is not
+ * seen (`docs/ANALYTICS.md`).
  */
 export function installLandingRouteGuard(): void {
   if (typeof window === 'undefined' || landingGuardInstalled) return
   landingGuardInstalled = true
+  window.addEventListener('popstate', stopIfRegionAsks)
   for (const method of ['pushState', 'replaceState'] as const) {
     const original = window.history[method]
     window.history[method] = function guarded(
       this: History,
       ...args: Parameters<History['pushState']>
     ) {
-      if (
-        automaticGrantLive &&
-        grantedStore?.getState().consentInfo == null &&
-        readConsentRequiredCookie(document.cookie) !== false
-      ) {
-        stopGoogleAnalytics(readGaEnv())
-      }
+      stopIfRegionAsks()
       return original.apply(this, args)
     }
   }

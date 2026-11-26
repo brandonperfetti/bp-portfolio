@@ -107,6 +107,13 @@ let impl: Impl = 'change'
 const originalPushState = window.history.pushState
 const originalReplaceState = window.history.replaceState
 
+/**
+ * `popstate` listeners added during a test, removed after it, so one page's
+ * landing-route guard cannot answer for another page's.
+ */
+const originalAddEventListener = window.addEventListener
+let popstateListeners: Array<EventListenerOrEventListenerObject> = []
+
 function setRegion(region: Region): void {
   document.cookie =
     region === null
@@ -282,6 +289,16 @@ function holdDigests() {
 }
 
 beforeEach(() => {
+  popstateListeners = []
+  window.addEventListener = function (
+    this: Window,
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions,
+  ) {
+    if (type === 'popstate') popstateListeners.push(listener)
+    return originalAddEventListener.call(this, type, listener, options)
+  } as typeof window.addEventListener
   tagsEverAppended = 0
   tagObserver.observe(document, { childList: true, subtree: true })
   vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'production')
@@ -349,6 +366,9 @@ afterEach(() => {
   cleanup()
   window.history.pushState = originalPushState
   window.history.replaceState = originalReplaceState
+  window.addEventListener = originalAddEventListener
+  for (const listener of popstateListeners)
+    window.removeEventListener('popstate', listener)
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   window.localStorage.clear()
@@ -560,6 +580,32 @@ describe('#375 histories — mid-visit', () => {
       window.history.pushState({}, '', '/landing')
 
       expect(gaDisabled(), 'the tag is off before the push returns').toBe(true)
+    },
+  )
+
+  history(
+    'landing route: Back or Forward into a region that asks switches the tag off before gtag hears it',
+    'differs',
+    async () => {
+      await openPage('false')
+      expect(gaDisabled(), 'the tag is on before the traversal').toBe(false)
+      // A listener gtag would add once loaded, after the guard.
+      let disabledWhenGtagHeard: unknown = 'not heard'
+      const gtagListener = () => {
+        disabledWhenGtagHeard = gaDisabled()
+      }
+      window.addEventListener('popstate', gtagListener)
+      try {
+        setRegion('true')
+        window.dispatchEvent(new PopStateEvent('popstate', { state: {} }))
+      } finally {
+        window.removeEventListener('popstate', gtagListener)
+      }
+
+      expect(
+        disabledWhenGtagHeard,
+        'the tag is off before gtag handles the traversal',
+      ).toBe(true)
     },
   )
 

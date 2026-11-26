@@ -124,10 +124,11 @@ against, is [`docs/designs/375-automatic-grant-region.md`](designs/375-automatic
   and the banner stayed away.
 - **The route the visitor lands on** is not reported, once the region cookie
   has changed. While an automatic grant is live, a wrapper on
-  `history.pushState`/`replaceState`, installed before the tag ever loads,
-  reads the cookie and switches the tag off before the router commits a route
-  into a region that asks, so gtag's history-driven `page_view` for that route
-  is dropped.
+  `history.pushState`/`replaceState` and a `popstate` listener, both
+  installed before the tag ever loads, read the cookie and switch the tag off
+  before the router commits a route into a region that asks, or before gtag
+  hears a Back or Forward to one. gtag's history-driven `page_view` for that
+  route is dropped.
 - **Explicit choices** go through `saveExplicitChoice` from the banner and the
   dialog, and are stored as before. A record stored by this code is therefore
   always an explicit choice.

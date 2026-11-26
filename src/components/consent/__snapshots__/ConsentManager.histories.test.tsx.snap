@@ -10,6 +10,8 @@ exports[`#375 histories — mid-visit > H2: moving into a region that asks clear
 
 exports[`#375 histories — mid-visit > H3 (signed deviation): in, then back out without choosing, re-grants automatically — production fails it 1`] = `"going back out re-grants automatically: expected false to be true // Object.is equality"`;
 
+exports[`#375 histories — mid-visit > landing route: Back or Forward into a region that asks switches the tag off before gtag hears it — production fails it 1`] = `"the tag is off before gtag handles the traversal: expected false to be true // Object.is equality"`;
+
 exports[`#375 histories — mid-visit > landing route: a history push into a region that asks switches the tag off before the push returns — production fails it 1`] = `"the tag is off before the push returns: expected false to be true // Object.is equality"`;
 
 exports[`#375 histories — mid-visit > rule 6: a navigation after which the region cookie is gone clears an automatic grant — production fails it 1`] = `"the automatic grant is cleared: expected true to be false // Object.is equality"`;
