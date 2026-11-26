@@ -21,8 +21,9 @@ itself, not a set of sub-packages.
 `minimumReleaseAge` key was absent, so the exclude list guarded nothing. The key is now set to
 `1440` (minutes, i.e. one day): `pnpm config get minimumReleaseAge` returns `1440`, and pnpm refuses
 to resolve any version published less than a day ago. The gate applies when a version is
-_resolved_ (`pnpm add`, `pnpm update`, a re-resolving install); a `--frozen-lockfile` install of
-versions already in the lockfile is not re-checked. Before choosing a version, read the key; an
+_resolved_ (`pnpm add`, `pnpm update`, a re-resolving install), and a `--frozen-lockfile` install
+also checks the versions already in the lockfile against it, so a version under a day old fails
+CI's install too (corrected 2026-11-25, #376). Before choosing a version, read the key; an
 exclude entry is a documented exception, see `docs/DEPENDENCIES.md` § "Release-age gate".
 
 The three checks that actually settle it, all negative:
