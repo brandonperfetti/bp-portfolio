@@ -7,10 +7,11 @@ import type { C15tCategory } from './consent-content'
  * Consent categories offered in the banner/dialog.
  *
  * @remarks
- * `necessary` is always-on and covers the site's only pre-existing cookies —
- * Clerk (auth session) and Cloudflare Turnstile (security) — which consent
- * frameworks exempt. `measurement` gates GA4. No `marketing`/`experience`
- * categories: #83 is analytics-only (no ads/marketing pixels).
+ * `necessary` is always-on and covers what runs before any choice — Clerk
+ * (auth session), Cloudflare Turnstile (security) and Sentry (error reports,
+ * outside the banner by #213; #476) — which consent frameworks exempt.
+ * `measurement` gates GA4. No `marketing`/`experience` categories: #83 is
+ * analytics-only (no ads/marketing pixels).
  */
 export const CONSENT_CATEGORIES = ['necessary', 'measurement'] as const
 

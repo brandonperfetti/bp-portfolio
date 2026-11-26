@@ -21,6 +21,7 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "diff:pages": "node scripts/diff-pages.mjs",
+    "probe:freshness": "node scripts/freshness-probe.mjs",
     "storybook": "node scripts/local-server.mjs storybook",
     "build-storybook": "storybook build",
     "payload": "payload",

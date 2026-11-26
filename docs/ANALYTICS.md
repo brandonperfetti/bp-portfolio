@@ -191,14 +191,28 @@ swap and moved the column default with a migration. The stored subtitle is now
 served as written, like every other consent string, so a database that still
 holds the old sentence would show it.
 
+**The dialog's always-on row (#476).** Its default copy names the three tools
+that run before any choice and says when each runs: Clerk on every page, with
+its cookies even for a visitor who never signs in; Cloudflare Turnstile once a
+visitor starts filling in a form (#475); and Sentry, by #213's reading below.
+That follows Brandon's #368 decision (2026-11-25). The row no longer says
+"Required for the site to work", which is not true of Sentry. The same rule as
+the Analytics sentence applies: production's global stored the earlier sentence
+([measured] anonymous read, 2026-11-26 11:38Z), and a stored value wins over
+the default, so the new copy shows only once that field is edited in the admin
+or cleared. A migration moves the column default for databases seeded later.
+
 ## Essential cookies (exempt from the banner)
 
 Set regardless of the consent choice — strictly-necessary, consent frameworks
 exempt them:
 
 - **Clerk** — authentication session. See `docs/AUTH.md`.
-- **Cloudflare Turnstile** — bot/security challenge on the contact form (and,
-  when armed, Corvus chat).
+- **Cloudflare Turnstile** — bot/security challenge on the contact form and
+  the Newsletter Signup block (and, when armed, Corvus chat). The forms load
+  its script on their first focus, not when the page arrives, so a visitor
+  who never uses one makes no request to Cloudflare (#475, Brandon's #368
+  decision). Armed chat loads it on mount.
 
 ## Sessions in Sentry (#213) — outside the banner, like the rest of Sentry
 

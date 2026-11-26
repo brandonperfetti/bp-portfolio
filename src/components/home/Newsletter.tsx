@@ -19,18 +19,25 @@ import {
  * the Resend list the sign-up and contact-form opt-ins use. There is no
  * checkbox; the copy says what joining means. The server's answer is shown
  * as given: it is the same for a new address and one already on the list.
- * The Turnstile check is invisible unless Cloudflare escalates, and
- * enforced server-side only when its keys are set. A submit made before
- * the check has loaded waits for it; one that times out sends nothing and
- * asks the visitor to try again (#405).
+ * The Turnstile check is invisible unless Cloudflare escalates, loads on
+ * the form's first focus (#475), and is enforced server-side only when its
+ * keys are set. A submit made before the check has loaded waits for it;
+ * one that times out sends nothing and asks the visitor to try again
+ * (#405).
  */
 export function Newsletter() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [success, setSuccess] = useState<boolean | null>(null)
-  const { containerRef: turnstileRef, requestToken } = useTurnstileToken({
+  const {
+    containerRef: turnstileRef,
+    requestToken,
+    load: startTurnstile,
+  } = useTurnstileToken({
     enabled: true,
+    // Nothing from Cloudflare until the visitor focuses the form (#475).
+    loadOn: 'demand',
   })
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -80,6 +87,8 @@ export function Newsletter() {
   return (
     <form
       onSubmit={onSubmit}
+      // Focus bubbles in React: any field, or the button, starts the load.
+      onFocus={startTurnstile}
       className="rounded-2xl border border-zinc-100 p-6 dark:border-zinc-700/40"
     >
       <h2 className="flex text-sm font-semibold text-zinc-900 dark:text-zinc-100">
