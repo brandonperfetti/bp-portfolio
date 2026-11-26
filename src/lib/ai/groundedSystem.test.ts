@@ -3,7 +3,10 @@ import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 
 import { ABOUT_CORVUS_COLLECTION } from '@/lib/ai/aboutCorvus'
-import { chunkTechStackSummary } from '@/lib/ai/chunking'
+import {
+  CORVUS_PRIVATE_REPO_SUMMARY_COLLECTION,
+  chunkTechStackSummary,
+} from '@/lib/ai/chunking'
 import { CORVUS_SYSTEM_PROMPT } from '@/lib/ai/corvus'
 import {
   CORVUS_POSITIONING,
@@ -11,6 +14,7 @@ import {
   SUBJECT_DISAMBIGUATION_RULE,
   SNIPPET_SOURCE_LABEL,
   TECH_PROFICIENCY_RANKING_RULE,
+  PRIVATE_REPO_SUMMARY_RULE,
   buildGroundedSystem,
   hostPageContextLine,
 } from '@/lib/ai/groundedSystem'
@@ -607,6 +611,35 @@ describe('three-way subject disambiguation (#167)', () => {
     expect(buildGroundedSystem([aboutCorvus])).toContain(
       `${SNIPPET_SOURCE_LABEL} /corvus`,
     )
+  })
+})
+
+/**
+ * The private-repository rule (#193): in force only when a summary passage is
+ * in the window, so no earlier turn's prompt moves.
+ */
+describe('private-repository summaries (#193)', () => {
+  const summary = snippet({
+    collection: CORVUS_PRIVATE_REPO_SUMMARY_COLLECTION,
+    title: 'sample-private (private repository)',
+    content: 'Private repository: sample-private\nAbout: review checklists.',
+    sourceUrl: null,
+  })
+
+  it('adds the rule when a summary passage is present', () => {
+    expect(buildGroundedSystem([summary])).toContain(PRIVATE_REPO_SUMMARY_RULE)
+  })
+
+  it('leaves every other turn without it', () => {
+    expect(buildGroundedSystem([snippet()])).not.toContain(
+      PRIVATE_REPO_SUMMARY_RULE,
+    )
+  })
+
+  it('keeps answers high-level, refuses code, and forbids a GitHub link', () => {
+    expect(PRIVATE_REPO_SUMMARY_RULE).toMatch(/Never describe its code/)
+    expect(PRIVATE_REPO_SUMMARY_RULE).toMatch(/private and only this summary/)
+    expect(PRIVATE_REPO_SUMMARY_RULE).toMatch(/Never write a github\.com link/)
   })
 })
 
