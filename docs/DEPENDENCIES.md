@@ -44,6 +44,14 @@ one set, version-locked.
   its own `openai@6` (`[measured 2026-09-26, pnpm why openai]`: `6.48.0`). The package is still declared; whether to remove it is
   open.
 - `streamdown`, `react-markdown`, `remark-gfm` — streaming markdown render.
+- `refractor` 5 — Prism syntax highlighting for article code blocks, through
+  the local rehype plugin `src/components/cms/rehypeRefractor.ts`. It replaced
+  `@mapbox/rehype-prism`, which was stuck on refractor 3 and `prismjs` <1.30
+  (GHSA-x7hr-w5r2-h6wg); refractor ≥4.7 bundles its grammars with no `prismjs`
+  dependency, so `pnpm why prismjs` prints nothing (#350).
+  `src/components/cms/refractorLanguages.ts` registers refractor 3.6.0's
+  grammars in its order, because the order decides the token classes the
+  Prism theme styles.
 - `zod` — request validation (chat, webhooks, forms).
 - `@upstash/ratelimit` + `@upstash/redis` — global rate limiting.
 - `evalite` + `autoevals` (dev) — Corvus behavior evals.
