@@ -56,7 +56,7 @@ export const ABOUT_CORVUS_TITLE = 'About Corvus'
  */
 export const ABOUT_CORVUS_STACK_ITEMS = [
   'Vercel AI SDK',
-  'gpt-5-mini',
+  'gpt-5.6-luna',
   'AI_CHAT_PROVIDER',
   'text-embedding-3-small',
   'pgvector',
@@ -125,7 +125,7 @@ export const ABOUT_CORVUS_PASSAGE = [
   '',
   'What Corvus runs on:',
   "- The Vercel AI SDK, streaming answers through this site's own server-side chat API.",
-  '- An env-selected chat model (AI_CHAT_PROVIDER and AI_CHAT_MODEL): OpenAI gpt-5-mini by default, with Anthropic as the alternative provider.',
+  '- An env-selected chat model (AI_CHAT_PROVIDER and AI_CHAT_MODEL): OpenAI gpt-5.6-luna by default, with Anthropic as the alternative provider.',
   "- Retrieval over the site's own content: passages are embedded with OpenAI text-embedding-3-small and stored as vectors in a pgvector table called corvus_embeddings, in the site's Supabase Postgres database. Each question retrieves the nearest passages above a similarity floor, and those passages are what Corvus answers from.",
   "- A scheduled sync of Brandon's public GitHub repositories into that same index, under the github-repos collection, so questions about a repository are answered from the repository.",
   '- streamdown, which renders each reply as markdown in the browser.',

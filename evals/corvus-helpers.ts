@@ -78,7 +78,8 @@ export type AskCorvusOptions = CorvusModelOption & TruncationPolicyOption
  * visitor gets is not measuring Corvus.
  *
  * It was 512, and that one number is the root cause of the #122 gate
- * flakiness. `gpt-5-mini` — the default model (`src/lib/ai/corvus.ts`) — is a
+ * flakiness. `gpt-5-mini` — the default model then (`src/lib/ai/corvus.ts`;
+ * `gpt-5.6-luna` since #238, the same family) — is a
  * REASONING model, and on the Responses API the hidden reasoning tokens are
  * drawn from the same `maxOutputTokens` allowance as the visible answer. At
  * 512 the reasoning pass could eat the entire budget, so the turn finished
@@ -364,7 +365,8 @@ export function formatOutputBudgetFailure(
  * as decoration.
  *
  * There is therefore **no sampling-determinism lever for this model family**.
- * That is a fact about `gpt-5-mini`, not a general one: the SDK honours
+ * That is a fact about the gpt-5 reasoning family (`gpt-5.6-luna`, the
+ * default, and `gpt-5-mini`), not a general one: the SDK honours
  * `temperature` for a non-reasoning OpenAI model and on the Anthropic path,
  * so if the gate is ever pointed at one the lever comes back. Nothing here
  * fakes it in the meantime. The remaining known determinism gap is the
@@ -393,7 +395,7 @@ async function runCorvusTurn(options: {
       // Built by production's own helper, from the model this turn actually
       // runs on — so a `matrix.eval.ts` variant pointed at a non-reasoning
       // model sends no `reasoningEffort` and collects no provider warning,
-      // while the gate's `gpt-5-mini` gets the same object the chat route
+      // while the gate's default model gets the same object the chat route
       // sends.
       providerOptions: corvusProviderOptions(
         EVAL_REASONING_EFFORT,
