@@ -20,6 +20,10 @@ import {
   refreshCorvusEmbeddings,
 } from '@/hooks/corvusEmbeddings'
 import { createPathRedirect } from '@/hooks/createPathRedirect'
+import {
+  recordDraftSaveIntent,
+  releaseDraftSaveIntent,
+} from '@/hooks/draftSaveIntent'
 import { populatePublishedAt } from '@/hooks/populatePublishedAt'
 import { generatePreviewPath } from '@/utilities/generatePreviewPath'
 import {
@@ -264,6 +268,13 @@ export const Pages: CollectionConfig = {
       cascadePagePaths,
       refreshCorvusEmbeddings('pages'),
     ],
+    // Carry each update's own `draft` argument to the unpublish guard below,
+    // the one thing `beforeChange` is never handed (#197): without it a
+    // Local-API draft save of a served section reads as an unpublish. Only that
+    // guard reads it. Released after the operation; see
+    // `src/hooks/draftSaveIntent.ts`.
+    beforeOperation: [recordDraftSaveIntent],
+    afterOperation: [releaseDraftSaveIntent],
     // `validatePageHierarchy` rejects an unservable placement before
     // `computePagePath` ever stores a path — the guard runs in `beforeValidate`,
     // the computation in `beforeChange`, so the stored `path` is always one the

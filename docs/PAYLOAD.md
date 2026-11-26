@@ -175,10 +175,15 @@ seed, test or MCP write.
   save** and will take its non-draft branch. The admin UI and REST both carry
   `?draft=true` and are unaffected — this bites scripts, seeds, tests and MCP
   writes. A Local-API caller that needs a hook to see the draft passes it
-  explicitly: `req: { query: { draft: 'true' } }`. Worked cases: the `cascadePagePaths` docblock in
-  `src/collections/Pages/hooks/pageHierarchy.ts` and the `createLocalReq` note
-  in `src/collections/Pages/hooks/servedPrefix.ts`; #197 for the live defect.
-  `[source: payload 3.88.0]`
+  explicitly: `req: { query: { draft: 'true' } }`, or the hook reads the
+  operation's own `draft` argument in `beforeOperation`, the one hook that runs
+  before `beforeChange` and is handed it. Its `afterOperation` release must
+  accept `'updateByID'`: Payload names a by-id update `'update'` going in and
+  `'updateByID'` coming out. Worked cases: the `cascadePagePaths` docblock in
+  `src/collections/Pages/hooks/pageHierarchy.ts`, and `recordDraftSaveIntent`
+  in `src/hooks/draftSaveIntent.ts`, which the Pages unpublish guard reads to
+  let a Local-API draft save through when it does not move the page (#197).
+  `[source: payload 3.88.0; beforeOperation/afterOperation at 3.93.0]`
 
 ## Slugs and paths
 
@@ -543,23 +548,23 @@ level: a **Local-API explicit draft save** reads as an unpublish, because
 For the capture itself that is one extra lookup and one redundant purge of a
 still-live path — never a lost purge, never a lost write.
 
-**Since #180 the same residual IS a lost write one hook over.** The served-prefix
-unpublish guard (`refuseUnpublishWithServedDescendants`) reads the identical
-predicate, so a `payload.update({ draft: true })` on a **published** page that
-has published descendants is REFUSED, though it would have unpublished nothing.
-That is a false refusal — a step up in severity from a wasted read — and the
-sentence above no longer covers every consumer of the residual. It is
-unreachable from the admin (autosave and "Save draft" are REST and carry
-`draft=true`) and unreached in this repo. That guard's docblock is the single
-home for the measurement, for the `req: { query: { draft: 'true' } }` escape
-hatch, and for where the follow-up should start: `createLocalReq` sets
-`req.payloadAPI` fifteen lines before the `req.query` line the residual rests
-on, so the fix does not need the caller sweep the ticket implies — but
-`payloadAPI` alone cannot separate a Local-API draft save from a Local-API
-unpublish, which is the design choice the ticket has to carry.
-`evals/slug-redirect-integration.test.ts` proves the capture behaviour end to end
-and pins the autosave read count; the false refusal is pinned in both directions
-by `src/collections/Pages/hooks/servedPrefix.test.ts`.
+**The served-prefix unpublish guard does not share that residual (#197,
+option A).** `refuseUnpublishWithServedDescendants` also reads the query-only
+predicate first, but for a query-free write it additionally reads the
+operation's own `draft` argument, which `recordDraftSaveIntent`
+(`src/hooks/draftSaveIntent.ts`) carries from `beforeOperation`. A
+`payload.update({ draft: true })` on a published page with published
+descendants therefore saves its draft when it keeps the page's slug and parent.
+It is refused when it would move the page, because the capture and the cascade
+above stay query-only and would otherwise treat the draft as a move. A
+query-free write without `draft` is still an unpublish and still refused. The
+guard's docblock holds the contract and the intent module's docblock the
+fail-closed rules. `src/collections/Pages/hooks/servedPrefix.test.ts` and the
+#197 cases in `evals/pages-hierarchy-integration.test.ts` pin both directions.
+Two things are left as they were: the query-flag escape hatch skips the guard's
+new checks, and a real publish's cascade loads each child's latest version
+(#443). `evals/slug-redirect-integration.test.ts` proves the capture behaviour
+end to end and pins the autosave read count.
 
 **A revalidation failure never fails the write (#135, #156).** Payload runs
 `afterChange`/`afterDelete` collection hooks **inside the operation's
