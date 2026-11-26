@@ -7,8 +7,8 @@ import { Dialog, Switch } from 'radix-ui'
 
 import { Button } from '@/components/ui/button'
 
-import { markExplicitConsentChoice } from './consent-config'
-import { useConsentConfig } from './consent-context'
+import { saveExplicitChoice } from './automatic-grant'
+import { useConsentConfig, useConsentStore } from './consent-context'
 import {
   type ConsentTriggerCapture,
   restoreConsentTriggerFocus,
@@ -29,7 +29,7 @@ import {
  * disclosure copy (Google Analytics loading only on a grant, #361, and the
  * Clerk/Turnstile essential-cookie note) — resolving the code-review disclosure
  * gap (Sp-2). Reject/Save/Accept are explicit choices, so they clear the #103
- * auto-grant marker ({@link markExplicitConsentChoice}). See docs/ANALYTICS.md.
+ * auto-grant marker (`saveExplicitChoice`, #375). See docs/ANALYTICS.md.
  */
 export function CookieDialog() {
   const {
@@ -39,6 +39,7 @@ export function CookieDialog() {
     saveConsents,
     setActiveUI,
   } = useConsentManager()
+  const store = useConsentStore()
   const { dialog, categories } = useConsentConfig()
   const rows = categories.filter((c) => c.enabled)
 
@@ -162,8 +163,7 @@ export function CookieDialog() {
               variant="outline"
               size="sm"
               onClick={() => {
-                markExplicitConsentChoice()
-                void saveConsents('necessary')
+                void saveExplicitChoice(() => saveConsents('necessary'), store)
                 close()
               }}
             >
@@ -173,8 +173,7 @@ export function CookieDialog() {
               variant="outline"
               size="sm"
               onClick={() => {
-                markExplicitConsentChoice()
-                void saveConsents('custom')
+                void saveExplicitChoice(() => saveConsents('custom'), store)
                 close()
               }}
             >
@@ -183,8 +182,7 @@ export function CookieDialog() {
             <Button
               size="sm"
               onClick={() => {
-                markExplicitConsentChoice()
-                void saveConsents('all')
+                void saveExplicitChoice(() => saveConsents('all'), store)
                 close()
               }}
             >

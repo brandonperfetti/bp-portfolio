@@ -8,10 +8,11 @@ import {
   gaDisableKey,
   readGaEnv,
   shouldAutoGrantMeasurement,
-  shouldRepromptOnRegionChange,
+  shouldClearAutomaticGrant,
   shouldShowBanner,
   stopGoogleAnalytics,
 } from './consent-config'
+import { isAutomaticShape } from './automatic-grant'
 
 describe('buildConsentScripts (GA4 gating)', () => {
   it('registers zero Google code when the measurement id is unset', () => {
@@ -232,52 +233,85 @@ describe('buildConsentManagerOptions (headless)', () => {
   })
 })
 
-describe('shouldRepromptOnRegionChange (#103: auto-grant vs explicit choice)', () => {
-  it('re-prompts an auto-granted visitor who enters a required region', () => {
+describe('shouldClearAutomaticGrant (#375: the region now asks)', () => {
+  it('clears a live automatic grant where consent is required', () => {
     expect(
-      shouldRepromptOnRegionChange({
-        wasAutoGranted: true,
+      shouldClearAutomaticGrant({
+        automaticGrantLive: true,
         consentRequired: true,
-        hasExplicitChoice: false,
+        hasConsented: false,
       }),
     ).toBe(true)
   })
 
-  it('never re-prompts an explicit choice (the bug being fixed)', () => {
+  it('clears it when the region cannot be read (fail closed)', () => {
     expect(
-      shouldRepromptOnRegionChange({
-        wasAutoGranted: false,
-        consentRequired: true,
-        hasExplicitChoice: true,
-      }),
-    ).toBe(false)
-  })
-
-  it('does not re-prompt while the region stays opt-out or unknown', () => {
-    expect(
-      shouldRepromptOnRegionChange({
-        wasAutoGranted: true,
-        consentRequired: false,
-        hasExplicitChoice: false,
-      }),
-    ).toBe(false)
-    expect(
-      shouldRepromptOnRegionChange({
-        wasAutoGranted: true,
+      shouldClearAutomaticGrant({
+        automaticGrantLive: true,
         consentRequired: null,
-        hasExplicitChoice: false,
+        hasConsented: false,
+      }),
+    ).toBe(true)
+  })
+
+  it('keeps it where consent is confidently not required', () => {
+    expect(
+      shouldClearAutomaticGrant({
+        automaticGrantLive: true,
+        consentRequired: false,
+        hasConsented: false,
       }),
     ).toBe(false)
   })
 
-  it('does not re-prompt when there was no auto-grant to revoke', () => {
+  it('never touches an explicit choice', () => {
     expect(
-      shouldRepromptOnRegionChange({
-        wasAutoGranted: false,
+      shouldClearAutomaticGrant({
+        automaticGrantLive: true,
         consentRequired: true,
-        hasExplicitChoice: false,
+        hasConsented: true,
       }),
     ).toBe(false)
+  })
+
+  it('does nothing when no automatic grant is live', () => {
+    expect(
+      shouldClearAutomaticGrant({
+        automaticGrantLive: false,
+        consentRequired: true,
+        hasConsented: false,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('isAutomaticShape (#375: what the one-time clean-up deletes)', () => {
+  const automatic = {
+    necessary: true,
+    functionality: false,
+    measurement: true,
+    experience: false,
+    marketing: false,
+  }
+
+  it('matches exactly the record the automatic grant stored', () => {
+    expect(isAutomaticShape(automatic)).toBe(true)
+    expect(isAutomaticShape({ necessary: true, measurement: true })).toBe(true)
+  })
+
+  it('does not match a Reject', () => {
+    expect(isAutomaticShape({ ...automatic, measurement: false })).toBe(false)
+  })
+
+  it('does not match a wider Accept', () => {
+    expect(isAutomaticShape({ ...automatic, marketing: true })).toBe(false)
+    expect(isAutomaticShape({ ...automatic, functionality: true })).toBe(false)
+  })
+
+  it('does not match a missing or malformed record', () => {
+    expect(isAutomaticShape(null)).toBe(false)
+    expect(isAutomaticShape(undefined)).toBe(false)
+    expect(isAutomaticShape({ measurement: true })).toBe(false)
   })
 })
 

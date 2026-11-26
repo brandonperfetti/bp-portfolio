@@ -3,7 +3,10 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { CONSENT_REQUIRED_COOKIE } from '@/lib/consent/cookie'
 
-import { CONSENT_AUTOGRANT_MARKER_KEY } from './consent-config'
+import {
+  CONSENT_AUTOGRANT_MARKER_KEY,
+  CONSENT_STORAGE_KEY,
+} from './consent-config'
 import { ConsentManager } from './ConsentManager'
 
 // `usePathname` is the client-navigation signal ConsentSurface re-reads the geo
@@ -52,18 +55,15 @@ afterEach(() => {
   setMockPathname('/')
 })
 
-describe('ConsentManager — region change across a client navigation (#111)', () => {
+describe('ConsentManager — region change across a client navigation (#111, #375)', () => {
   // The regression this guards: `ConsentSurface` used to read the geo cookie
-  // only on mount, so an opt-out visitor whose measurement was auto-granted
-  // could cross into a consent-required region via client-side navigation with
-  // measurement still enabled and the #103 reprompt never firing. The fix
-  // re-reads the cookie on each navigation. The auto-grant marker is the
-  // deterministic witness: it is written when the opt-out auto-grant runs and
-  // cleared when the region-change reprompt revokes it — so `'1'` → `null`
-  // across a navigation proves the re-read happened and the revoke fired.
-  it('re-reads the geo cookie on navigation and revokes an auto-grant when the visitor enters a consent-required region', async () => {
-    // Opt-out region on first load: measurement is auto-granted (marker set),
-    // and the banner stays hidden.
+  // only on mount, so an opt-out visitor whose measurement was granted
+  // automatically could cross into a consent-required region by client-side
+  // navigation with measurement still on. The fix re-reads the cookie on each
+  // navigation. Since #375 the automatic grant lives in memory only, so the
+  // witness is the banner: hidden while the grant holds, back once the
+  // re-read clears it. Nothing is stored at either step.
+  it('re-reads the geo cookie on navigation and clears the automatic grant when the visitor enters a consent-required region', async () => {
     setConsentCookie('false')
     setMockPathname('/start')
     const { rerender } = render(
@@ -72,17 +72,17 @@ describe('ConsentManager — region change across a client navigation (#111)', (
       </ConsentManager>,
     )
 
-    await waitFor(() => {
-      expect(window.localStorage.getItem(CONSENT_AUTOGRANT_MARKER_KEY)).toBe(
-        '1',
-      )
-    })
-    expect(
-      screen.queryByRole('region', { name: /cookie consent/i }),
-    ).not.toBeInTheDocument()
+    const banner = () =>
+      screen.queryByRole('region', { name: /cookie consent/i })
 
-    // Simulate a client-side navigation into a consent-required region: the
-    // proxy has flipped the cookie and only the pathname changes (no remount).
+    // Give the runtime time to settle; the banner must stay hidden.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(banner()).not.toBeInTheDocument()
+    expect(window.localStorage.getItem(CONSENT_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(CONSENT_AUTOGRANT_MARKER_KEY)).toBeNull()
+
+    // A client-side navigation into a consent-required region: the proxy has
+    // flipped the cookie and only the pathname changes (no remount).
     setConsentCookie('true')
     setMockPathname('/next')
     rerender(
@@ -91,12 +91,10 @@ describe('ConsentManager — region change across a client navigation (#111)', (
       </ConsentManager>,
     )
 
-    // The re-read drives the #103 reprompt: the auto-grant is revoked, clearing
-    // the marker. Without the on-navigation re-read the marker would stay '1'.
+    // Without the on-navigation re-read the banner would stay hidden.
     await waitFor(() => {
-      expect(
-        window.localStorage.getItem(CONSENT_AUTOGRANT_MARKER_KEY),
-      ).toBeNull()
+      expect(banner()).toBeInTheDocument()
     })
+    expect(window.localStorage.getItem(CONSENT_STORAGE_KEY)).toBeNull()
   })
 })

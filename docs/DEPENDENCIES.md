@@ -96,6 +96,14 @@ one set, version-locked.
   `@c15t/scripts/google-tag` subpath so the rest tree-shakes away. See
   `docs/ANALYTICS.md` for the architecture and for why its always-load
   default is overridden (#361).
+- `c15t` — the core of `@c15t/react`, imported directly for its storage
+  helpers (`getConsentFromStorage`, `deleteConsentFromStorage`) and the
+  store cache (`getOrCreateConsentRuntime`), which the in-memory automatic
+  grant and its one-time clean-up use (#375).
+- **The three c15t packages are pinned exactly**, not with a caret. The
+  automatic grant writes through the store's `setState` and `updateScripts`,
+  which are c15t internals; an upgrade is a deliberate change that has to
+  pass `ConsentManager.histories.test.tsx` and the consent e2e spec (#375).
 
 ## Dev/test
 

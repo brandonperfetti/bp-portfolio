@@ -209,14 +209,15 @@ export function shouldShowBanner(input: {
 }
 
 /**
- * Whether to auto-grant `measurement` (opt-out) before any explicit choice.
+ * Whether to grant `measurement` automatically, before any explicit choice.
  *
  * @remarks
  * Mirrors Brytecore's `getEffectiveConsent(opt-out, isRequired)`: where consent
- * is confidently NOT required, analytics run unconsented — so `measurement` is
+ * is confidently NOT required, analytics run unconsented, so `measurement` is
  * granted by default. Where required (or unknown), it stays denied until the
  * visitor grants it. An explicit saved choice always wins, so this only applies
- * before the visitor has consented.
+ * before the visitor has consented. Since #375 the grant is held in memory
+ * only (`automatic-grant.ts`), never saved.
  */
 export function shouldAutoGrantMeasurement(input: {
   consentRequired: boolean | null
@@ -226,39 +227,40 @@ export function shouldAutoGrantMeasurement(input: {
 }
 
 /**
- * Whether the banner must re-show after a region change (#103).
+ * Whether an automatic grant must be cleared (#103, #375).
  *
  * @remarks
- * The opt-out auto-grant ({@link shouldAutoGrantMeasurement}) calls
- * `setConsent('measurement', true)`, which makes c15t's `hasConsented()` true
- * and so suppresses the banner ({@link shouldShowBanner}). The bug: a visitor
- * auto-granted in an opt-out region who then navigates into a consent-required
- * region never sees the banner — an auto-grant was being treated as an explicit
- * choice. This predicate distinguishes the two: re-prompt only when the current
- * grant is an **auto-grant** (never an explicit save), the visitor is now in a
- * **required** region, and they have **not** made an explicit choice. Explicit
- * choices and stable regions are untouched (returns `false`), preserving the
- * pre-fix behavior for every other case.
+ * A visitor granted automatically where consent is not required, who moves
+ * into a region that asks, must be asked: the grant is cleared in memory and
+ * the banner returns. An unreadable region counts as asking (the design's
+ * rule 6, signed with it): the banner already shows for an unknown region, so
+ * the tag must not run behind it. Only an automatic grant is cleared; an
+ * explicit choice (`hasConsented`) never is.
  *
- * Pure (inputs only) so it is unit-testable; the caller supplies the markers.
+ * Pure (inputs only) so it is unit-testable.
  */
-export function shouldRepromptOnRegionChange(input: {
-  wasAutoGranted: boolean
+export function shouldClearAutomaticGrant(input: {
+  automaticGrantLive: boolean
   consentRequired: boolean | null
-  hasExplicitChoice: boolean
+  hasConsented: boolean
 }): boolean {
   return (
-    input.wasAutoGranted &&
-    input.consentRequired === true &&
-    !input.hasExplicitChoice
+    input.automaticGrantLive &&
+    !input.hasConsented &&
+    input.consentRequired !== false
   )
 }
 
 /**
- * localStorage key marking that the current `measurement` grant came from the
- * opt-out auto-grant, not an explicit visitor choice. Read on a region change
- * to decide {@link shouldRepromptOnRegionChange}; cleared the moment the
- * visitor makes an explicit choice.
+ * localStorage key production's code set beside an automatic grant it had
+ * saved, to tell it from an explicit choice.
+ *
+ * @remarks
+ * Since #375 nothing automatic is saved and new code never sets it. It is
+ * still read, by the one-time clean-up (`discardStoredAutomaticGrant`), and
+ * still cleared by every explicit choice. It is deliberately **not** deleted
+ * by that clean-up: a tab opened before the deploy runs production's code,
+ * which reads it to know its own grant is automatic and revoke it.
  */
 export const CONSENT_AUTOGRANT_MARKER_KEY = 'bp-consent-autogrant'
 
@@ -272,28 +274,20 @@ export function readAutoGrantMarker(): boolean {
   }
 }
 
-/** Sets or clears the auto-grant marker; a no-op where storage is unavailable. */
-export function setAutoGrantMarker(value: boolean): void {
-  if (typeof window === 'undefined') return
-  try {
-    if (value) {
-      window.localStorage.setItem(CONSENT_AUTOGRANT_MARKER_KEY, '1')
-    } else {
-      window.localStorage.removeItem(CONSENT_AUTOGRANT_MARKER_KEY)
-    }
-  } catch {
-    // Storage unavailable (private mode, quota) — the marker degrades to
-    // "no auto-grant recorded", which fails safe: the banner still shows via
-    // the normal required-region path when no grant persists.
-  }
-}
-
 /**
- * Records that the visitor made an explicit consent choice (banner or dialog),
- * so a later region change never mistakes it for an auto-grant. Clearing the
- * auto-grant marker is sufficient: the presence of that marker is what
- * distinguishes an auto-grant from an explicit save.
+ * Records that the visitor made an explicit consent choice (banner or dialog)
+ * by clearing the auto-grant marker, before the choice is saved.
+ *
+ * @remarks Load-bearing for the one-time clean-up: it deletes a record only
+ * beside a marker, so every explicit save must clear the marker first, or a
+ * later page would take the choice for production's automatic grant. Pinned
+ * by `ConsentManager.histories.test.tsx`.
  */
 export function markExplicitConsentChoice(): void {
-  setAutoGrantMarker(false)
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(CONSENT_AUTOGRANT_MARKER_KEY)
+  } catch {
+    // Storage unavailable: no marker can exist to clear.
+  }
 }

@@ -268,6 +268,19 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_GA_MEASUREMENT_ID', GA_ID)
 })
 
+/**
+ * Ends the current page as a navigation away would: React unmounts, and the
+ * document's tag element and gtag globals go with it. Storage and cookies
+ * stay, as they do between pages.
+ */
+function leavePage() {
+  cleanup()
+  for (const el of tagScripts()) el.remove()
+  delete win[`ga-disable-${GA_ID}`]
+  delete win.dataLayer
+  delete win.gtag
+}
+
 afterEach(() => {
   tagObserver.disconnect()
   cleanup()
@@ -616,7 +629,7 @@ describe('#375 histories — two tabs', () => {
     expect(await storedRecord()).toBeNull()
     // Old tab A, write 2, recreating the record; the marker was never removed.
     await writeRecord(AUTOMATIC_SHAPE)
-    cleanup()
+    leavePage()
 
     tagsEverAppended = 0
     const tabC = await openPage('true')

@@ -8,8 +8,9 @@ import { useMounted } from '@/lib/useMounted'
 
 import { Button } from '@/components/ui/button'
 
-import { shouldShowBanner, markExplicitConsentChoice } from './consent-config'
-import { useConsentConfig } from './consent-context'
+import { saveExplicitChoice } from './automatic-grant'
+import { shouldShowBanner } from './consent-config'
+import { useConsentConfig, useConsentStore } from './consent-context'
 import { CONSENT_TRIGGER_ATTR, captureConsentTrigger } from './consent-focus'
 import { useConsentBannerInset } from './consent-inset'
 
@@ -24,7 +25,7 @@ import { useConsentBannerInset } from './consent-inset'
  * (defaults reproduce today's strings). The "Customize" button is gated on the
  * `showManageButton` toggle; Accept-all / Reject-non-essential are explicit
  * choices, so they clear the #103 auto-grant marker
- * ({@link markExplicitConsentChoice}). Enter animation via `tw-animate-css`,
+ * (`saveExplicitChoice`, #375). Enter animation via `tw-animate-css`,
  * disabled under `prefers-reduced-motion`. Buttons are real `<button>`s so the
  * sitewide teal `:focus-visible` outline applies.
  *
@@ -79,6 +80,7 @@ export function CookieBanner({
 }) {
   const { hasConsented, saveConsents, setActiveUI, activeUI } =
     useConsentManager()
+  const store = useConsentStore()
   const { banner, features } = useConsentConfig()
 
   // Consent required and still undecided — the condition the #115 shell inset
@@ -115,12 +117,10 @@ export function CookieBanner({
   if (!visible) return null
 
   const accept = () => {
-    markExplicitConsentChoice()
-    void saveConsents('all')
+    void saveExplicitChoice(() => saveConsents('all'), store)
   }
   const reject = () => {
-    markExplicitConsentChoice()
-    void saveConsents('necessary')
+    void saveExplicitChoice(() => saveConsents('necessary'), store)
   }
 
   return (
