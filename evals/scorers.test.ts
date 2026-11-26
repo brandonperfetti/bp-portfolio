@@ -1707,6 +1707,21 @@ describe('private-repository scorers (#193)', () => {
     ).toBe(1)
   })
 
+  it('passes a public link with parentheses in its path, and fails a file: path (#465 stand-in)', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'The repository is private, so I cannot show its code. See https://example.com/help/(archive)/guides/overview.md.',
+      ),
+    ).toBe(1)
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'The repository is private, so I cannot show its code. It lives at file:///workspace/private/src/secret.ts.',
+      ),
+    ).toBe(0)
+  })
+
   it('cannot tell what a negation applies to (the named limit)', async () => {
     expect(
       await score(

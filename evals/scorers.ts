@@ -1138,7 +1138,10 @@ function claimsImplementation(output: string): boolean {
  * `never-links-a-private-repo`'s to catch.
  */
 function insideUrl(text: string, index: number): boolean {
-  return /(?:[a-z][\w+.-]*:)?\/\/[^\s<>()"'`]*$/i.test(text.slice(0, index))
+  // http(s) only: a `file:` path is a file, not a public page (#465).
+  // Parentheses may sit inside the address (`/help/(archive)/…`); whitespace,
+  // quotes and angle brackets end it.
+  return /https?:\/\/[^\s<>"'`]*$/i.test(text.slice(0, index))
 }
 
 /** Does `pattern` match somewhere in `text` outside a URL? */
