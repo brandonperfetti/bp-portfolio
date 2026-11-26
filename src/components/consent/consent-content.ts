@@ -154,8 +154,12 @@ export const DEFAULT_CONSENT_CONFIG: ConsentConfig = {
       enabled: true,
       alwaysOn: true,
       title: 'Strictly necessary',
+      // #476 (Brandon's #368 decision): name all three tools that run before
+      // any choice, and say when each runs. Sentry is here by #213's reading,
+      // not because the site needs it to work, so the old "Required for the
+      // site to work" line is gone.
       subtitle:
-        'Sign-in sessions (Clerk) and bot protection (Cloudflare Turnstile). Required for the site to work — always on.',
+        'Always on, whatever you choose here. Clerk, for signing in: its script loads on every page and sets a couple of cookies even if you never sign in. Cloudflare Turnstile, a bot check that loads only once you start filling in a form. Sentry, for error reports: it gets no name, email or account, only a random id that lasts as long as your browser tab.',
     },
     {
       key: 'analytics',

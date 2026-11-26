@@ -51,6 +51,7 @@ import * as migration_20260909_221759_issue_201_capture_identity from './2026090
 import * as migration_20260911_152336_issue_217_corvus_chat_block from './20260911_152336_issue_217_corvus_chat_block'
 import * as migration_20261114_194612_issue_257_payload_3_90 from './20261114_194612_issue_257_payload_3_90'
 import * as migration_20261119_211457_issue_372_analytics_subtitle_default from './20261119_211457_issue_372_analytics_subtitle_default'
+import * as migration_20261126_113900_issue_476_essential_subtitle_default from './20261126_113900_issue_476_essential_subtitle_default'
 
 export const migrations = [
   {
@@ -317,5 +318,10 @@ export const migrations = [
     up: migration_20261119_211457_issue_372_analytics_subtitle_default.up,
     down: migration_20261119_211457_issue_372_analytics_subtitle_default.down,
     name: '20261119_211457_issue_372_analytics_subtitle_default',
+  },
+  {
+    up: migration_20261126_113900_issue_476_essential_subtitle_default.up,
+    down: migration_20261126_113900_issue_476_essential_subtitle_default.down,
+    name: '20261126_113900_issue_476_essential_subtitle_default',
   },
 ]
