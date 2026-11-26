@@ -68,6 +68,12 @@ export const TARGETS = Object.freeze({
  * (`docs/CONTENT_WORKFLOW.md` §0). Sent to staging only: production is
  * probed on its custom domain, which needs no bypass.
  */
+/**
+ * Shortest secret the probe accepts. {@link readCredentials} refuses a
+ * shorter one, so {@link scrubEvidence} never has to skip a real value.
+ */
+export const MIN_SECRET_LENGTH = 8
+
 export const BYPASS_ENV = 'VERCEL_AUTOMATION_BYPASS_SECRET'
 
 /** The request header {@link BYPASS_ENV} travels in; never recorded. */
@@ -324,6 +330,19 @@ export function readCredentials(plan, env, envLocalText) {
   const bypass = plan.sendBypass ? pick(BYPASS_ENV) : ''
   if (plan.bypassRequired && !bypass) {
     throw new RefusalError(`${BYPASS_ENV} is required for a *.vercel.app host`)
+  }
+  // The evidence scrub matches values of at least MIN_SECRET_LENGTH; a
+  // shorter secret could not be scrubbed, so it is refused before use.
+  const short = Object.entries({ ...values, bypass })
+    .filter(
+      ([key, value]) =>
+        key !== 'email' && value && value.length < MIN_SECRET_LENGTH,
+    )
+    .map(([key]) => key)
+  if (short.length) {
+    throw new RefusalError(
+      `Credential too short to scrub from evidence (< ${MIN_SECRET_LENGTH} chars): ${short.join(', ')}`,
+    )
   }
   return { ...values, bypass }
 }
@@ -840,7 +859,9 @@ export function createEvidence(dir) {
  * @param {string[]} secrets
  */
 export function scrubEvidence(dir, secrets) {
-  const values = secrets.filter((s) => typeof s === 'string' && s.length >= 6)
+  const values = secrets.filter(
+    (s) => typeof s === 'string' && s.length >= MIN_SECRET_LENGTH,
+  )
   const hit = []
   const walk = (/** @type {string} */ d) => {
     for (const entry of readdirSync(d, { withFileTypes: true })) {
@@ -979,7 +1000,9 @@ export async function runProbe({
     // Only a body that is a sitemap counts: an HTML error page with a 200
     // would parse as an empty list and could match an empty baseline.
     const locs =
-      isSitemap && status === '200' && /<urlset[\s>]/.test(body)
+      isSitemap &&
+      status === '200' &&
+      /<urlset[\s>][\s\S]*<\/urlset>\s*$/.test(body)
         ? sitemapPaths(body)
         : null
     const present = locs
@@ -1070,7 +1093,10 @@ export async function runProbe({
     const deadline = now().getTime() + plan.timeoutMs
     for (;;) {
       // A check that finishes after the deadline does not count.
-      if (await check()) return now().getTime() <= deadline
+      const held = await check()
+      // An interrupt during the check wins over its result.
+      stopIfAborted()
+      if (held) return now().getTime() <= deadline
       if (now().getTime() + plan.intervalMs > deadline) return false
       await wait(plan.intervalMs, signal)
     }
@@ -1106,6 +1132,11 @@ export async function runProbe({
     baseline = base.locs
     evidence.file('locs-baseline.txt', `${baseline.join('\n')}\n`)
     const leftovers = await findLeftovers()
+    if (result.unchecked.length) {
+      throw new RefusalError(
+        `Cannot run: could not check ${result.unchecked.join(', ')}`,
+      )
+    }
     if (leftovers.length) {
       throw new RefusalError(
         `Probe leftovers exist; delete them first: ${leftovers.join(', ')}`,
@@ -1156,6 +1187,7 @@ export async function runProbe({
         result.notes.push(
           `${p.path} answered ${warm.status} when warmed, so removal was not checked against a cached published copy.`,
         )
+        result.unchecked.push(`removal of a cached copy of ${p.path}`)
       }
     }
     for (const p of probes)
@@ -1255,6 +1287,13 @@ export async function runProbe({
         }
       }
       if (!searched) ok = false
+      // No id after both searches does not prove the create never commits.
+      if (p.id === null) {
+        ok = false
+        log(
+          `${at()}  cleanup    ${p.kind} create outcome unknown: no ${p.slug} found yet; check the admin`,
+        )
+      }
     }
     for (const p of probes) {
       if (p.id === null) continue
@@ -1264,6 +1303,10 @@ export async function runProbe({
           await write('delete', p, () =>
             writer.remove(p.kind, /** @type {number | string} */ (p.id)),
           )
+        } catch {
+          /* the existence check below decides */
+        }
+        try {
           deleted = !(await writer.exists(
             p.kind,
             /** @type {number | string} */ (p.id),
@@ -1326,13 +1369,14 @@ export async function runProbe({
 /**
  * The exit code for a finished run.
  *
- * @param {{ inclusion: string, removal: string, cleanup: string, unchecked?: string[] }} result
+ * @param {{ inclusion: string, removal: string, cleanup: string, unchecked?: string[], error?: string | null }} result
  */
 export function exitCodeFor(result) {
   if (result.cleanup === 'FAIL') return EXIT.cleanupIncomplete
   return result.inclusion === 'PASS' &&
     result.removal === 'PASS' &&
-    !result.unchecked?.length
+    !result.unchecked?.length &&
+    !result.error
     ? EXIT.pass
     : EXIT.fail
 }

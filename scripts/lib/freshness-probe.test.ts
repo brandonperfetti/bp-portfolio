@@ -172,12 +172,12 @@ describe('readCredentials', () => {
     const creds = readCredentials(
       p,
       { CMS_PROBE_EMAIL_STAGING: 'a@b.test' },
-      'CMS_PROBE_PASSWORD_STAGING="from-file"\nVERCEL_AUTOMATION_BYPASS_SECRET=byp\n',
+      'CMS_PROBE_PASSWORD_STAGING="from-file"\nVERCEL_AUTOMATION_BYPASS_SECRET=bypass-fixture\n',
     )
     expect(creds).toEqual({
       email: 'a@b.test',
       password: 'from-file',
-      bypass: 'byp',
+      bypass: 'bypass-fixture',
     })
   })
 
@@ -203,12 +203,19 @@ describe('readCredentials', () => {
       readCredentials(
         p,
         {
-          CMS_PROBE_MCP_API_KEY_PRODUCTION: 'k',
-          VERCEL_AUTOMATION_BYPASS_SECRET: 'b',
+          CMS_PROBE_MCP_API_KEY_PRODUCTION: 'key-fixture-1',
+          VERCEL_AUTOMATION_BYPASS_SECRET: 'bypass-fixture',
         },
         null,
       ).bypass,
     ).toBe('')
+  })
+
+  it('refuses a secret too short for the evidence scrub', () => {
+    const p = plan(['--write-path', 'mcp', '--evidence', '/x'])
+    expect(() =>
+      readCredentials(p, { CMS_PROBE_MCP_API_KEY_LOCAL: 'short' }, null),
+    ).toThrow(/too short.*apiKey/)
   })
 
   it('requires the bypass secret on a *.vercel.app host, and never sends one locally', () => {
@@ -224,15 +231,19 @@ describe('readCredentials', () => {
       'https://bp-portfolio-git-x-sans-faux-studios.vercel.app',
     ])
     expect(() =>
-      readCredentials(remote, { CMS_PROBE_MCP_API_KEY_STAGING: 'k' }, null),
+      readCredentials(
+        remote,
+        { CMS_PROBE_MCP_API_KEY_STAGING: 'key-fixture-1' },
+        null,
+      ),
     ).toThrow(/VERCEL_AUTOMATION_BYPASS_SECRET/)
     const local = plan(['--write-path', 'mcp', '--evidence', '/x'])
     expect(
       readCredentials(
         local,
         {
-          CMS_PROBE_MCP_API_KEY_LOCAL: 'k',
-          VERCEL_AUTOMATION_BYPASS_SECRET: 'b',
+          CMS_PROBE_MCP_API_KEY_LOCAL: 'key-fixture-1',
+          VERCEL_AUTOMATION_BYPASS_SECRET: 'bypass-fixture',
         },
         null,
       ).bypass,
@@ -288,6 +299,7 @@ function fakeSite({
   stalePageCache = false,
   redirectsClosed = false,
   htmlSitemap = false,
+  truncatedSitemap = false,
   leftovers = [] as Doc[],
 } = {}) {
   const docs = new Map<number, Doc>()
@@ -336,6 +348,10 @@ function fakeSite({
     const auth = new Headers(init.headers).get('authorization') ?? ''
     const path = url.pathname
 
+    if (path === '/sitemap.xml' && truncatedSitemap)
+      return new Response('<urlset><url><loc>https://site.test/</loc></url>', {
+        status: 200,
+      })
     if (path === '/sitemap.xml' && htmlSitemap)
       return new Response('<html>maintenance</html>', { status: 200 })
     if (path === '/sitemap.xml') {
@@ -575,13 +591,19 @@ describe('runProbe', () => {
     expect(site.docs.size).toBe(0)
   })
 
-  it('fails a run whose redirect check could not be made', async () => {
-    const { result } = await run('rest', fakeSite({ redirectsClosed: true }))
-    expect(result.cleanup).toBe('PASS')
-    expect(result.unchecked).toEqual([
-      'redirects matching the probe prefix (not readable)',
-    ])
-    expect(exitCodeFor(result)).toBe(EXIT.fail)
+  it('refuses to start, writing nothing, when redirects cannot be checked', async () => {
+    const site = fakeSite({ redirectsClosed: true })
+    await expect(run('rest', site)).rejects.toThrow(
+      /could not check redirects matching the probe prefix/,
+    )
+    expect(site.calls).not.toContain('POST /api/pages')
+    expect(site.docs.size).toBe(0)
+  })
+
+  it('refuses a truncated sitemap with no closing </urlset>', async () => {
+    const site = fakeSite({ truncatedSitemap: true })
+    await expect(run('rest', site)).rejects.toThrow(/Baseline \/sitemap.xml/)
+    expect(site.docs.size).toBe(0)
   })
 
   it('refuses to start, writing nothing, while probe leftovers exist', async () => {
@@ -660,6 +682,14 @@ describe('exitCodeFor', () => {
     ).toBe(EXIT.fail)
     expect(
       exitCodeFor({ inclusion: 'PASS', removal: 'FAIL', cleanup: 'PASS' }),
+    ).toBe(EXIT.fail)
+    expect(
+      exitCodeFor({
+        inclusion: 'PASS',
+        removal: 'PASS',
+        cleanup: 'PASS',
+        error: 'evidence write failed',
+      }),
     ).toBe(EXIT.fail)
   })
 })
