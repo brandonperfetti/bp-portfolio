@@ -1267,6 +1267,17 @@ describe('ArticlesExplorer cover loading (#218)', () => {
     }
   })
 
+  it('gives the hints to the first cover even when the lead card has none', () => {
+    const [bare, ...covered] = withCovers(3)
+    const { image: _omit, ...noCover } = bare
+    render(<ArticlesExplorer articles={[noCover, ...covered]} />)
+    const covers = screen.getAllByRole('img')
+    expect(covers).toHaveLength(2)
+    expect(covers[0]).toHaveAttribute('loading', 'eager')
+    expect(covers[0]).toHaveAttribute('fetchPriority', 'high')
+    expect(covers[1]).not.toHaveAttribute('loading', 'eager')
+  })
+
   it('makes the first cover of a later page the eager one', () => {
     searchParamsMock = new URLSearchParams('page=2')
     render(<ArticlesExplorer articles={withCovers(ARTICLES_PAGE_SIZE + 2)} />)

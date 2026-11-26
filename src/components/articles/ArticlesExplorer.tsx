@@ -38,7 +38,7 @@ const PRIMARY_FILTER_CHIPS_LIMIT = 12
 const ARTICLES_PAGE_SIZE = 12
 
 /**
- * Loading hints for the first cover in the grid, and only the first (#218).
+ * Loading hints for the first cover in the grid, and only that one (#218).
  *
  * @remarks Next's dev server logged an `/articles` card cover as the Largest
  * Contentful Paint while it loaded lazily, as every `next/image` does by
@@ -462,6 +462,9 @@ export function ArticlesExplorer({
     () => getPageItems(filtered, currentPage, ARTICLES_PAGE_SIZE),
     [filtered, currentPage],
   )
+  // The first card that actually renders a cover, not the first card: a
+  // cover-less lead card would otherwise leave the grid with no eager image.
+  const leadCoverSlug = visibleArticles.find((article) => article.image)?.slug
 
   const buildPageHref = useCallback(
     (nextPage: number) => {
@@ -621,7 +624,7 @@ export function ArticlesExplorer({
           aria-label="Article results"
           className="grid scroll-mt-16 grid-cols-1 gap-8 lg:grid-cols-3"
         >
-          {visibleArticles.map((article, index) => {
+          {visibleArticles.map((article) => {
             const author = getAuthor(article)
             const topicValues = (article.topics ?? [])
               .map((item) => item.trim())
@@ -679,7 +682,9 @@ export function ArticlesExplorer({
                         width={960}
                         height={540}
                         sizes="(min-width: 1280px) 24rem, (min-width: 1024px) 30vw, 100vw"
-                        {...(index === 0 ? LEAD_COVER_LOADING : {})}
+                        {...(article.slug === leadCoverSlug
+                          ? LEAD_COVER_LOADING
+                          : {})}
                         data-hover-image
                         className="aspect-[16/9] w-full object-cover"
                       />
