@@ -15,7 +15,8 @@ import {
  *
  * @remarks The mailing-list box is unchecked by default and the server
  * captures only when it is ticked and the message delivered. The Turnstile
- * check is invisible unless Cloudflare escalates. A submit made before it
+ * check is invisible unless Cloudflare escalates, and its script loads on
+ * the form's first focus, not when the page arrives (#475). A submit made before it
  * has loaded waits for it; one that times out sends nothing, keeps every
  * field and says to try again (#405), since a tokenless send would only
  * earn a 403 where Turnstile is enforced.
@@ -33,8 +34,14 @@ export function Messenger() {
   const [feedback, setFeedback] = useState('')
   // Invisible bot check; enforced server-side only when Turnstile keys are
   // configured, so the form works identically in dev/preview without them.
-  const { containerRef: turnstileRef, requestToken } = useTurnstileToken({
+  const {
+    containerRef: turnstileRef,
+    requestToken,
+    load: loadTurnstile,
+  } = useTurnstileToken({
     enabled: true,
+    // Nothing from Cloudflare until the visitor focuses the form (#475).
+    loadOn: 'demand',
   })
   const fieldClassName =
     'w-full min-w-0 flex-auto appearance-none rounded-md border border-zinc-900/10 bg-white px-3 py-[calc(theme(spacing.2)-1px)] text-base text-black shadow-md shadow-zinc-800/5 placeholder:text-zinc-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 focus:outline-none sm:text-sm dark:border-zinc-700 dark:bg-zinc-700/[0.15] dark:text-zinc-200 dark:placeholder:text-zinc-500 dark:focus:border-teal-400 dark:focus:ring-teal-400/10'
@@ -92,6 +99,8 @@ export function Messenger() {
   return (
     <form
       onSubmit={onSubmit}
+      // Focus bubbles in React: any field, or the button, starts the load.
+      onFocus={loadTurnstile}
       className="rounded-2xl border border-zinc-100 p-6 dark:border-zinc-700/40"
     >
       <h2 className="flex text-sm font-semibold text-zinc-900 dark:text-zinc-100">

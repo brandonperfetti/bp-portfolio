@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 type TurnstileApi = {
   render: (
@@ -139,11 +139,24 @@ function loadTurnstile(): Promise<TurnstileApi | null> {
  * Enablement is per-surface (§ the Turnstile rollout decision, 2026-08-10):
  * pass `enabled: false` to compile the whole flow out of a surface without
  * touching markup.
+ *
+ * When the script loads is per-surface too. `loadOn: 'demand'` fetches
+ * nothing from Cloudflare until the surface calls the returned `load()` (a
+ * form does so on its first focus) or asks for a token, so a visitor who never
+ * uses the form makes no request to Cloudflare (#475, Brandon's #368
+ * decision). `'mount'`, the default, loads as soon as the surface mounts, for
+ * a surface whose first use should not wait for the script.
  */
-export function useTurnstileToken(options: { enabled: boolean }) {
-  const { enabled } = options
+export function useTurnstileToken(options: {
+  enabled: boolean
+  loadOn?: 'mount' | 'demand'
+}) {
+  const { enabled, loadOn = 'mount' } = options
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
   const active = enabled && Boolean(siteKey)
+  // Whether this surface wants the script yet; once true it stays true.
+  const [wanted, setWanted] = useState(loadOn === 'mount')
+  const load = useCallback(() => setWanted(true), [])
 
   const containerRef = useRef<HTMLDivElement | null>(null)
   const widgetIdRef = useRef<string | null>(null)
@@ -170,7 +183,7 @@ export function useTurnstileToken(options: { enabled: boolean }) {
   }, [])
 
   useEffect(() => {
-    if (!active || !siteKey) return
+    if (!active || !siteKey || !wanted) return
     let disposed = false
     setWidgetState('loading')
     void loadTurnstile().then((api) => {
@@ -218,7 +231,7 @@ export function useTurnstileToken(options: { enabled: boolean }) {
       // A remount renders a new widget; a waiter keeps waiting for it.
       widgetStateRef.current = 'loading'
     }
-  }, [active, siteKey, settle, setWidgetState])
+  }, [active, siteKey, wanted, settle, setWidgetState])
 
   /** Resolve once the widget has rendered or failed, or after `ms`. */
   const waitForWidget = useCallback((ms: number): Promise<WidgetState> => {
@@ -275,6 +288,9 @@ export function useTurnstileToken(options: { enabled: boolean }) {
 
   const requestToken = useCallback((): Promise<TurnstileTokenResult> => {
     if (!active) return Promise.resolve({ status: 'inactive' })
+    // A submit can arrive before any focus did (autofill, a script); it starts
+    // the load itself and waits for the widget like any early call.
+    load()
     // A monotonic clock: a wall-clock correction must not stretch the bound.
     const deadline = performance.now() + TURNSTILE_TOKEN_TIMEOUT_MS
     const left = () => deadline - performance.now()
@@ -295,12 +311,12 @@ export function useTurnstileToken(options: { enabled: boolean }) {
     )
     queueRef.current = run
     return run
-  }, [active, waitForWidget, runChallenge])
+  }, [active, load, waitForWidget, runChallenge])
 
   const getToken = useCallback(async (): Promise<string | null> => {
     const result = await requestToken()
     return result.status === 'token' ? result.token : null
   }, [requestToken])
 
-  return { containerRef, getToken, requestToken, active }
+  return { containerRef, getToken, requestToken, load, active }
 }
