@@ -113,6 +113,16 @@ describe('resolvePlan: where a run may write', () => {
     }
   })
 
+  it('sends staging credentials only to staging or a *.vercel.app preview', () => {
+    const staging = [...base, '--target', 'staging', '--allow-staging-writes']
+    expect(() =>
+      plan([...staging, '--base-url', 'https://staging.brandonperfetti.co']),
+    ).toThrow(/vercel\.app preview/)
+    expect(
+      plan([...staging, '--base-url', 'https://bp-git-x.vercel.app']).base,
+    ).toBe('https://bp-git-x.vercel.app')
+  })
+
   it('keeps local on loopback', () => {
     expect(() =>
       plan([...base, '--base-url', 'https://staging.brandonperfetti.com']),
@@ -161,6 +171,29 @@ describe('readCredentials', () => {
     expect(() =>
       readCredentials(p, { PAYLOAD_MCP_API_KEY: 'bare' }, null),
     ).toThrow(/CMS_PROBE_MCP_API_KEY_LOCAL/)
+  })
+
+  it('never sends the bypass secret to production', () => {
+    const p = plan([
+      '--write-path',
+      'mcp',
+      '--evidence',
+      '/x',
+      '--target',
+      'production',
+      '--allow-production-writes',
+    ])
+    expect(p.sendBypass).toBe(false)
+    expect(
+      readCredentials(
+        p,
+        {
+          CMS_PROBE_MCP_API_KEY_PRODUCTION: 'k',
+          VERCEL_AUTOMATION_BYPASS_SECRET: 'b',
+        },
+        null,
+      ).bypass,
+    ).toBe('')
   })
 
   it('requires the bypass secret on a *.vercel.app host, and never sends one locally', () => {
@@ -230,10 +263,15 @@ type Doc = {
  * A fake deployment: Payload REST + MCP over an in-memory store, a sitemap,
  * and a cache of probe pages. `brokenPurge` is #274's defect: writes land in
  * the store but the sitemap and the page cache never see them.
+ * `stalePageCache` keeps the sitemap honest but never evicts a cached page,
+ * the shape of #274's "unpublished page kept serving 200 HIT".
+ * `redirectsClosed` answers the redirects read with a 403.
  */
 function fakeSite({
   brokenPurge = false,
   failPublish = false,
+  stalePageCache = false,
+  redirectsClosed = false,
   leftovers = [] as Doc[],
 } = {}) {
   const docs = new Map<number, Doc>()
@@ -242,15 +280,18 @@ function fakeSite({
   const visible = new Map<string, boolean>() // what readers see
   const calls: string[] = []
   const requestBodies: string[] = []
+  const pathOf = (d: Doc) =>
+    d.kind === 'page' ? `/${d.slug}` : `/articles/${d.slug}`
   const seen = () => {
     if (brokenPurge) return
-    visible.clear()
-    for (const d of docs.values()) {
-      visible.set(
-        d.kind === 'page' ? `/${d.slug}` : `/articles/${d.slug}`,
-        d.status === 'published',
-      )
+    if (stalePageCache) {
+      for (const d of docs.values())
+        if (d.status === 'published') visible.set(pathOf(d), true)
+      return
     }
+    visible.clear()
+    for (const d of docs.values())
+      visible.set(pathOf(d), d.status === 'published')
   }
   const json = (
     status: number,
@@ -283,7 +324,11 @@ function fakeSite({
       const locs = [
         '/',
         '/about',
-        ...[...visible].filter(([, v]) => v).map(([p]) => p),
+        ...(stalePageCache
+          ? [...docs.values()]
+              .filter((d) => d.status === 'published')
+              .map(pathOf)
+          : [...visible].filter(([, v]) => v).map(([p]) => p)),
       ]
       return new Response(
         `<urlset>${locs.map((l) => `<url><loc>https://site.test${l}</loc></url>`).join('')}</urlset>`,
@@ -298,7 +343,8 @@ function fakeSite({
       )
     }
     if (path === '/llms.txt') return new Response('# llms', { status: 200 })
-    if (path === '/api/redirects') return json(200, { docs: [] })
+    if (path === '/api/redirects')
+      return redirectsClosed ? json(403, {}) : json(200, { docs: [] })
     if (path === '/api/users/login') {
       const body = JSON.parse(String(init.body))
       return body.password === SECRET_PASSWORD
@@ -494,6 +540,28 @@ describe('runProbe', () => {
     expect(exitCodeFor(result)).toBe(EXIT.fail)
     expect(site.docs.size).toBe(0)
     expect(lines.some((l) => /cleanup +page \d+ gone/.test(l))).toBe(true)
+  })
+
+  it('counts a page still served after its delete as a removal FAIL, not a leftover', async () => {
+    const site = fakeSite({ stalePageCache: true })
+    const { result } = await run('mcp', site)
+    expect(result).toMatchObject({
+      inclusion: 'PASS',
+      removal: 'FAIL',
+      cleanup: 'PASS',
+    })
+    expect(result.notes.join(' ')).toMatch(/still answered 200/)
+    expect(exitCodeFor(result)).toBe(EXIT.fail)
+    expect(site.docs.size).toBe(0)
+  })
+
+  it('fails a run whose redirect check could not be made', async () => {
+    const { result } = await run('rest', fakeSite({ redirectsClosed: true }))
+    expect(result.cleanup).toBe('PASS')
+    expect(result.unchecked).toEqual([
+      'redirects matching the probe prefix (not readable)',
+    ])
+    expect(exitCodeFor(result)).toBe(EXIT.fail)
   })
 
   it('refuses to start, writing nothing, while probe leftovers exist', async () => {

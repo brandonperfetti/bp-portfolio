@@ -39,6 +39,9 @@ import {
 
 const log = (/** @type {string} */ line) => process.stdout.write(`${line}\n`)
 
+/** Set once the probe may have written: a crash after it may leave probes. */
+let mayHaveWritten = false
+
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   if (args.help) {
@@ -84,6 +87,7 @@ async function main() {
 
   let result
   try {
+    mayHaveWritten = true
     result = await runProbe({
       plan,
       writer,
@@ -95,7 +99,11 @@ async function main() {
     })
   } finally {
     await writer.close()
-    const scrubbed = scrubEvidence(evidence.dir, Object.values(creds))
+    // The email is an identifier, not a secret, and may appear in a public body.
+    const secrets = Object.entries(creds)
+      .filter(([name]) => name !== 'email')
+      .map(([, value]) => value)
+    const scrubbed = scrubEvidence(evidence.dir, secrets)
     if (scrubbed.length) {
       log(
         `SECRET SCRUB: credential found and removed from ${scrubbed.join(', ')}`,
@@ -109,6 +117,7 @@ async function main() {
   log(`removal:   ${result.removal}`)
   log(`cleanup:   ${result.cleanup}`)
   for (const line of result.llms) log(`llms.txt (informational) ${line}`)
+  for (const item of result.unchecked) log(`NOT CHECKED: ${item}`)
   for (const note of result.notes) log(`note: ${note}`)
   if (result.error) log(`error: ${result.error}`)
   const code = exitCodeFor(result)
@@ -132,6 +141,11 @@ main().then(
     process.stderr.write(
       `freshness probe crashed: ${error instanceof Error ? error.message : String(error)}\n`,
     )
-    process.exit(EXIT.cleanupIncomplete)
+    process.stderr.write(
+      mayHaveWritten
+        ? 'Probes may remain: look for zz-freshness-probe- pages and posts.\n'
+        : 'Nothing was written.\n',
+    )
+    process.exit(mayHaveWritten ? EXIT.cleanupIncomplete : EXIT.fail)
   },
 )

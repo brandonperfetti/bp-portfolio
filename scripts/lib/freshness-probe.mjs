@@ -63,8 +63,14 @@ export const TARGETS = Object.freeze({
   }),
 })
 
-/** The Vercel automation-bypass variable and header (`docs/CONTENT_WORKFLOW.md` §0). */
+/**
+ * The script-only copy of Vercel's automation-bypass secret
+ * (`docs/CONTENT_WORKFLOW.md` §0). Sent to staging only: production is
+ * probed on its custom domain, which needs no bypass.
+ */
 export const BYPASS_ENV = 'VERCEL_AUTOMATION_BYPASS_SECRET'
+
+/** The request header {@link BYPASS_ENV} travels in; never recorded. */
 export const BYPASS_HEADER = 'x-vercel-protection-bypass'
 
 /** Response headers each read records. Anything else (notably `set-cookie`) is never written. */
@@ -88,6 +94,7 @@ export class RefusalError extends Error {
   }
 }
 
+/** The `--help` text, also printed after a refusal so the fix is in front of the caller. */
 export const USAGE = `Usage: pnpm probe:freshness --write-path rest|mcp --evidence <new dir> [options]
 
 Publishes a throwaway page (and, with --article, an article), checks that
@@ -229,13 +236,14 @@ export function resolvePlan(args) {
       )
     }
   } else if (args.target === 'staging') {
-    if (
-      base.protocol !== 'https:' ||
-      isProductionHost ||
-      LOOPBACK_HOSTS.has(host)
-    ) {
+    // An allowlist, not a denylist: the run sends a password or an MCP key
+    // and the bypass secret, so a mistyped host must not receive them.
+    const stagingHost =
+      host === new URL(target.defaultBaseUrl).hostname ||
+      host.endsWith('.vercel.app')
+    if (base.protocol !== 'https:' || isProductionHost || !stagingHost) {
       throw new RefusalError(
-        `--target staging needs a non-production https host, not ${base.origin}`,
+        `--target staging takes ${target.defaultBaseUrl} or an https *.vercel.app preview, not ${base.origin}`,
       )
     }
   } else if (base.origin !== target.defaultBaseUrl) {
@@ -254,7 +262,7 @@ export function resolvePlan(args) {
     evidenceDir: args.evidenceDir,
     intervalMs: args.intervalMs,
     timeoutMs: args.timeoutMs,
-    sendBypass: args.target !== 'local',
+    sendBypass: args.target === 'staging',
     bypassRequired: host.endsWith('.vercel.app'),
   }
 }
@@ -841,7 +849,13 @@ export function scrubEvidence(dir, secrets) {
   return hit
 }
 
-/** @param {number} ms @param {AbortSignal} [signal] */
+/**
+ * Waits `ms`, rejecting early when `signal` aborts, so Ctrl-C ends a poll
+ * at once and the run goes straight to cleanup.
+ *
+ * @param {number} ms
+ * @param {AbortSignal} [signal]
+ */
 export const sleep = (ms, signal) =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(signal.reason ?? new Error('aborted'))
@@ -917,6 +931,8 @@ export async function runProbe({
     cleanup: /** @type {'PASS' | 'FAIL' | 'NOT NEEDED'} */ ('NOT NEEDED'),
     llms: /** @type {string[]} */ ([]),
     notes: /** @type {string[]} */ ([]),
+    // Checks the spec requires that could not be made; any one fails the run.
+    unchecked: /** @type {string[]} */ ([]),
     error: /** @type {string | null} */ (null),
   }
   let reads = 0
@@ -1150,9 +1166,10 @@ export async function runProbe({
         found.push(`${kind} ${d.id} ${d.slug}`)
     }
     const redirects = await redirectLeftovers()
-    if (redirects === null)
-      result.notes.push('Redirects could not be read anonymously; not checked.')
-    else found.push(...redirects)
+    if (redirects === null) {
+      const what = 'redirects matching the probe prefix (not readable)'
+      if (!result.unchecked.includes(what)) result.unchecked.push(what)
+    } else found.push(...redirects)
     return found
   }
 
@@ -1228,9 +1245,17 @@ export async function runProbe({
         `${at()}  cleanup    prefix check failed: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
+    // A public URL still answering after the delete is stale cache, not a
+    // leftover: the API already says the document is gone. It fails removal
+    // (exit 1), not cleanup (exit 3, "probes may remain").
     for (const p of probes) {
       const r = await read('final', p.kind, p.path)
-      if (r.status !== '404') ok = false
+      if (r.status !== '404') {
+        result.removal = 'FAIL'
+        result.notes.push(
+          `${p.path} still answered ${r.status} after its document was deleted: a purge did not reach the cached copy.`,
+        )
+      }
     }
     const final = await read('final', 'sitemap', '/sitemap.xml')
     if (final.locs) {
@@ -1255,11 +1280,13 @@ export async function runProbe({
 /**
  * The exit code for a finished run.
  *
- * @param {{ inclusion: string, removal: string, cleanup: string }} result
+ * @param {{ inclusion: string, removal: string, cleanup: string, unchecked?: string[] }} result
  */
 export function exitCodeFor(result) {
   if (result.cleanup === 'FAIL') return EXIT.cleanupIncomplete
-  return result.inclusion === 'PASS' && result.removal === 'PASS'
+  return result.inclusion === 'PASS' &&
+    result.removal === 'PASS' &&
+    !result.unchecked?.length
     ? EXIT.pass
     : EXIT.fail
 }
