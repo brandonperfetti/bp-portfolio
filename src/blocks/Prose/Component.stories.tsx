@@ -146,6 +146,18 @@ export const Default: Story = {
     await expect(prose.clientWidth).toBeLessThanOrEqual(
       (prose.parentElement as HTMLElement).clientWidth,
     )
+    // #196: the computed cap is exactly 65ch in the prose's own font, read
+    // against a 65ch probe inside it, so a dropped or changed measure fails.
+    const probe = document.createElement('div')
+    probe.style.width = '65ch'
+    prose.appendChild(probe)
+    const cap = probe.getBoundingClientRect().width
+    probe.remove()
+    await expect(getComputedStyle(prose).maxWidth).not.toBe('none')
+    await expect(parseFloat(getComputedStyle(prose).maxWidth)).toBeCloseTo(
+      cap,
+      1,
+    )
     const h2 = prose.querySelector('h2') as HTMLElement
     await expect(getComputedStyle(h2).fontSize).toBe('20px')
     await expect(getComputedStyle(h2).lineHeight).toBe('28px')

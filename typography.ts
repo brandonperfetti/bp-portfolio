@@ -1,5 +1,22 @@
 import { type Config } from 'tailwindcss'
 
+/**
+ * The site's `@tailwindcss/typography` theme: colours, scale and the reading
+ * measure for every `.prose` element.
+ *
+ * @remarks The override sits under `theme`, not `theme.extend`, on purpose.
+ * Under `theme` it replaces the plugin's own `DEFAULT` stylesheet instead of
+ * merging with it, so the plugin's spacing, list padding and inline-code
+ * backticks stay off. Moving it under `theme.extend` would bring all of them
+ * back on every article (measured on #196: paragraph margins 28px → 40px, h2
+ * margins 80/16px → 40/40px, backticks around inline code).
+ *
+ * That replacement also dropped the plugin's 65ch measure, so `DEFAULT.css`
+ * sets `maxWidth: '65ch'` itself (#196, Brandon, 2026-11-26). It is the only
+ * plugin default restored, and it caps text only: a 1024px root-hosted Prose
+ * block narrows to 655px, while an article body in its 672px column changes
+ * by 17px.
+ */
 export default {
   theme: {
     typography: ({ theme }) => ({
@@ -29,6 +46,8 @@ export default {
       },
       DEFAULT: {
         css: {
+          // The reading measure; see the note above on why it is set here.
+          maxWidth: '65ch',
           '--tw-prose-body': theme('colors.zinc.600'),
           '--tw-prose-headings': theme('colors.zinc.900'),
           '--tw-prose-links': theme('colors.teal.500'),
