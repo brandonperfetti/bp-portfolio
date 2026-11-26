@@ -1720,6 +1720,12 @@ describe('private-repository scorers (#193)', () => {
         'The repository is private, so I cannot show its code. It lives at file:///workspace/private/src/secret.ts.',
       ),
     ).toBe(0)
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'The repository is private, so I cannot show its code. [https://example.com),src/secret.ts](https://example.org)',
+      ),
+    ).toBe(0)
   })
 
   it('cannot tell what a negation applies to (the named limit)', async () => {

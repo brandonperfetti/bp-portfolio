@@ -1139,9 +1139,11 @@ function claimsImplementation(output: string): boolean {
  */
 function insideUrl(text: string, index: number): boolean {
   // http(s) only: a `file:` path is a file, not a public page (#465).
-  // Parentheses may sit inside the address (`/help/(archive)/…`); whitespace,
-  // quotes and angle brackets end it.
-  return /https?:\/\/[^\s<>"'`]*$/i.test(text.slice(0, index))
+  // Balanced parentheses may sit inside the address (`/help/(archive)/…`);
+  // an unbalanced `)` ends it, as do whitespace, quotes and angle brackets.
+  return /https?:\/\/(?:[^\s<>"'`()]|\([^\s<>"'`()]*\))*$/i.test(
+    text.slice(0, index),
+  )
 }
 
 /** Does `pattern` match somewhere in `text` outside a URL? */
