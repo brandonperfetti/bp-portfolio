@@ -128,10 +128,11 @@ function clearConsentCookies(): void {
   }
 }
 
+const isGoogleTagScript = (script: HTMLScriptElement) =>
+  URL.parse(script.src)?.hostname === 'www.googletagmanager.com'
+
 const tagScripts = () =>
-  Array.from(document.querySelectorAll('script')).filter((el) =>
-    el.src.includes('googletagmanager.com'),
-  )
+  Array.from(document.querySelectorAll('script')).filter(isGoogleTagScript)
 
 const gaDisabled = () => win[`ga-disable-${GA_ID}`]
 
@@ -145,10 +146,7 @@ let tagsEverAppended = 0
 const tagObserver = new MutationObserver((records) => {
   for (const record of records)
     for (const node of Array.from(record.addedNodes))
-      if (
-        node instanceof HTMLScriptElement &&
-        node.src.includes('googletagmanager.com')
-      )
+      if (node instanceof HTMLScriptElement && isGoogleTagScript(node))
         tagsEverAppended++
 })
 
