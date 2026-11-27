@@ -4,61 +4,55 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import { usePathname } from 'next/navigation'
 
 import { ConsentManagerProvider, useConsentManager } from '@c15t/react'
+import { type ConsentManagerOptions, getOrCreateConsentRuntime } from 'c15t'
 
 import { readConsentRequiredCookie } from '@/lib/consent/cookie'
 
+import {
+  type ConsentStoreLike,
+  clearAutomaticGrant,
+  discardStoredAutomaticGrantOnce,
+  grantAutomatically,
+  installLandingRouteGuard,
+  isAutomaticGrantLive,
+} from './automatic-grant'
 import {
   type ConsentConfig,
   DEFAULT_CONSENT_CONFIG,
   enabledC15tCategories,
 } from './consent-content'
-import { ConsentConfigProvider } from './consent-context'
+import { ConsentConfigProvider, ConsentStoreProvider } from './consent-context'
 import {
   buildConsentManagerOptions,
   buildConsentScripts,
-  readAutoGrantMarker,
   readGaEnv,
-  setAutoGrantMarker,
   shouldAutoGrantMeasurement,
-  shouldRepromptOnRegionChange,
+  shouldClearAutomaticGrant,
   stopGoogleAnalytics,
 } from './consent-config'
 import { CookieBanner } from './CookieBanner'
 import { CookieDialog } from './CookieDialog'
 
 /**
- * Reads the geo-consent cookie (client-side) and drives the opt-out-aware
- * default: where consent is confidently NOT required, `measurement` is granted
- * so analytics run unconsented; where required or unknown, it stays denied
- * until the visitor chooses. Renders the custom banner + dialog. Must be inside
- * `ConsentManagerProvider`.
- *
- * @remarks
- * #103 (region change): an auto-grant is tracked with a localStorage marker
- * (`setAutoGrantMarker`) so it can be told apart from an explicit save. When the
- * geo cookie re-resolves to a consent-required region and the current grant is
- * an auto-grant (never an explicit choice), the auto-grant is revoked: a
- * denial is saved, Analytics goes off, and c15t reloads the page. The banner
- * does NOT come back, because c15t counts that save as a choice; asking again
- * was #103's intent and is open work in #375. Explicit choices and stable
- * regions are untouched.
- */
-/**
- * Suspense-isolated leaf that re-reads the geo-consent cookie on every client
- * navigation and reports the resolved tri-state up to {@link ConsentSurface}.
+ * Suspense-isolated leaf that re-reads the geo-consent cookie and reports the
+ * resolved tri-state up to {@link ConsentSurface}.
  *
  * @remarks
  * `src/proxy.ts` rewrites the `cookieConsentRequired` cookie on each matched
  * request, so a visitor can cross a consent jurisdiction mid-session through
- * client-side navigation alone — no remount, no full reload. Reading the cookie
- * only on mount would freeze `consentRequired` at its first value, leaving an
- * opt-out auto-grant (GA4 enabled, banner hidden) live after the visitor enters
- * a consent-required region, and never firing the #103 region-change reprompt.
- * Keying the read on `usePathname` re-resolves it on each navigation. Because
- * `usePathname` suspends during the static-shell prerender under
- * `cacheComponents`, it lives behind its own `Suspense` boundary — like
- * {@link PreviousPathnameTracker} — so the surrounding consent tree stays
- * static and never forces the app dynamic.
+ * client-side navigation alone: no remount, no full reload. The cookie is
+ * re-read:
+ *
+ * - on every navigation, keyed on `usePathname`;
+ * - when the page is restored from the back-forward cache (`pageshow` with
+ *   `persisted`), which keeps its pathname, so the key above would not fire;
+ * - when the tab becomes visible again, after it may have sat idle past the
+ *   cookie's one-hour life (#375, the design's rule 6).
+ *
+ * Because `usePathname` suspends during the static-shell prerender under
+ * `cacheComponents`, it lives behind its own `Suspense` boundary, like
+ * `PreviousPathnameTracker`, so the surrounding consent tree stays static and
+ * never forces the app dynamic.
  */
 function ConsentGeoCookieSignal({
   onResolved,
@@ -71,11 +65,41 @@ function ConsentGeoCookieSignal({
     onResolved(readConsentRequiredCookie(document.cookie))
   }, [pathname, onResolved])
 
+  useEffect(() => {
+    const reread = () => onResolved(readConsentRequiredCookie(document.cookie))
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) reread()
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') reread()
+    }
+    window.addEventListener('pageshow', onPageShow)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('pageshow', onPageShow)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [onResolved])
+
   return null
 }
 
-function ConsentSurface() {
-  const { hasConsented, setConsent, consents } = useConsentManager()
+/**
+ * Reads the region and holds the automatic Analytics grant, then renders the
+ * banner and dialog. Must be inside `ConsentManagerProvider`.
+ *
+ * @remarks
+ * #375 (option C, signed 2026-11-26): where consent is confidently not
+ * required and the visitor has made no choice, `measurement` is granted **in
+ * memory only** (`grantAutomatically`). Nothing is saved, so a fresh page has
+ * nothing automatic to restore, no automatic save can land late, and no other
+ * tab sees it. When the region asks, or cannot be read, the grant is cleared
+ * in memory (`clearAutomaticGrant`): no denial is recorded, so c15t still
+ * reports no choice and the banner returns. Explicit choices are never
+ * touched. See `docs/designs/375-automatic-grant-region.md`.
+ */
+function ConsentSurface({ store }: { store: ConsentStoreLike | null }) {
+  const { consents } = useConsentManager()
   const [consentRequired, setConsentRequired] = useState<boolean | null>(null)
 
   // #361: a withdrawal has to reach gtag.js from this app. c15t drops a
@@ -90,57 +114,68 @@ function ConsentSurface() {
   }, [measurementGranted])
 
   useEffect(() => {
-    if (consentRequired === null) return
+    if (!store) return
+    // Before any grant can load the tag, so this wrapper sits inside gtag's.
+    installLandingRouteGuard()
 
-    const wasAutoGranted = readAutoGrantMarker()
-    // An explicit choice is any grant NOT flagged as an auto-grant: the marker
-    // is set on auto-grant and cleared the moment the visitor chooses.
-    const hasExplicitChoice = hasConsented() && !wasAutoGranted
+    // Read live from the store, not from the render's snapshot: a save that
+    // committed since the last render is an explicit choice and must win.
+    const hasConsented = store.getState().consentInfo != null
 
-    // #103: a visitor auto-granted in an opt-out region who moved into a
-    // required region has the auto-grant revoked. This saves a denial, which
-    // turns Analytics off and makes c15t reload; it does not re-show the
-    // banner, since c15t then reports hasConsented() as true (#375).
     if (
-      shouldRepromptOnRegionChange({
-        wasAutoGranted,
+      shouldClearAutomaticGrant({
+        automaticGrantLive: isAutomaticGrantLive(),
         consentRequired,
-        hasExplicitChoice,
+        hasConsented,
       })
     ) {
-      setConsent('measurement', false)
-      setAutoGrantMarker(false)
+      clearAutomaticGrant(store)
       return
     }
 
-    if (
-      shouldAutoGrantMeasurement({
-        consentRequired,
-        hasConsented: hasConsented(),
-      })
-    ) {
-      // Persisted opt-out grant, flagged as an auto-grant so a later region
-      // change (above) can tell it apart from an explicit choice.
-      setConsent('measurement', true)
-      setAutoGrantMarker(true)
+    if (shouldAutoGrantMeasurement({ consentRequired, hasConsented })) {
+      grantAutomatically(store)
     }
-    // Runs once the cookie resolves and on every region change; hasConsented/
-    // setConsent are stable store methods, intentionally not in the dep array.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [consentRequired])
+  }, [consentRequired, store])
 
   return (
-    <>
+    <ConsentStoreProvider value={store}>
       {/* Re-reads the geo cookie on each client navigation (Suspense-isolated,
-          so the static shell stays static); drives the region-change reprompt
-          above. */}
+          so the static shell stays static). */}
       <Suspense fallback={null}>
         <ConsentGeoCookieSignal onResolved={setConsentRequired} />
       </Suspense>
       <CookieBanner consentRequired={consentRequired} />
       <CookieDialog />
-    </>
+    </ConsentStoreProvider>
   )
+}
+
+/**
+ * The store `ConsentManagerProvider` created for these options.
+ *
+ * @remarks Rendered inside the provider, so the provider has already created
+ * the store and this returns it from c15t's cache; the cache key does not
+ * depend on anything the call could change. `null` on the server, where there
+ * is nothing to grant.
+ */
+function useConsentRuntimeStore(
+  options: ConsentManagerOptions,
+): ConsentStoreLike | null {
+  return useMemo(() => {
+    if (typeof window === 'undefined') return null
+    return getOrCreateConsentRuntime(options)
+      .consentStore as unknown as ConsentStoreLike
+  }, [options])
+}
+
+function ConsentSurfaceWithStore({
+  options,
+}: {
+  options: ConsentManagerOptions
+}) {
+  const store = useConsentRuntimeStore(options)
+  return <ConsentSurface store={store} />
 }
 
 /**
@@ -167,6 +202,12 @@ export function ConsentManager({
   children: React.ReactNode
   consentConfig?: ConsentConfig
 }) {
+  // #375: before the provider below creates c15t's store, which restores
+  // whatever is stored. A record production saved as an automatic grant is
+  // deleted here once per document, so it is never restored (the design's
+  // rule 4).
+  discardStoredAutomaticGrantOnce()
+
   const options = useMemo(() => {
     const { measurementId, isProduction } = readGaEnv()
     return buildConsentManagerOptions({
@@ -185,7 +226,7 @@ export function ConsentManager({
     <ConsentManagerProvider options={options}>
       <ConsentConfigProvider value={consentConfig}>
         {children}
-        <ConsentSurface />
+        <ConsentSurfaceWithStore options={options} />
       </ConsentConfigProvider>
     </ConsentManagerProvider>
   )

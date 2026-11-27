@@ -1,9 +1,9 @@
 # Design: an automatic Analytics grant meeting a region that asks (#375)
 
-**Status: proposed, awaiting Brandon's signature. No code follows until it is
-signed** (Brandon, 2026-11-25, on #375). This is a proposal for one decision:
-once it is signed and built, the behaviour belongs in `docs/ANALYTICS.md`,
-and this file stays as the record of the choice.
+**Status: signed — option C** (Brandon, 2026-11-26, on #375: the two
+behaviour changes and the residuals accepted, and the server-side region read
+dropped). The behaviour is described in `docs/ANALYTICS.md` § The automatic
+grant is held in memory (#375); this file stays as the record of the choice.
 
 **The decision.** How should the site hold the Analytics grant it gives
 automatically where consent is not required? The goal is that a visitor who

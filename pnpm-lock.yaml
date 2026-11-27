@@ -206,10 +206,10 @@ importers:
         specifier: 3.0.236
         version: 3.0.236(react@19.2.4)(zod@4.6.7)
       '@c15t/react':
-        specifier: ^2.2.1
+        specifier: 2.2.1
         version: 2.2.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@19.2.4))
       '@c15t/scripts':
-        specifier: ^2.2.0
+        specifier: 2.2.0
         version: 2.2.0
       '@clerk/nextjs':
         specifier: ^7.10.2
@@ -274,6 +274,9 @@ importers:
       ai:
         specifier: 6.0.234
         version: 6.0.234(zod@4.6.7)
+      c15t:
+        specifier: 2.2.1
+        version: 2.2.1(@types/react@19.2.14)(react@19.2.4)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@19.2.4))
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
