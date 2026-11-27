@@ -72,7 +72,7 @@ async function main() {
     .filter(([name, value]) => name !== 'email' && value)
     .map(([, value]) => value)
   redact.push(...secrets)
-  const evidence = createEvidence(plan.evidenceDir)
+  const evidence = createEvidence(plan.evidenceDir, secrets)
   const extraHeaders = creds.bypass ? { [BYPASS_HEADER]: creds.bypass } : {}
   log(
     `freshness probe: target=${plan.target} base=${plan.base} write-path=${plan.writePath} probes=${plan.kinds.join(',')} evidence=${evidence.dir}`,

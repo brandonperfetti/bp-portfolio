@@ -25,8 +25,10 @@ Release PR [#486](https://github.com/brandonperfetti/bp-portfolio/pull/486) ·
   memory. Explicit cookie choices still persist. The release removes older
   stored automatic grants that match the recorded marker and grant shape
   (#375, #478, #484).
-- Forms load Turnstile on first focus. The cookie dialog names the services
-  that load independently of Analytics. The lead article cover loads
+- Forms load Turnstile on first focus. The cookie dialog's updated
+  subtitle names the services that load independently of Analytics. The
+  production subtitle edit follows deployment of the #479 migration.
+  The lead article cover loads
   eagerly, prose measures at most 65ch, and lighter-theme link and badge
   colours use updated contrast tokens (#477, #479, #469, #482, #466).
 - Explorer filters follow links to the current URL. Corvus can name its

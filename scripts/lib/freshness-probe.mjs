@@ -265,9 +265,14 @@ export function resolvePlan(args) {
     const stagingHost =
       host === new URL(target.defaultBaseUrl).hostname ||
       (branchAlias !== null && branchAlias[1] !== 'master')
-    if (base.protocol !== 'https:' || isProductionHost || !stagingHost) {
+    if (
+      base.protocol !== 'https:' ||
+      base.port ||
+      isProductionHost ||
+      !stagingHost
+    ) {
       throw new RefusalError(
-        `--target staging takes ${target.defaultBaseUrl} or a bp-portfolio-git-<branch>-sans-faux-studios.vercel.app alias (not master), not ${base.origin}`,
+        `--target staging takes ${target.defaultBaseUrl} or a bp-portfolio-git-<branch>-sans-faux-studios.vercel.app alias (not master), using the default HTTPS port. Got ${base.origin}`,
       )
     }
   } else if (base.origin !== target.defaultBaseUrl) {
@@ -318,16 +323,17 @@ export function credentialNames(plan) {
  */
 export function readCredentials(plan, env, envLocalText) {
   const file = envLocalText ? parseEnv(envLocalText) : {}
-  const pick = (/** @type {string} */ name) => {
+  const pick = (/** @type {string} */ name, preserveWhitespace = false) => {
     const value = env[name] || file[name]
-    return typeof value === 'string' && value.trim() !== '' ? value.trim() : ''
+    if (typeof value !== 'string' || value.trim() === '') return ''
+    return preserveWhitespace ? value : value.trim()
   }
   const names = credentialNames(plan)
   /** @type {Record<string, string>} */
   const values = {}
   const missing = []
   for (const [key, name] of Object.entries(names)) {
-    values[key] = pick(name)
+    values[key] = pick(name, key === 'password')
     if (!values[key]) missing.push(name)
   }
   if (missing.length) {
@@ -820,15 +826,23 @@ export async function createMcpWriter({
  * the baseline and final `<loc>` lists, and `summary.json`.
  *
  * @param {string} dir - Must not exist, or be empty.
+ * @param {string[]} [secrets] - Credentials to redact before persisting evidence.
  */
-export function createEvidence(dir) {
+export function createEvidence(dir, secrets = []) {
   if (existsSync(dir) && readdirSync(dir).length > 0) {
     throw new RefusalError(
       `--evidence must be a new or empty directory: ${dir}`,
     )
   }
-  mkdirSync(join(dir, 'raw'), { recursive: true, mode: 0o700 })
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
+  try {
+    mkdirSync(join(dir, 'raw'), { mode: 0o700 })
+  } catch (error) {
+    if (error?.code !== 'EEXIST') throw error
+    throw new RefusalError(`--evidence already claimed by another run: ${dir}`)
+  }
   chmodSync(dir, 0o700)
+  const clean = (/** @type {string} */ text) => redactSecrets(text, secrets)
   const readsHeader = [
     'utc',
     'phase',
@@ -849,26 +863,34 @@ export function createEvidence(dir) {
     dir,
     /** @param {string[]} cells */
     read(cells) {
-      writeFileSync(join(dir, 'reads.tsv'), `${cells.join('\t')}\n`, {
-        flag: 'a',
-      })
+      writeFileSync(
+        join(dir, 'reads.tsv'),
+        `${cells.map(clean).join('\t')}\n`,
+        {
+          flag: 'a',
+        },
+      )
     },
     /** @param {string[]} cells */
     write(cells) {
-      writeFileSync(join(dir, 'writes.tsv'), `${cells.join('\t')}\n`, {
-        flag: 'a',
-      })
+      writeFileSync(
+        join(dir, 'writes.tsv'),
+        `${cells.map(clean).join('\t')}\n`,
+        {
+          flag: 'a',
+        },
+      )
     },
     /** @param {string} label @param {string} headers @param {string} body */
     raw(label, headers, body) {
       seq += 1
       const name = `${String(seq).padStart(3, '0')}-${label.replace(/[^\w.-]+/g, '_')}`
-      writeFileSync(join(dir, 'raw', `${name}.headers`), headers)
-      writeFileSync(join(dir, 'raw', `${name}.body`), body)
+      writeFileSync(join(dir, 'raw', `${name}.headers`), clean(headers))
+      writeFileSync(join(dir, 'raw', `${name}.body`), clean(body))
     },
     /** @param {string} name @param {string} text */
     file(name, text) {
-      writeFileSync(join(dir, name), text)
+      writeFileSync(join(dir, name), clean(text))
     },
   }
 }
@@ -927,15 +949,15 @@ export function scrubEvidence(dir, secrets) {
 export const sleep = (ms, signal) =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(signal.reason ?? new Error('aborted'))
-    const t = setTimeout(resolve, ms)
-    signal?.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(t)
-        reject(signal.reason ?? new Error('aborted'))
-      },
-      { once: true },
-    )
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(signal?.reason ?? new Error('aborted'))
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    signal?.addEventListener('abort', onAbort, { once: true })
   })
 
 /**
@@ -1029,14 +1051,18 @@ export async function runProbe({
   /** @type {string[]} */
   let baseline = []
 
+  const pollDeadlineReached = Symbol('poll deadline reached')
   const read = async (
     /** @type {string} */ phase,
     /** @type {string} */ label,
     /** @type {string} */ path,
+    deadline = Infinity,
   ) => {
     // After an interrupt no new foreground read starts, so cleanup is not held
     // behind their timeouts; cleanup's own 'final' reads always run.
     if (phase !== 'final') stopIfAborted()
+    const budgetMs = Math.min(30_000, deadline - now().getTime())
+    if (budgetMs <= 0) throw pollDeadlineReached
     reads += 1
     const url = `${plan.base}${path}`
     const at = utc()
@@ -1048,7 +1074,7 @@ export async function runProbe({
         headers: readHeaders,
         redirect: 'manual',
         cache: 'no-store',
-        signal: timeoutSignal(30_000),
+        signal: timeoutSignal(budgetMs),
       })
       for (const name of RECORDED_HEADERS)
         headers[name] = res.headers.get(name) ?? ''
@@ -1169,17 +1195,20 @@ export async function runProbe({
   /** Polls `check` immediately and then every interval, until it holds or the timeout passes. */
   const poll = async (
     /** @type {string} */ phase,
-    /** @type {() => Promise<boolean>} */ check,
+    /** @type {(deadline: number) => Promise<boolean>} */ check,
   ) => {
     const deadline = now().getTime() + plan.timeoutMs
-    for (;;) {
-      // A check that finishes after the deadline does not count.
-      const held = await check()
-      // An interrupt during the check wins over its result.
-      stopIfAborted()
-      if (held) return now().getTime() <= deadline
-      if (now().getTime() + plan.intervalMs > deadline) return false
-      await wait(plan.intervalMs, signal)
+    try {
+      for (;;) {
+        const held = await check(deadline)
+        stopIfAborted()
+        if (held) return now().getTime() <= deadline
+        if (now().getTime() + plan.intervalMs > deadline) return false
+        await wait(plan.intervalMs, signal)
+      }
+    } catch (error) {
+      if (error === pollDeadlineReached) return false
+      throw error
     }
   }
 
@@ -1258,11 +1287,11 @@ export async function runProbe({
         ),
       )
     }
-    const included = await poll('inclusion', async () => {
-      const sm = await read('inclusion', 'sitemap', '/sitemap.xml')
+    const included = await poll('inclusion', async (deadline) => {
+      const sm = await read('inclusion', 'sitemap', '/sitemap.xml', deadline)
       let allUp = sm.present.length === probes.length
       for (const p of probes) {
-        const r = await read('inclusion', p.kind, p.path)
+        const r = await read('inclusion', p.kind, p.path, deadline)
         allUp = allUp && r.status === '200'
       }
       return allUp
@@ -1297,11 +1326,11 @@ export async function runProbe({
         ),
       )
     }
-    const removed = await poll('removal', async () => {
-      const sm = await read('removal', 'sitemap', '/sitemap.xml')
+    const removed = await poll('removal', async (deadline) => {
+      const sm = await read('removal', 'sitemap', '/sitemap.xml', deadline)
       let allGone = sm.locs !== null && sm.present.length === 0
       for (const p of probes) {
-        const r = await read('removal', p.kind, p.path)
+        const r = await read('removal', p.kind, p.path, deadline)
         allGone = allGone && r.status === '404'
       }
       return allGone
@@ -1319,7 +1348,7 @@ export async function runProbe({
   }
   if (result.inclusion === 'PASS' && result.removal === 'FAIL') {
     result.notes.push(
-      'Removal failed after a passing inclusion: an unpublish did not reach a cached reader.',
+      'Removal failed after a passing inclusion: see the removal and final read receipts.',
     )
   }
   if (result.inclusion === 'FAIL' && result.removal === 'PASS') {
@@ -1369,34 +1398,15 @@ export async function runProbe({
   async function cleanup() {
     let ok = true
     const at = () => utc()
-    // A create that timed out may have landed without returning its id: adopt
-    // any document carrying this run's own slug. Other runs' leftovers are
-    // never touched; the prefix check below reports them.
-    // A create that failed on the client can still commit on the server a
-    // moment later, so a miss is searched again after a short settle.
+    const confirmedDeleted = new Set()
+    // A missing create response leaves ownership unknown. A slug match does
+    // not authorize cleanup to delete a document another run could own.
     for (const p of probes) {
       if (p.id !== null || !p.attempted) continue
-      let searched = false
-      for (let attempt = 1; attempt <= 2 && p.id === null; attempt += 1) {
-        if (attempt === 2) await wait(5000)
-        try {
-          const mine = (await writer.findProbes(p.kind)).find(
-            (d) => d.slug === p.slug,
-          )
-          searched = true
-          if (mine) p.id = mine.id
-        } catch {
-          /* the second attempt, or the prefix check below, decides */
-        }
-      }
-      if (!searched) ok = false
-      // No id after both searches does not prove the create never commits.
-      if (p.id === null) {
-        ok = false
-        log(
-          `${at()}  cleanup    ${p.kind} create outcome unknown: no ${p.slug} found yet; check the admin`,
-        )
-      }
+      ok = false
+      log(
+        `${at()}  cleanup    ${p.kind} create outcome unknown for ${p.slug}; check the admin`,
+      )
     }
     for (const p of probes) {
       if (p.id === null) continue
@@ -1423,7 +1433,8 @@ export async function runProbe({
       log(
         `${at()}  cleanup    ${p.kind} ${p.id} ${deleted ? 'gone (API 404)' : 'STILL PRESENT'}`,
       )
-      if (!deleted) ok = false
+      if (deleted) confirmedDeleted.add(p.kind)
+      else ok = false
     }
     try {
       const left = await findLeftovers()
@@ -1441,15 +1452,15 @@ export async function runProbe({
         `${at()}  cleanup    prefix check failed: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
-    // A public URL still answering after the delete is stale cache, not a
-    // leftover: the API already says the document is gone. It fails removal
-    // (exit 1), not cleanup (exit 3, "probes may remain").
     for (const p of probes) {
       const r = await read('final', p.kind, p.path)
       if (r.status !== '404') {
         result.removal = 'FAIL'
+        const outcome = confirmedDeleted.has(p.kind)
+          ? 'deletion confirmed by the API'
+          : 'deletion unconfirmed'
         result.notes.push(
-          `${p.path} still answered ${r.status} after its document was deleted: a purge did not reach the cached copy.`,
+          `${p.path} final read returned ${r.status}; ${outcome}.`,
         )
       }
     }

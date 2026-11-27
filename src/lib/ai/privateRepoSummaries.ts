@@ -82,7 +82,8 @@ export class UnpublishableSummaryError extends Error {
 /** Any URL, or a bare GitHub address, inside a free-text field. */
 // No word boundary before the scheme: `_https://…_` (Markdown emphasis) has a
 // word character in front of it (#193 review).
-const URL_LIKE = /(?:https?:\/\/|www\.)\S+|github\.com\b/i
+const URL_LIKE =
+  /(?:[a-z][a-z0-9+.-]*:\/\/|(?<![a-z0-9])(?:mailto|tel|urn|data):|www\.)\S+|github\.com\b/i
 
 /** A stand-in origin: only whether a path stays on it matters. */
 const SITE_ORIGIN = 'https://site.invalid'

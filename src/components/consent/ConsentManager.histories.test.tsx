@@ -973,6 +973,20 @@ describe('#375 histories — two tabs', () => {
 })
 
 describe('#375 histories — explicit choices after an automatic grant', () => {
+  it('keeps an automatic grant revocable when an explicit save fails before writing', async () => {
+    const page = await openPage('false')
+    const { saveExplicitChoice } = await import('./automatic-grant')
+    expect(page.state().consents.measurement).toBe(true)
+    await expect(
+      saveExplicitChoice(async () => {
+        throw new Error('explicit save failed')
+      }, null),
+    ).rejects.toThrow('explicit save failed')
+    await page.navigate('true', '/asks')
+    expect(page.state().consents.measurement).toBe(false)
+    expect(await storedRecord()).toBeNull()
+  })
+
   it('a Reject after an automatic grant is stored first, then the page reloads (production reloads too)', async () => {
     const page = await openPage('false')
     // The module instance this page uses: imported after its fresh graph.

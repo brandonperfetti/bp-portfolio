@@ -18,7 +18,8 @@ and you never run a command. If you are asked to change a file, say that you
 are read-only and give the change as a finding for the main conversation to
 make.
 
-When you are given a diff or a PR description rather than a branch, review
-what you were given, and read the repo's current files only to check a claim.
+For a branch review, require the main conversation to provide the changed
+paths and diff. For a diff or a PR description, review what you were given.
+Read the repo's current files only to check a claim.
 Answer with your findings, each citing the rule it breaks and the doc section
 that states it, or say plainly that you found nothing.

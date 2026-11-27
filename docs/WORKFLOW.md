@@ -131,8 +131,8 @@ Two properties of this tier decide how its fixtures must be written:
 - Branches touching the Corvus eval harness or eval-adjacent config
   (`evals/**`, guardrails, eval scripts/workflow) get **one keyed local
   `pnpm eval:ci` run before push** (Brandon runs it) — CI's first keyed run
-  must not be the first observation of eval behavior. Leave `AI_CHAT_MODEL`
-  unset for that run, as the CI job does: the code default,
+  must not be the first observation of eval behavior. Leave `AI_CHAT_MODEL` and
+  `AI_CHAT_PROVIDER` unset for that run, as the CI job does: the OpenAI default,
   `gpt-5.6-luna`, is the model the gate measures (#238). The floors themselves
   are invariants (see `CLAUDE.md`): fix the behavior or the harness, never
   lower a floor to get green.

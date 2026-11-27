@@ -159,24 +159,28 @@ one. A throwaway database is the closer match to CI and leaves no fixtures in a
 database you keep:
 
 ```sh
-docker run -d --rm --name bp-pg-tier -p 127.0.0.1:55432:5432 \
-  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=bp_portfolio_ci --tmpfs /var/lib/postgresql/data \
-  pgvector/pgvector:pg16
-# Wait for the TCP listener; during first-boot init Postgres serves only a socket.
-for i in $(seq 1 30); do
-  docker exec bp-pg-tier pg_isready -h 127.0.0.1 -U postgres -q && break
-  sleep 1
-done
-docker exec bp-pg-tier pg_isready -h 127.0.0.1 -U postgres # fails if never ready
-export DATABASE_URI=postgres://postgres:postgres@127.0.0.1:55432/bp_portfolio_ci
-export PAYLOAD_SECRET=ci-not-a-real-secret
-# Empty, not unset: Payload's CLI reloads .env, which an unset name lets back in.
-export BLOB_READ_WRITE_TOKEN= STORAGE_VERCEL_BLOB_BASE_URL=
-pnpm migrate
-pnpm seed:e2e
-pnpm exec vitest run --root evals
-docker rm -f bp-pg-tier
+(
+  set -eu
+  container=$(docker run -d --rm --name bp-pg-tier -p 127.0.0.1:55432:5432 \
+    -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+    -e POSTGRES_DB=bp_portfolio_ci --tmpfs /var/lib/postgresql/data \
+    pgvector/pgvector:pg16)
+  trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+
+  # Wait for the TCP listener; first-boot init serves only a socket.
+  for i in $(seq 1 30); do
+    docker exec "$container" pg_isready -h 127.0.0.1 -U postgres -q && break
+    sleep 1
+  done
+  docker exec "$container" pg_isready -h 127.0.0.1 -U postgres
+  export DATABASE_URI=postgres://postgres:postgres@127.0.0.1:55432/bp_portfolio_ci
+  export PAYLOAD_SECRET=ci-not-a-real-secret
+  # Empty, not unset: Payload's CLI reloads .env, which an unset name lets back in.
+  export BLOB_READ_WRITE_TOKEN= STORAGE_VERCEL_BLOB_BASE_URL=
+  pnpm migrate
+  pnpm seed:e2e
+  pnpm exec vitest run --root evals
+)
 ```
 
 With no `BLOB_READ_WRITE_TOKEN`, `pnpm seed:e2e` writes its uploaded images to

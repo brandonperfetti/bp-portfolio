@@ -740,11 +740,13 @@ describe('buildGroundedSystem — the host page (#217 phase 2)', () => {
     )
   })
 
-  it('adds the line, and only the line, when a host resolved', () => {
-    const grounded = [snippet()]
+  it('allows the resolved host link when the retrieved passages cite another page', () => {
+    const grounded = [snippet({ sourceUrl: '/articles/other' })]
     const withHost = buildGroundedSystem(grounded, host)
+    const hostCitation = ` for claims about site content. You may also link [this page](${host.path}) to identify the page the visitor is on`
     expect(withHost).toContain(line)
-    expect(withHost.replace(`\n${line}\n`, '')).toBe(
+    expect(withHost).toContain(`ONLY site URLs you may cite${hostCitation}.`)
+    expect(withHost.replace(`\n${line}\n`, '').replace(hostCitation, '')).toBe(
       buildGroundedSystem(grounded),
     )
   })

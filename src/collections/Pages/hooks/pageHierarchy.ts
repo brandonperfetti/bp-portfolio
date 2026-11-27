@@ -342,7 +342,9 @@ export const cascadePagePaths: CollectionAfterChangeHook<Page> = async ({
   operation,
   req,
 }) => {
-  if (operation !== 'update') return doc
+  // Only published output can move a served prefix. A draft can carry a
+  // different path even when it never changes the page's main row.
+  if (operation !== 'update' || doc._status !== 'published') return doc
   if (context?.disablePathCascade) return doc
 
   // `req.context` first, for the same reason the redirect writer reads it

@@ -135,9 +135,9 @@ export const pageReload = {
  * @remarks
  * - The marker is cleared before the save, as production does, so the
  *   one-time clean-up below never takes this record for an automatic one.
- * - No automatic grant is made while the save is pending, and the flag is
- *   cleared again once it lands, so a choice is never later taken for an
- *   automatic grant.
+ * - No automatic grant is made while the save is pending. A live grant
+ *   remains revocable until c15t writes an explicit choice. If the save
+ *   fails before that write, the automatic grant stays revocable.
  * - c15t reloads on a revoking save only when a record existed before it, so
  *   a Reject that replaces an in-memory grant would not reload. Production
  *   reloads there, so this does too. It **awaits** the save first: c15t
@@ -148,22 +148,19 @@ export async function saveExplicitChoice(
   save: () => Promise<unknown>,
   store: ConsentStoreLike | null,
 ): Promise<void> {
-  const replacesAutomaticGrant = automaticGrantLive
-  automaticGrantLive = false
   explicitSavesPending++
   try {
     markExplicitConsentChoice()
     await save()
+    const reload =
+      automaticGrantLive &&
+      store &&
+      store.getState().consents.measurement !== true
+    automaticGrantLive = false
+    if (reload) pageReload.reload()
   } finally {
     explicitSavesPending--
-    automaticGrantLive = false
-  }
-  if (
-    replacesAutomaticGrant &&
-    store &&
-    store.getState().consents.measurement !== true
-  ) {
-    pageReload.reload()
+    if (store?.getState().consentInfo != null) automaticGrantLive = false
   }
 }
 

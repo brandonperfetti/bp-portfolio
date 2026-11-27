@@ -84,8 +84,11 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
   `mcp` (`POST /api/mcp`). It polls `/sitemap.xml` and the probe URL until the
   publish shows (inclusion) and, after warming the URL, until the unpublish
   shows: gone from the sitemap and a 404 (removal). It then deletes the probes
-  in a `finally` and checks the API returns nothing for them, no page, post or
-  redirect matches the prefix, and the final `<loc>` list equals the baseline.
+  in a `finally` when the create returned an ID. A missing ID leaves ownership
+  unconfirmed and requires manual cleanup. The probe checks that the API returns
+  nothing for the created IDs, no page, post or
+  redirect matches the prefix, and the final `<loc>` pathnames, including
+  duplicate counts, match the baseline.
   Each read's status, `x-vercel-cache`, `age`, `x-vercel-id` and probe presence
   goes to the console and to `reads.tsv`, with raw headers and bodies, in the
   `--evidence` directory. Exit codes: 0 PASS, 1 FAIL, 2 refused before any
@@ -97,8 +100,8 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
   `--target production` needs `--allow-production-writes`. The article probe is
   opt-in, because a live article shows in the public `/feed.xml`. Credentials
   are script-only and per target (`CMS_PROBE_*_<TARGET>`, `.env.example`), from
-  `.env.local`; a nonempty exported value wins over the file. A staging run
-  against a `*.vercel.app` branch alias also needs
+  `.env.local`; a nonempty exported value wins over the file. Protected staging
+  deployments, including the staging domain and branch aliases, need
   `VERCEL_AUTOMATION_BYPASS_SECRET`, which goes out as
   `x-vercel-protection-bypass`; only staging sends it, and production never
   reads it. Run it after a change to caching, the revalidation hooks,

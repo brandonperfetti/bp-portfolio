@@ -76,6 +76,13 @@ describe('chunkPrivateRepoSummary', () => {
     expect(content).toBe(chunkPrivateRepoSummary(entry).content)
   })
 
+  it('keeps colon-delimited text that does not start a URL scheme', () => {
+    const blurb = 'Checks metadata:schema and Intel:x86.'
+    expect(chunkPrivateRepoSummary({ ...entry, blurb }).content).toContain(
+      blurb,
+    )
+  })
+
   it('cites the blurb’s public home on this site when it has one', () => {
     expect(
       chunkPrivateRepoSummary({ ...entry, publicUrl: '/articles/sample' })
@@ -88,6 +95,14 @@ describe('chunkPrivateRepoSummary', () => {
     ['a space in the name', { name: 'sample private' }],
     ['a GitHub address in the blurb', { blurb: 'See github.com/x/y.' }],
     ['a URL in the description', { description: 'https://example.com' }],
+    [
+      'a non-HTTP URL in the description',
+      { description: 'ftp://example.com/internal' },
+    ],
+    [
+      'a mail link in the description',
+      { description: 'mailto:docs@example.com' },
+    ],
     ['a URL in a topic', { topics: ['www.example.com'] }],
     [
       'a URL inside Markdown emphasis (#465 review)',

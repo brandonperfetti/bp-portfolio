@@ -392,7 +392,11 @@ describe('cascadePagePaths', () => {
   const move = async (
     req: unknown,
     context: Record<string, unknown> = {},
-    doc: Record<string, unknown> = { id: 1, path: 'experience' },
+    doc: Record<string, unknown> = {
+      id: 1,
+      path: 'experience',
+      _status: 'published',
+    },
   ) =>
     cascadePagePaths({
       collection: { slug: 'pages' },
@@ -406,6 +410,14 @@ describe('cascadePagePaths', () => {
     // `mockReset`, not `mockClear`: the #156 containment case installs a
     // throwing implementation that must not leak into the next test.
     cacheMocks.revalidatePath.mockReset()
+  })
+
+  it('leaves the served subtree alone when a draft has a different path', async () => {
+    const { req, updates } = harness()
+    const draft = { id: 1, path: 'experience', _status: 'draft' }
+    await expect(move(req, {}, draft)).resolves.toBe(draft)
+    expect(updates).toEqual([])
+    expect(cacheMocks.revalidatePath).not.toHaveBeenCalled()
   })
 
   /**

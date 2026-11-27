@@ -117,6 +117,20 @@ describe('resolvePlan: where a run may write', () => {
   it('sends staging credentials only to staging or a *.vercel.app preview', () => {
     const staging = [...base, '--target', 'staging', '--allow-staging-writes']
     expect(() =>
+      plan([
+        ...staging,
+        '--base-url',
+        'https://staging.brandonperfetti.com:8443',
+      ]),
+    ).toThrow(/default HTTPS port/)
+    expect(
+      plan([
+        ...staging,
+        '--base-url',
+        'https://staging.brandonperfetti.com:443',
+      ]).base,
+    ).toBe('https://staging.brandonperfetti.com')
+    expect(() =>
       plan([...staging, '--base-url', 'https://staging.brandonperfetti.co']),
     ).toThrow(/alias \(not master\)/)
     for (const host of [
@@ -603,7 +617,9 @@ describe('runProbe', () => {
       removal: 'FAIL',
       cleanup: 'PASS',
     })
-    expect(result.notes.join(' ')).toMatch(/still answered 200/)
+    expect(result.notes.join(' ')).toMatch(
+      /final read returned 200; deletion confirmed by the API/,
+    )
     expect(exitCodeFor(result)).toBe(EXIT.fail)
     expect(site.docs.size).toBe(0)
   })
@@ -701,14 +717,15 @@ describe('runProbe', () => {
     expect(site.docs.size).toBe(0)
   })
 
-  it('adopts a REST draft by slug when the create answers with no id', async () => {
+  it('leaves an unowned draft alone when the create answers with no id', async () => {
     const site = fakeSite({ createWithoutId: true })
-    const { result } = await run('rest', site)
-    expect(site.calls).not.toContain('PATCH /api/pages/undefined')
-    expect(site.docs.size).toBe(0)
-    expect(result.cleanup).toBe('PASS')
+    const { result, lines } = await run('rest', site)
+    expect(site.calls.some((call) => call.startsWith('DELETE '))).toBe(false)
+    expect(site.docs.size).toBe(1)
+    expect(result.cleanup).toBe('FAIL')
     expect(result.error).toMatch(/no document id/)
-    expect(exitCodeFor(result)).toBe(EXIT.fail)
+    expect(lines.join('\n')).toContain('create outcome unknown')
+    expect(exitCodeFor(result)).toBe(EXIT.cleanupIncomplete)
   })
 
   it('starts no new publish after an interrupt during the page publish', async () => {
@@ -917,6 +934,20 @@ describe('exitCodeFor', () => {
         error: 'evidence write failed',
       }),
     ).toBe(EXIT.fail)
+  })
+})
+
+describe('evidence persistence', () => {
+  it('redacts response data before writing and refuses a second writer', () => {
+    const dir = join(tempDir(), 'evidence')
+    const evidence = createEvidence(dir, [SECRET_KEY])
+    evidence.raw('read', `x-test: ${SECRET_KEY}`, `echo ${SECRET_KEY}`)
+    evidence.read([SECRET_KEY])
+    const text = allFiles(dir).join('\n')
+    expect(text).toContain('x-test: [redacted]')
+    expect(text).toContain('echo [redacted]')
+    expect(text).not.toContain(SECRET_KEY)
+    expect(() => createEvidence(dir)).toThrow(RefusalError)
   })
 })
 
