@@ -245,6 +245,10 @@ Nothing here is a secret; the names-only rule is `docs/SECURITY.md`
 reasoning and `src/lib/observability/sessionId.test.ts` for the assertions
 that pin it.
 
+The browser Sentry hooks replace email addresses with `[email]` in request
+data, event messages and exception values, transaction names, breadcrumbs,
+span descriptions and data, and log bodies and attributes (#480).
+
 ## Verifying it (browser / preview, not sandbox)
 
 The a11y gate (`addon-a11y`, `test:'error'`) and the Storybook `play` functions

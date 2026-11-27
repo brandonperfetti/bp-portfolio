@@ -10,6 +10,10 @@ import {
   SENTRY_DENY_URLS,
   SENTRY_IGNORE_ERRORS,
   sentryDropNoisyLog,
+  sentryRedactBreadcrumb,
+  sentryRedactBrowserEvent,
+  sentryRedactLog,
+  sentryRedactSpan,
   sentryTracesSampler,
   warnIfDevDsnIgnored,
 } from '@/lib/observability/sentryConfig'
@@ -90,7 +94,10 @@ if (decision.init) {
       typeof navigator !== 'undefined' &&
       isFilteredUserAgent(navigator.userAgent)
         ? null
-        : event,
+        : sentryRedactBrowserEvent(event),
+    beforeSendTransaction: sentryRedactBrowserEvent,
+    beforeBreadcrumb: sentryRedactBreadcrumb,
+    beforeSendSpan: sentryRedactSpan,
     // Keep known-benign, high-volume warnings — and bot-UA logs — out of Sentry
     // Logs (#95, #94, #98).
     beforeSendLog: (log) => {
@@ -100,7 +107,8 @@ if (decision.init) {
       ) {
         return null
       }
-      return sentryDropNoisyLog(log)
+      const kept = sentryDropNoisyLog(log)
+      return kept && sentryRedactLog(kept)
     },
     integrations: [
       Sentry.consoleLoggingIntegration({
