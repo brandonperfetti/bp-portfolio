@@ -46,7 +46,7 @@ Release PR [#486](https://github.com/brandonperfetti/bp-portfolio/pull/486) ·
 
 **Developers**
 
-- pnpm is pinned to 12.16.1 and local servers use ports 6000–6029.
+- pnpm is pinned to 12.16.1 and local servers use ports 6001–6029.
   Syntax highlighting now uses refractor 5, and Partial Prefetching is
   explicitly disabled while the current behavior is retained
   (#472, #447, #471, #440).
