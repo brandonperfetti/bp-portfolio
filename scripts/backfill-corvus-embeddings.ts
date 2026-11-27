@@ -12,7 +12,7 @@ import {
 } from '../src/lib/ai/embeddingsStore'
 import { getEmbeddingModelId } from '../src/lib/ai/embeddings'
 import { refreshTechStackSummary } from '../src/lib/ai/techStackSummarySync'
-import { guardBackfillDocument } from './lib/backfill-guard'
+import { guardEmbeddingSource } from '../src/lib/ai/embeddingSourceGuard'
 import { canDropOrphans, orphanDeleteBounds } from './lib/orphan-guard.mjs'
 
 /**
@@ -152,7 +152,7 @@ async function run(): Promise<void> {
         const outcome = await syncDocumentEmbeddings({
           db:
             collection === 'pages' || collection === 'posts'
-              ? guardBackfillDocument(payload.db.drizzle, collection, doc)
+              ? guardEmbeddingSource(payload.db.drizzle, collection, doc)
               : db,
           collection: collection as CorvusCollectionSlug,
           doc,

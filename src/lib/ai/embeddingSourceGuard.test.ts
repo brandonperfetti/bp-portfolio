@@ -1,7 +1,7 @@
 import { sql, type PostgresAdapter } from '@payloadcms/db-postgres'
 import { describe, expect, it, vi } from 'vitest'
 
-import { guardBackfillDocument } from './backfill-guard'
+import { guardEmbeddingSource } from './embeddingSourceGuard'
 
 const snapshot = {
   id: 12,
@@ -9,7 +9,7 @@ const snapshot = {
   _status: 'published',
 }
 
-describe('guardBackfillDocument', () => {
+describe('guardEmbeddingSource', () => {
   function database(rows: unknown[]) {
     const execute = vi.fn().mockResolvedValueOnce({ rows })
     const transaction = vi.fn(async (run) => run({ execute }))
@@ -26,7 +26,7 @@ describe('guardBackfillDocument', () => {
     execute.mockResolvedValueOnce({ rows: [{ value: 1 }] })
 
     await expect(
-      guardBackfillDocument(db, 'pages', snapshot).execute(statement),
+      guardEmbeddingSource(db, 'pages', snapshot).execute(statement),
     ).resolves.toEqual({ rows: [{ value: 1 }] })
     expect(transaction).toHaveBeenCalledTimes(1)
     expect(execute).toHaveBeenNthCalledWith(2, statement)
@@ -35,8 +35,8 @@ describe('guardBackfillDocument', () => {
   it('leaves embeddings untouched when the source snapshot no longer matches', async () => {
     const { db, execute } = database([])
     await expect(
-      guardBackfillDocument(db, 'pages', snapshot).execute(sql`select 1`),
-    ).rejects.toThrow('Backfill snapshot changed')
+      guardEmbeddingSource(db, 'pages', snapshot).execute(sql`select 1`),
+    ).rejects.toThrow('Embedding snapshot changed')
     expect(execute).toHaveBeenCalledTimes(1)
   })
 })

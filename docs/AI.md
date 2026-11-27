@@ -673,22 +673,21 @@ the free taste is exactly where grounding helps most.
 
 ### Freshness: hooks, the hash skip, and metadata drift
 
-`src/hooks/corvusEmbeddings.ts` mirrors the `revalidateCollection.ts` pattern:
-an `afterChange` factory plus an `afterDelete` companion, per collection. It
-honours `context.disableRevalidate`, skips drafts, unpublished documents and
-autosave ticks, bounds its provider and sync work by `AbortSignal.timeout`, and
-**never throws** — a
-provider outage must not fail a content save. Published-content edits therefore
-reach retrieval with no redeploy.
+`src/hooks/corvusEmbeddings.ts` registers refreshes from the collection hooks
+and runs them after PostgreSQL confirms the content transaction committed
+(#462). It reloads the committed source before embedding. A rolled-back
+publish or subtree move cannot write new vectors or citation URLs, and
+provider calls never hold the content transaction open. The hook honours
+`context.disableRevalidate` and skips autosaves and draft saves over live
+content.
 
-One exception (#208): a draft saved over a published Post or Page keeps the
-live rows, and to tell it from an unpublish the hook reads the collection row
-on the save's own transaction (`payload.db.findOne`). If that read fails, the
-hook rethrows and the save fails, because the failure is inside the save's
-transaction and the save could not be trusted to commit. That read is not
-under the hook's deadline: a read on the transaction cannot be abandoned, since
-the save's COMMIT waits behind it on the same connection. The unpublish delete
-also runs before the deadline is created, as it did before #208.
+An unpublish, delete, or tighter visibility or publication date takes effect
+in the content transaction, so an older vector cannot stay publicly eligible
+while the provider is running. Less restrictive metadata and citation paths
+are applied by the post-commit refresh. A provider outage leaves the content
+save committed. The backfill repairs stale rows once the provider recovers.
+The save response waits for refreshes, which run one document at a time
+with an eight-second refresh deadline per document.
 
 Two skip paths, and the second one is a security fix, not an optimisation:
 

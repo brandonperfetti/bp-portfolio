@@ -725,7 +725,7 @@ describe('createPathRedirect', () => {
     )
   })
 
-  it('never fails the editor’s publish when the redirect write throws', async () => {
+  it('contains a redirect write failure when there is no shared transaction', async () => {
     const harness = makeHarness()
     const req = harness.makeReq('old')
     harness.findRedirects.mockRejectedValueOnce(new Error('db down') as never)

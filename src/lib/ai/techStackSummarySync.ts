@@ -58,17 +58,9 @@ import {
  * (`isEmbeddable` returns `true` for every non-post), so there is no published
  * view to ask for — every row is the published row.
  *
- * `req` is forwarded when the caller has one, because `@payloadcms/db-postgres`
- * runs with transactions on by default (`src/payload.config.ts` sets no
- * `transactionOptions`) and a Local API call WITHOUT `req` takes a separate
- * connection outside the caller's transaction. From a hook that means reading
- * the collection as it was BEFORE the save that triggered the refresh — an
- * `afterChange` would compose the summary from pre-save rows, and an
- * `afterDelete` would still see the deleted row. The repo's convention for a
- * hook-side read is `req.payload.find({ …, req })`
- * (`src/hooks/createPathRedirect.ts`). The backfill script has no request and
- * passes none: it runs outside any transaction on purpose, which is what a
- * repair tool wants.
+ * `req` is forwarded if supplied. The production hook refreshes after
+ * commit, so its request no longer carries a write transaction. The backfill
+ * also reads committed rows and supplies no request.
  *
  * @param payload - The Payload instance.
  * @param req - The hook's Payload request, when there is one, so the read joins
@@ -201,11 +193,9 @@ export async function syncTechStackSummaryEmbeddings(args: {
  * failure reads as a retrieval problem rather than a data one. So every
  * skipped row is named at `warn`, with its stored value, on every refresh.
  *
- * `req` is optional and forwarded to the `find` only. A hook MUST pass it so
- * the read runs inside the save's transaction and sees the save that triggered
- * it; the backfill script deliberately passes nothing, because a repair tool
- * has no request and wants a plain read. See
- * {@link readTechStackSummaryRows} for the full reason.
+ * `req` is optional and forwarded to the `find` only. The post-commit hook
+ * supplies request context without the ended transaction. Backfill reads
+ * committed rows without a request. See {@link readTechStackSummaryRows}.
  *
  * @param args - Payload instance, database handle, optional request, optional
  * abort signal.

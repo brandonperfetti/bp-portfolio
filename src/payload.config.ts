@@ -21,6 +21,7 @@ import {
   WorkHistory,
 } from './collections'
 import { defaultLexical } from './fields/defaultLexical'
+import { installCorvusAfterCommit } from './hooks/corvusAfterCommit'
 import {
   CookieConsent,
   Footer,
@@ -108,6 +109,7 @@ export default buildConfig({
   // Neon's proprietary serverless driver and cannot speak to any other
   // Postgres. Both adapters are Drizzle-Postgres underneath — schema and
   // committed migrations are interchangeable by design.
+  onInit: installCorvusAfterCommit,
   db: postgresAdapter({
     pool: {
       // DATABASE_URI is our canonical name (POSTGRES_URL / DATABASE_URL

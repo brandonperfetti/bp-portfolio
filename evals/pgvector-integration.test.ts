@@ -113,6 +113,10 @@ import {
   refreshCorvusEmbeddings,
 } from '../src/hooks/corvusEmbeddings'
 import { SITE_FIXTURE_DOCS } from './fixtures/site-content'
+import {
+  createFixturePage,
+  createFixturePost,
+} from './fixtures/payload-fixtures'
 
 /**
  * `pg` and `drizzle-orm`, resolved through the adapter that depends on them.
@@ -134,6 +138,36 @@ const requireFromAdapter = createRequire(
 )
 const { Pool } = requireFromAdapter('pg')
 const { drizzle } = requireFromAdapter('drizzle-orm/node-postgres')
+
+const lexical = (text: string) => ({
+  root: {
+    type: 'root',
+    format: '',
+    indent: 0,
+    version: 1,
+    direction: 'ltr',
+    children: [
+      {
+        type: 'paragraph',
+        format: '',
+        indent: 0,
+        version: 1,
+        direction: 'ltr',
+        children: [
+          {
+            type: 'text',
+            text: text,
+            format: 0,
+            style: '',
+            mode: 'normal',
+            detail: 0,
+            version: 1,
+          },
+        ],
+      },
+    ],
+  },
+})
 
 const connectionString = process.env.DATABASE_URI
 
@@ -286,6 +320,232 @@ describe.skipIf(!connectionString)(
         await clean()
       } finally {
         await pool.end()
+      }
+    })
+
+    it('refreshes a real Payload publish only after PostgreSQL commits', async () => {
+      const { sql } = await import('@payloadcms/db-postgres')
+      const { createLocalReq, getPayload } = await import('payload')
+      const { default: config } = await import('../src/payload.config')
+      const payload = await getPayload({ config })
+      const post = await createFixturePost(payload, {
+        context: { disableRevalidate: true },
+        data: {
+          title: 'Transactional embedding fixture',
+          slug: 'zz-corvus-after-commit',
+          _status: 'draft',
+          content: lexical(
+            'This fixture verifies published text after a committed save.',
+          ),
+        },
+      })
+      let transactionId: string | number | null = null
+      const stored = () => readStoredChunks(db, 'posts', post.id)
+
+      try {
+        const publish = async (
+          outcome: 'rollback' | 'commit-fails' | 'commit',
+        ) => {
+          transactionId = await payload.db.beginTransaction()
+          if (transactionId == null)
+            throw new Error('Expected a real transaction')
+          const req = await createLocalReq({}, payload)
+          req.transactionID = transactionId
+          await payload.update({
+            collection: 'posts',
+            id: post.id,
+            req,
+            data: { _status: 'published' },
+          })
+          expect((await stored()).size).toBe(0)
+          expect(embedChunksStub).not.toHaveBeenCalled()
+
+          if (outcome === 'commit-fails') {
+            // A deferred constraint permits the hook to finish and forces the
+            // database to roll back at COMMIT. Temporary tables are owned by
+            // this connection and disappear when it ends the transaction.
+            const session = payload.db.sessions?.[transactionId] as
+              { db: CorvusEmbeddingsDb } | undefined
+            if (!session) throw new Error('Expected a live PostgreSQL session')
+            await session.db.execute(
+              sql`CREATE TEMP TABLE corvus_tx_parent (id int PRIMARY KEY) ON COMMIT DROP`,
+            )
+            await session.db.execute(sql`CREATE TEMP TABLE corvus_tx_child (
+              parent int REFERENCES corvus_tx_parent(id) DEFERRABLE INITIALLY DEFERRED
+            ) ON COMMIT DROP`)
+            await session.db.execute(
+              sql`INSERT INTO corvus_tx_child VALUES (1)`,
+            )
+          }
+          if (outcome === 'rollback')
+            await payload.db.rollbackTransaction(transactionId)
+          else await payload.db.commitTransaction(transactionId)
+          transactionId = null
+        }
+
+        embedChunksStub.mockClear()
+        for (const outcome of ['rollback', 'commit-fails'] as const) {
+          await publish(outcome)
+          expect((await stored()).size).toBe(0)
+          expect(embedChunksStub).not.toHaveBeenCalled()
+          expect(
+            (
+              await payload.findByID({
+                collection: 'posts',
+                id: post.id,
+                draft: false,
+              })
+            )._status,
+          ).toBe('draft')
+        }
+
+        await publish('commit')
+        expect((await stored()).size).toBeGreaterThan(0)
+        expect(embedChunksStub).toHaveBeenCalledTimes(1)
+
+        // A provider failure is outside the transaction and cannot undo
+        // the newer published title or change the operation into an error.
+        let gateBeforeProvider: string[] = []
+        embedChunksStub.mockImplementationOnce(async () => {
+          gateBeforeProvider = [...(await stored()).values()].map(
+            (row) => row.visibility,
+          )
+          throw new Error('Fixture provider offline')
+        })
+        const saved = await payload.update({
+          collection: 'posts',
+          id: post.id,
+          data: {
+            title: 'Committed during provider outage',
+            _status: 'published',
+            access: { visibility: 'gated' },
+          },
+        })
+        expect(saved.title).toBe('Committed during provider outage')
+        expect(
+          (
+            await payload.findByID({
+              collection: 'posts',
+              id: post.id,
+              draft: false,
+            })
+          ).title,
+        ).toBe(saved.title)
+        expect(embedChunksStub).toHaveBeenCalledTimes(2)
+        expect(gateBeforeProvider.length).toBeGreaterThan(0)
+        expect(new Set(gateBeforeProvider)).toEqual(new Set(['gated']))
+      } finally {
+        if (transactionId != null)
+          await payload.db.rollbackTransaction(transactionId)
+        await payload.delete({ collection: 'posts', id: post.id })
+        await db.execute(
+          sql`DELETE FROM "corvus_embeddings" WHERE "collection" = 'posts' AND "doc_id" = ${post.id}`,
+        )
+      }
+    })
+
+    it('leaves descendant citations unchanged on a rolled-back page move', async () => {
+      const { createLocalReq, getPayload } = await import('payload')
+      const { default: config } = await import('../src/payload.config')
+      const payload = await getPayload({ config })
+      const slug = 'zz-corvus-after-commit-section'
+      const page = await createFixturePage(payload, {
+        data: {
+          title: 'Section',
+          slug,
+          layout: [{ blockType: 'spacer', size: 'md' }],
+          _status: 'published',
+        },
+      })
+      let childId: number | undefined
+      let transactionId: string | number | null = null
+      try {
+        const child = await createFixturePost(payload, {
+          data: {
+            title: 'Nested article',
+            slug: 'zz-corvus-after-commit-child',
+            content: lexical(
+              'This article provides a citation for the subtree move.',
+            ),
+            parent: page.id,
+            _status: 'published',
+          },
+        })
+        childId = child.id
+        const urls = async () =>
+          new Set(
+            [...(await readStoredChunks(db, 'posts', child.id)).values()].map(
+              (row) => row.sourceUrl,
+            ),
+          )
+        const initialPath = `/${slug}/${child.slug}`
+        expect(await urls()).toEqual(new Set([initialPath]))
+
+        const move = (req?: Awaited<ReturnType<typeof createLocalReq>>) =>
+          payload.update({
+            collection: 'pages',
+            id: page.id,
+            req,
+            data: { slug: `${slug}-moved`, slugLock: false },
+          })
+
+        transactionId = await payload.db.beginTransaction()
+        if (transactionId == null)
+          throw new Error('Expected a real transaction')
+        const req = await createLocalReq({}, payload)
+        req.transactionID = transactionId
+        await move(req)
+        expect(await urls()).toEqual(new Set([initialPath]))
+        await payload.db.rollbackTransaction(transactionId)
+        transactionId = null
+        expect(await urls()).toEqual(new Set([initialPath]))
+
+        // A nested redirect failure rolls back the shared transaction before
+        // the parent can cascade the move or refresh any embedding.
+        const redirects = payload.collections.redirects.config.hooks
+        const beforeChange = redirects.beforeChange
+        redirects.beforeChange = [
+          ...(beforeChange ?? []),
+          ({ data }) => {
+            if (data.from === `/${slug}`) {
+              throw new Error('Fixture redirect write failed')
+            }
+            return data
+          },
+        ]
+        try {
+          embedChunksStub.mockClear()
+          await expect(move()).rejects.toThrow('Fixture redirect write failed')
+          expect(embedChunksStub).not.toHaveBeenCalled()
+          const committed = await payload.findByID({
+            collection: 'pages',
+            id: page.id,
+            draft: false,
+          })
+          expect(committed.path).toBe(page.path)
+          const committedChild = await payload.findByID({
+            collection: 'posts',
+            id: child.id,
+            draft: false,
+          })
+          expect(committedChild.path).toBe(child.path)
+          expect(await urls()).toEqual(new Set([initialPath]))
+        } finally {
+          redirects.beforeChange = beforeChange
+        }
+
+        await move()
+        expect(await urls()).toEqual(new Set([`/${slug}-moved/${child.slug}`]))
+      } finally {
+        if (transactionId != null)
+          await payload.db.rollbackTransaction(transactionId)
+        if (childId !== undefined)
+          await payload.delete({ collection: 'posts', id: childId })
+        await payload.delete({ collection: 'pages', id: page.id })
+        await payload.delete({
+          collection: 'redirects',
+          where: { from: { like: `%${slug}%` } },
+        })
       }
     })
 

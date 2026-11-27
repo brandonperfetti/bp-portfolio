@@ -250,18 +250,9 @@ export const Pages: CollectionConfig = {
     // `cascadePagePaths` after the redirect: it recomputes the subtree
     // beneath a moved page, and it must run after the redirect row for the
     // page's OWN old path has landed (#150).
-    // `refreshCorvusEmbeddings` (#208) LAST, after the cascade. Its writes go
-    // through `payload.db.drizzle`, outside this request's transaction, so
-    // the hooks that can roll the save back run before it: a cascade that
-    // throws then rolls back a publish whose text was never embedded, instead
-    // of leaving an unpublished Page's text retrievable. Ordering cannot close
-    // the last window: if the transaction itself fails to commit after this
-    // hook has written, the rows stay until the backfill, as for Posts.
-    // Its provider work is fail-open and bounded (the draft-status read is
-    // the one exception; see `isDraftOverPublished`), and a cascaded
-    // descendant's path change
-    // reaches that descendant's chunks through its own `afterChange` as a
-    // metadata repair.
+    // Corvus refreshes the committed page and its moved descendants after
+    // Payload's transaction succeeds (#462). A rolled-back move leaves
+    // existing citation paths intact.
     afterChange: [
       revalidatePage,
       createPathRedirect,

@@ -33,7 +33,9 @@ Release PR [#486](https://github.com/brandonperfetti/bp-portfolio/pull/486) ·
   colours use updated contrast tokens (#477, #479, #469, #482, #466).
 - Explorer filters follow links to the current URL. Corvus can name its
   host page and retrieve published page text and owner-written summaries
-  of private repositories (#453, #460, #463, #465).
+  of private repositories (#453, #460, #463, #465). Corvus refreshes only
+  committed content, so a rolled-back publish or page move cannot introduce
+  new text or citations (#462).
 
 **CMS operators and MCP users**
 

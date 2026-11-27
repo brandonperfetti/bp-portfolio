@@ -1,20 +1,62 @@
 import type {
   CollectionAfterChangeHook,
   CollectionAfterDeleteHook,
+  PayloadRequest,
 } from 'payload'
 
-import type { CorvusCollectionSlug } from '@/lib/ai/chunking'
+import {
+  corvusTransaction,
+  queueCorvusAfterCommit,
+} from '@/hooks/corvusAfterCommit'
+import { type CorvusCollectionSlug, visibilityOf } from '@/lib/ai/chunking'
 import {
   type CorvusEmbeddingsDb,
   deleteDocumentEmbeddings,
   syncDocumentEmbeddings,
+  tightenEmbeddingAccess,
 } from '@/lib/ai/embeddingsStore'
+import { guardEmbeddingSource } from '@/lib/ai/embeddingSourceGuard'
 import { refreshTechStackSummary } from '@/lib/ai/techStackSummarySync'
 import {
   type Deadline,
   createDeadline,
   withDeadline,
 } from '@/lib/ai/withDeadline'
+
+/**
+ * Makes a restrictive publish-state change atomic with the source update.
+ * The committed source is reloaded for the separate, potentially slow refresh.
+ */
+async function protectChangedDocument(
+  req: PayloadRequest,
+  collection: 'pages' | 'posts',
+  id: number,
+  isDraftOutput: boolean,
+): Promise<boolean> {
+  const transaction = await corvusTransaction(req)
+  if (!transaction) return true
+  const db = transaction.session.db as unknown as CorvusEmbeddingsDb
+  const published = (await req.payload.db.findOne({
+    collection,
+    where: { id: { equals: id } },
+    select: { _status: true, access: true, publishedAt: true },
+    req,
+  })) as HookDoc | null
+  if (!published || !isPublished(published)) {
+    await deleteDocumentEmbeddings(db, collection, id)
+    return true
+  }
+  if (isDraftOutput) return false
+  const date = published.publishedAt
+  await tightenEmbeddingAccess(
+    db,
+    collection,
+    id,
+    visibilityOf(published),
+    typeof date === 'string' && date ? date : null,
+  )
+  return true
+}
 
 /**
  * The one collection whose write also re-emits a derived summary chunk (#165).
@@ -190,13 +232,10 @@ function drizzleOf(payload: unknown): CorvusEmbeddingsDb | null {
  *   arriving with a non-published `_status`. Unpublishing must remove
  *   content from retrieval, not merely stop refreshing it — otherwise
  *   unpublishing an article leaves Corvus still quoting it.
- * - **It never throws.** A provider outage must not fail a content save. The
- *   error is logged through `req.payload.logger` and the stale row is left in
- *   place; `scripts/backfill-corvus-embeddings.ts` is the repair path. This is
- *   the same "the index is derived and rebuildable" stance the migration takes
- *   by keeping the table out of the Payload config. The one exception is a
- *   failed draft-status lookup (#208), which fails inside the save's own
- *   transaction and is rethrown; see `isDraftOverPublished`.
+ * - **A provider outage does not fail a content save.** Refresh failures are
+ *   logged and the backfill can repair stale rows. Transaction checks and
+ *   access restrictions can fail the save when its index safety cannot be
+ *   established. See also the draft-status lookup in `isDraftOverPublished`.
  * - **A draft saved over a published document deletes nothing** (#208): the
  *   collection row is still published and still serving.
  *
@@ -205,10 +244,8 @@ function drizzleOf(payload: unknown): CorvusEmbeddingsDb | null {
  *   refresh a summary of all rows, so this step re-reads the collection and
  *   re-composes one chunk carrying the whole `daily` tier. It is inside the
  *   existing `try` on purpose: a failure logs and leaves the stale summary,
- *   and never fails the save. The re-read forwards `req`, so it runs inside
- *   the save's transaction and sees the save — the repo's convention for a
- *   hook-side Local API read. Without it the summary would be composed from
- *   pre-save rows.
+ *   and never fails the save. The production refresh reads after PostgreSQL confirms
+ *   the commit, so both the row and the summary reflect committed content.
  *
  * The provider call is awaited rather than fired and forgotten, bounded by
  * {@link HOOK_EMBEDDING_TIMEOUT_MS}: a floating promise in a serverless
@@ -236,7 +273,10 @@ function drizzleOf(payload: unknown): CorvusEmbeddingsDb | null {
 export const refreshCorvusEmbeddings = (
   collection: CorvusCollectionSlug,
 ): CollectionAfterChangeHook => {
-  return async ({ doc, previousDoc, req }) => {
+  const refresh = async (
+    { doc, previousDoc, req }: Parameters<CollectionAfterChangeHook>[0],
+    afterCommit = false,
+  ) => {
     const { payload, context } = req
     if (context?.disableRevalidate) return doc
 
@@ -245,10 +285,13 @@ export const refreshCorvusEmbeddings = (
     // pending for the rest of the budget in a serverless function.
     let deadline: Deadline | null = null
     try {
-      const db = drizzleOf(payload)
+      const current = doc as HookDoc
+      const db =
+        afterCommit && (collection === 'pages' || collection === 'posts')
+          ? guardEmbeddingSource(payload.db.drizzle, collection, current)
+          : drizzleOf(payload)
       if (!db) return doc
 
-      const current = doc as HookDoc
       const previous = previousDoc as HookDoc | undefined
       const docId = Number(current?.id)
       if (!Number.isFinite(docId)) return doc
@@ -334,8 +377,8 @@ export const refreshCorvusEmbeddings = (
       // `content_hash` before the provider is called, so editing a
       // technology's `notes` re-composes the same line of names and makes zero
       // embedding calls. The cost of this step on a no-op save is one `find`
-      // over ~50 rows plus one indexed SELECT — and that `find` runs on THIS
-      // request's transaction, because `req` is forwarded below.
+      // over ~50 rows plus one indexed SELECT. In the production hook the
+      // read runs after the save commits.
       //
       // It shares `deadline` with the per-row sync above rather than starting
       // its own: the bound is a property of the save, so whatever the per-row
@@ -350,9 +393,6 @@ export const refreshCorvusEmbeddings = (
           refreshTechStackSummary({
             payload,
             db,
-            // `req` so the summary's `find` joins THIS save's transaction —
-            // without it the read takes its own connection and composes the
-            // summary from pre-save rows. See `readTechStackSummaryRows`.
             req,
             abortSignal: deadline.signal,
           }),
@@ -374,6 +414,57 @@ export const refreshCorvusEmbeddings = (
 
     return doc
   }
+
+  return async (args) => {
+    const { doc, req } = args
+    if (req.context?.disableRevalidate || isAutosaveRequest(req)) return doc
+    if (!req.transactionID) return refresh(args)
+    const id = Number(doc?.id)
+    if (!Number.isFinite(id)) return doc
+    if (
+      (collection === 'pages' || collection === 'posts') &&
+      !(await protectChangedDocument(
+        req,
+        collection,
+        id,
+        doc._status === 'draft',
+      ))
+    )
+      return doc
+    const committedReq = {
+      ...req,
+      context: { ...req.context },
+      transactionID: undefined,
+    }
+    const queued = await queueCorvusAfterCommit(
+      req,
+      `${collection}:${id}`,
+      async () => {
+        const current = await req.payload.findByID({
+          collection,
+          id,
+          depth: 1,
+          overrideAccess: true,
+          disableErrors: true,
+          ...(collection === 'pages' || collection === 'posts'
+            ? { draft: false }
+            : {}),
+        })
+        if (!current) {
+          await deleteCorvusEmbeddings(collection)({
+            collection: args.collection,
+            context: committedReq.context,
+            doc,
+            id,
+            req: committedReq,
+          })
+          return
+        }
+        await refresh({ ...args, doc: current, req: committedReq }, true)
+      },
+    )
+    return queued ? doc : refresh(args)
+  }
 }
 
 /**
@@ -394,7 +485,7 @@ export const refreshCorvusEmbeddings = (
 export const deleteCorvusEmbeddings = (
   collection: CorvusCollectionSlug,
 ): CollectionAfterDeleteHook => {
-  return async ({ doc, req }) => {
+  const remove: CollectionAfterDeleteHook = async ({ doc, req }) => {
     const { payload, context } = req
     if (context?.disableRevalidate) return doc
 
@@ -429,9 +520,6 @@ export const deleteCorvusEmbeddings = (
           refreshTechStackSummary({
             payload,
             db,
-            // `req` so the summary's `find` joins THIS delete's transaction —
-            // without it the read takes its own connection and still sees the
-            // row that was just deleted. See `readTechStackSummaryRows`.
             req,
             abortSignal: deadline.signal,
           }),
@@ -449,5 +537,35 @@ export const deleteCorvusEmbeddings = (
     }
 
     return doc
+  }
+
+  return async (args) => {
+    const { doc, req } = args
+    if (req.context?.disableRevalidate) return doc
+    if (!req.transactionID) return remove(args)
+    const id = Number(doc?.id)
+    if (!Number.isFinite(id)) return doc
+    const transaction = await corvusTransaction(req)
+    if (transaction) {
+      await deleteDocumentEmbeddings(
+        transaction.session.db as unknown as CorvusEmbeddingsDb,
+        collection,
+        id,
+      )
+      if (collection !== SUMMARY_SOURCE_COLLECTION) return doc
+    }
+    const committedReq = {
+      ...req,
+      context: { ...req.context },
+      transactionID: undefined,
+    }
+    const queued = await queueCorvusAfterCommit(
+      req,
+      `${collection}:${id}`,
+      async () => {
+        await remove({ ...args, req: committedReq })
+      },
+    )
+    return queued ? doc : remove(args)
   }
 }
